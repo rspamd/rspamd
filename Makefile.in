@@ -1,0 +1,30 @@
+
+all: $(TARGETS)
+
+memctest: upstream.c memcached.c memcached-test.c
+	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c upstream.c
+	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c memcached.c
+	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c memcached-test.c
+	$(CC) $(OPT_FLAGS) $(PTHREAD_LDFLAGS) $(LD_PATH) upstream.o memcached.o memcached-test.o $(LIBS) -o memcached-test
+
+install: $(EXEC) rmilter.8 rmilter.conf.sample
+	$(INSTALL) -b $(EXEC) $(PREFIX)/sbin/$(EXEC)
+	$(INSTALL) -v $(EXEC).sh $(PREFIX)/etc/rc.d
+	#$(INSTALL) -m0644 rspamd.8 $(MANPATH)/man8
+	#$(INSTALL) -m0644 rspamd.conf.sample $(PREFIX)/etc
+	$(MKDIR) -o $(RSPAMD_USER) -g $(RSPAMD_GROUP) /var/run/rspamd
+
+clean:
+	rm -f *.o $(EXEC) *.core
+	rm -f cfg_lex.c cfg_yacc.c cfg_yacc.h
+
+dist-clean: clean
+	rm -f Makefile
+	rm -f config.log
+	rm -f md5.h md5.c strlcpy.h strlcpy.c queue.h
+
+creategroup:
+	@echo "Create group $(RSPAMD_GROUP) before installing!" 
+
+createuser:
+	@echo "Create user $(RSPAMD_USER) before installing!" 
