@@ -74,4 +74,9 @@ f_str_t* fstrgrow (f_str_t *orig, size_t newlen);
  */
 #define fstrfree(x) free((x)->begin); free((x))
 
+/*
+ * Return specified character
+ */
+#define fstridx(str, pos) *((str)->begin + (pos))
+
 #endif
