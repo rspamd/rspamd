@@ -7,11 +7,19 @@
 
 #include <sys/types.h>
 
+#define update_buf_size(x) (x)->free = (x)->buf->size - ((x)->pos - (x)->buf->begin); (x)->buf->len = (x)->pos - (x)->buf->begin
+
 typedef struct f_str_s {
 	char *begin;
 	size_t len;
 	size_t size;
 } f_str_t;
+
+typedef struct f_str_buf_s {
+	f_str_t *buf;
+	char *pos;
+	size_t free;
+} f_str_buf_t;
 
 typedef struct f_tok_s {
 	f_str_t word;

@@ -14,6 +14,7 @@
 #endif
 #include <netinet/in.h>
 #include <sys/un.h>
+#include <event.h>
 #include "upstream.h"
 #include "memcached.h"
 

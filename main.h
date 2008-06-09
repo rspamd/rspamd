@@ -15,6 +15,9 @@
 #include <arpa/inet.h>
 
 #include <signal.h>
+#include <event.h>
+
+#include "fstring.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE "./rspamd.conf"
@@ -41,6 +44,8 @@ struct rspamd_worker {
 	TAILQ_ENTRY (rspamd_worker) next;
 	struct rspamd_main *srv;
 	enum process_type type;
+	struct event sig_ev;
+	struct event bind_ev;
 };
 
 struct pidfh;
@@ -59,7 +64,17 @@ struct rspamd_main {
 };
 
 struct worker_task {
-	int id;
+	struct rspamd_worker *worker;
+	enum {
+		READ_COMMAND,
+		READ_HEADER,
+		READ_MESSAGE,
+		WRITE_REPLY,
+		WRITE_ERROR,
+	} state;
+	size_t content_length;
+	f_str_buf_t *msg;
+	struct bufferevent *bev;
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
