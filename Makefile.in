@@ -7,7 +7,7 @@ memctest: upstream.c memcached.c memcached-test.c
 	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c memcached-test.c
 	$(CC) $(OPT_FLAGS) $(PTHREAD_LDFLAGS) $(LD_PATH) upstream.o memcached.o memcached-test.o $(LIBS) -o memcached-test
 
-install: $(EXEC) rmilter.8 rmilter.conf.sample
+install: $(EXEC)
 	$(INSTALL) -b $(EXEC) $(PREFIX)/sbin/$(EXEC)
 	$(INSTALL) -v $(EXEC).sh $(PREFIX)/etc/rc.d
 	#$(INSTALL) -m0644 rspamd.8 $(MANPATH)/man8

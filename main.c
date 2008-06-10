@@ -128,6 +128,7 @@ main (int argc, char **argv)
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
 	struct sockaddr_un *un_addr;
 	FILE *f;
+	pid_t wrk;
 
 	rspamd = (struct rspamd_main *)malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
@@ -243,7 +244,7 @@ main (int argc, char **argv)
 			child_dead = 0;
 			msg_debug ("main: catch SIGCHLD signal, finding terminated worker");
 			/* Remove dead child form childs list */
-			pid_t wrk = waitpid (0, &res, 0);
+			wrk = waitpid (0, &res, 0);
 			TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
 				if (wrk == cur->pid) {
 					/* Catch situations if active worker is abnormally terminated */
