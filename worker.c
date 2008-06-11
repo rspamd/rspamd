@@ -22,6 +22,7 @@
 #include "main.h"
 #include "upstream.h"
 #include "cfg_file.h"
+#include "url.h"
 
 #define CONTENT_LENGTH_HEADER "Content-Length:"
 
@@ -58,11 +59,34 @@ sigusr_handler (int fd, short what, void *arg)
 }
 
 static void
+free_task (struct worker_task *task)
+{
+	struct uri *cur;
+	if (task) {
+		if (task->msg) {
+			fstrfree (task->msg->buf);
+			free (task->msg);
+		}
+		while (!TAILQ_EMPTY(&task->urls)) {
+			cur = TAILQ_FIRST(&task->urls);
+			free (cur->string);
+			free (cur);
+			TAILQ_REMOVE (&task->urls, cur, next);
+		}
+		free (task);
+	}
+}
+
+static void
 mime_foreach_callback (GMimeObject *part, gpointer user_data)
 {
-	int *count = user_data;
+	struct worker_task *task = (struct worker_task *)user_data;
+	const GMimeContentType *type;
+	GMimeDataWrapper *wrapper;
+	GMimeStream *part_stream;
+	GByteArray *part_content;
 	
-	(*count)++;
+	task->parts_count ++;
 	
 	/* 'part' points to the current part node that g_mime_message_foreach_part() is iterating over */
 	
@@ -77,7 +101,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
                    g_mime_message_foreach_part() again here. */
 		
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
-		g_mime_message_foreach_part (message, mime_foreach_callback, count);
+		g_mime_message_foreach_part (message, mime_foreach_callback, task);
 		g_object_unref (message);
 	} else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
 		/* message/partial */
@@ -94,6 +118,20 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
 	} else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
+		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
+		if (wrapper != NULL) {
+			part_stream = g_mime_stream_mem_new ();
+			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
+				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+				type = g_mime_part_get_content_type (GMIME_PART (part));
+				if (g_mime_content_type_is_type (type, "text", "html")) {
+					url_parse_html (task, part_content);
+				} 
+				else if (g_mime_content_type_is_type (type, "text", "plain")) {
+					url_parse_text (task, part_content);
+				}
+			}
+		}
 	} else {
 		g_assert_not_reached ();
 	}
@@ -101,14 +139,13 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 
 
 static void
-process_message (f_str_t *msg)
+process_message (struct worker_task *task)
 {
-	int count = 0;
 	GMimeMessage *message;
 	GMimeParser *parser;
 	GMimeStream *stream;
 
-	stream = g_mime_stream_mem_new_with_buffer (msg->begin, msg->len);
+	stream = g_mime_stream_mem_new_with_buffer (task->msg->buf->begin, task->msg->buf->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 	/* create a new parser object to parse the stream */
@@ -123,9 +160,9 @@ process_message (f_str_t *msg)
 	/* free the parser (and the stream) */
 	g_object_unref (parser);
 
-	g_mime_message_foreach_part (message, mime_foreach_callback, &count);
+	g_mime_message_foreach_part (message, mime_foreach_callback, task);
 	
-	msg_info ("process_message: found %d parts in message", count);
+	msg_info ("process_message: found %d parts in message", task->parts_count);
 }
 
 static void
@@ -186,7 +223,7 @@ read_socket (struct bufferevent *bev, void *arg)
 				task->msg->pos += r;
 				update_buf_size (task->msg);
 				if (task->msg->free == 0) {
-					process_message (task->msg->buf);
+					process_message (task);
 					task->state = WRITE_REPLY;
 				}
 			}
@@ -194,9 +231,7 @@ read_socket (struct bufferevent *bev, void *arg)
 				msg_err ("read_socket: cannot read data to buffer: %ld", (long int)r);
 				bufferevent_disable (bev, EV_READ);
 				bufferevent_free (bev);
-				fstrfree (task->msg->buf);
-				free (task->msg);
-				free (task);
+				free_task (task);
 			}
 			break;
 		case WRITE_REPLY:
@@ -220,12 +255,9 @@ write_socket (struct bufferevent *bev, void *arg)
 	if (task->state > READ_MESSAGE) {
 		msg_info ("closing connection");
 		/* Free buffers */
-		fstrfree (task->msg->buf);
-		free (task->msg);
+		free_task (task);
 		bufferevent_disable (bev, EV_WRITE);
 		bufferevent_free (bev);
-
-		free (task);
 	}
 }
 
@@ -235,14 +267,9 @@ err_socket (struct bufferevent *bev, short what, void *arg)
 	struct worker_task *task = (struct worker_task *)arg;
 	msg_info ("closing connection");
 	/* Free buffers */
-	if (task->state > READ_HEADER) {
-		fstrfree (task->msg->buf);
-		free (task->msg);
-	}
+	free_task (task);
 	bufferevent_disable (bev, EV_READ);
 	bufferevent_free (bev);
-
-	free (task);
 }
 
 static void
@@ -269,6 +296,8 @@ accept_socket (int fd, short what, void *arg)
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;
 	new_task->content_length = 0;
+	new_task->parts_count = 0;
+	TAILQ_INIT (&new_task->urls);
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);

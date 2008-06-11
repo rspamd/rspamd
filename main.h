@@ -18,6 +18,7 @@
 #include <event.h>
 
 #include "fstring.h"
+#include "url.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE "./rspamd.conf"
@@ -75,6 +76,10 @@ struct worker_task {
 	size_t content_length;
 	f_str_buf_t *msg;
 	struct bufferevent *bev;
+	/* Number of mime parts */
+	int parts_count;
+	/* URLs extracted from message */
+	TAILQ_HEAD (uriq, uri) urls;
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
