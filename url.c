@@ -16,6 +16,13 @@
 #define POST_CHAR 1
 #define POST_CHAR_S "\001"
 
+/* Tcp port range */
+#define LOWEST_PORT 0
+#define HIGHEST_PORT    65535
+
+#define uri_port_is_valid(port) \
+    (LOWEST_PORT <= (port) && (port) <= HIGHEST_PORT)
+
 struct _proto {
 	unsigned char *name;
 	int port;
@@ -26,10 +33,10 @@ struct _proto {
 	unsigned int need_ssl:1;
 };
 
-static const char *html_url = "((?:href=)|(?:archive=)|(?:code=)|(?:codebase=)|(?:src=)|(?:cite=)"
-"|(:?background=)|(?:pluginspage=)|(?:pluginurl=)|(?:action=)|(?:dynsrc=)|(?:longdesc=)|(?:lowsrc=)|(?:src=)|(?:usemap=))"
+static const char *html_url = "((?:href\\s*=\\s*)|(?:archive\\s*=\\s*)|(?:code\\s*=\\s*)|(?:codebase\\s*=\\s*)|(?:src\\s*=\\s*)|(?:cite\\s*=\\s*)"
+"|(:?background\\s*=\\s*)|(?:pluginspage\\s*=\\s*)|(?:pluginurl\\s*=\\s*)|(?:action\\s*=\\s*)|(?:dynsrc\\s*=\\s*)|(?:longdesc\\s*=\\s*)|(?:lowsrc\\s*=\\s*)|(?:usemap\\s*=\\s*))"
 "\\\"?([^>\"<]+)\\\"?";
-static const char *text_url = "((mailto\\:|(news|(ht|f)tp(s?))\\://){1}[^>\"<]+)";
+static const char *text_url = "((?:mailto\\:|(?:news|(?:ht|f)tp(?:s?))\\://){1}[^>\"<]+)";
 
 static short url_initialized = 0;
 static pcre_extra *text_re_extra;
@@ -57,6 +64,14 @@ static inline int
 is_uri_dir_sep(struct uri *uri, unsigned char pos)
 {
 	return (pos == '/');
+}
+
+static int
+check_uri_file(unsigned char *name)
+{
+	static const unsigned char chars[] = POST_CHAR_S "#?";
+
+	return strcspn(name, chars);
 }
 
 static int
@@ -480,15 +495,53 @@ normalize_uri(struct uri *uri, unsigned char *uristring)
 void 
 url_parse_text (struct worker_task *task, GByteArray *content)
 {
+	int ovec[30];
+	int pos = 0, rc;
+	char *url_str = NULL;
+	struct uri *new;
+
 	if (url_init () == 0) {
-		/* TODO: */
+		while ((rc = pcre_exec (text_re, text_re_extra, (const char *)content->data, content->len, pos, 0, 
+						ovec, sizeof (ovec) / sizeof (ovec[0])) >= 0)) {
+			if (rc > 0) {
+				pos = ovec[1];
+				pcre_get_substring ((const char *)content->data, ovec, rc, 1, (const char **)&url_str);
+				if (url_str != NULL) {
+					new = g_malloc (sizeof (struct uri));
+					if (new != NULL) {
+						parse_uri (new, url_str);
+						normalize_uri (new, url_str);
+						TAILQ_INSERT_TAIL (&task->urls, new, next);
+					}
+				}
+			}
+		} 
 	}
 }
 
 void 
 url_parse_html (struct worker_task *task, GByteArray *content)
 {
+	int ovec[30];
+	int pos = 0, rc;
+	char *url_str = NULL;
+	struct uri *new;
+
 	if (url_init () == 0) {
-		/* TODO: */
+		while ((rc = pcre_exec (html_re, html_re_extra, (const char *)content->data, content->len, pos, 0, 
+						ovec, sizeof (ovec) / sizeof (ovec[0])) >= 0)) {
+			if (rc > 0) {
+				pos = ovec[1];
+				pcre_get_substring ((const char *)content->data, ovec, rc, 3, (const char **)&url_str);
+				if (url_str != NULL) {
+					new = g_malloc (sizeof (struct uri));
+					if (new != NULL) {
+						parse_uri (new, url_str);
+						normalize_uri (new, url_str);
+						TAILQ_INSERT_TAIL (&task->urls, new, next);
+					}
+				}
+			}
+		}
 	}
 }

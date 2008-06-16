@@ -31,6 +31,8 @@ int event_make_socket_nonblocking(int);
 void init_signals (struct sigaction *, sig_t);
 /* Send specified signal to each worker */
 void pass_signal_worker (struct workq *, int );
+/* Convert string to lowercase */
+void convert_to_lowercase (char *str, unsigned int size);
 
 #ifndef HAVE_SETPROCTITLE
 int init_title(int argc, char *argv[], char *envp[]);
