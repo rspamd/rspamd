@@ -61,11 +61,11 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 	FILE *f;
 	struct config_file *tmp_cfg;
 	/* Starting worker process */
-	cur = (struct rspamd_worker *)malloc (sizeof (struct rspamd_worker));
+	cur = (struct rspamd_worker *)g_malloc (sizeof (struct rspamd_worker));
 	if (cur) {
 		/* Reconfig needed */
 		if (reconfig) {
-			tmp_cfg = (struct config_file *) malloc (sizeof (struct config_file));
+			tmp_cfg = (struct config_file *) g_malloc (sizeof (struct config_file));
 			if (tmp_cfg) {
         		cfg_file = strdup (rspamd->cfg->cfg_name);
         		bzero (tmp_cfg, sizeof (struct config_file));
@@ -83,7 +83,7 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 					}
 					else {
         				free_config (rspamd->cfg);
-						free (rspamd->cfg);
+						g_free (rspamd->cfg);
 						rspamd->cfg = tmp_cfg;
         				rspamd->cfg->cfg_name = cfg_file;
 					}
@@ -130,9 +130,9 @@ main (int argc, char **argv)
 	FILE *f;
 	pid_t wrk;
 
-	rspamd = (struct rspamd_main *)malloc (sizeof (struct rspamd_main));
+	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
-	cfg = (struct config_file *)malloc (sizeof (struct config_file));
+	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	rspamd->cfg = cfg;
 	if (!rspamd || !rspamd->cfg) {
 		fprintf(stderr, "Cannot allocate memory\n");
@@ -209,7 +209,7 @@ main (int argc, char **argv)
 		}
 	}
 	else {
-		un_addr = (struct sockaddr_un *) malloc (sizeof (struct sockaddr_un));
+		un_addr = (struct sockaddr_un *) g_malloc (sizeof (struct sockaddr_un));
 		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr)) == -1) {
 			msg_err ("main: cannot create unix listen socket. %m");
 			exit(-errno);
@@ -267,7 +267,7 @@ main (int argc, char **argv)
 						/* Fork another worker in replace of dead one */
 						fork_worker (rspamd, listen_sock, 0, cur->type);
 					}
-					free (cur);
+					g_free (cur);
 				}
 			}
 		}
@@ -303,7 +303,7 @@ main (int argc, char **argv)
 		waitpid (cur->pid, &res, 0);
 		msg_debug ("main(cleaning): worker process %d terminated", cur->pid);
 		TAILQ_REMOVE(&rspamd->workers, cur, next);
-		free(cur);
+		g_free(cur);
 	}
 	
 	msg_info ("main: terminating...");
@@ -314,8 +314,8 @@ main (int argc, char **argv)
 	}
 
 	free_config (rspamd->cfg);
-	free (rspamd->cfg);
-	free (rspamd);
+	g_free (rspamd->cfg);
+	g_free (rspamd);
 
 	return (res);
 }

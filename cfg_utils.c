@@ -129,13 +129,13 @@ void
 free_config (struct config_file *cfg)
 {
 	if (cfg->pid_file) {
-		free (cfg->pid_file);
+		g_free (cfg->pid_file);
 	}
 	if (cfg->temp_dir) {
-		free (cfg->temp_dir);
+		g_free (cfg->temp_dir);
 	}
 	if (cfg->bind_host) {
-		free (cfg->bind_host);
+		g_free (cfg->bind_host);
 	}
 }
 

@@ -196,7 +196,7 @@ pass_signal_worker (struct workq *workers, int signo)
 
 void convert_to_lowercase (char *str, unsigned int size)
 {
-	while (size --) {
+	while (size--) {
 		*str = tolower (*str ++);
 	}
 }
@@ -277,7 +277,7 @@ init_title(int argc, char *argv[], char *envp[])
 	if (!end_of_buffer)
 		return 0;
 
-	char  **new_environ = malloc ((i + 1) * sizeof (envp[0]));
+	char  **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
 
 	if (!new_environ)
 		return 0;
@@ -375,7 +375,7 @@ pidfile_open(const char *path, mode_t mode, pid_t *pidptr)
 	int error, fd, len, count;
 	struct timespec rqtp;
 
-	pfh = malloc(sizeof(*pfh));
+	pfh = g_malloc(sizeof(*pfh));
 	if (pfh == NULL)
 		return (NULL);
 

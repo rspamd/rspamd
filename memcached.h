@@ -3,10 +3,14 @@
 
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <sys/time.h>
+#include <time.h>
 
 #define MAXKEYLEN 250
 
 #define MEMC_OPT_DEBUG 0x1
+
+struct event;
 
 typedef enum memc_error {
 	OK,
@@ -27,26 +31,51 @@ typedef enum memc_proto {
 	TCP_BIN
 } memc_proto_t;
 
+typedef enum memc_op {
+	CMD_NULL,
+	CMD_CONNECT,
+	CMD_READ,
+	CMD_WRITE,
+	CMD_DELETE,
+} memc_opt_t;
+
+typedef struct memcached_param_s {
+	char key[MAXKEYLEN];
+	u_char *buf;
+	size_t bufsize;
+	size_t bufpos;
+	int expire;
+} memcached_param_t;
+
+
 /* Port must be in network byte order */
 typedef struct memcached_ctx_s {
 	memc_proto_t protocol;
 	struct in_addr addr;
 	uint16_t port;
 	int sock;
-	int timeout;
+	struct timeval timeout;
 	/* Counter that is used for memcached operations in network byte order */
 	uint16_t count;
 	/* Flag that signalize that this memcached is alive */
 	short alive;
 	/* Options that can be specified for memcached connection */
 	short options;
+	/* Current operation */
+	memc_opt_t op;
+	/* Event structure */
+	struct event mem_ev;
+	/* Current command */
+	const char *cmd;
+	/* Current param */
+	memcached_param_t *param;
+	/* Callback for current operation */
+	void (*callback) (struct memcached_ctx_s *ctx, memc_error_t error, void *data);
+	/* Data for callback function */
+	void *callback_data;
 } memcached_ctx_t;
 
-typedef struct memcached_param_s {
-	char key[MAXKEYLEN];
-	u_char *buf;
-	size_t bufsize;
-} memcached_param_t;
+typedef void (*memcached_callback_t) (memcached_ctx_t *ctx, memc_error_t error, void *data);
 
 /* 
  * Initialize connection to memcached server:
