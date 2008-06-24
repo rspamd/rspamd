@@ -16,6 +16,9 @@
 #endif
 #include <syslog.h>
 
+#include <EXTERN.h>               /* from the Perl distribution     */
+#include <perl.h>                 /* from the Perl distribution     */
+
 #include "main.h"
 #include "cfg_file.h"
 #include "util.h"
@@ -32,6 +35,12 @@ sig_atomic_t child_ready;
 
 extern int yynerrs;
 extern FILE *yyin;
+extern void boot_DynaLoader (pTHX_ CV* cv);
+extern void boot_Socket (pTHX_ CV* cv);
+
+PerlInterpreter *perl_interpreter;
+/* XXX: remove this shit when it would be clear why perl need this line */
+PerlInterpreter *my_perl;
 
 static 
 void sig_handler (int signo)
@@ -50,6 +59,26 @@ void sig_handler (int signo)
 		case SIGUSR2:
 			child_ready = 1;
 			break;
+	}
+}
+
+void
+xs_init(pTHX)
+{
+	dXSUB_SYS;
+	/* DynaLoader is a special case */
+	newXS ("DynaLoader::boot_DynaLoader", boot_DynaLoader, __FILE__);
+}
+
+static void
+init_filters (struct config_file *cfg)
+{
+	struct perl_module *module;
+
+	LIST_FOREACH (module, &cfg->modules, next) {
+		if (module->path) {
+			require_pv (module->path);
+		}
 	}
 }
 
@@ -129,6 +158,7 @@ main (int argc, char **argv)
 	struct sockaddr_un *un_addr;
 	FILE *f;
 	pid_t wrk;
+	char *args[] = { "", NULL };
 
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
@@ -199,6 +229,19 @@ main (int argc, char **argv)
 	rspamd->type = TYPE_MAIN;
 	
 	init_signals (&signals, sig_handler);
+	/* Init perl interpreter */
+	PERL_SYS_INIT3 (&argc, &argv, &env);
+	perl_interpreter = perl_alloc ();
+	if (perl_interpreter == NULL) {
+		msg_err ("main: cannot allocate perl interpreter, %m");
+		exit (-errno);
+	}
+
+	my_perl = perl_interpreter;
+	PERL_SET_CONTEXT (perl_interpreter);
+	perl_construct (perl_interpreter);
+	PL_exit_flags |= PERL_EXIT_DESTRUCT_END;
+	perl_parse (perl_interpreter, xs_init, 1, args, NULL);
 	/* Block signals to use sigsuspend in future */
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 

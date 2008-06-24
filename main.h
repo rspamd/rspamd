@@ -84,6 +84,7 @@ struct worker_task {
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
 
+
 #endif
 
 /* 

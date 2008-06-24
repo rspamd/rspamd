@@ -110,6 +110,15 @@ protocol						return PROTOCOL;
 memcached						return MEMCACHED;
 bind_socket						return BINDSOCK;
 servers							return SERVERS;
+require							return REQUIRE;
+module							return MODULE;
+filter							return FILTER;
+metric							return METRIC;
+script_header					return SCRIPT_HEADER;
+script_mime						return SCRIPT_MIME;
+script_message					return SCRIPT_MESSAGE;
+script_url						return SCRIPT_URL;
+script_chain					return SCRIPT_CHAIN;
 
 \{								return OBRACE;
 \}								return EBRACE;
@@ -126,11 +135,11 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 [0-9]+[sS]|[0-9]+[mM][sS]		yylval.seconds=parse_seconds(yytext); return SECONDS;
 [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}	yylval.string=strdup(yytext); return IPADDR;
 [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\/[0-9]{1,2}	yylval.string=strdup(yytext); return IPNETWORK;
+[a-zA-Z0-9.-]+:[0-9]{1,5}		yylval.string=strdup(yytext); return HOSTPORT;
+[a-zA-Z0-9]+:[a-zA-Z0-9_:]+		yylval.string=strdup(yytext); return SCRIPT_PARAM;		
 [a-zA-Z<][a-zA-Z@+>_-]*         yylval.string=strdup(yytext); return STRING;
 \/[^/\n]+\/						yylval.string=strdup(yytext); return REGEXP;
 [a-zA-Z0-9].[a-zA-Z0-9\/.-]+	yylval.string=strdup(yytext); return DOMAIN;
-[a-zA-Z0-9.-]+:[0-9]{1,5}		yylval.string=strdup(yytext); return HOSTPORT;
-[a-zA-Z0-9\/.-]+				yylval.string=strdup(yytext); return FILENAME;
 <incl>[ \t]*      /* eat the whitespace */
 <incl>[^ \t\n]+   { /* got the include file name */
         if ( include_stack_ptr >= MAX_INCLUDE_DEPTH ) {

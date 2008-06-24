@@ -15,6 +15,9 @@
 #include <fcntl.h>
 #include <netdb.h>
 
+#include <EXTERN.h>               /* from the Perl distribution     */
+#include <perl.h>                 /* from the Perl distribution     */
+
 #include <glib.h>
 #include <gmime/gmime.h>
 
@@ -31,6 +34,8 @@ const f_str_t CRLF = {
 	/* len */2,
 	/* size */2
 };
+
+extern PerlInterpreter *perl_interpreter;
 
 static 
 void sig_handler (int signo)

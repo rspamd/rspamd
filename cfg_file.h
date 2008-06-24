@@ -46,12 +46,38 @@
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
+enum script_type {
+	SCRIPT_HEADER,
+	SCRIPT_MIME,
+	SCRIPT_URL,
+	SCRIPT_MESSAGE,
+	SCRIPT_CHAIN,
+};
+
 struct memcached_server {
 	struct upstream up;
 	struct in_addr addr;
 	uint16_t port;
 	short alive;
 	short int num;
+};
+
+struct perl_module {
+	const char *path;
+	LIST_ENTRY (perl_module) next;
+};
+
+struct script_param {
+	const char *symbol;
+	const char *function;
+	enum script_type type;
+	LIST_ENTRY (script_param) next;
+};
+
+struct filter_chain {
+	unsigned int metric;
+	LIST_HEAD (scriptq, script_param) *scripts;
+	LIST_ENTRY (filter_chain) next;
 };
 
 struct config_file {
@@ -74,12 +100,16 @@ struct config_file {
 	unsigned int memcached_dead_time;
 	unsigned int memcached_maxerrors;
 	unsigned int memcached_connect_timeout;
+
+	LIST_HEAD (perlq, filter_chain) filters;
+	LIST_HEAD (modulesq, perl_module) modules;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);
 int parse_bind_line (struct config_file *cf, char *str);
 void init_defaults (struct config_file *cfg);
 void free_config (struct config_file *cfg);
+int parse_script (char *str, struct script_param *param, enum script_type type);
 
 int yylex (void);
 int yyparse (void);
