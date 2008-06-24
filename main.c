@@ -158,7 +158,7 @@ main (int argc, char **argv)
 	struct sockaddr_un *un_addr;
 	FILE *f;
 	pid_t wrk;
-	char *args[] = { "", NULL };
+	char *args[] = { "", "-e", "0", NULL };
 
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
@@ -241,7 +241,7 @@ main (int argc, char **argv)
 	PERL_SET_CONTEXT (perl_interpreter);
 	perl_construct (perl_interpreter);
 	PL_exit_flags |= PERL_EXIT_DESTRUCT_END;
-	perl_parse (perl_interpreter, xs_init, 1, args, NULL);
+	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
 	/* Block signals to use sigsuspend in future */
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 
