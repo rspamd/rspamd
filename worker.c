@@ -67,16 +67,23 @@ static void
 free_task (struct worker_task *task)
 {
 	struct uri *cur;
+	struct filter_result *res;
+
 	if (task) {
 		if (task->msg) {
 			fstrfree (task->msg->buf);
 			free (task->msg);
 		}
-		while (!TAILQ_EMPTY(&task->urls)) {
-			cur = TAILQ_FIRST(&task->urls);
+		while (!TAILQ_EMPTY (&task->urls)) {
+			cur = TAILQ_FIRST (&task->urls);
 			free (cur->string);
 			free (cur);
 			TAILQ_REMOVE (&task->urls, cur, next);
+		}
+		while (!TAILQ_EMPTY (&task->results)) {
+			res = TAILQ_FIRST (&task->results);
+			free (res);
+			TAILQ_REMOVE (&task->results, res, next);
 		}
 		free (task);
 	}
@@ -303,6 +310,7 @@ accept_socket (int fd, short what, void *arg)
 	new_task->content_length = 0;
 	new_task->parts_count = 0;
 	TAILQ_INIT (&new_task->urls);
+	TAILQ_INIT (&new_task->results);
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);

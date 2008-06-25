@@ -51,6 +51,7 @@ struct rspamd_worker {
 
 struct pidfh;
 struct config_file;
+struct filter_chain;
 
 /* Struct that determine main server object (for logging purposes) */
 struct rspamd_main {
@@ -62,6 +63,13 @@ struct rspamd_main {
 	unsigned ev_initialized:1;
 
 	TAILQ_HEAD (workq, rspamd_worker) workers;
+};
+
+struct filter_result {
+	const char *symbol;
+	struct filter_chain *chain;
+	int mark;
+	TAILQ_ENTRY (filter_result) next;
 };
 
 struct worker_task {
@@ -80,6 +88,8 @@ struct worker_task {
 	int parts_count;
 	/* URLs extracted from message */
 	TAILQ_HEAD (uriq, uri) urls;
+	/* List of filter results */
+	TAILQ_HEAD (resultsq, filter_result) results;
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
