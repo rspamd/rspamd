@@ -80,6 +80,16 @@ command	:
 
 tempdir :
 	TEMPDIR EQSIGN QUOTEDSTRING {
+		struct stat st;
+		
+		if (stat ($3, &st) == -1) {
+			yyerror ("yyparse: cannot stat directory \"%s\": %s", $3, strerror (errno)); 
+			YYERROR;
+		}
+		if (!S_ISDIR (st.st_mode)) {
+			yyerror ("yyparse: \"%s\" is not a directory", $3); 
+			YYERROR;
+		}
 		cfg->temp_dir = $3;
 	}
 	;
