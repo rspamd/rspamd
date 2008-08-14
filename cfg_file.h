@@ -15,6 +15,7 @@
 #include <netinet/in.h>
 #include <sys/un.h>
 #include <event.h>
+#include <glib.h>
 #include "upstream.h"
 #include "memcached.h"
 
@@ -54,6 +55,8 @@ enum script_type {
 	SCRIPT_CHAIN,
 };
 
+struct uri;
+
 struct memcached_server {
 	struct upstream up;
 	struct in_addr addr;
@@ -63,13 +66,27 @@ struct memcached_server {
 };
 
 struct perl_module {
-	const char *path;
+	char *path;
 	LIST_ENTRY (perl_module) next;
 };
 
+struct module_ctx {
+	int (*header_filter)(const char *header_name, const char *header_value);
+	int (*mime_filter)(GByteArray *content);
+	int (*message_filter)(GByteArray *content);
+	int (*uri_filter)(struct uri *uri);
+	int (*chain_filter)(GArray *results);
+};
+
+struct c_module {
+	const char *name;
+	struct module_ctx *ctx;
+	LIST_ENTRY (c_module) next;
+};
+
 struct script_param {
-	const char *symbol;
-	const char *function;
+	char *symbol;
+	char *function;
 	enum script_type type;
 	LIST_ENTRY (script_param) next;
 };
@@ -102,7 +119,8 @@ struct config_file {
 	unsigned int memcached_connect_timeout;
 
 	LIST_HEAD (perlq, filter_chain) filters;
-	LIST_HEAD (modulesq, perl_module) modules;
+	LIST_HEAD (modulesq, perl_module) perl_modules;
+	LIST_HEAD (cmodulesq, c_module) c_modules;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);

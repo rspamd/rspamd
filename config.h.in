@@ -1,0 +1,11 @@
+#include <sys/types.h>
+
+/* Forwarded declaration */
+struct module_ctx;
+
+typedef struct module_s {
+	const char *name;
+	int (*module_init_func)(struct module_ctx *ctx);
+} module_t;
+
+extern module_t modules[];

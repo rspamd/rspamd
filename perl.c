@@ -17,7 +17,7 @@
 extern PerlInterpreter *my_perl;
 
 int
-call_header_filter (const char *function, const char *header_name, const char *header_value)
+perl_call_header_filter (const char *function, const char *header_name, const char *header_value)
 {
 	int result;
 	dSP;
@@ -45,7 +45,7 @@ call_header_filter (const char *function, const char *header_name, const char *h
 }
 
 int
-call_mime_filter (const char *function, GByteArray *content)
+perl_call_mime_filter (const char *function, GByteArray *content)
 {
 	int result;
 	dSP;
@@ -72,7 +72,7 @@ call_mime_filter (const char *function, GByteArray *content)
 }
 
 int
-call_message_filter (const char *function, GByteArray *content)
+perl_call_message_filter (const char *function, GByteArray *content)
 {
 	int result;
 	dSP;
@@ -99,7 +99,7 @@ call_message_filter (const char *function, GByteArray *content)
 }
 
 int
-call_url_filter (const char *function, struct uri *uri)
+perl_call_url_filter (const char *function, struct uri *uri)
 {
 	int result;
 	dSP;
@@ -133,7 +133,7 @@ call_url_filter (const char *function, struct uri *uri)
 }
 
 int
-call_chain_filter (const char *function, GArray *results)
+perl_call_chain_filter (const char *function, GArray *results)
 {
 	int result, i;
 

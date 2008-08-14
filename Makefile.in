@@ -21,7 +21,7 @@ clean:
 dist-clean: clean
 	rm -f Makefile
 	rm -f config.log
-	rm -f md5.h md5.c strlcpy.h strlcpy.c queue.h
+	rm -f md5.h md5.c strlcpy.h strlcpy.c queue.h config.h modules.c
 
 creategroup:
 	@echo "Create group $(RSPAMD_GROUP) before installing!" 

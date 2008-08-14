@@ -19,8 +19,10 @@ YACC_SRC="cfg_file.y"
 LEX_SRC="cfg_file.l"
 YACC_OUTPUT="cfg_yacc.c"
 LEX_OUTPUT="cfg_lex.c"
+CONFIG="config.h"
 
 SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c worker.c fstring.c url.c perl.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
+MODULES=""
 
 CFLAGS="$CFLAGS -W -Wpointer-arith -Wno-unused-parameter"
 CFLAGS="$CFLAGS -Wno-unused-function -Wunused-variable -Wno-sign-compare"
@@ -28,7 +30,7 @@ CFLAGS="$CFLAGS -Wunused-value -ggdb -I${LOCALBASE}/include"
 CFLAGS="$CFLAGS "
 LDFLAGS="$LDFLAGS -L/usr/lib -L${LOCALBASE}/lib"
 OPT_FLAGS="-O -pipe -fno-omit-frame-pointer"
-DEPS="cfg_file.h memcached.h util.h main.h upstream.h fstring.h url.h perl.h ${LEX_OUTPUT} ${YACC_OUTPUT}"
+DEPS="config.h cfg_file.h memcached.h util.h main.h upstream.h fstring.h url.h perl.h ${LEX_OUTPUT} ${YACC_OUTPUT}"
 EXEC=rspamd
 USER=postfix
 GROUP=postfix
@@ -41,11 +43,28 @@ MAKEFILE_IN="Makefile.in"
 
 TARGETS="${EXEC}"
 
+prepare_config()
+{
+	echo "#ifndef CONFIG_H_IN" > $CONFIG
+	echo "#define CONFIG_H_IN" >> $CONFIG
+	cat "$CONFIG.in" >> $CONFIG
+}
+
+finish_config()
+{
+	echo "#endif" >> $CONFIG
+}
+
 cleanup()
 {
 	rm -f autotest.c
 	rm -f autotest
 	INCLUDE=""
+}
+
+have_opt()
+{
+	echo "#define HAVE_$1" >> $CONFIG
 }
 
 check_compiler()
@@ -157,8 +176,8 @@ check_include()
 	if [ $? -eq 0 ] ; then 
 		echo "found"
 		echo "-> OK" >> config.log
-		_CFLAG=`echo "-DHAVE_$INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
-		CFLAGS="$CFLAGS $_CFLAG"
+		_CFLAG=`echo "HAVE_$INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
+		have_opt $_CFLAG
 		cleanup
 		return 0
 	else
@@ -342,12 +361,15 @@ check_os()
 	case "$_OS" in
 		FreeBSD*)
 				OS="freebsd"
-				CFLAGS="${CFLAGS} -DFREEBSD"
+				CFLAGS="${CFLAGS}"
 				INSTALL="/usr/bin/install -C -S -v"
 				MKDIR="/usr/bin/install -d -v"
-				MANPATH="${PREFIX}/man" ;;
-		Linux*)	OS="linux" CFLAGS="${CFLAGS} -DLINUX -D_GNU_SOURCE"  ;;
-		Solaris*)	OS="solaris" CFLAGS="${CFLAGS} -DSOLARIS"  ;;
+				MANPATH="${PREFIX}/man" 
+				echo "#define FREEBSD" >> $CONFIG ;;
+		Linux*)	OS="linux" CFLAGS="${CFLAGS} -D_GNU_SOURCE"  
+				echo "#define LINUX" >> $CONFIG ;;
+		Solaris*)	OS="solaris" CFLAGS="${CFLAGS}"
+				echo "#define SOLARIS" >> $CONFIG ;;
 		*)		OS="unknown"  ;;
 	esac
 }
@@ -388,9 +410,21 @@ write_result()
 	echo "Cflags: $CFLAGS" >> config.log
 	echo "Ldflags: $LDFLAGS" >> config.log
 	echo "Libs: $LIBS" >> config.log
+	echo "#define RVERSION \"${VERSION}\"" >> $CONFIG
+	echo "#define HASH_COMPAT" >> $CONFIG
+	# Write modules init function
+	echo "#include \"config.h\"" > modules.c
+	echo "module_t modules[] = {" >> modules.c;
+	modules_num=0
+	for m in $MODULES ; do
+		echo "{\"${m}\", ${m}_module_init}," >> modules.c
+		modules_num=`expr $modules_num + 1`
+	done
+	echo "};" >> modules.c
+	echo "#define MODULES_NUM $modules_num" >> $CONFIG
+	SOURCES="$SOURCES modules.c"
 	OBJECTS=`echo $SOURCES | sed -e 's/\.c/\.o/g'`
 	# Make CFLAGS more readable
-	CFLAGS="$CFLAGS -DRVERSION=\\\"${VERSION}\\\" -DHASH_COMPAT"
 	CFLAGS=`echo $CFLAGS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
 	LDFLAGS=`echo $LDLAGS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
 	LIBS=`echo $LIBS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
@@ -481,6 +515,19 @@ do
 		--group)						 GROUP=$value								;;
 		--enable-debug)					 CFLAGS="$CFLAGS -DWITH_DEBUG" OPT_FLAGS=""	;;
 		--enable-opt)                    OPT_FLAGS="-O3 -pipe"						;;
+		--add-module)					 SOURCES="$SOURCES $value"
+										 if [ ! -f $value ] ; then
+										 	echo "Cannot find $value, please check path"
+											exit 1
+										 fi
+										 modline=`grep '/***MODULE:' $value`
+										 if [ F"$modline" = "F" ] ; then
+										 	echo "Cannot find /***MODULE line in $value, please check syntax"
+											exit 1
+										 fi
+
+										 name=`echo $modline | sed 's/.*MODULE:\([^: ]*\).*/\1/'`
+										 MODULES="$MODULES $name"							;;
 		*)
             echo "$0: error: invalid option \"$option\""
             exit 1
@@ -496,6 +543,7 @@ if [ "F$help" = "Fyes" ] ; then
   --prefix=PATH                      set the installation prefix
   --enable-debug                     turn on extra debug messages
   --enable-opt                       turn on extra optimization
+  --add-module						 add additional C module
   --user=USER                        set user to use
   --group=GROUP                      set group to use
 END
@@ -508,6 +556,7 @@ LDFLAGS="$LDFLAGS -L$PREFIX/lib"
 echo "Starting configure for rmilter" >config.log
 echo $0 $@ >> config.log
 
+prepare_config
 check_compiler
 check_make
 check_lex
@@ -533,18 +582,18 @@ if [ $? -eq 1 ] ; then
 	cp $COMPAT_DIR/md5.c .
 	cp $COMPAT_DIR/md5.h .
 	SOURCES="$SOURCES md5.c"
-	CFLAGS="$CFLAGS -DHAVE_OWN_MD5"
 	DEPS="$DEPS md5.h"
+	have_opt "OWN_MD5"
 fi
 
 check_lib "util"
 if [ $? -eq 0 ] ; then
-	CFLAGS="$CFLAGS -DHAVE_LIBUTIL"
+	have_opt "LIBUTIL"
 fi
 
 check_function "pidfile_open" "sys/param.h" "libutil.h"
 if [ $? -eq 0 ] ; then
-	CFLAGS="$CFLAGS -DHAVE_PIDFILE"
+	have_opt "PIDFILE"
 fi
 
 check_function "strlcpy" "string.h"
@@ -552,18 +601,18 @@ if [ $? -eq 1 ] ; then
 	cp $COMPAT_DIR/strlcpy.c .
 	cp $COMPAT_DIR/strlcpy.h .
 	SOURCES="$SOURCES strlcpy.c"
-	CFLAGS="$CFLAGS -DHAVE_STRLCPY_H"
 	DEPS="$DEPS strlcpy.h"
+	have_opt "STRLCPY_H"
 fi
 check_function "bzero" "string.h"
 check_function "srandomdev"
 if [ $? -eq 0 ] ; then
-	CFLAGS="$CFLAGS -DHAVE_SRANDOMDEV"
+	have_opt "SRANDOMDEV"
 fi
 
 check_function "setproctitle" "unistd.h"
 if [ $? -eq 0 ] ; then
-	CFLAGS="$CFLAGS -DHAVE_SETPROCTITLE"
+	have_opt "SETPROCTITLE"
 fi
 
 check_include "endian.h"
@@ -585,20 +634,21 @@ fi
 check_macro "SLIST_FOREACH_SAFE" "sys/queue.h"
 if [ $? -eq 1 ] ; then 
 	cp $COMPAT_DIR/queue.h .
-	CFLAGS="$CFLAGS -DOWN_QUEUE_H"
 	DEPS="$DEPS queue.h"
+	have_opt "OWN_QUEUE_H"
 fi
 
 check_macro "PATH_MAX" "limits.h"
 if [ $? -eq 1 ] ; then
 	check_macro "MAXPATHLEN" "sys/param.h"
 	if [ $? -eq 1 ] ; then
-		CFLAGS="$CFLAGS -DHAVE_MAXPATHLEN -DMAXPATHLEN=4096"
+		have_opt "MAXPATHLEN"
+		echo "#define MAXPATHLEN 4096" >> $CONFIG
 	else
-		CFLAGS="$CFLAGS -DHAVE_MAXPATHLEN"
+		have_opt "MAXPATHLEN"
 	fi
 else
-	CFLAGS="$CFLAGS -DHAVE_PATH_MAX"
+	have_opt "PATH_MAX"
 fi
 
 check_package "glib-2.0" "glib.h"
@@ -623,3 +673,4 @@ if [ $? -ne 0 ] ; then
 	TARGETS="$TARGETS createuser"
 fi
 write_result
+finish_config

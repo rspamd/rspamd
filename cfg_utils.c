@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -10,8 +11,8 @@
 #include <syslog.h>
 #include <netdb.h>
 #include <math.h>
-#include <sys/types.h>
-#ifndef OWN_QUEUE_H
+#include "config.h"
+#ifndef HAVE_OWN_QUEUE_H
 #include <sys/queue.h>
 #else
 #include "queue.h"
@@ -127,7 +128,8 @@ init_defaults (struct config_file *cfg)
 	cfg->workers_number = DEFAULT_WORKERS_NUM;
 
 	LIST_INIT (&cfg->filters);
-	LIST_INIT (&cfg->modules);
+	LIST_INIT (&cfg->perl_modules);
+	LIST_INIT (&cfg->c_modules);
 }
 
 void
@@ -136,6 +138,7 @@ free_config (struct config_file *cfg)
 	struct filter_chain *chain, *tmp_chain;
 	struct script_param *param, *tmp_param;
 	struct perl_module *module, *tmp_module;
+	struct c_module *cmodule, *tmp_cmodule;
 
 	if (cfg->pid_file) {
 		g_free (cfg->pid_file);
@@ -150,10 +153,10 @@ free_config (struct config_file *cfg)
 	LIST_FOREACH_SAFE (chain, &cfg->filters, next, tmp_chain) {
 		LIST_FOREACH_SAFE (param, chain->scripts, next, tmp_param) {
 			if (param->symbol) {
-				g_free (param->symbol);
+				free (param->symbol);
 			}
 			if (param->function) {
-				g_free (param->function);
+				free (param->function);
 			}
 			LIST_REMOVE (param, next);
 			free (param);
@@ -161,14 +164,20 @@ free_config (struct config_file *cfg)
 		LIST_REMOVE (chain, next);
 		free (chain);
 	}
-	LIST_FOREACH_SAFE (module, &cfg->modules, next, tmp_module) {
+	LIST_FOREACH_SAFE (module, &cfg->perl_modules, next, tmp_module) {
 		if (module->path) {
-			g_free (module->path);
+			free (module->path);
 		}
 		LIST_REMOVE (module, next);
 		free (module);
 	}
 
+	LIST_FOREACH_SAFE (cmodule, &cfg->c_modules, next, tmp_cmodule) {
+		if (cmodule->ctx) {
+			free (cmodule->ctx);
+		}
+		free (cmodule);
+	}
 }
 
 int

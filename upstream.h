@@ -2,7 +2,7 @@
 #define UPSTREAM_H
 
 #include <sys/types.h>
-
+#include <stdint.h>
 
 struct upstream {
 	unsigned int errors;

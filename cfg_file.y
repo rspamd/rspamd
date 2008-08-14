@@ -366,7 +366,7 @@ requirecmd:
 			YYERROR;
 		}
 		cur->path = $3;
-		LIST_INSERT_HEAD (&cfg->modules, cur, next);
+		LIST_INSERT_HEAD (&cfg->perl_modules, cur, next);
 	}
 	;
 
