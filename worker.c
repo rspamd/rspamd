@@ -27,7 +27,12 @@
 #include "cfg_file.h"
 #include "url.h"
 
-#define CONTENT_LENGTH_HEADER "Content-Length:"
+#define CONTENT_LENGTH_HEADER "Content-Length: "
+#define HELO_HEADER "Helo: "
+#define FROM_HEADER "From: "
+#define IP_ADDR_HEADER "IP: "
+#define NRCPT_HEADER "Recipient-Number: "
+#define RCPT_HEADER "Rcpt: "
 
 const f_str_t CRLF = {
 	/* begin */"\r\n",
@@ -73,6 +78,15 @@ free_task (struct worker_task *task)
 		if (task->msg) {
 			fstrfree (task->msg->buf);
 			free (task->msg);
+		}
+		if (task->helo) {
+			free (task->helo);
+		}
+		if (task->from) {
+			free (task->from);
+		}
+		if (task->rcpt) {
+			free (task->rcpt);
 		}
 		while (!TAILQ_EMPTY (&task->urls)) {
 			cur = TAILQ_FIRST (&task->urls);
@@ -182,7 +196,7 @@ read_socket (struct bufferevent *bev, void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
 	ssize_t r;
-	char *s;
+	char *s, *c;
 
 	switch (task->state) {
 		case READ_COMMAND:
@@ -198,7 +212,7 @@ read_socket (struct bufferevent *bev, void *arg)
 			if (s != NULL) {
 				msg_info ("read_socket: got header %s", s);
 				if (strncasecmp (s, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
-					task->content_length = atoi (s + sizeof (CONTENT_LENGTH_HEADER));
+					task->content_length = atoi (s + sizeof (CONTENT_LENGTH_HEADER) - 1);
 					msg_info ("read_socket: parsed content-length: %ld", (long int)task->content_length);
 					task->msg = malloc (sizeof (f_str_buf_t));
 					if (task->msg == NULL) {
@@ -218,7 +232,67 @@ read_socket (struct bufferevent *bev, void *arg)
 					task->msg->pos = task->msg->buf->begin;
 					update_buf_size (task->msg);
 				}
-				else if (strlen (s) == 0) {
+				else if (strncasecmp (s, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
+					c = rindex (s, '\r');
+					if (c != NULL) {
+						task->helo = malloc (c - (s + sizeof (HELO_HEADER) - 1));
+						if (task->helo) {
+							strlcpy (task->helo, s + sizeof (HELO_HEADER) - 1, (c - (s + sizeof (HELO_HEADER) - 1)));
+						}
+						else {
+							msg_err ("read_socket: malloc failed for HELO header: %m");
+						}
+					}
+					else {
+						msg_err ("read_socket: header " HELO_HEADER " has invalid format, ignored");
+					}
+				}
+				else if (strncasecmp (s, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
+					c = rindex (s, '\r');
+					if (c != NULL) {
+					 	task->from = malloc (c - (s + sizeof (FROM_HEADER) - 1));
+						if (task->from) {
+							strlcpy (task->from, s + sizeof (FROM_HEADER) - 1, (c - (s + sizeof (FROM_HEADER) - 1)));
+						}
+						else {
+							msg_err ("read_socket: malloc failed for FROM header: %m");
+						}
+					}
+					else {
+						msg_err ("read_socket: header " FROM_HEADER " has invalid format, ignored");
+					}
+				}
+				else if (strncasecmp (s, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
+					c = rindex (s, '\r');
+					if (c != NULL) {
+						task->rcpt = malloc (c - (s + sizeof (RCPT_HEADER) - 1));
+						if (task->rcpt) {
+							strlcpy (task->rcpt, s + sizeof (RCPT_HEADER) - 1, (c - (s + sizeof (RCPT_HEADER) - 1)));
+						}
+						else {
+							msg_err ("read_socket: malloc failed for RCPT header: %m");
+						}
+					}
+					else {
+						msg_err ("read_socket: header " RCPT_HEADER " has invalid format, ignored");
+					}
+				}
+				else if (strncasecmp (s, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
+					task->nrcpt = atoi (s + sizeof (NRCPT_HEADER) - 1);
+				}
+				else if (strncasecmp (s, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
+					c = rindex (s, '\r');
+					if (c != NULL) {
+						*c = 0;
+						if (!inet_aton (s + sizeof (IP_ADDR_HEADER) - 1, &task->from_addr)) {
+							msg_info ("read_socket: bad ip header: '%s'", s);
+						}
+					}
+					else {
+						msg_err ("read_socket: header " IP_ADDR_HEADER " has invalid format, ignored");
+					}
+				}
+				else if (strlen (s) == 0 || (*s == '\r' && *(s+1) == '\n')) {
 					if (task->content_length != 0) {
 						task->state = READ_MESSAGE;
 					}

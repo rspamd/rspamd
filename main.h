@@ -84,6 +84,11 @@ struct worker_task {
 		WRITE_ERROR,
 	} state;
 	size_t content_length;
+	char *helo;
+	char *from;
+	char *rcpt;
+	unsigned int nrcpt;
+	struct in_addr from_addr;
 	f_str_buf_t *msg;
 	struct bufferevent *bev;
 	/* Number of mime parts */
