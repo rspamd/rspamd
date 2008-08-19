@@ -73,11 +73,15 @@ free_task (struct worker_task *task)
 {
 	struct uri *cur;
 	struct filter_result *res;
+	struct mime_part *part;
 
 	if (task) {
 		if (task->msg) {
 			fstrfree (task->msg->buf);
 			free (task->msg);
+		}
+		if (task->message) {
+			g_object_unref (task->message);
 		}
 		if (task->helo) {
 			free (task->helo);
@@ -90,14 +94,21 @@ free_task (struct worker_task *task)
 		}
 		while (!TAILQ_EMPTY (&task->urls)) {
 			cur = TAILQ_FIRST (&task->urls);
+			TAILQ_REMOVE (&task->urls, cur, next);
 			free (cur->string);
 			free (cur);
-			TAILQ_REMOVE (&task->urls, cur, next);
 		}
 		while (!TAILQ_EMPTY (&task->results)) {
 			res = TAILQ_FIRST (&task->results);
 			free (res);
 			TAILQ_REMOVE (&task->results, res, next);
+		}
+		while (!TAILQ_EMPTY (&task->parts)) {
+			part = TAILQ_FIRST (&task->parts);
+			g_object_unref (part->type);
+			g_object_unref (part->content);
+			TAILQ_REMOVE (&task->parts, part, next);
+			free (part);
 		}
 		free (task);
 	}
@@ -107,6 +118,7 @@ static void
 mime_foreach_callback (GMimeObject *part, gpointer user_data)
 {
 	struct worker_task *task = (struct worker_task *)user_data;
+	struct mime_part *mime_part;
 	const GMimeContentType *type;
 	GMimeDataWrapper *wrapper;
 	GMimeStream *part_stream;
@@ -150,6 +162,10 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
 				type = g_mime_part_get_content_type (GMIME_PART (part));
+				mime_part = g_malloc (sizeof (struct mime_part));
+				mime_part->type = type;
+				mime_part->content = part_content;
+				TAILQ_INSERT_TAIL (&task->parts, mime_part, next);
 				if (g_mime_content_type_is_type (type, "text", "html")) {
 					url_parse_html (task, part_content);
 				} 
@@ -182,6 +198,8 @@ process_message (struct worker_task *task)
 
 	/* parse the message from the stream */
 	message = g_mime_parser_construct_message (parser);
+	
+	task->message = message;
 
 	/* free the parser (and the stream) */
 	g_object_unref (parser);
@@ -385,6 +403,7 @@ accept_socket (int fd, short what, void *arg)
 	new_task->parts_count = 0;
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->results);
+	TAILQ_INIT (&new_task->parts);
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);

@@ -40,6 +40,9 @@ MANPATH="${PREFIX}/share/man"
 
 MAKEFILE="Makefile"
 MAKEFILE_IN="Makefile.in"
+PERL_MAKEFILE="perl/Makefile.PL.in"
+PERLCFLAGS=""
+PERLLDFLAGS=""
 
 TARGETS="${EXEC}"
 
@@ -339,8 +342,6 @@ check_perl()
 	$GCC $CFLAGS $PERLCFLAGS $PTHREAD_CFLAGS -o autotest $LDFLAGS $LIBS $PERLLDFLAGS $PTHREAD_LDFLAGS autotest.c >>config.log 2>&1
 	if [ $? -eq 0 ] ; then 
 		echo "found"
-		LIBS="$LIBS $PERLLDFLAGS"
-		CFLAGS="$CFLAGS $PERLCFLAGS"
 		cleanup
 		echo "-> OK" >> config.log
 		return 0
@@ -424,9 +425,21 @@ write_result()
 	echo "#define MODULES_NUM $modules_num" >> $CONFIG
 	SOURCES="$SOURCES modules.c"
 	OBJECTS=`echo $SOURCES | sed -e 's/\.c/\.o/g'`
+	# Write to perl Makefile
+	sed -e "s|%%libs%%|${LDFLAGS} ${LIBS}|" < $PERL_MAKEFILE > .pl_tmp
+	sed -e "s|%%include%%|${CFLAGS}|" < .pl_tmp > .pl2_tmp
+	PERL_MAKEFILE=`echo ${PERL_MAKEFILE} | sed -e 's|.in$||'`
+	mv .pl2_tmp $PERL_MAKEFILE
+	rm -f .pl_tmp .pl2_tmp
+	CURDIR=`pwd`
+	cd `dirname ${PERL_MAKEFILE}`
+	$PERL Makefile.PL
+	cd $CURDIR
 	# Make CFLAGS more readable
+	CFLAGS="$CFLAGS $PERLCFLAGS"
+	LIBS="$LIBS $PERLLDFLAGS"
 	CFLAGS=`echo $CFLAGS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
-	LDFLAGS=`echo $LDLAGS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
+	LDFLAGS=`echo $LDFLAGS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
 	LIBS=`echo $LIBS | tr [:space:] \\\n | sed -e 's/$/ \\\/' | sed -e '$,$s/\\\//' | sort -r -k2 | uniq`
 	cat > $MAKEFILE << END
 # This is ${EXEC} Makefile
@@ -497,7 +510,6 @@ ${LEX_OUTPUT}: cfg_file.h ${LEX_SRC} ${YACC_OUTPUT}
 ${YACC_OUTPUT}: cfg_file.h ${YACC_SRC}
 	\$(YACC) -d -o ${YACC_OUTPUT} ${YACC_SRC}
 END
-
 }
 
 

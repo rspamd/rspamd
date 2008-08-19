@@ -1,0 +1,9 @@
+use ExtUtils::MakeMaker;
+WriteMakefile(
+    NAME         => 'rspamd',
+    VERSION_FROM => 'rspamd.pm', # finds $VERSION
+    LIBS         => ['%%libs%%'],   # e.g., '-lm'
+    DEFINE       => '',
+    INC          => '%%include%%',
+);
+

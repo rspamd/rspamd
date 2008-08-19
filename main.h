@@ -22,6 +22,9 @@
 #include "fstring.h"
 #include "url.h"
 
+#include <glib.h>
+#include <gmime/gmime.h>
+
 /* Default values */
 #define FIXED_CONFIG_FILE "./rspamd.conf"
 /* Time in seconds to exit for old worker */
@@ -74,6 +77,12 @@ struct filter_result {
 	TAILQ_ENTRY (filter_result) next;
 };
 
+struct mime_part {
+	GMimeContentType *type;
+	GByteArray *content;
+	TAILQ_ENTRY (mime_part) next;
+};
+
 struct worker_task {
 	struct rspamd_worker *worker;
 	enum {
@@ -93,6 +102,10 @@ struct worker_task {
 	struct bufferevent *bev;
 	/* Number of mime parts */
 	int parts_count;
+	/* Headers */
+	GMimeMessage *message;
+	/* All parts of message */
+	TAILQ_HEAD (mime_partq, mime_part) parts;
 	/* URLs extracted from message */
 	TAILQ_HEAD (uriq, uri) urls;
 	/* List of filter results */

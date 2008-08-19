@@ -1,0 +1,3 @@
+TYPEMAP
+
+rspamd   T_PTROBJ
