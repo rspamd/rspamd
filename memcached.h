@@ -108,29 +108,29 @@ int memc_init_ctx_mirror (memcached_ctx_t *ctx, size_t memcached_num);
 
  * "prepend" means "add this data to an existing key before existing data".
  */
-#define memc_get(ctx, params, nelem) memc_read(ctx, "get", params, nelem)
-#define memc_set(ctx, params, nelem, expire) memc_write(ctx, "set", params, nelem, expire)
-#define memc_add(ctx, params, nelem, expire) memc_write(ctx, "add", params, nelem, expire)
-#define memc_replace(ctx, params, nelem, expire) memc_write(ctx, "replace", params, nelem, expire)
-#define memc_append(ctx, params, nelem, expire) memc_write(ctx, "append", params, nelem, expire)
-#define memc_prepend(ctx, params, nelem, expire) memc_write(ctx, "prepend", params, nelem, expire)
+#define memc_get(ctx, param) memc_read(ctx, "get", param)
+#define memc_set(ctx, param, expire) memc_write(ctx, "set", param, expire)
+#define memc_add(ctx, param, expire) memc_write(ctx, "add", param, expire)
+#define memc_replace(ctx, param, expire) memc_write(ctx, "replace", param, expire)
+#define memc_append(ctx, param, expire) memc_write(ctx, "append", param, expire)
+#define memc_prepend(ctx, param, expire) memc_write(ctx, "prepend", param, expire)
 
 /* Functions that works with mirror of memcached servers */
-#define memc_get_mirror(ctx, num, params, nelem) memc_read_mirror(ctx, num, "get", params, nelem)
-#define memc_set_mirror(ctx, num, params, nelem, expire) memc_write_mirror(ctx, num, "set", params, nelem, expire)
-#define memc_add_mirror(ctx, num, params, nelem, expire) memc_write_mirror(ctx, num, "add", params, nelem, expire)
-#define memc_replace_mirror(ctx, num, params, nelem, expire) memc_write_mirror(ctx, num, "replace", params, nelem, expire)
-#define memc_append_mirror(ctx, num, params, nelem, expire) memc_write_mirror(ctx, num, "append", params, nelem, expire)
-#define memc_prepend_mirror(ctx, num, params, nelem, expire) memc_write_mirror(ctx, num, "prepend", params, nelem, expire)
+#define memc_get_mirror(ctx, num, param) memc_read_mirror(ctx, num, "get", param)
+#define memc_set_mirror(ctx, num, param, expire) memc_write_mirror(ctx, num, "set", param, expire)
+#define memc_add_mirror(ctx, num, param, expire) memc_write_mirror(ctx, num, "add", param, expire)
+#define memc_replace_mirror(ctx, num, param, expire) memc_write_mirror(ctx, num, "replace", param, expire)
+#define memc_append_mirror(ctx, num, param, expire) memc_write_mirror(ctx, num, "append", param, expire)
+#define memc_prepend_mirror(ctx, num, param, expire) memc_write_mirror(ctx, num, "prepend", param, expire)
 
 
-memc_error_t memc_read (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *params, size_t *nelem);
-memc_error_t memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *params, size_t *nelem, int expire);
-memc_error_t memc_delete (memcached_ctx_t *ctx, memcached_param_t *params, size_t *nelem);
+memc_error_t memc_read (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param);
+memc_error_t memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param, int expire);
+memc_error_t memc_delete (memcached_ctx_t *ctx, memcached_param_t *params);
 
-memc_error_t memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *params, size_t *nelem, int expire);
-memc_error_t memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *params, size_t *nelem);
-memc_error_t memc_delete_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *params, size_t *nelem);
+memc_error_t memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param, int expire);
+memc_error_t memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param);
+memc_error_t memc_delete_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param);
 
 /* Return symbolic name of memcached error*/
 const char * memc_strerror (memc_error_t err);

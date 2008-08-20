@@ -17,7 +17,7 @@
 extern PerlInterpreter *my_perl;
 
 int
-perl_call_header_filter (const char *function, const char *header_name, const char *header_value)
+perl_call_header_filter (const char *function, struct worker_task *task)
 {
 	int result;
 	dSP;
@@ -26,8 +26,7 @@ perl_call_header_filter (const char *function, const char *header_name, const ch
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSVpv (header_name, 0)));
-	XPUSHs (sv_2mortal (newSVpv (header_value, 0)));
+	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -35,7 +34,7 @@ perl_call_header_filter (const char *function, const char *header_name, const ch
 	SPAGAIN;
 
 	result = POPi;
-	msg_debug ("header_filter: call of %s with header %s returned mark %d\n", function, header_name, result);
+	msg_debug ("header_filter: call of %s with returned mark %d\n", function, result);
 
 	PUTBACK;
 	FREETMPS;
@@ -45,7 +44,7 @@ perl_call_header_filter (const char *function, const char *header_name, const ch
 }
 
 int
-perl_call_mime_filter (const char *function, GByteArray *content)
+perl_call_mime_filter (const char *function, struct worker_task *task)
 {
 	int result;
 	dSP;
@@ -54,7 +53,7 @@ perl_call_mime_filter (const char *function, GByteArray *content)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSVpv (content->data, content->len)));
+	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -72,7 +71,7 @@ perl_call_mime_filter (const char *function, GByteArray *content)
 }
 
 int
-perl_call_message_filter (const char *function, GByteArray *content)
+perl_call_message_filter (const char *function, struct worker_task *task)
 {
 	int result;
 	dSP;
@@ -81,7 +80,7 @@ perl_call_message_filter (const char *function, GByteArray *content)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSVpv (content->data, content->len)));
+	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -99,7 +98,7 @@ perl_call_message_filter (const char *function, GByteArray *content)
 }
 
 int
-perl_call_url_filter (const char *function, struct uri *uri)
+perl_call_url_filter (const char *function, struct worker_task *task)
 {
 	int result;
 	dSP;
@@ -107,15 +106,8 @@ perl_call_url_filter (const char *function, struct uri *uri)
 	ENTER;
 	SAVETMPS;
 	
-	/* URL:
-	 * url,
-	 * host,
-	 * data
-	 */
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSVpv (uri->string, 0)));
-	XPUSHs (sv_2mortal (newSVpv (uri->host, uri->hostlen)));
-	XPUSHs (sv_2mortal (newSVpv (uri->data, uri->datalen)));
+	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -123,7 +115,7 @@ perl_call_url_filter (const char *function, struct uri *uri)
 	SPAGAIN;
 
 	result = POPi;
-	msg_debug ("url_filter: call of %s for url '%s' returned mark %d\n", function, uri->string, result);
+	msg_debug ("url_filter: call of %s for url returned mark %d\n", function, result);
 
 	PUTBACK;
 	FREETMPS;
@@ -133,18 +125,16 @@ perl_call_url_filter (const char *function, struct uri *uri)
 }
 
 int
-perl_call_chain_filter (const char *function, GArray *results)
+perl_call_chain_filter (const char *function, struct worker_task *task)
 {
-	int result, i;
+	int result;
 
 	dSP;
 
 	ENTER;
 	SAVETMPS;
 	PUSHMARK (SP);
-	for (i = 0; i < results->len; i ++) {
-		XPUSHs (sv_2mortal (newSViv (g_array_index (results, int, i))));
-	}
+	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -160,4 +150,29 @@ perl_call_chain_filter (const char *function, GArray *results)
 
 
 	return result;
+}
+
+void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
+{
+	struct {
+        SV *callback;
+        struct worker_task *task;
+    } *callback_data = data;
+	
+	dSP;
+
+	ENTER;
+	SAVETMPS;
+	PUSHMARK (SP);
+	XPUSHs (sv_2mortal (newSViv (PTR2IV (callback_data->task))));
+	XPUSHs (sv_2mortal (newSViv (error)));
+	XPUSHs (sv_2mortal (newSVpv (ctx->param->buf, ctx->param->bufsize)));
+	PUTBACK;
+
+	call_sv (callback_data->callback, G_SCALAR);
+
+	SPAGAIN;
+	FREETMPS;
+	LEAVE;
+
 }

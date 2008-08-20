@@ -21,6 +21,7 @@
 
 #include "fstring.h"
 #include "url.h"
+#include "memcached.h"
 
 #include <glib.h>
 #include <gmime/gmime.h>
@@ -100,6 +101,9 @@ struct worker_task {
 	struct in_addr from_addr;
 	f_str_buf_t *msg;
 	struct bufferevent *bev;
+	/* Memcached connection for this task */
+	memcached_ctx_t *memc_ctx;
+	unsigned memc_busy:1;
 	/* Number of mime parts */
 	int parts_count;
 	/* Headers */

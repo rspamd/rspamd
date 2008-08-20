@@ -6,12 +6,13 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <EXTERN.h>
+#include <perl.h>
+#include <XSUB.h>
+
 #include "../config.h"
 #include "../main.h"
-
-#include "EXTERN.h"
-#include "perl.h"
-#include "XSUB.h"
+#include "../perl.h"
 
 #define perl_set_session(r)													\
 	r = INT2PTR(struct worker_task *, SvIV((SV *) SvRV(ST(0))))
@@ -97,4 +98,122 @@ get_part (r, num)
     sv_2mortal((SV*)RETVAL);
 	OUTPUT:
 	RETVAL
+
+void
+read_memcached_key (r, key, datalen, callback)
+    CODE:
+    struct worker_task *r;
+    char *key;
+    unsigned int datalen;
+    SV *callback;
+    STRLEN keylen;
+    struct _param {
+        SV *callback;
+        struct worker_task *task;
+    } *callback_data;
+    memcached_param_t param;
+
+    perl_set_session (r);
+    key = (char *) SvPV (ST(1), keylen);
+    datalen = (unsigned int) SvIV (ST(2));
+    callback = SvRV(ST(3));
+
+    r->memc_ctx->callback = perl_call_memcached_callback;
+    callback_data = malloc (sizeof (struct _param));
+    if (callback_data == NULL) {
+		XSRETURN_UNDEF;
+    }
+    callback_data->callback = callback;
+    callback_data->task = r;
+    r->memc_ctx->callback_data = (void *)callback_data;
+
+    r->memc_busy = 1;
+
+    strlcpy (param.key, key, sizeof (param.key));
+    param.buf = malloc (datalen);
+    if (param.buf != NULL) {
+        param.bufsize = datalen;
+    }
+    param.bufpos = 0;
+    param.expire = 0;
+
+    memc_get (r->memc_ctx, &param);
+    XSRETURN_EMPTY;
+
+void
+write_memcached_key (r, key, data, expire, callback)
+    CODE:
+    struct worker_task *r;
+    char *key, *data;
+    SV *callback;
+    STRLEN keylen, datalen;
+    int expire;
+    struct _param {
+        SV *callback;
+        struct worker_task *task;
+    } *callback_data;
+    memcached_param_t param;
+
+    perl_set_session (r);
+    key = (char *) SvPV (ST(1), keylen);
+    data = (char *) SvPV (ST(2), datalen);
+    expire = (int) SvIV (ST(3));
+    callback = SvRV(ST(4));
+
+    r->memc_ctx->callback = perl_call_memcached_callback;
+    callback_data = malloc (sizeof (struct _param));
+    if (callback_data == NULL) {
+		XSRETURN_UNDEF;
+    }
+    callback_data->callback = callback;
+    callback_data->task = r;
+    r->memc_ctx->callback_data = (void *)callback_data;
+
+    r->memc_busy = 1;
+
+    strlcpy (param.key, key, sizeof (param.key));
+    param.buf = data;
+    param.bufsize = datalen;
+    param.bufpos = 0;
+    param.expire = expire;
+
+    memc_set (r->memc_ctx, &param, expire);
+    XSRETURN_EMPTY;
+
+void
+delete_memcached_key (r, key, callback)
+    CODE:
+    struct worker_task *r;
+    char *key;
+    SV *callback;
+    STRLEN keylen;
+    struct _param {
+        SV *callback;
+        struct worker_task *task;
+    } *callback_data;
+    memcached_param_t param;
+
+    perl_set_session (r);
+    key = (char *) SvPV (ST(1), keylen);
+    callback = SvRV(ST(2));
+
+    r->memc_ctx->callback = perl_call_memcached_callback;
+    callback_data = malloc (sizeof (struct _param));
+    if (callback_data == NULL) {
+		XSRETURN_UNDEF;
+    }
+    callback_data->callback = callback;
+    callback_data->task = r;
+    r->memc_ctx->callback_data = (void *)callback_data;
+
+    r->memc_busy = 1;
+
+    strlcpy (param.key, key, sizeof (param.key));
+    param.buf = NULL;
+    param.bufsize = 0;
+    param.bufpos = 0;
+    param.expire = 0;
+
+    memc_delete (r->memc_ctx, &param);
+    XSRETURN_EMPTY;
 

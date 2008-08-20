@@ -92,6 +92,10 @@ free_task (struct worker_task *task)
 		if (task->rcpt) {
 			free (task->rcpt);
 		}
+		if (task->memc_ctx) {
+			memc_close_ctx (task->memc_ctx);
+			free (task->memc_ctx);
+		}
 		while (!TAILQ_EMPTY (&task->urls)) {
 			cur = TAILQ_FIRST (&task->urls);
 			TAILQ_REMOVE (&task->urls, cur, next);
@@ -394,7 +398,7 @@ accept_socket (int fd, short what, void *arg)
 	
 	new_task = malloc (sizeof (struct worker_task));
 	if (new_task == NULL) {
-		msg_err ("accept_socket: cannot allocate memory for task");
+		msg_err ("accept_socket: cannot allocate memory for task, %m");
 		return;
 	}
 	new_task->worker = worker;
@@ -404,6 +408,15 @@ accept_socket (int fd, short what, void *arg)
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->results);
 	TAILQ_INIT (&new_task->parts);
+	new_task->memc_ctx = malloc (sizeof (memcached_ctx_t));
+	if (new_task->memc_ctx == NULL) {
+		msg_err ("accept_socket: cannot allocate memory for memcached ctx, %m");
+	}
+	else {
+		if (memc_init_ctx (new_task->memc_ctx) == -1) {
+			msg_err ("accept_socket: cannot init memcached context for task");
+		}
+	}
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);

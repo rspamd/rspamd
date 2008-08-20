@@ -395,9 +395,11 @@ socket_callback (int fd, short what, void *arg)
 				event_set (&ctx->mem_ev, ctx->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, socket_callback, (void *)ctx);
 				event_add (&ctx->mem_ev, NULL);
 				ctx->callback (ctx, OK, ctx->callback_data);
+                ctx->alive = 1;
 			}
 			else {
 				ctx->callback (ctx, SERVER_TIMEOUT, ctx->callback_data);
+                ctx->alive = 0;
 			}
 			break;
 		case CMD_WRITE:
@@ -538,16 +540,13 @@ memc_parse_header (char *buf, size_t *len, char **end)
  * Common read command handler for memcached
  */
 memc_error_t
-memc_read (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *params, size_t *nelem)
+memc_read (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param)
 {
-	int i;
-	for (i = 0; i < *nelem; i++) {
-		ctx->cmd = cmd;
-		ctx->op = CMD_READ;
-		ctx->param = &params[i];
-		event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
-		event_add (&ctx->mem_ev, &ctx->timeout);
-	}
+	ctx->cmd = cmd;
+	ctx->op = CMD_READ;
+	ctx->param = param;
+	event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
+	event_add (&ctx->mem_ev, &ctx->timeout);
 
 	return OK;
 }
@@ -556,16 +555,13 @@ memc_read (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *params, siz
  * Common write command handler for memcached
  */
 memc_error_t
-memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *params, size_t *nelem, int expire)
+memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param, int expire)
 {
-	int i;	
-	for (i = 0; i < *nelem; i++) {
-		ctx->cmd = cmd;
-		ctx->op = CMD_WRITE;
-		ctx->param = &params[i];
-		event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
-		event_add (&ctx->mem_ev, &ctx->timeout);
-	}
+	ctx->cmd = cmd;
+	ctx->op = CMD_WRITE;
+	ctx->param = param;
+	event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
+	event_add (&ctx->mem_ev, &ctx->timeout);
 
 	return OK;
 }
@@ -573,17 +569,13 @@ memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *params, si
  * Delete command handler
  */
 memc_error_t
-memc_delete (memcached_ctx_t *ctx, memcached_param_t *params, size_t *nelem)
+memc_delete (memcached_ctx_t *ctx, memcached_param_t *param)
 {
-	int i;
-	
-	for (i = 0; i < *nelem; i++) {
-		ctx->cmd = "delete";
-		ctx->op = CMD_DELETE;
-		ctx->param = &params[i];
-		event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
-		event_add (&ctx->mem_ev, &ctx->timeout);
-	}
+	ctx->cmd = "delete";
+	ctx->op = CMD_DELETE;
+	ctx->param = param;
+	event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
+	event_add (&ctx->mem_ev, &ctx->timeout);
 
 	return OK;
 }
@@ -593,13 +585,13 @@ memc_delete (memcached_ctx_t *ctx, memcached_param_t *params, size_t *nelem)
  * writing is done to each memcached server
  */
 memc_error_t
-memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *params, size_t *nelem, int expire)
+memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param, int expire)
 {
 	memc_error_t r, result = OK;
 
 	while (memcached_num --) {
 		if (ctx[memcached_num].alive == 1) {
-			r = memc_write (&ctx[memcached_num], cmd, params, nelem, expire);
+			r = memc_write (&ctx[memcached_num], cmd, param, expire);
 			if (r != OK) {
 				memc_log (&ctx[memcached_num], __LINE__, "memc_write_mirror: cannot write to mirror server: %s", memc_strerror (r));
 				result = r;
@@ -616,13 +608,13 @@ memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, 
  * reading is done from first active memcached server
  */
 memc_error_t
-memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *params, size_t *nelem)
+memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param)
 {
 	memc_error_t r, result = OK;
 
 	while (memcached_num --) {
 		if (ctx[memcached_num].alive == 1) {
-			r = memc_read (&ctx[memcached_num], cmd, params, nelem);
+			r = memc_read (&ctx[memcached_num], cmd, param);
 			if (r != OK) {
 				result = r;
 				if (r != NOT_EXISTS) {
@@ -647,13 +639,13 @@ memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, m
  * deleting is done for each active memcached server
  */
 memc_error_t
-memc_delete_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *params, size_t *nelem)
+memc_delete_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param)
 {
 	memc_error_t r, result = OK;
 
 	while (memcached_num --) {
 		if (ctx[memcached_num].alive == 1) {
-			r = memc_delete (&ctx[memcached_num], params, nelem);
+			r = memc_delete (&ctx[memcached_num], param);
 			if (r != OK) {
 				result = r;
 				if (r != NOT_EXISTS) {
@@ -679,7 +671,7 @@ memc_init_ctx (memcached_ctx_t *ctx)
 	}
 
 	ctx->count = 0;
-	ctx->alive = 1;
+	ctx->alive = 0;
 	ctx->op = CMD_NULL;
 	/* Set default callback */
 	if (ctx->callback == NULL) {

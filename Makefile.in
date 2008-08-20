@@ -1,8 +1,12 @@
+.PHONY: perl clean
 
 all: perl $(TARGETS)
 
-perl:
+perl: perl/Makefile
 	cd perl && make && cd ..
+
+perl/Makefile: perl/Makefile.PL
+	cd perl && perl Makefile.PL && cd ..
 
 memctest: upstream.c memcached.c memcached-test.c
 	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c upstream.c
@@ -11,6 +15,7 @@ memctest: upstream.c memcached.c memcached-test.c
 	$(CC) $(OPT_FLAGS) $(PTHREAD_LDFLAGS) $(LD_PATH) upstream.o memcached.o memcached-test.o $(LIBS) -o memcached-test
 
 install: $(EXEC)
+	cd perl && make install && cd ..
 	$(INSTALL) -b $(EXEC) $(PREFIX)/sbin/$(EXEC)
 	$(INSTALL) -v $(EXEC).sh $(PREFIX)/etc/rc.d
 	#$(INSTALL) -m0644 rspamd.8 $(MANPATH)/man8
