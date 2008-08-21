@@ -125,16 +125,23 @@ perl_call_url_filter (const char *function, struct worker_task *task)
 }
 
 int
-perl_call_chain_filter (const char *function, struct worker_task *task)
+perl_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number)
 {
-	int result;
+	int result, i;
+	AV *av;
 
 	dSP;
-
+	
 	ENTER;
 	SAVETMPS;
+	av = newAV();
+	av_extend (av, number);
+	for (i = 0; i < number; i ++) {
+		av_push (av, sv_2mortal (newSViv (marks[i])));
+	}
 	PUSHMARK (SP);
 	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
+	XPUSHs (AvARRAY (av));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -146,6 +153,7 @@ perl_call_chain_filter (const char *function, struct worker_task *task)
 
 	PUTBACK;
 	FREETMPS;
+	av_undef (av);
 	LEAVE;
 
 
@@ -170,6 +178,9 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
 	PUTBACK;
 
 	call_sv (callback_data->callback, G_SCALAR);
+	
+	free (callback_data);
+	free (ctx);
 
 	SPAGAIN;
 	FREETMPS;

@@ -6,6 +6,7 @@
 #ifndef CFG_FILE_H
 #define CFG_FILE_H
 
+#include "config.h"
 #include <sys/types.h>
 #ifndef OWN_QUEUE_H
 #include <sys/queue.h>
@@ -18,6 +19,7 @@
 #include <glib.h>
 #include "upstream.h"
 #include "memcached.h"
+#include "main.h"
 
 #define DEFAULT_BIND_PORT 768
 #define MAX_MEMCACHED_SERVERS 48
@@ -55,8 +57,6 @@ enum script_type {
 	SCRIPT_CHAIN,
 };
 
-struct uri;
-
 struct memcached_server {
 	struct upstream up;
 	struct in_addr addr;
@@ -70,20 +70,6 @@ struct perl_module {
 	LIST_ENTRY (perl_module) next;
 };
 
-struct module_ctx {
-	int (*header_filter)(const char *header_name, const char *header_value);
-	int (*mime_filter)(GByteArray *content);
-	int (*message_filter)(GByteArray *content);
-	int (*uri_filter)(struct uri *uri);
-	int (*chain_filter)(GArray *results);
-};
-
-struct c_module {
-	const char *name;
-	struct module_ctx *ctx;
-	LIST_ENTRY (c_module) next;
-};
-
 struct script_param {
 	char *symbol;
 	char *function;
@@ -93,6 +79,7 @@ struct script_param {
 
 struct filter_chain {
 	unsigned int metric;
+	unsigned int scripts_number;
 	LIST_HEAD (scriptq, script_param) *scripts;
 	LIST_ENTRY (filter_chain) next;
 };

@@ -59,6 +59,7 @@ struct pidfh;
 struct config_file;
 struct filter_chain;
 
+
 /* Struct that determine main server object (for logging purposes) */
 struct rspamd_main {
 	struct config_file *cfg;
@@ -76,6 +77,14 @@ struct filter_result {
 	struct filter_chain *chain;
 	int mark;
 	TAILQ_ENTRY (filter_result) next;
+};
+
+struct chain_result {
+	struct filter_chain *chain;
+	int *marks;
+	unsigned int marks_num;
+	int result_mark;
+	TAILQ_ENTRY (chain_result) next;
 };
 
 struct mime_part {
@@ -114,6 +123,22 @@ struct worker_task {
 	TAILQ_HEAD (uriq, uri) urls;
 	/* List of filter results */
 	TAILQ_HEAD (resultsq, filter_result) results;
+	/* Results of all chains */
+	TAILQ_HEAD (chainsq, chain_result) chain_results;
+	struct config_file *cfg;
+};
+
+struct module_ctx {
+	int (*header_filter)(struct worker_task *task);
+	int (*mime_filter)(struct worker_task *task);
+	int (*message_filter)(struct worker_task *task);
+	int (*url_filter)(struct worker_task *task);
+};
+
+struct c_module {
+	const char *name;
+	struct module_ctx *ctx;
+	LIST_ENTRY (c_module) next;
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);

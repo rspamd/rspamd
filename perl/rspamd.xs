@@ -111,6 +111,7 @@ read_memcached_key (r, key, datalen, callback)
         SV *callback;
         struct worker_task *task;
     } *callback_data;
+    memcached_ctx_t *ctx;
     memcached_param_t param;
 
     perl_set_session (r);
@@ -118,16 +119,21 @@ read_memcached_key (r, key, datalen, callback)
     datalen = (unsigned int) SvIV (ST(2));
     callback = SvRV(ST(3));
 
-    r->memc_ctx->callback = perl_call_memcached_callback;
+    /* Copy old ctx to new one */
+    ctx = malloc (sizeof (memcached_ctx_t));
+    if (ctx == NULL) {
+        XSRETURN_UNDEF;
+    }
+    memcpy (ctx, r->memc_ctx, sizeof (memcached_ctx_t));
+    /* Set perl callback */
+    ctx->callback = perl_call_memcached_callback;
     callback_data = malloc (sizeof (struct _param));
     if (callback_data == NULL) {
 		XSRETURN_UNDEF;
     }
     callback_data->callback = callback;
     callback_data->task = r;
-    r->memc_ctx->callback_data = (void *)callback_data;
-
-    r->memc_busy = 1;
+    ctx->callback_data = (void *)callback_data;
 
     strlcpy (param.key, key, sizeof (param.key));
     param.buf = malloc (datalen);
@@ -137,7 +143,7 @@ read_memcached_key (r, key, datalen, callback)
     param.bufpos = 0;
     param.expire = 0;
 
-    memc_get (r->memc_ctx, &param);
+    memc_get (ctx, &param);
     XSRETURN_EMPTY;
 
 void
@@ -152,6 +158,7 @@ write_memcached_key (r, key, data, expire, callback)
         SV *callback;
         struct worker_task *task;
     } *callback_data;
+    memcached_ctx_t *ctx;
     memcached_param_t param;
 
     perl_set_session (r);
@@ -160,16 +167,21 @@ write_memcached_key (r, key, data, expire, callback)
     expire = (int) SvIV (ST(3));
     callback = SvRV(ST(4));
 
-    r->memc_ctx->callback = perl_call_memcached_callback;
+    /* Copy old ctx to new one */
+    ctx = malloc (sizeof (memcached_ctx_t));
+    if (ctx == NULL) {
+        XSRETURN_UNDEF;
+    }
+    memcpy (ctx, r->memc_ctx, sizeof (memcached_ctx_t));
+    /* Set perl callback */
+    ctx->callback = perl_call_memcached_callback;
     callback_data = malloc (sizeof (struct _param));
     if (callback_data == NULL) {
 		XSRETURN_UNDEF;
     }
     callback_data->callback = callback;
     callback_data->task = r;
-    r->memc_ctx->callback_data = (void *)callback_data;
-
-    r->memc_busy = 1;
+    ctx->callback_data = (void *)callback_data;
 
     strlcpy (param.key, key, sizeof (param.key));
     param.buf = data;
@@ -177,7 +189,7 @@ write_memcached_key (r, key, data, expire, callback)
     param.bufpos = 0;
     param.expire = expire;
 
-    memc_set (r->memc_ctx, &param, expire);
+    memc_set (ctx, &param, expire);
     XSRETURN_EMPTY;
 
 void
@@ -191,22 +203,28 @@ delete_memcached_key (r, key, callback)
         SV *callback;
         struct worker_task *task;
     } *callback_data;
+    memcached_ctx_t *ctx;
     memcached_param_t param;
 
     perl_set_session (r);
     key = (char *) SvPV (ST(1), keylen);
     callback = SvRV(ST(2));
 
-    r->memc_ctx->callback = perl_call_memcached_callback;
+    /* Copy old ctx to new one */
+    ctx = malloc (sizeof (memcached_ctx_t));
+    if (ctx == NULL) {
+        XSRETURN_UNDEF;
+    }
+    memcpy (ctx, r->memc_ctx, sizeof (memcached_ctx_t));
+    /* Set perl callback */
+    ctx->callback = perl_call_memcached_callback;
     callback_data = malloc (sizeof (struct _param));
     if (callback_data == NULL) {
 		XSRETURN_UNDEF;
     }
     callback_data->callback = callback;
     callback_data->task = r;
-    r->memc_ctx->callback_data = (void *)callback_data;
-
-    r->memc_busy = 1;
+    ctx->callback_data = (void *)callback_data;
 
     strlcpy (param.key, key, sizeof (param.key));
     param.buf = NULL;
@@ -214,6 +232,6 @@ delete_memcached_key (r, key, callback)
     param.bufpos = 0;
     param.expire = 0;
 
-    memc_delete (r->memc_ctx, &param);
+    memc_delete (ctx, &param);
     XSRETURN_EMPTY;
 

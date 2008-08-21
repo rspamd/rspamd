@@ -25,6 +25,7 @@ extern int yylineno;
 extern char *yytext;
 
 struct scriptq *cur_scripts;
+unsigned int cur_scripts_num = 0;
 
 %}
 
@@ -226,6 +227,7 @@ filterbody:
 
 		cur_chain->metric = $1;
 		cur_chain->scripts = cur_scripts;
+		cur_chain->scripts_number = cur_scripts_num;
 		LIST_INSERT_HEAD (&cfg->filters, cur_chain, next);
 
 	}
@@ -250,6 +252,7 @@ filter_chain:
 			YYERROR;
 		}
 		LIST_INSERT_HEAD (cur_scripts, $1, next);
+		cur_scripts_num = 1;
 	}
 	| filter_chain filter_param SEMICOLON	{
 		if ($2 == NULL) {
@@ -257,6 +260,7 @@ filter_chain:
 			YYERROR;
 		}
 		LIST_INSERT_HEAD (cur_scripts, $2, next);
+		cur_scripts_num ++;
 	}
 	;
 
