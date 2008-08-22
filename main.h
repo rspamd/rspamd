@@ -93,6 +93,13 @@ struct mime_part {
 	TAILQ_ENTRY (mime_part) next;
 };
 
+struct save_point {
+	enum { C_FILTER, PERL_FILTER } save_type;
+	void *entry;
+	void *chain;
+	unsigned saved:1;
+};
+
 struct worker_task {
 	struct rspamd_worker *worker;
 	enum {
@@ -101,6 +108,7 @@ struct worker_task {
 		READ_MESSAGE,
 		WRITE_REPLY,
 		WRITE_ERROR,
+		WAIT_FILTER,
 	} state;
 	size_t content_length;
 	char *helo;
@@ -126,6 +134,7 @@ struct worker_task {
 	/* Results of all chains */
 	TAILQ_HEAD (chainsq, chain_result) chain_results;
 	struct config_file *cfg;
+	struct save_point save;
 };
 
 struct module_ctx {
@@ -142,7 +151,7 @@ struct c_module {
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
-
+int process_filters (struct worker_task *task);
 
 #endif
 

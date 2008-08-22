@@ -181,6 +181,9 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
 	
 	free (callback_data);
 	free (ctx);
+    /* Set save point */
+    callback_data->task->save.saved = 0;
+	process_filters (callback_data->task);
 
 	SPAGAIN;
 	FREETMPS;

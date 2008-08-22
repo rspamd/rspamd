@@ -100,6 +100,22 @@ get_part (r, num)
 	RETVAL
 
 void
+save_point (r)
+    CODE:
+	struct worker_task *r;
+
+	perl_set_session (r);
+    r->save.saved = 1;
+
+void
+recall_filter (r)
+    CODE:
+    struct worker_task *r;
+
+	perl_set_session (r);
+    process_filters (r);
+
+void
 read_memcached_key (r, key, datalen, callback)
     CODE:
     struct worker_task *r;
@@ -144,6 +160,8 @@ read_memcached_key (r, key, datalen, callback)
     param.expire = 0;
 
     memc_get (ctx, &param);
+    /* Set save point */
+    r->save.saved = 1;
     XSRETURN_EMPTY;
 
 void
@@ -190,6 +208,8 @@ write_memcached_key (r, key, data, expire, callback)
     param.expire = expire;
 
     memc_set (ctx, &param, expire);
+    /* Set save point */
+    r->save.saved = 1;
     XSRETURN_EMPTY;
 
 void
@@ -233,5 +253,7 @@ delete_memcached_key (r, key, callback)
     param.expire = 0;
 
     memc_delete (ctx, &param);
+    /* Set save point */
+    r->save.saved = 1;
     XSRETURN_EMPTY;
 
