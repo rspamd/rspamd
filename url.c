@@ -54,6 +54,89 @@ static const struct _proto protocol_backends[] = {
 	{ NULL,		   0, NULL,			0, 0, 1, 0 },
 };
 
+/* 
+   Table of "reserved" and "unsafe" characters.  Those terms are
+   rfc1738-speak, as such largely obsoleted by rfc2396 and later
+   specs, but the general idea remains.
+
+   A reserved character is the one that you can't decode without
+   changing the meaning of the URL.  For example, you can't decode
+   "/foo/%2f/bar" into "/foo///bar" because the number and contents of
+   path components is different.  Non-reserved characters can be
+   changed, so "/foo/%78/bar" is safe to change to "/foo/x/bar".  The
+   unsafe characters are loosely based on rfc1738, plus "$" and ",",
+   as recommended by rfc2396, and minus "~", which is very frequently
+   used (and sometimes unrecognized as %7E by broken servers).
+
+   An unsafe character is the one that should be encoded when URLs are
+   placed in foreign environments.  E.g. space and newline are unsafe
+   in HTTP contexts because HTTP uses them as separator and line
+   terminator, so they must be encoded to %20 and %0A respectively.
+   "*" is unsafe in shell context, etc.
+
+   We determine whether a character is unsafe through static table
+   lookup.  This code assumes ASCII character set and 8-bit chars.  */
+
+enum {
+  /* rfc1738 reserved chars + "$" and ",".  */
+  urlchr_reserved = 1,
+
+  /* rfc1738 unsafe chars, plus non-printables.  */
+  urlchr_unsafe   = 2
+};
+
+#define urlchr_test(c, mask) (urlchr_table[(unsigned char)(c)] & (mask))
+#define URL_RESERVED_CHAR(c) urlchr_test(c, urlchr_reserved)
+#define URL_UNSAFE_CHAR(c) urlchr_test(c, urlchr_unsafe)
+/* Convert an ASCII hex digit to the corresponding number between 0
+   and 15.  H should be a hexadecimal digit that satisfies isxdigit;
+   otherwise, the result is undefined.  */
+#define XDIGIT_TO_NUM(h) ((h) < 'A' ? (h) - '0' : toupper (h) - 'A' + 10)
+#define X2DIGITS_TO_NUM(h1, h2) ((XDIGIT_TO_NUM (h1) << 4) + XDIGIT_TO_NUM (h2))
+/* The reverse of the above: convert a number in the [0, 16) range to
+   the ASCII representation of the corresponding hexadecimal digit.
+   `+ 0' is there so you can't accidentally use it as an lvalue.  */
+#define XNUM_TO_DIGIT(x) ("0123456789ABCDEF"[x] + 0)
+#define XNUM_TO_digit(x) ("0123456789abcdef"[x] + 0)
+
+/* Shorthands for the table: */
+#define R  urlchr_reserved
+#define U  urlchr_unsafe
+#define RU R|U
+
+static const unsigned char urlchr_table[256] =
+{
+  U,  U,  U,  U,   U,  U,  U,  U,   /* NUL SOH STX ETX  EOT ENQ ACK BEL */
+  U,  U,  U,  U,   U,  U,  U,  U,   /* BS  HT  LF  VT   FF  CR  SO  SI  */
+  U,  U,  U,  U,   U,  U,  U,  U,   /* DLE DC1 DC2 DC3  DC4 NAK SYN ETB */
+  U,  U,  U,  U,   U,  U,  U,  U,   /* CAN EM  SUB ESC  FS  GS  RS  US  */
+  U,  0,  U, RU,   R,  U,  R,  0,   /* SP  !   "   #    $   %   &   '   */
+  0,  0,  0,  R,   R,  0,  0,  R,   /* (   )   *   +    ,   -   .   /   */
+  0,  0,  0,  0,   0,  0,  0,  0,   /* 0   1   2   3    4   5   6   7   */
+  0,  0, RU,  R,   U,  R,  U,  R,   /* 8   9   :   ;    <   =   >   ?   */
+ RU,  0,  0,  0,   0,  0,  0,  0,   /* @   A   B   C    D   E   F   G   */
+  0,  0,  0,  0,   0,  0,  0,  0,   /* H   I   J   K    L   M   N   O   */
+  0,  0,  0,  0,   0,  0,  0,  0,   /* P   Q   R   S    T   U   V   W   */
+  0,  0,  0, RU,   U, RU,  U,  0,   /* X   Y   Z   [    \   ]   ^   _   */
+  U,  0,  0,  0,   0,  0,  0,  0,   /* `   a   b   c    d   e   f   g   */
+  0,  0,  0,  0,   0,  0,  0,  0,   /* h   i   j   k    l   m   n   o   */
+  0,  0,  0,  0,   0,  0,  0,  0,   /* p   q   r   s    t   u   v   w   */
+  0,  0,  0,  U,   U,  U,  0,  U,   /* x   y   z   {    |   }   ~   DEL */
+
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+};
+#undef R
+#undef U
+#undef RU
+
 static inline int
 end_of_dir(unsigned char c)
 {
@@ -189,6 +272,292 @@ get_protocol_length(const unsigned char *url)
 	return (*end == ':' || isdigit(*end)) ? end - url : 0;
 }
 
+/* URL-unescape the string S.
+
+   This is done by transforming the sequences "%HH" to the character
+   represented by the hexadecimal digits HH.  If % is not followed by
+   two hexadecimal digits, it is inserted literally.
+
+   The transformation is done in place.  If you need the original
+   string intact, make a copy before calling this function.  */
+
+static void
+url_unescape (char *s)
+{
+ 	char *t = s;			/* t - tortoise */
+	char *h = s;			/* h - hare     */
+    
+	for (; *h; h++, t++) {
+		if (*h != '%') {
+			copychar:
+			*t = *h;
+		}
+        else {
+			char c;
+			/* Do nothing if '%' is not followed by two hex digits. */
+			if (!h[1] || !h[2] || !(isxdigit (h[1]) && isxdigit (h[2])))
+				goto copychar;
+			c = X2DIGITS_TO_NUM (h[1], h[2]);
+			/* Don't unescape %00 because there is no way to insert it
+			 * into a C string without effectively truncating it. */
+			if (c == '\0')
+				goto copychar;
+			*t = c;
+			h += 2;
+		}
+	}
+	*t = '\0';
+}
+
+/* The core of url_escape_* functions.  Escapes the characters that
+   match the provided mask in urlchr_table.
+
+   If ALLOW_PASSTHROUGH is non-zero, a string with no unsafe chars
+   will be returned unchanged.  If ALLOW_PASSTHROUGH is zero, a
+   freshly allocated string will be returned in all cases.  */
+
+static char *
+url_escape_1 (const char *s, unsigned char mask, int allow_passthrough)
+{
+	const char *p1;
+	char *p2, *newstr;
+	int newlen;
+	int addition = 0;
+
+	for (p1 = s; *p1; p1++)
+		if (urlchr_test (*p1, mask))
+			addition += 2;		/* Two more characters (hex digits) */
+
+	if (!addition)
+		return allow_passthrough ? (char *)s : strdup (s);
+
+	newlen = (p1 - s) + addition;
+	newstr = (char *) g_malloc (newlen + 1);
+
+	p1 = s;
+	p2 = newstr;
+	while (*p1) {
+		/* Quote the characters that match the test mask. */
+		if (urlchr_test (*p1, mask)) {
+			unsigned char c = *p1++;
+			*p2++ = '%';
+			*p2++ = XNUM_TO_DIGIT (c >> 4);
+			*p2++ = XNUM_TO_DIGIT (c & 0xf);
+		}
+		else
+			*p2++ = *p1++;
+	}
+	*p2 = '\0';
+
+	return newstr;
+}
+
+/* URL-escape the unsafe characters (see urlchr_table) in a given
+   string, returning a freshly allocated string.  */
+
+char *
+url_escape (const char *s)
+{
+	return url_escape_1 (s, urlchr_unsafe, 0);
+}
+
+/* URL-escape the unsafe characters (see urlchr_table) in a given
+   string.  If no characters are unsafe, S is returned.  */
+
+static char *
+url_escape_allow_passthrough (const char *s)
+{
+	return url_escape_1 (s, urlchr_unsafe, 1);
+}
+
+/* Decide whether the char at position P needs to be encoded.  (It is
+   not enough to pass a single char *P because the function may need
+   to inspect the surrounding context.)
+
+   Return 1 if the char should be escaped as %XX, 0 otherwise.  */
+
+static inline int
+char_needs_escaping (const char *p)
+{
+	if (*p == '%') {
+		if (isxdigit (*(p + 1)) && isxdigit (*(p + 2)))
+			return 0;
+		else
+			/* Garbled %.. sequence: encode `%'. */
+			return 1;
+	}
+	else if (URL_UNSAFE_CHAR (*p) && !URL_RESERVED_CHAR (*p))
+		return 1;
+	else
+		return 0;
+}
+
+/* Translate a %-escaped (but possibly non-conformant) input string S
+   into a %-escaped (and conformant) output string.  If no characters
+   are encoded or decoded, return the same string S; otherwise, return
+   a freshly allocated string with the new contents.
+
+   After a URL has been run through this function, the protocols that
+   use `%' as the quote character can use the resulting string as-is,
+   while those that don't can use url_unescape to get to the intended
+   data.  This function is stable: once the input is transformed,
+   further transformations of the result yield the same output.
+*/
+
+static char *
+reencode_escapes (const char *s)
+{
+	const char *p1;
+	char *newstr, *p2;
+	int oldlen, newlen;
+
+	int encode_count = 0;
+
+	/* First pass: inspect the string to see if there's anything to do,
+	   and to calculate the new length.  */
+	for (p1 = s; *p1; p1++)
+		if (char_needs_escaping (p1))
+			++encode_count;
+
+	if (!encode_count)
+		/* The string is good as it is. */
+		return (char *) s;		/* C const model sucks. */
+
+	oldlen = p1 - s;
+	/* Each encoding adds two characters (hex digits).  */
+	newlen = oldlen + 2 * encode_count;
+	newstr = g_malloc (newlen + 1);
+
+	/* Second pass: copy the string to the destination address, encoding
+	   chars when needed.  */
+	p1 = s;
+	p2 = newstr;
+
+	while (*p1)
+	  if (char_needs_escaping (p1)) {
+		unsigned char c = *p1++;
+		*p2++ = '%';
+		*p2++ = XNUM_TO_DIGIT (c >> 4);
+		*p2++ = XNUM_TO_DIGIT (c & 0xf);
+	}
+	else {
+	    *p2++ = *p1++;
+	}
+
+	*p2 = '\0';
+	return newstr;
+}
+/* Unescape CHR in an otherwise escaped STR.  Used to selectively
+   escaping of certain characters, such as "/" and ":".  Returns a
+   count of unescaped chars.  */
+
+static void
+unescape_single_char (char *str, char chr)
+{
+	const char c1 = XNUM_TO_DIGIT (chr >> 4);
+	const char c2 = XNUM_TO_DIGIT (chr & 0xf);
+	char *h = str;		/* hare */
+	char *t = str;		/* tortoise */
+
+	for (; *h; h++, t++) {
+		if (h[0] == '%' && h[1] == c1 && h[2] == c2) {
+			*t = chr;
+			h += 2;
+		}
+	    else {
+			*t = *h;
+		}
+	}
+	*t = '\0';
+}
+
+/* Escape unsafe and reserved characters, except for the slash
+	 characters.  */
+
+static char *
+url_escape_dir (const char *dir)
+{
+	char *newdir = url_escape_1 (dir, urlchr_unsafe | urlchr_reserved, 1);
+	if (newdir == dir)
+		return (char *)dir;
+
+	unescape_single_char (newdir, '/');
+	return newdir;
+}
+
+/* Resolve "." and ".." elements of PATH by destructively modifying
+   PATH and return non-zero if PATH has been modified, zero otherwise.
+
+   The algorithm is in spirit similar to the one described in rfc1808,
+   although implemented differently, in one pass.  To recap, path
+   elements containing only "." are removed, and ".." is taken to mean
+   "back up one element".  Single leading and trailing slashes are
+   preserved.
+
+   For example, "a/b/c/./../d/.." will yield "a/b/".  More exhaustive
+   test examples are provided below.  If you change anything in this
+   function, run test_path_simplify to make sure you haven't broken a
+   test case.  */
+
+static int
+path_simplify (char *path)
+{
+	char *h = path;		/* hare */
+	char *t = path;		/* tortoise */
+	char *beg = path;		/* boundary for backing the tortoise */
+	char *end = path + strlen (path);
+
+	while (h < end) {
+		/* Hare should be at the beginning of a path element. */
+		if (h[0] == '.' && (h[1] == '/' || h[1] == '\0')) {
+	  		/* Ignore "./". */
+	  		h += 2;
+		}
+		else if (h[0] == '.' && h[1] == '.' && (h[2] == '/' || h[2] == '\0')) {
+	  		/* Handle "../" by retreating the tortoise by one path
+	     	   element -- but not past beggining.  */
+			if (t > beg) {
+	      		/* Move backwards until T hits the beginning of the
+		 	       previous path element or the beginning of path. */
+				for (--t; t > beg && t[-1] != '/'; t--);
+	    	}
+	  		else {
+	      		/* If we're at the beginning, copy the "../" literally
+		 	       move the beginning so a later ".." doesn't remove
+		 	       it.  */
+				beg = t + 3;
+				goto regular;
+			}
+			h += 3;
+		}
+		else {
+			regular:
+			/* A regular path element.  If H hasn't advanced past T,
+	           simply skip to the next path element.  Otherwise, copy
+	           the path element until the next slash.  */
+			if (t == h) {
+	      		/* Skip the path element, including the slash.  */
+				while (h < end && *h != '/')
+					t++, h++;
+				if (h < end)
+					t++, h++;
+	    	}
+	  		else {
+	      		/* Copy the path element, including the final slash.  */
+	      		while (h < end && *h != '/')
+					*t++ = *h++;
+	      		if (h < end)
+					*t++ = *h++;
+	    	}
+		}
+	}
+
+	if (t != h)
+		*t = '\0';
+
+	return t != h;
+}
+
 static enum uri_errno
 parse_uri(struct uri *uri, unsigned char *uristring)
 {
@@ -201,8 +570,8 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 
 	/* Nothing to do for an empty url. */
 	if (!*uristring) return URI_ERRNO_EMPTY;
-
-	uri->string = uristring;
+	
+	uri->string = reencode_escapes (uristring);
 	uri->protocollen = get_protocol_length (uristring);
 
 	/* Invalid */
@@ -211,7 +580,7 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 	/* Figure out whether the protocol is known */
 	uri->protocol = get_protocol (struri(uri), uri->protocollen);
 
-	prefix_end = uristring + uri->protocollen; /* ':' */
+	prefix_end = struri (uri) + uri->protocollen; /* ':' */
 
 	/* Check if there's a digit after the protocol name. */
 	if (isdigit (*prefix_end)) {
@@ -379,6 +748,16 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 	if (*prefix_end == POST_CHAR) {
 		uri->post = prefix_end + 1;
 	}
+	
+	convert_to_lowercase (uri->host, strlen (uri->host));
+	/* Decode %HH sequences in host name.  This is important not so much
+     to support %HH sequences in host names (which other browser
+     don't), but to support binary characters (which will have been
+     converted to %HH by reencode_escapes).  */
+	if (strchr (uri->host, '%')) {
+		url_unescape (uri->host);
+	}
+	path_simplify (uri->data);
 
 	return URI_ERRNO_OK;
 }
