@@ -1,4 +1,5 @@
 %x incl
+%x module
 
 %{
 #include <stdio.h>
@@ -98,6 +99,7 @@ parse_flag (const char *str)
 %%
 ^[ \t]*#.*						/* ignore comments */;
 .include						BEGIN(incl);
+.module							BEGIN(module);
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
 workers							return WORKERS;
@@ -119,6 +121,7 @@ script_mime						return SCRIPT_MIME;
 script_message					return SCRIPT_MESSAGE;
 script_url						return SCRIPT_URL;
 script_chain					return SCRIPT_CHAIN;
+
 
 \{								return OBRACE;
 \}								return EBRACE;
@@ -176,6 +179,15 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
                  include_stack[include_stack_ptr] );
             }
         }
+
+<module>\n								/* ignore EOL */;
+<module>[ \t]+							/* ignore whitespace */;
+<module>\'[a-zA-Z0-9_-]\'	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return MODULE_OPT; 
+<module>\{	return OBRACE;
+<module>\}  return EBRACE;
+<module>\;	return SEMICOLON;
+<module>[a-zA-Z0-9_-]	yylval.string=strdup(yytext); return PARAM;
+<module>\"[^"]+\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return QUOTEDSTRING;
 
 %%
 /* 

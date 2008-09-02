@@ -24,6 +24,24 @@
 extern int yylineno;
 extern char *yytext;
 
+static void 
+clean_hash_bucket (gpointer key, gpointer value, gpointer unused)
+{
+	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = (struct moduleoptq *)value;
+	struct module_opt *cur, *tmp;
+
+	LIST_FOREACH_SAFE (cur, cur_module_opt, next, tmp) {
+		if (cur->param) {
+			free (cur->param);
+		}
+		if (cur->value) {
+			free (cur->value);
+		}
+		LIST_REMOVE (cur, next);
+		free (cur);
+	}
+}
+
 int
 add_memcached_server (struct config_file *cf, char *str)
 {
@@ -126,6 +144,7 @@ init_defaults (struct config_file *cfg)
 	cfg->memcached_protocol = TCP_TEXT;
 
 	cfg->workers_number = DEFAULT_WORKERS_NUM;
+	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 
 	LIST_INIT (&cfg->filters);
 	LIST_INIT (&cfg->perl_modules);
@@ -178,6 +197,10 @@ free_config (struct config_file *cfg)
 		}
 		free (cmodule);
 	}
+
+	g_hash_table_foreach (cfg->modules_opts, clean_hash_bucket, NULL);
+	g_hash_table_remove_all (cfg->modules_opts);
+	g_hash_table_unref (cfg->modules_opts);
 }
 
 int

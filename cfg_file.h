@@ -84,6 +84,12 @@ struct filter_chain {
 	LIST_ENTRY (filter_chain) next;
 };
 
+struct module_opt {
+	char *param;
+	char *value;
+	LIST_ENTRY (module_opt) next;
+};
+
 struct config_file {
 	char *cfg_name;
 	char *pid_file;
@@ -108,6 +114,7 @@ struct config_file {
 	LIST_HEAD (perlq, filter_chain) filters;
 	LIST_HEAD (modulesq, perl_module) perl_modules;
 	LIST_HEAD (cmodulesq, c_module) c_modules;
+	GHashTable* modules_opts;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);

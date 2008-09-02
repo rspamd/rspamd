@@ -26,6 +26,7 @@ extern char *yytext;
 
 struct scriptq *cur_scripts;
 unsigned int cur_scripts_num = 0;
+LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 
 %}
 
@@ -47,9 +48,10 @@ unsigned int cur_scripts_num = 0;
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
 %token  MEMCACHED WORKERS REQUIRE MODULE
 %token  FILTER METRIC SCRIPT_HEADER SCRIPT_MIME SCRIPT_MESSAGE SCRIPT_URL SCRIPT_CHAIN SCRIPT_PARAM
+%token  MODULE_OPT, PARAM
 
 %type	<string>	STRING
-%type	<string>	QUOTEDSTRING
+%type	<string>	QUOTEDSTRING MODULE_OPT PARAM
 %type	<string>	FILENAME 
 %type   <string>  	SOCKCRED
 %type	<string>	IPADDR IPNETWORK
@@ -77,6 +79,7 @@ command	:
 	| workers
 	| require
 	| filter
+	| module_opt
 	;
 
 tempdir :
@@ -130,7 +133,7 @@ bind_cred:
 	;
 
 memcached:
-	BEANSTALK OBRACE memcachedbody EBRACE
+	MEMCACHED OBRACE memcachedbody EBRACE
 	;
 
 memcachedbody:
@@ -371,6 +374,32 @@ requirecmd:
 		}
 		cur->path = $3;
 		LIST_INSERT_HEAD (&cfg->perl_modules, cur, next);
+	}
+	;
+
+module_opt:
+	MODULE_OPT OBRACE moduleoptbody EBRACE {
+		g_hash_table_insert (cfg->modules_opts, $1, cur_module_opt);
+		cur_module_opt = NULL;
+	}
+	;
+
+moduleoptbody:
+	optcmd SEMICOLON
+	| moduleoptbody optcmd SEMICOLON
+	;
+
+optcmd:
+	PARAM EQSIGN QUOTEDSTRING {
+		struct module_opt *mopt;
+		if (cur_module_opt == NULL) {
+			cur_module_opt = g_malloc (sizeof (cur_module_opt));
+			LIST_INIT (cur_module_opt);
+		}
+		mopt = g_malloc (sizeof (struct module_opt));
+		mopt->param = $1;
+		mopt->value = $3;
+		LIST_INSERT_HEAD (cur_module_opt, mopt, next);
 	}
 	;
 
