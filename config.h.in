@@ -2,10 +2,11 @@
 
 /* Forwarded declaration */
 struct module_ctx;
+struct config_file;
 
 typedef struct module_s {
 	const char *name;
-	int (*module_init_func)(struct module_ctx *ctx);
+	int (*module_init_func)(struct config_file *cfg, struct module_ctx **ctx);
 } module_t;
 
 extern module_t modules[];

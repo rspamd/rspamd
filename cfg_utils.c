@@ -40,6 +40,7 @@ clean_hash_bucket (gpointer key, gpointer value, gpointer unused)
 		LIST_REMOVE (cur, next);
 		free (cur);
 	}
+	free (cur_module_opt);
 }
 
 int
@@ -220,6 +221,103 @@ parse_script (char *str, struct script_param *param, enum script_type type)
 	param->function = strdup (str);
 
 	return 0;
+}
+
+char* 
+get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
+{
+	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
+	struct module_opt *cur;
+	
+	cur_module_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
+	if (cur_module_opt == NULL) {
+		return NULL;
+	}
+
+	LIST_FOREACH (cur, cur_module_opt, next) {
+		if (strcmp (cur->param, opt_name) == 0) {
+			return cur->value;
+		}
+	}
+
+	return NULL;
+}
+
+size_t
+parse_limit (const char *limit)
+{
+	size_t result = 0;
+	char *err_str;
+
+	if (!limit || *limit == '\0') return 0;
+
+	result = strtoul (limit, &err_str, 10);
+
+	if (*err_str != '\0') {
+		/* Megabytes */
+		if (*err_str == 'm' || *err_str == 'M') {
+			result *= 1048576L;
+		}
+		/* Kilobytes */
+		else if (*err_str == 'k' || *err_str == 'K') {
+			result *= 1024;
+		}
+		/* Gigabytes */
+		else if (*err_str == 'g' || *err_str == 'G') {
+			result *= 1073741824L;
+		}
+	}
+
+	return result;
+}
+
+unsigned int
+parse_seconds (const char *t)
+{
+	unsigned int result = 0;
+	char *err_str;
+
+	if (!t || *t == '\0') return 0;
+
+	result = strtoul (t, &err_str, 10);
+
+	if (*err_str != '\0') {
+		/* Seconds */
+		if (*err_str == 's' || *err_str == 'S') {
+			result *= 1000;
+		}
+	}
+
+	return result;
+}
+
+char
+parse_flag (const char *str)
+{
+	if (!str || !*str) return -1;
+
+	if ((*str == 'Y' || *str == 'y') && *(str + 1) == '\0') {
+		return 1;
+	}
+
+	if ((*str == 'Y' || *str == 'y') &&
+		(*(str + 1) == 'E' || *(str + 1) == 'e') &&
+		(*(str + 2) == 'S' || *(str + 2) == 's') &&
+		*(str + 3) == '\0') {
+		return 1;		
+	}
+
+	if ((*str == 'N' || *str == 'n') && *(str + 1) == '\0') {
+		return 0;
+	}
+
+	if ((*str == 'N' || *str == 'n') &&
+		(*(str + 1) == 'O' || *(str + 1) == 'o') &&
+		*(str + 2) == '\0') {
+		return 0;		
+	}
+
+	return -1;
 }
 
 /*

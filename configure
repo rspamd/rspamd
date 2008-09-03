@@ -21,8 +21,8 @@ YACC_OUTPUT="cfg_yacc.c"
 LEX_OUTPUT="cfg_lex.c"
 CONFIG="config.h"
 
-SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c worker.c fstring.c url.c perl.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
-MODULES=""
+SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c worker.c fstring.c url.c perl.c plugins/surbl.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
+MODULES="surbl"
 
 CFLAGS="$CFLAGS -W -Wpointer-arith -Wno-unused-parameter"
 CFLAGS="$CFLAGS -Wno-unused-function -Wunused-variable -Wno-sign-compare"
@@ -414,14 +414,18 @@ write_result()
 	echo "#define RVERSION \"${VERSION}\"" >> $CONFIG
 	echo "#define HASH_COMPAT" >> $CONFIG
 	# Write modules init function
-	echo "#include \"config.h\"" > modules.c
+	echo "#ifndef MODULES_H" > modules.h
+	echo "#include \"config.h\"" >> modules.h
+	echo "#include \"modules.h\"" > modules.c
 	echo "module_t modules[] = {" >> modules.c;
 	modules_num=0
 	for m in $MODULES ; do
 		echo "{\"${m}\", ${m}_module_init}," >> modules.c
+		echo "int ${m}_module_init(struct config_file *cfg, struct module_ctx **ctx);" >> modules.h
 		modules_num=`expr $modules_num + 1`
 	done
 	echo "};" >> modules.c
+	echo "#endif" >> modules.h
 	echo "#define MODULES_NUM $modules_num" >> $CONFIG
 	SOURCES="$SOURCES modules.c"
 	OBJECTS=`echo $SOURCES | sed -e 's/\.c/\.o/g'`
@@ -499,7 +503,7 @@ END
 		SO=`echo $o | sed -e 's/\.o/\.c/g'`
 		cat >> $MAKEFILE << END
 ${o}: \$(DEPS) ${SO}
-	\$(CC) \$(OPT_FLAGS) \$(CFLAGS) \$(PTHREAD_CFLAGS) -c ${SO}
+	\$(CC) \$(OPT_FLAGS) \$(CFLAGS) \$(PTHREAD_CFLAGS) -o ${o} -c ${SO}
 
 END
 	done

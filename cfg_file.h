@@ -122,6 +122,10 @@ int parse_bind_line (struct config_file *cf, char *str);
 void init_defaults (struct config_file *cfg);
 void free_config (struct config_file *cfg);
 int parse_script (char *str, struct script_param *param, enum script_type type);
+char* get_module_opt (struct config_file *cfg, char *module_name, char *opt_name);
+size_t parse_limit (const char *limit);
+unsigned int parse_seconds (const char *t);
+char parse_flag (const char *str);
 
 int yylex (void);
 int yyparse (void);

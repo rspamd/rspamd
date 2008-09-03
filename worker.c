@@ -204,7 +204,7 @@ process_filters (struct worker_task *task)
 	int i = 0;
 	
 	/* First process C modules */
-	if (task->save.saved == 1) {
+	if (task->save.saved > 0) {
 		if (task->save.save_type == C_FILTER) {
 			task->save.saved = 0;
 			c_filter = (struct c_module *)task->save.entry;
@@ -233,28 +233,32 @@ process_filters (struct worker_task *task)
 		res->mark = 0;
 		if (c_filter->ctx->header_filter != NULL) {
 			res->mark += c_filter->ctx->header_filter (task);
-			if (task->save.saved == 1) {
+			if (task->save.saved > 0) {
+				TAILQ_INSERT_TAIL (&task->results, res, next);
 				task->save.save_type = C_FILTER;
 				goto save_point;
 			}
 		}
 		if (c_filter->ctx->message_filter != NULL) {
 			res->mark += c_filter->ctx->message_filter (task);
-			if (task->save.saved == 1) {
+			if (task->save.saved > 0) {
+				TAILQ_INSERT_TAIL (&task->results, res, next);
 				task->save.save_type = C_FILTER;
 				goto save_point;
 			}
 		}
 		if (c_filter->ctx->mime_filter != NULL) {
 			res->mark += c_filter->ctx->mime_filter (task);
-			if (task->save.saved == 1) {
+			if (task->save.saved > 0) {
+				TAILQ_INSERT_TAIL (&task->results, res, next);
 				task->save.save_type = C_FILTER;
 				goto save_point;
 			}
 		}
 		if (c_filter->ctx->url_filter != NULL) {
 			res->mark += c_filter->ctx->url_filter (task);
-			if (task->save.saved == 1) {
+			if (task->save.saved > 0) {
+				TAILQ_INSERT_TAIL (&task->results, res, next);
 				task->save.save_type = C_FILTER;
 				goto save_point;
 			}
@@ -295,28 +299,32 @@ process_filters (struct worker_task *task)
 			switch (perl_script->type) {
 				case SCRIPT_HEADER:
 					res->mark += perl_call_header_filter (perl_script->function, task);
-					if (task->save.saved == 1) {
+					if (task->save.saved > 0) {
+						TAILQ_INSERT_TAIL (&task->results, res, next);
 						task->save.save_type = PERL_FILTER;
 						goto save_point;
 					}
 					break;
 				case SCRIPT_MESSAGE:
 					res->mark += perl_call_message_filter (perl_script->function, task);
-					if (task->save.saved == 1) {
+					if (task->save.saved > 0) {
+						TAILQ_INSERT_TAIL (&task->results, res, next);
 						task->save.save_type = PERL_FILTER;
 						goto save_point;
 					}
 					break;
 				case SCRIPT_MIME:
 					res->mark += perl_call_mime_filter (perl_script->function, task);
-					if (task->save.saved == 1) {
+					if (task->save.saved > 0) {
+						TAILQ_INSERT_TAIL (&task->results, res, next);
 						task->save.save_type = PERL_FILTER;
 						goto save_point;
 					}
 					break;
 				case SCRIPT_URL:
 					res->mark += perl_call_url_filter (perl_script->function, task);
-					if (task->save.saved == 1) {
+					if (task->save.saved > 0) {
+						TAILQ_INSERT_TAIL (&task->results, res, next);
 						task->save.save_type = PERL_FILTER;
 						goto save_point;
 					}

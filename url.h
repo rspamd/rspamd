@@ -82,5 +82,7 @@ enum protocol {
 
 void url_parse_html (struct worker_task *task, GByteArray *part);
 void url_parse_text (struct worker_task *task, GByteArray *part);
+enum uri_errno parse_uri(struct uri *uri, unsigned char *uristring);
+unsigned char * normalize_uri(struct uri *uri, unsigned char *uristring);
 
 #endif

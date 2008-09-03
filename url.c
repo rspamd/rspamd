@@ -558,7 +558,7 @@ path_simplify (char *path)
 	return t != h;
 }
 
-static enum uri_errno
+enum uri_errno
 parse_uri(struct uri *uri, unsigned char *uristring)
 {
 	unsigned char *prefix_end, *host_end;
@@ -762,7 +762,7 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 	return URI_ERRNO_OK;
 }
 
-static unsigned char *
+unsigned char *
 normalize_uri(struct uri *uri, unsigned char *uristring)
 {
 	unsigned char *parse_string = uristring;

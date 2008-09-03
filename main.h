@@ -97,7 +97,7 @@ struct save_point {
 	enum { C_FILTER, PERL_FILTER } save_type;
 	void *entry;
 	void *chain;
-	unsigned saved:1;
+	unsigned int saved;
 };
 
 struct worker_task {

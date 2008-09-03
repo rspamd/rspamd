@@ -230,7 +230,7 @@ main (int argc, char **argv)
 	for (i = 0; i < MODULES_NUM; i ++) {
 		cur_module = g_malloc (sizeof (struct c_module));
 		cur_module->name = modules[i].name;
-		if (modules[i].module_init_func(cur_module->ctx) == 0) {
+		if (modules[i].module_init_func(cfg, &cur_module->ctx) == 0) {
 			LIST_INSERT_HEAD (&cfg->c_modules, cur_module, next);
 		}
 	}
