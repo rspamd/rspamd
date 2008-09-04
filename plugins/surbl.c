@@ -14,6 +14,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#include <evdns.h>
+
 #include "../config.h"
 #include "../main.h"
 #include "../modules.h"
@@ -26,6 +28,7 @@
 #define DEFAULT_REDIRECTOR_READ_TIMEOUT 5000
 #define DEFAULT_SURBL_MAX_URLS 1000
 #define DEFAULT_SURBL_URL_EXPIRE 86400
+#define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
 
 struct surbl_ctx {
 	int (*header_filter)(struct worker_task *task);
@@ -39,6 +42,9 @@ struct surbl_ctx {
 	unsigned int read_timeout;
 	unsigned int max_urls;
 	unsigned int url_expire;
+	char *suffix;
+	GHashTable *hosters;
+	GHashTable *whitelist;
 	unsigned use_redirector:1;
 };
 
@@ -59,7 +65,9 @@ struct memcached_param {
 	memcached_ctx_t *ctx;
 };
 
+static char *hash_fill = "1";
 struct surbl_ctx *surbl_module_ctx;
+GRegex *extract_hoster_regexp, *extract_normal_regexp, *extract_numeric_regexp;
 
 static int surbl_test_url (struct worker_task *task);
 
@@ -67,6 +75,7 @@ int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	struct hostent *hent;
+	GError *err = NULL;
 
 	char *value, *cur_tok, *str;
 
@@ -128,6 +137,58 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
+	if ((value = get_module_opt (cfg, "surbl", "suffix")) != NULL) {
+		surbl_module_ctx->suffix = value;
+	}
+	else {
+		surbl_module_ctx->suffix = DEFAULT_SURBL_SUFFIX;
+	}
+	
+	surbl_module_ctx->hosters = g_hash_table_new (g_str_hash, g_str_equal);
+	surbl_module_ctx->whitelist = g_hash_table_new (g_str_hash, g_str_equal);
+	if ((value = get_module_opt (cfg, "surbl", "hostings")) != NULL) {
+		char comment_flag = 0;
+		str = value;
+		while (*value ++) {
+			if (*value == '#') {
+				comment_flag = 1;
+			}
+			if (*value == '\r' || *value == '\n' || *value == ',') {
+				if (!comment_flag && str != value) {
+					g_hash_table_insert (surbl_module_ctx->hosters, g_strstrip(str), hash_fill);
+					str = value + 1;
+				}
+				else if (*value != ',') {
+					comment_flag = 0;
+					str = value + 1;
+				}
+			}
+		}
+	}
+	if ((value = get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
+		char comment_flag = 0;
+		str = value;
+		while (*value ++) {
+			if (*value == '#') {
+				comment_flag = 1;
+			}
+			if (*value == '\r' || *value == '\n' || *value == ',') {
+				if (!comment_flag && str != value) {
+					g_hash_table_insert (surbl_module_ctx->whitelist, g_strstrip(str), hash_fill);
+					str = value + 1;
+				}
+				else if (*value != ',') {
+					comment_flag = 0;
+					str = value + 1;
+				}
+			}
+		}
+	}
+	
+	/* Init matching regexps */
+	extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
+	extract_normal_regexp = g_regex_new ("([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
+	extract_numeric_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW, 0, &err);
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
@@ -136,12 +197,102 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
+static char *
+format_surbl_request (char *hostname) 
+{
+	GMatchInfo *info;
+	char *result;
+
+	result = g_malloc (strlen (hostname) + strlen (surbl_module_ctx->suffix) + 1); 
+
+	/* First try to match numeric expression */
+	if (g_regex_match (extract_numeric_regexp, hostname, 0, &info) == TRUE) {
+		gchar *octet1, *octet2, *octet3, *octet4;
+		octet1 = g_match_info_fetch (info, 0);
+		g_match_info_next (info, NULL);
+		octet2 = g_match_info_fetch (info, 0);
+		g_match_info_next (info, NULL);
+		octet3 = g_match_info_fetch (info, 0);
+		g_match_info_next (info, NULL);
+		octet4 = g_match_info_fetch (info, 0);
+		g_match_info_free (info);
+		sprintf (result, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, surbl_module_ctx->suffix);
+		g_free (octet1);
+		g_free (octet2);
+		g_free (octet3);
+		g_free (octet4);
+		return result;
+	}
+	g_match_info_free (info);
+	/* Try to match normal domain */
+	if (g_regex_match (extract_normal_regexp, hostname, 0, &info) == TRUE) {
+		gchar *part1, *part2;
+		part1 = g_match_info_fetch (info, 0);
+		g_match_info_next (info, NULL);
+		part2 = g_match_info_fetch (info, 0);
+		g_match_info_free (info);
+		sprintf (result, "%s.%s", part1, part2);
+		if (g_hash_table_lookup (surbl_module_ctx->hosters, result) != NULL) {
+			/* Match additional part for hosters */
+			g_free (part1);
+			g_free (part2);
+			if (g_regex_match (extract_hoster_regexp, hostname, 0, &info) == TRUE) {
+				gchar *hpart1, *hpart2, *hpart3;
+				hpart1 = g_match_info_fetch (info, 0);
+				g_match_info_next (info, NULL);
+				hpart2 = g_match_info_fetch (info, 0);
+				g_match_info_next (info, NULL);
+				hpart3 = g_match_info_fetch (info, 0);
+				g_match_info_free (info);
+				sprintf (result, "%s.%s.%s.%s", hpart1, hpart2, hpart3, surbl_module_ctx->suffix);
+				g_free (hpart1);
+				g_free (hpart2);
+				g_free (hpart3);
+				return result;
+			}
+			return NULL;
+		}
+		g_free (part1);
+		g_free (part2);
+		return result;
+	}
+
+	return NULL;
+}
+
+static void 
+dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
+{
+	struct memcached_param *param = (struct memcached_param *)data;
+	struct filter_result *res;
+	
+	/* If we have result from DNS server, this url exists in SURBL, so increase score */
+	if (result != DNS_ERR_NONE || type != DNS_IPv4_A) {
+		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, surbl_module_ctx->suffix);
+		res = TAILQ_LAST (&param->task->results, resultsq);
+		res->mark += surbl_module_ctx->weight;
+	}
+
+	param->task->save.saved --;
+	if (param->task->save.saved == 0) {
+		/* Call other filters */
+		param->task->save.saved = 1;
+		process_filters (param->task);
+	}
+
+	g_free (param->ctx->param->buf);
+	g_free (param->ctx->param);
+	g_free (param->ctx);
+	g_free (param);
+}
+
 static void 
 memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 {
 	struct memcached_param *param = (struct memcached_param *)data;
 	int *url_count;
 	struct filter_result *res;
+	char *surbl_req;
 
 	switch (ctx->op) {
 		case CMD_CONNECT:
@@ -201,7 +352,11 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 				param->task->save.saved = 1;
 				process_filters (param->task);
 			}
-			//XXX: read http://surbl.org and add surbl request here
+			if ((surbl_req = format_surbl_request (param->url->host)) != NULL) {
+				param->task->save.saved ++;
+				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+				return;
+			}
 			g_free (param->ctx->param->buf);
 			g_free (param->ctx->param);
 			g_free (param->ctx);
