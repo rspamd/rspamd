@@ -184,7 +184,6 @@ main (int argc, char **argv)
 	rspamd->cfg->cfg_name = strdup (FIXED_CONFIG_FILE);
 	read_cmd_line (argc, argv, rspamd->cfg);
 
-	openlog("rspamd", LOG_PID, LOG_MAIL);
     msg_warn ("(main) starting...");
 
 	#ifndef HAVE_SETPROCTITLE

@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
-#include <pcre.h>
 #include <syslog.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -36,13 +35,10 @@ struct _proto {
 static const char *html_url = "((?:href\\s*=\\s*)|(?:archive\\s*=\\s*)|(?:code\\s*=\\s*)|(?:codebase\\s*=\\s*)|(?:src\\s*=\\s*)|(?:cite\\s*=\\s*)"
 "|(:?background\\s*=\\s*)|(?:pluginspage\\s*=\\s*)|(?:pluginurl\\s*=\\s*)|(?:action\\s*=\\s*)|(?:dynsrc\\s*=\\s*)|(?:longdesc\\s*=\\s*)|(?:lowsrc\\s*=\\s*)|(?:usemap\\s*=\\s*))"
 "\\\"?([^>\"<]+)\\\"?";
-static const char *text_url = "((?:mailto\\:|(?:news|(?:ht|f)tp(?:s?))\\://){1}[^>\"<]+)";
+static const char *text_url = "((?:mailto\\:|(?:news|(?:ht|f)tp(?:s?))\\://){1}[^ ]+)";
 
 static short url_initialized = 0;
-static pcre_extra *text_re_extra;
-static pcre *text_re;
-static pcre_extra *html_re_extra;
-static pcre *html_re;
+GRegex *text_re, *html_re;
 
 static const struct _proto protocol_backends[] = {
 	{ "file",	   0, NULL,		1, 0, 0, 0 },
@@ -160,20 +156,22 @@ check_uri_file(unsigned char *name)
 static int
 url_init (void)
 {
+	GError *err = NULL;
 	if (url_initialized == 0) {
-		text_re = pcre_compile (text_url, PCRE_CASELESS, NULL, 0, NULL);
-		if (text_re == NULL) {
-			msg_info ("url_init: cannot init url parsing regexp");
+		text_re = g_regex_new  (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_RAW, 0, &err);
+		if (err != NULL) {
+			msg_info ("url_init: cannot init text url parsing regexp: %s", err->message);
+			g_error_free (err);
 			return -1;
 		}
-		text_re_extra = pcre_study (text_re, 0, NULL);
-		html_re = pcre_compile (html_url, PCRE_CASELESS, NULL, 0, NULL);
-		if (html_re == NULL) {
-			msg_info ("url_init: cannot init url parsing regexp");
+		html_re = g_regex_new (html_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_RAW, 0, &err);
+		if (err != NULL) {
+			msg_info ("url_init: cannot init html url parsing regexp: %s", err->message);
+			g_error_free (err);
 			return -1;
 		}
-		html_re_extra = pcre_study (html_re, 0, NULL);
 		url_initialized = 1;
+		msg_debug ("url_init: url regexps initialized successfully, text regexp: /%s/, html_regexp: /%s/", text_url, html_url);
 	}
 
 	return 0;
@@ -874,53 +872,81 @@ normalize_uri(struct uri *uri, unsigned char *uristring)
 void 
 url_parse_text (struct worker_task *task, GByteArray *content)
 {
-	int ovec[30];
-	int pos = 0, rc;
+	GMatchInfo *info;
+	GError *err = NULL;
+	int pos = 0, start;
+	gboolean rc;
 	char *url_str = NULL;
 	struct uri *new;
 
 	if (url_init () == 0) {
-		while ((rc = pcre_exec (text_re, text_re_extra, (const char *)content->data, content->len, pos, 0, 
-						ovec, sizeof (ovec) / sizeof (ovec[0])) >= 0)) {
-			if (rc > 0) {
-				pos = ovec[1];
-				pcre_get_substring ((const char *)content->data, ovec, rc, 1, (const char **)&url_str);
-				if (url_str != NULL) {
-					new = g_malloc (sizeof (struct uri));
-					if (new != NULL) {
-						parse_uri (new, url_str);
-						normalize_uri (new, url_str);
-						TAILQ_INSERT_TAIL (&task->urls, new, next);
+		do {
+			rc = g_regex_match_full (text_re, (const char *)content->data, content->len, pos, 0, &info, &err);
+			if (rc) {
+				if (g_match_info_matches (info)) {
+					g_match_info_fetch_pos (info, 0, &start, &pos);
+					url_str = g_match_info_fetch (info, 1);
+					msg_debug ("url_parse_text: extracted string with regexp: '%s'", url_str);
+					if (url_str != NULL) {
+						new = g_malloc (sizeof (struct uri));
+						if (new != NULL) {
+							parse_uri (new, url_str);
+							normalize_uri (new, url_str);
+							TAILQ_INSERT_TAIL (&task->urls, new, next);
+						}
 					}
+					g_free (url_str);
 				}
+				g_match_info_free (info);
 			}
-		} 
+			else if (err != NULL) {
+				msg_debug ("url_parse_text: error matching regexp: %s", err->message);
+				g_free (err);
+			}
+			else {
+				msg_debug ("url_parse_text: cannot find url pattern in given string");
+			}
+		} while (rc > 0);
 	}
 }
 
 void 
 url_parse_html (struct worker_task *task, GByteArray *content)
 {
-	int ovec[30];
-	int pos = 0, rc;
+	GMatchInfo *info;
+	GError *err = NULL;
+	int pos = 0, start;
+	gboolean rc;
 	char *url_str = NULL;
 	struct uri *new;
 
 	if (url_init () == 0) {
-		while ((rc = pcre_exec (html_re, html_re_extra, (const char *)content->data, content->len, pos, 0, 
-						ovec, sizeof (ovec) / sizeof (ovec[0])) >= 0)) {
-			if (rc > 0) {
-				pos = ovec[1];
-				pcre_get_substring ((const char *)content->data, ovec, rc, 3, (const char **)&url_str);
-				if (url_str != NULL) {
-					new = g_malloc (sizeof (struct uri));
-					if (new != NULL) {
-						parse_uri (new, url_str);
-						normalize_uri (new, url_str);
-						TAILQ_INSERT_TAIL (&task->urls, new, next);
+		do {
+			rc = g_regex_match_full (html_re, (const char *)content->data, content->len, pos, 0, &info, &err);
+			if (rc) {
+				if (g_match_info_matches (info)) {
+					g_match_info_fetch_pos (info, 0, &start, &pos);
+					url_str = g_match_info_fetch (info, 3);
+					msg_debug ("url_parse_html: extracted string with regexp: '%s'", url_str);
+					if (url_str != NULL) {
+						new = g_malloc (sizeof (struct uri));
+						if (new != NULL) {
+							parse_uri (new, url_str);
+							normalize_uri (new, url_str);
+							TAILQ_INSERT_TAIL (&task->urls, new, next);
+						}
 					}
+					g_free (url_str);
 				}
+				g_match_info_free (info);
 			}
-		}
+			else if (err) {
+				msg_debug ("url_parse_html: error matching regexp: %s", err->message);
+				g_free (err);
+			}
+			else {
+				msg_debug ("url_parse_html: cannot find url pattern in given string");
+			}
+		} while (rc > 0);
 	}
 }

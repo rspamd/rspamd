@@ -33,13 +33,14 @@ rspamd_url_test_func ()
 	text->data = (gchar *)test_text;
 	text->len = sizeof (test_text);
 	html = g_byte_array_new();
-	text->data = (gchar *)test_html;
-	text->len = sizeof (test_html);
+	html->data = (gchar *)test_html;
+	html->len = sizeof (test_html);
 	bzero (&task, sizeof (task));
 	TAILQ_INIT (&task.urls);
 	
 	g_test_timer_start ();
 	g_test_message ("* Testing text URL regexp parser *");
+	g_test_message ("Passing string: %s", test_text);
 	url_parse_text (&task, text);
 
 	TAILQ_FOREACH (url, &task.urls, next) {
@@ -60,6 +61,7 @@ rspamd_url_test_func ()
 	i = 0;
 	g_test_timer_start ();
 	g_test_message ("* Testing html URL regexp parser *");
+	g_test_message ("Passing string: %s", test_html);
 	url_parse_html (&task, html);
 
 	TAILQ_FOREACH (url, &task.urls, next) {

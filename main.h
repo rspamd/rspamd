@@ -32,10 +32,10 @@
 #define SOFT_SHUTDOWN_TIME 60
 
 /* Logging in postfix style */
-#define msg_err(args...) syslog(LOG_ERR, ##args)
-#define msg_warn(args...)	syslog(LOG_WARNING, ##args)
-#define msg_info(args...)	syslog(LOG_INFO, ##args)
-#define msg_debug(args...) syslog(LOG_DEBUG, ##args)
+#define msg_err g_error
+#define msg_warn	g_warning
+#define msg_info	g_message
+#define msg_debug g_debug
 
 /* Process type: main or worker */
 enum process_type {
