@@ -32,10 +32,8 @@ struct _proto {
 	unsigned int need_ssl:1;
 };
 
-static const char *html_url = "((?:href\\s*=\\s*)|(?:archive\\s*=\\s*)|(?:code\\s*=\\s*)|(?:codebase\\s*=\\s*)|(?:src\\s*=\\s*)|(?:cite\\s*=\\s*)"
-"|(:?background\\s*=\\s*)|(?:pluginspage\\s*=\\s*)|(?:pluginurl\\s*=\\s*)|(?:action\\s*=\\s*)|(?:dynsrc\\s*=\\s*)|(?:longdesc\\s*=\\s*)|(?:lowsrc\\s*=\\s*)|(?:usemap\\s*=\\s*))"
-"\\\"?([^>\"<]+)\\\"?";
-static const char *text_url = "((?:mailto\\:|(?:news|(?:ht|f)tp(?:s?))\\://){1}[^ ]+)";
+static const char *html_url = "((?:href\\s*=\\s*)?([^>\"<]+))?";
+static const char *text_url = "(https?://[^ ]+)";
 
 static short url_initialized = 0;
 GRegex *text_re, *html_re;
@@ -906,7 +904,7 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 			else {
 				msg_debug ("url_parse_text: cannot find url pattern in given string");
 			}
-		} while (rc > 0);
+		} while (rc);
 	}
 }
 
@@ -926,7 +924,7 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 			if (rc) {
 				if (g_match_info_matches (info)) {
 					g_match_info_fetch_pos (info, 0, &start, &pos);
-					url_str = g_match_info_fetch (info, 3);
+					url_str = g_match_info_fetch (info, 2);
 					msg_debug ("url_parse_html: extracted string with regexp: '%s'", url_str);
 					if (url_str != NULL) {
 						new = g_malloc (sizeof (struct uri));
@@ -947,6 +945,6 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 			else {
 				msg_debug ("url_parse_html: cannot find url pattern in given string");
 			}
-		} while (rc > 0);
+		} while (rc);
 	}
 }

@@ -31,10 +31,10 @@ rspamd_url_test_func ()
 
 	text = g_byte_array_new();
 	text->data = (gchar *)test_text;
-	text->len = sizeof (test_text);
+	text->len = strlen (test_text);
 	html = g_byte_array_new();
 	html->data = (gchar *)test_html;
-	html->len = sizeof (test_html);
+	html->len = strlen (test_html);
 	bzero (&task, sizeof (task));
 	TAILQ_INIT (&task.urls);
 	
