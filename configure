@@ -37,6 +37,7 @@ GROUP=postfix
 INSTALL="/usr/bin/install -v"
 MKDIR="/usr/bin/install -v -d"
 MANPATH="${PREFIX}/share/man"
+SUBDIRS="test"
 
 MAKEFILE="Makefile"
 MAKEFILE_IN="Makefile.in"
@@ -492,9 +493,30 @@ DEPS=$DEPS
 MANPATH=$MANPATH
 
 END
-	# Write build targets to makefile
+	# Write subdirs makefiles
+	for sub in $SUBDIRS ; do
+		cp $MAKEFILE $sub/$MAKEFILE
+		saved_pwd=`pwd`
+		old_objs=`echo $OBJECTS | sed -e 's/\([^. ]*\.o\)/..\/\1/g'`
+		old_srcs=`echo $SOURCES | sed -e 's/\([^. ]*\.c\)/..\/\1/g'`
+		cd $sub
+		sub_src="`echo *.c`"
+		sub_obj="`echo $sub_src | sed -e 's/\.c/\.o/g'`"
+		echo "SOURCES=$sub_src" >> $MAKEFILE
+		echo "OBJECTS=$sub_obj" >> $MAKEFILE
+		cat Makefile.in >> $MAKEFILE
+		for _sub_src in $sub_src ; do
+			_sub_obj=`echo $_sub_src | sed -e 's/\.c/\.o/g'`
+			cat >> $MAKEFILE << END
+${_sub_obj}: ${_sub_src}
+	\$(CC) \$(OPT_FLAGS) \$(CFLAGS) \$(PTHREAD_CFLAGS) -o ${_sub_obj} -c ${_sub_src}
 
+END
+		done
+		cd $saved_pwd
+	done
 	cat $MAKEFILE_IN >> $MAKEFILE
+	# Write build targets to makefile
 	cat >> $MAKEFILE << END
 ${EXEC}: \$(OBJECTS)
 	\$(CC) \$(PTHREAD_LDFLAGS) \$(LDFLAGS) \$(OBJECTS) \$(LIBS) -o \$(EXEC)
