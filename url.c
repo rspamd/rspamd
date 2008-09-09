@@ -32,8 +32,39 @@ struct _proto {
 	unsigned int need_ssl:1;
 };
 
-static const char *html_url = "((?:href\\s*=\\s*)?([^>\"<]+))?";
-static const char *text_url = "(https?://[^ ]+)";
+static const char *text_url = "((https?|ftp)://)?"
+"(\\b(?<![.\\@A-Za-z0-9-])"	
+"(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
+"(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel"
+"|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se"
+"|[a-z]{2}"
+"(?(1)|(?=/)))"
+"(?!\\w)"
+"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"
+")"
+"(?::\\d{1,5})?"	/* port */
+"(?!\\.\\w)" /* host part ended, no more of this further on */
+"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?" /* path (&query) */
+"(?<![\\s>?!),.'\"\\]:])"
+"(?!@)"
+")";
+static const char *html_url = "(?: src|href)=\"("
+"((https?|ftp)://)?"
+"(\\b(?<![.\\@A-Za-z0-9-])"	
+"(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
+"(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel"
+"|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se"
+"|[a-z]{2}"
+"(?(1)|(?=/)))"
+"(?!\\w)"
+"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"
+")"
+"(?::\\d{1,5})?"	/* port */
+"(?!\\.\\w)" /* host part ended, no more of this further on */
+"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?" /* path (&query) */
+"(?<![\\s>?!),.'\"\\]:])"
+"(?!@)"
+"))\"";
 
 static short url_initialized = 0;
 GRegex *text_re, *html_re;
@@ -156,13 +187,13 @@ url_init (void)
 {
 	GError *err = NULL;
 	if (url_initialized == 0) {
-		text_re = g_regex_new  (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_RAW, 0, &err);
+		text_re = g_regex_new  (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
 		if (err != NULL) {
 			msg_info ("url_init: cannot init text url parsing regexp: %s", err->message);
 			g_error_free (err);
 			return -1;
 		}
-		html_re = g_regex_new (html_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_RAW, 0, &err);
+		html_re = g_regex_new (html_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
 		if (err != NULL) {
 			msg_info ("url_init: cannot init html url parsing regexp: %s", err->message);
 			g_error_free (err);
@@ -258,14 +289,8 @@ get_protocol_length(const unsigned char *url)
 	while (isalnum(*end) || *end == '+' || *end == '-' || *end == '.')
 		end++;
 
-	/* Now we make something to support our "IP version in protocol scheme
-	 * name" hack and silently chop off the last digit if it's there. The
-	 * IETF's not gonna notice I hope or it'd be going after us hard. */
-	if (end != url && isdigit(end[-1]))
-		end--;
-
 	/* Also return 0 if there's no protocol name (@end == @url). */
-	return (*end == ':' || isdigit(*end)) ? end - url : 0;
+	return (*end == ':') ? end - url : 0;
 }
 
 /* URL-unescape the string S.
@@ -417,7 +442,7 @@ reencode_escapes (const char *s)
 
 	if (!encode_count)
 		/* The string is good as it is. */
-		return (char *) s;		/* C const model sucks. */
+		return g_strdup (s);		/* C const model sucks. */
 
 	oldlen = p1 - s;
 	/* Each encoding adds two characters (hex digits).  */
@@ -557,7 +582,7 @@ path_simplify (char *path)
 enum uri_errno
 parse_uri(struct uri *uri, unsigned char *uristring)
 {
-	unsigned char *prefix_end, *host_end;
+	unsigned char *prefix_end, *host_end, *p;
 	unsigned char *lbracket, *rbracket;
 	int datalen, n, addrlen;
 	unsigned char *frag_or_post, *user_end, *port_end;
@@ -568,35 +593,49 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 	if (!*uristring) return URI_ERRNO_EMPTY;
 	
 	uri->string = reencode_escapes (uristring);
-	uri->protocollen = get_protocol_length (uristring);
+	msg_debug ("parse_uri: reencoding escapes in original url: '%s'", struri (uri));
+	uri->protocollen = get_protocol_length (struri (uri));
 
-	/* Invalid */
-	if (!uri->protocollen) return URI_ERRNO_INVALID_PROTOCOL;
-
-	/* Figure out whether the protocol is known */
-	uri->protocol = get_protocol (struri(uri), uri->protocollen);
-
-	prefix_end = struri (uri) + uri->protocollen; /* ':' */
-
-	/* Check if there's a digit after the protocol name. */
-	if (isdigit (*prefix_end)) {
-		uri->ip_family = uristring[uri->protocollen] - '0';
-		prefix_end++;
+	/* Assume http as default protocol */
+	if (!uri->protocollen || (uri->protocol = get_protocol (struri(uri), uri->protocollen)) == PROTOCOL_UNKNOWN) {
+		p = g_strconcat ("http://", uri->string, NULL);
+		g_free (uri->string);
+		uri->string = p;
+		uri->protocol = PROTOCOL_HTTP;
+		prefix_end = struri (uri) + 7;
 	}
-	if (*prefix_end != ':')
-		return URI_ERRNO_INVALID_PROTOCOL;
-	prefix_end++;
+	else {
+		/* Figure out whether the protocol is known */
+		msg_debug ("parse_uri: getting protocol from url: %d", uri->protocol);
 
-	/* Skip slashes */
+		prefix_end = struri (uri) + uri->protocollen; /* ':' */
 
-	if (prefix_end[0] == '/' && prefix_end[1] == '/') {
-		if (prefix_end[2] == '/')
-			return URI_ERRNO_TOO_MANY_SLASHES;
+		/* Check if there's a digit after the protocol name. */
+		if (isdigit (*prefix_end)) {
+			p = struri (uri);
+			uri->ip_family = p[uri->protocollen] - '0';
+			prefix_end++;
+		}
+		if (*prefix_end != ':') {
+			msg_debug ("parse_uri: invalid protocol in uri");
+			return URI_ERRNO_INVALID_PROTOCOL;
+		}
+		prefix_end++;
 
-		prefix_end += 2;
+		/* Skip slashes */
 
-	} else {
-		return URI_ERRNO_NO_SLASHES;
+		if (prefix_end[0] == '/' && prefix_end[1] == '/') {
+			if (prefix_end[2] == '/') {
+				msg_debug ("parse_uri: too many '/' in uri");
+				return URI_ERRNO_TOO_MANY_SLASHES;
+			}
+
+			prefix_end += 2;
+
+		} else {
+			msg_debug ("parse_uri: no '/' in uri");
+			return URI_ERRNO_NO_SLASHES;
+		}
 	}
 
 	if (get_protocol_free_syntax (uri->protocol)) {
@@ -721,7 +760,7 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 	if (*host_end == '/') {
 		host_end++;
 
-	} else if (get_protocol_need_slash_after_host (uri->protocol)) {
+	} else if (get_protocol_need_slash_after_host (uri->protocol) && *host_end != '?') {
 		/* The need for slash after the host component depends on the
 		 * need for a host component. -- The dangerous mind of Jonah */
 		if (!uri->hostlen)
@@ -745,7 +784,8 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 		uri->post = prefix_end + 1;
 	}
 	
-	convert_to_lowercase (uri->host, strlen (uri->host));
+	convert_to_lowercase (uri->string, uri->protocollen);
+	convert_to_lowercase (uri->host, uri->hostlen);
 	/* Decode %HH sequences in host name.  This is important not so much
      to support %HH sequences in host names (which other browser
      don't), but to support binary characters (which will have been
@@ -757,115 +797,6 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 
 	return URI_ERRNO_OK;
 }
-
-unsigned char *
-normalize_uri(struct uri *uri, unsigned char *uristring)
-{
-	unsigned char *parse_string = uristring;
-	unsigned char *src, *dest, *path;
-	int need_slash = 0;
-	int parse = (uri == NULL);
-	struct uri uri_struct;
-
-	if (!uri) uri = &uri_struct;
-
-	/* 
-	 * We need to get the real (proxied) URI but lowercase relevant URI
-	 * parts along the way. 
-	 */
-	if (parse && parse_uri (uri, parse_string) != URI_ERRNO_OK)
-		return uristring;
-
-
-	/* This is a maybe not the right place but both join_urls() and
-	 * get_translated_uri() through translate_url() calls this
-	 * function and then it already works on and modifies an
-	 * allocated copy. */
-	convert_to_lowercase (uri->string, uri->protocollen);
-	if (uri->hostlen) convert_to_lowercase (uri->host, uri->hostlen);
-
-	parse = 1;
-	parse_string = uri->data;
-
-	if (get_protocol_free_syntax (uri->protocol))
-		return uristring;
-
-	if (uri->protocol != PROTOCOL_UNKNOWN)
-		need_slash = get_protocol_need_slash_after_host (uri->protocol);
-
-	/* We want to start at the first slash to also reduce URIs like
-	 * http://host//index.html to http://host/index.html */
-	path = uri->data - need_slash;
-	dest = src = path;
-
-	/* This loop mangles the URI string by removing directory elevators and
-	 * other cruft. Example: /.././etc////..//usr/ -> /usr/ */
-	while (*dest) {
-		/* If the following pieces are the LAST parts of URL, we remove
-		 * them as well. See RFC 1808 for details. */
-
-		if (end_of_dir (src[0])) {
-			/* URL data contains no more path. */
-			memmove (dest, src, strlen(src) + 1);
-			break;
-		}
-
-		if (!is_uri_dir_sep (uri, src[0])) {
-			/* This is to reduce indentation */
-
-		} else if (src[1] == '.') {
-			if (!src[2]) {
-				/* /. - skip the dot */
-				*dest++ = *src;
-				*dest = 0;
-				break;
-
-			} else if (is_uri_dir_sep (uri, src[2])) {
-				/* /./ - strip that.. */
-				src += 2;
-				continue;
-
-			} else if (src[2] == '.'
-				   && (is_uri_dir_sep (uri, src[3]) || !src[3])) {
-				/* /../ or /.. - skip it and preceding element. */
-
-				/* First back out the last incrementation of
-				 * @dest (dest++) to get the position that was
-				 * last asigned to. */
-				if (dest > path) dest--;
-
-				/* @dest might be pointing to a dir separator
-				 * so we decrement before any testing. */
-				while (dest > path) {
-					dest--;
-					if (is_uri_dir_sep (uri, *dest)) break;
-				}
-
-				if (!src[3]) {
-					/* /.. - add ending slash and stop */
-					*dest++ = *src;
-					*dest = 0;
-					break;
-				}
-
-				src += 3;
-				continue;
-			}
-
-		} else if (is_uri_dir_sep (uri, src[1])) {
-			/* // - ignore first '/'. */
-			src += 1;
-			continue;
-		}
-
-		/* We don't want to access memory past the NUL char. */
-		*dest = *src++;
-		if (*dest) dest++;
-	}
-
-	return uristring;
-}
-
 
 void 
 url_parse_text (struct worker_task *task, GByteArray *content)
@@ -883,13 +814,12 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 			if (rc) {
 				if (g_match_info_matches (info)) {
 					g_match_info_fetch_pos (info, 0, &start, &pos);
-					url_str = g_match_info_fetch (info, 1);
+					url_str = g_match_info_fetch (info, 0);
 					msg_debug ("url_parse_text: extracted string with regexp: '%s'", url_str);
 					if (url_str != NULL) {
 						new = g_malloc (sizeof (struct uri));
 						if (new != NULL) {
 							parse_uri (new, url_str);
-							normalize_uri (new, url_str);
 							TAILQ_INSERT_TAIL (&task->urls, new, next);
 						}
 					}
@@ -924,13 +854,12 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 			if (rc) {
 				if (g_match_info_matches (info)) {
 					g_match_info_fetch_pos (info, 0, &start, &pos);
-					url_str = g_match_info_fetch (info, 2);
+					url_str = g_match_info_fetch (info, 1);
 					msg_debug ("url_parse_html: extracted string with regexp: '%s'", url_str);
 					if (url_str != NULL) {
 						new = g_malloc (sizeof (struct uri));
 						if (new != NULL) {
 							parse_uri (new, url_str);
-							normalize_uri (new, url_str);
 							TAILQ_INSERT_TAIL (&task->urls, new, next);
 						}
 					}
