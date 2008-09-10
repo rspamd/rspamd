@@ -1,0 +1,12 @@
+.PHONY: clean
+
+all: url_extracter
+
+url_extracter: $(OBJECTS) ../url.o ../util.o
+	$(CC) $(PTHREAD_LDFLAGS) $(LDFLAGS) $(OBJECTS) ../url.o ../util.o $(LIBS) -o url_extracter
+
+clean:
+	rm -f *.o url_extracter *.core
+
+dist-clean: clean
+	rm -f Makefile

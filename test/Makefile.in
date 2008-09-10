@@ -11,3 +11,6 @@ run_test: rspamd_test_suite
 
 clean:
 	rm -f *.o rspamd_test_suite *.core rspamd_test.xml
+
+dist-clean: clean
+	rm -f Makefile

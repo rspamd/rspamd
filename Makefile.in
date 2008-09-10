@@ -1,11 +1,11 @@
-.PHONY: perl clean test
+.PHONY: perl clean $(SUBDIRS) 
 
 all: perl $(TARGETS)
 
 perl: perl/Makefile
 	cd perl && make && cd ..
 
-perl/Makefile: perl/Makefile.PL
+perl/Makefile:
 	cd perl && perl Makefile.PL && cd ..
 
 memctest: upstream.c memcached.c memcached-test.c
@@ -22,21 +22,17 @@ install: $(EXEC)
 	#$(INSTALL) -m0644 rspamd.conf.sample $(PREFIX)/etc
 	$(MKDIR) -o $(RSPAMD_USER) -g $(RSPAMD_GROUP) /var/run/rspamd
 
-clean:
+clean: clean-subdirs perl/Makefile
 	rm -f *.o $(EXEC) *.core
 	rm -f cfg_lex.c cfg_yacc.c cfg_yacc.h
 	cd perl && make clean && cd ..
-	cd test && make clean && cd ..
 
-dist-clean: clean
+dist-clean: clean dist-clean-subdirs
 	rm -f Makefile
 	rm -f test/Makefile
 	rm -f config.log
 	rm -f md5.h md5.c strlcpy.h strlcpy.c queue.h config.h modules.c modules.h
 	cd perl && rm -f Makefile.old && rm -f Makefile.PL && cd ..
-
-test:
-	cd test && make
 
 creategroup:
 	@echo "Create group $(RSPAMD_GROUP) before installing!" 

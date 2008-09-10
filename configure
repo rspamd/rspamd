@@ -37,7 +37,7 @@ GROUP=postfix
 INSTALL="/usr/bin/install -v"
 MKDIR="/usr/bin/install -v -d"
 MANPATH="${PREFIX}/share/man"
-SUBDIRS="test"
+SUBDIRS="test utils"
 
 MAKEFILE="Makefile"
 MAKEFILE_IN="Makefile.in"
@@ -486,14 +486,18 @@ EXEC=$EXEC
 RSPAMD_USER=$USER
 RSPAMD_GROUP=$GROUP
 # All target dependenses
-TARGETS=$TARGETS
+TARGETS=$TARGETS $SUBDIRS
 # Common dependenses
 DEPS=$DEPS
 # Path to install manual page
 MANPATH=$MANPATH
+# Subdirectories
+SUBDIRS=$SUBDIRS
 
 END
 	# Write subdirs makefiles
+	clean_target="clean-subdirs: "
+	dist_clean_target="dist-clean-subdirs: "
 	for sub in $SUBDIRS ; do
 		cp $MAKEFILE $sub/$MAKEFILE
 		saved_pwd=`pwd`
@@ -514,8 +518,28 @@ ${_sub_obj}: ${_sub_src}
 END
 		done
 		cd $saved_pwd
+		dist_clean_target="$dist_clean_target ${sub}-dist-clean"
+		clean_target="$clean_target ${sub}-clean"
 	done
+
+	# Write IN file
 	cat $MAKEFILE_IN >> $MAKEFILE
+
+	# Process clean targets for all subdirs
+	echo $dist_clean_target >> $MAKEFILE
+	echo $clean_target >> $MAKEFILE
+	for sub in $SUBDIRS ; do
+		cat >> $MAKEFILE << END
+${sub}-clean:
+	cd ${sub} && make clean && cd ..
+${sub}-dist-clean:
+	cd ${sub} && make dist-clean && cd ..
+${sub}:
+	cd ${sub} && make && cd ..
+
+END
+	done
+
 	# Write build targets to makefile
 	cat >> $MAKEFILE << END
 ${EXEC}: \$(OBJECTS)

@@ -384,8 +384,6 @@ process_message (struct worker_task *task)
 	stream = g_mime_stream_mem_new_with_buffer (task->msg->buf->begin, task->msg->buf->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
-	/* create a new parser object to parse the stream */
-	parser = g_mime_parser_new_with_stream (stream);
 
 	/* unref the stream (parser owns a ref, so this object does not actually get free'd until we destroy the parser) */
 	g_object_unref (stream);
