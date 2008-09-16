@@ -8,4 +8,7 @@
 /* URL parser test */
 void rspamd_url_test_func ();
 
+/* Memceched library test */
+void rspamd_memcached_test_func ();
+
 #endif

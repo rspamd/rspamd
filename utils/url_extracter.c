@@ -27,6 +27,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 	GMimeDataWrapper *wrapper;
 	GMimeStream *part_stream;
 	GByteArray *part_content;
+	GMimeMessage *message;
 	
 	/* 'part' points to the current part node that g_mime_message_foreach_part() is iterating over */
 	
@@ -34,7 +35,6 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 	if (GMIME_IS_MESSAGE_PART (part)) {
 		/* message/rfc822 or message/news */
 		printf ("Message part found\n");
-		GMimeMessage *message;
 		
 		/* g_mime_message_foreach_part() won't descend into
                    child message parts, so if we want to count any

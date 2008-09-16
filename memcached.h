@@ -63,8 +63,6 @@ typedef struct memcached_ctx_s {
 	short options;
 	/* Current operation */
 	memc_opt_t op;
-	/* Event structure */
-	struct event mem_ev;
 	/* Current command */
 	const char *cmd;
 	/* Current param */
@@ -73,6 +71,8 @@ typedef struct memcached_ctx_s {
 	void (*callback) (struct memcached_ctx_s *ctx, memc_error_t error, void *data);
 	/* Data for callback function */
 	void *callback_data;
+	/* Event structure */
+	struct event mem_ev;
 } memcached_ctx_t;
 
 typedef void (*memcached_callback_t) (memcached_ctx_t *ctx, memc_error_t error, void *data);

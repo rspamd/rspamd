@@ -21,8 +21,7 @@ main (int argc, char **argv)
 	g_test_init (&argc, &argv, NULL);
 
 	g_test_add_func ("/rspamd/url", rspamd_url_test_func);
+	g_test_add_func ("/rspamd/memcached", rspamd_memcached_test_func);
 
 	g_test_run ();
-	
-	g_mem_profile ();
 }

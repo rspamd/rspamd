@@ -2,8 +2,8 @@
 
 all: rspamd_test_suite
 
-rspamd_test_suite: $(OBJECTS) ../url.o ../util.o
-	$(CC) $(PTHREAD_LDFLAGS) $(LDFLAGS) $(OBJECTS) ../url.o ../util.o $(LIBS) -o rspamd_test_suite
+rspamd_test_suite: $(OBJECTS) ../url.o ../util.o ../memcached.o
+	$(CC) $(PTHREAD_LDFLAGS) $(LDFLAGS) $(OBJECTS) ../url.o ../util.o ../memcached.o $(LIBS) -o rspamd_test_suite
 
 run_test: rspamd_test_suite
 	gtester --verbose -k -o=rspamd_test.xml ./rspamd_test_suite

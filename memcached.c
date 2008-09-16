@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 #include <event.h>
+#include <glib.h>
 
 #include "memcached.h"
 
@@ -59,8 +60,8 @@ memc_log (const memcached_ctx_t *ctx, int line, const char *fmt, ...)
 	va_list args;
 	if (ctx->options & MEMC_OPT_DEBUG) {
 		va_start (args, fmt);
-		syslog (LOG_DEBUG, "memc_debug(%d): host: %s, port: %d", line, inet_ntoa (ctx->addr), ntohs (ctx->port));
-		vsyslog (LOG_DEBUG, fmt, args);
+		g_log (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, "memc_debug(%d): host: %s, port: %d", line, inet_ntoa (ctx->addr), ntohs (ctx->port));
+		g_logv (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, fmt, args);
 		va_end (args);
 	}
 }
@@ -104,7 +105,7 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[2].iov_len = ctx->param->bufsize - ctx->param->bufpos;
 			iov[3].iov_base = CRLF;
 			iov[3].iov_len = sizeof (CRLF) - 1;
-			ctx->param->bufpos = writev (ctx->sock, iov, 4);
+			writev (ctx->sock, iov, 4);
 		}
 		else {
 			iov[0].iov_base = read_buf;
@@ -113,18 +114,11 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_len = ctx->param->bufsize - ctx->param->bufpos;
 			iov[2].iov_base = CRLF;
 			iov[2].iov_len = sizeof (CRLF) - 1;
-			ctx->param->bufpos = writev (ctx->sock, iov, 3);	
+			writev (ctx->sock, iov, 3);
 		}
-		if (ctx->param->bufpos == ctx->param->bufsize) {
-			event_del (&ctx->mem_ev);
-			event_set (&ctx->mem_ev, ctx->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, socket_callback, (void *)ctx);
-			event_add (&ctx->mem_ev, &ctx->timeout);
-		}
-		else {
-			event_del (&ctx->mem_ev);
-			event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
-			event_add (&ctx->mem_ev, &ctx->timeout);
-		}
+		event_del (&ctx->mem_ev);
+		event_set (&ctx->mem_ev, ctx->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, socket_callback, (void *)ctx);
+		event_add (&ctx->mem_ev, &ctx->timeout);
 	}
 	else if (what == EV_READ) {
 		/* Read header */
@@ -135,8 +129,8 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = READ_BUFSIZ;
 			if ((r = readv (ctx->sock, iov, 2)) == -1) {
-				ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
 				event_del (&ctx->mem_ev);
+				ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
 			}
 			if (header.req_id != ctx->count && retries < MAX_RETRIES) {
 				retries ++;
@@ -148,8 +142,10 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 		if (ctx->protocol != UDP_TEXT) {
 			r = read (ctx->sock, read_buf, READ_BUFSIZ - 1);
 		}
+		memc_log (ctx, __LINE__, "memc_write: read reply from memcached: %s", read_buf);
 		/* Increment count */
 		ctx->count++;
+		event_del (&ctx->mem_ev);
 		if (strncmp (read_buf, STORED_TRAILER, sizeof (STORED_TRAILER) - 1) == 0) {
 			ctx->callback (ctx, OK, ctx->callback_data);
 		}
@@ -162,11 +158,10 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 		else {
 			ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
 		}
-		event_del (&ctx->mem_ev);
 	}
 	else if (what == EV_TIMEOUT) {
-		ctx->callback (ctx, SERVER_TIMEOUT, ctx->callback_data);
 		event_del (&ctx->mem_ev);
+		ctx->callback (ctx, SERVER_TIMEOUT, ctx->callback_data);
 	}
 }
 
@@ -182,7 +177,7 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 	size_t datalen;
 	struct memc_udp_header header;
 	struct iovec iov[2];
-	int retries = 0;
+	int retries = 0, t;
 	
 	if (what == EV_WRITE) {
 		/* Send command to memcached */
@@ -216,7 +211,9 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = READ_BUFSIZ;
 			if ((r = readv (ctx->sock, iov, 2)) == -1) {
+				event_del (&ctx->mem_ev);
 				ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
+				return;
 			}
 			memc_log (ctx, __LINE__, "memc_read: got read_buf: %s", read_buf);
 			if (header.req_id != ctx->count && retries < MAX_RETRIES) {
@@ -234,22 +231,25 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 		if (r > 0) {
 			read_buf[r] = 0;
 			if (ctx->param->bufpos == 0) {
-				r = memc_parse_header (read_buf, &datalen, &p);
-				if (r < 0) {
+				t = memc_parse_header (read_buf, &datalen, &p);
+				if (t < 0) {
+					event_del (&ctx->mem_ev);
 					memc_log (ctx, __LINE__, "memc_read: cannot parse memcached reply");
 					ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
-					goto cleanup;
+					return;
 				}
-				else if (r == 0) {
+				else if (t == 0) {
 					memc_log (ctx, __LINE__, "memc_read: record does not exists");
+					event_del (&ctx->mem_ev);
 					ctx->callback (ctx, NOT_EXISTS, ctx->callback_data);
-					goto cleanup;
+					return;
 				}
 
 				if (datalen > ctx->param->bufsize) {
 					memc_log (ctx, __LINE__, "memc_read: user's buffer is too small: %zd, %zd required", ctx->param->bufsize, datalen);
+					event_del (&ctx->mem_ev);
 					ctx->callback (ctx, WRONG_LENGTH, ctx->callback_data);
-					goto cleanup;
+					return;
 				}
 				/* Check if we already have all data in buffer */
 				if (r >= datalen + sizeof (END_TRAILER) + sizeof (CRLF) - 2) {
@@ -257,8 +257,9 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 					memcpy (ctx->param->buf + ctx->param->bufpos, p, datalen);
 					/* Increment count */
 					ctx->count++;
+					event_del (&ctx->mem_ev);
 					ctx->callback (ctx, OK, ctx->callback_data);
-					goto cleanup;
+					return;
 				}
 				/* Subtract from sum parsed header's length */
 				r -= p - read_buf;
@@ -271,8 +272,9 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 						END_TRAILER, sizeof (END_TRAILER) - 1) == 0) {
 				r -= sizeof (END_TRAILER) - sizeof (CRLF) - 2;
 				memcpy (ctx->param->buf + ctx->param->bufpos, p, r);
+				event_del (&ctx->mem_ev);
 				ctx->callback (ctx, OK, ctx->callback_data);
-				goto cleanup;
+				return;
 			}
 			/* Store this part of data in param's buffer */
 			memcpy (ctx->param->buf + ctx->param->bufpos, p, r);
@@ -280,21 +282,18 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 		}
 		else {
 			memc_log (ctx, __LINE__, "memc_read: read(v) failed: %d, %m", r);
+			event_del (&ctx->mem_ev);
 			ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
-			goto cleanup;
+			return;
 		}
 
 		ctx->count++;
 	}
 	else if (what == EV_TIMEOUT) {
+		event_del (&ctx->mem_ev);
 		ctx->callback (ctx, SERVER_TIMEOUT, ctx->callback_data);
-		goto cleanup;
 	}
 	
-	return;
-
-cleanup:
-	event_del (&ctx->mem_ev);
 }
 
 /*
@@ -343,8 +342,9 @@ delete_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = READ_BUFSIZ;
 			if ((r = readv (ctx->sock, iov, 2)) == -1) {
-				ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
 				event_del (&ctx->mem_ev);
+				ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
+				return;
 			}
 			if (header.req_id != ctx->count && retries < MAX_RETRIES) {
 				retries ++;
@@ -358,6 +358,7 @@ delete_handler (int fd, short what, memcached_ctx_t *ctx)
 		}
 		/* Increment count */
 		ctx->count++;
+		event_del (&ctx->mem_ev);
 		if (strncmp (read_buf, DELETED_TRAILER, sizeof (STORED_TRAILER) - 1) == 0) {
 			ctx->callback (ctx, OK, ctx->callback_data);
 		}
@@ -367,11 +368,10 @@ delete_handler (int fd, short what, memcached_ctx_t *ctx)
 		else {
 			ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
 		}
-		event_del (&ctx->mem_ev);
 	}
 	else if (what == EV_TIMEOUT) {
-		ctx->callback (ctx, SERVER_TIMEOUT, ctx->callback_data);
 		event_del (&ctx->mem_ev);
+		ctx->callback (ctx, SERVER_TIMEOUT, ctx->callback_data);
 	}
 }
 
@@ -560,6 +560,7 @@ memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param, int
 	ctx->cmd = cmd;
 	ctx->op = CMD_WRITE;
 	ctx->param = param;
+	param->expire = expire;
 	event_set (&ctx->mem_ev, ctx->sock, EV_WRITE | EV_TIMEOUT, socket_callback, (void *)ctx);
 	event_add (&ctx->mem_ev, &ctx->timeout);
 
