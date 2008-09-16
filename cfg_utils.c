@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -11,15 +12,17 @@
 #include <syslog.h>
 #include <netdb.h>
 #include <math.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "config.h"
+#include "cfg_file.h"
+#include "main.h"
 #ifndef HAVE_OWN_QUEUE_H
 #include <sys/queue.h>
 #else
 #include "queue.h"
 #endif
-
-#include "cfg_file.h"
-#include "memcached.h"
 
 extern int yylineno;
 extern char *yytext;

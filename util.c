@@ -7,11 +7,13 @@
 #include <netdb.h>
 #include <errno.h>
 #include <unistd.h>
+#include <stdarg.h>
+#include <sys/file.h>
+
+#include "config.h"
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
 #endif
-#include <stdarg.h>
-#include <sys/file.h>
 #include "util.h"
 #include "cfg_file.h"
 

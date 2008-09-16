@@ -19,7 +19,6 @@
 #include <glib.h>
 #include "upstream.h"
 #include "memcached.h"
-#include "main.h"
 
 #define DEFAULT_BIND_PORT 768
 #define MAX_MEMCACHED_SERVERS 48

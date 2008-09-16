@@ -9,6 +9,7 @@
 #include <syslog.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <gmime/gmime.h>
 

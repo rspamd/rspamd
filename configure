@@ -180,7 +180,7 @@ check_include()
 	if [ $? -eq 0 ] ; then 
 		echo "found"
 		echo "-> OK" >> config.log
-		_CFLAG=`echo "HAVE_$INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
+		_CFLAG=`echo "$INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
 		have_opt $_CFLAG
 		cleanup
 		return 0
