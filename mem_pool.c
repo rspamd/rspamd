@@ -11,6 +11,7 @@ memory_pool_new (size_t size)
 	new->begin = g_malloc (size);
 	new->len = size;
 	new->pos = new->begin;
+	new->next = NULL;
 
 	return new;
 }
@@ -18,31 +19,42 @@ memory_pool_new (size_t size)
 void *
 memory_pool_alloc (memory_pool_t *pool, size_t size)
 {
-	u_char *tmp; 
+	u_char *tmp;
+	memory_pool_t *new, *cur;
+
 	if (pool) {
-		if (pool->len < (pool->pos - pool->begin) + size) {
-			/* Grow pool */
-			if (pool->len > size) {
-				pool->len *= 2;
+		cur = pool;
+		/* Find free space in pool chain */
+		while (memory_pool_free (cur) < size && cur->next) {
+			cur = cur->next;
+		}
+		if (cur->next == NULL) {
+			/* Allocate new pool */
+			if (cur->len > size) {
+				new = memory_pool_new (cur->len);
 			}
 			else {
-				pool->len += size + pool->len;
+				new = memory_pool_new (size + cur->len);
 			}
-			pool->begin = g_realloc (pool->begin, pool->len);
-			return memory_pool_alloc (pool, size);
+			cur->next = new;
+			new->pos += size;
+			return new->begin;
 		}	
-		tmp = pool->pos;
-		pool->pos += size;
+		tmp = cur->pos;
+		cur->pos += size;
 		return tmp;
 	}
 	return NULL;
 }
 
-void memory_pool_free (memory_pool_t *pool)
+void memory_pool_delete (memory_pool_t *pool)
 {
-	if (pool) {
-		g_free (pool->begin);
-		g_free (pool);
+	memory_pool_t *cur = pool, *tmp;
+	while (cur) {
+		tmp = cur;
+		cur = cur->next;
+		g_free (tmp->begin);
+		g_free (tmp);
 	}
 }
 

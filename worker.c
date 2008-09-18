@@ -98,7 +98,7 @@ free_task (struct worker_task *task)
 			free (task->memc_ctx);
 		}
 		if (task->task_pool) {
-			memory_pool_free (task->task_pool);
+			memory_pool_delete (task->task_pool);
 		}
 		while (!TAILQ_EMPTY (&task->urls)) {
 			cur = TAILQ_FIRST (&task->urls);
