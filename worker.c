@@ -97,6 +97,9 @@ free_task (struct worker_task *task)
 			memc_close_ctx (task->memc_ctx);
 			free (task->memc_ctx);
 		}
+		if (task->task_pool) {
+			memory_pool_free (task->task_pool);
+		}
 		while (!TAILQ_EMPTY (&task->urls)) {
 			cur = TAILQ_FIRST (&task->urls);
 			TAILQ_REMOVE (&task->urls, cur, next);
@@ -610,6 +613,7 @@ accept_socket (int fd, short what, void *arg)
 	TAILQ_INIT (&new_task->results);
 	TAILQ_INIT (&new_task->parts);
 	new_task->memc_ctx = malloc (sizeof (memcached_ctx_t));
+	new_task->task_pool = memory_pool_new (1024);
 	if (new_task->memc_ctx == NULL) {
 		msg_err ("accept_socket: cannot allocate memory for memcached ctx, %m");
 	}

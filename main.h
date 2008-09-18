@@ -20,6 +20,7 @@
 #include <event.h>
 
 #include "fstring.h"
+#include "mem_pool.h"
 #include "url.h"
 #include "memcached.h"
 
@@ -135,6 +136,8 @@ struct worker_task {
 	TAILQ_HEAD (chainsq, chain_result) chain_results;
 	struct config_file *cfg;
 	struct save_point save;
+	/* Memory pool that is associated with this task */
+	memory_pool_t *task_pool;
 };
 
 struct module_ctx {
