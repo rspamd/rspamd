@@ -48,9 +48,10 @@ LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
 %token  MEMCACHED WORKERS REQUIRE MODULE
 %token  FILTER METRIC SCRIPT_HEADER SCRIPT_MIME SCRIPT_MESSAGE SCRIPT_URL SCRIPT_CHAIN SCRIPT_PARAM
-%token  MODULE_OPT, PARAM
+%token  MODULE_OPT PARAM VARIABLE
 
 %type	<string>	STRING
+%type	<string>	VARIABLE
 %type	<string>	QUOTEDSTRING MODULE_OPT PARAM
 %type	<string>	FILENAME 
 %type   <string>  	SOCKCRED
@@ -80,6 +81,7 @@ command	:
 	| require
 	| filter
 	| module_opt
+	| variable
 	;
 
 tempdir :
@@ -400,6 +402,12 @@ optcmd:
 		mopt->param = $1;
 		mopt->value = $3;
 		LIST_INSERT_HEAD (cur_module_opt, mopt, next);
+	}
+	;
+
+variable:
+	VARIABLE EQSIGN QUOTEDSTRING {
+		g_hash_table_insert (cfg->variables, $1, $3);
 	}
 	;
 

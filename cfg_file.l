@@ -13,6 +13,7 @@
 #define MAX_INCLUDE_DEPTH 10
 YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
 int include_stack_ptr = 0;
+extern struct config_file *cfg;
 
 %}
 
@@ -45,7 +46,6 @@ script_message					return SCRIPT_MESSAGE;
 script_url						return SCRIPT_URL;
 script_chain					return SCRIPT_CHAIN;
 
-
 \{								return OBRACE;
 \}								return EBRACE;
 ;								return SEMICOLON;
@@ -56,6 +56,7 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 [ \t]+							/* ignore whitespace */;
 \"[^"]+\"						yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return QUOTEDSTRING;
 \"								return QUOTE;
+\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 [0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
 [0-9]+[kKmMgG]?					yylval.limit=parse_limit(yytext); return SIZELIMIT;
 [0-9]+[sS]|[0-9]+[mM][sS]		yylval.seconds=parse_seconds(yytext); return SECONDS;
@@ -68,38 +69,34 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 [a-zA-Z0-9].[a-zA-Z0-9\/.-]+	yylval.string=strdup(yytext); return DOMAIN;
 <incl>[ \t]*      /* eat the whitespace */
 <incl>[^ \t\n]+   { /* got the include file name */
-        if ( include_stack_ptr >= MAX_INCLUDE_DEPTH ) {
-            yyerror ("yylex: includes nested too deeply" );
+        if (include_stack_ptr >= MAX_INCLUDE_DEPTH) {
+            yyerror ("yylex: includes nested too deeply");
             return -1;
         }
 
         include_stack[include_stack_ptr++] =
             YY_CURRENT_BUFFER;
 
-        yyin = fopen( yytext, "r" );
+        yyin = fopen (yytext, "r");
 
-        if ( ! yyin ) {
-            yyerror("yylex: cannot open include file");
+        if (! yyin) {
+            yyerror ("yylex: cannot open include file");
 			return -1;
 		}
 
-        yy_switch_to_buffer(
-            yy_create_buffer( yyin, YY_BUF_SIZE ) );
+        yy_switch_to_buffer (yy_create_buffer (yyin, YY_BUF_SIZE));
 
         BEGIN(INITIAL);
         }
 
 <<EOF>> {
-        if ( --include_stack_ptr < 0 )
-            {
-            yyterminate();
-            }
-
-        else
-            {
-            yy_delete_buffer( YY_CURRENT_BUFFER );
-            yy_switch_to_buffer(
-                 include_stack[include_stack_ptr] );
+        if ( --include_stack_ptr < 0 ) {
+			post_load_config (cfg);
+            yyterminate ();
+        }
+        else {
+            yy_delete_buffer (YY_CURRENT_BUFFER);
+            yy_switch_to_buffer (include_stack[include_stack_ptr]);
             }
         }
 
@@ -110,6 +107,7 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <module>\}  return EBRACE;
 <module>\;	return SEMICOLON;
 <module>[a-zA-Z0-9_-]	yylval.string=strdup(yytext); return PARAM;
+<module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <module>\"[^"]+\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return QUOTEDSTRING;
 
 %%

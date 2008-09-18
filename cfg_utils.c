@@ -149,6 +149,7 @@ init_defaults (struct config_file *cfg)
 
 	cfg->workers_number = DEFAULT_WORKERS_NUM;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
 
 	LIST_INIT (&cfg->filters);
 	LIST_INIT (&cfg->perl_modules);
@@ -205,6 +206,8 @@ free_config (struct config_file *cfg)
 	g_hash_table_foreach (cfg->modules_opts, clean_hash_bucket, NULL);
 	g_hash_table_remove_all (cfg->modules_opts);
 	g_hash_table_unref (cfg->modules_opts);
+	g_hash_table_remove_all (cfg->variables);
+	g_hash_table_unref (cfg->variables);
 }
 
 int
@@ -321,6 +324,81 @@ parse_flag (const char *str)
 	}
 
 	return -1;
+}
+
+/*
+ * Try to substitute all variables in given string
+ * Return: newly allocated string with substituted variables (original string may be freed if variables are found)
+ */
+char *
+substitute_variable (struct config_file *cfg, char *str, u_char recursive)
+{
+	char *var, *new, *v_begin, *v_end;
+	size_t len;
+
+	while ((v_begin = strstr (str, "${")) != NULL) {
+		len = strlen (str);
+		*v_begin = '\0';
+		v_begin += 2;
+		if ((v_end = strstr (v_begin, "}")) == NULL) {
+			/* Not a variable, skip */
+			continue;
+		}
+		*v_end = '\0';
+		var = g_hash_table_lookup (cfg->variables, v_begin);
+		if (var == NULL) {
+			yywarn ("substitute_variable: variable %s is not defined", v_begin);
+			/* Substitute unknown variables with empty string */
+			var = "";
+		}
+		else if (recursive) {
+			var = substitute_variable (cfg, var, recursive);
+		}
+		/* Allocate new string */
+		new = g_malloc (len - strlen (v_begin) + strlen (var) + 1);
+
+		snprintf (new, len - strlen (v_begin) + strlen (var) + 1, "%s%s%s",
+						str, var, v_end + 1);
+		g_free (str);
+		str = new;
+	}
+
+	return str;
+}
+
+static void
+substitute_module_variables (gpointer key, gpointer value, gpointer data)
+{
+	struct config_file *cfg = (struct config_file *)data;
+	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = (struct moduleoptq *)value;
+	struct module_opt *cur, *tmp;
+
+	LIST_FOREACH_SAFE (cur, cur_module_opt, next, tmp) {
+		if (cur->value) {
+			cur->value = substitute_variable (cfg, cur->value, 0);
+		}
+	}
+}
+
+static void
+substitute_all_variables (gpointer key, gpointer value, gpointer data)
+{
+	struct config_file *cfg = (struct config_file *)data;
+	char *var;
+
+	var = value;
+	/* Do recursive substitution */
+	var = substitute_variable (cfg, var, 1);
+}
+
+/* 
+ * Substitute all variables in strings
+ */
+void
+post_load_config (struct config_file *cfg)
+{
+	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
+	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
 }
 
 /*

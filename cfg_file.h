@@ -114,6 +114,7 @@ struct config_file {
 	LIST_HEAD (modulesq, perl_module) perl_modules;
 	LIST_HEAD (cmodulesq, c_module) c_modules;
 	GHashTable* modules_opts;
+	GHashTable* variables;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);
@@ -125,6 +126,8 @@ char* get_module_opt (struct config_file *cfg, char *module_name, char *opt_name
 size_t parse_limit (const char *limit);
 unsigned int parse_seconds (const char *t);
 char parse_flag (const char *str);
+char* substitute_variable (struct config_file *cfg, char *str, u_char recursive);
+void post_load_config (struct config_file *cfg);
 
 int yylex (void);
 int yyparse (void);
