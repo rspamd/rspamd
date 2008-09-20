@@ -23,6 +23,7 @@
 #include "mem_pool.h"
 #include "url.h"
 #include "memcached.h"
+#include "protocol.h"
 
 #include <glib.h>
 #include <gmime/gmime.h>
@@ -112,6 +113,8 @@ struct worker_task {
 		WAIT_FILTER,
 	} state;
 	size_t content_length;
+	enum rspamd_protocol proto;
+	enum rspamd_command cmd;
 	char *helo;
 	char *from;
 	char *rcpt;
