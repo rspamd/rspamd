@@ -141,7 +141,7 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 	}
 	PUSHMARK (SP);
 	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
-	XPUSHs (AvARRAY (av));
+	XPUSHs (sv_2mortal ((SV *)AvARRAY (av)));
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -179,8 +179,6 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
 
 	call_sv (callback_data->callback, G_SCALAR);
 	
-	free (callback_data);
-	free (ctx);
     /* Set save point */
     callback_data->task->save.saved = 0;
 	process_filters (callback_data->task);

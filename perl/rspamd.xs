@@ -13,6 +13,7 @@
 #include "../config.h"
 #include "../main.h"
 #include "../perl.h"
+#include "../mem_pool.h"
 
 #define perl_set_session(r)													\
 	r = INT2PTR(struct worker_task *, SvIV((SV *) SvRV(ST(0))))
@@ -136,14 +137,14 @@ read_memcached_key (r, key, datalen, callback)
     callback = SvRV(ST(3));
 
     /* Copy old ctx to new one */
-    ctx = malloc (sizeof (memcached_ctx_t));
+    ctx = memory_pool_alloc (r->task_pool, sizeof (memcached_ctx_t));
     if (ctx == NULL) {
         XSRETURN_UNDEF;
     }
     memcpy (ctx, r->memc_ctx, sizeof (memcached_ctx_t));
     /* Set perl callback */
     ctx->callback = perl_call_memcached_callback;
-    callback_data = malloc (sizeof (struct _param));
+    callback_data = memory_pool_alloc (r->task_pool, sizeof (struct _param));
     if (callback_data == NULL) {
 		XSRETURN_UNDEF;
     }
@@ -152,7 +153,7 @@ read_memcached_key (r, key, datalen, callback)
     ctx->callback_data = (void *)callback_data;
 
     strlcpy (param.key, key, sizeof (param.key));
-    param.buf = malloc (datalen);
+	param.buf = memory_pool_alloc (r->task_pool, datalen);
     if (param.buf != NULL) {
         param.bufsize = datalen;
     }
@@ -186,14 +187,14 @@ write_memcached_key (r, key, data, expire, callback)
     callback = SvRV(ST(4));
 
     /* Copy old ctx to new one */
-    ctx = malloc (sizeof (memcached_ctx_t));
+    ctx = memory_pool_alloc (r->task_pool, sizeof (memcached_ctx_t));
     if (ctx == NULL) {
         XSRETURN_UNDEF;
     }
     memcpy (ctx, r->memc_ctx, sizeof (memcached_ctx_t));
     /* Set perl callback */
     ctx->callback = perl_call_memcached_callback;
-    callback_data = malloc (sizeof (struct _param));
+    callback_data = memory_pool_alloc (r->task_pool, sizeof (struct _param));
     if (callback_data == NULL) {
 		XSRETURN_UNDEF;
     }
@@ -231,14 +232,14 @@ delete_memcached_key (r, key, callback)
     callback = SvRV(ST(2));
 
     /* Copy old ctx to new one */
-    ctx = malloc (sizeof (memcached_ctx_t));
+    ctx = memory_pool_alloc (r->task_pool, sizeof (memcached_ctx_t));
     if (ctx == NULL) {
         XSRETURN_UNDEF;
     }
     memcpy (ctx, r->memc_ctx, sizeof (memcached_ctx_t));
     /* Set perl callback */
     ctx->callback = perl_call_memcached_callback;
-    callback_data = malloc (sizeof (struct _param));
+    callback_data = memory_pool_alloc (r->task_pool, sizeof (struct _param));
     if (callback_data == NULL) {
 		XSRETURN_UNDEF;
     }
