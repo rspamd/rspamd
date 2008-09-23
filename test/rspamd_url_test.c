@@ -83,6 +83,7 @@ rspamd_url_test_func ()
 	html->len = strlen (test_html);
 	bzero (&task, sizeof (task));
 	TAILQ_INIT (&task.urls);
+	task.task_pool = memory_pool_new (8192);
 	
 	g_test_timer_start ();
 	g_test_message ("Testing text URL regexp parser");
@@ -97,8 +98,6 @@ rspamd_url_test_func ()
 	while (!TAILQ_EMPTY (&task.urls)) {
 		url = TAILQ_FIRST (&task.urls);
 		TAILQ_REMOVE (&task.urls, url, next);
-		g_free (url->string);
-		g_free (url);
 	}
 	g_assert (i == 39);
 
@@ -117,8 +116,6 @@ rspamd_url_test_func ()
 	while (!TAILQ_EMPTY (&task.urls)) {
 		url = TAILQ_FIRST (&task.urls);
 		TAILQ_REMOVE (&task.urls, url, next);
-		g_free (url->string);
-		g_free (url);
 	}
 	g_assert (i == 1);
 	msg_debug ("Time elapsed: %.2f", g_test_timer_elapsed ());

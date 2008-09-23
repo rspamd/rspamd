@@ -162,8 +162,8 @@ parse_header (struct worker_task *task, char *line)
 			/* content-length */
 			if (strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
 				task->content_length = strtoul (line, &err, 10);
-				task->msg = g_malloc (sizeof (f_str_buf_t));
-				task->msg->buf = fstralloc (task->content_length);
+				task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_buf_t));
+				task->msg->buf = fstralloc (task->task_pool, task->content_length);
 				if (task->msg->buf == NULL) {
 					msg_err ("read_socket: cannot allocate memory for message buffer");
 					return -1;
@@ -178,7 +178,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'H':
 			/* helo */
 			if (strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
-				task->helo = g_strdup (line);
+				task->helo = memory_pool_strdup (task->task_pool, line);
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);
@@ -189,7 +189,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'F':
 			/* from */
 			if (strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
-				task->from = g_strdup (line);
+				task->from = memory_pool_strdup (task->task_pool, line);
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);
@@ -200,7 +200,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'R':
 			/* rcpt */
 			if (strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
-				task->rcpt = g_strdup (line);
+				task->rcpt = memory_pool_strdup (task->task_pool, line);
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);

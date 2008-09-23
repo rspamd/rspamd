@@ -462,7 +462,7 @@ redirector_callback (int fd, short what, void *arg)
 					}
 					if (*p == '\0') {
 						msg_info ("redirector_callback: got reply from redirector: '%s' -> '%s'", struri (param->url), c);
-						parse_uri (param->url, c);
+						parse_uri (param->url, c, param->task->task_pool);
 						register_memcached_call (param->url, param->task);
 						param->task->save.saved ++;
 					}

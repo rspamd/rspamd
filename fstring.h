@@ -6,6 +6,7 @@
 #define FSTRING_H
 
 #include <sys/types.h>
+#include "mem_pool.h"
 
 #define update_buf_size(x) (x)->free = (x)->buf->size - ((x)->pos - (x)->buf->begin); (x)->buf->len = (x)->pos - (x)->buf->begin
 
@@ -65,22 +66,17 @@ int fstrpush (f_str_t *dest, char c);
 /*
  * Allocate memory for f_str_t
  */
-f_str_t* fstralloc (size_t len);
+f_str_t* fstralloc (memory_pool_t *pool, size_t len);
 
 /*
  * Truncate string to its len
  */
-f_str_t* fstrtruncate (f_str_t *orig);
+f_str_t* fstrtruncate (memory_pool_t *pool, f_str_t *orig);
 
 /*
  * Enlarge string to new size
  */
-f_str_t* fstrgrow (f_str_t *orig, size_t newlen);
-
-/*
- * Free memory for f_str_t
- */
-#define fstrfree(x) free((x)->begin); free((x))
+f_str_t* fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen);
 
 /*
  * Return specified character

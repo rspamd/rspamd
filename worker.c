@@ -35,6 +35,8 @@
 #define NRCPT_HEADER "Recipient-Number: "
 #define RCPT_HEADER "Rcpt: "
 
+#define TASK_POOL_SIZE 16384
+
 const f_str_t CRLF = {
 	/* begin */"\r\n",
 	/* len */2,
@@ -78,47 +80,23 @@ free_task (struct worker_task *task)
 	struct mime_part *part;
 
 	if (task) {
-		if (task->msg) {
-			fstrfree (task->msg->buf);
-			free (task->msg);
-		}
 		if (task->message) {
 			g_object_unref (task->message);
 		}
-		if (task->helo) {
-			free (task->helo);
-		}
-		if (task->from) {
-			free (task->from);
-		}
-		if (task->rcpt) {
-			free (task->rcpt);
-		}
 		if (task->memc_ctx) {
 			memc_close_ctx (task->memc_ctx);
-			free (task->memc_ctx);
-		}
-		if (task->task_pool) {
-			memory_pool_delete (task->task_pool);
 		}
 		while (!TAILQ_EMPTY (&task->urls)) {
 			cur = TAILQ_FIRST (&task->urls);
 			TAILQ_REMOVE (&task->urls, cur, next);
-			free (cur->string);
-			free (cur);
 		}
 		while (!TAILQ_EMPTY (&task->results)) {
 			res = TAILQ_FIRST (&task->results);
 			TAILQ_REMOVE (&task->results, res, next);
-			free (res);
 		}
 		while (!TAILQ_EMPTY (&task->chain_results)) {
 			chain_res = TAILQ_FIRST (&task->chain_results);
-			if (chain_res->marks != NULL) {
-				free (chain_res->marks);
-			}
 			TAILQ_REMOVE (&task->chain_results, chain_res, next);
-			free (chain_res);
 		}
 
 		while (!TAILQ_EMPTY (&task->parts)) {
@@ -126,9 +104,9 @@ free_task (struct worker_task *task)
 			g_object_unref (part->type);
 			g_object_unref (part->content);
 			TAILQ_REMOVE (&task->parts, part, next);
-			free (part);
 		}
-		free (task);
+		memory_pool_delete (task->task_pool);
+		g_free (task);
 	}
 }
 
@@ -180,7 +158,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
 				type = (GMimeContentType *)g_mime_part_get_content_type (GMIME_PART (part));
-				mime_part = g_malloc (sizeof (struct mime_part));
+				mime_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
 				TAILQ_INSERT_TAIL (&task->parts, mime_part, next);
@@ -227,7 +205,7 @@ process_filters (struct worker_task *task)
 		}
 	}
 	while (c_filter != NULL) {
-		res = malloc (sizeof (struct filter_result));
+		res = memory_pool_alloc (task->task_pool, sizeof (struct filter_result));
 		if (res == NULL) {
 			msg_err ("process_filters: malloc failed, %m");
 			return -1;
@@ -273,14 +251,14 @@ process_filters (struct worker_task *task)
 
 	/* Process perl chains */
 	while (chain != NULL) {
-		chain_res = malloc (sizeof (struct chain_result));
+		chain_res = memory_pool_alloc (task->task_pool, sizeof (struct chain_result));
 		if (chain_res == NULL) {
 			msg_err ("process_filters: malloc failed, %m");
 			return -1;
 		}
 		i = 0;
 		chain_res->chain = chain;
-		chain_res->marks = malloc (sizeof (int) * chain->scripts_number);
+		chain_res->marks = memory_pool_alloc (task->task_pool, sizeof (int) * chain->scripts_number);
 		chain_res->result_mark = 0;
 		if (chain_res->marks == NULL) {
 			free (chain_res);
@@ -292,7 +270,7 @@ process_filters (struct worker_task *task)
 				/* Skip chain filters first */
 				continue;
 			}
-			res = malloc (sizeof (struct filter_result));
+			res =  memory_pool_alloc (task->task_pool, sizeof (struct filter_result));
 			if (res == NULL) {
 				msg_err ("process_filters: malloc failed, %m");
 				return -1;
@@ -412,7 +390,7 @@ read_socket (struct bufferevent *bev, void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
 	ssize_t r;
-	char *s, *c;
+	char *s;
 
 	switch (task->state) {
 		case READ_COMMAND:
@@ -503,7 +481,7 @@ accept_socket (int fd, short what, void *arg)
 		return;
 	}
 	
-	new_task = malloc (sizeof (struct worker_task));
+	new_task = g_malloc (sizeof (struct worker_task));
 	if (new_task == NULL) {
 		msg_err ("accept_socket: cannot allocate memory for task, %m");
 		return;
@@ -517,8 +495,8 @@ accept_socket (int fd, short what, void *arg)
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->results);
 	TAILQ_INIT (&new_task->parts);
-	new_task->memc_ctx = malloc (sizeof (memcached_ctx_t));
-	new_task->task_pool = memory_pool_new (1024);
+	new_task->task_pool = memory_pool_new (TASK_POOL_SIZE);
+	new_task->memc_ctx = memory_pool_alloc (new_task->task_pool, sizeof (memcached_ctx_t));
 	if (new_task->memc_ctx == NULL) {
 		msg_err ("accept_socket: cannot allocate memory for memcached ctx, %m");
 	}

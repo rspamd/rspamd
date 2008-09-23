@@ -174,14 +174,14 @@ fstrpush (f_str_t *dest, char c)
  * Allocate memory for f_str_t
  */
 f_str_t*
-fstralloc (size_t len)
+fstralloc (memory_pool_t *pool, size_t len)
 {
-	f_str_t *res = malloc (sizeof (f_str_t));
+	f_str_t *res = memory_pool_alloc (pool, sizeof (f_str_t));
 
 	if (res == NULL) {
 		return NULL;
 	}
-	res->begin = malloc (len);
+	res->begin = memory_pool_alloc (pool, len);
 	if (res->begin == NULL) {
 		free (res);
 		return NULL;
@@ -195,7 +195,7 @@ fstralloc (size_t len)
  * Truncate string to its len
  */
 f_str_t*
-fstrtruncate (f_str_t *orig)
+fstrtruncate (memory_pool_t *pool, f_str_t *orig)
 {
 	f_str_t *res;
 
@@ -203,12 +203,11 @@ fstrtruncate (f_str_t *orig)
 		return orig;
 	}
 
-	res = fstralloc (orig->len);
+	res = fstralloc (pool, orig->len);
 	if (res == NULL) {
 		return NULL;
 	}
 	fstrcpy (res, orig);
-	fstrfree (orig);
 
 	return res;
 }
@@ -217,7 +216,7 @@ fstrtruncate (f_str_t *orig)
  * Enlarge string to new size
  */
 f_str_t*
-fstrgrow (f_str_t *orig, size_t newlen)
+fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen)
 {
 	f_str_t *res;
 
@@ -225,12 +224,11 @@ fstrgrow (f_str_t *orig, size_t newlen)
 		return orig;
 	}
 
-	res = fstralloc (newlen);
+	res = fstralloc (pool, newlen);
 	if (res == NULL) {
 		return NULL;
 	}
 	fstrcpy (res, orig);
-	fstrfree (orig);
 
 	return res;
 }

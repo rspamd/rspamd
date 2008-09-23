@@ -339,7 +339,7 @@ url_unescape (char *s)
    freshly allocated string will be returned in all cases.  */
 
 static char *
-url_escape_1 (const char *s, unsigned char mask, int allow_passthrough)
+url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_pool_t *pool)
 {
 	const char *p1;
 	char *p2, *newstr;
@@ -350,11 +350,17 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough)
 		if (urlchr_test (*p1, mask))
 			addition += 2;		/* Two more characters (hex digits) */
 
-	if (!addition)
-		return allow_passthrough ? (char *)s : strdup (s);
+	if (!addition) {
+		if (allow_passthrough) {
+			return (char *)s;
+		}
+		else {
+			return memory_pool_strdup (pool, s);
+		}
+	}
 
 	newlen = (p1 - s) + addition;
-	newstr = (char *) g_malloc (newlen + 1);
+	newstr = (char *) memory_pool_alloc (pool, newlen + 1);
 
 	p1 = s;
 	p2 = newstr;
@@ -378,18 +384,18 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough)
    string, returning a freshly allocated string.  */
 
 char *
-url_escape (const char *s)
+url_escape (const char *s, memory_pool_t *pool)
 {
-	return url_escape_1 (s, urlchr_unsafe, 0);
+	return url_escape_1 (s, urlchr_unsafe, 0, pool);
 }
 
 /* URL-escape the unsafe characters (see urlchr_table) in a given
    string.  If no characters are unsafe, S is returned.  */
 
 static char *
-url_escape_allow_passthrough (const char *s)
+url_escape_allow_passthrough (const char *s, memory_pool_t *pool)
 {
-	return url_escape_1 (s, urlchr_unsafe, 1);
+	return url_escape_1 (s, urlchr_unsafe, 1, pool);
 }
 
 /* Decide whether the char at position P needs to be encoded.  (It is
@@ -427,7 +433,7 @@ char_needs_escaping (const char *p)
 */
 
 static char *
-reencode_escapes (const char *s)
+reencode_escapes (const char *s, memory_pool_t *pool)
 {
 	const char *p1;
 	char *newstr, *p2;
@@ -441,14 +447,15 @@ reencode_escapes (const char *s)
 		if (char_needs_escaping (p1))
 			++encode_count;
 
-	if (!encode_count)
+	if (!encode_count) {
 		/* The string is good as it is. */
-		return g_strdup (s);		/* C const model sucks. */
+		return memory_pool_strdup (pool, s);
+	}
 
 	oldlen = p1 - s;
 	/* Each encoding adds two characters (hex digits).  */
 	newlen = oldlen + 2 * encode_count;
-	newstr = g_malloc (newlen + 1);
+	newstr = memory_pool_alloc (pool, newlen + 1);
 
 	/* Second pass: copy the string to the destination address, encoding
 	   chars when needed.  */
@@ -497,9 +504,9 @@ unescape_single_char (char *str, char chr)
 	 characters.  */
 
 static char *
-url_escape_dir (const char *dir)
+url_escape_dir (const char *dir, memory_pool_t *pool)
 {
-	char *newdir = url_escape_1 (dir, urlchr_unsafe | urlchr_reserved, 1);
+	char *newdir = url_escape_1 (dir, urlchr_unsafe | urlchr_reserved, 1, pool);
 	if (newdir == dir)
 		return (char *)dir;
 
@@ -581,7 +588,7 @@ path_simplify (char *path)
 }
 
 enum uri_errno
-parse_uri(struct uri *uri, unsigned char *uristring)
+parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 {
 	unsigned char *prefix_end, *host_end, *p;
 	unsigned char *lbracket, *rbracket;
@@ -593,7 +600,7 @@ parse_uri(struct uri *uri, unsigned char *uristring)
 	/* Nothing to do for an empty url. */
 	if (!*uristring) return URI_ERRNO_EMPTY;
 	
-	uri->string = reencode_escapes (uristring);
+	uri->string = reencode_escapes (uristring, pool);
 	msg_debug ("parse_uri: reencoding escapes in original url: '%s'", struri (uri));
 	uri->protocollen = get_protocol_length (struri (uri));
 
@@ -818,9 +825,9 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 					url_str = g_match_info_fetch (info, 0);
 					msg_debug ("url_parse_text: extracted string with regexp: '%s'", url_str);
 					if (url_str != NULL) {
-						new = g_malloc (sizeof (struct uri));
+						new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 						if (new != NULL) {
-							parse_uri (new, url_str);
+							parse_uri (new, url_str, task->task_pool);
 							TAILQ_INSERT_TAIL (&task->urls, new, next);
 						}
 					}
@@ -858,9 +865,9 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 					url_str = g_match_info_fetch (info, 1);
 					msg_debug ("url_parse_html: extracted string with regexp: '%s'", url_str);
 					if (url_str != NULL) {
-						new = g_malloc (sizeof (struct uri));
+						new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 						if (new != NULL) {
-							parse_uri (new, url_str);
+							parse_uri (new, url_str, task->task_pool);
 							TAILQ_INSERT_TAIL (&task->urls, new, next);
 						}
 					}

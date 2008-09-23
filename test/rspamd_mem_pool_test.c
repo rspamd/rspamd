@@ -11,6 +11,7 @@ void
 rspamd_mem_pool_test_func ()
 {
 	memory_pool_t *pool;
+	memory_pool_stat_t st;
 	char *tmp, *tmp2;
 
 	pool = memory_pool_new (sizeof (TEST_BUF));
@@ -24,4 +25,10 @@ rspamd_mem_pool_test_func ()
 	g_assert (strncmp (tmp2, TEST2_BUF, sizeof (TEST2_BUF)) == 0);
 	
 	memory_pool_delete (pool);
+	memory_pool_stat (&st);
+	
+	/* Check allocator stat */
+	g_assert (st.bytes_allocated == sizeof (TEST_BUF) * 3);
+	g_assert (st.chunks_allocated == 2);
+	g_assert (st.chunks_freed == 2);
 }

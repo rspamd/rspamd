@@ -11,6 +11,7 @@
 #endif
 
 #include <glib.h>
+#include "mem_pool.h"
 
 struct worker_task;
 
@@ -82,6 +83,6 @@ enum protocol {
 
 void url_parse_html (struct worker_task *task, GByteArray *part);
 void url_parse_text (struct worker_task *task, GByteArray *part);
-enum uri_errno parse_uri(struct uri *uri, unsigned char *uristring);
+enum uri_errno parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool);
 
 #endif
