@@ -48,6 +48,14 @@ enum process_type {
 	TYPE_WORKER,
 };
 
+/* Filter type */
+enum script_type {
+	SCRIPT_HEADER,
+	SCRIPT_MIME,
+	SCRIPT_URL,
+	SCRIPT_MESSAGE,
+};
+
 /* Worker process structure */
 struct rspamd_worker {
 	pid_t pid;
@@ -83,7 +91,7 @@ struct mime_part {
 
 struct save_point {
 	void *entry;
-	void *chain;
+	enum script_type type;
 	unsigned int saved;
 };
 

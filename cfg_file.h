@@ -50,13 +50,6 @@
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
-enum script_type {
-	SCRIPT_HEADER,
-	SCRIPT_MIME,
-	SCRIPT_URL,
-	SCRIPT_MESSAGE,
-};
-
 struct memcached_server {
 	struct upstream up;
 	struct in_addr addr;
