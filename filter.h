@@ -11,7 +11,7 @@
 
 struct worker_task;
 
-typedef void (*metric_cons_func)(struct worker_task *task, const char *metric_name);
+typedef int (*metric_cons_func)(struct worker_task *task, const char *metric_name);
 typedef void (*filter_func)(struct worker_task *task);
 
 enum filter_type { C_FILTER, PERL_FILTER };
@@ -42,5 +42,6 @@ struct metric_result {
 
 int process_filters (struct worker_task *task);
 void insert_result (struct worker_task *task, const char *metric_name, const char *symbol, u_char flag);
+int factor_consolidation_func (struct worker_task *task, const char *metric_name);
 
 #endif
