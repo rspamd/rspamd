@@ -99,7 +99,8 @@ tempdir :
 			yyerror ("yyparse: \"%s\" is not a directory", $3); 
 			YYERROR;
 		}
-		cfg->temp_dir = $3;
+		cfg->temp_dir = memory_pool_strdup (cfg->cfg_pool, $3);
+		free ($3);
 	}
 	;
 
@@ -139,25 +140,29 @@ bind_cred:
 
 header_filters:
 	HEADER_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->header_filters_str = g_strdup ($3);
+		cfg->header_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		free ($3);
 	}
 	;
 
 mime_filters:
 	MIME_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->mime_filters_str = g_strdup ($3);
+		cfg->mime_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		free ($3);
 	}
 	;
 
 message_filters:
 	MESSAGE_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->message_filters_str = g_strdup ($3);
+		cfg->message_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		free ($3);
 	}
 	;
 
 url_filters:
 	URL_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->url_filters_str = g_strdup ($3);
+		cfg->url_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		free ($3);
 	}
 	;
 
@@ -268,31 +273,31 @@ metriccmd:
 metricname:
 	NAME EQSIGN QUOTEDSTRING {
 		if (cur_metric == NULL) {
-			cur_metric = g_malloc (sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
-		cur_metric->name = g_strdup ($3);
+		cur_metric->name = memory_pool_strdup (cfg->cfg_pool, $3);
 	}
 	;
 
 metricfunction:
 	FUNCTION EQSIGN QUOTEDSTRING {
 		if (cur_metric == NULL) {
-			cur_metric = g_malloc (sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
-		cur_metric->func_name = g_strdup ($3);
+		cur_metric->func_name = memory_pool_strdup (cfg->cfg_pool, $3);
 	}
 	;
 
 metricscore:
 	REQUIRED_SCORE EQSIGN NUMBER {
 		if (cur_metric == NULL) {
-			cur_metric = g_malloc (sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->required_score = $3;
 	}
 	| REQUIRED_SCORE EQSIGN FRACT {
 		if (cur_metric == NULL) {
-			cur_metric = g_malloc (sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->required_score = $3;
 	}
@@ -309,12 +314,12 @@ factorsbody:
 
 factorparam:
 	QUOTEDSTRING EQSIGN FRACT {
-		double *tmp = g_malloc (sizeof (double));
+		double *tmp = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
 		*tmp = $3;
 		g_hash_table_insert (cfg->factors, $1, tmp);
 	}
 	| QUOTEDSTRING EQSIGN NUMBER {
-		double *tmp = g_malloc (sizeof (double));
+		double *tmp = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
 		*tmp = $3;
 		g_hash_table_insert (cfg->factors, $1, tmp);
 	};
@@ -336,7 +341,7 @@ requirecmd:
 			yyerror ("yyparse: cannot stat file %s, %m", $3);
 			YYERROR;
 		}
-		cur = g_malloc (sizeof (struct perl_module));
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct perl_module));
 		if (cur == NULL) {
 			yyerror ("yyparse: g_malloc: %s", strerror(errno));
 			YYERROR;
@@ -365,7 +370,7 @@ optcmd:
 			cur_module_opt = g_malloc (sizeof (cur_module_opt));
 			LIST_INIT (cur_module_opt);
 		}
-		mopt = g_malloc (sizeof (struct module_opt));
+		mopt = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
 		mopt->param = $1;
 		mopt->value = $3;
 		LIST_INSERT_HEAD (cur_module_opt, mopt, next);

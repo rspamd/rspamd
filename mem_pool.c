@@ -85,6 +85,16 @@ memory_pool_alloc (memory_pool_t *pool, size_t size)
 	return NULL;
 }
 
+void *
+memory_pool_alloc0 (memory_pool_t *pool, size_t size)
+{
+	void *pointer = memory_pool_alloc (pool, size);
+	if (pointer) {
+		bzero (pointer, size);
+	}
+	return pointer;
+}
+
 char *
 memory_pool_strdup (memory_pool_t *pool, const char *src)
 {

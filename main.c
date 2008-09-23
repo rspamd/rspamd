@@ -96,8 +96,9 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 		if (reconfig) {
 			tmp_cfg = (struct config_file *) g_malloc (sizeof (struct config_file));
 			if (tmp_cfg) {
-        		cfg_file = strdup (rspamd->cfg->cfg_name);
         		bzero (tmp_cfg, sizeof (struct config_file));
+				tmp_cfg->cfg_pool = memory_pool_new (32768);
+        		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 				f = fopen (rspamd->cfg->cfg_name , "r");
 				if (f == NULL) {
 					msg_warn ("fork_worker: cannot open file: %s", rspamd->cfg->cfg_name );
@@ -177,11 +178,12 @@ main (int argc, char **argv)
 	active_worker = NULL;
 
 	bzero (rspamd->cfg, sizeof (struct config_file));
+	rspamd->cfg->cfg_pool = memory_pool_new (32768);
 	init_defaults (rspamd->cfg);
 
 	bzero (&signals, sizeof (struct sigaction));
 
-	rspamd->cfg->cfg_name = strdup (FIXED_CONFIG_FILE);
+	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, FIXED_CONFIG_FILE);
 	read_cmd_line (argc, argv, rspamd->cfg);
 
     msg_warn ("(main) starting...");
@@ -203,15 +205,15 @@ main (int argc, char **argv)
 	}
 
 	fclose (f);
-	rspamd->cfg->cfg_name = strdup (rspamd->cfg->cfg_name );
+	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name );
 
 	/* Strictly set temp dir */
     if (!rspamd->cfg->temp_dir) {
 		msg_warn ("tempdir is not set, trying to use $TMPDIR");
-		rspamd->cfg->temp_dir = getenv ("TMPDIR");
+		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!rspamd->cfg->temp_dir) {
-	    	rspamd->cfg->temp_dir = strdup ("/tmp");
+	    	rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
 		}
     }
 
@@ -227,7 +229,7 @@ main (int argc, char **argv)
 
 	/* Init C modules */
 	for (i = 0; i < MODULES_NUM; i ++) {
-		cur_module = g_malloc (sizeof (struct module_ctx));
+		cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
 		if (modules[i].module_init_func(cfg, &cur_module) == 0) {
 			g_hash_table_insert (cfg->c_modules, (gpointer)modules[i].name, cur_module);
 		}

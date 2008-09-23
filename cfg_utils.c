@@ -27,25 +27,6 @@
 extern int yylineno;
 extern char *yytext;
 
-static void 
-clean_hash_bucket (gpointer key, gpointer value, gpointer unused)
-{
-	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = (struct moduleoptq *)value;
-	struct module_opt *cur, *tmp;
-
-	LIST_FOREACH_SAFE (cur, cur_module_opt, next, tmp) {
-		if (cur->param) {
-			free (cur->param);
-		}
-		if (cur->value) {
-			free (cur->value);
-		}
-		LIST_REMOVE (cur, next);
-		free (cur);
-	}
-	free (cur_module_opt);
-}
-
 int
 add_memcached_server (struct config_file *cf, char *str)
 {
@@ -160,29 +141,6 @@ init_defaults (struct config_file *cfg)
 void
 free_config (struct config_file *cfg)
 {
-	if (cfg->pid_file) {
-		g_free (cfg->pid_file);
-	}
-	if (cfg->temp_dir) {
-		g_free (cfg->temp_dir);
-	}
-	if (cfg->bind_host) {
-		g_free (cfg->bind_host);
-	}
-	if (cfg->header_filters_str) {
-		g_free (cfg->header_filters_str);
-	}
-	if (cfg->mime_filters_str) {
-		g_free (cfg->mime_filters_str);
-	}
-	if (cfg->message_filters_str) {
-		g_free (cfg->message_filters_str);
-	}
-	if (cfg->url_filters_str) {
-		g_free (cfg->url_filters_str);
-	}
-
-	g_hash_table_foreach (cfg->modules_opts, clean_hash_bucket, NULL);
 	g_hash_table_remove_all (cfg->modules_opts);
 	g_hash_table_unref (cfg->modules_opts);
 	g_hash_table_remove_all (cfg->variables);
@@ -193,6 +151,7 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->factors);
 	g_hash_table_remove_all (cfg->c_modules);
 	g_hash_table_unref (cfg->c_modules);
+	memory_pool_delete (cfg->cfg_pool);
 }
 
 char* 
@@ -321,11 +280,10 @@ substitute_variable (struct config_file *cfg, char *str, u_char recursive)
 			var = substitute_variable (cfg, var, recursive);
 		}
 		/* Allocate new string */
-		new = g_malloc (len - strlen (v_begin) + strlen (var) + 1);
+		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 1);
 
 		snprintf (new, len - strlen (v_begin) + strlen (var) + 1, "%s%s%s",
 						str, var, v_end + 1);
-		g_free (str);
 		str = new;
 	}
 
@@ -375,23 +333,23 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 		/* Search modules from known C modules */
 		for (i = 0; i < MODULES_NUM; i++) {
 			if (strcasecmp (modules[i].name, *p) == 0) {
-				cur = g_malloc (sizeof (struct filter));
+				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				switch (type) {
 					case SCRIPT_HEADER:
-						cur->func_name = g_strdup (*p);
+						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 						LIST_INSERT_HEAD (&cfg->header_filters, cur, next);
 						break;
 					case SCRIPT_MIME:
-						cur->func_name = g_strdup (*p);
+						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 						LIST_INSERT_HEAD (&cfg->mime_filters, cur, next);
 						break;
 					case SCRIPT_MESSAGE:
-						cur->func_name = g_strdup (*p);
+						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 						LIST_INSERT_HEAD (&cfg->message_filters, cur, next);
 						break;
 					case SCRIPT_URL:
-						cur->func_name = g_strdup (*p);
+						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 						LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
 						break;
 				}
@@ -402,23 +360,23 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 			/* Go to next iteration */
 			continue;
 		}
-		cur = g_malloc (sizeof (struct filter));
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 		cur->type = PERL_FILTER;
 		switch (type) {
 			case SCRIPT_HEADER:
-				cur->func_name = g_strdup (*p);
+				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 				LIST_INSERT_HEAD (&cfg->header_filters, cur, next);
 				break;
 			case SCRIPT_MIME:
-				cur->func_name = g_strdup (*p);
+				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 				LIST_INSERT_HEAD (&cfg->mime_filters, cur, next);
 				break;
 			case SCRIPT_MESSAGE:
-				cur->func_name = g_strdup (*p);
+				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 				LIST_INSERT_HEAD (&cfg->message_filters, cur, next);
 				break;
 			case SCRIPT_URL:
-				cur->func_name = g_strdup (*p);
+				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 				LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
 				break;
 		}

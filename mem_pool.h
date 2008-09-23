@@ -22,6 +22,7 @@ typedef struct memory_pool_stat_s {
 
 memory_pool_t* memory_pool_new (size_t size);
 void* memory_pool_alloc (memory_pool_t* pool, size_t size);
+void* memory_pool_alloc0 (memory_pool_t* pool, size_t size);
 char* memory_pool_strdup (memory_pool_t* pool, const char *src);
 void memory_pool_delete (memory_pool_t* pool);
 

@@ -17,6 +17,7 @@
 #include <sys/un.h>
 #include <event.h>
 #include <glib.h>
+#include "mem_pool.h"
 #include "upstream.h"
 #include "memcached.h"
 #include "filter.h"
@@ -76,6 +77,7 @@ struct module_opt {
 };
 
 struct config_file {
+	memory_pool_t *cfg_pool;
 	char *cfg_name;
 	char *pid_file;
 	char *temp_dir;
