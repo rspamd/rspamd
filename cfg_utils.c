@@ -150,20 +150,16 @@ init_defaults (struct config_file *cfg)
 	cfg->workers_number = DEFAULT_WORKERS_NUM;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->metrics = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->factors = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->c_modules = g_hash_table_new (g_str_hash, g_str_equal);
 
-	LIST_INIT (&cfg->filters);
 	LIST_INIT (&cfg->perl_modules);
-	LIST_INIT (&cfg->c_modules);
 }
 
 void
 free_config (struct config_file *cfg)
 {
-	struct filter_chain *chain, *tmp_chain;
-	struct script_param *param, *tmp_param;
-	struct perl_module *module, *tmp_module;
-	struct c_module *cmodule, *tmp_cmodule;
-
 	if (cfg->pid_file) {
 		g_free (cfg->pid_file);
 	}
@@ -173,34 +169,17 @@ free_config (struct config_file *cfg)
 	if (cfg->bind_host) {
 		g_free (cfg->bind_host);
 	}
-
-	LIST_FOREACH_SAFE (chain, &cfg->filters, next, tmp_chain) {
-		LIST_FOREACH_SAFE (param, chain->scripts, next, tmp_param) {
-			if (param->symbol) {
-				free (param->symbol);
-			}
-			if (param->function) {
-				free (param->function);
-			}
-			LIST_REMOVE (param, next);
-			free (param);
-		}
-		LIST_REMOVE (chain, next);
-		free (chain);
+	if (cfg->header_filters_str) {
+		g_free (cfg->header_filters_str);
 	}
-	LIST_FOREACH_SAFE (module, &cfg->perl_modules, next, tmp_module) {
-		if (module->path) {
-			free (module->path);
-		}
-		LIST_REMOVE (module, next);
-		free (module);
+	if (cfg->mime_filters_str) {
+		g_free (cfg->mime_filters_str);
 	}
-
-	LIST_FOREACH_SAFE (cmodule, &cfg->c_modules, next, tmp_cmodule) {
-		if (cmodule->ctx) {
-			free (cmodule->ctx);
-		}
-		free (cmodule);
+	if (cfg->message_filters_str) {
+		g_free (cfg->message_filters_str);
+	}
+	if (cfg->url_filters_str) {
+		g_free (cfg->url_filters_str);
 	}
 
 	g_hash_table_foreach (cfg->modules_opts, clean_hash_bucket, NULL);
@@ -208,25 +187,12 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->modules_opts);
 	g_hash_table_remove_all (cfg->variables);
 	g_hash_table_unref (cfg->variables);
-}
-
-int
-parse_script (char *str, struct script_param *param, enum script_type type)
-{
-	char *cur_tok;
-	
-	bzero (param, sizeof (struct script_param));
-	param->type = type;
-	
-	/* symbol:path:function -> cur_tok - symbol, str -> function */
-	cur_tok = strsep (&str, ":");
-
-	if (str == NULL || cur_tok == NULL || *cur_tok == '\0') return -1;
-	
-	param->symbol = strdup (cur_tok);
-	param->function = strdup (str);
-
-	return 0;
+	g_hash_table_remove_all (cfg->metrics);
+	g_hash_table_unref (cfg->metrics);
+	g_hash_table_remove_all (cfg->factors);
+	g_hash_table_unref (cfg->factors);
+	g_hash_table_remove_all (cfg->c_modules);
+	g_hash_table_unref (cfg->c_modules);
 }
 
 char* 
@@ -391,6 +357,76 @@ substitute_all_variables (gpointer key, gpointer value, gpointer data)
 	var = substitute_variable (cfg, var, 1);
 }
 
+static void
+parse_filters_str (struct config_file *cfg, const char *str, enum script_type type)
+{
+	gchar **strvec, **p;
+	struct filter *cur;
+	int i;
+
+	strvec = g_strsplit (str, ",", 0);
+	if (strvec == NULL) {
+		return;
+	}
+
+	p = strvec;
+	while (*p++) {
+		cur = NULL;
+		/* Search modules from known C modules */
+		for (i = 0; i < MODULES_NUM; i++) {
+			if (strcasecmp (modules[i].name, *p) == 0) {
+				cur = g_malloc (sizeof (struct filter));
+				cur->type = C_FILTER;
+				switch (type) {
+					case SCRIPT_HEADER:
+						cur->func_name = g_strdup (*p);
+						LIST_INSERT_HEAD (&cfg->header_filters, cur, next);
+						break;
+					case SCRIPT_MIME:
+						cur->func_name = g_strdup (*p);
+						LIST_INSERT_HEAD (&cfg->mime_filters, cur, next);
+						break;
+					case SCRIPT_MESSAGE:
+						cur->func_name = g_strdup (*p);
+						LIST_INSERT_HEAD (&cfg->message_filters, cur, next);
+						break;
+					case SCRIPT_URL:
+						cur->func_name = g_strdup (*p);
+						LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
+						break;
+				}
+				break;
+			}	
+		}
+		if (cur != NULL) {
+			/* Go to next iteration */
+			continue;
+		}
+		cur = g_malloc (sizeof (struct filter));
+		cur->type = PERL_FILTER;
+		switch (type) {
+			case SCRIPT_HEADER:
+				cur->func_name = g_strdup (*p);
+				LIST_INSERT_HEAD (&cfg->header_filters, cur, next);
+				break;
+			case SCRIPT_MIME:
+				cur->func_name = g_strdup (*p);
+				LIST_INSERT_HEAD (&cfg->mime_filters, cur, next);
+				break;
+			case SCRIPT_MESSAGE:
+				cur->func_name = g_strdup (*p);
+				LIST_INSERT_HEAD (&cfg->message_filters, cur, next);
+				break;
+			case SCRIPT_URL:
+				cur->func_name = g_strdup (*p);
+				LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
+				break;
+		}
+	}
+
+	g_strfreev (strvec);
+}
+
 /* 
  * Substitute all variables in strings
  */
@@ -399,6 +435,10 @@ post_load_config (struct config_file *cfg)
 {
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
 	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
+	parse_filters_str (cfg, cfg->header_filters_str, SCRIPT_HEADER);
+	parse_filters_str (cfg, cfg->mime_filters_str, SCRIPT_MIME);
+	parse_filters_str (cfg, cfg->message_filters_str, SCRIPT_MESSAGE);
+	parse_filters_str (cfg, cfg->url_filters_str, SCRIPT_URL);
 }
 
 /*

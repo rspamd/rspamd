@@ -19,6 +19,7 @@
 #include <glib.h>
 #include "upstream.h"
 #include "memcached.h"
+#include "filter.h"
 
 #define DEFAULT_BIND_PORT 768
 #define MAX_MEMCACHED_SERVERS 48
@@ -53,7 +54,6 @@ enum script_type {
 	SCRIPT_MIME,
 	SCRIPT_URL,
 	SCRIPT_MESSAGE,
-	SCRIPT_CHAIN,
 };
 
 struct memcached_server {
@@ -67,20 +67,6 @@ struct memcached_server {
 struct perl_module {
 	char *path;
 	LIST_ENTRY (perl_module) next;
-};
-
-struct script_param {
-	char *symbol;
-	char *function;
-	enum script_type type;
-	LIST_ENTRY (script_param) next;
-};
-
-struct filter_chain {
-	unsigned int metric;
-	unsigned int scripts_number;
-	LIST_HEAD (scriptq, script_param) *scripts;
-	LIST_ENTRY (filter_chain) next;
 };
 
 struct module_opt {
@@ -110,18 +96,26 @@ struct config_file {
 	unsigned int memcached_maxerrors;
 	unsigned int memcached_connect_timeout;
 
-	LIST_HEAD (perlq, filter_chain) filters;
 	LIST_HEAD (modulesq, perl_module) perl_modules;
-	LIST_HEAD (cmodulesq, c_module) c_modules;
+	LIST_HEAD (headersq, filter) header_filters;
+	LIST_HEAD (mimesq, filter) mime_filters;
+	LIST_HEAD (messagesq, filter) message_filters;
+	LIST_HEAD (urlsq, filter) url_filters;
+	char *header_filters_str;
+	char *mime_filters_str;
+	char *message_filters_str;
+	char *url_filters_str;
 	GHashTable* modules_opts;
 	GHashTable* variables;
+	GHashTable* metrics;
+	GHashTable* factors;
+	GHashTable* c_modules;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);
 int parse_bind_line (struct config_file *cf, char *str);
 void init_defaults (struct config_file *cfg);
 void free_config (struct config_file *cfg);
-int parse_script (char *str, struct script_param *param, enum script_type type);
 char* get_module_opt (struct config_file *cfg, char *module_name, char *opt_name);
 size_t parse_limit (const char *limit);
 unsigned int parse_seconds (const char *t);

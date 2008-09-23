@@ -24,6 +24,7 @@
 #include "url.h"
 #include "memcached.h"
 #include "protocol.h"
+#include "filter.h"
 
 #include <glib.h>
 #include <gmime/gmime.h>
@@ -32,6 +33,8 @@
 #define FIXED_CONFIG_FILE "./rspamd.conf"
 /* Time in seconds to exit for old worker */
 #define SOFT_SHUTDOWN_TIME 60
+/* Default metric name */
+#define DEFAULT_METRIC "default"
 
 /* Logging in postfix style */
 #define msg_err g_error
@@ -59,8 +62,6 @@ struct rspamd_worker {
 
 struct pidfh;
 struct config_file;
-struct filter_chain;
-
 
 /* Struct that determine main server object (for logging purposes) */
 struct rspamd_main {
@@ -74,21 +75,6 @@ struct rspamd_main {
 	TAILQ_HEAD (workq, rspamd_worker) workers;
 };
 
-struct filter_result {
-	const char *symbol;
-	struct filter_chain *chain;
-	int mark;
-	TAILQ_ENTRY (filter_result) next;
-};
-
-struct chain_result {
-	struct filter_chain *chain;
-	int *marks;
-	unsigned int marks_num;
-	int result_mark;
-	TAILQ_ENTRY (chain_result) next;
-};
-
 struct mime_part {
 	GMimeContentType *type;
 	GByteArray *content;
@@ -96,7 +82,6 @@ struct mime_part {
 };
 
 struct save_point {
-	enum { C_FILTER, PERL_FILTER } save_type;
 	void *entry;
 	void *chain;
 	unsigned int saved;
@@ -133,10 +118,8 @@ struct worker_task {
 	TAILQ_HEAD (mime_partq, mime_part) parts;
 	/* URLs extracted from message */
 	TAILQ_HEAD (uriq, uri) urls;
-	/* List of filter results */
-	TAILQ_HEAD (resultsq, filter_result) results;
-	/* Results of all chains */
-	TAILQ_HEAD (chainsq, chain_result) chain_results;
+	/* Hash of metric result structures */
+	GHashTable *results;
 	struct config_file *cfg;
 	struct save_point save;
 	/* Memory pool that is associated with this task */
@@ -157,7 +140,6 @@ struct c_module {
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
-int process_filters (struct worker_task *task);
 
 #endif
 

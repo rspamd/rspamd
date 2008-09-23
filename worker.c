@@ -74,9 +74,6 @@ sigusr_handler (int fd, short what, void *arg)
 static void
 free_task (struct worker_task *task)
 {
-	struct uri *cur;
-	struct filter_result *res;
-	struct chain_result *chain_res;
 	struct mime_part *part;
 
 	if (task) {
@@ -85,18 +82,6 @@ free_task (struct worker_task *task)
 		}
 		if (task->memc_ctx) {
 			memc_close_ctx (task->memc_ctx);
-		}
-		while (!TAILQ_EMPTY (&task->urls)) {
-			cur = TAILQ_FIRST (&task->urls);
-			TAILQ_REMOVE (&task->urls, cur, next);
-		}
-		while (!TAILQ_EMPTY (&task->results)) {
-			res = TAILQ_FIRST (&task->results);
-			TAILQ_REMOVE (&task->results, res, next);
-		}
-		while (!TAILQ_EMPTY (&task->chain_results)) {
-			chain_res = TAILQ_FIRST (&task->chain_results);
-			TAILQ_REMOVE (&task->chain_results, chain_res, next);
 		}
 
 		while (!TAILQ_EMPTY (&task->parts)) {
@@ -173,187 +158,6 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 	} else {
 		g_assert_not_reached ();
 	}
-}
-
-int
-process_filters (struct worker_task *task)
-{
-	struct filter_result *res = NULL;
-	struct chain_result *chain_res = NULL;
-	struct c_module *c_filter = NULL;
-	struct filter_chain *chain = NULL;
-	struct script_param *perl_script = NULL;
-	int i = 0;
-	
-	/* First process C modules */
-	if (task->save.saved > 0) {
-		if (task->save.save_type == C_FILTER) {
-			task->save.saved = 0;
-			c_filter = (struct c_module *)task->save.entry;
-		}
-		else if (task->save.save_type == PERL_FILTER) {
-			chain = (struct filter_chain *)task->save.chain;
-			perl_script = (struct script_param *)task->save.entry;
-			task->save.saved = 0;
-		}
-	}
-	else {
-		c_filter = LIST_FIRST (&task->cfg->c_modules);
-		chain = LIST_FIRST (&task->cfg->filters);
-		if (chain) {
-			perl_script = LIST_FIRST (chain->scripts);
-		}
-	}
-	while (c_filter != NULL) {
-		res = memory_pool_alloc (task->task_pool, sizeof (struct filter_result));
-		if (res == NULL) {
-			msg_err ("process_filters: malloc failed, %m");
-			return -1;
-		}
-		res->chain = NULL;
-		res->symbol = c_filter->name;
-		res->mark = 0;
-		if (c_filter->ctx->header_filter != NULL) {
-			res->mark += c_filter->ctx->header_filter (task);
-			if (task->save.saved > 0) {
-				TAILQ_INSERT_TAIL (&task->results, res, next);
-				task->save.save_type = C_FILTER;
-				goto save_point;
-			}
-		}
-		if (c_filter->ctx->message_filter != NULL) {
-			res->mark += c_filter->ctx->message_filter (task);
-			if (task->save.saved > 0) {
-				TAILQ_INSERT_TAIL (&task->results, res, next);
-				task->save.save_type = C_FILTER;
-				goto save_point;
-			}
-		}
-		if (c_filter->ctx->mime_filter != NULL) {
-			res->mark += c_filter->ctx->mime_filter (task);
-			if (task->save.saved > 0) {
-				TAILQ_INSERT_TAIL (&task->results, res, next);
-				task->save.save_type = C_FILTER;
-				goto save_point;
-			}
-		}
-		if (c_filter->ctx->url_filter != NULL) {
-			res->mark += c_filter->ctx->url_filter (task);
-			if (task->save.saved > 0) {
-				TAILQ_INSERT_TAIL (&task->results, res, next);
-				task->save.save_type = C_FILTER;
-				goto save_point;
-			}
-		}
-		TAILQ_INSERT_TAIL (&task->results, res, next);
-		c_filter = LIST_NEXT (c_filter, next);
-	}
-
-	/* Process perl chains */
-	while (chain != NULL) {
-		chain_res = memory_pool_alloc (task->task_pool, sizeof (struct chain_result));
-		if (chain_res == NULL) {
-			msg_err ("process_filters: malloc failed, %m");
-			return -1;
-		}
-		i = 0;
-		chain_res->chain = chain;
-		chain_res->marks = memory_pool_alloc (task->task_pool, sizeof (int) * chain->scripts_number);
-		chain_res->result_mark = 0;
-		if (chain_res->marks == NULL) {
-			free (chain_res);
-			msg_err ("process_filters: malloc failed, %m");
-			return -1;
-		}
-		while (perl_script != NULL) {
-			if (perl_script->type == SCRIPT_CHAIN) {
-				/* Skip chain filters first */
-				continue;
-			}
-			res =  memory_pool_alloc (task->task_pool, sizeof (struct filter_result));
-			if (res == NULL) {
-				msg_err ("process_filters: malloc failed, %m");
-				return -1;
-			}
-			res->chain = chain;
-			res->symbol = perl_script->symbol;
-			res->mark = 0;
-			switch (perl_script->type) {
-				case SCRIPT_HEADER:
-					res->mark += perl_call_header_filter (perl_script->function, task);
-					if (task->save.saved > 0) {
-						TAILQ_INSERT_TAIL (&task->results, res, next);
-						task->save.save_type = PERL_FILTER;
-						goto save_point;
-					}
-					break;
-				case SCRIPT_MESSAGE:
-					res->mark += perl_call_message_filter (perl_script->function, task);
-					if (task->save.saved > 0) {
-						TAILQ_INSERT_TAIL (&task->results, res, next);
-						task->save.save_type = PERL_FILTER;
-						goto save_point;
-					}
-					break;
-				case SCRIPT_MIME:
-					res->mark += perl_call_mime_filter (perl_script->function, task);
-					if (task->save.saved > 0) {
-						TAILQ_INSERT_TAIL (&task->results, res, next);
-						task->save.save_type = PERL_FILTER;
-						goto save_point;
-					}
-					break;
-				case SCRIPT_URL:
-					res->mark += perl_call_url_filter (perl_script->function, task);
-					if (task->save.saved > 0) {
-						TAILQ_INSERT_TAIL (&task->results, res, next);
-						task->save.save_type = PERL_FILTER;
-						goto save_point;
-					}
-					break;
-			}
-			TAILQ_INSERT_TAIL (&task->results, res, next);
-			chain_res->marks[i++] = res->mark;
-			perl_script = LIST_NEXT (perl_script, next);
-		}
-		chain_res->marks_num = i;
-		TAILQ_INSERT_TAIL (&task->chain_results, chain_res, next);
-		chain = LIST_NEXT (chain, next);
-	}
-
-	/* Now process chain results */
-	TAILQ_FOREACH (chain_res, &task->chain_results, next) {
-		i = 0;
-		LIST_FOREACH (perl_script, chain_res->chain->scripts, next) {
-			if (perl_script->type != SCRIPT_CHAIN) {
-				/* Skip not chain filters */
-				continue;
-			}
-			/* Increment i; if i would be equal to zero that would mean that this chain has no chain filter script */
-			i ++;
-			chain_res->result_mark += perl_call_url_filter (perl_script->function, task, chain_res->marks, chain_res->marks_num);
-		}
-		/* If chain has no chain filter, just do addition of all marks */
-		if (i == 0) {
-			for (i = 0; i < chain_res->marks_num; i++) {
-				chain_res->result_mark += chain_res->marks[i];
-			}
-		}
-	}
-	
-	task->state = WRITE_REPLY;
-	bufferevent_enable (task->bev, EV_WRITE);
-	return 0;
-
-save_point:
-	if (task->save.save_type == C_FILTER) {
-		task->save.entry = LIST_NEXT (c_filter, next);
-	}
-	else if (task->save.save_type == PERL_FILTER) {
-		task->save.chain = LIST_NEXT (chain, next);
-		task->save.entry = LIST_NEXT (perl_script, next);
-	}
-	return 1;
 }
 
 static int
@@ -493,7 +297,6 @@ accept_socket (int fd, short what, void *arg)
 	new_task->parts_count = 0;
 	new_task->cfg = worker->srv->cfg;
 	TAILQ_INIT (&new_task->urls);
-	TAILQ_INIT (&new_task->results);
 	TAILQ_INIT (&new_task->parts);
 	new_task->task_pool = memory_pool_new (TASK_POOL_SIZE);
 	new_task->memc_ctx = memory_pool_alloc (new_task->task_pool, sizeof (memcached_ctx_t));

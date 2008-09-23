@@ -24,9 +24,8 @@ extern struct config_file *cfg;
 extern int yylineno;
 extern char *yytext;
 
-struct scriptq *cur_scripts;
-unsigned int cur_scripts_num = 0;
 LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
+struct metric *cur_metric = NULL;
 
 %}
 
@@ -37,7 +36,7 @@ LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 	char flag;
 	unsigned int seconds;
 	unsigned int number;
-	struct script_param *param;
+	double fract;
 }
 
 %token	ERROR STRING QUOTEDSTRING FLAG
@@ -47,8 +46,9 @@ LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 %token  TEMPDIR PIDFILE SERVERS ERROR_TIME DEAD_TIME MAXERRORS CONNECT_TIMEOUT PROTOCOL RECONNECT_TIMEOUT
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
 %token  MEMCACHED WORKERS REQUIRE MODULE
-%token  FILTER METRIC SCRIPT_HEADER SCRIPT_MIME SCRIPT_MESSAGE SCRIPT_URL SCRIPT_CHAIN SCRIPT_PARAM
 %token  MODULE_OPT PARAM VARIABLE
+%token  HEADER_FILTERS MIME_FILTERS MESSAGE_FILTERS URL_FILTERS FACTORS METRIC NAME
+%token  REQUIRED_SCORE FUNCTION FRACT
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -58,14 +58,12 @@ LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 %type	<string>	IPADDR IPNETWORK
 %type	<string>	HOSTPORT
 %type	<string>	DOMAIN
-%type	<string>	SCRIPT_PARAM
 %type	<limit>		SIZELIMIT
 %type	<flag>		FLAG
 %type	<seconds>	SECONDS
 %type	<number>	NUMBER
 %type 	<string>	memcached_hosts bind_cred
-%type	<number>	metric
-%type	<param>		filter_param
+%type	<fract>		FRACT
 %%
 
 file	: /* empty */
@@ -79,9 +77,14 @@ command	:
 	| memcached
 	| workers
 	| require
-	| filter
+	| header_filters
+	| mime_filters
+	| message_filters
+	| url_filters
 	| module_opt
 	| variable
+	| factors
+	| metric
 	;
 
 tempdir :
@@ -131,6 +134,30 @@ bind_cred:
 	}
 	| QUOTEDSTRING {
 		$$ = $1;
+	}
+	;
+
+header_filters:
+	HEADER_FILTERS EQSIGN QUOTEDSTRING {
+		cfg->header_filters_str = g_strdup ($3);
+	}
+	;
+
+mime_filters:
+	MIME_FILTERS EQSIGN QUOTEDSTRING {
+		cfg->mime_filters_str = g_strdup ($3);
+	}
+	;
+
+message_filters:
+	MESSAGE_FILTERS EQSIGN QUOTEDSTRING {
+		cfg->message_filters_str = g_strdup ($3);
+	}
+	;
+
+url_filters:
+	URL_FILTERS EQSIGN QUOTEDSTRING {
+		cfg->url_filters_str = g_strdup ($3);
 	}
 	;
 
@@ -217,140 +244,80 @@ workers:
 	}
 	;
 
-filter:
-	FILTER OBRACE filterbody EBRACE
-	;
-
-filterbody:
-	metric SEMICOLON filter_chain {
-		struct filter_chain *cur_chain;
-		cur_chain = (struct filter_chain *) g_malloc (sizeof (struct filter_chain));
-		if (cur_chain == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror (errno));
-			YYERROR;
-		}
-
-		cur_chain->metric = $1;
-		cur_chain->scripts = cur_scripts;
-		cur_chain->scripts_number = cur_scripts_num;
-		LIST_INSERT_HEAD (&cfg->filters, cur_chain, next);
-
-	}
-	;
-
 metric:
-	METRIC EQSIGN NUMBER {
-		$$ = $3;
+	METRIC OBRACE metricbody EBRACE {
+		if (cur_metric == NULL || cur_metric->name == NULL) {
+			yyerror ("yyparse: not enough arguments in metric definition");
+			YYERROR;
+		}
+		g_hash_table_insert (cfg->metrics, cur_metric->name, cur_metric);
+		cur_metric = NULL;
 	}
 	;
 
-filter_chain:
-	filter_param SEMICOLON	{
-		cur_scripts = (struct scriptq *)g_malloc (sizeof (struct scriptq));
-		if (cur_scripts == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror (errno));
-			YYERROR;
+metricbody:
+	| metriccmd SEMICOLON
+	| metricbody metriccmd SEMICOLON
+	;
+metriccmd:
+	| metricname
+	| metricfunction
+	| metricscore
+	;
+	
+metricname:
+	NAME EQSIGN QUOTEDSTRING {
+		if (cur_metric == NULL) {
+			cur_metric = g_malloc (sizeof (struct metric));
 		}
-		LIST_INIT (cur_scripts);
-		if ($1 == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		LIST_INSERT_HEAD (cur_scripts, $1, next);
-		cur_scripts_num = 1;
-	}
-	| filter_chain filter_param SEMICOLON	{
-		if ($2 == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		LIST_INSERT_HEAD (cur_scripts, $2, next);
-		cur_scripts_num ++;
+		cur_metric->name = g_strdup ($3);
 	}
 	;
 
-filter_param:
-	SCRIPT_HEADER EQSIGN SCRIPT_PARAM {
-		struct script_param *cur;
-
-		cur = g_malloc (sizeof (struct script_param));
-		if (cur == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
+metricfunction:
+	FUNCTION EQSIGN QUOTEDSTRING {
+		if (cur_metric == NULL) {
+			cur_metric = g_malloc (sizeof (struct metric));
 		}
-		if (parse_script ($3, cur, SCRIPT_HEADER) == -1) {
-			yyerror ("yyparse: cannot parse filter param %s", $3);
-			YYERROR;
-		}
-
-		$$ = cur;
-		free ($3);
-	}
-	| SCRIPT_MIME EQSIGN SCRIPT_PARAM {
-		struct script_param *cur;
-
-		cur = g_malloc (sizeof (struct script_param));
-		if (cur == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		if (parse_script ($3, cur, SCRIPT_MIME) == -1) {
-			yyerror ("yyparse: cannot parse filter param %s", $3);
-			YYERROR;
-		}
-
-		$$ = cur;
-		free ($3);
-	}
-	| SCRIPT_MESSAGE EQSIGN SCRIPT_PARAM {
-		struct script_param *cur;
-
-		cur = g_malloc (sizeof (struct script_param));
-		if (cur == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		if (parse_script ($3, cur, SCRIPT_MESSAGE) == -1) {
-			yyerror ("yyparse: cannot parse filter param %s", $3);
-			YYERROR;
-		}
-
-		$$ = cur;
-		free ($3);
-	}
-	| SCRIPT_URL EQSIGN SCRIPT_PARAM {
-		struct script_param *cur;
-
-		cur = g_malloc (sizeof (struct script_param));
-		if (cur == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		if (parse_script ($3, cur, SCRIPT_URL) == -1) {
-			yyerror ("yyparse: cannot parse filter param %s", $3);
-			YYERROR;
-		}
-
-		$$ = cur;
-		free ($3);
-	}
-	| SCRIPT_CHAIN EQSIGN SCRIPT_PARAM {
-		struct script_param *cur;
-
-		cur = g_malloc (sizeof (struct script_param));
-		if (cur == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		if (parse_script ($3, cur, SCRIPT_CHAIN) == -1) {
-			yyerror ("yyparse: cannot parse filter param %s", $3);
-			YYERROR;
-		}
-
-		$$ = cur;
-		free ($3);
+		cur_metric->func_name = g_strdup ($3);
 	}
 	;
+
+metricscore:
+	REQUIRED_SCORE EQSIGN NUMBER {
+		if (cur_metric == NULL) {
+			cur_metric = g_malloc (sizeof (struct metric));
+		}
+		cur_metric->required_score = $3;
+	}
+	| REQUIRED_SCORE EQSIGN FRACT {
+		if (cur_metric == NULL) {
+			cur_metric = g_malloc (sizeof (struct metric));
+		}
+		cur_metric->required_score = $3;
+	}
+	;
+
+factors:
+	FACTORS OBRACE factorsbody EBRACE
+	;
+
+factorsbody:
+	factorparam SEMICOLON
+	| factorsbody factorparam SEMICOLON
+	;
+
+factorparam:
+	QUOTEDSTRING EQSIGN FRACT {
+		double *tmp = g_malloc (sizeof (double));
+		*tmp = $3;
+		g_hash_table_insert (cfg->factors, $1, tmp);
+	}
+	| QUOTEDSTRING EQSIGN NUMBER {
+		double *tmp = g_malloc (sizeof (double));
+		*tmp = $3;
+		g_hash_table_insert (cfg->factors, $1, tmp);
+	};
 
 require:
 	REQUIRE OBRACE requirebody EBRACE

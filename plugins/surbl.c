@@ -29,6 +29,7 @@
 #define DEFAULT_REDIRECTOR_READ_TIMEOUT 5000
 #define DEFAULT_SURBL_MAX_URLS 1000
 #define DEFAULT_SURBL_URL_EXPIRE 86400
+#define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
 
 struct surbl_ctx {
@@ -44,6 +45,8 @@ struct surbl_ctx {
 	unsigned int max_urls;
 	unsigned int url_expire;
 	char *suffix;
+	char *symbol;
+	char *metric;
 	GHashTable *hosters;
 	GHashTable *whitelist;
 	unsigned use_redirector:1;
@@ -143,6 +146,18 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	}
 	else {
 		surbl_module_ctx->suffix = DEFAULT_SURBL_SUFFIX;
+	}
+	if ((value = get_module_opt (cfg, "surbl", "symbol")) != NULL) {
+		surbl_module_ctx->symbol = value;
+	}
+	else {
+		surbl_module_ctx->symbol = DEFAULT_SURBL_SYMBOL;
+	}
+	if ((value = get_module_opt (cfg, "surbl", "metric")) != NULL) {
+		surbl_module_ctx->metric = value;
+	}
+	else {
+		surbl_module_ctx->metric = DEFAULT_METRIC;
 	}
 	
 	surbl_module_ctx->hosters = g_hash_table_new (g_str_hash, g_str_equal);
@@ -265,13 +280,14 @@ static void
 dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
 	struct memcached_param *param = (struct memcached_param *)data;
-	struct filter_result *res;
 	
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result != DNS_ERR_NONE || type != DNS_IPv4_A) {
 		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, surbl_module_ctx->suffix);
-		res = TAILQ_LAST (&param->task->results, resultsq);
-		res->mark += surbl_module_ctx->weight;
+		insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
+	}
+	else {
+		insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 0);
 	}
 
 	param->task->save.saved --;
@@ -292,7 +308,6 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 {
 	struct memcached_param *param = (struct memcached_param *)data;
 	int *url_count;
-	struct filter_result *res;
 	char *surbl_req;
 
 	switch (ctx->op) {
@@ -335,8 +350,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 				/* Do not check DNS for urls that have count more than max_urls */
 				if (*url_count > surbl_module_ctx->max_urls) {
 					msg_info ("memcached_callback: url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
-					res = TAILQ_LAST (&param->task->results, resultsq);
-					res->mark += surbl_module_ctx->weight;
+					insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
 				}
 				(*url_count) ++;
 				memc_set (param->ctx, param->ctx->param, surbl_module_ctx->url_expire);

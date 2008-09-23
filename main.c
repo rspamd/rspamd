@@ -152,7 +152,7 @@ int
 main (int argc, char **argv)
 {
 	struct rspamd_main *rspamd;
-	struct c_module *cur_module = NULL;
+	struct module_ctx *cur_module = NULL;
 	int res = 0, i, listen_sock;
 	struct sigaction signals;
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
@@ -227,10 +227,9 @@ main (int argc, char **argv)
 
 	/* Init C modules */
 	for (i = 0; i < MODULES_NUM; i ++) {
-		cur_module = g_malloc (sizeof (struct c_module));
-		cur_module->name = modules[i].name;
-		if (modules[i].module_init_func(cfg, &cur_module->ctx) == 0) {
-			LIST_INSERT_HEAD (&cfg->c_modules, cur_module, next);
+		cur_module = g_malloc (sizeof (struct module_ctx));
+		if (modules[i].module_init_func(cfg, &cur_module) == 0) {
+			g_hash_table_insert (cfg->c_modules, (gpointer)modules[i].name, cur_module);
 		}
 	}
 
