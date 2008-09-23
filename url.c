@@ -201,7 +201,6 @@ url_init (void)
 			return -1;
 		}
 		url_initialized = 1;
-		msg_debug ("url_init: url regexps initialized successfully, text regexp: /%s/, html_regexp: /%s/", text_url, html_url);
 	}
 
 	return 0;

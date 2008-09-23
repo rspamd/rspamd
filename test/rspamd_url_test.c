@@ -87,7 +87,6 @@ rspamd_url_test_func ()
 	
 	g_test_timer_start ();
 	g_test_message ("Testing text URL regexp parser");
-	msg_debug ("Passing string: %s", test_text);
 	url_parse_text (&task, text);
 
 	TAILQ_FOREACH (url, &task.urls, next) {
@@ -105,7 +104,6 @@ rspamd_url_test_func ()
 	i = 0;
 	g_test_timer_start ();
 	g_test_message ("Testing html URL regexp parser");
-	msg_debug ("Passing string: %s", test_html);
 	url_parse_html (&task, html);
 
 	TAILQ_FOREACH (url, &task.urls, next) {
