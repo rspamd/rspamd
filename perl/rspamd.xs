@@ -12,6 +12,7 @@
 
 #include "../config.h"
 #include "../main.h"
+#include "../cfg_file.h"
 #include "../perl.h"
 #include "../mem_pool.h"
 
@@ -115,6 +116,43 @@ recall_filter (r)
 
 	perl_set_session (r);
     process_filters (r);
+
+void
+insert_result (r, metric, symbol, flag)
+	CODE:
+	struct worker_task *r;
+	char *metric, *symbol;
+	int flag;
+	STRLEN metriclen, symbollen;
+
+	perl_set_session (r);
+	metric = (char *) SvPV (ST(1), metriclen);
+	symbol = (char *) SvPV (ST(2), symbollen);
+	flag = (int) SvIV (ST(3));
+
+	insert_result (r, metric, symbol, flag);
+
+void
+get_module_param (r, modulename, paramname)
+	CODE:
+	struct worker_task *r;
+	char *module, *param, *value;
+	STRLEN modulelen, paramlen;
+
+	dXSTARG;
+	perl_set_session (r);
+	module = (char *) SvPV (ST(1), modulelen);
+	param = (char *) SvPV (ST(2), paramlen);
+
+	value = get_module_opt (r->worker->srv->cfg, module, param);
+	if (value == NULL) {
+		XSRETURN_UNDEF;
+	}
+
+	sv_upgrade(TARG, SVt_PV);
+	sv_setpv(TARG, value);
+
+	ST(0) = TARG;
 
 void
 read_memcached_key (r, key, datalen, callback)
