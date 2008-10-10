@@ -8,7 +8,7 @@
 
 #include "config.h"
 #include <sys/types.h>
-#ifndef OWN_QUEUE_H
+#ifndef HAVE_OWN_QUEUE_H
 #include <sys/queue.h>
 #else
 #include "queue.h"

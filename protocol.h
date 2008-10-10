@@ -3,6 +3,10 @@
 
 #include "config.h"
 
+#define RSPAMD_FILTER_ERROR 1
+#define RSPAMD_NETWORK_ERROR 2
+#define RSPAMD_PROTOCOL_ERROR 3
+
 struct worker_task;
 
 enum rspamd_protocol {
@@ -21,5 +25,6 @@ enum rspamd_command {
 };
 
 int read_rspamd_input_line (struct worker_task *task, char *line);
+int write_reply (struct worker_task *task);
 
 #endif

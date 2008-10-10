@@ -128,8 +128,13 @@ struct worker_task {
 	TAILQ_HEAD (uriq, uri) urls;
 	/* Hash of metric result structures */
 	GHashTable *results;
+	/* Config file to write to */
 	struct config_file *cfg;
+	/* Save point for filters deferred processing */
 	struct save_point save;
+	/* Saved error message and code */
+	char *last_error;
+	int error_code;
 	/* Memory pool that is associated with this task */
 	memory_pool_t *task_pool;
 };

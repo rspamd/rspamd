@@ -201,6 +201,8 @@ read_socket (struct bufferevent *bev, void *arg)
 		case READ_HEADER:
 			s = evbuffer_readline (EVBUFFER_INPUT (bev));
 			if (read_rspamd_input_line (task, s) != 0) {
+				task->last_error = "Read error";
+				task->error_code = RSPAMD_NETWORK_ERROR;
 				task->state = WRITE_ERROR;
 			}
 			free (s);
@@ -213,6 +215,8 @@ read_socket (struct bufferevent *bev, void *arg)
 				if (task->msg->free == 0) {
 					r = process_message (task);
 					if (r == -1) {
+						task->last_error = "Filter processing error";
+						task->error_code = RSPAMD_FILTER_ERROR;
 						task->state = WRITE_ERROR;
 					}
 					else if (r == 1) {
@@ -229,15 +233,14 @@ read_socket (struct bufferevent *bev, void *arg)
 			break;
 		case WAIT_FILTER:
 			bufferevent_disable (bev, EV_READ);
-			bufferevent_disable (bev, EV_READ);
 			break;
 		case WRITE_REPLY:
-			r = bufferevent_write (bev, "Ok\r\n", sizeof ("Ok\r\n") - 1);
+			write_reply (task);
 			bufferevent_disable (bev, EV_READ);
 			bufferevent_enable (bev, EV_WRITE);
 			break;
 		case WRITE_ERROR:
-			r = bufferevent_write (bev, "Error\r\n", sizeof ("Error\r\n") - 1);
+			write_reply (task);
 			bufferevent_disable (bev, EV_READ);
 			bufferevent_enable (bev, EV_WRITE);
 			break;
@@ -293,8 +296,6 @@ accept_socket (int fd, short what, void *arg)
 	bzero (new_task, sizeof (struct worker_task));
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;
-	new_task->content_length = 0;
-	new_task->parts_count = 0;
 	new_task->cfg = worker->srv->cfg;
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->parts);

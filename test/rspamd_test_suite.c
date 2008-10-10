@@ -13,6 +13,10 @@
 #include "../cfg_file.h"
 #include "tests.h"
 
+#ifdef HAVE_STRLCPY_H
+#include "../strlcpy.c"
+#endif
+
 int
 main (int argc, char **argv)
 {

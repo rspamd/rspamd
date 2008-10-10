@@ -4,6 +4,9 @@
 #include <glib.h>
 #include "main.h"
 
+#define CRLF "\r\n"
+/* Max line size as it is defined in rfc2822 */
+#define OUTBUFSIZ 1000
 /*
  * Just check if the passed message is spam or not and reply as
  * described below
@@ -53,6 +56,15 @@
 #define IP_ADDR_HEADER "IP"
 #define NRCPT_HEADER "Recipient-Number"
 #define RCPT_HEADER "Rcpt"
+#define ERROR_HEADER "Error"
+/*
+ * Reply messages
+ */
+#define RSPAMD_REPLY_BANNER "RSPAMD/1.0"
+#define SPAMD_REPLY_BANNER "SPAMD/1.1"
+#define SPAMD_OK "EX_OK"
+/* XXX: try to convert rspamd errors to spamd errors */
+#define SPAMD_ERROR "EX_ERROR"
 
 static int
 parse_command (struct worker_task *task, char *line)
@@ -251,4 +263,210 @@ read_rspamd_input_line (struct worker_task *task, char *line)
 			return parse_header (task, line);
 			break;
 	}
+}
+
+static void
+show_url_header (struct worker_task *task)
+{
+	int r = 0;
+	char outbuf[OUTBUFSIZ], c;
+	struct uri *url;
+	f_str_t host;
+
+	r = snprintf (outbuf, sizeof (outbuf), "Urls: ");
+	TAILQ_FOREACH (url, &task->urls, next) {
+		host.begin = url->host;
+		host.len = url->hostlen;
+		/* Skip long hosts to avoid protocol coollisions */
+		if (host.len > OUTBUFSIZ) {
+			continue;
+		}
+		/* Do header folding */
+		if (host.len + r >= OUTBUFSIZ - 3) {
+			outbuf[r ++] = '\r'; outbuf[r ++] = '\n'; outbuf[r] = ' ';
+			bufferevent_write (task->bev, outbuf, r);
+			r = 0;
+		}
+		/* Write url host to buf */
+		if (TAILQ_NEXT (url, next) != NULL) {
+			c = *(host.begin + host.len);
+			*(host.begin + host.len) = '\0';
+			r += snprintf (outbuf, sizeof (outbuf) - r, "%s, ", host.begin);
+			*(host.begin + host.len) = c;
+		}
+		else {
+			c = *(host.begin + host.len);
+			*(host.begin + host.len) = '\0';
+			r += snprintf (outbuf, sizeof (outbuf) - r, "%s" CRLF, host.begin);
+			*(host.begin + host.len) = c;
+		}
+	}
+	bufferevent_write (task->bev, outbuf, r);
+}
+
+static void
+show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
+{
+	struct worker_task *task = (struct worker_task *)user_data;
+	int r;
+	char outbuf[OUTBUFSIZ];
+	struct metric_result *metric_res = (struct metric_result *)metric_value;
+	int is_spam = 0;
+
+	if (metric_res->score >= metric_res->metric->required_score) {
+		is_spam = 1;
+	}
+	if (task->proto == SPAMC_PROTO) {
+		r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF,
+					(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+	}
+	else {
+		r = snprintf (outbuf, sizeof (outbuf), "%s: %s ; %.2f / %.2f" CRLF, (char *)metric_name,
+					(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+	}
+	bufferevent_write (task->bev, outbuf, r);
+}
+
+static int
+write_check_reply (struct worker_task *task)
+{
+	int r;
+	char outbuf[OUTBUFSIZ];
+	struct metric_result *metric_res;
+
+	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
+	bufferevent_write (task->bev, outbuf, r);
+	if (task->proto == SPAMC_PROTO) {
+		/* Ignore metrics, just write report for 'default' metric */
+		metric_res = g_hash_table_lookup (task->results, "default");
+		if (metric_res == NULL) {
+			return -1;
+		}
+		else {
+			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)task);
+		}
+	}
+	else {
+		/* Write result for each metric separately */
+		g_hash_table_foreach (task->results, show_metric_result, task);
+		/* URL stat */
+		show_url_header (task);
+	}
+	bufferevent_write (task->bev, CRLF, sizeof (CRLF) - 1);
+
+	return 0;
+}
+
+static void
+show_metric_symbols (gpointer metric_name, gpointer metric_value, void *user_data)
+{
+	struct worker_task *task = (struct worker_task *)user_data;
+	int r = 0;
+	char outbuf[OUTBUFSIZ];
+	struct filter_result *result;
+	struct metric_result *metric_res = (struct metric_result *)metric_value;
+
+	if (task->proto == RSPAMC_PROTO) {
+		r = snprintf (outbuf, sizeof (outbuf), "%s: ", (char *)metric_name);
+	}
+
+	LIST_FOREACH (result, &metric_res->results, next) {
+		if (result->flag) {
+			if (LIST_NEXT (result, next) != NULL) {
+				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", result->symbol);
+			}
+			else {
+				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s", result->symbol);
+			}
+		}
+	}
+	outbuf[r++] = '\r'; outbuf[r] = '\n';
+	bufferevent_write (task->bev, outbuf, r);
+}
+
+static int
+write_symbols_reply (struct worker_task *task)
+{
+	struct metric_result *metric_res;
+	
+	/* First of all write normal results by calling write_check_reply */
+	if (write_check_reply (task) == -1) {
+		return -1;
+	}
+	/* Now write symbols */
+	if (task->proto == SPAMC_PROTO) {
+		/* Ignore metrics, just write report for 'default' metric */
+		metric_res = g_hash_table_lookup (task->results, "default");
+		if (metric_res == NULL) {
+			return -1;
+		}
+		else {
+			show_metric_symbols ((gpointer)"default", (gpointer)metric_res, (void *)task);
+		}
+	}
+	else {
+		/* Write result for each metric separately */
+		g_hash_table_foreach (task->results, show_metric_symbols, task);
+	}
+	return 0;
+}
+
+static int
+write_process_reply (struct worker_task *task)
+{
+	int r;
+	char outbuf[OUTBUFSIZ];
+
+	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, 
+					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, task->msg->buf->len);
+	bufferevent_write (task->bev, outbuf, r);
+	bufferevent_write (task->bev, task->msg->buf->begin, task->msg->buf->len);
+
+	return 0;
+}
+
+int
+write_reply (struct worker_task *task)
+{
+	int r;
+	char outbuf[OUTBUFSIZ];
+
+	if (task->error_code != 0) {
+		/* Write error message and error code to reply */
+		if (task->proto == SPAMC_PROTO) {
+			r = snprintf (outbuf, sizeof (outbuf), "%s %d %s" CRLF CRLF, SPAMD_REPLY_BANNER, task->error_code, SPAMD_ERROR);
+		}
+		else {
+			r = snprintf (outbuf, sizeof (outbuf), "%s %d %s" CRLF "%s: %s" CRLF CRLF, RSPAMD_REPLY_BANNER, task->error_code, 
+								SPAMD_ERROR, ERROR_HEADER, task->last_error);
+		}
+		/* Write to bufferevent error message */
+		bufferevent_write (task->bev, outbuf, r);
+	}
+	else {
+		switch (task->cmd) {
+			case CMD_REPORT_IFSPAM:
+			case CMD_REPORT:
+			case CMD_CHECK:
+				return write_check_reply (task);
+				break;
+			case CMD_SYMBOLS:
+				return write_symbols_reply (task);
+				break;
+			case CMD_PROCESS:
+				return write_process_reply (task);
+				break;
+			case CMD_SKIP:
+				r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
+																SPAMD_OK);
+				bufferevent_write (task->bev, outbuf, r);
+				break;
+			case CMD_PING:
+				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
+				bufferevent_write (task->bev, outbuf, r);
+				break;
+		}
+	}
+
+	return 0;
 }
