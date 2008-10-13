@@ -33,7 +33,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 			break;
 		case CMD_READ:
 			g_assert (error == OK);
-			g_assert (!strcmp(ctx->param->buf, buf));
+			g_assert (!memcmp(ctx->param->buf, buf, ctx->param->bufsize));
 			msg_debug ("Read ok");
 			memc_close_ctx (ctx);
 			tv.tv_sec = 0;

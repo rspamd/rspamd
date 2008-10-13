@@ -56,6 +56,16 @@ enum script_type {
 	SCRIPT_MESSAGE,
 };
 
+/* Logic expression */
+struct expression {
+	enum { EXPR_OPERAND, EXPR_OPERATION } type;
+	union {
+		void *operand;
+		char operation;
+	} content;
+	struct expression *next;
+};
+
 /* Worker process structure */
 struct rspamd_worker {
 	pid_t pid;
@@ -153,6 +163,7 @@ struct c_module {
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
+struct expression* parse_expression (memory_pool_t *pool, char *line);
 
 #endif
 

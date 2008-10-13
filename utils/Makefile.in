@@ -2,8 +2,8 @@
 
 all: url_extracter
 
-url_extracter: $(OBJECTS) ../url.o ../util.o
-	$(CC) $(PTHREAD_LDFLAGS) $(LDFLAGS) $(OBJECTS) ../url.o ../util.o ../mem_pool.o $(LIBS) -o url_extracter
+url_extracter: $(OBJECTS) $(OBJ_DEPENDS)
+	$(CC) $(PTHREAD_LDFLAGS) $(LDFLAGS) $(OBJECTS) $(OBJ_DEPENDS) $(LIBS) -o url_extracter
 
 clean:
 	rm -f *.o url_extracter *.core

@@ -14,4 +14,7 @@ void rspamd_memcached_test_func ();
 /* Memory pools */
 void rspamd_mem_pool_test_func ();
 
+/* Expressions */
+void rspamd_expression_test_func ();
+
 #endif
