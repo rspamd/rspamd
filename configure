@@ -458,8 +458,10 @@ write_modules()
 	echo "module_t modules[] = {" >> modules.c;
 	modules_num=0
 	for m in $MODULES ; do
-		echo "{\"${m}\", ${m}_module_init}," >> modules.c
+		echo "{\"${m}\", ${m}_module_init, ${m}_module_config, ${m}_module_reconfig}," >> modules.c
 		echo "int ${m}_module_init(struct config_file *cfg, struct module_ctx **ctx);" >> modules.h
+		echo "int ${m}_module_config(struct config_file *cfg);" >> modules.h
+		echo "int ${m}_module_reconfig(struct config_file *cfg);" >> modules.h
 		modules_num=`expr $modules_num + 1`
 	done
 	echo "};" >> modules.c
@@ -658,6 +660,19 @@ do
 
 										 name=`echo $modline | sed 's/.*MODULE:\([^: ]*\).*/\1/'`
 										 MODULES="$MODULES $name"							;;
+		--disable-module)				 SOURCES=`echo $SOURCES | sed -e "s/${value}//g"`
+										 if [ ! -f $value ] ; then
+										 	echo "Cannot find $value, please check path"
+											exit 1
+										 fi
+										 modline=`grep '/***MODULE:' $value`
+										 if [ F"$modline" = "F" ] ; then
+										 	echo "Cannot find /***MODULE line in $value, please check syntax"
+											exit 1
+										 fi
+
+										 name=`echo $modline | sed 's/.*MODULE:\([^: ]*\).*/\1/'`
+										 MODULES=`echo $MODULES | sed -e "s/${name}//g"`		;;
 		*)
             echo "$0: error: invalid option \"$option\""
             exit 1
@@ -674,6 +689,7 @@ if [ "F$help" = "Fyes" ] ; then
   --enable-debug                     turn on extra debug messages
   --enable-opt                       turn on extra optimization
   --add-module						 add additional C module
+  --disable-module                   do not include C module
   --user=USER                        set user to use
   --group=GROUP                      set group to use
 END
@@ -738,6 +754,11 @@ check_function "bzero" "string.h"
 check_function "srandomdev"
 if [ $? -eq 0 ] ; then
 	have_opt "SRANDOMDEV"
+fi
+
+check_function "getpagesize" "unistd.h"
+if [ $? -eq 0 ] ; then
+	have_opt "GETPAGESIZE"
 fi
 
 check_function "setproctitle" "unistd.h"

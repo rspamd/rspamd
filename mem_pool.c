@@ -13,6 +13,16 @@ pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 #define STAT_UNLOCK() do {} while (0)
 #endif
 
+/* 
+ * This define specify whether we should check all pools for free space for new object
+ * or just begin scan from current (recently attached) pool
+ * If MEMORY_GREEDY is defined, then we scan all pools to find free space (more CPU usage, slower
+ * but requires less memory). If it is not defined check only current pool and if object is too large
+ * to place in it allocate new one (this may cause huge CPU usage in some cases too, but generally faster than
+ * greedy method)
+ */
+#undef MEMORY_GREEDY
+
 /* Internal statistic */
 static size_t bytes_allocated = 0;
 static size_t chunks_allocated = 0;
@@ -54,7 +64,11 @@ memory_pool_alloc (memory_pool_t *pool, size_t size)
 	struct _pool_chain *new, *cur;
 
 	if (pool) {
+#ifdef MEMORY_GREEDY
+		cur = pool->first_pool;
+#else
 		cur = pool->cur_pool;
+#endif
 		/* Find free space in pool chain */
 		while (memory_pool_free (cur) < size && cur->next) {
 			cur = cur->next;

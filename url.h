@@ -39,17 +39,17 @@ struct uri {
 
 	/* @protocollen should only be usable if @protocol is either
 	 * PROTOCOL_USER or an uri string should be composed. */
-	unsigned int protocollen:16;
-	unsigned int userlen:16;
-	unsigned int passwordlen:16;
-	unsigned int hostlen:16;
-	unsigned int portlen:8;
-	unsigned int datalen:16;
-	unsigned int fragmentlen:16;
+	unsigned int protocollen;
+	unsigned int userlen;
+	unsigned int passwordlen;
+	unsigned int hostlen;
+	unsigned int portlen;
+	unsigned int datalen;
+	unsigned int fragmentlen;
 
 	/* Flags */
-	unsigned int ipv6:1;	/* URI contains IPv6 host */
-	unsigned int form:1;	/* URI originated from form */
+	unsigned int ipv6;	/* URI contains IPv6 host */
+	unsigned int form;	/* URI originated from form */
 	
 	/* Link */
 	TAILQ_ENTRY(uri) next;

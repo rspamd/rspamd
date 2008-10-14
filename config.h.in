@@ -7,6 +7,8 @@ struct config_file;
 typedef struct module_s {
 	const char *name;
 	int (*module_init_func)(struct config_file *cfg, struct module_ctx **ctx);
+	int (*module_config_func)(struct config_file *cfg);
+	int (*module_reconfig_func)(struct config_file *cfg);
 } module_t;
 
 extern module_t modules[];

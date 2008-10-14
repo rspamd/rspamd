@@ -27,15 +27,9 @@
 #include "upstream.h"
 #include "cfg_file.h"
 #include "url.h"
+#include "modules.h"
 
-#define CONTENT_LENGTH_HEADER "Content-Length: "
-#define HELO_HEADER "Helo: "
-#define FROM_HEADER "From: "
-#define IP_ADDR_HEADER "IP: "
-#define NRCPT_HEADER "Recipient-Number: "
-#define RCPT_HEADER "Rcpt: "
-
-#define TASK_POOL_SIZE 16384
+#define TASK_POOL_SIZE 4095
 
 const f_str_t CRLF = {
 	/* begin */"\r\n",
@@ -77,13 +71,9 @@ free_task (struct worker_task *task)
 	struct mime_part *part;
 
 	if (task) {
-		if (task->message) {
-			g_object_unref (task->message);
-		}
 		if (task->memc_ctx) {
 			memc_close_ctx (task->memc_ctx);
 		}
-
 		while (!TAILQ_EMPTY (&task->parts)) {
 			part = TAILQ_FIRST (&task->parts);
 			g_object_unref (part->type);
@@ -178,6 +168,7 @@ process_message (struct worker_task *task)
 	message = g_mime_parser_construct_message (parser);
 	
 	task->message = message;
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_object_unref, task->message);
 
 	/* free the parser (and the stream) */
 	g_object_unref (parser);
@@ -299,7 +290,11 @@ accept_socket (int fd, short what, void *arg)
 	new_task->cfg = worker->srv->cfg;
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->parts);
+#ifdef HAVE_GETPAGESIZE
+	new_task->task_pool = memory_pool_new (getpagesize () - 1);
+#else
 	new_task->task_pool = memory_pool_new (TASK_POOL_SIZE);
+#endif
 	new_task->memc_ctx = memory_pool_alloc (new_task->task_pool, sizeof (memcached_ctx_t));
 	if (new_task->memc_ctx == NULL) {
 		msg_err ("accept_socket: cannot allocate memory for memcached ctx, %m");
@@ -319,6 +314,9 @@ void
 start_worker (struct rspamd_worker *worker, int listen_sock)
 {
 	struct sigaction signals;
+	int i;
+
+
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_WORKER;
 	event_init ();
@@ -334,6 +332,11 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 	/* Accept event */
 	event_set(&worker->bind_ev, listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
+
+	/* Perform modules configuring */
+	for (i = 0; i < MODULES_NUM; i ++) {
+		modules[i].module_config_func (worker->srv->cfg);
+	}
 
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);

@@ -409,7 +409,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 	struct rspamd_regexp *result;
 	int regexp_flags = 0;
 	enum rspamd_regexp_type type = REGEXP_NONE;
-	GError *err;
+	GError *err = NULL;
 	
 	/* Find begin */
 	while (*line != '/') {

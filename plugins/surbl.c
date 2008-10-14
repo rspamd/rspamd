@@ -49,7 +49,8 @@ struct surbl_ctx {
 	char *metric;
 	GHashTable *hosters;
 	GHashTable *whitelist;
-	unsigned use_redirector:1;
+	unsigned use_redirector;
+	memory_pool_t *surbl_pool;
 };
 
 struct redirector_param {
@@ -78,10 +79,7 @@ static int surbl_test_url (struct worker_task *task);
 int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
-	struct hostent *hent;
 	GError *err = NULL;
-
-	char *value, *cur_tok, *str;
 
 	surbl_module_ctx = g_malloc (sizeof (struct surbl_ctx));
 
@@ -90,9 +88,37 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->message_filter = NULL;
 	surbl_module_ctx->url_filter = surbl_test_url;
 	surbl_module_ctx->use_redirector = 0;
+	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
+	
+	surbl_module_ctx->hosters = g_hash_table_new (g_str_hash, g_str_equal);
+	/* Register destructors */
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->hosters);
+
+	surbl_module_ctx->whitelist = g_hash_table_new (g_str_hash, g_str_equal);
+	/* Register destructors */
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->whitelist);
+		
+	/* Init matching regexps */
+	extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
+	extract_normal_regexp = g_regex_new ("([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
+	extract_numeric_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW, 0, &err);
+
+	*ctx = (struct module_ctx *)surbl_module_ctx;
+
+	evdns_init ();
+
+	return 0;
+}
+
+int
+surbl_module_config (struct config_file *cfg)
+{
+	struct hostent *hent;
+
+	char *value, *cur_tok, *str;
 
 	if ((value = get_module_opt (cfg, "surbl", "redirector")) != NULL) {
-		str = strdup (value);
+		str = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
 		cur_tok = strsep (&str, ":");
 		if (!inet_aton (cur_tok, &surbl_module_ctx->redirector_addr)) {
 			/* Try to call gethostbyname */
@@ -142,26 +168,26 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "suffix")) != NULL) {
-		surbl_module_ctx->suffix = value;
+		surbl_module_ctx->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
+		g_free (value);
 	}
 	else {
 		surbl_module_ctx->suffix = DEFAULT_SURBL_SUFFIX;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "symbol")) != NULL) {
-		surbl_module_ctx->symbol = value;
+		surbl_module_ctx->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
+		g_free (value);
 	}
 	else {
 		surbl_module_ctx->symbol = DEFAULT_SURBL_SYMBOL;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "metric")) != NULL) {
-		surbl_module_ctx->metric = value;
+		surbl_module_ctx->metric = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
+		g_free (value);
 	}
 	else {
 		surbl_module_ctx->metric = DEFAULT_METRIC;
 	}
-	
-	surbl_module_ctx->hosters = g_hash_table_new (g_str_hash, g_str_equal);
-	surbl_module_ctx->whitelist = g_hash_table_new (g_str_hash, g_str_equal);
 	if ((value = get_module_opt (cfg, "surbl", "hostings")) != NULL) {
 		char comment_flag = 0;
 		str = value;
@@ -200,17 +226,15 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 			}
 		}
 	}
-	
-	/* Init matching regexps */
-	extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
-	extract_normal_regexp = g_regex_new ("([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
-	extract_numeric_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW, 0, &err);
+}
 
-	*ctx = (struct module_ctx *)surbl_module_ctx;
+int
+surbl_module_reconfig (struct config_file *cfg)
+{
+	memory_pool_delete (surbl_module_ctx->surbl_pool);
+	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
 
-	evdns_init ();
-
-	return 0;
+	return surbl_module_config (cfg);
 }
 
 static char *
