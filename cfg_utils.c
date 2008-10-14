@@ -400,5 +400,105 @@ post_load_config (struct config_file *cfg)
 }
 
 /*
+ * Rspamd regexp utility functions
+ */
+struct rspamd_regexp*
+parse_regexp (memory_pool_t *pool, char *line)
+{
+	char *begin, *end, *p;
+	struct rspamd_regexp *result;
+	int regexp_flags = 0;
+	enum rspamd_regexp_type type = REGEXP_NONE;
+	GError *err;
+	
+	/* Find begin */
+	while (*line != '/') {
+		line ++;
+	}
+	if (*line != '\0') {
+		begin = line + 1;
+	}
+	else {
+		return NULL;
+	}
+	/* Find end */
+	end = begin;
+	while (*end && (*end != '/' || *(end - 1) == '\\')) {
+		end ++;
+	}
+	if (end == begin || *end != '/') {
+		return NULL;
+	}
+	/* Parse flags */
+	p = end + 1;
+	while (p != NULL) {
+		switch (*p) {
+			case 'i':
+				regexp_flags |= G_REGEX_CASELESS;
+				p ++;
+				break;
+			case 'm':
+				regexp_flags |= G_REGEX_MULTILINE;
+				p ++;
+				break;
+			case 's':
+				regexp_flags |= G_REGEX_DOTALL;
+				p ++;
+				break;
+			case 'x':
+				regexp_flags |= G_REGEX_EXTENDED;
+				p ++;
+				break;
+			case 'u':
+				regexp_flags |= G_REGEX_UNGREEDY;
+				p ++;
+				break;
+			case 'o':
+				regexp_flags |= G_REGEX_OPTIMIZE;
+				p ++;
+				break;
+			/* Type flags */
+			case 'H':
+				if (type != REGEXP_NONE) {
+					type = REGEXP_HEADER;
+				}
+				p ++;
+				break;
+			case 'M':
+				if (type != REGEXP_NONE) {
+					type = REGEXP_MESSAGE;
+				}
+				p ++;
+				break;
+			case 'P':
+				if (type != REGEXP_NONE) {
+					type = REGEXP_MIME;
+				}
+				p ++;
+				break;
+			case 'U':
+				if (type != REGEXP_NONE) {
+					type = REGEXP_URL;
+				}
+				p ++;
+				break;
+			/* Stop flags parsing */
+			default:
+				p = NULL;
+				break;
+		}
+	}
+
+	result = memory_pool_alloc (pool, sizeof (struct rspamd_regexp));
+	result->type = type;
+	*end = '\0';
+	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
+	result->regexp_text = memory_pool_strdup (pool, begin);
+	*end = '/';
+
+	return result;
+}
+
+/*
  * vi:ts=4
  */

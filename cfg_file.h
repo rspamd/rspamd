@@ -50,6 +50,20 @@
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
+enum rspamd_regexp_type {
+	REGEXP_NONE = 0,
+	REGEXP_HEADER,
+	REGEXP_MIME,
+	REGEXP_MESSAGE,
+	REGEXP_URL,
+};
+
+struct rspamd_regexp {
+	enum rspamd_regexp_type type;
+	char *regexp_text;
+	GRegex *regexp;
+};
+
 struct memcached_server {
 	struct upstream up;
 	struct in_addr addr;
@@ -117,6 +131,7 @@ unsigned int parse_seconds (const char *t);
 char parse_flag (const char *str);
 char* substitute_variable (struct config_file *cfg, char *str, u_char recursive);
 void post_load_config (struct config_file *cfg);
+struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line);
 
 int yylex (void);
 int yyparse (void);
