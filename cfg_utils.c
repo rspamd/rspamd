@@ -494,6 +494,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 	*end = '\0';
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
 	result->regexp_text = memory_pool_strdup (pool, begin);
+	memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->regexp);
 	*end = '/';
 
 	return result;

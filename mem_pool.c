@@ -42,6 +42,7 @@ memory_pool_new (size_t size)
 	new = g_malloc (sizeof (memory_pool_t));
 	new->cur_pool = pool_chain_new (size);
 	new->first_pool = new->cur_pool;
+	new->destructors = NULL;
 
 	return new;
 }
@@ -112,9 +113,31 @@ memory_pool_strdup (memory_pool_t *pool, const char *src)
 }
 
 void
+memory_pool_add_destructor (memory_pool_t *pool, pool_destruct_func func, void *data)
+{
+	struct _pool_destructors *cur;
+
+	cur = memory_pool_alloc (pool, sizeof (struct _pool_destructors));
+	if (cur) {
+		cur->func = func;
+		cur->data = data;
+		cur->prev = pool->destructors;
+		pool->destructors = cur;
+	}
+}
+
+void
 memory_pool_delete (memory_pool_t *pool)
 {
 	struct _pool_chain *cur = pool->first_pool, *tmp;
+	struct _pool_destructors *destructor = pool->destructors;
+	
+	/* Call all pool destructors */
+	while (destructor) {
+		destructor->func (destructor->data);
+		destructor = destructor->prev;
+	}
+
 	while (cur) {
 		tmp = cur;
 		cur = cur->next;
