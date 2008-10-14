@@ -29,20 +29,15 @@ struct metric {
 	double required_score;
 };
 
-struct filter_result {
-	const char *symbol;
-	u_char flag;
-	LIST_ENTRY (filter_result) next;
-};
-
 struct metric_result {
 	struct metric *metric;
 	double score;
-	LIST_HEAD (resultq, filter_result) results;
+	GHashTable *symbols;
 };
 
 int process_filters (struct worker_task *task);
 void insert_result (struct worker_task *task, const char *metric_name, const char *symbol, u_char flag);
+void make_composites (struct worker_task *task);
 double factor_consolidation_func (struct worker_task *task, const char *metric_name);
 
 #endif

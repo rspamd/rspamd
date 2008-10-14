@@ -134,6 +134,7 @@ init_defaults (struct config_file *cfg)
 	cfg->metrics = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->factors = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->c_modules = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 
 	LIST_INIT (&cfg->perl_modules);
 }
@@ -151,6 +152,8 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->factors);
 	g_hash_table_remove_all (cfg->c_modules);
 	g_hash_table_unref (cfg->c_modules);
+	g_hash_table_remove_all (cfg->composite_symbols);
+	g_hash_table_unref (cfg->composite_symbols);
 	memory_pool_delete (cfg->cfg_pool);
 }
 

@@ -24,6 +24,7 @@ extern struct config_file *cfg;
 ^[ \t]*#.*						/* ignore comments */;
 .include						BEGIN(incl);
 .module							BEGIN(module);
+composites						return COMPOSITES;
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
 workers							return WORKERS;

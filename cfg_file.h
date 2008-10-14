@@ -47,6 +47,7 @@
 		fprintf (stderr, fmt, ##__VA_ARGS__); \
 		fprintf (stderr, "\n")
 
+struct expression;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
@@ -119,6 +120,7 @@ struct config_file {
 	GHashTable* metrics;
 	GHashTable* factors;
 	GHashTable* c_modules;
+	GHashTable* composite_symbols;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);
@@ -132,6 +134,7 @@ char parse_flag (const char *str);
 char* substitute_variable (struct config_file *cfg, char *str, u_char recursive);
 void post_load_config (struct config_file *cfg);
 struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line);
+struct expression* parse_expression (memory_pool_t *pool, char *line);
 
 int yylex (void);
 int yyparse (void);

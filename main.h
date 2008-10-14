@@ -163,7 +163,6 @@ struct c_module {
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
-struct expression* parse_expression (memory_pool_t *pool, char *line);
 
 #endif
 

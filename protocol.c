@@ -363,23 +363,25 @@ show_metric_symbols (gpointer metric_name, gpointer metric_value, void *user_dat
 	struct worker_task *task = (struct worker_task *)user_data;
 	int r = 0;
 	char outbuf[OUTBUFSIZ];
-	struct filter_result *result;
+	GList *symbols = NULL, *cur;
 	struct metric_result *metric_res = (struct metric_result *)metric_value;
 
 	if (task->proto == RSPAMC_PROTO) {
 		r = snprintf (outbuf, sizeof (outbuf), "%s: ", (char *)metric_name);
 	}
 
-	LIST_FOREACH (result, &metric_res->results, next) {
-		if (result->flag) {
-			if (LIST_NEXT (result, next) != NULL) {
-				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", result->symbol);
-			}
-			else {
-				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s", result->symbol);
-			}
+	symbols = g_hash_table_get_keys (metric_res->symbols);
+	cur = symbols;
+	while (cur) {
+		if (g_list_next (cur) != NULL) {
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
 		}
+		else {
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (char *)cur->data);
+		}
+		cur = g_list_next (cur);
 	}
+	g_list_free (symbols);
 	outbuf[r++] = '\r'; outbuf[r] = '\n';
 	bufferevent_write (task->bev, outbuf, r);
 }

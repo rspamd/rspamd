@@ -12,7 +12,6 @@
 void
 insert_result (struct worker_task *task, const char *metric_name, const char *symbol, u_char flag)
 {
-	struct filter_result *result;
 	struct metric *metric;
 	struct metric_result *metric_res;
 
@@ -21,20 +20,18 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		return;
 	}
 
-	result = memory_pool_alloc (task->task_pool, sizeof (struct filter_result));
-	result->symbol = symbol;
-	result->flag = flag;
 	metric_res = g_hash_table_lookup (task->results, metric_name);
 
 	if (metric_res == NULL) {
 		/* Create new metric chain */
 		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
-		LIST_INIT (&metric_res->results);
+		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, metric_res->symbols);
 		metric_res->metric = metric;
 		g_hash_table_insert (task->results, (gpointer)metric_name, metric_res);
 	}
 	
-	LIST_INSERT_HEAD (&metric_res->results, result, next);
+	g_hash_table_insert (metric_res->symbols, (gpointer)symbol, GSIZE_TO_POINTER (flag));
 }
 
 /*
@@ -44,27 +41,30 @@ double
 factor_consolidation_func (struct worker_task *task, const char *metric_name)
 {
 	struct metric_result *metric_res;
-	struct filter_result *result;
 	double *factor;
 	double res = 0.;
+	GList *symbols = NULL, *cur;
 
 	metric_res = g_hash_table_lookup (task->results, metric_name);
 	if (metric_res == NULL) {
 		return res;
 	}
-
-	LIST_FOREACH (result, &metric_res->results, next) {
-		if (result->flag) {
-			factor = g_hash_table_lookup (task->worker->srv->cfg->factors, result->symbol);
-			if (factor == NULL) {
-				/* Default multiplier is 1 */
-				res ++;
-			}
-			else {
-				res += *factor;
-			}
+	
+	symbols = g_hash_table_get_keys (metric_res->symbols);
+	cur = g_list_first (symbols);
+	while (cur) {
+		factor = g_hash_table_lookup (task->worker->srv->cfg->factors, cur->data);
+		if (factor == NULL) {
+			/* Default multiplier is 1 */
+			res ++;
 		}
+		else {
+			res += *factor;
+		}
+		cur = g_list_next (cur);
 	}
+
+	g_list_free (symbols);
 
 	return res;
 }
@@ -239,4 +239,98 @@ process_filters (struct worker_task *task)
 	/* Process all metrics */
 	g_hash_table_foreach (task->results, metric_process_callback, task);
 	return 1;
+}
+
+struct composites_data {
+	struct worker_task *task;
+	struct metric_result *metric_res;
+};
+
+static void
+composites_foreach_callback (gpointer key, gpointer value, void *data)
+{
+	struct composites_data *cd = (struct composites_data *)data;
+	struct expression *expr = (struct expression *)value;
+	GQueue *stack;
+	GList *symbols = NULL, *s;
+	gsize cur, op1, op2;
+	
+	stack = g_queue_new ();
+
+	while (expr) {
+		if (expr->type == EXPR_OPERAND) {
+			/* Find corresponding symbol */
+			if (g_hash_table_lookup (cd->metric_res->symbols, expr->content.operand) == NULL) {
+				cur = 0;
+			}
+			else {
+				cur = 1;
+				symbols = g_list_append (symbols, expr->content.operand);
+			}
+			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+		}
+		else {
+			if (g_queue_is_empty (stack)) {
+				/* Queue has no operands for operation, exiting */
+				g_list_free (symbols);
+				g_queue_free (stack);
+				return;
+			}
+			switch (expr->content.operation) {
+				case '!':
+					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+					op1 = !op1;
+					g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
+					break;
+				case '&':
+					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+				case '|':
+					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+				default:
+					expr = expr->next;
+					continue;
+			}
+		}
+		expr = expr->next;
+	}
+	if (!g_queue_is_empty (stack)) {
+		op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+		if (op1) {
+			/* Remove all symbols that are in composite symbol */
+			s = g_list_first (symbols);
+			while (s) {
+				g_hash_table_remove (cd->metric_res->symbols, s->data);
+				s = g_list_next (s);
+			}
+			/* Add new symbol */
+			g_hash_table_insert (cd->metric_res->symbols, key, GSIZE_TO_POINTER (op1));
+		}
+	}
+
+	g_queue_free (stack);
+	g_list_free (symbols);
+
+	return;
+}
+
+static void
+composites_metric_callback (gpointer key, gpointer value, void *data) 
+{
+	struct worker_task *task = (struct worker_task *)data;
+	struct composites_data *cd = memory_pool_alloc (task->task_pool, sizeof (struct composites_data));
+	struct metric_result *metric_res = (struct metric_result *)value;
+
+	cd->task = task;
+	cd->metric_res = (struct metric_result *)metric_res;
+
+	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
+}
+
+void make_composites (struct worker_task *task)
+{
+	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }

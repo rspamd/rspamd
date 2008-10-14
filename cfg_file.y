@@ -17,6 +17,7 @@
 #include <glib.h>
 
 #include "cfg_file.h"
+#include "main.h"
 
 #define YYDEBUG 1
 
@@ -48,7 +49,7 @@ struct metric *cur_metric = NULL;
 %token  MEMCACHED WORKERS REQUIRE MODULE
 %token  MODULE_OPT PARAM VARIABLE
 %token  HEADER_FILTERS MIME_FILTERS MESSAGE_FILTERS URL_FILTERS FACTORS METRIC NAME
-%token  REQUIRED_SCORE FUNCTION FRACT
+%token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -85,6 +86,7 @@ command	:
 	| variable
 	| factors
 	| metric
+	| composites
 	;
 
 tempdir :
@@ -351,6 +353,25 @@ requirecmd:
 	}
 	;
 
+composites:
+	COMPOSITES OBRACE compositesbody EBRACE
+	;
+
+compositesbody:
+	compositescmd SEMICOLON
+	| compositesbody compositescmd SEMICOLON
+	;
+
+compositescmd:
+	QUOTEDSTRING EQSIGN QUOTEDSTRING {
+		struct expression *expr;
+		if ((expr = parse_expression (cfg->cfg_pool, $3)) == NULL) {
+			yyerror ("yyparse: cannot parse composite expression: %s", $3);
+			YYERROR;
+		}
+		g_hash_table_insert (cfg->composite_symbols, $1, expr);
+	}
+	;
 module_opt:
 	MODULE_OPT OBRACE moduleoptbody EBRACE {
 		g_hash_table_insert (cfg->modules_opts, $1, cur_module_opt);
