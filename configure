@@ -756,6 +756,17 @@ if [ $? -eq 0 ] ; then
 	have_opt "SRANDOMDEV"
 fi
 
+check_function "sched_yield" "sched.h"
+if [ $? -eq 0 ] ; then
+	have_opt "SCHED_YIELD"
+fi
+
+check_function "nanosleep" "time.h"
+if [ $? -eq 0 ] ; then
+	have_opt "NANOSLEEP"
+fi
+
+
 check_function "getpagesize" "unistd.h"
 if [ $? -eq 0 ] ; then
 	have_opt "GETPAGESIZE"
@@ -800,6 +811,24 @@ if [ $? -eq 1 ] ; then
 	fi
 else
 	have_opt "PATH_MAX"
+fi
+
+check_macro "MAP_SHARED" "sys/mman.h"
+if [ $? -eq 1 ] ; then
+	echo "Shared memory extension to mmap not found, this platform is not supported"
+	exit 1
+fi
+
+check_macro "MAP_ANON" "sys/mman.h"
+if [ $? -eq 0 ] ; then
+	have_opt "MMAP_ANON"
+else
+	if [ -f "/dev/zero" ] ; then
+		have_opt "MMAP_ZERO"
+	else
+		echo "Anon memory extension to mmap not found and /dev/zero not exists, this platform is not supported"
+		exit 1
+	fi
 fi
 
 check_package "glib-2.0" "glib.h"

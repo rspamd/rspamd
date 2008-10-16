@@ -12,20 +12,32 @@ struct _pool_chain {
 	size_t len;
 	struct _pool_chain *next;
 };
+
+struct _pool_chain_shared {
+	u_char *begin;
+	u_char *pos;
+	size_t len;
+	gint lock;
+	struct _pool_chain_shared *next;
+};
+
 struct _pool_destructors {
 	pool_destruct_func func;
 	void *data;
 	struct _pool_destructors *prev;
 };
+
 typedef struct memory_pool_s {
 	struct _pool_chain *cur_pool;
 	struct _pool_chain *first_pool;
+	struct _pool_chain_shared *shared_pool;
 	struct _pool_destructors *destructors;
 } memory_pool_t;
 
 typedef struct memory_pool_stat_s {
 	size_t bytes_allocated;
 	size_t chunks_allocated;
+	size_t shared_chunks_allocated;
 	size_t chunks_freed;
 } memory_pool_stat_t;
 
@@ -34,6 +46,9 @@ void* memory_pool_alloc (memory_pool_t* pool, size_t size);
 void* memory_pool_alloc0 (memory_pool_t* pool, size_t size);
 char* memory_pool_strdup (memory_pool_t* pool, const char *src);
 void memory_pool_add_destructor (memory_pool_t *pool, pool_destruct_func func, void *data);
+void* memory_pool_alloc_shared (memory_pool_t *pool, size_t size);
+void memory_pool_lock_shared (memory_pool_t *pool, void *pointer);
+void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer);
 void memory_pool_delete (memory_pool_t* pool);
 
 void memory_pool_stat (memory_pool_stat_t *st);
