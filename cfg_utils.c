@@ -414,14 +414,31 @@ parse_regexp (memory_pool_t *pool, char *line)
 	enum rspamd_regexp_type type = REGEXP_NONE;
 	GError *err = NULL;
 	
-	/* Find begin */
+	result = memory_pool_alloc0 (pool, sizeof (struct rspamd_regexp));
+	/* First try to find header name */
+	begin = strchr (line, '=');
+	if (begin != NULL) {
+		*begin = '\0';
+		result->header = memory_pool_strdup (pool, line);
+		result->type = REGEXP_HEADER;
+		*begin = '=';
+		line = begin;
+	}
+	/* Find begin of regexp */
 	while (*line != '/') {
 		line ++;
 	}
 	if (*line != '\0') {
 		begin = line + 1;
 	}
+	else if (result->header == NULL) {
+		/* Assume that line without // is just a header name */
+		result->header = memory_pool_strdup (pool, line);
+		result->type = REGEXP_HEADER;
+		return result;
+	}
 	else {
+		/* We got header name earlier but have not found // expression, so it is invalid regexp */
 		return NULL;
 	}
 	/* Find end */

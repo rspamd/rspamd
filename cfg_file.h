@@ -63,6 +63,7 @@ struct rspamd_regexp {
 	enum rspamd_regexp_type type;
 	char *regexp_text;
 	GRegex *regexp;
+	char *header;
 };
 
 struct memcached_server {

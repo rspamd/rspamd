@@ -130,7 +130,7 @@ struct worker_task {
 	unsigned memc_busy:1;
 	/* Number of mime parts */
 	int parts_count;
-	/* Headers */
+	/* Message */
 	GMimeMessage *message;
 	/* All parts of message */
 	TAILQ_HEAD (mime_partq, mime_part) parts;
