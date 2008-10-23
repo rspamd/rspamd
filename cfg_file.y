@@ -49,7 +49,7 @@ struct metric *cur_metric = NULL;
 %token  MEMCACHED WORKERS REQUIRE MODULE
 %token  MODULE_OPT PARAM VARIABLE
 %token  HEADER_FILTERS MIME_FILTERS MESSAGE_FILTERS URL_FILTERS FACTORS METRIC NAME
-%token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES
+%token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -73,6 +73,7 @@ file	: /* empty */
 
 command	: 
 	bindsock
+	| control
 	| tempdir
 	| pidfile
 	| memcached
@@ -112,9 +113,39 @@ pidfile :
 	}
 	;
 
+control:
+	CONTROL OBRACE controlbody EBRACE
+	;
+
+controlbody:
+	controlcmd SEMICOLON
+	| controlbody controlcmd SEMICOLON
+	;
+
+controlcmd:
+	controlsock
+	| controlpassword
+	;
+
+controlsock:
+	BINDSOCK EQSIGN bind_cred {
+		if (!parse_bind_line (cfg, $3, 1)) {
+			yyerror ("yyparse: parse_bind_line");
+			YYERROR;
+		}
+		cfg->controller_enabled = 1;
+		free ($3);
+	}
+	;
+controlpassword:
+	PASSWORD EQSIGN QUOTEDSTRING {
+		cfg->control_password = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
 bindsock:
 	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3)) {
+		if (!parse_bind_line (cfg, $3, 0)) {
 			yyerror ("yyparse: parse_bind_line");
 			YYERROR;
 		}		

@@ -47,6 +47,8 @@ metric							return METRIC;
 name							return NAME;
 required_score					return REQUIRED_SCORE;
 function						return FUNCTION;
+control							return CONTROL;
+password						return PASSWORD;
 
 \{								return OBRACE;
 \}								return EBRACE;

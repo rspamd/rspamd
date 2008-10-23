@@ -46,6 +46,7 @@
 enum process_type {
 	TYPE_MAIN,
 	TYPE_WORKER,
+	TYPE_CONTROLLER,
 };
 
 /* Filter type */
@@ -105,6 +106,17 @@ struct save_point {
 	unsigned int saved;
 };
 
+/* Control session */
+struct controller_session {
+	struct rspamd_worker *worker;
+	/* Access to authorized commands */
+	int authorized;
+	memory_pool_t *session_pool;
+	struct bufferevent *bev;
+	struct config_file *cfg;
+};
+
+/* Worker task structure */
 struct worker_task {
 	struct rspamd_worker *worker;
 	enum {
@@ -138,7 +150,6 @@ struct worker_task {
 	TAILQ_HEAD (uriq, uri) urls;
 	/* Hash of metric result structures */
 	GHashTable *results;
-	/* Config file to write to */
 	struct config_file *cfg;
 	/* Save point for filters deferred processing */
 	struct save_point save;
@@ -163,6 +174,7 @@ struct c_module {
 };
 
 void start_worker (struct rspamd_worker *worker, int listen_sock);
+void start_controller (struct rspamd_worker *worker);
 
 #endif
 

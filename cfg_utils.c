@@ -74,7 +74,7 @@ add_memcached_server (struct config_file *cf, char *str)
 }
 
 int
-parse_bind_line (struct config_file *cf, char *str)
+parse_bind_line (struct config_file *cf, char *str, char is_control)
 {
 	char *cur_tok, *err_str;
 	struct hostent *hent;
@@ -84,35 +84,69 @@ parse_bind_line (struct config_file *cf, char *str)
 	cur_tok = strsep (&str, ":");
 	
 	if (cur_tok[0] == '/' || cur_tok[0] == '.') {
-		cf->bind_host = strdup (cur_tok);
-		cf->bind_family = AF_UNIX;
+		if (is_control) {
+			cf->control_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+			cf->control_family = AF_UNIX;
+		}
+		else {
+			cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+			cf->bind_family = AF_UNIX;
+		}
 		return 1;
 
 	} else {
 		if (str == '\0') {
-			cf->bind_port = DEFAULT_BIND_PORT;
+			if (is_control) {
+				cf->control_port = DEFAULT_CONTROL_PORT;
+			}
+			else {
+				cf->bind_port = DEFAULT_BIND_PORT;
+			}
 		}
 		else {
-			cf->bind_port = (uint16_t)strtoul (str, &err_str, 10);
+			if (is_control) {
+				cf->control_port = (uint16_t)strtoul (str, &err_str, 10);
+			}
+			else {
+				cf->bind_port = (uint16_t)strtoul (str, &err_str, 10);
+			}
 			if (*err_str != '\0') {
 				return 0;
 			}
 		}
+		
+		if (is_control) {
+			if (!inet_aton (cur_tok, &cf->control_addr)) {
+				/* Try to call gethostbyname */
+				hent = gethostbyname (cur_tok);
+				if (hent == NULL) {
+					return 0;
+				}
+				else {
+					cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+					memcpy((char *)&cf->control_addr, hent->h_addr, sizeof(struct in_addr));
+					s = strlen (cur_tok) + 1;
+				}
+			}
 
-		if (!inet_aton (cur_tok, &cf->bind_addr)) {
-			/* Try to call gethostbyname */
-			hent = gethostbyname (cur_tok);
-			if (hent == NULL) {
-				return 0;
-			}
-			else {
-				cf->bind_host = strdup (cur_tok);
-				memcpy((char *)&cf->bind_addr, hent->h_addr, sizeof(struct in_addr));
-				s = strlen (cur_tok) + 1;
-			}
+			cf->control_family = AF_INET;
 		}
+		else {
+			if (!inet_aton (cur_tok, &cf->bind_addr)) {
+				/* Try to call gethostbyname */
+				hent = gethostbyname (cur_tok);
+				if (hent == NULL) {
+					return 0;
+				}
+				else {
+					cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+					memcpy((char *)&cf->bind_addr, hent->h_addr, sizeof(struct in_addr));
+					s = strlen (cur_tok) + 1;
+				}
+			}
 
-		cf->bind_family = AF_INET;
+			cf->bind_family = AF_INET;
+		}
 
 		return 1;
 	}

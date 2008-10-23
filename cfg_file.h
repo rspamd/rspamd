@@ -23,6 +23,7 @@
 #include "filter.h"
 
 #define DEFAULT_BIND_PORT 768
+#define DEFAULT_CONTROL_PORT 7608
 #define MAX_MEMCACHED_SERVERS 48
 #define DEFAULT_MEMCACHED_PORT 11211
 /* Memcached timeouts */
@@ -96,7 +97,14 @@ struct config_file {
 	uint16_t bind_port;
 	uint16_t bind_family;
 
-	char no_fork;
+	char *control_host;
+	struct in_addr control_addr;
+	uint16_t control_port;
+	uint16_t control_family;
+	int controller_enabled;
+	char *control_password;
+
+	int no_fork;
 	unsigned int workers_number;
 
 	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];
@@ -125,7 +133,7 @@ struct config_file {
 };
 
 int add_memcached_server (struct config_file *cf, char *str);
-int parse_bind_line (struct config_file *cf, char *str);
+int parse_bind_line (struct config_file *cf, char *str, char is_control);
 void init_defaults (struct config_file *cfg);
 void free_config (struct config_file *cfg);
 char* get_module_opt (struct config_file *cfg, char *module_name, char *opt_name);

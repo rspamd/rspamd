@@ -128,6 +128,13 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 			case 0:
 				/* TODO: add worker code */
 				switch (type) {
+					case TYPE_CONTROLLER:
+						setproctitle ("controller process");
+						pidfile_close (rspamd->pfh);
+						msg_info ("fork_worker: starting controller process %d", getpid ());
+						cur->type = TYPE_CONTROLLER;
+						start_controller (cur);
+						break;
 					case TYPE_WORKER:
 					default:
 						setproctitle ("worker process");
@@ -281,7 +288,10 @@ main (int argc, char **argv)
 	for (i = 0; i < cfg->workers_number; i++) {
 		fork_worker (rspamd, listen_sock, 0, TYPE_WORKER);
 	}
-	
+	/* Start controller if enabled */
+	if (cfg->controller_enabled) {
+		fork_worker (rspamd, listen_sock, 0, TYPE_CONTROLLER);
+	}
 
 	/* Signal processing cycle */
 	for (;;) {
@@ -305,6 +315,11 @@ main (int argc, char **argv)
 						active_worker = NULL;
 					}
 					TAILQ_REMOVE(&rspamd->workers, cur, next);
+					if (cur->type == TYPE_CONTROLLER) {
+						msg_info ("main: do not restart dead controller");
+						g_free (cur);
+						break;
+					}
 					if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 						/* Normal worker termination, do not fork one more */
 						msg_info ("main: worker process %d terminated normally", cur->pid);
