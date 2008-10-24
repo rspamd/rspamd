@@ -220,6 +220,7 @@ main (int argc, char **argv)
 		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!rspamd->cfg->temp_dir) {
+			msg_warn ("$TMPDIR is empty too, using /tmp as default");
 	    	rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
 		}
     }

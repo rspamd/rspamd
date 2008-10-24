@@ -73,6 +73,7 @@ parse_command (struct worker_task *task, char *line)
 
 	token = strsep (&line, " ");
 	if (line == NULL || token == NULL) {
+		msg_debug ("parse_command: bad comand: %s", token);
 		return -1;
 	}
 
@@ -153,13 +154,26 @@ static int
 parse_header (struct worker_task *task, char *line)
 {
 	char *headern, *err;
-	headern = strsep (&line, ":");
 
 	/* Check end of headers */
-	if (*line == '\r' && *(line + 1) == '\n') {
-		task->state = READ_MESSAGE;
+	if (*line == '\0') {
+		if (task->cmd == CMD_PING || task->cmd == CMD_SKIP) {
+			task->state = WRITE_REPLY;
+		}
+		else {
+			if (task->content_length > 0) {
+				task->state = READ_MESSAGE;
+			}
+			else {
+				task->last_error = "Unknown content length";
+				task->error_code = RSPAMD_LENGTH_ERROR;
+				task->state = WRITE_ERROR;
+			}
+		}
 		return 0;
 	}
+
+	headern = strsep (&line, ":");
 
 	if (line == NULL || headern == NULL) {
 		return -1;
@@ -433,14 +447,17 @@ write_reply (struct worker_task *task)
 	int r;
 	char outbuf[OUTBUFSIZ];
 
+	msg_debug ("write_reply: writing reply to client");
 	if (task->error_code != 0) {
 		/* Write error message and error code to reply */
 		if (task->proto == SPAMC_PROTO) {
 			r = snprintf (outbuf, sizeof (outbuf), "%s %d %s" CRLF CRLF, SPAMD_REPLY_BANNER, task->error_code, SPAMD_ERROR);
+			msg_debug ("write_reply: writing error: %s", outbuf);
 		}
 		else {
 			r = snprintf (outbuf, sizeof (outbuf), "%s %d %s" CRLF "%s: %s" CRLF CRLF, RSPAMD_REPLY_BANNER, task->error_code, 
 								SPAMD_ERROR, ERROR_HEADER, task->last_error);
+			msg_debug ("write_reply: writing error: %s", outbuf);
 		}
 		/* Write to bufferevent error message */
 		bufferevent_write (task->bev, outbuf, r);
@@ -459,12 +476,12 @@ write_reply (struct worker_task *task)
 				return write_process_reply (task);
 				break;
 			case CMD_SKIP:
-				r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
+				r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
 																SPAMD_OK);
 				bufferevent_write (task->bev, outbuf, r);
 				break;
 			case CMD_PING:
-				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
+				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
 				bufferevent_write (task->bev, outbuf, r);
 				break;
 		}

@@ -109,6 +109,7 @@ struct save_point {
 /* Control session */
 struct controller_session {
 	struct rspamd_worker *worker;
+	int sock;
 	/* Access to authorized commands */
 	int authorized;
 	memory_pool_t *session_pool;
@@ -126,10 +127,12 @@ struct worker_task {
 		WRITE_REPLY,
 		WRITE_ERROR,
 		WAIT_FILTER,
+		CLOSING_CONNECTION,
 	} state;
 	size_t content_length;
 	enum rspamd_protocol proto;
 	enum rspamd_command cmd;
+	int sock;
 	char *helo;
 	char *from;
 	char *rcpt;

@@ -280,6 +280,7 @@ accept_socket (int fd, short what, void *arg)
 	}
 	bzero (new_session, sizeof (struct controller_session));
 	new_session->worker = worker;
+	new_session->sock = nfd;
 	new_session->cfg = worker->srv->cfg;
 #ifdef HAVE_GETPAGESIZE
 	new_session->session_pool = memory_pool_new (getpagesize () - 1);

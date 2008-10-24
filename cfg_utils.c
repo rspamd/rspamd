@@ -358,6 +358,10 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 	gchar **strvec, **p;
 	struct filter *cur;
 	int i;
+	
+	if (str == NULL) {
+		return;	
+	}
 
 	strvec = g_strsplit (str, ",", 0);
 	if (strvec == NULL) {

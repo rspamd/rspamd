@@ -6,6 +6,7 @@
 #define RSPAMD_FILTER_ERROR 1
 #define RSPAMD_NETWORK_ERROR 2
 #define RSPAMD_PROTOCOL_ERROR 3
+#define RSPAMD_LENGTH_ERROR 4
 
 struct worker_task;
 

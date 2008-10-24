@@ -105,8 +105,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
-	evdns_init ();
-
 	return 0;
 }
 
@@ -116,6 +114,8 @@ surbl_module_config (struct config_file *cfg)
 	struct hostent *hent;
 
 	char *value, *cur_tok, *str;
+
+	evdns_init ();
 
 	if ((value = get_module_opt (cfg, "surbl", "redirector")) != NULL) {
 		str = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);

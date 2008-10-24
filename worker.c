@@ -80,6 +80,9 @@ free_task (struct worker_task *task)
 			TAILQ_REMOVE (&task->parts, part, next);
 		}
 		memory_pool_delete (task->task_pool);
+		bufferevent_disable (task->bev, EV_READ | EV_WRITE);
+		bufferevent_free (task->bev);
+		close (task->sock);
 		g_free (task);
 	}
 }
@@ -195,6 +198,10 @@ read_socket (struct bufferevent *bev, void *arg)
 				task->error_code = RSPAMD_NETWORK_ERROR;
 				task->state = WRITE_ERROR;
 			}
+			if (task->state == WRITE_ERROR || task->state == WRITE_REPLY) {
+				bufferevent_enable (bev, EV_WRITE);
+				bufferevent_disable (bev, EV_READ);
+			}
 			free (s);
 			break;
 		case READ_MESSAGE:
@@ -213,6 +220,10 @@ read_socket (struct bufferevent *bev, void *arg)
 						task->state = WAIT_FILTER;
 					}
 				}
+				if (task->state == WRITE_ERROR || task->state == WRITE_REPLY) {
+					bufferevent_enable (bev, EV_WRITE);
+					bufferevent_disable (bev, EV_READ);
+				}
 			}
 			else {
 				msg_err ("read_socket: cannot read data to buffer: %ld", (long int)r);
@@ -224,16 +235,6 @@ read_socket (struct bufferevent *bev, void *arg)
 		case WAIT_FILTER:
 			bufferevent_disable (bev, EV_READ);
 			break;
-		case WRITE_REPLY:
-			write_reply (task);
-			bufferevent_disable (bev, EV_READ);
-			bufferevent_enable (bev, EV_WRITE);
-			break;
-		case WRITE_ERROR:
-			write_reply (task);
-			bufferevent_disable (bev, EV_READ);
-			bufferevent_enable (bev, EV_WRITE);
-			break;
 	}
 }
 
@@ -241,13 +242,26 @@ static void
 write_socket (struct bufferevent *bev, void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
-
-	if (task->state > READ_MESSAGE) {
-		msg_info ("closing connection");
-		/* Free buffers */
-		free_task (task);
-		bufferevent_disable (bev, EV_WRITE);
-		bufferevent_free (bev);
+	
+	switch (task->state) {
+		case WRITE_REPLY:
+			write_reply (task);
+			task->state = CLOSING_CONNECTION;
+			bufferevent_disable (bev, EV_READ);
+			break;
+		case WRITE_ERROR:
+			write_reply (task);
+			task->state = CLOSING_CONNECTION;
+			bufferevent_disable (bev, EV_READ);
+			break;
+		case CLOSING_CONNECTION:
+			msg_debug ("write_socket: normally closing connection");
+			free_task (task);
+			break;
+		default:
+			msg_info ("write_socket: abnormally closing connection");
+			free_task (task);
+			break;
 	}
 }
 
@@ -255,11 +269,9 @@ static void
 err_socket (struct bufferevent *bev, short what, void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
-	msg_info ("closing connection");
+	msg_info ("err_socket: abnormally closing connection");
 	/* Free buffers */
 	free_task (task);
-	bufferevent_disable (bev, EV_READ);
-	bufferevent_free (bev);
 }
 
 static void
@@ -286,6 +298,7 @@ accept_socket (int fd, short what, void *arg)
 	bzero (new_task, sizeof (struct worker_task));
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;
+	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->parts);
@@ -294,15 +307,6 @@ accept_socket (int fd, short what, void *arg)
 #else
 	new_task->task_pool = memory_pool_new (TASK_POOL_SIZE);
 #endif
-	new_task->memc_ctx = memory_pool_alloc (new_task->task_pool, sizeof (memcached_ctx_t));
-	if (new_task->memc_ctx == NULL) {
-		msg_err ("accept_socket: cannot allocate memory for memcached ctx, %m");
-	}
-	else {
-		if (memc_init_ctx (new_task->memc_ctx) == -1) {
-			msg_err ("accept_socket: cannot init memcached context for task");
-		}
-	}
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);
