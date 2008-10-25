@@ -135,7 +135,7 @@ struct worker_task {
 	int sock;
 	char *helo;
 	char *from;
-	char *rcpt;
+	GList *rcpt;
 	unsigned int nrcpt;
 	struct in_addr from_addr;
 	f_str_buf_t *msg;

@@ -153,7 +153,7 @@ parse_command (struct worker_task *task, char *line)
 static int
 parse_header (struct worker_task *task, char *line)
 {
-	char *headern, *err;
+	char *headern, *err, *tmp;
 
 	/* Check end of headers */
 	if (*line == '\0') {
@@ -226,7 +226,8 @@ parse_header (struct worker_task *task, char *line)
 		case 'R':
 			/* rcpt */
 			if (strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
-				task->rcpt = memory_pool_strdup (task->task_pool, line);
+				tmp = memory_pool_strdup (task->task_pool, line);
+				task->rcpt = g_list_prepend (task->rcpt, tmp);
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);

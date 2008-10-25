@@ -102,6 +102,33 @@ get_part (r, num)
 	RETVAL
 
 void
+ip (r)
+	CODE:
+	dXSTARG;
+	struct worker_task *r;
+	char *ip_str;
+
+	perl_set_session (r);
+	sv_upgrade(TARG, SVt_PV);
+	ip_str = inet_ntoa (r->from_addr);
+	sv_setpv(TARG, ip_str);
+	ST(0) = TARG;
+
+void
+from (r)
+	CODE:
+	dXSTARG;
+	struct worker_task *r;
+
+	perl_set_session (r);
+	if (r->from == NULL) {
+		XSRETURN_UNDEF;
+	}
+	sv_upgrade(TARG, SVt_PV);
+	sv_setpv(TARG, r->from);
+	ST(0) = TARG;
+
+void
 save_point (r)
     CODE:
 	struct worker_task *r;

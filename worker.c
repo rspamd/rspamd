@@ -65,6 +65,16 @@ sigusr_handler (int fd, short what, void *arg)
 }
 
 static void
+rcpt_destruct (void *pointer)
+{
+	struct worker_task *task = (struct worker_task *)pointer;
+
+	if (task->rcpt) {
+		g_list_free (task->rcpt);
+	}
+}
+
+static void
 free_task (struct worker_task *task)
 {
 	struct mime_part *part;
@@ -307,6 +317,8 @@ accept_socket (int fd, short what, void *arg)
 #else
 	new_task->task_pool = memory_pool_new (TASK_POOL_SIZE);
 #endif
+	/* Add destructor for recipients list (it would be better to use anonymous function here */
+	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)rcpt_destruct, new_task);
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);
