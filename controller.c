@@ -282,12 +282,9 @@ accept_socket (int fd, short what, void *arg)
 	new_session->worker = worker;
 	new_session->sock = nfd;
 	new_session->cfg = worker->srv->cfg;
-#ifdef HAVE_GETPAGESIZE
-	new_session->session_pool = memory_pool_new (getpagesize () - 1);
-#else
-	new_session->session_pool = memory_pool_new (4095);
-#endif
+	new_session->session_pool = memory_pool_new (memory_pool_get_size () - 1);
 	memory_pool_add_destructor (new_session->session_pool, (pool_destruct_func)bufferevent_free, new_session->bev);
+	worker->srv->stat->control_connections_count ++;
 
 	/* Read event */
 	new_session->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_session);

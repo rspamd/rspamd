@@ -53,6 +53,9 @@ void memory_pool_delete (memory_pool_t* pool);
 
 void memory_pool_stat (memory_pool_stat_t *st);
 
+/* Get optimal pool size based on page size for this system */
+size_t memory_pool_get_size ();
+
 #define memory_pool_free(x) ((x)->len - ((x)->pos - (x)->begin))
 
 #endif

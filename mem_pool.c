@@ -344,6 +344,17 @@ memory_pool_stat (memory_pool_stat_t *st)
 	st->chunks_freed = chunks_freed;
 }
 
+#define FIXED_POOL_SIZE 4095
+size_t
+memory_pool_get_size ()
+{
+#ifdef HAVE_GETPAGESIZE
+	return getpagesize () - 1;
+#else
+	return FIXED_POOL_SIZE;
+#endif
+}
+
 /*
  * vi:ts=4
  */

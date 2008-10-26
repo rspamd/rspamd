@@ -172,6 +172,7 @@ main (int argc, char **argv)
 
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
+	rspamd->server_pool = memory_pool_new (memory_pool_get_size ());
 	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	rspamd->cfg = cfg;
 	if (!rspamd || !rspamd->cfg) {
@@ -186,8 +187,11 @@ main (int argc, char **argv)
 	do_reopen_log = 0;
 	active_worker = NULL;
 
+	rspamd->stat = memory_pool_alloc_shared (rspamd->server_pool, sizeof (struct rspamd_stat));
+	bzero (rspamd->stat, sizeof (struct rspamd_stat));
+
 	bzero (rspamd->cfg, sizeof (struct config_file));
-	rspamd->cfg->cfg_pool = memory_pool_new (32768);
+	rspamd->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
 	init_defaults (rspamd->cfg);
 
 	bzero (&signals, sizeof (struct sigaction));

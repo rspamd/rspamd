@@ -82,6 +82,16 @@ struct rspamd_worker {
 struct pidfh;
 struct config_file;
 
+/* Server statistics */
+struct rspamd_stat {
+	unsigned int messages_scanned;
+	unsigned int messages_spam;
+	unsigned int messages_ham;
+	unsigned int connections_count;
+	unsigned int control_connections_count;
+	unsigned int messages_learned;
+};
+
 /* Struct that determine main server object (for logging purposes) */
 struct rspamd_main {
 	struct config_file *cfg;
@@ -89,7 +99,10 @@ struct rspamd_main {
 	/* Pid file structure */
 	struct pidfh *pfh;
 	enum process_type type;
-	unsigned ev_initialized:1;
+	unsigned int ev_initialized;
+	struct rspamd_stat *stat;
+
+	memory_pool_t *server_pool;
 
 	TAILQ_HEAD (workq, rspamd_worker) workers;
 };

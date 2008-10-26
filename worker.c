@@ -190,6 +190,8 @@ process_message (struct worker_task *task)
 	
 	msg_info ("process_message: found %d parts in message", task->parts_count);
 
+	task->worker->srv->stat->messages_scanned ++;
+
 	return process_filters (task);
 }
 
@@ -313,13 +315,10 @@ accept_socket (int fd, short what, void *arg)
 	new_task->cfg = worker->srv->cfg;
 	TAILQ_INIT (&new_task->urls);
 	TAILQ_INIT (&new_task->parts);
-#ifdef HAVE_GETPAGESIZE
-	new_task->task_pool = memory_pool_new (getpagesize () - 1);
-#else
-	new_task->task_pool = memory_pool_new (TASK_POOL_SIZE);
-#endif
+	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)rcpt_destruct, new_task);
+	worker->srv->stat->connections_count ++;
 
 	/* Read event */
 	new_task->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_task);
