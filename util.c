@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <sys/file.h>
+#include <syslog.h>
+#include <glib.h>
 
 #include "config.h"
 #ifdef HAVE_LIBUTIL_H
@@ -16,6 +18,8 @@
 #endif
 #include "util.h"
 #include "cfg_file.h"
+
+sig_atomic_t do_reopen_log = 0;
 
 int
 event_make_socket_nonblocking (int fd)
@@ -734,6 +738,97 @@ parse_expression (memory_pool_t *pool, char *line)
 	return expr;
 }
 
+/* Logging utility functions */
+int
+open_log (struct config_file *cfg)
+{
+	switch (cfg->log_type) {
+		case RSPAMD_LOG_CONSOLE:
+			/* Do nothing with console */
+			return 0;
+		case RSPAMD_LOG_SYSLOG:
+			openlog ("rspamd", LOG_NDELAY | LOG_PID, cfg->log_facility);
+			return 0;
+		case RSPAMD_LOG_FILE:
+			cfg->log_fd = open (cfg->log_file, O_CREAT | O_WRONLY | O_APPEND);
+			if (cfg->log_fd == -1) {
+				msg_err ("open_log: cannot open desired log file: %s, %m", cfg->log_file);
+				return -1;
+			}
+			return 0;
+	}
+}
+
+int
+reopen_log (struct config_file *cfg)
+{
+	do_reopen_log = 0;
+	switch (cfg->log_type) {
+		case RSPAMD_LOG_CONSOLE:
+			/* Do nothing with console */
+			return 0;
+		case RSPAMD_LOG_SYSLOG:
+			closelog ();
+			break;
+		case RSPAMD_LOG_FILE:
+			close (cfg->log_fd);
+			break;
+	}
+	return open_log (cfg);
+}
+
+void
+syslog_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg)
+{
+	struct config_file *cfg = (struct config_file *)arg;
+	if (do_reopen_log) {
+		reopen_log (cfg);
+	}
+
+	if (log_level <= cfg->log_level) {
+		if (log_level >= G_LOG_LEVEL_DEBUG) {
+			syslog (LOG_DEBUG, message);
+		}
+		else if (log_level >= G_LOG_LEVEL_INFO) {
+			syslog (LOG_INFO, message);
+		}
+		else if (log_level >= G_LOG_LEVEL_WARNING) {
+			syslog (LOG_WARNING, message);
+		}
+		else if (log_level >= G_LOG_LEVEL_CRITICAL) {
+			syslog (LOG_ERR, message);
+		}
+	}
+}
+
+void
+file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg)
+{
+	struct config_file *cfg = (struct config_file *)arg;
+	char tmpbuf[128];
+	int r;
+	struct iovec out[3];
+	
+	if (cfg->log_fd == -1) {
+		return;
+	}
+
+	if (do_reopen_log) {
+		reopen_log (cfg);
+	}
+
+	if (log_level <= cfg->log_level) {
+		r = snprintf (tmpbuf, sizeof (tmpbuf), "#%d: %d rspamd ", (int)getpid (), (int)time (NULL));
+		out[0].iov_base = tmpbuf;
+		out[0].iov_len = r;
+		out[1].iov_base = (char *)message;
+		out[1].iov_len = strlen (message);
+		out[2].iov_base = "\r\n";
+		out[2].iov_len = 2;
+
+		writev (cfg->log_fd, out, sizeof (out) / sizeof (out[0]));
+	}
+}
 /*
  * vi:ts=4
  */

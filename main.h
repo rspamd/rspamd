@@ -179,6 +179,8 @@ struct c_module {
 void start_worker (struct rspamd_worker *worker, int listen_sock);
 void start_controller (struct rspamd_worker *worker);
 
+extern sig_atomic_t do_reopen_log;
+
 #endif
 
 /* 

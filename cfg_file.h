@@ -60,6 +60,12 @@ enum rspamd_regexp_type {
 	REGEXP_URL,
 };
 
+enum rspamd_log_type {
+	RSPAMD_LOG_CONSOLE,
+	RSPAMD_LOG_SYSLOG,
+	RSPAMD_LOG_FILE,
+};
+
 struct rspamd_regexp {
 	enum rspamd_regexp_type type;
 	char *regexp_text;
@@ -106,6 +112,12 @@ struct config_file {
 
 	int no_fork;
 	unsigned int workers_number;
+
+	enum rspamd_log_type log_type;
+	int log_facility;
+	int log_level;
+	char *log_file;
+	int log_fd;
 
 	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];
 	size_t memcached_servers_num;

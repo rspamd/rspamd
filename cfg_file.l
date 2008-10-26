@@ -49,6 +49,20 @@ required_score					return REQUIRED_SCORE;
 function						return FUNCTION;
 control							return CONTROL;
 password						return PASSWORD;
+logging							return LOGGING;
+
+log_type						return LOG_TYPE;
+console							return LOG_TYPE_CONSOLE;
+syslog							return LOG_TYPE_SYSLOG;
+file							return LOG_TYPE_FILE;
+
+log_level						return LOG_LEVEL;
+DEBUG							return LOG_LEVEL_DEBUG;
+INFO							return LOG_LEVEL_INFO;
+WARNING							return LOG_LEVEL_WARNING;
+ERROR							return LOG_LEVEL_ERROR;
+log_facility					return LOG_FACILITY;
+log_file						return LOG_FILENAME;
 
 \{								return OBRACE;
 \}								return EBRACE;

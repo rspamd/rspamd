@@ -48,6 +48,7 @@ void sig_handler (int signo)
 	switch (signo) {
 		case SIGHUP:
 			do_restart = 1;
+			do_reopen_log = 1;
 			break;
 		case SIGINT:
 		case SIGTERM:
@@ -182,6 +183,7 @@ main (int argc, char **argv)
 	do_restart = 0;
 	child_dead = 0;
 	child_ready = 0;
+	do_reopen_log = 0;
 	active_worker = NULL;
 
 	bzero (rspamd->cfg, sizeof (struct config_file));
@@ -224,6 +226,33 @@ main (int argc, char **argv)
 	    	rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
 		}
     }
+
+	switch (cfg->log_type) {
+		case RSPAMD_LOG_CONSOLE:
+			if (!rspamd->cfg->no_fork) {
+				fprintf (stderr, "Cannot log to console while daemonized, disable logging");
+				cfg->log_fd = -1;
+			}
+			else {
+				cfg->log_fd = 2;
+			}
+			g_log_set_default_handler (file_log_function, cfg);
+			break;
+		case RSPAMD_LOG_FILE:
+			if (cfg->log_file == NULL || open_log (cfg) == -1) {
+				fprintf (stderr, "Fatal error, cannot open logfile, exiting");
+				exit (EXIT_FAILURE);
+			}
+			g_log_set_default_handler (file_log_function, cfg);
+			break;
+		case RSPAMD_LOG_SYSLOG:
+			if (open_log (cfg) == -1) {
+				fprintf (stderr, "Fatal error, cannot open syslog facility, exiting");
+				exit (EXIT_FAILURE);
+			}
+			g_log_set_default_handler (syslog_log_function, cfg);
+			break;
+	}
 
 	if (!rspamd->cfg->no_fork && daemon (1, 1) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");

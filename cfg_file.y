@@ -50,6 +50,8 @@ struct metric *cur_metric = NULL;
 %token  MODULE_OPT PARAM VARIABLE
 %token  HEADER_FILTERS MIME_FILTERS MESSAGE_FILTERS URL_FILTERS FACTORS METRIC NAME
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
+%token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
+%token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -88,6 +90,7 @@ command	:
 	| factors
 	| metric
 	| composites
+	| logging
 	;
 
 tempdir :
@@ -432,6 +435,110 @@ optcmd:
 variable:
 	VARIABLE EQSIGN QUOTEDSTRING {
 		g_hash_table_insert (cfg->variables, $1, $3);
+	}
+	;
+
+logging:
+	LOGGING OBRACE loggingbody EBRACE
+	;
+
+loggingbody:
+	loggingcmd SEMICOLON
+	| loggingbody loggingcmd SEMICOLON
+	;
+
+loggingcmd:
+	loggingtype
+	| logginglevel
+	| loggingfacility
+	| loggingfile
+	;
+
+loggingtype:
+	LOG_TYPE EQSIGN LOG_TYPE_CONSOLE {
+		cfg->log_type = RSPAMD_LOG_CONSOLE;
+	}
+	LOG_TYPE EQSIGN LOG_TYPE_SYSLOG {
+		cfg->log_type = RSPAMD_LOG_SYSLOG;
+	}
+	LOG_TYPE EQSIGN LOG_TYPE_FILE {
+		cfg->log_type = RSPAMD_LOG_FILE;
+	}
+	;
+
+logginglevel:
+	LOG_LEVEL EQSIGN LOG_LEVEL_DEBUG {
+		cfg->log_level = G_LOG_LEVEL_DEBUG;
+	}
+	LOG_LEVEL EQSIGN LOG_LEVEL_INFO {
+		cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
+	}
+	LOG_LEVEL EQSIGN LOG_LEVEL_WARNING {
+		cfg->log_level = G_LOG_LEVEL_WARNING;
+	}
+	LOG_LEVEL EQSIGN LOG_LEVEL_ERROR {
+		cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
+	}
+	;
+
+loggingfacility:
+	LOG_FACILITY EQSIGN QUOTEDSTRING {
+		if (strncasecmp ($3, "LOG_AUTH", sizeof ("LOG_AUTH") - 1) == 0) {
+			cfg->log_facility = LOG_AUTH;
+		}
+		else if (strncasecmp ($3, "LOG_CONSOLE", sizeof ("LOG_CONSOLE") - 1) == 0) {
+			cfg->log_facility = LOG_CONSOLE;
+		}
+		else if (strncasecmp ($3, "LOG_CRON", sizeof ("LOG_CRON") - 1) == 0) {
+			cfg->log_facility = LOG_CRON;
+		}
+		else if (strncasecmp ($3, "LOG_DAEMON", sizeof ("LOG_DAEMON") - 1) == 0) {
+			cfg->log_facility = LOG_DAEMON;
+		}
+		else if (strncasecmp ($3, "LOG_MAIL", sizeof ("LOG_MAIL") - 1) == 0) {
+			cfg->log_facility = LOG_MAIL;
+		}
+		else if (strncasecmp ($3, "LOG_USER", sizeof ("LOG_USER") - 1) == 0) {
+			cfg->log_facility = LOG_USER;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL0", sizeof ("LOG_LOCAL0") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL0;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL1", sizeof ("LOG_LOCAL1") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL1;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL2", sizeof ("LOG_LOCAL2") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL2;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL3", sizeof ("LOG_LOCAL3") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL3;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL4", sizeof ("LOG_LOCAL4") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL4;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL5", sizeof ("LOG_LOCAL5") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL5;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL6", sizeof ("LOG_LOCAL6") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL6;
+		}
+		else if (strncasecmp ($3, "LOG_LOCAL7", sizeof ("LOG_LOCAL7") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL7;
+		}
+		else {
+			yyerror ("yyparse: invalid logging facility: %s", $3);
+			YYERROR;
+		}
+
+		free ($3);
+	}
+	;
+
+loggingfile:
+	LOG_FILENAME EQSIGN QUOTEDSTRING {
+		cfg->log_file = memory_pool_strdup (cfg->cfg_pool, $3);
+
+		free ($3);
 	}
 	;
 

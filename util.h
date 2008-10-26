@@ -52,4 +52,9 @@ int pidfile_close(struct pidfh *pfh);
 int pidfile_remove(struct pidfh *pfh);
 #endif
 
+int open_log (struct config_file *cfg);
+int reopen_log (struct config_file *cfg);
+void syslog_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
+void file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
+
 #endif
