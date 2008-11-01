@@ -12,9 +12,9 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "../config.h"
-#include "../main.h"
-#include "../cfg_file.h"
+#include "../src/config.h"
+#include "../src/main.h"
+#include "../src/cfg_file.h"
 #include "tests.h"
 
 /* Vector of test expressions */

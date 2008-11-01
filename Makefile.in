@@ -1,18 +1,15 @@
 .PHONY: perl clean $(SUBDIRS) 
 
-all: perl $(TARGETS)
+all: $(OBJDIR) perl $(TARGETS)
+
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
 
 perl: perl/Makefile
 	cd perl && make && cd ..
 
 perl/Makefile:
 	cd perl && perl Makefile.PL && cd ..
-
-memctest: upstream.c memcached.c memcached-test.c
-	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c upstream.c
-	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c memcached.c
-	$(CC) $(OPT_FLAGS) $(CFLAGS) $(PTHREAD_CFLAGS) -c memcached-test.c
-	$(CC) $(OPT_FLAGS) $(PTHREAD_LDFLAGS) $(LD_PATH) upstream.o memcached.o memcached-test.o $(LIBS) -o memcached-test
 
 install: $(EXEC)
 	cd perl && make install && cd ..
@@ -23,15 +20,16 @@ install: $(EXEC)
 	$(MKDIR) -o $(RSPAMD_USER) -g $(RSPAMD_GROUP) /var/run/rspamd
 
 clean: clean-subdirs perl/Makefile
-	rm -f *.o $(EXEC) *.core
-	rm -f cfg_lex.c cfg_yacc.c cfg_yacc.h
+	rm -f $(OBJDIR)/*.o $(EXEC) *core
+	rm -fr $(OBJDIR)
+	rm -f $(SRCDIR)/cfg_lex.c $(SRCDIR)/cfg_yacc.c $(SRCDIR)/cfg_yacc.h
 	cd perl && make clean && cd ..
 
 dist-clean: clean dist-clean-subdirs
 	rm -f Makefile
 	rm -f test/Makefile
 	rm -f config.log
-	rm -f md5.h md5.c strlcpy.h strlcpy.c queue.h config.h modules.c modules.h
+	rm -f $(SRCDIR)/md5.h $(SRCDIR)/md5.c $(SRCDIR)/strlcpy.h $(SRCDIR)/strlcpy.c $(SRCDIR)/queue.h $(SRCDIR)/config.h $(SRCDIR)/modules.c $(SRCDIR)/modules.h
 	cd perl && rm -f Makefile.old && rm -f Makefile.PL && cd ..
 
 creategroup:

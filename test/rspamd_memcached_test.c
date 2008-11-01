@@ -12,10 +12,10 @@
 #include <string.h>
 #include <event.h>
 
-#include "../config.h"
-#include "../main.h"
-#include "../cfg_file.h"
-#include "../memcached.h"
+#include "../src/config.h"
+#include "../src/main.h"
+#include "../src/cfg_file.h"
+#include "../src/memcached.h"
 #include "tests.h"
 
 u_char *buf = "test";

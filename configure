@@ -21,6 +21,8 @@ YACC_OUTPUT="cfg_yacc.c"
 LEX_OUTPUT="cfg_lex.c"
 CONFIG="config.h"
 
+SRCDIR="src"
+OBJDIR="src/.obj"
 SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c controller.c worker.c fstring.c url.c perl.c protocol.c mem_pool.c filter.c plugins/regexp.c plugins/surbl.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
 MODULES="surbl regexp"
 
@@ -30,7 +32,7 @@ CFLAGS="$CFLAGS -Wunused-value -ggdb -I${LOCALBASE}/include"
 CFLAGS="$CFLAGS "
 LDFLAGS="$LDFLAGS -L/usr/lib -L${LOCALBASE}/lib"
 OPT_FLAGS="-O -pipe -fno-omit-frame-pointer"
-DEPS="config.h cfg_file.h memcached.h util.h main.h upstream.h fstring.h url.h perl.h mem_pool.h protocol.h filter.h ${LEX_OUTPUT} ${YACC_OUTPUT}"
+DEPS="$SRCDIR/config.h $SRCDIR/cfg_file.h $SRCDIR/memcached.h $SRCDIR/util.h $SRCDIR/main.h $SRCDIR/upstream.h $SRCDIR/fstring.h $SRCDIR/url.h $SRCDIR/perl.h $SRCDIR/mem_pool.h $SRCDIR/protocol.h $SRCDIR/filter.h $SRCDIR/${LEX_OUTPUT} $SRCDIR/${YACC_OUTPUT}"
 EXEC=rspamd
 USER=postfix
 GROUP=postfix
@@ -52,14 +54,14 @@ TARGETS="${EXEC}"
 
 prepare_config()
 {
-	echo "#ifndef CONFIG_H_IN" > $CONFIG
-	echo "#define CONFIG_H_IN" >> $CONFIG
-	cat "$CONFIG.in" >> $CONFIG
+	echo "#ifndef CONFIG_H_IN" > $SRCDIR/$CONFIG
+	echo "#define CONFIG_H_IN" >> $SRCDIR/$CONFIG
+	cat "$CONFIG.in" >> $SRCDIR/$CONFIG
 }
 
 finish_config()
 {
-	echo "#endif" >> $CONFIG
+	echo "#endif" >> $SRCDIR/$CONFIG
 }
 
 cleanup()
@@ -71,7 +73,7 @@ cleanup()
 
 have_opt()
 {
-	echo "#define HAVE_$1" >> $CONFIG
+	echo "#define HAVE_$1" >> $SRCDIR/$CONFIG
 	OPTS="$OPTS HAVE_$1"
 }
 
@@ -122,6 +124,20 @@ check_yacc()
 	echo -n "Testing for yacc: "
 	if [ -x $YACC ] ; then
 		echo "found -> $YACC"
+		return 0
+	else
+		echo "not found"
+		exit 1
+	fi
+
+}
+
+check_util()
+{
+	UTIL=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which $1`
+	echo -n "Testing for $1: "
+	if [ -x $UTIL ] ; then
+		echo "found -> $UTIL"
 		return 0
 	else
 		echo "not found"
@@ -371,11 +387,11 @@ check_os()
 				INSTALL="/usr/bin/install -C -S -v"
 				MKDIR="/usr/bin/install -d -v"
 				MANPATH="${PREFIX}/man" 
-				echo "#define FREEBSD" >> $CONFIG ;;
+				echo "#define FREEBSD" >> $SRCDIR/$CONFIG ;;
 		Linux*)	OS="linux" CFLAGS="${CFLAGS} -D_GNU_SOURCE"  
-				echo "#define LINUX" >> $CONFIG ;;
+				echo "#define LINUX" >> $SRCDIR/$CONFIG ;;
 		Solaris*)	OS="solaris" CFLAGS="${CFLAGS}"
-				echo "#define SOLARIS" >> $CONFIG ;;
+				echo "#define SOLARIS" >> $SRCDIR/$CONFIG ;;
 		*)		OS="unknown"  ;;
 	esac
 }
@@ -452,23 +468,22 @@ END
 write_modules()
 {
 	# Write modules init function
-	echo "#ifndef MODULES_H" > modules.h
-	echo "#include \"config.h\"" >> modules.h
-	echo "#include \"modules.h\"" > modules.c
-	echo "module_t modules[] = {" >> modules.c;
+	echo "#ifndef MODULES_H" > $SRCDIR/modules.h
+	echo "#include \"config.h\"" >> $SRCDIR/modules.h
+	echo "#include \"modules.h\"" > $SRCDIR/modules.c
+	echo "module_t modules[] = {" >> $SRCDIR/modules.c;
 	modules_num=0
 	for m in $MODULES ; do
-		echo "{\"${m}\", ${m}_module_init, ${m}_module_config, ${m}_module_reconfig}," >> modules.c
-		echo "int ${m}_module_init(struct config_file *cfg, struct module_ctx **ctx);" >> modules.h
-		echo "int ${m}_module_config(struct config_file *cfg);" >> modules.h
-		echo "int ${m}_module_reconfig(struct config_file *cfg);" >> modules.h
+		echo "{\"${m}\", ${m}_module_init, ${m}_module_config, ${m}_module_reconfig}," >> $SRCDIR/modules.c
+		echo "int ${m}_module_init(struct config_file *cfg, struct module_ctx **ctx);" >> $SRCDIR/modules.h
+		echo "int ${m}_module_config(struct config_file *cfg);" >> $SRCDIR/modules.h
+		echo "int ${m}_module_reconfig(struct config_file *cfg);" >> $SRCDIR/modules.h
 		modules_num=`expr $modules_num + 1`
 	done
-	echo "};" >> modules.c
-	echo "#endif" >> modules.h
-	echo "#define MODULES_NUM $modules_num" >> $CONFIG
+	echo "};" >> $SRCDIR/modules.c
+	echo "#endif" >> $SRCDIR/modules.h
+	echo "#define MODULES_NUM $modules_num" >> $SRCDIR/$CONFIG
 	SOURCES="$SOURCES modules.c"
-	OBJECTS=`echo $SOURCES | sed -e 's/\.c/\.o/g'`
 
 }
 
@@ -494,8 +509,8 @@ write_subdirs()
 	for sub in $SUBDIRS ; do
 		cp $MAKEFILE $sub/$MAKEFILE
 		saved_pwd=`pwd`
-		old_objs=`echo $OBJECTS | sed -e 's/\([^. ]*\.o\)/..\/\1/g'`
-		old_srcs=`echo $SOURCES | sed -e 's/\([^. ]*\.c\)/..\/\1/g'`
+		old_objs=`echo $OBJECTS | sed -e 's/\([^. ]*\.o\)/..\/%%OBJDIR%%\/\1/g' | sed -e "s,%%OBJDIR%%,${OBJDIR},g"`
+		old_srcs=`echo $SOURCES | sed -e 's/\([^. ]*\.c\)/..\/%%SRCDIR%%\/\1/g' | sed -e "s,%%SRCDIR%%,${SRCDIR},g"`
 		cd $sub
 		sub_src="`echo *.c`"
 		sub_obj="`echo $sub_src | sed -e 's/\.c/\.o/g'`"
@@ -547,10 +562,15 @@ write_result()
 	echo "Cflags: $CFLAGS" >> config.log
 	echo "Ldflags: $LDFLAGS" >> config.log
 	echo "Libs: $LIBS" >> config.log
-	echo "#define RVERSION \"${VERSION}\"" >> $CONFIG
-	echo "#define HASH_COMPAT" >> $CONFIG
+	echo "#define RVERSION \"${VERSION}\"" >> $SRCDIR/$CONFIG
+	echo "#define HASH_COMPAT" >> $SRCDIR/$CONFIG
 
 	write_modules
+	for _s in $SOURCES ; do
+		_o=`echo $_s | awk -F '/' '{split($NF, A, "."); print "%%OBJDIR%%/"A[1]".o"}' | sed -e "s,%%OBJDIR%%,${OBJDIR},"`
+		OBJECTS="$OBJECTS $_o"
+		SRC_OBJ="$SRC_OBJ $_s#$_o"
+	done
 	write_perl
 	# Make CFLAGS more readable
 	CFLAGS="$CFLAGS $PERLCFLAGS"
@@ -571,6 +591,9 @@ CFLAGS=$CFLAGS
 LDFLAGS=$LDFLAGS
 # Libraries to link
 LIBS=$LIBS
+# Directories for sources and objects
+SRCDIR=$SRCDIR
+OBJDIR=$OBJDIR
 # ${EXEC} sources
 SOURCES=$SOURCES
 # ${EXEC} objects 
@@ -615,20 +638,21 @@ END
 ${EXEC}: \$(OBJECTS)
 	\$(CC) \$(PTHREAD_LDFLAGS) \$(LDFLAGS) \$(OBJECTS) \$(LIBS) -o \$(EXEC)
 END
-	for o in $OBJECTS ; do
-		SO=`echo $o | sed -e 's/\.o/\.c/g'`
+	for o in $SRC_OBJ ; do
+		SO=`echo $o | cut -d '#' -f 1`
+		O=`echo $o | cut -d '#' -f 2`
 		cat >> $MAKEFILE << END
-${o}: \$(DEPS) ${SO}
-	\$(CC) \$(OPT_FLAGS) \$(CFLAGS) \$(PTHREAD_CFLAGS) -o ${o} -c ${SO}
+${O}: \$(DEPS) ${SRCDIR}/${SO}
+	\$(CC) \$(OPT_FLAGS) \$(CFLAGS) \$(PTHREAD_CFLAGS) -o ${O} -c ${SRCDIR}/${SO}
 
 END
 	done
 	cat >> $MAKEFILE << END
-${LEX_OUTPUT}: cfg_file.h ${LEX_SRC} ${YACC_OUTPUT}
-	\$(LEX) -o${LEX_OUTPUT} ${LEX_SRC}
+${SRCDIR}/${LEX_OUTPUT}: \$(SRCDIR)/cfg_file.h \$(SRCDIR)/${LEX_SRC} \$(SRCDIR)/${YACC_OUTPUT}
+	\$(LEX) -o\$(SRCDIR)/${LEX_OUTPUT} \$(SRCDIR)/${LEX_SRC}
 
-${YACC_OUTPUT}: cfg_file.h ${YACC_SRC}
-	\$(YACC) -d -o ${YACC_OUTPUT} ${YACC_SRC}
+${SRCDIR}/${YACC_OUTPUT}: \$(SRCDIR)/cfg_file.h \$(SRCDIR)/${YACC_SRC}
+	\$(YACC) -d -o \$(SRCDIR)/${YACC_OUTPUT} \$(SRCDIR)/${YACC_SRC}
 END
 }
 
@@ -707,6 +731,9 @@ check_compiler
 check_make
 check_lex
 check_yacc
+check_util "sed"
+check_util "awk"
+check_util "cut"
 check_os
 
 check_lib "event" "event.h"
@@ -725,10 +752,10 @@ check_lib "m"
 check_lib "pcre"
 check_lib "md"
 if [ $? -eq 1 ] ; then
-	cp $COMPAT_DIR/md5.c .
-	cp $COMPAT_DIR/md5.h .
+	cp $COMPAT_DIR/md5.c $SRCDIR
+	cp $COMPAT_DIR/md5.h $SRCDIR
 	SOURCES="$SOURCES md5.c"
-	DEPS="$DEPS md5.h"
+	DEPS="$DEPS $SRCDIR/md5.h"
 	have_opt "OWN_MD5"
 fi
 
@@ -744,10 +771,10 @@ fi
 
 check_function "strlcpy" "string.h"
 if [ $? -eq 1 ] ; then
-	cp $COMPAT_DIR/strlcpy.c .
-	cp $COMPAT_DIR/strlcpy.h .
+	cp $COMPAT_DIR/strlcpy.c $SRCDIR
+	cp $COMPAT_DIR/strlcpy.h $SRCDIR
 	SOURCES="$SOURCES strlcpy.c"
-	DEPS="$DEPS strlcpy.h"
+	DEPS="$DEPS $SRCDIR/strlcpy.h"
 	have_opt "STRLCPY_H"
 fi
 check_function "bzero" "string.h"
@@ -790,13 +817,13 @@ check_include "strlcpy.h"
 check_include "md5.h"
 check_include "sys/queue.h"
 if [ $? -eq 1 ] ; then 
-	cp $COMPAT_DIR/queue.h .
-	DEPS="$DEPS queue.h"
+	cp $COMPAT_DIR/queue.h $SRCDIR
+	DEPS="$DEPS $SRCDIR/queue.h"
 fi
 check_macro "SLIST_FOREACH_SAFE" "sys/queue.h"
 if [ $? -eq 1 ] ; then 
-	cp $COMPAT_DIR/queue.h .
-	DEPS="$DEPS queue.h"
+	cp $COMPAT_DIR/queue.h $SRCDIR
+	DEPS="$DEPS $SRCDIR/queue.h"
 	have_opt "OWN_QUEUE_H"
 fi
 
@@ -805,7 +832,7 @@ if [ $? -eq 1 ] ; then
 	check_macro "MAXPATHLEN" "sys/param.h"
 	if [ $? -eq 1 ] ; then
 		have_opt "MAXPATHLEN"
-		echo "#define MAXPATHLEN 4096" >> $CONFIG
+		echo "#define MAXPATHLEN 4096" >> $SRCDIR/$CONFIG
 	else
 		have_opt "MAXPATHLEN"
 	fi

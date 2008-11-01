@@ -1,10 +1,11 @@
-#include "../mem_pool.h"
-#include "tests.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <glib.h>
+
+#include "../src/mem_pool.h"
+#include "tests.h"
 
 #define TEST_BUF "test bufffer"
 #define TEST2_BUF "test bufffertest bufffer"

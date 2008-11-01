@@ -1,0 +1,13 @@
+# Sample config file for rspamd
+# $Id$
+#
+
+
+# pidfile - path to pid file
+# Default: pidfile = /var/run/rspamd.pid
+
+pidfile = "./rspamd.pid";
+
+workers = 1;
+
+bind_socket = localhost:11333;

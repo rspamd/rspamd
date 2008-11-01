@@ -1,7 +1,7 @@
 #if HAVE_STRLCPY_H
-../strlcpy.c
+../src/strlcpy.c
 #endif
-../mem_pool.c
-../url.c
-../util.c
-../memcached.c
+../src/mem_pool.c
+../src/url.c
+../src/util.c
+../src/memcached.c

@@ -486,9 +486,6 @@ loggingfacility:
 		if (strncasecmp ($3, "LOG_AUTH", sizeof ("LOG_AUTH") - 1) == 0) {
 			cfg->log_facility = LOG_AUTH;
 		}
-		else if (strncasecmp ($3, "LOG_CONSOLE", sizeof ("LOG_CONSOLE") - 1) == 0) {
-			cfg->log_facility = LOG_CONSOLE;
-		}
 		else if (strncasecmp ($3, "LOG_CRON", sizeof ("LOG_CRON") - 1) == 0) {
 			cfg->log_facility = LOG_CRON;
 		}

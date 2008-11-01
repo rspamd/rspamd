@@ -10,11 +10,11 @@
 #include <perl.h>
 #include <XSUB.h>
 
-#include "../config.h"
-#include "../main.h"
-#include "../cfg_file.h"
-#include "../perl.h"
-#include "../mem_pool.h"
+#include "../src/config.h"
+#include "../src/main.h"
+#include "../src/cfg_file.h"
+#include "../src/perl.h"
+#include "../src/mem_pool.h"
 
 #define perl_set_session(r)													\
 	r = INT2PTR(struct worker_task *, SvIV((SV *) SvRV(ST(0))))
