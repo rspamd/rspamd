@@ -20,6 +20,7 @@ LEX_SRC="cfg_file.l"
 YACC_OUTPUT="cfg_yacc.c"
 LEX_OUTPUT="cfg_lex.c"
 CONFIG="config.h"
+CACHE="config.cache"
 
 SRCDIR="src"
 OBJDIR="src/.obj"
@@ -52,6 +53,37 @@ OPTS=""
 
 TARGETS="${EXEC}"
 
+check_cache()
+{
+	type=$1
+	name=$2
+
+	line=`fgrep "$type:$name" $CACHE 2>/dev/null`
+	if [ $? -eq 0 ] ; then
+		result=`echo $line | cut -d ':' -f 3`
+		CACHED=`echo $line | cut -d ':' -f 4-`
+		if [ "F$result" = "Fyes" ] ; then
+			return 0
+		elif [ "F$result" = "Fno" ] ; then
+			return 1
+		else
+			return 2
+		fi
+	else
+		return 3
+	fi
+}
+
+write_cache()
+{
+	type=$1
+	name=$2
+	result=$3
+	value=$4
+
+	echo "$type:$name:$result:$value" >> $CACHE
+}
+
 prepare_config()
 {
 	echo "#ifndef CONFIG_H_IN" > $SRCDIR/$CONFIG
@@ -79,10 +111,18 @@ have_opt()
 
 check_compiler()
 {	
-	GCC=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which gcc`
 	echo -n "Testing for gcc: "
+	check_cache "compiler" "gcc"
+	if [ $? -eq 0 ] ; then
+		GCC=$CACHED
+		echo "found(cached) -> $GCC"
+		return 0
+	fi
+
+	GCC=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which gcc`
 	if [ -x $GCC ] ; then
 		echo "found -> $GCC"
+		write_cache "compiler" "gcc" "yes" "$GCC"
 		return 0
 	else
 		echo "not found"
@@ -91,11 +131,18 @@ check_compiler()
 }
 
 check_make()
-{
-	MAKE=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which make`
+{	
 	echo -n "Testing for make: "
+	check_cache "make" "make"
+	if [ $? -eq 0 ] ; then
+		MAKE=$CACHED
+		echo "found(cached) -> $MAKE"
+		return 0
+	fi
+	MAKE=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which make`
 	if [ -x $MAKE ] ; then
 		echo "found -> $MAKE"
+		write_cache "make" "make" "yes" "$MAKE"
 		return 0
 	else
 		echo "not found"
@@ -106,10 +153,18 @@ check_make()
 
 check_lex()
 {
-	LEX=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which lex`
 	echo -n "Testing for lex: "
+	check_cache "binary" "lex"
+	if [ $? -eq 0 ] ; then
+		LEX=$CACHED
+		echo "found(cached) -> $LEX"
+		return 0
+	fi
+
+	LEX=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which lex`
 	if [ -x $LEX ] ; then
 		echo "found -> $LEX"
+		write_cache "binary" "lex" "yes" "$LEX"
 		return 0
 	else
 		echo "not found"
@@ -120,10 +175,19 @@ check_lex()
 
 check_yacc()
 {
+	echo -n "Testing for yacc: "
+	check_cache "binary" "yacc"
+	if [ $? -eq 0 ] ; then
+		YACC=$CACHED
+		echo "found(cached) -> $YACC"
+		return 0
+	fi
+
 	YACC=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which yacc`
 	echo -n "Testing for yacc: "
 	if [ -x $YACC ] ; then
 		echo "found -> $YACC"
+		write_cache "binary" "yacc" "yes" "$YACC"
 		return 0
 	else
 		echo "not found"
@@ -134,10 +198,16 @@ check_yacc()
 
 check_util()
 {
-	UTIL=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which $1`
 	echo -n "Testing for $1: "
+	check_cache "binary" "$1"
+	if [ $? -eq 0 ] ; then
+		echo "found(cached) -> $CACHED"
+		return 0
+	fi
+	UTIL=`PATH="$PATH:$PREFIX/bin:$LOCALBASE/bin" which $1`
 	if [ -x $UTIL ] ; then
 		echo "found -> $UTIL"
+		write_cache "binary" "$1" "yes" "$UTIL"
 		return 0
 	else
 		echo "not found"
@@ -158,6 +228,11 @@ check_function()
 		fi
 	done
 	echo -n "Testing for $FUNCTION: "
+	check_cache "function" "$FUNCTION"
+	if [ $? -eq 0 ] ; then
+		echo "-> OK (cached)"
+		return 0
+	fi
 	echo >> config.log
 	echo "Testing for $FUNCTION: " >> config.log
 	echo "#include <sys/types.h>" > autotest.c
@@ -174,6 +249,7 @@ check_function()
 		echo "found"
 		cleanup
 		echo "-> OK" >> config.log
+		write_cache "function" "$FUNCTION" "yes" ""
 		return 0
 	else
 		echo "not found"
@@ -181,6 +257,7 @@ check_function()
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
 		cleanup
+		write_cache "function" "$FUNCTION" "no" ""
 		return 1
 	fi
 }
@@ -191,6 +268,12 @@ check_include()
 	echo -n "Testing for $INCLUDE: "
 	echo >> config.log
 	echo "Testing for $INCLUDE: " >> config.log
+	check_cache "include" "$INCLUDE"
+	if [ $? -eq 0 ] ; then
+		echo "-> OK (cached)"
+		have_opt $CACHED
+		return 0
+	fi
 	echo "#include <sys/types.h>" > autotest.c
 	echo "#include \"$INCLUDE\"" >> autotest.c
 	echo "#include <stdlib.h>" >> autotest.c
@@ -202,6 +285,7 @@ check_include()
 		echo "-> OK" >> config.log
 		_CFLAG=`echo "$INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
 		have_opt $_CFLAG
+		write_cache "include" "$INCLUDE" "yes" "$_CFLAG"
 		cleanup
 		return 0
 	else
@@ -209,6 +293,7 @@ check_include()
 		echo "-> FAILED" >> config.log
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
+		write_cache "include" "$INCLUDE" "no" ""
 		cleanup
 		return 1
 	fi
@@ -226,6 +311,11 @@ check_macro()
 		fi
 	done
 	echo -n "Testing for $MACRO: "
+	check_cache "macro" "$MACRO"
+	if [ $? -eq 0 ] ; then
+		echo "-> OK (cached)"
+		return 0
+	fi
 	echo >> config.log
 	echo "Testing for $MACRO: " >> config.log
 	echo "#include <sys/types.h>" > autotest.c
@@ -243,14 +333,16 @@ check_macro()
 	$GCC $CFLAGS $PTHREAD_CFLAGS -o autotest $LDFLAGS $LIBS $PTHREAD_LDFLAGS autotest.c >>config.log 2>&1
 	if [ $? -eq 0 ] ; then 
 		echo "found"
-		cleanup
 		echo "-> OK" >> config.log
+		write_cache "macro" "$MACRO" "yes" ""
+		cleanup
 		return 0
 	else
 		echo "not found"
 		echo "-> FAILED" >> config.log
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
+		write_cache "macro" "$MACRO" "no" ""
 		cleanup
 		return 1
 	fi
@@ -271,6 +363,12 @@ check_lib()
 	echo -n "Testing for lib$LIB: "
 	echo >> config.log
 	echo "Testing for lib$LIB: " >> config.log
+	check_cache "lib" "$LIB"
+	if [ $? -eq 0 ] ; then
+		LIBS="$LIBS -l$LIB"
+		echo "-> OK (cached)"
+		return 0
+	fi
 	echo "#include <sys/types.h>" > autotest.c
 	if [ "F$INCLUDE" != "F" ] ; then
 		for inc in $INCLUDE ; do
@@ -284,14 +382,16 @@ check_lib()
 	if [ $? -eq 0 ] ; then 
 		echo "found"
 		LIBS="$LIBS -l$LIB"
-		cleanup
 		echo "-> OK" >> config.log
+		write_cache "lib" "$LIB" "yes" ""
+		cleanup
 		return 0
 	else
 		echo "not found"
 		echo "-> FAILED" >> config.log
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
+		write_cache "lib" "$LIB" "no" ""
 		cleanup
 		return 1
 	fi
@@ -311,6 +411,15 @@ check_package()
 		fi
 	done
 	echo -n "Testing for $PACKAGE: "
+	check_cache "package" "$PACKAGE"
+	if [ $? -eq 0 ] ; then
+		echo "-> OK (cached)"
+		_p_cflags=`echo $CACHED | cut -d ':' -f 1`
+		_p_libs=`echo $CACHED | cut -d ':' -f 2`
+		LIBS="$LIBS $_p_libs"
+		CFLAGS="$CFLAGS $_p_cflags"
+		return 0
+	fi
 	echo >> config.log
 	echo "Testing for $PACKAGE: " >> config.log
 	echo "#include <sys/types.h>" > autotest.c
@@ -327,14 +436,16 @@ check_package()
 		echo "found"
 		LIBS="$LIBS $PLIBS"
 		CFLAGS="$CFLAGS $PCFLAGS"
-		cleanup
 		echo "-> OK" >> config.log
+		write_cache "package" "$PACKAGE" "yes" "$PCFLAGS:$PLIBS"
+		cleanup
 		return 0
 	else
 		echo "not found"
 		echo "-> FAILED" >> config.log
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
+		write_cache "package" "$PACKAGE" "no" ""
 		cleanup
 		return 1
 	fi
@@ -346,6 +457,16 @@ check_perl()
 	echo -n "Testing for $PERL: "
 	echo >> config.log
 	echo "Testing for $PERL: " >> config.log
+	check_cache "perl" "$PERL"
+	if [ $? -eq 0 ] ; then
+		echo "-> OK (cached)"
+		_p_cflags=`echo $CACHED | cut -d ':' -f 1`
+		_p_libs=`echo $CACHED | cut -d ':' -f 2`
+		PERLLDFLAGS="$LIBS $_p_libs"
+		PERLCFLAGS="$CFLAGS $_p_cflags"
+		return 0
+	fi
+
 	if [ ! -x $PERL ] ; then
 		echo "not found"
 		echo "-> FAILED" >> config.log
@@ -363,14 +484,16 @@ check_perl()
 	$GCC $CFLAGS $PERLCFLAGS $PTHREAD_CFLAGS -o autotest $LDFLAGS $LIBS $PERLLDFLAGS $PTHREAD_LDFLAGS autotest.c >>config.log 2>&1
 	if [ $? -eq 0 ] ; then 
 		echo "found"
-		cleanup
 		echo "-> OK" >> config.log
+		cleanup
+		write_cache "perl" "$PERL" "yes" "$PERLCFLAGS:$PERLLDFLAGS"
 		return 0
 	else
 		echo "not found"
 		echo "-> FAILED" >> config.log
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
+		write_cache "perl" "$PERL" "no" ""
 		cleanup
 		return 1
 	fi
@@ -742,14 +865,7 @@ if [ $? -eq 1 ] ; then
 	exit 1
 fi
 
-check_lib "pcre" "pcre.h"
-if [ $? -eq 1 ] ; then
-	echo "PCRE not found, check config.log for details"
-	exit 1
-fi
-
 check_lib "m"
-check_lib "pcre"
 check_lib "md"
 if [ $? -eq 1 ] ; then
 	cp $COMPAT_DIR/md5.c $SRCDIR

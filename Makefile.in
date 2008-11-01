@@ -23,6 +23,7 @@ clean: clean-subdirs perl/Makefile
 	rm -f $(OBJDIR)/*.o $(EXEC) *core
 	rm -fr $(OBJDIR)
 	rm -f $(SRCDIR)/cfg_lex.c $(SRCDIR)/cfg_yacc.c $(SRCDIR)/cfg_yacc.h
+	rm -f config.cache
 	cd perl && make clean && cd ..
 
 dist-clean: clean dist-clean-subdirs
