@@ -232,3 +232,45 @@ fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen)
 
 	return res;
 }
+
+/*
+ * Return hash value for a string
+ */
+uint32_t
+fstrhash (f_str_t *str)
+{
+	size_t i;
+	uint32_t hval;
+	uint32_t tmp;
+
+	if (str == NULL) {
+		return 0;
+	}
+	hval = str->len;
+
+	for	(i = 0; i < str->len; i++) {
+		/* 
+		 * xor in the current byte against each byte of hval
+		 * (which alone gaurantees that every bit of input will have
+		 * an effect on the output)
+		 */
+		tmp = *(str->begin + i) & 0xFF;
+		tmp = tmp | (tmp << 8) | (tmp << 16) | (tmp << 24);
+		hval ^= tmp;
+
+		/* add some bits out of the middle as low order bits */
+		hval = hval + ((hval >> 12) & 0x0000ffff) ;
+
+		/* swap most and min significative bytes */
+		tmp = (hval << 24) | ((hval >> 24) & 0xff);
+		/* zero most and min significative bytes of hval */
+		hval &= 0x00ffff00;
+		hval |= tmp;
+		/*
+		 * rotate hval 3 bits to the left (thereby making the
+		 * 3rd msb of the above mess the hsb of the output hash)
+		 */
+		hval = (hval << 3) + (hval >> 29);
+	}
+	return hval;
+}

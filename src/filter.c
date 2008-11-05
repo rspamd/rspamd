@@ -334,3 +334,8 @@ void make_composites (struct worker_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
+
+
+/* 
+ * vi:ts=4 
+ */

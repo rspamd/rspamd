@@ -6,6 +6,11 @@
 #define FSTRING_H
 
 #include <sys/types.h>
+#include "config.h"
+
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
 #include "mem_pool.h"
 
 #define update_buf_size(x) (x)->free = (x)->buf->size - ((x)->pos - (x)->buf->begin); (x)->buf->len = (x)->pos - (x)->buf->begin
@@ -82,5 +87,10 @@ f_str_t* fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen);
  * Return specified character
  */
 #define fstridx(str, pos) *((str)->begin + (pos))
+
+/*
+ * Return fast hash value for fixed string
+ */
+uint32_t fstrhash (f_str_t *str);
 
 #endif
