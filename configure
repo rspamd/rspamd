@@ -24,7 +24,7 @@ CACHE="config.cache"
 
 SRCDIR="src"
 OBJDIR="src/.obj"
-SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c controller.c worker.c fstring.c url.c perl.c protocol.c mem_pool.c filter.c plugins/regexp.c plugins/surbl.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
+SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c controller.c worker.c fstring.c url.c perl.c protocol.c mem_pool.c filter.c plugins/regexp.c plugins/surbl.c tokenizers/tokenizers.c tokenizers/osb.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
 MODULES="surbl regexp"
 
 CFLAGS="$CFLAGS -W -Wpointer-arith -Wno-unused-parameter"
@@ -228,13 +228,14 @@ check_function()
 		fi
 	done
 	echo -n "Testing for $FUNCTION: "
+	echo >> config.log
+	echo "Testing for $FUNCTION: " >> config.log
 	check_cache "function" "$FUNCTION"
 	if [ $? -eq 0 ] ; then
 		echo "-> OK (cached)"
+		echo "-> OK (cached)" >> config.log
 		return 0
 	fi
-	echo >> config.log
-	echo "Testing for $FUNCTION: " >> config.log
 	echo "#include <sys/types.h>" > autotest.c
 	if [ "F$INCLUDE" != "F" ] ; then
 		for inc in $INCLUDE ; do
@@ -271,6 +272,7 @@ check_include()
 	check_cache "include" "$INCLUDE"
 	if [ $? -eq 0 ] ; then
 		echo "-> OK (cached)"
+		echo "-> OK (cached)" >> config.log
 		have_opt $CACHED
 		return 0
 	fi
@@ -311,13 +313,14 @@ check_macro()
 		fi
 	done
 	echo -n "Testing for $MACRO: "
+	echo >> config.log
+	echo "Testing for $MACRO: " >> config.log
 	check_cache "macro" "$MACRO"
 	if [ $? -eq 0 ] ; then
 		echo "-> OK (cached)"
+		echo "-> OK (cached)" >> config.log
 		return 0
 	fi
-	echo >> config.log
-	echo "Testing for $MACRO: " >> config.log
 	echo "#include <sys/types.h>" > autotest.c
 	for inc in $INCLUDE ; do
 		echo "#include \"$inc\"" >> autotest.c
@@ -367,6 +370,7 @@ check_lib()
 	if [ $? -eq 0 ] ; then
 		LIBS="$LIBS -l$LIB"
 		echo "-> OK (cached)"
+		echo "-> OK (cached)" >> config.log
 		return 0
 	fi
 	echo "#include <sys/types.h>" > autotest.c
@@ -411,17 +415,18 @@ check_package()
 		fi
 	done
 	echo -n "Testing for $PACKAGE: "
+	echo >> config.log
+	echo "Testing for $PACKAGE: " >> config.log
 	check_cache "package" "$PACKAGE"
 	if [ $? -eq 0 ] ; then
 		echo "-> OK (cached)"
+		echo "-> OK (cached)" >> config.log
 		_p_cflags=`echo $CACHED | cut -d ':' -f 1`
 		_p_libs=`echo $CACHED | cut -d ':' -f 2`
 		LIBS="$LIBS $_p_libs"
 		CFLAGS="$CFLAGS $_p_cflags"
 		return 0
 	fi
-	echo >> config.log
-	echo "Testing for $PACKAGE: " >> config.log
 	echo "#include <sys/types.h>" > autotest.c
 	if [ "F$INCLUDE" != "F" ] ; then
 		for inc in $INCLUDE ; do
@@ -460,6 +465,7 @@ check_perl()
 	check_cache "perl" "$PERL"
 	if [ $? -eq 0 ] ; then
 		echo "-> OK (cached)"
+		echo "-> OK (cached)" >> config.log
 		_p_cflags=`echo $CACHED | cut -d ':' -f 1`
 		_p_libs=`echo $CACHED | cut -d ':' -f 2`
 		PERLLDFLAGS="$LIBS $_p_libs"
