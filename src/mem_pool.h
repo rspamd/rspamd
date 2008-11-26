@@ -49,7 +49,10 @@ void memory_pool_add_destructor (memory_pool_t *pool, pool_destruct_func func, v
 void* memory_pool_alloc_shared (memory_pool_t *pool, size_t size);
 void memory_pool_lock_shared (memory_pool_t *pool, void *pointer);
 void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer);
-void memory_pool_delete (memory_pool_t* pool);
+void memory_pool_delete (memory_pool_t *pool);
+gint* memory_pool_get_mutex (memory_pool_t *pool);
+void memory_pool_lock_mutex (gint *mutex);
+void memory_pool_unlock_mutex (gint *mutex);
 
 void memory_pool_stat (memory_pool_stat_t *st);
 

@@ -240,9 +240,9 @@ memory_pool_find_pool (memory_pool_t *pool, void *pointer)
 }
 
 static void
-memory_pool_spin (struct _pool_chain_shared *chain)
+memory_pool_spin (gint *mutex)
 {
-	while (!g_atomic_int_compare_and_exchange (&chain->lock, 0, 1)) {
+	while (!g_atomic_int_compare_and_exchange (mutex, 0, 1)) {
 		/* lock was aqquired */
 #ifdef HAVE_NANOSLEEP
 		struct timespec ts;
@@ -271,7 +271,7 @@ memory_pool_lock_shared (memory_pool_t *pool, void *pointer)
 		return;
 	}
 	
-	memory_pool_spin (chain);
+	memory_pool_spin (&chain->lock);
 }
 
 void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer)
@@ -353,6 +353,31 @@ memory_pool_get_size ()
 #else
 	return FIXED_POOL_SIZE;
 #endif
+}
+
+gint* 
+memory_pool_get_mutex (memory_pool_t *pool)
+{
+	gint *res;
+	if (pool != NULL) {
+		res = memory_pool_alloc_shared (pool, sizeof (gint));
+		/* Initialize unlocked */
+		*res = 0;
+		return res;
+	}
+	return NULL;
+}
+
+void 
+memory_pool_lock_mutex (gint *mutex)
+{
+	memory_pool_spin (mutex);
+}
+
+void 
+memory_pool_unlock_mutex (gint *mutex)
+{
+	(void)g_atomic_int_dec_and_test (mutex);
 }
 
 /*
