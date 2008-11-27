@@ -24,7 +24,7 @@ CACHE="config.cache"
 
 SRCDIR="src"
 OBJDIR="src/.obj"
-SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c controller.c worker.c fstring.c url.c perl.c protocol.c mem_pool.c filter.c plugins/regexp.c plugins/surbl.c tokenizers/tokenizers.c tokenizers/osb.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
+SOURCES="upstream.c cfg_utils.c memcached.c main.c util.c controller.c worker.c fstring.c url.c perl.c protocol.c mem_pool.c filter.c plugins/regexp.c plugins/surbl.c tokenizers/tokenizers.c tokenizers/osb.c statfile.c ${LEX_OUTPUT} ${YACC_OUTPUT}"
 MODULES="surbl regexp"
 
 CFLAGS="$CFLAGS -W -Wpointer-arith -Wno-unused-parameter"
