@@ -38,12 +38,12 @@ statfile_pool_check (stat_file_t *file)
 		return -1;
 	}
 	
-	if (file->len - sizeof (f->header) % sizeof (struct stat_file_block) != 0) {
+	if ((file->len - sizeof (f->header)) % sizeof (struct stat_file_block) != 0) {
 		msg_info ("statfile_pool_check: file %s does not contain integer count of stat blocks", file->filename);
 		return -1;
 	}
 
-	file->blocks = file->len - sizeof (f->header) / sizeof (struct stat_file_block);
+	file->blocks = (file->len - sizeof (f->header)) / sizeof (struct stat_file_block);
 	return 0;
 }
 
@@ -189,6 +189,7 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 	static struct stat_file_header header = {
 		{'r', 's', 'd'},
 		{1, 0},
+		{0, 0, 0},
 		0
 	};
 	static struct stat_file_block block = {0, 0, 0, 0};
@@ -199,7 +200,7 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 		return 0;
 	}
 
-	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT)) == -1 ) {
+	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1 ) {
 		msg_info ("statfile_pool_create: cannot create file %s, error %m, %d", filename, errno);
 		return -1;
 	}
@@ -238,4 +239,141 @@ statfile_pool_delete (statfile_pool_t *pool)
 	g_hash_table_foreach (pool->files, pool_delete_callback, pool);
 	memory_pool_delete (pool->pool);
 	g_free (pool);
+}
+
+void
+statfile_pool_lock_file (statfile_pool_t *pool, char *filename) 
+{
+	stat_file_t *file;
+
+	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_lock_file: file %s is not opened", filename);
+		return;
+	}
+
+	memory_pool_lock_mutex (file->lock);
+}
+
+void
+statfile_pool_unlock_file (statfile_pool_t *pool, char *filename) 
+{
+	stat_file_t *file;
+
+	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_unlock_file: file %s is not opened", filename);
+		return;
+	}
+
+	memory_pool_unlock_mutex (file->lock);
+}
+
+uint32_t 
+statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now)
+{
+	stat_file_t *file;
+	struct stat_file_block *block;
+	struct stat_file_header *header;
+	unsigned int i, blocknum;
+	u_char *c;
+	
+	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_get_block: file %s is not opened", filename);
+		return 0;
+	}
+	
+	file->access_time = now;
+	if (!file->map) {
+		return 0;
+	}
+	
+	blocknum = h1 % file->blocks;
+	header = (struct stat_file_header *)file->map;
+	c = (u_char *)file->map + sizeof (struct stat_file_header) + blocknum * sizeof (struct stat_file_block);
+	block = (struct stat_file_block *)c;
+
+	for (i = 0; i < CHAIN_LENGTH; i ++) {
+		if (i + blocknum > file->blocks) {
+			break;
+		}
+		msg_debug ("statfile_pool_get_block: test block with h1=%u, h2=%u, number %u in chain %u", block->hash1, block->hash2, i, blocknum);
+		if (block->hash1 == h1 && block->hash2 == h2) {
+			msg_debug ("statfile_pool_get_block: found block with h1=%u, h2=%u, number %u in chain %u", h1, h2, i, blocknum);
+			block->last_access = now - (time_t)header->create_time;
+			return block->value;
+		}
+		c += sizeof (struct stat_file_block);
+		block = (struct stat_file_block *)c;
+	}
+
+	msg_debug ("statfile_pool_get_block: block with h1=%u, h2=%u, not found in chain %u", h1, h2, blocknum);
+
+	return 0;
+}
+
+void
+statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, uint32_t value)
+{
+	stat_file_t *file;
+	struct stat_file_block *block, *to_expire = NULL;
+	struct stat_file_header *header;
+	unsigned int i, blocknum, oldest = 0;
+	u_char *c;
+	
+	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_set_block: file %s is not opened", filename);
+		return;
+	}
+	
+	file->access_time = now;
+	if (!file->map) {
+		return;
+	}
+	
+	blocknum = h1 % file->blocks;
+	header = (struct stat_file_header *)file->map;
+	c = (u_char *)file->map + sizeof (struct stat_file_header) + blocknum * sizeof (struct stat_file_block);
+	block = (struct stat_file_block *)c;
+
+	for (i = 0; i < CHAIN_LENGTH; i ++) {
+		if (i + blocknum > file->blocks) {
+			/* Need to expire some block in chain */
+			msg_debug ("statfile_pool_set_block: chain %u is full, starting expire", blocknum);
+			break;
+		}
+		/* Check whether we have a free block in chain */
+		if (block->hash1 == 0 && block->hash2 == 0) {
+			/* Write new block here */
+			msg_debug ("statfile_pool_set_block: found free block %u in chain %u, set h1=%u, h2=%u", i, blocknum, h1, h2);
+			block->hash1 = h1;
+			block->hash2 = h2;
+			block->value = value;
+			block->last_access = now - (time_t)header->create_time;
+			return;
+		}
+		if (block->last_access > oldest) {
+			to_expire = block;
+		}
+		c += sizeof (struct stat_file_block);
+		block = (struct stat_file_block *)c;
+	}
+
+	/* Try expire some block */
+	if (to_expire) {
+		block = to_expire;
+	}
+	else {
+		/* Expire first block in chain */
+		c = (u_char *)file->map + sizeof (struct stat_file_header) + blocknum * sizeof (struct stat_file_block);
+		block = (struct stat_file_block *)c;
+	}
+	block->last_access = now - (time_t)header->create_time;
+	block->hash1 = h1;
+	block->hash2 = h2;
+	block->value = value;
+}
+
+int
+statfile_pool_is_open (statfile_pool_t *pool, char *filename)
+{
+	return g_hash_table_lookup (pool->files, filename) != NULL;
 }

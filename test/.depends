@@ -5,3 +5,4 @@
 ../src/url.c
 ../src/util.c
 ../src/memcached.c
+../src/statfile.c

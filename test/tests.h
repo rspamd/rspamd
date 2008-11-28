@@ -17,4 +17,7 @@ void rspamd_mem_pool_test_func ();
 /* Expressions */
 void rspamd_expression_test_func ();
 
+/* Stat file */
+void rspamd_statfile_test_func ();
+
 #endif

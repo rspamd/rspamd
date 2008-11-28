@@ -14,11 +14,14 @@
 #endif
 #include "mem_pool.h"
 
+#define CHAIN_LENGTH 128
+
 struct stat_file_header {
 	u_char magic[3];
 	u_char version[2];
+	u_char padding[3];
 	uint64_t create_time;
-};
+} __attribute__((__packed__));
 
 struct stat_file_block {
 	uint32_t hash1;
@@ -57,5 +60,10 @@ int statfile_pool_open (statfile_pool_t *pool, char *filename);
 int statfile_pool_create (statfile_pool_t *pool, char *filename, size_t len);
 int statfile_pool_close (statfile_pool_t *pool, char *filename);
 void statfile_pool_delete (statfile_pool_t *pool);
+void statfile_pool_lock_file (statfile_pool_t *pool, char *filename);
+void statfile_pool_unlock_file (statfile_pool_t *pool, char *filename);
+uint32_t statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now);
+void statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, uint32_t value);
+int statfile_pool_is_open (statfile_pool_t *pool, char *filename);
 
 #endif
