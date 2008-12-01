@@ -829,6 +829,65 @@ file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gcha
 		writev (cfg->log_fd, out, sizeof (out) / sizeof (out[0]));
 	}
 }
+
+/* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
+char *
+resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from)
+{
+	int need_to_format = 0, len = 0;
+	int rcptlen = strlen (rcpt);
+	int fromlen = strlen (from);
+	char *c = pattern, *new, *s;
+	
+	/* Calculate length */
+	while (*c++) {
+		if (*c == '%' && *(c + 1) == 'r') {
+			len += rcptlen;
+			c += 2;
+			need_to_format = 1;
+			continue;
+		}
+		else if (*c == '%' && *(c + 1) == 'f') {
+			len += fromlen;
+			c += 2;
+			need_to_format = 1;
+			continue;
+		}
+		len ++;
+	}
+	
+	/* Do not allocate extra memory if we do not need to format string */
+	if (!need_to_format) {
+		return pattern;
+	}
+	
+	/* Allocate new string */
+	new = memory_pool_alloc (pool, len);
+	c = pattern;
+	s = new;
+	
+	/* Format string */
+	while (*c ++) {
+		if (*c == '%' && *(c + 1) == 'r') {
+			c += 2;
+			memcpy (s, rcpt, rcptlen);
+			s += rcptlen;
+			continue;
+		}
+		else if (*c == '%' && *(c + 1) == 'r') {
+			c += 2;
+			memcpy (s, from, fromlen);
+			s += fromlen;
+			continue;
+		}
+		*s ++ = *c;
+	}
+	
+	*s = '\0';
+
+	return new;
+}
+
 /*
  * vi:ts=4
  */

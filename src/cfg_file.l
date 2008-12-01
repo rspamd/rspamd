@@ -49,6 +49,12 @@ required_score					return REQUIRED_SCORE;
 function						return FUNCTION;
 control							return CONTROL;
 password						return PASSWORD;
+
+statfile						return STATFILE;
+alias							return ALIAS;
+pattern							return PATTERN;
+weight							return WEIGHT;
+
 logging							return LOGGING;
 
 log_type						return LOG_TYPE;

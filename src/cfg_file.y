@@ -27,6 +27,7 @@ extern char *yytext;
 
 LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 struct metric *cur_metric = NULL;
+struct statfile *cur_statfile = NULL;
 
 %}
 
@@ -52,6 +53,7 @@ struct metric *cur_metric = NULL;
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
+%token  STATFILE ALIAS PATTERN WEIGHT
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -91,6 +93,7 @@ command	:
 	| metric
 	| composites
 	| logging
+	| statfile
 	;
 
 tempdir :
@@ -538,6 +541,62 @@ loggingfile:
 		free ($3);
 	}
 	;
+
+statfile:
+	STATFILE OBRACE statfilebody EBRACE {
+		if (cur_statfile == NULL || cur_statfile->alias == NULL || cur_statfile->pattern == NULL || cur_statfile->weight == 0) {
+			yyerror ("yyparse: not enough arguments in statfile definition");
+			YYERROR;
+		}
+		g_hash_table_insert (cfg->statfiles, cur_statfile->alias, cur_statfile);
+		cur_statfile = NULL;
+	}
+	;
+
+statfilebody:
+	| statfilecmd SEMICOLON
+	| statfilebody statfilecmd SEMICOLON
+	;
+
+statfilecmd:
+	| statfilealias
+	| statfilepattern
+	| statfileweight
+	;
+	
+statfilealias:
+	ALIAS EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->alias = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
+statfilepattern:
+	PATTERN EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->pattern = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
+statfileweight:
+	WEIGHT EQSIGN NUMBER {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->weight = $3;
+	}
+	| WEIGHT EQSIGN FRACT {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->weight = $3;
+	}
+	;
+
 
 %%
 /* 

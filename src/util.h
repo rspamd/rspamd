@@ -57,4 +57,8 @@ int reopen_log (struct config_file *cfg);
 void syslog_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
 void file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
 
+/* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
+char* resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from);
+
+
 #endif

@@ -92,6 +92,12 @@ struct module_opt {
 	LIST_ENTRY (module_opt) next;
 };
 
+struct statfile {
+	char *alias;
+	char *pattern;
+	double weight;	
+};
+
 struct config_file {
 	memory_pool_t *cfg_pool;
 	char *cfg_name;
@@ -142,6 +148,7 @@ struct config_file {
 	GHashTable* factors;
 	GHashTable* c_modules;
 	GHashTable* composite_symbols;
+	GHashTable* statfiles;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);
