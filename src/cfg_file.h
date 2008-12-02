@@ -33,6 +33,8 @@
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
 #define DEFAULT_UPSTREAM_DEAD_TIME 300
 #define DEFAULT_UPSTREAM_MAXERRORS 10
+/* Statfile pool size, 50Mb */
+#define DEFAULT_STATFILE_SIZE 52428800L
 
 /* 1 worker by default */
 #define DEFAULT_WORKERS_NUM 1
@@ -95,7 +97,8 @@ struct module_opt {
 struct statfile {
 	char *alias;
 	char *pattern;
-	double weight;	
+	double weight;
+	size_t size;
 };
 
 struct config_file {
@@ -124,6 +127,7 @@ struct config_file {
 	int log_level;
 	char *log_file;
 	int log_fd;
+	size_t max_statfile_size;
 
 	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];
 	size_t memcached_servers_num;

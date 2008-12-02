@@ -21,6 +21,7 @@
 
 #include "fstring.h"
 #include "mem_pool.h"
+#include "statfile.h"
 #include "url.h"
 #include "memcached.h"
 #include "protocol.h"
@@ -81,6 +82,7 @@ struct rspamd_worker {
 
 struct pidfh;
 struct config_file;
+struct tokenizer;
 
 /* Server statistics */
 struct rspamd_stat {
@@ -103,6 +105,7 @@ struct rspamd_main {
 	struct rspamd_stat *stat;
 
 	memory_pool_t *server_pool;
+	statfile_pool_t *statfile_pool;
 
 	TAILQ_HEAD (workq, rspamd_worker) workers;
 };
@@ -122,12 +125,21 @@ struct save_point {
 /* Control session */
 struct controller_session {
 	struct rspamd_worker *worker;
+	enum {
+		STATE_COMMAND,
+		STATE_LEARN,
+	} state;
 	int sock;
 	/* Access to authorized commands */
 	int authorized;
 	memory_pool_t *session_pool;
 	struct bufferevent *bev;
 	struct config_file *cfg;
+	char *learn_rcpt;
+	char *learn_from;
+	struct tokenizer *learn_tokenizer;
+	char *learn_filename;
+	f_str_buf_t *learn_buf;
 };
 
 /* Worker task structure */

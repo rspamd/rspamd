@@ -53,7 +53,7 @@ struct statfile *cur_statfile = NULL;
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
-%token  STATFILE ALIAS PATTERN WEIGHT
+%token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -94,6 +94,7 @@ command	:
 	| composites
 	| logging
 	| statfile
+	| statfile_pool_size
 	;
 
 tempdir :
@@ -544,7 +545,8 @@ loggingfile:
 
 statfile:
 	STATFILE OBRACE statfilebody EBRACE {
-		if (cur_statfile == NULL || cur_statfile->alias == NULL || cur_statfile->pattern == NULL || cur_statfile->weight == 0) {
+		if (cur_statfile == NULL || cur_statfile->alias == NULL || cur_statfile->pattern == NULL 
+			|| cur_statfile->weight == 0 || cur_statfile->size == 0) {
 			yyerror ("yyparse: not enough arguments in statfile definition");
 			YYERROR;
 		}
@@ -562,6 +564,7 @@ statfilecmd:
 	| statfilealias
 	| statfilepattern
 	| statfileweight
+	| statfilesize
 	;
 	
 statfilealias:
@@ -597,7 +600,30 @@ statfileweight:
 	}
 	;
 
+statfilesize:
+	SIZE EQSIGN NUMBER {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->size = $3;
+	}
+	| WEIGHT EQSIGN SIZELIMIT {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->size = $3;
+	}
+	;
 
+
+statfile_pool_size:
+	STATFILE_POOL_SIZE EQSIGN SIZELIMIT {
+		cfg->max_statfile_size = $3;
+	}
+	| STATFILE_POOL_SIZE EQSIGN NUMBER {
+		cfg->max_statfile_size = $3;
+	}
+	;
 %%
 /* 
  * vi:ts=4 

@@ -20,8 +20,23 @@ typedef struct token_list_s {
 	struct token_list_s *next;
 } token_list_t;
 
+
+/* Common tokenizer structure */
+struct tokenizer {
+	char *name;
+	token_list_t* (*tokenize_func)(struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input);
+	f_str_t* (*get_next_word)(f_str_t *buf, f_str_t *token);
+};
+
+/* Get tokenizer structure by name or return NULL if this name is not found */
+struct tokenizer* get_tokenizer (char *name);
 /* Get next word from specified f_str_t buf */
 f_str_t *get_next_word (f_str_t *buf, f_str_t *token);
+/* OSB tokenize function */
+token_list_t* osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input);
+
+/* Array of all defined tokenizers */
+extern struct tokenizer tokenizers[];
 
 #endif
 /*

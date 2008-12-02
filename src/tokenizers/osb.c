@@ -21,7 +21,7 @@ static const int primes[] = {
 };
 
 token_list_t *
-osb_tokenize_text (memory_pool_t *pool, f_str_t *input)
+osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input)
 {
 	token_list_t *new = NULL, *head = NULL, *last = NULL;
 	f_str_t token = { NULL, 0, 0 };
@@ -33,7 +33,7 @@ osb_tokenize_text (memory_pool_t *pool, f_str_t *input)
 		hashpipe[i] = 0xABCDEF;
 	}
 
-	while (get_next_word (input, &token)) {
+	while (tokenizer->get_next_word (input, &token)) {
 		/* Shift hashpipe */
 		for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i --) {
 			hashpipe[i] = hashpipe[i - 1];

@@ -318,6 +318,9 @@ main (int argc, char **argv)
 	TAILQ_INIT (&rspamd->workers);
 
 	setproctitle ("main process");
+
+	/* Init statfile pool */
+	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
 	
 	for (i = 0; i < cfg->workers_number; i++) {
 		fork_worker (rspamd, listen_sock, 0, TYPE_WORKER);

@@ -22,6 +22,7 @@
 #include "upstream.h"
 #include "cfg_file.h"
 #include "modules.h"
+#include "tokenizers/tokenizers.h"
 
 #define CRLF "\r\n"
 
@@ -32,6 +33,7 @@ enum command_type {
 	COMMAND_STAT,
 	COMMAND_SHUTDOWN,
 	COMMAND_UPTIME,
+	COMMAND_LEARN,
 };
 
 struct controller_command {
@@ -47,6 +49,7 @@ static struct controller_command commands[] = {
 	{"stat", 0, COMMAND_STAT},
 	{"shutdown", 1, COMMAND_SHUTDOWN},
 	{"uptime", 0, COMMAND_UPTIME},
+	{"learn", 1, COMMAND_LEARN},
 };
 
 static GCompletion *comp;
@@ -112,14 +115,16 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 static void
 process_command (struct controller_command *cmd, char **cmd_args, struct controller_session *session)
 {
-	char out_buf[512], *arg;
+	char out_buf[512], *arg, *err_str;
 	int r = 0, days, hours, minutes;
 	time_t uptime;
+	unsigned long size = 0;
+	struct statfile *statfile;
 
 	switch (cmd->type) {
 		case COMMAND_PASSWORD:
 			arg = *cmd_args;
-			if (*arg == '\0') {
+			if (!arg || *arg == '\0') {
 				msg_debug ("process_command: empty password passed");
 				r = snprintf (out_buf, sizeof (out_buf), "password command requires one argument" CRLF);
 				bufferevent_write (session->bev, out_buf, r);
@@ -185,10 +190,104 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								minutes, minutes > 1 ? "s" : " ",
 								(int)uptime, uptime > 1 ? "s" : " ");
 				}
-				
+				bufferevent_write (session->bev, out_buf, r);
 			}
-			bufferevent_write (session->bev, out_buf, r);
 			break;
+		case COMMAND_LEARN:
+			if (check_auth (cmd, session)) {
+				arg = *cmd_args++;
+				if (!arg || *arg == '\0') {
+					msg_debug ("process_command: no statfile specified in learn command");
+					r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+					bufferevent_write (session->bev, out_buf, r);
+					return;
+				}
+				arg = *cmd_args;
+				if (arg == NULL || *arg == '\0') {
+					msg_debug ("process_command: no statfile size specified in learn command");
+					r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+					bufferevent_write (session->bev, out_buf, r);
+					return;
+				}
+				size = strtoul (arg, &err_str, 10);
+				if (err_str && *err_str != '\0') {
+					msg_debug ("process_command: statfile size is invalid: %s", arg);
+					r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+					bufferevent_write (session->bev, out_buf, r);
+					return;
+				}
+				session->learn_buf = memory_pool_alloc (session->session_pool, sizeof (f_str_buf_t));
+				session->learn_buf->buf = fstralloc (session->session_pool, size);
+				if (session->learn_buf->buf == NULL) {
+					r = snprintf (out_buf, sizeof (out_buf), "allocating buffer for learn failed" CRLF);
+					bufferevent_write (session->bev, out_buf, r);
+					return;
+				}
+
+				statfile = g_hash_table_lookup (session->cfg->statfiles, arg);
+				if (statfile == NULL) {
+					r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, arg);
+					bufferevent_write (session->bev, out_buf, r);
+					return;
+
+				}
+				session->learn_rcpt = NULL;
+				session->learn_from = NULL;
+				session->learn_filename = NULL;
+				session->learn_tokenizer = get_tokenizer ("osb-text");
+				/* Get all arguments */
+				while (*cmd_args++) {
+					arg = *cmd_args;
+					if (*arg == '-') {
+						switch (*(arg + 1)) {
+							case 'r':
+								arg = *(cmd_args + 1);
+								if (!arg || *arg == '\0') {
+									r = snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF, arg);
+									bufferevent_write (session->bev, out_buf, r);
+									return;
+								}
+								session->learn_rcpt = memory_pool_strdup (session->session_pool, arg);
+								break;
+							case 'f':
+								arg = *(cmd_args + 1);
+								if (!arg || *arg == '\0') {
+									r = snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF, arg);
+									bufferevent_write (session->bev, out_buf, r);
+									return;
+								}
+								session->learn_from = memory_pool_strdup (session->session_pool, arg);
+								break;
+							case 't':
+								arg = *(cmd_args + 1);
+								if (!arg || *arg == '\0' || (session->learn_tokenizer = get_tokenizer (arg)) == NULL) {
+									r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF, arg);
+									bufferevent_write (session->bev, out_buf, r);
+									return;
+								}
+								break;
+						}
+					}
+				}
+				session->learn_filename = resolve_stat_filename (session->session_pool, statfile->pattern, session->learn_rcpt, session->learn_from);
+				if (statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename) == -1) {
+					/* Try to create statfile */
+					if (statfile_pool_create (session->worker->srv->statfile_pool, session->learn_filename, statfile->size) == -1) {
+						r = snprintf (out_buf, sizeof (out_buf), "cannot create statfile %s" CRLF, session->learn_filename);
+						bufferevent_write (session->bev, out_buf, r);
+						return;
+					}
+					if (statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename) == -1) {
+						r = snprintf (out_buf, sizeof (out_buf), "cannot open statfile %s" CRLF, session->learn_filename);
+						bufferevent_write (session->bev, out_buf, r);
+						return;
+					}
+				}
+				session->state = STATE_LEARN;
+				r = snprintf (out_buf, sizeof (out_buf), "ok" CRLF);
+				bufferevent_write (session->bev, out_buf, r);
+				break;
+			}
 	}
 }
 
@@ -200,39 +299,64 @@ read_socket (struct bufferevent *bev, void *arg)
 	char *s, **params, *cmd, out_buf[128];
 	GList *comp_list;
 
-	s = evbuffer_readline (EVBUFFER_INPUT (bev));
-	if (s != NULL && *s != 0) {
-		len = strlen (s);
-		/* Remove end of line characters from string */
-		if (s[len - 1] == '\n') {
-			if (s[len - 2] == '\r') {
-				s[len - 2] = 0;
+	switch (session->state) {
+		case STATE_COMMAND:
+			s = evbuffer_readline (EVBUFFER_INPUT (bev));
+			if (s != NULL && *s != 0) {
+				len = strlen (s);
+				/* Remove end of line characters from string */
+				if (s[len - 1] == '\n') {
+					if (s[len - 2] == '\r') {
+						s[len - 2] = 0;
+					}
+					s[len - 1] = 0;
+				}
+				params = g_strsplit (s, " ", -1);
+				len = g_strv_length (params);
+				if (len > 0) {
+					cmd = g_strstrip (params[0]);
+					comp_list = g_completion_complete (comp, cmd, NULL);
+					switch (g_list_length (comp_list)) {
+						case 1:
+							process_command ((struct controller_command *)comp_list->data, &params[1], session);
+							break;
+						case 0:
+							i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
+							bufferevent_write (bev, out_buf, i);
+							break;
+						default:
+							i = snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
+							bufferevent_write (bev, out_buf, i);
+							break;
+					}
+				}
+				g_strfreev (params);
 			}
-			s[len - 1] = 0;
-		}
-		params = g_strsplit (s, " ", -1);
-		len = g_strv_length (params);
-		if (len > 0) {
-			cmd = g_strstrip (params[0]);
-			comp_list = g_completion_complete (comp, cmd, NULL);
-			switch (g_list_length (comp_list)) {
-				case 1:
-					process_command ((struct controller_command *)comp_list->data, &params[1], session);
-					break;
-				case 0:
-					i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
-					bufferevent_write (bev, out_buf, i);
-					break;
-				default:
-					i = snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
-					bufferevent_write (bev, out_buf, i);
-					break;
+			if (s != NULL) {
+				free (s);
 			}
-		}
-		g_strfreev (params);
-	}
-	if (s != NULL) {
-		free (s);
+			break;
+		case STATE_LEARN:
+			i = bufferevent_read (bev, session->learn_buf->pos, session->learn_buf->free);
+			if (i > 0) {
+				session->learn_buf->pos += i;
+				update_buf_size (session->learn_buf);
+				if (session->learn_buf->free == 0) {
+					/* XXX: require to insert real learning code here */
+					session->worker->srv->stat->messages_learned ++;
+					i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
+					bufferevent_write (bev, out_buf, i);
+					session->state = STATE_COMMAND;
+					break;
+				}
+			}
+			else {
+				i = snprintf (out_buf, sizeof (out_buf), "read error: %d" CRLF, i);
+				bufferevent_write (bev, out_buf, i);
+				bufferevent_disable (bev, EV_READ);
+				free_session (session);
+			}
+			break;
 	}
 }
 
@@ -252,7 +376,7 @@ static void
 err_socket (struct bufferevent *bev, short what, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
-	msg_info ("closing connection");
+	msg_info ("closing control connection");
 	/* Free buffers */
 	free_session (session);
 }
@@ -282,6 +406,7 @@ accept_socket (int fd, short what, void *arg)
 	new_session->worker = worker;
 	new_session->sock = nfd;
 	new_session->cfg = worker->srv->cfg;
+	new_session->state = STATE_COMMAND;
 	new_session->session_pool = memory_pool_new (memory_pool_get_size () - 1);
 	memory_pool_add_destructor (new_session->session_pool, (pool_destruct_func)bufferevent_free, new_session->bev);
 	worker->srv->stat->control_connections_count ++;
