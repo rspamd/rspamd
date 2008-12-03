@@ -30,7 +30,7 @@ dist-clean: clean dist-clean-subdirs
 	rm -f Makefile
 	rm -f test/Makefile
 	rm -f config.log
-	rm -f $(SRCDIR)/md5.h $(SRCDIR)/md5.c $(SRCDIR)/strlcpy.h $(SRCDIR)/strlcpy.c $(SRCDIR)/queue.h $(SRCDIR)/config.h $(SRCDIR)/modules.c $(SRCDIR)/modules.h
+	rm -f $(SRCDIR)/md5.h $(SRCDIR)/md5.c $(SRCDIR)/queue.h $(SRCDIR)/config.h $(SRCDIR)/modules.c $(SRCDIR)/modules.h
 	cd perl && rm -f Makefile.old && rm -f Makefile.PL && cd ..
 
 creategroup:

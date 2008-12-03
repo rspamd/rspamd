@@ -117,7 +117,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	}
 	
 	if (st.st_size > pool->max) {
-		msg_info ("statfile_pool_open: cannot attach file to pool, too large: %zd", st.st_size);
+		msg_info ("statfile_pool_open: cannot attach file to pool, too large: %zd", (size_t)st.st_size);
 		return -1;
 	}
 

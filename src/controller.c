@@ -179,7 +179,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				}
 				/* If uptime is less than 1 minute print only seconds */
 				else if (uptime / 60 == 0) {
-					r = snprintf (out_buf, sizeof (out_buf), "%dsecond%s", uptime, uptime > 1 ? "s" : " ");
+					r = snprintf (out_buf, sizeof (out_buf), "%dsecond%s", (int)uptime, (int)uptime > 1 ? "s" : " ");
 				}
 				/* Else print the minutes and seconds. */
 				else {

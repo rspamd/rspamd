@@ -337,7 +337,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 	switch (ctx->op) {
 		case CMD_CONNECT:
 			if (error != OK) {
-				msg_info ("memcached_callback: memcached returned error %s on CONNECT stage");
+				msg_info ("memcached_callback: memcached returned error %s on CONNECT stage", memc_strerror (error));
 				memc_close_ctx (param->ctx);
 				param->task->save.saved --;
 				if (param->task->save.saved == 0) {
@@ -356,7 +356,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 			break;
 		case CMD_READ:
 			if (error != OK) {
-				msg_info ("memcached_callback: memcached returned error %s on READ stage");
+				msg_info ("memcached_callback: memcached returned error %s on READ stage", memc_strerror (error));
 				memc_close_ctx (param->ctx);
 				param->task->save.saved --;
 				if (param->task->save.saved == 0) {
@@ -382,7 +382,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 			break;
 		case CMD_WRITE:
 			if (error != OK) {
-				msg_info ("memcached_callback: memcached returned error %s on WRITE stage");
+				msg_info ("memcached_callback: memcached returned error %s on WRITE stage", memc_strerror (error));
 			}
 			memc_close_ctx (param->ctx);
 			param->task->save.saved --;
@@ -428,7 +428,7 @@ register_memcached_call (struct uri *url, struct worker_task *task)
 	cur_param->bufsize = sizeof (int);
 
 	sum_str = g_compute_checksum_for_string (G_CHECKSUM_MD5, struri (url), -1);
-	strlcpy (cur_param->key, sum_str, sizeof (cur_param->key));
+	g_strlcpy (cur_param->key, sum_str, sizeof (cur_param->key));
 	g_free (sum_str);
 
 	selected = (struct memcached_server *) get_upstream_by_hash ((void *)task->cfg->memcached_servers,
@@ -471,7 +471,18 @@ redirector_callback (int fd, short what, void *arg)
 				event_set (&param->ev, param->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, redirector_callback, (void *)param);
 				event_add (&param->ev, &timeout);
 				r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
-				write (param->sock, url_buf, r);
+				if (write (param->sock, url_buf, r) == -1) {
+					msg_err ("redirector_callback: write failed %m");
+					event_del (&param->ev);
+					param->task->save.saved --;
+					if (param->task->save.saved == 0) {
+						/* Call other filters */
+						param->task->save.saved = 1;
+						process_filters (param->task);
+					}
+					g_free (param);
+					return;
+				}
 				param->state = STATE_READ;
 			}
 			else {

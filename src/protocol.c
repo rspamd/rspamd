@@ -349,7 +349,7 @@ write_check_reply (struct worker_task *task)
 	char outbuf[OUTBUFSIZ];
 	struct metric_result *metric_res;
 
-	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
+	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 	bufferevent_write (task->bev, outbuf, r);
 	if (task->proto == SPAMC_PROTO) {
 		/* Ignore metrics, just write report for 'default' metric */
@@ -435,7 +435,7 @@ write_process_reply (struct worker_task *task)
 	char outbuf[OUTBUFSIZ];
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, 
-					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, task->msg->buf->len);
+					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK", task->msg->buf->len);
 	bufferevent_write (task->bev, outbuf, r);
 	bufferevent_write (task->bev, task->msg->buf->begin, task->msg->buf->len);
 

@@ -158,7 +158,7 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 }
 
 int 
-main (int argc, char **argv)
+main (int argc, char **argv, char **env)
 {
 	struct rspamd_main *rspamd;
 	struct module_ctx *cur_module = NULL;

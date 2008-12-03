@@ -9,6 +9,7 @@
 #include <EXTERN.h>
 #include <perl.h>
 #include <XSUB.h>
+#include <glib.h>
 
 #include "../src/config.h"
 #include "../src/main.h"
@@ -91,10 +92,10 @@ get_part (r, num)
 	RETVAL = newHV();
 	type = g_mime_content_type_to_string (part->type);
 
-	hv_store_ent (RETVAL, 
+	(void)hv_store_ent (RETVAL, 
 				newSVpv ("type", sizeof ("type") - 1), 
 				newSVpv (type, strlen(type)), 0);
-	hv_store_ent (RETVAL, 
+	(void)hv_store_ent (RETVAL, 
 				newSVpv ("content", sizeof ("content") - 1), 
 				newSVpv ((char *)part->content->data, part->content->len), 0);
     sv_2mortal((SV*)RETVAL);
@@ -217,7 +218,7 @@ read_memcached_key (r, key, datalen, callback)
     callback_data->task = r;
     ctx->callback_data = (void *)callback_data;
 
-    strlcpy (param.key, key, sizeof (param.key));
+    g_strlcpy (param.key, key, sizeof (param.key));
 	param.buf = memory_pool_alloc (r->task_pool, datalen);
     if (param.buf != NULL) {
         param.bufsize = datalen;
@@ -267,7 +268,7 @@ write_memcached_key (r, key, data, expire, callback)
     callback_data->task = r;
     ctx->callback_data = (void *)callback_data;
 
-    strlcpy (param.key, key, sizeof (param.key));
+    g_strlcpy (param.key, key, sizeof (param.key));
     param.buf = data;
     param.bufsize = datalen;
     param.bufpos = 0;
@@ -312,7 +313,7 @@ delete_memcached_key (r, key, callback)
     callback_data->task = r;
     ctx->callback_data = (void *)callback_data;
 
-    strlcpy (param.key, key, sizeof (param.key));
+    g_strlcpy (param.key, key, sizeof (param.key));
     param.buf = NULL;
     param.bufsize = 0;
     param.bufpos = 0;

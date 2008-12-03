@@ -1,6 +1,3 @@
-#if HAVE_STRLCPY_H
-../src/strlcpy.c
-#endif
 ../src/mem_pool.c
 ../src/url.c
 ../src/util.c

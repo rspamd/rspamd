@@ -485,7 +485,7 @@ check_perl()
 	echo "#include <stdlib.h>" > autotest.c
 	echo "#include <EXTERN.h>" >> autotest.c
 	echo "#include <perl.h>" >> autotest.c
-	echo "int main (int argc, char **argv) { PERL_SYS_INIT3(&argc,&argv,&env); return 0; }" >> autotest.c
+	echo "int main (int argc, char **argv, char **env) { PERL_SYS_INIT3(&argc,&argv,&env); return 0; }" >> autotest.c
 	echo "$GCC $CFLAGS $PERLCFLAGS $PTHREAD_CFLAGS -o autotest $LDFLAGS $LIBS $PERLLDFLAGS $PTHREAD_LDFLAGS autotest.c" >>config.log
 	$GCC $CFLAGS $PERLCFLAGS $PTHREAD_CFLAGS -o autotest $LDFLAGS $LIBS $PERLLDFLAGS $PTHREAD_LDFLAGS autotest.c >>config.log 2>&1
 	if [ $? -eq 0 ] ; then 
@@ -891,14 +891,6 @@ if [ $? -eq 0 ] ; then
 	have_opt "PIDFILE"
 fi
 
-check_function "strlcpy" "string.h"
-if [ $? -eq 1 ] ; then
-	cp $COMPAT_DIR/strlcpy.c $SRCDIR
-	cp $COMPAT_DIR/strlcpy.h $SRCDIR
-	SOURCES="$SOURCES strlcpy.c"
-	DEPS="$DEPS $SRCDIR/strlcpy.h"
-	have_opt "STRLCPY_H"
-fi
 check_function "bzero" "string.h"
 check_function "srandomdev"
 if [ $? -eq 0 ] ; then
@@ -935,7 +927,6 @@ check_include "stdint.h"
 if [ $? -eq 1 ] ; then
 	check_include "inttypes.h"
 fi
-check_include "strlcpy.h"
 check_include "md5.h"
 check_include "sys/queue.h"
 if [ $? -eq 1 ] ; then 

@@ -105,7 +105,9 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[2].iov_len = ctx->param->bufsize - ctx->param->bufpos;
 			iov[3].iov_base = CRLF;
 			iov[3].iov_len = sizeof (CRLF) - 1;
-			writev (ctx->sock, iov, 4);
+			if (writev (ctx->sock, iov, 4) == -1) {
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %m");
+			}
 		}
 		else {
 			iov[0].iov_base = read_buf;
@@ -195,10 +197,14 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[0].iov_len = sizeof (struct memc_udp_header);
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = r;
-			writev (ctx->sock, iov, 2);
+			if (writev (ctx->sock, iov, 2) == -1) {
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %m");
+			}
 		}
 		else {
-			write (ctx->sock, read_buf, r);
+			if (write (ctx->sock, read_buf, r) == -1) {
+				memc_log (ctx, __LINE__, "memc_write: write failed: %m");
+			}
 		}
 		event_del (&ctx->mem_ev);
 		event_set (&ctx->mem_ev, ctx->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, socket_callback, (void *)ctx);
@@ -325,9 +331,14 @@ delete_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = r;
 			ctx->param->bufpos = writev (ctx->sock, iov, 2);
+			if (ctx->param->bufpos == -1) {
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %m");
+			}
 		}
 		else {
-			write (ctx->sock, read_buf, r);
+			if (write (ctx->sock, read_buf, r) == -1) {
+				memc_log (ctx, __LINE__, "memc_write: write failed: %m");
+			}
 		}
 		event_del (&ctx->mem_ev);
 		event_set (&ctx->mem_ev, ctx->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, socket_callback, (void *)ctx);

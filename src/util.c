@@ -673,7 +673,7 @@ parse_expression (memory_pool_t *pool, char *line)
 			if (c != p) {
 				/* Copy operand */
 				str = memory_pool_alloc (pool, p - c + 1);
-				strlcpy (str, c, (p - c + 1));
+				g_strlcpy (str, c, (p - c + 1));
 				insert_expression (pool, &expr, EXPR_OPERAND, 0, str);
 			}
 			if (*p == ')') {
@@ -724,7 +724,7 @@ parse_expression (memory_pool_t *pool, char *line)
 	if (c != p) {
 		/* Copy operand */
 		str = memory_pool_alloc (pool, p - c + 1);
-		strlcpy (str, c, (p - c + 1));
+		g_strlcpy (str, c, (p - c + 1));
 		insert_expression (pool, &expr, EXPR_OPERAND, 0, str);
 	}
 	/* Pop everything from stack */
@@ -750,7 +750,7 @@ open_log (struct config_file *cfg)
 			openlog ("rspamd", LOG_NDELAY | LOG_PID, cfg->log_facility);
 			return 0;
 		case RSPAMD_LOG_FILE:
-			cfg->log_fd = open (cfg->log_file, O_CREAT | O_WRONLY | O_APPEND);
+			cfg->log_fd = open (cfg->log_file, O_CREAT | O_WRONLY | O_APPEND, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
 			if (cfg->log_fd == -1) {
 				msg_err ("open_log: cannot open desired log file: %s, %m", cfg->log_file);
 				return -1;
@@ -787,16 +787,16 @@ syslog_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gc
 
 	if (log_level <= cfg->log_level) {
 		if (log_level >= G_LOG_LEVEL_DEBUG) {
-			syslog (LOG_DEBUG, message);
+			syslog (LOG_DEBUG, "%s", message);
 		}
 		else if (log_level >= G_LOG_LEVEL_INFO) {
-			syslog (LOG_INFO, message);
+			syslog (LOG_INFO, "%s", message);
 		}
 		else if (log_level >= G_LOG_LEVEL_WARNING) {
-			syslog (LOG_WARNING, message);
+			syslog (LOG_WARNING, "%s", message);
 		}
 		else if (log_level >= G_LOG_LEVEL_CRITICAL) {
-			syslog (LOG_ERR, message);
+			syslog (LOG_ERR, "%s", message);
 		}
 	}
 }
