@@ -26,7 +26,7 @@ struct stat_file_header {
 struct stat_file_block {
 	uint32_t hash1;
 	uint32_t hash2;
-	uint32_t value; /* In fact this is float */
+	float value; /* In fact this is float */
 	uint32_t last_access;
 };
 
@@ -62,8 +62,8 @@ int statfile_pool_close (statfile_pool_t *pool, char *filename);
 void statfile_pool_delete (statfile_pool_t *pool);
 void statfile_pool_lock_file (statfile_pool_t *pool, char *filename);
 void statfile_pool_unlock_file (statfile_pool_t *pool, char *filename);
-uint32_t statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now);
-void statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, uint32_t value);
+float statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now);
+void statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, float value);
 int statfile_pool_is_open (statfile_pool_t *pool, char *filename);
 
 #endif

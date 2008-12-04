@@ -267,7 +267,7 @@ statfile_pool_unlock_file (statfile_pool_t *pool, char *filename)
 	memory_pool_unlock_mutex (file->lock);
 }
 
-uint32_t 
+float
 statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now)
 {
 	stat_file_t *file;
@@ -311,7 +311,7 @@ statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 }
 
 void
-statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, uint32_t value)
+statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, float value)
 {
 	stat_file_t *file;
 	struct stat_file_block *block, *to_expire = NULL;

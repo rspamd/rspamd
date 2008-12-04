@@ -45,13 +45,13 @@ rspamd_statfile_test_func ()
 	/* Get and set random blocks */
 	statfile_pool_lock_file (pool, TEST_FILENAME);
 	for (i = 0; i < HASHES_NUM; i ++) {
-		statfile_pool_set_block (pool, TEST_FILENAME, random_hashes[i], random_hashes[i], now, random_hashes[i]);
+		statfile_pool_set_block (pool, TEST_FILENAME, random_hashes[i], random_hashes[i], now, 1.0);
 	}
 	statfile_pool_unlock_file (pool, TEST_FILENAME);
 
 	for (i = 0; i < HASHES_NUM; i ++) {
 		v = statfile_pool_get_block (pool, TEST_FILENAME, random_hashes[i], random_hashes[i], now);
-		g_assert(v == random_hashes[i]);
+		g_assert(v == 1.0);
 	}
 
 	statfile_pool_delete (pool);
