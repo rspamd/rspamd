@@ -20,10 +20,11 @@ static const int primes[] = {
 	797, 3277,
 };
 
-token_list_t *
+GTree *
 osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input)
 {
-	token_list_t *new = NULL, *head = NULL, *last = NULL;
+	token_node_t *new = NULL;
+	GTree *tree;
 	f_str_t token = { NULL, 0, 0 };
 	uint32_t hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
 	int i;
@@ -32,6 +33,9 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 	for (i = 0; i < FEATURE_WINDOW_SIZE; i ++) {
 		hashpipe[i] = 0xABCDEF;
 	}
+
+	tree = g_tree_new (token_node_compare_func);
+	memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, tree);
 
 	while (tokenizer->get_next_word (input, &token)) {
 		/* Shift hashpipe */
@@ -43,25 +47,18 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 		for (i = 0; i < FEATURE_WINDOW_SIZE - 2; i ++) {
 			h1 = hashpipe[0]* primes[0] + hashpipe[i] * primes[i<<1];
 		    h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i<<1)-1];
-			new = memory_pool_alloc (pool, sizeof (token_list_t));
+			new = memory_pool_alloc (pool, sizeof (token_node_t));
 			new->h1 = h1;
 			new->h2 = h2;
-			if (last) {
-				last->next = new;
-			}
-			else {
-				head = new;
-			}
-			last = new;
 
-			msg_debug ("osb_tokenize_text: append new token, h1=%u, h2=%u", h1, h2);
+			if (g_tree_lookup (tree, new) == NULL) {
+				msg_debug ("osb_tokenize_text: append new token, h1=%u, h2=%u", h1, h2);
+				g_tree_insert (tree, new, new);
+			}
 		}
 	}
-	if (last) {
-		last->next = NULL;
-	}
 
-	return head;
+	return tree;
 }
 
 /*

@@ -23,6 +23,18 @@ get_tokenizer (char *name)
 	return NULL;
 }
 
+int 
+token_node_compare_func (gconstpointer a, gconstpointer b)
+{
+	const token_node_t *aa = a, *bb = b;
+	
+	if (aa->h1 == bb->h1) {
+		return aa->h2 - bb->h2;
+	}
+
+	return aa->h1 - bb->h1;
+}
+
 /* Get next word from specified f_str_t buf */
 f_str_t *
 get_next_word (f_str_t *buf, f_str_t *token)
