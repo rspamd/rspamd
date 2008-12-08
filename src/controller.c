@@ -23,6 +23,7 @@
 #include "cfg_file.h"
 #include "modules.h"
 #include "tokenizers/tokenizers.h"
+#include "classifiers/classifiers.h"
 
 #define CRLF "\r\n"
 
@@ -235,6 +236,9 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				session->learn_from = NULL;
 				session->learn_filename = NULL;
 				session->learn_tokenizer = get_tokenizer ("osb-text");
+				session->learn_classifier = get_classifier ("winnow");
+				/* By default learn positive */
+				session->in_class = 1;
 				/* Get all arguments */
 				while (*cmd_args++) {
 					arg = *cmd_args;
@@ -266,6 +270,21 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 									return;
 								}
 								break;
+							case 'c':
+								arg = *(cmd_args + 1);
+								if (!arg || *arg == '\0' || (session->learn_classifier = get_classifier (arg)) == NULL) {
+									r = snprintf (out_buf, sizeof (out_buf), "classifier is not defined" CRLF, arg);
+									bufferevent_write (session->bev, out_buf, r);
+									return;
+								}
+								break;
+							case 'n':
+								session->in_class = 0;
+								break;
+							default:
+								r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF, arg);
+								bufferevent_write (session->bev, out_buf, r);
+								return;
 						}
 					}
 				}
@@ -298,6 +317,7 @@ read_socket (struct bufferevent *bev, void *arg)
 	int len, i;
 	char *s, **params, *cmd, out_buf[128];
 	GList *comp_list;
+	GTree *tokens;
 
 	switch (session->state) {
 		case STATE_COMMAND:
@@ -342,7 +362,14 @@ read_socket (struct bufferevent *bev, void *arg)
 				session->learn_buf->pos += i;
 				update_buf_size (session->learn_buf);
 				if (session->learn_buf->free == 0) {
-					/* XXX: require to insert real learning code here */
+					tokens = session->learn_tokenizer->tokenize_func (session->learn_tokenizer, session->session_pool, session->learn_buf->buf);
+					if (tokens == NULL) {
+						i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
+						bufferevent_write (bev, out_buf, i);
+						session->state = STATE_COMMAND;
+						return;
+					}
+					session->learn_classifier->learn_func (session->worker->srv->statfile_pool, session->learn_filename, tokens, session->in_class);
 					session->worker->srv->stat->messages_learned ++;
 					i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 					bufferevent_write (bev, out_buf, i);

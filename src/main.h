@@ -83,6 +83,7 @@ struct rspamd_worker {
 struct pidfh;
 struct config_file;
 struct tokenizer;
+struct classifier;
 
 /* Server statistics */
 struct rspamd_stat {
@@ -138,8 +139,10 @@ struct controller_session {
 	char *learn_rcpt;
 	char *learn_from;
 	struct tokenizer *learn_tokenizer;
+	struct classifier *learn_classifier;
 	char *learn_filename;
 	f_str_buf_t *learn_buf;
+	int in_class;
 };
 
 /* Worker task structure */
