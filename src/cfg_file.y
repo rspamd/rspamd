@@ -18,6 +18,8 @@
 
 #include "cfg_file.h"
 #include "main.h"
+#include "classifiers/classifiers.h"
+#include "tokenizers/tokenizers.h"
 
 #define YYDEBUG 1
 
@@ -53,7 +55,7 @@ struct statfile *cur_statfile = NULL;
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
-%token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE
+%token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -550,6 +552,15 @@ statfile:
 			yyerror ("yyparse: not enough arguments in statfile definition");
 			YYERROR;
 		}
+		if (cur_statfile->metric == NULL) {
+			cur_statfile->metric = memory_pool_strdup (cfg->cfg_pool, "default");
+		}
+		if (cur_statfile->classifier == NULL) {
+			cur_statfile->classifier = get_classifier ("winnow");
+		}
+		if (cur_statfile->tokenizer == NULL) {
+			cur_statfile->tokenizer = get_tokenizer ("osb-text");
+		}
 		g_hash_table_insert (cfg->statfiles, cur_statfile->alias, cur_statfile);
 		cur_statfile = NULL;
 	}
@@ -565,6 +576,9 @@ statfilecmd:
 	| statfilepattern
 	| statfileweight
 	| statfilesize
+	| statfilemetric
+	| statfiletokenizer
+	| statfileclassifier
 	;
 	
 statfilealias:
@@ -615,6 +629,38 @@ statfilesize:
 	}
 	;
 
+statfilemetric:
+	METRIC EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		cur_statfile->metric = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
+statfiletokenizer:
+	TOKENIZER EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if ((cur_statfile->tokenizer = get_tokenizer ($3)) == NULL) {
+			yyerror ("yyparse: unknown tokenizer %s", $3);
+			YYERROR;
+		}
+	}
+	;
+
+statfileclassifier:
+	CLASSIFIER EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if ((cur_statfile->classifier = get_classifier ($3)) == NULL) {
+			yyerror ("yyparse: unknown classifier %s", $3);
+			YYERROR;
+		}
+	}
+	;
 
 statfile_pool_size:
 	STATFILE_POOL_SIZE EQSIGN SIZELIMIT {

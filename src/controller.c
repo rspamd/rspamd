@@ -235,8 +235,8 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				session->learn_rcpt = NULL;
 				session->learn_from = NULL;
 				session->learn_filename = NULL;
-				session->learn_tokenizer = get_tokenizer ("osb-text");
-				session->learn_classifier = get_classifier ("winnow");
+				session->learn_tokenizer = statfile->tokenizer;
+				session->learn_classifier = statfile->classifier;
 				/* By default learn positive */
 				session->in_class = 1;
 				/* Get all arguments */
@@ -261,22 +261,6 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 									return;
 								}
 								session->learn_from = memory_pool_strdup (session->session_pool, arg);
-								break;
-							case 't':
-								arg = *(cmd_args + 1);
-								if (!arg || *arg == '\0' || (session->learn_tokenizer = get_tokenizer (arg)) == NULL) {
-									r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF, arg);
-									bufferevent_write (session->bev, out_buf, r);
-									return;
-								}
-								break;
-							case 'c':
-								arg = *(cmd_args + 1);
-								if (!arg || *arg == '\0' || (session->learn_classifier = get_classifier (arg)) == NULL) {
-									r = snprintf (out_buf, sizeof (out_buf), "classifier is not defined" CRLF, arg);
-									bufferevent_write (session->bev, out_buf, r);
-									return;
-								}
 								break;
 							case 'n':
 								session->in_class = 0;

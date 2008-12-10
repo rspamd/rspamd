@@ -42,7 +42,13 @@ int setproctitle(const char *fmt, ...);
 #ifndef HAVE_PIDFILE
 struct pidfh {
 	int pf_fd;
+#ifdef HAVE_PATH_MAX
+	char    pf_path[PATH_MAX + 1];
+#elif defined(HAVE_MAXPATHLEN)
 	char    pf_path[MAXPATHLEN + 1];
+#else
+	char    pf_path[1024 + 1];
+#endif
  	__dev_t pf_dev;
  	ino_t   pf_ino;
 };

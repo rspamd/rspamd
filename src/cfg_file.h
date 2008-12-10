@@ -51,6 +51,8 @@
 		fprintf (stderr, "\n")
 
 struct expression;
+struct tokenizer;
+struct classifier;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
@@ -98,7 +100,10 @@ struct statfile {
 	char *alias;
 	char *pattern;
 	double weight;
+	char *metric;
 	size_t size;
+	struct tokenizer *tokenizer;
+	struct classifier *classifier;
 };
 
 struct config_file {

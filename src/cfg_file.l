@@ -55,6 +55,8 @@ alias							return ALIAS;
 pattern							return PATTERN;
 weight							return WEIGHT;
 size							return SIZE;
+tokenizer						return TOKENIZER;
+classifier						return CLASSIFIER;
 
 logging							return LOGGING;
 

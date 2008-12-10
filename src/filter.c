@@ -8,6 +8,9 @@
 #include "main.h"
 #include "cfg_file.h"
 #include "perl.h"
+#include "util.h"
+#include "classifiers/classifiers.h"
+#include "tokenizers/tokenizers.h"
 
 void
 insert_result (struct worker_task *task, const char *metric_name, const char *symbol, u_char flag)
@@ -330,11 +333,113 @@ composites_metric_callback (gpointer key, gpointer value, void *data)
 	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
 }
 
-void make_composites (struct worker_task *task)
+void 
+make_composites (struct worker_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
 
+struct statfile_callback_data {
+	GHashTable *metrics;
+	GHashTable *tokens;
+	struct worker_task *task;
+};
+
+static void
+statfiles_callback (gpointer key, gpointer value, void *arg)
+{
+	struct statfile_callback_data *data= (struct statfile_callback_data *)arg;
+	struct worker_task *task = data->task;
+	struct statfile *st = (struct statfile *)value;
+	GTree *tokens;
+	char *filename;
+	double weight, *w;
+	
+	if (g_list_length (task->rcpt) == 1) {
+		filename = resolve_stat_filename (task->task_pool, st->pattern, task->from, (char *)task->rcpt->data);
+	}
+	else {
+		/* XXX: handle multiply recipients correctly */
+		filename = resolve_stat_filename (task->task_pool, st->pattern, task->from, "");
+	}
+	
+	if (statfile_pool_open (task->worker->srv->statfile_pool, filename) == -1) {
+		return;
+	}
+	
+	if ((tokens = g_hash_table_lookup (data->tokens, st->tokenizer)) == NULL) {
+		/* Tree would be freed at task pool freeing */
+		tokens = st->tokenizer->tokenize_func (st->tokenizer, task->task_pool, task->msg->buf);
+		if (tokens == NULL) {
+			msg_info ("statfiles_callback: cannot tokenize input");
+			return;
+		}
+		g_hash_table_insert (data->tokens, st->tokenizer, tokens);
+	}
+	
+	weight = st->classifier->classify_func (task->worker->srv->statfile_pool, filename, tokens);
+	
+	if (weight > 0.000001) {
+		if ((w = g_hash_table_lookup (data->metrics, st->metric)) == NULL) {
+			w = memory_pool_alloc (task->task_pool, sizeof (double));
+			*w = weight * st->weight;
+			g_hash_table_insert (data->metrics, st->metric, w);
+		}
+		else {
+			*w += weight * st->weight;
+		}
+	}
+	
+}
+
+static void
+statfiles_results_callback (gpointer key, gpointer value, void *arg)
+{
+	struct worker_task *task = (struct worker_task *)arg;
+	struct metric_result *metric_res;
+	struct metric *metric;
+	double w;
+
+	metric_res = g_hash_table_lookup (task->results, (char *)key);
+	w = *(double *)value;
+
+	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, (char *)key);
+	if (metric == NULL) {
+		return;
+	}
+
+	if (metric_res == NULL) {
+		/* Create new metric chain */
+		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
+		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, metric_res->symbols);
+		metric_res->metric = metric;
+		metric_res->score = w;
+		g_hash_table_insert (task->results, key, metric_res);
+	}
+	else {
+		metric_res->score += w;
+	}
+	g_hash_table_insert (metric_res->symbols, key, GSIZE_TO_POINTER (1));
+
+}
+
+
+void
+process_statfiles (struct worker_task *task)
+{
+	struct statfile_callback_data cd;
+	
+	cd.task = task;
+	cd.tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
+	cd.metrics = g_hash_table_new (g_str_hash, g_str_equal);
+
+	g_hash_table_foreach (task->cfg->statfiles, statfiles_callback, &cd);
+	g_hash_table_foreach (cd.metrics, statfiles_results_callback, task);
+	
+	g_hash_table_destroy (cd.tokens);
+	g_hash_table_destroy (cd.metrics);
+}
 
 /* 
  * vi:ts=4 
