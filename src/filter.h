@@ -36,6 +36,7 @@ struct metric_result {
 };
 
 int process_filters (struct worker_task *task);
+void process_statfiles (struct worker_task *task);
 void insert_result (struct worker_task *task, const char *metric_name, const char *symbol, u_char flag);
 void make_composites (struct worker_task *task);
 double factor_consolidation_func (struct worker_task *task, const char *metric_name);

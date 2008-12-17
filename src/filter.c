@@ -441,6 +441,47 @@ process_statfiles (struct worker_task *task)
 	g_hash_table_destroy (cd.metrics);
 }
 
+static void
+insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data)
+{
+	struct worker_task *task = (struct worker_task *)data;
+	int r = 0;
+	/* Try to be rfc2822 compatible and avoid long headers with folding */
+	char header_name[128], outbuf[1000];
+	GList *symbols = NULL, *cur;
+	struct metric_result *metric_res = (struct metric_result *)metric_value;
+	
+	snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
+
+	if (metric_res->score >= metric_res->metric->required_score) {
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f; ", metric_res->score, metric_res->metric->required_score);
+	}
+	else {
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f; ", metric_res->score, metric_res->metric->required_score);
+	}
+
+	symbols = g_hash_table_get_keys (metric_res->symbols);
+	cur = symbols;
+	while (cur) {
+		if (g_list_next (cur) != NULL) {
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
+		}
+		else {
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (char *)cur->data);
+		}
+		cur = g_list_next (cur);
+	}
+	g_list_free (symbols);
+	g_mime_message_add_header (task->message, header_name, outbuf);
+
+}
+
+void
+insert_headers (struct worker_task *task)
+{
+	g_hash_table_foreach (task->results, insert_metric_header, task);
+}
+
 /* 
  * vi:ts=4 
  */

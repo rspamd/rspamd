@@ -232,6 +232,9 @@ read_socket (struct bufferevent *bev, void *arg)
 					else if (r == 1) {
 						task->state = WAIT_FILTER;
 					}
+					else {
+						process_statfiles (task);
+					}
 				}
 				if (task->state == WRITE_ERROR || task->state == WRITE_REPLY) {
 					bufferevent_enable (bev, EV_WRITE);
