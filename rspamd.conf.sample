@@ -5,9 +5,70 @@
 
 # pidfile - path to pid file
 # Default: pidfile = /var/run/rspamd.pid
-
 pidfile = "./rspamd.pid";
 
+# Number of workers to process connections
+# Default: 1
 workers = 1;
 
+# Socket for accepting mail to filter, can be unix socket if begin with '/'
+# (bind_socket=/var/run/rspamd.sock for example)
 bind_socket = localhost:11333;
+
+# Settings for controller interface
+control {
+	# Bind socket for control interface
+	bind_socket = localhost:11334;
+	# Password for privilleged commands
+	password = "q1";
+};
+
+# Sample metric definition
+metric {
+	# Name of metric
+	name = "testmetric";
+	# Score to count message as spam by this metric
+	required_score = 10.1;
+};
+
+# Logging settings
+logging {
+	# Log type can be: console, syslog and file
+	log_type = console;
+	# Log level can be: DEBUG, INFO, WARN and ERROR
+	log_level = DEBUG;
+	# Log facility specifies facility for syslog logging, see syslog (3) for details
+	# log_facility = "LOG_MAIL";
+	
+	# Log file is used with log type "file"
+	# log_file = /var/log/rspamd.log
+};
+
+# Limit for statfile pool size
+# Default: 100M
+statfile_pool_size = 10M;
+
+
+# Sample statfile definition
+statfile {
+	# Alias is used for learning and is used as symbol
+	alias = "test.spam";
+	# Pattern is path to file, can include %r - recipient name and %f - mail from value
+	pattern = "./test.spam";
+	# Weight in spam/ham classifier
+	weight = 1.0;
+	# Size of this statfile class
+	size = 10M;
+	# Tokenizer for this statfile
+	# Deafault: osb-text
+	tokenizer = "osb-text";
+	# Classifier for this statfile
+	# Default: winnow
+	classifier = "winnow";
+};
+statfile {
+	alias = "test.ham";
+	pattern = "./test.ham";
+	weight = -1.0;
+	size = 10M;
+};

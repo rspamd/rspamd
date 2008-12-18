@@ -464,10 +464,10 @@ loggingtype:
 	LOG_TYPE EQSIGN LOG_TYPE_CONSOLE {
 		cfg->log_type = RSPAMD_LOG_CONSOLE;
 	}
-	LOG_TYPE EQSIGN LOG_TYPE_SYSLOG {
+	| LOG_TYPE EQSIGN LOG_TYPE_SYSLOG {
 		cfg->log_type = RSPAMD_LOG_SYSLOG;
 	}
-	LOG_TYPE EQSIGN LOG_TYPE_FILE {
+	| LOG_TYPE EQSIGN LOG_TYPE_FILE {
 		cfg->log_type = RSPAMD_LOG_FILE;
 	}
 	;
@@ -476,13 +476,13 @@ logginglevel:
 	LOG_LEVEL EQSIGN LOG_LEVEL_DEBUG {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
-	LOG_LEVEL EQSIGN LOG_LEVEL_INFO {
+	| LOG_LEVEL EQSIGN LOG_LEVEL_INFO {
 		cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
 	}
-	LOG_LEVEL EQSIGN LOG_LEVEL_WARNING {
+	| LOG_LEVEL EQSIGN LOG_LEVEL_WARNING {
 		cfg->log_level = G_LOG_LEVEL_WARNING;
 	}
-	LOG_LEVEL EQSIGN LOG_LEVEL_ERROR {
+	| LOG_LEVEL EQSIGN LOG_LEVEL_ERROR {
 		cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
 	}
 	;
@@ -621,7 +621,7 @@ statfilesize:
 		}
 		cur_statfile->size = $3;
 	}
-	| WEIGHT EQSIGN SIZELIMIT {
+	| SIZE EQSIGN SIZELIMIT {
 		if (cur_statfile == NULL) {
 			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 		}

@@ -297,7 +297,7 @@ main (int argc, char **argv, char **env)
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 
 	if (rspamd->cfg->bind_family == AF_INET) {
-		if ((listen_sock = make_socket (rspamd->cfg->bind_host, rspamd->cfg->bind_port)) == -1) {
+		if ((listen_sock = make_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port)) == -1) {
 			msg_err ("main: cannot create tcp listen socket. %m");
 			exit(-errno);
 		}

@@ -123,10 +123,13 @@ parse_bind_line (struct config_file *cf, char *str, char is_control)
 					return 0;
 				}
 				else {
-					cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+					cf->control_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
 					memcpy((char *)&cf->control_addr, hent->h_addr, sizeof(struct in_addr));
 					s = strlen (cur_tok) + 1;
 				}
+			}
+			else {
+				cf->control_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
 			}
 
 			cf->control_family = AF_INET;
@@ -143,6 +146,9 @@ parse_bind_line (struct config_file *cf, char *str, char is_control)
 					memcpy((char *)&cf->bind_addr, hent->h_addr, sizeof(struct in_addr));
 					s = strlen (cur_tok) + 1;
 				}
+			}
+			else {
+				cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
 			}
 
 			cf->bind_family = AF_INET;

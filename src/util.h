@@ -18,7 +18,7 @@
 struct config_file;
 
 /* Create socket and bind it to specified address and port */
-int make_socket(const char *, u_short );
+int make_socket(struct in_addr *, u_short );
 /* Create and bind unix socket */
 int make_unix_socket (const char *, struct sockaddr_un *);
 /* Parse command line arguments using getopt (3) */

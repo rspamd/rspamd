@@ -31,33 +31,41 @@ event_make_socket_nonblocking (int fd)
 	return 0;
 }
 
-static int
-make_socket_ai (struct addrinfo *ai)
+int
+make_socket (struct in_addr *addr, u_short port)
 {
 	struct linger linger;
 	int fd, on = 1, r;
 	int serrno;
+	struct sockaddr_in sin;
 	
-	/* Create listen socket */
-	fd = socket(AF_INET, SOCK_STREAM, 0);
+	/* Create socket */
+	fd = socket (AF_INET, SOCK_STREAM, 0);
 	if (fd == -1) {
-		return (-1);
+		return -1;
 	}
 
-	if (event_make_socket_nonblocking(fd) < 0)
+	if (event_make_socket_nonblocking(fd) < 0) {
 		goto out;
+	}
 
 	if (fcntl(fd, F_SETFD, 1) == -1) {
 		goto out;
 	}
-
+	
+	/* Socket options */
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
 	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
 	linger.l_onoff = 1;
 	linger.l_linger = 5;
 	setsockopt(fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
+
+	/* Bind options */
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons (port);
+	sin.sin_addr.s_addr = addr->s_addr;
 	
-	r = bind(fd, ai->ai_addr, ai->ai_addrlen);
+	r = bind(fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
@@ -72,30 +80,6 @@ make_socket_ai (struct addrinfo *ai)
 	close(fd);
 	errno = serrno;
 	return (-1);
-}
-
-int
-make_socket (const char *address, u_short port)
-{
-	int fd;
-	struct addrinfo ai, *aitop = NULL;
-	char strport[NI_MAXSERV];
-	int ai_result;
-
-	memset (&ai, 0, sizeof (ai));
-	ai.ai_family = AF_INET;
-	ai.ai_socktype = SOCK_STREAM;
-	ai.ai_flags = AI_PASSIVE;
-	snprintf (strport, sizeof (strport), "%d", port);
-	if ((ai_result = getaddrinfo (address, strport, &ai, &aitop)) != 0) {
-		return (-1);
-	}
-
-	fd = make_socket_ai (aitop);
-
-	freeaddrinfo (aitop);
-
-	return (fd);
 }
 
 int

@@ -94,6 +94,7 @@ static void
 free_session (struct controller_session *session)
 {
 	bufferevent_disable (session->bev, EV_READ | EV_WRITE);
+	bufferevent_free (session->bev);
 	memory_pool_delete (session->session_pool);
 	g_free (session);
 }
@@ -306,6 +307,7 @@ read_socket (struct bufferevent *bev, void *arg)
 	switch (session->state) {
 		case STATE_COMMAND:
 			s = evbuffer_readline (EVBUFFER_INPUT (bev));
+			msg_debug ("read_socket: got '%s' string from user", s);
 			if (s != NULL && *s != 0) {
 				len = strlen (s);
 				/* Remove end of line characters from string */
@@ -325,10 +327,12 @@ read_socket (struct bufferevent *bev, void *arg)
 							process_command ((struct controller_command *)comp_list->data, &params[1], session);
 							break;
 						case 0:
+							msg_debug ("Unknown command: '%s'", cmd);
 							i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
 							bufferevent_write (bev, out_buf, i);
 							break;
 						default:
+							msg_debug ("Ambigious command: '%s'", cmd);
 							i = snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
 							bufferevent_write (bev, out_buf, i);
 							break;
@@ -419,7 +423,6 @@ accept_socket (int fd, short what, void *arg)
 	new_session->cfg = worker->srv->cfg;
 	new_session->state = STATE_COMMAND;
 	new_session->session_pool = memory_pool_new (memory_pool_get_size () - 1);
-	memory_pool_add_destructor (new_session->session_pool, (pool_destruct_func)bufferevent_free, new_session->bev);
 	worker->srv->stat->control_connections_count ++;
 
 	/* Read event */
@@ -448,7 +451,7 @@ start_controller (struct rspamd_worker *worker)
 	signal_add (&worker->sig_ev, NULL);
 
 	if (worker->srv->cfg->control_family == AF_INET) {
-		if ((listen_sock = make_socket (worker->srv->cfg->control_host, worker->srv->cfg->control_port)) == -1) {
+		if ((listen_sock = make_socket (&worker->srv->cfg->control_addr, worker->srv->cfg->control_port)) == -1) {
 			msg_err ("start_controller: cannot create tcp listen socket. %m");
 			exit(-errno);
 		}
@@ -462,6 +465,11 @@ start_controller (struct rspamd_worker *worker)
 	}
 	
 	start_time = time (NULL);
+
+	if (listen (listen_sock, -1) == -1) {
+		msg_err ("start_controller: cannot listen on socket. %m");
+		exit(-errno);
+	}
 	
 	/* Init command completion */
 	for (i = 0; i < sizeof (commands) / sizeof (commands[0]) - 1; i ++) {
