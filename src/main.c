@@ -23,6 +23,9 @@
 #include "cfg_file.h"
 #include "util.h"
 
+/* 2 seconds to fork new process in place of dead one */
+#define SOFT_FORK_TIME 2
+
 struct config_file *cfg;
 
 static void sig_handler (int );
@@ -32,6 +35,7 @@ sig_atomic_t do_restart;
 sig_atomic_t do_terminate;
 sig_atomic_t child_dead;
 sig_atomic_t child_ready;
+sig_atomic_t got_alarm;
 
 extern int yynerrs;
 extern FILE *yyin;
@@ -41,6 +45,9 @@ extern void boot_Socket (pTHX_ CV* cv);
 PerlInterpreter *perl_interpreter;
 /* XXX: remove this shit when it would be clear why perl need this line */
 PerlInterpreter *my_perl;
+
+/* List of workers that are pending to start */
+static GList *workers_pending = NULL;
 
 static 
 void sig_handler (int signo)
@@ -59,6 +66,9 @@ void sig_handler (int signo)
 			break;
 		case SIGUSR2:
 			child_ready = 1;
+			break;
+		case SIGALRM:
+			got_alarm = 1;
 			break;
 	}
 }
@@ -124,6 +134,7 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 		bzero (cur, sizeof (struct rspamd_worker));
 		TAILQ_INSERT_HEAD (&rspamd->workers, cur, next);
 		cur->srv = rspamd;
+		cur->type = type;
 		cur->pid = fork();
 		switch (cur->pid) {
 			case 0:
@@ -133,7 +144,6 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 						setproctitle ("controller process");
 						pidfile_close (rspamd->pfh);
 						msg_info ("fork_worker: starting controller process %d", getpid ());
-						cur->type = TYPE_CONTROLLER;
 						start_controller (cur);
 						break;
 					case TYPE_WORKER:
@@ -141,7 +151,6 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 						setproctitle ("worker process");
 						pidfile_close (rspamd->pfh);
 						msg_info ("fork_worker: starting worker process %d", getpid ());
-						cur->type = TYPE_WORKER;
 						start_worker (cur, listen_sock);
 						break;
 				}
@@ -155,6 +164,26 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 	}
 
 	return cur;
+}
+
+static void
+delay_fork (enum process_type type)
+{
+	workers_pending = g_list_prepend (workers_pending, GINT_TO_POINTER (type));
+	(void)alarm (SOFT_FORK_TIME);
+}
+
+static void
+fork_delayed (struct rspamd_main *rspamd, int listen_sock)
+{
+	GList *cur;
+
+	while (workers_pending != NULL) {
+		cur = workers_pending;
+		workers_pending = g_list_remove_link (workers_pending, cur);
+		fork_worker (rspamd, listen_sock, 0, GPOINTER_TO_INT (cur->data));
+		g_list_free_1 (cur);
+	}
 }
 
 int 
@@ -352,25 +381,23 @@ main (int argc, char **argv, char **env)
 						active_worker = NULL;
 					}
 					TAILQ_REMOVE(&rspamd->workers, cur, next);
-					if (cur->type == TYPE_CONTROLLER) {
-						msg_info ("main: do not restart dead controller");
-						g_free (cur);
-						break;
-					}
 					if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 						/* Normal worker termination, do not fork one more */
-						msg_info ("main: worker process %d terminated normally", cur->pid);
+						msg_info ("main: %s process %d terminated normally", 
+									(cur->type == TYPE_WORKER) ? "worker" : "controller", cur->pid);
 					}
 					else {
 						if (WIFSIGNALED (res)) {
-							msg_warn ("main: worker process %d terminated abnormally by signal: %d", 
+							msg_warn ("main: %s process %d terminated abnormally by signal: %d", 
+										(cur->type == TYPE_WORKER) ? "worker" : "controller",
 										cur->pid, WTERMSIG(res));
 						}
 						else {
-							msg_warn ("main: worker process %d terminated abnormally", cur->pid);
+							msg_warn ("main: %s process %d terminated abnormally", 
+										(cur->type == TYPE_WORKER) ? "worker" : "controller", cur->pid);
 						}
 						/* Fork another worker in replace of dead one */
-						fork_worker (rspamd, listen_sock, 0, cur->type);
+						delay_fork (cur->type);
 					}
 					g_free (cur);
 				}
@@ -399,6 +426,10 @@ main (int argc, char **argv, char **env)
 				}
 				active_worker = NULL;
 			}
+		}
+		if (got_alarm) {
+			got_alarm = 0;
+			fork_delayed (rspamd, listen_sock);
 		}
 	}
 

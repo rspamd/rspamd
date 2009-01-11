@@ -157,13 +157,14 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 	/* Setting up signal handlers */
 	/* SIGUSR1 - reopen config file */
 	/* SIGUSR2 - worker is ready for accept */
-	sigemptyset(&signals->sa_mask);
-	sigaddset(&signals->sa_mask, SIGTERM);
-	sigaddset(&signals->sa_mask, SIGINT);
-	sigaddset(&signals->sa_mask, SIGHUP);
-	sigaddset(&signals->sa_mask, SIGCHLD);
-	sigaddset(&signals->sa_mask, SIGUSR1);
-	sigaddset(&signals->sa_mask, SIGUSR2);
+	sigemptyset (&signals->sa_mask);
+	sigaddset (&signals->sa_mask, SIGTERM);
+	sigaddset (&signals->sa_mask, SIGINT);
+	sigaddset (&signals->sa_mask, SIGHUP);
+	sigaddset (&signals->sa_mask, SIGCHLD);
+	sigaddset (&signals->sa_mask, SIGUSR1);
+	sigaddset (&signals->sa_mask, SIGUSR2);
+	sigaddset (&signals->sa_mask, SIGALRM);
 
 
 	signals->sa_handler = sig_handler;
@@ -173,6 +174,7 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 	sigaction (SIGCHLD, signals, NULL);
 	sigaction (SIGUSR1, signals, NULL);
 	sigaction (SIGUSR2, signals, NULL);
+	sigaction (SIGALRM, signals, NULL);
 }
 
 void
@@ -790,9 +792,11 @@ void
 file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg)
 {
 	struct config_file *cfg = (struct config_file *)arg;
-	char tmpbuf[128];
+	char tmpbuf[128], timebuf[32];
 	int r;
 	struct iovec out[3];
+	time_t now;
+	struct tm *tms;
 	
 	if (cfg->log_fd == -1) {
 		return;
@@ -803,7 +807,10 @@ file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gcha
 	}
 
 	if (log_level <= cfg->log_level) {
-		r = snprintf (tmpbuf, sizeof (tmpbuf), "#%d: %d rspamd ", (int)getpid (), (int)time (NULL));
+		now = time (NULL);
+		tms = localtime (&now);
+		strftime (timebuf, sizeof (timebuf), "%b %d %H:%M:%S", tms);
+		r = snprintf (tmpbuf, sizeof (tmpbuf), "#%d: %s rspamd ", (int)getpid (), timebuf);
 		out[0].iov_base = tmpbuf;
 		out[0].iov_len = r;
 		out[1].iov_base = (char *)message;
