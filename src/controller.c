@@ -161,9 +161,16 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			}
 			break;
 		case COMMAND_STAT:
-			/* XXX need to implement stat */
 			if (check_auth (cmd, session)) {
-				r = snprintf (out_buf, sizeof (out_buf), "-- end of stats report" CRLF);
+				r = snprintf (out_buf, sizeof (out_buf), "Messages scanned: %u" CRLF,
+							  session->worker->srv->stat->messages_scanned);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r , "Messages learned: %u" CRLF,
+							  session->worker->srv->stat->messages_learned);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %u" CRLF,
+							  session->worker->srv->stat->connections_count);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF,
+							  session->worker->srv->stat->control_connections_count);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "-- end of stats report" CRLF);
 				bufferevent_write (session->bev, out_buf, r);
 			}
 			break;
