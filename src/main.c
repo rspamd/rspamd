@@ -418,7 +418,7 @@ main (int argc, char **argv, char **env)
 			if (active_worker != NULL) {
 				msg_info ("main: worker process %d has been successfully started", active_worker->pid);
 				TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
-					if (cur != active_worker && !cur->is_dying) {
+					if (cur != active_worker && !cur->is_dying && cur->type == TYPE_WORKER) {
 						/* Send to old workers SIGUSR2 */
 						kill (cur->pid, SIGUSR2);
 						cur->is_dying = 1;

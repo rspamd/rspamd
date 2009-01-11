@@ -35,6 +35,7 @@ enum command_type {
 	COMMAND_SHUTDOWN,
 	COMMAND_UPTIME,
 	COMMAND_LEARN,
+	COMMAND_HELP,
 };
 
 struct controller_command {
@@ -51,10 +52,13 @@ static struct controller_command commands[] = {
 	{"shutdown", 1, COMMAND_SHUTDOWN},
 	{"uptime", 0, COMMAND_UPTIME},
 	{"learn", 1, COMMAND_LEARN},
+	{"help", 0, COMMAND_HELP},
 };
 
 static GCompletion *comp;
 static time_t start_time;
+
+static char greetingbuf[1024];
 
 static 
 void sig_handler (int signo)
@@ -93,6 +97,7 @@ completion_func (gpointer elem)
 static void
 free_session (struct controller_session *session)
 {
+	msg_debug ("free_session: freeing session %p", session);
 	bufferevent_disable (session->bev, EV_READ | EV_WRITE);
 	bufferevent_free (session->bev);
 	memory_pool_delete (session->session_pool);
@@ -144,7 +149,9 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			}
 			break;
 		case COMMAND_QUIT:
-			free_session (session);
+				session->state = STATE_QUIT;
+				r = snprintf (out_buf, sizeof (out_buf), "bye" CRLF);
+				bufferevent_write (session->bev, out_buf, r);
 			break;
 		case COMMAND_RELOAD:
 			if (check_auth (cmd, session)) {
@@ -159,6 +166,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				r = snprintf (out_buf, sizeof (out_buf), "-- end of stats report" CRLF);
 				bufferevent_write (session->bev, out_buf, r);
 			}
+			break;
 		case COMMAND_SHUTDOWN:
 			if (check_auth (cmd, session)) {
 				r = snprintf (out_buf, sizeof (out_buf), "shutdown request sent" CRLF);
@@ -174,20 +182,20 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					days = uptime / 86400;
 					hours = (uptime % 3600) / 60;
 					minutes = (uptime % 60) / 60;
-					r = snprintf (out_buf, sizeof (out_buf), "%dday%s %dhour%s %dminute%s" CRLF, 
+					r = snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, 
 								days, days > 1 ? "s" : " ",
 								hours, hours > 1 ? "s" : " ",
 								minutes, minutes > 1 ? "s" : " ");
 				}
 				/* If uptime is less than 1 minute print only seconds */
 				else if (uptime / 60 == 0) {
-					r = snprintf (out_buf, sizeof (out_buf), "%dsecond%s", (int)uptime, (int)uptime > 1 ? "s" : " ");
+					r = snprintf (out_buf, sizeof (out_buf), "%d second%s" CRLF, (int)uptime, (int)uptime > 1 ? "s" : " ");
 				}
 				/* Else print the minutes and seconds. */
 				else {
 					hours = uptime / 3600;
 					minutes = (uptime % 60) / 60;
-					r = snprintf (out_buf, sizeof (out_buf), "%dhour%s %dminite%s %dsecond%s", 
+					r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minite%s %d second%s" CRLF, 
 								hours, hours > 1 ? "s" : " ",
 								minutes, minutes > 1 ? "s" : " ",
 								(int)uptime, uptime > 1 ? "s" : " ");
@@ -197,14 +205,14 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			break;
 		case COMMAND_LEARN:
 			if (check_auth (cmd, session)) {
-				arg = *cmd_args++;
+				arg = *cmd_args;
 				if (!arg || *arg == '\0') {
 					msg_debug ("process_command: no statfile specified in learn command");
 					r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
 					bufferevent_write (session->bev, out_buf, r);
 					return;
 				}
-				arg = *cmd_args;
+				arg = *(cmd_args + 1);
 				if (arg == NULL || *arg == '\0') {
 					msg_debug ("process_command: no statfile size specified in learn command");
 					r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
@@ -225,10 +233,12 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					bufferevent_write (session->bev, out_buf, r);
 					return;
 				}
+				session->learn_buf->pos = session->learn_buf->buf->begin;
+				update_buf_size (session->learn_buf);
 
-				statfile = g_hash_table_lookup (session->cfg->statfiles, arg);
+				statfile = g_hash_table_lookup (session->cfg->statfiles, *cmd_args);
 				if (statfile == NULL) {
-					r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, arg);
+					r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
 					bufferevent_write (session->bev, out_buf, r);
 					return;
 
@@ -243,7 +253,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				/* Get all arguments */
 				while (*cmd_args++) {
 					arg = *cmd_args;
-					if (*arg == '-') {
+					if (arg && *arg == '-') {
 						switch (*(arg + 1)) {
 							case 'r':
 								arg = *(cmd_args + 1);
@@ -273,10 +283,12 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 						}
 					}
 				}
-				session->learn_filename = resolve_stat_filename (session->session_pool, statfile->pattern, session->learn_rcpt, session->learn_from);
+				session->learn_filename = resolve_stat_filename (session->session_pool, statfile->pattern, 
+																	session->learn_rcpt, session->learn_from);
 				if (statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename) == -1) {
 					/* Try to create statfile */
-					if (statfile_pool_create (session->worker->srv->statfile_pool, session->learn_filename, statfile->size) == -1) {
+					if (statfile_pool_create (session->worker->srv->statfile_pool, 
+									session->learn_filename, statfile->size / sizeof (struct stat_file_block)) == -1) {
 						r = snprintf (out_buf, sizeof (out_buf), "cannot create statfile %s" CRLF, session->learn_filename);
 						bufferevent_write (session->bev, out_buf, r);
 						return;
@@ -288,10 +300,20 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					}
 				}
 				session->state = STATE_LEARN;
-				r = snprintf (out_buf, sizeof (out_buf), "ok" CRLF);
-				bufferevent_write (session->bev, out_buf, r);
-				break;
 			}
+			break;
+		case COMMAND_HELP:
+				r = snprintf (out_buf, sizeof (out_buf), 
+							"Rspamd CLI commands (* - privilleged command):" CRLF
+							"    help - this help message" CRLF
+							"(*) learn <statfile> <size> [-r recipient], [-f from] [-n] - learn message to specified statfile" CRLF
+							"    quit - quit CLI session" CRLF
+							"(*) reload - reload rspamd" CRLF
+							"(*) shutdown - shutdown rspamd" CRLF
+							"    stat - show different rspamd stat" CRLF
+							"    uptime - rspamd uptime" CRLF);
+				bufferevent_write (session->bev, out_buf, r);
+			break;
 	}
 }
 
@@ -338,6 +360,12 @@ read_socket (struct bufferevent *bev, void *arg)
 							break;
 					}
 				}
+				if (session->state == STATE_COMMAND) {
+					session->state = STATE_REPLY;
+				}
+				if (session->state != STATE_LEARN) {
+					bufferevent_enable (bev, EV_WRITE);
+				}
 				g_strfreev (params);
 			}
 			if (s != NULL) {
@@ -354,22 +382,23 @@ read_socket (struct bufferevent *bev, void *arg)
 					if (tokens == NULL) {
 						i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
 						bufferevent_write (bev, out_buf, i);
-						session->state = STATE_COMMAND;
+						session->state = STATE_REPLY;
 						return;
 					}
 					session->learn_classifier->learn_func (session->worker->srv->statfile_pool, session->learn_filename, tokens, session->in_class);
 					session->worker->srv->stat->messages_learned ++;
 					i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 					bufferevent_write (bev, out_buf, i);
-					session->state = STATE_COMMAND;
+					bufferevent_enable (bev, EV_WRITE);
+					session->state = STATE_REPLY;
 					break;
 				}
 			}
 			else {
 				i = snprintf (out_buf, sizeof (out_buf), "read error: %d" CRLF, i);
 				bufferevent_write (bev, out_buf, i);
-				bufferevent_disable (bev, EV_READ);
-				free_session (session);
+				bufferevent_enable (bev, EV_WRITE);
+				session->state = STATE_REPLY;
 			}
 			break;
 	}
@@ -378,11 +407,18 @@ read_socket (struct bufferevent *bev, void *arg)
 static void
 write_socket (struct bufferevent *bev, void *arg)
 {
-	char buf[1024], hostbuf[256];
-
-	gethostname (hostbuf, sizeof (hostbuf - 1));
-	hostbuf[sizeof (hostbuf) - 1] = '\0';
-	snprintf (buf, sizeof (buf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
+	struct controller_session *session = (struct controller_session *)arg;
+	
+	if (session->state == STATE_QUIT) {
+		msg_info ("closing control connection");
+		/* Free buffers */
+		close (session->sock);
+		free_session (session);
+		return;
+	}
+	else if (session->state == STATE_REPLY) {
+		session->state = STATE_COMMAND;
+	}
 	bufferevent_disable (bev, EV_WRITE);
 	bufferevent_enable (bev, EV_READ);
 }
@@ -427,6 +463,7 @@ accept_socket (int fd, short what, void *arg)
 
 	/* Read event */
 	new_session->bev = bufferevent_new (nfd, read_socket, write_socket, err_socket, (void *)new_session);
+	bufferevent_write (new_session->bev, greetingbuf, strlen (greetingbuf));
 	bufferevent_enable (new_session->bev, EV_WRITE);
 }
 
@@ -437,6 +474,8 @@ start_controller (struct rspamd_worker *worker)
 	int listen_sock, i;
 	struct sockaddr_un *un_addr;
 	GList *comp_list = NULL;
+	char *hostbuf;
+	long int hostmax;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_CONTROLLER;
@@ -472,11 +511,17 @@ start_controller (struct rspamd_worker *worker)
 	}
 	
 	/* Init command completion */
-	for (i = 0; i < sizeof (commands) / sizeof (commands[0]) - 1; i ++) {
+	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
 		comp_list = g_list_prepend (comp_list, &commands[i]);
 	}
 	comp = g_completion_new (completion_func);
 	g_completion_add_items (comp, comp_list);
+	/* Fill hostname buf */
+	hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
+	hostbuf = alloca (hostmax);
+	gethostname (hostbuf, hostmax);
+	hostbuf[hostmax - 1] = '\0';
+	snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
 	/* Accept event */
 	event_set(&worker->bind_ev, listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);

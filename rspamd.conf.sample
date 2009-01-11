@@ -46,7 +46,7 @@ logging {
 
 # Limit for statfile pool size
 # Default: 100M
-statfile_pool_size = 10M;
+statfile_pool_size = 20M;
 
 
 # Sample statfile definition

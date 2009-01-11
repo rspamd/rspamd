@@ -50,14 +50,14 @@ get_next_word (f_str_t *buf, f_str_t *token)
 		token->begin = buf->begin;
 	}
 
+	token->begin = token->begin + token->len;
+	token->len = 0;
+	
 	remain = buf->len - (token->begin - buf->begin);
 	if (remain <= 0) {
 		return NULL;
 	}
 
-	token->begin = token->begin + token->len;
-	token->len = 0;
-	
 	pos = token->begin;
 	/* Skip non graph symbols */
 	while (remain-- && !g_ascii_isgraph (*pos ++)) {
@@ -65,6 +65,10 @@ get_next_word (f_str_t *buf, f_str_t *token)
 	}
 	while (remain-- && g_ascii_isgraph (*pos ++)) {
 		token->len ++;
+	}
+
+	if (token->len == 0) {
+		return NULL;
 	}
 	
 	return token;

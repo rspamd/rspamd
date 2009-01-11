@@ -827,10 +827,23 @@ char *
 resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from)
 {
 	int need_to_format = 0, len = 0;
-	int rcptlen = strlen (rcpt);
-	int fromlen = strlen (from);
+	int rcptlen, fromlen;
 	char *c = pattern, *new, *s;
 	
+	if (rcpt) {
+		rcptlen = strlen (rcpt);
+	}
+	else {
+		rcptlen = 0;
+	}
+
+	if (from) {
+		fromlen = strlen (from);
+	}
+	else {
+		fromlen = 0;
+	}
+
 	/* Calculate length */
 	while (*c++) {
 		if (*c == '%' && *(c + 1) == 'r') {

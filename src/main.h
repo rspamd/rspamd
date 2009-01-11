@@ -129,6 +129,8 @@ struct controller_session {
 	enum {
 		STATE_COMMAND,
 		STATE_LEARN,
+		STATE_REPLY,
+		STATE_QUIT,
 	} state;
 	int sock;
 	/* Access to authorized commands */
