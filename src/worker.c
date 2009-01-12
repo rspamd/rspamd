@@ -18,6 +18,7 @@
 #include <perl.h>                 /* from the Perl distribution     */
 
 #include <glib.h>
+#include <event.h>
 #include <gmime/gmime.h>
 
 #include "util.h"
@@ -229,7 +230,7 @@ read_socket (struct bufferevent *bev, void *arg)
 						task->error_code = RSPAMD_FILTER_ERROR;
 						task->state = WRITE_ERROR;
 					}
-					else if (r == 1) {
+					else if (r == 0) {
 						task->state = WAIT_FILTER;
 					}
 					else {
@@ -239,6 +240,7 @@ read_socket (struct bufferevent *bev, void *arg)
 				if (task->state == WRITE_ERROR || task->state == WRITE_REPLY) {
 					bufferevent_enable (bev, EV_WRITE);
 					bufferevent_disable (bev, EV_READ);
+					evbuffer_drain (bev->output, EVBUFFER_LENGTH (bev->output));
 				}
 			}
 			else {
@@ -333,7 +335,6 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 {
 	struct sigaction signals;
 	int i;
-
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_WORKER;

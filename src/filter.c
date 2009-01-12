@@ -188,6 +188,9 @@ continue_process_filters (struct worker_task *task)
 				cur = LIST_NEXT (cur, next);
 			}
 			/* All done */
+			bufferevent_enable (task->bev, EV_WRITE);
+			evbuffer_drain (task->bev->output, EVBUFFER_LENGTH (task->bev->output));
+			process_statfiles (task);
 			return 1;
 	}
 }
@@ -439,6 +442,8 @@ process_statfiles (struct worker_task *task)
 	
 	g_hash_table_destroy (cd.tokens);
 	g_hash_table_destroy (cd.metrics);
+
+	task->state = WRITE_REPLY;
 }
 
 static void
