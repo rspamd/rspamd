@@ -106,6 +106,16 @@ struct statfile {
 	struct classifier *classifier;
 };
 
+struct config_scalar {
+    void *pointer;
+    enum {
+        SCALAR_TYPE_INT,
+        SCALAR_TYPE_UINT,
+        SCALAR_TYPE_STR,
+        SCALAR_TYPE_SIZE,
+    } type;
+};
+
 struct config_file {
 	memory_pool_t *cfg_pool;
 	char *cfg_name;
@@ -151,13 +161,22 @@ struct config_file {
 	char *mime_filters_str;
 	char *message_filters_str;
 	char *url_filters_str;
+    /* Options for all modules */
 	GHashTable* modules_opts;
+    /* Variables, defined in config */
 	GHashTable* variables;
+    /* Metrics */
 	GHashTable* metrics;
+    /* Factors */
 	GHashTable* factors;
+    /* C modules, enabled in config */
 	GHashTable* c_modules;
+    /* Composite symbols */
 	GHashTable* composite_symbols;
+    /* Statfiles, described in config */
 	GHashTable* statfiles;
+    /* All cfg file scalars to access fields in structure */
+    GHashTable* cfg_params;
 };
 
 int add_memcached_server (struct config_file *cf, char *str);

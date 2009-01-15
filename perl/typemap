@@ -1,3 +1,4 @@
 TYPEMAP
 
-rspamd   T_PTROBJ
+rspamd_task   T_PTROBJ
+rspamd_config   T_PTROBJ

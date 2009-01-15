@@ -21,7 +21,7 @@ rspamd - Perl interface to the rspamd API
 
 =head1 SYNOPSIS
 
-  use rpspamd;
+  use rspamd;
 
 =head1 DESCRIPTION
 

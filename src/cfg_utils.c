@@ -177,6 +177,7 @@ init_defaults (struct config_file *cfg)
 	cfg->c_modules = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->statfiles = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
 
 	LIST_INIT (&cfg->perl_modules);
 }
@@ -198,6 +199,8 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->composite_symbols);
 	g_hash_table_remove_all (cfg->statfiles);
 	g_hash_table_unref (cfg->statfiles);
+	g_hash_table_remove_all (cfg->cfg_params);
+	g_hash_table_unref (cfg->cfg_params);
 	memory_pool_delete (cfg->cfg_pool);
 }
 
@@ -436,8 +439,51 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 	g_strfreev (strvec);
 }
 
+/*
+ * Place pointers to cfg_file structure to hash cfg_params
+ */
+static void
+fill_cfg_params (struct config_file *cfg)
+{
+    struct config_scalar *scalars;
+
+    scalars = memory_pool_alloc (cfg->cfg_pool, 10 * sizeof (struct config_scalar));
+
+    scalars[0].type = SCALAR_TYPE_STR;
+    scalars[0].pointer = &cfg->cfg_name;
+    g_hash_table_insert (cfg->cfg_params, "cfg_name", &scalars[0]);
+    scalars[1].type = SCALAR_TYPE_STR;
+    scalars[1].pointer = &cfg->pid_file;
+    g_hash_table_insert (cfg->cfg_params, "pid_file", &scalars[1]);
+    scalars[2].type = SCALAR_TYPE_STR;
+    scalars[2].pointer = &cfg->temp_dir;
+    g_hash_table_insert (cfg->cfg_params, "temp_dir", &scalars[2]);
+    scalars[3].type = SCALAR_TYPE_STR;
+    scalars[3].pointer = &cfg->bind_host;
+    g_hash_table_insert (cfg->cfg_params, "bind_host", &scalars[3]);
+    scalars[4].type = SCALAR_TYPE_STR;
+    scalars[4].pointer = &cfg->control_host;
+    g_hash_table_insert (cfg->cfg_params, "control_host", &scalars[4]);
+    scalars[5].type = SCALAR_TYPE_INT;
+    scalars[5].pointer = &cfg->controller_enabled;
+    g_hash_table_insert (cfg->cfg_params, "controller_enabled", &scalars[5]);
+    scalars[6].type = SCALAR_TYPE_STR;
+    scalars[6].pointer = &cfg->control_password;
+    g_hash_table_insert (cfg->cfg_params, "control_password", &scalars[6]);
+    scalars[7].type = SCALAR_TYPE_INT;
+    scalars[7].pointer = &cfg->no_fork;
+    g_hash_table_insert (cfg->cfg_params, "no_fork", &scalars[7]);
+    scalars[8].type = SCALAR_TYPE_UINT;
+    scalars[8].pointer = &cfg->workers_number;
+    g_hash_table_insert (cfg->cfg_params, "workers_number", &scalars[8]);
+    scalars[9].type = SCALAR_TYPE_SIZE;
+    scalars[9].pointer = &cfg->max_statfile_size;
+    g_hash_table_insert (cfg->cfg_params, "max_statfile_size", &scalars[9]);
+
+}
+
 /* 
- * Substitute all variables in strings
+ * Perform post load actions
  */
 void
 post_load_config (struct config_file *cfg)
@@ -448,6 +494,7 @@ post_load_config (struct config_file *cfg)
 	parse_filters_str (cfg, cfg->mime_filters_str, SCRIPT_MIME);
 	parse_filters_str (cfg, cfg->message_filters_str, SCRIPT_MESSAGE);
 	parse_filters_str (cfg, cfg->url_filters_str, SCRIPT_URL);
+    fill_cfg_params (cfg);
 }
 
 /*
