@@ -73,7 +73,7 @@ parse_command (struct worker_task *task, char *line)
 
 	token = strsep (&line, " ");
 	if (line == NULL || token == NULL) {
-		msg_debug ("parse_command: bad comand: %s", token);
+		msg_debug ("parse_command: bad command: %s", token);
 		return -1;
 	}
 
@@ -85,7 +85,7 @@ parse_command (struct worker_task *task, char *line)
 				task->cmd = CMD_CHECK;	
 			}
 			else {
-				msg_debug ("parse_command: bad comand: %s", token);
+				msg_debug ("parse_command: bad command: %s", token);
 				return -1;
 			}
 			break;
@@ -99,7 +99,7 @@ parse_command (struct worker_task *task, char *line)
 				task->cmd = CMD_SKIP;
 			}
 			else {
-				msg_debug ("parse_command: bad comand: %s", token);
+				msg_debug ("parse_command: bad command: %s", token);
 				return -1;
 			}
 			break;
@@ -113,7 +113,7 @@ parse_command (struct worker_task *task, char *line)
 				task->cmd = CMD_PROCESS;
 			}
 			else {
-				msg_debug ("parse_command: bad comand: %s", token);
+				msg_debug ("parse_command: bad command: %s", token);
 				return -1;
 			}
 			break;
@@ -127,12 +127,12 @@ parse_command (struct worker_task *task, char *line)
 				task->cmd = CMD_REPORT_IFSPAM;
 			}
 			else {
-				msg_debug ("parse_command: bad comand: %s", token);
+				msg_debug ("parse_command: bad command: %s", token);
 				return -1;
 			}
 			break;
 		default:
-			msg_debug ("parse_command: bad comand: %s", token);
+			msg_debug ("parse_command: bad command: %s", token);
 			return -1;
 	}
 
@@ -187,12 +187,16 @@ parse_header (struct worker_task *task, char *line)
 		case 'C':
 			/* content-length */
 			if (strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
-				task->content_length = strtoul (line, &err, 10);
-				task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_buf_t));
-				task->msg->buf = fstralloc (task->task_pool, task->content_length);
-				if (task->msg->buf == NULL) {
-					msg_err ("read_socket: cannot allocate memory for message buffer");
-					return -1;
+                if (task->content_length == 0) {
+				    task->content_length = strtoul (line, &err, 10);
+				    task->msg = memory_pool_alloc0 (task->task_pool, sizeof (f_str_buf_t));
+				    task->msg->buf = fstralloc (task->task_pool, task->content_length);
+				    if (task->msg->buf == NULL) {
+					    msg_err ("read_socket: cannot allocate memory for message buffer");
+					    return -1;
+				    }
+					task->msg->pos = task->msg->buf->begin;
+                	update_buf_size (task->msg);
 				}
 			}
 			else {
@@ -306,13 +310,13 @@ show_url_header (struct worker_task *task)
 		if (TAILQ_NEXT (url, next) != NULL) {
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
-			r += snprintf (outbuf, sizeof (outbuf) - r, "%s, ", host.begin);
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
 			*(host.begin + host.len) = c;
 		}
 		else {
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
-			r += snprintf (outbuf, sizeof (outbuf) - r, "%s" CRLF, host.begin);
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
 			*(host.begin + host.len) = c;
 		}
 	}

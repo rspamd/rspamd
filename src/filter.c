@@ -381,6 +381,8 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	}
 	
 	weight = st->classifier->classify_func (task->worker->srv->statfile_pool, filename, tokens);
+
+	msg_debug ("process_statfiles: got classify weight: %.2f", weight);
 	
 	if (weight > 0.000001) {
 		if ((w = g_hash_table_lookup (data->metrics, st->metric)) == NULL) {

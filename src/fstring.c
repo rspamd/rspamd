@@ -188,6 +188,7 @@ fstralloc (memory_pool_t *pool, size_t len)
 	}
 
 	res->size = len;
+    res->len = 0;
 	return res;
 }
 

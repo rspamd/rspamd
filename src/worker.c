@@ -87,8 +87,7 @@ free_task (struct worker_task *task)
 		}
 		while (!TAILQ_EMPTY (&task->parts)) {
 			part = TAILQ_FIRST (&task->parts);
-			g_object_unref (part->type);
-			g_object_unref (part->content);
+			g_byte_array_free (part->content, FALSE);
 			TAILQ_REMOVE (&task->parts, part, next);
 		}
 		memory_pool_delete (task->task_pool);
@@ -222,6 +221,7 @@ read_socket (struct bufferevent *bev, void *arg)
 			r = bufferevent_read (bev, task->msg->pos, task->msg->free);
 			if (r > 0) {
 				task->msg->pos += r;
+                msg_debug ("read_socket: read %zd bytes from socket, %zd bytes left", r, task->msg->free);
 				update_buf_size (task->msg);
 				if (task->msg->free == 0) {
 					r = process_message (task);
@@ -244,9 +244,8 @@ read_socket (struct bufferevent *bev, void *arg)
 				}
 			}
 			else {
-				msg_err ("read_socket: cannot read data to buffer: %ld", (long int)r);
+				msg_warn ("read_socket: cannot read data to buffer (free space: %zd): %ld", task->msg->free, (long int)r);
 				bufferevent_disable (bev, EV_READ);
-				bufferevent_free (bev);
 				free_task (task);
 			}
 			break;

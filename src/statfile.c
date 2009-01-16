@@ -295,9 +295,7 @@ statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 		if (i + blocknum > file->blocks) {
 			break;
 		}
-		msg_debug ("statfile_pool_get_block: test block with h1=%u, h2=%u, number %u in chain %u", block->hash1, block->hash2, i, blocknum);
 		if (block->hash1 == h1 && block->hash2 == h2) {
-			msg_debug ("statfile_pool_get_block: found block with h1=%u, h2=%u, number %u in chain %u", h1, h2, i, blocknum);
 			block->last_access = now - (time_t)header->create_time;
 			return block->value;
 		}
@@ -305,7 +303,6 @@ statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 		block = (struct stat_file_block *)c;
 	}
 
-	msg_debug ("statfile_pool_get_block: block with h1=%u, h2=%u, not found in chain %u", h1, h2, blocknum);
 
 	return 0;
 }

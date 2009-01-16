@@ -14,6 +14,7 @@ perl/Makefile:
 install: $(EXEC)
 	cd perl && make install && cd ..
 	$(INSTALL) -b $(EXEC) $(PREFIX)/sbin/$(EXEC)
+	$(INSTALL) -b rspamc.pl $(PREFIX)/bin/rspamc
 	$(INSTALL) -v $(EXEC).sh $(PREFIX)/etc/rc.d
 	#$(INSTALL) -m0644 rspamd.8 $(MANPATH)/man8
 	#$(INSTALL) -m0644 rspamd.conf.sample $(PREFIX)/etc
