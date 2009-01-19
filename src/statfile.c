@@ -337,6 +337,12 @@ statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 			msg_debug ("statfile_pool_set_block: chain %u is full, starting expire", blocknum);
 			break;
 		}
+		/* First try to find block in chain */
+		if (block->hash1 == h1 && block->hash2 == h2) {
+			block->last_access = now - (time_t)header->create_time;
+			block->value = value;
+			return;
+		}
 		/* Check whether we have a free block in chain */
 		if (block->hash1 == 0 && block->hash2 == 0) {
 			/* Write new block here */

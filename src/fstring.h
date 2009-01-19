@@ -93,4 +93,10 @@ f_str_t* fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen);
  */
 uint32_t fstrhash (f_str_t *str);
 
+
+/*
+ * Make copy of string to 0-terminated string
+ */
+char* fstrcstr (f_str_t *str, memory_pool_t *pool);
+
 #endif

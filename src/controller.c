@@ -26,6 +26,7 @@
 #include "classifiers/classifiers.h"
 
 #define CRLF "\r\n"
+#define END "END" CRLF
 
 enum command_type {
 	COMMAND_PASSWORD,
@@ -149,9 +150,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			}
 			break;
 		case COMMAND_QUIT:
-				session->state = STATE_QUIT;
-				r = snprintf (out_buf, sizeof (out_buf), "bye" CRLF);
-				bufferevent_write (session->bev, out_buf, r);
+			session->state = STATE_QUIT;
 			break;
 		case COMMAND_RELOAD:
 			if (check_auth (cmd, session)) {
@@ -170,7 +169,6 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							  session->worker->srv->stat->connections_count);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF,
 							  session->worker->srv->stat->control_connections_count);
-				r += snprintf (out_buf + r, sizeof (out_buf) - r, "-- end of stats report" CRLF);
 				bufferevent_write (session->bev, out_buf, r);
 			}
 			break;
@@ -187,8 +185,8 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				/* If uptime more than 2 hours, print as a number of days. */
  				if (uptime >= 2 * 3600) {
 					days = uptime / 86400;
-					hours = (uptime % 3600) / 60;
-					minutes = (uptime % 60) / 60;
+					hours = uptime / 3600 - days * 86400;
+					minutes = uptime / 60 - hours * 3600 - days * 86400;
 					r = snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, 
 								days, days > 1 ? "s" : " ",
 								hours, hours > 1 ? "s" : " ",
@@ -201,7 +199,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				/* Else print the minutes and seconds. */
 				else {
 					hours = uptime / 3600;
-					minutes = (uptime % 60) / 60;
+					minutes = uptime / 60 - hours * 3600;
 					r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minite%s %d second%s" CRLF, 
 								hours, hours > 1 ? "s" : " ",
 								minutes, minutes > 1 ? "s" : " ",
@@ -371,10 +369,14 @@ read_socket (struct bufferevent *bev, void *arg)
 					session->state = STATE_REPLY;
 				}
 				if (session->state != STATE_LEARN) {
+					bufferevent_write (bev, END, sizeof (END) - 1);
 					bufferevent_enable (bev, EV_WRITE);
 				}
 				g_strfreev (params);
 			}
+            else {
+				bufferevent_enable (bev, EV_WRITE);
+            }
 			if (s != NULL) {
 				free (s);
 			}

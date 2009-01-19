@@ -60,11 +60,13 @@ get_next_word (f_str_t *buf, f_str_t *token)
 
 	pos = token->begin;
 	/* Skip non graph symbols */
-	while (remain-- && !g_ascii_isgraph (*pos ++)) {
+	while (remain-- && !g_ascii_isgraph (*pos)) {
 		token->begin ++;
+		pos ++;
 	}
-	while (remain-- && g_ascii_isgraph (*pos ++)) {
+	while (remain-- && g_ascii_isgraph (*pos)) {
 		token->len ++;
+		pos ++;
 	}
 
 	if (token->len == 0) {

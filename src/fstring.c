@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "fstring.h"
 
@@ -152,6 +153,21 @@ fstrcat (f_str_t *dest, f_str_t *src)
 
 	return cur;
 
+}
+
+/*
+ * Make copy of string to 0-terminated string
+ */
+char* 
+fstrcstr (f_str_t *str, memory_pool_t *pool)
+{
+	char *res;
+	res = memory_pool_alloc (pool, str->len + 1);
+
+	memcpy (res, str->begin, str->len);
+	res[str->len] = 0;
+
+	return res;
 }
 
 /*

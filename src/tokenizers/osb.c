@@ -43,6 +43,7 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 			hashpipe[i] = hashpipe[i - 1];
 		}
 		hashpipe[0] = fstrhash (&token);
+		msg_debug ("osb_tokenize_text: text token %s, hash: %d", fstrcstr (&token, pool), hashpipe[0]);
 		
 		for (i = 1; i < FEATURE_WINDOW_SIZE; i ++) {
 			h1 = hashpipe[0]* primes[0] + hashpipe[i] * primes[i<<1];
