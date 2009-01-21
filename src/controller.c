@@ -135,11 +135,12 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 static void
 process_command (struct controller_command *cmd, char **cmd_args, struct controller_session *session)
 {
-	char out_buf[512], *arg, *err_str;
+	char out_buf[BUFSIZ], *arg, *err_str;
 	int r = 0, days, hours, minutes;
 	time_t uptime;
 	unsigned long size = 0;
 	struct statfile *statfile;
+	memory_pool_stat_t mem_st;
 
 	switch (cmd->type) {
 		case COMMAND_PASSWORD:
@@ -173,6 +174,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			break;
 		case COMMAND_STAT:
 			if (check_auth (cmd, session)) {
+				memory_pool_stat (&mem_st);
 				r = snprintf (out_buf, sizeof (out_buf), "Messages scanned: %u" CRLF,
 							  session->worker->srv->stat->messages_scanned);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r , "Messages learned: %u" CRLF,
@@ -181,6 +183,14 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							  session->worker->srv->stat->connections_count);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF,
 							  session->worker->srv->stat->control_connections_count);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %zd" CRLF,
+							  mem_st.bytes_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %zd" CRLF,
+							  mem_st.chunks_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %zd" CRLF,
+							  mem_st.shared_chunks_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %zd" CRLF,
+							  mem_st.chunks_freed);
 				bufferevent_write (session->bev, out_buf, r);
 			}
 			break;
