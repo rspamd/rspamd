@@ -6,6 +6,7 @@
 #include "mem_pool.h"
 #include "filter.h"
 #include "main.h"
+#include "message.h"
 #include "cfg_file.h"
 #include "perl.h"
 #include "util.h"
@@ -354,9 +355,12 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	struct statfile_callback_data *data= (struct statfile_callback_data *)arg;
 	struct worker_task *task = data->task;
 	struct statfile *st = (struct statfile *)value;
-	GTree *tokens;
+	GTree *tokens = NULL;
 	char *filename;
 	double weight, *w;
+	GList *cur = NULL;
+	GByteArray *content;
+	f_str_t c;
 	
 	if (g_list_length (task->rcpt) == 1) {
 		filename = resolve_stat_filename (task->task_pool, st->pattern, task->from, (char *)task->rcpt->data);
@@ -371,11 +375,14 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	}
 	
 	if ((tokens = g_hash_table_lookup (data->tokens, st->tokenizer)) == NULL) {
-		/* Tree would be freed at task pool freeing */
-		tokens = st->tokenizer->tokenize_func (st->tokenizer, task->task_pool, task->msg->buf);
-		if (tokens == NULL) {
-			msg_info ("statfiles_callback: cannot tokenize input");
-			return;
+		while ((content = get_next_text_part (task->task_pool, task->parts, &cur)) != NULL) {
+			c.begin = content->data;
+			c.len = content->len;
+			/* Tree would be freed at task pool freeing */
+			if (!st->tokenizer->tokenize_func (st->tokenizer, task->task_pool, &c, &tokens)) {
+				msg_info ("statfiles_callback: cannot tokenize input");
+				return;
+			}
 		}
 		g_hash_table_insert (data->tokens, st->tokenizer, tokens);
 	}

@@ -13,6 +13,7 @@
 
 #include "../src/config.h"
 #include "../src/main.h"
+#include "../src/message.h"
 #include "../src/cfg_file.h"
 #include "../src/perl.h"
 #include "../src/mem_pool.h"
@@ -86,12 +87,8 @@ rspamd_task_get_part (r, num)
 	if (number < 0 || number > r->parts_count - 1) {
 		XSRETURN_UNDEF;
 	}
-
-	TAILQ_FOREACH (part, &r->parts, next) {
-		if (--number == 0) {
-			break;
-		}
-	}
+	
+	part = g_list_nth_data (r->parts, number);
 	RETVAL = newHV();
 	type = g_mime_content_type_to_string (part->type);
 

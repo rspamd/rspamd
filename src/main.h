@@ -1,5 +1,5 @@
-#ifndef RPOP_MAIN_H
-#define RPOP_MAIN_H
+#ifndef RSPAMD_MAIN_H
+#define RSPAMD_MAIN_H
 
 #include "config.h"
 
@@ -84,6 +84,7 @@ struct pidfh;
 struct config_file;
 struct tokenizer;
 struct classifier;
+struct mime_part;
 
 /* Server statistics */
 struct rspamd_stat {
@@ -111,11 +112,6 @@ struct rspamd_main {
 	TAILQ_HEAD (workq, rspamd_worker) workers;
 };
 
-struct mime_part {
-	GMimeContentType *type;
-	GByteArray *content;
-	TAILQ_ENTRY (mime_part) next;
-};
 
 struct save_point {
 	void *entry;
@@ -144,6 +140,7 @@ struct controller_session {
 	struct classifier *learn_classifier;
 	char *learn_filename;
 	f_str_buf_t *learn_buf;
+	GList *parts;
 	int in_class;
 };
 
@@ -178,7 +175,7 @@ struct worker_task {
 	/* Message */
 	GMimeMessage *message;
 	/* All parts of message */
-	TAILQ_HEAD (mime_partq, mime_part) parts;
+	GList *parts;
 	/* URLs extracted from message */
 	TAILQ_HEAD (uriq, uri) urls;
 	/* Hash of metric result structures */

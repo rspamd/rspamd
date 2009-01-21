@@ -20,11 +20,10 @@ static const int primes[] = {
 	797, 3277,
 };
 
-GTree *
-osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input)
+int
+osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **tree)
 {
 	token_node_t *new = NULL;
-	GTree *tree;
 	f_str_t token = { NULL, 0, 0 };
 	uint32_t hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
 	int i;
@@ -33,9 +32,13 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 	for (i = 0; i < FEATURE_WINDOW_SIZE; i ++) {
 		hashpipe[i] = 0xABCDEF;
 	}
+	
+	if (*tree == NULL) {
+		*tree = g_tree_new (token_node_compare_func);
+		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
+	}
 
-	tree = g_tree_new (token_node_compare_func);
-	memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, tree);
+	msg_debug ("osb_tokenize_text: got input length: %zd", input->len);
 
 	while (tokenizer->get_next_word (input, &token)) {
 		/* Shift hashpipe */
@@ -43,7 +46,6 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 			hashpipe[i] = hashpipe[i - 1];
 		}
 		hashpipe[0] = fstrhash (&token);
-		msg_debug ("osb_tokenize_text: text token %s, hash: %d", fstrcstr (&token, pool), hashpipe[0]);
 		
 		for (i = 1; i < FEATURE_WINDOW_SIZE; i ++) {
 			h1 = hashpipe[0]* primes[0] + hashpipe[i] * primes[i<<1];
@@ -52,14 +54,13 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 			new->h1 = h1;
 			new->h2 = h2;
 
-			if (g_tree_lookup (tree, new) == NULL) {
-				msg_debug ("osb_tokenize_text: append new token, h1=%u, h2=%u", h1, h2);
-				g_tree_insert (tree, new, new);
+			if (g_tree_lookup (*tree, new) == NULL) {
+				g_tree_insert (*tree, new, new);
 			}
 		}
 	}
 
-	return tree;
+	return TRUE;
 }
 
 /*

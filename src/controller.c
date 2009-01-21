@@ -18,6 +18,7 @@
 
 #include "util.h"
 #include "main.h"
+#include "message.h"
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"
@@ -98,9 +99,20 @@ completion_func (gpointer elem)
 static void
 free_session (struct controller_session *session)
 {
+	GList *part;
+	struct mime_part *p;
+	
 	msg_debug ("free_session: freeing session %p", session);
 	bufferevent_disable (session->bev, EV_READ | EV_WRITE);
 	bufferevent_free (session->bev);
+	
+	while ((part = g_list_first (session->parts))) {
+		session->parts = g_list_remove_link (session->parts, part);
+		p = (struct mime_part *)part->data;
+		g_byte_array_free (p->content, FALSE);
+		g_list_free_1 (part);
+	}
+
 	memory_pool_delete (session->session_pool);
 	g_free (session);
 }
@@ -231,7 +243,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					bufferevent_write (session->bev, out_buf, r);
 					return;
 				}
-				session->learn_buf = memory_pool_alloc (session->session_pool, sizeof (f_str_buf_t));
+				session->learn_buf = memory_pool_alloc0 (session->session_pool, sizeof (f_str_buf_t));
 				session->learn_buf->buf = fstralloc (session->session_pool, size);
 				if (session->learn_buf->buf == NULL) {
 					r = snprintf (out_buf, sizeof (out_buf), "allocating buffer for learn failed" CRLF);
@@ -328,8 +340,11 @@ read_socket (struct bufferevent *bev, void *arg)
 	struct controller_session *session = (struct controller_session *)arg;
 	int len, i;
 	char *s, **params, *cmd, out_buf[128];
-	GList *comp_list;
-	GTree *tokens;
+	GList *comp_list, *cur = NULL;
+	GTree *tokens = NULL;
+	GByteArray *content = NULL;
+	struct mime_part *p;
+	f_str_t c;
 
 	switch (session->state) {
 		case STATE_COMMAND:
@@ -387,18 +402,32 @@ read_socket (struct bufferevent *bev, void *arg)
 				session->learn_buf->pos += i;
 				update_buf_size (session->learn_buf);
 				if (session->learn_buf->free == 0) {
-					tokens = session->learn_tokenizer->tokenize_func (session->learn_tokenizer, session->session_pool, session->learn_buf->buf);
-					if (tokens == NULL) {
-						i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
-						bufferevent_write (bev, out_buf, i);
-						session->state = STATE_REPLY;
-						return;
+					process_learn (session);
+					while ((content = get_next_text_part (session->session_pool, session->parts, &cur)) != NULL) {
+						c.begin = content->data;
+						c.len = content->len;
+						if (!session->learn_tokenizer->tokenize_func (session->learn_tokenizer, 
+									session->session_pool, &c, &tokens)) {
+							i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
+							bufferevent_write (bev, out_buf, i);
+							session->state = STATE_REPLY;
+							return;
+						}
 					}
 					session->learn_classifier->learn_func (session->worker->srv->statfile_pool, session->learn_filename, tokens, session->in_class);
 					session->worker->srv->stat->messages_learned ++;
 					i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 					bufferevent_write (bev, out_buf, i);
 					bufferevent_enable (bev, EV_WRITE);
+
+					/* Clean learned parts */
+					while ((cur = g_list_first (session->parts))) {
+						session->parts = g_list_remove_link (session->parts, cur);
+						p = (struct mime_part *)cur->data;
+						g_byte_array_free (p->content, FALSE);
+						g_list_free_1 (cur);
+					}
+
 					session->state = STATE_REPLY;
 					break;
 				}

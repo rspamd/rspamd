@@ -19,6 +19,7 @@
 
 #include "../config.h"
 #include "../main.h"
+#include "../message.h"
 #include "../modules.h"
 #include "../cfg_file.h"
 
@@ -125,6 +126,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
 	char *headerv;
 	struct mime_part *part;
+	GList *cur;
 	struct uri *url;
 
 	switch (re->type) {
@@ -155,10 +157,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			break;
 		case REGEXP_MIME:
 			msg_debug ("process_regexp: checking mime regexp: /%s/", re->regexp_text);
-			TAILQ_FOREACH (part, &task->parts, next) {
+			cur = g_list_first (task->parts);
+			while (cur) {
+				part = (struct mime_part *)cur->data;
 				if (g_regex_match_full (re->regexp, part->content->data, part->content->len, 0, 0, NULL, NULL) == TRUE) {
 					return 1;
 				}
+				cur = g_list_next (cur);
 			}
 			return 0;
 		case REGEXP_MESSAGE:

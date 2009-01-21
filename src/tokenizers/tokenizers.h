@@ -22,7 +22,7 @@ typedef struct token_node_s {
 /* Common tokenizer structure */
 struct tokenizer {
 	char *name;
-	GTree* (*tokenize_func)(struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input);
+	int (*tokenize_func)(struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **cur);
 	f_str_t* (*get_next_word)(f_str_t *buf, f_str_t *token);
 };
 
@@ -33,7 +33,7 @@ struct tokenizer* get_tokenizer (char *name);
 /* Get next word from specified f_str_t buf */
 f_str_t *get_next_word (f_str_t *buf, f_str_t *token);
 /* OSB tokenize function */
-GTree* osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input);
+int osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **cur);
 
 /* Array of all defined tokenizers */
 extern struct tokenizer tokenizers[];
