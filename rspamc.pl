@@ -103,8 +103,8 @@ sub do_rspamc_command {
     syswrite $sock, "Content-Length: " . length ($input) . $CRLF . $CRLF;
     syswrite $sock, $input;
     syswrite $sock, $CRLF;
-    while (<$sock>) {
-        print $_;
+    while (defined (my $line = <$sock>)) {
+        print $line;
     }
 }
 

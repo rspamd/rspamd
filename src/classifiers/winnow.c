@@ -105,3 +105,9 @@ winnow_learn (statfile_pool_t *pool, char *statfile, GTree *input, int in_class)
 	statfile_pool_unlock_file (pool, statfile);
 	
 }
+
+double
+winnow_add_result (double result, double new)
+{
+	return result + new;
+}

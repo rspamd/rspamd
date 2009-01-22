@@ -16,6 +16,7 @@ struct classifier {
 	char *name;
 	double (*classify_func)(statfile_pool_t *pool, char *statfile, GTree *input);
 	void (*learn_func)(statfile_pool_t *pool, char *statfile, GTree *input, int in_class);
+	double (*add_result_func)(double result, double new);
 };
 
 /* Get classifier structure by name or return NULL if this name is not found */
@@ -23,6 +24,7 @@ struct classifier* get_classifier (char *name);
 /* Winnow algorithm */
 double winnow_classify (statfile_pool_t *pool, char *statfile, GTree *input);
 void winnow_learn (statfile_pool_t *pool, char *statfile, GTree *input, int in_class);
+double winnow_add_result (double result, double new);
 
 /* Array of all defined classifiers */
 extern struct classifier classifiers[];

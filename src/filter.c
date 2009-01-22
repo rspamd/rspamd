@@ -349,6 +349,12 @@ struct statfile_callback_data {
 	struct worker_task *task;
 };
 
+struct statfile_result {
+	double weight;
+	GList *symbols;
+	struct classifier *classifier;
+};
+
 static void
 statfiles_callback (gpointer key, gpointer value, void *arg)
 {
@@ -357,7 +363,8 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	struct statfile *st = (struct statfile *)value;
 	GTree *tokens = NULL;
 	char *filename;
-	double weight, *w;
+	double weight;
+	struct statfile_result *res;
 	GList *cur = NULL;
 	GByteArray *content;
 	f_str_t c;
@@ -392,13 +399,16 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	msg_debug ("process_statfiles: got classify weight: %.2f", weight);
 	
 	if (weight > 0.000001) {
-		if ((w = g_hash_table_lookup (data->metrics, st->metric)) == NULL) {
-			w = memory_pool_alloc (task->task_pool, sizeof (double));
-			*w = weight * st->weight;
-			g_hash_table_insert (data->metrics, st->metric, w);
+
+		if ((res = g_hash_table_lookup (data->metrics, st->metric)) == NULL) {
+			res = memory_pool_alloc (task->task_pool, sizeof (struct statfile_result));
+			res->symbols = g_list_prepend (NULL, st->alias);
+			res->weight = st->classifier->add_result_func (0, weight);
+			g_hash_table_insert (data->metrics, st->metric, res);
 		}
 		else {
-			*w += weight * st->weight;
+			res->symbols = g_list_prepend (NULL, st->alias);
+			res->weight = st->classifier->add_result_func (res->weight, weight);
 		}
 	}
 	
@@ -410,10 +420,10 @@ statfiles_results_callback (gpointer key, gpointer value, void *arg)
 	struct worker_task *task = (struct worker_task *)arg;
 	struct metric_result *metric_res;
 	struct metric *metric;
-	double w;
+	struct statfile_result *res = (struct statfile_result *)value;
+	GList *cur_symbol;
 
 	metric_res = g_hash_table_lookup (task->results, (char *)key);
-	w = *(double *)value;
 
 	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, (char *)key);
 	if (metric == NULL) {
@@ -426,13 +436,19 @@ statfiles_results_callback (gpointer key, gpointer value, void *arg)
 		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, metric_res->symbols);
 		metric_res->metric = metric;
-		metric_res->score = w;
-		g_hash_table_insert (task->results, key, metric_res);
+		metric_res->score = res->weight;
+		g_hash_table_insert (task->results, metric->name, metric_res);
 	}
 	else {
-		metric_res->score += w;
+		metric_res->score += res->weight;
 	}
-	g_hash_table_insert (metric_res->symbols, key, GSIZE_TO_POINTER (1));
+
+	cur_symbol = g_list_first (res->symbols);
+	while (cur_symbol) {	
+		msg_debug ("statfiles_results_callback: insert symbol %s to metric %s", (char *)cur_symbol->data, metric->name);
+		g_hash_table_insert (metric_res->symbols, (char *)cur_symbol->data, GSIZE_TO_POINTER (1));
+		cur_symbol = g_list_next (cur_symbol);
+	}
 
 }
 

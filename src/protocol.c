@@ -401,7 +401,8 @@ show_metric_symbols (gpointer metric_name, gpointer metric_value, void *user_dat
 		cur = g_list_next (cur);
 	}
 	g_list_free (symbols);
-	outbuf[r++] = '\r'; outbuf[r] = '\n';
+	msg_debug ("show_metric_symbols: write symbols line: %s", outbuf);
+	outbuf[r++] = '\r'; outbuf[r++] = '\n';
 	bufferevent_write (task->bev, outbuf, r);
 }
 
