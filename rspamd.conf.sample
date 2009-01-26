@@ -46,7 +46,7 @@ logging {
 
 # Limit for statfile pool size
 # Default: 100M
-statfile_pool_size = 20M;
+statfile_pool_size = 40M;
 
 
 # Sample statfile definition
@@ -69,6 +69,8 @@ statfile {
 statfile {
 	alias = "test.ham";
 	pattern = "./test.ham";
-	weight = -1.0;
+	weight = -2.0;
 	size = 10M;
 };
+
+url_filters = "surbl";

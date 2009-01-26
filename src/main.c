@@ -227,8 +227,10 @@ main (int argc, char **argv, char **env)
 
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, FIXED_CONFIG_FILE);
 	read_cmd_line (argc, argv, rspamd->cfg);
-
-    msg_warn ("(main) starting...");
+    
+    /* First set logger to console logger */
+    cfg->log_fd = 2;
+	g_log_set_default_handler (file_log_function, cfg);
 
 	#ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, environ);
@@ -236,26 +238,27 @@ main (int argc, char **argv, char **env)
 	
 	f = fopen (rspamd->cfg->cfg_name , "r");
 	if (f == NULL) {
-		msg_warn ("cannot open file: %s", rspamd->cfg->cfg_name );
+		msg_err ("main: cannot open file: %s", rspamd->cfg->cfg_name );
 		return EBADF;
 	}
 	yyin = f;
 
 	if (yyparse() != 0 || yynerrs > 0) {
-		msg_warn ("yyparse: cannot parse config file, %d errors", yynerrs);
+		msg_err ("main: cannot parse config file, %d errors", yynerrs);
 		return EBADF;
 	}
 
 	fclose (f);
+    msg_info ("main: starting...");
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name );
 
 	/* Strictly set temp dir */
     if (!rspamd->cfg->temp_dir) {
-		msg_warn ("tempdir is not set, trying to use $TMPDIR");
+		msg_warn ("main: tempdir is not set, trying to use $TMPDIR");
 		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!rspamd->cfg->temp_dir) {
-			msg_warn ("$TMPDIR is empty too, using /tmp as default");
+			msg_warn ("main: $TMPDIR is empty too, using /tmp as default");
 	    	rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
 		}
     }

@@ -394,13 +394,14 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 	}
 
 	p = strvec;
-	while (*p++) {
+	while (*p) {
 		cur = NULL;
 		/* Search modules from known C modules */
 		for (i = 0; i < MODULES_NUM; i++) {
 			if (strcasecmp (modules[i].name, *p) == 0) {
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
+				msg_debug ("parse_filters_str: found C filter %s", *p);
 				switch (type) {
 					case SCRIPT_HEADER:
 						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
@@ -424,6 +425,7 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 		}
 		if (cur != NULL) {
 			/* Go to next iteration */
+			p++;
 			continue;
 		}
 		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
@@ -446,6 +448,7 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 				LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
 				break;
 		}
+		p ++;
 	}
 
 	g_strfreev (strvec);

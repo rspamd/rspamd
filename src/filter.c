@@ -77,15 +77,17 @@ factor_consolidation_func (struct worker_task *task, const char *metric_name)
  * Call perl or C module function for specified part of message 
  */
 static void
-call_filter_by_name (struct worker_task *task, const char *name, enum script_type sc_type, enum filter_type filt_type)
+call_filter_by_name (struct worker_task *task, const char *name, enum filter_type filt_type, enum script_type sc_type)
 {
 	struct module_ctx *c_module;
-
+	int res = 0;
+	
 	switch (filt_type) {
 		case C_FILTER:
 			c_module = g_hash_table_lookup (task->worker->srv->cfg->c_modules, name);
 			if (c_module) {
-				switch (filt_type) {
+				res = 1;
+				switch (sc_type) {
 					case SCRIPT_HEADER:
 						c_module->header_filter (task);
 						break;
@@ -100,9 +102,13 @@ call_filter_by_name (struct worker_task *task, const char *name, enum script_typ
 						break;
 				}
 			}
+			else {
+				msg_debug ("call_filter_by_name: %s is not a C module", name);
+			}
 			break;
 		case PERL_FILTER:
-			switch (filt_type) {
+			res = 1;
+			switch (sc_type) {
 				case SCRIPT_HEADER:
 					perl_call_header_filter (name, task);
 					break;
@@ -118,6 +124,8 @@ call_filter_by_name (struct worker_task *task, const char *name, enum script_typ
 			}
 			break;
 	}
+
+	msg_debug ("call_filter_by_name: filter name: %s, result: %d", name, (int)res);
 }
 
 static void
@@ -403,12 +411,12 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 		if ((res = g_hash_table_lookup (data->metrics, st->metric)) == NULL) {
 			res = memory_pool_alloc (task->task_pool, sizeof (struct statfile_result));
 			res->symbols = g_list_prepend (NULL, st->alias);
-			res->weight = st->classifier->add_result_func (0, weight);
+			res->weight = st->classifier->add_result_func (0, weight * st->weight);
 			g_hash_table_insert (data->metrics, st->metric, res);
 		}
 		else {
 			res->symbols = g_list_prepend (NULL, st->alias);
-			res->weight = st->classifier->add_result_func (res->weight, weight);
+			res->weight = st->classifier->add_result_func (res->weight, weight * st->weight);
 		}
 	}
 	

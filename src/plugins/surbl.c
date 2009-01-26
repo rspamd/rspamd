@@ -238,25 +238,25 @@ surbl_module_reconfig (struct config_file *cfg)
 }
 
 static char *
-format_surbl_request (char *hostname) 
+format_surbl_request (memory_pool_t *pool, f_str_t *hostname) 
 {
 	GMatchInfo *info;
-	char *result;
-
-	result = g_malloc (strlen (hostname) + strlen (surbl_module_ctx->suffix) + 1); 
+	char *result = NULL;
+    int len;
+    
+    len = hostname->len + strlen (surbl_module_ctx->suffix) + 2;
 
 	/* First try to match numeric expression */
-	if (g_regex_match (extract_numeric_regexp, hostname, 0, &info) == TRUE) {
+	if (g_regex_match_full (extract_numeric_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 		gchar *octet1, *octet2, *octet3, *octet4;
-		octet1 = g_match_info_fetch (info, 0);
-		g_match_info_next (info, NULL);
-		octet2 = g_match_info_fetch (info, 0);
-		g_match_info_next (info, NULL);
-		octet3 = g_match_info_fetch (info, 0);
-		g_match_info_next (info, NULL);
-		octet4 = g_match_info_fetch (info, 0);
+		octet1 = g_match_info_fetch (info, 1);
+		octet2 = g_match_info_fetch (info, 2);
+		octet3 = g_match_info_fetch (info, 3);
+		octet4 = g_match_info_fetch (info, 4);
 		g_match_info_free (info);
-		sprintf (result, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, surbl_module_ctx->suffix);
+		result = memory_pool_alloc (pool, len); 
+		msg_debug ("format_surbl_request: got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
+		snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, surbl_module_ctx->suffix);
 		g_free (octet1);
 		g_free (octet2);
 		g_free (octet3);
@@ -265,26 +265,25 @@ format_surbl_request (char *hostname)
 	}
 	g_match_info_free (info);
 	/* Try to match normal domain */
-	if (g_regex_match (extract_normal_regexp, hostname, 0, &info) == TRUE) {
+	if (g_regex_match_full (extract_normal_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 		gchar *part1, *part2;
-		part1 = g_match_info_fetch (info, 0);
-		g_match_info_next (info, NULL);
-		part2 = g_match_info_fetch (info, 0);
+		part1 = g_match_info_fetch (info, 1);
+		part2 = g_match_info_fetch (info, 2);
 		g_match_info_free (info);
-		sprintf (result, "%s.%s", part1, part2);
+		result = memory_pool_alloc (pool, len); 
+		msg_debug ("format_surbl_request: got normal 2-d level domain %s.%s", part1, part2);
 		if (g_hash_table_lookup (surbl_module_ctx->hosters, result) != NULL) {
 			/* Match additional part for hosters */
 			g_free (part1);
 			g_free (part2);
-			if (g_regex_match (extract_hoster_regexp, hostname, 0, &info) == TRUE) {
+			if (g_regex_match_full (extract_hoster_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 				gchar *hpart1, *hpart2, *hpart3;
-				hpart1 = g_match_info_fetch (info, 0);
-				g_match_info_next (info, NULL);
-				hpart2 = g_match_info_fetch (info, 0);
-				g_match_info_next (info, NULL);
-				hpart3 = g_match_info_fetch (info, 0);
+				hpart1 = g_match_info_fetch (info, 1);
+				hpart2 = g_match_info_fetch (info, 2);
+				hpart3 = g_match_info_fetch (info, 3);
 				g_match_info_free (info);
-				sprintf (result, "%s.%s.%s.%s", hpart1, hpart2, hpart3, surbl_module_ctx->suffix);
+				msg_debug ("format_surbl_request: got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
+				snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, surbl_module_ctx->suffix);
 				g_free (hpart1);
 				g_free (hpart2);
 				g_free (hpart3);
@@ -292,6 +291,7 @@ format_surbl_request (char *hostname)
 			}
 			return NULL;
 		}
+		snprintf (result, len, "%s.%s.%s", part1, part2, surbl_module_ctx->suffix);
 		g_free (part1);
 		g_free (part2);
 		return result;
@@ -305,12 +305,14 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 {
 	struct memcached_param *param = (struct memcached_param *)data;
 	
+	msg_debug ("dns_callback: in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
-	if (result != DNS_ERR_NONE || type != DNS_IPv4_A) {
+	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
 		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, surbl_module_ctx->suffix);
 		insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
 	}
 	else {
+		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, surbl_module_ctx->suffix);
 		insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 0);
 	}
 
@@ -321,10 +323,6 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 		process_filters (param->task);
 	}
 
-	g_free (param->ctx->param->buf);
-	g_free (param->ctx->param);
-	g_free (param->ctx);
-	g_free (param);
 }
 
 static void 
@@ -333,6 +331,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 	struct memcached_param *param = (struct memcached_param *)data;
 	int *url_count;
 	char *surbl_req;
+	f_str_t c;
 
 	switch (ctx->op) {
 		case CMD_CONNECT:
@@ -345,10 +344,6 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 					param->task->save.saved = 1;
 					process_filters (param->task);
 				}
-				g_free (param->ctx->param->buf);
-				g_free (param->ctx->param);
-				g_free (param->ctx);
-				g_free (param);
 			}
 			else {
 				memc_get (param->ctx, param->ctx->param);
@@ -364,10 +359,6 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 					param->task->save.saved = 1;
 					process_filters (param->task);
 				}
-				g_free (param->ctx->param->buf);
-				g_free (param->ctx->param);
-				g_free (param->ctx);
-				g_free (param);
 			}
 			else {
 				url_count = (int *)param->ctx->param->buf;
@@ -391,15 +382,14 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 				param->task->save.saved = 1;
 				process_filters (param->task);
 			}
-			if ((surbl_req = format_surbl_request (param->url->host)) != NULL) {
+			c.begin = param->url->host;
+			c.len = param->url->hostlen;
+			if ((surbl_req = format_surbl_request (param->task->task_pool, &c)) != NULL) {
+				msg_debug ("surbl_memcached: send surbl dns request %s", surbl_req);
 				param->task->save.saved ++;
 				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
 				return;
 			}
-			g_free (param->ctx->param->buf);
-			g_free (param->ctx->param);
-			g_free (param->ctx);
-			g_free (param);
 			break;
 	}
 }
@@ -413,16 +403,14 @@ register_memcached_call (struct uri *url, struct worker_task *task)
 	gchar *sum_str;
 	int *url_count;
 
-	param = g_malloc (sizeof (struct memcached_param));
-	cur_param = g_malloc (sizeof (memcached_param_t));
-	url_count = g_malloc (sizeof (int));
+	param = memory_pool_alloc (task->task_pool, sizeof (struct memcached_param));
+	cur_param = memory_pool_alloc0 (task->task_pool, sizeof (memcached_param_t));
+	url_count = memory_pool_alloc (task->task_pool, sizeof (int));
 
 	param->url = url;
 	param->task = task;
 
-	param->ctx = g_malloc (sizeof (memcached_ctx_t));
-	bzero (param->ctx, sizeof (memcached_ctx_t));
-	bzero (cur_param, sizeof (memcached_param_t));
+	param->ctx = memory_pool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
 
 	cur_param->buf = (u_char *)url_count;
 	cur_param->bufsize = sizeof (int);
@@ -435,6 +423,10 @@ register_memcached_call (struct uri *url, struct worker_task *task)
 											task->cfg->memcached_servers_num, sizeof (struct memcached_server),
 											time (NULL), task->cfg->memcached_error_time, task->cfg->memcached_dead_time, task->cfg->memcached_maxerrors,
 											cur_param->key, strlen(cur_param->key));
+	if (selected == NULL) {
+		msg_err ("surbl_register_memcached_call: no memcached servers can be selected");
+		return;
+	}
 	param->ctx->callback = memcached_callback;
 	param->ctx->callback_data = (void *)param;
 	param->ctx->protocol = task->cfg->memcached_protocol;
@@ -480,7 +472,6 @@ redirector_callback (int fd, short what, void *arg)
 						param->task->save.saved = 1;
 						process_filters (param->task);
 					}
-					g_free (param);
 					return;
 				}
 				param->state = STATE_READ;
@@ -494,7 +485,6 @@ redirector_callback (int fd, short what, void *arg)
 					param->task->save.saved = 1;
 					process_filters (param->task);
 				}
-				g_free (param);
 			}
 			break;
 		case STATE_READ:
@@ -523,7 +513,6 @@ redirector_callback (int fd, short what, void *arg)
 					param->task->save.saved = 1;
 					process_filters (param->task);
 				}
-				g_free (param);
 			}
 			else {
 				event_del (&param->ev);
@@ -534,7 +523,6 @@ redirector_callback (int fd, short what, void *arg)
 					param->task->save.saved = 1;
 					process_filters (param->task);
 				}
-				g_free (param);
 			}
 			break;
 	}
@@ -571,7 +559,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 			msg_info ("register_redirector_call: connect() failed: %m");
 		}
 	}
-	param = g_malloc (sizeof (struct redirector_param));
+	param = memory_pool_alloc (task->task_pool, sizeof (struct redirector_param));
 	param->url = url;
 	param->task = task;
 	param->state = STATE_READ;
@@ -586,13 +574,34 @@ static int
 surbl_test_url (struct worker_task *task)
 {
 	struct uri *url;
+	char *surbl_req;
+	struct memcached_param *param;
+	f_str_t c;
 
 	TAILQ_FOREACH (url, &task->urls, next) {
+		msg_debug ("surbl_test_url: check url %s", struri (url));
 		if (surbl_module_ctx->use_redirector) {
 			register_redirector_call (url, task);
 		}
 		else {
-			register_memcached_call (url, task);
+			if (task->worker->srv->cfg->memcached_servers_num > 0) {
+				register_memcached_call (url, task);
+			}
+			else {
+				c.begin = url->host;
+				c.len = url->hostlen;
+				if ((surbl_req = format_surbl_request (task->task_pool, &c)) != NULL) {
+					param = memory_pool_alloc (task->task_pool, sizeof (struct memcached_param));
+					param->task = task;
+					param->url = url;
+					msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+					evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+				}
+				else {
+					msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (url));
+					return;
+				}
+			}
 		}
 		task->save.saved++;
 	}
