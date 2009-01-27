@@ -71,17 +71,17 @@ statfile_pool_expire (statfile_pool_t *pool)
 {
 	struct expiration_data exp;
 
-	if (g_hash_table_size (pool->files) == 0) {
+	if (rspamd_hash_size (pool->files) == 0) {
 		return -1;
 	}
 
 	exp.pool = pool;
 	exp.oldest = ULLONG_MAX;
 	exp.filename = NULL;
-	g_hash_table_foreach (pool->files, pool_expiration_callback, &exp);
+	rspamd_hash_foreach (pool->files, pool_expiration_callback, &exp);
 
 	if (exp.filename) {
-		statfile_pool_close (pool, exp.filename);
+		statfile_pool_close (pool, exp.filename, TRUE);
 	}
 }
 
@@ -94,8 +94,7 @@ statfile_pool_new (size_t max_size)
 	bzero (new, sizeof (statfile_pool_t));
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
-	new->files = g_hash_table_new (g_str_hash, g_str_equal);
-	memory_pool_add_destructor (new->pool, (pool_destruct_func)g_hash_table_destroy, new->files);
+	new->files = rspamd_hash_new_shared (new->pool, g_str_hash, g_str_equal);
 
 	return new;
 }
@@ -106,7 +105,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	struct stat st;
 	stat_file_t *new_file;	
 	
-	if (g_hash_table_lookup (pool->files, filename) != NULL) {
+	if (rspamd_hash_lookup (pool->files, filename) != NULL) {
 		msg_info ("statfile_pool_open: file %s is already opened", filename);
 		return 0;
 	}
@@ -154,17 +153,17 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	new_file->open_time = time (NULL);
 	new_file->access_time = new_file->open_time;
 	new_file->lock = memory_pool_get_mutex (pool->pool);
-	g_hash_table_insert (pool->files, new_file->filename, new_file);
+	rspamd_hash_insert (pool->files, new_file->filename, new_file);
 
 	return 0;
 }
 
 int
-statfile_pool_close (statfile_pool_t *pool, char *filename) 
+statfile_pool_close (statfile_pool_t *pool, char *filename, gboolean remove_hash)
 {
 	stat_file_t *file;	
 	
-	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
 		msg_info ("statfile_pool_open: file %s is not opened", filename);
 		return -1;
 	}
@@ -180,7 +179,9 @@ statfile_pool_close (statfile_pool_t *pool, char *filename)
 		close (file->fd);
 	}
 	pool->occupied -= file->len;
-	g_hash_table_remove (pool->files, file->filename);
+	if (remove_hash) {
+		rspamd_hash_remove (pool->files, file->filename);
+	}
 }
 
 int
@@ -195,7 +196,7 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 	static struct stat_file_block block = {0, 0, 0, 0};
 	int fd;
 	
-	if (g_hash_table_lookup (pool->files, filename) != NULL) {
+	if (rspamd_hash_lookup (pool->files, filename) != NULL) {
 		msg_info ("statfile_pool_create: file %s is already opened", filename);
 		return 0;
 	}
@@ -230,13 +231,13 @@ pool_delete_callback (gpointer key, gpointer value, void *data)
 {
 	statfile_pool_t *pool = (statfile_pool_t *)data;
 
-	statfile_pool_close (pool, (char *)key);
+	statfile_pool_close (pool, (char *)key, FALSE);
 }
 
 void
 statfile_pool_delete (statfile_pool_t *pool)
 {
-	g_hash_table_foreach (pool->files, pool_delete_callback, pool);
+	rspamd_hash_foreach (pool->files, pool_delete_callback, pool);
 	memory_pool_delete (pool->pool);
 	g_free (pool);
 }
@@ -246,7 +247,7 @@ statfile_pool_lock_file (statfile_pool_t *pool, char *filename)
 {
 	stat_file_t *file;
 
-	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
 		msg_info ("statfile_pool_lock_file: file %s is not opened", filename);
 		return;
 	}
@@ -259,7 +260,7 @@ statfile_pool_unlock_file (statfile_pool_t *pool, char *filename)
 {
 	stat_file_t *file;
 
-	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
 		msg_info ("statfile_pool_unlock_file: file %s is not opened", filename);
 		return;
 	}
@@ -276,7 +277,7 @@ statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 	unsigned int i, blocknum;
 	u_char *c;
 	
-	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
 		msg_info ("statfile_pool_get_block: file %s is not opened", filename);
 		return 0;
 	}
@@ -316,7 +317,7 @@ statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 	unsigned int i, blocknum, oldest = 0;
 	u_char *c;
 	
-	if ((file = g_hash_table_lookup (pool->files, filename)) == NULL) {
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
 		msg_info ("statfile_pool_set_block: file %s is not opened", filename);
 		return;
 	}
@@ -378,5 +379,5 @@ statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 int
 statfile_pool_is_open (statfile_pool_t *pool, char *filename)
 {
-	return g_hash_table_lookup (pool->files, filename) != NULL;
+	return rspamd_hash_lookup (pool->files, filename) != NULL;
 }

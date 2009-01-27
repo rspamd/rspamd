@@ -13,6 +13,7 @@
 #include <stdint.h>
 #endif
 #include "mem_pool.h"
+#include "hash.h"
 
 #define CHAIN_LENGTH 128
 
@@ -48,7 +49,7 @@ typedef struct stat_file_s {
 } stat_file_t;
 
 typedef struct statfile_pool_s {
-	GHashTable *files;
+	rspamd_hash_t *files;
 	int opened;
 	size_t max;
 	size_t occupied;
@@ -58,7 +59,7 @@ typedef struct statfile_pool_s {
 statfile_pool_t* statfile_pool_new (size_t max_size);
 int statfile_pool_open (statfile_pool_t *pool, char *filename);
 int statfile_pool_create (statfile_pool_t *pool, char *filename, size_t len);
-int statfile_pool_close (statfile_pool_t *pool, char *filename);
+int statfile_pool_close (statfile_pool_t *pool, char *filename, gboolean remove_hash);
 void statfile_pool_delete (statfile_pool_t *pool);
 void statfile_pool_lock_file (statfile_pool_t *pool, char *filename);
 void statfile_pool_unlock_file (statfile_pool_t *pool, char *filename);

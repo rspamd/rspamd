@@ -14,9 +14,17 @@
 #include <gmime/gmime.h>
 
 #include "../src/config.h"
+#if !defined(HAVE_OWN_QUEUE_H) && defined(HAVE_SYS_QUEUE_H)
+#include <sys/queue.h>
+#endif
+#ifdef HAVE_OWN_QUEUE_H
+#include "../src/queue.h"
+#endif
+
 #include "../src/main.h"
 #include "../src/cfg_file.h"
 #include "../src/url.h"
+#include "../src/message.h"
 
 static void
 mime_foreach_callback (GMimeObject *part, gpointer user_data)
@@ -72,7 +80,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 				mime_part = g_malloc (sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
-				TAILQ_INSERT_TAIL (&task->parts, mime_part, next);
+				task->parts =  g_list_prepend (task->parts, mime_part);
 				if (g_mime_content_type_is_type (type, "text", "html")) {
 					printf ("Found text/html part\n");
 					url_parse_html (task, part_content);
@@ -127,7 +135,6 @@ main (int argc, char **argv)
 	
 	task.message = message;
 	TAILQ_INIT (&task.urls);
-	TAILQ_INIT (&task.parts);
 
 	/* free the parser (and the stream) */
 	g_object_unref (parser);

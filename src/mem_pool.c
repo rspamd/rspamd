@@ -239,10 +239,9 @@ memory_pool_find_pool (memory_pool_t *pool, void *pointer)
 	return NULL;
 }
 
-static void
-memory_pool_spin (gint *mutex)
+static inline void
+__mutex_spin (gint *mutex)
 {
-	while (!g_atomic_int_compare_and_exchange (mutex, 0, 1)) {
 		/* lock was aqquired */
 #ifdef HAVE_NANOSLEEP
 		struct timespec ts;
@@ -257,6 +256,14 @@ memory_pool_spin (gint *mutex)
 #if !defined(HAVE_NANOSLEEP) && !defined(HAVE_SCHED_YIELD)
 #	error No methods to spin are defined
 #endif
+
+}
+
+static void
+memory_pool_mutex_spin (gint *mutex)
+{
+	while (!g_atomic_int_compare_and_exchange (mutex, 0, 1)) {
+		__mutex_spin (mutex);
 	}
 }
 
@@ -271,7 +278,7 @@ memory_pool_lock_shared (memory_pool_t *pool, void *pointer)
 		return;
 	}
 	
-	memory_pool_spin (&chain->lock);
+	memory_pool_mutex_spin (&chain->lock);
 }
 
 void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer)
@@ -371,13 +378,60 @@ memory_pool_get_mutex (memory_pool_t *pool)
 void 
 memory_pool_lock_mutex (gint *mutex)
 {
-	memory_pool_spin (mutex);
+	memory_pool_mutex_spin (mutex);
 }
 
 void 
 memory_pool_unlock_mutex (gint *mutex)
 {
 	(void)g_atomic_int_dec_and_test (mutex);
+}
+
+memory_pool_rwlock_t* 
+memory_pool_get_rwlock (memory_pool_t *pool)
+{
+	memory_pool_rwlock_t *lock;
+
+	lock = memory_pool_alloc_shared (pool, sizeof (memory_pool_rwlock_t));
+	lock->__r_lock = memory_pool_get_mutex (pool);
+	lock->__w_lock = memory_pool_get_mutex (pool);
+
+	return lock;
+}
+
+void 
+memory_pool_rlock_rwlock (memory_pool_rwlock_t *lock)
+{
+	/* Spin on write lock */
+	while (g_atomic_int_get (lock->__w_lock)) {
+		__mutex_spin (lock->__w_lock);
+	}
+	
+	g_atomic_int_inc (lock->__r_lock);
+}
+
+void 
+memory_pool_wlock_rwlock (memory_pool_rwlock_t *lock)
+{
+	/* Spin on write lock first */
+	memory_pool_mutex_spin (lock->__w_lock);
+	/* Now we have write lock set up */
+	/* Wait all readers */
+	while (g_atomic_int_get (lock->__r_lock)) {
+		__mutex_spin (lock->__r_lock);
+	}
+}
+
+void 
+memory_pool_runlock_rwlock (memory_pool_rwlock_t *lock)
+{
+	(void)g_atomic_int_dec_and_test (lock->__r_lock);
+}
+
+void 
+memory_pool_wunlock_rwlock (memory_pool_rwlock_t *lock)
+{
+	(void)g_atomic_int_dec_and_test (lock->__w_lock);
 }
 
 /*

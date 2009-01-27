@@ -4,9 +4,11 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#ifndef HAVE_OWN_QUEUE_H
+#include "config.h"
+#if !defined(HAVE_OWN_QUEUE_H) && defined(HAVE_SYS_QUEUE_H)
 #include <sys/queue.h>
-#else
+#endif
+#ifdef HAVE_OWN_QUEUE_H
 #include "queue.h"
 #endif
 
