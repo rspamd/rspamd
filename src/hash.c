@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include "hash.h"
 
-#define HASH_TABLE_MIN_SIZE 20
+#define HASH_TABLE_MIN_SIZE 19
 #define HASH_TABLE_MAX_SIZE 13845163
 
 /*
