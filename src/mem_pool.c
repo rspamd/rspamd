@@ -39,10 +39,7 @@ pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 #undef MEMORY_GREEDY
 
 /* Internal statistic */
-static size_t bytes_allocated = 0;
-static size_t chunks_allocated = 0;
-static size_t chunks_freed = 0;
-static size_t shared_chunks_allocated = 0;
+static memory_pool_stat_t *stat = NULL;
 
 static struct _pool_chain *
 pool_chain_new (size_t size) 
@@ -54,7 +51,7 @@ pool_chain_new (size_t size)
 	chain->pos = chain->begin;
 	chain->next = NULL;
 	STAT_LOCK ();
-	chunks_allocated ++;
+	stat->chunks_allocated ++;
 	STAT_UNLOCK ();
 	
 	return chain;
@@ -78,7 +75,7 @@ pool_chain_new_shared (size_t size)
 	if (fd == -1) {
 		return NULL;
 	}
-	chain = mmap (NULL, shm->size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	chain = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	chain->begin = ((u_char *)chain) + sizeof (struct _pool_chain_shared);
 	if (chain == MAP_FAILED) {
 		return NULL;
@@ -91,7 +88,7 @@ pool_chain_new_shared (size_t size)
 	chain->lock = 0;
 	chain->next = NULL;
 	STAT_LOCK ();
-	shared_chunks_allocated ++;
+	stat->shared_chunks_allocated ++;
 	STAT_UNLOCK ();
 	
 	return chain;
@@ -101,6 +98,23 @@ memory_pool_t*
 memory_pool_new (size_t size)
 {
 	memory_pool_t *new;
+	
+	/* Allocate statistic structure if it is not allocated before */
+	if (stat == NULL) {
+#if defined(HAVE_MMAP_ANON)
+		stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED, -1, 0);
+		g_assert (stat != MAP_FAILED);
+#elif defined(HAVE_MMAP_ZERO)
+		int fd;
+
+		fd = open ("/dev/zero", O_RDWR);
+		g_assert (fd != -1);
+		stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+		g_assert (chain != MAP_FAILED);
+#else
+#	error No mmap methods are defined
+#endif
+	}
 
 	new = g_malloc (sizeof (memory_pool_t));
 	new->cur_pool = pool_chain_new (size);
@@ -140,14 +154,14 @@ memory_pool_alloc (memory_pool_t *pool, size_t size)
 			pool->cur_pool = new;
 			new->pos += size;
 			STAT_LOCK ();
-			bytes_allocated += size;
+			stat->bytes_allocated += size;
 			STAT_UNLOCK ();
 			return new->begin;
 		}	
 		tmp = cur->pos;
 		cur->pos += size;
 		STAT_LOCK ();
-		bytes_allocated += size;
+		stat->bytes_allocated += size;
 		STAT_UNLOCK ();
 		return tmp;
 	}
@@ -209,14 +223,14 @@ memory_pool_alloc_shared (memory_pool_t *pool, size_t size)
 			cur->next = new;
 			new->pos += size;
 			STAT_LOCK ();
-			bytes_allocated += size;
+			stat->bytes_allocated += size;
 			STAT_UNLOCK ();
 			return new->begin;
 		}
 		tmp = cur->pos;
 		cur->pos += size;
 		STAT_LOCK ();
-		bytes_allocated += size;
+		stat->bytes_allocated += size;
 		STAT_UNLOCK ();
 		return tmp;
 	}
@@ -326,7 +340,7 @@ memory_pool_delete (memory_pool_t *pool)
 		g_free (tmp->begin);
 		g_free (tmp);
 		STAT_LOCK ();
-		chunks_freed ++;
+		stat->chunks_freed ++;
 		STAT_UNLOCK ();
 	}
 	/* Unmap shared memory */
@@ -335,7 +349,7 @@ memory_pool_delete (memory_pool_t *pool)
 		cur_shared = cur_shared->next;
 		munmap (tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
 		STAT_LOCK ();
-		chunks_freed ++;
+		stat->chunks_freed ++;
 		STAT_UNLOCK ();
 	}
 
@@ -345,10 +359,12 @@ memory_pool_delete (memory_pool_t *pool)
 void
 memory_pool_stat (memory_pool_stat_t *st)
 {
-	st->bytes_allocated = bytes_allocated;
-	st->chunks_allocated = chunks_allocated;
-	st->shared_chunks_allocated = shared_chunks_allocated;
-	st->chunks_freed = chunks_freed;
+	if (stat) {
+		st->bytes_allocated = stat->bytes_allocated;
+		st->chunks_allocated = stat->chunks_allocated;
+		st->shared_chunks_allocated = stat->shared_chunks_allocated;
+		st->chunks_freed = stat->chunks_freed;
+	}
 }
 
 #define FIXED_POOL_SIZE 4095

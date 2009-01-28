@@ -140,6 +140,8 @@ metric_process_callback (gpointer key, gpointer value, void *data)
 	else {
 		metric_res->score = factor_consolidation_func (task, metric_res->metric->name);
 	}
+	msg_debug ("process_metric_callback: got result %.2f from consolidation function for metric %s", 
+					metric_res->score, metric_res->metric->name);
 }
 
 static int
@@ -196,6 +198,8 @@ continue_process_filters (struct worker_task *task)
 				}
 				cur = LIST_NEXT (cur, next);
 			}
+			/* Process all metrics */
+			g_hash_table_foreach (task->results, metric_process_callback, task);
 			/* All done */
 			bufferevent_enable (task->bev, EV_WRITE);
 			evbuffer_drain (task->bev->output, EVBUFFER_LENGTH (task->bev->output));
@@ -418,6 +422,7 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 			res->symbols = g_list_prepend (NULL, st->alias);
 			res->weight = st->classifier->add_result_func (res->weight, weight * st->weight);
 		}
+		msg_debug ("process_statfiles: result weight: %.2f", res->weight);
 	}
 	
 }
@@ -450,6 +455,7 @@ statfiles_results_callback (gpointer key, gpointer value, void *arg)
 	else {
 		metric_res->score += res->weight;
 	}
+	msg_debug ("statfiles_results_callback: got total weight %.2f for metric %s", metric_res->score, metric->name);
 
 	cur_symbol = g_list_first (res->symbols);
 	while (cur_symbol) {	
@@ -457,6 +463,8 @@ statfiles_results_callback (gpointer key, gpointer value, void *arg)
 		g_hash_table_insert (metric_res->symbols, (char *)cur_symbol->data, GSIZE_TO_POINTER (1));
 		cur_symbol = g_list_next (cur_symbol);
 	}
+
+	g_list_free (res->symbols);
 
 }
 

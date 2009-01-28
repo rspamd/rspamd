@@ -84,6 +84,7 @@ free_task (struct worker_task *task)
 	struct mime_part *p;
 
 	if (task) {
+		msg_debug ("free_task: free pointer %p", task);
 		if (task->memc_ctx) {
 			memc_close_ctx (task->memc_ctx);
 		}
