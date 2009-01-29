@@ -103,7 +103,6 @@ struct statfile {
 	char *metric;
 	size_t size;
 	struct tokenizer *tokenizer;
-	struct classifier *classifier;
 };
 
 struct config_scalar {

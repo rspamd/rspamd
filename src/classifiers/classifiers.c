@@ -6,7 +6,13 @@
 #include "classifiers.h"
 
 struct classifier classifiers[] = {
-	{"winnow", winnow_classify, winnow_learn, winnow_add_result },
+	{
+	.name             = "winnow", 
+	.init_func        = winnow_init, 
+	.classify_func    = winnow_classify, 
+	.learn_func       = winnow_learn, 
+	.result_file_func = winnow_result_file 
+	},
 };
 
 struct classifier*

@@ -167,13 +167,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			}
 			return 0;
 		case REGEXP_MESSAGE:
-			msg_debug ("process_message: checking mime regexp: /%s/", re->regexp_text);
+			msg_debug ("process_message: checking message regexp: /%s/", re->regexp_text);
 			if (g_regex_match_full (re->regexp, task->msg->buf->begin, task->msg->buf->len, 0, 0, NULL, NULL) == TRUE) {
 				return 1;
 			}
 			return 0;
 		case REGEXP_URL:
-			msg_debug ("process_url: checking mime regexp: /%s/", re->regexp_text);
+			msg_debug ("process_url: checking url regexp: /%s/", re->regexp_text);
 			TAILQ_FOREACH (url, &task->urls, next) {
 				if (g_regex_match (re->regexp, struri (url), 0, NULL) == TRUE) {
 					return 1;

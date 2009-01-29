@@ -140,6 +140,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	time_t uptime;
 	unsigned long size = 0;
 	struct statfile *statfile;
+	struct metric *metric;
 	memory_pool_stat_t mem_st;
 
 	switch (cmd->type) {
@@ -270,11 +271,19 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					return;
 
 				}
+
+				metric = g_hash_table_lookup (session->cfg->metrics, statfile->metric);
+
 				session->learn_rcpt = NULL;
 				session->learn_from = NULL;
 				session->learn_filename = NULL;
 				session->learn_tokenizer = statfile->tokenizer;
-				session->learn_classifier = statfile->classifier;
+				if (metric != NULL) {
+					session->learn_classifier = metric->classifier;
+				}
+				else {
+					session->learn_classifier = get_classifier ("winnow");
+				}
 				/* By default learn positive */
 				session->in_class = 1;
 				/* Get all arguments */
@@ -348,6 +357,7 @@ static void
 read_socket (struct bufferevent *bev, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
+	struct classifier_ctx *cls_ctx;
 	int len, i;
 	char *s, **params, *cmd, out_buf[128];
 	GList *comp_list, *cur = NULL;
@@ -424,7 +434,9 @@ read_socket (struct bufferevent *bev, void *arg)
 							return;
 						}
 					}
-					session->learn_classifier->learn_func (session->worker->srv->statfile_pool, session->learn_filename, tokens, session->in_class);
+					cls_ctx = session->learn_classifier->init_func (session->session_pool);
+					session->learn_classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool,
+															session->learn_filename, tokens, session->in_class);
 					session->worker->srv->stat->messages_learned ++;
 					i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 					bufferevent_write (bev, out_buf, i);

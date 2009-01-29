@@ -14,10 +14,12 @@
 #include "tokenizers/tokenizers.h"
 
 void
-insert_result (struct worker_task *task, const char *metric_name, const char *symbol, u_char flag)
+insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag)
 {
 	struct metric *metric;
 	struct metric_result *metric_res;
+	double *fl = memory_pool_alloc (task->task_pool, sizeof (double));
+	*fl = flag;
 
 	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, metric_name);
 	if (metric == NULL) {
@@ -35,42 +37,50 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		g_hash_table_insert (task->results, (gpointer)metric_name, metric_res);
 	}
 	
-	g_hash_table_insert (metric_res->symbols, (gpointer)symbol, GSIZE_TO_POINTER (flag));
+	g_hash_table_insert (metric_res->symbols, (gpointer)symbol, fl);
 }
 
 /*
  * Default consolidation function based on factors in config file
  */
+struct consolidation_callback_data {
+	struct worker_task *task;
+	double score;
+};
+
+static void
+consolidation_callback (gpointer key, gpointer value, gpointer arg)
+{
+	double *factor;
+	double val = *(double *)value;
+	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
+	
+	factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
+	if (factor == NULL) {
+		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: 1", val, (char *)key);
+		data->score += val;
+	}
+	else {
+		data->score += *factor * val;
+		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", val, (char *)key, *factor);
+	}
+}
+
 double
 factor_consolidation_func (struct worker_task *task, const char *metric_name)
 {
 	struct metric_result *metric_res;
-	double *factor;
 	double res = 0.;
-	GList *symbols = NULL, *cur;
+	struct consolidation_callback_data data = { task, 0 };
 
 	metric_res = g_hash_table_lookup (task->results, metric_name);
 	if (metric_res == NULL) {
 		return res;
 	}
 	
-	symbols = g_hash_table_get_keys (metric_res->symbols);
-	cur = g_list_first (symbols);
-	while (cur) {
-		factor = g_hash_table_lookup (task->worker->srv->cfg->factors, cur->data);
-		if (factor == NULL) {
-			/* Default multiplier is 1 */
-			res ++;
-		}
-		else {
-			res += *factor;
-		}
-		cur = g_list_next (cur);
-	}
+	g_hash_table_foreach (metric_res->symbols, consolidation_callback, &data);
 
-	g_list_free (symbols);
-
-	return res;
+	return data.score;
 }
 
 /* 
@@ -273,6 +283,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	GQueue *stack;
 	GList *symbols = NULL, *s;
 	gsize cur, op1, op2;
+	double *res;
 	
 	stack = g_queue_new ();
 
@@ -326,7 +337,9 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				s = g_list_next (s);
 			}
 			/* Add new symbol */
-			g_hash_table_insert (cd->metric_res->symbols, key, GSIZE_TO_POINTER (op1));
+			res = memory_pool_alloc (cd->task->task_pool, sizeof (double));
+			*res = 1;
+			g_hash_table_insert (cd->metric_res->symbols, key, res);
 		}
 	}
 
@@ -355,16 +368,15 @@ make_composites (struct worker_task *task)
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
 
-struct statfile_callback_data {
-	GHashTable *metrics;
-	GHashTable *tokens;
-	struct worker_task *task;
+struct statfile_result_data {
+	struct metric *metric;
+	struct classifier_ctx *ctx;
 };
 
-struct statfile_result {
-	double weight;
-	GList *symbols;
-	struct classifier *classifier;
+struct statfile_callback_data {
+	GHashTable *tokens;
+	GHashTable *classifiers;
+	struct worker_task *task;
 };
 
 static void
@@ -373,12 +385,15 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	struct statfile_callback_data *data= (struct statfile_callback_data *)arg;
 	struct worker_task *task = data->task;
 	struct statfile *st = (struct statfile *)value;
+	struct classifier *classifier;
+	struct statfile_result_data *res_data;
+	struct metric *metric;
+
 	GTree *tokens = NULL;
-	char *filename;
-	double weight;
-	struct statfile_result *res;
 	GList *cur = NULL;
 	GByteArray *content;
+
+	char *filename;
 	f_str_t c;
 	
 	if (g_list_length (task->rcpt) == 1) {
@@ -406,65 +421,37 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 		g_hash_table_insert (data->tokens, st->tokenizer, tokens);
 	}
 	
-	weight = st->classifier->classify_func (task->worker->srv->statfile_pool, filename, tokens);
-
-	msg_debug ("process_statfiles: got classify weight: %.2f", weight);
-	
-	if (weight > 0.000001) {
-
-		if ((res = g_hash_table_lookup (data->metrics, st->metric)) == NULL) {
-			res = memory_pool_alloc (task->task_pool, sizeof (struct statfile_result));
-			res->symbols = g_list_prepend (NULL, st->alias);
-			res->weight = st->classifier->add_result_func (0, weight * st->weight);
-			g_hash_table_insert (data->metrics, st->metric, res);
-		}
-		else {
-			res->symbols = g_list_prepend (NULL, st->alias);
-			res->weight = st->classifier->add_result_func (res->weight, weight * st->weight);
-		}
-		msg_debug ("process_statfiles: result weight: %.2f", res->weight);
+	metric = g_hash_table_lookup (task->cfg->metrics, st->metric);
+	if (metric == NULL) {
+		classifier = get_classifier ("winnow");
+	} 
+	else {
+		classifier = metric->classifier;
+	}
+	if ((res_data = g_hash_table_lookup (data->classifiers, classifier)) == NULL) {
+		res_data = memory_pool_alloc (task->task_pool, sizeof (struct statfile_result_data));
+		res_data->ctx = classifier->init_func (task->task_pool);
+		res_data->metric = metric;
+		g_hash_table_insert (data->classifiers, classifier, res_data);
 	}
 	
+	classifier->classify_func (res_data->ctx, task->worker->srv->statfile_pool, filename, tokens, st->weight);
+
 }
 
 static void
 statfiles_results_callback (gpointer key, gpointer value, void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
-	struct metric_result *metric_res;
-	struct metric *metric;
-	struct statfile_result *res = (struct statfile_result *)value;
-	GList *cur_symbol;
+	struct statfile_result_data *res = (struct statfile_result_data *)value;
+	struct classifier *classifier = (struct classifier *)key;
+	double *w;
+	char *filename;
 
-	metric_res = g_hash_table_lookup (task->results, (char *)key);
-
-	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, (char *)key);
-	if (metric == NULL) {
-		return;
-	}
-
-	if (metric_res == NULL) {
-		/* Create new metric chain */
-		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
-		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, metric_res->symbols);
-		metric_res->metric = metric;
-		metric_res->score = res->weight;
-		g_hash_table_insert (task->results, metric->name, metric_res);
-	}
-	else {
-		metric_res->score += res->weight;
-	}
-	msg_debug ("statfiles_results_callback: got total weight %.2f for metric %s", metric_res->score, metric->name);
-
-	cur_symbol = g_list_first (res->symbols);
-	while (cur_symbol) {	
-		msg_debug ("statfiles_results_callback: insert symbol %s to metric %s", (char *)cur_symbol->data, metric->name);
-		g_hash_table_insert (metric_res->symbols, (char *)cur_symbol->data, GSIZE_TO_POINTER (1));
-		cur_symbol = g_list_next (cur_symbol);
-	}
-
-	g_list_free (res->symbols);
+	w = memory_pool_alloc (task->task_pool, sizeof (double));
+	filename = classifier->result_file_func (res->ctx, w);
+	insert_result (task, res->metric->name, classifier->name, *w);
+	msg_debug ("statfiles_results_callback: got total weight %.2f for metric %s", *w, res->metric->name);
 
 }
 
@@ -476,13 +463,14 @@ process_statfiles (struct worker_task *task)
 	
 	cd.task = task;
 	cd.tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-	cd.metrics = g_hash_table_new (g_str_hash, g_str_equal);
+	cd.classifiers = g_hash_table_new (g_str_hash, g_str_equal);
 
 	g_hash_table_foreach (task->cfg->statfiles, statfiles_callback, &cd);
-	g_hash_table_foreach (cd.metrics, statfiles_results_callback, task);
+	g_hash_table_foreach (cd.classifiers, statfiles_results_callback, task);
 	
 	g_hash_table_destroy (cd.tokens);
-	g_hash_table_destroy (cd.metrics);
+	g_hash_table_destroy (cd.classifiers);
+	g_hash_table_foreach (task->results, metric_process_callback, task);
 
 	task->state = WRITE_REPLY;
 }

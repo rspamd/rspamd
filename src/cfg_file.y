@@ -297,6 +297,9 @@ metric:
 			yyerror ("yyparse: not enough arguments in metric definition");
 			YYERROR;
 		}
+		if (cur_metric->classifier == NULL) {
+			cur_metric->classifier = get_classifier ("winnow");
+		}
 		g_hash_table_insert (cfg->metrics, cur_metric->name, cur_metric);
 		cur_metric = NULL;
 	}
@@ -310,6 +313,7 @@ metriccmd:
 	| metricname
 	| metricfunction
 	| metricscore
+	| metricclassifier
 	;
 	
 metricname:
@@ -342,6 +346,18 @@ metricscore:
 			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->required_score = $3;
+	}
+	;
+
+metricclassifier:
+	CLASSIFIER EQSIGN QUOTEDSTRING {
+		if (cur_metric == NULL) {
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		}
+		if ((cur_metric->classifier = get_classifier ($3)) == NULL) {
+			yyerror ("yyparse: unknown classifier %s", $3);
+			YYERROR;
+		}
 	}
 	;
 
@@ -555,9 +571,6 @@ statfile:
 		if (cur_statfile->metric == NULL) {
 			cur_statfile->metric = memory_pool_strdup (cfg->cfg_pool, "default");
 		}
-		if (cur_statfile->classifier == NULL) {
-			cur_statfile->classifier = get_classifier ("winnow");
-		}
 		if (cur_statfile->tokenizer == NULL) {
 			cur_statfile->tokenizer = get_tokenizer ("osb-text");
 		}
@@ -578,7 +591,6 @@ statfilecmd:
 	| statfilesize
 	| statfilemetric
 	| statfiletokenizer
-	| statfileclassifier
 	;
 	
 statfilealias:
@@ -650,17 +662,7 @@ statfiletokenizer:
 	}
 	;
 
-statfileclassifier:
-	CLASSIFIER EQSIGN QUOTEDSTRING {
-		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
-		}
-		if ((cur_statfile->classifier = get_classifier ($3)) == NULL) {
-			yyerror ("yyparse: unknown classifier %s", $3);
-			YYERROR;
-		}
-	}
-	;
+
 
 statfile_pool_size:
 	STATFILE_POOL_SIZE EQSIGN SIZELIMIT {

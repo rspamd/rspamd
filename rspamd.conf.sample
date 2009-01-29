@@ -62,15 +62,18 @@ statfile {
 	# Tokenizer for this statfile
 	# Deafault: osb-text
 	tokenizer = "osb-text";
-	# Classifier for this statfile
-	# Default: winnow
-	classifier = "winnow";
 };
 statfile {
 	alias = "test.ham";
 	pattern = "./test.ham";
 	weight = -2.0;
 	size = 10M;
+};
+
+# Factors coefficients
+factors {
+	"SURBL_DNS" = 10.5;
+	"winnow" = 5.5;
 };
 
 url_filters = "surbl";

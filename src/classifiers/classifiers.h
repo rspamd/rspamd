@@ -11,20 +11,29 @@
 #include "../statfile.h"
 #include "../tokenizers/tokenizers.h"
 
+struct classifier_ctx {
+	memory_pool_t *pool;
+	GHashTable *results;
+};
 /* Common classifier structure */
 struct classifier {
 	char *name;
-	double (*classify_func)(statfile_pool_t *pool, char *statfile, GTree *input);
-	void (*learn_func)(statfile_pool_t *pool, char *statfile, GTree *input, int in_class);
-	double (*add_result_func)(double result, double new);
+	struct classifier_ctx* (*init_func)(memory_pool_t *pool);
+	void (*classify_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, 
+							char *statfile, GTree *input, double scale);
+	void (*learn_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, 
+							char *statfile, GTree *input, int in_class);
+	char* (*result_file_func)(struct classifier_ctx *ctx, double *probability);
 };
 
 /* Get classifier structure by name or return NULL if this name is not found */
 struct classifier* get_classifier (char *name);
+
 /* Winnow algorithm */
-double winnow_classify (statfile_pool_t *pool, char *statfile, GTree *input);
-void winnow_learn (statfile_pool_t *pool, char *statfile, GTree *input, int in_class);
-double winnow_add_result (double result, double new);
+struct classifier_ctx* winnow_init (memory_pool_t *pool);
+void winnow_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, char *statfile, GTree *input, double scale);
+void winnow_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, char *statfile, GTree *input, int in_class);
+char* winnow_result_file (struct classifier_ctx* ctx, double *probability);
 
 /* Array of all defined classifiers */
 extern struct classifier classifiers[];

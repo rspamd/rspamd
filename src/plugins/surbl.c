@@ -313,7 +313,6 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	}
 	else {
 		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, surbl_module_ctx->suffix);
-		insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 0);
 	}
 
 	param->task->save.saved --;

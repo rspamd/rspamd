@@ -3,6 +3,7 @@
  */
 
 #include <sys/types.h>
+#include <math.h>
 #include "classifiers.h"
 
 #define WINNOW_PROMOTION 1.23
@@ -10,6 +11,7 @@
 
 struct winnow_callback_data {
 	statfile_pool_t *pool;
+	struct classifier_ctx *ctx;
 	char *filename;
 	double sum;
 	int count;
@@ -30,6 +32,7 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 	}
 	else {
 		cd->sum += v;
+		cd->in_class ++;
 	}
 
 	cd->count ++;
@@ -59,33 +62,51 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	return FALSE;
 }
 
+struct classifier_ctx* 
+winnow_init (memory_pool_t *pool)
+{
+	struct classifier_ctx *ctx = memory_pool_alloc (pool, sizeof (struct classifier_ctx));
 
-double 
-winnow_classify (statfile_pool_t *pool, char *statfile, GTree *input)
+	ctx->pool = pool;
+	ctx->results = g_hash_table_new (g_str_hash, g_str_equal);
+	memory_pool_add_destructor (pool, (pool_destruct_func)g_hash_table_destroy, ctx->results);
+
+	return ctx;
+}
+void 
+winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, char *statfile, GTree *input, double scale)
 {
 	struct winnow_callback_data data;
+	double *res = memory_pool_alloc (ctx->pool, sizeof (double));
+
+	g_assert (pool != NULL);
+	g_assert (ctx != NULL);
 
 	data.pool = pool;
 	data.filename = statfile;
 	data.sum = 0;
 	data.count = 0;
 	data.now = time (NULL);
+	data.ctx = ctx;
 
 	if (!statfile_pool_is_open (pool, statfile)) {
 		if (statfile_pool_open (pool, statfile) == -1) {
-			return 0;
+			return;
 		}
 	}
 
 	g_tree_foreach (input, classify_callback, &data);
-	
-	return data.sum / data.count;
+	*res = scale * (data.sum / data.count);
+	g_hash_table_insert (ctx->results, statfile, res);
 }
 
 void
-winnow_learn (statfile_pool_t *pool, char *statfile, GTree *input, int in_class)
+winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *statfile, GTree *input, int in_class)
 {
 	struct winnow_callback_data data;
+	
+	g_assert (pool != NULL);
+	g_assert (ctx != NULL);
 
 	data.pool = pool;
 	data.filename = statfile;
@@ -93,6 +114,7 @@ winnow_learn (statfile_pool_t *pool, char *statfile, GTree *input, int in_class)
 	data.count = 0;
 	data.in_class = in_class;
 	data.now = time (NULL);
+	data.ctx = ctx;
 
 	if (!statfile_pool_is_open (pool, statfile)) {
 		if (statfile_pool_open (pool, statfile) == -1) {
@@ -103,11 +125,40 @@ winnow_learn (statfile_pool_t *pool, char *statfile, GTree *input, int in_class)
 	statfile_pool_lock_file (pool, statfile);
 	g_tree_foreach (input, learn_callback, &data);
 	statfile_pool_unlock_file (pool, statfile);
-	
 }
 
-double
-winnow_add_result (double result, double new)
+struct winnow_result_data {
+	char *filename;
+	double max_score;
+	double sum;
+};
+
+static void 
+result_file_callback (gpointer key, gpointer value, gpointer data)
 {
-	return result + new;
+	struct winnow_result_data *d = (struct winnow_result_data *)data;
+	double w = *((double *)value);
+
+	if (fabs (w) > fabs (d->max_score)) {
+		d->filename = (char *)key;
+		d->max_score = w;
+	}
+	d->sum += fabs (w);
+}
+
+char* 
+winnow_result_file (struct classifier_ctx* ctx, double *probability)
+{
+	struct winnow_result_data data = { NULL, 0, 0 };
+	g_assert (ctx != NULL);
+	
+	g_hash_table_foreach (ctx->results, result_file_callback, &data);
+	if (data.sum != 0) {
+		*probability = data.max_score / data.sum;
+	}
+	else {
+		*probability = 1;
+	}
+
+	return data.filename;
 }

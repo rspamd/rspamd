@@ -19,6 +19,7 @@
 #include "cfg_file.h"
 #include "main.h"
 #include "filter.h"
+#include "classifiers/classifiers.h"
 #ifndef HAVE_OWN_QUEUE_H
 #include <sys/queue.h>
 #else
@@ -189,6 +190,7 @@ init_defaults (struct config_file *cfg)
 	def_metric->func_name = "factors";
 	def_metric->func = factor_consolidation_func;
 	def_metric->required_score = DEFAULT_SCORE;
+	def_metric->classifier = get_classifier ("winnow");
 	g_hash_table_insert (cfg->metrics, "default", def_metric);
 
 	LIST_INIT (&cfg->perl_modules);
