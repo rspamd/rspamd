@@ -8,6 +8,10 @@
 #define RSPAMD_PROTOCOL_ERROR 3
 #define RSPAMD_LENGTH_ERROR 4
 
+/**
+ * Rspamd protocol definition
+ */
+
 struct worker_task;
 
 enum rspamd_protocol {
@@ -25,7 +29,19 @@ enum rspamd_command {
 	CMD_PROCESS,
 };
 
+/**
+ * Read one line of user's input for specified task
+ * @param task task object
+ * @param line line of user's input
+ * @return 0 if line was successfully parsed and -1 if we have protocol error
+ */
 int read_rspamd_input_line (struct worker_task *task, char *line);
+
+/**
+ * Write reply for specified task command
+ * @param task task object
+ * @return 0 if we wrote reply and -1 if there was some error
+ */
 int write_reply (struct worker_task *task);
 
 #endif

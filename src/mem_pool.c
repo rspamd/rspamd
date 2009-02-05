@@ -94,6 +94,12 @@ pool_chain_new_shared (size_t size)
 	return chain;
 }
 
+
+/**
+ * Allocate new memory poll 
+ * @param size size of pool's page
+ * @return new memory pool object
+ */
 memory_pool_t* 
 memory_pool_new (size_t size)
 {

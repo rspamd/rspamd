@@ -1,3 +1,7 @@
+/*
+ * Rspamd worker implementation
+ */
+
 #include <sys/stat.h>
 #include <sys/param.h>
 #include <sys/types.h>
@@ -51,6 +55,9 @@ void sig_handler (int signo)
 	}
 }
 
+/*
+ * Config reload is designed by sending sigusr to active workers and pending shutdown of them
+ */
 static void
 sigusr_handler (int fd, short what, void *arg)
 {
@@ -67,6 +74,9 @@ sigusr_handler (int fd, short what, void *arg)
 	return;
 }
 
+/*
+ * Destructor for recipients list
+ */
 static void
 rcpt_destruct (void *pointer)
 {
@@ -77,6 +87,9 @@ rcpt_destruct (void *pointer)
 	}
 }
 
+/*
+ * Free all structures of worker_task
+ */
 static void
 free_task (struct worker_task *task)
 {
@@ -102,8 +115,9 @@ free_task (struct worker_task *task)
 	}
 }
 
-
-
+/*
+ * Callback that is called when there is data to read in buffer
+ */
 static void
 read_socket (struct bufferevent *bev, void *arg)
 {
@@ -165,6 +179,9 @@ read_socket (struct bufferevent *bev, void *arg)
 	}
 }
 
+/*
+ * Callback for socket writing
+ */
 static void
 write_socket (struct bufferevent *bev, void *arg)
 {
@@ -192,6 +209,9 @@ write_socket (struct bufferevent *bev, void *arg)
 	}
 }
 
+/*
+ * Called if something goes wrong
+ */
 static void
 err_socket (struct bufferevent *bev, short what, void *arg)
 {
@@ -201,6 +221,9 @@ err_socket (struct bufferevent *bev, short what, void *arg)
 	free_task (task);
 }
 
+/*
+ * Accept new connection and construct task
+ */
 static void
 accept_socket (int fd, short what, void *arg)
 {
@@ -240,6 +263,9 @@ accept_socket (int fd, short what, void *arg)
 	bufferevent_enable (new_task->bev, EV_READ);
 }
 
+/*
+ * Start worker process
+ */
 void
 start_worker (struct rspamd_worker *worker, int listen_sock)
 {

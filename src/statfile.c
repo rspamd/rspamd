@@ -182,6 +182,7 @@ statfile_pool_close (statfile_pool_t *pool, char *filename, gboolean remove_hash
 	if (remove_hash) {
 		rspamd_hash_remove (pool->files, file->filename);
 	}
+	return 0;
 }
 
 int
@@ -376,8 +377,8 @@ statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 	block->value = value;
 }
 
-int
+gboolean
 statfile_pool_is_open (statfile_pool_t *pool, char *filename)
 {
-	return rspamd_hash_lookup (pool->files, filename) != NULL;
+	return (rspamd_hash_lookup (pool->files, filename) != NULL);
 }
