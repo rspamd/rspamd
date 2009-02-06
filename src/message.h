@@ -1,3 +1,8 @@
+/**
+ * @file message.h
+ * Message processing functions and structures
+ */
+
 #ifndef RSPAMD_MESSAGE_H
 #define RSPAMD_MESSAGE_H
 
@@ -23,11 +28,6 @@
 
 #include <glib.h>
 #include <gmime/gmime.h>
-
-
-/**
- * Message processing functions and structures
- */
 
 struct mime_part {
 	GMimeContentType *type;

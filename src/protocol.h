@@ -1,3 +1,8 @@
+/**
+ * @file protocol.h
+ * Rspamd protocol definition
+ */
+
 #ifndef RSPAMD_PROTOCOL_H
 #define RSPAMD_PROTOCOL_H
 
@@ -7,10 +12,6 @@
 #define RSPAMD_NETWORK_ERROR 2
 #define RSPAMD_PROTOCOL_ERROR 3
 #define RSPAMD_LENGTH_ERROR 4
-
-/**
- * Rspamd protocol definition
- */
 
 struct worker_task;
 

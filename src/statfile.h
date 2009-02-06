@@ -1,5 +1,6 @@
 /**
- * Describes common methods in accessing statistics files and caching them in memory
+ * @file statfile.h
+ * Describes common methods for accessing statistics files and caching them in memory
  */
 
 #ifndef RSPAMD_STATFILE_H
@@ -21,58 +22,58 @@
  * Common statfile header
  */
 struct stat_file_header {
-	u_char magic[3];						/** < magic signature ('r' 's' 'd') 	*/
-	u_char version[2];						/** < version of statfile (1.0)			*/
-	u_char padding[3];						/** < padding							*/
-	uint64_t create_time;					/** < create time (time_t->uint64_t)	*/
+	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
+	u_char version[2];						/**< version of statfile (1.0)			*/
+	u_char padding[3];						/**< padding							*/
+	uint64_t create_time;					/**< create time (time_t->uint64_t)		*/
 } __attribute__((__packed__));
 
 /**
  * Block of data in statfile
  */
 struct stat_file_block {
-	uint32_t hash1;							/** < hash1 (also acts as index)		*/				
-	uint32_t hash2;							/** < hash2								*/
-	float value; 							/** < float value 						*/
-	uint32_t last_access;					/** < last access to block since create time of file	*/
+	uint32_t hash1;							/**< hash1 (also acts as index)			*/				
+	uint32_t hash2;							/**< hash2								*/
+	float value; 							/**< float value 						*/
+	uint32_t last_access;					/**< last access to block since create time of file	*/
 };
 
 /**
  * Statistic file
  */
 struct stat_file {
-	struct stat_file_header header;			/** < header							*/
-	struct stat_file_block blocks[1];		/** < first block of data				*/
+	struct stat_file_header header;			/**< header								*/
+	struct stat_file_block blocks[1];		/**< first block of data				*/
 };
 
 /**
  * Common view of statfile object
  */
 typedef struct stat_file_s {
-	char *filename;							/** < name of file						*/
-	int fd;									/** < descriptor						*/
-	void *map;								/** < mmaped area						*/
-	time_t open_time;						/** < time when file was opened			*/
-	time_t access_time;						/** < last access time					*/
-	size_t len;								/** < length of file(in bytes)			*/
-	size_t blocks;							/** < length of file in blocks			*/
-	gint *lock;								/** < mutex								*/
+	char *filename;							/**< name of file						*/
+	int fd;									/**< descriptor							*/
+	void *map;								/**< mmaped area						*/
+	time_t open_time;						/**< time when file was opened			*/
+	time_t access_time;						/**< last access time					*/
+	size_t len;								/**< length of file(in bytes)			*/
+	size_t blocks;							/**< length of file in blocks			*/
+	gint *lock;								/**< mutex								*/
 } stat_file_t;
 
 /**
  * Statfiles pool
  */
 typedef struct statfile_pool_s {
-	rspamd_hash_t *files;					/** < hash table of opened files indexed by name	*/
-	int opened;								/** < number of opened files			*/
-	size_t max;								/** < maximum size						*/
-	size_t occupied;						/** < current size						*/
-	memory_pool_t *pool;					/** < memory pool object				*/
+	rspamd_hash_t *files;					/**< hash table of opened files indexed by name	*/
+	int opened;								/**< number of opened files				*/
+	size_t max;								/**< maximum size						*/
+	size_t occupied;						/**< current size						*/
+	memory_pool_t *pool;					/**< memory pool object					*/
 } statfile_pool_t;
 
 /**
  * Create new statfile pool
- * @param size maximum size
+ * @param max_size maximum size
  * @return statfile pool object
  */
 statfile_pool_t* statfile_pool_new (size_t max_size);

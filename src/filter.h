@@ -1,3 +1,8 @@
+/**
+ * @file filter.h
+ * Filters logic implemetation
+ */
+
 #ifndef RSPAMD_FILTER_H
 #define RSPAMD_FILTER_H
 
@@ -8,10 +13,6 @@
 #include "queue.h"
 #endif
 #include <glib.h>
-
-/**
- * Filters logic implemetation
- */
 
 struct worker_task;
 
@@ -24,29 +25,29 @@ enum filter_type { C_FILTER, PERL_FILTER };
  * Filter structure
  */
 struct filter {
-	char *func_name;								/** < function name					*/
-	enum filter_type type;							/** < filter type (c or perl)		*/
-	LIST_ENTRY (filter) next;						/** < chain link					*/
+	char *func_name;								/**< function name					*/
+	enum filter_type type;							/**< filter type (c or perl)		*/
+	LIST_ENTRY (filter) next;						/**< chain link						*/
 };
 
 /**
  * Common definition of metric
  */
 struct metric {
-	char *name;										/** < name of metric						*/
-	char *func_name;								/** < name of consolidation function		*/
-	metric_cons_func func;							/** < c consolidation function				*/
-	double required_score;							/** < required score for this metric		*/
-	struct classifier *classifier;					/** < classifier that is used for metric	*/
+	char *name;										/**< name of metric							*/
+	char *func_name;								/**< name of consolidation function			*/
+	metric_cons_func func;							/**< c consolidation function				*/
+	double required_score;							/**< required score for this metric			*/
+	struct classifier *classifier;					/**< classifier that is used for metric		*/
 };
 
 /**
  * Result of metric processing
  */
 struct metric_result {
-	struct metric *metric;							/** < pointer to metric structure			*/
-	double score;									/** < total score							*/
-	GHashTable *symbols;							/** < symbols of metric						*/
+	struct metric *metric;							/**< pointer to metric structure			*/
+	double score;									/**< total score							*/
+	GHashTable *symbols;							/**< symbols of metric						*/
 };
 
 /**

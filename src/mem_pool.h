@@ -1,10 +1,5 @@
-#ifndef RSPAMD_MEM_POOL_H
-#define RSPAMD_MEM_POOL_H
-
-#include <sys/types.h>
-#include <glib.h>
-
 /**
+ * @file mem_pool.h
  * \brief Memory pools library.
  *
  * Memory pools library. Library is designed to implement efficient way to
@@ -14,17 +9,26 @@
  * can use pool for them
  */
 
-/** Destructor type definition */
+#ifndef RSPAMD_MEM_POOL_H
+#define RSPAMD_MEM_POOL_H
+
+#include <sys/types.h>
+#include <glib.h>
+
+
+/** 
+ * Destructor type definition 
+ */
 typedef void (*pool_destruct_func)(void *ptr);
 
 /**
  * Pool page structure
  */
 struct _pool_chain {
-	u_char *begin;					/** < begin of pool chain block 			*/
-	u_char *pos;					/** < current start of free space in block 	*/
-	size_t len;						/** < length of block 						*/
-	struct _pool_chain *next;		/** < chain link 							*/
+	u_char *begin;					/**< begin of pool chain block 				*/
+	u_char *pos;					/**< current start of free space in block 	*/
+	size_t len;						/**< length of block 						*/
+	struct _pool_chain *next;		/**< chain link 							*/
 };
 
 /**
@@ -42,37 +46,37 @@ struct _pool_chain_shared {
  * Destructors list item structure
  */
 struct _pool_destructors {
-	pool_destruct_func func;				/** < pointer to destructor					*/
-	void *data;								/** < data to free							*/
-	struct _pool_destructors *prev;			/** < chain link							*/
+	pool_destruct_func func;				/**< pointer to destructor					*/
+	void *data;								/**< data to free							*/
+	struct _pool_destructors *prev;			/**< chain link								*/
 };
 
 /**
  * Memory pool type
  */
 typedef struct memory_pool_s {
-	struct _pool_chain *cur_pool;			/** < currently used page					*/
-	struct _pool_chain *first_pool;			/** < first page							*/
-	struct _pool_chain_shared *shared_pool;	/** < shared chain							*/
-	struct _pool_destructors *destructors;	/** < destructors chain						*/
+	struct _pool_chain *cur_pool;			/**< currently used page					*/
+	struct _pool_chain *first_pool;			/**< first page								*/
+	struct _pool_chain_shared *shared_pool;	/**< shared chain							*/
+	struct _pool_destructors *destructors;	/**< destructors chain						*/
 } memory_pool_t;
 
 /**
  * Statistics structure
  */
 typedef struct memory_pool_stat_s {
-	size_t bytes_allocated;					/** < bytes that are allocated with pool allocator		*/
-	size_t chunks_allocated;				/** < number of chunks that are allocated				*/
-	size_t shared_chunks_allocated;			/** < shared chunks allocated							*/
-	size_t chunks_freed;					/** < chunks freed										*/
+	size_t bytes_allocated;					/**< bytes that are allocated with pool allocator		*/
+	size_t chunks_allocated;				/**< number of chunks that are allocated				*/
+	size_t shared_chunks_allocated;			/**< shared chunks allocated							*/
+	size_t chunks_freed;					/**< chunks freed										*/
 } memory_pool_stat_t;
 
 /**
  * Rwlock for locking shared memory regions
  */
 typedef struct memory_pool_rwlock_s {
-	gint *__r_lock;							/** < read mutex (private)								*/
-	gint *__w_lock;							/** < write mutex (private)								*/
+	gint *__r_lock;							/**< read mutex (private)								*/
+	gint *__w_lock;							/**< write mutex (private)								*/
 } memory_pool_rwlock_t;
 
 /**

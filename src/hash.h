@@ -1,17 +1,7 @@
-/*
- * =====================================================================================
- *
- *       Filename:  hash.h
- *
- *    Description:  Hash table implementation that uses memory pools from mem_pool library
- *
- *        Created:  27.01.2009 16:31:11
- *       Compiler:  gcc
- *
- *         Author:  Vsevolod Stakhov
- *        Company:  Rambler
- *
- * =====================================================================================
+/**
+ * @file hash.h
+ * Hash table implementation that allows using memory pools for storage as well as using
+ * shared memory for this purpose
  */
 
 #ifndef RSPAMD_HASH_H
@@ -20,11 +10,6 @@
 #include <sys/types.h>
 #include <glib.h>
 #include "mem_pool.h"
-
-/**
- * Hash table implementation that allows using memory pools for storage as well as using
- * shared memory for this purpose
- */
 
 struct rspamd_hash_node {
 	gpointer                 key;
