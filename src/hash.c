@@ -157,7 +157,7 @@ rspamd_hash_new (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_
 	hash->nnodes             = 0;
 	hash->hash_func          = hash_func ? hash_func : g_direct_hash;
 	hash->key_equal_func     = key_equal_func;
-	hash->nodes              = memory_pool_alloc (pool, sizeof (struct rspamd_hash_node*) * hash->size);
+	hash->nodes              = memory_pool_alloc0 (pool, sizeof (struct rspamd_hash_node*) * hash->size);
 	hash->shared             = 0;
 	hash->pool               = pool;
 	
@@ -177,7 +177,7 @@ rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key
 	hash->nnodes             = 0;
 	hash->hash_func          = hash_func ? hash_func : g_direct_hash;
 	hash->key_equal_func     = key_equal_func;
-	hash->nodes              = memory_pool_alloc (pool, sizeof (struct rspamd_hash_node*) * hash->size);
+	hash->nodes              = memory_pool_alloc0 (pool, sizeof (struct rspamd_hash_node*) * hash->size);
 	hash->shared             = 1;
 	/* Get mutex from pool for locking on insert/remove operations */
 	hash->lock               = memory_pool_get_rwlock (pool);
