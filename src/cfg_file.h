@@ -39,16 +39,8 @@
 /* 1 worker by default */
 #define DEFAULT_WORKERS_NUM 1
 
-#define yyerror(fmt, ...) \
-		fprintf (stderr, "Config file parse error!\non line: %d\n", yylineno); \
-		fprintf (stderr, "while reading text: %s\nreason: ", yytext); \
-		fprintf (stderr, fmt, ##__VA_ARGS__); \
-		fprintf (stderr, "\n")
-#define yywarn(fmt, ...) \
-		fprintf (stderr, "Config file parse warning!\non line %d\n", yylineno); \
-		fprintf (stderr, "while reading text: %s\nreason: ", yytext); \
-		fprintf (stderr, fmt, ##__VA_ARGS__); \
-		fprintf (stderr, "\n")
+#define yyerror parse_err
+#define yywarn parse_warn
 
 struct expression;
 struct tokenizer;
@@ -292,6 +284,8 @@ struct expression* parse_expression (memory_pool_t *pool, char *line);
 int yylex (void);
 int yyparse (void);
 void yyrestart (FILE *);
+void parse_err (const char *fmt, ...);
+void parse_warn (const char *fmt, ...);
 
 #endif /* ifdef CFG_FILE_H */
 /* 

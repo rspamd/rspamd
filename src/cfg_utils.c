@@ -632,6 +632,41 @@ parse_regexp (memory_pool_t *pool, char *line)
 	return result;
 }
 
+void
+parse_err (const char *fmt, ...)
+{
+	va_list aq;
+	char logbuf[BUFSIZ], readbuf[32];
+	int r;
+	
+	va_start (aq, fmt);
+	g_strlcpy (readbuf, yytext, sizeof (readbuf));
+
+	r = snprintf (logbuf, sizeof (logbuf), "config file parse error! line: %d, text: %s, reason: ", yylineno, readbuf);
+	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
+
+	va_end (aq);
+	g_error ("%s", logbuf);
+}
+
+void
+parse_warn (const char *fmt, ...)
+{
+	va_list aq;
+	char logbuf[BUFSIZ], readbuf[32];
+	int r;
+	
+	va_start (aq, fmt);
+	g_strlcpy (readbuf, yytext, sizeof (readbuf));
+
+	r = snprintf (logbuf, sizeof (logbuf), "config file parse warning! line: %d, text: %s, reason: ", yylineno, readbuf);
+	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
+
+	va_end (aq);
+	g_warning ("%s", logbuf);
+}
+
+
 /*
  * vi:ts=4
  */
