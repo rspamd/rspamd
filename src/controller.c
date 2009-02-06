@@ -368,7 +368,7 @@ read_socket (struct bufferevent *bev, void *arg)
 
 	switch (session->state) {
 		case STATE_COMMAND:
-			s = evbuffer_readline (EVBUFFER_INPUT (bev));
+			s = buffer_readline (session->session_pool, EVBUFFER_INPUT (bev));
 			msg_debug ("read_socket: got '%s' string from user", s);
 			if (s != NULL && *s != 0) {
 				len = strlen (s);
@@ -412,9 +412,6 @@ read_socket (struct bufferevent *bev, void *arg)
             else {
 				bufferevent_enable (bev, EV_WRITE);
             }
-			if (s != NULL) {
-				free (s);
-			}
 			break;
 		case STATE_LEARN:
 			i = bufferevent_read (bev, session->learn_buf->pos, session->learn_buf->free);

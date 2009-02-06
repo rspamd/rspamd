@@ -128,7 +128,11 @@ read_socket (struct bufferevent *bev, void *arg)
 	switch (task->state) {
 		case READ_COMMAND:
 		case READ_HEADER:
-			s = evbuffer_readline (EVBUFFER_INPUT (bev));
+			s = buffer_readline (task->task_pool, EVBUFFER_INPUT (bev));
+			if (s == NULL) {
+				msg_debug ("read_socket: got incomplete line from user");
+				return;
+			}
 			if (read_rspamd_input_line (task, s) != 0) {
 				task->last_error = "Read error";
 				task->error_code = RSPAMD_NETWORK_ERROR;
@@ -138,7 +142,6 @@ read_socket (struct bufferevent *bev, void *arg)
 				bufferevent_enable (bev, EV_WRITE);
 				bufferevent_disable (bev, EV_READ);
 			}
-			free (s);
 			break;
 		case READ_MESSAGE:
 			r = bufferevent_read (bev, task->msg->pos, task->msg->free);
