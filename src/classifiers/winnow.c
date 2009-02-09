@@ -96,7 +96,14 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, char *statfi
 	}
 
 	g_tree_foreach (input, classify_callback, &data);
-	*res = scale * (data.sum / data.count);
+	
+	if (data.count != 0) {
+    	*res = scale * (data.sum / data.count);
+	}
+	else {
+		*res = 0;
+	}
+
 	g_hash_table_insert (ctx->results, statfile, res);
 }
 
