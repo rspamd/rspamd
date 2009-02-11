@@ -265,11 +265,11 @@ check_function()
 
 check_include()
 {
-	INCLUDE="$1"
-	echo -n "Testing for $INCLUDE: "
+	_INCLUDE="$1"
+	echo -n "Testing for $_INCLUDE: "
 	echo >> config.log
-	echo "Testing for $INCLUDE: " >> config.log
-	check_cache "include" "$INCLUDE"
+	echo "Testing for $_INCLUDE: " >> config.log
+	check_cache "include" "$_INCLUDE"
 	if [ $? -eq 0 ] ; then
 		echo "-> OK (cached)"
 		echo "-> OK (cached)" >> config.log
@@ -277,7 +277,7 @@ check_include()
 		return 0
 	fi
 	echo "#include <sys/types.h>" > autotest.c
-	echo "#include \"$INCLUDE\"" >> autotest.c
+	echo "#include \"$_INCLUDE\"" >> autotest.c
 	echo "#include <stdlib.h>" >> autotest.c
 	echo "int main (int argc, char **argv) { return 0; }" >> autotest.c
 	echo "$GCC $CFLAGS $PTHREAD_CFLAGS -o autotest $LDFLAGS $LIBS $PTHREAD_LDFLAGS autotest.c" >>config.log
@@ -285,9 +285,9 @@ check_include()
 	if [ $? -eq 0 ] ; then 
 		echo "found"
 		echo "-> OK" >> config.log
-		_CFLAG=`echo "$INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
+		_CFLAG=`echo "$_INCLUDE" | sed -e 's/[./]/_/g' | tr '[:lower:]' '[:upper:]'`
 		have_opt $_CFLAG
-		write_cache "include" "$INCLUDE" "yes" "$_CFLAG"
+		write_cache "include" "$_INCLUDE" "yes" "$_CFLAG"
 		cleanup
 		return 0
 	else
@@ -295,7 +295,7 @@ check_include()
 		echo "-> FAILED" >> config.log
 		echo "Failed program was:" >> config.log
 		cat autotest.c >> config.log
-		write_cache "include" "$INCLUDE" "no" ""
+		write_cache "include" "$_INCLUDE" "no" ""
 		cleanup
 		return 1
 	fi
@@ -304,12 +304,13 @@ check_include()
 check_macro()
 {
 	MACRO=$1
+	_INCLUDE=""
 	while [ $# -ne 1 -a -n $1 ] ; do 
 		shift
-		if [ "F$INCLUDE" = "F" ] ; then
-			INCLUDE="$1"
+		if [ "F$_INCLUDE" = "F" ] ; then
+			_INCLUDE="$1"
 		else
-			INCLUDE="$INCLUDE $1"
+			_INCLUDE="$_INCLUDE $1"
 		fi
 	done
 	echo -n "Testing for $MACRO: "
@@ -322,10 +323,9 @@ check_macro()
 		return 0
 	fi
 	echo "#include <sys/types.h>" > autotest.c
-	for inc in $INCLUDE ; do
-		echo "#include \"$inc\"" >> autotest.c
+	for _inc in $_INCLUDE ; do
+		echo "#include \"$_inc\"" >> autotest.c
 	done
-	echo "#include \"${INCLUDE}\"" >> autotest.c
 	echo "#include <stdlib.h>" >> autotest.c
 	echo "int main (int argc, char **argv) {" >>autotest.c
 	echo "#ifndef $MACRO" >>autotest.c
@@ -969,6 +969,11 @@ else
 		echo "Anon memory extension to mmap not found and /dev/zero not exists, this platform is not supported"
 		exit 1
 	fi
+fi
+
+check_macro "_SC_NPROCESSORS_ONLN" "unistd.h"
+if [ $? -eq 0 ] ; then
+	have_opt "SC_NPROCESSORS_ONLN"
 fi
 
 check_package "glib-2.0" "glib.h"

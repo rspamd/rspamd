@@ -6,14 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <math.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 #include "config.h"
 #include "cfg_file.h"
@@ -174,7 +173,11 @@ init_defaults (struct config_file *cfg)
 	cfg->memcached_maxerrors = DEFAULT_UPSTREAM_MAXERRORS;
 	cfg->memcached_protocol = TCP_TEXT;
 
+#ifdef HAVE_SC_NPROCESSORS_ONLN
+	cfg->workers_number = sysconf (_SC_NPROCESSORS_ONLN);
+#else
 	cfg->workers_number = DEFAULT_WORKERS_NUM;
+#endif
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
