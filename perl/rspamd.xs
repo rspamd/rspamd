@@ -464,7 +464,7 @@ OUTPUT:
     RETVAL
 
 void
-rspamd_task_get_module_param (r, modulename, paramname)
+rspamd_config_get_module_param (r, modulename, paramname)
 	CODE:
 	struct config_file *r;
 	char *module, *param, *value;
@@ -483,3 +483,19 @@ rspamd_task_get_module_param (r, modulename, paramname)
 	sv_setpv(TARG, value);
 
 	ST(0) = TARG;
+
+MODULE = rspamd   PACKAGE = rspamd_log PREFIX = rspamd_log_
+PROTOTYPES: DISABLE
+
+void
+rspamd_log_log (level, str)
+    CODE:
+    int level;
+    char *str;
+    
+    level = (int)SvIV (ST(0));
+    str = (char *)SvPV_nolen (ST(1));
+    
+    g_log (G_LOG_DOMAIN, level, "%s", str);
+    XSRETURN_EMPTY;
+

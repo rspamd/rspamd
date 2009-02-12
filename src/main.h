@@ -43,7 +43,7 @@
 #define DEFAULT_METRIC "default"
 
 /* Logging in postfix style */
-#define msg_err g_error
+#define msg_err g_critical
 #define msg_warn	g_warning
 #define msg_info	g_message
 #define msg_debug g_debug

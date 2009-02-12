@@ -25,6 +25,8 @@
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
+/* Perl module init function */
+#define MODULE_INIT_FUNC "module_init"
 
 struct config_file *cfg;
 
@@ -85,10 +87,28 @@ static void
 init_filters (struct config_file *cfg)
 {
 	struct perl_module *module;
+    char *init_func, *class;
+    size_t funclen;
+    dSP;
 
 	LIST_FOREACH (module, &cfg->perl_modules, next) {
 		if (module->path) {
 			require_pv (module->path);
+            ENTER;
+	        SAVETMPS;
+
+	        PUSHMARK (SP);
+            XPUSHs (sv_2mortal (newSVpv (class, 0)));
+	        XPUSHs (sv_2mortal (newSViv (PTR2IV (cfg))));
+	        PUTBACK;
+	        /* Call module init function */
+            funclen = strlen (module->path) + sizeof ("::") + sizeof (MODULE_INIT_FUNC) - 1;
+            init_func = g_malloc (funclen);
+            snptintf (init_func, funclen, "%s::%s", module->path, MODULE_INIT_FUNC);
+            call_method (init_func, G_DISCARD);
+
+            FREETMPS;
+            LEAVE;
 		}
 	}
 }
