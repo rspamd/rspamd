@@ -16,17 +16,13 @@
 #endif
 #include <syslog.h>
 
-#include <EXTERN.h>               /* from the Perl distribution     */
-#include <perl.h>                 /* from the Perl distribution     */
-
 #include "main.h"
 #include "cfg_file.h"
 #include "util.h"
+#include "perl.h"
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
-/* Perl module init function */
-#define MODULE_INIT_FUNC "module_init"
 
 struct config_file *cfg;
 
@@ -41,12 +37,10 @@ sig_atomic_t got_alarm;
 
 extern int yynerrs;
 extern FILE *yyin;
-extern void boot_DynaLoader (pTHX_ CV* cv);
-extern void boot_Socket (pTHX_ CV* cv);
+extern void xs_init(pTHX);
 
-PerlInterpreter *perl_interpreter;
-/* XXX: remove this shit when it would be clear why perl need this line */
-PerlInterpreter *my_perl;
+
+extern PerlInterpreter *perl_interpreter;
 
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
@@ -75,43 +69,6 @@ void sig_handler (int signo)
 	}
 }
 
-void
-xs_init(pTHX)
-{
-	dXSUB_SYS;
-	/* DynaLoader is a special case */
-	newXS ("DynaLoader::boot_DynaLoader", boot_DynaLoader, __FILE__);
-}
-
-static void
-init_filters (struct config_file *cfg)
-{
-	struct perl_module *module;
-    char *init_func, *class;
-    size_t funclen;
-    dSP;
-
-	LIST_FOREACH (module, &cfg->perl_modules, next) {
-		if (module->path) {
-			require_pv (module->path);
-            ENTER;
-	        SAVETMPS;
-
-	        PUSHMARK (SP);
-            XPUSHs (sv_2mortal (newSVpv (class, 0)));
-	        XPUSHs (sv_2mortal (newSViv (PTR2IV (cfg))));
-	        PUTBACK;
-	        /* Call module init function */
-            funclen = strlen (module->path) + sizeof ("::") + sizeof (MODULE_INIT_FUNC) - 1;
-            init_func = g_malloc (funclen);
-            snptintf (init_func, funclen, "%s::%s", module->path, MODULE_INIT_FUNC);
-            call_method (init_func, G_DISCARD);
-
-            FREETMPS;
-            LEAVE;
-		}
-	}
-}
 
 static struct rspamd_worker *
 fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum process_type type) 
@@ -333,6 +290,7 @@ main (int argc, char **argv, char **env)
 	
 	init_signals (&signals, sig_handler);
 	/* Init perl interpreter */
+	dTHXa (perl_interpreter);
 	PERL_SYS_INIT3 (&argc, &argv, &env);
 	perl_interpreter = perl_alloc ();
 	if (perl_interpreter == NULL) {
@@ -340,7 +298,6 @@ main (int argc, char **argv, char **env)
 		exit (-errno);
 	}
 
-	my_perl = perl_interpreter;
 	PERL_SET_CONTEXT (perl_interpreter);
 	perl_construct (perl_interpreter);
 	PL_exit_flags |= PERL_EXIT_DESTRUCT_END;

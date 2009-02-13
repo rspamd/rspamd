@@ -7,26 +7,82 @@
 
 #include <glib.h>
 
-#include <EXTERN.h>               /* from the Perl distribution     */
-#include <perl.h>                 /* from the Perl distribution     */
-
 #include "url.h"
 #include "main.h"
 #include "perl.h"
+#include "cfg_file.h"
 
-extern PerlInterpreter *my_perl;
+/* Perl module init function */
+#define MODULE_INIT_FUNC "module_init"
+
+PerlInterpreter *perl_interpreter;
+
+static HV  *rspamd_stash;
+
+extern void boot_DynaLoader (pTHX_ CV* cv);
+extern void boot_Socket (pTHX_ CV* cv);
+
+void
+xs_init(pTHX)
+{
+	dXSUB_SYS;
+	/* DynaLoader is a special case */
+	newXS ("DynaLoader::boot_DynaLoader", boot_DynaLoader, __FILE__);
+
+    rspamd_stash = gv_stashpv("rspamd", TRUE);
+}
+
+void
+init_perl_filters (struct config_file *cfg)
+{
+	struct perl_module *module;
+    char *init_func;
+    size_t funclen;
+	SV* sv;
+    
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
+    dSP;
+	LIST_FOREACH (module, &cfg->perl_modules, next) {
+		if (module->path) {
+			require_pv (module->path);
+            ENTER;
+	        SAVETMPS;
+
+	        PUSHMARK (SP);
+			sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(cfg))), rspamd_stash));
+	        XPUSHs (sv);
+	        PUTBACK;
+	        /* Call module init function */
+            funclen = strlen (module->path) + sizeof ("::") + sizeof (MODULE_INIT_FUNC) - 1;
+            init_func = g_malloc (funclen);
+            snprintf (init_func, funclen, "%s::%s", module->path, MODULE_INIT_FUNC);
+            call_pv (init_func, G_DISCARD);
+
+            FREETMPS;
+            LEAVE;
+		}
+	}
+}
+
 
 int
 perl_call_header_filter (const char *function, struct worker_task *task)
 {
 	int result;
-	dSP;
+	SV* sv;
 
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
+	dSP;
 	ENTER;
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	XPUSHs (sv);
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -47,13 +103,18 @@ int
 perl_call_mime_filter (const char *function, struct worker_task *task)
 {
 	int result;
-	dSP;
+	SV *sv;
 
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
+	dSP;
 	ENTER;
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	XPUSHs (sv);
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -74,13 +135,18 @@ int
 perl_call_message_filter (const char *function, struct worker_task *task)
 {
 	int result;
-	dSP;
+	SV *sv;
 
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
+	dSP;
 	ENTER;
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	XPUSHs (sv);
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -101,13 +167,18 @@ int
 perl_call_url_filter (const char *function, struct worker_task *task)
 {
 	int result;
-	dSP;
+	SV *sv;
 
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
+	dSP;
 	ENTER;
 	SAVETMPS;
 	
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	XPUSHs (sv);
 	PUTBACK;
 	
 	call_pv (function, G_SCALAR);
@@ -129,6 +200,10 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 {
 	int result, i;
 	AV *av;
+	SV *sv;
+
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
 
 	dSP;
 	
@@ -140,7 +215,8 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 		av_push (av, sv_2mortal (newSViv (marks[i])));
 	}
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSViv (PTR2IV (task))));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	XPUSHs (sv);
 	XPUSHs (sv_2mortal ((SV *)AvARRAY (av)));
 	PUTBACK;
 	
@@ -166,13 +242,18 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
         SV *callback;
         struct worker_task *task;
     } *callback_data = data;
+	SV *sv;
 	
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
 	dSP;
 
 	ENTER;
 	SAVETMPS;
 	PUSHMARK (SP);
-	XPUSHs (sv_2mortal (newSViv (PTR2IV (callback_data->task))));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(callback_data->task))), rspamd_stash));
+	XPUSHs (sv);
 	XPUSHs (sv_2mortal (newSViv (error)));
 	XPUSHs (sv_2mortal (newSVpv (ctx->param->buf, ctx->param->bufsize)));
 	PUTBACK;

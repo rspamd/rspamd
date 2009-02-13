@@ -5,8 +5,19 @@
 #include <glib.h>
 #include "memcached.h"
 
+#include <EXTERN.h>               /* from the Perl distribution     */
+#include <perl.h>                 /* from the Perl distribution     */
+
+#ifndef PERL_IMPLICIT_CONTEXT
+#undef  dTHXa
+#define dTHXa(a)
+#endif
+
 struct uri;
 struct worker_task;
+struct config_file;
+
+void init_perl_filters (struct config_file *cfg);
 
 int perl_call_header_filter (const char *function, struct worker_task *task);
 int perl_call_mime_filter (const char *function, struct worker_task *task);
