@@ -17,7 +17,8 @@
 
 PerlInterpreter *perl_interpreter;
 
-static HV  *rspamd_stash;
+static HV  *rspamd_task_stash;
+static HV  *rspamd_cfg_stash;
 
 extern void boot_DynaLoader (pTHX_ CV* cv);
 extern void boot_Socket (pTHX_ CV* cv);
@@ -29,7 +30,8 @@ xs_init(pTHX)
 	/* DynaLoader is a special case */
 	newXS ("DynaLoader::boot_DynaLoader", boot_DynaLoader, __FILE__);
 
-    rspamd_stash = gv_stashpv("rspamd", TRUE);
+    rspamd_task_stash = gv_stashpv("rspamd_task", TRUE);
+    rspamd_cfg_stash = gv_stashpv("rspamd_config", TRUE);
 }
 
 void
@@ -51,7 +53,7 @@ init_perl_filters (struct config_file *cfg)
 	        SAVETMPS;
 
 	        PUSHMARK (SP);
-			sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(cfg))), rspamd_stash));
+			sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(cfg))), rspamd_cfg_stash));
 	        XPUSHs (sv);
 	        PUTBACK;
 	        /* Call module init function */
@@ -81,7 +83,7 @@ perl_call_header_filter (const char *function, struct worker_task *task)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
 	XPUSHs (sv);
 	PUTBACK;
 	
@@ -113,7 +115,7 @@ perl_call_mime_filter (const char *function, struct worker_task *task)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
 	XPUSHs (sv);
 	PUTBACK;
 	
@@ -145,7 +147,7 @@ perl_call_message_filter (const char *function, struct worker_task *task)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
 	XPUSHs (sv);
 	PUTBACK;
 	
@@ -177,7 +179,7 @@ perl_call_url_filter (const char *function, struct worker_task *task)
 	SAVETMPS;
 	
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
 	XPUSHs (sv);
 	PUTBACK;
 	
@@ -215,7 +217,7 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 		av_push (av, sv_2mortal (newSViv (marks[i])));
 	}
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
 	XPUSHs (sv);
 	XPUSHs (sv_2mortal ((SV *)AvARRAY (av)));
 	PUTBACK;
@@ -252,7 +254,7 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
 	ENTER;
 	SAVETMPS;
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(callback_data->task))), rspamd_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(callback_data->task))), rspamd_task_stash));
 	XPUSHs (sv);
 	XPUSHs (sv_2mortal (newSViv (error)));
 	XPUSHs (sv_2mortal (newSVpv (ctx->param->buf, ctx->param->bufsize)));

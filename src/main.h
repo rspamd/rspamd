@@ -191,7 +191,6 @@ struct worker_task {
 	f_str_buf_t *msg;											/**< message buffer									*/
 	struct bufferevent *bev;									/**< buffered event for IO							*/
 	memcached_ctx_t *memc_ctx;									/**< memcached context associated with task			*/
-	unsigned memc_busy:1;										/**< is memcached connection is busy XXX: fix this	*/
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
 	GList *parts;												/**< list of parsed parts							*/
