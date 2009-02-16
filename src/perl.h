@@ -1,8 +1,8 @@
 #ifndef RSPAM_PERL_H
 #define RSPAM_PERL_H
 
-#include <sys/types.h>
-#include <glib.h>
+
+#include "config.h"
 #include "memcached.h"
 
 #include <EXTERN.h>               /* from the Perl distribution     */

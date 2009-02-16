@@ -7,8 +7,6 @@
 #ifndef RSPAMD_HASH_H
 #define RSPAMD_HASH_H
 
-#include <sys/types.h>
-#include <glib.h>
 #include "mem_pool.h"
 
 struct rspamd_hash_node {

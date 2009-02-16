@@ -7,12 +7,6 @@
 #define RSPAMD_STATFILE_H
 
 #include "config.h"
-#include <sys/types.h>
-#include <glib.h>
-
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
 #include "mem_pool.h"
 #include "hash.h"
 

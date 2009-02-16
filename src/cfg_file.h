@@ -7,16 +7,6 @@
 #define CFG_FILE_H
 
 #include "config.h"
-#include <sys/types.h>
-#ifndef HAVE_OWN_QUEUE_H
-#include <sys/queue.h>
-#else
-#include "queue.h"
-#endif
-#include <netinet/in.h>
-#include <sys/un.h>
-#include <event.h>
-#include <glib.h>
 #include "mem_pool.h"
 #include "upstream.h"
 #include "memcached.h"

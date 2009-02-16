@@ -2,20 +2,7 @@
 
 %{
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <syslog.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <glib.h>
-
+#include "config.h"
 #include "cfg_file.h"
 #include "main.h"
 #include "classifiers/classifiers.h"
@@ -45,7 +32,7 @@ struct statfile *cur_statfile = NULL;
 
 %token	ERROR STRING QUOTEDSTRING FLAG
 %token  FILENAME REGEXP QUOTE SEMICOLON OBRACE EBRACE COMMA EQSIGN
-%token  BINDSOCK SOCKCRED DOMAIN IPADDR IPNETWORK HOSTPORT NUMBER CHECK_TIMEOUT
+%token  BINDSOCK SOCKCRED DOMAINNAME IPADDR IPNETWORK HOSTPORT NUMBER CHECK_TIMEOUT
 %token  MAXSIZE SIZELIMIT SECONDS BEANSTALK MYSQL USER PASSWORD DATABASE
 %token  TEMPDIR PIDFILE SERVERS ERROR_TIME DEAD_TIME MAXERRORS CONNECT_TIMEOUT PROTOCOL RECONNECT_TIMEOUT
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
@@ -64,7 +51,7 @@ struct statfile *cur_statfile = NULL;
 %type   <string>  	SOCKCRED
 %type	<string>	IPADDR IPNETWORK
 %type	<string>	HOSTPORT
-%type	<string>	DOMAIN
+%type	<string>	DOMAINNAME
 %type	<limit>		SIZELIMIT
 %type	<flag>		FLAG
 %type	<seconds>	SECONDS
@@ -169,7 +156,7 @@ bind_cred:
 	| IPADDR{
 		$$ = $1;
 	}
-	| DOMAIN {
+	| DOMAINNAME {
 		$$ = $1;
 	}
 	| HOSTPORT {
@@ -247,7 +234,7 @@ memcached_params:
 memcached_hosts:
 	STRING
 	| IPADDR
-	| DOMAIN
+	| DOMAINNAME
 	| HOSTPORT
 	;
 memcached_error_time:

@@ -6,13 +6,7 @@
 #ifndef RSPAMD_FILTER_H
 #define RSPAMD_FILTER_H
 
-#include <sys/types.h>
-#ifndef HAVE_OWN_QUEUE_H
-#include <sys/queue.h>
-#else
-#include "queue.h"
-#endif
-#include <glib.h>
+#include "config.h"
 
 struct worker_task;
 

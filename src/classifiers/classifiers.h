@@ -1,12 +1,7 @@
 #ifndef CLASSIFIERS_H
 #define CLASSIFIERS_H
 
-#include <sys/types.h>
 #include "../config.h"
-
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
 #include "../mem_pool.h"
 #include "../statfile.h"
 #include "../tokenizers/tokenizers.h"

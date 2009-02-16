@@ -1,0 +1,199 @@
+#
+# Rspamd - rambler antispam system
+#
+# Cmake configuration file
+#
+PROJECT(rspamd C)
+
+SET(RSPAMD_VERSION_MAJOR 0)
+SET(RSPAMD_VERSION_MINOR 1)
+SET(RSPAMD_VERSION_PATCH 0)
+
+SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
+SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
+
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
+
+OPTION(DEBUG_MODE          "Enable debug output [default: OFF]"                 OFF)
+OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: ON]"                  ON)
+OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
+
+# Build optimized code for following CPU (default i386)
+#SET(CPU_TUNE               "i686")
+
+# ################################################################################
+# Check Includes
+#
+INCLUDE(CheckIncludeFiles)
+INCLUDE(CheckFunctionExists)
+INCLUDE(CheckSymbolExists)
+INCLUDE(CheckLibraryExists)
+INCLUDE(FindPkgConfig)
+INCLUDE(FindPerl)
+
+IF(NOT PERL_EXECUTABLE)
+	MESSAGE(FATAL_ERROR "Error: Perl is not found but is required")
+ENDIF(NOT PERL_EXECUTABLE)
+
+# Find perl libraries and cflags
+EXECUTE_PROCESS(COMMAND ${PERL_EXECUTABLE} -MExtUtils::Embed -e ccopts OUTPUT_VARIABLE PERL_CFLAGS)
+EXECUTE_PROCESS(COMMAND ${PERL_EXECUTABLE} -MExtUtils::Embed -e ldopts OUTPUT_VARIABLE PERL_LDFLAGS)
+STRING(REGEX REPLACE "[\r\n]" " " PERL_CFLAGS ${PERL_CFLAGS})
+STRING(REGEX REPLACE " +$" "" PERL_CFLAGS ${PERL_CFLAGS})
+STRING(REGEX REPLACE "[\r\n]" " " PERL_LDFLAGS ${PERL_LDFLAGS})
+STRING(REGEX REPLACE " +$" "" PERL_LDFLAGS ${PERL_LDFLAGS})
+
+# Lex and yacc
+FIND_PROGRAM(LEX_EXECUTABLE lex)
+FIND_PROGRAM(YACC_EXECUTABLE yacc)
+
+IF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
+	MESSAGE(FATAL_ERROR "Error: yacc and lex are required for build")
+ENDIF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
+
+pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.10)
+pkg_check_modules(GMIME2 REQUIRED gmime-2.0)
+
+INCLUDE_DIRECTORIES(${GLIB2_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${GMIME2_INCLUDE_DIRS})
+LINK_DIRECTORIES(${GLIB2_LIBRARY_DIRS})
+LINK_DIRECTORIES(${GMIME2_LIBRARY_DIRS})
+
+SET(CMAKE_REQUIRED_LIBRARIES m)
+SET(CMAKE_REQUIRED_INCLUDES sys/mman.h stdlib.h stdio.h unistd.h time.h sched.h)
+
+CHECK_LIBRARY_EXISTS(util pidfile_open   " " HAVE_PIDFILE)
+CHECK_LIBRARY_EXISTS(event event_loop   " " HAVE_LIBEVENT)
+IF(NOT HAVE_LIBEVENT)
+	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
+ENDIF(NOT HAVE_LIBEVENT)
+
+CHECK_INCLUDE_FILES(sys/types.h HAVE_SYS_TYPES_H)
+CHECK_INCLUDE_FILES(sys/time.h  HAVE_SYS_TIME_H)
+CHECK_INCLUDE_FILES(sys/uio.h   HAVE_SYS_UIO_H)
+
+CHECK_INCLUDE_FILES(fcntl.h     HAVE_FCNTL_H)
+CHECK_INCLUDE_FILES(math.h      HAVE_MATH_H)
+CHECK_INCLUDE_FILES(stdio.h     HAVE_STDIO_H)
+CHECK_INCLUDE_FILES(stdlib.h    HAVE_STDLIB_H)
+CHECK_INCLUDE_FILES(string.h    HAVE_STRING_H)
+CHECK_INCLUDE_FILES(strings.h   HAVE_STRINGS_H)
+CHECK_INCLUDE_FILES(time.h      HAVE_TIME_H)
+CHECK_INCLUDE_FILES(unistd.h    HAVE_UNISTD_H)
+CHECK_INCLUDE_FILES(sysexits.h  HAVE_SYSEXITS_H)
+CHECK_INCLUDE_FILES(stdint.h  HAVE_STDINT_H)
+CHECK_INCLUDE_FILES(inttypes.h  HAVE_INTTYPES_H)
+CHECK_INCLUDE_FILES(endian.h  HAVE_ENDIAN_H)
+CHECK_INCLUDE_FILES(sys/endian.h  HAVE_SYS_ENDIAN_H)
+CHECK_INCLUDE_FILES(machine/endian.h  HAVE_MACHINE_ENDIAN_H)
+CHECK_INCLUDE_FILES(sys/queue.h  HAVE_SYS_QUEUE_H)
+CHECK_INCLUDE_FILES(sys/socket.h  HAVE_SYS_SOCKET_H)
+CHECK_INCLUDE_FILES(sys/mman.h  HAVE_SYS_MMAN_H)
+CHECK_INCLUDE_FILES(sys/un.h  HAVE_SYS_UN_H)
+CHECK_INCLUDE_FILES(sys/stat.h  HAVE_SYS_STAT_H)
+CHECK_INCLUDE_FILES(netinet/in.h  HAVE_NETINET_IN_H)
+CHECK_INCLUDE_FILES(arpa/inet.h  HAVE_ARPA_INET_H)
+CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
+CHECK_INCLUDE_FILES(syslog.h HAVE_SYSLOG_H)
+
+CHECK_FUNCTION_EXISTS(setproctitle HAVE_SETPROCTITLE)
+CHECK_FUNCTION_EXISTS(getpagesize HAVE_GETPAGESIZE)
+CHECK_FUNCTION_EXISTS(nanosleep HAVE_NANOSLEEP)
+
+CHECK_SYMBOL_EXISTS(PATH_MAX limits.h HAVE_PATH_MAX)
+CHECK_SYMBOL_EXISTS(MAXPATHLEN sys/param.h HAVE_MAXPATHLEN)
+CHECK_SYMBOL_EXISTS(MAP_SHARED sys/mman.h HAVE_MMAP_SHARED)
+CHECK_SYMBOL_EXISTS(MAP_ANON sys/mman.h HAVE_MMAP_ANON)
+CHECK_SYMBOL_EXISTS(_SC_NPROCESSORS_ONLN unistd.h HAVE_SC_NPROCESSORS_ONLN)
+CHECK_SYMBOL_EXISTS(SLIST_FOREACH_SAFE sys/queue.h HAVE_COMPATIBLE_QUEUE_H)
+
+if (NOT HAVE_COMPATIBLE_QUEUE_H)
+	INCLUDE_DIRECTORIES(compat)
+endif (NOT HAVE_COMPATIBLE_QUEUE_H)
+
+
+SET(CONTRIBSRC "")
+FIND_PATH(MD5_INCLUDE md5.h PATHS 	/opt/include
+									/usr/include
+									/usr/local/include
+									DOC "Path where the openssl header files can be found")
+IF (MD5_INCLUDE)
+	INCLUDE_DIRECTORIES(${MD5_INCLUDE})
+
+	FIND_LIBRARY(MD5_LIBRARY NAMES md PATHS /lib
+                                           	/opt/lib
+                                            /usr/lib
+                                            /usr/local/lib
+                 DOC "Path where the md5 libraries can be found")
+    IF (MD5_LIBRARY)
+    	SET(PROJECT_LIBS "${PROJECT_LIBS} md")
+		MESSAGE(STATUS "INFO: MD5 (libmd) hash function support enabled")
+	ELSE (MD5_LIBRARY)
+		MESSAGE(SEND_ERROR "ERROR: Cannot find libmd.so, aborting")
+	ENDIF (MD5_LIBRARY)
+ELSE (MD5_INCLUDE)
+	SET(CONTRIBSRC compat/md5.c)
+	MESSAGE(STATUS "WARNING: Using internal MD5 support")
+ENDIF (MD5_INCLUDE)
+
+IF("${CMAKE_COMPILER_IS_GNUC}" MATCHES "1")
+	SET(CMAKE_C_WARN_FLAGS " -Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value")
+
+	IF(DEBUG_MODE MATCHES "ON")
+		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb ")
+	ENDIF(DEBUG_MODE MATCHES "ON")
+ENDIF("${CMAKE_COMPILER_IS_GNUC}" MATCHES "1")
+
+SET(RSPAMDSRC	src/modules.c
+				src/hash.c
+				src/worker.c
+				src/util.c
+				src/url.c
+				src/upstream.c
+				src/statfile.c
+				src/protocol.c
+				src/perl.c
+				src/message.c
+				src/mem_pool.c
+				src/memcached.c
+				src/main.c
+				src/fstring.c
+				src/filter.c
+				src/controller.c
+				src/cfg_utils.c)
+
+SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
+				src/tokenizers/osb.c)
+
+SET(CLASSIFIERSSRC src/classifiers/classifiers.c
+				src/classifiers/winnow.c)
+
+SET(PLUGINSSRC	src/plugins/surbl.c
+				src/plugins/regexp.c)
+
+LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
+
+SET(YACC_SRC	src/cfg_file.y)
+SET(LEX_SRC		src/cfg_file.l)
+
+STRING(REPLACE "_file.y" "_yacc.c" YACC_OUTPUT ${YACC_SRC})
+STRING(REPLACE "_file.l" "_lex.c" LEX_OUTPUT ${LEX_SRC})
+
+ADD_CUSTOM_COMMAND(OUTPUT ${LEX_OUTPUT}
+					COMMAND ${LEX_EXECUTABLE} -o${LEX_OUTPUT} ${LEX_SRC})
+ADD_CUSTOM_COMMAND(OUTPUT ${YACC_OUTPUT}
+					COMMAND ${YACC_EXECUTABLE} -d -o ${YACC_OUTPUT} ${YACC_SRC})
+ADD_CUSTOM_COMMAND(TARGET perlxs PRE_LINK
+					COMMAND ${PERL_EXECUTABLE} ./Makefile.PL
+					COMMAND make
+					WORKING_DIRECTORY perl
+					VERBATIM)
+CONFIGURE_FILE(config.h.in src/config.h)
+ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC} ${PLUGINSSRC} ${YACC_OUTPUT} ${LEX_OUTPUT})
+SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
+SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
+SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS ${PERL_CFLAGS}
+										LINK_FLAGS ${PERL_LDFLAGS})
+TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})
+TARGET_LINK_LIBRARIES(rspamd event)
+TARGET_LINK_LIBRARIES(rspamd ${GMIME2_LIBRARIES})

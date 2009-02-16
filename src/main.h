@@ -7,23 +7,6 @@
 #define RSPAMD_MAIN_H
 
 #include "config.h"
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#ifndef HAVE_OWN_QUEUE_H
-#include <sys/queue.h>
-#else
-#include "queue.h"
-#endif
-#include <sys/time.h>
-
-#include <sys/un.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
-#include <signal.h>
-#include <event.h>
-
 #include "fstring.h"
 #include "mem_pool.h"
 #include "statfile.h"
@@ -31,9 +14,6 @@
 #include "memcached.h"
 #include "protocol.h"
 #include "filter.h"
-
-#include <glib.h>
-#include <gmime/gmime.h>
 
 /* Default values */
 #define FIXED_CONFIG_FILE "./rspamd.conf"

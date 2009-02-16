@@ -2,17 +2,7 @@
 #ifndef URL_H
 #define URL_H
 
-#include <sys/types.h>
-#include <sys/socket.h>
 #include "config.h"
-#if !defined(HAVE_OWN_QUEUE_H) && defined(HAVE_SYS_QUEUE_H)
-#include <sys/queue.h>
-#endif
-#ifdef HAVE_OWN_QUEUE_H
-#include "queue.h"
-#endif
-
-#include <glib.h>
 #include "mem_pool.h"
 
 struct worker_task;

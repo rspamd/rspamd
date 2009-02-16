@@ -12,9 +12,7 @@
 #ifndef RSPAMD_MEM_POOL_H
 #define RSPAMD_MEM_POOL_H
 
-#include <sys/types.h>
-#include <glib.h>
-
+#include "config.h"
 
 /** 
  * Destructor type definition 

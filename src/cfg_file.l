@@ -2,11 +2,8 @@
 %x module
 
 %{
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <syslog.h>
+
+#include "config.h"
 #include "cfg_file.h"
 #include "cfg_yacc.h"
 
@@ -95,7 +92,7 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 [a-zA-Z0-9.-]+:[0-9]{1,5}		yylval.string=strdup(yytext); return HOSTPORT;
 [a-zA-Z<][a-zA-Z@+>_-]*         yylval.string=strdup(yytext); return STRING;
 \/[^/\n]+\/						yylval.string=strdup(yytext); return REGEXP;
-[a-zA-Z0-9].[a-zA-Z0-9\/.-]+	yylval.string=strdup(yytext); return DOMAIN;
+[a-zA-Z0-9].[a-zA-Z0-9\/.-]+	yylval.string=strdup(yytext); return DOMAINNAME;
 <incl>[ \t]*      /* eat the whitespace */
 <incl>[^ \t\n]+   { /* got the include file name */
         if (include_stack_ptr >= MAX_INCLUDE_DEPTH) {

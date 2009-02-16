@@ -1,4 +1,187 @@
+#ifndef RSPAMD_CONFIG_H_IN
+#define RSPAMD_CONFIG_H_IN
+
+#cmakedefine HAVE_SYS_TYPES_H    1
+
+#cmakedefine HAVE_SYS_TIME_H     1
+
+#cmakedefine HAVE_SYS_UIO_H      1
+
+#cmakedefine HAVE_FCNTL_H        1
+
+#cmakedefine HAVE_MATH_H         1
+
+#cmakedefine HAVE_STDIO_H        1
+
+#cmakedefine HAVE_STDLIB_H       1
+
+#cmakedefine HAVE_STRING_H       1
+
+#cmakedefine HAVE_STRINGS_H      1
+
+#cmakedefine HAVE_TIME_H         1
+
+#cmakedefine HAVE_UNISTD_H       1
+
+#cmakedefine HAVE_SYSEXITS_H     1
+
+#cmakedefine HAVE_STDINT_H       1
+
+#cmakedefine HAVE_INTTYPES_H     1
+
+#cmakedefine HAVE_STDBOOL_H      1
+
+#cmakedefine HAVE_NETDB_H        1
+
+#cmakedefine HAVE_SYSLOG_H       1
+
+#cmakedefine HAVE_ENDIAN_H       1
+#cmakedefine HAVE_SYS_ENDIAN_H   1
+#cmakedefine HAVE_MACHINE_ENDIAN_H  1
+
+#cmakedefine HAVE_SYS_QUEUE_H    1
+#cmakedefine HAVE_SYS_MMAN_H     1
+#cmakedefine HAVE_SYS_SOCKET_H   1
+#cmakedefine HAVE_SYS_UN_H       1
+
+#cmakedefine HAVE_SETPROCTITLE   1
+
+#cmakedefine HAVE_GETPAGESIZE    1
+
+#cmakedefine HAVE_NANOSLEEP      1
+
+#cmakedefine HAVE_PATH_MAX       1
+
+#cmakedefine HAVE_MAXPATHLEN     1
+
+#cmakedefine HAVE_MMAP_SHARED    1
+
+#cmakedefine HAVE_MMAP_ANON      1
+
+#cmakedefine HAVE_OWN_QUEUE_H    1
+
+#cmakedefine HAVE_SC_NPROCESSORS_ONLN 1
+
+#cmakedefine DEBUG_MODE          1
+
+#define RVERSION          "${RSPAMD_VERSION}"
+#define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
+
+#define MODULES_NUM        ${RSPAMD_MODULES_NUM}
+
+/* sys/types */
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+
+/* stdint */
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#elif defined(HAVE_INTTYPES_H)
+#include <inttypes.h>
+#endif
+
+/* stdbool */
+#ifdef HAVE_STDBOOL_H
+#include <stdbool.h>
+#endif
+
+/* queue */
+#ifdef HAVE_COMPATIBLE_QUEUE_H
+#ifdef HAVE_SYS_QUEUE_H
+#include <sys/queue.h>
+#endif
+#else
+#include "queue.h"
+#endif
+
+/* sys/socket */
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+
+/* sys/mman */
+#ifdef HAVE_SYS_MMAN_H
+#include <sys/mman.h>
+#endif
+
+/* netinet issues */
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
+
+/* unix sockets */
+#ifdef HAVE_SYS_UN_H
+#include <sys/un.h>
+#endif
+
+/* netdb */
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+
+/* stdlib */
+#ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
+
+/* stdio */
+#ifdef HAVE_STDIO_H
+#include <stdio.h>
+#endif
+
+/* time */
+#ifdef HAVE_TIME_H
+#include <time.h>
+#endif
+
+/* sysexits */
+#ifdef HAVE_SYSEXITS_H
+#include <sysexits.h>
+#endif
+
+/* unistd */
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+
+/* string */
+#ifdef HAVE_STDIO_H
+#include <string.h>
+#endif
+
+/* fcntl */
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+
+/* sys/stat */
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
+/* math */
+#ifdef HAVE_MATH_H
+#include <math.h>
+#endif
+
+#ifdef HAVE_LIBUTIL_H
+#include <libutil.h>
+#endif
+
+#ifdef HAVE_SYSLOG_H
+#include <syslog.h>
+#endif
+
+#include <errno.h>
+#include <signal.h>
+#include <event.h>
+#include <glib.h>
+#include <gmime/gmime.h>
 
 /* Forwarded declaration */
 struct module_ctx;
@@ -12,3 +195,5 @@ typedef struct module_s {
 } module_t;
 
 extern module_t modules[];
+
+#endif

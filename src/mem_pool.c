@@ -13,7 +13,7 @@
  * THIS SOFTWARE IS PROVIDED BY Rambler media ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL <copyright holder> BE LIABLE FOR ANY
+ * DISCLAIMED. IN NO EVENT SHALL Rambler BE LIABLE FOR ANY
  * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
  * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
  * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
@@ -22,21 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/types.h>
-#include <glib.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/mman.h>
-#include <errno.h>
 #include "config.h"
-
-#ifdef HAVE_SCHED_YIELD
-#include <sched.h>
-#endif
-
-#ifdef HAVE_NANOSLEEP
-#include <time.h>
-#endif
 
 #include "mem_pool.h"
 
@@ -63,7 +49,7 @@ pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 #undef MEMORY_GREEDY
 
 /* Internal statistic */
-static memory_pool_stat_t *stat = NULL;
+static memory_pool_stat_t *mem_pool_stat = NULL;
 
 static struct _pool_chain *
 pool_chain_new (size_t size) 
@@ -75,7 +61,7 @@ pool_chain_new (size_t size)
 	chain->pos = chain->begin;
 	chain->next = NULL;
 	STAT_LOCK ();
-	stat->chunks_allocated ++;
+	mem_pool_stat->chunks_allocated ++;
 	STAT_UNLOCK ();
 	
 	return chain;
@@ -112,7 +98,7 @@ pool_chain_new_shared (size_t size)
 	chain->lock = 0;
 	chain->next = NULL;
 	STAT_LOCK ();
-	stat->shared_chunks_allocated ++;
+	mem_pool_stat->shared_chunks_allocated ++;
 	STAT_UNLOCK ();
 	
 	return chain;
@@ -130,16 +116,16 @@ memory_pool_new (size_t size)
 	memory_pool_t *new;
 	
 	/* Allocate statistic structure if it is not allocated before */
-	if (stat == NULL) {
+	if (mem_pool_stat == NULL) {
 #if defined(HAVE_MMAP_ANON)
-		stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED, -1, 0);
+		mem_pool_stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED, -1, 0);
 		g_assert (stat != MAP_FAILED);
 #elif defined(HAVE_MMAP_ZERO)
 		int fd;
 
 		fd = open ("/dev/zero", O_RDWR);
 		g_assert (fd != -1);
-		stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+		mem_pool_stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 		g_assert (chain != MAP_FAILED);
 #else
 #	error No mmap methods are defined
@@ -184,14 +170,14 @@ memory_pool_alloc (memory_pool_t *pool, size_t size)
 			pool->cur_pool = new;
 			new->pos += size;
 			STAT_LOCK ();
-			stat->bytes_allocated += size;
+			mem_pool_stat->bytes_allocated += size;
 			STAT_UNLOCK ();
 			return new->begin;
 		}	
 		tmp = cur->pos;
 		cur->pos += size;
 		STAT_LOCK ();
-		stat->bytes_allocated += size;
+		mem_pool_stat->bytes_allocated += size;
 		STAT_UNLOCK ();
 		return tmp;
 	}
@@ -253,14 +239,14 @@ memory_pool_alloc_shared (memory_pool_t *pool, size_t size)
 			cur->next = new;
 			new->pos += size;
 			STAT_LOCK ();
-			stat->bytes_allocated += size;
+			mem_pool_stat->bytes_allocated += size;
 			STAT_UNLOCK ();
 			return new->begin;
 		}
 		tmp = cur->pos;
 		cur->pos += size;
 		STAT_LOCK ();
-		stat->bytes_allocated += size;
+		mem_pool_stat->bytes_allocated += size;
 		STAT_UNLOCK ();
 		return tmp;
 	}
@@ -370,7 +356,7 @@ memory_pool_delete (memory_pool_t *pool)
 		g_free (tmp->begin);
 		g_free (tmp);
 		STAT_LOCK ();
-		stat->chunks_freed ++;
+		mem_pool_stat->chunks_freed ++;
 		STAT_UNLOCK ();
 	}
 	/* Unmap shared memory */
@@ -379,7 +365,7 @@ memory_pool_delete (memory_pool_t *pool)
 		cur_shared = cur_shared->next;
 		munmap (tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
 		STAT_LOCK ();
-		stat->chunks_freed ++;
+		mem_pool_stat->chunks_freed ++;
 		STAT_UNLOCK ();
 	}
 
@@ -390,10 +376,10 @@ void
 memory_pool_stat (memory_pool_stat_t *st)
 {
 	if (stat) {
-		st->bytes_allocated = stat->bytes_allocated;
-		st->chunks_allocated = stat->chunks_allocated;
-		st->shared_chunks_allocated = stat->shared_chunks_allocated;
-		st->chunks_freed = stat->chunks_freed;
+		st->bytes_allocated = mem_pool_stat->bytes_allocated;
+		st->chunks_allocated = mem_pool_stat->chunks_allocated;
+		st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
+		st->chunks_freed = mem_pool_stat->chunks_freed;
 	}
 }
 
