@@ -54,6 +54,23 @@ ENDIF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.10)
 pkg_check_modules(GMIME2 REQUIRED gmime-2.0)
 
+# Make from ; separated list normal space separated list
+# Glib2
+FOREACH(arg ${GLIB2_CFLAGS})
+	SET(GLIB_CFLAGS "${GLIB_CFLAGS} ${arg}")
+ENDFOREACH(arg ${GLIB2_CFLAGS})
+FOREACH(arg ${GLIB2_LDFLAGS})
+	SET(GLIB_LDFLAGS "${GLIB_LDFLAGS} ${arg}")
+ENDFOREACH(arg ${GLIB2_LDFLAGS})
+# Gmime2
+FOREACH(arg ${GMIME2_CFLAGS})
+	SET(GMIME_CFLAGS "${GMIME_CFLAGS} ${arg}")
+ENDFOREACH(arg ${GMIME2_CFLAGS})
+FOREACH(arg ${GMIME2_LDFLAGS})
+	SET(GMIME_LDFLAGS "${GMIME_LDFLAGS} ${arg}")
+ENDFOREACH(arg ${GMIME2_LDFLAGS})
+
+
 INCLUDE_DIRECTORIES(${GLIB2_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${GMIME2_INCLUDE_DIRS})
 LINK_DIRECTORIES(${GLIB2_LIBRARY_DIRS})
@@ -62,11 +79,29 @@ LINK_DIRECTORIES(${GMIME2_LIBRARY_DIRS})
 SET(CMAKE_REQUIRED_LIBRARIES m)
 SET(CMAKE_REQUIRED_INCLUDES sys/mman.h stdlib.h stdio.h unistd.h time.h sched.h)
 
-CHECK_LIBRARY_EXISTS(util pidfile_open   " " HAVE_PIDFILE)
-CHECK_LIBRARY_EXISTS(event event_loop   " " HAVE_LIBEVENT)
-IF(NOT HAVE_LIBEVENT)
+FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATHS /lib
+                                           		/opt/lib
+                                            	/usr/lib
+                                            	/usr/local/lib
+                 DOC "Path where the libevent library can be found")
+IF(NOT LIBEVENT_LIBRARY)
 	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
-ENDIF(NOT HAVE_LIBEVENT)
+ENDIF(NOT LIBEVENT_LIBRARY)
+
+FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	/lib
+                                           		/opt/lib
+                                            	/usr/lib
+                                            	/usr/local/lib
+                 DOC "Path where the libutil library can be found")
+IF(LIBUTIL_LIBRARY)
+	LIST(APPEND CMAKE_REQUIRED_LIBRARIES util)
+	CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
+
+	FIND_FILE(HAVE_LIBUTIL_H NAMES libutil.h PATHS /usr/include
+											   /opt/include
+											   /usr/local/include
+				DOC "Path to libutil header")
+ENDIF(LIBUTIL_LIBRARY)
 
 CHECK_INCLUDE_FILES(sys/types.h HAVE_SYS_TYPES_H)
 CHECK_INCLUDE_FILES(sys/time.h  HAVE_SYS_TIME_H)
@@ -91,10 +126,14 @@ CHECK_INCLUDE_FILES(sys/socket.h  HAVE_SYS_SOCKET_H)
 CHECK_INCLUDE_FILES(sys/mman.h  HAVE_SYS_MMAN_H)
 CHECK_INCLUDE_FILES(sys/un.h  HAVE_SYS_UN_H)
 CHECK_INCLUDE_FILES(sys/stat.h  HAVE_SYS_STAT_H)
+CHECK_INCLUDE_FILES(sys/wait.h  HAVE_SYS_WAIT_H)
+CHECK_INCLUDE_FILES(sys/param.h  HAVE_SYS_PARAM_H)
+CHECK_INCLUDE_FILES(sys/cdefs.h  HAVE_SYS_CDEFS_H)
 CHECK_INCLUDE_FILES(netinet/in.h  HAVE_NETINET_IN_H)
 CHECK_INCLUDE_FILES(arpa/inet.h  HAVE_ARPA_INET_H)
 CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
 CHECK_INCLUDE_FILES(syslog.h HAVE_SYSLOG_H)
+
 
 CHECK_FUNCTION_EXISTS(setproctitle HAVE_SETPROCTITLE)
 CHECK_FUNCTION_EXISTS(getpagesize HAVE_GETPAGESIZE)
@@ -107,9 +146,9 @@ CHECK_SYMBOL_EXISTS(MAP_ANON sys/mman.h HAVE_MMAP_ANON)
 CHECK_SYMBOL_EXISTS(_SC_NPROCESSORS_ONLN unistd.h HAVE_SC_NPROCESSORS_ONLN)
 CHECK_SYMBOL_EXISTS(SLIST_FOREACH_SAFE sys/queue.h HAVE_COMPATIBLE_QUEUE_H)
 
-if (NOT HAVE_COMPATIBLE_QUEUE_H)
+IF(NOT HAVE_COMPATIBLE_QUEUE_H)
 	INCLUDE_DIRECTORIES(compat)
-endif (NOT HAVE_COMPATIBLE_QUEUE_H)
+ENDIF(NOT HAVE_COMPATIBLE_QUEUE_H)
 
 
 SET(CONTRIBSRC "")
@@ -171,6 +210,28 @@ SET(CLASSIFIERSSRC src/classifiers/classifiers.c
 SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/regexp.c)
 
+SET(TESTSRC		test/rspamd_expression_test.c
+				test/rspamd_memcached_test.c
+				test/rspamd_mem_pool_test.c
+				test/rspamd_statfile_test.c
+				test/rspamd_test_suite.c
+				test/rspamd_url_test.c)
+
+SET(TESTDEPENDS	src/mem_pool.c
+				src/hash.c
+				src/url.c
+				src/util.c
+				src/memcached.c
+				src/statfile.c)
+
+SET(UTILSSRC	utils/url_extracter.c)
+
+SET(UTILSDEPENDS src/mem_pool.c
+				src/hash.c
+				src/url.c
+				src/util.c
+				src/memcached.c)
+
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
 SET(YACC_SRC	src/cfg_file.y)
@@ -183,12 +244,19 @@ ADD_CUSTOM_COMMAND(OUTPUT ${LEX_OUTPUT}
 					COMMAND ${LEX_EXECUTABLE} -o${LEX_OUTPUT} ${LEX_SRC})
 ADD_CUSTOM_COMMAND(OUTPUT ${YACC_OUTPUT}
 					COMMAND ${YACC_EXECUTABLE} -d -o ${YACC_OUTPUT} ${YACC_SRC})
-ADD_CUSTOM_COMMAND(TARGET perlxs PRE_LINK
+ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
+					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
+					WORKING_DIRECTORY src)
+
+ADD_CUSTOM_TARGET(perlxs ALL
 					COMMAND ${PERL_EXECUTABLE} ./Makefile.PL
 					COMMAND make
 					WORKING_DIRECTORY perl
 					VERBATIM)
+
 CONFIGURE_FILE(config.h.in src/config.h)
+CONFIGURE_FILE(perl/Makefile.PL.in perl/Makefile.PL)
+
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC} ${PLUGINSSRC} ${YACC_OUTPUT} ${LEX_OUTPUT})
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
@@ -197,3 +265,19 @@ SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS ${PERL_CFLAGS}
 TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd event)
 TARGET_LINK_LIBRARIES(rspamd ${GMIME2_LIBRARIES})
+
+ADD_EXECUTABLE(test/rspamd-test ${TESTDEPENDS} ${CONTRIBSRC} ${TESTSRC})
+SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES LINKER_LANGUAGE C)
+SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES COMPILE_FLAGS ${PERL_CFLAGS}
+										LINK_FLAGS ${PERL_LDFLAGS})
+TARGET_LINK_LIBRARIES(test/rspamd-test ${GLIB2_LIBRARIES})
+TARGET_LINK_LIBRARIES(test/rspamd-test event)
+TARGET_LINK_LIBRARIES(test/rspamd-test ${GMIME2_LIBRARIES})
+
+ADD_EXECUTABLE(utils/url-extracter ${UTILSDEPENDS} ${CONTRIBSRC} ${UTILSSRC})
+SET_TARGET_PROPERTIES(utils/url-extracter PROPERTIES LINKER_LANGUAGE C)
+SET_TARGET_PROPERTIES(utils/url-extracter PROPERTIES COMPILE_FLAGS ${PERL_CFLAGS}
+										LINK_FLAGS ${PERL_LDFLAGS})
+TARGET_LINK_LIBRARIES(utils/url-extracter ${GLIB2_LIBRARIES})
+TARGET_LINK_LIBRARIES(utils/url-extracter event)
+TARGET_LINK_LIBRARIES(utils/url-extracter ${GMIME2_LIBRARIES})

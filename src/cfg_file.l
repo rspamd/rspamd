@@ -3,6 +3,7 @@
 
 %{
 
+#define NO_GMIME
 #include "config.h"
 #include "cfg_file.h"
 #include "cfg_yacc.h"

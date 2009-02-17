@@ -2,8 +2,8 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME         => 'rspamd',
     VERSION_FROM => 'rspamd.pm', # finds $VERSION
-    LIBS         => ['%%libs%%'],   # e.g., '-lm'
+    LIBS         => ['${GLIB_LDFLAGS} ${GMIME_LDFLAGS} -levent'],   # e.g., '-lm'
     DEFINE       => '',
-    INC          => '%%include%%',
+    INC          => '${GLIB_CFLAGS} ${GMIME_CFLAGS}',
 );
 

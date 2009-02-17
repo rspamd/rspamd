@@ -35,14 +35,22 @@
 
 #cmakedefine HAVE_SYSLOG_H       1
 
+#cmakedefine HAVE_LIBUTIL_H      1
+
 #cmakedefine HAVE_ENDIAN_H       1
 #cmakedefine HAVE_SYS_ENDIAN_H   1
 #cmakedefine HAVE_MACHINE_ENDIAN_H  1
+#cmakedefine HAVE_SYS_CDEFS_H    1
 
 #cmakedefine HAVE_SYS_QUEUE_H    1
 #cmakedefine HAVE_SYS_MMAN_H     1
 #cmakedefine HAVE_SYS_SOCKET_H   1
 #cmakedefine HAVE_SYS_UN_H       1
+#cmakedefine HAVE_SYS_STAT_H     1
+#cmakedefine HAVE_SYS_WAIT_H     1
+#cmakedefine HAVE_SYS_PARAM_H    1
+
+#cmakedefine HAVE_PIDFILE        1
 
 #cmakedefine HAVE_SETPROCTITLE   1
 
@@ -58,7 +66,7 @@
 
 #cmakedefine HAVE_MMAP_ANON      1
 
-#cmakedefine HAVE_OWN_QUEUE_H    1
+#cmakedefine HAVE_COMPATIBLE_QUEUE_H    1
 
 #cmakedefine HAVE_SC_NPROCESSORS_ONLN 1
 
@@ -72,6 +80,16 @@
 /* sys/types */
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+
+/* cdefs */
+#ifdef HAVE_SYS_CDEFS_H
+#include <sys/cdefs.h>
+#endif
+
+/* sys/param */
+#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
 #endif
 
 /* stdint */
@@ -164,6 +182,11 @@
 #include <sys/stat.h>
 #endif
 
+/* sys/wait */
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+
 /* math */
 #ifdef HAVE_MATH_H
 #include <math.h>
@@ -181,7 +204,10 @@
 #include <signal.h>
 #include <event.h>
 #include <glib.h>
+
+#ifndef NO_GMIME
 #include <gmime/gmime.h>
+#endif
 
 /* Forwarded declaration */
 struct module_ctx;
