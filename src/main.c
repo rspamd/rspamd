@@ -4,11 +4,11 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
+ *	 * Redistributions of source code must retain the above copyright
+ *	   notice, this list of conditions and the following disclaimer.
+ *	 * Redistributions in binary form must reproduce the above copyright
+ *	   notice, this list of conditions and the following disclaimer in the
+ *	   documentation and/or other materials provided with the distribution.
  *
  * THIS SOFTWARE IS PROVIDED BY Rambler media ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -77,6 +77,53 @@ void sig_handler (int signo)
 }
 
 
+static void
+config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
+{
+	switch (rspamd->cfg->log_type) {
+		case RSPAMD_LOG_CONSOLE:
+			if (!rspamd->cfg->no_fork) {
+				if (is_fatal) {
+					fprintf (stderr, "Cannot log to console while daemonized, disable logging");
+				}
+				rspamd->cfg->log_fd = -1;
+			}
+			else {
+				rspamd->cfg->log_fd = 2;
+			}
+			g_log_set_default_handler (file_log_function, rspamd->cfg);
+			break;
+		case RSPAMD_LOG_FILE:
+			if (rspamd->cfg->log_file == NULL || open_log (rspamd->cfg) == -1) {
+				if (is_fatal) {
+					fprintf (stderr, "Fatal error, cannot open logfile, exiting");
+					exit (EXIT_FAILURE);
+				}
+				else {
+					msg_err ("config_logger: cannot log to file, logfile unaccessable");
+				}
+			}
+			else {
+				g_log_set_default_handler (file_log_function, rspamd->cfg);
+			}
+			break;
+		case RSPAMD_LOG_SYSLOG:
+			if (open_log (rspamd->cfg) == -1) {
+				if (is_fatal) {
+					fprintf (stderr, "Fatal error, cannot open syslog facility, exiting");
+					exit (EXIT_FAILURE);
+				}
+				else {
+					msg_err ("config_logger: cannot log to syslog");
+				}
+			}
+			else {
+				g_log_set_default_handler (syslog_log_function, rspamd->cfg);
+			}
+			break;
+	}
+}
+
 static struct rspamd_worker *
 fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum process_type type) 
 {
@@ -91,9 +138,9 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 		if (reconfig) {
 			tmp_cfg = (struct config_file *) g_malloc (sizeof (struct config_file));
 			if (tmp_cfg) {
-        		bzero (tmp_cfg, sizeof (struct config_file));
+				bzero (tmp_cfg, sizeof (struct config_file));
 				tmp_cfg->cfg_pool = memory_pool_new (32768);
-        		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
+				cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 				f = fopen (rspamd->cfg->cfg_name , "r");
 				if (f == NULL) {
 					msg_warn ("fork_worker: cannot open file: %s", rspamd->cfg->cfg_name );
@@ -107,10 +154,11 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 						fclose (f);
 					}
 					else {
-        				free_config (rspamd->cfg);
+						free_config (rspamd->cfg);
 						g_free (rspamd->cfg);
 						rspamd->cfg = tmp_cfg;
-        				rspamd->cfg->cfg_name = cfg_file;
+						rspamd->cfg->cfg_name = cfg_file;
+						config_logger (rspamd, FALSE);
 					}
 				}
 			}
@@ -211,9 +259,9 @@ main (int argc, char **argv, char **env)
 
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, FIXED_CONFIG_FILE);
 	read_cmd_line (argc, argv, rspamd->cfg);
-    
-    /* First set logger to console logger */
-    cfg->log_fd = 2;
+	
+	/* First set logger to console logger */
+	cfg->log_fd = 2;
 	g_log_set_default_handler (file_log_function, cfg);
 
 	#ifndef HAVE_SETPROCTITLE
@@ -233,45 +281,21 @@ main (int argc, char **argv, char **env)
 	}
 
 	fclose (f);
-    msg_info ("main: starting...");
+	
+	config_logger (rspamd, TRUE);
+
+	msg_info ("main: starting...");
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name );
 
 	/* Strictly set temp dir */
-    if (!rspamd->cfg->temp_dir) {
+	if (!rspamd->cfg->temp_dir) {
 		msg_warn ("main: tempdir is not set, trying to use $TMPDIR");
 		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!rspamd->cfg->temp_dir) {
 			msg_warn ("main: $TMPDIR is empty too, using /tmp as default");
-	    	rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
+			rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
 		}
-    }
-
-	switch (cfg->log_type) {
-		case RSPAMD_LOG_CONSOLE:
-			if (!rspamd->cfg->no_fork) {
-				fprintf (stderr, "Cannot log to console while daemonized, disable logging");
-				cfg->log_fd = -1;
-			}
-			else {
-				cfg->log_fd = 2;
-			}
-			g_log_set_default_handler (file_log_function, cfg);
-			break;
-		case RSPAMD_LOG_FILE:
-			if (cfg->log_file == NULL || open_log (cfg) == -1) {
-				fprintf (stderr, "Fatal error, cannot open logfile, exiting");
-				exit (EXIT_FAILURE);
-			}
-			g_log_set_default_handler (file_log_function, cfg);
-			break;
-		case RSPAMD_LOG_SYSLOG:
-			if (open_log (cfg) == -1) {
-				fprintf (stderr, "Fatal error, cannot open syslog facility, exiting");
-				exit (EXIT_FAILURE);
-			}
-			g_log_set_default_handler (syslog_log_function, cfg);
-			break;
 	}
 
 	if (!rspamd->cfg->no_fork && daemon (1, 1) == -1) {
