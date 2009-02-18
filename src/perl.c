@@ -4,11 +4,11 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
+ *	 * Redistributions of source code must retain the above copyright
+ *	   notice, this list of conditions and the following disclaimer.
+ *	 * Redistributions in binary form must reproduce the above copyright
+ *	   notice, this list of conditions and the following disclaimer in the
+ *	   documentation and/or other materials provided with the distribution.
  *
  * THIS SOFTWARE IS PROVIDED BY Rambler media ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -46,40 +46,40 @@ xs_init(pTHX)
 	/* DynaLoader is a special case */
 	newXS ("DynaLoader::boot_DynaLoader", boot_DynaLoader, __FILE__);
 
-    rspamd_task_stash = gv_stashpv("rspamd_task", TRUE);
-    rspamd_cfg_stash = gv_stashpv("rspamd_config", TRUE);
+	rspamd_task_stash = gv_stashpv("rspamd_task", TRUE);
+	rspamd_cfg_stash = gv_stashpv("rspamd_config", TRUE);
 }
 
 void
 init_perl_filters (struct config_file *cfg)
 {
 	struct perl_module *module;
-    char *init_func;
-    size_t funclen;
+	char *init_func;
+	size_t funclen;
 	SV* sv;
-    
+	
 	dTHXa (perl_interpreter);
 	PERL_SET_CONTEXT (perl_interpreter);
 
-    dSP;
+	dSP;
 	LIST_FOREACH (module, &cfg->perl_modules, next) {
 		if (module->path) {
 			require_pv (module->path);
-            ENTER;
-	        SAVETMPS;
+			ENTER;
+			SAVETMPS;
 
-	        PUSHMARK (SP);
+			PUSHMARK (SP);
 			sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(cfg))), rspamd_cfg_stash));
-	        XPUSHs (sv);
-	        PUTBACK;
-	        /* Call module init function */
-            funclen = strlen (module->path) + sizeof ("::") + sizeof (MODULE_INIT_FUNC) - 1;
-            init_func = g_malloc (funclen);
-            snprintf (init_func, funclen, "%s::%s", module->path, MODULE_INIT_FUNC);
-            call_pv (init_func, G_DISCARD);
+			XPUSHs (sv);
+			PUTBACK;
+			/* Call module init function */
+			funclen = strlen (module->path) + sizeof ("::") + sizeof (MODULE_INIT_FUNC) - 1;
+			init_func = g_malloc (funclen);
+			snprintf (init_func, funclen, "%s::%s", module->path, MODULE_INIT_FUNC);
+			call_pv (init_func, G_DISCARD);
 
-            FREETMPS;
-            LEAVE;
+			FREETMPS;
+			LEAVE;
 		}
 	}
 }
@@ -257,9 +257,9 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 {
 	struct {
-        SV *callback;
-        struct worker_task *task;
-    } *callback_data = data;
+		SV *callback;
+		struct worker_task *task;
+	} *callback_data = data;
 	SV *sv;
 	
 	dTHXa (perl_interpreter);
@@ -278,8 +278,8 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
 
 	call_sv (callback_data->callback, G_SCALAR);
 	
-    /* Set save point */
-    callback_data->task->save.saved = 0;
+	/* Set save point */
+	callback_data->task->save.saved = 0;
 	process_filters (callback_data->task);
 
 	SPAGAIN;
