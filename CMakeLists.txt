@@ -211,7 +211,8 @@ SET(RSPAMDSRC	src/modules.c
 				src/fstring.c
 				src/filter.c
 				src/controller.c
-				src/cfg_utils.c)
+				src/cfg_utils.c
+				src/buffer.c)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)

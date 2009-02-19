@@ -304,7 +304,7 @@ process_message (struct worker_task *task)
 	GMimeParser *parser;
 	GMimeStream *stream;
 
-	stream = g_mime_stream_mem_new_with_buffer (task->msg->buf->begin, task->msg->buf->len);
+	stream = g_mime_stream_mem_new_with_buffer (task->msg->begin, task->msg->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 
@@ -393,7 +393,7 @@ process_learn (struct controller_session *session)
 	GMimeParser *parser;
 	GMimeStream *stream;
 
-	stream = g_mime_stream_mem_new_with_buffer (session->learn_buf->buf->begin, session->learn_buf->buf->len);
+	stream = g_mime_stream_mem_new_with_buffer (session->learn_buf->begin, session->learn_buf->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 

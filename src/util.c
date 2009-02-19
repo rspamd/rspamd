@@ -901,50 +901,5 @@ resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *fro
 }
 
 /*
- * These functions are from libevent where they are static and not exported anywhere
- * XXX: think how to avoid this
- */
-
-char *
-buffer_readline (memory_pool_t *pool, struct evbuffer *buf)
-{
-	u_char *data = EVBUFFER_DATA (buf);
-	size_t len = EVBUFFER_LENGTH (buf);
-	char *line, fch, sch;
-	unsigned int i;
-
-	for (i = 0; i < len; i++) {
-		if (data[i] == '\r' || data[i] == '\n') {
-			break;
-		}
-	}
-
-	if (i == len) {
-		return (NULL);
-	}
-	
-	line = memory_pool_alloc (pool, i + 1);
-
-	memcpy (line, data, i);
-	line[i] = '\0';
-
-	/*
-	 * Some protocols terminate a line with '\r\n', so check for
-	 * that, too.
-	 */
-	if ( i < len - 1 ) {
-		fch = data[i], sch = data[i+1];
-
-		/* Drain one more character if needed */
-		if ( (sch == '\r' || sch == '\n') && sch != fch )
-			i += 1;
-	}
-
-	evbuffer_drain (buf, i + 1);
-
-	return (line);
-}
-
-/*
  * vi:ts=4
  */

@@ -234,9 +234,6 @@ continue_process_filters (struct worker_task *task)
 			}
 			/* Process all metrics */
 			g_hash_table_foreach (task->results, metric_process_callback, task);
-			/* All done */
-			bufferevent_enable (task->bev, EV_WRITE);
-			evbuffer_drain (task->bev->output, EVBUFFER_LENGTH (task->bev->output));
 			process_statfiles (task);
 			return 1;
 	}

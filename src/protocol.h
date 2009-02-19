@@ -36,7 +36,7 @@ enum rspamd_command {
  * @param line line of user's input
  * @return 0 if line was successfully parsed and -1 if we have protocol error
  */
-int read_rspamd_input_line (struct worker_task *task, char *line);
+int read_rspamd_input_line (struct worker_task *task, f_str_t *line);
 
 /**
  * Write reply for specified task command

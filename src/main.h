@@ -14,6 +14,7 @@
 #include "memcached.h"
 #include "protocol.h"
 #include "filter.h"
+#include "buffer.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE "./rspamd.conf"
@@ -133,14 +134,14 @@ struct controller_session {
 	/* Access to authorized commands */
 	int authorized;												/**< whether this session is authorized				*/
 	memory_pool_t *session_pool;								/**< memory pool for session 						*/
-	struct bufferevent *bev;									/**< buffered event for IO							*/
 	struct config_file *cfg;									/**< pointer to config file							*/
 	char *learn_rcpt;											/**< recipient for learning							*/
 	char *learn_from;											/**< from address for learning						*/
 	struct tokenizer *learn_tokenizer;							/**< tokenizer for learning							*/
 	struct classifier *learn_classifier;						/**< classifier for learning						*/
 	char *learn_filename;										/**< real filename for learning						*/
-	f_str_buf_t *learn_buf;										/**< learn input									*/
+	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
+	f_str_t *learn_buf;											/**< learn input									*/
 	GList *parts;												/**< extracted mime parts							*/
 	int in_class;												/**< positive or negative learn						*/
 };
@@ -168,8 +169,8 @@ struct worker_task {
 	GList *rcpt;												/**< recipients list								*/
 	unsigned int nrcpt;											/**< number of recipients							*/
 	struct in_addr from_addr;									/**< client addr in numeric form					*/
-	f_str_buf_t *msg;											/**< message buffer									*/
-	struct bufferevent *bev;									/**< buffered event for IO							*/
+	f_str_t *msg;												/**< message buffer									*/
+	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
 	memcached_ctx_t *memc_ctx;									/**< memcached context associated with task			*/
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
