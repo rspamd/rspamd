@@ -457,7 +457,13 @@ static void
 err_socket (GError *err, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
-	msg_info ("err_socket: abnormally closing control connection, error: %s", err->message);
+
+	if (err->code == EOF) {
+		msg_info ("err_socket: client closed control connection");
+	}
+	else {
+		msg_info ("err_socket: abnormally closing control connection, error: %s", err->message);
+	}
 	/* Free buffers */
 	free_session (session);
 }

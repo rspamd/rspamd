@@ -40,8 +40,8 @@
 #include <perl.h>                 /* from the Perl distribution     */
 
 #define TASK_POOL_SIZE 4095
-/* 2 seconds for worker's IO */
-#define WORKER_IO_TIMEOUT 2
+/* 60 seconds for worker's IO */
+#define WORKER_IO_TIMEOUT 60
 
 const f_str_t CRLF = {
 	/* begin */"\r\n",
@@ -119,7 +119,8 @@ free_task (struct worker_task *task)
 			g_list_free_1 (part);
 		}
 		memory_pool_delete (task->task_pool);
-		rspamd_remove_dispatcher (task->dispatcher);
+		/* Plan dispatcher shutdown */
+		task->dispatcher->wanna_die = 1;
 		close (task->sock);
 		g_free (task);
 	}
@@ -216,7 +217,8 @@ accept_socket (int fd, short what, void *arg)
 	struct sockaddr_storage ss;
 	struct worker_task *new_task;
 	socklen_t addrlen = sizeof(ss);
-	int nfd;
+	int nfd, on = 1;
+	struct linger linger;
 
 	if ((nfd = accept (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
 		return;
@@ -224,6 +226,13 @@ accept_socket (int fd, short what, void *arg)
 	if (event_make_socket_nonblocking(fd) < 0) {
 		return;
 	}
+
+	/* Socket options */
+	setsockopt (nfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
+	setsockopt (nfd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
+	linger.l_onoff = 1;
+	linger.l_linger = 2;
+	setsockopt (nfd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 	
 	new_task = g_malloc (sizeof (struct worker_task));
 	if (new_task == NULL) {

@@ -91,6 +91,7 @@ parse_command (struct worker_task *task, char *line)
 {
 	char *token;
 
+	msg_debug ("parse_command: got line from worker: %s", line);
 	token = strsep (&line, " ");
 	if (line == NULL || token == NULL) {
 		msg_debug ("parse_command: bad command: %s", token);
@@ -191,6 +192,7 @@ parse_header (struct worker_task *task, char *line)
 				task->last_error = "Unknown content length";
 				task->error_code = RSPAMD_LENGTH_ERROR;
 				task->state = WRITE_ERROR;
+				return -1;
 			}
 		}
 		return 0;
