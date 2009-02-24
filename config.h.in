@@ -37,6 +37,8 @@
 
 #cmakedefine HAVE_LIBUTIL_H      1
 
+#cmakedefine HAVE_LIBGEN_H       1
+
 #cmakedefine HAVE_ENDIAN_H       1
 #cmakedefine HAVE_SYS_ENDIAN_H   1
 #cmakedefine HAVE_MACHINE_ENDIAN_H  1
@@ -192,12 +194,19 @@
 #include <math.h>
 #endif
 
+/* libutil */
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
 #endif
 
+/* syslog */
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
+#endif
+
+#ifdef HAVE_LIBGEN_H
+#include <libgen.h>
+#define HAVE_DIRNAME 1
 #endif
 
 #include <errno.h>

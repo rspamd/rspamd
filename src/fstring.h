@@ -43,6 +43,11 @@ ssize_t fstrrchr (f_str_t *src, char c);
 ssize_t fstrstr (f_str_t *orig, f_str_t *pattern);
 
 /*
+ * Search for pattern in orig ignoring case
+ */
+ssize_t fstrstri (f_str_t *orig, f_str_t *pattern);
+
+/*
  * Split string by tokens
  * word contains parsed word
  */
@@ -87,7 +92,6 @@ f_str_t* fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen);
  * Return fast hash value for fixed string
  */
 uint32_t fstrhash (f_str_t *str);
-
 
 /*
  * Make copy of string to 0-terminated string

@@ -14,6 +14,7 @@
 
 #define DEFAULT_BIND_PORT 768
 #define DEFAULT_CONTROL_PORT 7608
+#define DEFAULT_LMTP_PORT 7609
 #define MAX_MEMCACHED_SERVERS 48
 #define DEFAULT_MEMCACHED_PORT 11211
 /* Memcached timeouts */
@@ -37,6 +38,16 @@ struct tokenizer;
 struct classifier;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
+
+/**
+ * Types of rspamd bind lines
+ */
+enum rspamd_cred_type {
+	CRED_NORMAL,
+	CRED_CONTROL,
+	CRED_LMTP,
+	CRED_DELIVERY,
+};
 
 /**
  * Regexp type: /H - header, /M - mime, /U - url
@@ -161,6 +172,21 @@ struct config_file {
 	unsigned int memcached_maxerrors;				/**< maximum number of errors							*/
 	unsigned int memcached_connect_timeout;			/**< connection timeout									*/
 
+	gboolean lmtp_enable;							/**< is lmtp agent is enabled							*/
+	char *lmtp_host;								/**< host for lmtp agent								*/
+	struct in_addr lmtp_addr;						/**< bind address for lmtp								*/
+	uint16_t lmtp_port;								/**< bind port for lmtp agent							*/
+	uint16_t lmtp_family;							/**< bind family for lmtp agent							*/
+	char *lmtp_metric;								/**< metric to use in lmtp module						*/
+
+	gboolean delivery_enable;						/**< is delivery agent is enabled						*/
+	char *deliver_host;								/**< host for mail deliviring							*/
+	struct in_addr deliver_addr;					/**< its address										*/
+	uint16_t deliver_port;							/**< port for deliviring								*/
+	uint16_t deliver_family;						/**< socket family for delivirnig						*/
+	char *deliver_agent_path;						/**< deliver to pipe instead of socket					*/
+	gboolean deliver_lmtp;							/**< use LMTP instead of SMTP							*/
+
 	LIST_HEAD (modulesq, perl_module) perl_modules;	/**< linked list of perl modules to load				*/
 
 	LIST_HEAD (headersq, filter) header_filters;	/**< linked list of all header's filters				*/
@@ -193,10 +219,10 @@ int add_memcached_server (struct config_file *cf, char *str);
  * Parse bind credits
  * @param cf config file to use
  * @param str line that presents bind line
- * @param is_control flag that defines whether this credits are for controller
+ * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-int parse_bind_line (struct config_file *cf, char *str, char is_control);
+int parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type);
 
 /**
  * Init default values

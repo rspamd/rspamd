@@ -27,6 +27,7 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "perl.h"
+#include "lmtp.h"
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
@@ -178,6 +179,11 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 						msg_info ("fork_worker: starting controller process %d", getpid ());
 						start_controller (cur);
 						break;
+					case TYPE_LMTP:
+						setproctitle ("lmtp process");
+						pidfile_close (rspamd->pfh);
+						msg_info ("fork_worker: starting lmtp process %d", getpid ());
+						start_lmtp_worker (cur);
 					case TYPE_WORKER:
 					default:
 						setproctitle ("worker process");
@@ -368,6 +374,11 @@ main (int argc, char **argv, char **env)
 	if (cfg->controller_enabled) {
 		fork_worker (rspamd, listen_sock, 0, TYPE_CONTROLLER);
 	}
+	
+	/* Start lmtp if enabled */
+	if (cfg->lmtp_enable) {
+		fork_worker (rspamd, listen_sock, 0, TYPE_LMTP);
+	}
 
 	/* Signal processing cycle */
 	for (;;) {
@@ -394,17 +405,17 @@ main (int argc, char **argv, char **env)
 					if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 						/* Normal worker termination, do not fork one more */
 						msg_info ("main: %s process %d terminated normally", 
-									(cur->type == TYPE_WORKER) ? "worker" : "controller", cur->pid);
+									(cur->type != TYPE_WORKER) ? "controller" : "worker", cur->pid);
 					}
 					else {
 						if (WIFSIGNALED (res)) {
 							msg_warn ("main: %s process %d terminated abnormally by signal: %d", 
-										(cur->type == TYPE_WORKER) ? "worker" : "controller",
+										(cur->type != TYPE_WORKER) ? "controller" : "worker",
 										cur->pid, WTERMSIG(res));
 						}
 						else {
 							msg_warn ("main: %s process %d terminated abnormally", 
-										(cur->type == TYPE_WORKER) ? "worker" : "controller", cur->pid);
+										(cur->type != TYPE_WORKER) ? "controller" : "worker", cur->pid);
 						}
 						/* Fork another worker in replace of dead one */
 						delay_fork (cur->type);

@@ -47,6 +47,10 @@ required_score					return REQUIRED_SCORE;
 function						return FUNCTION;
 control							return CONTROL;
 password						return PASSWORD;
+lmtp							return LMTP;
+enabled							return ENABLED;
+delivery						return DELIVERY;
+agent							return AGENT;
 
 statfile						return STATFILE;
 alias							return ALIAS;

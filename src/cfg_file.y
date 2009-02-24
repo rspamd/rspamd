@@ -43,6 +43,7 @@ struct statfile *cur_statfile = NULL;
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
+%token	DELIVERY LMTP ENABLED AGENT
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -84,6 +85,8 @@ command	:
 	| logging
 	| statfile
 	| statfile_pool_size
+	| lmtp
+	| delivery
 	;
 
 tempdir :
@@ -125,7 +128,7 @@ controlcmd:
 
 controlsock:
 	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3, 1)) {
+		if (!parse_bind_line (cfg, $3, CRED_CONTROL)) {
 			yyerror ("yyparse: parse_bind_line");
 			YYERROR;
 		}
@@ -141,7 +144,7 @@ controlpassword:
 
 bindsock:
 	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3, 0)) {
+		if (!parse_bind_line (cfg, $3, CRED_NORMAL)) {
 			yyerror ("yyparse: parse_bind_line");
 			YYERROR;
 		}		
@@ -659,6 +662,85 @@ statfile_pool_size:
 		cfg->max_statfile_size = $3;
 	}
 	;
+
+lmtp:
+	LMTP OBRACE lmtpbody EBRACE
+	;
+
+lmtpbody:
+	lmtpcmd SEMICOLON
+	| lmtpbody lmtpcmd SEMICOLON
+	;
+
+lmtpcmd:
+	lmtpenabled
+	| lmtpsock
+	| lmtpmetric
+	;
+
+lmtpenabled:
+	ENABLED EQSIGN FLAG {
+		cfg->lmtp_enable = $3;
+	}
+	;
+
+lmtpsock:
+	BINDSOCK EQSIGN bind_cred {
+		if (!parse_bind_line (cfg, $3, CRED_LMTP)) {
+			yyerror ("yyparse: parse_bind_line");
+			YYERROR;
+		}
+		free ($3);
+	}
+	;
+lmtpmetric:
+	METRIC EQSIGN QUOTEDSTRING {
+		cfg->lmtp_metric = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
+delivery:
+	DELIVERY OBRACE deliverybody EBRACE
+	;
+
+deliverybody:
+	deliverycmd SEMICOLON
+	| deliverybody deliverycmd SEMICOLON
+	;
+
+deliverycmd:
+	deliveryenabled
+	| deliverysock
+	| deliveryagent
+	| deliverylmtp
+	;
+
+deliveryenabled:
+	ENABLED EQSIGN FLAG {
+		cfg->delivery_enable = $3;
+	}
+	;
+
+deliverysock:
+	BINDSOCK EQSIGN bind_cred {
+		if (!parse_bind_line (cfg, $3, CRED_DELIVERY)) {
+			yyerror ("yyparse: parse_bind_line");
+			YYERROR;
+		}
+		free ($3);
+	}
+	;
+deliverylmtp:
+	LMTP EQSIGN FLAG {
+		cfg->deliver_lmtp = $3;
+	}
+	;
+deliveryagent:
+	AGENT EQSIGN QUOTEDSTRING {
+		cfg->deliver_agent_path = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
 %%
 /* 
  * vi:ts=4 

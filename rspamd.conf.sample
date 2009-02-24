@@ -76,4 +76,14 @@ factors {
 	"winnow" = 5.5;
 };
 
+lmtp {
+	enabled = yes;
+	bind_socket = localhost:11335;
+};
+
+delivery {
+	enabled = yes;
+	agent = "/dev/null";
+};
+
 url_filters = "surbl";

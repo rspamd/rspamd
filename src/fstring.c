@@ -92,6 +92,37 @@ fstrstr (f_str_t *orig, f_str_t *pattern)
 }
 
 /*
+ * Search for pattern in orig ignoring case
+ */
+ssize_t
+fstrstri (f_str_t *orig, f_str_t *pattern)
+{
+	register ssize_t cur = 0, pcur = 0;
+
+	if (pattern->len > orig->len) {
+		return -1;
+	}
+
+	while (cur < orig->len) {
+		if (tolower (*(orig->begin + cur)) == tolower (*pattern->begin)) {
+			while (cur < orig->len && pcur < pattern->len) {
+				if (tolower (*(orig->begin + cur)) != tolower (*(pattern->begin + pcur))) {
+					pcur = 0;
+					break;
+				}
+				cur ++;
+				pcur ++;
+			}
+			return cur - pattern->len;
+		}
+		cur ++;
+	}
+
+	return -1;
+
+}
+
+/*
  * Split string by tokens
  * word contains parsed word
  *

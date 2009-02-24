@@ -81,85 +81,107 @@ add_memcached_server (struct config_file *cf, char *str)
 }
 
 int
-parse_bind_line (struct config_file *cf, char *str, char is_control)
+parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 {
 	char *cur_tok, *err_str;
 	struct hostent *hent;
 	size_t s;
+	char **host;
+	int16_t *family, *port;
+	struct in_addr *addr;
 	
 	if (str == NULL) return 0;
 	cur_tok = strsep (&str, ":");
+
+	switch (type) {
+		case CRED_NORMAL:
+			host = &cf->bind_host;
+			port = &cf->bind_port;
+			*port = DEFAULT_BIND_PORT;
+			family = &cf->bind_family;
+			addr = &cf->bind_addr;
+			break;
+		case CRED_CONTROL:
+			host = &cf->control_host;
+			port = &cf->control_port;
+			*port = DEFAULT_CONTROL_PORT;
+			family = &cf->control_family;
+			addr = &cf->control_addr;
+			break;
+		case CRED_LMTP:
+			host = &cf->lmtp_host;
+			port = &cf->lmtp_port;
+			*port = DEFAULT_LMTP_PORT;
+			family = &cf->lmtp_family;
+			addr = &cf->lmtp_addr;
+			break;
+		case CRED_DELIVERY:
+			host = &cf->deliver_host;
+			port = &cf->deliver_port;
+			*port = 25;
+			family = &cf->deliver_family;
+			addr = &cf->deliver_addr;
+			break;
+	}
 	
 	if (cur_tok[0] == '/' || cur_tok[0] == '.') {
-		if (is_control) {
-			cf->control_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
-			cf->control_family = AF_UNIX;
+#ifdef HAVE_DIRNAME
+		/* Try to check path of bind credit */
+		struct stat st;
+		int fd;
+		char *copy = memory_pool_strdup (cf->cfg_pool, cur_tok);
+		if (stat (copy, &st) == -1) {
+			if (errno == ENOENT) {
+				if ((fd = open (cur_tok, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+					yyerror ("parse_bind_line: cannot open path %s for making socket, %m", cur_tok);
+					return 0;
+				}
+				else {
+					close (fd);
+					unlink (cur_tok);
+				}
+			}
+			else {
+				yyerror ("parse_bind_line: cannot stat path %s for making socket, %m", cur_tok);
+				return 0;
+			}
 		}
 		else {
-			cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
-			cf->bind_family = AF_UNIX;
+			if (unlink (cur_tok) == -1) {
+				yyerror ("parse_bind_line: cannot remove path %s for making socket, %m", cur_tok);
+				return 0;
+			}
 		}
+#endif
+		*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+		*family = AF_UNIX;
 		return 1;
 
 	} else {
-		if (str == '\0') {
-			if (is_control) {
-				cf->control_port = DEFAULT_CONTROL_PORT;
-			}
-			else {
-				cf->bind_port = DEFAULT_BIND_PORT;
-			}
-		}
-		else {
-			if (is_control) {
-				cf->control_port = (uint16_t)strtoul (str, &err_str, 10);
-			}
-			else {
-				cf->bind_port = (uint16_t)strtoul (str, &err_str, 10);
-			}
+		if (*str != '\0') {
+			*port = (uint16_t)strtoul (str, &err_str, 10);
 			if (*err_str != '\0') {
+				yyerror ("parse_bind_line: cannot read numeric value: %s", err_str);
 				return 0;
 			}
 		}
 		
-		if (is_control) {
-			if (!inet_aton (cur_tok, &cf->control_addr)) {
-				/* Try to call gethostbyname */
-				hent = gethostbyname (cur_tok);
-				if (hent == NULL) {
-					return 0;
-				}
-				else {
-					cf->control_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
-					memcpy((char *)&cf->control_addr, hent->h_addr, sizeof(struct in_addr));
-					s = strlen (cur_tok) + 1;
-				}
+		if (!inet_aton (cur_tok, addr)) {
+			/* Try to call gethostbyname */
+			hent = gethostbyname (cur_tok);
+			if (hent == NULL) {
+				return 0;
 			}
 			else {
-				cf->control_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+				*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+				memcpy((char *)addr, hent->h_addr, sizeof(struct in_addr));
+				s = strlen (cur_tok) + 1;
 			}
-
-			cf->control_family = AF_INET;
 		}
 		else {
-			if (!inet_aton (cur_tok, &cf->bind_addr)) {
-				/* Try to call gethostbyname */
-				hent = gethostbyname (cur_tok);
-				if (hent == NULL) {
-					return 0;
-				}
-				else {
-					cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
-					memcpy((char *)&cf->bind_addr, hent->h_addr, sizeof(struct in_addr));
-					s = strlen (cur_tok) + 1;
-				}
-			}
-			else {
-				cf->bind_host = memory_pool_strdup (cf->cfg_pool, cur_tok);
-			}
-
-			cf->bind_family = AF_INET;
+			*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
 		}
+		*family = AF_INET;
 
 		return 1;
 	}
@@ -191,6 +213,7 @@ init_defaults (struct config_file *cfg)
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->statfiles = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->lmtp_metric = "default";
 
 	def_metric = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric));
 	def_metric->name = "default";
@@ -512,6 +535,11 @@ fill_cfg_params (struct config_file *cfg)
 void
 post_load_config (struct config_file *cfg)
 {
+	if (cfg->lmtp_enable && !cfg->delivery_enable) {
+		yywarn ("post_load_config: lmtp is enabled, but delivery is not enabled, disabling lmtp");
+		cfg->lmtp_enable = FALSE;
+	}
+
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
 	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
 	parse_filters_str (cfg, cfg->header_filters_str, SCRIPT_HEADER);

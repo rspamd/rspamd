@@ -22,6 +22,8 @@
 #define SOFT_SHUTDOWN_TIME 60
 /* Default metric name */
 #define DEFAULT_METRIC "default"
+/* 60 seconds for worker's IO */
+#define WORKER_IO_TIMEOUT 60
 
 /* Logging in postfix style */
 #define msg_err g_critical
@@ -36,6 +38,7 @@ enum process_type {
 	TYPE_MAIN,
 	TYPE_WORKER,
 	TYPE_CONTROLLER,
+	TYPE_LMTP,
 };
 
 /** 

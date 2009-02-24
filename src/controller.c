@@ -534,7 +534,7 @@ start_controller (struct rspamd_worker *worker)
 	}
 	else {
 		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->bind_host, un_addr)) == -1) {
+		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->control_host, un_addr)) == -1) {
 			msg_err ("start_controller: cannot create unix listen socket. %m");
 			exit(-errno);
 		}

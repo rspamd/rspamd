@@ -145,7 +145,7 @@ CHECK_INCLUDE_FILES(netinet/in.h  HAVE_NETINET_IN_H)
 CHECK_INCLUDE_FILES(arpa/inet.h  HAVE_ARPA_INET_H)
 CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
 CHECK_INCLUDE_FILES(syslog.h HAVE_SYSLOG_H)
-
+CHECK_INCLUDE_FILES(libgen.h HAVE_LIBGEN_H)
 
 CHECK_FUNCTION_EXISTS(setproctitle HAVE_SETPROCTITLE)
 CHECK_FUNCTION_EXISTS(getpagesize HAVE_GETPAGESIZE)
@@ -212,7 +212,9 @@ SET(RSPAMDSRC	src/modules.c
 				src/filter.c
 				src/controller.c
 				src/cfg_utils.c
-				src/buffer.c)
+				src/buffer.c
+				src/lmtp.c
+				src/lmtp_proto.c)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
