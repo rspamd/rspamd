@@ -52,9 +52,12 @@ pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 static memory_pool_stat_t *mem_pool_stat = NULL;
 
 static struct _pool_chain *
-pool_chain_new (size_t size) 
+pool_chain_new (memory_pool_ssize_t size) 
 {
 	struct _pool_chain *chain;
+
+	g_assert (size > 0);
+
 	chain = g_malloc (sizeof (struct _pool_chain));
 	chain->begin = g_malloc (size);
 	chain->len = size;
@@ -68,7 +71,7 @@ pool_chain_new (size_t size)
 }
 
 static struct _pool_chain_shared *
-pool_chain_new_shared (size_t size) 
+pool_chain_new_shared (memory_pool_ssize_t size) 
 {
 	struct _pool_chain_shared *chain;
 
@@ -111,10 +114,11 @@ pool_chain_new_shared (size_t size)
  * @return new memory pool object
  */
 memory_pool_t* 
-memory_pool_new (size_t size)
+memory_pool_new (memory_pool_ssize_t size)
 {
 	memory_pool_t *new;
 	
+	g_assert (size > 0);
 	/* Allocate statistic structure if it is not allocated before */
 	if (mem_pool_stat == NULL) {
 #if defined(HAVE_MMAP_ANON)
@@ -142,7 +146,7 @@ memory_pool_new (size_t size)
 }
 
 void *
-memory_pool_alloc (memory_pool_t *pool, size_t size)
+memory_pool_alloc (memory_pool_t *pool, memory_pool_ssize_t size)
 {
 	u_char *tmp;
 	struct _pool_chain *new, *cur;
@@ -185,7 +189,7 @@ memory_pool_alloc (memory_pool_t *pool, size_t size)
 }
 
 void *
-memory_pool_alloc0 (memory_pool_t *pool, size_t size)
+memory_pool_alloc0 (memory_pool_t *pool, memory_pool_ssize_t size)
 {
 	void *pointer = memory_pool_alloc (pool, size);
 	if (pointer) {
@@ -197,7 +201,7 @@ memory_pool_alloc0 (memory_pool_t *pool, size_t size)
 char *
 memory_pool_strdup (memory_pool_t *pool, const char *src)
 {
-	size_t len;
+	memory_pool_ssize_t len;
 	char *newstr;
 
 	if (src == NULL) {
@@ -211,12 +215,13 @@ memory_pool_strdup (memory_pool_t *pool, const char *src)
 }
 
 void *
-memory_pool_alloc_shared (memory_pool_t *pool, size_t size)
+memory_pool_alloc_shared (memory_pool_t *pool, memory_pool_ssize_t size)
 {
 	u_char *tmp;
 	struct _pool_chain_shared *new, *cur;
 
 	if (pool) {
+		g_assert (size > 0);
 		cur = pool->shared_pool;
 		if (!cur) {
 			cur = pool_chain_new_shared (pool->first_pool->len);
@@ -384,7 +389,7 @@ memory_pool_stat (memory_pool_stat_t *st)
 }
 
 #define FIXED_POOL_SIZE 4095
-size_t
+memory_pool_ssize_t
 memory_pool_get_size ()
 {
 #ifdef HAVE_GETPAGESIZE

@@ -194,14 +194,14 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							  session->worker->srv->stat->connections_count);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF,
 							  session->worker->srv->stat->control_connections_count);
-				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %zd" CRLF,
-							  mem_st.bytes_allocated);
-				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %zd" CRLF,
-							  mem_st.chunks_allocated);
-				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %zd" CRLF,
-							  mem_st.shared_chunks_allocated);
-				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %zd" CRLF,
-							  mem_st.chunks_freed);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %ld" CRLF,
+							  (long int)mem_st.bytes_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %ld" CRLF,
+							  (long int)mem_st.chunks_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %ld" CRLF,
+							  (long int)mem_st.shared_chunks_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %ld" CRLF,
+							  (long int)mem_st.chunks_freed);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
 			}
 			break;

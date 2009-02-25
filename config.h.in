@@ -72,6 +72,12 @@
 
 #cmakedefine HAVE_SC_NPROCESSORS_ONLN 1
 
+#cmakedefine HAVE_VFORK          1
+
+#cmakedefine HAVE_WAIT4          1
+
+#cmakedefine HAVE_WAITPID        1
+
 #cmakedefine DEBUG_MODE          1
 
 #define RVERSION          "${RSPAMD_VERSION}"

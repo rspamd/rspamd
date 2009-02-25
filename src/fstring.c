@@ -190,14 +190,16 @@ fstrcpy (f_str_t *dest, f_str_t *src)
 size_t
 fstrcat (f_str_t *dest, f_str_t *src)
 {
-	register size_t cur = src->len;
+	register size_t cur = 0;
+	char *p = dest->begin + dest->len;
 
 	if (dest->size < src->len + dest->len) {
 		return 0;
 	}
 
-	while (cur < src->len && cur < dest->size) {
-		*(dest->begin + cur) = *(src->begin + cur);
+	while (cur < src->len) {
+		*p = *(src->begin + cur);
+		p ++;
 		cur ++;
 	}
 
@@ -246,14 +248,7 @@ fstralloc (memory_pool_t *pool, size_t len)
 {
 	f_str_t *res = memory_pool_alloc (pool, sizeof (f_str_t));
 
-	if (res == NULL) {
-		return NULL;
-	}
 	res->begin = memory_pool_alloc (pool, len);
-	if (res->begin == NULL) {
-		free (res);
-		return NULL;
-	}
 
 	res->size = len;
     res->len = 0;

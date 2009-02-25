@@ -53,6 +53,36 @@ static f_str_t data_dot = {
 	.len = sizeof (".\r\n") - 1
 };
 
+static const char *mail_regexp = "[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+static GRegex *mail_re = NULL;
+
+/*
+ * Extract e-mail from read line 
+ * return <> if no valid address detected
+ */
+static char *
+extract_mail (memory_pool_t *pool, f_str_t *line)
+{
+	GError *err = NULL;
+	char *match;
+	GMatchInfo *info;
+
+	if (mail_re == NULL) {
+		/* Compile regexp */
+		mail_re = g_regex_new (mail_regexp, G_REGEX_RAW, 0, &err);
+	}
+
+	if (g_regex_match_full (mail_re, line->begin, line->len, 0, 0, &info, NULL) == TRUE) {
+		match = memory_pool_strdup (pool, g_match_info_fetch (info, 0));
+		g_match_info_free (info);
+	}
+	else {
+		match = "<>";
+	}
+
+	return match;
+}
+
 static void
 out_lmtp_reply (struct rspamd_lmtp_proto *lmtp, int code, char *rcode, char *msg)
 {
@@ -72,6 +102,7 @@ int
 read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 {
 	char *c, *rcpt;
+	f_str_t fstr;
 	unsigned int i = 0, l = 0, size;
 
 	switch (lmtp->state) {
@@ -108,19 +139,9 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 			else {
 				i += mail_command.len;
 				c = line->begin + i;
-				/* Get data from brackets (<>)*/
-				while (*c++ != '<' && i < line->len) {
-					i ++;
-				}
-				while (*c != '>' && i < line->len) {
-					l ++;
-					c ++;
-					i ++;
-				}
-
-				lmtp->task->from = memory_pool_alloc (lmtp->task->task_pool, l + 1);
-				/* Strlcpy makes string null terminated by design */
-				g_strlcpy (lmtp->task->from, c - l, l + 1);
+				fstr.begin = line->begin + i;
+				fstr.len = line->len - i;
+				lmtp->task->from = extract_mail (lmtp->task->task_pool, &fstr);
 				lmtp->state = LMTP_READ_RCPT;
 				out_lmtp_reply (lmtp, LMTP_OK, "2.1.0", "Sender ok");
 				return 0;
@@ -130,24 +151,22 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 			/* Search RCPT_TO: line */
 			if ((i = fstrstri (line, &rcpt_command)) == -1) {
 				msg_info ("read_lmtp_input_line: RCPT expected but not found");
-				out_lmtp_reply (lmtp, LMTP_BAD_CMD, "5.0.0", "Need RCPT here");
+				out_lmtp_reply (lmtp, LMTP_NO_RCPT, "5.5.4", "Need RCPT here");
 				return -1;
 			}
 			else {
 				i += rcpt_command.len;
 				c = line->begin + i;
-				/* Get data from brackets (<>)*/
-				while (*c++ != '<' && i < line->len) {
-					i ++;
+				fstr.begin = line->begin + i;
+				fstr.len = line->len - i;
+				rcpt = extract_mail (lmtp->task->task_pool, &fstr);
+				if (*rcpt == '<' && *(rcpt + 1) == '>') {
+					/* Invalid or empty rcpt not allowed */
+					msg_info ("read_lmtp_input_line: bad recipient");
+					out_lmtp_reply (lmtp, LMTP_NO_RCPT, "5.5.4", "Bad recipient");
+					return -1;
 				}
-				while (*c != '>' && i < line->len) {
-					l ++;
-					c ++;
-					i ++;
-				}
-				rcpt = memory_pool_alloc (lmtp->task->task_pool, l + 1);
 				/* Strlcpy makes string null terminated by design */
-				g_strlcpy (rcpt, c - l, l + 1);
 				lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
 				lmtp->state = LMTP_READ_DATA;
 				out_lmtp_reply (lmtp, LMTP_OK, "2.1.0", "Recipient ok");
@@ -162,7 +181,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 				return -1;
 			}
 			else {
-				i += rcpt_command.len;
+				i += data_command.len;
 				c = line->begin + i;
 				/* Skip spaces */
 				while (isspace (*c++)) {
@@ -299,43 +318,98 @@ format_lda_args (struct worker_task *task)
 static int
 lmtp_deliver_lda (struct worker_task *task)
 {
-	char *args;
-	FILE *lda;
+	char *args, **argv;
 	GMimeStream *stream;
-	int rc, ecode;
+	int rc, ecode, p[2], argc;
+	pid_t cpid, pid;
 
 	if ((args = format_lda_args (task)) == NULL) {
 		return -1;
 	}
-
-	lda = popen (args, "w");
-	if (lda == NULL) {
-		msg_info ("lmtp_deliver_lda: cannot deliver to lda, %m");
+	
+	/* Format arguments in shell style */
+	if (!g_shell_parse_argv (args, &argc, &argv, NULL)) {
+		msg_info ("lmtp_deliver_lda: cannot parse arguments");
 		return -1;
 	}
 
-	stream = g_mime_stream_file_new (lda);
+	if (pipe (p) == -1) {
+		g_strfreev (argv);
+		msg_info ("lmtp_deliver_lda: cannot open pipe: %m");
+		return -1;
+	}
+	
+	/* Fork to exec LDA */
+#ifdef HAVE_VFORK
+	if ((cpid = vfork ()) == -1) {
+		g_strfreev (argv);
+		msg_info ("lmtp_deliver_lda: cannot fork: %m");
+		return -1;
+	}
+#else 
+	if ((cpid = fork ()) == -1) {
+		g_strfreev (argv);
+		msg_info ("lmtp_deliver_lda: cannot fork: %m");
+		return -1;
+	}
+#endif
+
+	if (cpid == 0) {
+		/* Child process, close write pipe and keep only read one */
+		close (p[1]);
+		/* Set standart IO descriptors */
+		if (p[0] != STDIN_FILENO) {
+			(void)dup2(p[0], STDIN_FILENO);
+			(void)close(p[0]);
+		}
+
+		execv (argv[0], argv);
+		_exit (127);
+	}
+	
+	close (p[0]);
+	stream = g_mime_stream_fs_new (p[1]);
 
 	if (g_mime_object_write_to_stream ((GMimeObject *)task->message, stream) == -1) {
+		g_strfreev (argv);
 		msg_info ("lmtp_deliver_lda: cannot write stream to lda");
 		return -1;
 	}
 
-	rc = pclose (lda);
+	g_object_unref (stream);
+	close (p[1]);
+
+#if defined(HAVE_WAIT4)
+	do {
+		pid = wait4(cpid, &rc, 0, NULL);
+	} while (pid == -1 && errno == EINTR);
+#elif defined(HAVE_WAITPID)
+	do {
+		pid = waitpid(cpid, &rc, 0);
+	} while (pid == -1 && errno == EINTR);
+#else
+#error wait mechanisms are undefined
+#endif
 	if (rc == -1) {
+		g_strfreev (argv);
 		msg_info ("lmtp_deliver_lda: lda returned error code");
 		return -1;
 	}
 	else if (WIFEXITED (rc)) {
 		ecode = WEXITSTATUS (rc);
 		if (ecode == 0) {
+			g_strfreev (argv);
 			return 0;
 		}
 		else {
+			g_strfreev (argv);
 			msg_info ("lmtp_deliver_lda: lda returned error code %d", ecode);
 			return -1;
 		}
 	}
+
+	g_strfreev (argv);
+	return -1;
 }
 
 int

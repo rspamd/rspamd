@@ -20,12 +20,17 @@
 typedef void (*pool_destruct_func)(void *ptr);
 
 /**
+ * Type that represents allocating size
+ */
+typedef long int memory_pool_ssize_t;
+
+/**
  * Pool page structure
  */
 struct _pool_chain {
 	u_char *begin;					/**< begin of pool chain block 				*/
 	u_char *pos;					/**< current start of free space in block 	*/
-	size_t len;						/**< length of block 						*/
+	memory_pool_ssize_t len;						/**< length of block 						*/
 	struct _pool_chain *next;		/**< chain link 							*/
 };
 
@@ -35,7 +40,7 @@ struct _pool_chain {
 struct _pool_chain_shared {
 	u_char *begin;
 	u_char *pos;
-	size_t len;
+	memory_pool_ssize_t len;
 	gint lock;
 	struct _pool_chain_shared *next;
 };
@@ -63,10 +68,10 @@ typedef struct memory_pool_s {
  * Statistics structure
  */
 typedef struct memory_pool_stat_s {
-	size_t bytes_allocated;					/**< bytes that are allocated with pool allocator		*/
-	size_t chunks_allocated;				/**< number of chunks that are allocated				*/
-	size_t shared_chunks_allocated;			/**< shared chunks allocated							*/
-	size_t chunks_freed;					/**< chunks freed										*/
+	memory_pool_ssize_t bytes_allocated;					/**< bytes that are allocated with pool allocator		*/
+	memory_pool_ssize_t chunks_allocated;				/**< number of chunks that are allocated				*/
+	memory_pool_ssize_t shared_chunks_allocated;			/**< shared chunks allocated							*/
+	memory_pool_ssize_t chunks_freed;					/**< chunks freed										*/
 } memory_pool_stat_t;
 
 /**
@@ -82,7 +87,7 @@ typedef struct memory_pool_rwlock_s {
  * @param size size of pool's page
  * @return new memory pool object
  */
-memory_pool_t* memory_pool_new (size_t size);
+memory_pool_t* memory_pool_new (memory_pool_ssize_t size);
 
 /** 
  * Get memory from pool
@@ -90,7 +95,7 @@ memory_pool_t* memory_pool_new (size_t size);
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void* memory_pool_alloc (memory_pool_t* pool, size_t size);
+void* memory_pool_alloc (memory_pool_t* pool, memory_pool_ssize_t size);
 
 /**
  * Get memory and set it to zero
@@ -98,7 +103,7 @@ void* memory_pool_alloc (memory_pool_t* pool, size_t size);
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void* memory_pool_alloc0 (memory_pool_t* pool, size_t size);
+void* memory_pool_alloc0 (memory_pool_t* pool, memory_pool_ssize_t size);
 
 /**
  * Make a copy of string in pool
@@ -113,7 +118,7 @@ char* memory_pool_strdup (memory_pool_t* pool, const char *src);
  * @param pool memory pool object
  * @param size bytes to allocate
  */
-void* memory_pool_alloc_shared (memory_pool_t *pool, size_t size);
+void* memory_pool_alloc_shared (memory_pool_t *pool, memory_pool_ssize_t size);
 
 /**
  * Lock chunk of shared memory in which pointer is placed
@@ -203,7 +208,7 @@ void memory_pool_stat (memory_pool_stat_t *st);
  * Get optimal pool size based on page size for this system
  * @return size of memory page in system
  */
-size_t memory_pool_get_size ();
+memory_pool_ssize_t memory_pool_get_size ();
 
 /**
  * Macro that return free space in pool page
