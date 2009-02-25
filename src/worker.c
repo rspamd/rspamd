@@ -41,12 +41,6 @@
 
 #define TASK_POOL_SIZE 4095
 
-const f_str_t CRLF = {
-	/* begin */"\r\n",
-	/* len */2,
-	/* size */2
-};
-
 static struct timeval io_tv;
 
 extern PerlInterpreter *perl_interpreter;

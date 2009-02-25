@@ -31,6 +31,11 @@
 #define msg_info	g_message
 #define msg_debug g_debug
 
+#ifdef CRLF
+#undef CRLF
+#endif
+
+#define CRLF "\r\n"
 /** 
  * Process type: main or worker
  */

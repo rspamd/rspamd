@@ -163,8 +163,12 @@ write_socket (void *arg)
 	
 	switch (lmtp->task->state) {
 		case WRITE_REPLY:
-			write_lmtp_reply (lmtp);
-			lmtp->task->state = CLOSING_CONNECTION;
+			if (write_lmtp_reply (lmtp) == 1) {
+				lmtp->task->state = WAIT_FILTER;
+			}
+			else {
+				lmtp->task->state = CLOSING_CONNECTION;
+			}
 			break;
 		case WRITE_ERROR:
 			write_lmtp_reply (lmtp);

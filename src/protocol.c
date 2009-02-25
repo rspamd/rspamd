@@ -24,7 +24,6 @@
 
 #include "main.h"
 
-#define CRLF "\r\n"
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
 /*
