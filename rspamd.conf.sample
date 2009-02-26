@@ -41,7 +41,7 @@ logging {
 	# log_facility = "LOG_MAIL";
 	
 	# Log file is used with log type "file"
-	# log_file = /var/log/rspamd.log
+	# log_file = "/var/log/rspamd.log"
 };
 
 # Limit for statfile pool size

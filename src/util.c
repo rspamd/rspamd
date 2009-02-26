@@ -118,7 +118,7 @@ void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
 {
 	int ch;
-	while ((ch = getopt(argc, argv, "hfc:")) != -1) {
+	while ((ch = getopt(argc, argv, "thfc:")) != -1) {
         switch (ch) {
             case 'f':
                 cfg->no_fork = 1;
@@ -128,13 +128,17 @@ read_cmd_line (int argc, char **argv, struct config_file *cfg)
                     cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
                 }
                 break;
+			case 't':
+				cfg->config_test = 1;
+				break;
             case 'h':
             case '?':
             default:
                 /* Show help message and exit */
                 printf ("Rspamd version " RVERSION "\n"
-                        "Usage: rspamd [-h] [-n] [-f] [-c config_file]\n"
+                        "Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
                         "-h:        This help message\n"
+						"-t:        Do config test and exit\n"
                         "-f:        Do not daemonize main process\n"
                         "-c:        Specify config file (./rspamd.conf is used by default)\n");
                 exit (0);

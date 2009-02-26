@@ -224,6 +224,8 @@
 #include <gmime/gmime.h>
 #endif
 
+#define CMAKE_PREFIX "${CMAKE_INSTALL_PREFIX}"
+
 /* Forwarded declaration */
 struct module_ctx;
 struct config_file;

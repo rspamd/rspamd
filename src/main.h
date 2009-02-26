@@ -17,7 +17,7 @@
 #include "buffer.h"
 
 /* Default values */
-#define FIXED_CONFIG_FILE "./rspamd.conf"
+#define FIXED_CONFIG_FILE CMAKE_PREFIX "/etc/rspamd.conf"
 /* Time in seconds to exit for old worker */
 #define SOFT_SHUTDOWN_TIME 60
 /* Default metric name */

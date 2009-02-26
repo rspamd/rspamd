@@ -681,7 +681,7 @@ parse_err (const char *fmt, ...)
 	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
 
 	va_end (aq);
-	g_error ("%s", logbuf);
+	g_critical ("%s", logbuf);
 }
 
 void

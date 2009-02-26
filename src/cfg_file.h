@@ -153,7 +153,8 @@ struct config_file {
 	int controller_enabled;							/**< whether controller is enabled						*/
 	char *control_password;							/**< controller password								*/
 
-	int no_fork;									/**< if 1 do not call daemon()							*/
+	gboolean no_fork;								/**< if 1 do not call daemon()							*/
+	gboolean config_test;							/**< if TRUE do only config file test					*/
 	unsigned int workers_number;					/**< number of workers									*/
 
 	enum rspamd_log_type log_type;					/**< log type											*/

@@ -265,9 +265,16 @@ main (int argc, char **argv, char **env)
 
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, FIXED_CONFIG_FILE);
 	read_cmd_line (argc, argv, rspamd->cfg);
+
+	if (cfg->config_test) {
+		cfg->log_level = G_LOG_LEVEL_DEBUG;
+	}
+	else {
+		cfg->log_level = G_LOG_LEVEL_CRITICAL;
+	}
 	
 	/* First set logger to console logger */
-	cfg->log_fd = 2;
+	cfg->log_fd = STDERR_FILENO;
 	g_log_set_default_handler (file_log_function, cfg);
 
 	#ifndef HAVE_SETPROCTITLE
@@ -287,6 +294,11 @@ main (int argc, char **argv, char **env)
 	}
 
 	fclose (f);
+
+	if (cfg->config_test) {
+		fprintf (stderr, "syntax OK\n");
+		return EXIT_SUCCESS;
+	}
 	
 	config_logger (rspamd, TRUE);
 
