@@ -1,4 +1,4 @@
-package rspamd;
+package Mail::Rspamd;
 
 use 5.006001;
 use strict;
@@ -20,7 +20,7 @@ our @EXPORT = qw(
 our $VERSION = '0.0.1';
 
 require XSLoader;
-XSLoader::load('rspamd', $VERSION);
+XSLoader::load('Rspamd', $VERSION);
 
 sub module_init {
     my ($cfg) = @_;
