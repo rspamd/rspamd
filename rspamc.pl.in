@@ -10,7 +10,7 @@
 use Socket qw(:DEFAULT :crlf);
 
 my %cfg = (
-    'conf_file' => './rspamd.conf',
+    'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
     'command'   => 'SYMBOLS',
     'host'      => 'localhost',
     'port'      => '11333',
@@ -33,7 +33,7 @@ sub parse_config {
 
     my $ctrl = 0;
     while (<CONF>) {
-        if ($_ =~ /control\s*{/i) {
+        if ($_ =~ /control\s*{/i || $_ =~ /lmtp\s*{/i || $_ =~ /delivery\s*{/i) {
             $ctrl = 1;
         }
         if ($ctrl && $_ =~ /}/) {

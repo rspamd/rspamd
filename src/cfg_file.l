@@ -133,11 +133,13 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 
 <module>\n								/* ignore EOL */;
 <module>[ \t]+							/* ignore whitespace */;
-<module>\'[a-zA-Z0-9_-]\'	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return MODULE_OPT; 
+<module>^[ \t]*#.*						/* ignore comments */;
+<module>\'[a-zA-Z0-9_-]+\'	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return MODULE_OPT; 
 <module>\{	return OBRACE;
-<module>\}  return EBRACE;
+<module>\}  BEGIN(INITIAL); return EBRACE;
 <module>\;	return SEMICOLON;
-<module>[a-zA-Z0-9_-]	yylval.string=strdup(yytext); return PARAM;
+<module>=	return EQSIGN;
+<module>[a-zA-Z0-9_-]+	yylval.string=strdup(yytext); return PARAM;
 <module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <module>\"[^"]+\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return QUOTEDSTRING;
 

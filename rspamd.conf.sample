@@ -76,14 +76,45 @@ factors {
 	"winnow" = 5.5;
 };
 
+# Options for lmtp worker
 lmtp {
 	enabled = yes;
+	# Bind socket for lmtp interface
 	bind_socket = localhost:11335;
+	# Metric that is considered as main. If we have spam result on
+	# this metric, lmtp delivery would be failed
+	metric = "default";
 };
 
 delivery {
 	enabled = yes;
+	# Path to delivery agent, %f is expanded as mail from address and %r 
+	# is expanded as recipient address
+	# Expample: agent = "/usr/local/bin/procmail -f %f -d %r"
 	agent = "/dev/null";
+	# Bind socket for lmtp interface
+	# Example: bind_socket = localhost:25
+	
+	# Whether we should use lmtp for MTA delivery
+	lmtp = no;
+};
+
+# SURBL module params, note that single quotes are mandatory here
+.module 'surbl' {
+	# Address to redirector in host:port format
+	redirector = "localhost:8080";
+	# Connect timeout for redirector
+	redirector_connect_timeout = "1s";
+	# IO timeout for redirector (may be usefull to set this value rather big)
+	redirector_read_timeout = "10s";
+	# This is suffix for surbl dns requests
+	suffix = "multi.surbl.org";
+	# Metric for surbl module
+	metric = "default";
+	# List of public known hostings (for which we should use 3 components of domain name instead of 2)
+	hostings = "narod.ru,pp.ru,org.ru,net.ru";
+	# Whitelisted urls
+	whitelist = "highsecure.ru,freebsd.org";
 };
 
 url_filters = "surbl";
