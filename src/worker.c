@@ -94,7 +94,7 @@ rcpt_destruct (void *pointer)
  * Free all structures of worker_task
  */
 static void
-free_task (struct worker_task *task)
+free_task (struct worker_task *task, gboolean is_soft)
 {
 	GList *part;
 	struct mime_part *p;
@@ -111,8 +111,13 @@ free_task (struct worker_task *task)
 			g_list_free_1 (part);
 		}
 		memory_pool_delete (task->task_pool);
-		/* Plan dispatcher shutdown */
-		task->dispatcher->wanna_die = 1;
+		if (is_soft) {
+			/* Plan dispatcher shutdown */
+			task->dispatcher->wanna_die = 1;
+		}
+		else {
+			rspamd_remove_dispatcher (task->dispatcher);
+		}
 		close (task->sock);
 		g_free (task);
 	}
@@ -178,11 +183,11 @@ write_socket (void *arg)
 			break;
 		case CLOSING_CONNECTION:
 			msg_debug ("write_socket: normally closing connection");
-			free_task (task);
+			free_task (task, TRUE);
 			break;
 		default:
 			msg_info ("write_socket: abnormally closing connection");
-			free_task (task);
+			free_task (task, TRUE);
 			break;
 	}
 }
@@ -196,7 +201,7 @@ err_socket (GError *err, void *arg)
 	struct worker_task *task = (struct worker_task *)arg;
 	msg_info ("err_socket: abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
-	free_task (task);
+	free_task (task, FALSE);
 }
 
 /*
@@ -231,6 +236,7 @@ accept_socket (int fd, short what, void *arg)
 		msg_err ("accept_socket: cannot allocate memory for task, %m");
 		return;
 	}
+	msg_debug ("accept_socket: new task allocated: %p", new_task);
 	bzero (new_task, sizeof (struct worker_task));
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;

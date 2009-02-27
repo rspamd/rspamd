@@ -235,6 +235,8 @@ continue_process_filters (struct worker_task *task)
 			/* Process all metrics */
 			g_hash_table_foreach (task->results, metric_process_callback, task);
 			process_statfiles (task);
+			/* XXX: ugly direct call */
+			task->dispatcher->write_callback (task);
 			return 1;
 	}
 }

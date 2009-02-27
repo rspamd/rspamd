@@ -134,6 +134,7 @@ main (int argc, char **argv)
 	message = g_mime_parser_construct_message (parser);
 	
 	task.message = message;
+	task.task_pool = memory_pool_new (memory_pool_get_size ());
 	TAILQ_INIT (&task.urls);
 
 	/* free the parser (and the stream) */

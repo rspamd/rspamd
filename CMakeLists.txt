@@ -14,8 +14,8 @@ SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
 
-OPTION(DEBUG_MODE          "Enable debug output [default: OFF]"                 OFF)
-OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: ON]"                  ON)
+OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
+OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 
 # Build optimized code for following CPU (default i386)
@@ -194,13 +194,11 @@ ELSE (MD5_INCLUDE)
 	MESSAGE(STATUS "WARNING: Using internal MD5 support")
 ENDIF (MD5_INCLUDE)
 
-IF("${CMAKE_COMPILER_IS_GNUC}" MATCHES "1")
-	SET(CMAKE_C_WARN_FLAGS " -Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value")
+SET(CMAKE_C_WARN_FLAGS " -Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value")
 
-	IF(DEBUG_MODE MATCHES "ON")
-		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb ")
-	ENDIF(DEBUG_MODE MATCHES "ON")
-ENDIF("${CMAKE_COMPILER_IS_GNUC}" MATCHES "1")
+IF(DEBUG_MODE MATCHES "ON")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb ")
+ENDIF(DEBUG_MODE MATCHES "ON")
 
 SET(RSPAMDSRC	src/modules.c
 				src/hash.c
@@ -251,8 +249,7 @@ SET(UTILSSRC	utils/url_extracter.c)
 SET(UTILSDEPENDS src/mem_pool.c
 				src/hash.c
 				src/url.c
-				src/util.c
-				src/memcached.c)
+				src/util.c)
 
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
@@ -311,7 +308,6 @@ SET_TARGET_PROPERTIES(utils/url-extracter PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(utils/url-extracter PROPERTIES COMPILE_FLAGS ${PERL_CFLAGS}
 										LINK_FLAGS ${PERL_LDFLAGS})
 TARGET_LINK_LIBRARIES(utils/url-extracter ${GLIB2_LIBRARIES})
-TARGET_LINK_LIBRARIES(utils/url-extracter event)
 TARGET_LINK_LIBRARIES(utils/url-extracter ${GMIME2_LIBRARIES})
 
 INSTALL(PROGRAMS rspamd-${RSPAMD_VERSION} DESTINATION bin RENAME rspamd)

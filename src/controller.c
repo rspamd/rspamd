@@ -356,7 +356,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 }
 
 static void
-read_socket (f_str_t *in, void *arg)
+controller_read_socket (f_str_t *in, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
 	struct classifier_ctx *cls_ctx;
@@ -436,7 +436,7 @@ read_socket (f_str_t *in, void *arg)
 }
 
 static void
-write_socket (void *arg)
+controller_write_socket (void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
 	
@@ -454,15 +454,15 @@ write_socket (void *arg)
 }
 
 static void
-err_socket (GError *err, void *arg)
+controller_err_socket (GError *err, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
 
 	if (err->code == EOF) {
-		msg_info ("err_socket: client closed control connection");
+		msg_info ("controller_err_socket: client closed control connection");
 	}
 	else {
-		msg_info ("err_socket: abnormally closing control connection, error: %s", err->message);
+		msg_info ("controller_err_socket: abnormally closing control connection, error: %s", err->message);
 	}
 	/* Free buffers */
 	free_session (session);
@@ -498,8 +498,8 @@ accept_socket (int fd, short what, void *arg)
 	worker->srv->stat->control_connections_count ++;
 
 	/* Set up dispatcher */
-	new_session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, read_socket,
-														write_socket, err_socket, &io_tv,
+	new_session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, controller_read_socket,
+														controller_write_socket, controller_err_socket, &io_tv,
 														(void *)new_session);
 	rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE);
 }

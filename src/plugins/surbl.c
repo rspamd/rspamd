@@ -145,8 +145,6 @@ surbl_module_config (struct config_file *cfg)
 				surbl_module_ctx->use_redirector = 1;
 			}
 		}
-		/* Free cur_tok as it is actually initial str after strsep */
-		free (cur_tok);
 	}
 	if ((value = get_module_opt (cfg, "surbl", "weight")) != NULL) {
 		surbl_module_ctx->weight = atoi (value);
@@ -180,21 +178,18 @@ surbl_module_config (struct config_file *cfg)
 	}
 	if ((value = get_module_opt (cfg, "surbl", "suffix")) != NULL) {
 		surbl_module_ctx->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
-		g_free (value);
 	}
 	else {
 		surbl_module_ctx->suffix = DEFAULT_SURBL_SUFFIX;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "symbol")) != NULL) {
 		surbl_module_ctx->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
-		g_free (value);
 	}
 	else {
 		surbl_module_ctx->symbol = DEFAULT_SURBL_SYMBOL;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "metric")) != NULL) {
 		surbl_module_ctx->metric = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
-		g_free (value);
 	}
 	else {
 		surbl_module_ctx->metric = DEFAULT_METRIC;
@@ -462,6 +457,8 @@ redirector_callback (int fd, short what, void *arg)
 	int r;
 	struct timeval timeout;
 	char *p, *c;
+	char *surbl_req;
+	f_str_t f;
 
 	switch (param->state) {
 		case STATE_CONNECT:
@@ -512,7 +509,16 @@ redirector_callback (int fd, short what, void *arg)
 					if (*p == '\0') {
 						msg_info ("redirector_callback: got reply from redirector: '%s' -> '%s'", struri (param->url), c);
 						parse_uri (param->url, c, param->task->task_pool);
-						register_memcached_call (param->url, param->task);
+						f.begin = param->url->host;
+						f.len = param->url->hostlen;
+						if ((surbl_req = format_surbl_request (param->task->task_pool, &f)) != NULL) {
+							msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+							evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+						}
+						else {
+							msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (param->url));
+							return;
+						}
 						param->task->save.saved ++;
 					}
 				}

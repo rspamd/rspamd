@@ -35,7 +35,7 @@
 static char greetingbuf[1024];
 static struct timeval io_tv;
 
-static void write_socket (void *arg);
+static void lmtp_write_socket (void *arg);
 
 static 
 void sig_handler (int signo)
@@ -84,7 +84,7 @@ rcpt_destruct (void *pointer)
  * Free all structures of lmtp proto
  */
 static void
-free_task (struct rspamd_lmtp_proto *lmtp)
+free_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 {
 	GList *part;
 	struct mime_part *p;
@@ -101,8 +101,13 @@ free_task (struct rspamd_lmtp_proto *lmtp)
 			g_list_free_1 (part);
 		}
 		memory_pool_delete (lmtp->task->task_pool);
-		/* Plan dispatcher shutdown */
-		lmtp->task->dispatcher->wanna_die = 1;
+		if (is_soft) {
+			/* Plan dispatcher shutdown */
+			lmtp->task->dispatcher->wanna_die = 1;
+		}
+		else {
+			rspamd_remove_dispatcher (lmtp->task->dispatcher);
+		}
 		close (lmtp->task->sock);
 		g_free (lmtp->task);
 		g_free (lmtp);
@@ -113,7 +118,7 @@ free_task (struct rspamd_lmtp_proto *lmtp)
  * Callback that is called when there is data to read in buffer
  */
 static void
-read_socket (f_str_t *in, void *arg)
+lmtp_read_socket (f_str_t *in, void *arg)
 {
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
 	struct worker_task *task = lmtp->task;
@@ -128,7 +133,7 @@ read_socket (f_str_t *in, void *arg)
 			}
 			/* Task was read, recall read handler once more with new state to process message and write reply */
 			if (task->state == READ_MESSAGE) {
-				read_socket (in, arg);
+				lmtp_read_socket (in, arg);
 			}
 			break;
 		case READ_MESSAGE:
@@ -138,7 +143,7 @@ read_socket (f_str_t *in, void *arg)
 				task->last_error = "Filter processing error";
 				task->error_code = LMTP_FAILURE;
 				task->state = WRITE_ERROR;
-				write_socket (lmtp);
+				lmtp_write_socket (lmtp);
 			}
 			else if (r == 0) {
 				task->state = WAIT_FILTER;
@@ -147,7 +152,7 @@ read_socket (f_str_t *in, void *arg)
 			else {
 				process_statfiles (lmtp->task);
 				task->state = WRITE_REPLY;
-				write_socket (lmtp);
+				lmtp_write_socket (lmtp);
 			}
 			break;
 	}
@@ -157,7 +162,7 @@ read_socket (f_str_t *in, void *arg)
  * Callback for socket writing
  */
 static void
-write_socket (void *arg)
+lmtp_write_socket (void *arg)
 {
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
 	
@@ -176,7 +181,7 @@ write_socket (void *arg)
 			break;
 		case CLOSING_CONNECTION:
 			msg_debug ("lmtp_write_socket: normally closing connection");
-			free_task (lmtp);
+			free_task (lmtp, TRUE);
 			break;
 	}
 }
@@ -185,12 +190,12 @@ write_socket (void *arg)
  * Called if something goes wrong
  */
 static void
-err_socket (GError *err, void *arg)
+lmtp_err_socket (GError *err, void *arg)
 {
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
 	msg_info ("lmtp_err_socket: abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
-	free_task (lmtp);
+	free_task (lmtp, FALSE);
 }
 
 /*
@@ -239,8 +244,8 @@ accept_socket (int fd, short what, void *arg)
 	lmtp->state = LMTP_READ_LHLO;
 
 	/* Set up dispatcher */
-	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, read_socket,
-														write_socket, err_socket, &io_tv,
+	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, lmtp_read_socket,
+														lmtp_write_socket, lmtp_err_socket, &io_tv,
 														(void *)lmtp);
 	rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE);
 }
