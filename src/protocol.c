@@ -332,12 +332,14 @@ show_url_header (struct worker_task *task)
 		if (TAILQ_NEXT (url, next) != NULL) {
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
+			msg_debug ("show_url_header: write url: %s", host.begin);
 			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
 			*(host.begin + host.len) = c;
 		}
 		else {
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
+			msg_debug ("show_url_header: write url: %s", host.begin);
 			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
 			*(host.begin + host.len) = c;
 		}

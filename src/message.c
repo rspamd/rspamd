@@ -274,23 +274,36 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
 	} else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
+		type = (GMimeContentType *)g_mime_part_get_content_type (GMIME_PART (part));
+		if (type == NULL) {
+			msg_warn ("mime_foreach_callback: type of part is unknown, assume text/plain");
+			type = g_mime_content_type_new ("text", "plain");
+		}
 		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
 		if (wrapper != NULL) {
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
-				type = (GMimeContentType *)g_mime_part_get_content_type (GMIME_PART (part));
 				mime_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
+				msg_debug ("mime_foreach_callback: found part with content-type: %s/%s", type->type, type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
 				if (g_mime_content_type_is_type (type, "text", "html")) {
+					msg_debug ("mime_foreach_callback: got urls from text/html part");
 					url_parse_html (task, part_content);
 				} 
 				else if (g_mime_content_type_is_type (type, "text", "plain")) {
 					url_parse_text (task, part_content);
+					msg_debug ("mime_foreach_callback: got urls from text/plain part");
 				}
 			}
+			else {
+				msg_warn ("mime_foreach_callback: write to stream failed: %d, %m", errno);
+			}
+		}
+		else {
+			msg_warn ("mime_foreach_callback: cannot get wrapper for mime part, type of part: %s/%s", type->type, type->subtype);
 		}
 	} else {
 		g_assert_not_reached ();

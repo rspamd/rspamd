@@ -110,6 +110,7 @@ main (int argc, char **argv)
 	
 	g_mem_set_vtable(glib_mem_profiler_table);
 	g_mime_init (0);
+	bzero (&task, sizeof (struct worker_task));
 	
 	/* Preallocate buffer */
 	buf = g_malloc (size);
