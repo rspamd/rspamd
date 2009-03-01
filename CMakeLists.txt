@@ -60,7 +60,12 @@ IF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
 ENDIF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
 
 pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.10)
-pkg_check_modules(GMIME2 REQUIRED gmime-2.0)
+pkg_check_modules(GMIME2 gmime-2.0)
+
+# Try to link with gmime24
+IF(NOT GMIME2_FOUND)
+	 pkg_check_modules(GMIME2 REQUIRED gmime-2.4)
+ENDIF(NOT GMIME2_FOUND)
 
 IF(NOT GLIB2_FOUND OR NOT GMIME2_FOUND)
 	MESSAGE(FATAL_ERROR "Error: gmime2 and glib2 are required for rspamd")
