@@ -549,7 +549,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 
 	bzero (&sc, sizeof (struct sockaddr_in *));
 	sc.sin_family = AF_INET;
-	sc.sin_port = htonl (surbl_module_ctx->redirector_port);
+	sc.sin_port = htons (surbl_module_ctx->redirector_port);
 	memcpy (&sc.sin_addr, &surbl_module_ctx->redirector_addr, sizeof (struct in_addr));
 
 	s = socket (PF_INET, SOCK_STREAM, 0);
@@ -560,8 +560,8 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	}
 
 	/* set nonblocking */
-    ofl = fcntl(s, F_GETFL, 0);
-    fcntl(s, F_SETFL, ofl | O_NONBLOCK);
+    ofl = fcntl (s, F_GETFL, 0);
+    fcntl (s, F_SETFL, ofl | O_NONBLOCK);
 	
 	if ((r = connect (s, (struct sockaddr*)&sc, sizeof (struct sockaddr_in))) == -1) {
 		if (errno != EINPROGRESS) {

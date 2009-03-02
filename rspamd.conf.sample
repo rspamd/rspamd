@@ -102,7 +102,7 @@ delivery {
 # SURBL module params, note that single quotes are mandatory here
 .module 'surbl' {
 	# Address to redirector in host:port format
-	#redirector = "localhost:8080";
+	redirector = "localhost:8080";
 	# Connect timeout for redirector
 	redirector_connect_timeout = "1s";
 	# IO timeout for redirector (may be usefull to set this value rather big)
