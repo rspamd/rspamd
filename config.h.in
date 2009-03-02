@@ -80,6 +80,8 @@
 
 #cmakedefine DEBUG_MODE          1
 
+#cmakedefine GMIME24             1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 

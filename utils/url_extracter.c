@@ -26,8 +26,13 @@
 #include "../src/url.h"
 #include "../src/message.h"
 
+#ifdef GMIME24
+static void
+mime_foreach_callback (GMimeObject *parent, GMimeObject *part, gpointer user_data)
+#else
 static void
 mime_foreach_callback (GMimeObject *part, gpointer user_data)
+#endif
 {
 	struct worker_task *task = (struct worker_task *)user_data;
 	struct mime_part *mime_part;
@@ -50,7 +55,11 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
                    g_mime_message_foreach_part() again here. */
 		
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
+#ifdef GMIME24
+		g_mime_message_foreach (message, mime_foreach_callback, task);
+#else
 		g_mime_message_foreach_part (message, mime_foreach_callback, task);
+#endif
 		g_object_unref (message);
 	} else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
 		/* message/partial */
@@ -76,7 +85,11 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 				printf ("Write wrapper to stream\n");
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+#ifdef GMIME24
+				type = (GMimeContentType *)g_mime_object_get_content_type (GMIME_OBJECT (part));
+#else
 				type = (GMimeContentType *)g_mime_part_get_content_type (GMIME_PART (part));
+#endif
 				mime_part = g_malloc (sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
@@ -141,7 +154,11 @@ main (int argc, char **argv)
 	/* free the parser (and the stream) */
 	g_object_unref (parser);
 
+#ifdef GMIME24
+	g_mime_message_foreach (message, mime_foreach_callback, &task);
+#else
 	g_mime_message_foreach_part (message, mime_foreach_callback, &task);
+#endif
 
 	TAILQ_FOREACH (url, &task.urls, next) {
 		printf ("Found url: %s, hostname: %s, data: %s\n", struri (url), url->host, url->data);

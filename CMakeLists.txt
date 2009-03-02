@@ -65,6 +65,7 @@ pkg_check_modules(GMIME2 gmime-2.0)
 # Try to link with gmime24
 IF(NOT GMIME2_FOUND)
 	 pkg_check_modules(GMIME2 REQUIRED gmime-2.4)
+	 SET(GMIME24 "yes")
 ENDIF(NOT GMIME2_FOUND)
 
 IF(NOT GLIB2_FOUND OR NOT GMIME2_FOUND)

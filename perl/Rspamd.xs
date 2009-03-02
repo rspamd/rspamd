@@ -35,8 +35,13 @@ typedef struct _GMimeHeader {
 } local_GMimeHeader;
 
 /* enums */
-typedef GMimePartEncodingType	Mail__Rspamd__PartEncodingType;
+#ifdef GMIME24
+typedef GMimeContentEncoding Mail__Rspamd__PartEncodingType;
+typedef int	Mail__Rspamd__InternetAddressType;
+#else
 typedef InternetAddressType	Mail__Rspamd__InternetAddressType;
+typedef GMimePartEncodingType	Mail__Rspamd__PartEncodingType;
+#endif
 
 /* C types */
 typedef GMimeObject *		Mail__Rspamd__Object;
@@ -48,7 +53,11 @@ typedef GMimeMessage *		Mail__Rspamd__Message;
 typedef GMimeMessagePart *	Mail__Rspamd__MessagePart;
 typedef GMimeMessagePartial *	Mail__Rspamd__MessagePartial;
 typedef InternetAddress *	Mail__Rspamd__InternetAddress;
+#ifdef GMIME24
+typedef GMimeContentDisposition *	Mail__Rspamd__Disposition;
+#else
 typedef GMimeDisposition *	Mail__Rspamd__Disposition;
+#endif
 typedef GMimeContentType *	Mail__Rspamd__ContentType;
 typedef GMimeCharset *		Mail__Rspamd__Charset;
 
@@ -131,8 +140,9 @@ enum {
 static GList *
 local_message_get_header(GMimeMessage *message, const char *field)
 {
-	struct raw_header *h;
 	GList *	gret = NULL;
+#ifndef GMIME24
+	struct raw_header *h;
 
 	if (field == NULL) {
 		return NULL;
@@ -145,6 +155,27 @@ local_message_get_header(GMimeMessage *message, const char *field)
 		h = h->next;
 	}
 	return gret;
+#else
+	GMimeHeaderList *ls;
+	GMimeHeaderIter *iter;
+	const char *name;
+
+	ls = GMIME_OBJECT(message)->headers;
+
+	if (g_mime_header_list_get_iter (ls, iter)) {
+		while (g_mime_header_iter_is_valid (iter)) {
+			name = g_mime_header_iter_get_name (iter);
+			if (!g_strncasecmp (field, name, strlen (name))) {
+				gret = g_list_prepend (gret, g_strdup (g_mime_header_iter_get_value (iter)));
+			}
+			if (!g_mime_header_iter_next (iter)) {
+				break;
+			}
+		}
+	}
+
+	return gret;
+#endif
 }
 
 /**
@@ -164,6 +195,35 @@ local_mime_message_set_date_from_string (GMimeMessage *message, const gchar *str
 	g_mime_message_set_date (message, date, offset); 
 }
 
+#ifdef GMIME24
+
+#define ADD_RECIPIENT_TEMPLATE(type,def)														\
+static void																						\
+local_message_add_recipients_from_string_##type (GMimeMessage *message, const gchar *string, const gchar *value)	\
+{																								\
+	InternetAddressList *il, *new;																\
+																								\
+	il = g_mime_message_get_recipients (message, (def));										\
+	new = internet_address_list_parse_string (string);											\
+	internet_address_list_append (il, new);														\
+}																								\
+
+ADD_RECIPIENT_TEMPLATE(to, GMIME_RECIPIENT_TYPE_TO)
+ADD_RECIPIENT_TEMPLATE(cc, GMIME_RECIPIENT_TYPE_CC)
+ADD_RECIPIENT_TEMPLATE(bcc, GMIME_RECIPIENT_TYPE_BCC)
+
+#define GET_RECIPIENT_TEMPLATE(type,def)														\
+static InternetAddressList*																		\
+local_message_get_recipients_##type (GMimeMessage *message, const char *unused)					\
+{																								\
+	return g_mime_message_get_recipients (message, (def));										\
+}
+
+GET_RECIPIENT_TEMPLATE(to, GMIME_RECIPIENT_TYPE_TO)
+GET_RECIPIENT_TEMPLATE(cc, GMIME_RECIPIENT_TYPE_CC)
+GET_RECIPIENT_TEMPLATE(bcc, GMIME_RECIPIENT_TYPE_BCC)
+
+#endif
 
 
 /* different declarations for different types of set and get functions */
@@ -209,14 +269,27 @@ static struct {
 } fieldfunc[] = {
 	{ "From",		g_mime_message_get_sender,		NULL, NULL,				g_mime_message_set_sender,	NULL, FUNC_CHARPTR },
 	{ "Reply-To",	g_mime_message_get_reply_to,	NULL, NULL,				g_mime_message_set_reply_to,	NULL, FUNC_CHARPTR },
+#ifndef GMIME24
 	{ "To",	NULL,	g_mime_message_get_recipients,	NULL, NULL, 			g_mime_message_add_recipients_from_string, FUNC_IA },
 	{ "Cc",	NULL,	g_mime_message_get_recipients,	NULL, NULL, 			g_mime_message_add_recipients_from_string, FUNC_IA },
 	{ "Bcc",	NULL,	g_mime_message_get_recipients,	NULL, NULL, 		g_mime_message_add_recipients_from_string, FUNC_IA },
-	{ "Subject",	g_mime_message_get_subject,		NULL, NULL,				g_mime_message_set_subject,	NULL, FUNC_CHARPTR },
 	{ "Date",		g_mime_message_get_date_string, NULL, NULL,				local_mime_message_set_date_from_string,	NULL, FUNC_CHARFREEPTR },
+#else
+	{ "To",	NULL,	local_message_get_recipients_to,	NULL, NULL, 			local_message_add_recipients_from_string_to, FUNC_IA },
+	{ "Cc",	NULL,	local_message_get_recipients_cc,	NULL, NULL, 			local_message_add_recipients_from_string_cc, FUNC_IA },
+	{ "Bcc",	NULL,	local_message_get_recipients_bcc,	NULL, NULL, 		local_message_add_recipients_from_string_bcc, FUNC_IA },
+	{ "Date",		g_mime_message_get_date_as_string, NULL, NULL,				local_mime_message_set_date_from_string,	NULL, FUNC_CHARFREEPTR },
+#endif
+	{ "Subject",	g_mime_message_get_subject,		NULL, NULL,				g_mime_message_set_subject,	NULL, FUNC_CHARPTR },
 	{ "Message-Id",	g_mime_message_get_message_id,	NULL, NULL,				g_mime_message_set_message_id,	NULL, FUNC_CHARPTR },
+#ifndef GMIME24
 	{ NULL,	NULL,	NULL,	local_message_get_header,	  NULL,				g_mime_message_add_header, FUNC_LIST }
+#else
+	{ NULL,	NULL,	NULL,	local_message_get_header,	  NULL,				g_mime_object_append_header, FUNC_LIST }
+#endif
 };
+
+
 
 /**
 * message_set_header: set header of any type excluding special (Content- and MIME-Version:)
@@ -259,7 +332,7 @@ static
 GList *
 message_get_header(GMimeMessage *message, const char *field) {
 	gint		i;
-	char *	ret = NULL;
+	char *	ret = NULL, *ia_string;
 	GList *	gret = NULL;
 	InternetAddressList *ia_list = NULL, *ia;
 
@@ -276,13 +349,21 @@ message_get_header(GMimeMessage *message, const char *field) {
 					ia_list = (*(fieldfunc[i].rcptfunc))(message, field);
 					gret = g_list_alloc();
 					ia = ia_list;
+#ifndef GMIME24
 					while (ia && ia->address) {
-						char *ia_string;
 
 						ia_string = internet_address_to_string ((InternetAddress *)ia->address, FALSE);
 						gret = g_list_append (gret, ia_string);
 						ia = ia->next;
 					}
+#else
+					i = internet_address_list_length (ia);
+					while (i > 0) {
+						ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
+						gret = g_list_append (gret, ia_string);
+						-- i;
+					}
+#endif
 					break;
 				case FUNC_LIST:
 					gret = (*(fieldfunc[i].getlistfunc))(message, field);

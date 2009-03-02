@@ -26,7 +26,19 @@ rspamd_message_add_recipient(message, type, name, address)
 		const char *	name
 		const char *	address
 	CODE:
+#ifndef GMIME24
 		g_mime_message_add_recipient (message, type, name, address);
+#else
+		if (!g_strcasecmp (type, "to")) {
+			g_mime_message_add_recipient (message, GMIME_RECIPIENT_TYPE_TO, name, address);
+		}
+		else if (!g_strcasecmp (type, "cc")) {
+			g_mime_message_add_recipient (message, GMIME_RECIPIENT_TYPE_CC, name, address);
+		}
+		else if (!g_strcasecmp (type, "bcc")) {
+			g_mime_message_add_recipient (message, GMIME_RECIPIENT_TYPE_BCC, name, address);
+		}
+#endif
 
 void
 rspamd_message_add_recipients_from_string(message, type, recipients)
@@ -34,17 +46,25 @@ rspamd_message_add_recipients_from_string(message, type, recipients)
 		char *		type
 		const char *	recipients
 	CODE:
+#ifndef GMIME24
 		g_mime_message_add_recipients_from_string (message, type, recipients);
+#else
+		/* XXX: add code here */
+		XSRETURN_UNDEF;
+#endif
+
 
 AV *
 rspamd_message_get_recipients(message, type)
 		Mail::Rspamd::Message	message
 		const char *	type
 	PREINIT:
-		const InternetAddressList *		rcpt;
+		InternetAddressList *		rcpt;
 		AV * 		retav;
+		int i;
 	CODE:
 		retav = newAV();
+#ifndef GMIME24
 		rcpt = g_mime_message_get_recipients (message, type);
 		while (rcpt) {
 		  SV * address = newSViv(0);
@@ -52,6 +72,24 @@ rspamd_message_get_recipients(message, type)
 		  av_push(retav, address);
 		  rcpt = rcpt->next;
 		}
+#else
+		if (!g_strcasecmp (type, "to")) {
+			rcpt = g_mime_message_get_recipients (message, GMIME_RECIPIENT_TYPE_TO);
+		}
+		else if (!g_strcasecmp (type, "cc")) {
+			rcpt = g_mime_message_get_recipients (message, GMIME_RECIPIENT_TYPE_CC);
+		}
+		else if (!g_strcasecmp (type, "bcc")) {
+			rcpt = g_mime_message_get_recipients (message, GMIME_RECIPIENT_TYPE_BCC);
+		}
+		i = internet_address_list_length (rcpt);
+		while (i > 0) {
+			SV * address = newSViv(0);
+			sv_setref_pv(address, "Mail::Rspamd::InternetAddress", (Mail__Rspamd__InternetAddress)internet_address_list_get_address(rcpt, i));
+			av_push(retav, address);
+			-- i;
+		}
+#endif
 		RETVAL = retav;
 	OUTPUT:
 		RETVAL
@@ -113,7 +151,11 @@ rspamd_message_get_date (message)
 		char *		str;
 	PPCODE:
 		if (gimme == G_SCALAR) {
+#ifdef GMIME24
+			str = g_mime_message_get_date_as_string (message);
+#else
 			str = g_mime_message_get_date_string (message);
+#endif
 			if (str) {
 				XPUSHs (sv_2mortal (newSVpv (str,0)));
 				g_free (str);
@@ -130,14 +172,23 @@ rspamd_message_set_header (message, field, value)
 		const char *	field
 		const char *	value
 	CODE:
+#ifdef GMIME24
+		g_mime_object_set_header (GMIME_OBJECT (message), field, value);
+#else
 		g_mime_message_set_header (message, field, value);
+#endif
 		
 void
 rspamd_message_remove_header (message, field)
 		Mail::Rspamd::Message	message
 		const char *	field
 	CODE:
+#ifdef GMIME24
 		g_mime_object_remove_header (GMIME_OBJECT (message), field);
+#else
+		g_mime_message_remove_header (message, field);
+#endif
+	
 
 void
 rspamd_message_add_header (message, field, value)
@@ -145,14 +196,22 @@ rspamd_message_add_header (message, field, value)
 		const char *	field
 		const char *	value
 	CODE:
+#ifdef GMIME24
+		g_mime_object_set_header (GMIME_OBJECT (message), field, value);
+#else
 		g_mime_message_set_header (message, field, value);
+#endif
 
 const char *
 rspamd_message_get_header (message, field)
 		Mail::Rspamd::Message	message
 		const char *	field
 	CODE:
+#ifdef GMIME24
+		RETVAL = g_mime_object_get_header (GMIME_OBJECT (message), field);
+#else
 		RETVAL = g_mime_message_get_header (message, field);
+#endif
 	OUTPUT:
 		RETVAL
 
@@ -164,6 +223,7 @@ rspamd_message_set_mime_part (message, mime_part)
 		g_mime_message_set_mime_part (message, GMIME_OBJECT (mime_part));
 		plist = g_list_remove (plist, mime_part);
 
+#if !defined(GMIME24)
 SV *
 rspamd_message_get_body (message, want_plain = 1, is_html = 0)
 	CASE: items == 1
@@ -210,6 +270,8 @@ rspamd_message_get_body (message, want_plain = 1, is_html = 0)
 	OUTPUT:
 		is_html
 		RETVAL
+
+#endif
 		
 SV *
 rspamd_message_get_headers(message)
@@ -217,7 +279,11 @@ rspamd_message_get_headers(message)
 	PREINIT:
 		char *		textdata;
 	CODE:
+#ifdef GMIME24
+		textdata = g_mime_object_get_headers (GMIME_OBJECT (message));
+#else
 		textdata = g_mime_message_get_headers (message);
+#endif
 		if (textdata == NULL) {
 			RETVAL = &PL_sv_undef;
 		}

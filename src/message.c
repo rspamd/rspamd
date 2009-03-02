@@ -232,8 +232,13 @@ free_byte_array_callback (void *pointer)
 	g_byte_array_free (arr, TRUE);
 }
 
+#ifdef GMIME24
+static void
+mime_foreach_callback (GMimeObject *parent, GMimeObject *part, gpointer user_data)
+#else
 static void
 mime_foreach_callback (GMimeObject *part, gpointer user_data)
+#endif
 {
 	struct worker_task *task = (struct worker_task *)user_data;
 	struct mime_part *mime_part;
@@ -257,7 +262,11 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
                    g_mime_message_foreach_part() again here. */
 		
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
+#ifdef GMIME24
+		g_mime_message_foreach (message, mime_foreach_callback, task);
+#else
 		g_mime_message_foreach_part (message, mime_foreach_callback, task);
+#endif
 		g_object_unref (message);
 	} else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
 		/* message/partial */
@@ -274,7 +283,11 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
 	} else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
+#ifdef GMIME24
+		type = (GMimeContentType *)g_mime_object_get_content_type (GMIME_OBJECT (part));
+#else
 		type = (GMimeContentType *)g_mime_part_get_content_type (GMIME_PART (part));
+#endif
 		if (type == NULL) {
 			msg_warn ("mime_foreach_callback: type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
@@ -328,7 +341,11 @@ process_message (struct worker_task *task)
 	task->message = message;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_object_unref, task->message);
 
+#ifdef GMIME24
+	g_mime_message_foreach (message, mime_foreach_callback, task);
+#else
 	g_mime_message_foreach_part (message, mime_foreach_callback, task);
+#endif
 	
 	msg_info ("process_message: found %d parts in message", task->parts_count);
 
@@ -341,8 +358,13 @@ process_message (struct worker_task *task)
 	return 0;
 }
 
+#ifdef GMIME24
+static void
+mime_learn_foreach_callback (GMimeObject *parent, GMimeObject *part, gpointer user_data)
+#else
 static void
 mime_learn_foreach_callback (GMimeObject *part, gpointer user_data)
+#endif
 {
 	struct controller_session *session = (struct controller_session *)user_data;
 	struct mime_part *mime_part;
@@ -362,9 +384,12 @@ mime_learn_foreach_callback (GMimeObject *part, gpointer user_data)
                    child message parts, so if we want to count any
                    subparts of this child message, we'll have to call
                    g_mime_message_foreach_part() again here. */
-		
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
+#ifdef GMIME24
+		g_mime_message_foreach (message, mime_learn_foreach_callback, session);
+#else
 		g_mime_message_foreach_part (message, mime_learn_foreach_callback, session);
+#endif
 		g_object_unref (message);
 	} else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
 		/* message/partial */
@@ -386,7 +411,11 @@ mime_learn_foreach_callback (GMimeObject *part, gpointer user_data)
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+#ifdef GMIME24
+				type = (GMimeContentType *)g_mime_object_get_content_type (GMIME_OBJECT (part));
+#else
 				type = (GMimeContentType *)g_mime_part_get_content_type (GMIME_PART (part));
+#endif
 				mime_part = memory_pool_alloc (session->session_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
@@ -420,7 +449,11 @@ process_learn (struct controller_session *session)
 	/* free the parser (and the stream) */
 	g_object_unref (parser);
 
+#ifdef GMIME24
+	g_mime_message_foreach (message, mime_learn_foreach_callback, session);
+#else
 	g_mime_message_foreach_part (message, mime_learn_foreach_callback, session);
+#endif
 	
 	return 0;
 }

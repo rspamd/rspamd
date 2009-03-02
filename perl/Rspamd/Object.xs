@@ -13,7 +13,7 @@ rspamd_object_get_content_type (mime_object)
 		Mail::Rspamd::Object	mime_object
 	PREINIT:
 		char *			textdata;
-		const GMimeContentType	*ct;
+		GMimeContentType	*ct;
 	CODE:
 		ct = g_mime_object_get_content_type (mime_object);
 		textdata = g_mime_content_type_to_string (ct);
@@ -132,6 +132,19 @@ rspamd_object_get_content_length(mime_object)
 				lsize = (mime_part->content && mime_part->content->stream) ?
 							g_mime_stream_length (mime_part->content->stream) : 0; 
 				if (lsize) {
+#ifdef GMIME24
+					GMimeContentEncoding enc;
+
+					enc = _mime_part_get_encoding (mime_part);
+					switch (enc) {
+				  		case GMIME_CONTENT_ENCODING_BASE64:
+							lsize = BASE64_ENCODE_LEN (lsize);
+							break;
+				  		case GMIME_CONTENT_ENCODING_QUOTEDPRINTABLE:
+							lsize = QP_ENCODE_LEN (lsize);
+							break;
+					}
+#else
 					GMimePartEncodingType	enc;
 
 					enc = g_mime_part_get_encoding (mime_part);
@@ -143,6 +156,7 @@ rspamd_object_get_content_length(mime_object)
 							lsize = QP_ENCODE_LEN (lsize);
 							break;
 					}
+#endif				
 				}
 			}
 		}

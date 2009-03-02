@@ -31,7 +31,6 @@ interface_p_set(mime_part, value)
 	set_content_description
 	set_content_md5
 	set_content_location
-	set_content_disposition
 	set_filename
 
 
@@ -45,8 +44,9 @@ interface_p_get(mime_part)
 	get_content_description
 	get_content_md5
 	get_content_location
-	get_content_disposition
 	get_filename
+
+#if !defined(GMIME24)
 
 void
 rspamd_part_set_content_header (mime_part, field, value)
@@ -64,6 +64,8 @@ rspamd_part_get_content_header (mime_part, field)
 		RETVAL = g_mime_part_get_content_header (mime_part, field);
 	OUTPUT:
 		RETVAL
+
+#endif
 
 void
 rspamd_part_set_content_type (mime_part, content_type)
@@ -92,8 +94,13 @@ rspamd_part_get_encoding (mime_part)
 const char *
 rspamd_part_encoding_to_string (encoding)
 		Mail::Rspamd::PartEncodingType		encoding
+	PREINIT:
 	CODE:
+#ifdef GMIME24
+		RETVAL = g_mime_content_encoding_to_string (encoding);
+#else
 		RETVAL = g_mime_part_encoding_to_string (encoding);
+#endif
 	OUTPUT:
 		RETVAL
 
@@ -101,7 +108,11 @@ Mail::Rspamd::PartEncodingType
 rspamd_part_encoding_from_string (encoding)
 		const char *		encoding
 	CODE:
-		RETVAL = g_mime_part_encoding_from_string(encoding);
+#ifdef GMIME24
+		RETVAL = g_mime_content_encoding_from_string (encoding);
+#else
+		RETVAL = g_mime_part_encoding_from_string (encoding);
+#endif
 	OUTPUT:
 		RETVAL
 
@@ -111,14 +122,22 @@ rspamd_part_add_content_disposition_parameter (mime_part, name, value)
 		const char *		name
 		const char *		value
 	CODE:
+#ifdef GMIME24
+		g_mime_object_add_content_disposition_parameter (GMIME_OBJECT (mime_part), name, value);
+#else
 		g_mime_part_add_content_disposition_parameter (mime_part, name, value);
+#endif
 
 const char *
 rspamd_part_get_content_disposition_parameter (mime_part, name)
 		Mail::Rspamd::Part	mime_part
 		const char *		name
 	CODE:
+#ifdef GMIME24
+		RETVAL = g_mime_object_get_content_disposition_parameter (GMIME_OBJECT (mime_part), name);
+#else
 		RETVAL = g_mime_part_get_content_disposition_parameter (mime_part, name);
+#endif
 	OUTPUT:
 		RETVAL
 
@@ -140,20 +159,39 @@ SV *
 rspamd_part_get_content(mime_part)
 		Mail::Rspamd::Part	mime_part
 	PREINIT:
+#ifdef GMIME24
+		GMimeDataWrapper *wrapper;
+        GMimeStream *part_stream;
+        GByteArray *part_content;
+#else
 		guint len;
 		const char * content_char;
+#endif
 		SV * content;
 	CODE:
 		ST(0) = &PL_sv_undef;
+#ifdef GMIME24
 		if (!(mime_part->content) || !(mime_part->content->stream) ||
-			 (content_char = g_mime_part_get_content(mime_part, &len)) == NULL) {
+			 (wrapper = g_mime_part_get_content_object (mime_part)) == NULL) {
+#else
+		if (!(mime_part->content) || !(mime_part->content->stream) ||
+			 (content_char = g_mime_part_get_content (mime_part, &len)) == NULL) {
+#endif
 			return;
 		}
 		content = sv_newmortal ();
 		SvUPGRADE (content, SVt_PV);
 		SvREADONLY_on (content);
+#ifdef GMIME24
+		part_stream = g_mime_stream_mem_new ();
+		g_mime_data_wrapper_write_to_stream (wrapper, part_stream);
+		part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+		SvPVX(content) = (char *) (part_content->data);
+		SvCUR_set (content, part_content->len);
+#else
 		SvPVX(content) = (char *) (content_char);
 		SvCUR_set (content, len);
+#endif
 		SvLEN_set (content, 0);
 		SvPOK_only (content);
 		ST(0) = content;

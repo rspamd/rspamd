@@ -529,7 +529,11 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 		cur = g_list_next (cur);
 	}
 	g_list_free (symbols);
+#ifdef GMIME24
+	g_mime_object_append_header (GMIME_OBJECT (task->message), header_name, outbuf);
+#else
 	g_mime_message_add_header (task->message, header_name, outbuf);
+#endif
 
 }
 

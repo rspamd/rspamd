@@ -179,12 +179,17 @@ hash_NEXTKEY(obj, lastkey = NULL)
 	ALIAS:
 		Mail::Rspamd::Hash::Header::FIRSTKEY = 1
 	PREINIT:
-		char *			key = NULL;
-		char *			value = NULL;
+		const char *			key = NULL;
+		const char *			value = NULL;
 		Mail__Rspamd__Message		msg;
 		I32			gimme = GIMME_V;
 		gint			i, j, found;
+#ifdef GMIME24
+		GMimeHeaderList *hl;
+		GMimeHeaderIter *iter;
+#else
 		local_GMimeHeader *		header;
+#endif
 		struct raw_header	*h;
 	INIT:
 		if (ix == 1) {
@@ -194,6 +199,24 @@ hash_NEXTKEY(obj, lastkey = NULL)
 		msg = obj->objptr;
 		++obj->keyindex;
 		i = obj->keyindex;
+#ifdef GMIME24
+		hl = g_mime_object_get_header_list (GMIME_OBJECT (msg));
+		j = 0;
+		found = 0;
+		if (g_mime_header_list_get_iter (hl, iter)) {
+			while (g_mime_header_iter_is_valid (iter)) {
+				if (j >= i) {
+					key = g_mime_header_iter_get_name (iter);
+					value = g_mime_header_iter_get_value (iter);
+					found = 1;
+					break;
+				}	
+				if (!g_mime_header_iter_next (iter)) {
+					break;
+				}
+			}
+		}
+#else
 		header = GMIME_OBJECT(msg)->headers;
 
 		h = header->headers;
@@ -209,6 +232,7 @@ hash_NEXTKEY(obj, lastkey = NULL)
 			j++;
 			h = h->next;
 		}
+#endif
 		
 		if (!found && key == NULL) {
 			obj->keyindex = -1;
@@ -223,8 +247,10 @@ hash_NEXTKEY(obj, lastkey = NULL)
 				XPUSHs (sv_2mortal (newSVpv (value, 0)));
 			}
 		  	/* THE HACK - FETCH method would get value indirectly */
-		  	obj->fetchvalue = value;
+		  	obj->fetchvalue = (char *)value;
 		}
+
+#ifndef GMIME24
 
 void
 hash_CLEAR(obj)
@@ -255,4 +281,4 @@ hash_CLEAR(obj)
 		g_mime_header_destroy (header);
 		GMIME_OBJECT(message)->headers = g_mime_header_new ();
 
-
+#endif
