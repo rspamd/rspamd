@@ -321,23 +321,21 @@ process_message (struct worker_task *task)
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 
-	/* unref the stream (parser owns a ref, so this object does not actually get free'd until we destroy the parser) */
-	g_object_unref (stream);
-
 	/* parse the message from the stream */
 	message = g_mime_parser_construct_message (parser);
 	
 	task->message = message;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_object_unref, task->message);
 
-	/* free the parser (and the stream) */
-	g_object_unref (parser);
-
 	g_mime_message_foreach_part (message, mime_foreach_callback, task);
 	
 	msg_info ("process_message: found %d parts in message", task->parts_count);
 
 	task->worker->srv->stat->messages_scanned ++;
+
+	/* free the parser (and the stream) */
+	g_object_unref (parser);
+	g_object_unref (stream);
 
 	return 0;
 }
