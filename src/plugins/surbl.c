@@ -189,8 +189,8 @@ surbl_module_config (struct config_file *cfg)
 				if ((str = strchr (cur->param, '_')) != NULL) {
 					new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
 					*str = '\0';
-					new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->param);
 					new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
+					new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
 					msg_debug ("surbl_module_config: add new surbl suffix: %s with symbol: %s", 
 								new_suffix->suffix, new_suffix->symbol);
 					*str = '_';
@@ -590,16 +590,17 @@ surbl_test_url (struct worker_task *task)
 		msg_debug ("surbl_test_url: check url %s", struri (url));
 		if (surbl_module_ctx->use_redirector) {
 			register_redirector_call (url, task);
+			task->save.saved++;
 		}
 		else {
 			if (task->worker->srv->cfg->memcached_servers_num > 0) {
 				register_memcached_call (url, task);
+				task->save.saved++;
 			}
 			else {
 				make_surbl_requests (url, task);
 			}
 		}
-		task->save.saved++;
 	}
 	return 0;
 }
