@@ -269,12 +269,6 @@ start_lmtp_worker (struct rspamd_worker *worker)
 
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
-	/* Ignore SIGPIPE for further use in LDA delivery */
-	sigemptyset (&signals.sa_mask);
-	sigaddset (&signals.sa_mask, SIGPIPE);
-	signals.sa_handler = SIG_IGN;
-	sigaction (SIGPIPE, &signals, NULL);
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *) worker);

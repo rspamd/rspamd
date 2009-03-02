@@ -51,6 +51,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->url_filter = surbl_test_url;
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
+	surbl_module_ctx->bits = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
 	
 	surbl_module_ctx->hosters = g_hash_table_new (g_str_hash, g_str_equal);
@@ -60,6 +61,8 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->whitelist = g_hash_table_new (g_str_hash, g_str_equal);
 	/* Register destructors */
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->whitelist);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->suffixes);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->bits);
 		
 	/* Init matching regexps */
 	extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
@@ -78,8 +81,10 @@ surbl_module_config (struct config_file *cfg)
 	LIST_HEAD (moduleoptq, module_opt) *opt = NULL;
 	struct module_opt *cur;
 	struct suffix_item *new_suffix;
+	struct surbl_bit_item *new_bit;
 
 	char *value, *cur_tok, *str;
+	uint32_t bit;
 
 	evdns_init ();
 
@@ -130,12 +135,6 @@ surbl_module_config (struct config_file *cfg)
 	}
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
-	}
-	if ((value = get_module_opt (cfg, "surbl", "symbol")) != NULL) {
-		surbl_module_ctx->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
-	}
-	else {
-		surbl_module_ctx->symbol = DEFAULT_SURBL_SYMBOL;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "metric")) != NULL) {
 		surbl_module_ctx->metric = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
@@ -195,6 +194,19 @@ surbl_module_config (struct config_file *cfg)
 								new_suffix->suffix, new_suffix->symbol);
 					*str = '_';
 					surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
+				}
+			}
+			if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
+				if ((str = strchr (cur->param, '_')) != NULL) {
+					bit = strtoul (str + 1, NULL, 10);
+					if (bit != 0) {
+						new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
+						new_bit->bit = bit;
+						new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
+						msg_debug ("surbl_module_config: add new bit suffix: %d with symbol: %s", 
+									(int)new_bit->bit, new_bit->symbol);
+						surbl_module_ctx->bits = g_list_prepend (surbl_module_ctx->bits, new_bit);
+					}
 				}
 			}
 		}
@@ -312,6 +324,42 @@ make_surbl_requests (struct uri* url, struct worker_task *task)
 	}
 }
 
+static void
+process_dns_results (struct worker_task *task, struct suffix_item *suffix, uint32_t addr)
+{
+	char *c, *symbol;
+	GList *cur;
+	struct surbl_bit_item *bit;
+	int len, found = 0;
+
+	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
+		cur = g_list_first (surbl_module_ctx->bits);
+
+		while (cur) {
+			bit = (struct surbl_bit_item *)cur->data;
+			msg_debug ("process_dns_results: got result(%d) AND bit(%d): %d", (int)addr, (int)ntohl(bit->bit), 
+							(int)bit->bit & (int)ntohl (addr));
+			if (((int)bit->bit & (int)ntohl (addr)) != 0) {
+				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
+				*c = '\0';
+				symbol = memory_pool_alloc (task->task_pool, len);
+				snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
+				*c = '%';
+				insert_result (task, surbl_module_ctx->metric, symbol, 1);
+				found = 1;
+			}
+			cur = g_list_next (cur);
+		}
+
+		if (!found) {
+			insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1);
+		}
+	}
+	else {
+		insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1);
+	}
+}
+
 static void 
 dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
@@ -324,7 +372,7 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
 		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, param->suffix->suffix);
-		insert_result (param->task, surbl_module_ctx->metric, param->suffix->symbol, 1);
+		process_dns_results (param->task, param->suffix, (uint32_t)(((in_addr_t *)addresses)[0]));
 	}
 	else {
 		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, param->suffix->suffix);
@@ -379,7 +427,10 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 				/* Do not check DNS for urls that have count more than max_urls */
 				if (*url_count > surbl_module_ctx->max_urls) {
 					msg_info ("memcached_callback: url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
-					insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
+					/* 
+					 * XXX: try to understand why we should use memcached here
+					 * insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
+					 */
 				}
 				(*url_count) ++;
 				memc_set (param->ctx, param->ctx->param, surbl_module_ctx->url_expire);
@@ -474,6 +525,7 @@ redirector_callback (int fd, short what, void *arg)
 					msg_err ("redirector_callback: write failed %s", strerror (errno));
 					event_del (&param->ev);
 					param->task->save.saved --;
+					make_surbl_requests (param->url, param->task);
 					if (param->task->save.saved == 0) {
 						/* Call other filters */
 						param->task->save.saved = 1;

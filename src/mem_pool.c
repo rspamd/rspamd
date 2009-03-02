@@ -351,7 +351,10 @@ memory_pool_delete (memory_pool_t *pool)
 	
 	/* Call all pool destructors */
 	while (destructor) {
-		destructor->func (destructor->data);
+		/* Avoid calling destructors for NULL pointers */
+		if (destructor->data != NULL) { 
+			destructor->func (destructor->data);
+		}
 		destructor = destructor->prev;
 	}
 

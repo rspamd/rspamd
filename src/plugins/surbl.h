@@ -30,7 +30,7 @@ struct surbl_ctx {
 	unsigned int max_urls;
 	unsigned int url_expire;
 	GList *suffixes;
-	char *symbol;
+	GList *bits;
 	char *metric;
 	GHashTable *hosters;
 	GHashTable *whitelist;
@@ -64,6 +64,11 @@ struct memcached_param {
 	struct uri *url;
 	struct worker_task *task;
 	memcached_ctx_t *ctx;
+};
+
+struct surbl_bit_item {
+	uint32_t bit;
+	const char *symbol;
 };
 
 #endif

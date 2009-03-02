@@ -107,8 +107,20 @@ delivery {
 	redirector_connect_timeout = "1s";
 	# IO timeout for redirector (may be usefull to set this value rather big)
 	redirector_read_timeout = "10s";
-	# This is suffix for surbl dns requests
-	suffix_SURBL_MULTI = "multi.surbl.org";
+	# This is suffix for surbl dns requests,
+	# %b is replaced with bit metric if it is found
+	suffix_%b_SURBL_MULTI = "multi.surbl.org";
+
+	# Bits that are used to determine specific URI black list
+	# details are at http://www.surbl.org/lists.html#multi
+	# sytax is: bit_{number} = "SYMBOL"
+	bit_2 = "SC"; # sc.surbl.org
+	bit_4 = "WS"; # ws.surbl.org
+	bit_8 = "PH"; # ph.surbl.org
+	bit_16 = "OB"; # ob.surbl.org
+	bit_32 = "AB"; # ab.surbl.org
+	bit_64 = "JP"; # jp.surbl.org
+
 	# Metric for surbl module
 	metric = "default";
 	# List of public known hostings (for which we should use 3 components of domain name instead of 2)
