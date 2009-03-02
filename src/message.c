@@ -318,6 +318,7 @@ process_message (struct worker_task *task)
 	GMimeStream *stream;
 
 	stream = g_mime_stream_mem_new_with_buffer (task->msg->begin, task->msg->len);
+	msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 

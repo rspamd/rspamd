@@ -286,8 +286,14 @@ rspamd_create_dispatcher (int fd, enum io_policy policy,
 	bzero (new, sizeof (rspamd_io_dispatcher_t));
 
 	new->pool = memory_pool_new (memory_pool_get_size ());
-	new->tv = memory_pool_alloc (new->pool, sizeof (struct timeval));
-	memcpy (new->tv, tv, sizeof (struct timeval));
+	if (tv != NULL) {
+		new->tv = memory_pool_alloc (new->pool, sizeof (struct timeval));
+		memcpy (new->tv, tv, sizeof (struct timeval));
+	}
+	else {
+		new->tv = NULL;
+	}
+	new->nchars = 0;
 	new->policy = policy;
 	new->read_callback = read_cb;
 	new->write_callback = write_cb;
@@ -320,7 +326,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
 {
 	f_str_t *tmp;
 
-	if (d->policy != policy || d->nchars != nchars) {
+	if (d->policy != policy) {
 		d->policy = policy;
 		d->nchars = nchars ? nchars : BUFSIZ;
 		/* Resize input buffer if needed */
