@@ -31,15 +31,21 @@ sub parse_config {
 
     open CONF, "< $cfg{'conf_file'}" or die "config file $cfg{'conf_file'} cannot be opened";
 
-    my $ctrl = 0;
+    my $ctrl = 0, $skip = 0;
     while (<CONF>) {
-        if ($_ =~ /control\s*{/i || $_ =~ /lmtp\s*{/i || $_ =~ /delivery\s*{/i) {
+        if ($_ =~ /control\s*{/i) {
             $ctrl = 1;
         }
         if ($ctrl && $_ =~ /}/) {
             $ctrl = 0;
         }
-        if (((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
+        if ($_ =~ /lmtp\s*{/i || $_ =~ /delivery\s*{/i) {
+            $skip = 1;
+        }
+        if ($skip && $_ =~ /}/) {
+            $skip = 0;
+        }
+        if (!$skip && ((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
                 && $_ =~ /^\s*bind_socket\s*=\s*((([^:]+):(\d+))|(\/\S*))/i) {
             if ($3 && $4) {
                 $cfg{'host'} = $3;
