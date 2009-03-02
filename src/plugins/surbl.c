@@ -511,7 +511,6 @@ redirector_callback (int fd, short what, void *arg)
 					if (*p == '\0') {
 						msg_info ("redirector_callback: got reply from redirector: '%s' -> '%s'", struri (param->url), c);
 						parse_uri (param->url, c, param->task->task_pool);
-						param->task->save.saved ++;
 					}
 				}
 				event_del (&param->ev);
@@ -572,7 +571,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	param = memory_pool_alloc (task->task_pool, sizeof (struct redirector_param));
 	param->url = url;
 	param->task = task;
-	param->state = STATE_READ;
+	param->state = STATE_CONNECT;
 	param->sock = s;
 	timeout.tv_sec = surbl_module_ctx->connect_timeout / 1000;
 	timeout.tv_usec = surbl_module_ctx->connect_timeout - timeout.tv_sec * 1000;

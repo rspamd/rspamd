@@ -165,6 +165,7 @@ write_pid (struct rspamd_main *main)
 void
 init_signals (struct sigaction *signals, sig_t sig_handler)
 {
+	struct sigaction sigpipe_act;
 	/* Setting up signal handlers */
 	/* SIGUSR1 - reopen config file */
 	/* SIGUSR2 - worker is ready for accept */
@@ -186,6 +187,12 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 	sigaction (SIGUSR1, signals, NULL);
 	sigaction (SIGUSR2, signals, NULL);
 	sigaction (SIGALRM, signals, NULL);
+	
+	/* Ignore SIGPIPE as we handle write errors manually */
+	sigemptyset (&sigpipe_act.sa_mask);
+	sigaddset (&sigpipe_act.sa_mask, SIGPIPE);
+	sigpipe_act.sa_handler = SIG_IGN;
+	sigaction (SIGPIPE, &sigpipe_act, NULL);
 }
 
 void
