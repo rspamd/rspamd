@@ -26,66 +26,17 @@
  * rspamd module that implements SURBL url checking
  */
 
+#include "../config.h"
 #include <evdns.h>
 
-#include "../config.h"
-#include "../main.h"
-#include "../modules.h"
-#include "../cfg_file.h"
-#include "../memcached.h"
-
-#define DEFAULT_REDIRECTOR_PORT 8080
-#define DEFAULT_SURBL_WEIGHT 10
-#define DEFAULT_REDIRECTOR_CONNECT_TIMEOUT 1000
-#define DEFAULT_REDIRECTOR_READ_TIMEOUT 5000
-#define DEFAULT_SURBL_MAX_URLS 1000
-#define DEFAULT_SURBL_URL_EXPIRE 86400
-#define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
-#define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
-
-struct surbl_ctx {
-	int (*header_filter)(struct worker_task *task);
-	int (*mime_filter)(struct worker_task *task);
-	int (*message_filter)(struct worker_task *task);
-	int (*url_filter)(struct worker_task *task);
-	struct in_addr redirector_addr;
-	uint16_t redirector_port;
-	uint16_t weight;
-	unsigned int connect_timeout;
-	unsigned int read_timeout;
-	unsigned int max_urls;
-	unsigned int url_expire;
-	char *suffix;
-	char *symbol;
-	char *metric;
-	GHashTable *hosters;
-	GHashTable *whitelist;
-	unsigned use_redirector;
-	memory_pool_t *surbl_pool;
-};
-
-struct redirector_param {
-	struct uri *url;
-	struct worker_task *task;
-	enum {
-		STATE_CONNECT,
-		STATE_READ,
-	} state;
-	struct event ev;
-	int sock;
-};
-
-struct memcached_param {
-	struct uri *url;
-	struct worker_task *task;
-	memcached_ctx_t *ctx;
-};
+#include "surbl.h"
 
 static char *hash_fill = "1";
 struct surbl_ctx *surbl_module_ctx;
 GRegex *extract_hoster_regexp, *extract_normal_regexp, *extract_numeric_regexp;
 
 static int surbl_test_url (struct worker_task *task);
+static void dns_callback (int result, char type, int count, int ttl, void *addresses, void *data);
 
 int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -99,6 +50,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->message_filter = NULL;
 	surbl_module_ctx->url_filter = surbl_test_url;
 	surbl_module_ctx->use_redirector = 0;
+	surbl_module_ctx->suffixes = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
 	
 	surbl_module_ctx->hosters = g_hash_table_new (g_str_hash, g_str_equal);
@@ -123,6 +75,9 @@ int
 surbl_module_config (struct config_file *cfg)
 {
 	struct hostent *hent;
+	LIST_HEAD (moduleoptq, module_opt) *opt = NULL;
+	struct module_opt *cur;
+	struct suffix_item *new_suffix;
 
 	char *value, *cur_tok, *str;
 
@@ -176,12 +131,6 @@ surbl_module_config (struct config_file *cfg)
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "suffix")) != NULL) {
-		surbl_module_ctx->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
-	}
-	else {
-		surbl_module_ctx->suffix = DEFAULT_SURBL_SUFFIX;
-	}
 	if ((value = get_module_opt (cfg, "surbl", "symbol")) != NULL) {
 		surbl_module_ctx->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
 	}
@@ -232,6 +181,33 @@ surbl_module_config (struct config_file *cfg)
 			}
 		}
 	}
+	
+	opt = g_hash_table_lookup (cfg->modules_opts, "surbl");
+	if (opt) {
+		LIST_FOREACH (cur, opt, next) {
+			if (!g_strncasecmp (cur->param, "suffix", sizeof ("suffix") - 1)) {
+				if ((str = strchr (cur->param, '_')) != NULL) {
+					new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
+					*str = '\0';
+					new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->param);
+					new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
+					msg_debug ("surbl_module_config: add new surbl suffix: %s with symbol: %s", 
+								new_suffix->suffix, new_suffix->symbol);
+					*str = '_';
+					surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
+				}
+			}
+		}
+	}
+	/* Add default suffix */
+	if (surbl_module_ctx->suffixes == NULL) {
+		new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
+		new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SUFFIX);
+		new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SYMBOL);
+		msg_debug ("surbl_module_config: add default surbl suffix: %s with symbol: %s", 
+								new_suffix->suffix, new_suffix->symbol);
+		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
+	}
 }
 
 int
@@ -244,13 +220,13 @@ surbl_module_reconfig (struct config_file *cfg)
 }
 
 static char *
-format_surbl_request (memory_pool_t *pool, f_str_t *hostname) 
+format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item *suffix) 
 {
 	GMatchInfo *info;
 	char *result = NULL;
     int len;
     
-    len = hostname->len + strlen (surbl_module_ctx->suffix) + 2;
+    len = hostname->len + strlen (suffix->suffix) + 2;
 
 	/* First try to match numeric expression */
 	if (g_regex_match_full (extract_numeric_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
@@ -262,7 +238,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname)
 		g_match_info_free (info);
 		result = memory_pool_alloc (pool, len); 
 		msg_debug ("format_surbl_request: got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
-		snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, surbl_module_ctx->suffix);
+		snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, suffix->suffix);
 		g_free (octet1);
 		g_free (octet2);
 		g_free (octet3);
@@ -289,7 +265,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname)
 				hpart3 = g_match_info_fetch (info, 3);
 				g_match_info_free (info);
 				msg_debug ("format_surbl_request: got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
-				snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, surbl_module_ctx->suffix);
+				snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, suffix->suffix);
 				g_free (hpart1);
 				g_free (hpart2);
 				g_free (hpart3);
@@ -297,7 +273,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname)
 			}
 			return NULL;
 		}
-		snprintf (result, len, "%s.%s.%s", part1, part2, surbl_module_ctx->suffix);
+		snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
 		g_free (part1);
 		g_free (part2);
 		return result;
@@ -307,9 +283,39 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname)
 }
 
 static void 
+make_surbl_requests (struct uri* url, struct worker_task *task)
+{	
+	char *surbl_req;
+	f_str_t f;
+	GList *cur;
+	struct dns_param *param;
+
+	cur = g_list_first (surbl_module_ctx->suffixes);
+	f.begin = url->host;
+	f.len = url->hostlen;
+
+	while (cur) {
+		param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
+		param->url = url;
+		param->task = task;
+		param->suffix = (struct suffix_item *)cur->data;
+		if ((surbl_req = format_surbl_request (task->task_pool, &f, (struct suffix_item *)cur->data)) != NULL) {
+			msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+			evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+		}
+		else {
+			msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (url));
+			return;
+		}
+		cur = g_list_next (cur);
+		param->task->save.saved ++;
+	}
+}
+
+static void 
 dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
-	struct memcached_param *param = (struct memcached_param *)data;
+	struct dns_param *param = (struct dns_param *)data;
 	char c;
 	
 	msg_debug ("dns_callback: in surbl request callback");
@@ -317,11 +323,11 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	*(param->url->host + param->url->hostlen) = 0;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
-		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, surbl_module_ctx->suffix);
-		insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
+		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, param->suffix->suffix);
+		insert_result (param->task, surbl_module_ctx->metric, param->suffix->symbol, 1);
 	}
 	else {
-		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, surbl_module_ctx->suffix);
+		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, param->suffix->suffix);
 	}
 	*(param->url->host + param->url->hostlen) = c;
 
@@ -339,7 +345,6 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 {
 	struct memcached_param *param = (struct memcached_param *)data;
 	int *url_count;
-	char *surbl_req;
 	f_str_t c;
 
 	switch (ctx->op) {
@@ -391,14 +396,7 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 				param->task->save.saved = 1;
 				process_filters (param->task);
 			}
-			c.begin = param->url->host;
-			c.len = param->url->hostlen;
-			if ((surbl_req = format_surbl_request (param->task->task_pool, &c)) != NULL) {
-				msg_debug ("surbl_memcached: send surbl dns request %s", surbl_req);
-				param->task->save.saved ++;
-				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-				return;
-			}
+			make_surbl_requests (param->url, param->task);
 			break;
 	}
 }
@@ -461,8 +459,6 @@ redirector_callback (int fd, short what, void *arg)
 	int r;
 	struct timeval timeout;
 	char *p, *c;
-	char *surbl_req;
-	f_str_t f;
 
 	switch (param->state) {
 		case STATE_CONNECT:
@@ -471,7 +467,7 @@ redirector_callback (int fd, short what, void *arg)
 				timeout.tv_sec = surbl_module_ctx->connect_timeout / 1000;
 				timeout.tv_usec = surbl_module_ctx->connect_timeout - timeout.tv_sec * 1000;
 				event_del (&param->ev);
-				event_set (&param->ev, param->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, redirector_callback, (void *)param);
+				event_set (&param->ev, param->sock, EV_READ | EV_PERSIST, redirector_callback, (void *)param);
 				event_add (&param->ev, &timeout);
 				r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
 				if (write (param->sock, url_buf, r) == -1) {
@@ -489,8 +485,10 @@ redirector_callback (int fd, short what, void *arg)
 			}
 			else {
 				event_del (&param->ev);
-				msg_info ("redirector_callback: connection to redirector timed out");
+				msg_info ("redirector_callback: connection to redirector timed out while waiting for write");
 				param->task->save.saved --;
+				make_surbl_requests (param->url, param->task);
+
 				if (param->task->save.saved == 0) {
 					/* Call other filters */
 					param->task->save.saved = 1;
@@ -513,21 +511,12 @@ redirector_callback (int fd, short what, void *arg)
 					if (*p == '\0') {
 						msg_info ("redirector_callback: got reply from redirector: '%s' -> '%s'", struri (param->url), c);
 						parse_uri (param->url, c, param->task->task_pool);
-						f.begin = param->url->host;
-						f.len = param->url->hostlen;
-						if ((surbl_req = format_surbl_request (param->task->task_pool, &f)) != NULL) {
-							msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-							evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-						}
-						else {
-							msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (param->url));
-							return;
-						}
 						param->task->save.saved ++;
 					}
 				}
 				event_del (&param->ev);
 				param->task->save.saved --;
+				make_surbl_requests (param->url, param->task);
 				if (param->task->save.saved == 0) {
 					/* Call other filters */
 					param->task->save.saved = 1;
@@ -536,8 +525,9 @@ redirector_callback (int fd, short what, void *arg)
 			}
 			else {
 				event_del (&param->ev);
-				msg_info ("redirector_callback: reading redirector timed out");
+				msg_info ("redirector_callback: reading redirector timed out, while waiting for read");
 				param->task->save.saved --;
+				make_surbl_requests (param->url, param->task);
 				if (param->task->save.saved == 0) {
 					/* Call other filters */
 					param->task->save.saved = 1;
@@ -559,7 +549,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 
 	bzero (&sc, sizeof (struct sockaddr_in *));
 	sc.sin_family = AF_INET;
-	sc.sin_port = surbl_module_ctx->redirector_port;
+	sc.sin_port = htonl (surbl_module_ctx->redirector_port);
 	memcpy (&sc.sin_addr, &surbl_module_ctx->redirector_addr, sizeof (struct in_addr));
 
 	s = socket (PF_INET, SOCK_STREAM, 0);
@@ -586,7 +576,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	param->sock = s;
 	timeout.tv_sec = surbl_module_ctx->connect_timeout / 1000;
 	timeout.tv_usec = surbl_module_ctx->connect_timeout - timeout.tv_sec * 1000;
-	event_set (&param->ev, s, EV_WRITE | EV_TIMEOUT, redirector_callback, (void *)param);
+	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
 	event_add (&param->ev, &timeout);
 }
 
@@ -594,9 +584,7 @@ static int
 surbl_test_url (struct worker_task *task)
 {
 	struct uri *url;
-	char *surbl_req;
 	struct memcached_param *param;
-	f_str_t c;
 
 	TAILQ_FOREACH (url, &task->urls, next) {
 		msg_debug ("surbl_test_url: check url %s", struri (url));
@@ -608,19 +596,7 @@ surbl_test_url (struct worker_task *task)
 				register_memcached_call (url, task);
 			}
 			else {
-				c.begin = url->host;
-				c.len = url->hostlen;
-				if ((surbl_req = format_surbl_request (task->task_pool, &c)) != NULL) {
-					param = memory_pool_alloc (task->task_pool, sizeof (struct memcached_param));
-					param->task = task;
-					param->url = url;
-					msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-					evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-				}
-				else {
-					msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (url));
-					return;
-				}
+				make_surbl_requests (url, task);
 			}
 		}
 		task->save.saved++;

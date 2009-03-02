@@ -72,7 +72,7 @@ statfile {
 
 # Factors coefficients
 factors {
-	"SURBL_DNS" = 10.5;
+	"SURBL_MULTI" = 10.5;
 	"winnow" = 5.5;
 };
 
@@ -108,7 +108,7 @@ delivery {
 	# IO timeout for redirector (may be usefull to set this value rather big)
 	redirector_read_timeout = "10s";
 	# This is suffix for surbl dns requests
-	suffix = "multi.surbl.org";
+	suffix_SURBL_MULTI = "multi.surbl.org";
 	# Metric for surbl module
 	metric = "default";
 	# List of public known hostings (for which we should use 3 components of domain name instead of 2)
