@@ -144,6 +144,7 @@ read_socket (f_str_t *in, void *arg)
 			break;
 		case READ_MESSAGE:
 			task->msg = in;
+			msg_debug ("read_socket: got string of length %ld", (long int)task->msg->len);
 			r = process_message (task);
 			r = process_filters (task);
 			if (r == -1) {
@@ -242,6 +243,8 @@ accept_socket (int fd, short what, void *arg)
 	new_task->state = READ_COMMAND;
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
+	io_tv.tv_sec = WORKER_IO_TIMEOUT;
+	io_tv.tv_usec = 0;
 	TAILQ_INIT (&new_task->urls);
 	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
@@ -288,9 +291,6 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);
-
-	io_tv.tv_sec = WORKER_IO_TIMEOUT;
-	io_tv.tv_usec = 0;
 
 	event_loop (0);
 }

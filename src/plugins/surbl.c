@@ -310,8 +310,11 @@ static void
 dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
 	struct memcached_param *param = (struct memcached_param *)data;
+	char c;
 	
 	msg_debug ("dns_callback: in surbl request callback");
+	c = *(param->url->host + param->url->hostlen);
+	*(param->url->host + param->url->hostlen) = 0;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
 		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, surbl_module_ctx->suffix);
@@ -320,6 +323,7 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	else {
 		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, surbl_module_ctx->suffix);
 	}
+	*(param->url->host + param->url->hostlen) = c;
 
 	param->task->save.saved --;
 	if (param->task->save.saved == 0) {
