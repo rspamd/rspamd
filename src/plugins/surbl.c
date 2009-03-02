@@ -464,8 +464,8 @@ redirector_callback (int fd, short what, void *arg)
 		case STATE_CONNECT:
 			/* We have write readiness after connect call, so reinit event */
 			if (what == EV_WRITE) {
-				timeout.tv_sec = surbl_module_ctx->connect_timeout / 1000;
-				timeout.tv_usec = surbl_module_ctx->connect_timeout - timeout.tv_sec * 1000;
+				timeout.tv_sec = surbl_module_ctx->read_timeout / 1000;
+				timeout.tv_usec = surbl_module_ctx->read_timeout - timeout.tv_sec * 1000;
 				event_del (&param->ev);
 				event_set (&param->ev, param->sock, EV_READ | EV_PERSIST, redirector_callback, (void *)param);
 				event_add (&param->ev, &timeout);
