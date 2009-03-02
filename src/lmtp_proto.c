@@ -432,7 +432,7 @@ lmtp_deliver_mta (struct worker_task *task)
 		sock = make_socket (&task->cfg->deliver_addr, task->cfg->deliver_port);
 	}
 	if (sock == -1) {
-		msg_warn ("lmtp_deliver_mta: cannot create socket for %s, %m", task->cfg->deliver_host);
+		msg_warn ("lmtp_deliver_mta: cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));
 	}
 
 	/* Socket options */
@@ -554,7 +554,7 @@ lmtp_deliver_lda (struct worker_task *task)
 
 	if (pipe (p) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot open pipe: %m");
+		msg_info ("lmtp_deliver_lda: cannot open pipe: %s", strerror (errno));
 		return -1;
 	}
 	
@@ -562,13 +562,13 @@ lmtp_deliver_lda (struct worker_task *task)
 #ifdef HAVE_VFORK
 	if ((cpid = vfork ()) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot fork: %m");
+		msg_info ("lmtp_deliver_lda: cannot fork: %s", strerror (errno));
 		return -1;
 	}
 #else 
 	if ((cpid = fork ()) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot fork: %m");
+		msg_info ("lmtp_deliver_lda: cannot fork: %s", strerror (errno));
 		return -1;
 	}
 #endif

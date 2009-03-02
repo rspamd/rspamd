@@ -283,20 +283,20 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	/* Create listen socket */
 	if (worker->srv->cfg->lmtp_family == AF_INET) {
 		if ((listen_sock = make_socket (&worker->srv->cfg->lmtp_addr, worker->srv->cfg->lmtp_port)) == -1) {
-			msg_err ("start_lmtp: cannot create tcp listen socket. %m");
+			msg_err ("start_lmtp: cannot create tcp listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	else {
 		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
 		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->lmtp_host, un_addr)) == -1) {
-			msg_err ("start_lmtp: cannot create unix listen socket. %m");
+			msg_err ("start_lmtp: cannot create unix listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	
 	if (listen (listen_sock, -1) == -1) {
-		msg_err ("start_lmtp: cannot listen on socket. %m");
+		msg_err ("start_lmtp: cannot listen on socket. %s", strerror (errno));
 		exit(-errno);
 	}
 	/* Accept event */

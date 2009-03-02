@@ -133,7 +133,7 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
 				if ((fd = open (cur_tok, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-					yyerror ("parse_bind_line: cannot open path %s for making socket, %m", cur_tok);
+					yyerror ("parse_bind_line: cannot open path %s for making socket, %s", cur_tok, strerror (errno));
 					return 0;
 				}
 				else {
@@ -142,13 +142,13 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 				}
 			}
 			else {
-				yyerror ("parse_bind_line: cannot stat path %s for making socket, %m", cur_tok);
+				yyerror ("parse_bind_line: cannot stat path %s for making socket, %s", cur_tok, strerror (errno));
 				return 0;
 			}
 		}
 		else {
 			if (unlink (cur_tok) == -1) {
-				yyerror ("parse_bind_line: cannot remove path %s for making socket, %m", cur_tok);
+				yyerror ("parse_bind_line: cannot remove path %s for making socket, %s", cur_tok, strerror (errno));
 				return 0;
 			}
 		}

@@ -312,7 +312,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 				}
 			}
 			else {
-				msg_warn ("mime_foreach_callback: write to stream failed: %d, %m", errno);
+				msg_warn ("mime_foreach_callback: write to stream failed: %d, %s", errno, strerror (errno));
 			}
 		}
 		else {

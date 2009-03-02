@@ -386,7 +386,7 @@ requirecmd:
 		struct stat st;
 		struct perl_module *cur;
 		if (stat ($3, &st) == -1) {
-			yyerror ("yyparse: cannot stat file %s, %m", $3);
+			yyerror ("yyparse: cannot stat file %s, %s", $3, strerror (errno));
 			YYERROR;
 		}
 		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct perl_module));

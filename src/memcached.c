@@ -130,7 +130,7 @@ write_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[3].iov_base = CRLF;
 			iov[3].iov_len = sizeof (CRLF) - 1;
 			if (writev (ctx->sock, iov, 4) == -1) {
-				memc_log (ctx, __LINE__, "memc_write: writev failed: %m");
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %s", strerror (errno));
 			}
 		}
 		else {
@@ -222,12 +222,12 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = r;
 			if (writev (ctx->sock, iov, 2) == -1) {
-				memc_log (ctx, __LINE__, "memc_write: writev failed: %m");
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %s", strerror (errno));
 			}
 		}
 		else {
 			if (write (ctx->sock, read_buf, r) == -1) {
-				memc_log (ctx, __LINE__, "memc_write: write failed: %m");
+				memc_log (ctx, __LINE__, "memc_write: write failed: %s", strerror (errno));
 			}
 		}
 		event_del (&ctx->mem_ev);
@@ -311,7 +311,7 @@ read_handler (int fd, short what, memcached_ctx_t *ctx)
 			ctx->param->bufpos += r;
 		}
 		else {
-			memc_log (ctx, __LINE__, "memc_read: read(v) failed: %d, %m", r);
+			memc_log (ctx, __LINE__, "memc_read: read(v) failed: %d, %s", r, strerror (errno));
 			event_del (&ctx->mem_ev);
 			ctx->callback (ctx, SERVER_ERROR, ctx->callback_data);
 			return;
@@ -356,12 +356,12 @@ delete_handler (int fd, short what, memcached_ctx_t *ctx)
 			iov[1].iov_len = r;
 			ctx->param->bufpos = writev (ctx->sock, iov, 2);
 			if (ctx->param->bufpos == -1) {
-				memc_log (ctx, __LINE__, "memc_write: writev failed: %m");
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %s", strerror (errno));
 			}
 		}
 		else {
 			if (write (ctx->sock, read_buf, r) == -1) {
-				memc_log (ctx, __LINE__, "memc_write: write failed: %m");
+				memc_log (ctx, __LINE__, "memc_write: write failed: %s", strerror (errno));
 			}
 		}
 		event_del (&ctx->mem_ev);
@@ -475,7 +475,7 @@ memc_make_udp_sock (memcached_ctx_t *ctx)
 	ctx->sock = socket (PF_INET, SOCK_DGRAM, 0);
 
 	if (ctx->sock == -1) {
-		memc_log (ctx, __LINE__, "memc_make_udp_sock: socket() failed: %m");
+		memc_log (ctx, __LINE__, "memc_make_udp_sock: socket() failed: %s", strerror (errno));
 		return -1;
 	}
 
@@ -510,7 +510,7 @@ memc_make_tcp_sock (memcached_ctx_t *ctx)
 	ctx->sock = socket (PF_INET, SOCK_STREAM, 0);
 
 	if (ctx->sock == -1) {
-		memc_log (ctx, __LINE__, "memc_make_tcp_sock: socket() failed: %m");
+		memc_log (ctx, __LINE__, "memc_make_tcp_sock: socket() failed: %s", strerror (errno));
 		return -1;
 	}
 
@@ -522,7 +522,7 @@ memc_make_tcp_sock (memcached_ctx_t *ctx)
 		if (errno != EINPROGRESS) {
 			close (ctx->sock);
 			ctx->sock = -1;
-			memc_log (ctx, __LINE__, "memc_make_tcp_sock: connect() failed: %m");
+			memc_log (ctx, __LINE__, "memc_make_tcp_sock: connect() failed: %s", strerror (errno));
 			return -1;
 		}
 	}

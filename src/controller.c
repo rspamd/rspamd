@@ -486,7 +486,7 @@ accept_socket (int fd, short what, void *arg)
 	
 	new_session = g_malloc (sizeof (struct controller_session));
 	if (new_session == NULL) {
-		msg_err ("accept_socket: cannot allocate memory for task, %m");
+		msg_err ("accept_socket: cannot allocate memory for task, %s", strerror (errno));
 		return;
 	}
 	bzero (new_session, sizeof (struct controller_session));
@@ -528,14 +528,14 @@ start_controller (struct rspamd_worker *worker)
 
 	if (worker->srv->cfg->control_family == AF_INET) {
 		if ((listen_sock = make_socket (&worker->srv->cfg->control_addr, worker->srv->cfg->control_port)) == -1) {
-			msg_err ("start_controller: cannot create tcp listen socket. %m");
+			msg_err ("start_controller: cannot create tcp listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	else {
 		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
 		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->control_host, un_addr)) == -1) {
-			msg_err ("start_controller: cannot create unix listen socket. %m");
+			msg_err ("start_controller: cannot create unix listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
@@ -543,7 +543,7 @@ start_controller (struct rspamd_worker *worker)
 	start_time = time (NULL);
 
 	if (listen (listen_sock, -1) == -1) {
-		msg_err ("start_controller: cannot listen on socket. %m");
+		msg_err ("start_controller: cannot listen on socket. %s", strerror (errno));
 		exit(-errno);
 	}
 	

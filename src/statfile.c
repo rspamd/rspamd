@@ -125,7 +125,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	}
 
 	if (stat (filename, &st) == -1) {
-		msg_info ("statfile_pool_open: cannot stat file %s, error %m, %d", filename, errno);
+		msg_info ("statfile_pool_open: cannot stat file %s, error %s, %d", filename, strerror (errno), errno);
 		return -1;
 	}
 	
@@ -144,13 +144,13 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 
 	new_file = memory_pool_alloc (pool->pool, sizeof (stat_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1 ) {
-		msg_info ("statfile_pool_open: cannot open file %s, error %m, %d", filename, errno);
+		msg_info ("statfile_pool_open: cannot open file %s, error %d, %s", filename, errno, strerror (errno));
 		return -1;
 	}
 	
 	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == NULL) {
 		close (new_file->fd);
-		msg_info ("statfile_pool_open: cannot mmap file %s, error %m, %d", filename, errno);
+		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
 		return -1;
 	
 	}
@@ -217,20 +217,20 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 	}
 
 	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1 ) {
-		msg_info ("statfile_pool_create: cannot create file %s, error %m, %d", filename, errno);
+		msg_info ("statfile_pool_create: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 		return -1;
 	}
 
 	header.create_time = (uint64_t)time (NULL);
 	if (write (fd, &header, sizeof (header)) == -1) {
-		msg_info ("statfile_pool_create: cannot write header to file %s, error %m, %d", filename, errno);
+		msg_info ("statfile_pool_create: cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		return -1;
 	}
 	
 	while (blocks --) {
 		if (write (fd, &block, sizeof (block)) == -1) {
-			msg_info ("statfile_pool_create: cannot write block to file %s, error %m, %d", filename, errno);
+			msg_info ("statfile_pool_create: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
 			close (fd);
 			return -1;
 		}

@@ -471,7 +471,7 @@ redirector_callback (int fd, short what, void *arg)
 				event_add (&param->ev, &timeout);
 				r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
 				if (write (param->sock, url_buf, r) == -1) {
-					msg_err ("redirector_callback: write failed %m");
+					msg_err ("redirector_callback: write failed %s", strerror (errno));
 					event_del (&param->ev);
 					param->task->save.saved --;
 					if (param->task->save.saved == 0) {
@@ -555,7 +555,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	s = socket (PF_INET, SOCK_STREAM, 0);
 
 	if (s == -1) {
-		msg_info ("register_redirector_call: socket() failed: %m");
+		msg_info ("register_redirector_call: socket() failed: %s", strerror (errno));
 		return; 
 	}
 
@@ -566,7 +566,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	if ((r = connect (s, (struct sockaddr*)&sc, sizeof (struct sockaddr_in))) == -1) {
 		if (errno != EINPROGRESS) {
 			close (s);
-			msg_info ("register_redirector_call: connect() failed: %m");
+			msg_info ("register_redirector_call: connect() failed: %s", strerror (errno));
 		}
 	}
 	param = memory_pool_alloc (task->task_pool, sizeof (struct redirector_param));

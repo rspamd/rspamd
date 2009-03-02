@@ -194,7 +194,7 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 				}
 				break;
 			case -1:
-				msg_err ("fork_worker: cannot fork main process. %m");
+				msg_err ("fork_worker: cannot fork main process. %s", strerror (errno));
 				pidfile_remove (rspamd->pfh);
 				exit (-errno);
 				break;
@@ -343,7 +343,7 @@ main (int argc, char **argv, char **env)
 	PERL_SYS_INIT3 (&argc, &argv, &env);
 	perl_interpreter = perl_alloc ();
 	if (perl_interpreter == NULL) {
-		msg_err ("main: cannot allocate perl interpreter, %m");
+		msg_err ("main: cannot allocate perl interpreter, %s", strerror (errno));
 		exit (-errno);
 	}
 
@@ -355,20 +355,20 @@ main (int argc, char **argv, char **env)
 
 	if (rspamd->cfg->bind_family == AF_INET) {
 		if ((listen_sock = make_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port)) == -1) {
-			msg_err ("main: cannot create tcp listen socket. %m");
+			msg_err ("main: cannot create tcp listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	else {
 		un_addr = (struct sockaddr_un *) g_malloc (sizeof (struct sockaddr_un));
 		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr)) == -1) {
-			msg_err ("main: cannot create unix listen socket. %m");
+			msg_err ("main: cannot create unix listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 
 	if (listen (listen_sock, -1) == -1) {
-		msg_err ("main: cannot listen on socket. %m");
+		msg_err ("main: cannot listen on socket. %s", strerror (errno));
 		exit(-errno);
 	}
 	

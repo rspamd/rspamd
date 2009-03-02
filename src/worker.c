@@ -233,10 +233,7 @@ accept_socket (int fd, short what, void *arg)
 	setsockopt (nfd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 	
 	new_task = g_malloc (sizeof (struct worker_task));
-	if (new_task == NULL) {
-		msg_err ("accept_socket: cannot allocate memory for task, %m");
-		return;
-	}
+
 	msg_debug ("accept_socket: new task allocated: %p", new_task);
 	bzero (new_task, sizeof (struct worker_task));
 	new_task->worker = worker;
@@ -251,6 +248,7 @@ accept_socket (int fd, short what, void *arg)
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (g_str_hash, g_str_equal);
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)g_hash_table_destroy, new_task->results);
+
 	worker->srv->stat->connections_count ++;
 
 	/* Set up dispatcher */
