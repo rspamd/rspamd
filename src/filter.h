@@ -25,6 +25,14 @@ struct filter {
 };
 
 /**
+ * Rspamd symbol
+ */
+struct symbol {
+	double score;									/**< symbol's score					*/
+	GList *options;									/**< list of symbol's options		*/
+};
+
+/**
  * Common definition of metric
  */
 struct metric {
@@ -63,8 +71,9 @@ void process_statfiles (struct worker_task *task);
  * @param metric_name metric's name to which we need to insert result
  * @param symbol symbol to insert
  * @param flag numeric weight for symbol
+ * @param opts list of symbol's options
  */
-void insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag);
+void insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList *opts);
 
 /**
  * Process all results and form composite metrics from existent metrics as it is defined in config

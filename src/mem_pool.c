@@ -331,10 +331,20 @@ void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer)
 void
 memory_pool_add_destructor (memory_pool_t *pool, pool_destruct_func func, void *data)
 {
-	struct _pool_destructors *cur;
+	struct _pool_destructors *cur, *tmp;
 
 	cur = memory_pool_alloc (pool, sizeof (struct _pool_destructors));
 	if (cur) {
+		/* Check whether we have identical destructor in pool */
+		tmp = pool->destructors;
+		while (tmp) {
+			if (tmp->func == func && tmp->data == data) {
+				/* Do not add identical destructors, they must be unique */
+				return;
+			}
+			tmp = tmp->prev;
+		}
+
 		cur->func = func;
 		cur->data = data;
 		cur->prev = pool->destructors;

@@ -22,7 +22,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "main.h"
+#include "cfg_file.h"
 
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
@@ -348,26 +350,105 @@ show_url_header (struct worker_task *task)
 }
 
 static void
+metric_symbols_callback (gpointer key, gpointer value, void *user_data)
+{
+	struct worker_task *task = (struct worker_task *)user_data;
+	int r = 0;
+	char outbuf[OUTBUFSIZ];
+	struct symbol *s = (struct symbol *)value;	
+	GList *cur;
+
+	if (s->options) {
+		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
+		cur = s->options;
+		while (cur) {
+			if (g_list_next (cur)) {
+				r += snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (char *)cur->data);
+			}
+			else {
+				r += snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (char *)cur->data);
+			}
+			cur = g_list_next (cur);
+		}
+		/* End line with CRLF strictly */
+		if (r >= OUTBUFSIZ - 1) {
+			outbuf[OUTBUFSIZ - 2] = '\r';
+			outbuf[OUTBUFSIZ - 1] = '\n';
+		}
+	}
+	else {
+		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
+	}
+
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+}
+
+static void
+show_metric_symbols (struct metric_result *metric_res, struct worker_task *task)
+{
+	int r = 0;
+	GList *symbols, *cur;
+	char outbuf[OUTBUFSIZ];
+
+	if (task->proto == SPAMC_PROTO) {
+		symbols = g_hash_table_get_keys (metric_res->symbols);
+		cur = symbols;
+		while (cur) {
+			if (g_list_next (cur) != NULL) {
+				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
+			}
+			else {
+				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, (char *)cur->data);
+			}
+			cur = g_list_next (cur);
+		}
+		g_list_free (symbols);
+		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	}
+	else {
+		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, task);
+	}
+}
+
+static void
 show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
 {
 	struct worker_task *task = (struct worker_task *)user_data;
 	int r;
 	char outbuf[OUTBUFSIZ];
 	struct metric_result *metric_res = (struct metric_result *)metric_value;
+	struct metric *m;
 	int is_spam = 0;
-
-	if (metric_res->score >= metric_res->metric->required_score) {
-		is_spam = 1;
-	}
-	if (task->proto == SPAMC_PROTO) {
-		r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF,
-					(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+	
+	if (metric_name == NULL || metric_value == NULL) {
+		m = g_hash_table_lookup (task->cfg->metrics, "default");
+		if (task->proto == SPAMC_PROTO) {
+			r = snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF,
+						m != NULL ? m->required_score : 0);
+		}
+		else {
+			r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF,
+						m != NULL ? m->required_score : 0);
+		}
 	}
 	else {
-		r = snprintf (outbuf, sizeof (outbuf), "%s: %s ; %.2f / %.2f" CRLF, (char *)metric_name,
-					(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+		if (metric_res->score >= metric_res->metric->required_score) {
+			is_spam = 1;
+		}
+		if (task->proto == SPAMC_PROTO) {
+			r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF,
+						(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+		}
+		else {
+			r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, (char *)metric_name,
+						(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+		}
 	}
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+
+	if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
+		show_metric_symbols (metric_res, task);
+	}
 }
 
 static int
@@ -383,77 +464,31 @@ write_check_reply (struct worker_task *task)
 		/* Ignore metrics, just write report for 'default' metric */
 		metric_res = g_hash_table_lookup (task->results, "default");
 		if (metric_res == NULL) {
-			return -1;
+			/* Implicit metric result */
+			show_metric_result (NULL, NULL, (void *)task);
 		}
 		else {
 			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)task);
 		}
 	}
 	else {
+		/* Show default metric first */
+		metric_res = g_hash_table_lookup (task->results, "default");
+		if (metric_res == NULL) {
+			/* Implicit metric result */
+			show_metric_result (NULL, NULL, (void *)task);
+		}
+		else {
+			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)task);
+		}
+		g_hash_table_remove (task->results, "default");
+
 		/* Write result for each metric separately */
 		g_hash_table_foreach (task->results, show_metric_result, task);
 		/* URL stat */
 		show_url_header (task);
 	}
 	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE);
-
-	return 0;
-}
-
-static void
-show_metric_symbols (gpointer metric_name, gpointer metric_value, void *user_data)
-{
-	struct worker_task *task = (struct worker_task *)user_data;
-	int r = 0;
-	char outbuf[OUTBUFSIZ];
-	GList *symbols = NULL, *cur;
-	struct metric_result *metric_res = (struct metric_result *)metric_value;
-
-	if (task->proto == RSPAMC_PROTO) {
-		r = snprintf (outbuf, sizeof (outbuf), "%s: ", (char *)metric_name);
-	}
-
-	symbols = g_hash_table_get_keys (metric_res->symbols);
-	cur = symbols;
-	while (cur) {
-		if (g_list_next (cur) != NULL) {
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
-		}
-		else {
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (char *)cur->data);
-		}
-		cur = g_list_next (cur);
-	}
-	g_list_free (symbols);
-	msg_debug ("show_metric_symbols: write symbols line: %s", outbuf);
-	outbuf[r++] = '\r'; outbuf[r++] = '\n';
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
-}
-
-static int
-write_symbols_reply (struct worker_task *task)
-{
-	struct metric_result *metric_res;
-	
-	/* First of all write normal results by calling write_check_reply */
-	if (write_check_reply (task) == -1) {
-		return -1;
-	}
-	/* Now write symbols */
-	if (task->proto == SPAMC_PROTO) {
-		/* Ignore metrics, just write report for 'default' metric */
-		metric_res = g_hash_table_lookup (task->results, "default");
-		if (metric_res == NULL) {
-			return -1;
-		}
-		else {
-			show_metric_symbols ((gpointer)"default", (gpointer)metric_res, (void *)task);
-		}
-	}
-	else {
-		/* Write result for each metric separately */
-		g_hash_table_foreach (task->results, show_metric_symbols, task);
-	}
 
 	return 0;
 }
@@ -498,10 +533,8 @@ write_reply (struct worker_task *task)
 			case CMD_REPORT_IFSPAM:
 			case CMD_REPORT:
 			case CMD_CHECK:
-				return write_check_reply (task);
-				break;
 			case CMD_SYMBOLS:
-				return write_symbols_reply (task);
+				return write_check_reply (task);
 				break;
 			case CMD_PROCESS:
 				return write_process_reply (task);

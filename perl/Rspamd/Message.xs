@@ -65,7 +65,7 @@ rspamd_message_get_recipients(message, type)
 	CODE:
 		retav = newAV();
 #ifndef GMIME24
-		rcpt = g_mime_message_get_recipients (message, type);
+		rcpt = (InternetAddressList *)g_mime_message_get_recipients (message, type);
 		while (rcpt) {
 		  SV * address = newSViv(0);
 		  sv_setref_pv(address, "Mail::Rspamd::InternetAddress", (Mail__Rspamd__InternetAddress)(rcpt->address));

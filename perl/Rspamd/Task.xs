@@ -55,7 +55,7 @@ rspamd_task_insert_result (task, metric, symbol, flag)
 		const char *symbol
 		double flag
 	CODE:
-		insert_result (task, metric, symbol, flag);
+		insert_result (task, metric, symbol, flag, NULL);
 
 Mail::Rspamd::Conf
 rspamd_task_get_conf (task)

@@ -38,12 +38,11 @@
 #include "tokenizers/tokenizers.h"
 
 void
-insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag)
+insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList *opts)
 {
 	struct metric *metric;
 	struct metric_result *metric_res;
-	double *fl = memory_pool_alloc (task->task_pool, sizeof (double));
-	*fl = flag;
+	struct symbol *s;
 
 	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, metric_name);
 	if (metric == NULL) {
@@ -61,7 +60,33 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		g_hash_table_insert (task->results, (gpointer)metric_name, metric_res);
 	}
 	
-	g_hash_table_insert (metric_res->symbols, (gpointer)symbol, fl);
+	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
+		if (s->options && opts) {
+			/* Append new options */
+			s->options = g_list_concat (s->options, opts);
+			/* 
+			 * Note that there is no need to add new destructor of GList as elements of appended
+			 * GList are used directly, so just free initial GList
+			 */
+		}
+		else if (opts) {
+			s->options = opts;
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, s->options);
+		}
+
+		s->score = flag;
+	}
+	else {
+		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
+		s->score = flag;
+		s->options = opts;
+
+		if (opts) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, s->options);
+		}
+
+		g_hash_table_insert (metric_res->symbols, (gpointer)symbol, s);
+	}
 }
 
 /*
@@ -76,17 +101,17 @@ static void
 consolidation_callback (gpointer key, gpointer value, gpointer arg)
 {
 	double *factor;
-	double val = *(double *)value;
+	struct symbol *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
 	
 	factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
 	if (factor == NULL) {
-		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: 1", val, (char *)key);
-		data->score += val;
+		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: 1", s->score, (char *)key);
+		data->score += s->score;
 	}
 	else {
-		data->score += *factor * val;
-		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", val, (char *)key, *factor);
+		data->score += *factor * s->score;
+		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
 	}
 }
 
@@ -232,8 +257,7 @@ continue_process_filters (struct worker_task *task)
 				}
 				cur = LIST_NEXT (cur, next);
 			}
-			/* Process all metrics */
-			g_hash_table_foreach (task->results, metric_process_callback, task);
+			/* Process all statfiles */
 			process_statfiles (task);
 			/* XXX: ugly direct call */
 			task->dispatcher->write_callback (task);
@@ -306,7 +330,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	GQueue *stack;
 	GList *symbols = NULL, *s;
 	gsize cur, op1, op2;
-	double *res;
+	struct symbol *res;
 	
 	stack = g_queue_new ();
 
@@ -360,8 +384,9 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				s = g_list_next (s);
 			}
 			/* Add new symbol */
-			res = memory_pool_alloc (cd->task->task_pool, sizeof (double));
-			*res = 1;
+			res = memory_pool_alloc (cd->task->task_pool, sizeof (struct symbol));
+			res->score = 1.;
+			res->options = NULL;
 			g_hash_table_insert (cd->metric_res->symbols, key, res);
 		}
 	}
@@ -473,7 +498,7 @@ statfiles_results_callback (gpointer key, gpointer value, void *arg)
 
 	w = memory_pool_alloc (task->task_pool, sizeof (double));
 	filename = classifier->result_file_func (res->ctx, w);
-	insert_result (task, res->metric->name, classifier->name, *w);
+	insert_result (task, res->metric->name, classifier->name, *w, NULL);
 	msg_debug ("statfiles_results_callback: got total weight %.2f for metric %s", *w, res->metric->name);
 
 }

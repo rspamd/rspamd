@@ -15,7 +15,7 @@ rspamd_object_get_content_type (mime_object)
 		char *			textdata;
 		GMimeContentType	*ct;
 	CODE:
-		ct = g_mime_object_get_content_type (mime_object);
+		ct = (GMimeContentType *)g_mime_object_get_content_type (mime_object);
 		textdata = g_mime_content_type_to_string (ct);
 		RETVAL = g_mime_content_type_new_from_string (textdata);
 		plist = g_list_prepend (plist, RETVAL);

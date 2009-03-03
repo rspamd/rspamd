@@ -325,7 +325,7 @@ make_surbl_requests (struct uri* url, struct worker_task *task)
 }
 
 static void
-process_dns_results (struct worker_task *task, struct suffix_item *suffix, uint32_t addr)
+process_dns_results (struct worker_task *task, struct suffix_item *suffix, char *url, uint32_t addr)
 {
 	char *c, *symbol;
 	GList *cur;
@@ -345,18 +345,21 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, uint3
 				symbol = memory_pool_alloc (task->task_pool, len);
 				snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
 				*c = '%';
-				insert_result (task, surbl_module_ctx->metric, symbol, 1);
+				insert_result (task, surbl_module_ctx->metric, symbol, 1, 
+							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 				found = 1;
 			}
 			cur = g_list_next (cur);
 		}
 
 		if (!found) {
-			insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1);
+			insert_result (task, surbl_module_ctx->metric, symbol, 1, 
+							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 		}
 	}
 	else {
-		insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1);
+		insert_result (task, surbl_module_ctx->metric, symbol, 1, 
+							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 	}
 }
 
@@ -372,7 +375,7 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
 		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, param->suffix->suffix);
-		process_dns_results (param->task, param->suffix, (uint32_t)(((in_addr_t *)addresses)[0]));
+		process_dns_results (param->task, param->suffix, param->url->host, (uint32_t)(((in_addr_t *)addresses)[0]));
 	}
 	else {
 		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, param->suffix->suffix);

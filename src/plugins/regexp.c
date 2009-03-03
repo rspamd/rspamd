@@ -249,7 +249,7 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 		op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 		if (op1) {
 			/* Add symbol to results */
-			insert_result (task, regexp_module_ctx->metric, item->symbol, op1);
+			insert_result (task, regexp_module_ctx->metric, item->symbol, op1, NULL);
 		}
 	}
 

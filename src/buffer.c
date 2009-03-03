@@ -122,7 +122,7 @@ write_buffers (int fd, rspamd_io_dispatcher_t *d)
 }
 
 static void
-read_buffers (int fd, rspamd_io_dispatcher_t *d)
+read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 {
 	ssize_t r;
 	GError *err;
@@ -150,7 +150,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d)
 			return;
 		}
 	}
-	else {
+	else if (!skip_read) {
 		/* Try to read the whole buffer */
 		r = read (fd, d->in_buf->pos, BUFREMAIN (d->in_buf));
 		if (r == -1 && errno != EAGAIN) {
@@ -213,7 +213,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d)
 						len = d->in_buf->data->len;
 						if (d->policy != saved_policy) {
 							msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
-							read_buffers (fd, d);
+							read_buffers (fd, d, TRUE);
 							return;
 						}
 						continue;
@@ -239,7 +239,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d)
 						len = d->in_buf->data->len;
 						if (d->policy != saved_policy) {
 							msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
-							read_buffers (fd, d);
+							read_buffers (fd, d, TRUE);
 							return;
 						}
 						continue;
@@ -282,7 +282,7 @@ dispatcher_cb (int fd, short what, void *arg)
 			}
 			break;
 		case EV_READ:
-			read_buffers (fd, d);
+			read_buffers (fd, d, FALSE);
 			break;
 	}
 }
