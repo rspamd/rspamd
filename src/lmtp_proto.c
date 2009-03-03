@@ -416,31 +416,20 @@ mta_err_socket (GError *err, void *arg)
 static int
 lmtp_deliver_mta (struct worker_task *task)
 {
-	int sock, on = 1;
-	struct linger linger;
+	int sock;
 	struct sockaddr_un *un;
 	struct mta_callback_data *cd;
 	
 	if (task->cfg->deliver_family == AF_UNIX) {
 		un = alloca (sizeof (struct sockaddr_un));
-		sock = make_unix_socket (task->cfg->deliver_host, un);
-		if (event_make_socket_nonblocking (sock) < 0) {
-			return -1;
-		}
+		sock = make_unix_socket (task->cfg->deliver_host, un, FALSE);
 	}
 	else {
-		sock = make_socket (&task->cfg->deliver_addr, task->cfg->deliver_port);
+		sock = make_tcp_socket (&task->cfg->deliver_addr, task->cfg->deliver_port, FALSE);
 	}
 	if (sock == -1) {
 		msg_warn ("lmtp_deliver_mta: cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));
 	}
-
-	/* Socket options */
-	setsockopt (sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
-	setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
-	linger.l_onoff = 1;
-	linger.l_linger = 2;
-	setsockopt (sock, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 	
 	cd = memory_pool_alloc (task->task_pool, sizeof (struct mta_callback_data));
 	cd->task = task;

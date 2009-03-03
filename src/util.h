@@ -6,10 +6,12 @@
 
 struct config_file;
 
-/* Create socket and bind it to specified address and port */
-int make_socket(struct in_addr *, u_short );
-/* Create and bind unix socket */
-int make_unix_socket (const char *, struct sockaddr_un *);
+/* Create socket and bind or connect it to specified address and port */
+int make_tcp_socket (struct in_addr *, u_short, gboolean is_server);
+/* Accept from socket */
+int accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len);
+/* Create and bind or connect unix socket */
+int make_unix_socket (const char *, struct sockaddr_un *, gboolean is_server);
 /* Parse command line arguments using getopt (3) */
 void read_cmd_line (int , char **, struct config_file *);
 /* Write pid to file */

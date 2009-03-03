@@ -354,14 +354,14 @@ main (int argc, char **argv, char **env)
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 
 	if (rspamd->cfg->bind_family == AF_INET) {
-		if ((listen_sock = make_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port)) == -1) {
+		if ((listen_sock = make_tcp_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, TRUE)) == -1) {
 			msg_err ("main: cannot create tcp listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	else {
 		un_addr = (struct sockaddr_un *) g_malloc (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr)) == -1) {
+		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr, TRUE)) == -1) {
 			msg_err ("main: cannot create unix listen socket. %s", strerror (errno));
 			exit(-errno);
 		}

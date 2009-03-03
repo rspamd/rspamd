@@ -477,13 +477,11 @@ accept_socket (int fd, short what, void *arg)
 	socklen_t addrlen = sizeof(ss);
 	int nfd;
 
-	if ((nfd = accept (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
 		return;
 	}
-	if (event_make_socket_nonblocking(fd) < 0) {
-		return;
-	}
-	
+
 	new_session = g_malloc (sizeof (struct controller_session));
 	if (new_session == NULL) {
 		msg_err ("accept_socket: cannot allocate memory for task, %s", strerror (errno));
@@ -527,14 +525,14 @@ start_controller (struct rspamd_worker *worker)
 	signal_add (&worker->sig_ev, NULL);
 
 	if (worker->srv->cfg->control_family == AF_INET) {
-		if ((listen_sock = make_socket (&worker->srv->cfg->control_addr, worker->srv->cfg->control_port)) == -1) {
+		if ((listen_sock = make_tcp_socket (&worker->srv->cfg->control_addr, worker->srv->cfg->control_port, TRUE)) == -1) {
 			msg_err ("start_controller: cannot create tcp listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	else {
 		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->control_host, un_addr)) == -1) {
+		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->control_host, un_addr, TRUE)) == -1) {
 			msg_err ("start_controller: cannot create unix listen socket. %s", strerror (errno));
 			exit(-errno);
 		}

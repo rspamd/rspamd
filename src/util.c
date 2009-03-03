@@ -39,10 +39,10 @@ event_make_socket_nonblocking (int fd)
 }
 
 int
-make_socket (struct in_addr *addr, u_short port)
+make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 {
 	struct linger linger;
-	int fd, on = 1, r;
+	int fd, on = 1, r, optlen, s_error;
 	int serrno;
 	struct sockaddr_in sin;
 	
@@ -55,45 +55,97 @@ make_socket (struct in_addr *addr, u_short port)
 	if (event_make_socket_nonblocking(fd) < 0) {
 		goto out;
 	}
-
-	if (fcntl(fd, F_SETFD, 1) == -1) {
+	
+	/* Set close on exec */
+	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
 		goto out;
 	}
 	
 	/* Socket options */
-	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
+	setsockopt (fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
+	setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
 	linger.l_onoff = 1;
 	linger.l_linger = 5;
-	setsockopt(fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
+	setsockopt (fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 
 	/* Bind options */
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons (port);
 	sin.sin_addr.s_addr = addr->s_addr;
 	
-	r = bind(fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	if (is_server) {
+		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	}
+	else {
+		r = connect (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	}
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
 			goto out;
 		}
 	}
+	else {
+		/* Still need to check SO_ERROR on socket */
+		optlen = sizeof(s_error);
+		getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
+		if (s_error) {
+			errno = s_error;
+			goto out;
+		}
+	}
+
 
 	return (fd);
 
  out:
 	serrno = errno;
-	close(fd);
+	close (fd);
 	errno = serrno;
 	return (-1);
 }
 
 int
-make_unix_socket (const char *path, struct sockaddr_un *addr)
+accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len)
+{
+	struct linger linger;
+	int nfd, on = 1;
+	int serrno;
+
+	if ((nfd = accept (listen_sock, addr, len)) == -1) {
+		return -1;
+	}
+	if (event_make_socket_nonblocking(nfd) < 0) {
+		goto out;
+	}
+	
+	/* Set close on exec */
+	if (fcntl (nfd, F_SETFD, FD_CLOEXEC) == -1) {
+		goto out;
+	}
+
+	/* Socket options */
+	setsockopt (nfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
+	setsockopt (nfd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
+	linger.l_onoff = 1;
+	linger.l_linger = 2;
+	setsockopt (nfd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
+
+	return (nfd);
+
+ out:
+	serrno = errno;
+	close (nfd);
+	errno = serrno;
+	return (-1);
+
+}
+
+int
+make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server)
 {
 	size_t len = strlen (path);
-	int sock;
+	int fd, s_error, r, optlen, serrno;
 
 	if (len > sizeof (addr->sun_path) - 1) return -1;
 	
@@ -105,13 +157,50 @@ make_unix_socket (const char *path, struct sockaddr_un *addr)
 	
 	strncpy (addr->sun_path, path, len);
 	
-	sock = socket (PF_LOCAL, SOCK_STREAM, 0);
-
-	if (sock != -1) {
-		if (bind (sock, (struct sockaddr *) addr, sizeof (struct sockaddr_un)) == -1) return -1;
+	fd = socket (PF_LOCAL, SOCK_STREAM, 0);
+	
+	if (fd == -1) {
+		return -1;
 	}
 
-	return sock;
+	if (event_make_socket_nonblocking(fd) < 0) {
+		goto out;
+	}
+	
+	/* Set close on exec */
+	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		goto out;
+	}
+	if (is_server) {
+		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	}
+	else {
+		r = connect (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	}
+
+	if (r == -1) {
+		if (errno != EINPROGRESS) {
+			goto out;
+		}
+	}
+	else {
+		/* Still need to check SO_ERROR on socket */
+		optlen = sizeof(s_error);
+		getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
+		if (s_error) {
+			errno = s_error;
+			goto out;
+		}
+	}
+
+
+	return (fd);
+
+ out:
+	serrno = errno;
+	close (fd);
+	errno = serrno;
+	return (-1);
 }
 
 void 

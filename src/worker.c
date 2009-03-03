@@ -215,22 +215,12 @@ accept_socket (int fd, short what, void *arg)
 	struct sockaddr_storage ss;
 	struct worker_task *new_task;
 	socklen_t addrlen = sizeof(ss);
-	int nfd, on = 1;
-	struct linger linger;
+	int nfd;
 
-	if ((nfd = accept (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
 		return;
 	}
-	if (event_make_socket_nonblocking(fd) < 0) {
-		return;
-	}
-
-	/* Socket options */
-	setsockopt (nfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
-	setsockopt (nfd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
-	linger.l_onoff = 1;
-	linger.l_linger = 2;
-	setsockopt (nfd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 	
 	new_task = g_malloc (sizeof (struct worker_task));
 

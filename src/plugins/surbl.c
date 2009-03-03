@@ -596,33 +596,19 @@ redirector_callback (int fd, short what, void *arg)
 static void
 register_redirector_call (struct uri *url, struct worker_task *task) 
 {
-	struct sockaddr_in sc;
-	int ofl, r, s;
+	int s;
 	struct redirector_param *param;
 	struct timeval timeout;
 
-	bzero (&sc, sizeof (struct sockaddr_in *));
-	sc.sin_family = AF_INET;
-	sc.sin_port = htons (surbl_module_ctx->redirector_port);
-	memcpy (&sc.sin_addr, &surbl_module_ctx->redirector_addr, sizeof (struct in_addr));
-
-	s = socket (PF_INET, SOCK_STREAM, 0);
+	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, htons (surbl_module_ctx->redirector_port), FALSE);
 
 	if (s == -1) {
-		msg_info ("register_redirector_call: socket() failed: %s", strerror (errno));
+		msg_info ("register_redirector_call: cannot create tcp socket failed: %s", strerror (errno));
+		task->save.saved --;
+		make_surbl_requests (url, task);
 		return; 
 	}
 
-	/* set nonblocking */
-    ofl = fcntl (s, F_GETFL, 0);
-    fcntl (s, F_SETFL, ofl | O_NONBLOCK);
-	
-	if ((r = connect (s, (struct sockaddr*)&sc, sizeof (struct sockaddr_in))) == -1) {
-		if (errno != EINPROGRESS) {
-			close (s);
-			msg_info ("register_redirector_call: connect() failed: %s", strerror (errno));
-		}
-	}
 	param = memory_pool_alloc (task->task_pool, sizeof (struct redirector_param));
 	param->url = url;
 	param->task = task;

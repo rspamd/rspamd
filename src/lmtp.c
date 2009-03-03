@@ -209,22 +209,12 @@ accept_socket (int fd, short what, void *arg)
 	struct worker_task *new_task;
 	struct rspamd_lmtp_proto *lmtp;
 	socklen_t addrlen = sizeof(ss);
-	int nfd, on = 1;
-	struct linger linger;
+	int nfd;
 
-	if ((nfd = accept (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
 		return;
 	}
-	if (event_make_socket_nonblocking(fd) < 0) {
-		return;
-	}
-
-	/* Socket options */
-	setsockopt (nfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
-	setsockopt (nfd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
-	linger.l_onoff = 1;
-	linger.l_linger = 2;
-	setsockopt (nfd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 
 	lmtp = g_malloc (sizeof (struct rspamd_lmtp_proto));
 	new_task = g_malloc (sizeof (struct worker_task));
@@ -276,14 +266,14 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	
 	/* Create listen socket */
 	if (worker->srv->cfg->lmtp_family == AF_INET) {
-		if ((listen_sock = make_socket (&worker->srv->cfg->lmtp_addr, worker->srv->cfg->lmtp_port)) == -1) {
+		if ((listen_sock = make_tcp_socket (&worker->srv->cfg->lmtp_addr, worker->srv->cfg->lmtp_port, TRUE)) == -1) {
 			msg_err ("start_lmtp: cannot create tcp listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
 	}
 	else {
 		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->lmtp_host, un_addr)) == -1) {
+		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->lmtp_host, un_addr, TRUE)) == -1) {
 			msg_err ("start_lmtp: cannot create unix listen socket. %s", strerror (errno));
 			exit(-errno);
 		}
