@@ -353,12 +353,12 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 		}
 
 		if (!found) {
-			insert_result (task, surbl_module_ctx->metric, symbol, 1, 
+			insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1, 
 							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 		}
 	}
 	else {
-		insert_result (task, surbl_module_ctx->metric, symbol, 1, 
+		insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1, 
 							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 	}
 }
