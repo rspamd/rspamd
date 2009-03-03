@@ -1,0 +1,447 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+# Required ports:
+# www/p5-POE-Component-Client-HTTP
+# www/p5-POE-Component-Server-HTTP
+# dns/p5-POE-Component-Client-DNS
+# databases/p5-Cache-Memcached-Fast
+# devel/p5-Proc-Daemon
+# sysutils/p5-Proc-PidUtil
+# security/p5-Digest-SHA256
+
+# POE::Component::Client::HTTP uses HTTP::Request and response
+# objects.
+
+use POSIX qw(strftime);
+use HTTP::Request::Common qw(GET POST);
+
+use POE qw(Component::Server::TCP Filter::HTTPD Component::Client::HTTP); # p5-POE-Component-Client-HTTP
+use HTTP::Response;
+use HTML::HeadParser; 
+use SWF::Element; # p5-SWF-File
+use Cache::Memcached::Fast;
+use Digest::SHA256;
+
+use HTML::HeadParser;
+use Proc::Daemon;
+use Proc::PidUtil;
+use URI::Escape qw(uri_unescape);
+
+my $swf_parser;
+my $saved_swf_url = "";
+
+my %cfg = (
+    port    =>  8080,
+    max_size    =>  102400,
+    http_timeout    =>  5,
+    max_rec     => 5,
+    pidfile =>  '/var/run/rspamd/redirector.pid',
+    logfile =>  '/var/log/rspamd-redirector.log',
+    do_log  =>  1,
+    debug   =>  0,
+    digest_bits => 256,
+    cache_expire => 3600,
+    user    => '@RSPAMD_USER@',
+    group   => '@RSPAMD_GROUP@',
+);
+
+our $do_reopen_log = 0;
+
+die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
+
+die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
+close(PID);
+
+$cfg{do_log} = 0 if ! open(LOG, ">> $cfg{logfile}");
+
+# Do daemonization
+Proc::Daemon::Init if !$cfg{debug};
+
+my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
+my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
+setpgrp ($uid, $gid) or die "cannot drop privilleges";
+
+Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
+
+# Init memcached connection
+my $memd = new Cache::Memcached::Fast({
+        servers => [ { address => 'localhost:11211', weight => 2.5 },
+                    ],
+        connect_timeout => 0.2,
+        io_timeout => 0.5,
+        max_failures => 3,
+        failure_timeout => 2,
+        ketama_points => 150,
+        hash_namespace => 1,
+        serialize_methods => [ \&Storable::freeze, \&Storable::thaw ],
+        utf8 => ($^V ge v5.8.1 ? 1 : 0),
+});
+
+# Reopen log on SIGUSR1
+$SIG{USR1} = sub { $do_reopen_log = 1; };
+$SIG{INT} = sub { $poe_kernel->stop(); };
+$SIG{QUIT} = sub { $poe_kernel->stop(); };
+
+write_log ("", "Starting URL resolver");
+
+# POE part
+POE::Component::Client::HTTP->spawn( 
+    Alias => 'cl',
+    MaxSize => $cfg{max_size},    # Remove for unlimited page sizes
+    Timeout => $cfg{http_timeout},
+    ConnectionManager   => POE::Component::Client::Keepalive->new(
+        max_per_host    => 256,
+        max_open        => 1024,
+        keep_alive      => 1,
+        timeout         => $cfg{http_timeout},
+    ), 
+);
+
+sub reopen_log {
+    if ($cfg{do_log}) {
+        close (LOG);
+        $cfg{do_log} = 0 if ! open (LOG, ">> $cfg{logfile}");
+        write_log ("", "Log reopened");
+    }
+}
+
+# Write log line:
+# $remote_ip - remote ip string
+# $str - string to write
+sub write_log {
+    my ( $remote_ip, $str ) = @_;
+    
+    if ($cfg{do_log}) {
+        my $now_string = strftime "%F %T", localtime;
+        LOG->autoflush(1);
+        print LOG "[$now_string]: $remote_ip: $str\n";
+    }
+}
+
+sub swf_init_parser {
+    $swf_parser = SWF::Parser->new('tag-callback' => \&swf_tag_callback);
+}
+
+# Checking for SWF url
+sub swf_search_get_url {
+    my $actions = shift;
+    my $saved_pool_str = "";
+
+    for my $action (@$actions) {
+        if ($action->tag_name eq 'ActionConstantPool') {
+            my $pool = $action->ConstantPool;
+            for my $string (@$pool) {
+                if ($string =~ /^https?:\/\//) {
+                    $saved_pool_str = $string->value;
+                }
+            }
+        }
+        elsif ($action->tag_name eq 'ActionGetURL2') {
+            if ($saved_pool_str ne "") {
+                $saved_swf_url = $saved_pool_str;
+            }
+        }
+        elsif ($action->tag_name =~ 'ActionGetURL') {
+            $saved_swf_url = $action->UrlString->value;
+        }
+    }
+}
+
+# SWF check tag utility
+sub swf_check_tag {
+    my ($t, $stream) = @_;
+    my ($tagname) = $t->tag_name;
+
+    for ($tagname) {
+    (/^Do(Init)?Action$/ or /^DefineButton$/) and do {
+        swf_search_get_url ($t->Actions);
+        last;
+    };
+    /^PlaceObject2$/ and do {
+        for my $ca (@{$t->ClipActions}) {
+            swf_search_get_url ($ca->Actions);
+        }
+        last;
+    };
+    /^DefineButton2$/ and do {
+        for my $ba (@{$t->Actions}) {
+            swf_search_get_url ($ba->Actions);
+        }
+        last;
+    };
+    /^DefineSprite$/ and do {
+        for my $tag (@{$t->ControlTags}) {
+            swf_search_get_url ($tag, $stream);
+        }
+        last;
+    };
+    }
+}
+
+# Callback for swf parser
+sub swf_tag_callback {
+    my ($self, $tag, $length, $stream)=@_;
+    my $t = SWF::Element::Tag->new (Tag=>$tag, Length=>$length);
+    my ($tagname) = $t->tag_name;
+
+    return unless
+          $tagname eq 'DoAction'      or
+          $tagname eq 'DoInitAction'  or
+          $tagname eq 'PlaceObject2'  or
+          $tagname eq 'DefineButton'  or
+          $tagname eq 'DefineButton2' or
+          $tagname eq 'DefineSprite';
+    
+    if ($tagname eq 'DefineSprite') {
+
+        # Tags in the sprite are not unpacked here.
+
+        $t->shallow_unpack ($stream);
+        $t->TagStream->parse (callback => \&swf_tag_callback);
+        return;
+
+    } elsif ($tagname eq 'PlaceObject2') {
+
+        # Most of PlaceObject2 tags don't have ClipActions.
+
+        $t->lookahead_Flags ($stream);
+        return unless $t->PlaceFlagHasClipActions;
+    }
+
+    # unpack the tag and search actions.
+
+    $t->unpack ($stream);
+    swf_check_tag ($t);
+}
+
+# Check url from memcached cache first
+sub memcached_check_url {
+    my ( $url ) = @_;
+
+    my $context = Digest::SHA256::new($cfg{digest_bits});
+
+    if ($cfg{debug}) {
+        write_log ("127.0.0.1", "Check key '". unpack("H*", ($context->hash($url))) . "'");
+    }
+
+    return $memd->get(unpack("H*", ($context->hash($url))));
+}
+
+# Write url to memcached key
+sub memcached_cache_url {
+    my ( $url, $url_real ) = @_;
+
+    my $context = Digest::SHA256::new($cfg{digest_bits});
+
+    if ($cfg{debug}) {
+        write_log ("127.0.0.1", "Cache key '". unpack("H*", ($context->hash($url))) . "' with value '$url_real'");
+    }
+
+    $memd->set(unpack("H*", ($context->hash($url))), $url_real, $cfg{cache_expire});
+}
+
+# POE http client callback
+sub process_client {
+    my ( $kernel, $heap ) = @_[ KERNEL, HEAP ];
+    
+    my $http_request = $_[ARG0]->[0];
+    my $rec = $_[ARG0]->[1][0];
+    my $http_response = $_[ARG1]->[0];
+    my $base_url = $_[ARG0]->[1][1];
+    $saved_swf_url = "";
+    
+    if ($rec == 0) {
+        $base_url = $http_request->uri;
+    }
+    else {
+        # Check cache for each url
+        my $redirect = memcached_check_url($http_request->uri);
+        if ($redirect) {
+            write_log ($heap->{remote_ip}, "Memcached redirect from: " . $http_response->base . " to: " . $redirect);
+            my $new_response = HTTP::Response->new(200);
+            $new_response->header("Uri", $redirect); 
+
+            # Avoid sending the response if the client has gone away.
+            $heap->{client}->put($new_response) if defined $heap->{client};
+
+            # Shut down the client's connection when the response is sent.
+            return;
+        }
+    }
+
+    if ($do_reopen_log) {
+        $do_reopen_log = 0;
+        reopen_log();
+    }
+
+    if ($rec > $cfg{max_rec}) {
+        write_log ($heap->{remote_ip}, "Max recursion exceeded: $rec, returning '$base_url' -> '" . $http_request->uri . "'");
+        # Write to cache
+        memcached_cache_url ($base_url, $http_request->uri);
+        my $new_response = HTTP::Response->new(200);
+        $new_response->header("Uri", $http_request->uri); 
+
+        # Avoid sending the response if the client has gone away.
+        $heap->{client}->put($new_response) if defined $heap->{client};
+
+        # Shut down the client's connection when the response is sent.
+        $kernel->yield("shutdown");
+        return;
+    }
+    
+    # Detect HTTP redirects
+    if ($http_response->is_redirect) {
+        my $redirect = $http_response->header('Location');
+        if ($redirect) {
+            if ($redirect =~ /^https?:\/\//) {
+                write_log ($heap->{remote_ip}, "HTTP redirect from: ". $http_response->base . " to: " . $redirect);
+                my $request = HTTP::Request->new('GET', $redirect);
+                $request->header( "Connection",       "close" );
+                $request->header( "Proxy-Connection", "close" );
+                $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
+                return;
+            }
+            else {
+                write_log ($heap->{remote_ip}, "Internal redirect, ignoring '$redirect', returning '$base_url' -> '" . $http_request->uri . "'");
+                my $new_response = HTTP::Response->new(200);
+                $new_response->header("Uri", $http_request->uri); 
+
+                # Avoid sending the response if the client has gone away.
+                $heap->{client}->put($new_response) if defined $heap->{client};
+
+                # Shut down the client's connection when the response is sent.
+                $kernel->yield("shutdown");
+                return;
+            }
+        }
+    }
+    my $response_type = $http_response->content_type();
+    if ( $response_type =~ /^text/i ) {
+        my $content = $http_response->decoded_content();
+        my $p = HTML::HeadParser->new($http_response);
+        $p->parse($content);
+        my $expire = $http_response->header('Refresh');
+        if ($http_response->is_redirect || $expire) {
+            my $redirect;
+            if ($expire) {
+                $expire =~ /URL=(\S+)/;
+                $redirect = $1;
+            }
+            else {
+                $redirect = $http_response->header('Location');
+            }
+            if ($redirect) {
+                if ($redirect =~ /^https?:\/\//) {
+                    write_log ($heap->{remote_ip}, "HTML redirect from:". $http_response->base . " to: " . $redirect);
+                    my $request = HTTP::Request->new('GET', $redirect);
+                    $request->header( "Connection",       "close" );
+                    $request->header( "Proxy-Connection", "close" );
+                    $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
+                    return;
+                }
+                else {
+                    write_log ($heap->{remote_ip}, "Internal redirect, ignoring '$redirect'");
+                }
+            }
+        }
+        if ($content =~ /location\s*=\s*["']*(https?:\/\/[^"'\s]+)["']*/im) {
+            my $redir = uri_unescape ($1);
+            write_log ($heap->{remote_ip}, "JavaScript redirect from:". $http_response->base . " to: " . $1);
+            my $request = HTTP::Request->new('GET', $redir);
+            $request->header( "Connection",       "close" );
+            $request->header( "Proxy-Connection", "close" );
+            $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
+            return;
+        }
+    }
+    elsif ( $response_type eq 'application/x-shockwave-flash' || 
+            ($http_request->uri =~ /\.swf(\?.*)?$/i && $http_response->code == 200)) {
+        my $content = $http_response->decoded_content();
+        $swf_parser->parse( $content );
+        if ($saved_swf_url ne "") {
+            write_log ($heap->{remote_ip}, "Flash redirect from:". $http_response->base . " to: " . $saved_swf_url);
+            my $request = HTTP::Request->new('GET', $saved_swf_url);
+            # Reset swf redirect global variable
+            $saved_swf_url = "";
+            $request->header( "Connection",       "close" );
+            $request->header( "Proxy-Connection", "close" );
+            $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
+            return;
+        }
+    }
+    else {
+        write_log ($heap->{remote_ip}, "Response wasn't text");
+    }
+    
+    write_log ($heap->{remote_ip}, "Returning '$base_url' -> '" . $http_request->uri . "'");
+    # Write to cache
+    memcached_cache_url ($base_url, $http_request->uri);
+    my $new_response = HTTP::Response->new($http_response->code);
+    $new_response->header("Uri", $http_request->uri); 
+
+    # Avoid sending the response if the client has gone away.
+    $heap->{client}->put($new_response) if defined $heap->{client};
+
+    # Shut down the client's connection when the response is sent.
+    $kernel->yield("shutdown");
+
+}
+
+sub process_input {
+    my ( $kernel, $heap, $request ) = @_[ KERNEL, HEAP, ARG0 ];
+
+    if ($request->isa ("HTTP::Response")) {
+        $heap->{client}->put($request);
+        $kernel->yield("shutdown");
+        return;
+    }
+    
+    # Check cache first
+    my $redirect = memcached_check_url($request->uri);
+    if ($redirect) {
+        write_log ($heap->{remote_ip}, "Memcached redirect from: " . $request->uri . " to: " . $redirect);
+        my $new_response = HTTP::Response->new(200);
+        $new_response->header("Uri", $redirect); 
+        $new_response->header("Connection", "close"); 
+        $new_response->header("Proxy-Connection", "close"); 
+
+        # Avoid sending the response if the client has gone away.
+        $heap->{client}->put($new_response) if defined $heap->{client};
+        $kernel->yield("shutdown");
+
+        # Shut down the client's connection when the response is sent.
+        return;
+    }
+    # Start http request
+    my $new_request = HTTP::Request->new('GET', $request->uri);
+    $new_request->header( "Connection",       "close" );
+    $new_request->header( "Proxy-Connection", "close" );
+    $kernel->post( "cl", "request", "got_response", $new_request, [0, ""]);
+}
+
+POE::Component::Server::TCP->new
+  ( Alias => "",
+    Port         => $cfg{port},
+    ClientFilter => 'POE::Filter::HTTPD',
+
+    ClientInput => \&process_input,
+    InlineStates => { got_response => \&process_client, },
+);
+
+swf_init_parser ();
+
+
+# Start POE.  This will run the server until it exits.
+POE::Kernel->run();
+exit 0;
+
+END {
+    unlink($cfg{pidfile});
+    if ($cfg{do_log}) {
+        write_log ("", "Stopping URL resolver");
+        close (LOG);
+    }
+}

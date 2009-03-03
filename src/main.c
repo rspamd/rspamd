@@ -77,6 +77,84 @@ void sig_handler (int signo)
 	}
 }
 
+static void 
+read_cmd_line (int argc, char **argv, struct config_file *cfg)
+{
+	int ch;
+	while ((ch = getopt(argc, argv, "thfc:u:g:")) != -1) {
+        switch (ch) {
+            case 'f':
+                cfg->no_fork = 1;
+                break;
+            case 'c':
+                if (optarg && cfg->cfg_name) {
+                    cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
+                }
+                break;
+			case 't':
+				cfg->config_test = 1;
+				break;
+			case 'u':
+				if (optarg) {
+					cfg->rspamd_user = memory_pool_strdup (cfg->cfg_pool, optarg);
+				}
+				break;
+			case 'g':
+				if (optarg) {
+					cfg->rspamd_group = memory_pool_strdup (cfg->cfg_pool, optarg);
+				}
+				break;
+            case 'h':
+            case '?':
+            default:
+                /* Show help message and exit */
+                printf ("Rspamd version " RVERSION "\n"
+                        "Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
+                        "-h:        This help message\n"
+						"-t:        Do config test and exit\n"
+                        "-f:        Do not daemonize main process\n"
+                        "-c:        Specify config file (./rspamd.conf is used by default)\n"
+						"-u:        User to run rspamd as\n"
+						"-g:        Group to run rspamd as\n");
+                exit (0);
+                break;
+        }
+    }
+}
+
+static void
+drop_priv (struct config_file *cfg) 
+{
+	struct passwd *pwd;
+	struct group *grp;
+
+	if (geteuid () == 0 && cfg->rspamd_user) {
+		pwd = getpwnam (cfg->rspamd_user);
+		if (pwd == NULL) {
+			msg_err ("drop_priv: user specified does not exists (%s), aborting", strerror (errno));
+			exit (-errno);
+		}
+		if (cfg->rspamd_group) {
+			grp = getgrnam (cfg->rspamd_group);
+			if (grp == NULL) {
+				msg_err ("drop_priv: group specified does not exists (%s), aborting", strerror (errno));
+				exit (-errno);
+			}
+			if (setgid (grp->gr_gid) == -1) {
+				msg_err ("drop_priv: cannot setgid to %d (%s), aborting", (int)grp->gr_gid, strerror (errno));
+				exit (-errno);
+			}
+			if (initgroups(cfg->rspamd_user, grp->gr_gid) == -1) {
+				msg_err ("drop_priv: initgroups failed (%s), aborting", strerror (errno));
+				exit (-errno);
+			}
+		}
+		if (setuid (pwd->pw_uid) == -1) {
+			msg_err ("drop_priv: cannot setuid to %d (%s), aborting", (int)pwd->pw_uid, strerror (errno));
+			exit (-errno);
+		}
+	}
+}
 
 static void
 config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
@@ -321,11 +399,6 @@ main (int argc, char **argv, char **env)
 		exit (-errno);
 	}
 
-	if (write_pid (rspamd) == -1) {
-		msg_err ("main: cannot write pid file %s", rspamd->cfg->pid_file);
-		exit (-errno);
-	}
-
 	/* Init C modules */
 	for (i = 0; i < MODULES_NUM; i ++) {
 		cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
@@ -338,21 +411,8 @@ main (int argc, char **argv, char **env)
 	rspamd->type = TYPE_MAIN;
 	
 	init_signals (&signals, sig_handler);
-	/* Init perl interpreter */
-	dTHXa (perl_interpreter);
-	PERL_SYS_INIT3 (&argc, &argv, &env);
-	perl_interpreter = perl_alloc ();
-	if (perl_interpreter == NULL) {
-		msg_err ("main: cannot allocate perl interpreter, %s", strerror (errno));
-		exit (-errno);
-	}
 
-	PERL_SET_CONTEXT (perl_interpreter);
-	perl_construct (perl_interpreter);
-	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
-	/* Block signals to use sigsuspend in future */
-	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
-
+	/* Create listen socket */
 	if (rspamd->cfg->bind_family == AF_INET) {
 		if ((listen_sock = make_tcp_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, TRUE)) == -1) {
 			msg_err ("main: cannot create tcp listen socket. %s", strerror (errno));
@@ -371,6 +431,30 @@ main (int argc, char **argv, char **env)
 		msg_err ("main: cannot listen on socket. %s", strerror (errno));
 		exit(-errno);
 	}
+
+	/* Drop privilleges */
+	drop_priv (cfg);
+
+	if (write_pid (rspamd) == -1) {
+		msg_err ("main: cannot write pid file %s", rspamd->cfg->pid_file);
+		exit (-errno);
+	}
+
+	/* Init perl interpreter */
+	dTHXa (perl_interpreter);
+	PERL_SYS_INIT3 (&argc, &argv, &env);
+	perl_interpreter = perl_alloc ();
+	if (perl_interpreter == NULL) {
+		msg_err ("main: cannot allocate perl interpreter, %s", strerror (errno));
+		exit (-errno);
+	}
+
+	PERL_SET_CONTEXT (perl_interpreter);
+	perl_construct (perl_interpreter);
+	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
+	/* Block signals to use sigsuspend in future */
+	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
+
 	
 	TAILQ_INIT (&rspamd->workers);
 
@@ -389,7 +473,9 @@ main (int argc, char **argv, char **env)
 	
 	/* Start lmtp if enabled */
 	if (cfg->lmtp_enable) {
-		fork_worker (rspamd, listen_sock, 0, TYPE_LMTP);
+		for (i = 0; i < cfg->lmtp_workers_number; i++) {
+			fork_worker (rspamd, listen_sock, 0, TYPE_LMTP);
+		}
 	}
 
 	/* Signal processing cycle */
@@ -443,7 +529,7 @@ main (int argc, char **argv, char **env)
 				/* Start new worker that would reread configuration*/
 				active_worker = fork_worker (rspamd, listen_sock, 1, TYPE_WORKER);
 			}
-			/* Do not start new workers untill active worker is not ready for accept */
+			/* Do not start new workers until active worker is not ready for accept */
 		}
 		if (child_ready) {
 			child_ready = 0;

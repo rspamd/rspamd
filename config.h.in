@@ -39,6 +39,9 @@
 
 #cmakedefine HAVE_LIBGEN_H       1
 
+#cmakedefine HAVE_GRP_H          1
+#cmakedefine HAVE_PWD_H          1
+
 #cmakedefine HAVE_ENDIAN_H       1
 #cmakedefine HAVE_SYS_ENDIAN_H   1
 #cmakedefine HAVE_MACHINE_ENDIAN_H  1
@@ -205,6 +208,15 @@
 /* libutil */
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
+#endif
+
+/* pwd and grp */
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+
+#ifdef HAVE_GRP_H
+#include <grp.h>
 #endif
 
 /* syslog */

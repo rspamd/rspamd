@@ -136,6 +136,8 @@ struct config_scalar {
  * Structure that stores all config data
  */
 struct config_file {
+	char *rspamd_user;								/**< user to run as										*/
+	char *rspamd_group;								/**< group to run as									*/
 	memory_pool_t *cfg_pool;						/**< memory pool for config								*/
 	char *cfg_name;									/**< name of config file								*/
 	char *pid_file;									/**< name of pid file									*/
@@ -156,6 +158,7 @@ struct config_file {
 	gboolean no_fork;								/**< if 1 do not call daemon()							*/
 	gboolean config_test;							/**< if TRUE do only config file test					*/
 	unsigned int workers_number;					/**< number of workers									*/
+	unsigned int lmtp_workers_number;				/**< number of lmtp workers								*/
 
 	enum rspamd_log_type log_type;					/**< log type											*/
 	int log_facility;								/**< log facility in case of syslog						*/

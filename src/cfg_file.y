@@ -676,6 +676,7 @@ lmtpcmd:
 	lmtpenabled
 	| lmtpsock
 	| lmtpmetric
+	| lmtpworkers
 	;
 
 lmtpenabled:
@@ -696,6 +697,11 @@ lmtpsock:
 lmtpmetric:
 	METRIC EQSIGN QUOTEDSTRING {
 		cfg->lmtp_metric = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+lmtpworkers:
+	WORKERS EQSIGN NUMBER {
+		cfg->lmtp_workers_number = $3;
 	}
 	;
 

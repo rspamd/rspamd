@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# $Id$
+#
+# PROVIDE: rspamd
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following line to /etc/rc.conf to enable countd:
+# rspamd (bool):          Set to "NO" by default.
+#                          Set it to "YES" to enable rspamd.
+
+. /etc/rc.subr
+
+name="rspamd"
+rcvar=`set_rcvar`
+procname="@CMAKE_INSTALL_PREFIX@/bin/rspamd"
+
+load_rc_config $name
+
+: ${rspamd_enable="NO"}
+: ${rspamd_pidfile="/var/run/rspamd/rspamd.pid"}
+: ${rspamd_user="@RSPAMD_USER@"}
+: ${rspamd_group="@RSPAMD_GROUP@"}
+
+stop_postcmd="rm -f $rspamd_pidfile"
+
+extra_commands="reload"
+sig_reload="USR1"
+
+command="$procname"
+command_args="-u ${rspamd_user} -g ${rspamd_group} -c @CMAKE_INSTALL_PREFIX@/etc/rspamd.conf"
+
+run_rc_command "$1"
