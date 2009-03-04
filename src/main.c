@@ -377,6 +377,29 @@ main (int argc, char **argv, char **env)
 		fprintf (stderr, "syntax OK\n");
 		return EXIT_SUCCESS;
 	}
+
+	/* Create listen socket */
+	if (rspamd->cfg->bind_family == AF_INET) {
+		if ((listen_sock = make_tcp_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, TRUE)) == -1) {
+			msg_err ("main: cannot create tcp listen socket. %s", strerror (errno));
+			exit(-errno);
+		}
+	}
+	else {
+		un_addr = (struct sockaddr_un *) g_malloc (sizeof (struct sockaddr_un));
+		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr, TRUE)) == -1) {
+			msg_err ("main: cannot create unix listen socket. %s", strerror (errno));
+			exit(-errno);
+		}
+	}
+
+	if (listen (listen_sock, -1) == -1) {
+		msg_err ("main: cannot listen on socket. %s", strerror (errno));
+		exit(-errno);
+	}
+
+	/* Drop privilleges */
+	drop_priv (cfg);
 	
 	config_logger (rspamd, TRUE);
 
@@ -412,28 +435,6 @@ main (int argc, char **argv, char **env)
 	
 	init_signals (&signals, sig_handler);
 
-	/* Create listen socket */
-	if (rspamd->cfg->bind_family == AF_INET) {
-		if ((listen_sock = make_tcp_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, TRUE)) == -1) {
-			msg_err ("main: cannot create tcp listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
-	else {
-		un_addr = (struct sockaddr_un *) g_malloc (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr, TRUE)) == -1) {
-			msg_err ("main: cannot create unix listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
-
-	if (listen (listen_sock, -1) == -1) {
-		msg_err ("main: cannot listen on socket. %s", strerror (errno));
-		exit(-errno);
-	}
-
-	/* Drop privilleges */
-	drop_priv (cfg);
 
 	if (write_pid (rspamd) == -1) {
 		msg_err ("main: cannot write pid file %s", rspamd->cfg->pid_file);
@@ -455,7 +456,6 @@ main (int argc, char **argv, char **env)
 	/* Block signals to use sigsuspend in future */
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 
-	
 	TAILQ_INIT (&rspamd->workers);
 
 	setproctitle ("main process");
