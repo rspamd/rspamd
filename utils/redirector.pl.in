@@ -50,6 +50,14 @@ my %cfg = (
 
 our $do_reopen_log = 0;
 
+# Drop privilleges
+if ($> == 0) {
+    my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
+    my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
+    $< = $uid;
+    $) = $gid;
+}
+
 die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
 
 die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
@@ -59,10 +67,6 @@ $cfg{do_log} = 0 if ! open(LOG, ">> $cfg{logfile}");
 
 # Do daemonization
 Proc::Daemon::Init if !$cfg{debug};
-
-my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
-my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
-setpgrp ($uid, $gid) or die "cannot drop privilleges";
 
 Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
 
