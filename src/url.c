@@ -446,7 +446,7 @@ char_needs_escaping (const char *p)
 */
 
 static char *
-reencode_escapes (const char *s, memory_pool_t *pool)
+reencode_escapes (char *s, memory_pool_t *pool)
 {
 	const char *p1;
 	char *newstr, *p2;
@@ -462,7 +462,7 @@ reencode_escapes (const char *s, memory_pool_t *pool)
 
 	if (!encode_count) {
 		/* The string is good as it is. */
-		return memory_pool_strdup (pool, s);
+		return s;
 	}
 
 	oldlen = p1 - s;
@@ -620,8 +620,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 	/* Assume http as default protocol */
 	if (!uri->protocollen || (uri->protocol = get_protocol (struri(uri), uri->protocollen)) == PROTOCOL_UNKNOWN) {
 		p = g_strconcat ("http://", uri->string, NULL);
-		g_free (uri->string);
-		uri->string = p;
+		uri->string = memory_pool_strdup (pool, p);
+		g_free (p);
 		uri->protocol = PROTOCOL_HTTP;
 		prefix_end = struri (uri) + 7;
 	}

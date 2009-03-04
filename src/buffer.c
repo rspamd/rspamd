@@ -176,12 +176,11 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 			d->in_buf->pos += r;
 			d->in_buf->data->len += r;
 		}
-	
+		msg_debug ("read_buffers: read %ld characters, policy is %s, watermark is: %ld", 
+				(long int)r, d->policy == BUFFER_LINE ? "LINE" : "CHARACTER",
+				(long int)d->nchars);
 	}
 	
-	msg_debug ("read_buffers: read %ld characters, policy is %s, watermark is: %ld", 
-			(long int)r, d->policy == BUFFER_LINE ? "LINE" : "CHARACTER",
-			(long int)d->nchars);
 	saved_policy = d->policy;
 	c = d->in_buf->data->begin;
 	r = 0;
