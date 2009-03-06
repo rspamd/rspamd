@@ -107,7 +107,7 @@ free_task (struct worker_task *task, gboolean is_soft)
 		while ((part = g_list_first (task->parts))) {
 			task->parts = g_list_remove_link (task->parts, part);
 			p = (struct mime_part *)part->data;
-			g_byte_array_free (p->content, FALSE);
+			g_byte_array_free (p->content, TRUE);
 			g_list_free_1 (part);
 		}
 		memory_pool_delete (task->task_pool);

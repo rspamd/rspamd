@@ -329,8 +329,12 @@ process_message (struct worker_task *task)
 	GMimeMessage *message;
 	GMimeParser *parser;
 	GMimeStream *stream;
-
-	stream = g_mime_stream_mem_new_with_buffer (task->msg->begin, task->msg->len);
+	GByteArray *tmp;
+    
+	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
+	tmp->data = task->msg->begin;
+	tmp->len = task->msg->len;
+	stream = g_mime_stream_mem_new_with_byte_array (tmp);
 	msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
@@ -433,8 +437,13 @@ process_learn (struct controller_session *session)
 	GMimeMessage *message;
 	GMimeParser *parser;
 	GMimeStream *stream;
+	GByteArray *tmp;
+    
+	tmp = memory_pool_alloc (session->session_pool, sizeof (GByteArray));
+	tmp->data = session->learn_buf->begin;
+	tmp->len = session->learn_buf->len;
+	stream = g_mime_stream_mem_new_with_byte_array (tmp);
 
-	stream = g_mime_stream_mem_new_with_buffer (session->learn_buf->begin, session->learn_buf->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 
@@ -446,14 +455,14 @@ process_learn (struct controller_session *session)
 	
 	memory_pool_add_destructor (session->session_pool, (pool_destruct_func)g_object_unref, message);
 
-	/* free the parser (and the stream) */
-	g_object_unref (parser);
-
 #ifdef GMIME24
 	g_mime_message_foreach (message, mime_learn_foreach_callback, session);
 #else
 	g_mime_message_foreach_part (message, mime_learn_foreach_callback, session);
 #endif
+
+	/* free the parser (and the stream) */
+	g_object_unref (parser);
 	
 	return 0;
 }
