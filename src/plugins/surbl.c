@@ -247,7 +247,6 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		octet2 = g_match_info_fetch (info, 2);
 		octet3 = g_match_info_fetch (info, 3);
 		octet4 = g_match_info_fetch (info, 4);
-		g_match_info_free (info);
 		result = memory_pool_alloc (pool, len); 
 		msg_debug ("format_surbl_request: got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
 		snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, suffix->suffix);
@@ -255,6 +254,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		g_free (octet2);
 		g_free (octet3);
 		g_free (octet4);
+		g_match_info_free (info);
 		return result;
 	}
 	g_match_info_free (info);
@@ -270,19 +270,21 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 			/* Match additional part for hosters */
 			g_free (part1);
 			g_free (part2);
+			g_match_info_free (info);
 			if (g_regex_match_full (extract_hoster_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 				gchar *hpart1, *hpart2, *hpart3;
 				hpart1 = g_match_info_fetch (info, 1);
 				hpart2 = g_match_info_fetch (info, 2);
 				hpart3 = g_match_info_fetch (info, 3);
-				g_match_info_free (info);
 				msg_debug ("format_surbl_request: got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
 				snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, suffix->suffix);
 				g_free (hpart1);
 				g_free (hpart2);
 				g_free (hpart3);
+				g_match_info_free (info);
 				return result;
 			}
+			g_match_info_free (info);
 			return NULL;
 		}
 		snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
@@ -291,6 +293,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		return result;
 	}
 
+	g_match_info_free (info);
 	return NULL;
 }
 

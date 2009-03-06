@@ -177,6 +177,37 @@ static const unsigned char urlchr_table[256] =
 #undef U
 #undef RU
 
+static const char *
+url_strerror (enum uri_errno err)
+{
+	switch (err) {
+		case URI_ERRNO_OK:
+			return "Parsing went well";
+		case URI_ERRNO_EMPTY:
+			return "The URI string was empty";
+		case URI_ERRNO_INVALID_PROTOCOL:
+			return "No protocol was found";
+		case URI_ERRNO_NO_SLASHES:
+			return "Slashes after protocol missing";
+		case URI_ERRNO_TOO_MANY_SLASHES:
+			return "Too many slashes after protocol";
+		case URI_ERRNO_TRAILING_DOTS:
+			return "'.' after host";
+		case URI_ERRNO_NO_HOST:
+			return "Host part is missing";
+		case URI_ERRNO_NO_PORT_COLON:
+			return "':' after host without port";
+		case URI_ERRNO_NO_HOST_SLASH:
+			return "Slash after host missing";
+		case URI_ERRNO_IPV6_SECURITY:
+			return "IPv6 security bug detected";
+		case URI_ERRNO_INVALID_PORT:
+			return "Port number is bad";
+		case URI_ERRNO_INVALID_PORT_RANGE:
+			return "Port number is not within 0-65535";
+	}
+}
+
 static inline int
 end_of_dir(unsigned char c)
 {
@@ -825,7 +856,7 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 	GMatchInfo *info;
 	GError *err = NULL;
 	int pos = 0, start;
-	gboolean rc;
+	int rc;
 	char *url_str = NULL;
 	struct uri *new;
 
@@ -840,13 +871,17 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 					if (url_str != NULL) {
 						new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 						if (new != NULL) {
-							parse_uri (new, url_str, task->task_pool);
-							TAILQ_INSERT_TAIL (&task->urls, new, next);
+							rc = parse_uri (new, url_str, task->task_pool);
+							if (rc != URI_ERRNO_OK) {
+								msg_info ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
+							}
+							else {
+								TAILQ_INSERT_TAIL (&task->urls, new, next);
+							}
 						}
 					}
-					g_free (url_str);
+					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, url_str);
 				}
-				g_match_info_free (info);
 			}
 			else if (err != NULL) {
 				msg_debug ("url_parse_text: error matching regexp: %s", err->message);
@@ -855,6 +890,7 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 			else {
 				msg_debug ("url_parse_text: cannot find url pattern in given string");
 			}
+			g_match_info_free (info);
 		} while (rc);
 	}
 }
@@ -865,7 +901,7 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 	GMatchInfo *info;
 	GError *err = NULL;
 	int pos = 0, start;
-	gboolean rc;
+	int rc;
 	char *url_str = NULL;
 	struct uri *new;
 
@@ -880,13 +916,17 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 					if (url_str != NULL) {
 						new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 						if (new != NULL) {
-							parse_uri (new, url_str, task->task_pool);
-							TAILQ_INSERT_TAIL (&task->urls, new, next);
+							rc = parse_uri (new, url_str, task->task_pool);
+							if (rc != URI_ERRNO_OK) {
+								msg_info ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
+							}
+							else {
+								TAILQ_INSERT_TAIL (&task->urls, new, next);
+							}
 						}
 					}
-					g_free (url_str);
+					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, url_str);
 				}
-				g_match_info_free (info);
 			}
 			else if (err) {
 				msg_debug ("url_parse_html: error matching regexp: %s", err->message);
@@ -895,6 +935,7 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 			else {
 				msg_debug ("url_parse_html: cannot find url pattern in given string");
 			}
+			g_match_info_free (info);
 		} while (rc);
 	}
 }

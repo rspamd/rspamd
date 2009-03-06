@@ -236,6 +236,7 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 
 
 	signals->sa_handler = sig_handler;
+	signals->sa_flags = 0;
 	sigaction (SIGTERM, signals, NULL);
 	sigaction (SIGINT, signals, NULL);
 	sigaction (SIGHUP, signals, NULL);
@@ -248,6 +249,7 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 	sigemptyset (&sigpipe_act.sa_mask);
 	sigaddset (&sigpipe_act.sa_mask, SIGPIPE);
 	sigpipe_act.sa_handler = SIG_IGN;
+	sigpipe_act.sa_flags = 0;
 	sigaction (SIGPIPE, &sigpipe_act, NULL);
 }
 
