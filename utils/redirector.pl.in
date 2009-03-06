@@ -40,7 +40,7 @@ my %cfg = (
     max_rec     => 5,
     pidfile =>  '/var/run/rspamd/redirector.pid',
     logfile =>  '/var/log/rspamd-redirector.log',
-    do_log  =>  1,
+    do_log  =>  0,
     debug   =>  0,
     digest_bits => 256,
     cache_expire => 3600,
@@ -50,6 +50,11 @@ my %cfg = (
 
 our $do_reopen_log = 0;
 
+die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
+
+# Do daemonization
+Proc::Daemon::Init if !$cfg{debug};
+
 # Drop privilleges
 if ($> == 0) {
     my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
@@ -58,15 +63,10 @@ if ($> == 0) {
     $) = $gid;
 }
 
-die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
-
 die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
 close(PID);
 
-$cfg{do_log} = 0 if ! open(LOG, ">> $cfg{logfile}");
-
-# Do daemonization
-Proc::Daemon::Init if !$cfg{debug};
+$cfg{do_log} = 1 if open(LOG, ">> $cfg{logfile}");
 
 Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
 
@@ -443,7 +443,6 @@ POE::Kernel->run();
 exit 0;
 
 END {
-    unlink($cfg{pidfile});
     if ($cfg{do_log}) {
         write_log ("", "Stopping URL resolver");
         close (LOG);

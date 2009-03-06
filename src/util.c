@@ -813,7 +813,7 @@ open_log (struct config_file *cfg)
 		case RSPAMD_LOG_FILE:
 			cfg->log_fd = open (cfg->log_file, O_CREAT | O_WRONLY | O_APPEND, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
 			if (cfg->log_fd == -1) {
-				msg_err ("open_log: cannot open desired log file: %s, %s", cfg->log_file, strerror (errno));
+				fprintf (stderr, "open_log: cannot open desired log file: %s, %s", cfg->log_file, strerror (errno));
 				return -1;
 			}
 			return 0;
