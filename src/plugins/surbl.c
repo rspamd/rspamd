@@ -265,7 +265,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		part2 = g_match_info_fetch (info, 2);
 		g_match_info_free (info);
 		result = memory_pool_alloc (pool, len); 
-		msg_debug ("format_surbl_request: got normal 2-d level domain %s.%s", part1, part2);
+		snprintf (result, len, "%s.%s", part1, part2);
 		if (g_hash_table_lookup (surbl_module_ctx->hosters, result) != NULL) {
 			/* Match additional part for hosters */
 			g_free (part1);
@@ -287,7 +287,10 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 			g_match_info_free (info);
 			return NULL;
 		}
-		snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
+		else {
+			snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
+			msg_debug ("format_surbl_request: got normal 2-d level domain %s.%s", part1, part2);
+		}
 		g_free (part1);
 		g_free (part2);
 		return result;
