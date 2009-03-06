@@ -875,7 +875,7 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 							if (rc != URI_ERRNO_OK) {
 								msg_info ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
 							}
-							else {
+							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
 								TAILQ_INSERT_TAIL (&task->urls, new, next);
 							}
 						}
@@ -920,7 +920,7 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 							if (rc != URI_ERRNO_OK) {
 								msg_info ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
 							}
-							else {
+							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
 								TAILQ_INSERT_TAIL (&task->urls, new, next);
 							}
 						}
