@@ -859,6 +859,11 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 	int rc;
 	char *url_str = NULL;
 	struct uri *new;
+	
+	if (!content->data || content->len == 0) {
+		msg_warn ("url_parse_text: got empty text part");
+		return;
+	}
 
 	if (url_init () == 0) {
 		do {
@@ -904,6 +909,11 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 	int rc;
 	char *url_str = NULL;
 	struct uri *new;
+
+	if (!content->data || content->len == 0) {
+		msg_warn ("url_parse_text: got empty text part");
+		return;
+	}
 
 	if (url_init () == 0) {
 		do {

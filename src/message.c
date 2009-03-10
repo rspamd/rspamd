@@ -335,12 +335,23 @@ process_message (struct worker_task *task)
 	tmp->data = task->msg->begin;
 	tmp->len = task->msg->len;
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
+	/* 
+	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
+	 * pool allocator
+	 */
+	g_mime_stream_mem_set_owner (stream, FALSE);
+
 	msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
 
 	/* parse the message from the stream */
 	message = g_mime_parser_construct_message (parser);
+
+	if (message == NULL) {
+		msg_warn ("process_message: cannot construct mime from stream");
+		return -1;
+	}
 	
 	task->message = message;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_object_unref, task->message);
@@ -443,6 +454,11 @@ process_learn (struct controller_session *session)
 	tmp->data = session->learn_buf->begin;
 	tmp->len = session->learn_buf->len;
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
+	/* 
+	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
+	 * pool allocator
+	 */
+	g_mime_stream_mem_set_owner (stream, FALSE);
 
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);

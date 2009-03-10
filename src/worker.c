@@ -146,6 +146,13 @@ read_socket (f_str_t *in, void *arg)
 			task->msg = in;
 			msg_debug ("read_socket: got string of length %ld", (long int)task->msg->len);
 			r = process_message (task);
+            if (r == -1) {
+                msg_warn ("read_socket: processing of message failed");
+				task->last_error = "MIME processing error";
+				task->error_code = RSPAMD_FILTER_ERROR;
+				task->state = WRITE_ERROR;
+				write_socket (task);
+            }
 			r = process_filters (task);
 			if (r == -1) {
 				task->last_error = "Filter processing error";
