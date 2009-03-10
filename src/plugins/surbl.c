@@ -322,6 +322,7 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 				g_tree_insert (tree, surbl_req, surbl_req);
 				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
 				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+				param->task->save.saved ++;
 			}
 			else {
 				msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
@@ -332,7 +333,6 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 			return;
 		}
 		cur = g_list_next (cur);
-		param->task->save.saved ++;
 	}
 }
 
