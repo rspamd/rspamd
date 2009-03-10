@@ -42,10 +42,13 @@ my %cfg = (
     logfile =>  '/var/log/rspamd-redirector.log',
     do_log  =>  0,
     debug   =>  0,
+    check_regexp => 'http://[^/]+/',
+    check_domains =>  [ 'narod.ru', 'test.ru' ],
     digest_bits => 256,
     cache_expire => 3600,
     user    => '@RSPAMD_USER@',
     group   => '@RSPAMD_GROUP@',
+    cfg_file => '@CMAKE_INSTALL_PREFIX@/etc/rspamd-redirector.conf',
 );
 
 our $do_reopen_log = 0;
@@ -59,8 +62,8 @@ Proc::Daemon::Init if !$cfg{debug};
 if ($> == 0) {
     my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
     my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
-    $< = $uid;
-    $) = $gid;
+    $< = $> = $uid;
+    $) = $( = $gid;
 }
 
 die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
@@ -88,6 +91,7 @@ my $memd = new Cache::Memcached::Fast({
 $SIG{USR1} = sub { $do_reopen_log = 1; };
 $SIG{INT} = sub { $poe_kernel->stop(); };
 $SIG{QUIT} = sub { $poe_kernel->stop(); };
+$SIG{PIPE} = 'IGNORE';
 
 write_log ("", "Starting URL resolver");
 
@@ -103,6 +107,17 @@ POE::Component::Client::HTTP->spawn(
         timeout         => $cfg{http_timeout},
     ), 
 );
+
+sub read_file {
+    my ($file) = @_;
+
+    open(IN, $file) or die "Can't open $file: $!";
+    local $/;
+    my $content = <IN>;
+    close IN;
+
+    return $content;
+}
 
 sub reopen_log {
     if ($cfg{do_log}) {
@@ -403,6 +418,30 @@ sub process_input {
         return;
     }
     
+    my $domain;
+    if ($request->uri =~ /^http:\/\/([^\/]+)\//) {
+        my @parts = split(/\./, $1);
+        my $c1 = pop @parts;
+        my $c2 = pop @parts;
+        $domain = "$c2.$c1";
+    }
+
+    if ((defined($cfg{check_regexp}) && $request->uri !~ $cfg{check_regexp}) ||
+        (defined($cfg{check_domains}) && ($_ = grep(/$domain/, $cfg{check_domains})) == 0)) {
+        write_log ($heap->{remote_ip}, "Uri is not checked: " . $request->uri);
+        my $new_response = HTTP::Response->new(200);
+        $new_response->header("Uri", $request->uri); 
+        $new_response->header("Connection", "close"); 
+        $new_response->header("Proxy-Connection", "close"); 
+
+        # Avoid sending the response if the client has gone away.
+        $heap->{client}->put($new_response) if defined $heap->{client};
+        $kernel->yield("shutdown");
+
+        # Shut down the client's connection when the response is sent.
+        return;
+    }
+
     # Check cache first
     my $redirect = memcached_check_url($request->uri);
     if ($redirect) {
@@ -424,6 +463,12 @@ sub process_input {
     $new_request->header( "Connection",       "close" );
     $new_request->header( "Proxy-Connection", "close" );
     $kernel->post( "cl", "request", "got_response", $new_request, [0, ""]);
+}
+
+# Try to eval config file
+if (-f $cfg{cfg_file}) {
+    my $config = read_file ($cfg{cfg_file});
+    eval $config;
 }
 
 POE::Component::Server::TCP->new

@@ -77,6 +77,7 @@
 #define IP_ADDR_HEADER "IP"
 #define NRCPT_HEADER "Recipient-Number"
 #define RCPT_HEADER "Rcpt"
+#define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 /*
  * Reply messages
@@ -241,6 +242,18 @@ parse_header (struct worker_task *task, char *line)
 			if (strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
 				task->from = memory_pool_strdup (task->task_pool, line);
 				msg_debug ("parse_header: read from header, value: %s", task->from);
+			}
+			else {
+				msg_info ("parse_header: wrong header: %s", headern);
+				return -1;
+			}
+			break;
+		case 'q':
+		case 'Q':
+			/* Queue id */
+			if (strncasecmp (headern, QUEUE_ID_HEADER, sizeof (QUEUE_ID_HEADER) - 1) == 0) {
+				task->queue_id = memory_pool_strdup (task->task_pool, line);
+				msg_debug ("parse_header: read queue_id header, value: %s", task->queue_id);
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);

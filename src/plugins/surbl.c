@@ -386,11 +386,13 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	*(param->url->host + param->url->hostlen) = 0;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
-		msg_info ("surbl_check: url %s is in surbl %s", param->url->host, param->suffix->suffix);
+		msg_info ("surbl_check: <%s> url %s is in surbl %s", 
+					param->task->queue_id, param->url->host, param->suffix->suffix);
 		process_dns_results (param->task, param->suffix, param->url->host, (uint32_t)(((in_addr_t *)addresses)[0]));
 	}
 	else {
-		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, param->suffix->suffix);
+		msg_debug ("surbl_check: <%s> url %s is not in surbl %s", 
+					param->task->queue_id, param->url->host, param->suffix->suffix);
 	}
 	*(param->url->host + param->url->hostlen) = c;
 	
@@ -553,7 +555,8 @@ redirector_callback (int fd, short what, void *arg)
 			}
 			else {
 				event_del (&param->ev);
-				msg_info ("redirector_callback: connection to redirector timed out while waiting for write");
+				msg_info ("redirector_callback: <%s> connection to redirector timed out while waiting for write",
+							param->task->queue_id);
 				param->task->save.saved --;
 				make_surbl_requests (param->url, param->task, param->tree);
 
@@ -577,7 +580,8 @@ redirector_callback (int fd, short what, void *arg)
 						}
 					}
 					if (*p == '\0') {
-						msg_info ("redirector_callback: got reply from redirector: '%s' -> '%s'", struri (param->url), c);
+						msg_info ("redirector_callback: <%s> got reply from redirector: '%s' -> '%s'", 
+									param->task->queue_id, struri (param->url), c);
 						parse_uri (param->url, c, param->task->task_pool);
 					}
 				}
@@ -592,7 +596,8 @@ redirector_callback (int fd, short what, void *arg)
 			}
 			else {
 				event_del (&param->ev);
-				msg_info ("redirector_callback: reading redirector timed out, while waiting for read");
+				msg_info ("redirector_callback: <%s> reading redirector timed out, while waiting for read",
+							param->task->queue_id);
 				param->task->save.saved --;
 				make_surbl_requests (param->url, param->task, param->tree);
 				if (param->task->save.saved == 0) {
@@ -613,10 +618,11 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
 	struct redirector_param *param;
 	struct timeval timeout;
 
-	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, htons (surbl_module_ctx->redirector_port), FALSE);
+	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, surbl_module_ctx->redirector_port, FALSE);
 
 	if (s == -1) {
-		msg_info ("register_redirector_call: cannot create tcp socket failed: %s", strerror (errno));
+		msg_info ("register_redirector_call: <%s> cannot create tcp socket failed: %s", 
+					task->queue_id, strerror (errno));
 		task->save.saved --;
 		make_surbl_requests (url, task, url_tree);
 		return; 
@@ -641,7 +647,7 @@ surbl_test_url (struct worker_task *task)
 	struct memcached_param *param;
 	GTree *url_tree;
 
-	url_tree = g_tree_new ((GCompareFunc)g_strcasecmp);
+	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
 
 	TAILQ_FOREACH (url, &task->urls, next) {
 		msg_debug ("surbl_test_url: check url %s", struri (url));
@@ -660,7 +666,7 @@ surbl_test_url (struct worker_task *task)
 		}
 	}
 
-	g_tree_destroy (url_tree);
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, url_tree);
 	return 0;
 }
 

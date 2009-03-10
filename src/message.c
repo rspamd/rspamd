@@ -362,7 +362,10 @@ process_message (struct worker_task *task)
 	g_mime_message_foreach_part (message, mime_foreach_callback, task);
 #endif
 	
-	msg_info ("process_message: found %d parts in message", task->parts_count);
+	msg_debug ("process_message: found %d parts in message", task->parts_count);
+	if (task->queue_id == NULL) {
+		task->queue_id = (char *)g_mime_message_get_message_id (task->message);
+	}
 
 	task->worker->srv->stat->messages_scanned ++;
 

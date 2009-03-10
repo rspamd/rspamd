@@ -220,6 +220,7 @@ accept_socket (int fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct sockaddr_storage ss;
+    struct sockaddr_in *sin;
 	struct worker_task *new_task;
 	socklen_t addrlen = sizeof(ss);
 	int nfd;
@@ -228,6 +229,14 @@ accept_socket (int fd, short what, void *arg)
 		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
 		return;
 	}
+
+    if (ss.ss_family == AF_UNIX) {
+        msg_info ("accept_socket: accepted connection from unix socket");
+    }
+    else if (ss.ss_family == AF_INET) {
+        sin = (struct sockaddr_in *) &ss;
+        msg_info ("accept_socket: accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
+    }
 	
 	new_task = g_malloc (sizeof (struct worker_task));
 
