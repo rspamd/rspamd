@@ -878,7 +878,7 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 						if (new != NULL) {
 							rc = parse_uri (new, url_str, task->task_pool);
 							if (rc != URI_ERRNO_OK) {
-								msg_info ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
+								msg_debug ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
 							}
 							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
 								TAILQ_INSERT_TAIL (&task->urls, new, next);
@@ -928,7 +928,7 @@ url_parse_html (struct worker_task *task, GByteArray *content)
 						if (new != NULL) {
 							rc = parse_uri (new, url_str, task->task_pool);
 							if (rc != URI_ERRNO_OK) {
-								msg_info ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
+								msg_debug ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
 							}
 							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
 								TAILQ_INSERT_TAIL (&task->urls, new, next);

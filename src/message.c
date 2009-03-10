@@ -339,7 +339,7 @@ process_message (struct worker_task *task)
 	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
 	 * pool allocator
 	 */
-	g_mime_stream_mem_set_owner (stream, FALSE);
+	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
 
 	msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
 	/* create a new parser object to parse the stream */
@@ -458,7 +458,7 @@ process_learn (struct controller_session *session)
 	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
 	 * pool allocator
 	 */
-	g_mime_stream_mem_set_owner (stream, FALSE);
+	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
 
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);

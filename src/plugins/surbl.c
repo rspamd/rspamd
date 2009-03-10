@@ -301,7 +301,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 }
 
 static void 
-make_surbl_requests (struct uri* url, struct worker_task *task)
+make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 {	
 	char *surbl_req;
 	f_str_t f;
@@ -318,8 +318,14 @@ make_surbl_requests (struct uri* url, struct worker_task *task)
 		param->task = task;
 		param->suffix = (struct suffix_item *)cur->data;
 		if ((surbl_req = format_surbl_request (task->task_pool, &f, (struct suffix_item *)cur->data)) != NULL) {
-			msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-			evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+			if (g_tree_lookup (tree, surbl_req) == NULL) {
+				g_tree_insert (tree, surbl_req, surbl_req);
+				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+			}
+			else {
+				msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
+			}
 		}
 		else {
 			msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (url));
@@ -387,7 +393,7 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 		msg_debug ("surbl_check: url %s is not in surbl %s", param->url->host, param->suffix->suffix);
 	}
 	*(param->url->host + param->url->hostlen) = c;
-
+	
 	param->task->save.saved --;
 	if (param->task->save.saved == 0) {
 		/* Call other filters */
@@ -456,13 +462,13 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 				param->task->save.saved = 1;
 				process_filters (param->task);
 			}
-			make_surbl_requests (param->url, param->task);
+			make_surbl_requests (param->url, param->task, param->tree);
 			break;
 	}
 }
 
 static void
-register_memcached_call (struct uri *url, struct worker_task *task) 
+register_memcached_call (struct uri *url, struct worker_task *task, GTree *url_tree) 
 {
 	struct memcached_param *param;
 	struct memcached_server *selected;
@@ -476,6 +482,7 @@ register_memcached_call (struct uri *url, struct worker_task *task)
 
 	param->url = url;
 	param->task = task;
+	param->tree = url_tree;
 
 	param->ctx = memory_pool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
 
@@ -534,7 +541,7 @@ redirector_callback (int fd, short what, void *arg)
 					msg_err ("redirector_callback: write failed %s", strerror (errno));
 					event_del (&param->ev);
 					param->task->save.saved --;
-					make_surbl_requests (param->url, param->task);
+					make_surbl_requests (param->url, param->task, param->tree);
 					if (param->task->save.saved == 0) {
 						/* Call other filters */
 						param->task->save.saved = 1;
@@ -548,7 +555,7 @@ redirector_callback (int fd, short what, void *arg)
 				event_del (&param->ev);
 				msg_info ("redirector_callback: connection to redirector timed out while waiting for write");
 				param->task->save.saved --;
-				make_surbl_requests (param->url, param->task);
+				make_surbl_requests (param->url, param->task, param->tree);
 
 				if (param->task->save.saved == 0) {
 					/* Call other filters */
@@ -576,7 +583,7 @@ redirector_callback (int fd, short what, void *arg)
 				}
 				event_del (&param->ev);
 				param->task->save.saved --;
-				make_surbl_requests (param->url, param->task);
+				make_surbl_requests (param->url, param->task, param->tree);
 				if (param->task->save.saved == 0) {
 					/* Call other filters */
 					param->task->save.saved = 1;
@@ -587,7 +594,7 @@ redirector_callback (int fd, short what, void *arg)
 				event_del (&param->ev);
 				msg_info ("redirector_callback: reading redirector timed out, while waiting for read");
 				param->task->save.saved --;
-				make_surbl_requests (param->url, param->task);
+				make_surbl_requests (param->url, param->task, param->tree);
 				if (param->task->save.saved == 0) {
 					/* Call other filters */
 					param->task->save.saved = 1;
@@ -600,7 +607,7 @@ redirector_callback (int fd, short what, void *arg)
 
 
 static void
-register_redirector_call (struct uri *url, struct worker_task *task) 
+register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_tree) 
 {
 	int s;
 	struct redirector_param *param;
@@ -611,7 +618,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	if (s == -1) {
 		msg_info ("register_redirector_call: cannot create tcp socket failed: %s", strerror (errno));
 		task->save.saved --;
-		make_surbl_requests (url, task);
+		make_surbl_requests (url, task, url_tree);
 		return; 
 	}
 
@@ -620,6 +627,7 @@ register_redirector_call (struct uri *url, struct worker_task *task)
 	param->task = task;
 	param->state = STATE_CONNECT;
 	param->sock = s;
+	param->tree = url_tree;
 	timeout.tv_sec = surbl_module_ctx->connect_timeout / 1000;
 	timeout.tv_usec = surbl_module_ctx->connect_timeout - timeout.tv_sec * 1000;
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
@@ -631,23 +639,28 @@ surbl_test_url (struct worker_task *task)
 {
 	struct uri *url;
 	struct memcached_param *param;
+	GTree *url_tree;
+
+	url_tree = g_tree_new ((GCompareFunc)g_strcasecmp);
 
 	TAILQ_FOREACH (url, &task->urls, next) {
 		msg_debug ("surbl_test_url: check url %s", struri (url));
 		if (surbl_module_ctx->use_redirector) {
-			register_redirector_call (url, task);
+			register_redirector_call (url, task, url_tree);
 			task->save.saved++;
 		}
 		else {
 			if (task->worker->srv->cfg->memcached_servers_num > 0) {
-				register_memcached_call (url, task);
+				register_memcached_call (url, task, url_tree);
 				task->save.saved++;
 			}
 			else {
-				make_surbl_requests (url, task);
+				make_surbl_requests (url, task, url_tree);
 			}
 		}
 	}
+
+	g_tree_destroy (url_tree);
 	return 0;
 }
 

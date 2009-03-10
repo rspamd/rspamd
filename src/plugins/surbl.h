@@ -58,12 +58,14 @@ struct redirector_param {
 	} state;
 	struct event ev;
 	int sock;
+	GTree *tree;
 };
 
 struct memcached_param {
 	struct uri *url;
 	struct worker_task *task;
 	memcached_ctx_t *ctx;
+	GTree *tree;
 };
 
 struct surbl_bit_item {
