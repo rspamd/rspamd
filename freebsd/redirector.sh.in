@@ -28,5 +28,6 @@ extra_commands="reload"
 sig_reload="USR1"
 
 command="$procname"
+command_interpreter="/usr/bin/perl"
 
 run_rc_command "$1"
