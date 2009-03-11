@@ -33,7 +33,7 @@ use URI::Escape qw(uri_unescape);
 my $swf_parser;
 my $saved_swf_url = "";
 
-my %cfg = (
+our %cfg = (
     port    =>  8080,
     max_size    =>  102400,
     http_timeout    =>  5,
@@ -44,6 +44,8 @@ my %cfg = (
     debug   =>  0,
     check_regexp => 'http://[^/]+/',
     check_domains =>  [ 'narod.ru', 'test.ru' ],
+    memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, 
+                          ],
     digest_bits => 256,
     cache_expire => 3600,
     user    => '@RSPAMD_USER@',
@@ -52,62 +54,11 @@ my %cfg = (
 );
 
 our $do_reopen_log = 0;
+our $memd;
 
-die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
+############################################ Subs ########################################
 
-# Do daemonization
-Proc::Daemon::Init if !$cfg{debug};
-
-# Drop privilleges
-if ($> == 0) {
-    my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
-    my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
-    $< = $> = $uid;
-    $) = $( = $gid;
-}
-
-die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
-close(PID);
-
-$cfg{do_log} = 1 if open(LOG, ">> $cfg{logfile}");
-
-Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
-
-# Init memcached connection
-my $memd = new Cache::Memcached::Fast({
-        servers => [ { address => 'localhost:11211', weight => 2.5 },
-                    ],
-        connect_timeout => 0.2,
-        io_timeout => 0.5,
-        max_failures => 3,
-        failure_timeout => 2,
-        ketama_points => 150,
-        hash_namespace => 1,
-        serialize_methods => [ \&Storable::freeze, \&Storable::thaw ],
-        utf8 => ($^V ge v5.8.1 ? 1 : 0),
-});
-
-# Reopen log on SIGUSR1
-$SIG{USR1} = sub { $do_reopen_log = 1; };
-$SIG{INT} = sub { $poe_kernel->stop(); };
-$SIG{QUIT} = sub { $poe_kernel->stop(); };
-$SIG{PIPE} = 'IGNORE';
-
-write_log ("", "Starting URL resolver");
-
-# POE part
-POE::Component::Client::HTTP->spawn( 
-    Alias => 'cl',
-    MaxSize => $cfg{max_size},    # Remove for unlimited page sizes
-    Timeout => $cfg{http_timeout},
-    ConnectionManager   => POE::Component::Client::Keepalive->new(
-        max_per_host    => 256,
-        max_open        => 1024,
-        keep_alive      => 1,
-        timeout         => $cfg{http_timeout},
-    ), 
-);
-
+# Read file into string
 sub read_file {
     my ($file) = @_;
 
@@ -119,6 +70,7 @@ sub read_file {
     return $content;
 }
 
+# Reopen logfile
 sub reopen_log {
     if ($cfg{do_log}) {
         close (LOG);
@@ -140,6 +92,7 @@ sub write_log {
     }
 }
 
+# Init swf parser
 sub swf_init_parser {
     $swf_parser = SWF::Parser->new('tag-callback' => \&swf_tag_callback);
 }
@@ -426,8 +379,8 @@ sub process_input {
         $domain = "$c2.$c1";
     }
 
-    if ((defined($cfg{check_regexp}) && $request->uri !~ $cfg{check_regexp}) ||
-        (defined($cfg{check_domains}) && ($_ = grep(/$domain/, $cfg{check_domains})) == 0)) {
+    if ((defined($cfg{check_regexp}) && $request->uri !~ $cfg{check_regexp}) || 
+        (defined($cfg{check_domains}) && scalar(grep {$_ eq $domain} @{$cfg{check_domains}}) == 0)) {
         write_log ($heap->{remote_ip}, "Uri is not checked: " . $request->uri);
         my $new_response = HTTP::Response->new(200);
         $new_response->header("Uri", $request->uri); 
@@ -465,11 +418,66 @@ sub process_input {
     $kernel->post( "cl", "request", "got_response", $new_request, [0, ""]);
 }
 
+############################### Main code fragment ##################################
+
 # Try to eval config file
 if (-f $cfg{cfg_file}) {
     my $config = read_file ($cfg{cfg_file});
     eval $config;
 }
+
+die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
+
+# Do daemonization
+Proc::Daemon::Init if !$cfg{debug};
+
+# Drop privilleges
+if ($> == 0) {
+    my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
+    my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
+    $< = $> = $uid;
+    $) = $( = $gid;
+}
+
+die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
+close(PID);
+
+# Reopen log on SIGUSR1
+$SIG{USR1} = sub { $do_reopen_log = 1; };
+$SIG{INT} = sub { $poe_kernel->stop(); };
+$SIG{QUIT} = sub { $poe_kernel->stop(); };
+$SIG{PIPE} = 'IGNORE';
+
+
+$cfg{do_log} = 1 if open(LOG, ">> $cfg{logfile}");
+
+Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
+
+# Init memcached connection
+$memd = new Cache::Memcached::Fast({
+        servers => $cfg{memcached_servers},
+        connect_timeout => 0.2,
+        io_timeout => 0.5,
+        max_failures => 3,
+        failure_timeout => 2,
+        ketama_points => 150,
+        hash_namespace => 1,
+        serialize_methods => [ \&Storable::freeze, \&Storable::thaw ],
+        utf8 => ($^V ge v5.8.1 ? 1 : 0),
+});
+
+# POE part
+POE::Component::Client::HTTP->spawn( 
+    Alias => 'cl',
+    MaxSize => $cfg{max_size},    # Remove for unlimited page sizes
+    Timeout => $cfg{http_timeout},
+    ConnectionManager   => POE::Component::Client::Keepalive->new(
+        max_per_host    => 256,
+        max_open        => 1024,
+        keep_alive      => 1,
+        timeout         => $cfg{http_timeout},
+    ), 
+);
 
 POE::Component::Server::TCP->new
   ( Alias => "",
@@ -481,11 +489,13 @@ POE::Component::Server::TCP->new
 );
 
 swf_init_parser ();
-
+write_log ("", "Starting URL resolver");
 
 # Start POE.  This will run the server until it exits.
 POE::Kernel->run();
 exit 0;
+
+############################## Final block ####################################
 
 END {
     if ($cfg{do_log}) {
