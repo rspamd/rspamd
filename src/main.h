@@ -175,6 +175,7 @@ struct worker_task {
 	char *helo;													/**< helo header value								*/
 	char *from;													/**< from header value								*/
 	char *queue_id;												/**< queue id if specified							*/
+	const char *message_id;										/**< message id										*/
 	GList *rcpt;												/**< recipients list								*/
 	unsigned int nrcpt;											/**< number of recipients							*/
 	struct in_addr from_addr;									/**< client addr in numeric form					*/

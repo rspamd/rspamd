@@ -321,6 +321,13 @@ read_rspamd_input_line (struct worker_task *task, f_str_t *line)
 	}
 }
 
+struct metric_callback_data {
+	struct worker_task *task;
+	char *log_buf;
+	int log_offset;
+	int log_size;
+};
+
 static void
 show_url_header (struct worker_task *task)
 {
@@ -365,7 +372,8 @@ show_url_header (struct worker_task *task)
 static void
 metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 {
-	struct worker_task *task = (struct worker_task *)user_data;
+	struct metric_callback_data *cd = (struct metric_callback_data *)user_data;
+	struct worker_task *task = cd->task;
 	int r = 0;
 	char outbuf[OUTBUFSIZ];
 	struct symbol *s = (struct symbol *)value;	
@@ -392,18 +400,20 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	else {
 		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
 	}
+	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
+						"%s,", (char *)key); 
 
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
 }
 
 static void
-show_metric_symbols (struct metric_result *metric_res, struct worker_task *task)
+show_metric_symbols (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
 	int r = 0;
 	GList *symbols, *cur;
 	char outbuf[OUTBUFSIZ];
 
-	if (task->proto == SPAMC_PROTO) {
+	if (cd->task->proto == SPAMC_PROTO) {
 		symbols = g_hash_table_get_keys (metric_res->symbols);
 		cur = symbols;
 		while (cur) {
@@ -416,17 +426,18 @@ show_metric_symbols (struct metric_result *metric_res, struct worker_task *task)
 			cur = g_list_next (cur);
 		}
 		g_list_free (symbols);
-		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
 	}
 	else {
-		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, task);
+		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, cd);
 	}
 }
 
 static void
 show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
 {
-	struct worker_task *task = (struct worker_task *)user_data;
+	struct metric_callback_data *cd = (struct metric_callback_data *)user_data;
+	struct worker_task *task = cd->task;
 	int r;
 	char outbuf[OUTBUFSIZ];
 	struct metric_result *metric_res = (struct metric_result *)metric_value;
@@ -443,6 +454,8 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF,
 						m != NULL ? m->required_score : 0);
 		}
+		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
+						"(%s: F: [0/%.2f] [", "default", m != NULL ? m->required_score : 0); 
 	}
 	else {
 		if (metric_res->score >= metric_res->metric->required_score) {
@@ -456,32 +469,43 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, (char *)metric_name,
 						(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
 		}
+		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
+						"(%s: %s: [%.2f/%.2f] [", (char *)metric_name, is_spam ? "T" : "F", 
+						metric_res->score, metric_res->metric->required_score); 
 	}
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
 
 	if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
-		show_metric_symbols (metric_res, task);
+		show_metric_symbols (metric_res, cd);
 	}
+	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "] )");
 }
 
 static int
 write_check_reply (struct worker_task *task)
 {
 	int r;
-	char outbuf[OUTBUFSIZ];
+	char outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
 	struct metric_result *metric_res;
+	struct metric_callback_data cd;
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
+
+	cd.task = task;
+	cd.log_buf = logbuf;
+	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "process_message: msg ok, id: <%s>, ", task->message_id);
+	cd.log_size = sizeof (logbuf);
+
 	if (task->proto == SPAMC_PROTO) {
 		/* Ignore metrics, just write report for 'default' metric */
 		metric_res = g_hash_table_lookup (task->results, "default");
 		if (metric_res == NULL) {
 			/* Implicit metric result */
-			show_metric_result (NULL, NULL, (void *)task);
+			show_metric_result (NULL, NULL, (void *)&cd);
 		}
 		else {
-			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)task);
+			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
 		}
 	}
 	else {
@@ -489,18 +513,19 @@ write_check_reply (struct worker_task *task)
 		metric_res = g_hash_table_lookup (task->results, "default");
 		if (metric_res == NULL) {
 			/* Implicit metric result */
-			show_metric_result (NULL, NULL, (void *)task);
+			show_metric_result (NULL, NULL, (void *)&cd);
 		}
 		else {
-			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)task);
+			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
 		}
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
-		g_hash_table_foreach (task->results, show_metric_result, task);
+		g_hash_table_foreach (task->results, show_metric_result, &cd);
 		/* URL stat */
 		show_url_header (task);
 	}
+	msg_info ("%s", logbuf);
 	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE);
 
 	return 0;

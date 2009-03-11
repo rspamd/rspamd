@@ -387,12 +387,12 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
 		msg_info ("surbl_check: <%s> url %s is in surbl %s", 
-					param->task->queue_id, param->url->host, param->suffix->suffix);
+					param->task->message_id, param->url->host, param->suffix->suffix);
 		process_dns_results (param->task, param->suffix, param->url->host, (uint32_t)(((in_addr_t *)addresses)[0]));
 	}
 	else {
 		msg_debug ("surbl_check: <%s> url %s is not in surbl %s", 
-					param->task->queue_id, param->url->host, param->suffix->suffix);
+					param->task->message_id, param->url->host, param->suffix->suffix);
 	}
 	*(param->url->host + param->url->hostlen) = c;
 	
@@ -556,7 +556,7 @@ redirector_callback (int fd, short what, void *arg)
 			else {
 				event_del (&param->ev);
 				msg_info ("redirector_callback: <%s> connection to redirector timed out while waiting for write",
-							param->task->queue_id);
+							param->task->message_id);
 				param->task->save.saved --;
 				make_surbl_requests (param->url, param->task, param->tree);
 
@@ -581,7 +581,7 @@ redirector_callback (int fd, short what, void *arg)
 					}
 					if (*p == '\0') {
 						msg_info ("redirector_callback: <%s> got reply from redirector: '%s' -> '%s'", 
-									param->task->queue_id, struri (param->url), c);
+									param->task->message_id, struri (param->url), c);
 						parse_uri (param->url, c, param->task->task_pool);
 					}
 				}
@@ -597,7 +597,7 @@ redirector_callback (int fd, short what, void *arg)
 			else {
 				event_del (&param->ev);
 				msg_info ("redirector_callback: <%s> reading redirector timed out, while waiting for read",
-							param->task->queue_id);
+							param->task->message_id);
 				param->task->save.saved --;
 				make_surbl_requests (param->url, param->task, param->tree);
 				if (param->task->save.saved == 0) {
@@ -622,7 +622,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
 
 	if (s == -1) {
 		msg_info ("register_redirector_call: <%s> cannot create tcp socket failed: %s", 
-					task->queue_id, strerror (errno));
+					task->message_id, strerror (errno));
 		task->save.saved --;
 		make_surbl_requests (url, task, url_tree);
 		return; 

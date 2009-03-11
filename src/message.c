@@ -366,6 +366,10 @@ process_message (struct worker_task *task)
 	if (task->queue_id == NULL) {
 		task->queue_id = (char *)g_mime_message_get_message_id (task->message);
 	}
+	task->message_id = g_mime_message_get_message_id (task->message);
+	if (task->message_id == NULL) {
+		task->message_id = "undef";
+	}
 
 	task->worker->srv->stat->messages_scanned ++;
 
