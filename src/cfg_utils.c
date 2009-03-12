@@ -562,6 +562,13 @@ parse_regexp (memory_pool_t *pool, char *line)
 	GError *err = NULL;
 	
 	result = memory_pool_alloc0 (pool, sizeof (struct rspamd_regexp));
+	/* Skip whitespaces */
+	while (g_ascii_isspace (*line)) {
+		line ++;
+	}
+	if (line == '\0') {
+		return NULL;
+	}
 	/* First try to find header name */
 	begin = strchr (line, '=');
 	if (begin != NULL) {
@@ -626,26 +633,26 @@ parse_regexp (memory_pool_t *pool, char *line)
 				break;
 			/* Type flags */
 			case 'H':
-				if (type != REGEXP_NONE) {
-					type = REGEXP_HEADER;
+				if (result->type == REGEXP_NONE) {
+					result->type = REGEXP_HEADER;
 				}
 				p ++;
 				break;
 			case 'M':
-				if (type != REGEXP_NONE) {
-					type = REGEXP_MESSAGE;
+				if (result->type == REGEXP_NONE) {
+					result->type = REGEXP_MESSAGE;
 				}
 				p ++;
 				break;
 			case 'P':
-				if (type != REGEXP_NONE) {
-					type = REGEXP_MIME;
+				if (result->type == REGEXP_NONE) {
+					result->type = REGEXP_MIME;
 				}
 				p ++;
 				break;
 			case 'U':
-				if (type != REGEXP_NONE) {
-					type = REGEXP_URL;
+				if (result->type == REGEXP_NONE) {
+					result->type = REGEXP_URL;
 				}
 				p ++;
 				break;
@@ -656,8 +663,6 @@ parse_regexp (memory_pool_t *pool, char *line)
 		}
 	}
 
-	result = memory_pool_alloc (pool, sizeof (struct rspamd_regexp));
-	result->type = type;
 	*end = '\0';
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
 	result->regexp_text = memory_pool_strdup (pool, begin);

@@ -56,13 +56,13 @@ Spam: False ; 2 / 5
 
 Новый формат ответа:
 RSPAMD/1.0 0 EX_OK
-Metric: Name ; Spam_Result ; Spam_Mark / Spam_Mark_Required
+Metric: Name; Spam_Result; Spam_Mark / Spam_Mark_Required
 Metric: Name2 ; Spam_Result2 ; Spam_Mark2 / Spam_Mark_Required2
 
 Заголовков типа metric может быть несколько.
 Формат вывода символов:
 SYMBOL1, SYMBOL2, SYMBOL3 -- формат совместимости с sa-spamd
-Metric: SYMBOL1, SYMBOL2, SYMBOL3 -- формат rspamd
+Symbol: Name; Param1,Param2,Param3 -- формат rspamd
 
 Формат ответа зависит от формата запроса:
 PROCESS SPAMC/1.2
@@ -78,5 +78,34 @@ From - MAIL FROM
 IP - IP клиента
 Recipient-Number - число реципиентов
 Rcpt - реципиент
+Queue-ID - идентификатор очереди
 
 Эти значения могут использоваться в фильтрах rspamd.
+
+Регулярные выражения
+====================
+
+Регулярные выражения разбираются модулем regexp, поэтому их настройка выглядит следующим образом
+.module 'regexp' {
+	SYMBOL = "regexp_expression";
+};
+
+Формат регэкспов такой:
+/pattern/flags
+При этом может быть такой формат:
+headername=/pattern/flags
+если регэксп ищет соответствие хедера и выражения
+Флаги регэскпов:
+i, m, s, x, u, o - такие же, как у perl/pcre
+H - ищет по заголовкам
+M - ищет по всему сообщению
+P - ищет по всем mime частям
+U - ищет по url
+Выражение регэкспов может содержать сложные выражения из нескольких регэкспов, операторов логики и скобок:
+SOME_SYMBOL = "To=/blah@blah/H & !(From=/blah@blah/H | Subject=/blah/H)"
+Также можно использовать переменные:
+$to_blah = "To=/blah@blah/H";
+$from_blah = "From=/blah@blah/H";
+$subject_blah = "Subject=/blah/H";
+тогда предыдущее выражение будет таким
+SOME_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})"

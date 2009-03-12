@@ -737,7 +737,10 @@ parse_expression (memory_pool_t *pool, char *line)
 				/* Copy operand */
 				str = memory_pool_alloc (pool, p - c + 1);
 				g_strlcpy (str, c, (p - c + 1));
-				insert_expression (pool, &expr, EXPR_OPERAND, 0, str);
+				g_strstrip (str);
+				if (strlen (str) != 0) {
+					insert_expression (pool, &expr, EXPR_OPERAND, 0, str);
+				}
 			}
 			if (*p == ')') {
 				if (stack == NULL) {

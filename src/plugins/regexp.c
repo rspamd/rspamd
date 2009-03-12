@@ -68,6 +68,8 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	regexp_module_ctx->url_filter = NULL;
 	regexp_module_ctx->regexp_pool = memory_pool_new (1024);
 	regexp_module_ctx->items = NULL;
+
+	*ctx = (struct module_ctx *)regexp_module_ctx;
 	
 	return 0;
 }
@@ -140,6 +142,11 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	struct mime_part *part;
 	GList *cur;
 	struct uri *url;
+
+	if (re == NULL) {
+		msg_info ("process_regexp: invalid regexp passed");
+		return 0;
+	}
 
 	switch (re->type) {
 		case REGEXP_NONE:

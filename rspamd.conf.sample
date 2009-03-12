@@ -131,4 +131,14 @@ delivery {
 	whitelist = "highsecure.ru,freebsd.org";
 };
 
+
+$to_blah = "To=/blah@blah/H";
+$from_blah = "From=/blah@blah/H";
+$subject_blah = "Subject=/blah/H";
+
+.module 'regexp' {
+	BLAH_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})";
+};
+
 url_filters = "surbl";
+header_filters = "regexp";
