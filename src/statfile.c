@@ -51,13 +51,12 @@ statfile_pool_check (stat_file_t *file)
 		msg_info ("statfile_pool_check: file %s is invalid stat file", file->filename);
 		return -1;
 	}
-	
-	if ((file->len - sizeof (f->header)) % sizeof (struct stat_file_block) != 0) {
-		msg_info ("statfile_pool_check: file %s does not contain integer count of stat blocks", file->filename);
-		return -1;
-	}
 
-	file->blocks = (file->len - sizeof (f->header)) / sizeof (struct stat_file_block);
+	/* Check first section and set new offset */
+	file->cur_section.code = f->section.code;
+	file->cur_section.length = f->section.length;
+	file->seek_pos = sizeof (struct stat_file) - sizeof (struct stat_file_block);
+	
 	return 0;
 }
 
@@ -108,7 +107,8 @@ statfile_pool_new (size_t max_size)
 	bzero (new, sizeof (statfile_pool_t));
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
-	new->files = rspamd_hash_new_shared (new->pool, g_str_hash, g_str_equal);
+	new->files = rspamd_hash_new (new->pool, g_str_hash, g_str_equal);
+	new->maps = rspamd_hash_new_shared (new->pool, g_str_hash, g_str_equal);
 
 	return new;
 }
@@ -148,11 +148,15 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 		return -1;
 	}
 	
-	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == NULL) {
-		close (new_file->fd);
-		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
-		return -1;
-	
+	/* First try to search mmapped area in already opened areas */
+	if ((new_file->map = rspamd_hash_lookup (pool->maps, filename)) == NULL) {
+		if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == NULL) {
+			close (new_file->fd);
+			msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
+			return -1;
+		
+		}
+		rspamd_hash_insert (pool->maps, filename, new_file->map);
 	}
 	
 	/* XXX: this is temporary copy of name to avoid strdup early */
@@ -188,6 +192,7 @@ statfile_pool_close (statfile_pool_t *pool, char *filename, gboolean remove_hash
 
 	if (file->map) {
 		munmap (file->map, file->len);
+		rspamd_hash_remove (pool->maps, filename);
 	}
 	if (file->fd != -1) {
 		close (file->fd);
@@ -202,13 +207,15 @@ statfile_pool_close (statfile_pool_t *pool, char *filename, gboolean remove_hash
 int
 statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 {
-	static struct stat_file_header header = {
-		{'r', 's', 'd'},
-		{1, 0},
-		{0, 0, 0},
-		0
+	struct stat_file_header header = {
+		.magic = {'r', 's', 'd'},
+		.version = {1, 0},
+		.padding = {0, 0, 0},
 	};
-	static struct stat_file_block block = {0, 0, 0, 0};
+	struct stat_file_section section = {
+		.code = STATFILE_SECTION_COMMON,
+	};
+	struct stat_file_block block = {0, 0, 0, 0};
 	int fd;
 	
 	if (rspamd_hash_lookup (pool->files, filename) != NULL) {
@@ -224,6 +231,13 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 	header.create_time = (uint64_t)time (NULL);
 	if (write (fd, &header, sizeof (header)) == -1) {
 		msg_info ("statfile_pool_create: cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
+		close (fd);
+		return -1;
+	}
+	
+	section.length = (uint64_t)blocks;
+	if (write (fd, &section, sizeof (section)) == -1) {
+		msg_info ("statfile_pool_create: cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		return -1;
 	}
@@ -302,13 +316,13 @@ statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 		return 0;
 	}
 	
-	blocknum = h1 % file->blocks;
+	blocknum = h1 % file->cur_section.length;
 	header = (struct stat_file_header *)file->map;
-	c = (u_char *)file->map + sizeof (struct stat_file_header) + blocknum * sizeof (struct stat_file_block);
+	c = (u_char *)file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 	block = (struct stat_file_block *)c;
 
 	for (i = 0; i < CHAIN_LENGTH; i ++) {
-		if (i + blocknum > file->blocks) {
+		if (i + blocknum > file->cur_section.length) {
 			break;
 		}
 		if (block->hash1 == h1 && block->hash2 == h2) {
@@ -342,13 +356,13 @@ statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 		return;
 	}
 	
-	blocknum = h1 % file->blocks;
+	blocknum = h1 % file->cur_section.length;
 	header = (struct stat_file_header *)file->map;
-	c = (u_char *)file->map + sizeof (struct stat_file_header) + blocknum * sizeof (struct stat_file_block);
+	c = (u_char *)file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 	block = (struct stat_file_block *)c;
 
 	for (i = 0; i < CHAIN_LENGTH; i ++) {
-		if (i + blocknum > file->blocks) {
+		if (i + blocknum > file->cur_section.length) {
 			/* Need to expire some block in chain */
 			msg_debug ("statfile_pool_set_block: chain %u is full, starting expire", blocknum);
 			break;
@@ -382,7 +396,7 @@ statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uin
 	}
 	else {
 		/* Expire first block in chain */
-		c = (u_char *)file->map + sizeof (struct stat_file_header) + blocknum * sizeof (struct stat_file_block);
+		c = (u_char *)file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 		block = (struct stat_file_block *)c;
 	}
 	block->last_access = now - (time_t)header->create_time;
@@ -395,4 +409,112 @@ gboolean
 statfile_pool_is_open (statfile_pool_t *pool, char *filename)
 {
 	return (rspamd_hash_lookup (pool->files, filename) != NULL);
+}
+
+uint32_t
+statfile_pool_get_section (statfile_pool_t *pool, char *filename)
+{
+	stat_file_t *file;
+
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_get_section: file %s is not opened", filename);
+		return 0;
+	}
+	
+	return file->cur_section.code;
+}
+
+gboolean 
+statfile_pool_set_section (statfile_pool_t *pool, char *filename, uint32_t code, gboolean from_begin)
+{
+	stat_file_t *file;
+	struct stat_file_section *sec;
+	off_t cur_offset;
+
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_set_section: file %s is not opened", filename);
+		return FALSE;
+	}
+	
+	/* Try to find section */
+	if (from_begin) {
+		cur_offset = sizeof (struct stat_file_header);
+	}
+	else {
+		cur_offset = file->seek_pos - sizeof (struct stat_file_section);
+	}
+	while (cur_offset < file->len) {
+		sec = (struct stat_file_section *)(file->map + cur_offset);
+		if (sec->code == code) {
+			file->cur_section.code = code;
+			file->cur_section.length = sec->length;
+			file->seek_pos = cur_offset + sizeof (struct stat_file_section);
+			return TRUE;
+		}
+		cur_offset += sec->length;
+	}
+
+	return FALSE;
+}
+
+gboolean 
+statfile_pool_add_section (statfile_pool_t *pool, char *filename, uint32_t code, uint64_t length)
+{
+	stat_file_t *file;
+	struct stat_file_section sect;
+	struct stat_file_block block = {0, 0, 0, 0};
+	
+	if ((file = rspamd_hash_lookup (pool->files, filename)) == NULL) {
+		msg_info ("statfile_pool_add_section: file %s is not opened", filename);
+		return FALSE;
+	}
+
+	if (lseek (file->fd, 0, SEEK_END) == -1) {
+		msg_info ("statfile_pool_add_section: cannot lseek file %s, error %d, %s", filename, errno, strerror (errno));
+		return FALSE;
+	}
+	
+	sect.code = code;
+	sect.length = length;
+
+	if (write (file->fd, &sect, sizeof (sect)) == -1) {
+		msg_info ("statfile_pool_add_section: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
+		return FALSE;
+	}
+
+	while (length --) {
+		if (write (file->fd, &block, sizeof (block)) == -1) {
+			msg_info ("statfile_pool_add_section: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
+			return FALSE;
+		}
+	}
+	
+	/* Lock statfile to remap memory */
+	statfile_pool_lock_file (pool, filename);
+	rspamd_hash_remove (pool->maps, filename);
+	munmap (file->map, file->len);
+	fsync (file->fd);
+	file->len += length;
+	
+	if (file->len > pool->max) {
+		msg_info ("statfile_pool_open: cannot attach file to pool, too large: %lu", (long int)file->len);
+		return FALSE;
+	}
+
+	while (pool->max <= pool->occupied + file->len) {
+		if (statfile_pool_expire (pool) == -1) {
+			/* Failed to find any more free space in pool */
+			msg_info ("statfile_pool_open: expiration for pool failed, opening file %s failed", filename);
+			return FALSE;
+		}
+	}
+	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == NULL) {
+		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
+		return FALSE;
+	}
+	rspamd_hash_insert (pool->maps, filename, file->map);
+	statfile_pool_unlock_file (pool, filename);
+
+	return TRUE;
+
 }
