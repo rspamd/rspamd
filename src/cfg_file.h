@@ -108,6 +108,15 @@ struct module_opt {
 };
 
 /**
+ * Statfile section definition
+ */
+struct statfile_section {
+	uint32_t code;									/**< section's code										*/
+	uint64_t size;									/**< size of section									*/
+	double weight;									/**< weight coefficient for section						*/
+};
+
+/**
  * Statfile config definition
  */
 struct statfile {
@@ -117,6 +126,7 @@ struct statfile {
 	char *metric;									/**< metric name										*/
 	size_t size;									/**< size of statfile									*/
 	struct tokenizer *tokenizer;					/**< tokenizer used for statfile						*/
+	GList *sections;								/**< list of sections in statfile						*/
 };
 
 /**

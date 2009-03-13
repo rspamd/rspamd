@@ -59,6 +59,7 @@ weight							return WEIGHT;
 size							return SIZE;
 tokenizer						return TOKENIZER;
 classifier						return CLASSIFIER;
+section							return SECTION;
 
 logging							return LOGGING;
 

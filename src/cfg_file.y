@@ -17,6 +17,7 @@ extern char *yytext;
 LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
 struct metric *cur_metric = NULL;
 struct statfile *cur_statfile = NULL;
+struct statfile_section *cur_section = NULL;
 
 %}
 
@@ -43,7 +44,7 @@ struct statfile *cur_statfile = NULL;
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
-%token	DELIVERY LMTP ENABLED AGENT
+%token	DELIVERY LMTP ENABLED AGENT SECTION
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -442,6 +443,9 @@ optcmd:
 		mopt->value = $3;
 		LIST_INSERT_HEAD (cur_module_opt, mopt, next);
 	}
+	| VARIABLE EQSIGN QUOTEDSTRING {
+		g_hash_table_insert (cfg->variables, $1, $3);
+	}
 	;
 
 variable:
@@ -581,6 +585,7 @@ statfilecmd:
 	| statfilesize
 	| statfilemetric
 	| statfiletokenizer
+	| statfilesection
 	;
 	
 statfilealias:
@@ -652,7 +657,69 @@ statfiletokenizer:
 	}
 	;
 
+statfilesection:
+	SECTION OBRACE sectionbody EBRACE {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if (cur_section == NULL || cur_section->code == 0) {
+			yyerror ("yyparse: error in section definition");
+			YYERROR;
+		}
+		cur_statfile->sections = g_list_prepend (cur_statfile->sections, cur_section);
+		cur_section = NULL;
+	}
+	;
 
+sectionbody:
+	sectioncmd SEMICOLON
+	| sectionbody sectioncmd SEMICOLON
+	;
+
+sectioncmd:
+	sectionname
+	| sectionsize
+	| sectionweight
+	;
+
+sectionname:
+	NAME EQSIGN QUOTEDSTRING {
+		if (cur_section == NULL) {
+			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+		}
+		cur_section->code = statfile_get_section_by_name ($3);
+	}
+	;
+
+sectionsize:
+	SIZE EQSIGN NUMBER {
+		if (cur_section == NULL) {
+			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+		}
+		cur_section->size = $3;
+	}
+	| SIZE EQSIGN SIZELIMIT {
+		if (cur_section == NULL) {
+			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+		}
+		cur_section->size = $3;
+	}
+	;
+
+sectionweight:
+	WEIGHT EQSIGN NUMBER {
+		if (cur_section == NULL) {
+			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+		}
+		cur_section->weight = $3;
+	}
+	| WEIGHT EQSIGN FRACT {
+		if (cur_section == NULL) {
+			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+		}
+		cur_section->weight = $3;
+	}
+	;
 
 statfile_pool_size:
 	STATFILE_POOL_SIZE EQSIGN SIZELIMIT {

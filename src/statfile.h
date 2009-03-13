@@ -14,6 +14,8 @@
 
 /* Section types */
 #define STATFILE_SECTION_COMMON 1
+#define STATFILE_SECTION_HEADERS 2
+#define STATFILE_SECTION_URLS 3
 
 /**
  * Common statfile header
@@ -189,5 +191,13 @@ gboolean statfile_pool_set_section (statfile_pool_t *pool, char *filename, uint3
  * @return TRUE if section was successfully added and FALSE in case of error
  */
 gboolean statfile_pool_add_section (statfile_pool_t *pool, char *filename, uint32_t code, uint64_t length);
+
+
+/**
+ * Return code of section identified by name
+ * @param name name of section
+ * @return code of section or 0 if name of section is unknown
+ */
+uint32_t statfile_get_section_by_name (const char *name);
 
 #endif

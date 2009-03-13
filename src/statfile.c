@@ -518,3 +518,19 @@ statfile_pool_add_section (statfile_pool_t *pool, char *filename, uint32_t code,
 	return TRUE;
 
 }
+
+uint32_t 
+statfile_get_section_by_name (const char *name)
+{
+	if (g_ascii_strcasecmp (name, "common") == 0) {
+		return STATFILE_SECTION_COMMON;
+	}
+	else if (g_ascii_strcasecmp (name, "header") == 0) {
+		return STATFILE_SECTION_HEADERS;
+	}
+	else if (g_ascii_strcasecmp (name, "url") == 0) {
+		return STATFILE_SECTION_URLS;
+	}
+
+	return 0;
+}
