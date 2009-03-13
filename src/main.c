@@ -35,7 +35,7 @@
 struct config_file *cfg;
 
 static void sig_handler (int );
-static struct rspamd_worker * fork_worker (struct rspamd_main *, int, int, enum process_type);
+static struct rspamd_worker * fork_worker (struct rspamd_main *, int, enum process_type);
 	
 sig_atomic_t do_restart;
 sig_atomic_t do_terminate;
@@ -203,45 +203,52 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 	}
 }
 
-static struct rspamd_worker *
-fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum process_type type) 
+static void
+reread_config (struct rspamd_main *rspamd)
 {
-	struct rspamd_worker *cur;
+	struct config_file *tmp_cfg;
 	char *cfg_file;
 	FILE *f;
-	struct config_file *tmp_cfg;
+
+	tmp_cfg = (struct config_file *) g_malloc (sizeof (struct config_file));
+	if (tmp_cfg) {
+		bzero (tmp_cfg, sizeof (struct config_file));
+		tmp_cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+		init_defaults (tmp_cfg);
+		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
+		f = fopen (rspamd->cfg->cfg_name , "r");
+		if (f == NULL) {
+			msg_warn ("reread_config: cannot open file: %s", rspamd->cfg->cfg_name );
+		}
+		else {
+			yyin = f;
+			yyrestart (yyin);
+
+			if (yyparse() != 0 || yynerrs > 0) {
+				msg_warn ("reread_config: yyparse: cannot parse config file, %d errors", yynerrs);
+				fclose (f);
+			}
+			else {
+				msg_debug ("reread_config: replacing config");
+				free_config (rspamd->cfg);
+				close_log (rspamd->cfg);
+				g_free (rspamd->cfg);
+				rspamd->cfg = tmp_cfg;
+				rspamd->cfg->cfg_name = cfg_file;
+				config_logger (rspamd, FALSE);
+				msg_info ("reread_config: config rereaded successfully");
+			}
+		}
+	}
+}
+
+static struct rspamd_worker *
+fork_worker (struct rspamd_main *rspamd, int listen_sock, enum process_type type) 
+{
+	struct rspamd_worker *cur;
 	/* Starting worker process */
 	cur = (struct rspamd_worker *)g_malloc (sizeof (struct rspamd_worker));
 	if (cur) {
-		/* Reconfig needed */
-		if (reconfig) {
-			tmp_cfg = (struct config_file *) g_malloc (sizeof (struct config_file));
-			if (tmp_cfg) {
-				bzero (tmp_cfg, sizeof (struct config_file));
-				tmp_cfg->cfg_pool = memory_pool_new (32768);
-				cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
-				f = fopen (rspamd->cfg->cfg_name , "r");
-				if (f == NULL) {
-					msg_warn ("fork_worker: cannot open file: %s", rspamd->cfg->cfg_name );
-				}
-				else {
-					yyin = f;
-					yyrestart (yyin);
-
-					if (yyparse() != 0 || yynerrs > 0) {
-						msg_warn ("fork_worker: yyparse: cannot parse config file, %d errors", yynerrs);
-						fclose (f);
-					}
-					else {
-						free_config (rspamd->cfg);
-						g_free (rspamd->cfg);
-						rspamd->cfg = tmp_cfg;
-						rspamd->cfg->cfg_name = cfg_file;
-						config_logger (rspamd, FALSE);
-					}
-				}
-			}
-		}
 		bzero (cur, sizeof (struct rspamd_worker));
 		TAILQ_INSERT_HEAD (&rspamd->workers, cur, next);
 		cur->srv = rspamd;
@@ -261,7 +268,7 @@ fork_worker (struct rspamd_main *rspamd, int listen_sock, int reconfig, enum pro
 						setproctitle ("lmtp process");
 						pidfile_close (rspamd->pfh);
 						msg_info ("fork_worker: starting lmtp process %d", getpid ());
-						start_lmtp_worker (cur);
+						start_lmtp_worker (cur, listen_sock);
 					case TYPE_WORKER:
 					default:
 						setproctitle ("worker process");
@@ -297,9 +304,36 @@ fork_delayed (struct rspamd_main *rspamd, int listen_sock)
 	while (workers_pending != NULL) {
 		cur = workers_pending;
 		workers_pending = g_list_remove_link (workers_pending, cur);
-		fork_worker (rspamd, listen_sock, 0, GPOINTER_TO_INT (cur->data));
+		fork_worker (rspamd, listen_sock, GPOINTER_TO_INT (cur->data));
 		g_list_free_1 (cur);
 	}
+}
+
+static int
+create_listen_socket (struct in_addr *addr, int port, int family, char *path)
+{
+	int listen_sock = -1;
+	struct sockaddr_un *un_addr;
+	/* Create listen socket */
+	if (family == AF_INET) {
+		if ((listen_sock = make_tcp_socket (addr, port, TRUE)) == -1) {
+			msg_err ("create_listen_socket: cannot create tcp listen socket. %s", strerror (errno));
+		}
+	}
+	else {
+		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
+		if (!un_addr || (listen_sock = make_unix_socket (path, un_addr, TRUE)) == -1) {
+			msg_err ("create_listen_socket: cannot create unix listen socket. %s", strerror (errno));
+		}
+	}
+	
+	if (listen_sock != -1) {
+		if (listen (listen_sock, -1) == -1) {
+			msg_err ("start_lmtp: cannot listen on socket. %s", strerror (errno));
+		}
+	}
+
+	return listen_sock;
 }
 
 int 
@@ -307,10 +341,9 @@ main (int argc, char **argv, char **env)
 {
 	struct rspamd_main *rspamd;
 	struct module_ctx *cur_module = NULL;
-	int res = 0, i, listen_sock;
+	int res = 0, i, listen_sock, lmtp_listen_sock;
 	struct sigaction signals;
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
-	struct sockaddr_un *un_addr;
 	FILE *f;
 	pid_t wrk;
 	char *args[] = { "", "-e", "0", NULL };
@@ -379,23 +412,18 @@ main (int argc, char **argv, char **env)
 	}
 
 	/* Create listen socket */
-	if (rspamd->cfg->bind_family == AF_INET) {
-		if ((listen_sock = make_tcp_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, TRUE)) == -1) {
-			msg_err ("main: cannot create tcp listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
-	else {
-		un_addr = (struct sockaddr_un *) g_malloc (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (rspamd->cfg->bind_host, un_addr, TRUE)) == -1) {
-			msg_err ("main: cannot create unix listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
+	listen_sock = create_listen_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, 
+										rspamd->cfg->bind_family, rspamd->cfg->bind_host);
+	if (listen_sock == -1) {
+		exit(-errno);
 	}
 
-	if (listen (listen_sock, -1) == -1) {
-		msg_err ("main: cannot listen on socket. %s", strerror (errno));
-		exit(-errno);
+	if (cfg->lmtp_enable) {
+		lmtp_listen_sock = create_listen_socket (&rspamd->cfg->lmtp_addr, rspamd->cfg->lmtp_port, 
+										rspamd->cfg->lmtp_family, rspamd->cfg->lmtp_host);
+		if (listen_sock == -1) {
+			exit(-errno);
+		}
 	}
 
 	/* Drop privilleges */
@@ -403,7 +431,7 @@ main (int argc, char **argv, char **env)
 	
 	config_logger (rspamd, TRUE);
 
-	msg_info ("main: starting...");
+	msg_info ("main: rspamd "RVERSION " is starting");
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name );
 
 	/* Strictly set temp dir */
@@ -464,17 +492,17 @@ main (int argc, char **argv, char **env)
 	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
 	
 	for (i = 0; i < cfg->workers_number; i++) {
-		fork_worker (rspamd, listen_sock, 0, TYPE_WORKER);
+		fork_worker (rspamd, listen_sock, TYPE_WORKER);
 	}
 	/* Start controller if enabled */
 	if (cfg->controller_enabled) {
-		fork_worker (rspamd, listen_sock, 0, TYPE_CONTROLLER);
+		fork_worker (rspamd, listen_sock, TYPE_CONTROLLER);
 	}
 	
 	/* Start lmtp if enabled */
 	if (cfg->lmtp_enable) {
 		for (i = 0; i < cfg->lmtp_workers_number; i++) {
-			fork_worker (rspamd, listen_sock, 0, TYPE_LMTP);
+			fork_worker (rspamd, lmtp_listen_sock, TYPE_LMTP);
 		}
 	}
 
@@ -504,6 +532,10 @@ main (int argc, char **argv, char **env)
 						/* Normal worker termination, do not fork one more */
 						msg_info ("main: %s process %d terminated normally", 
 									(cur->type != TYPE_WORKER) ? "controller" : "worker", cur->pid);
+						/* But respawn controller */
+						if (cur->type == TYPE_CONTROLLER) {
+							fork_worker (rspamd, listen_sock, TYPE_CONTROLLER);
+						}
 					}
 					else {
 						if (WIFSIGNALED (res)) {
@@ -524,10 +556,22 @@ main (int argc, char **argv, char **env)
 		}
 		if (do_restart) {	
 			do_restart = 0;
+			do_reopen_log = 1;
 
+			msg_info ("main: rspamd "RVERSION " is restarting");
 			if (active_worker == NULL) {
-				/* Start new worker that would reread configuration*/
-				active_worker = fork_worker (rspamd, listen_sock, 1, TYPE_WORKER);
+				/* reread_config (rspamd); */
+				TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
+					if (cur->type == TYPE_WORKER || cur->type == TYPE_LMTP) {
+						/* Start new workers that would reread configuration */
+						active_worker = fork_worker (rspamd, listen_sock, cur->type);
+					}
+					/* Immideately send termination request to conroller and wait for SIGCHLD */
+					if (cur->type == TYPE_CONTROLLER) {
+						kill (cur->pid, SIGUSR2);
+						cur->is_dying = 1;
+					}
+				}
 			}
 			/* Do not start new workers until active worker is not ready for accept */
 		}
@@ -537,7 +581,7 @@ main (int argc, char **argv, char **env)
 			if (active_worker != NULL) {
 				msg_info ("main: worker process %d has been successfully started", active_worker->pid);
 				TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
-					if (cur != active_worker && !cur->is_dying && cur->type == TYPE_WORKER) {
+					if (cur != active_worker && !cur->is_dying && cur->type != TYPE_CONTROLLER) {
 						/* Send to old workers SIGUSR2 */
 						kill (cur->pid, SIGUSR2);
 						cur->is_dying = 1;

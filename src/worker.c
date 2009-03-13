@@ -297,6 +297,7 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 	kill (getppid (), SIGUSR2);
 
 	event_loop (0);
+	exit (EXIT_SUCCESS);
 }
 
 /* 

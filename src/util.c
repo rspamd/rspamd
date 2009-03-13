@@ -825,14 +825,13 @@ open_log (struct config_file *cfg)
 	}
 }
 
-int
-reopen_log (struct config_file *cfg)
+void 
+close_log (struct config_file *cfg)
 {
-	do_reopen_log = 0;
 	switch (cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			/* Do nothing with console */
-			return 0;
+			break;
 		case RSPAMD_LOG_SYSLOG:
 			closelog ();
 			break;
@@ -840,6 +839,14 @@ reopen_log (struct config_file *cfg)
 			close (cfg->log_fd);
 			break;
 	}
+
+}
+
+int
+reopen_log (struct config_file *cfg)
+{
+	do_reopen_log = 0;
+	close_log (cfg);
 	return open_log (cfg);
 }
 

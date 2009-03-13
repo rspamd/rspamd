@@ -90,11 +90,11 @@ sigusr_handler (int fd, short what, void *arg)
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
 	struct timeval tv;
-	tv.tv_sec = SOFT_SHUTDOWN_TIME;
+	tv.tv_sec = 2;
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev);
 	event_del (&worker->bind_ev);
-	msg_info ("controller's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
+	msg_info ("controller's shutdown is pending in %d sec", 2);
 	event_loopexit (&tv);
 	return;
 }
@@ -568,6 +568,9 @@ start_controller (struct rspamd_worker *worker)
 	io_tv.tv_usec = 0;
 
 	event_loop (0);
+	close (listen_sock);
+
+	exit (EXIT_SUCCESS);
 }
 
 

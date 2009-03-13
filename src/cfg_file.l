@@ -10,6 +10,7 @@
 
 #define MAX_INCLUDE_DEPTH 10
 YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
+int line_stack[MAX_INCLUDE_DEPTH];
 int include_stack_ptr = 0;
 extern struct config_file *cfg;
 
@@ -101,36 +102,41 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 [a-zA-Z0-9].[a-zA-Z0-9\/.-]+	yylval.string=strdup(yytext); return DOMAINNAME;
 <incl>[ \t]*      /* eat the whitespace */
 <incl>[^ \t\n]+   { /* got the include file name */
-        if (include_stack_ptr >= MAX_INCLUDE_DEPTH) {
-            yyerror ("yylex: includes nested too deeply");
-            return -1;
-        }
-
-        include_stack[include_stack_ptr++] =
-            YY_CURRENT_BUFFER;
-
-        yyin = fopen (yytext, "r");
-
-        if (! yyin) {
-            yyerror ("yylex: cannot open include file");
+		/* got the include file name */
+		if ( include_stack_ptr >= MAX_INCLUDE_DEPTH ) {
+			yyerror ("yylex: includes nested too deeply" );
 			return -1;
 		}
 
-        yy_switch_to_buffer (yy_create_buffer (yyin, YY_BUF_SIZE));
+		line_stack[include_stack_ptr] = yylineno;
+		include_stack[include_stack_ptr++] = YY_CURRENT_BUFFER;
 
-        BEGIN(INITIAL);
-        }
+		yylineno = 1;
+		yyin = fopen (yytext, "r");
+
+		if (!yyin) {
+			yyerror ("yylex: cannot open include file");
+			return -1;
+		}
+
+		yy_switch_to_buffer (yy_create_buffer (yyin, YY_BUF_SIZE));
+
+		BEGIN(INITIAL);
+}
 
 <<EOF>> {
-        if ( --include_stack_ptr < 0 ) {
+		if ( --include_stack_ptr < 0 ) {
+			include_stack_ptr = 0;
+			yylineno = 1;
 			post_load_config (cfg);
-            yyterminate ();
-        }
-        else {
-            yy_delete_buffer (YY_CURRENT_BUFFER);
-            yy_switch_to_buffer (include_stack[include_stack_ptr]);
-            }
-        }
+			yyterminate ();
+		}
+		else {
+			yy_delete_buffer (YY_CURRENT_BUFFER);
+			yy_switch_to_buffer (include_stack[include_stack_ptr] );
+			yylineno = line_stack[include_stack_ptr];
+		}
+}
 
 <module>\n								/* ignore EOL */;
 <module>[ \t]+							/* ignore whitespace */;

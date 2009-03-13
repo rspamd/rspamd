@@ -62,7 +62,7 @@ sigusr_handler (int fd, short what, void *arg)
 	event_del (&worker->sig_ev);
 	event_del (&worker->bind_ev);
 	do_reopen_log = 1;
-	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
+	msg_info ("lmtp worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
 	return;
 }
@@ -244,11 +244,10 @@ accept_socket (int fd, short what, void *arg)
  * Start lmtp worker process
  */
 void
-start_lmtp_worker (struct rspamd_worker *worker)
+start_lmtp_worker (struct rspamd_worker *worker, int listen_sock)
 {
 	struct sigaction signals;
-	int listen_sock, i;
-	struct sockaddr_un *un_addr;
+	int i;
 	char *hostbuf;
 	long int hostmax;
 
@@ -264,25 +263,6 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *) worker);
 	signal_add (&worker->sig_ev, NULL);
 	
-	/* Create listen socket */
-	if (worker->srv->cfg->lmtp_family == AF_INET) {
-		if ((listen_sock = make_tcp_socket (&worker->srv->cfg->lmtp_addr, worker->srv->cfg->lmtp_port, TRUE)) == -1) {
-			msg_err ("start_lmtp: cannot create tcp listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
-	else {
-		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->lmtp_host, un_addr, TRUE)) == -1) {
-			msg_err ("start_lmtp: cannot create unix listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
-	
-	if (listen (listen_sock, -1) == -1) {
-		msg_err ("start_lmtp: cannot listen on socket. %s", strerror (errno));
-		exit(-errno);
-	}
 	/* Accept event */
 	event_set(&worker->bind_ev, listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
@@ -306,6 +286,7 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	io_tv.tv_usec = 0;
 
 	event_loop (0);
+	exit (EXIT_SUCCESS);
 }
 
 /* 
