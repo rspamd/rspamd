@@ -30,19 +30,7 @@
 #include "tokenizers.h"
 
 
-/* Coefficients that are used for OSB tokenizer */
-static const int primes[] = {
-	1, 7,
-	3, 13,
-	5, 29,
-	11, 51,
-	23, 101,
-	47, 203,
-	97, 407,
-	197, 817,
-	397, 1637,
-	797, 3277,
-};
+extern const int primes[];
 
 int
 osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **tree)

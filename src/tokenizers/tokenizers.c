@@ -27,10 +27,24 @@
  */
 
 #include <sys/types.h>
+#include "../main.h"
 #include "tokenizers.h"
 
 struct tokenizer tokenizers[] = {
 	{"osb-text", osb_tokenize_text, get_next_word },
+};
+
+const int primes[] = {
+	1, 7,
+	3, 13,
+	5, 29,
+	11, 51,
+	23, 101,
+	47, 203,
+	97, 407,
+	197, 817,
+	397, 1637,
+	797, 3277,
 };
 
 struct tokenizer*
@@ -100,6 +114,108 @@ get_next_word (f_str_t *buf, f_str_t *token)
 	}
 	
 	return token;
+}
+
+int
+tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **tree)
+{
+	token_node_t *new = NULL;
+	f_str_t url_domain;
+	struct uri *url;
+	uint32_t h;
+
+	if (*tree == NULL) {
+		*tree = g_tree_new (token_node_compare_func);
+		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
+	}
+	
+	TAILQ_FOREACH (url, &task->urls, next) {
+		url_domain.begin = url->host;
+		url_domain.len = url->hostlen;
+		new = memory_pool_alloc (pool, sizeof (token_node_t));
+		h = fstrhash (&url_domain);
+		new->h1 = h * primes[0];
+		new->h2 = h * primes[1];
+		if (g_tree_lookup (*tree, new) == NULL) {
+			g_tree_insert (*tree, new, new);
+		}
+	}
+
+	return TRUE;
+}
+
+/* Struct to access gmime headers */
+struct raw_header {
+	struct raw_header *next;
+	char *name;
+	char *value;
+};
+
+typedef struct _GMimeHeader {
+	GHashTable *hash;
+	GHashTable *writers;
+	struct raw_header *headers;
+} local_GMimeHeader;
+
+int
+tokenize_headers (memory_pool_t *pool, struct worker_task *task, GTree **tree)
+{
+	token_node_t *new = NULL;
+	f_str_t headername;
+	f_str_t headervalue;
+
+	if (*tree == NULL) {
+		*tree = g_tree_new (token_node_compare_func);
+		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
+	}
+#ifndef GMIME24
+	struct raw_header *h;
+
+	h = GMIME_OBJECT(task->message)->headers->headers;
+	while (h) {
+		if (h->name && h->value) {
+			new = memory_pool_alloc (pool, sizeof (token_node_t));
+			headername.begin = h->name;
+			headername.len = strlen (h->name);
+			headervalue.begin = h->value;
+			headervalue.len = strlen (h->value);
+			new->h1 = fstrhash (&headername) * primes[0];
+			new->h2 = fstrhash (&headervalue) * primes[1];
+			if (g_tree_lookup (*tree, new) == NULL) {
+				g_tree_insert (*tree, new, new);
+			}
+		}
+		h = h->next;
+	}
+#else
+	GMimeHeaderList *ls;
+	GMimeHeaderIter *iter;
+	const char *name;
+	const char *value;
+
+	ls = GMIME_OBJECT(task->message)->headers;
+
+	if (g_mime_header_list_get_iter (ls, iter)) {
+		while (g_mime_header_iter_is_valid (iter)) {
+			new = memory_pool_alloc (pool, sizeof (token_node_t));
+			name = g_mime_header_iter_get_name (iter);
+			value = g_mime_header_iter_get_value (iter);
+			headername.begin = name;
+			headername.len = strlen (name);
+			headervalue.begin = value;
+			headervalue.len = strlen (value);
+			new->h1 = fstrhash (&headername) * primes[0];
+			new->h2 = fstrhash (&headervalue) * primes[1];
+			if (g_tree_lookup (*tree, new) == NULL) {
+				g_tree_insert (*tree, new, new);
+			}
+			if (!g_mime_header_iter_next (iter)) {
+				break;
+			}
+		}
+	}
+#endif
+	return TRUE;
 }
 
 /*

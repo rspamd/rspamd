@@ -29,9 +29,9 @@ struct raw_header {
 };			
 
 typedef struct _GMimeHeader {
-        GHashTable *hash;
+	GHashTable *hash;
 	GHashTable *writers;
-        struct raw_header *headers;
+	struct raw_header *headers;
 } local_GMimeHeader;
 
 /* enums */
