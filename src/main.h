@@ -185,6 +185,7 @@ struct worker_task {
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
 	GList *parts;												/**< list of parsed parts							*/
+	char *raw_headers;											/**< list of raw headers							*/
 	TAILQ_HEAD (uriq, uri) urls;								/**< list of parsed urls							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/

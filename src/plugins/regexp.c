@@ -138,7 +138,7 @@ regexp_module_reconfig (struct config_file *cfg)
 static gsize
 process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
-	char *headerv;
+	char *headerv, *c, t;
 	struct mime_part *part;
 	GList *cur;
 	struct uri *url;
@@ -190,18 +190,59 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			}
 			return 0;
 		case REGEXP_MESSAGE:
-			msg_debug ("process_message: checking message regexp: /%s/", re->regexp_text);
+			msg_debug ("process_regexp: checking message regexp: /%s/", re->regexp_text);
 			if (g_regex_match_full (re->regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
 				return 1;
 			}
 			return 0;
 		case REGEXP_URL:
-			msg_debug ("process_url: checking url regexp: /%s/", re->regexp_text);
+			msg_debug ("process_regexp: checking url regexp: /%s/", re->regexp_text);
 			TAILQ_FOREACH (url, &task->urls, next) {
 				if (g_regex_match (re->regexp, struri (url), 0, NULL) == TRUE) {
 					return 1;
 				}
 			}
+			return 0;
+		case REGEXP_RAW_HEADER:
+			msg_debug ("process_regexp: checking for raw header: %s with regexp: /%s/", re->header, re->regexp_text);
+			if (task->raw_headers == NULL) {
+				msg_debug ("process_regexp: cannot check for raw header in message, no headers found");
+				return 0;
+			}
+			if ((headerv = strstr (task->raw_headers, re->header)) == NULL) {
+				/* No header was found */
+				return 0;
+			}
+			/* Skip header name and start matching after regexp */
+			headerv += strlen (re->header) + 1;
+			/* Now the main problem is to find position of end of raw header */
+			c = headerv;
+			while (*c) {
+				/* We need to handle all types of line end */
+				if ((*c == '\r' && *(c + 1) == '\n')) {
+					c ++;
+					/* Check for folding */
+					if (!g_ascii_isspace (*(c + 1))) {
+						c ++;
+						break;
+					}
+				} 
+				else if (*c == '\r' || *c == '\n') {
+					if (!g_ascii_isspace (*(c + 1))) {
+						c ++;
+						break;
+					}
+				}
+				c ++;
+			}
+			/* Temporary null terminate this part of string */
+			t = *c;
+			*c = '\0';
+			if (g_regex_match (re->regexp, headerv, 0, NULL) == TRUE) {
+				*c = t;
+				return 1;
+			}
+			*c = t;
 			return 0;
 	}
 

@@ -371,6 +371,16 @@ process_message (struct worker_task *task)
 		task->message_id = "undef";
 	}
 
+#ifdef GMIME24
+	task->raw_headers = g_mime_object_get_headers (GMIME_OBJECT (task->message));
+#else
+	task->raw_headers = g_mime_message_get_headers (task->message);
+#endif
+
+	if (task->raw_headers) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, task->raw_headers);
+	}
+
 	task->worker->srv->stat->messages_scanned ++;
 
 	/* free the parser (and the stream) */

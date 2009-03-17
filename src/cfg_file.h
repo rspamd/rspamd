@@ -50,7 +50,7 @@ enum rspamd_cred_type {
 };
 
 /**
- * Regexp type: /H - header, /M - mime, /U - url
+ * Regexp type: /H - header, /M - mime, /U - url /X - raw header
  */
 enum rspamd_regexp_type {
 	REGEXP_NONE = 0,
@@ -58,6 +58,7 @@ enum rspamd_regexp_type {
 	REGEXP_MIME,
 	REGEXP_MESSAGE,
 	REGEXP_URL,
+	REGEXP_RAW_HEADER,
 };
 
 /**

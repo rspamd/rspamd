@@ -89,6 +89,10 @@ Queue-ID - идентификатор очереди
 .module 'regexp' {
 	SYMBOL = "regexp_expression";
 };
+header_filters = "regexp";
+
+Обратите внимание, что модуль regexp надо регистрировать как header filter, так как иначе он не будет работать.
+Эту проблему надо исправлять, но это не первоочередная задача.
 
 Формат регэкспов такой:
 /pattern/flags
@@ -98,14 +102,19 @@ headername=/pattern/flags
 Флаги регэскпов:
 i, m, s, x, u, o - такие же, как у perl/pcre
 H - ищет по заголовкам
-M - ищет по всему сообщению
+M - ищет по всему сообщению (в "сыром" виде)
 P - ищет по всем mime частям
 U - ищет по url
+X - ищет по "сырым" хедерам (тут нужно учитывать фолдинг и ставить, где надо, /m для multiline матчинга)
+
 Выражение регэкспов может содержать сложные выражения из нескольких регэкспов, операторов логики и скобок:
 SOME_SYMBOL = "To=/blah@blah/H & !(From=/blah@blah/H | Subject=/blah/H)"
+
 Также можно использовать переменные:
 $to_blah = "To=/blah@blah/H";
 $from_blah = "From=/blah@blah/H";
 $subject_blah = "Subject=/blah/H";
+
 тогда предыдущее выражение будет таким
+
 SOME_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})"

@@ -656,6 +656,12 @@ parse_regexp (memory_pool_t *pool, char *line)
 				}
 				p ++;
 				break;
+			case 'X':
+				if (result->type == REGEXP_NONE || result->type == REGEXP_HEADER) {
+					result->type = REGEXP_RAW_HEADER;
+				}
+				p ++;
+				break;
 			/* Stop flags parsing */
 			default:
 				p = NULL;
