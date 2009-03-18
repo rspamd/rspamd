@@ -132,7 +132,7 @@ delivery {
 };
 
 
-$to_blah = "To=/blah@blah/H";
+$to_blah = "To=/\"blah@blah\"/H";
 $from_blah = "From=/blah@blah/H";
 $subject_blah = "Subject=/blah/H";
 

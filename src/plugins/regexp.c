@@ -80,6 +80,9 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 	struct expression *e, *cur;
 
 	e = parse_expression (regexp_module_ctx->regexp_pool, line);
+	if (e == NULL) {
+		msg_err ("read_regexp_extension: %s is invalid regexp extension", line);
+	}
 	chain->expr = e;
 	cur = e;
 	while (cur) {

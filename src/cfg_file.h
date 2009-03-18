@@ -312,6 +312,12 @@ struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line);
  */
 struct expression* parse_expression (memory_pool_t *pool, char *line);
 
+/**
+ * Replace all \" with a single " in given string
+ * @param line input string
+ */
+void unescape_quotes (char *line);
+
 int yylex (void);
 int yyparse (void);
 void yyrestart (FILE *);

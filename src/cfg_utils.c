@@ -567,6 +567,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 		line ++;
 	}
 	if (line == '\0') {
+		msg_warn ("parse_regexp: got empty regexp");
 		return NULL;
 	}
 	/* First try to find header name */
@@ -593,6 +594,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 	}
 	else {
 		/* We got header name earlier but have not found // expression, so it is invalid regexp */
+		msg_warn ("parse_regexp: got no header name (eg. header=) but without corresponding regexp");
 		return NULL;
 	}
 	/* Find end */
@@ -601,6 +603,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 		end ++;
 	}
 	if (end == begin || *end != '/') {
+		msg_warn ("parse_regexp: no trailing / in regexp");
 		return NULL;
 	}
 	/* Parse flags */
@@ -675,6 +678,11 @@ parse_regexp (memory_pool_t *pool, char *line)
 	memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->regexp);
 	*end = '/';
 
+	if (result->regexp == NULL || err != NULL) {
+		msg_warn ("parse_regexp: could not read regexp: %s", err->message);
+		return NULL;
+	}
+
 	return result;
 }
 
@@ -712,6 +720,22 @@ parse_warn (const char *fmt, ...)
 	g_warning ("%s", logbuf);
 }
 
+void
+unescape_quotes (char *line)
+{
+	char *c = line, *t;
+
+	while (*c) {
+		if (*c == '\\' && *(c + 1) == '"') {
+			t = c;
+			while (*t) {
+				*t = *(t + 1);
+				t ++;
+			}
+		}
+		c ++;
+	}
+}
 
 /*
  * vi:ts=4
