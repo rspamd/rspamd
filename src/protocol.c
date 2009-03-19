@@ -430,6 +430,10 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 	}
 	else {
 		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, cd);
+		/* Remove last , from log buf */
+		if (cd->log_buf[cd->log_offset - 1] == ',') {
+			cd->log_buf[--cd->log_offset] = '\0';
+		}
 	}
 }
 
