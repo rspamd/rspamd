@@ -276,6 +276,7 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 			/* If this operation is just ! just inverse res and check for further operators */
 			if (it->content.operation == '!') {
 				res = !res;
+				it = it->next;
 				continue;
 			}
 			else if (it->content.operation == '&' && res == FALSE) {
