@@ -264,12 +264,45 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	return 0;
 }
 
+static gboolean 
+optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
+{
+	struct expression *it = *e;
+	gboolean ret = FALSE;
+	
+	while (it) {
+		/* Find first operation for this iterator */
+		if (it->type == EXPR_OPERATION) {
+			/* If this operation is just ! just inverse res and check for further operators */
+			if (it->content.operation == '!') {
+				res = !res;
+				continue;
+			}
+			else if (it->content.operation == '&' && res == FALSE) {
+				e = &it;
+				ret = TRUE;
+			}
+			else if (it->content.operation == '|' && res == TRUE) {
+				e = &it;
+				ret = TRUE;
+			}
+			break;
+		}
+		it = it->next;
+	}
+
+	g_queue_push_head (stack, GSIZE_TO_POINTER (res));
+
+	return ret;
+}
+
 static void
 process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 {
 	GQueue *stack;
 	gsize cur, op1, op2;
 	struct expression *it = item->expr;
+	gboolean try_optimize = TRUE;
 	
 	stack = g_queue_new ();
 
@@ -278,18 +311,28 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 			/* Find corresponding symbol */
 			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task);
 			msg_debug ("process_regexp_item: regexp %s found", cur ? "is" : "is not");
-			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			if (try_optimize) {
+				try_optimize = optimize_regexp_expression (&it, stack, cur);
+			} else {
+				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			}
+
 		} else if (it->type == EXPR_FUNCTION) {
 			cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
 			msg_debug ("process_regexp_item: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
 															cur ? "true" : "false");
-			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			if (try_optimize) {
+				try_optimize = optimize_regexp_expression (&it, stack, cur);
+			} else {
+				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			}
 		} else if (it->type == EXPR_OPERATION) {
 			if (g_queue_is_empty (stack)) {
 				/* Queue has no operands for operation, exiting */
 				g_queue_free (stack);
 				return;
 			}
+			try_optimize = TRUE;
 			switch (it->content.operation) {
 				case '!':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
