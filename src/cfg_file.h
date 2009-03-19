@@ -296,21 +296,6 @@ char* substitute_variable (struct config_file *cfg, char *str, u_char recursive)
  */
 void post_load_config (struct config_file *cfg);
 
-/**
- * Parse regexp line to regexp structure
- * @param pool memory pool to use
- * @param line incoming line
- * @return regexp structure or NULL in case of error
- */
-struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line);
-
-/**
- * Parse composites line to composites structure (eg. "SYMBOL1&SYMBOL2|!SYMBOL3")
- * @param pool memory pool to use
- * @param line incoming line
- * @return expression structure or NULL in case of error
- */
-struct expression* parse_expression (memory_pool_t *pool, char *line);
 
 /**
  * Replace all \" with a single " in given string

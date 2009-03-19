@@ -27,7 +27,13 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 
 	switch (ctx->op) {
 		case CMD_CONNECT:
-			g_assert (error == OK);
+			if (error != OK) {
+				msg_warn ("Connect failed, skipping test");
+				memc_close_ctx (ctx);
+				tv.tv_sec = 0;
+				tv.tv_usec = 0;
+				event_loopexit (&tv);
+			}
 			msg_debug ("Connect ok");
 			memc_set (ctx, ctx->param, 60);
 			break;
@@ -41,7 +47,13 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 			event_loopexit (&tv);
 			break;
 		case CMD_WRITE:
-			g_assert (error == OK);
+			if (error != OK) {
+				msg_warn ("Connect failed, skipping test");
+				memc_close_ctx (ctx);
+				tv.tv_sec = 0;
+				tv.tv_usec = 0;
+				event_loopexit (&tv);
+			}
 			msg_debug ("Write ok");
 			ctx->param->buf = g_malloc (sizeof (buf));
 			bzero (ctx->param->buf, sizeof (buf));

@@ -34,6 +34,7 @@
 #include "../message.h"
 #include "../modules.h"
 #include "../cfg_file.h"
+#include "../expressions.h"
 
 struct regexp_module_item {
 	struct expression *expr;
@@ -87,7 +88,7 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 	chain->expr = e;
 	cur = e;
 	while (cur) {
-		if (cur->type == EXPR_OPERAND) {
+		if (cur->type == EXPR_REGEXP) {
 			cur->content.operand = parse_regexp (pool, cur->content.operand);
 			if (cur->content.operand == NULL) {
 				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s", line);
@@ -273,13 +274,17 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 	stack = g_queue_new ();
 
 	while (it) {
-		if (it->type == EXPR_OPERAND) {
+		if (it->type == EXPR_REGEXP) {
 			/* Find corresponding symbol */
 			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task);
 			msg_debug ("process_regexp_item: regexp %s found", cur ? "is" : "is not");
 			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
-		}
-		else {
+		} else if (it->type == EXPR_FUNCTION) {
+			cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
+			msg_debug ("process_regexp_item: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
+															cur ? "true" : "false");
+			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+		} else if (it->type == EXPR_OPERATION) {
 			if (g_queue_is_empty (stack)) {
 				/* Queue has no operands for operation, exiting */
 				g_queue_free (stack);

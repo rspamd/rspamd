@@ -56,17 +56,6 @@ enum script_type {
 	SCRIPT_MESSAGE,
 };
 
-/** 
- * Logic expression 
- */
-struct expression {
-	enum { EXPR_OPERAND, EXPR_OPERATION } type;					/**< expression type								*/
-	union {
-		void *operand;
-		char operation;
-	} content;													/**< union for storing operand or operation code 	*/
-	struct expression *next;									/**< chain link										*/
-};
 
 /** 
  * Worker process structure 

@@ -236,6 +236,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/protocol.c
 				src/perl.c
 				src/message.c
+				src/expressions.c
 				src/mem_pool.c
 				src/memcached.c
 				src/main.c
@@ -268,6 +269,7 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/url.c
 				src/util.c
 				src/memcached.c
+				src/expressions.c
 				src/statfile.c)
 
 SET(UTILSSRC	utils/url_extracter.c)

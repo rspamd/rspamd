@@ -542,6 +542,7 @@ redirector_callback (int fd, short what, void *arg)
 				if (write (param->sock, url_buf, r) == -1) {
 					msg_err ("redirector_callback: write failed %s", strerror (errno));
 					event_del (&param->ev);
+					close (fd);
 					param->task->save.saved --;
 					make_surbl_requests (param->url, param->task, param->tree);
 					if (param->task->save.saved == 0) {
@@ -555,6 +556,7 @@ redirector_callback (int fd, short what, void *arg)
 			}
 			else {
 				event_del (&param->ev);
+				close (fd);
 				msg_info ("redirector_callback: <%s> connection to redirector timed out while waiting for write",
 							param->task->message_id);
 				param->task->save.saved --;
@@ -586,6 +588,7 @@ redirector_callback (int fd, short what, void *arg)
 					}
 				}
 				event_del (&param->ev);
+				close (fd);
 				param->task->save.saved --;
 				make_surbl_requests (param->url, param->task, param->tree);
 				if (param->task->save.saved == 0) {
@@ -596,6 +599,7 @@ redirector_callback (int fd, short what, void *arg)
 			}
 			else {
 				event_del (&param->ev);
+				close (fd);
 				msg_info ("redirector_callback: <%s> reading redirector timed out, while waiting for read",
 							param->task->message_id);
 				param->task->save.saved --;

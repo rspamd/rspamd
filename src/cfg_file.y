@@ -5,6 +5,7 @@
 #include "config.h"
 #include "cfg_file.h"
 #include "main.h"
+#include "expressions.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 

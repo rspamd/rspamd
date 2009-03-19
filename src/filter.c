@@ -34,6 +34,7 @@
 #include "cfg_file.h"
 #include "perl.h"
 #include "util.h"
+#include "expressions.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -335,7 +336,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	stack = g_queue_new ();
 
 	while (expr) {
-		if (expr->type == EXPR_OPERAND) {
+		if (expr->type == EXPR_REGEXP) {
 			/* Find corresponding symbol */
 			if (g_hash_table_lookup (cd->metric_res->symbols, expr->content.operand) == NULL) {
 				cur = 0;
