@@ -280,11 +280,11 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 				continue;
 			}
 			else if (it->content.operation == '&' && res == FALSE) {
-				e = &it;
+				*e = it;
 				ret = TRUE;
 			}
 			else if (it->content.operation == '|' && res == TRUE) {
-				e = &it;
+				*e = it;
 				ret = TRUE;
 			}
 			break;
