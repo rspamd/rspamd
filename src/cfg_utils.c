@@ -555,12 +555,13 @@ post_load_config (struct config_file *cfg)
 struct rspamd_regexp*
 parse_regexp (memory_pool_t *pool, char *line)
 {
-	char *begin, *end, *p;
+	char *begin, *end, *p, *src;
 	struct rspamd_regexp *result;
 	int regexp_flags = 0;
 	enum rspamd_regexp_type type = REGEXP_NONE;
 	GError *err = NULL;
 	
+	src = line;
 	result = memory_pool_alloc0 (pool, sizeof (struct rspamd_regexp));
 	/* Skip whitespaces */
 	while (g_ascii_isspace (*line)) {
@@ -594,7 +595,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 	}
 	else {
 		/* We got header name earlier but have not found // expression, so it is invalid regexp */
-		msg_warn ("parse_regexp: got no header name (eg. header=) but without corresponding regexp");
+		msg_warn ("parse_regexp: got no header name (eg. header=) but without corresponding regexp, %s", src);
 		return NULL;
 	}
 	/* Find end */
@@ -603,7 +604,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 		end ++;
 	}
 	if (end == begin || *end != '/') {
-		msg_warn ("parse_regexp: no trailing / in regexp");
+		msg_warn ("parse_regexp: no trailing / in regexp %s", src);
 		return NULL;
 	}
 	/* Parse flags */
@@ -679,7 +680,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 	*end = '/';
 
 	if (result->regexp == NULL || err != NULL) {
-		msg_warn ("parse_regexp: could not read regexp: %s", err->message);
+		msg_warn ("parse_regexp: could not read regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
 

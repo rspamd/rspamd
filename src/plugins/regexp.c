@@ -74,20 +74,25 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
-static void
+static gboolean
 read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, char *line)
 {	
 	struct expression *e, *cur;
 
 	e = parse_expression (regexp_module_ctx->regexp_pool, line);
 	if (e == NULL) {
-		msg_err ("read_regexp_extension: %s is invalid regexp extension", line);
+		msg_warn ("read_regexp_expression: %s is invalid regexp expression", line);
+		return FALSE;
 	}
 	chain->expr = e;
 	cur = e;
 	while (cur) {
 		if (cur->type == EXPR_OPERAND) {
 			cur->content.operand = parse_regexp (pool, cur->content.operand);
+			if (cur->content.operand == NULL) {
+				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s", line);
+				return FALSE;
+			}
 			chain->regexp_number ++;
 		}
 		else {
@@ -95,6 +100,8 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 		}
 		cur = cur->next;
 	}
+
+	return TRUE;
 }
 
 int
@@ -104,6 +111,7 @@ regexp_module_config (struct config_file *cfg)
 	struct module_opt *cur;
 	struct regexp_module_item *cur_item;
 	char *value;
+	int res = TRUE;
 
 	if ((value = get_module_opt (cfg, "regexp", "metric")) != NULL) {
 		regexp_module_ctx->metric = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
@@ -121,12 +129,14 @@ regexp_module_config (struct config_file *cfg)
 			}
 			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = cur->param;
-			read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->value);
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->value)) {
+				res = FALSE;
+			}
 			regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);
 		}
 	}
 	
-	return 0;
+	return res;
 }
 
 int

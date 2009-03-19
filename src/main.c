@@ -383,7 +383,15 @@ main (int argc, char **argv, char **env)
 	else {
 		cfg->log_level = G_LOG_LEVEL_CRITICAL;
 	}
-	
+
+#ifdef HAVE_SETLOCALE
+	/* Set locale setting to C locale to avoid problems in future */
+	setlocale (LC_ALL, "C");
+	setlocale (LC_CTYPE, "C");
+	setlocale (LC_MESSAGES, "C");
+	setlocale (LC_TIME, "C");
+#endif
+
 	/* First set logger to console logger */
 	cfg->log_fd = STDERR_FILENO;
 	g_log_set_default_handler (file_log_function, cfg);
@@ -406,9 +414,26 @@ main (int argc, char **argv, char **env)
 
 	fclose (f);
 
+	/* Init C modules */
+	for (i = 0; i < MODULES_NUM; i ++) {
+		cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
+		if (modules[i].module_init_func(cfg, &cur_module) == 0) {
+			g_hash_table_insert (cfg->c_modules, (gpointer)modules[i].name, cur_module);
+		}
+	}
+
 	if (cfg->config_test) {
-		fprintf (stderr, "syntax OK\n");
-		return EXIT_SUCCESS;
+		/* Init events to test modules */
+		event_init ();
+		res = TRUE;
+		/* Perform modules configuring */
+		for (i = 0; i < MODULES_NUM; i ++) {
+			if (!modules[i].module_config_func (cfg)) {
+				res = FALSE;
+			}
+		}
+		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
+		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	/* Create listen socket */
@@ -448,14 +473,6 @@ main (int argc, char **argv, char **env)
 	if (!rspamd->cfg->no_fork && daemon (1, 1) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");
 		exit (-errno);
-	}
-
-	/* Init C modules */
-	for (i = 0; i < MODULES_NUM; i ++) {
-		cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
-		if (modules[i].module_init_func(cfg, &cur_module) == 0) {
-			g_hash_table_insert (cfg->c_modules, (gpointer)modules[i].name, cur_module);
-		}
 	}
 
 	rspamd->pid = getpid();
