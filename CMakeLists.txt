@@ -236,6 +236,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/protocol.c
 				src/perl.c
 				src/message.c
+				src/fuzzy.c
 				src/expressions.c
 				src/mem_pool.c
 				src/memcached.c
@@ -261,6 +262,7 @@ SET(TESTSRC		test/rspamd_expression_test.c
 				test/rspamd_memcached_test.c
 				test/rspamd_mem_pool_test.c
 				test/rspamd_statfile_test.c
+				test/rspamd_fuzzy_test.c
 				test/rspamd_test_suite.c
 				test/rspamd_url_test.c)
 
@@ -268,6 +270,7 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/hash.c
 				src/url.c
 				src/util.c
+				src/fuzzy.c
 				src/memcached.c
 				src/expressions.c
 				src/statfile.c)
