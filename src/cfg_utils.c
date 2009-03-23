@@ -355,6 +355,11 @@ substitute_variable (struct config_file *cfg, char *str, u_char recursive)
 	char *var, *new, *v_begin, *v_end;
 	size_t len;
 
+	if (str == NULL) {
+		yywarn ("substitute_variable: trying to substitute variable in NULL string");
+		return NULL;
+	}
+
 	while ((v_begin = strstr (str, "${")) != NULL) {
 		len = strlen (str);
 		*v_begin = '\0';

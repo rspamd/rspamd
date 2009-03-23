@@ -26,12 +26,15 @@
 #include "util.h"
 #include "cfg_file.h"
 #include "main.h"
+#include "message.h"
+#include "fuzzy.h"
 #include "expressions.h"
 
 typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args);
 
 gboolean rspamd_compare_encoding (struct worker_task *task, GList *args);
 gboolean rspamd_header_exists (struct worker_task *task, GList *args);
+gboolean rspamd_parts_distance (struct worker_task *task, GList *args);
 /*
  * List of internal functions of rspamd
  * Sorted by name to use bsearch
@@ -41,6 +44,7 @@ static struct _fl {
 	rspamd_internal_func_t func;
 } rspamd_functions_list[] = {
 	{ "compare_encoding", rspamd_compare_encoding },
+	{ "compare_parts_distance", rspamd_parts_distance },
 	{ "header_exists", rspamd_header_exists },
 };
 
@@ -273,7 +277,9 @@ parse_expression (memory_pool_t *pool, char *line)
 
 			case READ_REGEXP:
 				if (*p == '/' && *(p - 1) != '\\') {
-					p ++;
+					if (*(p + 1)) {
+						p ++;
+					}
 					state = READ_REGEXP_FLAGS;
 				}
 				else {
@@ -285,14 +291,17 @@ parse_expression (memory_pool_t *pool, char *line)
 				if (!is_regexp_flag (*p) || *(p + 1) == '\0') {
 					if (c != p) {
 						/* Copy operand */
-						str = memory_pool_alloc (pool, p - c + 3);
-						g_strlcpy (str, c - 1, (p - c + 3));
+						if (*(p + 1) == '\0') {
+							p++;
+						}
+						str = memory_pool_alloc (pool, p - c + 2);
+						g_strlcpy (str, c - 1, (p - c + 2));
 						g_strstrip (str);
 						if (strlen (str) > 0) {
 							insert_expression (pool, &expr, EXPR_REGEXP, 0, str);
 						}
 					}
-					c = ++p;
+					c = p;
 					state = SKIP_SPACES;
 				}
 				else {
@@ -591,6 +600,53 @@ rspamd_header_exists (struct worker_task *task, GList *args)
 #else
 	return (g_mime_message_get_header (task->message, (char *)arg->data) != NULL);
 #endif
+}
+
+/*
+ * This function is designed to find difference between text/html and text/plain parts
+ * It takes one argument: difference threshold, if we have two text parts, compare 
+ * its hashes and check for threshold, if value is greater than threshold, return TRUE
+ * and return FALSE otherwise.
+ */
+gboolean 
+rspamd_parts_distance (struct worker_task *task, GList *args)
+{	
+	int threshold;
+	struct mime_text_part *p1, *p2;
+	GList *cur;
+	
+	if (args == NULL) {
+		msg_debug ("rspamd_parts_distance: no threshold is specified, assume it 100");
+		threshold = 100;
+	}
+	else {
+		errno = 0;
+		threshold = strtoul ((char *)args->data, NULL, 10);
+		if (errno != 0) {
+			msg_info ("rspamd_parts_distance: bad numeric value for threshold \"%s\", assume it 100", (char *)args->data);
+			threshold = 100;
+		}
+	}
+
+	if (g_list_length (task->text_parts) == 2) {
+		cur = g_list_first (task->text_parts);
+		p1 = cur->data;
+		cur = g_list_next (cur);
+		if (cur == NULL) {
+			msg_info ("rspamd_parts_distance: bad parts list");
+			return FALSE;
+		}
+		p2 = cur->data;
+		if (fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy) >= threshold) {
+			return TRUE;
+		}
+	}
+	else {
+		msg_debug ("rspamd_parts_distance: message has too many text parts, so do not try to compare them with each other");
+		return FALSE;
+	}
+
+	return FALSE;
 }
 
 /*

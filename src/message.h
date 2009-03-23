@@ -7,11 +7,17 @@
 #define RSPAMD_MESSAGE_H
 
 #include "config.h"
+#include "fuzzy.h"
 
 struct mime_part {
 	GMimeContentType *type;
 	GByteArray *content;
-	TAILQ_ENTRY (mime_part) next;
+};
+
+struct mime_text_part {
+	gboolean is_html;
+	GByteArray *content;
+	fuzzy_hash_t *fuzzy;
 };
 
 /**

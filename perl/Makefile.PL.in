@@ -1,7 +1,7 @@
 use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME         => 'Mail::Rspamd',
-    AUTHOR       => 'Vsevolod Stakhov <vsevolod@rambler-co.ru>',
+    AUTHOR       => 'Vsevolod Stakhov <vsevolod@highsecure.ru>',
     XS           => { 'Rspamd.xs'  => 'Rspamd.c' },
     VERSION_FROM => 'Rspamd.pm', # finds $VERSION
     LIBS         => ['${GLIB_LDFLAGS} ${GMIME_LDFLAGS} -levent'],   # e.g., '-lm'
@@ -15,6 +15,7 @@ WriteMakefile(
 	    'Rspamd.c'   => qw{
 Rspamd/ContentType.xs            Rspamd/Part.xs                   Rspamd/Hash.xs
 Rspamd/InternetAddress.xs        Rspamd/Message.xs                Rspamd/Object.xs
+Rspamd/TextPart.xs
 },
 	},
 );

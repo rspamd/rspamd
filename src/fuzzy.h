@@ -27,6 +27,7 @@ typedef struct fuzzy_hash_s {
  * @return fuzzy_hash object allocated in pool
  */
 fuzzy_hash_t * fuzzy_init (f_str_t *in, memory_pool_t *pool);
+fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
 
 /**
  * Compare score of difference between two hashes 

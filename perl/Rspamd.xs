@@ -14,6 +14,7 @@
 #include "../src/cfg_file.h"
 #include "../src/perl.h"
 #include "../src/mem_pool.h"
+#include "../src/fuzzy.h"
 
 #define XSINTERFACE_FUNC_RSPAMD_MESSAGE_SET(cv,f)      \
 	CvXSUBANY(cv).any_dptr = (void (*) (pTHX_ void*))(CAT2( g_mime_message_,f ))
@@ -47,6 +48,7 @@ typedef GMimePartEncodingType	Mail__Rspamd__PartEncodingType;
 typedef GMimeObject *		Mail__Rspamd__Object;
 typedef GMimeParam *		Mail__Rspamd__Param;
 typedef GMimePart *		Mail__Rspamd__Part;
+typedef struct mime_text_part * Mail__Rspamd__TextPart;
 typedef GMimeParser *		Mail__Rspamd__Parser;
 typedef GMimeMultipart *	Mail__Rspamd__MultiPart;
 typedef GMimeMessage *		Mail__Rspamd__Message;
@@ -401,5 +403,6 @@ INCLUDE: Rspamd/Message.xs
 
 INCLUDE: Rspamd/InternetAddress.xs
 INCLUDE: Rspamd/Hash.xs
+INCLUDE: Rspamd/TextPart.xs
 
 

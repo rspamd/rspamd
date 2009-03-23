@@ -20,6 +20,7 @@ Mail::Rspamd::Object			T_PTROBJ
 Mail::Rspamd::Param			T_PTROBJ
 Mail::Rspamd::Message			T_PTROBJ
 Mail::Rspamd::Part			T_PTROBJ
+Mail::Rspamd::TextPart		T_PTROBJ
 Mail::Rspamd::ContentType			T_PTROBJ
 Mail::Rspamd::InternetAddress		T_PTROBJ
 Mail::Rspamd::Hash::Header		T_PTROBJ

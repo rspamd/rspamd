@@ -95,7 +95,7 @@ fuzzy_update (fuzzy_hash_t *h, char c)
     
 	if (h->rh % h->block_size == (h->block_size - 1)) {
 		h->hash_pipe[h->hi] = h->h;
-		if (h->hi < FUZZY_HASHLEN - 1) {
+		if (h->hi < FUZZY_HASHLEN - 2) {
 			h->h = HASH_INIT;
 			h->hi ++;
 		}
@@ -247,6 +247,17 @@ fuzzy_init (f_str_t *in, memory_pool_t *pool)
 	}
 
 	return new;
+}
+
+fuzzy_hash_t *
+fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool)
+{
+	f_str_t f;
+
+	f.begin = in->data;
+	f.len = in->len;
+
+	return fuzzy_init (&f, pool);
 }
 
 /* Compare score of difference between two hashes 0 - different hashes, 100 - identical hashes */

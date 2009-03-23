@@ -437,10 +437,10 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	struct classifier *classifier;
 	struct statfile_result_data *res_data;
 	struct metric *metric;
+	struct mime_text_part *text_part;
 
 	GTree *tokens = NULL;
-	GList *cur = NULL;
-	GByteArray *content;
+	GList *cur;
 
 	char *filename;
 	f_str_t c;
@@ -457,10 +457,12 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 		return;
 	}
 	
+	cur = g_list_first (task->text_parts);
 	if ((tokens = g_hash_table_lookup (data->tokens, st->tokenizer)) == NULL) {
-		while ((content = get_next_text_part (task->task_pool, task->parts, &cur)) != NULL) {
-			c.begin = content->data;
-			c.len = content->len;
+		while (cur != NULL) {
+			text_part = (struct mime_text_part *)cur->data;
+			c.begin = text_part->content->data;
+			c.len = text_part->content->len;
 			/* Tree would be freed at task pool freeing */
 			if (!st->tokenizer->tokenize_func (st->tokenizer, task->task_pool, &c, &tokens)) {
 				msg_info ("statfiles_callback: cannot tokenize input");

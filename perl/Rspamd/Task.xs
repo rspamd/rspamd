@@ -81,3 +81,24 @@ rspamd_task_get_urls (task)
 	OUTPUT:
 		RETVAL
 
+AV*
+rspamd_task_get_text_parts (task)
+		Mail::Rspamd::Task task
+	PREINIT:
+		AV* retav;
+		GList *cur;
+		SV* ps;
+	CODE:
+		retav = newAV ();
+		cur = g_list_first (task->text_parts);
+		while (cur) {
+			ps = newSViv (0);
+			sv_setref_pv (ps, "Mail::Rspamd::TextPart", (Mail__Rspamd__TextPart)(cur->data));
+			av_push(retav, ps);
+			cur = g_list_next (task->text_parts);
+		}
+
+		RETVAL = retav;
+	OUTPUT:
+		RETVAL
+

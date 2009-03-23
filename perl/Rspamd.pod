@@ -197,7 +197,7 @@ E.g.:
 
 Mail::Rspamd::Header is a private structure. This structure contains
 all the headers except special ones (Content-* MIME-Version).
-Look for L<Header tied hash> for easy maintaining for header.
+Look for Header tied hash for easy maintaining for header.
 Use also the Mail::Rspamd::Message::get_header() and set_header() methods.
 
 =back
@@ -476,6 +476,10 @@ Return Mail::Rspamd::Config object.
 
 Return message's urls as array of strings.
 
+=item I<get_text_parts> ()
+
+Return message's text parts as array of Mail::Rspamd::TextPart objects.
+
 =back
 
 =head2 Mail::Rspamd::Config
@@ -493,15 +497,23 @@ Gets and sets specified parameter in config.
 =item I<get_metric> (metric)
 
 Returns hash of parameters of specified metric:
+
+=begin text
+
 {
 'name'             => name of metric
 'func_name'        => consolidation function
 'required_score'   => score for metric
 }
 
+=end text
+
 =item I<get_statfile> (statfile)
 
 Returns parameters of specified statfile:
+
+=begin text
+
 {
 'alias'         => alias of statfile
 'pattern'       => fs pattern
@@ -510,9 +522,35 @@ Returns parameters of specified statfile:
 'size'          => size of statfile
 }
 
+=end text
+
 =item I<get_module_param> (modulename, paramname)
 
 Return parameter's value for specified module.
+
+=back
+
+=head2 Mail::Rspamd::TextPart
+
+Object that represent a single text part of message.
+
+=over 4
+
+=item I<get_content> ()
+
+Returns content of part.
+
+=item I<get_fuzzy> ()
+
+Returns fuzzy hash of part as string.
+
+=item I<compare_distance> (other)
+
+Calculate distance between two parts using their fuzzy hashes. Return value from 0 (identical) to 100 (totally different).
+
+=item I<is_html> ()
+
+Return 0 if part is plain text and not 0 otherwise.
 
 =back
 
