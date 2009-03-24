@@ -264,6 +264,8 @@ continue_process_filters (struct worker_task *task)
 			task->dispatcher->write_callback (task);
 			return 1;
 	}
+
+	return -1;
 }
 
 int 

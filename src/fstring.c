@@ -104,9 +104,9 @@ fstrstri (f_str_t *orig, f_str_t *pattern)
 	}
 
 	while (cur < orig->len) {
-		if (tolower (*(orig->begin + cur)) == tolower (*pattern->begin)) {
+		if (g_ascii_tolower (*(orig->begin + cur)) == g_ascii_tolower (*pattern->begin)) {
 			while (cur < orig->len && pcur < pattern->len) {
-				if (tolower (*(orig->begin + cur)) != tolower (*(pattern->begin + pcur))) {
+				if (g_ascii_tolower (*(orig->begin + cur)) != g_ascii_tolower (*(pattern->begin + pcur))) {
 					pcur = 0;
 					break;
 				}

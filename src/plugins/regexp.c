@@ -378,4 +378,6 @@ regexp_common_filter (struct worker_task *task)
 		process_regexp_item ((struct regexp_module_item *)cur_expr->data, task);
 		cur_expr = g_list_next (cur_expr);
 	}
+
+	return 0;
 }

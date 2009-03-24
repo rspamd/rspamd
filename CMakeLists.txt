@@ -150,6 +150,7 @@ CHECK_INCLUDE_FILES(sys/stat.h  HAVE_SYS_STAT_H)
 CHECK_INCLUDE_FILES(sys/wait.h  HAVE_SYS_WAIT_H)
 CHECK_INCLUDE_FILES(sys/param.h  HAVE_SYS_PARAM_H)
 CHECK_INCLUDE_FILES(sys/cdefs.h  HAVE_SYS_CDEFS_H)
+CHECK_INCLUDE_FILES(sys/file.h  HAVE_SYS_FILE_H)
 CHECK_INCLUDE_FILES(netinet/in.h  HAVE_NETINET_IN_H)
 CHECK_INCLUDE_FILES(arpa/inet.h  HAVE_ARPA_INET_H)
 CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
@@ -206,7 +207,8 @@ ELSE (MD5_INCLUDE)
 	MESSAGE(STATUS "WARNING: Using internal MD5 support")
 ENDIF (MD5_INCLUDE)
 
-SET(CMAKE_C_WARN_FLAGS " -Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value")
+SET(CMAKE_C_WARN_FLAGS "-Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value -Wno-declaration-after-statement -Wno-pointer-sign")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS} -std=c99")
 
 # Platform specific routines
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")

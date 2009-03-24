@@ -96,6 +96,8 @@ statfile_pool_expire (statfile_pool_t *pool)
 	if (exp.filename) {
 		statfile_pool_close (pool, exp.filename, TRUE);
 	}
+
+	return 0;
 }
 
 statfile_pool_t* 
@@ -444,7 +446,7 @@ statfile_pool_set_section (statfile_pool_t *pool, char *filename, uint32_t code,
 		cur_offset = file->seek_pos - sizeof (struct stat_file_section);
 	}
 	while (cur_offset < file->len) {
-		sec = (struct stat_file_section *)(file->map + cur_offset);
+		sec = (struct stat_file_section *)((char *)file->map + cur_offset);
 		if (sec->code == code) {
 			file->cur_section.code = code;
 			file->cur_section.length = sec->length;

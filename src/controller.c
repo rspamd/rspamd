@@ -295,7 +295,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							case 'r':
 								arg = *(cmd_args + 1);
 								if (!arg || *arg == '\0') {
-									r = snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF, arg);
+									r = snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF);
 									rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
 									return;
 								}
@@ -304,7 +304,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							case 'f':
 								arg = *(cmd_args + 1);
 								if (!arg || *arg == '\0') {
-									r = snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF, arg);
+									r = snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF);
 									rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
 									return;
 								}
@@ -314,7 +314,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								session->in_class = 0;
 								break;
 							default:
-								r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF, arg);
+								r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF);
 								rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
 								return;
 						}
@@ -431,6 +431,9 @@ controller_read_socket (f_str_t *in, void *arg)
 			}
 
 			session->state = STATE_REPLY;
+			break;
+		default:
+			msg_debug ("controller_read_socket: unknown state while reading %d", session->state);
 			break;
 	}
 }

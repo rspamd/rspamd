@@ -23,9 +23,10 @@
  */
 
 #include "config.h"
-#include "url.h"
+#include "util.h"
 #include "fstring.h"
 #include "main.h"
+#include "url.h"
 
 #define POST_CHAR 1
 #define POST_CHAR_S "\001"
@@ -131,7 +132,7 @@ enum {
 /* Convert an ASCII hex digit to the corresponding number between 0
    and 15.  H should be a hexadecimal digit that satisfies isxdigit;
    otherwise, the result is undefined.  */
-#define XDIGIT_TO_NUM(h) ((h) < 'A' ? (h) - '0' : toupper (h) - 'A' + 10)
+#define XDIGIT_TO_NUM(h) ((h) < 'A' ? (h) - '0' : g_ascii_toupper (h) - 'A' + 10)
 #define X2DIGITS_TO_NUM(h1, h2) ((XDIGIT_TO_NUM (h1) << 4) + XDIGIT_TO_NUM (h2))
 /* The reverse of the above: convert a number in the [0, 16) range to
    the ASCII representation of the corresponding hexadecimal digit.
@@ -206,6 +207,7 @@ url_strerror (enum uri_errno err)
 		case URI_ERRNO_INVALID_PORT_RANGE:
 			return "Port number is not within 0-65535";
 	}
+	return NULL;
 }
 
 static inline int
@@ -331,7 +333,7 @@ get_protocol_length(const unsigned char *url)
 	/* RFC1738:
 	 * scheme  = 1*[ lowalpha | digit | "+" | "-" | "." ]
 	 * (but per its recommendations we accept "upalpha" too) */
-	while (isalnum(*end) || *end == '+' || *end == '-' || *end == '.')
+	while (g_ascii_isalnum (*end) || *end == '+' || *end == '-' || *end == '.')
 		end++;
 
 	/* Also return 0 if there's no protocol name (@end == @url). */
@@ -361,7 +363,7 @@ url_unescape (char *s)
         else {
 			char c;
 			/* Do nothing if '%' is not followed by two hex digits. */
-			if (!h[1] || !h[2] || !(isxdigit (h[1]) && isxdigit (h[2])))
+			if (!h[1] || !h[2] || !(g_ascii_isxdigit (h[1]) && g_ascii_isxdigit (h[2])))
 				goto copychar;
 			c = X2DIGITS_TO_NUM (h[1], h[2]);
 			/* Don't unescape %00 because there is no way to insert it
@@ -452,7 +454,7 @@ static inline int
 char_needs_escaping (const char *p)
 {
 	if (*p == '%') {
-		if (isxdigit (*(p + 1)) && isxdigit (*(p + 2)))
+		if (g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2)))
 			return 0;
 		else
 			/* Garbled %.. sequence: encode `%'. */
@@ -663,7 +665,7 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 		prefix_end = struri (uri) + uri->protocollen; /* ':' */
 
 		/* Check if there's a digit after the protocol name. */
-		if (isdigit (*prefix_end)) {
+		if (g_ascii_isdigit (*prefix_end)) {
 			p = struri (uri);
 			uri->ip_family = p[uri->protocollen] - '0';
 			prefix_end++;
@@ -795,7 +797,7 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 
 		/* test if port is number */
 		for (; host_end < port_end; host_end++)
-			if (!isdigit (*host_end))
+			if (!g_ascii_isdigit (*host_end))
 				return URI_ERRNO_INVALID_PORT;
 
 		/* Check valid port value, and let show an error message

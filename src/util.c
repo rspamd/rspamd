@@ -265,7 +265,7 @@ pass_signal_worker (struct workq *workers, int signo)
 void convert_to_lowercase (char *str, unsigned int size)
 {
 	while (size--) {
-		*str = tolower (*str);
+		*str = g_ascii_tolower (*str);
 		str ++;
 	}
 }
@@ -629,6 +629,7 @@ open_log (struct config_file *cfg)
 			}
 			return 0;
 	}
+	return -1;
 }
 
 void 

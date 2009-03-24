@@ -448,7 +448,6 @@ parse_regexp (memory_pool_t *pool, char *line)
 	char *begin, *end, *p, *src;
 	struct rspamd_regexp *result;
 	int regexp_flags = 0;
-	enum rspamd_regexp_type type = REGEXP_NONE;
 	GError *err = NULL;
 	
 	src = line;

@@ -318,7 +318,10 @@ read_rspamd_input_line (struct worker_task *task, f_str_t *line)
 		case READ_HEADER:
 			return parse_header (task, fstrcstr (line, task->task_pool));
 			break;
+		default:
+			return -1;
 	}
+	return -1;
 }
 
 struct metric_callback_data {

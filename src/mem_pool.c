@@ -393,12 +393,10 @@ memory_pool_delete (memory_pool_t *pool)
 void
 memory_pool_stat (memory_pool_stat_t *st)
 {
-	if (stat) {
-		st->bytes_allocated = mem_pool_stat->bytes_allocated;
-		st->chunks_allocated = mem_pool_stat->chunks_allocated;
-		st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
-		st->chunks_freed = mem_pool_stat->chunks_freed;
-	}
+	st->bytes_allocated = mem_pool_stat->bytes_allocated;
+	st->chunks_allocated = mem_pool_stat->chunks_allocated;
+	st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
+	st->chunks_freed = mem_pool_stat->chunks_freed;
 }
 
 #define FIXED_POOL_SIZE 4095

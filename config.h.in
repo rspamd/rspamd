@@ -31,6 +31,9 @@
 
 #cmakedefine HAVE_STDBOOL_H      1
 
+#cmakedefine HAVE_ARPA_INET_H    1
+#cmakedefine HAVE_NETINET_IN_H   1
+
 #cmakedefine HAVE_NETDB_H        1
 
 #cmakedefine HAVE_SYSLOG_H       1
@@ -56,6 +59,7 @@
 #cmakedefine HAVE_SYS_STAT_H     1
 #cmakedefine HAVE_SYS_WAIT_H     1
 #cmakedefine HAVE_SYS_PARAM_H    1
+#cmakedefine HAVE_SYS_FILE_H     1
 
 #cmakedefine HAVE_PIDFILE        1
 
@@ -131,6 +135,11 @@
 /* sys/socket */
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+
+/* sys/file.h */
+#ifdef HAVE_SYS_FILE_H
+#include <sys/file.h>
 #endif
 
 /* sys/mman */

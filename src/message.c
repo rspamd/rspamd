@@ -181,12 +181,12 @@ strip_html_tags (GByteArray *src, int *stateptr)
 			case 'e':
 				/* !DOCTYPE exception */
 				if (state == 3 && p > src->data + 6
-						     && tolower(*(p-1)) == 'p'
-					         && tolower(*(p-2)) == 'y'
-						     && tolower(*(p-3)) == 't'
-						     && tolower(*(p-4)) == 'c'
-						     && tolower(*(p-5)) == 'o'
-						     && tolower(*(p-6)) == 'd') {
+						     && g_ascii_tolower(*(p-1)) == 'p'
+					         && g_ascii_tolower(*(p-2)) == 'y'
+						     && g_ascii_tolower(*(p-3)) == 't'
+						     && g_ascii_tolower(*(p-4)) == 'c'
+						     && g_ascii_tolower(*(p-5)) == 'o'
+						     && g_ascii_tolower(*(p-6)) == 'd') {
 					state = 1;
 					break;
 				}

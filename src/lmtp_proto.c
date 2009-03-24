@@ -25,6 +25,7 @@
 #include "config.h"
 #include "main.h"
 #include "cfg_file.h"
+#include "util.h"
 #include "lmtp.h"
 #include "lmtp_proto.h"
 
@@ -117,7 +118,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 				i += lhlo_command.len;
 				c = line->begin + i;
 				/* Skip spaces */
-				while (isspace (*c) && i < line->len) {
+				while (g_ascii_isspace (*c) && i < line->len) {
 					i ++;
 					c ++;
 				}
@@ -184,7 +185,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 				i += data_command.len;
 				c = line->begin + i;
 				/* Skip spaces */
-				while (isspace (*c++)) {
+				while (g_ascii_isspace (*c++)) {
 					i ++;
 				}
 				rcpt = memory_pool_alloc (lmtp->task->task_pool, line->len - i + 1);
@@ -229,6 +230,8 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line)
 			return 0;
 			break;
 	}	
+
+	return 0;
 }
 
 struct mta_callback_data {
@@ -236,7 +239,6 @@ struct mta_callback_data {
 	rspamd_io_dispatcher_t *dispatcher;
 	enum {
 		LMTP_WANT_GREETING,
-		LMTP_WANT_HELO,
 		LMTP_WANT_MAIL,
 		LMTP_WANT_RCPT,
 		LMTP_WANT_DATA,
@@ -264,7 +266,6 @@ parse_mta_str (f_str_t *in, struct mta_callback_data *cd)
 
 	switch (cd->state) {
 		case LMTP_WANT_GREETING:
-		case LMTP_WANT_HELO:
 		case LMTP_WANT_MAIL:
 		case LMTP_WANT_RCPT:
 		case LMTP_WANT_DATA:
@@ -437,12 +438,13 @@ lmtp_deliver_mta (struct worker_task *task)
 	cd->dispatcher = rspamd_create_dispatcher (sock, BUFFER_LINE, mta_read_socket,
 														NULL, mta_err_socket, NULL,
 														(void *)cd);
+	return 0;
 }
 
 static char*
 format_lda_args (struct worker_task *task)
 {
-	char *arg, *res, *c, *r;
+	char *res, *c, *r;
 	size_t len;
 	GList *rcpt;
 	gboolean got_args = FALSE;
@@ -637,7 +639,6 @@ int
 write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 {
 	int r;
-	char outbuf[OUTBUFSIZ];
 
 	msg_debug ("write_lmtp_reply: writing reply to client");
 	if (lmtp->task->error_code != 0) {

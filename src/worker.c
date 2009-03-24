@@ -169,6 +169,9 @@ read_socket (f_str_t *in, void *arg)
 				write_socket (task);
 			}
 			break;
+		default:
+			msg_debug ("read_socket: invalid state on reading stage");
+			break;
 	}
 }
 

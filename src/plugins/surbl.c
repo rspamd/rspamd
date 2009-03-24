@@ -27,6 +27,7 @@
  */
 
 #include "../config.h"
+#include "../util.h"
 #include <evdns.h>
 
 #include "surbl.h"
@@ -220,6 +221,8 @@ surbl_module_config (struct config_file *cfg)
 								new_suffix->suffix, new_suffix->symbol);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 	}
+
+	return 0;
 }
 
 int
@@ -410,7 +413,6 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 {
 	struct memcached_param *param = (struct memcached_param *)data;
 	int *url_count;
-	f_str_t c;
 
 	switch (ctx->op) {
 		case CMD_CONNECT:
@@ -466,6 +468,8 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 			}
 			make_surbl_requests (param->url, param->task, param->tree);
 			break;
+		default:
+			return;
 	}
 }
 
@@ -648,7 +652,6 @@ static int
 surbl_test_url (struct worker_task *task)
 {
 	struct uri *url;
-	struct memcached_param *param;
 	GTree *url_tree;
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);

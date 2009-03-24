@@ -28,6 +28,7 @@
 #include "lmtp.h"
 #include "lmtp_proto.h"
 #include "cfg_file.h"
+#include "util.h"
 #include "url.h"
 #include "modules.h"
 #include "message.h"
@@ -155,6 +156,9 @@ lmtp_read_socket (f_str_t *in, void *arg)
 				lmtp_write_socket (lmtp);
 			}
 			break;
+		default:
+			msg_debug ("lmtp_read_socket: invalid state while reading from socket %d", lmtp->task->state);
+			break;
 	}
 }
 
@@ -182,6 +186,9 @@ lmtp_write_socket (void *arg)
 		case CLOSING_CONNECTION:
 			msg_debug ("lmtp_write_socket: normally closing connection");
 			free_task (lmtp, TRUE);
+			break;
+		default:
+			msg_debug ("lmtp_write_socket: invalid state while writing to socket %d", lmtp->task->state);
 			break;
 	}
 }

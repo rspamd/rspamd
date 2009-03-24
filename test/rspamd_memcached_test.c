@@ -59,6 +59,8 @@ memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 			bzero (ctx->param->buf, sizeof (buf));
 			memc_get (ctx, ctx->param);
 			break;
+		default:
+			return;
 	}
 }
 			
