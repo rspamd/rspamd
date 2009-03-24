@@ -342,16 +342,13 @@ parse_expression (memory_pool_t *pool, char *line)
 				break;
 
 			case READ_FUNCTION:
-				if (func == NULL) {
-					func = memory_pool_alloc (pool, sizeof (struct expression_function));
-				}
-
 				if (*p == '/') {
 					/* In fact it is regexp */
 					state = READ_REGEXP;
 					c ++;
 					p ++;
 				} else if (*p == '(') {
+					func = memory_pool_alloc (pool, sizeof (struct expression_function));
 					func->name = memory_pool_alloc (pool, p - c + 1);
 					func->args = NULL;
 					g_strlcpy (func->name, c, (p - c + 1));

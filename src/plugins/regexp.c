@@ -268,13 +268,13 @@ static gboolean
 optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 {
 	struct expression *it = *e;
-	gboolean ret = FALSE;
+	gboolean ret = FALSE, is_nearest = TRUE;
 	
 	while (it) {
 		/* Find first operation for this iterator */
 		if (it->type == EXPR_OPERATION) {
 			/* If this operation is just ! just inverse res and check for further operators */
-			if (it->content.operation == '!') {
+			if (it->content.operation == '!' && is_nearest) {
 				res = !res;
 				it = it->next;
 				*e = it;
@@ -290,6 +290,7 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 			}
 			break;
 		}
+		is_nearest = FALSE;
 		it = it->next;
 	}
 
