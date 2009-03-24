@@ -580,7 +580,7 @@ enum {
 };
 
 static GList *
-local_message_get_header(GMimeMessage *message, const char *field)
+local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char *field)
 {
 	GList *	gret = NULL;
 #ifndef GMIME24
@@ -592,7 +592,7 @@ local_message_get_header(GMimeMessage *message, const char *field)
 	h = GMIME_OBJECT(message)->headers->headers;
 	while (h) {
 		if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
-			gret = g_list_prepend(gret, g_strdup (h->value));
+			gret = g_list_prepend (gret, memory_pool_strdup (pool, h->value));
 		}
 		h = h->next;
 	}
@@ -608,7 +608,7 @@ local_message_get_header(GMimeMessage *message, const char *field)
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
 			if (!g_strncasecmp (field, name, strlen (name))) {
-				gret = g_list_prepend (gret, g_strdup (g_mime_header_iter_get_value (iter)));
+				gret = g_list_prepend (gret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
 			}
 			if (!g_mime_header_iter_next (iter)) {
 				break;
@@ -671,7 +671,7 @@ GET_RECIPIENT_TEMPLATE(bcc, GMIME_RECIPIENT_TYPE_BCC)
 /* different declarations for different types of set and get functions */
 typedef const char *(*GetFunc) (GMimeMessage *message);
 typedef InternetAddressList *(*GetRcptFunc) (GMimeMessage *message, const char *type );
-typedef GList *(*GetListFunc) (GMimeMessage *message, const char *type );
+typedef GList *(*GetListFunc) (memory_pool_t *pool, GMimeMessage *message, const char *type );
 typedef void	 (*SetFunc) (GMimeMessage *message, const char *value);
 typedef void	 (*SetListFunc) (GMimeMessage *message, const char *field, const char *value);
 
@@ -767,7 +767,7 @@ message_set_header (GMimeMessage *message, const char *field, const char *value)
 * You should free the GList list by yourself.
 **/
 GList *
-message_get_header (GMimeMessage *message, const char *field) 
+message_get_header (memory_pool_t *pool, GMimeMessage *message, const char *field) 
 {
 	gint		i;
 	char *	ret = NULL, *ia_string;
@@ -791,30 +791,31 @@ message_get_header (GMimeMessage *message, const char *field)
 					while (ia && ia->address) {
 
 						ia_string = internet_address_to_string ((InternetAddress *)ia->address, FALSE);
-						gret = g_list_append (gret, ia_string);
+						gret = g_list_prepend (gret, ia_string);
 						ia = ia->next;
 					}
 #else
 					i = internet_address_list_length (ia);
 					while (i > 0) {
 						ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
-						gret = g_list_append (gret, ia_string);
+						gret = g_list_prepend (gret, ia_string);
 						-- i;
 					}
 #endif
 					break;
 				case FUNC_LIST:
-					gret = (*(fieldfunc[i].getlistfunc))(message, field);
+					gret = (*(fieldfunc[i].getlistfunc))(pool, message, field);
 					break;
 			}
 			break;
 		}		 
 	}
 	if (gret == NULL && ret != NULL) {
-		gret = g_list_prepend (gret, g_strdup (ret));
+		gret = g_list_prepend (gret, memory_pool_strdup (pool, ret));
 	}
 	if (fieldfunc[i].functype == FUNC_CHARFREEPTR && ret) {
 		g_free (ret);
 	}
+
 	return gret;
 }

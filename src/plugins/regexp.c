@@ -171,7 +171,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				return 0;
 			}
 			msg_debug ("process_regexp: checking header regexp: %s = /%s/", re->header, re->regexp_text);
-			headerlist = message_get_header (task->message, re->header);
+			headerlist = message_get_header (task->task_pool, task->message, re->header);
 			if (headerlist == NULL) {
 				return 0;
 			}
@@ -183,7 +183,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				}
 				cur = headerlist;
 				while (cur) {
-					if (g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+					if (cur->data && g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
 						return 1;
 					}
 					cur = g_list_next (cur);
