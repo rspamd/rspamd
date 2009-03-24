@@ -142,6 +142,11 @@
 #include <sys/file.h>
 #endif
 
+/* sys/uio.h */
+#ifdef HAVE_SYS_UIO_H
+#include <sys/uio.h>
+#endif
+
 /* sys/mman */
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
