@@ -592,7 +592,12 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 	h = GMIME_OBJECT(message)->headers->headers;
 	while (h) {
 		if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
-			gret = g_list_prepend (gret, memory_pool_strdup (pool, h->value));
+			if (pool != NULL) {
+				gret = g_list_prepend (gret, memory_pool_strdup (pool, h->value));
+			}
+			else {
+				gret = g_list_prepend (gret, g_strdup (h->value));
+			}
 		}
 		h = h->next;
 	}
@@ -608,7 +613,13 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
 			if (!g_strncasecmp (field, name, strlen (name))) {
-				gret = g_list_prepend (gret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+				if (pool != NULL) {
+					gret = g_list_prepend (gret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+				}
+				else {
+					gret = g_list_prepend (gret, g_strdup (g_mime_header_iter_get_value (iter)));
+				}
+				}
 			}
 			if (!g_mime_header_iter_next (iter)) {
 				break;
@@ -811,7 +822,12 @@ message_get_header (memory_pool_t *pool, GMimeMessage *message, const char *fiel
 		}		 
 	}
 	if (gret == NULL && ret != NULL) {
-		gret = g_list_prepend (gret, memory_pool_strdup (pool, ret));
+		if (pool != NULL) {
+			gret = g_list_prepend (gret, memory_pool_strdup (pool, ret));
+		}
+		else {
+			gret = g_list_prepend (gret, g_strdup (ret));
+		}
 	}
 	if (fieldfunc[i].functype == FUNC_CHARFREEPTR && ret) {
 		g_free (ret);

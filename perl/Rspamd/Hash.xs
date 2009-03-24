@@ -43,7 +43,7 @@ hash_FETCH (obj, key)
 
 		obj->fetchvalue = NULL;
 		
-		gret = message_get_header (msg, key);
+		gret = message_get_header (NULL, msg, key);
 
 		if (!gret || gret->data == NULL) {
 			if (gret) {
@@ -150,7 +150,7 @@ hash_EXISTS (obj, key)
 		GList			*gret, *item;
 	CODE:
 		msg = obj->objptr;
-		gret = message_get_header (msg, key);
+		gret = message_get_header (NULL, msg, key);
 		RETVAL = (gret != NULL && gret->data != NULL);
 		if (gret) {
 			item = gret;
