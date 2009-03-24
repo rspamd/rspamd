@@ -407,11 +407,13 @@ static void
 substitute_all_variables (gpointer key, gpointer value, gpointer data)
 {
 	struct config_file *cfg = (struct config_file *)data;
-	char *var;
+	char *new;
 
-	var = value;
 	/* Do recursive substitution */
-	var = substitute_variable (cfg, var, 1);
+	new = substitute_variable (cfg, (char *)value, 1);
+	if (new != value) {
+		g_hash_table_replace (cfg->variables, key, new);
+	}
 }
 
 static void

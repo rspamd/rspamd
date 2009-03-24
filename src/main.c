@@ -47,6 +47,7 @@ extern int yynerrs;
 extern FILE *yyin;
 extern void xs_init(pTHX);
 
+static int dump_vars = 0;
 
 extern PerlInterpreter *perl_interpreter;
 
@@ -81,18 +82,21 @@ static void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
 {
 	int ch;
-	while ((ch = getopt(argc, argv, "thfc:u:g:")) != -1) {
-        switch (ch) {
-            case 'f':
-                cfg->no_fork = 1;
-                break;
-            case 'c':
-                if (optarg && cfg->cfg_name) {
-                    cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
-                }
-                break;
+	while ((ch = getopt(argc, argv, "tVhfc:u:g:")) != -1) {
+		switch (ch) {
+			case 'f':
+				cfg->no_fork = 1;
+				break;
+			case 'c':
+				if (optarg && cfg->cfg_name) {
+					cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
+				}
+				break;
 			case 't':
 				cfg->config_test = 1;
+				break;
+		 	case 'V':
+				dump_vars = 1;
 				break;
 			case 'u':
 				if (optarg) {
@@ -104,22 +108,23 @@ read_cmd_line (int argc, char **argv, struct config_file *cfg)
 					cfg->rspamd_group = memory_pool_strdup (cfg->cfg_pool, optarg);
 				}
 				break;
-            case 'h':
-            case '?':
-            default:
-                /* Show help message and exit */
-                printf ("Rspamd version " RVERSION "\n"
-                        "Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
-                        "-h:        This help message\n"
+			case 'h':
+			case '?':
+			default:
+				/* Show help message and exit */
+				printf ("Rspamd version " RVERSION "\n"
+						"Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
+						"-h:        This help message\n"
 						"-t:        Do config test and exit\n"
-                        "-f:        Do not daemonize main process\n"
-                        "-c:        Specify config file (./rspamd.conf is used by default)\n"
+						"-V         Print all rspamd variables and exit\n"
+						"-f:        Do not daemonize main process\n"
+						"-c:        Specify config file (./rspamd.conf is used by default)\n"
 						"-u:        User to run rspamd as\n"
 						"-g:        Group to run rspamd as\n");
-                exit (0);
-                break;
-        }
-    }
+				exit (0);
+				break;
+		}
+	}
 }
 
 static void
@@ -309,6 +314,33 @@ fork_delayed (struct rspamd_main *rspamd, int listen_sock)
 	}
 }
 
+static void
+dump_module_variables (gpointer key, gpointer value, gpointer data)
+{
+	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = (struct moduleoptq *)value;
+	struct module_opt *cur, *tmp;
+
+	LIST_FOREACH_SAFE (cur, cur_module_opt, next, tmp) {
+		if (cur->value) {
+			printf ("$%s = \"%s\"\n", cur->param, cur->value);
+		}
+	}
+}
+
+static void
+dump_all_variables (gpointer key, gpointer value, gpointer data)
+{
+	printf ("$%s = \"%s\"\n", (char *)key, (char *)value);
+}
+
+
+static void
+dump_cfg_vars ()
+{
+	g_hash_table_foreach (cfg->variables, dump_all_variables, NULL);
+	g_hash_table_foreach (cfg->modules_opts, dump_module_variables, NULL);
+}
+
 static int
 create_listen_socket (struct in_addr *addr, int port, int family, char *path)
 {
@@ -422,7 +454,7 @@ main (int argc, char **argv, char **env)
 		}
 	}
 
-	if (cfg->config_test) {
+	if (cfg->config_test || dump_vars) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
@@ -431,6 +463,9 @@ main (int argc, char **argv, char **env)
 			if (!modules[i].module_config_func (cfg)) {
 				res = FALSE;
 			}
+		}
+		if (dump_vars) {
+			dump_cfg_vars ();
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
