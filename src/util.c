@@ -26,13 +26,15 @@
 #include "config.h"
 #include "util.h"
 #include "cfg_file.h"
+#include "main.h"
 
 sig_atomic_t do_reopen_log = 0;
 
 int
-event_make_socket_nonblocking (int fd)
+make_socket_nonblocking (int fd)
 {
 	if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
+		msg_warn ("make_socket_nonblocking: fcntl failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	return 0;
@@ -41,33 +43,27 @@ event_make_socket_nonblocking (int fd)
 int
 make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 {
-	struct linger linger;
-	int fd, on = 1, r, optlen, s_error;
+	int fd, r, optlen, s_error;
 	int serrno;
 	struct sockaddr_in sin;
 	
 	/* Create socket */
 	fd = socket (AF_INET, SOCK_STREAM, 0);
 	if (fd == -1) {
+		msg_warn ("make_tcp_socket: socket failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 
-	if (event_make_socket_nonblocking(fd) < 0) {
+	if (make_socket_nonblocking(fd) < 0) {
 		goto out;
 	}
 	
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("make_tcp_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 	
-	/* Socket options */
-	setsockopt (fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
-	setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
-	linger.l_onoff = 1;
-	linger.l_linger = 5;
-	setsockopt (fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
-
 	/* Bind options */
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons (port);
@@ -82,6 +78,7 @@ make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
+			msg_warn ("make_tcp_socket: bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
 	}
@@ -108,28 +105,22 @@ make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 int
 accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len)
 {
-	struct linger linger;
-	int nfd, on = 1;
+	int nfd;
 	int serrno;
 
 	if ((nfd = accept (listen_sock, addr, len)) == -1) {
+		msg_warn ("accept_from_socket: accept failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
-	if (event_make_socket_nonblocking(nfd) < 0) {
+	if (make_socket_nonblocking(nfd) < 0) {
 		goto out;
 	}
 	
 	/* Set close on exec */
 	if (fcntl (nfd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("accept_from_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
-
-	/* Socket options */
-	setsockopt (nfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on));
-	setsockopt (nfd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
-	linger.l_onoff = 1;
-	linger.l_linger = 2;
-	setsockopt (nfd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger));
 
 	return (nfd);
 
@@ -160,15 +151,17 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 	fd = socket (PF_LOCAL, SOCK_STREAM, 0);
 	
 	if (fd == -1) {
+		msg_warn ("make_unix_socket: socket failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 
-	if (event_make_socket_nonblocking(fd) < 0) {
+	if (make_socket_nonblocking(fd) < 0) {
 		goto out;
 	}
 	
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("make_unix_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 	if (is_server) {
@@ -180,6 +173,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
+			msg_warn ("make_unix_socket: bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
 	}
