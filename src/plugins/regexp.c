@@ -277,6 +277,7 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 			if (it->content.operation == '!') {
 				res = !res;
 				it = it->next;
+				*e = it;
 				continue;
 			}
 			else if (it->content.operation == '&' && res == FALSE) {
@@ -353,7 +354,9 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 					continue;
 			}
 		}
-		it = it->next;
+		if (it) {
+			it = it->next;
+		}
 	}
 	if (!g_queue_is_empty (stack)) {
 		op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
