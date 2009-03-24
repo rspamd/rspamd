@@ -649,6 +649,7 @@ rspamd_parts_distance (struct worker_task *task, GList *args)
 	int threshold;
 	struct mime_text_part *p1, *p2;
 	GList *cur;
+	struct expression_argument *arg;
 	
 	if (args == NULL) {
 		msg_debug ("rspamd_parts_distance: no threshold is specified, assume it 100");
@@ -656,7 +657,8 @@ rspamd_parts_distance (struct worker_task *task, GList *args)
 	}
 	else {
 		errno = 0;
-		threshold = strtoul ((char *)args->data, NULL, 10);
+		arg = args->data;
+		threshold = strtoul ((char *)arg->data, NULL, 10);
 		if (errno != 0) {
 			msg_info ("rspamd_parts_distance: bad numeric value for threshold \"%s\", assume it 100", (char *)args->data);
 			threshold = 100;
@@ -690,20 +692,25 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 	char *param_name, *param_pattern;
 	const char *param_data;
 	struct rspamd_regexp *re;
+	struct expression_argument *arg;
+	const GMimeContentType *ct;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
 		return FALSE;
 	}
-	param_name = args->data;
+	arg = args->data;
+	param_name = arg->data;
 	args = g_list_next (args);
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: too few params to function");
 		return FALSE;
 	}
-	param_pattern = args->data;
-
-	if ((param_data = g_mime_content_type_get_parameter (g_mime_object_get_content_type (GMIME_OBJECT (task->message)), param_name)) == NULL) {
+	arg = args->data;
+	param_pattern = arg->data;
+	
+	ct = g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
+	if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
 		return FALSE;
 	}
 	
@@ -736,13 +743,17 @@ rspamd_content_type_has_param (struct worker_task *task, GList *args)
 {
 	char *param_name;
 	const char *param_data;
+	struct expression_argument *arg;
+	const GMimeContentType *ct;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
 		return FALSE;
 	}
-	param_name = args->data;
-	if ((param_data = g_mime_content_type_get_parameter (g_mime_object_get_content_type (GMIME_OBJECT (task->message)), param_name)) == NULL) {
+	arg = args->data;
+	param_name = arg->data;
+	ct = g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
+	if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
 		return FALSE;
 	}
 	
@@ -763,15 +774,17 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 {
 	char *param_pattern;
 	struct rspamd_regexp *re;
+	struct expression_argument *arg;
 	localContentType *ct;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
 		return FALSE;
 	}
-
-	param_pattern = args->data;
-	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (task->message));
+	
+	arg = args->data;
+	param_pattern = arg->data;
+	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
 
 	if (ct == NULL) {
 		return FALSE;
@@ -807,14 +820,16 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 	char *param_pattern;
 	struct rspamd_regexp *re;
 	localContentType *ct;
+	struct expression_argument *arg;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
 		return FALSE;
 	}
-
-	param_pattern = args->data;
-	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (task->message));
+	
+	arg = args->data;
+	param_pattern = arg->data;
+	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
 
 	if (ct == NULL) {
 		return FALSE;
