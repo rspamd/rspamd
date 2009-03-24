@@ -272,6 +272,7 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/util.c
 				src/fuzzy.c
 				src/memcached.c
+				src/message.c
 				src/expressions.c
 				src/statfile.c)
 

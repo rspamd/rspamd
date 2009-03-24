@@ -154,7 +154,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
 	char *headerv, *c, t;
 	struct mime_part *part;
-	GList *cur;
+	GList *cur, *headerlist;
 	struct uri *url;
 
 	if (re == NULL) {
@@ -171,25 +171,25 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				return 0;
 			}
 			msg_debug ("process_regexp: checking header regexp: %s = /%s/", re->header, re->regexp_text);
-#ifdef GMIME24
-			headerv = (char *)g_mime_object_get_header (GMIME_OBJECT (task->message), re->header);
-#else
-			headerv = (char *)g_mime_message_get_header (task->message, re->header);
-#endif
-			if (headerv == NULL) {
+			headerlist = message_get_header (task->message, re->header);
+			if (headerlist == NULL) {
 				return 0;
 			}
 			else {
 				if (re->regexp == NULL) {
 					msg_debug ("process_regexp: regexp contains only header and it is found %s", re->header);
+					g_list_free (headerlist);
 					return 1;
 				}
-				if (g_regex_match (re->regexp, headerv, 0, NULL) == TRUE) {
-					return 1;
+				cur = headerlist;
+				while (cur) {
+					if (g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+						return 1;
+					}
+					cur = g_list_next (cur);
 				}
-				else {
-					return 0;
-				}
+				g_list_free (headerlist);
+				return 0;
 			}
 			break;
 		case REGEXP_MIME:

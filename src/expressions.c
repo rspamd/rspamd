@@ -585,6 +585,7 @@ gboolean
 rspamd_header_exists (struct worker_task *task, GList *args)
 {
 	struct expression_argument *arg;
+	GList *headerlist;
 
 	if (args == NULL || task == NULL) {
 		return FALSE;
@@ -595,11 +596,13 @@ rspamd_header_exists (struct worker_task *task, GList *args)
 		msg_warn ("rspamd_header_exists: invalid argument to function is passed");
 		return FALSE;
 	}
-#ifdef GMIME24
-	return (g_mime_object_get_header (GMIME_OBJECT (task->message), (char *)arg->data) != NULL);
-#else
-	return (g_mime_message_get_header (task->message, (char *)arg->data) != NULL);
-#endif
+
+	headerlist = message_get_header (task->message, (char *)arg->data);
+	if (headerlist) {
+		g_list_free (headerlist);
+		return TRUE;
+	}
+	return FALSE;
 }
 
 /*

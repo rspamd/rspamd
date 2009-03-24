@@ -44,4 +44,7 @@ int process_learn (struct controller_session *session);
  */
 GByteArray* get_next_text_part (memory_pool_t *pool, GList *parts, GList **cur);
 
+void message_set_header (GMimeMessage *message, const char *field, const char *value);
+GList* message_get_header (GMimeMessage *message, const char *field);
+
 #endif
