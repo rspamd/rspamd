@@ -34,7 +34,12 @@ typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args);
 
 gboolean rspamd_compare_encoding (struct worker_task *task, GList *args);
 gboolean rspamd_header_exists (struct worker_task *task, GList *args);
+gboolean rspamd_content_type_compare_param (struct worker_task *task, GList *args);
+gboolean rspamd_content_type_has_param (struct worker_task *task, GList *args);
+gboolean rspamd_content_type_is_subtype (struct worker_task *task, GList *args);
+gboolean rspamd_content_type_is_type (struct worker_task *task, GList *args);
 gboolean rspamd_parts_distance (struct worker_task *task, GList *args);
+
 /*
  * List of internal functions of rspamd
  * Sorted by name to use bsearch
@@ -45,6 +50,10 @@ static struct _fl {
 } rspamd_functions_list[] = {
 	{ "compare_encoding", rspamd_compare_encoding },
 	{ "compare_parts_distance", rspamd_parts_distance },
+	{ "content_type_compare_param", rspamd_content_type_compare_param },
+	{ "content_type_has_param", rspamd_content_type_has_param },
+	{ "content_type_is_subtype", rspamd_content_type_is_subtype },
+	{ "content_type_is_type", rspamd_content_type_is_type },
 	{ "header_exists", rspamd_header_exists },
 };
 
@@ -55,6 +64,29 @@ fl_cmp (const void *s1, const void *s2)
 	struct _fl *fl1 = (struct _fl *)s1;
 	struct _fl *fl2 = (struct _fl *)s2;
 	return strcmp (fl1->name, fl2->name);
+}
+
+/* Cache for regular expressions that are used in functions */
+static GHashTable *re_cache = NULL;
+
+static inline void *
+re_cache_check (const char *line)
+{
+	if (re_cache == NULL) {
+		re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+		return NULL;
+	}
+	return g_hash_table_lookup (re_cache, line);
+}
+
+static inline void
+re_cache_add (char *line, void *pointer)
+{
+	if (re_cache == NULL) {
+		re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+	}
+	
+	g_hash_table_insert (re_cache, line, pointer);
 }
 
 /*
@@ -647,6 +679,166 @@ rspamd_parts_distance (struct worker_task *task, GList *args)
 	else {
 		msg_debug ("rspamd_parts_distance: message has too many text parts, so do not try to compare them with each other");
 		return FALSE;
+	}
+
+	return FALSE;
+}
+
+gboolean 
+rspamd_content_type_compare_param (struct worker_task *task, GList *args)
+{
+	char *param_name, *param_pattern;
+	const char *param_data;
+	struct rspamd_regexp *re;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		return FALSE;
+	}
+	param_name = args->data;
+	args = g_list_next (args);
+	if (args == NULL) {
+		msg_warn ("rspamd_content_type_compare_param: too few params to function");
+		return FALSE;
+	}
+	param_pattern = args->data;
+
+	if ((param_data = g_mime_content_type_get_parameter (g_mime_object_get_content_type (GMIME_OBJECT (task->message)), param_name)) == NULL) {
+		return FALSE;
+	}
+	
+	if (*param_pattern == '/') {
+		/* This is regexp, so compile and create g_regexp object */
+		if ((re = re_cache_check (param_pattern)) == NULL) {
+			re = parse_regexp (task->task_pool, param_pattern);
+			if (re == NULL) {
+				msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+				return FALSE;
+			}
+			re_cache_add (param_pattern, re);
+		}
+		if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
+			return TRUE;
+		}
+	}
+	else {
+		/* Just do strcasecmp */
+		if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}	
+
+gboolean 
+rspamd_content_type_has_param (struct worker_task *task, GList *args)
+{
+	char *param_name;
+	const char *param_data;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		return FALSE;
+	}
+	param_name = args->data;
+	if ((param_data = g_mime_content_type_get_parameter (g_mime_object_get_content_type (GMIME_OBJECT (task->message)), param_name)) == NULL) {
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+
+/* In gmime24 this function is opaque, so define it here to avoid errors when compiling with gmime24 */
+typedef struct {
+	char *type;
+	char *subtype;
+	
+	GMimeParam *params;
+	GHashTable *param_hash;
+} localContentType;
+
+gboolean 
+rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
+{
+	char *param_pattern;
+	struct rspamd_regexp *re;
+	localContentType *ct;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		return FALSE;
+	}
+
+	param_pattern = args->data;
+	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (task->message));
+
+	if (ct == NULL) {
+		return FALSE;
+	}
+	
+	if (*param_pattern == '/') {
+		/* This is regexp, so compile and create g_regexp object */
+		if ((re = re_cache_check (param_pattern)) == NULL) {
+			re = parse_regexp (task->task_pool, param_pattern);
+			if (re == NULL) {
+				msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+				return FALSE;
+			}
+			re_cache_add (param_pattern, re);
+		}
+		if (g_regex_match (re->regexp, ct->subtype, 0, NULL) == TRUE) {
+			return TRUE;
+		}
+	}
+	else {
+		/* Just do strcasecmp */
+		if (g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+gboolean 
+rspamd_content_type_is_type (struct worker_task *task, GList *args)
+{
+	char *param_pattern;
+	struct rspamd_regexp *re;
+	localContentType *ct;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		return FALSE;
+	}
+
+	param_pattern = args->data;
+	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (task->message));
+
+	if (ct == NULL) {
+		return FALSE;
+	}
+	
+	if (*param_pattern == '/') {
+		/* This is regexp, so compile and create g_regexp object */
+		if ((re = re_cache_check (param_pattern)) == NULL) {
+			re = parse_regexp (task->task_pool, param_pattern);
+			if (re == NULL) {
+				msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+				return FALSE;
+			}
+			re_cache_add (param_pattern, re);
+		}
+		if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+			return TRUE;
+		}
+	}
+	else {
+		/* Just do strcasecmp */
+		if (g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
+			return TRUE;
+		}
 	}
 
 	return FALSE;

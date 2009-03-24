@@ -139,3 +139,11 @@ SOME_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})"
     между частями письма. Функция работает с сообщениями, содержащими 2 текстовые части (text/plain и text/html) и
 	возвращает true тогда, когда эти части различаются более чем на n процентов. Если аргумент не указан, то
 	по умолчанию ищется различие в 100% (полностью разные части).
+  * content_type_compare_param - сравнивает параметр content-type заголовка с регулярным выражением или строкой:
+     content_type_compare_param(Charset, /windows-\d+/)
+	 content_type_compare_param(Charset, ascii)
+  * content_type_has_param - проверяет, есть ли в заголовке content-type определенный параметр
+  * content_type_is_subtype - сравнивает подтип content-type с регулярным выражением или строкой
+  * content_type_is_type - сравнивает тип content-type с регулярным выражением или строкой
+     content_type_is_type(text)
+     content_type_is_subtype(/?.html/)
