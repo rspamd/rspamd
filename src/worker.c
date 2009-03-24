@@ -232,6 +232,11 @@ accept_socket (int fd, short what, void *arg)
 		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
 		return;
 	}
+	/* Check for EAGAIN */
+	if (nfd == 0) {
+		msg_debug ("accept_socket: cannot accept socket as it was already accepted by other worker");
+		return;
+	}
 
     if (ss.ss_family == AF_UNIX) {
         msg_info ("accept_socket: accepted connection from unix socket");

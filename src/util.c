@@ -43,7 +43,7 @@ make_socket_nonblocking (int fd)
 int
 make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 {
-	int fd, r, optlen, s_error;
+	int fd, r, optlen, on = 1, s_error;
 	int serrno;
 	struct sockaddr_in sin;
 	
@@ -70,6 +70,7 @@ make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 	sin.sin_addr.s_addr = addr->s_addr;
 	
 	if (is_server) {
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &on, sizeof(int));
 		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
 	}
 	else {
@@ -109,6 +110,9 @@ accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len)
 	int serrno;
 
 	if ((nfd = accept (listen_sock, addr, len)) == -1) {
+		if (errno == EAGAIN) {
+			return 0;	
+		}
 		msg_warn ("accept_from_socket: accept failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
@@ -121,6 +125,8 @@ accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len)
 		msg_warn ("accept_from_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
+
+
 
 	return (nfd);
 
@@ -136,7 +142,7 @@ int
 make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server)
 {
 	size_t len = strlen (path);
-	int fd, s_error, r, optlen, serrno;
+	int fd, s_error, r, optlen, serrno, on = 1;
 
 	if (len > sizeof (addr->sun_path) - 1) return -1;
 	
@@ -165,6 +171,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 		goto out;
 	}
 	if (is_server) {
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &on, sizeof(int));
 		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
 	}
 	else {
