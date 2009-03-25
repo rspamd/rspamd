@@ -787,18 +787,28 @@ resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *fro
 	return new;
 }
 
-long int
-calculate_check_time (struct timespec *begin)
+const char *
+calculate_check_time (struct timespec *begin, int resolution)
 {
 	struct timespec ts;
-	long int res;
+	double diff;
+	static char res[sizeof("100000.000")];
+	static char fmt[sizeof("%.10f")];
 	
+#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
+#elif defined(HAVE_CLOCK_VIRTUAL)
+	clock_gettime (CLOCK_VIRTUAL, &ts);
+#else
 	clock_gettime (CLOCK_REALTIME, &ts);
+#endif
 
-	res = (ts.tv_sec - begin->tv_sec) * 1000 + /* Seconds */
-		  (ts.tv_nsec - begin->tv_nsec) / 1000000; /* Nanoseconds */
+	diff = (ts.tv_sec - begin->tv_sec) * 1000. + 		/* Seconds */
+		   (ts.tv_nsec - begin->tv_nsec) / 1000000.; 	/* Nanoseconds */
+	sprintf (fmt, "%%.%df", resolution);
+	snprintf (res, sizeof (res), fmt, diff);
 
-	return res;
+	return (const char *)res;
 }
 
 /*

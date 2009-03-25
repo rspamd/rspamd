@@ -220,6 +220,7 @@ struct config_file {
 	GHashTable* composite_symbols;					/**< hash of composite symbols indexed by its name		*/
 	GHashTable* statfiles;							/**< hash of defined statfiles indexed by alias			*/
     GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
+	int clock_res;									/**< resolution of clock used							*/
 };
 
 /**

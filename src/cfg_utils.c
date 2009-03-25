@@ -24,6 +24,7 @@
 
 
 #include "config.h"
+#include <math.h>
 #include "cfg_file.h"
 #include "main.h"
 #include "filter.h"
@@ -542,6 +543,8 @@ fill_cfg_params (struct config_file *cfg)
 void
 post_load_config (struct config_file *cfg)
 {
+	struct timespec ts;
+
 	if (cfg->lmtp_enable && !cfg->delivery_enable) {
 		yywarn ("post_load_config: lmtp is enabled, but delivery is not enabled, disabling lmtp");
 		cfg->lmtp_enable = FALSE;
@@ -554,6 +557,21 @@ post_load_config (struct config_file *cfg)
 	parse_filters_str (cfg, cfg->message_filters_str, SCRIPT_MESSAGE);
 	parse_filters_str (cfg, cfg->url_filters_str, SCRIPT_URL);
     fill_cfg_params (cfg);
+
+#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+	clock_getres (CLOCK_PROCESS_CPUTIME_ID, &ts);
+#elif defined(HAVE_CLOCK_VIRTUAL)
+	clock_getres (CLOCK_VIRTUAL, &ts);
+#else
+	clock_getres (CLOCK_REALTIME, &ts);
+#endif
+	cfg->clock_res = (int)log10 (1000000 / ts.tv_nsec);
+	if (cfg->clock_res < 0) {
+		cfg->clock_res = 0;
+	}
+	if (cfg->clock_res > 3) {
+		cfg->clock_res = 3;
+	}
 }
 
 

@@ -55,6 +55,6 @@ void file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const
 
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
 char* resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from);
-long int calculate_check_time (struct timespec *begin);
+const char* calculate_check_time (struct timespec *begin, int resolution);
 
 #endif
