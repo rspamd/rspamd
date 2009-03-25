@@ -486,7 +486,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
 		show_metric_symbols (metric_res, cd);
 	}
-	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "] ), len: %ld, time: %s",
+	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %ld, time: %sms",
 							(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
 }
 
