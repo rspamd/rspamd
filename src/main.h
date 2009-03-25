@@ -184,6 +184,7 @@ struct worker_task {
 	char *last_error;											/**< last error										*/
 	int error_code;												/**< code of last error								*/
 	memory_pool_t *task_pool;									/**< memory pool for task							*/
+	struct timespec ts;											/**< time of connection								*/
 };
 
 /**

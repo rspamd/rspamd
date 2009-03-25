@@ -292,6 +292,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 		if (type == NULL) {
 			msg_warn ("mime_foreach_callback: type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_mime_content_type_destroy, type);
 		}
 		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
 		if (wrapper != NULL) {
@@ -802,6 +803,7 @@ message_get_header (memory_pool_t *pool, GMimeMessage *message, const char *fiel
 					while (ia && ia->address) {
 
 						ia_string = internet_address_to_string ((InternetAddress *)ia->address, FALSE);
+						memory_pool_add_destructor (pool, (pool_destruct_func)g_free, ia_string);
 						gret = g_list_prepend (gret, ia_string);
 						ia = ia->next;
 					}
@@ -809,6 +811,7 @@ message_get_header (memory_pool_t *pool, GMimeMessage *message, const char *fiel
 					i = internet_address_list_length (ia);
 					while (i > 0) {
 						ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
+						memory_pool_add_destructor (pool, (pool_destruct_func)g_free, ia_string);
 						gret = g_list_prepend (gret, ia_string);
 						-- i;
 					}

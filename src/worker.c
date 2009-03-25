@@ -254,6 +254,7 @@ accept_socket (int fd, short what, void *arg)
 	new_task->state = READ_COMMAND;
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
+	clock_gettime (CLOCK_REALTIME, &new_task->ts);
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;
 	TAILQ_INIT (&new_task->urls);

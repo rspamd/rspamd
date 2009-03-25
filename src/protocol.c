@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "main.h"
+#include "util.h"
 #include "cfg_file.h"
 
 /* Max line size as it is defined in rfc2822 */
@@ -485,7 +486,8 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
 		show_metric_symbols (metric_res, cd);
 	}
-	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "] )");
+	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "] ), len: %ld, time: %ldms",
+							(long int)task->msg->len, calculate_check_time (&task->ts));
 }
 
 static int

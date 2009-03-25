@@ -787,6 +787,20 @@ resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *fro
 	return new;
 }
 
+long int
+calculate_check_time (struct timespec *begin)
+{
+	struct timespec ts;
+	long int res;
+	
+	clock_gettime (CLOCK_REALTIME, &ts);
+
+	res = (ts.tv_sec - begin->tv_sec) * 1000 + /* Seconds */
+		  (ts.tv_nsec - begin->tv_nsec) / 1000000; /* Nanoseconds */
+
+	return res;
+}
+
 /*
  * vi:ts=4
  */
