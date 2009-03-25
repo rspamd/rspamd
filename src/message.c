@@ -300,7 +300,9 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 		if (wrapper != NULL) {
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
+				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream), FALSE);
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+				g_object_unref (part_stream);
 				mime_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
@@ -362,6 +364,7 @@ process_message (struct worker_task *task)
 	msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
 	/* create a new parser object to parse the stream */
 	parser = g_mime_parser_new_with_stream (stream);
+	g_object_unref (stream);
 
 	/* parse the message from the stream */
 	message = g_mime_parser_construct_message (parser);
@@ -403,7 +406,6 @@ process_message (struct worker_task *task)
 
 	/* free the parser (and the stream) */
 	g_object_unref (parser);
-	g_object_unref (stream);
 
 	return 0;
 }
@@ -460,7 +462,9 @@ mime_learn_foreach_callback (GMimeObject *part, gpointer user_data)
 		if (wrapper != NULL) {
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
+				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream), FALSE);
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+				g_object_unref (part_stream);
 #ifdef GMIME24
 				type = (GMimeContentType *)g_mime_object_get_content_type (GMIME_OBJECT (part));
 #else
