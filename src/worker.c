@@ -143,7 +143,9 @@ read_socket (f_str_t *in, void *arg)
 			}
 			break;
 		case READ_MESSAGE:
-			task->msg = in;
+			task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+			task->msg->begin = in->begin;
+			task->msg->len = in->len;
 			msg_debug ("read_socket: got string of length %ld", (long int)task->msg->len);
 			r = process_message (task);
             if (r == -1) {

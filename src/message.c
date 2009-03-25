@@ -211,8 +211,10 @@ reg_char:
 				} 
 				break;
 		}
-		c = *(++p);
 		i++;
+		if (i < src->len) {
+			c = *(++p);
+		}
 	}	
 	if (rp < buf->data + src->len) {
 		*rp = '\0';
