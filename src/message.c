@@ -337,6 +337,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 			else {
 				msg_warn ("mime_foreach_callback: write to stream failed: %d, %s", errno, strerror (errno));
 			}
+			g_object_unref (wrapper);
 		}
 		else {
 			msg_warn ("mime_foreach_callback: cannot get wrapper for mime part, type of part: %s/%s", type->type, type->subtype);
@@ -478,6 +479,7 @@ mime_learn_foreach_callback (GMimeObject *part, gpointer user_data)
 				mime_part->content = part_content;
 				session->parts = g_list_prepend (session->parts, mime_part);
 			}
+			g_object_unref (wrapper);
 		}
 	} else {
 		g_assert_not_reached ();
