@@ -68,9 +68,11 @@ typedef struct memory_pool_s {
  * Statistics structure
  */
 typedef struct memory_pool_stat_s {
-	memory_pool_ssize_t bytes_allocated;					/**< bytes that are allocated with pool allocator		*/
+	memory_pool_ssize_t pools_allocated;				/**< total number of allocated pools					*/
+	memory_pool_ssize_t pools_freed;					/**< number of freed pools								*/
+	memory_pool_ssize_t bytes_allocated;				/**< bytes that are allocated with pool allocator		*/
 	memory_pool_ssize_t chunks_allocated;				/**< number of chunks that are allocated				*/
-	memory_pool_ssize_t shared_chunks_allocated;			/**< shared chunks allocated							*/
+	memory_pool_ssize_t shared_chunks_allocated;		/**< shared chunks allocated							*/
 	memory_pool_ssize_t chunks_freed;					/**< chunks freed										*/
 } memory_pool_stat_t;
 

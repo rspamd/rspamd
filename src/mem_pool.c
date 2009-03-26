@@ -142,6 +142,8 @@ memory_pool_new (memory_pool_ssize_t size)
 	new->first_pool = new->cur_pool;
 	new->destructors = NULL;
 
+	mem_pool_stat->pools_allocated ++;
+
 	return new;
 }
 
@@ -387,12 +389,16 @@ memory_pool_delete (memory_pool_t *pool)
 		STAT_UNLOCK ();
 	}
 
+	mem_pool_stat->pools_freed ++;
 	g_free (pool);
 }
 
 void
 memory_pool_stat (memory_pool_stat_t *st)
 {
+	st->pools_allocated = mem_pool_stat->pools_allocated;
+	st->pools_freed = mem_pool_stat->pools_freed;
+	st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
 	st->bytes_allocated = mem_pool_stat->bytes_allocated;
 	st->chunks_allocated = mem_pool_stat->chunks_allocated;
 	st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;

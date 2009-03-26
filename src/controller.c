@@ -194,6 +194,10 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							  session->worker->srv->stat->connections_count);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF,
 							  session->worker->srv->stat->control_connections_count);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %ld" CRLF,
+							  (long int)mem_st.pools_allocated);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %ld" CRLF,
+							  (long int)mem_st.pools_freed);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %ld" CRLF,
 							  (long int)mem_st.bytes_allocated);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %ld" CRLF,
