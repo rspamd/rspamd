@@ -308,27 +308,30 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 				mime_part->content = part_content;
 				msg_debug ("mime_foreach_callback: found part with content-type: %s/%s", type->type, type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
-				/* Now do special processing for text parts of message */
-				if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
-					msg_debug ("mime_foreach_callback: got urls from text/html part");
-					url_parse_html (task, part_content);
+				/* Skip empty parts */
+				if (part_content->len > 0) {
+					/* Now do special processing for text parts of message */
+					if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
+						msg_debug ("mime_foreach_callback: got urls from text/html part");
+						url_parse_html (task, part_content);
 
-					text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
-					text_part->content = strip_html_tags (part_content, NULL);
-					text_part->is_html = TRUE;
-					text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
-					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)free_byte_array_callback, text_part->content);
-					task->text_parts = g_list_prepend (task->text_parts, text_part);
-				} 
-				else if (g_mime_content_type_is_type (type, "text", "plain")) {
-					msg_debug ("mime_foreach_callback: got urls from text/plain part");
-					url_parse_text (task, part_content);
+						text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+						text_part->content = strip_html_tags (part_content, NULL);
+						text_part->is_html = TRUE;
+						text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
+						memory_pool_add_destructor (task->task_pool, (pool_destruct_func)free_byte_array_callback, text_part->content);
+						task->text_parts = g_list_prepend (task->text_parts, text_part);
+					} 
+					else if (g_mime_content_type_is_type (type, "text", "plain")) {
+						msg_debug ("mime_foreach_callback: got urls from text/plain part");
+						url_parse_text (task, part_content);
 
-					text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
-					text_part->content = part_content;
-					text_part->is_html = FALSE;
-					text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
-					task->text_parts = g_list_prepend (task->text_parts, text_part);
+						text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+						text_part->content = part_content;
+						text_part->is_html = FALSE;
+						text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
+						task->text_parts = g_list_prepend (task->text_parts, text_part);
+					}
 				}
 			}
 			else {
