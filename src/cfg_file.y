@@ -385,6 +385,7 @@ requirebody:
 
 requirecmd:
 	MODULE EQSIGN QUOTEDSTRING {
+#ifndef WITHOUT_PERL
 		struct stat st;
 		struct perl_module *cur;
 		if (stat ($3, &st) == -1) {
@@ -398,6 +399,10 @@ requirecmd:
 		}
 		cur->path = $3;
 		LIST_INSERT_HEAD (&cfg->perl_modules, cur, next);
+#else
+		yyerror ("require command is not available when perl support is not compiled");
+		YYERROR;
+#endif
 	}
 	;
 

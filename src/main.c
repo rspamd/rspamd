@@ -26,8 +26,11 @@
 #include "main.h"
 #include "cfg_file.h"
 #include "util.h"
-#include "perl.h"
 #include "lmtp.h"
+
+#ifndef WITHOUT_PERL
+#include "perl.h"
+#endif
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
@@ -45,11 +48,13 @@ sig_atomic_t got_alarm;
 
 extern int yynerrs;
 extern FILE *yyin;
-extern void xs_init(pTHX);
 
 static int dump_vars = 0;
 
+#ifndef WITHOUT_PERL
+extern void xs_init(pTHX);
 extern PerlInterpreter *perl_interpreter;
+#endif
 
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
@@ -378,7 +383,9 @@ main (int argc, char **argv, char **env)
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
 	FILE *f;
 	pid_t wrk;
+#ifndef WITHOUT_PERL
 	char *args[] = { "", "-e", "0", NULL };
+#endif
 
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
@@ -521,6 +528,7 @@ main (int argc, char **argv, char **env)
 		exit (-errno);
 	}
 
+#ifndef WITHOUT_PERL
 	/* Init perl interpreter */
 	dTHXa (perl_interpreter);
 	PERL_SYS_INIT3 (&argc, &argv, &env);
@@ -533,6 +541,8 @@ main (int argc, char **argv, char **env)
 	PERL_SET_CONTEXT (perl_interpreter);
 	perl_construct (perl_interpreter);
 	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
+#endif
+
 	/* Block signals to use sigsuspend in future */
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 

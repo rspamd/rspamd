@@ -36,14 +36,14 @@
 #include "modules.h"
 #include "message.h"
 
+#ifndef WITHOUT_PERL
 #include <EXTERN.h>               /* from the Perl distribution     */
 #include <perl.h>                 /* from the Perl distribution     */
 
-#define TASK_POOL_SIZE 4095
+extern PerlInterpreter *perl_interpreter;
+#endif
 
 static struct timeval io_tv;
-
-extern PerlInterpreter *perl_interpreter;
 
 static void write_socket (void *arg);
 

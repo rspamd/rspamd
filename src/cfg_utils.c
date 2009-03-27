@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include <math.h>
+
 #include "cfg_file.h"
 #include "main.h"
 #include "filter.h"

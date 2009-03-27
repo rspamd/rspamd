@@ -94,6 +94,8 @@
 #cmakedefine HAVE_CLOCK_VIRTUAL  1
 #cmakedefine HAVE_CLOCK_PROCESS_CPUTIME_ID  1
 
+#cmakedefine WITHOUT_PERL        1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
