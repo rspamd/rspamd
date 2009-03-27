@@ -689,6 +689,7 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 	const char *param_data;
 	struct rspamd_regexp *re;
 	struct expression_argument *arg;
+	GMimeObject *part;
 	const GMimeContentType *ct;
 	
 	if (args == NULL) {
@@ -705,31 +706,36 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 	arg = args->data;
 	param_pattern = arg->data;
 	
-	ct = g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
-	if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
-		return FALSE;
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = g_mime_object_get_content_type (part);
+		g_object_unref (part);
+
+		if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
+			return FALSE;
+		}
+		if (*param_pattern == '/') {
+			/* This is regexp, so compile and create g_regexp object */
+			if ((re = re_cache_check (param_pattern)) == NULL) {
+				re = parse_regexp (task->task_pool, param_pattern);
+				if (re == NULL) {
+					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+					return FALSE;
+				}
+				re_cache_add (param_pattern, re);
+			}
+			if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
+				return TRUE;
+			}
+		}
+		else {
+			/* Just do strcasecmp */
+			if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
+				return TRUE;
+			}
+		}
 	}
 	
-	if (*param_pattern == '/') {
-		/* This is regexp, so compile and create g_regexp object */
-		if ((re = re_cache_check (param_pattern)) == NULL) {
-			re = parse_regexp (task->task_pool, param_pattern);
-			if (re == NULL) {
-				msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
-				return FALSE;
-			}
-			re_cache_add (param_pattern, re);
-		}
-		if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
-			return TRUE;
-		}
-	}
-	else {
-		/* Just do strcasecmp */
-		if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
-			return TRUE;
-		}
-	}
 
 	return FALSE;
 }	
@@ -740,6 +746,7 @@ rspamd_content_type_has_param (struct worker_task *task, GList *args)
 	char *param_name;
 	const char *param_data;
 	struct expression_argument *arg;
+	GMimeObject *part;
 	const GMimeContentType *ct;
 	
 	if (args == NULL) {
@@ -748,9 +755,14 @@ rspamd_content_type_has_param (struct worker_task *task, GList *args)
 	}
 	arg = args->data;
 	param_name = arg->data;
-	ct = g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
-	if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
-		return FALSE;
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = g_mime_object_get_content_type (part);
+		g_object_unref (part);
+
+		if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
+			return FALSE;
+		}
 	}
 	
 	return TRUE;
@@ -771,7 +783,8 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 	char *param_pattern;
 	struct rspamd_regexp *re;
 	struct expression_argument *arg;
-	localContentType *ct;
+	GMimeObject *part;
+	const localContentType *ct;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
@@ -780,30 +793,34 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 	
 	arg = args->data;
 	param_pattern = arg->data;
-	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = (const localContentType *)g_mime_object_get_content_type (part);
+		g_object_unref (part);
 
-	if (ct == NULL) {
-		return FALSE;
-	}
-	
-	if (*param_pattern == '/') {
-		/* This is regexp, so compile and create g_regexp object */
-		if ((re = re_cache_check (param_pattern)) == NULL) {
-			re = parse_regexp (task->task_pool, param_pattern);
-			if (re == NULL) {
-				msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
-				return FALSE;
+		if (ct == NULL) {
+			return FALSE;
+		}
+		
+		if (*param_pattern == '/') {
+			/* This is regexp, so compile and create g_regexp object */
+			if ((re = re_cache_check (param_pattern)) == NULL) {
+				re = parse_regexp (task->task_pool, param_pattern);
+				if (re == NULL) {
+					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+					return FALSE;
+				}
+				re_cache_add (param_pattern, re);
 			}
-			re_cache_add (param_pattern, re);
+			if (g_regex_match (re->regexp, ct->subtype, 0, NULL) == TRUE) {
+				return TRUE;
+			}
 		}
-		if (g_regex_match (re->regexp, ct->subtype, 0, NULL) == TRUE) {
-			return TRUE;
-		}
-	}
-	else {
-		/* Just do strcasecmp */
-		if (g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
-			return TRUE;
+		else {
+			/* Just do strcasecmp */
+			if (g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
+				return TRUE;
+			}
 		}
 	}
 
@@ -815,7 +832,8 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 {
 	char *param_pattern;
 	struct rspamd_regexp *re;
-	localContentType *ct;
+	GMimeObject *part;
+	const localContentType *ct;
 	struct expression_argument *arg;
 	
 	if (args == NULL) {
@@ -825,30 +843,36 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 	
 	arg = args->data;
 	param_pattern = arg->data;
-	ct = (localContentType *)g_mime_object_get_content_type (GMIME_OBJECT (g_mime_message_get_mime_part (task->message)));
+	param_pattern = arg->data;
 
-	if (ct == NULL) {
-		return FALSE;
-	}
-	
-	if (*param_pattern == '/') {
-		/* This is regexp, so compile and create g_regexp object */
-		if ((re = re_cache_check (param_pattern)) == NULL) {
-			re = parse_regexp (task->task_pool, param_pattern);
-			if (re == NULL) {
-				msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
-				return FALSE;
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = (const localContentType *)g_mime_object_get_content_type (part);
+		g_object_unref (part);
+
+		if (ct == NULL) {
+			return FALSE;
+		}
+		
+		if (*param_pattern == '/') {
+			/* This is regexp, so compile and create g_regexp object */
+			if ((re = re_cache_check (param_pattern)) == NULL) {
+				re = parse_regexp (task->task_pool, param_pattern);
+				if (re == NULL) {
+					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+					return FALSE;
+				}
+				re_cache_add (param_pattern, re);
 			}
-			re_cache_add (param_pattern, re);
+			if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+				return TRUE;
+			}
 		}
-		if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
-			return TRUE;
-		}
-	}
-	else {
-		/* Just do strcasecmp */
-		if (g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
-			return TRUE;
+		else {
+			/* Just do strcasecmp */
+			if (g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
+				return TRUE;
+			}
 		}
 	}
 

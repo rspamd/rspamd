@@ -23,7 +23,6 @@
  */
 
 #include "config.h"
-
 #include "mem_pool.h"
 
 /* Sleep time for spin lock in nanoseconds */

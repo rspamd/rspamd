@@ -110,6 +110,9 @@ free_task (struct worker_task *task, gboolean is_soft)
 			g_byte_array_free (p->content, TRUE);
 			g_list_free_1 (part);
 		}
+		if (task->text_parts) {
+			g_list_free (task->text_parts);
+		}
 		memory_pool_delete (task->task_pool);
 		if (is_soft) {
 			/* Plan dispatcher shutdown */

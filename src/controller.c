@@ -237,6 +237,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				else {
 					hours = uptime / 3600;
 					minutes = uptime / 60 - hours * 3600;
+					uptime -= hours * 3600 + minutes * 60;
 					r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minite%s %d second%s" CRLF, 
 								hours, hours > 1 ? "s" : " ",
 								minutes, minutes > 1 ? "s" : " ",
