@@ -385,7 +385,7 @@ requirebody:
 
 requirecmd:
 	MODULE EQSIGN QUOTEDSTRING {
-#ifndef WITHOUT_PERL
+#if !defined(WITHOUT_PERL) || defined(WITH_LUA)
 		struct stat st;
 		struct perl_module *cur;
 		if (stat ($3, &st) == -1) {

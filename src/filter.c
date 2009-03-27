@@ -40,6 +40,9 @@
 #ifndef WITHOUT_PERL
 #include "perl.h"
 #endif
+#ifdef WITH_LUA
+#include "lua-rspamd.h"
+#endif
 
 void
 insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList *opts)
@@ -184,6 +187,21 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 					break;
 				case SCRIPT_MESSAGE:
 					perl_call_message_filter (name, task);
+					break;
+			}
+#elif defined(WITH_LUA)
+			switch (sc_type) {
+				case SCRIPT_HEADER:
+					lua_call_header_filter (name, task);
+					break;
+				case SCRIPT_MIME:
+					lua_call_mime_filter (name, task);
+					break;
+				case SCRIPT_URL:
+					lua_call_url_filter (name, task);
+					break;
+				case SCRIPT_MESSAGE:
+					lua_call_message_filter (name, task);
 					break;
 			}
 #else

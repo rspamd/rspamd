@@ -30,6 +30,8 @@
 
 #ifndef WITHOUT_PERL
 #include "perl.h"
+#elif defined(WITH_LUA)
+#include "lua-rspamd.h"
 #endif
 
 /* 2 seconds to fork new process in place of dead one */
@@ -435,9 +437,9 @@ main (int argc, char **argv, char **env)
 	cfg->log_fd = STDERR_FILENO;
 	g_log_set_default_handler (file_log_function, cfg);
 
-	#ifndef HAVE_SETPROCTITLE
+#ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, environ);
-	#endif
+#endif
 	
 	f = fopen (rspamd->cfg->cfg_name , "r");
 	if (f == NULL) {
@@ -541,6 +543,9 @@ main (int argc, char **argv, char **env)
 	PERL_SET_CONTEXT (perl_interpreter);
 	perl_construct (perl_interpreter);
 	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
+	init_perl_filters (cfg);
+#elif defined(WITH_LUA)
+	init_lua_filters (cfg);
 #endif
 
 	/* Block signals to use sigsuspend in future */

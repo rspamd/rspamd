@@ -19,6 +19,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
 OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
 OPTION(ENABLE_PERL         "Enable perl support [default: ON]"                  ON)
+OPTION(ENABLE_LUA          "Enable lua support [default: OFF]"                  OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
 
@@ -60,6 +61,25 @@ IF(ENABLE_PERL MATCHES "ON")
 ELSE(ENABLE_PERL MATCHES "ON")
 	SET(WITHOUT_PERL 1)
 ENDIF(ENABLE_PERL MATCHES "ON")
+
+IF(ENABLE_LUA MATCHES "ON")
+	IF (ENABLE_PERL MATCHES "ON")
+		MESSAGE(FATAL_ERROR "Error: Perl and Lua support cannot be turned on together")
+	ENDIF (ENABLE_PERL MATCHES "ON")
+
+	INCLUDE(FindLua51)
+	IF(NOT LUA_FOUND)
+		# Automatic check failed, check passed variable
+		IF(LUA_INCLUDE_DIR)
+			INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
+		ELSE(LUA_INCLUDE_DIR)
+			MESSAGE(FATAL_ERROR "Error: Lua not found but its support is enabled")
+		ENDIF(LUA_INCLUDE_DIR)
+	ELSE(NOT LUA_FOUND)
+		INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
+	ENDIF(NOT LUA_FOUND)
+	SET(WITH_LUA 1)
+ENDIF(ENABLE_LUA MATCHES "ON")
 
 # Lex and yacc
 FIND_PROGRAM(LEX_EXECUTABLE lex)
@@ -276,6 +296,9 @@ SET(RSPAMDSRC	src/modules.c
 IF(ENABLE_PERL MATCHES "ON")
 	LIST(APPEND RSPAMDSRC src/perl.c)
 ENDIF(ENABLE_PERL MATCHES "ON")
+IF(ENABLE_LUA MATCHES "ON")
+	LIST(APPEND RSPAMDSRC src/lua.c)
+ENDIF(ENABLE_LUA MATCHES "ON")
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
@@ -366,6 +389,9 @@ ENDIF(LIBUTIL_LIBRARY)
 TARGET_LINK_LIBRARIES(rspamd event)
 TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd ${GMIME2_LIBRARIES})
+IF(ENABLE_LUA MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd "${LUA_LIBRARY}")
+ENDIF(ENABLE_LUA MATCHES "ON")
 
 ADD_EXECUTABLE(test/rspamd-test ${TESTDEPENDS} ${CONTRIBSRC} ${TESTSRC})
 SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES LINKER_LANGUAGE C)

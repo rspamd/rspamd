@@ -96,6 +96,8 @@
 
 #cmakedefine WITHOUT_PERL        1
 
+#cmakedefine WITH_LUA            1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
