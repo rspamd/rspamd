@@ -277,6 +277,9 @@ parse_expression (memory_pool_t *pool, char *line)
 							insert_expression (pool, &expr, EXPR_OPERATION, op, NULL);
 						}
 					}
+					if (stack) {
+						op = delete_expression_stack (&stack);
+					}
 				}
 				else if (*p == '(') {
 					/* Push it to stack */
