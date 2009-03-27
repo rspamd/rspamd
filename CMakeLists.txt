@@ -116,6 +116,15 @@ IF(NOT LIBEVENT_LIBRARY)
 	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
 ENDIF(NOT LIBEVENT_LIBRARY)
 
+FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
+										/usr/include
+										/usr/local/include
+										DOC "Path where the libevent header files can be found")
+
+GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
+INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
+LINK_DIRECTORIES("${LIBEVENT_PATH}")
+
 FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	/lib
                                            		/opt/lib
                                             	/usr/lib
