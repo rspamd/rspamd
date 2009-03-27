@@ -33,6 +33,80 @@
 
 lua_State *L = NULL;
 
+static int lua_task_get_message (lua_State *L);
+static int lua_task_insert_result (lua_State *L);
+static int lua_task_get_urls (lua_State *L);
+
+/* Task methods */
+static const struct luaL_reg tasklib_m[] = {
+	{"get_message", lua_task_get_message},
+	{"insert_result", lua_task_insert_result},
+	{"get_urls", lua_task_get_urls},
+	{NULL, NULL},
+};
+
+static struct worker_task *
+lua_check_task (lua_State *L) 
+{
+	void *ud = luaL_checkudata (L, 1, "Rspamd.task");
+	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
+	return (struct worker_task *)ud;
+}
+
+static int
+lua_task_get_message (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	if (task != NULL) {
+		/* XXX write handler for message object */
+	}
+	return 1;
+}
+
+static int 
+lua_task_insert_result (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	const char *metric_name, *symbol_name;
+	double flag;
+
+	if (task != NULL) {
+		metric_name = luaL_checkstring (L, 2);
+		symbol_name = luaL_checkstring (L, 3);
+		flag = luaL_checknumber (L, 4);
+		insert_result (task, metric_name, symbol_name, flag, NULL);
+	}
+	return 1;
+}
+
+static int 
+lua_task_get_urls (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	struct uri *url;
+
+	if (task != NULL) {
+		TAILQ_FOREACH (url, &task->urls, next) {	
+			lua_pushstring (L, struri (url));	
+		}
+	}
+	return 1;
+}
+
+static int
+luaopen_task (lua_State *L)
+{
+	luaL_newmetatable(L, "Rspamd.task");
+    
+	lua_pushstring(L, "__index");
+	lua_pushvalue(L, -2);  /* pushes the metatable */
+	lua_settable(L, -3);  /* metatable.__index = metatable */
+    
+	luaL_openlib(L, NULL, tasklib_m, 0);
+    
+	return 1;
+}
+
 void
 init_lua_filters (struct config_file *cfg)
 {
@@ -59,6 +133,7 @@ init_lua_filters (struct config_file *cfg)
 			}
 		}
 	}
+	luaopen_task (L);
 }
 
 

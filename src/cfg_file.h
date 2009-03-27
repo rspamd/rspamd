@@ -285,11 +285,12 @@ char parse_flag (const char *str);
 /**
  * Substitutes variable in specified string, may be recursive (eg. ${var1${var2}})
  * @param cfg config file
+ * @param name variable's name
  * @param str incoming string
  * @param recursive whether do recursive scanning
  * @return new string with substituted variables (uses cfg memory pool for allocating)
  */
-char* substitute_variable (struct config_file *cfg, char *str, u_char recursive);
+char* substitute_variable (struct config_file *cfg, char *name, char *str, u_char recursive);
 
 /**
  * Do post load actions for config

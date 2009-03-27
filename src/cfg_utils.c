@@ -352,10 +352,11 @@ parse_flag (const char *str)
  * Return: newly allocated string with substituted variables (original string may be freed if variables are found)
  */
 char *
-substitute_variable (struct config_file *cfg, char *str, u_char recursive)
+substitute_variable (struct config_file *cfg, char *name, char *str, u_char recursive)
 {
 	char *var, *new, *v_begin, *v_end;
 	size_t len;
+	gboolean changed = FALSE;
 
 	if (str == NULL) {
 		yywarn ("substitute_variable: trying to substitute variable in NULL string");
@@ -378,7 +379,7 @@ substitute_variable (struct config_file *cfg, char *str, u_char recursive)
 			var = "";
 		}
 		else if (recursive) {
-			var = substitute_variable (cfg, var, recursive);
+			new = substitute_variable (cfg, v_begin, var, recursive);
 		}
 		/* Allocate new string */
 		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 1);
@@ -386,8 +387,12 @@ substitute_variable (struct config_file *cfg, char *str, u_char recursive)
 		snprintf (new, len - strlen (v_begin) + strlen (var) + 1, "%s%s%s",
 						str, var, v_end + 1);
 		str = new;
+		changed = TRUE;
 	}
-
+	
+	if (changed && name != NULL) {
+		g_hash_table_insert (cfg->variables, name, str);
+	}
 	return str;
 }
 
@@ -400,7 +405,7 @@ substitute_module_variables (gpointer key, gpointer value, gpointer data)
 
 	LIST_FOREACH_SAFE (cur, cur_module_opt, next, tmp) {
 		if (cur->value) {
-			cur->value = substitute_variable (cfg, cur->value, 0);
+			cur->value = substitute_variable (cfg, NULL, cur->value, 1);
 		}
 	}
 }
@@ -412,10 +417,7 @@ substitute_all_variables (gpointer key, gpointer value, gpointer data)
 	char *new;
 
 	/* Do recursive substitution */
-	new = substitute_variable (cfg, (char *)value, 1);
-	if (new != value) {
-		g_hash_table_replace (cfg->variables, key, new);
-	}
+	new = substitute_variable (cfg, (char *)key, (char *)value, 1);
 }
 
 static void

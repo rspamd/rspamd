@@ -76,13 +76,13 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 }
 
 static gboolean
-read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, char *line)
+read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, char *symbol, char *line)
 {	
 	struct expression *e, *cur;
 
 	e = parse_expression (regexp_module_ctx->regexp_pool, line);
 	if (e == NULL) {
-		msg_warn ("read_regexp_expression: %s is invalid regexp expression", line);
+		msg_warn ("read_regexp_expression: %s = \"%s\" is invalid regexp expression", symbol, line);
 		return FALSE;
 	}
 	chain->expr = e;
@@ -91,7 +91,7 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 		if (cur->type == EXPR_REGEXP) {
 			cur->content.operand = parse_regexp (pool, cur->content.operand);
 			if (cur->content.operand == NULL) {
-				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s", line);
+				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
 				return FALSE;
 			}
 			chain->regexp_number ++;
@@ -130,7 +130,7 @@ regexp_module_config (struct config_file *cfg)
 			}
 			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = cur->param;
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->value)) {
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value)) {
 				res = FALSE;
 			}
 			regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);

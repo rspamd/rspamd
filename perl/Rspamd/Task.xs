@@ -73,7 +73,7 @@ rspamd_task_get_urls (task)
 		struct uri *url;
 	CODE:
 		retav = newAV ();
-		TAILQ_FOREACH (url, &task.urls, next) {
+		TAILQ_FOREACH (url, &task->urls, next) {
 			av_push (retav, newSVpv ((char *)g_strdup (struri (url)), 0));
 		}
 
