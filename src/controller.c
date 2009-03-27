@@ -222,8 +222,8 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				/* If uptime more than 2 hours, print as a number of days. */
  				if (uptime >= 2 * 3600) {
 					days = uptime / 86400;
-					hours = uptime / 3600 - days * 86400;
-					minutes = uptime / 60 - hours * 3600 - days * 86400;
+					hours = uptime / 3600 - days * 3600;
+					minutes = uptime / 60 - hours * 60 - days * 3600;
 					r = snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, 
 								days, days > 1 ? "s" : " ",
 								hours, hours > 1 ? "s" : " ",
