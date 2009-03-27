@@ -458,8 +458,20 @@ parse_regexp (memory_pool_t *pool, char *line)
 		return NULL;
 	}
 	/* First try to find header name */
-	begin = strchr (line, '=');
+	begin = strchr (line, '/');
 	if (begin != NULL) {
+		*begin = '\0';
+		end = strchr (line, '=');
+		*begin = '/';
+		if (end) {
+			*end = '\0';
+			result->header = memory_pool_strdup (pool, line);
+			result->type = REGEXP_HEADER;
+			*end = '=';
+			line = end;
+		}
+	}
+	else {
 		*begin = '\0';
 		result->header = memory_pool_strdup (pool, line);
 		result->type = REGEXP_HEADER;
@@ -467,7 +479,7 @@ parse_regexp (memory_pool_t *pool, char *line)
 		line = begin;
 	}
 	/* Find begin of regexp */
-	while (*line != '/') {
+	while (*line && *line != '/') {
 		line ++;
 	}
 	if (*line != '\0') {

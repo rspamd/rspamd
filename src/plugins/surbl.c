@@ -222,7 +222,7 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 	}
 
-	return 0;
+	return TRUE;
 }
 
 int
