@@ -30,8 +30,6 @@
 #include "fuzzy.h"
 #include "expressions.h"
 
-typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args);
-
 gboolean rspamd_compare_encoding (struct worker_task *task, GList *args);
 gboolean rspamd_header_exists (struct worker_task *task, GList *args);
 gboolean rspamd_content_type_compare_param (struct worker_task *task, GList *args);
@@ -45,7 +43,7 @@ gboolean rspamd_parts_distance (struct worker_task *task, GList *args);
  * Sorted by name to use bsearch
  */
 static struct _fl {
-	char *name;
+	const char *name;
 	rspamd_internal_func_t func;
 } rspamd_functions_list[] = {
 	{ "compare_encoding", rspamd_compare_encoding },
@@ -56,6 +54,10 @@ static struct _fl {
 	{ "content_type_is_type", rspamd_content_type_is_type },
 	{ "header_exists", rspamd_header_exists },
 };
+
+static struct _fl *list_ptr = &rspamd_functions_list[0];
+static uint32_t functions_number = sizeof (rspamd_functions_list) / sizeof (struct _fl);
+static gboolean list_allocated = FALSE;
 
 /* Bsearch routine */
 static int
@@ -595,7 +597,7 @@ call_expression_function (struct expression_function *func, struct worker_task *
 
 	key.name = func->name;
 
-	selected = bsearch (&key, rspamd_functions_list, sizeof (rspamd_functions_list) / sizeof (struct _fl),
+	selected = bsearch (&key, list_ptr, functions_number,
 						sizeof (struct _fl), fl_cmp);
 	if (selected == NULL) {
 		msg_warn ("call_expression_function: call to undefined function %s", key.name);
@@ -603,6 +605,26 @@ call_expression_function (struct expression_function *func, struct worker_task *
 	}
 	
 	return selected->func (task, func->args);
+}
+
+void
+register_expression_function (const char *name, rspamd_internal_func_t func)
+{
+	static struct _fl *new;
+
+	functions_number ++;
+	
+	new = g_new (struct _fl, functions_number);
+	memcpy (new, rspamd_functions_list, (functions_number - 1) * sizeof (struct _fl));
+	if (list_allocated) {
+		g_free (list_ptr);
+	}
+
+	list_allocated = TRUE;
+	new[functions_number - 1].name = name;
+	new[functions_number - 1].func = func;
+	qsort (new, functions_number, sizeof (struct _fl), fl_cmp);
+	list_ptr = new;
 }
 
 gboolean

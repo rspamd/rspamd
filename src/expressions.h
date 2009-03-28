@@ -41,6 +41,8 @@ struct expression {
 	struct expression *next;									/**< chain link										*/
 };
 
+typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args);
+
 /**
  * Parse regexp line to regexp structure
  * @param pool memory pool to use
@@ -65,5 +67,11 @@ struct expression* parse_expression (memory_pool_t *pool, char *line);
  */
 gboolean call_expression_function (struct expression_function *func, struct worker_task *task);
 
+/**
+ * Register specified function to rspamd internal functions list
+ * @param name name of function
+ * @param func pointer to function
+ */
+void register_expression_function (const char *name, rspamd_internal_func_t func);
 
 #endif
