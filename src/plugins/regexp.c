@@ -57,6 +57,7 @@ struct regexp_ctx {
 static struct regexp_ctx *regexp_module_ctx = NULL;
 
 static int regexp_common_filter (struct worker_task *task);
+static gboolean rspamd_regexp_match_number (struct worker_task *task, GList *args);
 
 int
 regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -71,6 +72,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	regexp_module_ctx->items = NULL;
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
+	register_expression_function ("regexp_match_number", rspamd_regexp_match_number);
 	
 	return 0;
 }
@@ -381,4 +383,48 @@ regexp_common_filter (struct worker_task *task)
 	}
 
 	return 0;
+}
+
+static gboolean 
+rspamd_regexp_match_number (struct worker_task *task, GList *args)
+{
+	char *param_pattern;
+	int param_count, res = 0;
+	struct rspamd_regexp *re;
+	struct expression_argument *arg;
+	GList *cur;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_regexp_match_number: no parameters to function");
+		return FALSE;
+	}
+	
+	arg = args->data;
+	param_count = strtoul (arg->data, NULL, 10);
+	
+	cur = g_list_next (args);
+	while (cur) {
+		arg = args->data;
+		if (arg->type == EXPRESSION_ARGUMENT_FUNCTION) {
+			if (call_expression_function ((struct expression_function *)arg->data, task)) {
+				res ++;
+			}
+		}
+		else {
+			param_pattern = (char *)arg->data;
+			/* This is regexp, so compile and create g_regexp object */
+			if ((re = re_cache_check (param_pattern)) == NULL) {
+				re = parse_regexp (task->task_pool, param_pattern);
+				if (re == NULL) {
+					msg_warn ("rspamd_regexp_match_number: cannot compile regexp for function");
+					return FALSE;
+				}
+				re_cache_add (param_pattern, re);
+			}
+			res += process_regexp (re, task);
+		}
+		cur = g_list_next (args);
+	}
+
+	return res >= param_count;
 }

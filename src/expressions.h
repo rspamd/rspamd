@@ -74,4 +74,18 @@ gboolean call_expression_function (struct expression_function *func, struct work
  */
 void register_expression_function (const char *name, rspamd_internal_func_t func);
 
+/**
+ * Add regexp to regexp cache
+ * @param line symbolic representation
+ * @param pointer regexp data
+ */
+void re_cache_add (char *line, void *pointer);
+
+/**
+ * Check regexp in cache
+ * @param line symbolic representation
+ * @return pointer to regexp data or NULL if regexp is not found
+ */
+void * re_cache_check (const char *line);
+
 #endif

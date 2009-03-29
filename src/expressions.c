@@ -71,7 +71,7 @@ fl_cmp (const void *s1, const void *s2)
 /* Cache for regular expressions that are used in functions */
 static GHashTable *re_cache = NULL;
 
-static inline void *
+void *
 re_cache_check (const char *line)
 {
 	if (re_cache == NULL) {
@@ -81,7 +81,7 @@ re_cache_check (const char *line)
 	return g_hash_table_lookup (re_cache, line);
 }
 
-static inline void
+void
 re_cache_add (char *line, void *pointer)
 {
 	if (re_cache == NULL) {
