@@ -238,6 +238,7 @@ parse_expression (memory_pool_t *pool, char *line)
 	struct expression_argument *arg;
 	GQueue *function_stack;
 	char *p, *c, *str, op;
+	gboolean in_regexp = FALSE;
 
 	enum {
 		SKIP_SPACES,
@@ -386,44 +387,52 @@ parse_expression (memory_pool_t *pool, char *line)
 				break;
 			
 			case READ_FUNCTION_ARGUMENT:
-				/* Append argument to list */
-				if (*p == ',' || *p == ')') {
-					arg = memory_pool_alloc (pool, sizeof (struct expression_argument));
-					if (*(p - 1) != ')') {
-						/* Not a function argument */
-						str = memory_pool_alloc (pool, p - c + 1);
-						g_strlcpy (str, c, (p - c + 1));
-						g_strstrip (str);
-						arg->type = EXPRESSION_ARGUMENT_NORMAL;
-						arg->data = str;
-						func->args = g_list_prepend (func->args, arg);
-					}
-					else {
-						arg->type = EXPRESSION_ARGUMENT_FUNCTION;
-						arg->data = old;
-						func->args = g_list_prepend (func->args, arg);
-					}
-					/* Pop function */
-					if (*p == ')') {
-						/* Last function in chain, goto skipping spaces state */
-						old = func;
-						func = g_queue_pop_tail (function_stack);
-						if (g_queue_get_length (function_stack) == 0) {
-							state = SKIP_SPACES;
-						}
-					}
-					c = p + 1;
+				if (*p == '/' && !in_regexp) {
+					in_regexp = TRUE;
 				}
-				if (*p == '(') {
-					/* Push current function to stack */
-					g_queue_push_tail (function_stack, func);
-					func = memory_pool_alloc (pool, sizeof (struct expression_function));
-					func->name = memory_pool_alloc (pool, p - c + 1);
-					func->args = NULL;
-					g_strlcpy (func->name, c, (p - c + 1));
-					g_strstrip (func->name);
-					state = READ_FUNCTION_ARGUMENT;
-					c = p + 1;
+				if (!in_regexp) {
+					/* Append argument to list */
+					if (*p == ',' || *p == ')') {
+						arg = memory_pool_alloc (pool, sizeof (struct expression_argument));
+						if (*(p - 1) != ')') {
+							/* Not a function argument */
+							str = memory_pool_alloc (pool, p - c + 1);
+							g_strlcpy (str, c, (p - c + 1));
+							g_strstrip (str);
+							arg->type = EXPRESSION_ARGUMENT_NORMAL;
+							arg->data = str;
+							func->args = g_list_prepend (func->args, arg);
+						}
+						else {
+							arg->type = EXPRESSION_ARGUMENT_FUNCTION;
+							arg->data = old;
+							func->args = g_list_prepend (func->args, arg);
+						}
+						/* Pop function */
+						if (*p == ')') {
+							/* Last function in chain, goto skipping spaces state */
+							old = func;
+							func = g_queue_pop_tail (function_stack);
+							if (g_queue_get_length (function_stack) == 0) {
+								state = SKIP_SPACES;
+							}
+						}
+						c = p + 1;
+					}
+					if (*p == '(') {
+						/* Push current function to stack */
+						g_queue_push_tail (function_stack, func);
+						func = memory_pool_alloc (pool, sizeof (struct expression_function));
+						func->name = memory_pool_alloc (pool, p - c + 1);
+						func->args = NULL;
+						g_strlcpy (func->name, c, (p - c + 1));
+						g_strstrip (func->name);
+						state = READ_FUNCTION_ARGUMENT;
+						c = p + 1;
+					}
+				}
+				else if (*p == '/' && *(p - 1) != '\\') {
+					in_regexp = FALSE;
 				}
 				p ++;
 				break;
