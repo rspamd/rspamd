@@ -107,7 +107,7 @@ fuzzy_update (fuzzy_hash_t *h, char c)
  *
  * Replace cost is normally 1, and 2 with nonzero xcost.
  */
-static uint32_t
+uint32_t
 lev_distance (char *s1, int len1, char *s2, int len2)
 {	
 	int i;

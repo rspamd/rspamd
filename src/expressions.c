@@ -37,6 +37,9 @@ gboolean rspamd_content_type_has_param (struct worker_task *task, GList *args);
 gboolean rspamd_content_type_is_subtype (struct worker_task *task, GList *args);
 gboolean rspamd_content_type_is_type (struct worker_task *task, GList *args);
 gboolean rspamd_parts_distance (struct worker_task *task, GList *args);
+gboolean rspamd_recipients_distance (struct worker_task *task, GList *args);
+gboolean rspamd_has_only_html_part (struct worker_task *task, GList *args);
+gboolean rspamd_is_recipients_sorted (struct worker_task *task, GList *args);
 
 /*
  * List of internal functions of rspamd
@@ -48,11 +51,14 @@ static struct _fl {
 } rspamd_functions_list[] = {
 	{ "compare_encoding", rspamd_compare_encoding },
 	{ "compare_parts_distance", rspamd_parts_distance },
+	{ "compare_recipients_distance", rspamd_recipients_distance },
 	{ "content_type_compare_param", rspamd_content_type_compare_param },
 	{ "content_type_has_param", rspamd_content_type_has_param },
 	{ "content_type_is_subtype", rspamd_content_type_is_subtype },
 	{ "content_type_is_type", rspamd_content_type_is_type },
+	{ "has_only_html_part", rspamd_has_only_html_part },
 	{ "header_exists", rspamd_header_exists },
+	{ "is_recipients_sorted", rspamd_is_recipients_sorted },
 };
 
 static struct _fl *list_ptr = &rspamd_functions_list[0];
@@ -911,6 +917,144 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 				return TRUE;
 			}
 		}
+	}
+
+	return FALSE;
+}
+
+struct addr_list {
+	const char *name;
+	const char *addr;
+};
+
+#define COMPARE_RCPT_LEN 3
+#define MIN_RCPT_TO_COMPARE 5
+
+gboolean 
+rspamd_recipients_distance (struct worker_task *task, GList *args)
+{
+	struct expression_argument *arg;
+	InternetAddressList *cur;
+	InternetAddress *addr;
+	double threshold;
+	struct addr_list *ar;
+	int num, i, j, hits = 0, total = 0;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		return FALSE;
+	}
+	
+	arg = args->data;
+	threshold = strtod ((char *)arg->data, NULL);
+
+	num = internet_address_list_length (task->rcpts);
+	if (num < MIN_RCPT_TO_COMPARE) {
+		return FALSE;
+	}
+	ar = memory_pool_alloc (task->task_pool, num * sizeof (struct addr_list));
+
+	/* Fill array */
+	cur = task->rcpts;
+	i = 0;
+	while (cur) {
+		addr = internet_address_list_get_address (cur);
+		ar[i].name = internet_address_get_name (addr);
+		ar[i].addr = internet_address_get_addr (addr);
+		cur = internet_address_list_next (cur);
+	}
+
+	/* Cycle all elements in array */
+	for (i = 0; i < num; i ++) {
+		for (j = i + 1; j < num; j ++) {
+			if (g_ascii_strncasecmp (ar[i].name, ar[j].name, COMPARE_RCPT_LEN) == 0) {
+				hits ++;
+			}
+			if (g_ascii_strcasecmp (ar[i].addr, ar[j].addr) == 0) {
+				hits ++;
+			}
+			total ++;
+		}
+	}
+
+	if ((double)total / (double)hits >= threshold) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean 
+rspamd_has_only_html_part (struct worker_task *task, GList *args)
+{
+	struct mime_text_part *p;
+	GList *cur;
+	gboolean res = FALSE;
+
+	cur = g_list_first (task->text_parts);
+	while (cur) {
+		p = cur->data;
+		if (p->is_html) {
+			res = TRUE;
+		}
+		else {
+			res = FALSE;
+			break;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return res;
+}
+
+static gboolean
+is_recipient_list_sorted (const InternetAddressList *ia)
+{
+	const InternetAddressList *cur;
+	InternetAddress *addr;
+	gboolean res = TRUE;
+	struct addr_list current = {NULL, NULL}, previous = {NULL, NULL};
+	
+	/* Do not check to short address lists */
+	if (internet_address_list_length (ia) < MIN_RCPT_TO_COMPARE) {
+		return FALSE;
+	}
+
+	cur = ia;
+	while (cur) {
+		addr = internet_address_list_get_address (cur);
+		current.name = internet_address_get_name (addr);
+		current.addr = internet_address_get_addr (addr);
+		if (previous.name != NULL) {
+			if (g_ascii_strcasecmp (current.name, previous.name) < 0) {
+				res = FALSE;
+				break;
+			}
+			if (g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+				res = FALSE;
+				break;
+			}
+		}
+		previous.name = current.name;
+		previous.addr = current.addr;
+		cur = internet_address_list_next (cur);
+	}
+
+	return res;
+}
+
+gboolean
+rspamd_is_recipients_sorted (struct worker_task *task, GList *args)
+{
+	/* Check all types of addresses */
+	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message, GMIME_RECIPIENT_TYPE_TO)) == TRUE) {
+		return TRUE;
+	}
+	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message, GMIME_RECIPIENT_TYPE_BCC)) == TRUE) {
+		return TRUE;
+	}
+	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message, GMIME_RECIPIENT_TYPE_CC)) == TRUE) {
+		return TRUE;
 	}
 
 	return FALSE;

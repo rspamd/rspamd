@@ -14,8 +14,6 @@
 #include "perl.h"
 #endif
 
-#define YYDEBUG 1
-
 extern struct config_file *cfg;
 extern int yylineno;
 extern char *yytext;
@@ -330,8 +328,10 @@ metricfunction:
 		cur_metric->func_name = memory_pool_strdup (cfg->cfg_pool, $3);
 #ifdef WITH_LUA
 		cur_metric->func = lua_consolidation_func;
-#else
+#elif !defined(WITHOUT_PERL)
 		cur_metric->func = perl_consolidation_func;
+#else
+		yyerror ("yyparse: rspamd is not compiled with perl or lua, so it is not possible to use custom consolidation functions");
 #endif
 	}
 	;

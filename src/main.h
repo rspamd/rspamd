@@ -173,6 +173,7 @@ struct worker_task {
 	memcached_ctx_t *memc_ctx;									/**< memcached context associated with task			*/
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
+	InternetAddressList *rcpts;									/**< list of all recipients 						*/
 	GList *parts;												/**< list of parsed parts							*/
 	GList *text_parts;											/**< list of text parts								*/
 	char *raw_headers;											/**< list of raw headers							*/

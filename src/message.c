@@ -406,6 +406,11 @@ process_message (struct worker_task *task)
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, task->raw_headers);
 	}
 
+	task->rcpts = g_mime_message_get_all_recipients (message);
+	if (task->rcpts) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)internet_address_list_destroy, task->rcpts);
+	}
+
 	task->worker->srv->stat->messages_scanned ++;
 
 	/* free the parser (and the stream) */

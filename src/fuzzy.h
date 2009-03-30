@@ -37,5 +37,7 @@ fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
  */
 int fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2);
 
+uint32_t lev_distance (char *s1, int len1, char *s2, int len2);
+
 
 #endif

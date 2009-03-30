@@ -11,7 +11,7 @@
 #ifdef WITH_LUA
 #include "lua.h"
 #else 
-#define add_luabuf(x) yyerror ("lua support diabled"); YYERROR
+#define add_luabuf(x) yyerror ("lua support diabled")
 #endif
 
 #define MAX_INCLUDE_DEPTH 10
@@ -157,6 +157,9 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <module>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
+<lua>\n									/* ignore EOL */;
+<lua>[ \t]+								/* ignore whitespace */;
+<lua>[ \t]*#.*							/* ignore comments */;
 <lua>^.endlua$							BEGIN(INITIAL);
 <lua>.*									add_luabuf(yytext);
 
