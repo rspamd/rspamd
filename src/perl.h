@@ -5,13 +5,6 @@
 #include "config.h"
 #include "memcached.h"
 
-#include <EXTERN.h>               /* from the Perl distribution     */
-#include <perl.h>                 /* from the Perl distribution     */
-
-#ifndef PERL_IMPLICIT_CONTEXT
-#undef  dTHXa
-#define dTHXa(a)
-#endif
 
 struct uri;
 struct worker_task;
@@ -26,5 +19,7 @@ int perl_call_url_filter (const char *function, struct worker_task *task);
 int perl_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number);
 
 void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data);
+
+double perl_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name);
 
 #endif

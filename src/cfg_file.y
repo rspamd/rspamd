@@ -8,6 +8,11 @@
 #include "expressions.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
+#ifdef WITH_LUA
+#include "lua-rspamd.h"
+#else
+#include "perl.h"
+#endif
 
 #define YYDEBUG 1
 
@@ -323,6 +328,11 @@ metricfunction:
 			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->func_name = memory_pool_strdup (cfg->cfg_pool, $3);
+#ifdef WITH_LUA
+		cur_metric->func = lua_consolidation_func;
+#else
+		cur_metric->func = perl_consolidation_func;
+#endif
 	}
 	;
 

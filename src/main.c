@@ -29,7 +29,16 @@
 #include "lmtp.h"
 
 #ifndef WITHOUT_PERL
+
+#include <EXTERN.h>               /* from the Perl distribution     */
+#include <perl.h>                 /* from the Perl distribution     */
+
+# ifndef PERL_IMPLICIT_CONTEXT
+#  undef  dTHXa
+#  define dTHXa(a)
+# endif
 #include "perl.h"
+
 #elif defined(WITH_LUA)
 #include "lua-rspamd.h"
 #endif

@@ -10,7 +10,7 @@
 
 struct worker_task;
 
-typedef double (*metric_cons_func)(struct worker_task *task, const char *metric_name);
+typedef double (*metric_cons_func)(struct worker_task *task, const char *metric_name, const char *func_name);
 typedef void (*filter_func)(struct worker_task *task);
 
 enum filter_type { C_FILTER, PERL_FILTER };
@@ -88,6 +88,6 @@ void make_composites (struct worker_task *task);
  * @param metric_name name of metric
  * @return result metric weight
  */
-double factor_consolidation_func (struct worker_task *task, const char *metric_name);
+double factor_consolidation_func (struct worker_task *task, const char *metric_name, const char *unused);
 
 #endif

@@ -28,6 +28,14 @@
 #include "perl.h"
 #include "cfg_file.h"
 
+#include <EXTERN.h>               /* from the Perl distribution     */
+#include <perl.h>                 /* from the Perl distribution     */
+
+#ifndef PERL_IMPLICIT_CONTEXT
+#undef  dTHXa
+#define dTHXa(a)
+#endif
+
 /* Perl module init function */
 #define MODULE_INIT_FUNC "module_init"
 
@@ -254,7 +262,8 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 	return result;
 }
 
-void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
+void 
+perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 {
 	struct {
 		SV *callback;
@@ -286,4 +295,63 @@ void perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, voi
 	FREETMPS;
 	LEAVE;
 
+}
+
+/*
+ * Perl custom consolidation function
+ */
+struct consolidation_callback_data {
+	struct worker_task *task;
+	double score;
+	const char *func;
+};
+
+static void
+perl_consolidation_callback (gpointer key, gpointer value, gpointer arg)
+{
+	double res;
+	struct symbol *s = (struct symbol *)value;
+	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
+	
+	dTHXa (perl_interpreter);
+	PERL_SET_CONTEXT (perl_interpreter);
+
+	dSP;
+	ENTER;
+	SAVETMPS;
+
+	PUSHMARK (SP);
+	
+	XPUSHs (sv_2mortal (newSVpv ((const char *)key, 0)));
+	XPUSHs (sv_2mortal (newSVnv (s->score)));
+	PUTBACK;
+	
+	call_pv (data->func, G_SCALAR);
+
+	SPAGAIN;
+
+	res = POPi;
+
+	data->score += res;
+}
+
+double
+perl_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name)
+{
+	struct metric_result *metric_res;
+	double res = 0.;
+	struct consolidation_callback_data data = { task, 0, function_name };
+
+	if (function_name == NULL) {
+		return 0;
+	}
+
+	metric_res = g_hash_table_lookup (task->results, metric_name);
+	if (metric_res == NULL) {
+		return res;
+	}
+
+	g_hash_table_foreach (metric_res->symbols, perl_consolidation_callback, &data);
+
+	return data.score;
 }

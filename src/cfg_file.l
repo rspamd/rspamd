@@ -1,5 +1,6 @@
 %x incl
 %x module
+%x lua
 
 %{
 
@@ -7,6 +8,11 @@
 #include "config.h"
 #include "cfg_file.h"
 #include "cfg_yacc.h"
+#ifdef WITH_LUA
+#include "lua.h"
+#else 
+#define add_luabuf(x) yyerror ("lua support diabled"); YYERROR
+#endif
 
 #define MAX_INCLUDE_DEPTH 10
 YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
@@ -23,6 +29,7 @@ extern struct config_file *cfg;
 [ \t]*#.*						/* ignore comments */;
 .include						BEGIN(incl);
 .module							BEGIN(module);
+.lua							BEGIN(lua);
 composites						return COMPOSITES;
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
@@ -149,6 +156,9 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <module>[a-zA-Z0-9_%-]+	yylval.string=strdup(yytext); return PARAM;
 <module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <module>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
+
+<lua>^.endlua$							BEGIN(INITIAL);
+<lua>.*									add_luabuf(yytext);
 
 %%
 /* 

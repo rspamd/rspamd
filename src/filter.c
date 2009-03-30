@@ -123,7 +123,7 @@ consolidation_callback (gpointer key, gpointer value, gpointer arg)
 }
 
 double
-factor_consolidation_func (struct worker_task *task, const char *metric_name)
+factor_consolidation_func (struct worker_task *task, const char *metric_name, const char *unused)
 {
 	struct metric_result *metric_res;
 	double res = 0.;
@@ -220,10 +220,10 @@ metric_process_callback (gpointer key, gpointer value, void *data)
 	struct metric_result *metric_res = (struct metric_result *)value;
 	
 	if (metric_res->metric->func != NULL) {
-		metric_res->score = metric_res->metric->func (task, metric_res->metric->name);
+		metric_res->score = metric_res->metric->func (task, metric_res->metric->name, metric_res->metric->func_name);
 	}
 	else {
-		metric_res->score = factor_consolidation_func (task, metric_res->metric->name);
+		metric_res->score = factor_consolidation_func (task, metric_res->metric->name, NULL);
 	}
 	msg_debug ("process_metric_callback: got result %.2f from consolidation function for metric %s", 
 					metric_res->score, metric_res->metric->name);
