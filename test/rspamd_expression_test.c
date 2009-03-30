@@ -9,7 +9,7 @@ char *test_expressions[] = {
 	"(A&B|!C)&!(D|E)",
 	"/test&!/&!/\\/|/",
 	"header_exists(f(b(aaa)))|header=/bbb/",
-	"!(header_exists(X-Mailer) | header_exists(User-Agent)) & Received=/cp-out\\d+\\.libero\\.it/H & Message-Id=/<[\\da-f]{12}\\.[\\da-f]{16}@/H",
+	"!(header_exists(X-Mailer, /aaa,/) | header_exists(User-Agent)) & Received=/cp-out\\d+\\.libero\\.it/H & Message-Id=/<[\\da-f]{12}\\.[\\da-f]{16}@/H",
 	NULL
 }; 
 

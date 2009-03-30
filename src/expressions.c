@@ -389,6 +389,7 @@ parse_expression (memory_pool_t *pool, char *line)
 			case READ_FUNCTION_ARGUMENT:
 				if (*p == '/' && !in_regexp) {
 					in_regexp = TRUE;
+					p ++;
 				}
 				if (!in_regexp) {
 					/* Append argument to list */
