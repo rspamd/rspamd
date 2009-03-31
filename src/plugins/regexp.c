@@ -412,6 +412,11 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 		}
 		else {
 			param_pattern = (char *)arg->data;
+			if (*param_pattern != '/') {
+				/* Skip non-regexp arguments */
+				cur = g_list_next (cur);
+				continue;
+			}
 			/* This is regexp, so compile and create g_regexp object */
 			if ((re = re_cache_check (param_pattern)) == NULL) {
 				re = parse_regexp (task->task_pool, param_pattern);

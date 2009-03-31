@@ -402,12 +402,12 @@ parse_expression (memory_pool_t *pool, char *line)
 							g_strstrip (str);
 							arg->type = EXPRESSION_ARGUMENT_NORMAL;
 							arg->data = str;
-							func->args = g_list_prepend (func->args, arg);
+							func->args = g_list_append (func->args, arg);
 						}
 						else {
 							arg->type = EXPRESSION_ARGUMENT_FUNCTION;
 							arg->data = old;
-							func->args = g_list_prepend (func->args, arg);
+							func->args = g_list_append (func->args, arg);
 						}
 						/* Pop function */
 						if (*p == ')') {
