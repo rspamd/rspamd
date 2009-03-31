@@ -48,7 +48,7 @@ struct statfile_section *cur_section = NULL;
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
-%token	DELIVERY LMTP ENABLED AGENT SECTION
+%token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -92,6 +92,7 @@ command	:
 	| statfile_pool_size
 	| lmtp
 	| delivery
+	| luacode
 	;
 
 tempdir :
@@ -828,6 +829,10 @@ deliveryagent:
 	AGENT EQSIGN QUOTEDSTRING {
 		cfg->deliver_agent_path = memory_pool_strdup (cfg->cfg_pool, $3);
 	}
+	;
+
+luacode:
+	LUACODE
 	;
 
 %%

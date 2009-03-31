@@ -161,7 +161,7 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <lua>[ \t]+								/* ignore whitespace */;
 <lua>[ \t]*#.*							/* ignore comments */;
 <lua>^.endlua$							BEGIN(INITIAL);
-<lua>.*									add_luabuf(yytext);
+<lua>.*									add_luabuf(yytext); return LUACODE;
 
 %%
 /* 

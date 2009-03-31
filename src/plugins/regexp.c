@@ -423,7 +423,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 			}
 			res += process_regexp (re, task);
 		}
-		cur = g_list_next (args);
+		cur = g_list_next (cur);
 	}
 
 	return res >= param_count;
