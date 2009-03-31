@@ -948,6 +948,7 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 	InternetAddress *addr;
 	double threshold;
 	struct addr_list *ar;
+	char *c;
 	int num, i, j, hits = 0, total = 0;
 	
 	if (args == NULL) {
@@ -969,18 +970,26 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 	i = 0;
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
-		ar[i].name = internet_address_get_name (addr);
-		ar[i].addr = internet_address_get_addr (addr);
+		ar[i].name = memory_pool_strdup (task->task_pool, internet_address_get_addr (addr));
+		if ((c = strchr (ar[i].name, '@')) != NULL) {
+			*c = '\0';
+			ar[i].addr = c + 1;
+		}
+		else {
+			ar[i].addr = NULL;
+		}
 		cur = internet_address_list_next (cur);
 	}
 
 	/* Cycle all elements in array */
 	for (i = 0; i < num; i ++) {
 		for (j = i + 1; j < num; j ++) {
-			if (g_ascii_strncasecmp (ar[i].name, ar[j].name, COMPARE_RCPT_LEN) == 0) {
+			if (ar[i].name && ar[j].name && g_ascii_strncasecmp (ar[i].name, ar[j].name, COMPARE_RCPT_LEN) == 0) {
+				/* Common name part */
 				hits ++;
 			}
-			if (g_ascii_strcasecmp (ar[i].addr, ar[j].addr) == 0) {
+			else if (ar[i].addr && ar[j].addr && g_ascii_strcasecmp (ar[i].addr, ar[j].addr) == 0) {
+				/* Common address part, but different name */
 				hits ++;
 			}
 			total ++;
@@ -1033,19 +1042,13 @@ is_recipient_list_sorted (const InternetAddressList *ia)
 	cur = ia;
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
-		current.name = internet_address_get_name (addr);
 		current.addr = internet_address_get_addr (addr);
-		if (previous.name != NULL) {
-			if (g_ascii_strcasecmp (current.name, previous.name) < 0) {
-				res = FALSE;
-				break;
-			}
+		if (previous.addr != NULL) {
 			if (g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
 				res = FALSE;
 				break;
 			}
 		}
-		previous.name = current.name;
 		previous.addr = current.addr;
 		cur = internet_address_list_next (cur);
 	}
