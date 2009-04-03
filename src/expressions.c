@@ -38,6 +38,8 @@ gboolean rspamd_content_type_is_subtype (struct worker_task *task, GList *args);
 gboolean rspamd_content_type_is_type (struct worker_task *task, GList *args);
 gboolean rspamd_parts_distance (struct worker_task *task, GList *args);
 gboolean rspamd_recipients_distance (struct worker_task *task, GList *args);
+gboolean rspamd_has_content_part (struct worker_task *task, GList *args);
+gboolean rspamd_has_content_part_len (struct worker_task *task, GList *args);
 gboolean rspamd_has_only_html_part (struct worker_task *task, GList *args);
 gboolean rspamd_is_recipients_sorted (struct worker_task *task, GList *args);
 
@@ -56,6 +58,8 @@ static struct _fl {
 	{ "content_type_has_param", rspamd_content_type_has_param },
 	{ "content_type_is_subtype", rspamd_content_type_is_subtype },
 	{ "content_type_is_type", rspamd_content_type_is_type },
+	{ "has_content_part", rspamd_has_content_part },
+	{ "has_content_part_len", rspamd_has_content_part_len },
 	{ "has_only_html_part", rspamd_has_only_html_part },
 	{ "header_exists", rspamd_header_exists },
 	{ "is_recipients_sorted", rspamd_is_recipients_sorted },
@@ -896,7 +900,6 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 	
 	arg = args->data;
 	param_pattern = arg->data;
-	param_pattern = arg->data;
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
@@ -957,7 +960,12 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 	}
 	
 	arg = args->data;
+	errno = 0;
 	threshold = strtod ((char *)arg->data, NULL);
+	if (errno != 0) {
+		msg_warn ("rspamd_recipients_distance: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+		return FALSE;
+	}
 
 	num = internet_address_list_length (task->rcpts);
 	if (num < MIN_RCPT_TO_COMPARE) {
@@ -1071,6 +1079,184 @@ rspamd_is_recipients_sorted (struct worker_task *task, GList *args)
 	}
 
 	return FALSE;
+}
+
+static inline gboolean
+compare_subtype (struct worker_task *task, const localContentType *ct, char *subtype)
+{
+	struct rspamd_regexp *re;
+
+	if (*subtype == '/') {
+		/* This is regexp, so compile and create g_regexp object */
+		if ((re = re_cache_check (subtype)) == NULL) {
+			re = parse_regexp (task->task_pool, subtype);
+			if (re == NULL) {
+				msg_warn ("compare_subtype: cannot compile regexp for function");
+				return FALSE;
+			}
+			re_cache_add (subtype, re);
+		}
+		if (g_regex_match (re->regexp, ct->subtype , 0, NULL) == TRUE) {
+			return TRUE;
+		}
+	}
+	else {
+		/* Just do strcasecmp */
+		if (g_ascii_strcasecmp (ct->subtype, subtype) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+static inline gboolean
+compare_len (struct mime_part *part, int min, int max)
+{
+	if (min == 0 && max == 0) {
+		return TRUE;
+	}
+
+	if (min == 0) {
+		return part->content->len <= max;
+	}
+	else if (max == 0) {
+		return part->content->len >= min;
+	}
+	else {
+		return part->content->len >= min && part->content->len <= max;
+	}
+}
+
+gboolean 
+common_has_content_part (struct worker_task *task, char *param_type, char *param_subtype, int min_len, int max_len)
+{
+	struct rspamd_regexp *re;
+	struct mime_part *part;
+	GList *cur;
+	const localContentType *ct;
+	
+	
+	cur = g_list_first (task->parts);
+	while (cur) {
+		part = cur->data;
+		ct = (localContentType *)part->type;
+		if (ct == NULL) {
+			cur = g_list_next (cur);
+			continue;
+		}
+		
+		if (*param_type == '/') {
+			/* This is regexp, so compile and create g_regexp object */
+			if ((re = re_cache_check (param_type)) == NULL) {
+				re = parse_regexp (task->task_pool, param_type);
+				if (re == NULL) {
+					msg_warn ("rspamd_has_content_part: cannot compile regexp for function");
+					cur = g_list_next (cur);
+					continue;
+				}
+				re_cache_add (param_type, re);
+			}
+			if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+				if (param_subtype) {
+					if (compare_subtype (task, ct, param_subtype)) {
+						if (compare_len (part, min_len, max_len)) {
+							return TRUE;
+						}
+					}
+				}
+				else {
+					if (compare_len (part, min_len, max_len)) {
+						return TRUE;
+					}
+				}
+			}
+		}
+		else {
+			/* Just do strcasecmp */
+			if (g_ascii_strcasecmp (ct->type, param_type) == 0) {
+				if (param_subtype) {
+					if (compare_subtype (task, ct, param_subtype)) {
+						if (compare_len (part, min_len, max_len)) {
+							return TRUE;
+						}
+					}
+				}
+				else {
+					if (compare_len (part, min_len, max_len)) {
+						return TRUE;
+					}
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_has_content_part (struct worker_task *task, GList *args)
+{
+	char *param_type = NULL, *param_subtype = NULL;
+	struct expression_argument *arg;
+
+	if (args == NULL) {
+		msg_warn ("rspamd_has_content_part: no parameters to function");
+		return FALSE;
+	}
+	
+	arg = args->data;
+	param_type = arg->data;
+	args = args->next;
+	if (args) {
+		arg = args->data;
+		param_subtype = arg->data;
+	}
+
+	return common_has_content_part (task, param_type, param_subtype, 0, 0);
+}
+
+gboolean
+rspamd_has_content_part_len (struct worker_task *task, GList *args)
+{
+	char *param_type = NULL, *param_subtype = NULL;
+	int min = 0, max = 0;
+	struct expression_argument *arg;
+
+	if (args == NULL) {
+		msg_warn ("rspamd_has_content_part_len: no parameters to function");
+		return FALSE;
+	}
+	
+	arg = args->data;
+	param_type = arg->data;
+	args = args->next;
+	if (args) {
+		arg = args->data;
+		param_subtype = arg->data;
+		args = args->next;
+		if (args) {
+			arg = args->data;
+			errno = 0;
+			min = strtoul (arg->data, NULL, 10);
+			if (errno != 0) {
+				msg_warn ("rspamd_has_content_part_len: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+				return FALSE;
+			}
+			args = args->next;
+			if (args) {
+				arg = args->data;
+				max = strtoul (arg->data, NULL, 10);
+				if (errno != 0) {
+					msg_warn ("rspamd_has_content_part_len: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+					return FALSE;
+				}
+			}
+		}
+	}
+
+	return common_has_content_part (task, param_type, param_subtype, min, max);
 }
 
 /*

@@ -155,7 +155,7 @@ static gsize
 process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
 	char *headerv, *c, t;
-	struct mime_part *part;
+	struct mime_text_part *part;
 	GList *cur, *headerlist;
 	struct uri *url;
 
@@ -196,10 +196,10 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			break;
 		case REGEXP_MIME:
 			msg_debug ("process_regexp: checking mime regexp: /%s/", re->regexp_text);
-			cur = g_list_first (task->parts);
+			cur = g_list_first (task->text_parts);
 			while (cur) {
-				part = (struct mime_part *)cur->data;
-				if (g_regex_match_full (re->regexp, part->content->data, part->content->len, 0, 0, NULL, NULL) == TRUE) {
+				part = (struct mime_text_part *)cur->data;
+				if (g_regex_match_full (re->regexp, part->orig->data, part->orig->len, 0, 0, NULL, NULL) == TRUE) {
 					return 1;
 				}
 				cur = g_list_next (cur);

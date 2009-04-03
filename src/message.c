@@ -316,6 +316,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 						url_parse_html (task, part_content);
 
 						text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+						text_part->orig = part_content;
 						text_part->content = strip_html_tags (part_content, NULL);
 						text_part->is_html = TRUE;
 						text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
@@ -327,6 +328,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 						url_parse_text (task, part_content);
 
 						text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+						text_part->orig = part_content;
 						text_part->content = part_content;
 						text_part->is_html = FALSE;
 						text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
