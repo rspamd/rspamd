@@ -158,10 +158,15 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	struct mime_text_part *part;
 	GList *cur, *headerlist;
 	struct uri *url;
+	int r;
 
 	if (re == NULL) {
 		msg_info ("process_regexp: invalid regexp passed");
 		return 0;
+	}
+	
+	if ((r = task_cache_check (task, re)) != -1) {
+		return r == 1;
 	}
 
 	switch (re->type) {
@@ -170,27 +175,32 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 		case REGEXP_HEADER:
 			if (re->header == NULL) {
 				msg_info ("process_regexp: header regexp without header name");
+				task_cache_add (task, re, 0);
 				return 0;
 			}
 			msg_debug ("process_regexp: checking header regexp: %s = /%s/", re->header, re->regexp_text);
 			headerlist = message_get_header (task->task_pool, task->message, re->header);
 			if (headerlist == NULL) {
+				task_cache_add (task, re, 0);
 				return 0;
 			}
 			else {
 				if (re->regexp == NULL) {
 					msg_debug ("process_regexp: regexp contains only header and it is found %s", re->header);
+					task_cache_add (task, re, 1);
 					g_list_free (headerlist);
 					return 1;
 				}
 				cur = headerlist;
 				while (cur) {
 					if (cur->data && g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+						task_cache_add (task, re, 1);
 						return 1;
 					}
 					cur = g_list_next (cur);
 				}
 				g_list_free (headerlist);
+				task_cache_add (task, re, 0);
 				return 0;
 			}
 			break;
@@ -200,33 +210,41 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			while (cur) {
 				part = (struct mime_text_part *)cur->data;
 				if (g_regex_match_full (re->regexp, part->orig->data, part->orig->len, 0, 0, NULL, NULL) == TRUE) {
+					task_cache_add (task, re, 1);
 					return 1;
 				}
 				cur = g_list_next (cur);
 			}
+			task_cache_add (task, re, 0);
 			return 0;
 		case REGEXP_MESSAGE:
 			msg_debug ("process_regexp: checking message regexp: /%s/", re->regexp_text);
 			if (g_regex_match_full (re->regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
+				task_cache_add (task, re, 1);
 				return 1;
 			}
+			task_cache_add (task, re, 0);
 			return 0;
 		case REGEXP_URL:
 			msg_debug ("process_regexp: checking url regexp: /%s/", re->regexp_text);
 			TAILQ_FOREACH (url, &task->urls, next) {
 				if (g_regex_match (re->regexp, struri (url), 0, NULL) == TRUE) {
+					task_cache_add (task, re, 1);
 					return 1;
 				}
 			}
+			task_cache_add (task, re, 0);
 			return 0;
 		case REGEXP_RAW_HEADER:
 			msg_debug ("process_regexp: checking for raw header: %s with regexp: /%s/", re->header, re->regexp_text);
 			if (task->raw_headers == NULL) {
 				msg_debug ("process_regexp: cannot check for raw header in message, no headers found");
+				task_cache_add (task, re, 0);
 				return 0;
 			}
 			if ((headerv = strstr (task->raw_headers, re->header)) == NULL) {
 				/* No header was found */
+				task_cache_add (task, re, 0);
 				return 0;
 			}
 			/* Skip header name and start matching after regexp */
@@ -256,9 +274,11 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			*c = '\0';
 			if (g_regex_match (re->regexp, headerv, 0, NULL) == TRUE) {
 				*c = t;
+				task_cache_add (task, re, 1);
 				return 1;
 			}
 			*c = t;
+			task_cache_add (task, re, 0);
 			return 0;
 	}
 

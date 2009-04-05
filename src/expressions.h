@@ -88,4 +88,20 @@ void re_cache_add (char *line, void *pointer);
  */
 void * re_cache_check (const char *line);
 
+/**
+ * Add regexp to regexp task cache
+ * @param task task object
+ * @param pointer regexp data
+ * @param result numeric result of this regexp
+ */
+void task_cache_add (struct worker_task *task, void *pointer, int32_t result);
+
+/**
+ * Check regexp in cache
+ * @param task task object
+ * @param pointer regexp data
+ * @return numeric result if value exists or -1 if not
+ */
+int32_t task_cache_check (struct worker_task *task, void *pointer);
+
 #endif

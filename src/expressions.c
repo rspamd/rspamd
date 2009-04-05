@@ -101,6 +101,23 @@ re_cache_add (char *line, void *pointer)
 	g_hash_table_insert (re_cache, line, pointer);
 }
 
+/* Task cache functions */
+void 
+task_cache_add (struct worker_task *task, void *pointer, int32_t result)
+{
+	g_hash_table_insert (task->re_cache, pointer, GINT_TO_POINTER (result));
+}
+
+int32_t
+task_cache_check (struct worker_task *task, void *pointer)
+{
+	gpointer res;
+	if ((res = g_hash_table_lookup (task->re_cache, pointer)) != NULL) {
+		return GPOINTER_TO_INT (res);
+	}
+	return -1;
+}
+
 /*
  * Functions for parsing expressions
  */
@@ -748,6 +765,7 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 	struct expression_argument *arg;
 	GMimeObject *part;
 	const GMimeContentType *ct;
+	int r;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
@@ -781,8 +799,15 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 				}
 				re_cache_add (param_pattern, re);
 			}
-			if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
-				return TRUE;
+			if ((r = task_cache_check (task, re)) == -1) {
+				if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
+					task_cache_add (task, re, 1);
+					return TRUE;
+				}
+				task_cache_add (task, re, 0);
+			}
+			else {
+				return r == 1;
 			}
 		}
 		else {
@@ -842,6 +867,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 	struct expression_argument *arg;
 	GMimeObject *part;
 	const localContentType *ct;
+	int r;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
@@ -869,8 +895,15 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 				}
 				re_cache_add (param_pattern, re);
 			}
-			if (g_regex_match (re->regexp, ct->subtype, 0, NULL) == TRUE) {
-				return TRUE;
+			if ((r = task_cache_check (task, re)) == -1) {
+				if (g_regex_match (re->regexp, ct->subtype, 0, NULL) == TRUE) {
+					task_cache_add (task, re, 1);
+					return TRUE;
+				}
+				task_cache_add (task, re, 0);
+			}
+			else {
+				return r == 1;
 			}
 		}
 		else {
@@ -892,6 +925,7 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 	GMimeObject *part;
 	const localContentType *ct;
 	struct expression_argument *arg;
+	int r;
 	
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
@@ -920,8 +954,15 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 				}
 				re_cache_add (param_pattern, re);
 			}
-			if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
-				return TRUE;
+			if ((r = task_cache_check (task, re)) == -1) {
+				if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+					task_cache_add (task, re, 1);
+					return TRUE;
+				}
+				task_cache_add (task, re, 0);
+			}
+			else {
+				return r == 1;
 			}
 		}
 		else {
@@ -1085,6 +1126,7 @@ static inline gboolean
 compare_subtype (struct worker_task *task, const localContentType *ct, char *subtype)
 {
 	struct rspamd_regexp *re;
+	int r;
 
 	if (*subtype == '/') {
 		/* This is regexp, so compile and create g_regexp object */
@@ -1096,8 +1138,15 @@ compare_subtype (struct worker_task *task, const localContentType *ct, char *sub
 			}
 			re_cache_add (subtype, re);
 		}
-		if (g_regex_match (re->regexp, ct->subtype , 0, NULL) == TRUE) {
-			return TRUE;
+		if ((r = task_cache_check (task, re)) == -1) {
+			if (g_regex_match (re->regexp, subtype, 0, NULL) == TRUE) {
+				task_cache_add (task, re, 1);
+				return TRUE;
+			}
+			task_cache_add (task, re, 0);
+		}
+		else {
+			return r == 1;
 		}
 	}
 	else {
@@ -1135,7 +1184,7 @@ common_has_content_part (struct worker_task *task, char *param_type, char *param
 	struct mime_part *part;
 	GList *cur;
 	const localContentType *ct;
-	
+	int r;
 	
 	cur = g_list_first (task->parts);
 	while (cur) {
@@ -1157,17 +1206,32 @@ common_has_content_part (struct worker_task *task, char *param_type, char *param
 				}
 				re_cache_add (param_type, re);
 			}
-			if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
-				if (param_subtype) {
-					if (compare_subtype (task, ct, param_subtype)) {
+			if ((r = task_cache_check (task, re)) == -1) {
+				if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+					if (param_subtype) {
+						if (compare_subtype (task, ct, param_subtype)) {
+							if (compare_len (part, min_len, max_len)) {
+								return TRUE;
+							}
+						}
+					}
+					else {
 						if (compare_len (part, min_len, max_len)) {
 							return TRUE;
 						}
 					}
+					task_cache_add (task, re, 1);
 				}
 				else {
-					if (compare_len (part, min_len, max_len)) {
-						return TRUE;
+					task_cache_add (task, re, 0);
+				}
+			}
+			else {
+				if (r == 1) {
+					if (compare_subtype (task, ct, param_subtype)) {
+						if (compare_len (part, min_len, max_len)) {
+							return TRUE;
+						}
 					}
 				}
 			}

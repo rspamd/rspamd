@@ -180,6 +180,7 @@ struct worker_task {
 	TAILQ_HEAD (uriq, uri) urls;								/**< list of parsed urls							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/
+	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
 	struct config_file *cfg;									/**< pointer to config object						*/
 	struct save_point save;										/**< save point for delayed processing				*/
 	char *last_error;											/**< last error										*/
