@@ -485,7 +485,7 @@ struct rspamd_regexp*
 parse_regexp (memory_pool_t *pool, char *line)
 {
 	char *begin, *end, *p, *src;
-	struct rspamd_regexp *result;
+	struct rspamd_regexp *result, *check;
 	int regexp_flags = 0;
 	GError *err = NULL;
 	
@@ -614,6 +614,21 @@ parse_regexp (memory_pool_t *pool, char *line)
 	}
 
 	*end = '\0';
+
+	/* Avoid multiply regexp structures for similar regexps */
+	if ((check = (struct rspamd_regexp *)re_cache_check (begin)) != NULL) {
+		/* Additional check for headers */
+		if (result->type == REGEXP_HEADER || result->type == REGEXP_RAW_HEADER) {
+			if (result->header && check->header) {
+				if (strcmp (result->header, check->header) == 0) {
+					return check;
+				}
+			}
+		}
+		else {
+			return check;
+		}
+	}
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
 	result->regexp_text = memory_pool_strdup (pool, begin);
 	memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->regexp);
@@ -623,7 +638,9 @@ parse_regexp (memory_pool_t *pool, char *line)
 		msg_warn ("parse_regexp: could not read regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
-
+	
+	/* Add to cache for further usage */
+	re_cache_add (result->regexp_text, result);
 	return result;
 }
 
