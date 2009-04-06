@@ -1029,7 +1029,7 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
-	ar = memory_pool_alloc (task->task_pool, num * sizeof (struct addr_list));
+	ar = memory_pool_alloc0 (task->task_pool, num * sizeof (struct addr_list));
 
 	/* Fill array */
 	cur = task->rcpts;
@@ -1041,10 +1041,8 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 			*c = '\0';
 			ar[i].addr = c + 1;
 		}
-		else {
-			ar[i].addr = NULL;
-		}
 		cur = internet_address_list_next (cur);
+		i ++;
 	}
 
 	/* Cycle all elements in array */
