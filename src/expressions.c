@@ -809,7 +809,7 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 		if (*param_pattern == '/') {
 			/* This is regexp, so compile and create g_regexp object */
 			if ((re = re_cache_check (param_pattern)) == NULL) {
-				re = parse_regexp (task->task_pool, param_pattern);
+				re = parse_regexp (task->cfg->cfg_pool, param_pattern);
 				if (re == NULL) {
 					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
 					return FALSE;
@@ -905,7 +905,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 		if (*param_pattern == '/') {
 			/* This is regexp, so compile and create g_regexp object */
 			if ((re = re_cache_check (param_pattern)) == NULL) {
-				re = parse_regexp (task->task_pool, param_pattern);
+				re = parse_regexp (task->cfg->cfg_pool, param_pattern);
 				if (re == NULL) {
 					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
 					return FALSE;
@@ -964,7 +964,7 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 		if (*param_pattern == '/') {
 			/* This is regexp, so compile and create g_regexp object */
 			if ((re = re_cache_check (param_pattern)) == NULL) {
-				re = parse_regexp (task->task_pool, param_pattern);
+				re = parse_regexp (task->cfg->cfg_pool, param_pattern);
 				if (re == NULL) {
 					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
 					return FALSE;
@@ -1148,7 +1148,7 @@ compare_subtype (struct worker_task *task, const localContentType *ct, char *sub
 	if (*subtype == '/') {
 		/* This is regexp, so compile and create g_regexp object */
 		if ((re = re_cache_check (subtype)) == NULL) {
-			re = parse_regexp (task->task_pool, subtype);
+			re = parse_regexp (task->cfg->cfg_pool, subtype);
 			if (re == NULL) {
 				msg_warn ("compare_subtype: cannot compile regexp for function");
 				return FALSE;
@@ -1215,7 +1215,7 @@ common_has_content_part (struct worker_task *task, char *param_type, char *param
 		if (*param_type == '/') {
 			/* This is regexp, so compile and create g_regexp object */
 			if ((re = re_cache_check (param_type)) == NULL) {
-				re = parse_regexp (task->task_pool, param_type);
+				re = parse_regexp (task->cfg->cfg_pool, param_type);
 				if (re == NULL) {
 					msg_warn ("rspamd_has_content_part: cannot compile regexp for function");
 					cur = g_list_next (cur);
