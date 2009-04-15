@@ -174,7 +174,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			return 0;
 		case REGEXP_HEADER:
 			if (re->header == NULL) {
-				msg_info ("process_regexp: header regexp without header name");
+				msg_info ("process_regexp: header regexp without header name: '%s'", re->regexp_text);
 				task_cache_add (task, re, 0);
 				return 0;
 			}

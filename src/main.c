@@ -392,6 +392,7 @@ main (int argc, char **argv, char **env)
 	int res = 0, i, listen_sock, lmtp_listen_sock;
 	struct sigaction signals;
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
+	struct rlimit rlim;
 	FILE *f;
 	pid_t wrk;
 #ifndef WITHOUT_PERL
@@ -506,6 +507,11 @@ main (int argc, char **argv, char **env)
 
 	/* Drop privilleges */
 	drop_priv (cfg);
+
+	/* Set stack size for pcre */
+	getrlimit(RLIMIT_STACK, &rlim);
+	rlim.rlim_cur = 100 * 1024 * 1024;
+	setrlimit(RLIMIT_STACK, &rlim);
 	
 	config_logger (rspamd, TRUE);
 
