@@ -77,6 +77,7 @@ struct rspamd_regexp {
 	enum rspamd_regexp_type type;					/**< regexp type										*/
 	char *regexp_text;								/**< regexp text representation							*/
 	GRegex *regexp;									/**< glib regexp structure								*/
+	GRegex *raw_regexp;								/**< glib regexp structure for raw matching				*/
 	char *header;									/**< header name for header regexps						*/
 };
 

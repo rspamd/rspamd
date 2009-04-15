@@ -632,10 +632,18 @@ parse_regexp (memory_pool_t *pool, char *line)
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
 	result->regexp_text = memory_pool_strdup (pool, begin);
 	memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->regexp);
-	*end = '/';
 
 	if (result->regexp == NULL || err != NULL) {
+		*end = '/';
 		msg_warn ("parse_regexp: could not read regexp: %s while reading regexp %s", err->message, src);
+		return NULL;
+	}
+	result->raw_regexp = g_regex_new (begin, regexp_flags | G_REGEX_RAW, 0, &err);
+	memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->raw_regexp);
+	*end = '/';
+
+	if (result->raw_regexp == NULL || err != NULL) {
+		msg_warn ("parse_regexp: could not read raw regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
 	

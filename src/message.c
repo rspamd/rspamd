@@ -235,7 +235,7 @@ free_byte_array_callback (void *pointer)
 }
 
 static GByteArray *
-convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeContentType *type)
+convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeContentType *type, struct mime_text_part *text_part)
 {
 	GError *err = NULL;
 	gsize read_bytes, write_bytes;
@@ -244,10 +244,12 @@ convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeCo
 	GByteArray *result_array;
 
 	if ((charset = g_mime_content_type_get_parameter (type, "charset")) == NULL) {
-		charset = "ASCII";
+		text_part->is_raw = TRUE;
+		return part_content;
 	}
 	
 	if (g_ascii_strcasecmp (charset, "utf-8") == 0 || g_ascii_strcasecmp (charset, "utf8") == 0) {
+		text_part->is_raw = TRUE;
 		return part_content;
 	}
 	
@@ -256,6 +258,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeCo
 									  &read_bytes, &write_bytes, &err);
 	if (res_str == NULL) {
 		msg_warn ("convert_text_to_utf: cannot convert from %s to utf8: %s", charset, err ? err->message : "unknown problem");
+		text_part->is_raw = TRUE;
 		return part_content;
 	}
 
@@ -263,6 +266,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeCo
 	result_array->data = res_str;
 	result_array->len = write_bytes + 1;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, res_str);
+	text_part->is_raw = FALSE;
 
 	return result_array;
 }
@@ -277,7 +281,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		url_parse_html (task, part_content);
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
-		text_part->orig = convert_text_to_utf (task, part_content, type);
+		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->content = strip_html_tags (part_content, NULL);
 		text_part->is_html = TRUE;
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
@@ -289,7 +293,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		url_parse_text (task, part_content);
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
-		text_part->orig = convert_text_to_utf (task, part_content, type);
+		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->content = part_content;
 		text_part->is_html = FALSE;
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);

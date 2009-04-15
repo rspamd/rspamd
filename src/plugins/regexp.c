@@ -157,6 +157,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	char *headerv, *c, t;
 	struct mime_text_part *part;
 	GList *cur, *headerlist;
+	GRegex *regexp;
 	struct uri *url;
 	int r;
 
@@ -209,7 +210,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			cur = g_list_first (task->text_parts);
 			while (cur) {
 				part = (struct mime_text_part *)cur->data;
-				if (g_regex_match_full (re->regexp, part->orig->data, part->orig->len, 0, 0, NULL, NULL) == TRUE) {
+				if (part->is_raw) {
+					regexp = re->raw_regexp;
+				}
+				else {
+					regexp = re->regexp;
+				}
+				if (g_regex_match_full (regexp, part->orig->data, part->orig->len, 0, 0, NULL, NULL) == TRUE) {
 					task_cache_add (task, re, 1);
 					return 1;
 				}
