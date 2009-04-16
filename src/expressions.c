@@ -575,6 +575,10 @@ parse_regexp (memory_pool_t *pool, char *line)
 				regexp_flags |= G_REGEX_OPTIMIZE;
 				p ++;
 				break;
+			case 'r':
+				regexp_flags |= G_REGEX_RAW;
+				p ++;
+				break;
 			/* Type flags */
 			case 'H':
 				if (result->type == REGEXP_NONE) {
@@ -638,8 +642,13 @@ parse_regexp (memory_pool_t *pool, char *line)
 		msg_warn ("parse_regexp: could not read regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
-	result->raw_regexp = g_regex_new (begin, regexp_flags | G_REGEX_RAW, 0, &err);
-	memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->raw_regexp);
+	if ((regexp_flags & G_REGEX_RAW) != 0) {
+		result->raw_regexp = result->regexp;
+	}
+	else {
+		result->raw_regexp = g_regex_new (begin, regexp_flags | G_REGEX_RAW, 0, &err);
+		memory_pool_add_destructor (pool, (pool_destruct_func)g_regex_unref, (void *)result->raw_regexp);
+	}
 	*end = '/';
 
 	if (result->raw_regexp == NULL || err != NULL) {

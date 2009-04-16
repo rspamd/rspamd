@@ -279,7 +279,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			/* Temporary null terminate this part of string */
 			t = *c;
 			*c = '\0';
-			if (g_regex_match (re->regexp, headerv, 0, NULL) == TRUE) {
+			if (g_regex_match (re->raw_regexp, headerv, 0, NULL) == TRUE) {
 				*c = t;
 				task_cache_add (task, re, 1);
 				return 1;
