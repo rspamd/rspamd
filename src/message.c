@@ -278,7 +278,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 
 	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
 		msg_debug ("mime_foreach_callback: got urls from text/html part");
-		url_parse_html (task, part_content);
+		url_parse_text (task, part_content, TRUE);
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
@@ -290,7 +290,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 	} 
 	else if (g_mime_content_type_is_type (type, "text", "plain")) {
 		msg_debug ("mime_foreach_callback: got urls from text/plain part");
-		url_parse_text (task, part_content);
+		url_parse_text (task, part_content, FALSE);
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);

@@ -87,7 +87,7 @@ rspamd_url_test_func ()
 	
 	g_test_timer_start ();
 	g_test_message ("Testing text URL regexp parser");
-	url_parse_text (&task, text);
+	url_parse_text (&task, text, FALSE);
 
 	TAILQ_FOREACH (url, &task.urls, next) {
 		msg_debug ("Found url: %s, hostname: %s, data: %s", struri (url), url->host, url->data);
@@ -104,7 +104,7 @@ rspamd_url_test_func ()
 	i = 0;
 	g_test_timer_start ();
 	g_test_message ("Testing html URL regexp parser");
-	url_parse_html (&task, html);
+	url_parse_text (&task, html, TRUE);
 
 	TAILQ_FOREACH (url, &task.urls, next) {
 		msg_debug ("Found url: %s, hostname: %s, data: %s", struri (url), url->host, url->data);

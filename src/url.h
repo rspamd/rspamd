@@ -73,8 +73,7 @@ enum protocol {
 
 #define struri(uri) ((uri)->string)
 
-void url_parse_html (struct worker_task *task, GByteArray *part);
-void url_parse_text (struct worker_task *task, GByteArray *part);
+void url_parse_text (struct worker_task *task, GByteArray *part, gboolean is_html);
 enum uri_errno parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool);
 
 #endif

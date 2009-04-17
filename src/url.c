@@ -853,11 +853,10 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 }
 
 void 
-url_parse_text (struct worker_task *task, GByteArray *content)
+url_parse_text (struct worker_task *task, GByteArray *content, gboolean is_html)
 {
 	GMatchInfo *info;
 	GError *err = NULL;
-	int pos = 0, start;
 	int rc;
 	char *url_str = NULL;
 	struct uri *new;
@@ -868,86 +867,39 @@ url_parse_text (struct worker_task *task, GByteArray *content)
 	}
 
 	if (url_init () == 0) {
-		do {
-			rc = g_regex_match_full (text_re, (const char *)content->data, content->len, pos, 0, &info, &err);
-			if (rc) {
-				if (g_match_info_matches (info)) {
-					g_match_info_fetch_pos (info, 0, &start, &pos);
-					url_str = g_match_info_fetch (info, 0);
-					msg_debug ("url_parse_text: extracted string with regexp: '%s'", url_str);
-					if (url_str != NULL) {
-						new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
-						if (new != NULL) {
-							rc = parse_uri (new, url_str, task->task_pool);
-							if (rc != URI_ERRNO_OK) {
-								msg_debug ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
-							}
-							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
-								TAILQ_INSERT_TAIL (&task->urls, new, next);
-							}
+		rc = g_regex_match_full (is_html ? html_re : text_re, (const char *)content->data, content->len, 0, 0, &info, &err);
+		if (rc) {
+			while (g_match_info_matches (info)) {
+				url_str = g_match_info_fetch (info, is_html ? 1 : 0);
+				msg_debug ("url_parse_text: extracted string with regexp: '%s', html is %s", url_str, is_html ? "on" : "off");
+				if (url_str != NULL) {
+					new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
+					if (new != NULL) {
+						rc = parse_uri (new, url_str, task->task_pool);
+						if (rc != URI_ERRNO_OK) {
+							msg_debug ("url_parse_text: error while parsing url %s: %s", url_str, url_strerror (rc));
+						}
+						if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
+							TAILQ_INSERT_TAIL (&task->urls, new, next);
 						}
 					}
-					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, url_str);
 				}
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, url_str);
+				/* Get next match */
+				g_match_info_next (info, &err);
 			}
-			else if (err != NULL) {
-				msg_debug ("url_parse_text: error matching regexp: %s", err->message);
-				g_free (err);
-			}
-			else {
-				msg_debug ("url_parse_text: cannot find url pattern in given string");
-			}
-			g_match_info_free (info);
-		} while (rc);
+		}
+		else if (err != NULL) {
+			msg_debug ("url_parse_text: error matching regexp: %s", err->message);
+			g_free (err);
+		}
+		else {
+			msg_debug ("url_parse_text: cannot find url pattern in given string");
+		}
+		g_match_info_free (info);
 	}
 }
 
-void 
-url_parse_html (struct worker_task *task, GByteArray *content)
-{
-	GMatchInfo *info;
-	GError *err = NULL;
-	int pos = 0, start;
-	int rc;
-	char *url_str = NULL;
-	struct uri *new;
-
-	if (!content->data || content->len == 0) {
-		msg_warn ("url_parse_text: got empty text part");
-		return;
-	}
-
-	if (url_init () == 0) {
-		do {
-			rc = g_regex_match_full (html_re, (const char *)content->data, content->len, pos, 0, &info, &err);
-			if (rc) {
-				if (g_match_info_matches (info)) {
-					g_match_info_fetch_pos (info, 0, &start, &pos);
-					url_str = g_match_info_fetch (info, 1);
-					msg_debug ("url_parse_html: extracted string with regexp: '%s'", url_str);
-					if (url_str != NULL) {
-						new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
-						if (new != NULL) {
-							rc = parse_uri (new, url_str, task->task_pool);
-							if (rc != URI_ERRNO_OK) {
-								msg_debug ("url_parse_html: error while parsing url %s: %s", url_str, url_strerror (rc));
-							}
-							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
-								TAILQ_INSERT_TAIL (&task->urls, new, next);
-							}
-						}
-					}
-					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, url_str);
-				}
-			}
-			else if (err) {
-				msg_debug ("url_parse_html: error matching regexp: %s", err->message);
-				g_free (err);
-			}
-			else {
-				msg_debug ("url_parse_html: cannot find url pattern in given string");
-			}
-			g_match_info_free (info);
-		} while (rc);
-	}
-}
+/*
+ * vi: ts=4
+ */

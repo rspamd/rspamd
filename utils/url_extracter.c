@@ -96,11 +96,11 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 				task->parts =  g_list_prepend (task->parts, mime_part);
 				if (g_mime_content_type_is_type (type, "text", "html")) {
 					printf ("Found text/html part\n");
-					url_parse_html (task, part_content);
+					url_parse_text (task, part_content, TRUE);
 				} 
 				else if (g_mime_content_type_is_type (type, "text", "plain")) {
 					printf ("Found text/plain part\n");
-					url_parse_text (task, part_content);
+					url_parse_text (task, part_content, FALSE);
 				}
 			}
 		}
