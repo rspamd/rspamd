@@ -304,16 +304,19 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 		if (it->type == EXPR_OPERATION) {
 			/* If this operation is just ! just inverse res and check for further operators */
 			if (it->content.operation == '!' && is_nearest) {
+				msg_debug ("optimize_regexp_expression: found '!' operator, inversing result");
 				res = !res;
 				it = it->next;
 				*e = it;
 				continue;
 			}
 			else if (it->content.operation == '&' && res == FALSE) {
+				msg_debug ("optimize_regexp_expression: found '&' and previous expression is false");
 				*e = it;
 				ret = TRUE;
 			}
 			else if (it->content.operation == '|' && res == TRUE) {
+				msg_debug ("optimize_regexp_expression: found '|' and previous expression is true");
 				*e = it;
 				ret = TRUE;
 			}

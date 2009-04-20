@@ -876,6 +876,8 @@ rspamd_content_type_has_param (struct worker_task *task, GList *args)
 		ct = g_mime_object_get_content_type (part);
 		g_object_unref (part);
 
+		msg_debug ("rspamd_content_type_has_param: checking %s param", param_name);
+
 		if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
 			return FALSE;
 		}

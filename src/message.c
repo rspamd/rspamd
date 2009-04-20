@@ -641,35 +641,28 @@ enum {
 	HEADER_UNKNOWN
 };
 
-static GList *
-local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char *field)
-{
-	GList *	gret = NULL;
 #ifndef GMIME24
-	struct raw_header *h;
-
-	if (field == NULL) {
-		return NULL;
-	}
-	h = GMIME_OBJECT(message)->headers->headers;
+static void
+header_iterate (memory_pool_t *pool, struct raw_header *h, GList *ret, const char *field)
+{
 	while (h) {
 		if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
 			if (pool != NULL) {
-				gret = g_list_prepend (gret, memory_pool_strdup (pool, h->value));
+				ret = g_list_prepend (ret, memory_pool_strdup (pool, h->value));
 			}
 			else {
-				gret = g_list_prepend (gret, g_strdup (h->value));
+				ret = g_list_prepend (ret, g_strdup (h->value));
 			}
 		}
 		h = h->next;
 	}
-	return gret;
+}
 #else
-	GMimeHeaderList *ls;
+static void
+header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList *ret, const char field)
+{
 	GMimeHeaderIter *iter;
 	const char *name;
-
-	ls = GMIME_OBJECT(message)->headers;
 
 	if (g_mime_header_list_get_iter (ls, iter)) {
 		while (g_mime_header_iter_is_valid (iter)) {
@@ -688,6 +681,50 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 			}
 		}
 	}
+}
+#endif
+
+static GList *
+local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char *field)
+{
+	GList *	gret = NULL;
+	GMimeObject *part;
+#ifndef GMIME24
+	struct raw_header *h;
+
+	if (field == NULL) {
+		return NULL;
+	}
+
+	h = GMIME_OBJECT(message)->headers->headers;
+	header_iterate (pool, h, gret, field);
+	
+	if (gret == NULL) {
+		/* Try to iterate with mime part headers */
+		part = g_mime_message_get_mime_part (message);
+		if (part) {
+			h = part->headers->headers;
+			header_iterate (pool, h, gret, field);
+			g_object_unref (part);
+		}
+	}
+
+	return gret;
+#else
+	GMimeHeaderList *ls;
+
+	ls = GMIME_OBJECT(message)->headers;
+	header_iterate (pool, ls, gret, field);
+	if (gret == NULL) {
+		/* Try to iterate with mime part headers */
+		part = g_mime_message_get_mime_part (message);
+		if (part) {
+			ls = part->headers;
+			header_iterate (pool, ls, gret, field);
+			g_object_unref (part);
+		}
+	}
+
 
 	return gret;
 #endif
@@ -709,6 +746,7 @@ local_mime_message_set_date_from_string (GMimeMessage *message, const gchar *str
 	date = g_mime_utils_header_decode_date (string, &offset);
 	g_mime_message_set_date (message, date, offset); 
 }
+
 
 #ifdef GMIME24
 
