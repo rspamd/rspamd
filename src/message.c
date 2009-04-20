@@ -243,6 +243,11 @@ convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeCo
 	gchar *res_str;
 	GByteArray *result_array;
 
+	if (task->cfg->raw_mode) {
+		text_part->is_raw = TRUE;
+		return part_content;
+	}
+
 	if ((charset = g_mime_content_type_get_parameter (type, "charset")) == NULL) {
 		text_part->is_raw = TRUE;
 		return part_content;

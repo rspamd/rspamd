@@ -16,6 +16,9 @@
 name="rspamd"
 rcvar=`set_rcvar`
 procname="@CMAKE_INSTALL_PREFIX@/bin/rspamd"
+restart_precmd="rspamd_checkconfig"
+reload_precmd="rspamd_checkconfig"
+configtest_cmd="rspamd_checkconfig"
 
 load_rc_config $name
 
@@ -26,7 +29,13 @@ load_rc_config $name
 
 stop_postcmd="rm -f $rspamd_pidfile"
 
-extra_commands="reload"
+rspamd_checkconfig()
+{
+	echo "Performing sanity check on rspamd configuration:"
+	eval ${command} -t
+}
+
+extra_commands="reload configtest"
 sig_reload="USR1"
 
 command="$procname"

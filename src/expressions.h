@@ -49,7 +49,7 @@ typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args);
  * @param line incoming line
  * @return regexp structure or NULL in case of error
  */
-struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line);
+struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line, gboolean raw_mode);
 
 /**
  * Parse composites line to composites structure (eg. "SYMBOL1&SYMBOL2|!SYMBOL3")

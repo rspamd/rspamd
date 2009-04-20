@@ -56,6 +56,7 @@ function						return FUNCTION;
 control							return CONTROL;
 password						return PASSWORD;
 lmtp							return LMTP;
+raw_mode						return RAW_MODE;
 enabled							return ENABLED;
 delivery						return DELIVERY;
 agent							return AGENT;

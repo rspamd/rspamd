@@ -169,6 +169,7 @@ struct config_file {
 
 	gboolean no_fork;								/**< if 1 do not call daemon()							*/
 	gboolean config_test;							/**< if TRUE do only config file test					*/
+	gboolean raw_mode;								/**< work in raw mode instead of utf one				*/
 	unsigned int workers_number;					/**< number of workers									*/
 	unsigned int lmtp_workers_number;				/**< number of lmtp workers								*/
 

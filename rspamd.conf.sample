@@ -140,5 +140,11 @@ $subject_blah = "Subject=/blah/H";
 	BLAH_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})";
 };
 
+# If enables threat each regexp as raw regex and do not try to convert
+# each text part to utf8 encoding. Save a lot of resources but less
+# portable.
+# Default: no
+raw_mode = yes;
+
 url_filters = "surbl";
 header_filters = "regexp";

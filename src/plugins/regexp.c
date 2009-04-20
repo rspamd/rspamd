@@ -78,7 +78,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 }
 
 static gboolean
-read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, char *symbol, char *line)
+read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, char *symbol, char *line, struct config_file *cfg)
 {	
 	struct expression *e, *cur;
 
@@ -91,7 +91,7 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 	cur = e;
 	while (cur) {
 		if (cur->type == EXPR_REGEXP) {
-			cur->content.operand = parse_regexp (pool, cur->content.operand);
+			cur->content.operand = parse_regexp (pool, cur->content.operand, cfg->raw_mode);
 			if (cur->content.operand == NULL) {
 				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
 				return FALSE;
@@ -132,7 +132,7 @@ regexp_module_config (struct config_file *cfg)
 			}
 			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = cur->param;
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value)) {
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
 				res = FALSE;
 			}
 			regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);
@@ -449,7 +449,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 			}
 			/* This is regexp, so compile and create g_regexp object */
 			if ((re = re_cache_check (param_pattern)) == NULL) {
-				re = parse_regexp (task->task_pool, param_pattern);
+				re = parse_regexp (task->task_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
 					msg_warn ("rspamd_regexp_match_number: cannot compile regexp for function");
 					return FALSE;
