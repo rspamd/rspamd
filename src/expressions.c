@@ -42,6 +42,7 @@ gboolean rspamd_has_content_part (struct worker_task *task, GList *args);
 gboolean rspamd_has_content_part_len (struct worker_task *task, GList *args);
 gboolean rspamd_has_only_html_part (struct worker_task *task, GList *args);
 gboolean rspamd_is_recipients_sorted (struct worker_task *task, GList *args);
+gboolean rspamd_compare_transfer_encoding (struct worker_task *task, GList *args);
 
 /*
  * List of internal functions of rspamd
@@ -54,6 +55,7 @@ static struct _fl {
 	{ "compare_encoding", rspamd_compare_encoding },
 	{ "compare_parts_distance", rspamd_parts_distance },
 	{ "compare_recipients_distance", rspamd_recipients_distance },
+	{ "compare_transfer_encoding", rspamd_compare_transfer_encoding },
 	{ "content_type_compare_param", rspamd_content_type_compare_param },
 	{ "content_type_has_param", rspamd_content_type_has_param },
 	{ "content_type_is_subtype", rspamd_content_type_is_subtype },
@@ -1355,6 +1357,43 @@ rspamd_has_content_part_len (struct worker_task *task, GList *args)
 	}
 
 	return common_has_content_part (task, param_type, param_subtype, min, max);
+}
+
+gboolean 
+rspamd_compare_transfer_encoding (struct worker_task *task, GList *args)
+{
+	GMimeObject *part;
+	GMimePartEncodingType enc_req, part_enc;
+	struct expression_argument *arg;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_compare_transfer_encoding: no parameters to function");
+		return FALSE;
+	}
+	
+	arg = args->data;
+	enc_req = g_mime_part_encoding_from_string (arg->data);
+#ifndef GMIME24
+	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {
+#else
+	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
+#endif
+		msg_warn ("rspamd_compare_transfer_encoding: bad encoding type: %s", (char *)arg->data);
+		return FALSE;
+	}
+
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		part_enc = g_mime_part_get_encoding (GMIME_PART (part));
+		g_object_unref (part);
+		
+		msg_debug ("rspamd_compare_transfer_encoding: got encoding in part: %d and compare with %d",
+				(int)part_enc, (int)enc_req);
+
+		return part_enc == enc_req;
+	}
+
+	return FALSE;
 }
 
 /*
