@@ -148,3 +148,4 @@ raw_mode = yes;
 
 url_filters = "surbl";
 header_filters = "regexp";
+mime_filters = "chartable";

@@ -299,7 +299,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
-		text_part->content = part_content;
+		text_part->content = text_part->orig;
 		text_part->is_html = FALSE;
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);

@@ -308,7 +308,8 @@ SET(CLASSIFIERSSRC src/classifiers/classifiers.c
 				src/classifiers/winnow.c)
 
 SET(PLUGINSSRC	src/plugins/surbl.c
-				src/plugins/regexp.c)
+				src/plugins/regexp.c
+				src/plugins/chartable.c)
 
 SET(TESTSRC		test/rspamd_expression_test.c
 				test/rspamd_memcached_test.c
