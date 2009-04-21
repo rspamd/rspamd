@@ -114,40 +114,54 @@ chartable_module_reconfig (struct config_file *cfg)
 }
 
 static gboolean
-check_part (struct mime_text_part *part)
+check_part (struct mime_text_part *part, gboolean raw_mode)
 {
-	char *p, *p1;
+	unsigned char *p, *p1;
 	gunichar c, t;
 	GUnicodeScript scc, sct;
 	uint32_t mark = 0, total = 0;
 	uint32_t remain = part->content->len;
 	
-	if (part->is_raw) {
-		return FALSE;
-	}
-
 	p = part->content->data;
 
-	while (remain > 0) {
-		c = g_utf8_get_char (p);
-		scc = g_unichar_get_script (c);
-		p1 = g_utf8_next_char (p);
-		remain -= p1 - p;
-		p = p1;
-		
-		if (remain > 0) {
-			t = g_utf8_get_char (p);
-			sct = g_unichar_get_script (t);
-			if (g_unichar_isalnum (c) && g_unichar_isalnum (t)) {
-				/* We have two unicode alphanumeric characters, so we can check its script */
-				if (sct != scc) {
-					mark ++;
-				}
+	if (part->is_raw || raw_mode) {
+		while (remain > 1) {
+			if ((g_ascii_isalpha (*p) && (*(p + 1) & 0x80)) ||
+			   ((*p & 0x80) && g_ascii_isalpha (*(p + 1)))) {
+				mark ++;
 				total ++;
 			}
+			/* Current and next symbols are of one class */
+			else if (((*p & 0x80) && (*(p + 1) & 0x80)) ||
+					(g_ascii_isalpha (*p) && g_ascii_isalpha (*(p + 1)))) {
+				total ++;		
+			}
+			p ++;
+			remain --;
+		}
+	}
+	else {
+		while (remain > 0) {
+			c = g_utf8_get_char (p);
+			scc = g_unichar_get_script (c);
 			p1 = g_utf8_next_char (p);
 			remain -= p1 - p;
 			p = p1;
+			
+			if (remain > 0) {
+				t = g_utf8_get_char (p);
+				sct = g_unichar_get_script (t);
+				if (g_unichar_isalnum (c) && g_unichar_isalnum (t)) {
+					/* We have two unicode alphanumeric characters, so we can check its script */
+					if (sct != scc) {
+						mark ++;
+					}
+					total ++;
+				}
+				p1 = g_utf8_next_char (p);
+				remain -= p1 - p;
+				p = p1;
+			}
 		}
 	}
 
@@ -159,15 +173,9 @@ chartable_mime_filter (struct worker_task *task)
 {	
 	GList *cur;
 
-	/* XXX: write translation tables for this */
-	if (task->cfg->raw_mode) {
-		msg_warn ("chartable_mime_filter: cannot work in non-unicode mode");
-		return 0;
-	}
-
 	cur = g_list_first (task->text_parts);
 	while (cur) {
-		if (check_part ((struct mime_text_part *)cur->data)) {
+		if (check_part ((struct mime_text_part *)cur->data, task->cfg->raw_mode)) {
 			insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);	
 		}
 		cur = g_list_next (cur);

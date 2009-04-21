@@ -140,6 +140,12 @@ $subject_blah = "Subject=/blah/H";
 	BLAH_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})";
 };
 
+.module 'chartable' {
+	metric = "default";
+	symbold = "R_MIXED_CHARSET";
+	threshold = "0.1";
+};
+
 # If enables threat each regexp as raw regex and do not try to convert
 # each text part to utf8 encoding. Save a lot of resources but less
 # portable.
