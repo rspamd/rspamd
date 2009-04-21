@@ -206,6 +206,8 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							  (long int)mem_st.shared_chunks_allocated);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %ld" CRLF,
 							  (long int)mem_st.chunks_freed);
+				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %ld" CRLF,
+							  (long int)mem_st.oversized_chunks);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
 			}
 			break;

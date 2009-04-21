@@ -74,6 +74,7 @@ typedef struct memory_pool_stat_s {
 	memory_pool_ssize_t chunks_allocated;				/**< number of chunks that are allocated				*/
 	memory_pool_ssize_t shared_chunks_allocated;		/**< shared chunks allocated							*/
 	memory_pool_ssize_t chunks_freed;					/**< chunks freed										*/
+	memory_pool_ssize_t oversized_chunks;				/**< oversized chunks									*/
 } memory_pool_stat_t;
 
 /**

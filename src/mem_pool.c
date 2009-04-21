@@ -168,6 +168,7 @@ memory_pool_alloc (memory_pool_t *pool, memory_pool_ssize_t size)
 				new = pool_chain_new (cur->len);
 			}
 			else {
+				mem_pool_stat->oversized_chunks ++;
 				new = pool_chain_new (size + cur->len);
 			}
 			/* Attach new pool to chain */
@@ -239,6 +240,7 @@ memory_pool_alloc_shared (memory_pool_t *pool, memory_pool_ssize_t size)
 				new = pool_chain_new_shared (cur->len);
 			}
 			else {
+				mem_pool_stat->oversized_chunks ++;
 				new = pool_chain_new_shared (size + cur->len);
 			}
 			/* Attach new pool to chain */
@@ -402,6 +404,7 @@ memory_pool_stat (memory_pool_stat_t *st)
 	st->chunks_allocated = mem_pool_stat->chunks_allocated;
 	st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
 	st->chunks_freed = mem_pool_stat->chunks_freed;
+	st->oversized_chunks = mem_pool_stat->oversized_chunks;
 }
 
 #define FIXED_POOL_SIZE 4095
