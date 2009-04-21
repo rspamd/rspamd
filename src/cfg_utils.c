@@ -382,9 +382,9 @@ substitute_variable (struct config_file *cfg, char *name, char *str, u_char recu
 			new = substitute_variable (cfg, v_begin, var, recursive);
 		}
 		/* Allocate new string */
-		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 1);
+		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 3);
 
-		snprintf (new, len - strlen (v_begin) + strlen (var) + 1, "%s%s%s",
+		snprintf (new, len - strlen (v_begin) + strlen (var) + 3, "%s(%s)%s",
 						str, var, v_end + 1);
 		str = new;
 		changed = TRUE;
