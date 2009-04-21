@@ -679,7 +679,6 @@ header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList **ret, const cha
 				else {
 					*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
 				}
-				}
 			}
 			if (!g_mime_header_iter_next (iter)) {
 				break;
