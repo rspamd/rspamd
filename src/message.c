@@ -648,15 +648,15 @@ enum {
 
 #ifndef GMIME24
 static void
-header_iterate (memory_pool_t *pool, struct raw_header *h, GList *ret, const char *field)
+header_iterate (memory_pool_t *pool, struct raw_header *h, GList **ret, const char *field)
 {
 	while (h) {
 		if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
 			if (pool != NULL) {
-				ret = g_list_prepend (ret, memory_pool_strdup (pool, h->value));
+				*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
 			}
 			else {
-				ret = g_list_prepend (ret, g_strdup (h->value));
+				*ret = g_list_prepend (*ret, g_strdup (h->value));
 			}
 		}
 		h = h->next;
@@ -664,7 +664,7 @@ header_iterate (memory_pool_t *pool, struct raw_header *h, GList *ret, const cha
 }
 #else
 static void
-header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList *ret, const char field)
+header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList **ret, const char field)
 {
 	GMimeHeaderIter *iter;
 	const char *name;
@@ -674,10 +674,10 @@ header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList *ret, const char
 			name = g_mime_header_iter_get_name (iter);
 			if (!g_strncasecmp (field, name, strlen (name))) {
 				if (pool != NULL) {
-					gret = g_list_prepend (gret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
 				}
 				else {
-					gret = g_list_prepend (gret, g_strdup (g_mime_header_iter_get_value (iter)));
+					*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
 				}
 				}
 			}
@@ -692,7 +692,7 @@ header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList *ret, const char
 static GList *
 local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char *field)
 {
-	GList *	gret = NULL;
+	GList *gret = NULL;
 	GMimeObject *part;
 #ifndef GMIME24
 	struct raw_header *h;
@@ -702,14 +702,14 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 	}
 
 	h = GMIME_OBJECT(message)->headers->headers;
-	header_iterate (pool, h, gret, field);
+	header_iterate (pool, h, &gret, field);
 	
 	if (gret == NULL) {
 		/* Try to iterate with mime part headers */
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
 			h = part->headers->headers;
-			header_iterate (pool, h, gret, field);
+			header_iterate (pool, h, &gret, field);
 			g_object_unref (part);
 		}
 	}
@@ -719,13 +719,13 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 	GMimeHeaderList *ls;
 
 	ls = GMIME_OBJECT(message)->headers;
-	header_iterate (pool, ls, gret, field);
+	header_iterate (pool, ls, &gret, field);
 	if (gret == NULL) {
 		/* Try to iterate with mime part headers */
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
 			ls = part->headers;
-			header_iterate (pool, ls, gret, field);
+			header_iterate (pool, ls, &gret, field);
 			g_object_unref (part);
 		}
 	}
