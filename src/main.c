@@ -354,7 +354,6 @@ static void
 dump_cfg_vars ()
 {
 	g_hash_table_foreach (cfg->variables, dump_all_variables, NULL);
-	g_hash_table_foreach (cfg->modules_opts, dump_module_variables, NULL);
 }
 
 static int

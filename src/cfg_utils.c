@@ -354,7 +354,7 @@ parse_flag (const char *str)
 char *
 substitute_variable (struct config_file *cfg, char *name, char *str, u_char recursive)
 {
-	char *var, *new, *v_begin, *v_end;
+	char *var, *new, *v_begin, *v_end, *p, t;
 	size_t len;
 	gboolean changed = FALSE;
 
@@ -362,30 +362,35 @@ substitute_variable (struct config_file *cfg, char *name, char *str, u_char recu
 		yywarn ("substitute_variable: trying to substitute variable in NULL string");
 		return NULL;
 	}
-
-	while ((v_begin = strstr (str, "${")) != NULL) {
+	
+	p = str;
+	while ((v_begin = strstr (p, "${")) != NULL) {
 		len = strlen (str);
 		*v_begin = '\0';
 		v_begin += 2;
 		if ((v_end = strstr (v_begin, "}")) == NULL) {
 			/* Not a variable, skip */
+			p = v_begin;
 			continue;
 		}
+		t = *v_end;
 		*v_end = '\0';
 		var = g_hash_table_lookup (cfg->variables, v_begin);
 		if (var == NULL) {
 			yywarn ("substitute_variable: variable %s is not defined", v_begin);
-			/* Substitute unknown variables with empty string */
-			var = "";
+			*v_end = t;
+			p = v_end + 1;
+			continue;
 		}
 		else if (recursive) {
-			new = substitute_variable (cfg, v_begin, var, recursive);
+			var = substitute_variable (cfg, v_begin, var, recursive);
 		}
 		/* Allocate new string */
 		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 3);
 
 		snprintf (new, len - strlen (v_begin) + strlen (var) + 3, "%s(%s)%s",
 						str, var, v_end + 1);
+		p = new;
 		str = new;
 		changed = TRUE;
 	}
@@ -393,6 +398,7 @@ substitute_variable (struct config_file *cfg, char *name, char *str, u_char recu
 	if (changed && name != NULL) {
 		g_hash_table_insert (cfg->variables, name, str);
 	}
+
 	return str;
 }
 
@@ -414,10 +420,9 @@ static void
 substitute_all_variables (gpointer key, gpointer value, gpointer data)
 {
 	struct config_file *cfg = (struct config_file *)data;
-	char *new;
 
 	/* Do recursive substitution */
-	new = substitute_variable (cfg, (char *)key, (char *)value, 1);
+	(void)substitute_variable (cfg, (char *)key, (char *)value, 1);
 }
 
 static void

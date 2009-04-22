@@ -154,8 +154,8 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <module>\}  BEGIN(INITIAL); return EBRACE;
 <module>\;	return SEMICOLON;
 <module>=	return EQSIGN;
-<module>[a-zA-Z0-9_%-]+	yylval.string=strdup(yytext); return PARAM;
 <module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
+<module>[a-zA-Z0-9_%-]+	yylval.string=strdup(yytext); return PARAM;
 <module>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
 <lua>\n									/* ignore EOL */;
