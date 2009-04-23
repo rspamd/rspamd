@@ -210,6 +210,7 @@ is_regexp_flag (char a)
 		case 's':
 		case 'u':
 		case 'o':
+		case 'r':
 		case 'H':
 		case 'M':
 		case 'P':
@@ -297,6 +298,8 @@ parse_expression (memory_pool_t *pool, char *line)
 	if (line == NULL || pool == NULL) {
 		return NULL;
 	} 
+
+	msg_debug ("parse_expression: parsing expression {{ %s }}", line);
 	
 	function_stack = g_queue_new ();
 	p = line;
@@ -379,13 +382,13 @@ parse_expression (memory_pool_t *pool, char *line)
 			case READ_REGEXP_FLAGS:
 				if (!is_regexp_flag (*p) || *(p + 1) == '\0') {
 					if (c != p) {
-						/* Copy operand */
-						if (*(p + 1) == '\0' || *(p - 1) == '/') {
-							p++;
+						if (is_regexp_flag (*p) && *(p + 1) == '\0') {
+							p ++;
 						}
-						str = memory_pool_alloc (pool, p - c + 1);
-						g_strlcpy (str, c - 1, (p - c + 1));
+						str = memory_pool_alloc (pool, p - c + 2);
+						g_strlcpy (str, c - 1, (p - c + 2));
 						g_strstrip (str);
+						msg_debug ("parse_expression: found regexp: %s", str);
 						if (strlen (str) > 0) {
 							insert_expression (pool, &expr, EXPR_REGEXP, 0, str);
 						}

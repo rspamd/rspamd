@@ -155,6 +155,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	GRegex *regexp;
 	struct uri *url;
 	int r;
+	
 
 	if (re == NULL) {
 		msg_info ("process_regexp: invalid regexp passed");
@@ -162,11 +163,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	}
 	
 	if ((r = task_cache_check (task, re)) != -1) {
+		msg_debug ("process_regexp: regexp /%s/ is found in cache, result: %d", re->regexp_text, r);
 		return r == 1;
 	}
 
 	switch (re->type) {
 		case REGEXP_NONE:
+			msg_warn ("process_regexp: bad error detected: /%s/ has invalid regexp type", re->regexp_text);
 			return 0;
 		case REGEXP_HEADER:
 			if (re->header == NULL) {
@@ -282,6 +285,8 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			*c = t;
 			task_cache_add (task, re, 0);
 			return 0;
+		default:
+			msg_warn ("process_regexp: bad error detected: %p is not a valid regexp object", re);
 	}
 
 	/* Not reached */
@@ -332,6 +337,7 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 	GQueue *stack;
 	gsize cur, op1, op2;
 	struct expression *it = expr;
+	struct rspamd_regexp *re;
 	gboolean try_optimize = TRUE;
 	
 	stack = g_queue_new ();
@@ -362,11 +368,12 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 				it = it->next;
 				continue;
 			}
-			it->content.operand = parse_regexp (task->cfg->cfg_pool, it->content.operand, task->cfg->raw_mode);
-			if (it->content.operand == NULL) {
+			re = parse_regexp (task->cfg->cfg_pool, it->content.operand, task->cfg->raw_mode);
+			if (re == NULL) {
 				msg_warn ("process_regexp_expression: cannot parse regexp, skip expression");
 				return FALSE;
 			}
+			it->content.operand = re;
 			it->type = EXPR_REGEXP_PARSED;
 			/* Continue with this regexp once again */
 			continue;
