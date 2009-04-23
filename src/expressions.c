@@ -707,7 +707,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 	}
 	if (expr->next == NULL) {
 		res = memory_pool_alloc (task->task_pool, sizeof (struct expression_argument));
-		if (expr->type == EXPR_REGEXP || expr->type == EXPR_STR) {
+		if (expr->type == EXPR_REGEXP || expr->type == EXPR_STR || expr->type == EXPR_REGEXP_PARSED) {
 			res->type = EXPRESSION_ARGUMENT_NORMAL;
 			res->data = expr->content.operand;
 		}
@@ -729,7 +729,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 		it = expr;
 
 		while (it) {
-			if (it->type == EXPR_REGEXP || it->type == EXPR_STR) {
+			if (it->type == EXPR_REGEXP || it->type == EXPR_REGEXP_PARSED || it->type == EXPR_STR) {
 				g_queue_free (stack);
 				res->type = EXPRESSION_ARGUMENT_EXPR;
 				res->data = expr;
