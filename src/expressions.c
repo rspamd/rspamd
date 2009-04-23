@@ -380,7 +380,7 @@ parse_expression (memory_pool_t *pool, char *line)
 				if (!is_regexp_flag (*p) || *(p + 1) == '\0') {
 					if (c != p) {
 						/* Copy operand */
-						if (*(p + 1) == '\0') {
+						if (*(p + 1) == '\0' || *p == '/') {
 							p++;
 						}
 						str = memory_pool_alloc (pool, p - c + 1);

@@ -18,7 +18,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
 
 OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
-OPTION(ENABLE_PERL         "Enable perl support [default: ON]"                  ON)
+OPTION(ENABLE_PERL         "Enable perl support [default: OFF]"                 OFF)
 OPTION(ENABLE_LUA          "Enable lua support [default: OFF]"                  OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
