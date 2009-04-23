@@ -830,13 +830,14 @@ rspamd_header_exists (struct worker_task *task, GList *args)
 {
 	struct expression_argument *arg;
 	GList *headerlist;
+	char *c;
 
 	if (args == NULL || task == NULL) {
 		return FALSE;
 	}
 
 	arg = get_function_arg (args->data, task, TRUE);
-	if (arg->type == EXPRESSION_ARGUMENT_BOOL) {
+	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
 		msg_warn ("rspamd_header_exists: invalid argument to function is passed");
 		return FALSE;
 	}
@@ -845,6 +846,13 @@ rspamd_header_exists (struct worker_task *task, GList *args)
 	if (headerlist) {
 		g_list_free (headerlist);
 		return TRUE;
+	}
+	else {
+		/* Also check in raw headers */
+		if ((c = strstr (task->raw_headers, (char *)arg->data)) != NULL && 
+			(c == task->raw_headers || *(c - 1) == '\n')) {
+			return TRUE;
+		}
 	}
 	return FALSE;
 }
