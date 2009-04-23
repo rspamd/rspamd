@@ -248,6 +248,27 @@ insert_expression (memory_pool_t *pool, struct expression **head, int type, char
 	}
 }
 
+static struct expression*
+maybe_parse_expression (memory_pool_t *pool, char *line)
+{
+	struct expression *expr;
+	char *p = line;
+
+	while (*p) {
+		if (is_operation_symbol (*p)) {
+			return parse_expression (pool, line);
+		}
+		p ++;
+	}
+
+	expr = memory_pool_alloc (pool, sizeof (struct expression));
+	expr->type = EXPR_STR;
+	expr->content.operand = memory_pool_strdup (pool, line);
+	expr->next = NULL;
+
+	return expr;
+}
+
 /*
  * Make inverse polish record for specified expression
  * Memory is allocated from given pool
@@ -258,10 +279,11 @@ parse_expression (memory_pool_t *pool, char *line)
 	struct expression *expr = NULL;
 	struct expression_stack *stack = NULL;
 	struct expression_function *func = NULL, *old;
-	struct expression_argument *arg;
+	struct expression *arg;
 	GQueue *function_stack;
 	char *p, *c, *str, op;
 	gboolean in_regexp = FALSE;
+	int brackets = 0;
 
 	enum {
 		SKIP_SPACES,
@@ -303,7 +325,7 @@ parse_expression (memory_pool_t *pool, char *line)
 						return NULL;
 					}
 					/* Pop all operators from stack to nearest '(' or to head */
-					while (stack->op != '(') {
+					while (stack && stack->op != '(') {
 						op = delete_expression_stack (&stack);
 						if (op != '(') {
 							insert_expression (pool, &expr, EXPR_OPERATION, op, NULL);
@@ -416,22 +438,14 @@ parse_expression (memory_pool_t *pool, char *line)
 				}
 				if (!in_regexp) {
 					/* Append argument to list */
-					if (*p == ',' || *p == ')') {
-						arg = memory_pool_alloc (pool, sizeof (struct expression_argument));
-						if (*(p - 1) != ')') {
-							/* Not a function argument */
-							str = memory_pool_alloc (pool, p - c + 1);
-							g_strlcpy (str, c, (p - c + 1));
-							g_strstrip (str);
-							arg->type = EXPRESSION_ARGUMENT_NORMAL;
-							arg->data = str;
-							func->args = g_list_append (func->args, arg);
-						}
-						else {
-							arg->type = EXPRESSION_ARGUMENT_FUNCTION;
-							arg->data = old;
-							func->args = g_list_append (func->args, arg);
-						}
+					if (*p == ',' || (*p == ')' && brackets == 0)) {
+						arg = memory_pool_alloc (pool, sizeof (struct expression));
+						str = memory_pool_alloc (pool, p - c + 1);
+						g_strlcpy (str, c, (p - c + 1));
+						g_strstrip (str);
+						/* Recursive call */
+						arg = maybe_parse_expression (pool, str);
+						func->args = g_list_append (func->args, arg);
 						/* Pop function */
 						if (*p == ')') {
 							/* Last function in chain, goto skipping spaces state */
@@ -443,16 +457,11 @@ parse_expression (memory_pool_t *pool, char *line)
 						}
 						c = p + 1;
 					}
-					if (*p == '(') {
-						/* Push current function to stack */
-						g_queue_push_tail (function_stack, func);
-						func = memory_pool_alloc (pool, sizeof (struct expression_function));
-						func->name = memory_pool_alloc (pool, p - c + 1);
-						func->args = NULL;
-						g_strlcpy (func->name, c, (p - c + 1));
-						g_strstrip (func->name);
-						state = READ_FUNCTION_ARGUMENT;
-						c = p + 1;
+					else if (*p == '(') {
+						brackets ++;
+					}
+					else if (*p == ')') {
+						brackets --;
 					}
 				}
 				else if (*p == '/' && *(p - 1) != '\\') {
@@ -684,6 +693,95 @@ call_expression_function (struct expression_function *func, struct worker_task *
 	return selected->func (task, func->args);
 }
 
+struct expression_argument *
+get_function_arg (struct expression *expr, struct worker_task *task, gboolean want_string)
+{
+	GQueue *stack;
+	gsize cur, op1, op2;
+	struct expression_argument *res;
+	struct expression *it;
+
+	if (expr == NULL) {
+		msg_warn ("get_function_arg: NULL expression passed");
+		return NULL;
+	}
+	if (expr->next == NULL) {
+		res = memory_pool_alloc (task->task_pool, sizeof (struct expression_argument));
+		if (expr->type == EXPR_REGEXP || expr->type == EXPR_STR) {
+			res->type = EXPRESSION_ARGUMENT_NORMAL;
+			res->data = expr->content.operand;
+		}
+		else if (expr->type == EXPR_FUNCTION && !want_string) {
+			res->type = EXPRESSION_ARGUMENT_BOOL;
+			cur = call_expression_function (expr->content.operand, task);
+			res->data = GSIZE_TO_POINTER (cur);
+		}
+		else {
+			msg_warn ("get_function_arg: cannot parse argument: it contains operator or bool expression that is not wanted");
+			return NULL;
+		}
+		return res;
+	}
+	else if (!want_string) {
+		res = memory_pool_alloc (task->task_pool, sizeof (struct expression_argument));
+		res->type = EXPRESSION_ARGUMENT_BOOL;
+		stack = g_queue_new ();
+		it = expr;
+
+		while (it) {
+			if (it->type == EXPR_REGEXP || it->type == EXPR_STR) {
+				g_queue_free (stack);
+				msg_warn ("get_function_arg: cannot parse function arguments that contains regexps or strings");
+				return NULL;
+			} else if (it->type == EXPR_FUNCTION) {
+				cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
+				msg_debug ("get_function_arg: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
+																cur ? "true" : "false");
+			} else if (it->type == EXPR_OPERATION) {
+				if (g_queue_is_empty (stack)) {
+					/* Queue has no operands for operation, exiting */
+					msg_warn ("get_function_arg: invalid expression");
+					g_queue_free (stack);
+					return NULL;
+				}
+				switch (it->content.operation) {
+					case '!':
+						op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+						op1 = !op1;
+						g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
+						break;
+					case '&':
+						op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+						op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+						g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+					case '|':
+						op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+						op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+						g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+					default:
+						it = it->next;
+						continue;
+				}
+			}
+			if (it) {
+				it = it->next;
+			}
+		}
+		if (!g_queue_is_empty (stack)) {
+			res->data = g_queue_pop_head (stack);
+		}
+		else {
+			res->data = GSIZE_TO_POINTER (FALSE);
+		}
+
+		return res;
+	}
+
+	msg_warn ("get_function_arg: invalid expression argument");
+
+	return NULL;
+}
+
 void
 register_expression_function (const char *name, rspamd_internal_func_t func)
 {
@@ -713,8 +811,8 @@ rspamd_compare_encoding (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 
-	arg = args->data;
-	if (arg->type == EXPRESSION_ARGUMENT_FUNCTION) {
+	arg = get_function_arg (args->data, task, TRUE);
+	if (arg->type == EXPRESSION_ARGUMENT_BOOL) {
 		msg_warn ("rspamd_compare_encoding: invalid argument to function is passed");
 		return FALSE;
 	}
@@ -733,8 +831,8 @@ rspamd_header_exists (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 
-	arg = args->data;
-	if (arg->type == EXPRESSION_ARGUMENT_FUNCTION) {
+	arg = get_function_arg (args->data, task, TRUE);
+	if (arg->type == EXPRESSION_ARGUMENT_BOOL) {
 		msg_warn ("rspamd_header_exists: invalid argument to function is passed");
 		return FALSE;
 	}
@@ -767,7 +865,7 @@ rspamd_parts_distance (struct worker_task *task, GList *args)
 	}
 	else {
 		errno = 0;
-		arg = args->data;
+		arg = get_function_arg (args->data, task, TRUE);
 		threshold = strtoul ((char *)arg->data, NULL, 10);
 		if (errno != 0) {
 			msg_info ("rspamd_parts_distance: bad numeric value for threshold \"%s\", assume it 100", (char *)args->data);
@@ -811,14 +909,14 @@ rspamd_content_type_compare_param (struct worker_task *task, GList *args)
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
 		return FALSE;
 	}
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_name = arg->data;
 	args = g_list_next (args);
 	if (args == NULL) {
 		msg_warn ("rspamd_content_type_compare_param: too few params to function");
 		return FALSE;
 	}
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_pattern = arg->data;
 	
 	part = g_mime_message_get_mime_part (task->message);
@@ -875,7 +973,7 @@ rspamd_content_type_has_param (struct worker_task *task, GList *args)
 		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
 		return FALSE;
 	}
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_name = arg->data;
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
@@ -916,7 +1014,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_pattern = arg->data;
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
@@ -974,7 +1072,7 @@ rspamd_content_type_is_type (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_pattern = arg->data;
 
 	part = g_mime_message_get_mime_part (task->message);
@@ -1042,7 +1140,7 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	errno = 0;
 	threshold = strtod ((char *)arg->data, NULL);
 	if (errno != 0) {
@@ -1310,7 +1408,7 @@ rspamd_has_content_part (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_type = arg->data;
 	args = args->next;
 	if (args) {
@@ -1333,15 +1431,15 @@ rspamd_has_content_part_len (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_type = arg->data;
 	args = args->next;
 	if (args) {
-		arg = args->data;
+		arg = get_function_arg (args->data, task, TRUE);
 		param_subtype = arg->data;
 		args = args->next;
 		if (args) {
-			arg = args->data;
+			arg = get_function_arg (args->data, task, TRUE);
 			errno = 0;
 			min = strtoul (arg->data, NULL, 10);
 			if (errno != 0) {
@@ -1350,7 +1448,7 @@ rspamd_has_content_part_len (struct worker_task *task, GList *args)
 			}
 			args = args->next;
 			if (args) {
-				arg = args->data;
+				arg = get_function_arg (args->data, task, TRUE);
 				max = strtoul (arg->data, NULL, 10);
 				if (errno != 0) {
 					msg_warn ("rspamd_has_content_part_len: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
@@ -1375,7 +1473,7 @@ rspamd_compare_transfer_encoding (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	enc_req = g_mime_part_encoding_from_string (arg->data);
 #ifndef GMIME24
 	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {

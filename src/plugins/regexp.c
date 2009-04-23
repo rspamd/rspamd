@@ -38,8 +38,6 @@
 
 struct regexp_module_item {
 	struct expression *expr;
-	int regexp_number;
-	int op_number;
 	char *symbol;
 };
 
@@ -96,10 +94,6 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
 				return FALSE;
 			}
-			chain->regexp_number ++;
-		}
-		else {
-			chain->op_number ++;
 		}
 		cur = cur->next;
 	}
@@ -331,12 +325,12 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 	return ret;
 }
 
-static void
-process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
+static gboolean
+process_regexp_expression (struct expression *expr, struct worker_task *task)
 {
 	GQueue *stack;
 	gsize cur, op1, op2;
-	struct expression *it = item->expr;
+	struct expression *it = expr;
 	gboolean try_optimize = TRUE;
 	
 	stack = g_queue_new ();
@@ -365,7 +359,7 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 			if (g_queue_is_empty (stack)) {
 				/* Queue has no operands for operation, exiting */
 				g_queue_free (stack);
-				return;
+				return FALSE;
 			}
 			try_optimize = TRUE;
 			switch (it->content.operation) {
@@ -394,12 +388,21 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
 	if (!g_queue_is_empty (stack)) {
 		op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 		if (op1) {
-			/* Add symbol to results */
-			insert_result (task, regexp_module_ctx->metric, item->symbol, op1, NULL);
+			return TRUE;
 		}
 	}
 
 	g_queue_free (stack);
+
+	return FALSE;
+}
+
+static void
+process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
+{
+	if (process_regexp_expression (item->expr, task)) {
+		insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+	}
 }
 
 static int
@@ -429,14 +432,14 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 		return FALSE;
 	}
 	
-	arg = args->data;
+	arg = get_function_arg (args->data, task, TRUE);
 	param_count = strtoul (arg->data, NULL, 10);
 	
-	cur = g_list_next (args);
+	cur = args->next;
 	while (cur) {
-		arg = args->data;
-		if (arg->type == EXPRESSION_ARGUMENT_FUNCTION) {
-			if (call_expression_function ((struct expression_function *)arg->data, task)) {
+		arg = get_function_arg (cur->data, task, FALSE);
+		if (arg && arg->type == EXPRESSION_ARGUMENT_BOOL) {
+			if ((gboolean)GPOINTER_TO_SIZE (arg->data)) {
 				res ++;
 			}
 		}
@@ -456,7 +459,9 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 				}
 				re_cache_add (param_pattern, re);
 			}
-			res += process_regexp (re, task);
+			if (process_regexp_expression (cur->data, task)) {
+				res ++;
+			}
 			if (res >= param_count) {
 				return TRUE;
 			}

@@ -24,7 +24,7 @@ struct expression_function {
 struct expression_argument {
 	enum {
 		EXPRESSION_ARGUMENT_NORMAL,
-		EXPRESSION_ARGUMENT_FUNCTION
+		EXPRESSION_ARGUMENT_BOOL,
 	} type;														/**< type of argument (text or other function)		*/
 	void *data;													/**< pointer to its data							*/
 };
@@ -103,5 +103,14 @@ void task_cache_add (struct worker_task *task, void *pointer, int32_t result);
  * @return numeric result if value exists or -1 if not
  */
 int32_t task_cache_check (struct worker_task *task, void *pointer);
+
+/**
+ * Parse and return a single function argument for a function (may recurse)
+ * @param expr expression structure that represents function's argument
+ * @param task task object
+ * @param want_string return NULL if argument is not a string
+ * @return expression argument structure or NULL if failed
+ */
+struct expression_argument *get_function_arg (struct expression *expr, struct worker_task *task, gboolean want_string);
 
 #endif
