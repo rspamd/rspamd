@@ -221,7 +221,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			return 0;
 		case REGEXP_MESSAGE:
 			msg_debug ("process_regexp: checking message regexp: /%s/", re->regexp_text);
-			if (g_regex_match_full (re->regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
+			if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
 				task_cache_add (task, re, 1);
 				return 1;
 			}
@@ -358,7 +358,11 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 			}
 		} else if (it->type == EXPR_REGEXP) {
 			/* Compile regexp if it is not parsed */
-			it->content.operand = parse_regexp (task->task_pool, it->content.operand, task->cfg->raw_mode);
+			if (it->content.operand == NULL) {
+				it = it->next;
+				continue;
+			}
+			it->content.operand = parse_regexp (task->cfg->cfg_pool, it->content.operand, task->cfg->raw_mode);
 			if (it->content.operand == NULL) {
 				msg_warn ("process_regexp_expression: cannot parse regexp, skip expression");
 				return FALSE;
