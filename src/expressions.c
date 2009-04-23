@@ -383,8 +383,8 @@ parse_expression (memory_pool_t *pool, char *line)
 						if (*(p + 1) == '\0') {
 							p++;
 						}
-						str = memory_pool_alloc (pool, p - c + 2);
-						g_strlcpy (str, c - 1, (p - c + 2));
+						str = memory_pool_alloc (pool, p - c + 1);
+						g_strlcpy (str, c - 1, (p - c + 1));
 						g_strstrip (str);
 						if (strlen (str) > 0) {
 							insert_expression (pool, &expr, EXPR_REGEXP, 0, str);

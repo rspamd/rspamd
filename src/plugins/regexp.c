@@ -94,6 +94,7 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
 				return FALSE;
 			}
+			cur->type = EXPR_REGEXP_PARSED;
 		}
 		cur = cur->next;
 	}
@@ -336,10 +337,10 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 	stack = g_queue_new ();
 
 	while (it) {
-		if (it->type == EXPR_REGEXP) {
+		if (it->type == EXPR_REGEXP_PARSED) {
 			/* Find corresponding symbol */
 			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task);
-			msg_debug ("process_regexp_item: regexp %s found", cur ? "is" : "is not");
+			msg_debug ("process_regexp_expression: regexp %s found", cur ? "is" : "is not");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
 			} else {
@@ -348,13 +349,23 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 
 		} else if (it->type == EXPR_FUNCTION) {
 			cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
-			msg_debug ("process_regexp_item: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
+			msg_debug ("process_regexp_expression: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
 															cur ? "true" : "false");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
 			} else {
 				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
 			}
+		} else if (it->type == EXPR_REGEXP) {
+			/* Compile regexp if it is not parsed */
+			it->content.operand = parse_regexp (task->task_pool, it->content.operand, task->cfg->raw_mode);
+			if (it->content.operand == NULL) {
+				msg_warn ("process_regexp_expression: cannot parse regexp, skip expression");
+				return FALSE;
+			}
+			it->type = EXPR_REGEXP_PARSED;
+			/* Continue with this regexp once again */
+			continue;
 		} else if (it->type == EXPR_OPERATION) {
 			if (g_queue_is_empty (stack)) {
 				/* Queue has no operands for operation, exiting */

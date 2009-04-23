@@ -34,7 +34,13 @@ struct expression_argument {
  * Logic expression 
  */
 struct expression {
-	enum { EXPR_REGEXP, EXPR_OPERATION, EXPR_FUNCTION, EXPR_STR } type;	/**< expression type								*/
+	enum { 
+		EXPR_REGEXP,
+		EXPR_OPERATION, 
+		EXPR_FUNCTION, 
+		EXPR_STR, 
+		EXPR_REGEXP_PARSED,
+	} type;														/**< expression type								*/
 	union {
 		void *operand;
 		char operation;
