@@ -421,9 +421,7 @@ regexp_common_filter (struct worker_task *task)
 static gboolean 
 rspamd_regexp_match_number (struct worker_task *task, GList *args)
 {
-	char *param_pattern;
 	int param_count, res = 0;
-	struct rspamd_regexp *re;
 	struct expression_argument *arg;
 	GList *cur;
 	
@@ -444,21 +442,6 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 			}
 		}
 		else {
-			param_pattern = (char *)arg->data;
-			if (*param_pattern != '/') {
-				/* Skip non-regexp arguments */
-				cur = g_list_next (cur);
-				continue;
-			}
-			/* This is regexp, so compile and create g_regexp object */
-			if ((re = re_cache_check (param_pattern)) == NULL) {
-				re = parse_regexp (task->task_pool, param_pattern, task->cfg->raw_mode);
-				if (re == NULL) {
-					msg_warn ("rspamd_regexp_match_number: cannot compile regexp for function");
-					return FALSE;
-				}
-				re_cache_add (param_pattern, re);
-			}
 			if (process_regexp_expression (cur->data, task)) {
 				res ++;
 			}

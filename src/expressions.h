@@ -25,6 +25,7 @@ struct expression_argument {
 	enum {
 		EXPRESSION_ARGUMENT_NORMAL,
 		EXPRESSION_ARGUMENT_BOOL,
+		EXPRESSION_ARGUMENT_EXPR,
 	} type;														/**< type of argument (text or other function)		*/
 	void *data;													/**< pointer to its data							*/
 };

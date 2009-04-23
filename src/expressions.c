@@ -731,8 +731,9 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 		while (it) {
 			if (it->type == EXPR_REGEXP || it->type == EXPR_STR) {
 				g_queue_free (stack);
-				msg_warn ("get_function_arg: cannot parse function arguments that contains regexps or strings");
-				return NULL;
+				res->type = EXPRESSION_ARGUMENT_EXPR;
+				res->data = expr;
+				return res;
 			} else if (it->type == EXPR_FUNCTION) {
 				cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
 				msg_debug ("get_function_arg: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
