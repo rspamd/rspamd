@@ -174,7 +174,7 @@ regexp_module_config (struct config_file *cfg)
 			if (strcmp (cur->param, "metric") == 0 || strcmp (cur->param, "statfile_prefix") == 0) {
 				continue;
 			}
-			else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1)) {
+			else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
 				parse_autolearn_param (cur->param, cur->value, cfg);
 				continue;
 			}
