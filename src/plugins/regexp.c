@@ -36,9 +36,17 @@
 #include "../cfg_file.h"
 #include "../expressions.h"
 
+#define DEFAULT_STATFILE_PREFIX "./"
+
 struct regexp_module_item {
 	struct expression *expr;
 	char *symbol;
+};
+
+struct autolearn_data {
+	char *statfile_name;
+	char *symbol;
+	float weight;	
 };
 
 struct regexp_ctx {
@@ -47,7 +55,9 @@ struct regexp_ctx {
 	int (*message_filter)(struct worker_task *task);
 	int (*url_filter)(struct worker_task *task);
 	GList *items;
+	GHashTable *autolearn_symbols;
 	char *metric;
+	char *statfile_prefix;
 
 	memory_pool_t *regexp_pool;
 };
@@ -68,6 +78,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	regexp_module_ctx->url_filter = NULL;
 	regexp_module_ctx->regexp_pool = memory_pool_new (1024);
 	regexp_module_ctx->items = NULL;
+	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 	register_expression_function ("regexp_match_number", rspamd_regexp_match_number);
@@ -102,6 +113,37 @@ read_regexp_expression (memory_pool_t *pool, struct regexp_module_item *chain, c
 	return TRUE;
 }
 
+/* 
+ * Parse string in format:
+ * SYMBOL:statfile:weight
+ */
+void
+parse_autolearn_param (const char *param, const char *value, struct config_file *cfg)
+{
+	struct autolearn_data *d;
+	char *p;
+
+	p = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
+	d = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (struct autolearn_data));
+
+	d->symbol = strsep (&p, ":");
+	if (d->symbol) {
+		d->statfile_name = strsep (&p, ":");
+		if (d->statfile_name) {
+			if (p != NULL && *p != '\0') {
+				d->weight = strtod (p, NULL);
+				g_hash_table_insert (regexp_module_ctx->autolearn_symbols, d->symbol, d);
+			}
+		}
+		else {
+			msg_warn ("parse_autolearn_param: cannot extract statfile name from %s", p);
+		}
+	}
+	else {
+		msg_warn ("parse_autolearn_param: cannot extract symbol name from %s", p);
+	}
+}
+
 int
 regexp_module_config (struct config_file *cfg)
 {
@@ -118,11 +160,22 @@ regexp_module_config (struct config_file *cfg)
 	else {
 		regexp_module_ctx->metric = DEFAULT_METRIC;
 	}
+	if ((value = get_module_opt (cfg, "regexp", "statfile_prefix")) != NULL) {
+		regexp_module_ctx->statfile_prefix = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
+		g_free (value);
+	}
+	else {
+		regexp_module_ctx->metric = DEFAULT_STATFILE_PREFIX;
+	}
 
 	cur_module_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
 	if (cur_module_opt != NULL) {
 		LIST_FOREACH (cur, cur_module_opt, next) {
-			if (strcmp (cur->param, "metric") == 0) {
+			if (strcmp (cur->param, "metric") == 0 || strcmp (cur->param, "statfile_prefix") == 0) {
+				continue;
+			}
+			else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1)) {
+				parse_autolearn_param (cur->param, cur->value, cfg);
 				continue;
 			}
 			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));

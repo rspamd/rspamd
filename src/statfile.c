@@ -533,6 +533,9 @@ statfile_get_section_by_name (const char *name)
 	else if (g_ascii_strcasecmp (name, "url") == 0) {
 		return STATFILE_SECTION_URLS;
 	}
+	else if (g_ascii_strcasecmp (name, "regexp") == 0) {
+		return STATFILE_SECTION_REGEXP;
+	}
 
 	return 0;
 }

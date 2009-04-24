@@ -16,6 +16,7 @@
 #define STATFILE_SECTION_COMMON 1
 #define STATFILE_SECTION_HEADERS 2
 #define STATFILE_SECTION_URLS 3
+#define STATFILE_SECTION_REGEXP 4
 
 /**
  * Common statfile header
