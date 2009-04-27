@@ -165,7 +165,7 @@ regexp_module_config (struct config_file *cfg)
 		g_free (value);
 	}
 	else {
-		regexp_module_ctx->metric = DEFAULT_STATFILE_PREFIX;
+		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
 	}
 
 	cur_module_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
