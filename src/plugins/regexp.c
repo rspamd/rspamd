@@ -433,6 +433,7 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 		} else if (it->type == EXPR_OPERATION) {
 			if (g_queue_is_empty (stack)) {
 				/* Queue has no operands for operation, exiting */
+				msg_warn ("process_regexp_expression: regexp expression seems to be invalid: empty stack while reading operation");
 				g_queue_free (stack);
 				return FALSE;
 			}
@@ -446,10 +447,12 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+					break;
 				case '|':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+					break;
 				default:
 					it = it->next;
 					continue;
@@ -464,6 +467,9 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 		if (op1) {
 			return TRUE;
 		}
+	}
+	else {
+		msg_warn ("process_regexp_expression: regexp expression seems to be invalid: empty stack at the end of expression");
 	}
 
 	g_queue_free (stack);
