@@ -382,7 +382,7 @@ parse_expression (memory_pool_t *pool, char *line)
 			case READ_REGEXP_FLAGS:
 				if (!is_regexp_flag (*p) || *(p + 1) == '\0') {
 					if (c != p) {
-						if (is_regexp_flag (*p) && *(p + 1) == '\0') {
+						if ((is_regexp_flag (*p) || *p == '/') && *(p + 1) == '\0') {
 							p ++;
 						}
 						str = memory_pool_alloc (pool, p - c + 2);

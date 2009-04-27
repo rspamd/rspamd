@@ -369,17 +369,17 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 				msg_debug ("optimize_regexp_expression: found '!' operator, inversing result");
 				res = !res;
 				it = it->next;
-				*e = it;
+				*e = it->next;
 				continue;
 			}
 			else if (it->content.operation == '&' && res == FALSE) {
 				msg_debug ("optimize_regexp_expression: found '&' and previous expression is false");
-				*e = it;
+				*e = it->next;
 				ret = TRUE;
 			}
 			else if (it->content.operation == '|' && res == TRUE) {
 				msg_debug ("optimize_regexp_expression: found '|' and previous expression is true");
-				*e = it;
+				*e = it->next;
 				ret = TRUE;
 			}
 			break;
@@ -400,7 +400,6 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 	gsize cur, op1, op2;
 	struct expression *it = expr;
 	struct rspamd_regexp *re;
-	gboolean try_optimize = TRUE;
 	
 	stack = g_queue_new ();
 
@@ -409,21 +408,13 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 			/* Find corresponding symbol */
 			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task);
 			msg_debug ("process_regexp_expression: regexp %s found", cur ? "is" : "is not");
-			if (try_optimize) {
-				try_optimize = optimize_regexp_expression (&it, stack, cur);
-			} else {
-				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
-			}
+			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
 
 		} else if (it->type == EXPR_FUNCTION) {
 			cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
 			msg_debug ("process_regexp_expression: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
 															cur ? "true" : "false");
-			if (try_optimize) {
-				try_optimize = optimize_regexp_expression (&it, stack, cur);
-			} else {
-				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
-			}
+			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
 		} else if (it->type == EXPR_REGEXP) {
 			/* Compile regexp if it is not parsed */
 			if (it->content.operand == NULL) {
@@ -445,7 +436,6 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 				g_queue_free (stack);
 				return FALSE;
 			}
-			try_optimize = TRUE;
 			switch (it->content.operation) {
 				case '!':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));

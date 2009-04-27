@@ -330,10 +330,14 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/statfile.c)
 
 SET(UTILSSRC	utils/url_extracter.c)
+SET(EXPRSRC	utils/expression_parser.c)
 
 SET(UTILSDEPENDS src/mem_pool.c
 				src/hash.c
 				src/url.c
+				src/fuzzy.c
+				src/expressions.c
+				src/message.c
 				src/util.c)
 
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
@@ -413,6 +417,15 @@ IF(LIBUTIL_LIBRARY)
 ENDIF(LIBUTIL_LIBRARY)
 TARGET_LINK_LIBRARIES(utils/url-extracter ${GLIB2_LIBRARIES})
 TARGET_LINK_LIBRARIES(utils/url-extracter ${GMIME2_LIBRARIES})
+
+ADD_EXECUTABLE(utils/expression-parser ${UTILSDEPENDS} ${CONTRIBSRC} ${EXPRSRC})
+SET_TARGET_PROPERTIES(utils/expression-parser PROPERTIES LINKER_LANGUAGE C)
+TARGET_LINK_LIBRARIES(utils/expression-parser m)
+IF(LIBUTIL_LIBRARY)
+	TARGET_LINK_LIBRARIES(utils/expression-parser util)
+ENDIF(LIBUTIL_LIBRARY)
+TARGET_LINK_LIBRARIES(utils/expression-parser ${GLIB2_LIBRARIES})
+TARGET_LINK_LIBRARIES(utils/expression-parser ${GMIME2_LIBRARIES})
 
 INSTALL(PROGRAMS rspamd-${RSPAMD_VERSION} DESTINATION bin RENAME rspamd)
 INSTALL(PROGRAMS rspamc.pl DESTINATION bin RENAME rspamc)
