@@ -358,33 +358,51 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 static gboolean 
 optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 {
-	struct expression *it = *e;
+	struct expression *it = (*e)->next;
 	gboolean ret = FALSE, is_nearest = TRUE;
+	int skip_level = 0;
 	
+	/* Skip nearest logical operators from optimization */
+	if (!it || (it->type == EXPR_OPERATION && it->content.operation != '!')) {
+		g_queue_push_head (stack, GSIZE_TO_POINTER (res));
+		return ret;
+	}
+
 	while (it) {
 		/* Find first operation for this iterator */
 		if (it->type == EXPR_OPERATION) {
 			/* If this operation is just ! just inverse res and check for further operators */
-			if (it->content.operation == '!' && is_nearest) {
-				msg_debug ("optimize_regexp_expression: found '!' operator, inversing result");
-				res = !res;
+			if (it->content.operation == '!') {
+				if (is_nearest) {
+					msg_debug ("optimize_regexp_expression: found '!' operator, inversing result");
+					res = !res;
+					*e = it;
+				}
 				it = it->next;
-				*e = it->next;
 				continue;
 			}
-			else if (it->content.operation == '&' && res == FALSE) {
-				msg_debug ("optimize_regexp_expression: found '&' and previous expression is false");
-				*e = it->next;
-				ret = TRUE;
+			else {
+				skip_level --;
 			}
-			else if (it->content.operation == '|' && res == TRUE) {
-				msg_debug ("optimize_regexp_expression: found '|' and previous expression is true");
-				*e = it->next;
-				ret = TRUE;
+			/* Check whether we found corresponding operator for this operand */
+			if (skip_level <= 0) {
+				if (it->content.operation == '|' && res == TRUE) {
+					msg_debug ("optimize_regexp_expression: found '|' and previous expression is true");
+					*e = it;
+					ret = TRUE;
+				}
+				else if (it->content.operation == '&' && res == FALSE) {
+					msg_debug ("optimize_regexp_expression: found '&' and previous expression is false");
+					*e = it;
+					ret = TRUE;
+				}
+				break;
 			}
-			break;
 		}
-		is_nearest = FALSE;
+		else {
+			is_nearest = FALSE;
+			skip_level ++;
+		}
 		it = it->next;
 	}
 
@@ -400,6 +418,7 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 	gsize cur, op1, op2;
 	struct expression *it = expr;
 	struct rspamd_regexp *re;
+	gboolean try_optimize = TRUE;
 	
 	stack = g_queue_new ();
 
@@ -408,13 +427,22 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 			/* Find corresponding symbol */
 			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task);
 			msg_debug ("process_regexp_expression: regexp %s found", cur ? "is" : "is not");
-			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
-
+			if (try_optimize) {
+				try_optimize = optimize_regexp_expression (&it, stack, cur);
+			}
+			else {
+				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			}
 		} else if (it->type == EXPR_FUNCTION) {
 			cur = (gsize)call_expression_function ((struct expression_function *)it->content.operand, task);
 			msg_debug ("process_regexp_expression: function %s returned %s", ((struct expression_function *)it->content.operand)->name,
 															cur ? "true" : "false");
-			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			if (try_optimize) {
+				try_optimize = optimize_regexp_expression (&it, stack, cur);
+			}
+			else {
+				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			}
 		} else if (it->type == EXPR_REGEXP) {
 			/* Compile regexp if it is not parsed */
 			if (it->content.operand == NULL) {
@@ -437,11 +465,13 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 				g_queue_free (stack);
 				return FALSE;
 			}
+			try_optimize = TRUE;
+			msg_debug ("process_regexp_expression: got operation %c", it->content.operation);
 			switch (it->content.operation) {
 				case '!':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op1 = !op1;
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
+					try_optimize = optimize_regexp_expression (&it, stack, op1);
 					break;
 				case '&':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
