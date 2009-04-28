@@ -273,6 +273,11 @@ fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2)
 	
 	l1 = strlen (h1->hash_pipe);
 	l2 = strlen (h2->hash_pipe);
+
+	if (l1 == 0 || l2 == 0) {
+		return 0;
+	}
+
 	res = lev_distance (h1->hash_pipe, l1, h2->hash_pipe, l2);
 	res = (res * 100) / (l1 + l2);
 
