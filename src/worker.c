@@ -53,7 +53,11 @@ void sig_handler (int signo)
 	switch (signo) {
 		case SIGINT:
 		case SIGTERM:
+#ifdef WITH_PROFILER
+			exit (0);
+#else
 			_exit (1);
+#endif
 			break;
 	}
 }
@@ -293,6 +297,18 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 {
 	struct sigaction signals;
 	int i;
+#ifdef WITH_PROFILER
+	extern void _start (void), etext (void);
+	monstartup ((u_long) &_start, (u_long) &etext);
+#endif
+#if 0
+	/* Try to create temp directory for gmon.out and chdir to it */
+	char prof_dir[PATH_MAX];
+	snprintf (prof_dir, sizeof (prof_dir), "%s/rspamd-prof-%d", worker->srv->cfg->temp_dir, (int)getpid ());
+	if (mkdir (prof_dir, S_IRUSR | S_IWUSR | S_IXUSR | S_IXOTH | S_IROTH | S_IXGRP | S_IRGRP) != -1) {
+		chdir (prof_dir);
+	}
+#endif
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_WORKER;

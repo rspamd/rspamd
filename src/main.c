@@ -687,8 +687,7 @@ main (int argc, char **argv, char **env)
 	}
 	
 	msg_info ("main: terminating...");
-
-
+	
 	if (rspamd->cfg->bind_family == AF_UNIX) {
 		unlink (rspamd->cfg->bind_host);
 	}

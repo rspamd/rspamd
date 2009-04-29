@@ -99,6 +99,8 @@
 
 #cmakedefine WITH_LUA            1
 
+#cmakedefine WITH_PROFILER       1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 

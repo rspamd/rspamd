@@ -22,6 +22,7 @@ OPTION(ENABLE_PERL         "Enable perl support [default: OFF]"                 
 OPTION(ENABLE_LUA          "Enable lua support [default: OFF]"                  OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
+OPTION(ENABLE_PROFILING    "Enable profiling [default: OFF]"                    OFF)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -135,6 +136,13 @@ FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATHS /lib
 IF(NOT LIBEVENT_LIBRARY)
 	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
 ENDIF(NOT LIBEVENT_LIBRARY)
+
+IF(ENABLE_PROFILING MATCHES "ON")
+	SET(WITH_PROFILER 1)
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg")
+	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
+ENDIF(ENABLE_PROFILING MATCHES "ON")
+
 
 FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
 										/usr/include
