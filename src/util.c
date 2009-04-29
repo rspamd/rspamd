@@ -144,7 +144,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 	size_t len = strlen (path);
 	int fd, s_error, r, optlen, serrno, on = 1;
 
-	if (len > sizeof (addr->sun_path) - 1) return -1;
+	if (len > sizeof (addr->sun_path) - 1 || path == NULL) return -1;
 	
 	#ifdef FREEBSD
 	addr->sun_len = sizeof (struct sockaddr_un);

@@ -167,8 +167,10 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 				return 0;
 			}
 		}
-		
-		if (!inet_aton (cur_tok, addr)) {
+		if (strcmp (cur_tok, "*") == 0) {
+			*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+			addr->s_addr = htonl (INADDR_ANY);
+		} else if (!inet_aton (cur_tok, addr)) {
 			/* Try to call gethostbyname */
 			hent = gethostbyname (cur_tok);
 			if (hent == NULL) {
