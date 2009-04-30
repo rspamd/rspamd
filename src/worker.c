@@ -146,6 +146,8 @@ read_socket (f_str_t *in, void *arg)
 				task->last_error = "Read error";
 				task->error_code = RSPAMD_NETWORK_ERROR;
 				task->state = WRITE_ERROR;
+			}
+			if (task->state == WRITE_REPLY || task->state == WRITE_ERROR) {
 				write_socket (task);
 			}
 			break;
