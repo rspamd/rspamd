@@ -528,7 +528,7 @@ main (int argc, char **argv, char **env)
 		}
 	}
 
-	if (!rspamd->cfg->no_fork && daemon (1, 1) == -1) {
+	if (!rspamd->cfg->no_fork && daemon (0, 0) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");
 		exit (-errno);
 	}
