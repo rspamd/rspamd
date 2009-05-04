@@ -110,7 +110,7 @@ statfile_pool_new (size_t max_size)
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
 	new->files = rspamd_hash_new (new->pool, g_str_hash, g_str_equal);
-	new->maps = rspamd_hash_new_shared (new->pool, g_str_hash, g_str_equal);
+	new->maps = rspamd_hash_new_shared (new->pool, g_str_hash, g_str_equal, 64);
 
 	return new;
 }

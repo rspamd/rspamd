@@ -179,12 +179,12 @@ rspamd_hash_new (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_
  * Create new hash in specified pool using shared memory 
  */
 rspamd_hash_t* 
-rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func)
+rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func, gint size)
 {
 	rspamd_hash_t* hash;
 
 	hash = memory_pool_alloc_shared (pool, sizeof (rspamd_hash_t));
-	hash->size               = HASH_TABLE_MIN_SIZE;
+	hash->size               = size;
 	hash->nnodes             = 0;
 	hash->hash_func          = hash_func ? hash_func : g_direct_hash;
 	hash->key_equal_func     = key_equal_func;
@@ -235,9 +235,10 @@ rspamd_hash_insert (rspamd_hash_t *hash, gpointer key, gpointer value)
 	if (hash->shared) {
 		memory_pool_wunlock_rwlock (hash->lock);
 	}
-
-	rspamd_hash_maybe_resize (hash);
-
+	
+	if (!hash->shared) {
+		rspamd_hash_maybe_resize (hash);
+	}
 }
 
 /* 

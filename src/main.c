@@ -575,7 +575,7 @@ main (int argc, char **argv, char **env)
 	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
 
 	/* Init counters */
-	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal);
+	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
 	
 	for (i = 0; i < cfg->workers_number; i++) {
 		fork_worker (rspamd, listen_sock, TYPE_WORKER);

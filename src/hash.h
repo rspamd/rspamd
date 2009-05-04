@@ -46,7 +46,7 @@ rspamd_hash_t* rspamd_hash_new (memory_pool_t *pool, GHashFunc hash_func, GEqual
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
  */
-rspamd_hash_t* rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func);
+rspamd_hash_t* rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func, gint size);
 
 /**
  * Insert item in hash
