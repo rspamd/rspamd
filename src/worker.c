@@ -291,7 +291,7 @@ accept_socket (int fd, short what, void *arg)
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (g_str_hash, g_str_equal);
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)g_hash_table_destroy, new_task->results);
-	new_task->re_cache = g_hash_table_new (g_direct_hash, g_direct_equal);
+	new_task->re_cache = g_hash_table_new (g_str_hash, g_str_equal);
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)g_hash_table_destroy, new_task->re_cache);
 
 	worker->srv->stat->connections_count ++;

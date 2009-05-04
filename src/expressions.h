@@ -101,7 +101,7 @@ void * re_cache_check (const char *line);
  * @param pointer regexp data
  * @param result numeric result of this regexp
  */
-void task_cache_add (struct worker_task *task, void *pointer, int32_t result);
+void task_cache_add (struct worker_task *task, struct rspamd_regexp *re, int32_t result);
 
 /**
  * Check regexp in cache
@@ -109,7 +109,7 @@ void task_cache_add (struct worker_task *task, void *pointer, int32_t result);
  * @param pointer regexp data
  * @return numeric result if value exists or -1 if not
  */
-int32_t task_cache_check (struct worker_task *task, void *pointer);
+int32_t task_cache_check (struct worker_task *task, struct rspamd_regexp *re);
 
 /**
  * Parse and return a single function argument for a function (may recurse)

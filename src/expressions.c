@@ -105,17 +105,27 @@ re_cache_add (char *line, void *pointer)
 
 /* Task cache functions */
 void 
-task_cache_add (struct worker_task *task, void *pointer, int32_t result)
+task_cache_add (struct worker_task *task, struct rspamd_regexp *re, int32_t result)
 {
-	g_hash_table_insert (task->re_cache, pointer, GINT_TO_POINTER (result));
+    if (result == 0) {
+        result = -1;
+    }
+
+	g_hash_table_insert (task->re_cache, re->regexp_text, GINT_TO_POINTER (result));
 }
 
 int32_t
-task_cache_check (struct worker_task *task, void *pointer)
+task_cache_check (struct worker_task *task, struct rspamd_regexp *re)
 {
 	gpointer res;
-	if ((res = g_hash_table_lookup (task->re_cache, pointer)) != NULL) {
-		return GPOINTER_TO_INT (res);
+    int32_t r;
+
+	if ((res = g_hash_table_lookup (task->re_cache, re->regexp_text)) != NULL) {
+        r = GPOINTER_TO_INT (res);
+        if (r == -1) {
+            return 0;
+        }
+        return 1;
 	}
 	return -1;
 }
