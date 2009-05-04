@@ -78,6 +78,9 @@ sub connect_socket {
         my $proto = getprotobyname('tcp');
         my $sin;
         socket ($sock, PF_INET, SOCK_STREAM, $proto) or die "cannot create tcp socket";
+        if ($cfg{'host'} eq '*') {
+            $cfg{'host'} = '127.0.0.1';
+        }
         if (inet_aton ($cfg{'host'})) {
             $sin = sockaddr_in ($cfg{'port'}, inet_aton($cfg{'host'}));
         }

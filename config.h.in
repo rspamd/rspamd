@@ -101,6 +101,8 @@
 
 #cmakedefine WITH_PROFILER       1
 
+#cmakedefine WITH_GPERF_TOOLS    1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 

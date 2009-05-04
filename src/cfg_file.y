@@ -48,7 +48,7 @@ struct statfile_section *cur_section = NULL;
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
-%token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE
+%token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -94,6 +94,7 @@ command	:
 	| delivery
 	| luacode
 	| raw_mode
+	| profile_file
 	;
 
 tempdir :
@@ -839,6 +840,16 @@ luacode:
 raw_mode:
 	RAW_MODE EQSIGN FLAG {
 		cfg->raw_mode = $3;
+	}
+	;
+
+profile_file:
+	PROFILE_FILE EQSIGN QUOTEDSTRING {
+#ifdef WITH_GPREF_TOOLS
+		cfg->profile_path = $3;
+#else
+		yywarn ("yyparse: profile_file directive is ignored as gperf support is not enabled");
+#endif
 	}
 	;
 

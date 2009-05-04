@@ -154,6 +154,9 @@ struct config_file {
 	char *cfg_name;									/**< name of config file								*/
 	char *pid_file;									/**< name of pid file									*/
 	char *temp_dir;									/**< dir for temp files									*/
+#ifdef WITH_GPERF_TOOLS
+	char *profile_path;
+#endif
 
 	char *bind_host;								/**< bind line											*/
 	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/

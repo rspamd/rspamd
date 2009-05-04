@@ -23,6 +23,7 @@ OPTION(ENABLE_LUA          "Enable lua support [default: OFF]"                  
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
 OPTION(ENABLE_PROFILING    "Enable profiling [default: OFF]"                    OFF)
+OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -142,6 +143,10 @@ IF(ENABLE_PROFILING MATCHES "ON")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg")
 	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 ENDIF(ENABLE_PROFILING MATCHES "ON")
+
+IF(ENABLE_GPERF_TOOLS MATCHES "ON")
+	SET(WITH_GPERF_TOOLS 1)
+ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 
 FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
@@ -406,6 +411,10 @@ TARGET_LINK_LIBRARIES(rspamd ${GMIME2_LIBRARIES})
 IF(ENABLE_LUA MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamd "${LUA_LIBRARY}")
 ENDIF(ENABLE_LUA MATCHES "ON")
+
+IF(ENABLE_GPERF_TOOLS MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd profiler)
+ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 ADD_EXECUTABLE(test/rspamd-test ${TESTDEPENDS} ${CONTRIBSRC} ${TESTSRC})
 SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES LINKER_LANGUAGE C)
