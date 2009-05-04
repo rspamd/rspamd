@@ -215,7 +215,7 @@ while (my $param = shift) {
         $cfg{'command'} = $1;
         $cfg{'control'} = 0;
     }
-    elsif ($param =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME)/i) {
+    elsif ($param =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS)/i) {
         $cfg{'command'} = $1;
         $cfg{'control'} = 1;
     }

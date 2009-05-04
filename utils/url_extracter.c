@@ -26,6 +26,7 @@
 #include "../src/url.h"
 #include "../src/message.h"
 
+rspamd_hash_t *counters = NULL;
 #ifdef GMIME24
 static void
 mime_foreach_callback (GMimeObject *parent, GMimeObject *part, gpointer user_data)

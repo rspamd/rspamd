@@ -114,8 +114,12 @@ rspamd_hash_resize (rspamd_hash_t *hash)
 
 	new_size = g_spaced_primes_closest (hash->nnodes);
 	new_size = CLAMP (new_size, HASH_TABLE_MIN_SIZE, HASH_TABLE_MAX_SIZE);
-
-	new_nodes = memory_pool_alloc (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
+	
+	if (hash->shared) {
+		new_nodes = memory_pool_alloc_shared (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
+	} else {
+		new_nodes = memory_pool_alloc (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
+	}
 
 	if (hash->shared) {
 		memory_pool_wlock_rwlock (hash->lock);
@@ -184,7 +188,7 @@ rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key
 	hash->nnodes             = 0;
 	hash->hash_func          = hash_func ? hash_func : g_direct_hash;
 	hash->key_equal_func     = key_equal_func;
-	hash->nodes              = memory_pool_alloc0 (pool, sizeof (struct rspamd_hash_node*) * hash->size);
+	hash->nodes              = memory_pool_alloc0_shared (pool, sizeof (struct rspamd_hash_node*) * hash->size);
 	hash->shared             = 1;
 	/* Get mutex from pool for locking on insert/remove operations */
 	hash->lock               = memory_pool_get_rwlock (pool);
@@ -227,12 +231,12 @@ rspamd_hash_insert (rspamd_hash_t *hash, gpointer key, gpointer value)
 		
 		*node_ptr = node;
 		hash->nnodes ++;
-		rspamd_hash_maybe_resize (hash);
-
     }
 	if (hash->shared) {
 		memory_pool_wunlock_rwlock (hash->lock);
 	}
+
+	rspamd_hash_maybe_resize (hash);
 
 }
 

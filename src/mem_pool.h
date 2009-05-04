@@ -122,6 +122,8 @@ char* memory_pool_strdup (memory_pool_t* pool, const char *src);
  * @param size bytes to allocate
  */
 void* memory_pool_alloc_shared (memory_pool_t *pool, memory_pool_ssize_t size);
+void* memory_pool_alloc0_shared (memory_pool_t *pool, memory_pool_ssize_t size);
+char* memory_pool_strdup_shared (memory_pool_t* pool, const char *src);
 
 /**
  * Lock chunk of shared memory in which pointer is placed

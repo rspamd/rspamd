@@ -200,6 +200,16 @@ memory_pool_alloc0 (memory_pool_t *pool, memory_pool_ssize_t size)
 	return pointer;
 }
 
+void *
+memory_pool_alloc0_shared (memory_pool_t *pool, memory_pool_ssize_t size)
+{
+	void *pointer = memory_pool_alloc_shared (pool, size);
+	if (pointer) {
+		bzero (pointer, size);
+	}
+	return pointer;
+}
+
 char *
 memory_pool_strdup (memory_pool_t *pool, const char *src)
 {
@@ -212,9 +222,28 @@ memory_pool_strdup (memory_pool_t *pool, const char *src)
 
 	len = strlen (src);
 	newstr = memory_pool_alloc (pool, len + 1);
-	memcpy (newstr, src, len + 1);
+	memcpy (newstr, src, len);
+	newstr[len] = '\0';
 	return newstr;
 }
+
+char *
+memory_pool_strdup_shared (memory_pool_t *pool, const char *src)
+{
+	memory_pool_ssize_t len;
+	char *newstr;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	len = strlen (src);
+	newstr = memory_pool_alloc_shared (pool, len + 1);
+	memcpy (newstr, src, len);
+	newstr[len] = '\0';
+	return newstr;
+}
+
 
 void *
 memory_pool_alloc_shared (memory_pool_t *pool, memory_pool_ssize_t size)

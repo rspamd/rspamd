@@ -15,6 +15,7 @@
 #include "protocol.h"
 #include "filter.h"
 #include "buffer.h"
+#include "hash.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE CMAKE_PREFIX "/etc/rspamd.conf"
@@ -105,6 +106,11 @@ struct rspamd_main {
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
 
 	TAILQ_HEAD (workq, rspamd_worker) workers;					/**< linked list of workers							*/
+};
+
+struct counter_data {
+	uint64_t value;
+	int number;
 };
 
 /**

@@ -48,6 +48,7 @@ enum command_type {
 	COMMAND_UPTIME,
 	COMMAND_LEARN,
 	COMMAND_HELP,
+	COMMAND_COUNTERS,
 };
 
 struct controller_command {
@@ -65,6 +66,7 @@ static struct controller_command commands[] = {
 	{"uptime", 0, COMMAND_UPTIME},
 	{"learn", 1, COMMAND_LEARN},
 	{"help", 0, COMMAND_HELP},
+	{"counters", 0, COMMAND_COUNTERS},
 };
 
 static GCompletion *comp;
@@ -72,6 +74,7 @@ static time_t start_time;
 
 static char greetingbuf[1024];
 static struct timeval io_tv;
+extern rspamd_hash_t *counters;
 
 static 
 void sig_handler (int signo)
@@ -108,19 +111,25 @@ completion_func (gpointer elem)
 }
 
 static void
-free_session (struct controller_session *session)
+free_session (struct controller_session *session, gboolean is_soft)
 {
 	GList *part;
 	struct mime_part *p;
 	
 	msg_debug ("free_session: freeing session %p", session);
-	rspamd_remove_dispatcher (session->dispatcher);
 	
 	while ((part = g_list_first (session->parts))) {
 		session->parts = g_list_remove_link (session->parts, part);
 		p = (struct mime_part *)part->data;
 		g_byte_array_free (p->content, FALSE);
 		g_list_free_1 (part);
+	}
+	if (is_soft) {
+		/* Plan dispatcher shutdown */
+		session->dispatcher->wanna_die = 1;
+	}
+	else {
+		rspamd_remove_dispatcher (session->dispatcher);
 	}
 
 	memory_pool_delete (session->session_pool);
@@ -140,6 +149,19 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 	}
 
 	return 1;
+}
+
+static void
+counter_write_callback (gpointer key, gpointer value, void *data)
+{
+	struct controller_session *session = data;
+	struct counter_data *cd = value;
+	char *name = key;
+	char out_buf[128];
+	int r;
+
+	r = snprintf (out_buf, sizeof (out_buf), "%s: %llu" CRLF, name, (unsigned long long int)cd->value);
+	rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE);
 }
 
 static void
@@ -348,7 +370,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			}
 			break;
 		case COMMAND_HELP:
-				r = snprintf (out_buf, sizeof (out_buf), 
+			r = snprintf (out_buf, sizeof (out_buf), 
 							"Rspamd CLI commands (* - privilleged command):" CRLF
 							"    help - this help message" CRLF
 							"(*) learn <statfile> <size> [-r recipient], [-f from] [-n] - learn message to specified statfile" CRLF
@@ -356,8 +378,12 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							"(*) reload - reload rspamd" CRLF
 							"(*) shutdown - shutdown rspamd" CRLF
 							"    stat - show different rspamd stat" CRLF
+							"    counters - show rspamd counters" CRLF
 							"    uptime - rspamd uptime" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+			break;
+		case COMMAND_COUNTERS:
+			rspamd_hash_foreach (counters, counter_write_callback, session);
 			break;
 	}
 }
@@ -454,7 +480,7 @@ controller_write_socket (void *arg)
 		msg_info ("closing control connection");
 		/* Free buffers */
 		close (session->sock);
-		free_session (session);
+		free_session (session, TRUE);
 		return;
 	}
 	else if (session->state == STATE_REPLY) {
@@ -475,7 +501,7 @@ controller_err_socket (GError *err, void *arg)
 		msg_info ("controller_err_socket: abnormally closing control connection, error: %s", err->message);
 	}
 	/* Free buffers */
-	free_session (session);
+	free_session (session, FALSE);
 }
 
 static void

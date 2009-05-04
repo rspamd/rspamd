@@ -3,6 +3,8 @@
 #include "../src/cfg_file.h"
 #include "../src/expressions.h"
 
+rspamd_hash_t *counters = NULL;
+
 int 
 main (int argc, char **argv)
 {

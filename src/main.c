@@ -48,6 +48,8 @@
 
 struct config_file *cfg;
 
+rspamd_hash_t *counters;
+
 static void sig_handler (int );
 static struct rspamd_worker * fork_worker (struct rspamd_main *, int, enum process_type);
 	
@@ -571,6 +573,9 @@ main (int argc, char **argv, char **env)
 
 	/* Init statfile pool */
 	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
+
+	/* Init counters */
+	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal);
 	
 	for (i = 0; i < cfg->workers_number; i++) {
 		fork_worker (rspamd, listen_sock, TYPE_WORKER);

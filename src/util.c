@@ -29,6 +29,7 @@
 #include "main.h"
 
 sig_atomic_t do_reopen_log = 0;
+extern rspamd_hash_t *counters;
 
 int
 make_socket_nonblocking (int fd)
@@ -809,6 +810,33 @@ calculate_check_time (struct timespec *begin, int resolution)
 	snprintf (res, sizeof (res), fmt, diff);
 
 	return (const char *)res;
+}
+
+void 
+set_counter (const char *name, long int value)
+{
+	struct counter_data *cd;
+	double alpha;
+	char *key;
+
+	cd = rspamd_hash_lookup (counters, (gpointer)name);
+
+	if (cd == NULL) {
+		cd = memory_pool_alloc_shared (counters->pool, sizeof (struct counter_data));
+		cd->value = value;
+		cd->number = 1;
+		key = memory_pool_strdup_shared (counters->pool, name);
+		rspamd_hash_insert (counters, (gpointer)key, (gpointer)cd);
+	}
+	else {
+		/* Calculate new value */
+		memory_pool_wlock_rwlock (counters->lock);
+
+		alpha = 2. / (++cd->number + 1);
+		cd->value = cd->value * (1. - alpha) + value * alpha;
+
+		memory_pool_wunlock_rwlock (counters->lock);
+	}
 }
 
 /*

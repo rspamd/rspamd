@@ -500,7 +500,7 @@ parse_regexp (memory_pool_t *pool, char *line, gboolean raw_mode)
 {
 	char *begin, *end, *p, *src;
 	struct rspamd_regexp *result, *check;
-	int regexp_flags = 0;
+	int regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
 	GError *err = NULL;
 	
 	src = line;
