@@ -818,7 +818,8 @@ set_counter (const char *name, long int value)
 	struct counter_data *cd;
 	double alpha;
 	char *key;
-
+	
+#if 0
 	cd = rspamd_hash_lookup (counters, (gpointer)name);
 
 	if (cd == NULL) {
@@ -837,6 +838,7 @@ set_counter (const char *name, long int value)
 
 		memory_pool_wunlock_rwlock (counters->lock);
 	}
+#endif
 }
 
 /*
