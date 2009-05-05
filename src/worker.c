@@ -342,6 +342,7 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_WORKER;
 
+	event_init ();
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
