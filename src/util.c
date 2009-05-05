@@ -819,13 +819,12 @@ set_counter (const char *name, long int value)
 	double alpha;
 	char *key;
 	
-#if 0
 	cd = rspamd_hash_lookup (counters, (gpointer)name);
 
 	if (cd == NULL) {
 		cd = memory_pool_alloc_shared (counters->pool, sizeof (struct counter_data));
 		cd->value = value;
-		cd->number = 1;
+		cd->number = 0;
 		key = memory_pool_strdup_shared (counters->pool, name);
 		rspamd_hash_insert (counters, (gpointer)key, (gpointer)cd);
 	}
@@ -838,7 +837,6 @@ set_counter (const char *name, long int value)
 
 		memory_pool_wunlock_rwlock (counters->lock);
 	}
-#endif
 }
 
 /*

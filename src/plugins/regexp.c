@@ -185,6 +185,7 @@ regexp_module_config (struct config_file *cfg)
 			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
 				res = FALSE;
 			}
+			set_counter (cur_item->symbol, 0);
 			regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);
 		}
 	}

@@ -309,7 +309,6 @@ void
 start_worker (struct rspamd_worker *worker, int listen_sock)
 {
 	struct sigaction signals;
-	int i;
 
 #ifdef WITH_PROFILER
 	extern void _start (void), etext (void);
@@ -355,11 +354,6 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 	/* Accept event */
 	event_set(&worker->bind_ev, listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
-
-	/* Perform modules configuring */
-	for (i = 0; i < MODULES_NUM; i ++) {
-		modules[i].module_config_func (worker->srv->cfg);
-	}
 
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);

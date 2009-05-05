@@ -465,6 +465,8 @@ main (int argc, char **argv, char **env)
 	}
 
 	fclose (f);
+	/* Init counters */
+	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
 
 	/* Init C modules */
 	for (i = 0; i < MODULES_NUM; i ++) {
@@ -490,6 +492,7 @@ main (int argc, char **argv, char **env)
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
+
 
 	/* Create listen socket */
 	listen_sock = create_listen_socket (&rspamd->cfg->bind_addr, rspamd->cfg->bind_port, 
@@ -574,8 +577,11 @@ main (int argc, char **argv, char **env)
 	/* Init statfile pool */
 	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
 
-	/* Init counters */
-	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
+
+	/* Perform modules configuring */
+	for (i = 0; i < MODULES_NUM; i ++) {
+		modules[i].module_config_func (cfg);
+	}
 	
 	for (i = 0; i < cfg->workers_number; i++) {
 		fork_worker (rspamd, listen_sock, TYPE_WORKER);
