@@ -36,6 +36,8 @@
 #include "modules.h"
 #include "message.h"
 
+#include <evdns.h>
+
 #ifndef WITHOUT_PERL
 #include <EXTERN.h>               /* from the Perl distribution     */
 #include <perl.h>                 /* from the Perl distribution     */
@@ -343,6 +345,8 @@ start_worker (struct rspamd_worker *worker, int listen_sock)
 	worker->srv->type = TYPE_WORKER;
 
 	event_init ();
+	evdns_init ();
+
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
