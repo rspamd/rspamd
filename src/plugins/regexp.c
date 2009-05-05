@@ -468,7 +468,6 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 				g_queue_free (stack);
 				return FALSE;
 			}
-			try_optimize = TRUE;
 			msg_debug ("process_regexp_expression: got operation %c", it->content.operation);
 			switch (it->content.operation) {
 				case '!':
@@ -479,12 +478,12 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 				case '&':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+					try_optimize = optimize_regexp_expression (&it, stack, op1 && op2);
 					break;
 				case '|':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+					try_optimize = optimize_regexp_expression (&it, stack, op1 || op2);
 					break;
 				default:
 					it = it->next;
