@@ -577,6 +577,8 @@ main (int argc, char **argv, char **env)
 	/* Init statfile pool */
 	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
 
+	event_init ();
+	g_mime_init (0);
 
 	/* Perform modules configuring */
 	for (i = 0; i < MODULES_NUM; i ++) {
