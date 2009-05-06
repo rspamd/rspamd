@@ -388,12 +388,12 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 	*(param->url->host + param->url->hostlen) = 0;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
-		msg_info ("surbl_check: <%s> url %s is in surbl %s", 
+		msg_info ("surbl_check: <%s> url [%s] is in surbl %s", 
 					param->task->message_id, param->url->host, param->suffix->suffix);
 		process_dns_results (param->task, param->suffix, param->url->host, (uint32_t)(((in_addr_t *)addresses)[0]));
 	}
 	else {
-		msg_debug ("surbl_check: <%s> url %s is not in surbl %s", 
+		msg_debug ("surbl_check: <%s> url [%s] is not in surbl %s", 
 					param->task->message_id, param->url->host, param->suffix->suffix);
 	}
 	*(param->url->host + param->url->hostlen) = c;

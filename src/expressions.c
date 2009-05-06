@@ -754,7 +754,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 			} else if (it->type == EXPR_OPERATION) {
 				if (g_queue_is_empty (stack)) {
 					/* Queue has no operands for operation, exiting */
-					msg_warn ("get_function_arg: invalid expression");
+					msg_debug ("get_function_arg: invalid expression");
 					g_queue_free (stack);
 					return NULL;
 				}
