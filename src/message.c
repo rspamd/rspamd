@@ -397,6 +397,15 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 	}
 }
 
+static void
+destroy_message (void *pointer)
+{
+	GMimeMessage *msg = pointer;
+
+	msg_debug ("destroy_message: freeing pointer %p", msg);
+	g_object_unref (msg);
+}
+
 int
 process_message (struct worker_task *task)
 {
@@ -429,7 +438,7 @@ process_message (struct worker_task *task)
 	}
 	
 	task->message = message;
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_object_unref, task->message);
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)destroy_message, task->message);
 
 #ifdef GMIME24
 	g_mime_message_foreach (message, mime_foreach_callback, task);

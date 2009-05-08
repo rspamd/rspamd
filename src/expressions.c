@@ -1507,14 +1507,17 @@ rspamd_compare_transfer_encoding (struct worker_task *task, GList *args)
 	}
 
 	part = g_mime_message_get_mime_part (task->message);
-	if (part && GMIME_IS_PART (part)) {
-		part_enc = g_mime_part_get_encoding (GMIME_PART (part));
-		g_object_unref (part);
+	if (part) {
+		if (GMIME_IS_PART (part)) {
+			part_enc = g_mime_part_get_encoding (GMIME_PART (part));
 		
-		msg_debug ("rspamd_compare_transfer_encoding: got encoding in part: %d and compare with %d",
-				(int)part_enc, (int)enc_req);
+			msg_debug ("rspamd_compare_transfer_encoding: got encoding in part: %d and compare with %d",
+					(int)part_enc, (int)enc_req);
+			g_object_unref (part);
 
-		return part_enc == enc_req;
+			return part_enc == enc_req;
+		}
+		g_object_unref (part);
 	}
 
 	return FALSE;
