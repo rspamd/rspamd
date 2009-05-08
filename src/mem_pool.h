@@ -14,6 +14,9 @@
 
 #include "config.h"
 
+
+struct f_str_s;
+
 /** 
  * Destructor type definition 
  */
@@ -115,6 +118,14 @@ void* memory_pool_alloc0 (memory_pool_t* pool, memory_pool_ssize_t size);
  * @return pointer to newly created string that is copy of src
  */
 char* memory_pool_strdup (memory_pool_t* pool, const char *src);
+
+/**
+ * Make a copy of fixed string in pool as null terminated string
+ * @param pool memory pool object
+ * @param src source string
+ * @return pointer to newly created string that is copy of src
+ */
+char* memory_pool_fstrdup (memory_pool_t* pool, const struct f_str_s *src);
 
 /**
  * Allocate piece of shared memory

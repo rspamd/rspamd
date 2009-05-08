@@ -89,13 +89,32 @@
 /* XXX: try to convert rspamd errors to spamd errors */
 #define SPAMD_ERROR "EX_ERROR"
 
+static char *
+separate_command (f_str_t *in, char c)
+{
+	int r = 0;
+	char *p = in->begin, *b;
+	b = p;
+
+	while (r < in->len) {
+		if (*p == c) {
+			*p = '\0';
+			in->begin = p + 1;
+			return b;
+		}
+		p ++;
+		r ++;
+	}
+
+	return NULL;
+}
+
 static int
-parse_command (struct worker_task *task, char *line)
+parse_command (struct worker_task *task, f_str_t *line)
 {
 	char *token;
 
-	msg_debug ("parse_command: got line from worker: %s", line);
-	token = strsep (&line, " ");
+	token = separate_command (line, ' ');
 	if (line == NULL || token == NULL) {
 		msg_debug ("parse_command: bad command: %s", token);
 		return -1;
@@ -160,14 +179,13 @@ parse_command (struct worker_task *task, char *line)
 			return -1;
 	}
 
-	if (strncasecmp (line, RSPAMC_GREETING, sizeof (RSPAMC_GREETING) - 1) == 0) {
+	if (strncasecmp (line->begin, RSPAMC_GREETING, sizeof (RSPAMC_GREETING) - 1) == 0) {
 		task->proto = RSPAMC_PROTO;
 	}
-	else if (strncasecmp (line, SPAMC_GREETING, sizeof (SPAMC_GREETING) -1) == 0) {
+	else if (strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) -1) == 0) {
 		task->proto = SPAMC_PROTO;
 	}
 	else {
-		msg_debug ("parse_command: bad protocol version: %s", line);
 		return -1;
 	}
 	task->state = READ_HEADER;
@@ -175,13 +193,12 @@ parse_command (struct worker_task *task, char *line)
 }
 
 static int
-parse_header (struct worker_task *task, char *line)
+parse_header (struct worker_task *task, f_str_t *line)
 {
 	char *headern, *err, *tmp;
 	
-	msg_debug ("parse_header: got line from worker: %s", line);
 	/* Check end of headers */
-	if (*line == '\0') {
+	if (line->len == 0) {
 		msg_debug ("parse_header: got empty line, assume it as end of headers");
 		if (task->cmd == CMD_PING || task->cmd == CMD_SKIP) {
 			task->state = WRITE_REPLY;
@@ -201,13 +218,12 @@ parse_header (struct worker_task *task, char *line)
 		return 0;
 	}
 
-	headern = strsep (&line, ":");
+	headern = separate_command (line, ':');
 
 	if (line == NULL || headern == NULL) {
 		return -1;
 	}
 	/* Eat whitespaces */
-	g_strstrip (line);
 	g_strstrip (headern);
 
 	switch (headern[0]) {
@@ -216,7 +232,8 @@ parse_header (struct worker_task *task, char *line)
 			/* content-length */
 			if (strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
                 if (task->content_length == 0) {
-				    task->content_length = strtoul (line, &err, 10);
+					tmp = memory_pool_fstrdup (task->task_pool, line);
+				    task->content_length = strtoul (tmp, &err, 10);
 					msg_debug ("parse_header: read Content-Length header, value: %lu", (unsigned long int)task->content_length);
 				}
 			}
@@ -229,7 +246,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'H':
 			/* helo */
 			if (strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
-				task->helo = memory_pool_strdup (task->task_pool, line);
+				task->helo = memory_pool_fstrdup (task->task_pool, line);
 				msg_debug ("parse_header: read helo header, value: %s", task->helo);
 			}
 			else {
@@ -241,7 +258,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'F':
 			/* from */
 			if (strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
-				task->from = memory_pool_strdup (task->task_pool, line);
+				task->from = memory_pool_fstrdup (task->task_pool, line);
 				msg_debug ("parse_header: read from header, value: %s", task->from);
 			}
 			else {
@@ -253,7 +270,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'Q':
 			/* Queue id */
 			if (strncasecmp (headern, QUEUE_ID_HEADER, sizeof (QUEUE_ID_HEADER) - 1) == 0) {
-				task->queue_id = memory_pool_strdup (task->task_pool, line);
+				task->queue_id = memory_pool_fstrdup (task->task_pool, line);
 				msg_debug ("parse_header: read queue_id header, value: %s", task->queue_id);
 			}
 			else {
@@ -265,7 +282,7 @@ parse_header (struct worker_task *task, char *line)
 		case 'R':
 			/* rcpt */
 			if (strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
-				tmp = memory_pool_strdup (task->task_pool, line);
+				tmp = memory_pool_fstrdup (task->task_pool, line);
 				task->rcpt = g_list_prepend (task->rcpt, tmp);
 				msg_debug ("parse_header: read rcpt header, value: %s", tmp);
 			}
@@ -278,7 +295,8 @@ parse_header (struct worker_task *task, char *line)
 		case 'N':
 			/* nrcpt */
 			if (strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
-				task->nrcpt = strtoul (line, &err, 10);
+				tmp = memory_pool_fstrdup (task->task_pool, line);
+				task->nrcpt = strtoul (tmp, &err, 10);
 				msg_debug ("parse_header: read rcpt header, value: %d", (int)task->nrcpt);
 			}
 			else {
@@ -290,11 +308,12 @@ parse_header (struct worker_task *task, char *line)
 		case 'I':
 			/* ip_addr */
 			if (strncasecmp (headern, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
-				if (!inet_aton (line, &task->from_addr)) {
-					msg_info ("parse_header: bad ip header: '%s'", line);
+				tmp = memory_pool_fstrdup (task->task_pool, line);
+				if (!inet_aton (tmp, &task->from_addr)) {
+					msg_info ("parse_header: bad ip header: '%s'", tmp);
 					return -1;
 				}
-				msg_debug ("parse_header: read IP header, value: %s", line);
+				msg_debug ("parse_header: read IP header, value: %s", tmp);
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);
@@ -314,10 +333,10 @@ read_rspamd_input_line (struct worker_task *task, f_str_t *line)
 {
 	switch (task->state) {
 		case READ_COMMAND:
-			return parse_command (task, fstrcstr (line, task->task_pool));
+			return parse_command (task, line);
 			break;
 		case READ_HEADER:
-			return parse_header (task, fstrcstr (line, task->task_pool));
+			return parse_header (task, line);
 			break;
 		default:
 			return -1;

@@ -127,9 +127,11 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 	ssize_t r;
 	GError *err;
 	f_str_t res;
-	char *c;
-	unsigned int len;
+	char *c, *b;
+	char **pos;
+	unsigned int *len;
 	enum io_policy saved_policy;
+
 
 	if (d->in_buf == NULL) {
 		d->in_buf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
@@ -141,6 +143,9 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 		}
 		d->in_buf->pos = d->in_buf->data->begin;
 	}
+
+	pos = &d->in_buf->pos;
+	len = &d->in_buf->data->len;
 	
 	if (BUFREMAIN (d->in_buf) == 0) {
 		/* Buffer is full, try to call callback with overflow error */
@@ -152,7 +157,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 	}
 	else if (!skip_read) {
 		/* Try to read the whole buffer */
-		r = read (fd, d->in_buf->pos, BUFREMAIN (d->in_buf));
+		r = read (fd, *pos, BUFREMAIN (d->in_buf));
 		if (r == -1 && errno != EAGAIN) {
 			if (d->err_callback) {
 				err = g_error_new (G_DISPATCHER_ERROR, errno, "%s", strerror (errno));
@@ -173,8 +178,8 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 			return;
 		}
 		else {
-			d->in_buf->pos += r;
-			d->in_buf->data->len += r;
+			*pos += r;
+			*len += r;
 		}
 		msg_debug ("read_buffers: read %ld characters, policy is %s, watermark is: %ld", 
 				(long int)r, d->policy == BUFFER_LINE ? "LINE" : "CHARACTER",
@@ -183,15 +188,18 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 	
 	saved_policy = d->policy;
 	c = d->in_buf->data->begin;
+	b = c;
 	r = 0;
-	len = d->in_buf->data->len;
 
 	switch (d->policy) {
 		case BUFFER_LINE:
-			while (r < len) {
-				if (*c == '\r' || *c == '\n') {
-					res.begin = d->in_buf->data->begin;
+			while (r < *len) {
+				if (*c == '\n') {
+					res.begin = b;
 					res.len = r;
+					if (*(c - 1) == '\r') {
+						res.len --;
+					}
 					if (d->read_callback) {
 						d->read_callback (&res, d->user_data);
 						if (d->wanna_die) {
@@ -199,23 +207,18 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 							rspamd_remove_dispatcher (d);
 							return;
 						}
-						if (r < len - 1 && *(c + 1) == '\n') {
-							r ++;
-							c ++;
-						}
 						/* Move remaining string to begin of buffer (draining) */
-						memmove (d->in_buf->data->begin, c + 1, len - r - 1);
-						c = d->in_buf->data->begin;
-						d->in_buf->data->len -= r + 1;
-						d->in_buf->pos -= r + 1;
+						memmove (d->in_buf->data->begin, c + 1, *len - r - 1);
+						b = d->in_buf->data->begin;
+						c = b;
+						*len -= r + 1;
+						*pos = b + *len;
 						r = 0;
-						len = d->in_buf->data->len;
 						if (d->policy != saved_policy) {
 							msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
 							read_buffers (fd, d, TRUE);
 							return;
 						}
-						continue;
 					}
 				}
 				r ++;
@@ -223,30 +226,25 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 			}
 			break;
 		case BUFFER_CHARACTER:
-			while (r <= len) {
-				if (r == d->nchars) {
-					res.begin = d->in_buf->data->begin;
-					res.len = r;
-					if (d->read_callback) {
-						d->read_callback (&res, d->user_data);
-						/* Move remaining string to begin of buffer (draining) */
-						memmove (d->in_buf->data->begin, c, len - r);
-						c = d->in_buf->data->begin;
-						d->in_buf->data->len -= r;
-						d->in_buf->pos -= r;
-						r = 0;
-						len = d->in_buf->data->len;
-						if (d->policy != saved_policy) {
-							msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
-							read_buffers (fd, d, TRUE);
-							return;
-						}
-						continue;
+			r = d->nchars;
+			if (*len >= r) {
+				res.begin = b;
+				res.len = r;
+				c = b + r;
+				if (d->read_callback) {
+					d->read_callback (&res, d->user_data);
+					/* Move remaining string to begin of buffer (draining) */
+					memmove (d->in_buf->data->begin, c, *len - r);
+					b = d->in_buf->data->begin;
+					c = b;
+					*len -= r;
+					*pos = b + *len;
+					if (d->policy != saved_policy) {
+						msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
+						read_buffers (fd, d, TRUE);
+						return;
 					}
-				
 				}
-				r ++;
-				c ++;
 			}
 			break;
 	}

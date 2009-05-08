@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include "fstring.h"
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L
@@ -226,6 +227,22 @@ memory_pool_strdup (memory_pool_t *pool, const char *src)
 	newstr[len] = '\0';
 	return newstr;
 }
+
+char *
+memory_pool_fstrdup (memory_pool_t *pool, const struct f_str_s *src)
+{
+	char *newstr;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	newstr = memory_pool_alloc (pool, src->len + 1);
+	memcpy (newstr, src->begin, src->len);
+	newstr[src->len] = '\0';
+	return newstr;
+}
+
 
 char *
 memory_pool_strdup_shared (memory_pool_t *pool, const char *src)
