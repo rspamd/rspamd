@@ -100,6 +100,7 @@ separate_command (f_str_t *in, char c)
 		if (*p == c) {
 			*p = '\0';
 			in->begin = p + 1;
+			in->len -= r + 1;
 			return b;
 		}
 		p ++;
@@ -225,6 +226,7 @@ parse_header (struct worker_task *task, f_str_t *line)
 	}
 	/* Eat whitespaces */
 	g_strstrip (headern);
+	fstrstrip (line);
 
 	switch (headern[0]) {
 		case 'c':

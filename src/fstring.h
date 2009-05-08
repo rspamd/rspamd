@@ -98,4 +98,9 @@ uint32_t fstrhash (f_str_t *str);
  */
 char* fstrcstr (f_str_t *str, memory_pool_t *pool);
 
+/*
+ * Strip fstr string from space symbols
+ */
+void fstrstrip (f_str_t *str);
+
 #endif

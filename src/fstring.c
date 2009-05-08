@@ -338,3 +338,39 @@ fstrhash (f_str_t *str)
 	}
 	return hval;
 }
+
+void
+fstrstrip (f_str_t *str)
+{
+	char *p = str->begin;
+	int r = 0;
+
+	while (r < str->len) {
+		if (g_ascii_isspace (*p)) {
+			p ++;
+			r ++;
+		}
+		else {
+			break;
+		}
+	}
+	
+	if (r > 0) {
+		memmove (str->begin, p, str->len - r);
+		str->len -= r;
+	}
+
+	r = str->len;
+	p = str->begin + str->len;
+	while (r > 0) {
+		if (g_ascii_isspace (*p)) {
+			p --;
+			r --;
+		}
+		else {
+			break;
+		}
+	}
+
+	str->len = r;
+}
