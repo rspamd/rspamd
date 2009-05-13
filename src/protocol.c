@@ -472,7 +472,8 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	struct metric_result *metric_res = (struct metric_result *)metric_value;
 	struct metric *m;
 	int is_spam = 0;
-	
+
+
 	if (metric_name == NULL || metric_value == NULL) {
 		m = g_hash_table_lookup (task->cfg->metrics, "default");
 		if (task->proto == SPAMC_PROTO) {
@@ -502,10 +503,19 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 						"(%s: %s: [%.2f/%.2f] [", (char *)metric_name, is_spam ? "T" : "F", 
 						metric_res->score, metric_res->metric->required_score); 
 	}
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	if (task->cmd == CMD_PROCESS) {
+#ifndef GMIME24
+		g_mime_message_add_header (task->message, "X-Spam-Status", outbuf);
+#else
+		g_mime_object_append_header (GMIME_OBJECT (task->message), "X-Spam-Status", outbuf);
+#endif
+	}
+	else {
+		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
 
-	if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
-		show_metric_symbols (metric_res, cd);
+		if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
+			show_metric_symbols (metric_res, cd);
+		}
 	}
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %ld, time: %sms",
 							(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
@@ -565,12 +575,54 @@ static int
 write_process_reply (struct worker_task *task)
 {
 	int r;
-	char outbuf[OUTBUFSIZ];
+	char *outmsg;
+	char outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
+	struct metric_result *metric_res;
+	struct metric_callback_data cd;
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, 
 					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK", task->msg->len);
+
+	cd.task = task;
+	cd.log_buf = logbuf;
+	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "process_message: msg ok, id: <%s>, ", task->message_id);
+	cd.log_size = sizeof (logbuf);
+
+	if (task->proto == SPAMC_PROTO) {
+		/* Ignore metrics, just write report for 'default' metric */
+		metric_res = g_hash_table_lookup (task->results, "default");
+		if (metric_res == NULL) {
+			/* Implicit metric result */
+			show_metric_result (NULL, NULL, (void *)&cd);
+		}
+		else {
+			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
+		}
+	}
+	else {
+		/* Show default metric first */
+		metric_res = g_hash_table_lookup (task->results, "default");
+		if (metric_res == NULL) {
+			/* Implicit metric result */
+			show_metric_result (NULL, NULL, (void *)&cd);
+		}
+		else {
+			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
+		}
+		g_hash_table_remove (task->results, "default");
+
+		/* Write result for each metric separately */
+		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		/* URL stat */
+	}
+	msg_info ("%s", logbuf);
+
+	outmsg = g_mime_object_to_string (GMIME_OBJECT (task->message));
+
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
-	rspamd_dispatcher_write (task->dispatcher, task->msg->begin, task->msg->len, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE);
+
+	g_free (outmsg);
 
 	return 0;
 }
