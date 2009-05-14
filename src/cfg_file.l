@@ -14,6 +14,8 @@
 #define add_luabuf(x) yyerror ("lua support diabled")
 #endif
 
+#define ECHO do {} while(0)
+
 #define MAX_INCLUDE_DEPTH 10
 YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
 int line_stack[MAX_INCLUDE_DEPTH];
