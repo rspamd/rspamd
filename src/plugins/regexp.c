@@ -226,6 +226,7 @@ find_raw_header_pos (const char *headers, const char *headerv)
 				/* Find semicolon */
 				p += headerlen;
 				if (*p == ':') {
+					while (*p && g_ascii_isspace (*(++p)));
 					return p;
 				}
 			}
@@ -352,8 +353,6 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				task_cache_add (task, re, 0);
 				return 0;
 			}
-			/* Skip header name and start matching after regexp */
-			headerv += strlen (re->header) + 1;
 			/* Now the main problem is to find position of end of raw header */
 			c = headerv;
 			while (*c) {
