@@ -760,6 +760,50 @@ local_mime_message_set_date_from_string (GMimeMessage *message, const gchar *str
 	g_mime_message_set_date (message, date, offset); 
 }
 
+/*
+ * Replacements for standart gmime functions but converting adresses to IA
+ */
+static const char*
+local_message_get_sender (GMimeMessage *message)
+{
+	char *res;
+	const char *from = g_mime_message_get_sender (message);
+	InternetAddressList *ia;
+	
+#ifndef	GMIME24
+	ia = internet_address_parse_string (from);
+#else
+	ia = internet_address_list_parse_string (from);
+#endif
+	if (!ia) {
+		return NULL;
+	}
+	res = internet_address_list_to_string (ia, FALSE);
+	internet_address_list_destroy (ia);
+	
+	return res;
+}
+
+static const char*
+local_message_get_reply_to (GMimeMessage *message)
+{
+	char *res;
+	const char *from = g_mime_message_get_reply_to (message);
+	InternetAddressList *ia;
+
+#ifndef	GMIME24
+	ia = internet_address_parse_string (from);
+#else
+	ia = internet_address_list_parse_string (from);
+#endif
+	if (!ia) {
+		return NULL;
+	}
+	res = internet_address_list_to_string (ia, FALSE);
+	internet_address_list_destroy (ia);
+	
+	return res;
+}
 
 #ifdef GMIME24
 
@@ -833,8 +877,8 @@ static struct {
 	SetListFunc	setlfunc;
 	gint		functype;
 } fieldfunc[] = {
-	{ "From",		g_mime_message_get_sender,		NULL, NULL,				g_mime_message_set_sender,	NULL, FUNC_CHARPTR },
-	{ "Reply-To",	g_mime_message_get_reply_to,	NULL, NULL,				g_mime_message_set_reply_to,	NULL, FUNC_CHARPTR },
+	{ "From",		local_message_get_sender,					NULL, NULL,	g_mime_message_set_sender, NULL, FUNC_CHARFREEPTR },
+	{ "Reply-To",	local_message_get_reply_to, 				NULL, NULL,	g_mime_message_set_reply_to, NULL, FUNC_CHARFREEPTR },
 #ifndef GMIME24
 	{ "To",	NULL,	(GetRcptFunc)g_mime_message_get_recipients,	NULL, NULL, (SetListFunc)g_mime_message_add_recipients_from_string, FUNC_IA },
 	{ "Cc",	NULL,	(GetRcptFunc)g_mime_message_get_recipients,	NULL, NULL, (SetListFunc)g_mime_message_add_recipients_from_string, FUNC_IA },

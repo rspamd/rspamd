@@ -202,6 +202,40 @@ regexp_module_reconfig (struct config_file *cfg)
 	return regexp_module_config (cfg);
 }
 
+static const char *
+find_raw_header_pos (const char *headers, const char *headerv)
+{
+	const char *p = headers;
+	gsize headerlen = strlen (headerv);
+
+	if (headers == NULL) {
+		return NULL;
+	}
+
+	while (*p) {
+		/* Try to find headers only at the begin of line */
+		if (*p == '\r' || *p == '\n') {
+			if (*(p + 1) == '\n' && *p == '\r') {
+				p ++;
+			}
+			if (g_ascii_isspace (*(++p))) {
+				/* Folding */
+				continue;
+			}
+			if (memcmp (p, headerv, headerlen) == 0) {
+				/* Find semicolon */
+				p += headerlen;
+				if (*p == ':') {
+					return p;
+				}
+			}
+		}
+		p ++;
+	}
+
+	return NULL;
+}
+
 static gsize
 process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
@@ -248,6 +282,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				}
 				cur = headerlist;
 				while (cur) {
+					msg_debug ("process_regexp: found header \"%s\" with value \"%s\"", re->header, (char *)cur->data);
 					if (cur->data && g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
 						task_cache_add (task, re, 1);
 						return 1;
@@ -312,7 +347,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				task_cache_add (task, re, 0);
 				return 0;
 			}
-			if ((headerv = strstr (task->raw_headers, re->header)) == NULL) {
+			if ((headerv = (char *)find_raw_header_pos (task->raw_headers, re->header)) == NULL) {
 				/* No header was found */
 				task_cache_add (task, re, 0);
 				return 0;
@@ -342,6 +377,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			/* Temporary null terminate this part of string */
 			t = *c;
 			*c = '\0';
+			msg_debug ("process_regexp: found raw header \"%s\" with value \"%s\"", re->header, headerv);
 			if (g_regex_match (re->raw_regexp, headerv, 0, NULL) == TRUE) {
 				*c = t;
 				task_cache_add (task, re, 1);
