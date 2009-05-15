@@ -29,6 +29,7 @@
 #include "message.h"
 #include "fuzzy.h"
 #include "expressions.h"
+#include "html.h"
 
 gboolean rspamd_compare_encoding (struct worker_task *task, GList *args);
 gboolean rspamd_header_exists (struct worker_task *task, GList *args);
@@ -43,6 +44,8 @@ gboolean rspamd_has_content_part_len (struct worker_task *task, GList *args);
 gboolean rspamd_has_only_html_part (struct worker_task *task, GList *args);
 gboolean rspamd_is_recipients_sorted (struct worker_task *task, GList *args);
 gboolean rspamd_compare_transfer_encoding (struct worker_task *task, GList *args);
+gboolean rspamd_is_html_balanced (struct worker_task *task, GList *args);
+gboolean rspamd_has_html_tag (struct worker_task *task, GList *args);
 
 /*
  * List of internal functions of rspamd
@@ -62,8 +65,10 @@ static struct _fl {
 	{ "content_type_is_type", rspamd_content_type_is_type },
 	{ "has_content_part", rspamd_has_content_part },
 	{ "has_content_part_len", rspamd_has_content_part_len },
+	{ "has_html_tag", rspamd_has_html_tag },
 	{ "has_only_html_part", rspamd_has_only_html_part },
 	{ "header_exists", rspamd_header_exists },
+	{ "is_html_balanced", rspamd_is_html_balanced },
 	{ "is_recipients_sorted", rspamd_is_recipients_sorted },
 };
 
@@ -1521,6 +1526,92 @@ rspamd_compare_transfer_encoding (struct worker_task *task, GList *args)
 	}
 
 	return FALSE;
+}
+
+gboolean 
+rspamd_is_html_balanced (struct worker_task *task, GList *args)
+{
+	struct mime_text_part *p;
+	GList *cur;
+	gboolean res = TRUE;
+
+	cur = g_list_first (task->text_parts);
+	while (cur) {
+		p = cur->data;
+		if (p->is_html) {
+			if (p->is_balanced) {
+				res = TRUE;
+			}
+			else {
+				res = FALSE;
+				break;
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	return res;
+
+}
+
+struct html_callback_data {
+	struct html_tag *tag;
+	gboolean *res;
+};
+
+static gboolean
+search_html_node_callback (GNode *node, gpointer data)
+{
+	struct html_callback_data *cd = data;
+	struct html_node *nd;
+	
+	nd = node->data;
+	if (nd) {
+		if (nd->tag == cd->tag) {
+			*cd->res = TRUE;
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+gboolean 
+rspamd_has_html_tag (struct worker_task *task, GList *args)
+{
+	struct mime_text_part *p;
+	GList *cur;
+	struct expression_argument *arg;
+	struct html_tag *tag;
+	gboolean res = FALSE;
+	struct html_callback_data cd;
+	
+	if (args == NULL) {
+		msg_warn ("rspamd_has_html_tag: no parameters to function");
+		return FALSE;
+	}
+	
+	arg = get_function_arg (args->data, task, TRUE);
+	tag = get_tag_by_name (arg->data);
+	if (tag == NULL) {
+		msg_warn ("rspamd_has_html_tag: unknown tag type passed as argument: %s", (char *)arg->data);
+		return FALSE;
+	}
+
+	cur = g_list_first (task->text_parts);
+	cd.res = &res;
+	cd.tag = tag;
+
+	while (cur && res == FALSE) {
+		p = cur->data;
+		if (p->is_html && p->html_nodes) {
+			g_node_traverse (p->html_nodes, G_PRE_ORDER, G_TRAVERSE_ALL, -1, search_html_node_callback, &cd);
+		}
+		cur = g_list_next (cur);
+	}
+
+	return res;
+
 }
 
 /*

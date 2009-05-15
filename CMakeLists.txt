@@ -7,7 +7,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 1)
-SET(RSPAMD_VERSION_PATCH 1)
+SET(RSPAMD_VERSION_PATCH 2)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
@@ -304,6 +304,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/controller.c
 				src/cfg_utils.c
 				src/buffer.c
+				src/html.c
 				src/lmtp.c
 				src/lmtp_proto.c)
 
@@ -339,6 +340,7 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/fuzzy.c
 				src/memcached.c
 				src/message.c
+				src/html.c
 				src/expressions.c
 				src/statfile.c)
 
@@ -351,6 +353,7 @@ SET(UTILSDEPENDS src/mem_pool.c
 				src/fuzzy.c
 				src/expressions.c
 				src/message.c
+				src/html.c
 				src/util.c)
 
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)

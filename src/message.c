@@ -27,15 +27,17 @@
 #include "main.h"
 #include "message.h"
 #include "cfg_file.h"
+#include "html.h"
 #include "modules.h"
 
 GByteArray*
-strip_html_tags (GByteArray *src, int *stateptr)
+strip_html_tags (memory_pool_t *pool, struct mime_text_part *part, GByteArray *src, int *stateptr)
 {
-	uint8_t *tbuf = NULL, *p, *tp = NULL, *rp, c, lc;
+	uint8_t *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin, c, lc;
 	int br, i = 0, depth = 0, in_q = 0;
 	int state = 0;
 	GByteArray *buf;
+	GNode *level_ptr = NULL;
 
 	if (stateptr)
 		state = *stateptr;
@@ -59,6 +61,7 @@ strip_html_tags (GByteArray *src, int *stateptr)
 				}
 				if (state == 0) {
 					lc = '<';
+					tbegin = p + 1;
 					state = 1;
 				} else if (state == 1) {
 					depth++;
@@ -101,7 +104,9 @@ strip_html_tags (GByteArray *src, int *stateptr)
 					case 1: /* HTML/XML */
 						lc = '>';
 						in_q = state = 0;
-						
+						*p = '\0';
+						add_html_node (pool, part, tbegin, &level_ptr);
+						*p = '>';
 						break;
 						
 					case 2: /* PHP */
@@ -220,9 +225,15 @@ reg_char:
 		*rp = '\0';
 		g_byte_array_set_size (buf, rp - buf->data);
 	}
+	
+	/* Check tag balancing */
+	if (level_ptr && level_ptr->data != NULL) {
+			part->is_balanced = FALSE;
+	}
 
-	if (stateptr)
+	if (stateptr) {
 		*stateptr = state;
+	}
 
 	return buf;
 }
@@ -287,8 +298,10 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
-		text_part->content = strip_html_tags (part_content, NULL);
 		text_part->is_html = TRUE;
+		text_part->is_balanced = TRUE;
+		text_part->html_nodes = NULL;
+		text_part->content = strip_html_tags (task->task_pool, text_part, part_content, NULL);
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)free_byte_array_callback, text_part->content);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
@@ -591,10 +604,12 @@ process_learn (struct controller_session *session)
 	return 0;
 }
 
+/*
+ * XXX: remove this function for learning
+ */
 GByteArray* 
 get_next_text_part (memory_pool_t *pool, GList *parts, GList **cur)
 {
-	GByteArray *ret = NULL;
 	struct mime_part *p;
 
 	if (*cur == NULL) {
@@ -611,6 +626,7 @@ get_next_text_part (memory_pool_t *pool, GList *parts, GList **cur)
 			msg_debug ("get_next_text_part: text/plain part");
 			return p->content;
 		}
+#if 0
 		else if (g_mime_content_type_is_type (p->type, "text", "html")) {
 			msg_debug ("get_next_text_part: try to strip html tags");
 			ret = strip_html_tags (p->content, NULL);
@@ -623,6 +639,7 @@ get_next_text_part (memory_pool_t *pool, GList *parts, GList **cur)
 			memory_pool_add_destructor (pool, (pool_destruct_func)free_byte_array_callback, ret);
 			return ret;
 		}
+#endif
 		*cur = g_list_next (*cur);
 	}
 	

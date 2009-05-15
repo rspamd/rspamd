@@ -17,8 +17,10 @@ struct mime_part {
 struct mime_text_part {
 	gboolean is_html;
 	gboolean is_raw;
+	gboolean is_balanced;
 	GByteArray *orig;
 	GByteArray *content;
+	GNode *html_nodes;
 	fuzzy_hash_t *fuzzy;
 };
 
