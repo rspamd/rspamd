@@ -80,6 +80,7 @@
 #define RCPT_HEADER "Rcpt"
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
+#define USER_HEADER "User"
 /*
  * Reply messages
  */
@@ -319,6 +320,15 @@ parse_header (struct worker_task *task, f_str_t *line)
 			}
 			else {
 				msg_info ("parse_header: wrong header: %s", headern);
+				return -1;
+			}
+			break;
+		case 'u':
+		case 'U':
+			if (strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
+				/* XXX: use this header somehow */
+			}
+			else {
 				return -1;
 			}
 			break;
