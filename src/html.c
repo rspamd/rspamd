@@ -231,7 +231,6 @@ check_balance (GNode *node, GNode **cur_level)
 		while (cur && cur->data) {
 			tmp = cur->data;
 			if (tmp->tag->id == arg->tag->id && (tmp->flags & FL_CLOSED) == 0) {
-				msg_debug ("check_balance: found closing tag for parent '%s'", tmp->tag->name);
 				tmp->flags |= FL_CLOSED;
 				/* Destroy current node as we find corresponding parent node */
 				g_node_destroy (node);
@@ -246,7 +245,6 @@ check_balance (GNode *node, GNode **cur_level)
 		return TRUE;
 	}
 	
-	msg_debug ("check_balance: found unbalanced tag %s", arg->tag->name);
 	return FALSE;
 }
 
@@ -302,11 +300,7 @@ add_html_node (memory_pool_t *pool, struct mime_text_part *part, char *tag_text,
 		else {
 			g_node_append (*cur_level, new);
 			if ((data->flags & FL_CLOSED) == 0) {
-				msg_debug ("add_html_node: append opening tag: '%s'", data->tag->name);
 				*cur_level = new;
-			}
-			else {
-				msg_debug ("add_html_node: append closed tag: '%s'", data->tag->name);
 			}
 		}
 	}
