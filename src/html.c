@@ -230,7 +230,7 @@ check_balance (GNode *node, GNode **cur_level)
 		cur = node->parent;
 		while (cur && cur->data) {
 			tmp = cur->data;
-			if (tmp->tag->id == arg->tag->id && (tmp->flags & FL_CLOSED) == 0) {
+			if ((tmp->tag && arg->tag) && tmp->tag->id == arg->tag->id && (tmp->flags & FL_CLOSED) == 0) {
 				tmp->flags |= FL_CLOSED;
 				/* Destroy current node as we find corresponding parent node */
 				g_node_destroy (node);
