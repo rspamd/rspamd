@@ -28,6 +28,15 @@ typedef void (*pool_destruct_func)(void *ptr);
 typedef long int memory_pool_ssize_t;
 
 /**
+ * Pool mutex structure
+ */
+typedef struct memory_pool_mutex_s {
+	gint lock;
+	pid_t owner;
+	guint spin;
+} memory_pool_mutex_t;
+
+/**
  * Pool page structure
  */
 struct _pool_chain {
@@ -44,7 +53,7 @@ struct _pool_chain_shared {
 	u_char *begin;
 	u_char *pos;
 	memory_pool_ssize_t len;
-	gint lock;
+	memory_pool_mutex_t *lock;
 	struct _pool_chain_shared *next;
 };
 
@@ -84,8 +93,8 @@ typedef struct memory_pool_stat_s {
  * Rwlock for locking shared memory regions
  */
 typedef struct memory_pool_rwlock_s {
-	gint *__r_lock;							/**< read mutex (private)								*/
-	gint *__w_lock;							/**< write mutex (private)								*/
+	memory_pool_mutex_t *__r_lock;							/**< read mutex (private)								*/
+	memory_pool_mutex_t *__w_lock;							/**< write mutex (private)								*/
 } memory_pool_rwlock_t;
 
 /**
@@ -169,19 +178,19 @@ void memory_pool_delete (memory_pool_t *pool);
  * @param pool memory pool object
  * @return mutex object
  */
-gint* memory_pool_get_mutex (memory_pool_t *pool);
+memory_pool_mutex_t* memory_pool_get_mutex (memory_pool_t *pool);
 
 /**
  * Lock mutex
  * @param mutex mutex to lock
  */
-void memory_pool_lock_mutex (gint *mutex);
+void memory_pool_lock_mutex (memory_pool_mutex_t *mutex);
 
 /**
  * Unlock mutex
  * @param mutex mutex to unlock
  */
-void memory_pool_unlock_mutex (gint *mutex);
+void memory_pool_unlock_mutex (memory_pool_mutex_t *mutex);
 
 /**
  * Create new rwlock and place it in shared memory

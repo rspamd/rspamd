@@ -28,6 +28,7 @@
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L
+#define MUTEX_SPIN_COUNT 100
 
 #ifdef _THREAD_SAFE
 pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -323,31 +324,48 @@ memory_pool_find_pool (memory_pool_t *pool, void *pointer)
 	return NULL;
 }
 
-static inline void
-__mutex_spin (gint *mutex)
+static inline int
+__mutex_spin (memory_pool_mutex_t *mutex)
 {
-		/* lock was aqquired */
+	/* check spin count */
+	if (g_atomic_int_dec_and_test (&mutex->spin)) {
+		/* This may be deadlock, so check owner of this lock */
+		if (mutex->owner == getpid ()) {
+			/* This mutex was locked by calling process, so it is just double lock and we can easily unlock it */
+			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
+			return 0;
+		}
+		else if (kill (0, mutex->owner) == -1) {
+			/* Owner process was not found, so release lock */
+			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
+			return 0;
+		}
+		/* Spin again */
+		g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
+	}
 #ifdef HAVE_NANOSLEEP
-		struct timespec ts;
-		ts.tv_sec = 0;
-		ts.tv_nsec = MUTEX_SLEEP_TIME;
-		/* Spin */
-		while (nanosleep (&ts, &ts) == -1 && errno == EINTR);
+	struct timespec ts;
+	ts.tv_sec = 0;
+	ts.tv_nsec = MUTEX_SLEEP_TIME;
+	/* Spin */
+	while (nanosleep (&ts, &ts) == -1 && errno == EINTR);
 #endif
 #ifdef HAVE_SCHED_YIELD
-		(void)sched_yield ();
+	(void)sched_yield ();
 #endif
 #if !defined(HAVE_NANOSLEEP) && !defined(HAVE_SCHED_YIELD)
 #	error No methods to spin are defined
 #endif
-
+	return 1;
 }
 
 static void
-memory_pool_mutex_spin (gint *mutex)
+memory_pool_mutex_spin (memory_pool_mutex_t *mutex)
 {
-	while (!g_atomic_int_compare_and_exchange (mutex, 0, 1)) {
-		__mutex_spin (mutex);
+	while (!g_atomic_int_compare_and_exchange (&mutex->lock, 0, 1)) {
+		if (!__mutex_spin (mutex)) {
+			return;
+		}
 	}
 }
 
@@ -362,7 +380,7 @@ memory_pool_lock_shared (memory_pool_t *pool, void *pointer)
 		return;
 	}
 	
-	memory_pool_mutex_spin (&chain->lock);
+	memory_pool_lock_mutex (chain->lock);
 }
 
 void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer)
@@ -374,7 +392,7 @@ void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer)
 		return;
 	}
 	
-	(void)g_atomic_int_dec_and_test (&chain->lock);
+	memory_pool_unlock_mutex (chain->lock);
 }
 
 void
@@ -464,29 +482,32 @@ memory_pool_get_size ()
 #endif
 }
 
-gint* 
+memory_pool_mutex_t* 
 memory_pool_get_mutex (memory_pool_t *pool)
 {
-	gint *res;
+	memory_pool_mutex_t *res;
 	if (pool != NULL) {
-		res = memory_pool_alloc_shared (pool, sizeof (gint));
-		/* Initialize unlocked */
-		*res = 0;
+		res = memory_pool_alloc_shared (pool, sizeof (memory_pool_mutex_t));
+		res->lock = 0;
+		res->owner = 0;
+		res->spin = MUTEX_SPIN_COUNT;
 		return res;
 	}
 	return NULL;
 }
 
 void 
-memory_pool_lock_mutex (gint *mutex)
+memory_pool_lock_mutex (memory_pool_mutex_t *mutex)
 {
 	memory_pool_mutex_spin (mutex);
+	mutex->owner = getpid ();
 }
 
 void 
-memory_pool_unlock_mutex (gint *mutex)
+memory_pool_unlock_mutex (memory_pool_mutex_t *mutex)
 {
-	(void)g_atomic_int_dec_and_test (mutex);
+	mutex->owner = 0;
+	(void)g_atomic_int_dec_and_test (&mutex->lock);
 }
 
 memory_pool_rwlock_t* 
@@ -505,21 +526,24 @@ void
 memory_pool_rlock_rwlock (memory_pool_rwlock_t *lock)
 {
 	/* Spin on write lock */
-	while (g_atomic_int_get (lock->__w_lock)) {
-		__mutex_spin (lock->__w_lock);
+	while (g_atomic_int_get (&lock->__w_lock->lock)) {
+		if (!__mutex_spin (lock->__w_lock)) {
+			break;
+		}
 	}
 	
-	g_atomic_int_inc (lock->__r_lock);
+	g_atomic_int_inc (&lock->__r_lock->lock);
+	lock->__r_lock->owner = getpid ();
 }
 
 void 
 memory_pool_wlock_rwlock (memory_pool_rwlock_t *lock)
 {
 	/* Spin on write lock first */
-	memory_pool_mutex_spin (lock->__w_lock);
+	memory_pool_lock_mutex (lock->__w_lock);
 	/* Now we have write lock set up */
 	/* Wait all readers */
-	while (g_atomic_int_get (lock->__r_lock)) {
+	while (g_atomic_int_get (&lock->__r_lock->lock)) {
 		__mutex_spin (lock->__r_lock);
 	}
 }
@@ -527,13 +551,13 @@ memory_pool_wlock_rwlock (memory_pool_rwlock_t *lock)
 void 
 memory_pool_runlock_rwlock (memory_pool_rwlock_t *lock)
 {
-	(void)g_atomic_int_dec_and_test (lock->__r_lock);
+	memory_pool_unlock_mutex (lock->__r_lock);
 }
 
 void 
 memory_pool_wunlock_rwlock (memory_pool_rwlock_t *lock)
 {
-	(void)g_atomic_int_dec_and_test (lock->__w_lock);
+	memory_pool_unlock_mutex (lock->__w_lock);
 }
 
 /*

@@ -67,7 +67,7 @@ typedef struct stat_file_s {
 	time_t open_time;						/**< time when file was opened			*/
 	time_t access_time;						/**< last access time					*/
 	size_t len;								/**< length of file(in bytes)			*/
-	gint *lock;								/**< mutex								*/
+	memory_pool_mutex_t *lock;				/**< mutex								*/
 } stat_file_t;
 
 /**
