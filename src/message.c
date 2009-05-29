@@ -294,7 +294,6 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 
 	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
 		msg_debug ("mime_foreach_callback: got urls from text/html part");
-		url_parse_text (task, part_content, TRUE);
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
@@ -302,6 +301,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
 		text_part->content = strip_html_tags (task->task_pool, text_part, part_content, NULL);
+		url_parse_text (task, text_part->orig, (text_part->html_nodes != NULL));
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)free_byte_array_callback, text_part->content);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
