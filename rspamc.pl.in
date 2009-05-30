@@ -8,6 +8,7 @@
 # By default rspamc.pl would read ./rspamd.conf and default command is SYMBOLS
 
 use Socket qw(:DEFAULT :crlf);
+use Getopt::Std;
 
 my %cfg = (
     'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
@@ -20,10 +21,19 @@ my %cfg = (
     'statfile'  =>  '',
 );
 
+$main::VERSION = '@RSPAMD_VERSION@';
 
-sub usage {
-    return "Usage: rspamc.pl [-c conf_file] [-s statfile] [command]";
-}
+sub HELP_MESSAGE {
+    print <<EOD;
+Usage: rspamc.pl [-h host] [-p port] [-P] [-c conf_file] [-s statfile] [command]
+-h         host to connect or unix socket path
+-p         port to connect (not used with unix sockets)
+-P         ask for control password
+-c         config file to parse
+-s         statfile to use for learn commands
+Version:   @RSPAMD_VERSION@
+EOD
+};
 
 # Load rspamd config params
 sub parse_config {
@@ -187,44 +197,61 @@ sub do_control_command {
     }
 }
 
-while (my $param = shift) {
-    if ($param eq '-c') {
-        my $value = shift;
-        if ($value) {
-            if (-r $value) {
-                $cfg{'conf_file'} = $value;
-            }
-            else {
-                die "config file $value is not readable";
-            }
-        }
-        else {
-            die usage();
-        }
-    }
-    elsif ($param eq '-s') {
-        my $value = shift;
-        if ($value) {
-            $cfg{'statfile'} = $value;
-        }
-        else {
-            die usage();
-        }
-    }
-    elsif ($param =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT)/i) {
-        $cfg{'command'} = $1;
-        $cfg{'control'} = 0;
-    }
-    elsif ($param =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS)/i) {
-        $cfg{'command'} = $1;
-        $cfg{'control'} = 1;
-    }
-    else {
-        die usage();
-    }
+my %args;
+getopt('c:h:p:Ps:', \%args);
+my $cmd = shift;
+my $do_parse_config = 0;
+
+if (!defined ($cmd) || $cmd eq '') {
+    HELP_MESSAGE();
+    exit;
 }
 
-parse_config ($cfg{'control'});
+if (defined ($args{c})) {
+     if (-r $args{c}) {
+            $cfg{'conf_file'} = $args{c};
+            $do_parse_config = 1;
+     }
+     else {
+        die "config file $args{c} is not readable";
+     }
+
+}
+if (defined ($args{s})) {
+    if ($args{s}) {
+        $cfg{'statfile'} = $args{s};
+    }
+    else {
+        main::HELP_MESSAGE();
+        exit;
+    }
+}
+if (defined ($args{h})) {
+    $cfg{'host'} = $args{h};
+    if ($args{h} =~ /^\/.*$/) {
+        $cfg{'is_unix'} = 1;
+    }
+}
+if (defined ($args{p})) {
+    $cfg{'port'} = $args{p};
+}
+
+if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT)/i) {
+    $cfg{'command'} = $1;
+    $cfg{'control'} = 0;
+}
+elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS)/i) {
+    $cfg{'command'} = $1;
+    $cfg{'control'} = 1;
+}
+else {
+    die "unknown command $cmd";
+}
+
+if ($do_parse_config != 0) {
+    parse_config ($cfg{'control'});
+}
+
 my $sock = connect_socket ();
 
 if ($cfg{'control'}) {
