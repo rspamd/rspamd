@@ -301,7 +301,14 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
 		text_part->content = strip_html_tags (task->task_pool, text_part, part_content, NULL);
-		url_parse_text (task, text_part->orig, (text_part->html_nodes != NULL));
+
+		if (text_part->html_nodes == NULL) {
+			url_parse_text (task, text_part->orig, FALSE);
+		}
+		else {
+			url_parse_text (task, text_part->orig, TRUE);
+		}
+
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)free_byte_array_callback, text_part->content);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
