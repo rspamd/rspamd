@@ -369,10 +369,13 @@ show_url_header (struct worker_task *task)
 	int r = 0;
 	char outbuf[OUTBUFSIZ], c;
 	struct uri *url;
+	GList *cur;
 	f_str_t host;
 
 	r = snprintf (outbuf, sizeof (outbuf), "Urls: ");
-	TAILQ_FOREACH (url, &task->urls, next) {
+	cur = task->urls;
+	while (cur) {
+		url = cur->data;
 		host.begin = url->host;
 		host.len = url->hostlen;
 		/* Skip long hosts to avoid protocol coollisions */
@@ -386,7 +389,7 @@ show_url_header (struct worker_task *task)
 			r = 0;
 		}
 		/* Write url host to buf */
-		if (TAILQ_NEXT (url, next) != NULL) {
+		if (g_list_next (cur) != NULL) {
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
 			msg_debug ("show_url_header: write url: %s", host.begin);
@@ -400,6 +403,7 @@ show_url_header (struct worker_task *task)
 			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
 			*(host.begin + host.len) = c;
 		}
+		cur = g_list_next (cur);
 	}
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
 }

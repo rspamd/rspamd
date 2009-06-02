@@ -200,7 +200,7 @@ sub do_control_command {
 my %args;
 getopt('c:h:p:Ps:', \%args);
 my $cmd = shift;
-my $do_parse_config = 0;
+my $do_parse_config = 1;
 
 if (!defined ($cmd) || $cmd eq '') {
     HELP_MESSAGE();
@@ -230,6 +230,7 @@ if (defined ($args{h})) {
     $cfg{'host'} = $args{h};
     if ($args{h} =~ /^\/.*$/) {
         $cfg{'is_unix'} = 1;
+        $do_parse_config = 0;
     }
 }
 if (defined ($args{p})) {

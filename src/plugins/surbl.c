@@ -28,6 +28,7 @@
 
 #include "../config.h"
 #include "../util.h"
+#include "../message.h"
 #include <evdns.h>
 
 #include "surbl.h"
@@ -647,29 +648,53 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
 	event_add (&param->ev, &timeout);
 }
 
+static gboolean
+tree_url_callback (gpointer key, gpointer value, void *data)
+{
+	struct redirector_param *param = data;
+	struct uri *url = value;
+
+	msg_debug ("surbl_test_url: check url %s", struri (url));
+	if (surbl_module_ctx->use_redirector) {
+		register_redirector_call (url, param->task, param->tree);
+		param->task->save.saved++;
+	}
+	else {
+		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
+			register_memcached_call (url, param->task, param->tree);
+			param->task->save.saved++;
+		}
+		else {
+			make_surbl_requests (url, param->task, param->tree);
+		}
+	}
+
+	return FALSE;
+}
+
 static int 
 surbl_test_url (struct worker_task *task)
 {
-	struct uri *url;
 	GTree *url_tree;
+	GList *cur;
+	struct mime_text_part *part;
+	struct redirector_param param;
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
+	
+	param.tree = url_tree;
+	param.task = task;
+	cur = task->text_parts;
+	while (cur) {
+		part = cur->data;
+		if (part->urls) {
+			g_tree_foreach (part->urls, tree_url_callback, &param); 
+		}
+		if (part->html_urls) {
+			g_tree_foreach (part->html_urls, tree_url_callback, &param); 
+		}
 
-	TAILQ_FOREACH (url, &task->urls, next) {
-		msg_debug ("surbl_test_url: check url %s", struri (url));
-		if (surbl_module_ctx->use_redirector) {
-			register_redirector_call (url, task, url_tree);
-			task->save.saved++;
-		}
-		else {
-			if (task->worker->srv->cfg->memcached_servers_num > 0) {
-				register_memcached_call (url, task, url_tree);
-				task->save.saved++;
-			}
-			else {
-				make_surbl_requests (url, task, url_tree);
-			}
-		}
+		cur = g_list_next (cur);
 	}
 
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, url_tree);

@@ -122,6 +122,7 @@ tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **tree)
 	token_node_t *new = NULL;
 	f_str_t url_domain;
 	struct uri *url;
+	GList *cur;
 	uint32_t h;
 
 	if (*tree == NULL) {
@@ -129,7 +130,9 @@ tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **tree)
 		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
 	}
 	
-	TAILQ_FOREACH (url, &task->urls, next) {
+	cur = task->urls;
+	while (cur) {
+		url = cur->data;
 		url_domain.begin = url->host;
 		url_domain.len = url->hostlen;
 		new = memory_pool_alloc (pool, sizeof (token_node_t));
@@ -139,6 +142,7 @@ tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **tree)
 		if (g_tree_lookup (*tree, new) == NULL) {
 			g_tree_insert (*tree, new, new);
 		}
+		cur = g_list_next (cur);
 	}
 
 	return TRUE;

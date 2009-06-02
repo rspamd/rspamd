@@ -23,10 +23,11 @@
  */
 
 #include "config.h"
+#include "url.h"
 #include "util.h"
 #include "fstring.h"
 #include "main.h"
-#include "url.h"
+#include "message.h"
 
 #define POST_CHAR 1
 #define POST_CHAR_S "\001"
@@ -853,7 +854,7 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 }
 
 void 
-url_parse_text (struct worker_task *task, GByteArray *content, gboolean is_html)
+url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
 	GMatchInfo *info;
 	GError *err = NULL;
@@ -861,26 +862,32 @@ url_parse_text (struct worker_task *task, GByteArray *content, gboolean is_html)
 	char *url_str = NULL;
 	struct uri *new;
 	
-	if (!content->data || content->len == 0) {
+	if (!part->orig->data || part->orig->len == 0) {
 		msg_warn ("url_parse_text: got empty text part");
 		return;
 	}
 
 	if (url_init () == 0) {
-		rc = g_regex_match_full (is_html ? html_re : text_re, (const char *)content->data, content->len, 0, 0, &info, &err);
+		if (is_html) {
+			rc = g_regex_match_full (html_re, (const char *)part->orig->data, part->orig->len, 0, 0, &info, &err);
+		}
+		else {
+			rc = g_regex_match_full (text_re, (const char *)part->content->data, part->content->len, 0, 0, &info, &err);
+		
+		}
 		if (rc) {
 			while (g_match_info_matches (info)) {
 				url_str = g_match_info_fetch (info, is_html ? 1 : 0);
 				msg_debug ("url_parse_text: extracted string with regexp: '%s', html is %s", url_str, is_html ? "on" : "off");
 				if (url_str != NULL) {
-					new = memory_pool_alloc (task->task_pool, sizeof (struct uri));
-					if (new != NULL) {
-						rc = parse_uri (new, url_str, task->task_pool);
-						if (rc != URI_ERRNO_OK) {
-							msg_debug ("url_parse_text: error while parsing url %s: %s", url_str, url_strerror (rc));
-						}
-						if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
-							TAILQ_INSERT_TAIL (&task->urls, new, next);
+					if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
+						new = memory_pool_alloc (pool, sizeof (struct uri));
+						if (new != NULL) {
+							rc = parse_uri (new, url_str, pool);
+							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
+								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
+								task->urls = g_list_prepend (task->urls, new);
+							}
 						}
 					}
 				}

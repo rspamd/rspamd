@@ -21,6 +21,8 @@ struct mime_text_part {
 	GByteArray *orig;
 	GByteArray *content;
 	GNode *html_nodes;
+	GTree *urls;
+	GTree *html_urls;
 	fuzzy_hash_t *fuzzy;
 };
 

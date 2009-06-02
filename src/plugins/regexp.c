@@ -237,6 +237,28 @@ find_raw_header_pos (const char *headers, const char *headerv)
 	return NULL;
 }
 
+struct url_regexp_param {
+	struct worker_task *task;
+	GRegex *regexp;
+	struct rspamd_regexp *re;
+	gboolean found;
+};
+
+static gboolean
+tree_url_callback (gpointer key, gpointer value, void *data)
+{
+	struct url_regexp_param *param = data;
+	struct uri *url = value;
+
+	if (g_regex_match (param->regexp, struri (url), 0, NULL) == TRUE) {
+		task_cache_add (param->task, param->re, 1);
+		param->found = TRUE;
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static gsize
 process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
@@ -244,7 +266,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	struct mime_text_part *part, *tmp;
 	GList *cur, *headerlist;
 	GRegex *regexp;
-	struct uri *url;
+	struct url_regexp_param callback_param;
 	int r;
 	
 
@@ -333,13 +355,30 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			return 0;
 		case REGEXP_URL:
 			msg_debug ("process_regexp: checking url regexp: /%s/", re->regexp_text);
-			TAILQ_FOREACH (url, &task->urls, next) {
-				if (g_regex_match (re->regexp, struri (url), 0, NULL) == TRUE) {
-					task_cache_add (task, re, 1);
-					return 1;
+			cur = g_list_first (task->text_parts);
+			while (cur) {
+				part = (struct mime_text_part *)cur->data;
+				if (part->is_raw) {
+					regexp = re->raw_regexp;
 				}
+				else {
+					regexp = re->regexp;
+				}
+				callback_param.task = task;
+				callback_param.regexp = regexp;
+				callback_param.re = re;
+				callback_param.found = FALSE;
+				if (part->urls) {
+					g_tree_foreach (part->urls, tree_url_callback, &callback_param);
+				}
+				if (part->html_urls && callback_param.found == FALSE) {
+					g_tree_foreach (part->html_urls, tree_url_callback, &callback_param);
+				}
+				cur = g_list_next (cur);
 			}
-			task_cache_add (task, re, 0);
+			if (callback_param.found == FALSE) {
+				task_cache_add (task, re, 0);
+			}
 			return 0;
 		case REGEXP_RAW_HEADER:
 			msg_debug ("process_regexp: checking for raw header: %s with regexp: /%s/", re->header, re->regexp_text);

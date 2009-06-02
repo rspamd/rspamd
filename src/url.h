@@ -6,6 +6,7 @@
 #include "mem_pool.h"
 
 struct worker_task;
+struct mime_text_part;
 
 struct uri {
 	/* The start of the uri (and thus start of the protocol string). */
@@ -73,7 +74,7 @@ enum protocol {
 
 #define struri(uri) ((uri)->string)
 
-void url_parse_text (struct worker_task *task, GByteArray *part, gboolean is_html);
+void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
 enum uri_errno parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool);
 
 #endif

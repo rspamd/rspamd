@@ -109,6 +109,9 @@ free_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 		else {
 			rspamd_remove_dispatcher (lmtp->task->dispatcher);
 		}
+		if (lmtp->task->urls) {
+			g_list_free (lmtp->task->urls);
+		}
 		close (lmtp->task->sock);
 		g_free (lmtp->task);
 		g_free (lmtp);
@@ -230,7 +233,6 @@ accept_socket (int fd, short what, void *arg)
 	new_task->state = READ_COMMAND;
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
-	TAILQ_INIT (&new_task->urls);
 	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)rcpt_destruct, new_task);

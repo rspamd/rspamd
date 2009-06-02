@@ -301,28 +301,36 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
 		text_part->content = strip_html_tags (task->task_pool, text_part, part_content, NULL);
+		text_part->html_urls = g_tree_new ( (GCompareFunc)g_ascii_strcasecmp);
+		text_part->urls = g_tree_new ( (GCompareFunc)g_ascii_strcasecmp);
 
 		if (text_part->html_nodes == NULL) {
-			url_parse_text (task, text_part->orig, FALSE);
+			url_parse_text (task->task_pool, task, text_part, FALSE);
 		}
 		else {
-			url_parse_text (task, text_part->orig, TRUE);
+			url_parse_text (task->task_pool, task, text_part, FALSE);
+			url_parse_text (task->task_pool, task, text_part, TRUE);
 		}
 
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)free_byte_array_callback, text_part->content);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, text_part->html_urls);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, text_part->urls);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	} 
 	else if (g_mime_content_type_is_type (type, "text", "plain")) {
 		msg_debug ("mime_foreach_callback: got urls from text/plain part");
-		url_parse_text (task, part_content, FALSE);
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->content = text_part->orig;
 		text_part->is_html = FALSE;
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
+		text_part->html_urls = NULL;
+		text_part->urls = g_tree_new ( (GCompareFunc)g_ascii_strcasecmp);
+		url_parse_text (task->task_pool, task, text_part, FALSE);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, text_part->urls);
 	}
 }
 
@@ -489,8 +497,10 @@ process_message (struct worker_task *task)
 	if (task->rcpts) {
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)internet_address_list_destroy, task->rcpts);
 	}
-
-	task->worker->srv->stat->messages_scanned ++;
+	
+	if (task->worker) {
+		task->worker->srv->stat->messages_scanned ++;
+	}
 
 	/* free the parser (and the stream) */
 	g_object_unref (parser);

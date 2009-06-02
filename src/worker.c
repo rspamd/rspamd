@@ -130,6 +130,9 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->text_parts) {
 			g_list_free (task->text_parts);
 		}
+		if (task->urls) {
+			g_list_free (task->urls);
+		}
 		memory_pool_delete (task->task_pool);
 		if (is_soft) {
 			/* Plan dispatcher shutdown */
@@ -287,7 +290,6 @@ accept_socket (int fd, short what, void *arg)
 #endif
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;
-	TAILQ_INIT (&new_task->urls);
 	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)rcpt_destruct, new_task);

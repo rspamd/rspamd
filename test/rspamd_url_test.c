@@ -70,51 +70,5 @@ const char *test_html = "<some_tag>This is test file with <a href=\"http://micro
 void
 rspamd_url_test_func ()
 {
-	GByteArray *text, *html;
-	struct worker_task task;
-	struct uri *url;
-	int i = 0;
-
-	text = g_byte_array_new();
-	text->data = (gchar *)test_text;
-	text->len = strlen (test_text);
-	html = g_byte_array_new();
-	html->data = (gchar *)test_html;
-	html->len = strlen (test_html);
-	bzero (&task, sizeof (task));
-	TAILQ_INIT (&task.urls);
-	task.task_pool = memory_pool_new (8192);
-	
-	g_test_timer_start ();
-	g_test_message ("Testing text URL regexp parser");
-	url_parse_text (&task, text, FALSE);
-
-	TAILQ_FOREACH (url, &task.urls, next) {
-		msg_debug ("Found url: %s, hostname: %s, data: %s", struri (url), url->host, url->data);
-		i ++;
-	}
-
-	while (!TAILQ_EMPTY (&task.urls)) {
-		url = TAILQ_FIRST (&task.urls);
-		TAILQ_REMOVE (&task.urls, url, next);
-	}
-	/* g_assert (i == 39); */
-
-	msg_debug ("Time elapsed: %.2f", g_test_timer_elapsed ());
-	i = 0;
-	g_test_timer_start ();
-	g_test_message ("Testing html URL regexp parser");
-	url_parse_text (&task, html, TRUE);
-
-	TAILQ_FOREACH (url, &task.urls, next) {
-		msg_debug ("Found url: %s, hostname: %s, data: %s", struri (url), url->host, url->data);
-		i ++;
-	}
-
-	while (!TAILQ_EMPTY (&task.urls)) {
-		url = TAILQ_FIRST (&task.urls);
-		TAILQ_REMOVE (&task.urls, url, next);
-	}
-	g_assert (i == 1);
-	msg_debug ("Time elapsed: %.2f", g_test_timer_elapsed ());
+	/* XXX: maybe write test for this */
 }
