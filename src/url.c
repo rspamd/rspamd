@@ -65,7 +65,7 @@ static const char *text_url = "((https?|ftp)://)?"
 "(?<![\\s>?!),.'\"\\]:])"
 "(?!@)"
 ")";
-static const char *html_url = "(?: src|href)=\"("
+static const char *html_url = "(?: src|href)=\"?("
 "((https?|ftp)://)?"
 "(\\b(?<![.\\@A-Za-z0-9-])"	
 "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
@@ -81,7 +81,7 @@ static const char *html_url = "(?: src|href)=\"("
 "(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?" /* path (&query) */
 "(?<![\\s>?!),.'\"\\]:])"
 "(?!@)"
-"))\"";
+"))\"?";
 
 static short url_initialized = 0;
 GRegex *text_re, *html_re;
