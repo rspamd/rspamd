@@ -32,7 +32,7 @@ struct surbl_ctx {
 	GList *suffixes;
 	GList *bits;
 	char *metric;
-	GHashTable *hosters;
+	GHashTable *tld2;
 	GHashTable *whitelist;
 	unsigned use_redirector;
 	memory_pool_t *surbl_pool;
