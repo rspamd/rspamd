@@ -28,8 +28,19 @@
 #include "cfg_file.h"
 #include "main.h"
 
+/* Value in seconds after whitch we would try to do stat on list file */
+#define MON_TIMEOUT 10
+
 sig_atomic_t do_reopen_log = 0;
 extern rspamd_hash_t *counters;
+static char *hash_fill = "1";
+
+struct list_file {
+	char *filename;
+	struct stat st;
+};
+
+static GHashTable *listfiles = NULL;
 
 int
 make_socket_nonblocking (int fd)
@@ -837,6 +848,116 @@ set_counter (const char *name, long int value)
 
 		memory_pool_wunlock_rwlock (counters->lock);
 	}
+}
+
+gboolean
+parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
+{
+	int fd;
+	char buf[BUFSIZ], str[BUFSIZ], *s, *p;
+	ssize_t r;
+	enum {
+		READ_SYMBOL,
+		SKIP_COMMENT,
+	} state = READ_SYMBOL;
+
+	struct list_file *new_file;
+
+	if (listfiles == NULL) {
+		listfiles = g_hash_table_new (g_str_hash, g_str_equal);
+	}
+	
+	if ((fd = open (filename, O_RDONLY)) == -1) {
+		msg_warn ("parse_host_list: cannot open file '%s': %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	new_file = memory_pool_alloc (pool, sizeof (struct list_file));
+	new_file->filename = memory_pool_strdup (pool, filename);
+	fstat (fd, &new_file->st);
+	g_hash_table_insert (listfiles, new_file->filename, new_file);
+
+	s = str;
+
+	while ((r = read (fd, buf, sizeof (buf) - 1)) > 0) {
+		buf[r] = '\0';
+		p = buf;
+		while (*p) {
+			switch (state) {
+				case READ_SYMBOL:
+					if (*p == '#') {
+						if (s != str) {
+							*s = '\0';
+							s = memory_pool_strdup (pool, str);
+							g_hash_table_insert (tbl, s, hash_fill);
+							s = str;
+						}
+						state = SKIP_COMMENT;
+					}
+					else if (*p == '\r' || *p == '\n') {
+						if (s != str) {
+							*s = '\0';
+							s = memory_pool_strdup (pool, str);
+							g_hash_table_insert (tbl, s, hash_fill);
+							s = str;
+						}
+						while (*p == '\r' || *p == '\n') {
+							p ++;
+						}
+					}
+					else if (g_ascii_isspace (*p)) {
+						p ++;
+					}
+					else {
+						*s = *p;
+						s ++;
+						p ++;
+					}
+					break;
+				case SKIP_COMMENT:
+					if (*p == '\r' || *p == '\n') {
+						while (*p == '\r' || *p == '\n') {
+							p ++;
+						}
+						s = str;
+						state = READ_SYMBOL;
+					}
+					else {
+						p ++;
+					}
+					break;
+			}
+		}
+	}
+
+	close (fd);
+
+	return TRUE;
+}
+
+gboolean
+maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename, time_t tv)
+{
+	struct list_file *lf;
+	struct stat cur_st;
+
+	if (listfiles == NULL || (lf = g_hash_table_lookup (listfiles, filename)) == NULL) {
+		/* Do not try to parse unknown files */
+		return FALSE;
+	}
+	
+	if (tv - lf->st.st_mtime > MON_TIMEOUT) {
+		/* Try to stat */
+		if (stat (lf->filename, &cur_st) != -1) {
+			if (cur_st.st_mtime > lf->st.st_mtime) {
+				g_hash_table_remove (listfiles, lf->filename);
+				g_hash_table_remove_all (tbl);
+				parse_host_list (pool, tbl, filename);
+			}
+		}
+	}
+
+	return TRUE;
 }
 
 /*

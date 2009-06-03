@@ -33,84 +33,11 @@
 
 #include "surbl.h"
 
-static char *hash_fill = "1";
 struct surbl_ctx *surbl_module_ctx;
 GRegex *extract_hoster_regexp, *extract_normal_regexp, *extract_numeric_regexp;
 
 static int surbl_test_url (struct worker_task *task);
 static void dns_callback (int result, char type, int count, int ttl, void *addresses, void *data);
-
-static void
-parse_host_list (GHashTable *tbl, const char *filename)
-{
-	int fd;
-	char buf[BUFSIZ], str[BUFSIZ], *s, *p;
-	ssize_t r;
-	enum {
-		READ_SYMBOL,
-		SKIP_COMMENT,
-	} state = READ_SYMBOL;
-
-	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_warn ("parse_host_list: cannot open file '%s': %s", filename, strerror (errno));
-		return;
-	}
-
-	s = str;
-
-	while ((r = read (fd, buf, sizeof (buf) - 1)) > 0) {
-		buf[r] = '\0';
-		p = buf;
-		while (*p) {
-			switch (state) {
-				case READ_SYMBOL:
-					if (*p == '#') {
-						if (s != str) {
-							*s = '\0';
-							s = memory_pool_strdup (surbl_module_ctx->surbl_pool, str);
-							g_hash_table_insert (tbl, s, hash_fill);
-							s = str;
-						}
-						state = SKIP_COMMENT;
-					}
-					else if (*p == '\r' || *p == '\n') {
-						if (s != str) {
-							*s = '\0';
-							s = memory_pool_strdup (surbl_module_ctx->surbl_pool, str);
-							g_hash_table_insert (tbl, s, hash_fill);
-							s = str;
-						}
-						while (*p == '\r' || *p == '\n') {
-							p ++;
-						}
-					}
-					else if (g_ascii_isspace (*p)) {
-						p ++;
-					}
-					else {
-						*s = *p;
-						s ++;
-						p ++;
-					}
-					break;
-				case SKIP_COMMENT:
-					if (*p == '\r' || *p == '\n') {
-						while (*p == '\r' || *p == '\n') {
-							p ++;
-						}
-						s = str;
-						state = READ_SYMBOL;
-					}
-					else {
-						p ++;
-					}
-					break;
-			}
-		}
-	}
-
-	close (fd);
-}
 
 int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -128,6 +55,8 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->bits = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
 	
+	surbl_module_ctx->tld2_file = NULL;
+	surbl_module_ctx->whitelist_file = NULL;
 	surbl_module_ctx->tld2 = g_hash_table_new (g_str_hash, g_str_equal);
 	/* Register destructors */
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->tld2);
@@ -217,12 +146,16 @@ surbl_module_config (struct config_file *cfg)
 	}
 	if ((value = get_module_opt (cfg, "surbl", "2tld")) != NULL) {
 		if (g_ascii_strncasecmp (value, "file://", sizeof ("file://") - 1) == 0) {
-			parse_host_list (surbl_module_ctx->tld2, value + sizeof ("file://") - 1);
+			if (parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, value + sizeof ("file://") - 1)) {
+				surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
+			}
 		}
 	}
 	if ((value = get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
 		if (g_ascii_strncasecmp (value, "file://", sizeof ("file://") - 1) == 0) {
-			parse_host_list (surbl_module_ctx->whitelist, value + sizeof ("file://") - 1);
+			if (parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, value + sizeof ("file://") - 1)) {
+				surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
+			}
 		}
 	}
 	
@@ -723,6 +656,14 @@ surbl_test_url (struct worker_task *task)
 	GList *cur;
 	struct mime_text_part *part;
 	struct redirector_param param;
+
+	/* Try to check lists */
+	if (surbl_module_ctx->tld2_file) {
+		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, surbl_module_ctx->tld2_file, task->ts.tv_sec);
+	}
+	if (surbl_module_ctx->whitelist_file) {
+		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, surbl_module_ctx->whitelist_file, task->ts.tv_sec);
+	}
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
 	

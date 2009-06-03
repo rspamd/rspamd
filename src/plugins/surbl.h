@@ -32,6 +32,8 @@ struct surbl_ctx {
 	GList *suffixes;
 	GList *bits;
 	char *metric;
+	const char *tld2_file;
+	const char *whitelist_file;
 	GHashTable *tld2;
 	GHashTable *whitelist;
 	unsigned use_redirector;
