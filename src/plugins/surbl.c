@@ -33,8 +33,7 @@
 
 #include "surbl.h"
 
-struct surbl_ctx *surbl_module_ctx;
-GRegex *extract_hoster_regexp, *extract_normal_regexp, *extract_numeric_regexp;
+static struct surbl_ctx *surbl_module_ctx = NULL;
 
 static int surbl_test_url (struct worker_task *task);
 static void dns_callback (int result, char type, int count, int ttl, void *addresses, void *data);
@@ -68,9 +67,9 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->bits);
 		
 	/* Init matching regexps */
-	extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
-	extract_normal_regexp = g_regex_new ("([^.]+)\\.([^.]+)$", G_REGEX_RAW, 0, &err);
-	extract_numeric_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW, 0, &err);
+	surbl_module_ctx->extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
+	surbl_module_ctx->extract_normal_regexp = g_regex_new ("([^.]+)\\.([^.]+)$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
+	surbl_module_ctx->extract_numeric_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
@@ -221,7 +220,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
     len = hostname->len + strlen (suffix->suffix) + 2;
 
 	/* First try to match numeric expression */
-	if (g_regex_match_full (extract_numeric_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
+	if (g_regex_match_full (surbl_module_ctx->extract_numeric_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 		gchar *octet1, *octet2, *octet3, *octet4;
 		octet1 = g_match_info_fetch (info, 1);
 		octet2 = g_match_info_fetch (info, 2);
@@ -239,7 +238,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 	}
 	g_match_info_free (info);
 	/* Try to match normal domain */
-	if (g_regex_match_full (extract_normal_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
+	if (g_regex_match_full (surbl_module_ctx->extract_normal_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 		gchar *part1, *part2;
 		part1 = g_match_info_fetch (info, 1);
 		part2 = g_match_info_fetch (info, 2);
@@ -251,7 +250,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 			g_free (part1);
 			g_free (part2);
 			g_match_info_free (info);
-			if (g_regex_match_full (extract_hoster_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
+			if (g_regex_match_full (surbl_module_ctx->extract_hoster_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 				gchar *hpart1, *hpart2, *hpart3;
 				hpart1 = g_match_info_fetch (info, 1);
 				hpart2 = g_match_info_fetch (info, 2);
@@ -658,12 +657,14 @@ surbl_test_url (struct worker_task *task)
 	struct redirector_param param;
 
 	/* Try to check lists */
+#if 0
 	if (surbl_module_ctx->tld2_file) {
 		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, surbl_module_ctx->tld2_file, task->ts.tv_sec);
 	}
 	if (surbl_module_ctx->whitelist_file) {
 		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, surbl_module_ctx->whitelist_file, task->ts.tv_sec);
 	}
+#endif
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
 	

@@ -38,6 +38,9 @@ struct surbl_ctx {
 	GHashTable *whitelist;
 	unsigned use_redirector;
 	memory_pool_t *surbl_pool;
+    GRegex *extract_hoster_regexp;
+	GRegex *extract_normal_regexp;
+	GRegex *extract_numeric_regexp;
 };
 
 struct suffix_item {
