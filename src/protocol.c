@@ -62,6 +62,11 @@
 #define MSG_CMD_PROCESS "process"
 
 /*
+ * Only extract urls from message
+ */
+#define MSG_CMD_URLS "urls"
+
+/*
  * spamassassin greeting:
  */
 #define SPAMC_GREETING "SPAMC"
@@ -170,6 +175,17 @@ parse_command (struct worker_task *task, f_str_t *line)
 			}
 			else if (strcasecmp (token + 1, MSG_CMD_REPORT_IFSPAM + 1) == 0) {
 				task->cmd = CMD_REPORT_IFSPAM;
+			}
+			else {
+				msg_debug ("parse_command: bad command: %s", token);
+				return -1;
+			}
+			break;
+		case 'u':
+		case 'U':
+			/* urls */
+			if (strcasecmp (token + 1, MSG_CMD_URLS + 1) == 0) {
+				task->cmd = CMD_URLS;
 			}
 			else {
 				msg_debug ("parse_command: bad command: %s", token);
@@ -419,7 +435,12 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	GList *cur;
 
 	if (s->options) {
-		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
+		if (task->cmd != CMD_URLS) {
+			r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
+		}
+		else {
+			r = snprintf (outbuf, OUTBUFSIZ, "Urls: ");
+		}
 		cur = s->options;
 		while (cur) {
 			if (g_list_next (cur)) {
@@ -436,7 +457,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 			outbuf[OUTBUFSIZ - 1] = '\n';
 		}
 	}
-	else {
+	else if (task->cmd != CMD_URLS) {
 		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
 	}
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
@@ -586,6 +607,42 @@ write_check_reply (struct worker_task *task)
 }
 
 static int
+write_urls_reply (struct worker_task *task)
+{
+	int r;
+	char outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
+	struct metric_result *metric_res;
+	struct metric_callback_data cd;
+
+	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
+
+	cd.task = task;
+	cd.log_buf = logbuf;
+	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "process_message: msg ok, id: <%s>, ", task->message_id);
+	cd.log_size = sizeof (logbuf);
+
+	/* Ignore metrics, just write report for 'default' metric */
+	metric_res = g_hash_table_lookup (task->results, "default");
+	if (metric_res == NULL) {
+		/* Implicit metric result */
+		show_metric_result (NULL, NULL, (void *)&cd);
+	}
+	else {
+		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, &cd);
+		/* Remove last , from log buf */
+		if (cd.log_buf[cd.log_offset - 1] == ',') {
+			cd.log_buf[--cd.log_offset] = '\0';
+		}
+	}
+	msg_info ("%s", logbuf);
+	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE);
+
+	return 0;
+}
+
+
+static int
 write_process_reply (struct worker_task *task)
 {
 	int r;
@@ -681,6 +738,9 @@ write_reply (struct worker_task *task)
 			case CMD_PING:
 				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
 				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+				break;
+			case CMD_URLS:
+				return write_urls_reply (task);
 				break;
 		}
 	}

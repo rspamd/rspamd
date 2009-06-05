@@ -237,7 +237,7 @@ if (defined ($args{p})) {
     $cfg{'port'} = $args{p};
 }
 
-if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT)/i) {
+if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 0;
 }

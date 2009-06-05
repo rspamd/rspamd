@@ -37,6 +37,7 @@ static struct surbl_ctx *surbl_module_ctx = NULL;
 
 static int surbl_test_url (struct worker_task *task);
 static void dns_callback (int result, char type, int count, int ttl, void *addresses, void *data);
+static void process_dns_results (struct worker_task *task, struct suffix_item *suffix, char *url, uint32_t addr);
 
 int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -311,9 +312,16 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 				*host_end = '\0';
 				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 				*host_end = '.';
-				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-				param->task->save.saved ++;
+				if (task->cmd == CMD_URLS) {
+					process_dns_results (task, suffix, param->host_resolve, 0);
+					/* Immideately break cycle */
+					break;
+				}
+				else {
+					msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+					evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+					param->task->save.saved ++;
+				}
 			}
 			else {
 				msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
@@ -334,6 +342,12 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 	GList *cur;
 	struct surbl_bit_item *bit;
 	int len, found = 0;
+	
+	if (task->cmd == CMD_URLS) {
+		insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1, 
+							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+		return;
+	}
 
 	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
 		cur = g_list_first (surbl_module_ctx->bits);
@@ -639,17 +653,23 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	struct uri *url = value;
 
 	msg_debug ("surbl_test_url: check url %s", struri (url));
-	if (surbl_module_ctx->use_redirector) {
-		register_redirector_call (url, param->task, param->tree);
-		param->task->save.saved++;
+
+	if (param->task->cmd == CMD_URLS) {
+		make_surbl_requests (url, param->task, param->tree);
 	}
 	else {
-		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
-			register_memcached_call (url, param->task, param->tree);
+		if (surbl_module_ctx->use_redirector) {
+			register_redirector_call (url, param->task, param->tree);
 			param->task->save.saved++;
 		}
 		else {
-			make_surbl_requests (url, param->task, param->tree);
+			if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
+				register_memcached_call (url, param->task, param->tree);
+				param->task->save.saved++;
+			}
+			else {
+				make_surbl_requests (url, param->task, param->tree);
+			}
 		}
 	}
 
