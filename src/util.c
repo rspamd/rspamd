@@ -952,7 +952,7 @@ maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filenam
 			if (cur_st.st_mtime > lf->st.st_mtime) {
 				g_hash_table_remove (listfiles, lf->filename);
 				g_hash_table_remove_all (tbl);
-				parse_host_list (pool, tbl, filename);
+				return parse_host_list (pool, tbl, filename);
 			}
 		}
 	}

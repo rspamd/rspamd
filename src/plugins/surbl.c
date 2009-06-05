@@ -52,7 +52,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
 	surbl_module_ctx->bits = NULL;
-	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
+	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
 	
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
@@ -63,6 +63,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->whitelist = g_hash_table_new (g_str_hash, g_str_equal);
 	/* Register destructors */
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->whitelist);
+	
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->suffixes);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->bits);
 		
@@ -249,7 +250,6 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 			/* Match additional part for hosters */
 			g_free (part1);
 			g_free (part2);
-			g_match_info_free (info);
 			if (g_regex_match_full (surbl_module_ctx->extract_hoster_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
 				gchar *hpart1, *hpart2, *hpart3;
 				hpart1 = g_match_info_fetch (info, 1);
@@ -657,14 +657,12 @@ surbl_test_url (struct worker_task *task)
 	struct redirector_param param;
 
 	/* Try to check lists */
-#if 0
 	if (surbl_module_ctx->tld2_file) {
 		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, surbl_module_ctx->tld2_file, task->ts.tv_sec);
 	}
 	if (surbl_module_ctx->whitelist_file) {
 		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, surbl_module_ctx->whitelist_file, task->ts.tv_sec);
 	}
-#endif
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
 	
