@@ -51,6 +51,7 @@ struct suffix_item {
 struct dns_param {
 	struct uri *url;
 	struct worker_task *task;
+	char *host_resolve;
 	struct suffix_item *suffix;
 };
 

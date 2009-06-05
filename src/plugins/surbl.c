@@ -212,13 +212,14 @@ surbl_module_reconfig (struct config_file *cfg)
 }
 
 static char *
-format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item *suffix) 
+format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item *suffix, char **host_end) 
 {
 	GMatchInfo *info;
 	char *result = NULL;
-    int len;
+    int len, slen, r;
     
-    len = hostname->len + strlen (suffix->suffix) + 2;
+	slen = strlen (suffix->suffix);
+    len = hostname->len + slen + 2;
 
 	/* First try to match numeric expression */
 	if (g_regex_match_full (surbl_module_ctx->extract_numeric_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
@@ -227,9 +228,10 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		octet2 = g_match_info_fetch (info, 2);
 		octet3 = g_match_info_fetch (info, 3);
 		octet4 = g_match_info_fetch (info, 4);
-		result = memory_pool_alloc (pool, len); 
+		result = memory_pool_alloc (pool, len);
 		msg_debug ("format_surbl_request: got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
-		snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, suffix->suffix);
+		r = snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, suffix->suffix);
+		*host_end = result + r - slen - 1;
 		g_free (octet1);
 		g_free (octet2);
 		g_free (octet3);
@@ -256,7 +258,8 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 				hpart2 = g_match_info_fetch (info, 2);
 				hpart3 = g_match_info_fetch (info, 3);
 				msg_debug ("format_surbl_request: got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
-				snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, suffix->suffix);
+				r = snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, suffix->suffix);
+				*host_end = result + r - slen - 1;
 				g_free (hpart1);
 				g_free (hpart2);
 				g_free (hpart3);
@@ -264,10 +267,12 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 				return result;
 			}
 			g_match_info_free (info);
+			*host_end = NULL;
 			return NULL;
 		}
 		else {
-			snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
+			r = snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
+			*host_end = result + r - slen - 1;
 			msg_debug ("format_surbl_request: got normal 2-d level domain %s.%s", part1, part2);
 		}
 		g_free (part1);
@@ -276,6 +281,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 	}
 
 	g_match_info_free (info);
+	*host_end = NULL;
 	return NULL;
 }
 
@@ -286,19 +292,25 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 	f_str_t f;
 	GList *cur;
 	struct dns_param *param;
+	struct suffix_item *suffix;
+	char *host_end;
 
 	cur = g_list_first (surbl_module_ctx->suffixes);
 	f.begin = url->host;
 	f.len = url->hostlen;
 
 	while (cur) {
-		param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
-		param->url = url;
-		param->task = task;
-		param->suffix = (struct suffix_item *)cur->data;
-		if ((surbl_req = format_surbl_request (task->task_pool, &f, (struct suffix_item *)cur->data)) != NULL) {
+		suffix = (struct suffix_item *)cur->data;
+		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, &host_end)) != NULL) {
 			if (g_tree_lookup (tree, surbl_req) == NULL) {
 				g_tree_insert (tree, surbl_req, surbl_req);
+				param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
+				param->url = url;
+				param->task = task;
+				param->suffix = suffix;
+				*host_end = '\0';
+				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
+				*host_end = '.';
 				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
 				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
 				param->task->save.saved ++;
@@ -358,22 +370,18 @@ static void
 dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
 	struct dns_param *param = (struct dns_param *)data;
-	char c;
 	
 	msg_debug ("dns_callback: in surbl request callback");
-	c = *(param->url->host + param->url->hostlen);
-	*(param->url->host + param->url->hostlen) = 0;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
-		msg_info ("surbl_check: <%s> url [%s] is in surbl %s", 
-					param->task->message_id, param->url->host, param->suffix->suffix);
-		process_dns_results (param->task, param->suffix, param->url->host, (uint32_t)(((in_addr_t *)addresses)[0]));
+		msg_info ("surbl_check: <%s> domain [%s] is in surbl %s", 
+					param->task->message_id, param->host_resolve, param->suffix->suffix);
+		process_dns_results (param->task, param->suffix, param->host_resolve, (uint32_t)(((in_addr_t *)addresses)[0]));
 	}
 	else {
-		msg_debug ("surbl_check: <%s> url [%s] is not in surbl %s", 
-					param->task->message_id, param->url->host, param->suffix->suffix);
+		msg_debug ("surbl_check: <%s> domain [%s] is not in surbl %s", 
+					param->task->message_id, param->host_resolve, param->suffix->suffix);
 	}
-	*(param->url->host + param->url->hostlen) = c;
 	
 	param->task->save.saved --;
 	if (param->task->save.saved == 0) {
