@@ -658,10 +658,10 @@ surbl_test_url (struct worker_task *task)
 
 	/* Try to check lists */
 	if (surbl_module_ctx->tld2_file) {
-		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, surbl_module_ctx->tld2_file, task->ts.tv_sec);
+		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, surbl_module_ctx->tld2_file);
 	}
 	if (surbl_module_ctx->whitelist_file) {
-		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, surbl_module_ctx->whitelist_file, task->ts.tv_sec);
+		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, surbl_module_ctx->whitelist_file);
 	}
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);

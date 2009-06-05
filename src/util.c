@@ -936,22 +936,24 @@ parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
 }
 
 gboolean
-maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename, time_t tv)
+maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
 {
 	struct list_file *lf;
 	struct stat cur_st;
+	time_t cur_time = time (NULL);
 
 	if (listfiles == NULL || (lf = g_hash_table_lookup (listfiles, filename)) == NULL) {
 		/* Do not try to parse unknown files */
 		return FALSE;
 	}
 	
-	if (tv - lf->st.st_mtime > MON_TIMEOUT) {
+	if (cur_time - lf->st.st_mtime > MON_TIMEOUT) {
 		/* Try to stat */
 		if (stat (lf->filename, &cur_st) != -1) {
 			if (cur_st.st_mtime > lf->st.st_mtime) {
 				g_hash_table_remove (listfiles, lf->filename);
 				g_hash_table_remove_all (tbl);
+				msg_info ("maybe_parse_host_list: file %s was modified and rereaded", filename);
 				return parse_host_list (pool, tbl, filename);
 			}
 		}

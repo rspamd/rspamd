@@ -60,7 +60,7 @@ const char* calculate_check_time (struct timespec *begin, int resolution);
 void set_counter (const char *name, long int value);
 
 gboolean parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename);
-gboolean maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename, time_t tv);
+gboolean maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename);
 
 
 #endif

@@ -254,7 +254,7 @@ accept_socket (int fd, short what, void *arg)
 	struct worker_task *new_task;
 	socklen_t addrlen = sizeof(ss);
 	int nfd;
-
+	
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
 		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
 		return;
