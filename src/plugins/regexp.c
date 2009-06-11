@@ -68,6 +68,7 @@ static struct regexp_ctx *regexp_module_ctx = NULL;
 
 static int regexp_common_filter (struct worker_task *task);
 static gboolean rspamd_regexp_match_number (struct worker_task *task, GList *args);
+static gboolean rspamd_raw_header_exists (struct worker_task *task, GList *args);
 
 int
 regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -84,6 +85,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 	register_expression_function ("regexp_match_number", rspamd_regexp_match_number);
+	register_expression_function ("raw_header_exists", rspamd_raw_header_exists);
 	
 	return 0;
 }
@@ -661,4 +663,25 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 	}
 
 	return res >= param_count;
+}
+
+static gboolean 
+rspamd_raw_header_exists (struct worker_task *task, GList *args)
+{
+	struct expression_argument *arg;
+
+	if (args == NULL || task == NULL) {
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
+		msg_warn ("rspamd_raw_header_exists: invalid argument to function is passed");
+		return FALSE;
+	}
+	if (find_raw_header_pos (task->raw_headers, (char *)arg->data) == NULL) {
+		return FALSE;
+	}
+
+	return TRUE;
 }
