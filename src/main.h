@@ -166,6 +166,7 @@ struct worker_task {
 	size_t content_length;										/**< length of user's input							*/
 	enum rspamd_protocol proto;									/**< protocol (rspamc or spamc)						*/
 	enum rspamd_command cmd;									/**< command										*/
+	struct custom_command *custom_cmd;							/**< custom command if any							*/	
 	int sock;													/**< socket descriptor								*/
 	char *helo;													/**< helo header value								*/
 	char *from;													/**< from header value								*/

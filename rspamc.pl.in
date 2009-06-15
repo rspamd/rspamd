@@ -203,8 +203,7 @@ my $cmd = shift;
 my $do_parse_config = 1;
 
 if (!defined ($cmd) || $cmd eq '') {
-    HELP_MESSAGE();
-    exit;
+    $cmd = 'SYMBOLS';
 }
 
 if (defined ($args{c})) {
@@ -237,7 +236,7 @@ if (defined ($args{p})) {
     $cfg{'port'} = $args{p};
 }
 
-if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS)/i) {
+if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 0;
 }

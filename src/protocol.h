@@ -13,6 +13,15 @@
 #define RSPAMD_PROTOCOL_ERROR 3
 #define RSPAMD_LENGTH_ERROR 4
 
+/*
+ * Reply messages
+ */
+#define RSPAMD_REPLY_BANNER "RSPAMD/1.0"
+#define SPAMD_REPLY_BANNER "SPAMD/1.1"
+#define SPAMD_OK "EX_OK"
+/* XXX: try to convert rspamd errors to spamd errors */
+#define SPAMD_ERROR "EX_ERROR"
+
 struct worker_task;
 
 enum rspamd_protocol {
@@ -29,6 +38,15 @@ enum rspamd_command {
 	CMD_PING,
 	CMD_PROCESS,
 	CMD_URLS,
+	CMD_OTHER,
+};
+
+
+typedef int (*protocol_reply_func)(struct worker_task *task);
+
+struct custom_command {
+	const char *name;
+	protocol_reply_func func;
 };
 
 /**
@@ -45,5 +63,13 @@ int read_rspamd_input_line (struct worker_task *task, f_str_t *line);
  * @return 0 if we wrote reply and -1 if there was some error
  */
 int write_reply (struct worker_task *task);
+
+
+/**
+ * Register custom fucntion to extend protocol
+ * @param name symbolic name of custom function
+ * @param func callback function for writing reply
+ */
+void register_protocol_command (const char *name, protocol_reply_func func);
 
 #endif

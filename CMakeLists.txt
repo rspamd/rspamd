@@ -7,7 +7,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 1)
-SET(RSPAMD_VERSION_PATCH 7)
+SET(RSPAMD_VERSION_PATCH 8)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
@@ -323,7 +323,8 @@ SET(CLASSIFIERSSRC src/classifiers/classifiers.c
 
 SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/regexp.c
-				src/plugins/chartable.c)
+				src/plugins/chartable.c
+				src/plugins/emails.c)
 
 SET(TESTSRC		test/rspamd_expression_test.c
 				test/rspamd_memcached_test.c

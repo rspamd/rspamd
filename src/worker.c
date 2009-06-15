@@ -180,6 +180,12 @@ read_socket (f_str_t *in, void *arg)
 				task->state = WRITE_ERROR;
 				write_socket (task);
             }
+			if (task->cmd == CMD_URLS || task->cmd == CMD_OTHER) {
+				/* Skip filters */
+				task->state = WRITE_REPLY;
+				write_socket (task);
+				return;
+			}
 			r = process_filters (task);
 			if (r == -1) {
 				task->last_error = "Filter processing error";

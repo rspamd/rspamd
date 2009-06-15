@@ -146,6 +146,12 @@ $subject_blah = "Subject=/blah/H";
 	threshold = "0.1";
 };
 
+.module 'emails' {
+    metric = "default";
+	symbold = "R_BAD_EMAIL";
+    blacklist = "file:///some/path/emails.lst";
+};
+
 # If enables threat each regexp as raw regex and do not try to convert
 # each text part to utf8 encoding. Save a lot of resources but less
 # portable.
@@ -154,4 +160,4 @@ raw_mode = yes;
 
 url_filters = "surbl";
 header_filters = "regexp";
-mime_filters = "chartable";
+mime_filters = "chartable,emails";

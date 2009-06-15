@@ -86,14 +86,8 @@
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 #define USER_HEADER "User"
-/*
- * Reply messages
- */
-#define RSPAMD_REPLY_BANNER "RSPAMD/1.0"
-#define SPAMD_REPLY_BANNER "SPAMD/1.1"
-#define SPAMD_OK "EX_OK"
-/* XXX: try to convert rspamd errors to spamd errors */
-#define SPAMD_ERROR "EX_ERROR"
+
+static GList *custom_commands = NULL;
 
 static char *
 separate_command (f_str_t *in, char c)
@@ -120,6 +114,8 @@ static int
 parse_command (struct worker_task *task, f_str_t *line)
 {
 	char *token;
+	struct custom_command *cmd;
+	GList *cur;
 
 	token = separate_command (line, ' ');
 	if (line == NULL || token == NULL) {
@@ -131,7 +127,7 @@ parse_command (struct worker_task *task, f_str_t *line)
 		case 'c':
 		case 'C':
 			/* check */
-			if (strcasecmp (token + 1, MSG_CMD_CHECK + 1) == 0) {
+			if (g_ascii_strcasecmp (token + 1, MSG_CMD_CHECK + 1) == 0) {
 				task->cmd = CMD_CHECK;	
 			}
 			else {
@@ -142,10 +138,10 @@ parse_command (struct worker_task *task, f_str_t *line)
 		case 's':
 		case 'S':
 			/* symbols, skip */
-			if (strcasecmp (token + 1, MSG_CMD_SYMBOLS + 1) == 0) {
+			if (g_ascii_strcasecmp (token + 1, MSG_CMD_SYMBOLS + 1) == 0) {
 				task->cmd = CMD_SYMBOLS;
 			}
-			else if (strcasecmp (token + 1, MSG_CMD_SKIP + 1) == 0) {
+			else if (g_ascii_strcasecmp (token + 1, MSG_CMD_SKIP + 1) == 0) {
 				task->cmd = CMD_SKIP;
 			}
 			else {
@@ -156,10 +152,10 @@ parse_command (struct worker_task *task, f_str_t *line)
 		case 'p':
 		case 'P':
 			/* ping, process */
-			if (strcasecmp (token + 1, MSG_CMD_PING + 1) == 0) {
+			if (g_ascii_strcasecmp (token + 1, MSG_CMD_PING + 1) == 0) {
 				task->cmd = CMD_PING;
 			}
-			else if (strcasecmp (token + 1, MSG_CMD_PROCESS + 1) == 0) {
+			else if (g_ascii_strcasecmp (token + 1, MSG_CMD_PROCESS + 1) == 0) {
 				task->cmd = CMD_PROCESS;
 			}
 			else {
@@ -170,10 +166,10 @@ parse_command (struct worker_task *task, f_str_t *line)
 		case 'r':
 		case 'R':
 			/* report, report_ifspam */
-			if (strcasecmp (token + 1, MSG_CMD_REPORT + 1) == 0) {
+			if (g_ascii_strcasecmp (token + 1, MSG_CMD_REPORT + 1) == 0) {
 				task->cmd = CMD_REPORT;
 			}
-			else if (strcasecmp (token + 1, MSG_CMD_REPORT_IFSPAM + 1) == 0) {
+			else if (g_ascii_strcasecmp (token + 1, MSG_CMD_REPORT_IFSPAM + 1) == 0) {
 				task->cmd = CMD_REPORT_IFSPAM;
 			}
 			else {
@@ -184,7 +180,7 @@ parse_command (struct worker_task *task, f_str_t *line)
 		case 'u':
 		case 'U':
 			/* urls */
-			if (strcasecmp (token + 1, MSG_CMD_URLS + 1) == 0) {
+			if (g_ascii_strcasecmp (token + 1, MSG_CMD_URLS + 1) == 0) {
 				task->cmd = CMD_URLS;
 			}
 			else {
@@ -193,8 +189,21 @@ parse_command (struct worker_task *task, f_str_t *line)
 			}
 			break;
 		default:
-			msg_debug ("parse_command: bad command: %s", token);
-			return -1;
+			cur = custom_commands;
+			while (cur) {
+				cmd = cur->data;
+				if (g_ascii_strcasecmp (token, cmd->name) == 0) {
+					task->cmd = CMD_OTHER;
+					task->custom_cmd = cmd;
+					break;
+				}
+			}
+
+			if (cur == NULL) {
+				msg_debug ("parse_command: bad command: %s", token);
+				return -1;
+			}
+			break;
 	}
 
 	if (strncasecmp (line->begin, RSPAMC_GREETING, sizeof (RSPAMC_GREETING) - 1) == 0) {
@@ -742,8 +751,22 @@ write_reply (struct worker_task *task)
 			case CMD_URLS:
 				return write_urls_reply (task);
 				break;
+			case CMD_OTHER:
+				return task->custom_cmd->func (task);
 		}
 	}
 
 	return 0;
+}
+
+void 
+register_protocol_command (const char *name, protocol_reply_func func)
+{
+	struct custom_command *cmd;
+
+	cmd = g_malloc (sizeof (struct custom_command));
+	cmd->name = name;
+	cmd->func = func;
+
+	custom_commands = g_list_prepend (custom_commands, cmd);
 }
