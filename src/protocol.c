@@ -619,33 +619,14 @@ static int
 write_urls_reply (struct worker_task *task)
 {
 	int r;
-	char outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
-	struct metric_result *metric_res;
-	struct metric_callback_data cd;
+	char outbuf[OUTBUFSIZ];
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
 
-	cd.task = task;
-	cd.log_buf = logbuf;
-	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "process_message: msg ok, id: <%s>, ", task->message_id);
-	cd.log_size = sizeof (logbuf);
+	show_url_header (task);
 
-	/* Ignore metrics, just write report for 'default' metric */
-	metric_res = g_hash_table_lookup (task->results, "default");
-	if (metric_res == NULL) {
-		/* Implicit metric result */
-		show_metric_result (NULL, NULL, (void *)&cd);
-	}
-	else {
-		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, &cd);
-		/* Remove last , from log buf */
-		if (cd.log_buf[cd.log_offset - 1] == ',') {
-			cd.log_buf[--cd.log_offset] = '\0';
-		}
-	}
-	msg_info ("%s", logbuf);
-	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE);
+	msg_info ("process_message: msg ok, id: <%s>, %d urls extracted", task->message_id, g_list_length (task->urls));
 
 	return 0;
 }
