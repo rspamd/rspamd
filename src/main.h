@@ -16,6 +16,7 @@
 #include "filter.h"
 #include "buffer.h"
 #include "hash.h"
+#include "util.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE CMAKE_PREFIX "/etc/rspamd.conf"
@@ -27,10 +28,10 @@
 #define WORKER_IO_TIMEOUT 60
 
 /* Logging in postfix style */
-#define msg_err g_critical
-#define msg_warn	g_warning
-#define msg_info	g_message
-#define msg_debug g_debug
+#define msg_err(args...)	rspamd_log_function(G_LOG_LEVEL_CRITICAL, ##args)
+#define msg_warn(args...)	rspamd_log_function(G_LOG_LEVEL_WARNING, ##args)
+#define msg_info(args...)	rspamd_log_function(G_LOG_LEVEL_INFO, ##args)
+#define msg_debug(args...)	rspamd_log_function(G_LOG_LEVEL_DEBUG, ##args)
 
 #ifdef CRLF
 #undef CRLF

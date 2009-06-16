@@ -40,7 +40,14 @@ struct list_file {
 	struct stat st;
 };
 
+struct logger_params {
+    GLogFunc log_func;
+    struct config_file *cfg;
+};
+
+
 static GHashTable *listfiles = NULL;
+static struct logger_params log_params;
 
 int
 make_socket_nonblocking (int fd)
@@ -662,12 +669,33 @@ close_log (struct config_file *cfg)
 
 }
 
+void
+rspamd_set_logger (GLogFunc func, struct config_file *cfg)
+{
+	log_params.log_func = func;
+	log_params.cfg = cfg;
+}
+
 int
 reopen_log (struct config_file *cfg)
 {
 	do_reopen_log = 0;
 	close_log (cfg);
 	return open_log (cfg);
+}
+
+void
+rspamd_log_function (GLogLevelFlags log_level, const char *fmt, ...)
+{
+	static char logbuf[BUFSIZ];
+	va_list vp;
+
+	if (log_level <= log_params.cfg->log_level) {
+		va_start (vp, fmt);
+		vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
+		va_end (vp);
+		log_params.log_func (NULL, log_level, logbuf, log_params.cfg);
+	}
 }
 
 void

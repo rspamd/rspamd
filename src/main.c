@@ -193,6 +193,7 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 			else {
 				rspamd->cfg->log_fd = 2;
 			}
+            rspamd_set_logger (file_log_function, rspamd->cfg);
 			g_log_set_default_handler (file_log_function, rspamd->cfg);
 			break;
 		case RSPAMD_LOG_FILE:
@@ -206,6 +207,7 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 				}
 			}
 			else {
+                rspamd_set_logger (file_log_function, rspamd->cfg);
 				g_log_set_default_handler (file_log_function, rspamd->cfg);
 			}
 			break;
@@ -220,6 +222,7 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 				}
 			}
 			else {
+                rspamd_set_logger (syslog_log_function, rspamd->cfg);
 				g_log_set_default_handler (syslog_log_function, rspamd->cfg);
 			}
 			break;
@@ -446,6 +449,7 @@ main (int argc, char **argv, char **env)
 
 	/* First set logger to console logger */
 	cfg->log_fd = STDERR_FILENO;
+	rspamd_set_logger (file_log_function, rspamd->cfg);
 	g_log_set_default_handler (file_log_function, cfg);
 
 #ifndef HAVE_SETPROCTITLE

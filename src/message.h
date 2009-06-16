@@ -9,6 +9,9 @@
 #include "config.h"
 #include "fuzzy.h"
 
+struct worker_task;
+struct controller_session;
+
 struct mime_part {
 	GMimeContentType *type;
 	GByteArray *content;

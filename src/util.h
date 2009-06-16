@@ -2,9 +2,11 @@
 #define RSPAMD_UTIL_H
 
 #include "config.h"
-#include "main.h"
+#include "mem_pool.h"
 
 struct config_file;
+struct rspamd_main;
+struct workq;
 
 /* Create socket and bind or connect it to specified address and port */
 int make_tcp_socket (struct in_addr *, u_short, gboolean is_server);
@@ -47,9 +49,11 @@ int pidfile_close(struct pidfh *pfh);
 int pidfile_remove(struct pidfh *pfh);
 #endif
 
+void rspamd_set_logger (GLogFunc func, struct config_file *cfg);
 int open_log (struct config_file *cfg);
 void close_log (struct config_file *cfg);
 int reopen_log (struct config_file *cfg);
+void rspamd_log_function (GLogLevelFlags log_level, const char *fmt, ...);
 void syslog_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
 void file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
 
