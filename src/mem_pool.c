@@ -59,8 +59,8 @@ pool_chain_new (memory_pool_ssize_t size)
 
 	g_assert (size > 0);
 
-	chain = g_malloc (sizeof (struct _pool_chain));
-	chain->begin = g_malloc (size);
+	chain = g_slice_alloc (sizeof (struct _pool_chain));
+	chain->begin = g_slice_alloc (size);
 	chain->len = size;
 	chain->pos = chain->begin;
 	chain->next = NULL;
@@ -137,7 +137,7 @@ memory_pool_new (memory_pool_ssize_t size)
 #endif
 	}
 
-	new = g_malloc (sizeof (memory_pool_t));
+	new = g_slice_alloc (sizeof (memory_pool_t));
 	new->cur_pool = pool_chain_new (size);
 	new->shared_pool = NULL;
 	new->first_pool = new->cur_pool;
@@ -438,8 +438,8 @@ memory_pool_delete (memory_pool_t *pool)
 	while (cur) {
 		tmp = cur;
 		cur = cur->next;
-		g_free (tmp->begin);
-		g_free (tmp);
+		g_slice_free1 (tmp->len, tmp->begin);
+		g_slice_free (struct _pool_chain, tmp);
 		STAT_LOCK ();
 		mem_pool_stat->chunks_freed ++;
 		STAT_UNLOCK ();
@@ -455,7 +455,7 @@ memory_pool_delete (memory_pool_t *pool)
 	}
 
 	mem_pool_stat->pools_freed ++;
-	g_free (pool);
+	g_slice_free (memory_pool_t, pool);
 }
 
 void
@@ -471,14 +471,15 @@ memory_pool_stat (memory_pool_stat_t *st)
 	st->oversized_chunks = mem_pool_stat->oversized_chunks;
 }
 
-#define FIXED_POOL_SIZE 4095
+/* By default allocate 8Kb chunks of memory */
+#define FIXED_POOL_SIZE 8192
 memory_pool_ssize_t
 memory_pool_get_size ()
 {
 #ifdef HAVE_GETPAGESIZE
-	return getpagesize () - 1;
+    return MAX (getpagesize (), FIXED_POOL_SIZE);
 #else
-	return FIXED_POOL_SIZE;
+	return MAX (sysconf (_SC_PAGESIZE), FIXED_POOL_SIZE);
 #endif
 }
 

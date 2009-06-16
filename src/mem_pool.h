@@ -42,7 +42,7 @@ typedef struct memory_pool_mutex_s {
 struct _pool_chain {
 	u_char *begin;					/**< begin of pool chain block 				*/
 	u_char *pos;					/**< current start of free space in block 	*/
-	memory_pool_ssize_t len;						/**< length of block 						*/
+	memory_pool_ssize_t len;		/**< length of block 						*/
 	struct _pool_chain *next;		/**< chain link 							*/
 };
 
