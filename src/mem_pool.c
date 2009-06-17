@@ -508,7 +508,7 @@ void
 memory_pool_unlock_mutex (memory_pool_mutex_t *mutex)
 {
 	mutex->owner = 0;
-	(void)g_atomic_int_dec_and_test (&mutex->lock);
+	(void)g_atomic_int_compare_and_exchange (&mutex->lock, 1, 0);
 }
 
 memory_pool_rwlock_t* 
