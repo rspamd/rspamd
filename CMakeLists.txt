@@ -34,6 +34,7 @@ OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckFunctionExists)
 INCLUDE(CheckSymbolExists)
+INCLUDE(CheckCSourceCompiles)
 INCLUDE(CheckLibraryExists)
 INCLUDE(FindPkgConfig)
 
@@ -228,6 +229,12 @@ CHECK_SYMBOL_EXISTS(MAP_ANON sys/mman.h HAVE_MMAP_ANON)
 CHECK_SYMBOL_EXISTS(_SC_NPROCESSORS_ONLN unistd.h HAVE_SC_NPROCESSORS_ONLN)
 CHECK_SYMBOL_EXISTS(CLOCK_PROCESS_CPUTIME_ID time.h HAVE_CLOCK_PROCESS_CPUTIME_ID)
 CHECK_SYMBOL_EXISTS(CLOCK_VIRTUAL time.h HAVE_CLOCK_VIRTUAL)
+
+CHECK_C_SOURCE_COMPILES ("#include <sys/types.h>
+                          int main (int argc, char **argv) {
+						  	__asm __volatile(\"pause\");
+							return 0;
+						  }" HAVE_ASM_PAUSE)
 
 IF(NOT HAVE_COMPATIBLE_QUEUE_H)
 	INCLUDE_DIRECTORIES(compat)

@@ -343,17 +343,17 @@ __mutex_spin (memory_pool_mutex_t *mutex)
 		/* Spin again */
 		g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
 	}
-#ifdef HAVE_NANOSLEEP
+#ifdef HAVE_ASM_PAUSE
+	__asm __volatile("pause");
+#elif defined(HAVE_SCHED_YIELD)
+	(void)sched_yield ();
+#elif defined(HAVE_NANOSLEEP)
 	struct timespec ts;
 	ts.tv_sec = 0;
 	ts.tv_nsec = MUTEX_SLEEP_TIME;
 	/* Spin */
 	while (nanosleep (&ts, &ts) == -1 && errno == EINTR);
-#endif
-#ifdef HAVE_SCHED_YIELD
-	(void)sched_yield ();
-#endif
-#if !defined(HAVE_NANOSLEEP) && !defined(HAVE_SCHED_YIELD)
+#else
 #	error No methods to spin are defined
 #endif
 	return 1;
@@ -552,7 +552,9 @@ memory_pool_wlock_rwlock (memory_pool_rwlock_t *lock)
 void 
 memory_pool_runlock_rwlock (memory_pool_rwlock_t *lock)
 {
-	memory_pool_unlock_mutex (lock->__r_lock);
+	if (g_atomic_int_get (&lock->__r_lock->lock)) {
+		(void)g_atomic_int_dec_and_test (&lock->__r_lock->lock);
+	}
 }
 
 void 
