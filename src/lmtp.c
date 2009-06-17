@@ -253,7 +253,7 @@ accept_socket (int fd, short what, void *arg)
  * Start lmtp worker process
  */
 void
-start_lmtp_worker (struct rspamd_worker *worker, int listen_sock)
+start_lmtp_worker (struct rspamd_worker *worker)
 {
 	struct sigaction signals;
 	int i;
@@ -273,7 +273,7 @@ start_lmtp_worker (struct rspamd_worker *worker, int listen_sock)
 	signal_add (&worker->sig_ev, NULL);
 	
 	/* Accept event */
-	event_set(&worker->bind_ev, listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
+	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
 
 	/* Perform modules configuring */

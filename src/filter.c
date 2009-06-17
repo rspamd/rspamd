@@ -232,56 +232,61 @@ metric_process_callback (gpointer key, gpointer value, void *data)
 static int
 continue_process_filters (struct worker_task *task)
 {
-	struct filter *cur = task->save.entry;
+	GList *cur = task->save.entry;
+	struct filter *filt = cur->data;
 	
-	cur = LIST_NEXT (cur, next);
+	cur = g_list_next (cur);
 	/* Note: no breaks in this case! */
 	switch (task->save.type) {
 		case SCRIPT_HEADER:
 			while (cur) {
-				call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_HEADER);
+				filt = cur->data;
+				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER);
 				if (task->save.saved) {
 					task->save.entry = cur;
 					task->save.type = SCRIPT_HEADER;
 					return 0;
 				}
-				cur = LIST_NEXT (cur, next);
+				cur = g_list_next (cur);
 			}
 			/* Process mime filters */
-			cur = LIST_FIRST (&task->worker->srv->cfg->mime_filters);
+			cur = g_list_first (task->worker->srv->cfg->mime_filters);
 		case SCRIPT_MIME:
 			while (cur) {
-				call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_MIME);
+				filt = cur->data;
+				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MIME);
 				if (task->save.saved) {
 					task->save.entry = cur;
 					task->save.type = SCRIPT_MIME;
 					return 0;
 				}
-				cur = LIST_NEXT (cur, next);
+				cur = g_list_next (cur);
 			}
 			/* Process url filters */
-			cur = LIST_FIRST (&task->worker->srv->cfg->url_filters);
+			cur = g_list_first (task->worker->srv->cfg->url_filters);
 		case SCRIPT_URL:
 			while (cur) {
-				call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_URL);
+				filt = cur->data;
+				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_URL);
 				if (task->save.saved) {
 					task->save.entry = cur;
 					task->save.type = SCRIPT_URL;
 					return 0;
 				}
-				cur = LIST_NEXT (cur, next);
+				cur = g_list_next (cur);
 			}
 			/* Process message filters */
-			cur = LIST_FIRST (&task->worker->srv->cfg->message_filters);
+			cur = g_list_first (task->worker->srv->cfg->message_filters);
 		case SCRIPT_MESSAGE:
 			while (cur) {
-				call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_MESSAGE);
+				filt = cur->data;
+				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MESSAGE);
 				if (task->save.saved) {
 					task->save.entry = cur;
 					task->save.type = SCRIPT_MESSAGE;
 					return 0;
 				}
-				cur = LIST_NEXT (cur, next);
+				cur = g_list_next (cur);
 			}
 			/* Process all statfiles */
 			process_statfiles (task);
@@ -296,7 +301,8 @@ continue_process_filters (struct worker_task *task)
 int 
 process_filters (struct worker_task *task)
 {
-	struct filter *cur;
+	GList *cur;
+	struct filter *filt;
 
 	if (task->save.saved) {
 		task->save.saved = 0;
@@ -304,40 +310,52 @@ process_filters (struct worker_task *task)
 	}
 
 	/* Process filters in order that they are listed in config file */
-	LIST_FOREACH (cur, &task->worker->srv->cfg->header_filters, next) {
-		call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_HEADER);
+	cur = task->worker->srv->cfg->header_filters;
+	while (cur) {
+		filt = cur->data;
+		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER);
 		if (task->save.saved) {
 			task->save.entry = cur;
 			task->save.type = SCRIPT_HEADER;
 			return 0;
 		}
+		cur = g_list_next (cur);
 	}
 
-	LIST_FOREACH (cur, &task->worker->srv->cfg->mime_filters, next) {
-		call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_MIME);
+	cur = task->worker->srv->cfg->mime_filters;
+	while (cur) {
+		filt = cur->data;
+		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MIME);
 		if (task->save.saved) {
 			task->save.entry = cur;
 			task->save.type = SCRIPT_MIME;
 			return 0;
 		}
+		cur = g_list_next (cur);
 	}
 
-	LIST_FOREACH (cur, &task->worker->srv->cfg->url_filters, next) {
-		call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_URL);
+	cur = task->worker->srv->cfg->url_filters;
+	while (cur) {
+		filt = cur->data;
+		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_URL);
 		if (task->save.saved) {
 			task->save.entry = cur;
 			task->save.type = SCRIPT_URL;
 			return 0;
 		}
+		cur = g_list_next (cur);
 	}
 
-	LIST_FOREACH (cur, &task->worker->srv->cfg->message_filters, next) {
-		call_filter_by_name (task, cur->func_name, cur->type, SCRIPT_MESSAGE);
+	cur = task->worker->srv->cfg->message_filters;
+	while (cur) {
+		filt = cur->data;
+		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MESSAGE);
 		if (task->save.saved) {
 			task->save.entry = cur;
 			task->save.type = SCRIPT_MESSAGE;
 			return 0;
 		}
+		cur = g_list_next (cur);
 	}
 
 	/* Process all metrics */

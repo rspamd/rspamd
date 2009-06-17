@@ -83,7 +83,7 @@ add_memcached_server (struct config_file *cf, char *str)
 }
 
 int
-parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
+parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 {
 	char *cur_tok, *err_str;
 	struct hostent *hent;
@@ -95,43 +95,18 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 	if (str == NULL) return 0;
 	cur_tok = strsep (&str, ":");
 
-	switch (type) {
-		case CRED_NORMAL:
-			host = &cf->bind_host;
-			port = &cf->bind_port;
-			*port = DEFAULT_BIND_PORT;
-			family = &cf->bind_family;
-			addr = &cf->bind_addr;
-			break;
-		case CRED_CONTROL:
-			host = &cf->control_host;
-			port = &cf->control_port;
-			*port = DEFAULT_CONTROL_PORT;
-			family = &cf->control_family;
-			addr = &cf->control_addr;
-			break;
-		case CRED_LMTP:
-			host = &cf->lmtp_host;
-			port = &cf->lmtp_port;
-			*port = DEFAULT_LMTP_PORT;
-			family = &cf->lmtp_family;
-			addr = &cf->lmtp_addr;
-			break;
-		case CRED_DELIVERY:
-			host = &cf->deliver_host;
-			port = &cf->deliver_port;
-			*port = 25;
-			family = &cf->deliver_family;
-			addr = &cf->deliver_addr;
-			break;
-	}
+	host = &cf->bind_host;
+	port = &cf->bind_port;
+	*port = DEFAULT_BIND_PORT;
+	family = &cf->bind_family;
+	addr = &cf->bind_addr;
 	
 	if (cur_tok[0] == '/' || cur_tok[0] == '.') {
 #ifdef HAVE_DIRNAME
 		/* Try to check path of bind credit */
 		struct stat st;
 		int fd;
-		char *copy = memory_pool_strdup (cf->cfg_pool, cur_tok);
+		char *copy = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
 				if ((fd = open (cur_tok, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
@@ -155,7 +130,7 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 			}
 		}
 #endif
-		*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+		*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 		*family = AF_UNIX;
 		return 1;
 
@@ -168,7 +143,7 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 			}
 		}
 		if (strcmp (cur_tok, "*") == 0) {
-			*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+			*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 			addr->s_addr = htonl (INADDR_ANY);
 		} else if (!inet_aton (cur_tok, addr)) {
 			/* Try to call gethostbyname */
@@ -177,13 +152,13 @@ parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type)
 				return 0;
 			}
 			else {
-				*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+				*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 				memcpy((char *)addr, hent->h_addr, sizeof(struct in_addr));
 				s = strlen (cur_tok) + 1;
 			}
 		}
 		else {
-			*host = memory_pool_strdup (cf->cfg_pool, cur_tok);
+			*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 		}
 		*family = AF_INET;
 
@@ -203,11 +178,7 @@ init_defaults (struct config_file *cfg)
 	cfg->memcached_maxerrors = DEFAULT_UPSTREAM_MAXERRORS;
 	cfg->memcached_protocol = TCP_TEXT;
 
-#ifdef HAVE_SC_NPROCESSORS_ONLN
-	cfg->workers_number = sysconf (_SC_NPROCESSORS_ONLN);
-#else
-	cfg->workers_number = DEFAULT_WORKERS_NUM;
-#endif
+
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
@@ -217,7 +188,6 @@ init_defaults (struct config_file *cfg)
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->statfiles = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->lmtp_metric = "default";
 
 	def_metric = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric));
 	def_metric->name = "default";
@@ -227,7 +197,6 @@ init_defaults (struct config_file *cfg)
 	def_metric->classifier = get_classifier ("winnow");
 	g_hash_table_insert (cfg->metrics, "default", def_metric);
 
-	LIST_INIT (&cfg->perl_modules);
 }
 
 void
@@ -255,18 +224,20 @@ free_config (struct config_file *cfg)
 char* 
 get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
 {
-	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
+	GList *cur_opt;
 	struct module_opt *cur;
 	
-	cur_module_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
-	if (cur_module_opt == NULL) {
+	cur_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
+	if (cur_opt == NULL) {
 		return NULL;
 	}
-
-	LIST_FOREACH (cur, cur_module_opt, next) {
+	
+	while (cur_opt) {
+		cur = cur_opt->data;
 		if (strcmp (cur->param, opt_name) == 0) {
 			return cur->value;
 		}
+		cur_opt = g_list_next (cur_opt);
 	}
 
 	return NULL;
@@ -408,13 +379,15 @@ static void
 substitute_module_variables (gpointer key, gpointer value, gpointer data)
 {
 	struct config_file *cfg = (struct config_file *)data;
-	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = (struct moduleoptq *)value;
-	struct module_opt *cur, *tmp;
+	GList *cur_opt = (GList *)value;
+	struct module_opt *cur;
 
-	LIST_FOREACH_SAFE (cur, cur_module_opt, next, tmp) {
+	while (cur_opt) {
+		cur = cur_opt->data;
 		if (cur->value) {
 			cur->value = substitute_variable (cfg, NULL, cur->value, 1);
 		}
+		cur_opt = g_list_next (cur_opt);
 	}
 }
 
@@ -455,19 +428,19 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 				switch (type) {
 					case SCRIPT_HEADER:
 						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						LIST_INSERT_HEAD (&cfg->header_filters, cur, next);
+						cfg->header_filters = g_list_prepend (cfg->header_filters, cur);
 						break;
 					case SCRIPT_MIME:
 						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						LIST_INSERT_HEAD (&cfg->mime_filters, cur, next);
+						cfg->mime_filters = g_list_prepend (cfg->mime_filters, cur);
 						break;
 					case SCRIPT_MESSAGE:
 						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						LIST_INSERT_HEAD (&cfg->message_filters, cur, next);
+						cfg->message_filters = g_list_prepend (cfg->message_filters, cur);
 						break;
 					case SCRIPT_URL:
 						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
+						cfg->url_filters = g_list_prepend (cfg->url_filters, cur);
 						break;
 				}
 				break;
@@ -483,19 +456,19 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 		switch (type) {
 			case SCRIPT_HEADER:
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				LIST_INSERT_HEAD (&cfg->header_filters, cur, next);
+				cfg->header_filters = g_list_prepend (cfg->header_filters, cur);
 				break;
 			case SCRIPT_MIME:
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				LIST_INSERT_HEAD (&cfg->mime_filters, cur, next);
+				cfg->mime_filters = g_list_prepend (cfg->mime_filters, cur);
 				break;
 			case SCRIPT_MESSAGE:
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				LIST_INSERT_HEAD (&cfg->message_filters, cur, next);
+				cfg->message_filters = g_list_prepend (cfg->message_filters, cur);
 				break;
 			case SCRIPT_URL:
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				LIST_INSERT_HEAD (&cfg->url_filters, cur, next);
+				cfg->url_filters = g_list_prepend (cfg->message_filters, cur);
 				break;
 		}
 		p ++;
@@ -523,27 +496,9 @@ fill_cfg_params (struct config_file *cfg)
     scalars[2].type = SCALAR_TYPE_STR;
     scalars[2].pointer = &cfg->temp_dir;
     g_hash_table_insert (cfg->cfg_params, "temp_dir", &scalars[2]);
-    scalars[3].type = SCALAR_TYPE_STR;
-    scalars[3].pointer = &cfg->bind_host;
-    g_hash_table_insert (cfg->cfg_params, "bind_host", &scalars[3]);
-    scalars[4].type = SCALAR_TYPE_STR;
-    scalars[4].pointer = &cfg->control_host;
-    g_hash_table_insert (cfg->cfg_params, "control_host", &scalars[4]);
-    scalars[5].type = SCALAR_TYPE_INT;
-    scalars[5].pointer = &cfg->controller_enabled;
-    g_hash_table_insert (cfg->cfg_params, "controller_enabled", &scalars[5]);
-    scalars[6].type = SCALAR_TYPE_STR;
-    scalars[6].pointer = &cfg->control_password;
-    g_hash_table_insert (cfg->cfg_params, "control_password", &scalars[6]);
-    scalars[7].type = SCALAR_TYPE_INT;
-    scalars[7].pointer = &cfg->no_fork;
-    g_hash_table_insert (cfg->cfg_params, "no_fork", &scalars[7]);
-    scalars[8].type = SCALAR_TYPE_UINT;
-    scalars[8].pointer = &cfg->workers_number;
-    g_hash_table_insert (cfg->cfg_params, "workers_number", &scalars[8]);
-    scalars[9].type = SCALAR_TYPE_SIZE;
-    scalars[9].pointer = &cfg->max_statfile_size;
-    g_hash_table_insert (cfg->cfg_params, "max_statfile_size", &scalars[9]);
+    scalars[3].type = SCALAR_TYPE_SIZE;
+    scalars[3].pointer = &cfg->max_statfile_size;
+    g_hash_table_insert (cfg->cfg_params, "max_statfile_size", &scalars[3]);
 
 }
 
@@ -554,11 +509,6 @@ void
 post_load_config (struct config_file *cfg)
 {
 	struct timespec ts;
-
-	if (cfg->lmtp_enable && !cfg->delivery_enable) {
-		yywarn ("post_load_config: lmtp is enabled, but delivery is not enabled, disabling lmtp");
-		cfg->lmtp_enable = FALSE;
-	}
 
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
 	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);

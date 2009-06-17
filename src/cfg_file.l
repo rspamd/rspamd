@@ -1,6 +1,7 @@
 %x incl
 %x module
 %x lua
+%x worker
 
 %{
 
@@ -32,10 +33,12 @@ extern struct config_file *cfg;
 .include						BEGIN(incl);
 .module							BEGIN(module);
 .lua							BEGIN(lua);
+worker							BEGIN(worker); return WORKER;
 composites						return COMPOSITES;
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
-workers							return WORKERS;
+
+
 error_time                      return ERROR_TIME;
 dead_time                       return DEAD_TIME;
 maxerrors                       return MAXERRORS;
@@ -43,7 +46,6 @@ reconnect_timeout				return RECONNECT_TIMEOUT;
 connect_timeout					return CONNECT_TIMEOUT;
 protocol						return PROTOCOL;
 memcached						return MEMCACHED;
-bind_socket						return BINDSOCK;
 servers							return SERVERS;
 require							return REQUIRE;
 header_filters					return HEADER_FILTERS;
@@ -160,6 +162,24 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <module>[a-zA-Z0-9_%-]+	yylval.string=strdup(yytext); return PARAM;
 <module>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
+
+<worker>\n								/* ignore EOL */;
+<worker>[ \t]+							/* ignore whitespace */;
+<worker>[ \t]*#.*						/* ignore comments */;
+<worker>\{	return OBRACE;
+<worker>\}  BEGIN(INITIAL); return EBRACE;
+<worker>\;	return SEMICOLON;
+<worker>=	return EQSIGN;
+<worker>type							return TYPE;
+<worker>bind_socket						return BINDSOCK;
+<worker>count							return COUNT;
+<worker>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
+<worker>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}	yylval.string=strdup(yytext); return IPADDR;
+<worker>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\/[0-9]{1,2}	yylval.string=strdup(yytext); return IPNETWORK;
+<worker>[*a-zA-Z0-9.-]+:[0-9]{1,5}		yylval.string=strdup(yytext); return HOSTPORT;
+<worker>[a-zA-Z<][a-zA-Z@+>_-]*         yylval.string=strdup(yytext); return STRING;
+<worker>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
+<worker>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
 <lua>\n									/* ignore EOL */;
 <lua>[ \t]+								/* ignore whitespace */;

@@ -97,7 +97,6 @@ struct memcached_server {
  */
 struct perl_module {
 	char *path;										/**< path to module										*/
-	LIST_ENTRY (perl_module) next;					/**< chain link											*/
 };
 
 /**
@@ -106,7 +105,6 @@ struct perl_module {
 struct module_opt {
 	char *param;									/**< parameter name										*/
 	char *value;									/**< paramater value									*/
-	LIST_ENTRY (module_opt) next;					
 };
 
 /**
@@ -144,6 +142,21 @@ struct config_scalar {
     } type;											/**< type of data										*/
 };
 
+
+/**
+ * Config params for rspamd worker
+ */
+struct worker_conf {
+	int type;										/**< worker type										*/
+	char *bind_host;								/**< bind line											*/
+	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
+	uint16_t bind_port;								/**< bind port in case of TCP socket					*/
+	uint16_t bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
+	int count;										/**< number of workers									*/
+	GHashTable *params;								/**< params for worker									*/
+	int listen_sock;								/**< listening socket desctiptor						*/
+};
+
 /**
  * Structure that stores all config data
  */
@@ -158,23 +171,9 @@ struct config_file {
 	char *profile_path;
 #endif
 
-	char *bind_host;								/**< bind line											*/
-	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
-	uint16_t bind_port;								/**< bind port in case of TCP socket					*/
-	uint16_t bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
-
-	char *control_host;								/**< bind line for controller							*/
-	struct in_addr control_addr;					/**< bind address for controller						*/
-	uint16_t control_port;							/**< bind port for controller							*/
-	uint16_t control_family;						/**< bind family for controller							*/
-	int controller_enabled;							/**< whether controller is enabled						*/
-	char *control_password;							/**< controller password								*/
-
 	gboolean no_fork;								/**< if 1 do not call daemon()							*/
 	gboolean config_test;							/**< if TRUE do only config file test					*/
 	gboolean raw_mode;								/**< work in raw mode instead of utf one				*/
-	unsigned int workers_number;					/**< number of workers									*/
-	unsigned int lmtp_workers_number;				/**< number of lmtp workers								*/
 
 	enum rspamd_log_type log_type;					/**< log type											*/
 	int log_facility;								/**< log facility in case of syslog						*/
@@ -192,13 +191,6 @@ struct config_file {
 	unsigned int memcached_maxerrors;				/**< maximum number of errors							*/
 	unsigned int memcached_connect_timeout;			/**< connection timeout									*/
 
-	gboolean lmtp_enable;							/**< is lmtp agent is enabled							*/
-	char *lmtp_host;								/**< host for lmtp agent								*/
-	struct in_addr lmtp_addr;						/**< bind address for lmtp								*/
-	uint16_t lmtp_port;								/**< bind port for lmtp agent							*/
-	uint16_t lmtp_family;							/**< bind family for lmtp agent							*/
-	char *lmtp_metric;								/**< metric to use in lmtp module						*/
-
 	gboolean delivery_enable;						/**< is delivery agent is enabled						*/
 	char *deliver_host;								/**< host for mail deliviring							*/
 	struct in_addr deliver_addr;					/**< its address										*/
@@ -207,12 +199,13 @@ struct config_file {
 	char *deliver_agent_path;						/**< deliver to pipe instead of socket					*/
 	gboolean deliver_lmtp;							/**< use LMTP instead of SMTP							*/
 
-	LIST_HEAD (modulesq, perl_module) perl_modules;	/**< linked list of perl modules to load				*/
+	GList *perl_modules;							/**< linked list of perl modules to load				*/
 
-	LIST_HEAD (headersq, filter) header_filters;	/**< linked list of all header's filters				*/
-	LIST_HEAD (mimesq, filter) mime_filters;		/**< linked list of all mime filters					*/
-	LIST_HEAD (messagesq, filter) message_filters;	/**< linked list of all message's filters				*/
-	LIST_HEAD (urlsq, filter) url_filters;			/**< linked list of all url's filters					*/
+	GList *header_filters;							/**< linked list of all header's filters				*/
+	GList *mime_filters;							/**< linked list of all mime filters					*/
+	GList *message_filters;							/**< linked list of all message's filters				*/
+	GList *url_filters;								/**< linked list of all url's filters					*/
+	GList *workers;									/**< linked list of all workers params					*/
 	char *header_filters_str;						/**< string of header's filters							*/
 	char *mime_filters_str;							/**< string of mime's filters							*/
 	char *message_filters_str;						/**< string of message's filters						*/
@@ -243,7 +236,7 @@ int add_memcached_server (struct config_file *cf, char *str);
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-int parse_bind_line (struct config_file *cf, char *str, enum rspamd_cred_type type);
+int parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str);
 
 /**
  * Init default values

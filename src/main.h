@@ -38,6 +38,7 @@
 #endif
 
 #define CRLF "\r\n"
+
 /** 
  * Process type: main or worker
  */
@@ -46,6 +47,7 @@ enum process_type {
 	TYPE_WORKER,
 	TYPE_CONTROLLER,
 	TYPE_LMTP,
+	TYPE_FUZZY,
 };
 
 /** 
@@ -70,6 +72,7 @@ struct rspamd_worker {
 	enum process_type type;										/**< process type									*/
 	struct event sig_ev;										/**< signals event									*/
 	struct event bind_ev;										/**< socket events									*/
+	struct worker_conf *cf;										/**< worker config data								*/
 	TAILQ_ENTRY (rspamd_worker) next;							/**< chain link to next worker						*/
 };
 
@@ -118,8 +121,8 @@ struct counter_data {
  * Save point object for delayed filters processing
  */
 struct save_point {
-	void *entry;												/**< pointer to C function or perl function name	*/
-	enum script_type type;										/**< where we did stop								*/
+	GList *entry;												/**< pointer to saved filter	*/
+	enum script_type type;
 	unsigned int saved;											/**< how much time we have delayed processing		*/
 };
 
@@ -216,7 +219,7 @@ struct c_module {
 	LIST_ENTRY (c_module) next;									/**< linked list									*/
 };
 
-void start_worker (struct rspamd_worker *worker, int listen_sock);
+void start_worker (struct rspamd_worker *worker);
 void start_controller (struct rspamd_worker *worker);
 
 /**

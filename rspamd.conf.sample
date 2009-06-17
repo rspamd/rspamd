@@ -7,18 +7,28 @@
 # Default: pidfile = /var/run/rspamd.pid
 pidfile = "./rspamd.pid";
 
-# Number of workers to process connections
-# Default: 1
-workers = 1;
 
-# Socket for accepting mail to filter, can be unix socket if begin with '/'
-# (bind_socket=/var/run/rspamd.sock for example)
-bind_socket = localhost:11333;
+worker {
+    type = "normal";
+
+    # Number of workers to process connections
+    # Default: number of processors in system
+    count = 1;
+
+    # Socket for accepting mail to filter, can be unix socket if begin with '/'
+    # (bind_socket=/var/run/rspamd.sock for example)
+    bind_socket = localhost:11333;
+};
+
 
 # Settings for controller interface
-control {
+worker {
+    type = "controller";
+
 	# Bind socket for control interface
 	bind_socket = localhost:11334;
+
+    count = 1;
 	# Password for privilleged commands
 	password = "q1";
 };
@@ -77,29 +87,29 @@ factors {
 };
 
 # Options for lmtp worker
-lmtp {
-	enabled = yes;
+worker {
+	type = "lmtp";
 	# Bind socket for lmtp interface
 	bind_socket = localhost:11335;
 	# Metric that is considered as main. If we have spam result on
 	# this metric, lmtp delivery would be failed
 	metric = "default";
 	# Number of lmtp workers
-	workers = 1;
+	count = 1;
 };
 
-delivery {
-	enabled = yes;
+#worker {
+#	type = "delivery";
 	# Path to delivery agent, %f is expanded as mail from address and %r 
 	# is expanded as recipient address
 	# Expample: agent = "/usr/local/bin/procmail -f %f -d %r"
-	agent = "/dev/null";
+#	agent = "/dev/null";
 	# Bind socket for lmtp interface
 	# Example: bind_socket = localhost:25
 	
 	# Whether we should use lmtp for MTA delivery
-	lmtp = no;
-};
+#	lmtp = no;
+#};
 
 # SURBL module params, note that single quotes are mandatory here
 .module 'surbl' {

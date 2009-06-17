@@ -21,7 +21,6 @@ enum filter_type { C_FILTER, PERL_FILTER };
 struct filter {
 	char *func_name;								/**< function name					*/
 	enum filter_type type;							/**< filter type (c or perl)		*/
-	LIST_ENTRY (filter) next;						/**< chain link						*/
 };
 
 /**

@@ -82,7 +82,7 @@ int
 surbl_module_config (struct config_file *cfg)
 {
 	struct hostent *hent;
-	LIST_HEAD (moduleoptq, module_opt) *opt = NULL;
+	GList *cur_opt;
 	struct module_opt *cur;
 	struct suffix_item *new_suffix;
 	struct surbl_bit_item *new_bit;
@@ -160,35 +160,35 @@ surbl_module_config (struct config_file *cfg)
 		}
 	}
 	
-	opt = g_hash_table_lookup (cfg->modules_opts, "surbl");
-	if (opt) {
-		LIST_FOREACH (cur, opt, next) {
-			if (!g_strncasecmp (cur->param, "suffix", sizeof ("suffix") - 1)) {
-				if ((str = strchr (cur->param, '_')) != NULL) {
-					new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
-					*str = '\0';
-					new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
-					new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-					msg_debug ("surbl_module_config: add new surbl suffix: %s with symbol: %s", 
-								new_suffix->suffix, new_suffix->symbol);
-					*str = '_';
-					surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
-				}
+	cur_opt = g_hash_table_lookup (cfg->modules_opts, "surbl");
+	while (cur_opt) {
+		cur = cur_opt->data;
+		if (!g_strncasecmp (cur->param, "suffix", sizeof ("suffix") - 1)) {
+			if ((str = strchr (cur->param, '_')) != NULL) {
+				new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
+				*str = '\0';
+				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
+				new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
+				msg_debug ("surbl_module_config: add new surbl suffix: %s with symbol: %s", 
+							new_suffix->suffix, new_suffix->symbol);
+				*str = '_';
+				surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 			}
-			if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
-				if ((str = strchr (cur->param, '_')) != NULL) {
-					bit = strtoul (str + 1, NULL, 10);
-					if (bit != 0) {
-						new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
-						new_bit->bit = bit;
-						new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-						msg_debug ("surbl_module_config: add new bit suffix: %d with symbol: %s", 
-									(int)new_bit->bit, new_bit->symbol);
-						surbl_module_ctx->bits = g_list_prepend (surbl_module_ctx->bits, new_bit);
-					}
+		}
+		if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
+			if ((str = strchr (cur->param, '_')) != NULL) {
+				bit = strtoul (str + 1, NULL, 10);
+				if (bit != 0) {
+					new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
+					new_bit->bit = bit;
+					new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
+					msg_debug ("surbl_module_config: add new bit suffix: %d with symbol: %s", 
+								(int)new_bit->bit, new_bit->symbol);
+					surbl_module_ctx->bits = g_list_prepend (surbl_module_ctx->bits, new_bit);
 				}
 			}
 		}
+		cur_opt = g_list_next (cur_opt);
 	}
 	/* Add default suffix */
 	if (surbl_module_ctx->suffixes == NULL) {

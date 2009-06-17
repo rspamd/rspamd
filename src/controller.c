@@ -174,6 +174,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	struct statfile *statfile;
 	struct metric *metric;
 	memory_pool_stat_t mem_st;
+	char *password = g_hash_table_lookup (session->worker->cf->params, "password");
 
 	switch (cmd->type) {
 		case COMMAND_PASSWORD:
@@ -184,7 +185,12 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
 				return;
 			}
-			if (strncmp (arg, session->cfg->control_password, strlen (arg)) == 0) {
+			if (password == NULL) {
+				r = snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access unallowed" CRLF);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				return;
+			}
+			if (strncmp (arg, password, strlen (arg)) == 0) {
 				session->authorized = 1;
 				r = snprintf (out_buf, sizeof (out_buf), "password accepted" CRLF);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
@@ -542,14 +548,12 @@ void
 start_controller (struct rspamd_worker *worker)
 {
 	struct sigaction signals;
-	int listen_sock, i;
-	struct sockaddr_un *un_addr;
+	int i;
 	GList *comp_list = NULL;
 	char *hostbuf;
 	long int hostmax;
 
 	worker->srv->pid = getpid ();
-	worker->srv->type = TYPE_CONTROLLER;
 	event_init ();
 	g_mime_init (0);
 
@@ -560,27 +564,9 @@ start_controller (struct rspamd_worker *worker)
 	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *) worker);
 	signal_add (&worker->sig_ev, NULL);
 
-	if (worker->srv->cfg->control_family == AF_INET) {
-		if ((listen_sock = make_tcp_socket (&worker->srv->cfg->control_addr, worker->srv->cfg->control_port, TRUE)) == -1) {
-			msg_err ("start_controller: cannot create tcp listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
-	else {
-		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (worker->srv->cfg->control_host, un_addr, TRUE)) == -1) {
-			msg_err ("start_controller: cannot create unix listen socket. %s", strerror (errno));
-			exit(-errno);
-		}
-	}
 	
 	start_time = time (NULL);
 
-	if (listen (listen_sock, -1) == -1) {
-		msg_err ("start_controller: cannot listen on socket. %s", strerror (errno));
-		exit(-errno);
-	}
-	
 	/* Init command completion */
 	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
 		comp_list = g_list_prepend (comp_list, &commands[i]);
@@ -594,7 +580,7 @@ start_controller (struct rspamd_worker *worker)
 	hostbuf[hostmax - 1] = '\0';
 	snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
 	/* Accept event */
-	event_set(&worker->bind_ev, listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
+	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
 
 	/* Send SIGUSR2 to parent */
@@ -604,7 +590,6 @@ start_controller (struct rspamd_worker *worker)
 	io_tv.tv_usec = 0;
 
 	event_loop (0);
-	close (listen_sock);
 
 	exit (EXIT_SUCCESS);
 }

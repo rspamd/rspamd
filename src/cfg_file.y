@@ -13,15 +13,17 @@
 #else
 #include "perl.h"
 #endif
+#define YYDEBUG 1
 
 extern struct config_file *cfg;
 extern int yylineno;
 extern char *yytext;
 
-LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
+GList *cur_module_opt = NULL;
 struct metric *cur_metric = NULL;
 struct statfile *cur_statfile = NULL;
 struct statfile_section *cur_section = NULL;
+struct worker_conf *cur_worker = NULL;
 
 %}
 
@@ -41,14 +43,14 @@ struct statfile_section *cur_section = NULL;
 %token  MAXSIZE SIZELIMIT SECONDS BEANSTALK MYSQL USER PASSWORD DATABASE
 %token  TEMPDIR PIDFILE SERVERS ERROR_TIME DEAD_TIME MAXERRORS CONNECT_TIMEOUT PROTOCOL RECONNECT_TIMEOUT
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
-%token  MEMCACHED WORKERS REQUIRE MODULE
+%token  MEMCACHED WORKER TYPE REQUIRE MODULE
 %token  MODULE_OPT PARAM VARIABLE
 %token  HEADER_FILTERS MIME_FILTERS MESSAGE_FILTERS URL_FILTERS FACTORS METRIC NAME
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
-%token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE
+%token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -71,12 +73,10 @@ file	: /* empty */
 	;
 
 command	: 
-	bindsock
-	| control
 	| tempdir
 	| pidfile
 	| memcached
-	| workers
+	| worker
 	| require
 	| header_filters
 	| mime_filters
@@ -90,8 +90,6 @@ command	:
 	| logging
 	| statfile
 	| statfile_pool_size
-	| lmtp
-	| delivery
 	| luacode
 	| raw_mode
 	| profile_file
@@ -120,63 +118,6 @@ pidfile :
 	}
 	;
 
-control:
-	CONTROL OBRACE controlbody EBRACE
-	;
-
-controlbody:
-	controlcmd SEMICOLON
-	| controlbody controlcmd SEMICOLON
-	;
-
-controlcmd:
-	controlsock
-	| controlpassword
-	;
-
-controlsock:
-	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3, CRED_CONTROL)) {
-			yyerror ("yyparse: parse_bind_line");
-			YYERROR;
-		}
-		cfg->controller_enabled = 1;
-		free ($3);
-	}
-	;
-controlpassword:
-	PASSWORD EQSIGN QUOTEDSTRING {
-		cfg->control_password = memory_pool_strdup (cfg->cfg_pool, $3);
-	}
-	;
-
-bindsock:
-	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3, CRED_NORMAL)) {
-			yyerror ("yyparse: parse_bind_line");
-			YYERROR;
-		}		
-		free ($3);
-	}
-	;
-
-bind_cred:
-	STRING {
-		$$ = $1;
-	}
-	| IPADDR{
-		$$ = $1;
-	}
-	| DOMAINNAME {
-		$$ = $1;
-	}
-	| HOSTPORT {
-		$$ = $1;
-	}
-	| QUOTEDSTRING {
-		$$ = $1;
-	}
-	;
 
 header_filters:
 	HEADER_FILTERS EQSIGN QUOTEDSTRING {
@@ -283,11 +224,136 @@ memcached_protocol:
 		}
 	}
 	;
-workers:
-	WORKERS EQSIGN NUMBER {
-		cfg->workers_number = $3;
+
+/* Workers section */
+worker:
+	WORKER OBRACE workerbody EBRACE {
+		cfg->workers = g_list_prepend (cfg->workers, cur_worker);
+		cur_worker = NULL;
 	}
 	;
+
+workerbody:
+	workercmd SEMICOLON
+	| workerbody workercmd SEMICOLON
+	;
+
+workercmd:
+	| bindsock
+	| workertype
+	| workercount
+	| workerparam
+	;
+
+bindsock:
+	BINDSOCK EQSIGN bind_cred {
+		if (cur_worker == NULL) {
+			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
+			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
+#ifdef HAVE_SC_NPROCESSORS_ONLN
+			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
+#else
+			cur_worker->count = DEFAULT_WORKERS_NUM;
+#endif
+		}
+
+		if (!parse_bind_line (cfg, cur_worker, $3)) {
+			yyerror ("yyparse: parse_bind_line");
+			YYERROR;
+		}		
+		free ($3);
+	}
+	;
+
+bind_cred:
+	STRING {
+		$$ = $1;
+	}
+	| IPADDR{
+		$$ = $1;
+	}
+	| DOMAINNAME {
+		$$ = $1;
+	}
+	| HOSTPORT {
+		$$ = $1;
+	}
+	| QUOTEDSTRING {
+		$$ = $1;
+	}
+	;
+
+workertype:
+	TYPE EQSIGN QUOTEDSTRING {
+		if (cur_worker == NULL) {
+			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
+			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
+#ifdef HAVE_SC_NPROCESSORS_ONLN
+			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
+#else
+			cur_worker->count = DEFAULT_WORKERS_NUM;
+#endif
+		}
+		
+		if (g_ascii_strcasecmp ($3, "normal") == 0) {
+			cur_worker->type = TYPE_WORKER;
+		}
+		else if (g_ascii_strcasecmp ($3, "controller") == 0) {
+			cur_worker->type = TYPE_CONTROLLER;
+		}
+		else if (g_ascii_strcasecmp ($3, "lmtp") == 0) {
+			cur_worker->type = TYPE_LMTP;
+		}
+		else if (g_ascii_strcasecmp ($3, "fuzzy") == 0) {
+			cur_worker->type = TYPE_FUZZY;
+		}
+		else {
+			yyerror ("yyparse: unknown worker type: %s", $3);
+			YYERROR;
+		}
+	}
+	;
+
+workercount:
+	COUNT EQSIGN NUMBER {
+		if (cur_worker == NULL) {
+			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
+			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
+#ifdef HAVE_SC_NPROCESSORS_ONLN
+			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
+#else
+			cur_worker->count = DEFAULT_WORKERS_NUM;
+#endif
+		}
+
+		if ($3 > 0) {
+			cur_worker->count = $3;
+		}
+		else {
+			yyerror ("yyparse: invalid number of workers: %d", $3);
+			YYERROR;
+		}
+	}
+	;
+
+workerparam:
+	STRING EQSIGN QUOTEDSTRING {
+		if (cur_worker == NULL) {
+			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
+			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
+#ifdef HAVE_SC_NPROCESSORS_ONLN
+			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
+#else
+			cur_worker->count = DEFAULT_WORKERS_NUM;
+#endif
+		}
+		
+		g_hash_table_insert (cur_worker->params, $1, $3);
+	}
 
 metric:
 	METRIC OBRACE metricbody EBRACE {
@@ -411,7 +477,7 @@ requirecmd:
 			YYERROR;
 		}
 		cur->path = $3;
-		LIST_INSERT_HEAD (&cfg->perl_modules, cur, next);
+		cfg->perl_modules = g_list_prepend (cfg->perl_modules, cur);
 #else
 		yyerror ("require command is not available when perl support is not compiled");
 		YYERROR;
@@ -453,14 +519,10 @@ moduleoptbody:
 optcmd:
 	PARAM EQSIGN QUOTEDSTRING {
 		struct module_opt *mopt;
-		if (cur_module_opt == NULL) {
-			cur_module_opt = g_malloc (sizeof (cur_module_opt));
-			LIST_INIT (cur_module_opt);
-		}
 		mopt = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
 		mopt->param = $1;
 		mopt->value = $3;
-		LIST_INSERT_HEAD (cur_module_opt, mopt, next);
+		cur_module_opt = g_list_prepend (cur_module_opt, mopt);
 	}
 	| VARIABLE EQSIGN QUOTEDSTRING {
 		g_hash_table_insert (cfg->variables, $1, $3);
@@ -749,89 +811,6 @@ statfile_pool_size:
 	}
 	;
 
-lmtp:
-	LMTP OBRACE lmtpbody EBRACE
-	;
-
-lmtpbody:
-	lmtpcmd SEMICOLON
-	| lmtpbody lmtpcmd SEMICOLON
-	;
-
-lmtpcmd:
-	lmtpenabled
-	| lmtpsock
-	| lmtpmetric
-	| lmtpworkers
-	;
-
-lmtpenabled:
-	ENABLED EQSIGN FLAG {
-		cfg->lmtp_enable = $3;
-	}
-	;
-
-lmtpsock:
-	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3, CRED_LMTP)) {
-			yyerror ("yyparse: parse_bind_line");
-			YYERROR;
-		}
-		free ($3);
-	}
-	;
-lmtpmetric:
-	METRIC EQSIGN QUOTEDSTRING {
-		cfg->lmtp_metric = memory_pool_strdup (cfg->cfg_pool, $3);
-	}
-	;
-lmtpworkers:
-	WORKERS EQSIGN NUMBER {
-		cfg->lmtp_workers_number = $3;
-	}
-	;
-
-delivery:
-	DELIVERY OBRACE deliverybody EBRACE
-	;
-
-deliverybody:
-	deliverycmd SEMICOLON
-	| deliverybody deliverycmd SEMICOLON
-	;
-
-deliverycmd:
-	deliveryenabled
-	| deliverysock
-	| deliveryagent
-	| deliverylmtp
-	;
-
-deliveryenabled:
-	ENABLED EQSIGN FLAG {
-		cfg->delivery_enable = $3;
-	}
-	;
-
-deliverysock:
-	BINDSOCK EQSIGN bind_cred {
-		if (!parse_bind_line (cfg, $3, CRED_DELIVERY)) {
-			yyerror ("yyparse: parse_bind_line");
-			YYERROR;
-		}
-		free ($3);
-	}
-	;
-deliverylmtp:
-	LMTP EQSIGN FLAG {
-		cfg->deliver_lmtp = $3;
-	}
-	;
-deliveryagent:
-	AGENT EQSIGN QUOTEDSTRING {
-		cfg->deliver_agent_path = memory_pool_strdup (cfg->cfg_pool, $3);
-	}
-	;
 
 luacode:
 	LUACODE

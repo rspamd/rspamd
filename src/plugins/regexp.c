@@ -151,7 +151,7 @@ parse_autolearn_param (const char *param, const char *value, struct config_file 
 int
 regexp_module_config (struct config_file *cfg)
 {
-	LIST_HEAD (moduleoptq, module_opt) *cur_module_opt = NULL;
+	GList *cur_opt = NULL;
 	struct module_opt *cur;
 	struct regexp_module_item *cur_item;
 	char *value;
@@ -172,24 +172,24 @@ regexp_module_config (struct config_file *cfg)
 		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
 	}
 
-	cur_module_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
-	if (cur_module_opt != NULL) {
-		LIST_FOREACH (cur, cur_module_opt, next) {
-			if (strcmp (cur->param, "metric") == 0 || strcmp (cur->param, "statfile_prefix") == 0) {
-				continue;
-			}
-			else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
-				parse_autolearn_param (cur->param, cur->value, cfg);
-				continue;
-			}
-			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
-			cur_item->symbol = cur->param;
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
-				res = FALSE;
-			}
-			set_counter (cur_item->symbol, 0);
-			regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);
+	cur_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
+	while (cur_opt) {
+		cur = cur_opt->data;
+		if (strcmp (cur->param, "metric") == 0 || strcmp (cur->param, "statfile_prefix") == 0) {
+			continue;
 		}
+		else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
+			parse_autolearn_param (cur->param, cur->value, cfg);
+			continue;
+		}
+		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
+		cur_item->symbol = cur->param;
+		if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
+			res = FALSE;
+		}
+		set_counter (cur_item->symbol, 0);
+		regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);
+		cur_opt = g_list_next (cur_opt);
 	}
 	
 	return res;
