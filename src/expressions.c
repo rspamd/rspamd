@@ -809,7 +809,7 @@ register_expression_function (const char *name, rspamd_internal_func_t func)
 	functions_number ++;
 	
 	new = g_new (struct _fl, functions_number);
-	memcpy (new, rspamd_functions_list, (functions_number - 1) * sizeof (struct _fl));
+	memcpy (new, list_ptr, (functions_number - 1) * sizeof (struct _fl));
 	if (list_allocated) {
 		g_free (list_ptr);
 	}
