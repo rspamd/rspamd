@@ -405,6 +405,7 @@ show_url_header (struct worker_task *task)
 		host.len = url->hostlen;
 		/* Skip long hosts to avoid protocol coollisions */
 		if (host.len > OUTBUFSIZ) {
+			cur = g_list_next (cur);
 			continue;
 		}
 		/* Do header folding */
