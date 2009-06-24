@@ -2,10 +2,16 @@
 # $Id$
 #
 
+.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/drugs.inc
+.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/lotto.inc
+.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/fraud.inc
+.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/headers.inc
+.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/html.inc
+
 
 # pidfile - path to pid file
 # Default: pidfile = /var/run/rspamd.pid
-pidfile = "./rspamd.pid";
+pidfile = "/var/run/rspamd.pid";
 
 
 worker {
@@ -46,7 +52,7 @@ logging {
 	# Log type can be: console, syslog and file
 	log_type = console;
 	# Log level can be: DEBUG, INFO, WARN and ERROR
-	log_level = DEBUG;
+	log_level = INFO;
 	# Log facility specifies facility for syslog logging, see syslog (3) for details
 	# log_facility = "LOG_MAIL";
 	
@@ -60,61 +66,128 @@ statfile_pool_size = 40M;
 
 
 # Sample statfile definition
-statfile {
+#statfile {
 	# Alias is used for learning and is used as symbol
-	alias = "test.spam";
+	#alias = "test.spam";
 	# Pattern is path to file, can include %r - recipient name and %f - mail from value
-	pattern = "./test.spam";
+	#pattern = "./test.spam";
 	# Weight in spam/ham classifier
-	weight = 1.0;
+	#weight = 1.0;
 	# Size of this statfile class
-	size = 10M;
+	#size = 10M;
 	# Tokenizer for this statfile
 	# Deafault: osb-text
-	tokenizer = "osb-text";
-};
-statfile {
-	alias = "test.ham";
-	pattern = "./test.ham";
-	weight = -2.0;
-	size = 10M;
-};
+	#tokenizer = "osb-text";
+#};
+#statfile {
+	#alias = "test.ham";
+	#pattern = "./test.ham";
+	#weight = -2.0;
+	#size = 10M;
+#};
 
 # Factors coefficients
 factors {
-	"SURBL_MULTI" = 10.5;
-	"winnow" = 5.5;
-};
+    # SURBL's
+	"SC_SURBL_MULTI" = 5.5;
+	"WS_SURBL_MULTI" = 5.5;
+	"PH_SURBL_MULTI" = 5.5;
+	"OB_SURBL_MULTI" = 5.5;
+	"AB_SURBL_MULTI" = 5.5;
+	"JP_SURBL_MULTI" = 5.5;
+	"RAMBLER_URIBL" = 10.5;
+    
+    # Regexp factors
+	"R_TINYURL" = 2;
+	"R_FREE_HOSTING" = 4;
+	"R_FREE_HOSTING_NAROD" = 3;
+	"R_WWW_EKONF_COM" = 10;
+	"SUBJECT_NEEDS_ENCODING" = 1;
 
+	"R_POCHTA_RU" = 10;
+	"R_BAD_CTE_7BIT" = 6;
+	"R_UNDISC_RCPT" = 5;
+	"MISSING_MID" = 3;
+	"R_RCVD_SPAMBOTS" = 3;
+	"R_TO_SEEMS_AUTO" = 3;
+	"R_MISSING_CHARSET" = 5;
+	"R_SAJDING" = 8;
+	"R_FORGED_MPOP_WEBMAIL" = 8;
+	"R_WHITE_ON_WHITE" = 9;
+	"R_NO_SPACE_IN_FROM" = 3;
+	"R_FLASH_REDIR_IMGSHACK" = 10;
+	"R_SPAM_FROM_VALUEHOST" = 10;
+	"R_SPAM_FROM_MTU" = 8;
+	"R_SPAM_FROM_ONO" = 10;
+	"R_SPAM_FROM_VERSATEL" = 10;
+	"R_SPAM_FROM_LIBERO" = 10;
+	"R_FAKE_OUTLOOK"= 8;
+	"R_FAKE_THEBAT"= 8;
+	"R_LOTTO" = 5;
+	"KAM_LOTTO1" = 7;
+	"FORGED_OUTLOOK_HTML" = 5;
+	"SUSPICIOUS_RECIPS" = 3.5;
+	"HTML_TAG_BALANCE_HEAD" = 5;
+	"SORTED_RECIPS" = 3.5;
+	"TRACKER_ID" = 3.843;
+	"ADVANCE_FEE_2" = 3.300;
+	"ADVANCE_FEE_3" = 2.121;
+	"FORGED_MUA_OUTLOOK" = 3;
+	"FORGED_OUTLOOK_TAGS" = 2.099;
+	"HTML_SHORT_LINK_IMG_2" = 3;
+	"INVALID_MSGID" = 5;
+	"HTML_MIME_NO_HTML_TAG" = 2;
+	"MIME_HEADER_CTYPE_ONLY" = 2;
+	"MISSING_MIMEOLE" = 5;
+	"MISSING_SUBJECT" = 2;
+	"RATWARE_MS_HASH" = 2;
+	"STOX_REPLY_TYPE" = 1;
+	"FM_FAKE_HELO_VERIZON" = 2;
+	"FORGED_MSGID_YAHOO" = 2;
+	"FORGED_MUA_THEBAT_BOUN" = 2;
+	"RCVD_DOUBLE_IP_SPAM" = 2;
+	"REPTO_QUOTE_YAHOO" = 2;
+	"DRUGS_DIET" = 2;
+	"DRUGS_ERECTILE" = 2;
+	"DRUGS_ANXIETY" = 2;
+	"DRUGS_ANXIETY_EREC" = 2;
+	"DRUGS_MANYKINDS" = 2;
+	"FAKE_REPLY_C" = 6;
+	"MIME_HTML_ONLY" = 1;
+    
+    # Modules factors
+    "R_MIXED_CHARSET" = 5;
+    "R_BAD_EMAIL" = 10.5;
+};
 # Options for lmtp worker
-worker {
-	type = "lmtp";
+#worker {
+	#type = "lmtp";
 	# Bind socket for lmtp interface
-	bind_socket = localhost:11335;
+	#bind_socket = localhost:11335;
 	# Metric that is considered as main. If we have spam result on
 	# this metric, lmtp delivery would be failed
-	metric = "default";
+	#metric = "default";
 	# Number of lmtp workers
-	count = 1;
-};
+	#count = 1;
+#};
 
 #worker {
-#	type = "delivery";
+	#type = "delivery";
 	# Path to delivery agent, %f is expanded as mail from address and %r 
 	# is expanded as recipient address
 	# Expample: agent = "/usr/local/bin/procmail -f %f -d %r"
-#	agent = "/dev/null";
+	#agent = "/dev/null";
 	# Bind socket for lmtp interface
 	# Example: bind_socket = localhost:25
 	
 	# Whether we should use lmtp for MTA delivery
-#	lmtp = no;
+	#lmtp = no;
 #};
 
 # SURBL module params, note that single quotes are mandatory here
 .module 'surbl' {
 	# Address to redirector in host:port format
-	redirector = "localhost:8080";
+	#redirector = "localhost:8080";
 	# Connect timeout for redirector
 	redirector_connect_timeout = "1s";
 	# IO timeout for redirector (may be usefull to set this value rather big)
@@ -136,30 +209,80 @@ worker {
 	# Metric for surbl module
 	metric = "default";
 	# List of public known hostings (for which we should use 3 components of domain name instead of 2)
-	2tld = "file:///some/path/file";
+	2tld = "file://@CMAKE_INSTALL_PREFIX@/etc/rspamd/2tld.inc";
 	# Whitelisted urls
-	whitelist = "file:///some/other/file";
+	whitelist = "file://@CMAKE_INSTALL_PREFIX@/etc/rspamd/surbl-whitelist.inc";
 };
 
-
-$to_blah = "To=/\"blah@blah\"/H";
-$from_blah = "From=/blah@blah/H";
-$subject_blah = "Subject=/blah/H";
-
 .module 'regexp' {
-	BLAH_SYMBOL = "${to_blah} & !(${from_blah} | ${subject_blah})";
+	R_TINYURL = "${R_TINYURL}";
+	R_FREE_HOSTING = "${R_FREE_HOSTING}";
+	R_WWW_EKONF_COM = "${R_WWW_EKONF_COM}";
+	R_FREE_HOSTING_NAROD = "${R_FREE_HOSTING_NAROD}";
+	SUBJECT_NEEDS_ENCODING = "${SUBJECT_NEEDS_ENCODING}";
+
+	R_POCHTA_RU = "${R_POCHTA_RU}";
+	R_BAD_CTE_7BIT="${R_BAD_CTE_7BIT}";
+	R_UNDISC_RCPT="${R_UNDISC_RCPT}";
+	MISSING_MID="${MISSING_MID}";
+	R_RCVD_SPAMBOTS="${R_RCVD_SPAMBOTS}";
+	R_TO_SEEMS_AUTO="${R_TO_SEEMS_AUTO}";
+	R_SAJDING="${R_SAJDING}";
+	R_FORGED_MPOP_WEBMAIL="${R_FORGED_MPOP_WEBMAIL}";
+	R_WHITE_ON_WHITE="${R_WHITE_ON_WHITE}";
+	R_NO_SPACE_IN_FROM="${R_NO_SPACE_IN_FROM}";
+	R_FLASH_REDIR_IMGSHACK="${R_FLASH_REDIR_IMGSHACK}";
+	R_SPAM_FROM_VALUEHOST="${R_SPAM_FROM_VALUEHOST}";
+	R_SPAM_FROM_MTU="${R_SPAM_FROM_MTU}";
+	R_SPAM_FROM_ONO="${R_SPAM_FROM_ONO}";
+	R_SPAM_FROM_VERSATEL="${R_SPAM_FROM_VERSATEL}";
+	R_SPAM_FROM_LIBERO="${R_SPAM_FROM_LIBERO}";
+	R_FAKE_OUTLOOK="${R_FAKE_OUTLOOK}";
+	R_FAKE_THEBAT="${R_FAKE_THEBAT}";
+	R_MISSING_CHARSET="${R_MISSING_CHARSET}";
+	R_LOTTO="${R_LOTTO}";
+	KAM_LOTTO1="${KAM_LOTTO1}";
+	FORGED_OUTLOOK_HTML="${FORGED_OUTLOOK_HTML}";
+	SUSPICIOUS_RECIPS="${SUSPICIOUS_RECIPS}";
+	SORTED_RECIPS="${SORTED_RECIPS}";
+	TRACKER_ID="${TRACKER_ID}";
+	ADVANCE_FEE_2="${ADVANCE_FEE_2}";
+	ADVANCE_FEE_3="${ADVANCE_FEE_3}";
+	FORGED_MUA_OUTLOOK="${FORGED_MUA_OUTLOOK}";
+	FORGED_OUTLOOK_TAGS="${FORGED_OUTLOOK_TAGS}";
+	HTML_SHORT_LINK_IMG_2="${HTML_SHORT_LINK_IMG_2}";
+	INVALID_MSGID="${INVALID_MSGID}";
+	HTML_MIME_NO_HTML_TAG="${HTML_MIME_NO_HTML_TAG}";
+	MIME_HEADER_CTYPE_ONLY="${MIME_HEADER_CTYPE_ONLY}";
+	MISSING_MIMEOLE="${MISSING_MIMEOLE}";
+	MISSING_SUBJECT="${MISSING_SUBJECT}";
+	RATWARE_MS_HASH="${RATWARE_MS_HASH}";
+	STOX_REPLY_TYPE="${STOX_REPLY_TYPE}";
+	FM_FAKE_HELO_VERIZON="${FM_FAKE_HELO_VERIZON}";
+	FORGED_MSGID_YAHOO="${FORGED_MSGID_YAHOO}";
+	FORGED_MUA_THEBAT_BOUN="${FORGED_MUA_THEBAT_BOUN}";
+	RCVD_DOUBLE_IP_SPAM="${RCVD_DOUBLE_IP_SPAM}";
+	REPTO_QUOTE_YAHOO="${REPTO_QUOTE_YAHOO}";
+	DRUGS_DIET="${DRUGS_DIET}";
+	DRUGS_ERECTILE="${DRUGS_ERECTILE}";
+	DRUGS_ANXIETY="${DRUGS_ANXIETY}";
+	DRUGS_ANXIETY_EREC="${DRUGS_ANXIETY_EREC}";
+	DRUGS_MANYKINDS="${DRUGS_MANYKINDS}";
+	
+	FAKE_REPLY_C="${FAKE_REPLY_C}";
+	MIME_HTML_ONLY="${MIME_HTML_ONLY}";
 };
 
 .module 'chartable' {
 	metric = "default";
-	symbold = "R_MIXED_CHARSET";
+	symbol = "R_MIXED_CHARSET";
 	threshold = "0.1";
 };
 
 .module 'emails' {
     metric = "default";
-	symbold = "R_BAD_EMAIL";
-    blacklist = "file:///some/path/emails.lst";
+	symbol = "R_BAD_EMAIL";
+    #blacklist = "file:///some/path/emails.lst";
 };
 
 # If enables threat each regexp as raw regex and do not try to convert

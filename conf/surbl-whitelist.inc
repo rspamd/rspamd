@@ -1,0 +1,23 @@
+#
+# $Id: rspamd-whitelist.conf,v 1.1 2009/06/11 12:25:37 dmx Exp $
+#
+1gost.info
+autorambler.ru
+easylnk.com
+google.ru
+li.ru
+list.ru
+liveinternet.ru
+msn.com
+nod32.com
+price.ru
+rambler-co.ru
+rambler.ru
+subscribe.ru
+tns-counter.ru
+top4top.ru
+wordpress.com
+yandex.ru
+yandex.net
+youtube.com
+walmart.com

@@ -43,13 +43,13 @@ sub parse_config {
 
     my $ctrl = 0, $skip = 0;
     while (<CONF>) {
-        if ($_ =~ /control\s*{/i) {
+        if ($_ =~ /^.*type.*=.*controller.*$/i) {
             $ctrl = 1;
         }
         if ($ctrl && $_ =~ /}/) {
             $ctrl = 0;
         }
-        if ($_ =~ /lmtp\s*{/i || $_ =~ /delivery\s*{/i) {
+        if ($_ =~ /^.*type.*=.*(?:lmtp|delivery).*$/i) {
             $skip = 1;
         }
         if ($skip && $_ =~ /}/) {
