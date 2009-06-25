@@ -586,7 +586,7 @@ redirector_callback (int fd, short what, void *arg)
 					if (*p == '\0') {
 						msg_debug ("redirector_callback: <%s> got reply from redirector: '%s' -> '%s'", 
 									param->task->message_id, struri (param->url), c);
-						parse_uri (param->url, c, param->task->task_pool);
+						parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
 					}
 				}
 				event_del (&param->ev);
