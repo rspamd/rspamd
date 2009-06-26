@@ -528,18 +528,19 @@ redirector_callback (int fd, short what, void *arg)
 	struct redirector_param *param = (struct redirector_param *)arg;
 	char url_buf[1024];
 	int r;
-	struct timeval timeout;
+	struct timeval *timeout;
 	char *p, *c;
 
 	switch (param->state) {
 		case STATE_CONNECT:
 			/* We have write readiness after connect call, so reinit event */
 			if (what == EV_WRITE) {
-				timeout.tv_sec = surbl_module_ctx->read_timeout / 1000;
-				timeout.tv_usec = surbl_module_ctx->read_timeout - timeout.tv_sec * 1000;
+				timeout = memory_pool_alloc (param->task->task_pool, sizeof (struct timeval));
+				timeout->tv_sec = surbl_module_ctx->read_timeout / 1000;
+				timeout->tv_usec = surbl_module_ctx->read_timeout - timeout->tv_sec * 1000;
 				event_del (&param->ev);
 				event_set (&param->ev, param->sock, EV_READ | EV_PERSIST, redirector_callback, (void *)param);
-				event_add (&param->ev, &timeout);
+				event_add (&param->ev, timeout);
 				r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
 				if (write (param->sock, url_buf, r) == -1) {
 					msg_err ("redirector_callback: write failed %s", strerror (errno));
@@ -622,7 +623,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
 {
 	int s;
 	struct redirector_param *param;
-	struct timeval timeout;
+	struct timeval *timeout;
 
 	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, surbl_module_ctx->redirector_port, FALSE);
 
@@ -640,10 +641,11 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
 	param->state = STATE_CONNECT;
 	param->sock = s;
 	param->tree = url_tree;
-	timeout.tv_sec = surbl_module_ctx->connect_timeout / 1000;
-	timeout.tv_usec = surbl_module_ctx->connect_timeout - timeout.tv_sec * 1000;
+	timeout = memory_pool_alloc (task->task_pool, sizeof (struct timeval));
+	timeout->tv_sec = surbl_module_ctx->connect_timeout / 1000;
+	timeout->tv_usec = surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000;
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
-	event_add (&param->ev, &timeout);
+	event_add (&param->ev, timeout);
 }
 
 static gboolean

@@ -381,7 +381,7 @@ sub process_input {
 
     if ((defined($cfg{check_regexp}) && $request->uri !~ $cfg{check_regexp}) || 
         (defined($cfg{check_domains}) && scalar(grep {$_ eq $domain} @{$cfg{check_domains}}) == 0)) {
-        write_log ($heap->{remote_ip}, "Uri is not checked: " . $request->uri);
+        write_log ($heap->{remote_ip}, "Uri is not checked: " . $request->uri) if $cfg{debug};
         my $new_response = HTTP::Response->new(200);
         $new_response->header("Uri", $request->uri); 
         $new_response->header("Connection", "close"); 
