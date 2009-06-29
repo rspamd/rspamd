@@ -16,7 +16,6 @@
 #define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
 
-
 struct surbl_ctx {
 	int (*header_filter)(struct worker_task *task);
 	int (*mime_filter)(struct worker_task *task);

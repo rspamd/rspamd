@@ -37,7 +37,6 @@ enum rspamd_command {
 	CMD_SKIP,
 	CMD_PING,
 	CMD_PROCESS,
-	CMD_URLS,
 	CMD_OTHER,
 };
 

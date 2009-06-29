@@ -38,6 +38,15 @@ static struct surbl_ctx *surbl_module_ctx = NULL;
 static int surbl_test_url (struct worker_task *task);
 static void dns_callback (int result, char type, int count, int ttl, void *addresses, void *data);
 static void process_dns_results (struct worker_task *task, struct suffix_item *suffix, char *url, uint32_t addr);
+static int  urls_command_handler (struct worker_task *task);
+
+#define SURBL_ERROR surbl_error_quark ()
+#define WHITELIST_ERROR 0
+GQuark
+surbl_error_quark (void)
+{
+	return g_quark_from_static_string ("surbl-error-quark");
+}
 
 int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -74,6 +83,8 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->extract_numeric_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
+
+	register_protocol_command ("urls", urls_command_handler);
 
 	return 0;
 }
@@ -212,14 +223,24 @@ surbl_module_reconfig (struct config_file *cfg)
 	return surbl_module_config (cfg);
 }
 
+
+
 static char *
-format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item *suffix, char **host_end) 
+format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item *suffix, char **host_end, gboolean append_suffix, GError **err) 
 {
 	GMatchInfo *info;
 	char *result = NULL;
     int len, slen, r;
-    
-	slen = strlen (suffix->suffix);
+   	
+	if (suffix != NULL) {
+		slen = strlen (suffix->suffix);
+	}
+	else if (!append_suffix) {
+		slen = 0;
+	}
+	else {
+		g_assert_not_reached ();
+	}
     len = hostname->len + slen + 2;
 
 	/* First try to match numeric expression */
@@ -231,7 +252,25 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		octet4 = g_match_info_fetch (info, 4);
 		result = memory_pool_alloc (pool, len);
 		msg_debug ("format_surbl_request: got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
-		r = snprintf (result, len, "%s.%s.%s.%s.%s", octet4, octet3, octet2, octet1, suffix->suffix);
+		r = snprintf (result, len, "%s.%s.%s.%s", octet4, octet3, octet2, octet1);
+		if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+			g_free (octet1);
+			g_free (octet2);
+			g_free (octet3);
+			g_free (octet4);
+			g_match_info_free (info);
+			msg_debug ("format_surbl_request: url %s is whitelisted", result);
+			g_set_error (err,
+                   SURBL_ERROR,                 /* error domain */
+                   WHITELIST_ERROR,            	/* error code */
+                   "URL is whitelisted: %s", 	/* error message format string */
+                   result);
+
+			return NULL;
+		}
+		if (append_suffix) {
+			r += snprintf (result + r, len - r, ".%s", suffix->suffix);
+		}
 		*host_end = result + r - slen - 1;
 		g_free (octet1);
 		g_free (octet2);
@@ -259,7 +298,23 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 				hpart2 = g_match_info_fetch (info, 2);
 				hpart3 = g_match_info_fetch (info, 3);
 				msg_debug ("format_surbl_request: got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
-				r = snprintf (result, len, "%s.%s.%s.%s", hpart1, hpart2, hpart3, suffix->suffix);
+				r = snprintf (result, len, "%s.%s.%s", hpart1, hpart2, hpart3);
+				if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+					g_free (hpart1);
+					g_free (hpart2);
+					g_free (hpart3);
+					g_match_info_free (info);
+					msg_debug ("format_surbl_request: url %s is whitelisted", result);
+					g_set_error (err,
+						   SURBL_ERROR,                 /* error domain */
+						   WHITELIST_ERROR,            	/* error code */
+						   "URL is whitelisted: %s", 	/* error message format string */
+						   result);
+					return NULL;
+				}
+				if (append_suffix) {
+					r += snprintf (result + r, len - r, ".%s", suffix->suffix);
+				}
 				*host_end = result + r - slen - 1;
 				g_free (hpart1);
 				g_free (hpart2);
@@ -272,7 +327,20 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 			return NULL;
 		}
 		else {
-			r = snprintf (result, len, "%s.%s.%s", part1, part2, suffix->suffix);
+			if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+				g_free (part1);
+				g_free (part2);
+				msg_debug ("format_surbl_request: url %s is whitelisted", result);
+				g_set_error (err,
+					   SURBL_ERROR,                 /* error domain */
+					   WHITELIST_ERROR,            	/* error code */
+					   "URL is whitelisted: %s", 	/* error message format string */
+					   result);
+				return NULL;
+			}
+			if (append_suffix) {
+				r += snprintf (result + r, len - r, ".%s", suffix->suffix);
+			}
 			*host_end = result + r - slen - 1;
 			msg_debug ("format_surbl_request: got normal 2-d level domain %s.%s", part1, part2);
 		}
@@ -292,6 +360,7 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 	char *surbl_req;
 	f_str_t f;
 	GList *cur;
+	GError *err = NULL;
 	struct dns_param *param;
 	struct suffix_item *suffix;
 	char *host_end;
@@ -302,7 +371,7 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 
 	while (cur) {
 		suffix = (struct suffix_item *)cur->data;
-		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, &host_end)) != NULL) {
+		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, &host_end, TRUE, &err)) != NULL) {
 			if (g_tree_lookup (tree, surbl_req) == NULL) {
 				g_tree_insert (tree, surbl_req, surbl_req);
 				param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
@@ -312,23 +381,16 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 				*host_end = '\0';
 				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 				*host_end = '.';
-				if (task->cmd == CMD_URLS) {
-					process_dns_results (task, suffix, param->host_resolve, 0);
-					/* Immideately break cycle */
-					break;
-				}
-				else {
-					msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-					evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-					param->task->save.saved ++;
-				}
+				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+				param->task->save.saved ++;
 			}
 			else {
 				msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
 			}
 		}
-		else {
-			msg_info ("surbl_test_url: cannot format url string for surbl %s", struri (url));
+		else if (err != NULL && err->code != WHITELIST_ERROR) {
+			msg_info ("surbl_test_url: cannot format url string for surbl %s, %s", struri (url), err->message);
 			return;
 		}
 		cur = g_list_next (cur);
@@ -343,12 +405,6 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 	struct surbl_bit_item *bit;
 	int len, found = 0;
 	
-	if (task->cmd == CMD_URLS) {
-		insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1, 
-							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
-		return;
-	}
-
 	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
 		cur = g_list_first (surbl_module_ctx->bits);
 
@@ -656,22 +712,17 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 
 	msg_debug ("surbl_test_url: check url %s", struri (url));
 
-	if (param->task->cmd == CMD_URLS) {
-		make_surbl_requests (url, param->task, param->tree);
+	if (surbl_module_ctx->use_redirector) {
+		register_redirector_call (url, param->task, param->tree);
+		param->task->save.saved++;
 	}
 	else {
-		if (surbl_module_ctx->use_redirector) {
-			register_redirector_call (url, param->task, param->tree);
+		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
+			register_memcached_call (url, param->task, param->tree);
 			param->task->save.saved++;
 		}
 		else {
-			if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
-				register_memcached_call (url, param->task, param->tree);
-				param->task->save.saved++;
-			}
-			else {
-				make_surbl_requests (url, param->task, param->tree);
-			}
+			make_surbl_requests (url, param->task, param->tree);
 		}
 	}
 
@@ -714,6 +765,55 @@ surbl_test_url (struct worker_task *task)
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, url_tree);
 	return 0;
 }
+
+static int 
+urls_command_handler (struct worker_task *task)
+{
+	GList *cur;
+	char outbuf[16384], *urlstr;
+	int r, num = 0;
+	struct uri *url;
+	GError *err = NULL;
+	GTree *url_tree;
+	f_str_t f;
+	char *host_end;
+
+	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
+
+	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
+	
+	r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "URLs: ");
+	
+	cur = g_list_first (task->urls);
+
+	while (cur) {
+		num ++;
+		url = cur->data;
+		if (g_tree_lookup (url_tree, struri (url)) == NULL) {
+			g_tree_insert (url_tree, struri (url), url);
+			f.begin = url->host;
+			f.len = url->hostlen;
+			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, &host_end, FALSE, &err)) != NULL) {
+				if (g_list_next (cur) != NULL) {
+					r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "%s, ", (char *)urlstr);
+				}
+				else {
+					r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "%s", (char *)urlstr);
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+	
+	outbuf[r++] = '\r'; outbuf[r++] = '\n';
+
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	msg_info ("process_message: msg ok, id: <%s>, %d urls extracted", task->message_id, num);
+	g_tree_destroy (url_tree);
+
+	return 0;
+}
+
 
 /*
  * vi:ts=4 

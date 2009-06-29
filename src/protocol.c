@@ -62,11 +62,6 @@
 #define MSG_CMD_PROCESS "process"
 
 /*
- * Only extract urls from message
- */
-#define MSG_CMD_URLS "urls"
-
-/*
  * spamassassin greeting:
  */
 #define SPAMC_GREETING "SPAMC"
@@ -177,17 +172,6 @@ parse_command (struct worker_task *task, f_str_t *line)
 				return -1;
 			}
 			break;
-		case 'u':
-		case 'U':
-			/* urls */
-			if (g_ascii_strcasecmp (token + 1, MSG_CMD_URLS + 1) == 0) {
-				task->cmd = CMD_URLS;
-			}
-			else {
-				msg_debug ("parse_command: bad command: %s", token);
-				return -1;
-			}
-			break;
 		default:
 			cur = custom_commands;
 			while (cur) {
@@ -197,6 +181,7 @@ parse_command (struct worker_task *task, f_str_t *line)
 					task->custom_cmd = cmd;
 					break;
 				}
+				cur = g_list_next (cur);
 			}
 
 			if (cur == NULL) {
@@ -445,12 +430,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	GList *cur;
 
 	if (s->options) {
-		if (task->cmd != CMD_URLS) {
-			r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
-		}
-		else {
-			r = snprintf (outbuf, OUTBUFSIZ, "Urls: ");
-		}
+		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
 		cur = s->options;
 		while (cur) {
 			if (g_list_next (cur)) {
@@ -467,9 +447,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 			outbuf[OUTBUFSIZ - 1] = '\n';
 		}
 	}
-	else if (task->cmd != CMD_URLS) {
-		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
-	}
+	r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 						"%s,", (char *)key); 
 
@@ -617,23 +595,6 @@ write_check_reply (struct worker_task *task)
 }
 
 static int
-write_urls_reply (struct worker_task *task)
-{
-	int r;
-	char outbuf[OUTBUFSIZ];
-
-	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
-
-	show_url_header (task);
-
-	msg_info ("process_message: msg ok, id: <%s>, %d urls extracted", task->message_id, g_list_length (task->urls));
-
-	return 0;
-}
-
-
-static int
 write_process_reply (struct worker_task *task)
 {
 	int r;
@@ -729,9 +690,6 @@ write_reply (struct worker_task *task)
 			case CMD_PING:
 				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
 				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
-				break;
-			case CMD_URLS:
-				return write_urls_reply (task);
 				break;
 			case CMD_OTHER:
 				return task->custom_cmd->func (task);
