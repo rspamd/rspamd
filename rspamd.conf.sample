@@ -294,3 +294,17 @@ raw_mode = yes;
 url_filters = "surbl";
 header_filters = "regexp";
 mime_filters = "chartable,emails";
+
+# Definition of view, views may allow to customize rules for different messages
+view {
+	# All directives here may be duplicated to add specific elements or regexp/files
+	# List of ip/mask for this view
+	ip = "file://@CMAKE_INSTALL_PREFIX@/etc/rspamd/ip_internal.inc";
+	# From addresses for this view:
+	# list is placed in file:
+	#from = "file://@CMAKE_INSTALL_PREFIX@/etc/rspamd/from_internal.inc";
+	# list is regexp:
+	#from = "/^.+@example.com$/i";
+	# Symbols to check, can also be list of files or regexp:
+	symbols = "/^[A-Z]{2}_SURBL_MULTI$/i";
+};

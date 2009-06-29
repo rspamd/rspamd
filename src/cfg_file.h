@@ -219,6 +219,7 @@ struct config_file {
 	GHashTable* statfiles;							/**< hash of defined statfiles indexed by alias			*/
     GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	int clock_res;									/**< resolution of clock used							*/
+	GList *views;									/**< views												*/
 };
 
 /**

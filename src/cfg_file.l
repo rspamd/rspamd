@@ -38,6 +38,10 @@ composites						return COMPOSITES;
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
 
+view							return VIEW;
+ip								return IP;
+from							return FROM;
+symbols							return SYMBOLS;
 
 error_time                      return ERROR_TIME;
 dead_time                       return DEAD_TIME;

@@ -33,6 +33,7 @@
 #include "../cfg_file.h"
 #include "../expressions.h"
 #include "../util.h"
+#include "../view.h"
 
 #define DEFAULT_SYMBOL "R_BAD_EMAIL"
 
@@ -204,16 +205,18 @@ emails_mime_filter (struct worker_task *task)
 
 	emails = extract_emails (task);
 
-	if (email_module_ctx->blacklist && emails) {
-		cur = g_list_first (emails);
+	if (check_view (task->cfg->views, email_module_ctx->symbol, task)) {
+		if (email_module_ctx->blacklist && emails) {
+			cur = g_list_first (emails);
 
-		while (cur) {
-			if (g_hash_table_lookup (email_module_ctx->blacklist, cur->data) != NULL) {
-				insert_result (task, email_module_ctx->metric, email_module_ctx->symbol, 1, 
-							g_list_prepend (NULL, memory_pool_strdup (task->task_pool, (char *)cur->data)));
-	
+			while (cur) {
+				if (g_hash_table_lookup (email_module_ctx->blacklist, cur->data) != NULL) {
+					insert_result (task, email_module_ctx->metric, email_module_ctx->symbol, 1, 
+								g_list_prepend (NULL, memory_pool_strdup (task->task_pool, (char *)cur->data)));
+		
+				}
+				cur = g_list_next (cur);
 			}
-			cur = g_list_next (cur);
 		}
 	}
 

@@ -878,8 +878,10 @@ set_counter (const char *name, long int value)
 	}
 }
 
-gboolean
-parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
+typedef void (*insert_func)(gpointer st, gconstpointer key, gpointer value);
+
+static gboolean
+abstract_parse_list (memory_pool_t *pool, void *arg, insert_func func, const char *filename)
 {
 	int fd;
 	char buf[BUFSIZ], str[BUFSIZ], *s, *p;
@@ -917,7 +919,7 @@ parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
 						if (s != str) {
 							*s = '\0';
 							s = memory_pool_strdup (pool, str);
-							g_hash_table_insert (tbl, s, hash_fill);
+							func (arg, s, hash_fill);
 							s = str;
 						}
 						state = SKIP_COMMENT;
@@ -926,7 +928,7 @@ parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
 						if (s != str) {
 							*s = '\0';
 							s = memory_pool_strdup (pool, str);
-							g_hash_table_insert (tbl, s, hash_fill);
+							func (arg, s, hash_fill);
 							s = str;
 						}
 						while (*p == '\r' || *p == '\n') {
@@ -963,6 +965,59 @@ parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
 	return TRUE;
 }
 
+static void
+radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
+{
+	radix_tree_t *tree = st;
+
+	uint32_t mask = 0xFFFFFFFF;
+	uint32_t ip;
+	char *token, *ipnet;
+	struct in_addr ina;
+	int k;
+	
+	k = strlen ((char *)key) + 1;
+	ipnet = alloca (k);
+	g_strlcpy (ipnet, key, k);
+	token = strsep (&ipnet, "/");
+
+	if (ipnet != NULL) {
+		k = atoi (ipnet);
+		if (k > 32 || k < 0) {
+			msg_warn ("radix_tree_insert_helper: invalid netmask value: %d", k);
+			k = 32;
+		}
+		k = 32 - k;
+		mask = mask << k;
+	}
+
+	if (inet_aton (token, &ina) == 0) {
+		msg_err ("radix_tree_insert_helper: invalid ip address: %s", token);
+		return;
+	}
+
+	ip = ntohl ((uint32_t)ina.s_addr);
+	k = radix32tree_insert (tree, ip, mask, 1);
+	if (k == -1) {
+		msg_warn ("radix_tree_insert_helper: cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
+	}
+	else if (k == 1) {
+		msg_warn ("add_ip_radix: ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
+	}
+}
+
+gboolean 
+parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
+{
+	return abstract_parse_list (pool, (void *)tbl, (insert_func)g_hash_table_insert, filename);
+}
+
+gboolean 
+parse_radix_list (memory_pool_t *pool, radix_tree_t *tree, const char *filename)
+{
+	return abstract_parse_list (pool, (void *)tree, (insert_func)radix_tree_insert_helper, filename);
+}
+
 gboolean
 maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
 {
@@ -988,6 +1043,31 @@ maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filenam
 	}
 
 	return TRUE;
+}
+
+#ifndef g_tolower
+#define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
+#endif
+
+gint
+rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
+{
+	return g_ascii_strcasecmp ((const char *) v, (const char *) v2) == 0;
+}
+
+
+guint
+rspamd_strcase_hash (gconstpointer key)
+{
+	const char *p = key;
+	guint h = 0;
+	
+	while (*p != '\0') {
+		h = (h << 5) - h + g_tolower (*p);
+		p++;
+	}
+	
+	return h;
 }
 
 /*

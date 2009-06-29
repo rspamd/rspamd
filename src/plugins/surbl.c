@@ -29,6 +29,7 @@
 #include "../config.h"
 #include "../util.h"
 #include "../message.h"
+#include "../view.h"
 #include <evdns.h>
 
 #include "surbl.h"
@@ -371,27 +372,32 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 
 	while (cur) {
 		suffix = (struct suffix_item *)cur->data;
-		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, &host_end, TRUE, &err)) != NULL) {
-			if (g_tree_lookup (tree, surbl_req) == NULL) {
-				g_tree_insert (tree, surbl_req, surbl_req);
-				param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
-				param->url = url;
-				param->task = task;
-				param->suffix = suffix;
-				*host_end = '\0';
-				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
-				*host_end = '.';
-				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-				evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-				param->task->save.saved ++;
+		if (check_view (task->cfg->views, suffix->symbol, task)) {
+			if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, &host_end, TRUE, &err)) != NULL) {
+				if (g_tree_lookup (tree, surbl_req) == NULL) {
+					g_tree_insert (tree, surbl_req, surbl_req);
+					param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
+					param->url = url;
+					param->task = task;
+					param->suffix = suffix;
+					*host_end = '\0';
+					param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
+					*host_end = '.';
+					msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+					evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
+					param->task->save.saved ++;
+				}
+				else {
+					msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
+				}
 			}
-			else {
-				msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
+			else if (err != NULL && err->code != WHITELIST_ERROR) {
+				msg_info ("surbl_test_url: cannot format url string for surbl %s, %s", struri (url), err->message);
+				return;
 			}
 		}
-		else if (err != NULL && err->code != WHITELIST_ERROR) {
-			msg_info ("surbl_test_url: cannot format url string for surbl %s, %s", struri (url), err->message);
-			return;
+		else {
+			msg_debug ("make_surbl_requests: skipping symbol that is not in view: %s", suffix->symbol);
 		}
 		cur = g_list_next (cur);
 	}

@@ -287,6 +287,8 @@ accept_socket (int fd, short what, void *arg)
 	new_task->state = READ_COMMAND;
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
+	new_task->from_addr.s_addr = INADDR_NONE;
+	new_task->view_checked = FALSE;
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
 #elif defined(HAVE_CLOCK_VIRTUAL)

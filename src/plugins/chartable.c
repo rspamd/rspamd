@@ -32,6 +32,7 @@
 #include "../modules.h"
 #include "../cfg_file.h"
 #include "../expressions.h"
+#include "../view.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1
@@ -182,12 +183,14 @@ chartable_mime_filter (struct worker_task *task)
 {	
 	GList *cur;
 
-	cur = g_list_first (task->text_parts);
-	while (cur) {
-		if (check_part ((struct mime_text_part *)cur->data, task->cfg->raw_mode)) {
-			insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);	
+	if (check_view (task->cfg->views, chartable_module_ctx->symbol, task)) {
+		cur = g_list_first (task->text_parts);
+		while (cur) {
+			if (check_part ((struct mime_text_part *)cur->data, task->cfg->raw_mode)) {
+				insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);	
+			}
+			cur = g_list_next (cur);
 		}
-		cur = g_list_next (cur);
 	}
 
 	return 0;

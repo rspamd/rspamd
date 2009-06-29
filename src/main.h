@@ -81,6 +81,7 @@ struct config_file;
 struct tokenizer;
 struct classifier;
 struct mime_part;
+struct rspamd_view;
 
 /** 
  * Server statistics
@@ -198,6 +199,8 @@ struct worker_task {
 	int error_code;												/**< code of last error								*/
 	memory_pool_t *task_pool;									/**< memory pool for task							*/
 	struct timespec ts;											/**< time of connection								*/
+	struct rspamd_view *view;									/**< matching view									*/
+	gboolean view_checked;
 };
 
 /**

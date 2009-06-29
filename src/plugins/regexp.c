@@ -36,6 +36,7 @@
 #include "../cfg_file.h"
 #include "../util.h"
 #include "../expressions.h"
+#include "../view.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 
@@ -591,28 +592,29 @@ process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
     struct timespec ts1, ts2;
 	uint64_t diff;
 
+	if (check_view (task->cfg->views, item->symbol, task)) {
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
+		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
 #elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL, &ts1);
+		clock_gettime (CLOCK_VIRTUAL, &ts1);
 #else
-	clock_gettime (CLOCK_REALTIME, &ts1);
+		clock_gettime (CLOCK_REALTIME, &ts1);
+#endif
+		if (process_regexp_expression (item->expr, task)) {
+			insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+		}
+
+#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts2);
+#elif defined(HAVE_CLOCK_VIRTUAL)
+		clock_gettime (CLOCK_VIRTUAL, &ts2);
+#else
+		clock_gettime (CLOCK_REALTIME, &ts2);
 #endif
 
-	if (process_regexp_expression (item->expr, task)) {
-		insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+		diff = (ts2.tv_sec - ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
+		set_counter (item->symbol, diff);
 	}
-
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts2);
-#elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL, &ts2);
-#else
-	clock_gettime (CLOCK_REALTIME, &ts2);
-#endif
-
-	diff = (ts2.tv_sec - ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
-	set_counter (item->symbol, diff);
 }
 
 static int

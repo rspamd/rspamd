@@ -7,7 +7,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 2)
-SET(RSPAMD_VERSION_PATCH 1)
+SET(RSPAMD_VERSION_PATCH 2)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
@@ -312,7 +312,9 @@ SET(RSPAMDSRC	src/modules.c
 				src/buffer.c
 				src/html.c
 				src/lmtp.c
-				src/lmtp_proto.c)
+				src/lmtp_proto.c
+				src/radix.c
+				src/view.c)
 
 IF(ENABLE_PERL MATCHES "ON")
 	LIST(APPEND RSPAMDSRC src/perl.c)
@@ -344,6 +346,7 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/hash.c
 				src/url.c
 				src/util.c
+				src/radix.c
 				src/fuzzy.c
 				src/memcached.c
 				src/message.c
@@ -361,7 +364,8 @@ SET(UTILSDEPENDS src/mem_pool.c
 				src/expressions.c
 				src/message.c
 				src/html.c
-				src/util.c)
+				src/util.c
+				src/radix.c)
 
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 

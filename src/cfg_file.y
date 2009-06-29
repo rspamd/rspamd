@@ -8,6 +8,7 @@
 #include "expressions.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
+#include "view.h"
 #ifdef WITH_LUA
 #include "lua-rspamd.h"
 #else
@@ -24,6 +25,8 @@ struct metric *cur_metric = NULL;
 struct statfile *cur_statfile = NULL;
 struct statfile_section *cur_section = NULL;
 struct worker_conf *cur_worker = NULL;
+
+struct rspamd_view *cur_view = NULL;
 
 %}
 
@@ -51,6 +54,7 @@ struct worker_conf *cur_worker = NULL;
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
+%token  VIEW IP FROM SYMBOLS
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -93,6 +97,7 @@ command	:
 	| luacode
 	| raw_mode
 	| profile_file
+	| view
 	;
 
 tempdir :
@@ -832,6 +837,62 @@ profile_file:
 	}
 	;
 
+view:
+	VIEW OBRACE viewbody EBRACE {
+		if (cur_view == NULL) {
+			yyerror ("yyparse: not enough arguments in view definition");
+			YYERROR;
+		}
+		cfg->views = g_list_prepend (cfg->views, cur_view);
+		cur_view = NULL;
+	}
+	;
+
+viewbody:
+	| viewcmd SEMICOLON
+	| viewbody viewcmd SEMICOLON
+	;
+
+viewcmd:
+	| viewip
+	| viewfrom
+	| viewsymbols
+	;
+	
+viewip:
+	IP EQSIGN QUOTEDSTRING {
+		if (cur_view == NULL) {
+			cur_view = init_view (cfg->cfg_pool);
+		}
+		if (!add_view_ip (cur_view, $3)) {
+			yyerror ("yyparse: invalid ip line in view definition: ip = '%s'", $3);
+			YYERROR;
+		}
+	}
+	;
+
+viewfrom:
+	FROM EQSIGN QUOTEDSTRING {
+		if (cur_view == NULL) {
+			cur_view = init_view (cfg->cfg_pool);
+		}
+		if (!add_view_from (cur_view, $3)) {
+			yyerror ("yyparse: invalid from line in view definition: from = '%s'", $3);
+			YYERROR;
+		}
+	}
+	;
+viewsymbols:
+	SYMBOLS EQSIGN QUOTEDSTRING {
+		if (cur_view == NULL) {
+			cur_view = init_view (cfg->cfg_pool);
+		}
+		if (!add_view_symbols (cur_view, $3)) {
+			yyerror ("yyparse: invalid symbols line in view definition: symbols = '%s'", $3);
+			YYERROR;
+		}
+	}
+	;
 %%
 /* 
  * vi:ts=4 
