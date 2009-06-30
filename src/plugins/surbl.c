@@ -288,7 +288,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 		part2 = g_match_info_fetch (info, 2);
 		g_match_info_free (info);
 		result = memory_pool_alloc (pool, len); 
-		snprintf (result, len, "%s.%s", part1, part2);
+		r = snprintf (result, len, "%s.%s", part1, part2);
 		if (g_hash_table_lookup (surbl_module_ctx->tld2, result) != NULL) {
 			/* Match additional part for hosters */
 			g_free (part1);
