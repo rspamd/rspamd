@@ -393,7 +393,11 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 			}
 			else if (err != NULL && err->code != WHITELIST_ERROR) {
 				msg_info ("surbl_test_url: cannot format url string for surbl %s, %s", struri (url), err->message);
+				g_error_free (err);
 				return;
+			}
+			else if (err != NULL) {
+				g_error_free (err);
 			}
 		}
 		else {
