@@ -129,7 +129,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 	f_str_t res;
 	char *c, *b;
 	char **pos;
-	unsigned int *len;
+	size_t *len;
 	enum io_policy saved_policy;
 
 

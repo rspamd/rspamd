@@ -33,7 +33,7 @@
 GByteArray*
 strip_html_tags (memory_pool_t *pool, struct mime_text_part *part, GByteArray *src, int *stateptr)
 {
-	uint8_t *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin, c, lc;
+	uint8_t *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin = NULL, c, lc;
 	int br, i = 0, depth = 0, in_q = 0;
 	int state = 0;
 	GByteArray *buf;
