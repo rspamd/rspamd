@@ -1179,7 +1179,7 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
 		ar[i].name = memory_pool_strdup (task->task_pool, internet_address_get_addr (addr));
-		if ((c = strchr (ar[i].name, '@')) != NULL) {
+		if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
 			*c = '\0';
 			ar[i].addr = c + 1;
 		}
