@@ -144,7 +144,7 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 
 	if (cmd->privilleged && !session->authorized) {
 		r = snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
-		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 		return 0;
 	}
 
@@ -161,7 +161,7 @@ counter_write_callback (gpointer key, gpointer value, void *data)
 	int r;
 
 	r = snprintf (out_buf, sizeof (out_buf), "%s: %llu" CRLF, name, (unsigned long long int)cd->value);
-	rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE);
+	rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE);
 }
 
 static void
@@ -182,23 +182,23 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			if (!arg || *arg == '\0') {
 				msg_debug ("process_command: empty password passed");
 				r = snprintf (out_buf, sizeof (out_buf), "password command requires one argument" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				return;
 			}
 			if (password == NULL) {
 				r = snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access unallowed" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				return;
 			}
 			if (strncmp (arg, password, strlen (arg)) == 0) {
 				session->authorized = 1;
 				r = snprintf (out_buf, sizeof (out_buf), "password accepted" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			}
 			else {
 				session->authorized = 0;
 				r = snprintf (out_buf, sizeof (out_buf), "password NOT accepted" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			}
 			break;
 		case COMMAND_QUIT:
@@ -207,7 +207,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		case COMMAND_RELOAD:
 			if (check_auth (cmd, session)) {
 				r = snprintf (out_buf, sizeof (out_buf), "reload request sent" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				kill (getppid (), SIGHUP);
 			}
 			break;
@@ -236,13 +236,13 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							  (long int)mem_st.chunks_freed);
 				r += snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %ld" CRLF,
 							  (long int)mem_st.oversized_chunks);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			}
 			break;
 		case COMMAND_SHUTDOWN:
 			if (check_auth (cmd, session)) {
 				r = snprintf (out_buf, sizeof (out_buf), "shutdown request sent" CRLF);
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				kill (getppid (), SIGTERM);
 			}
 			break;
@@ -273,7 +273,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								minutes, minutes > 1 ? "s" : " ",
 								(int)uptime, uptime > 1 ? "s" : " ");
 				}
-				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			}
 			break;
 		case COMMAND_LEARN:
@@ -282,28 +282,28 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				if (!arg || *arg == '\0') {
 					msg_debug ("process_command: no statfile specified in learn command");
 					r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
-					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 					return;
 				}
 				arg = *(cmd_args + 1);
 				if (arg == NULL || *arg == '\0') {
 					msg_debug ("process_command: no statfile size specified in learn command");
 					r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
-					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 					return;
 				}
 				size = strtoul (arg, &err_str, 10);
 				if (err_str && *err_str != '\0') {
 					msg_debug ("process_command: statfile size is invalid: %s", arg);
 					r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 					return;
 				}
 
 				statfile = g_hash_table_lookup (session->cfg->statfiles, *cmd_args);
 				if (statfile == NULL) {
 					r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
-					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 					return;
 
 				}
@@ -331,7 +331,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								arg = *(cmd_args + 1);
 								if (!arg || *arg == '\0') {
 									r = snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF);
-									rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+									rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 									return;
 								}
 								session->learn_rcpt = memory_pool_strdup (session->session_pool, arg);
@@ -340,7 +340,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								arg = *(cmd_args + 1);
 								if (!arg || *arg == '\0') {
 									r = snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF);
-									rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+									rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 									return;
 								}
 								session->learn_from = memory_pool_strdup (session->session_pool, arg);
@@ -350,7 +350,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								break;
 							default:
 								r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF);
-								rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+								rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 								return;
 						}
 					}
@@ -362,12 +362,12 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					if (statfile_pool_create (session->worker->srv->statfile_pool, 
 									session->learn_filename, statfile->size / sizeof (struct stat_file_block)) == -1) {
 						r = snprintf (out_buf, sizeof (out_buf), "cannot create statfile %s" CRLF, session->learn_filename);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 						return;
 					}
 					if (statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename) == -1) {
 						r = snprintf (out_buf, sizeof (out_buf), "cannot open statfile %s" CRLF, session->learn_filename);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 						return;
 					}
 				}
@@ -386,7 +386,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 							"    stat - show different rspamd stat" CRLF
 							"    counters - show rspamd counters" CRLF
 							"    uptime - rspamd uptime" CRLF);
-			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE);
+			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			break;
 		case COMMAND_COUNTERS:
 			rspamd_hash_foreach (counters, counter_write_callback, session);
@@ -422,12 +422,12 @@ controller_read_socket (f_str_t *in, void *arg)
 					case 0:
 						msg_debug ("Unknown command: '%s'", cmd);
 						i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE);
+						rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
 						break;
 					default:
 						msg_debug ("Ambigious command: '%s'", cmd);
 						i = snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE);
+						rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
 						break;
 				}
 			}
@@ -435,7 +435,7 @@ controller_read_socket (f_str_t *in, void *arg)
 				session->state = STATE_REPLY;
 			}
 			if (session->state != STATE_LEARN) {
-				rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE);
+				rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE, TRUE);
 			}
 
 			g_strfreev (params);
@@ -449,7 +449,7 @@ controller_read_socket (f_str_t *in, void *arg)
 				if (!session->learn_tokenizer->tokenize_func (session->learn_tokenizer, 
 							session->session_pool, &c, &tokens)) {
 					i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
-					rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE);
+					rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
 					session->state = STATE_REPLY;
 					return;
 				}
@@ -459,7 +459,7 @@ controller_read_socket (f_str_t *in, void *arg)
 													session->learn_filename, tokens, session->in_class);
 			session->worker->srv->stat->messages_learned ++;
 			i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
-			rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE);
+			rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
 
 			/* Clean learned parts */
 			while ((cur = g_list_first (session->parts))) {
@@ -541,7 +541,7 @@ accept_socket (int fd, short what, void *arg)
 	new_session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, controller_read_socket,
 														controller_write_socket, controller_err_socket, &io_tv,
 														(void *)new_session);
-	rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE);
+	rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE);
 }
 
 void

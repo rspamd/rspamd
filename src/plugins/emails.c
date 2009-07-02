@@ -192,7 +192,7 @@ emails_command_handler (struct worker_task *task)
 	
 	outbuf[r++] = '\r'; outbuf[r++] = '\n';
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 	msg_info ("process_message: msg ok, id: <%s>, %d emails extracted", task->message_id, num);
 
 	return 0;

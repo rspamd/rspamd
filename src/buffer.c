@@ -375,15 +375,23 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
 void 
 rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 									void *data,
-									size_t len, gboolean delayed)
+									size_t len, gboolean delayed, gboolean allocated)
 {
 	rspamd_buffer_t *newbuf;
 
 	newbuf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
-	newbuf->data = fstralloc (d->pool, len);
-	
-	/* We need to copy data to temporary internal buffer to avoid using of stack variables */
-	memcpy (newbuf->data->begin, data, len);
+	if (!allocated) {
+		newbuf->data = fstralloc (d->pool, len);
+		
+		/* We need to copy data to temporary internal buffer to avoid using of stack variables */
+		memcpy (newbuf->data->begin, data, len);
+	}
+	else {
+		newbuf->data = memory_pool_alloc (d->pool, sizeof (f_str_t));
+		newbuf->data->begin = data;
+		newbuf->data->size = len;
+	}
+
 	newbuf->pos = newbuf->data->begin;
 	newbuf->data->len = len;
 	

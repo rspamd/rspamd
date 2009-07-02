@@ -780,8 +780,8 @@ static int
 urls_command_handler (struct worker_task *task)
 {
 	GList *cur;
-	char outbuf[16384], *urlstr;
-	int r, num = 0;
+	char *outbuf, *urlstr;
+	int r, num = 0, buflen;
 	struct uri *url;
 	GError *err = NULL;
 	GTree *url_tree;
@@ -790,9 +790,22 @@ urls_command_handler (struct worker_task *task)
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
 
-	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
+	/* First calculate buffer length */
+	cur = g_list_first (task->urls);
+	buflen = 0;
+	while (cur) {
+		url = cur->data;
+		buflen += strlen (struri (url)) + url->hostlen + sizeof (" <\"\">, ") - 1;	
+		cur = g_list_next (cur);
+	}
+
+	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF);
+
+	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (char));
+
+	r = snprintf (outbuf, buflen, "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 	
-	r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "URLs: ");
+	r += snprintf (outbuf + r, buflen - r - 2, "URLs: ");
 	
 	cur = g_list_first (task->urls);
 
@@ -805,10 +818,10 @@ urls_command_handler (struct worker_task *task)
 			f.len = url->hostlen;
 			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, &host_end, FALSE, &err)) != NULL) {
 				if (g_list_next (cur) != NULL) {
-					r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "%s, ", (char *)urlstr);
+					r += snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (char *)urlstr, struri (url));
 				}
 				else {
-					r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "%s", (char *)urlstr);
+					r += snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">", (char *)urlstr, struri (url));
 				}
 			}
 		}
@@ -817,7 +830,7 @@ urls_command_handler (struct worker_task *task)
 	
 	outbuf[r++] = '\r'; outbuf[r++] = '\n';
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, TRUE);
 	msg_info ("process_message: msg ok, id: <%s>, %d urls extracted", task->message_id, num);
 	g_tree_destroy (url_tree);
 

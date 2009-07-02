@@ -43,9 +43,6 @@ struct uri {
 	/* Flags */
 	unsigned int ipv6;	/* URI contains IPv6 host */
 	unsigned int form;	/* URI originated from form */
-	
-	/* Link */
-	TAILQ_ENTRY(uri) next;
 };
 
 enum uri_errno {

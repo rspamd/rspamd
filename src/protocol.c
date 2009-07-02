@@ -396,7 +396,7 @@ show_url_header (struct worker_task *task)
 		/* Do header folding */
 		if (host.len + r >= OUTBUFSIZ - 3) {
 			outbuf[r ++] = '\r'; outbuf[r ++] = '\n'; outbuf[r] = ' ';
-			rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
+			rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
 			r = 0;
 		}
 		/* Write url host to buf */
@@ -416,7 +416,7 @@ show_url_header (struct worker_task *task)
 		}
 		cur = g_list_next (cur);
 	}
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
 static void
@@ -451,7 +451,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 						"%s,", (char *)key); 
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
 static void
@@ -474,7 +474,7 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 			cur = g_list_next (cur);
 		}
 		g_list_free (symbols);
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
+		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
 	}
 	else {
 		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, cd);
@@ -534,7 +534,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 #endif
 	}
 	else {
-		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 
 		if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
 			show_metric_symbols (metric_res, cd);
@@ -553,7 +553,7 @@ write_check_reply (struct worker_task *task)
 	struct metric_callback_data cd;
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
 
 	cd.task = task;
 	cd.log_buf = logbuf;
@@ -589,7 +589,7 @@ write_check_reply (struct worker_task *task)
 		show_url_header (task);
 	}
 	msg_info ("%s", logbuf);
-	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 
 	return 0;
 }
@@ -642,10 +642,10 @@ write_process_reply (struct worker_task *task)
 
 	outmsg = g_mime_object_to_string (GMIME_OBJECT (task->message));
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE);
-	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE, TRUE);
 
-	g_free (outmsg);
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, outmsg);
 
 	return 0;
 }
@@ -669,7 +669,7 @@ write_reply (struct worker_task *task)
 			msg_debug ("write_reply: writing error: %s", outbuf);
 		}
 		/* Write to bufferevent error message */
-		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 	}
 	else {
 		switch (task->cmd) {
@@ -685,11 +685,11 @@ write_reply (struct worker_task *task)
 			case CMD_SKIP:
 				r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
 																SPAMD_OK);
-				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 				break;
 			case CMD_PING:
 				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
-				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 				break;
 			case CMD_OTHER:
 				return task->custom_cmd->func (task);

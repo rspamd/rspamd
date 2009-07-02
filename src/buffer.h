@@ -83,7 +83,7 @@ void rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
  */
 void rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 												  void *data,
-												  size_t len, gboolean delayed);
+												  size_t len, gboolean delayed, gboolean allocated);
 
 /**
  * Pause IO events on dispatcher

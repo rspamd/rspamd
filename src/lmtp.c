@@ -246,7 +246,7 @@ accept_socket (int fd, short what, void *arg)
 	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, lmtp_read_socket,
 														lmtp_write_socket, lmtp_err_socket, &io_tv,
 														(void *)lmtp);
-	rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE);
+	rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE);
 }
 
 /*

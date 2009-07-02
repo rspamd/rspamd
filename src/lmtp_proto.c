@@ -96,7 +96,7 @@ out_lmtp_reply (struct worker_task *task, int code, char *rcode, char *msg)
 	else {
 		r = snprintf (outbuf, OUTBUFSIZ, "%d %s %s\r\n", code, rcode, msg);
 	}
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE);
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
 int 
@@ -337,7 +337,7 @@ mta_read_socket (f_str_t *in, void *arg)
 			else {
 				r = snprintf (outbuf, sizeof (outbuf), "HELO %s" CRLF, hostbuf); 
 			}
-			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
+			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
 			cd->state = LMTP_WANT_MAIL;
 			break;
 		case LMTP_WANT_MAIL:
@@ -347,7 +347,7 @@ mta_read_socket (f_str_t *in, void *arg)
 				return;
 			}
 			r = snprintf (outbuf, sizeof (outbuf), "MAIL FROM: <%s>" CRLF, cd->task->from);
-			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
+			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
 			cd->state = LMTP_WANT_RCPT;
 			break;
 		case LMTP_WANT_RCPT:
@@ -363,7 +363,7 @@ mta_read_socket (f_str_t *in, void *arg)
 				cur = g_list_next (cur);
 			}
 
-			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
+			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
 			cd->state = LMTP_WANT_DATA;
 			break;
 		case LMTP_WANT_DATA:
@@ -373,7 +373,7 @@ mta_read_socket (f_str_t *in, void *arg)
 				return;
 			}
 			r = snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
-			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
+			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
 			cd->state = LMTP_WANT_DOT;
 			break;
 		case LMTP_WANT_DOT:
@@ -384,10 +384,10 @@ mta_read_socket (f_str_t *in, void *arg)
 			}
 			c = g_mime_object_to_string ((GMimeObject *)cd->task->message);
 			r = strlen (c);
-			rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE);
-			g_free (c);
+			rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE, TRUE);
+			memory_pool_add_destructor (cd->task->task_pool, (pool_destruct_func)g_free, c);
 			r = snprintf (outbuf, sizeof (outbuf), CRLF "." CRLF);
-			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE);
+			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
 			cd->state = LMTP_WANT_CLOSING;
 		case LMTP_WANT_CLOSING:
 			if (!parse_mta_str (in, cd)) {
