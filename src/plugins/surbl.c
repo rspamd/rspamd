@@ -799,7 +799,7 @@ urls_command_handler (struct worker_task *task)
 		cur = g_list_next (cur);
 	}
 
-	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF);
+	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF "URLs: ");
 
 	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (char));
 

@@ -172,6 +172,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	time_t uptime;
 	unsigned long size = 0;
 	struct statfile *statfile;
+	stat_file_t *file;
 	struct metric *metric;
 	memory_pool_stat_t mem_st;
 	char *password = g_hash_table_lookup (session->worker->cf->params, "password");
@@ -357,7 +358,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				}
 				session->learn_filename = resolve_stat_filename (session->session_pool, statfile->pattern, 
 																	session->learn_rcpt, session->learn_from);
-				if (statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename) == -1) {
+				if ((file = statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename)) == NULL) {
 					/* Try to create statfile */
 					if (statfile_pool_create (session->worker->srv->statfile_pool, 
 									session->learn_filename, statfile->size / sizeof (struct stat_file_block)) == -1) {
@@ -365,7 +366,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 						return;
 					}
-					if (statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename) == -1) {
+					if ((file = statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename)) == NULL) {
 						r = snprintf (out_buf, sizeof (out_buf), "cannot open statfile %s" CRLF, session->learn_filename);
 						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 						return;

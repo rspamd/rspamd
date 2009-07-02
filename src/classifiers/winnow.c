@@ -34,7 +34,7 @@
 struct winnow_callback_data {
 	statfile_pool_t *pool;
 	struct classifier_ctx *ctx;
-	char *filename;
+	stat_file_t *file;
 	double sum;
 	int count;
 	int in_class;
@@ -49,7 +49,7 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 	float v;
 	
 	/* Consider that not found blocks have value 1 */
-	if ((v = statfile_pool_get_block (cd->pool, cd->filename, node->h1, node->h2, cd->now)) < 0.00001) {
+	if ((v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now)) < 0.00001) {
 		cd->sum += 1;
 	}
 	else {
@@ -72,11 +72,11 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	c = (cd->in_class) ? WINNOW_PROMOTION : WINNOW_DEMOTION;
 
 	/* Consider that not found blocks have value 1 */
-	if ((v = statfile_pool_get_block (cd->pool, cd->filename, node->h1, node->h2, cd->now)) < 0.00001) {
-		statfile_pool_set_block (cd->pool, cd->filename, node->h1, node->h2, cd->now, c);
+	if ((v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now)) < 0.00001) {
+		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
 	}
 	else {
-		statfile_pool_set_block (cd->pool, cd->filename, node->h1, node->h2, cd->now, v * c);
+		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v * c);
 	}
 
 	cd->count ++;
@@ -105,14 +105,13 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, char *statfi
 	g_assert (ctx != NULL);
 
 	data.pool = pool;
-	data.filename = statfile;
 	data.sum = 0;
 	data.count = 0;
 	data.now = time (NULL);
 	data.ctx = ctx;
 
-	if (!statfile_pool_is_open (pool, statfile)) {
-		if (statfile_pool_open (pool, statfile) == -1) {
+	if ((data.file = statfile_pool_is_open (pool, statfile)) == NULL) {
+		if ((data.file = statfile_pool_open (pool, statfile)) == NULL) {
 			return;
 		}
 	}
@@ -138,22 +137,21 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *statfile,
 	g_assert (ctx != NULL);
 
 	data.pool = pool;
-	data.filename = statfile;
 	data.sum = 0;
 	data.count = 0;
 	data.in_class = in_class;
 	data.now = time (NULL);
 	data.ctx = ctx;
 
-	if (!statfile_pool_is_open (pool, statfile)) {
-		if (statfile_pool_open (pool, statfile) == -1) {
+	if ((data.file = statfile_pool_is_open (pool, statfile)) == NULL) {
+		if ((data.file = statfile_pool_open (pool, statfile)) == NULL) {
 			return;
 		}
 	}
 
-	statfile_pool_lock_file (pool, statfile);
+	statfile_pool_lock_file (pool, data.file);
 	g_tree_foreach (input, learn_callback, &data);
-	statfile_pool_unlock_file (pool, statfile);
+	statfile_pool_unlock_file (pool, data.file);
 }
 
 struct winnow_result_data {

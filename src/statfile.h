@@ -74,8 +74,8 @@ typedef struct stat_file_s {
  * Statfiles pool
  */
 typedef struct statfile_pool_s {
-	rspamd_hash_t *files;					/**< hash table of opened files indexed by name	*/
-	rspamd_hash_t *maps;					/**< shared hash table of mmaped areas indexed by name	*/
+	stat_file_t *files;						/**< hash table of opened files indexed by name	*/
+	void **maps;							/**< shared hash table of mmaped areas indexed by name	*/
 	int opened;								/**< number of opened files				*/
 	size_t max;								/**< maximum size						*/
 	size_t occupied;						/**< current size						*/
@@ -95,7 +95,7 @@ statfile_pool_t* statfile_pool_new (size_t max_size);
  * @param filename name of statfile to open
  * @return 0 if specified statfile is attached and -1 in case of error
  */
-int statfile_pool_open (statfile_pool_t *pool, char *filename);
+stat_file_t* statfile_pool_open (statfile_pool_t *pool, char *filename);
 
 /**
  * Create new statfile but DOES NOT attach it to pool, use @see statfile_pool_open for attaching
@@ -113,7 +113,7 @@ int statfile_pool_create (statfile_pool_t *pool, char *filename, size_t len);
  * @param remove_hash remove filename from opened files hash also
  * @return 0 if file was closed and -1 if statfile was not opened
  */
-int statfile_pool_close (statfile_pool_t *pool, char *filename, gboolean remove_hash);
+int statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean keep_sorted);
 
 /**
  * Delete statfile pool and close all attached statfiles
@@ -126,14 +126,14 @@ void statfile_pool_delete (statfile_pool_t *pool);
  * @param pool statfile pool object
  * @param filename name of statfile
  */
-void statfile_pool_lock_file (statfile_pool_t *pool, char *filename);
+void statfile_pool_lock_file (statfile_pool_t *pool, stat_file_t *file);
 
 /**
  * Unlock specified file
  * @param pool statfile pool object
  * @param filename name of statfile
  */
-void statfile_pool_unlock_file (statfile_pool_t *pool, char *filename);
+void statfile_pool_unlock_file (statfile_pool_t *pool, stat_file_t *file);
 
 /**
  * Get block from statfile with h1 and h2 values, use time argument for current time
@@ -144,7 +144,7 @@ void statfile_pool_unlock_file (statfile_pool_t *pool, char *filename);
  * @param now current time
  * @return block value or 0 if block is not found
  */
-float statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now);
+float statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now);
 
 /**
  * Set specified block in statfile
@@ -155,7 +155,7 @@ float statfile_pool_get_block (statfile_pool_t *pool, char *filename, uint32_t h
  * @param now current time
  * @param value value of block
  */
-void statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1, uint32_t h2, time_t now, float value);
+void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now, float value);
 
 /**
  * Check whether statfile is opened
@@ -163,7 +163,7 @@ void statfile_pool_set_block (statfile_pool_t *pool, char *filename, uint32_t h1
  * @param filename name of statfile
  * @return TRUE if specified statfile is opened and FALSE otherwise
  */
-gboolean statfile_pool_is_open (statfile_pool_t *pool, char *filename);
+stat_file_t* statfile_pool_is_open (statfile_pool_t *pool, char *filename);
 
 /**
  * Returns current statfile section
@@ -171,7 +171,7 @@ gboolean statfile_pool_is_open (statfile_pool_t *pool, char *filename);
  * @param filename name of statfile
  * @return code of section or 0 if file is not opened
  */
-uint32_t statfile_pool_get_section (statfile_pool_t *pool, char *filename);
+uint32_t statfile_pool_get_section (statfile_pool_t *pool, stat_file_t *file);
 
 /**
  * Go to other section of statfile
@@ -181,7 +181,7 @@ uint32_t statfile_pool_get_section (statfile_pool_t *pool, char *filename);
  * @param from_begin search for section from begin of file if true
  * @return TRUE if section was set and FALSE otherwise
  */
-gboolean statfile_pool_set_section (statfile_pool_t *pool, char *filename, uint32_t code, gboolean from_begin);
+gboolean statfile_pool_set_section (statfile_pool_t *pool, stat_file_t *file, uint32_t code, gboolean from_begin);
 
 /**
  * Add new section to statfile
@@ -191,7 +191,7 @@ gboolean statfile_pool_set_section (statfile_pool_t *pool, char *filename, uint3
  * @param length length in blocks of new section
  * @return TRUE if section was successfully added and FALSE in case of error
  */
-gboolean statfile_pool_add_section (statfile_pool_t *pool, char *filename, uint32_t code, uint64_t length);
+gboolean statfile_pool_add_section (statfile_pool_t *pool, stat_file_t *file, uint32_t code, uint64_t length);
 
 
 /**
