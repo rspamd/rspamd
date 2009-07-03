@@ -31,7 +31,7 @@
 #include "modules.h"
 
 GByteArray*
-strip_html_tags (memory_pool_t *pool, struct mime_text_part *part, GByteArray *src, int *stateptr)
+strip_html_tags (struct worker_task *task, memory_pool_t *pool, struct mime_text_part *part, GByteArray *src, int *stateptr)
 {
 	uint8_t *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin = NULL, c, lc;
 	int br, i = 0, depth = 0, in_q = 0;
@@ -105,7 +105,7 @@ strip_html_tags (memory_pool_t *pool, struct mime_text_part *part, GByteArray *s
 						lc = '>';
 						in_q = state = 0;
 						*p = '\0';
-						add_html_node (pool, part, tbegin, &level_ptr);
+						add_html_node (task, pool, part, tbegin, &level_ptr);
 						*p = '>';
 						break;
 						
@@ -300,9 +300,11 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		text_part->is_html = TRUE;
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
-		text_part->content = strip_html_tags (task->task_pool, text_part, part_content, NULL);
+
 		text_part->html_urls = g_tree_new ( (GCompareFunc)g_ascii_strcasecmp);
 		text_part->urls = g_tree_new ( (GCompareFunc)g_ascii_strcasecmp);
+
+		text_part->content = strip_html_tags (task, task->task_pool, text_part, part_content, NULL);
 
 		if (text_part->html_nodes == NULL) {
 			url_parse_text (task->task_pool, task, text_part, FALSE);

@@ -27,6 +27,7 @@
 #include "main.h"
 #include "message.h"
 #include "html.h"
+#include "url.h"
 
 sig_atomic_t tags_sorted = 0;
 
@@ -258,8 +259,61 @@ get_tag_by_name (const char *name)
 	return bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs), sizeof (struct html_tag), tag_cmp);
 }
 
+static void
+parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, char *tag_text)
+{
+	char *c = NULL, *p;
+	int len, rc;
+	char *url_text;
+	struct uri *url;
+	gboolean got_quote = FALSE;
+
+	/* For A tags search for href= and for IMG tags search for src= */
+	if (id == Tag_A) {
+		c = strcasestr (tag_text, "href=");
+		len = sizeof ("href=") - 1;
+	}
+	else if (id == Tag_IMG) {
+		c = strcasestr (tag_text, "src=");
+		len = sizeof ("src=") - 1;
+	}
+
+	if (c != NULL) {
+		/* First calculate length */
+		c += len;
+		len = 0;
+		p = c;
+		while (*p) {
+			if (*p == '\r' || *p == '\n' || (got_quote && *p == '"')) {
+				break;
+			}
+			if (*p != '"') {
+				got_quote = !got_quote;
+				len ++;
+			}
+			p ++;
+		}
+
+		if (got_quote) {
+			c++;
+		}
+
+		url_text = memory_pool_alloc (task->task_pool, len + 1);
+		g_strlcpy (url_text, c, len + 1);
+		url = memory_pool_alloc (task->task_pool, sizeof (struct uri));
+		rc = parse_uri (url, url_text, task->task_pool);
+
+		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
+			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
+				g_tree_insert (part->html_urls, url_text, url);
+				task->urls = g_list_prepend (task->urls, url);
+			}
+		}
+	}	
+}
+
 gboolean
-add_html_node (memory_pool_t *pool, struct mime_text_part *part, char *tag_text, GNode **cur_level)
+add_html_node (struct worker_task *task, memory_pool_t *pool, struct mime_text_part *part, char *tag_text, GNode **cur_level)
 {
 	GNode *new;
 	struct html_node *data;
@@ -277,7 +331,7 @@ add_html_node (memory_pool_t *pool, struct mime_text_part *part, char *tag_text,
 		part->html_nodes = new;
 		memory_pool_add_destructor (pool, (pool_destruct_func)g_node_destroy, part->html_nodes);
 		/* Call once again with root node */
-		return add_html_node (pool, part, tag_text, cur_level);
+		return add_html_node (task, pool, part, tag_text, cur_level);
 	}
 	else {
 		new = construct_html_node (pool, tag_text);
@@ -286,6 +340,9 @@ add_html_node (memory_pool_t *pool, struct mime_text_part *part, char *tag_text,
 			return -1;
 		}
 		data = new->data;
+		if (data->tag->id == Tag_A || data->tag->id == Tag_IMG) {
+			parse_tag_url (task, part, data->tag->id, tag_text);
+		}
 		if (data->flags & FL_CLOSING) {
 			if (! *cur_level) {
 				msg_debug ("add_html_node: bad parent node");

@@ -351,7 +351,7 @@ get_protocol_length(const unsigned char *url)
    string intact, make a copy before calling this function.  */
 
 static void
-url_unescape (char *s)
+url_unescape (char *s, unsigned int *len)
 {
  	char *t = s;			/* t - tortoise */
 	char *h = s;			/* h - hare     */
@@ -373,6 +373,7 @@ url_unescape (char *s)
 				goto copychar;
 			*t = c;
 			h += 2;
+			*len -=2;
 		}
 	}
 	*t = '\0';
@@ -846,7 +847,7 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
      don't), but to support binary characters (which will have been
      converted to %HH by reencode_escapes).  */
 	if (strchr (uri->host, '%')) {
-		url_unescape (uri->host);
+		url_unescape (uri->host, &uri->hostlen);
 	}
 	path_simplify (uri->data);
 
@@ -885,8 +886,10 @@ url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_
 						if (new != NULL) {
 							rc = parse_uri (new, url_str, pool);
 							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
-								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
-								task->urls = g_list_prepend (task->urls, new);
+								if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
+									g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
+									task->urls = g_list_prepend (task->urls, new);
+								}
 							}
 						}
 					}
