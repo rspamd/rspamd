@@ -325,7 +325,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			c++;
 		}
 
-		if (len == 0) {
+		if (len == 0 || g_ascii_strncasecmp (c, "http://", sizeof ("http://") - 1) != 0) {
 			return;
 		}
 
