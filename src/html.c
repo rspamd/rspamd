@@ -266,7 +266,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 	int len, rc;
 	char *url_text;
 	struct uri *url;
-	gboolean got_quote = FALSE;
+	gboolean got_single_quote = FALSE, got_double_quote = FALSE;
 
 	/* For A tags search for href= and for IMG tags search for src= */
 	if (id == Tag_A) {
@@ -281,20 +281,47 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 	if (c != NULL) {
 		/* First calculate length */
 		c += len;
+		/* Skip spaces after eqsign */
+		while (g_ascii_isspace (*c)) {
+			c ++;
+		}
 		len = 0;
 		p = c;
 		while (*p) {
-			if (*p == '\r' || *p == '\n' || (got_quote && *p == '"')) {
+			if (got_double_quote) {
+				if (*p == '"') {
+					break;
+				}
+				else {
+					len ++;
+				}
+			}
+			else if (got_single_quote) {
+				if (*p == '\'') {
+					break;
+				}
+				else {
+					len ++;
+				}
+			}
+			else if (g_ascii_isspace(*p) || *p == '>' || (*p == '/' && *(p + 1) == '>') || *p == '\r' || *p == '\n') {
 				break;
 			}
-			if (*p != '"') {
-				got_quote = !got_quote;
-				len ++;
+			else {
+				if (*p == '"' && !got_single_quote) {
+					got_double_quote = !got_double_quote;
+				}
+				else if (*p == '\'' && !got_double_quote) {
+					got_single_quote = !got_single_quote;
+				}
+				else {
+					len ++;
+				}
 			}
 			p ++;
 		}
 
-		if (got_quote) {
+		if (got_single_quote || got_double_quote) {
 			c++;
 		}
 
@@ -340,7 +367,7 @@ add_html_node (struct worker_task *task, memory_pool_t *pool, struct mime_text_p
 			return -1;
 		}
 		data = new->data;
-		if (data->tag->id == Tag_A || data->tag->id == Tag_IMG) {
+		if ((data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
 			parse_tag_url (task, part, data->tag->id, tag_text);
 		}
 		if (data->flags & FL_CLOSING) {
