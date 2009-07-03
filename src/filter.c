@@ -498,7 +498,7 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 		filename = resolve_stat_filename (task->task_pool, st->pattern, task->from, "");
 	}
 	
-	if (statfile_pool_open (task->worker->srv->statfile_pool, filename) == -1) {
+	if (statfile_pool_open (task->worker->srv->statfile_pool, filename) == NULL) {
 		return;
 	}
 	

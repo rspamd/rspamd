@@ -68,6 +68,7 @@ gboolean
 add_view_symbols (struct rspamd_view *view, char *line)
 {
 	struct rspamd_regexp *re = NULL;
+	GList *symbols;
 
 	if (g_ascii_strncasecmp (line, "file://", sizeof ("file://") - 1) == 0) {
 		if (parse_host_list (view->pool, view->symbols_hash, line + sizeof ("file://") - 1)) {
@@ -80,7 +81,12 @@ add_view_symbols (struct rspamd_view *view, char *line)
 	}
 	else {
 		/* Try to parse symbols line as comma separated list */
-		
+		symbols = parse_comma_list (view->pool, line);
+		while (symbols) {
+			g_hash_table_insert (view->symbols_hash, (char *)symbols->data, symbols->data);
+			/* Symbols list would be free at pool destruction */
+			symbols = g_list_next (symbols);
+		}
 	}
 
 	return FALSE;

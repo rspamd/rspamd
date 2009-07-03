@@ -303,7 +303,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		url = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 		rc = parse_uri (url, url_text, task->task_pool);
 
-		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
+		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST && url->hostlen != 0) {
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);
 				task->urls = g_list_prepend (task->urls, url);

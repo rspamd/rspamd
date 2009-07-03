@@ -117,6 +117,16 @@ struct statfile_section {
 };
 
 /**
+ * Statfile autolearn parameters
+ */
+struct statfile_autolearn_params {
+	const char *metric;								/**< metric name for autolearn triggering 				*/
+	double threshold_min;							/**< threshold mark										*/
+	double threshold_max;							/**< threshold mark										*/
+	GList *symbols;									/**< list of symbols									*/
+};
+
+/**
  * Statfile config definition
  */
 struct statfile {
@@ -127,6 +137,7 @@ struct statfile {
 	size_t size;									/**< size of statfile									*/
 	struct tokenizer *tokenizer;					/**< tokenizer used for statfile						*/
 	GList *sections;								/**< list of sections in statfile						*/
+	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
 };
 
 /**
@@ -303,6 +314,9 @@ void post_load_config (struct config_file *cfg);
  * @param line input string
  */
 void unescape_quotes (char *line);
+
+GList* parse_comma_list (memory_pool_t *pool, char *line);
+
 
 int yylex (void);
 int yyparse (void);

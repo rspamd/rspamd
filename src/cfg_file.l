@@ -77,6 +77,9 @@ size							return SIZE;
 tokenizer						return TOKENIZER;
 classifier						return CLASSIFIER;
 section							return SECTION;
+autolearn						return AUTOLEARN;
+min_mark						return MIN_MARK;
+max_mark						return MAX_MARK;
 
 logging							return LOGGING;
 

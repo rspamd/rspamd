@@ -24,6 +24,7 @@ GList *cur_module_opt = NULL;
 struct metric *cur_metric = NULL;
 struct statfile *cur_statfile = NULL;
 struct statfile_section *cur_section = NULL;
+struct statfile_autolearn_params *cur_autolearn = NULL;
 struct worker_conf *cur_worker = NULL;
 
 struct rspamd_view *cur_view = NULL;
@@ -55,6 +56,7 @@ struct rspamd_view *cur_view = NULL;
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS
+%token  AUTOLEARN MIN_MARK MAX_MARK
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -672,6 +674,7 @@ statfilecmd:
 	| statfilemetric
 	| statfiletokenizer
 	| statfilesection
+	| statfileautolearn
 	;
 	
 statfilealias:
@@ -804,6 +807,80 @@ sectionweight:
 			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
 		}
 		cur_section->weight = $3;
+	}
+	;
+
+statfileautolearn:
+	AUTOLEARN OBRACE autolearnbody EBRACE {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if (cur_autolearn == NULL) {
+			yyerror ("yyparse: error in autolearn definition");
+			YYERROR;
+		}
+		cur_statfile->autolearn = cur_autolearn;
+		cur_autolearn = NULL;
+	}
+	;
+
+autolearnbody:
+	autolearncmd SEMICOLON
+	| autolearnbody autolearncmd SEMICOLON
+	;
+
+autolearncmd:
+	autolearnmetric
+	| autolearnmin
+	| autolearnmax
+	| autolearnsymbols
+	;
+
+autolearnmetric:
+	METRIC EQSIGN QUOTEDSTRING {
+		if (cur_autolearn == NULL) {
+			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+		}
+		cur_autolearn->metric = memory_pool_strdup (cfg->cfg_pool, $3);
+	}
+	;
+
+autolearnmin:
+	MIN_MARK EQSIGN NUMBER {
+		if (cur_autolearn == NULL) {
+			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+		}
+		cur_autolearn->threshold_min = $3;
+	}
+	| MIN_MARK EQSIGN FRACT {
+		if (cur_autolearn == NULL) {
+			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+		}
+		cur_autolearn->threshold_min = $3;
+	}
+	;
+
+autolearnmax:
+	MAX_MARK EQSIGN NUMBER {
+		if (cur_autolearn == NULL) {
+			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+		}
+		cur_autolearn->threshold_max = $3;
+	}
+	| MAX_MARK EQSIGN FRACT {
+		if (cur_autolearn == NULL) {
+			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+		}
+		cur_autolearn->threshold_max = $3;
+	}
+	;
+
+autolearnsymbols:
+	SYMBOLS EQSIGN QUOTEDSTRING {
+		if (cur_autolearn == NULL) {
+			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+		}
+		cur_autolearn->symbols = parse_comma_list (cfg->cfg_pool, $3);
 	}
 	;
 

@@ -586,6 +586,34 @@ unescape_quotes (char *line)
 	}
 }
 
+GList *
+parse_comma_list (memory_pool_t *pool, char *line)
+{
+	GList *res = NULL;
+	char *c, *p, *str;
+	
+	c = line;
+	p = c;
+
+	while (*p) {
+		if (*p == ',' && *c != *p) {
+			str = memory_pool_alloc (pool, p - c + 1);
+			g_strlcpy (str, c, p - c + 1);
+			res = g_list_prepend (res, str);
+			/* Skip spaces */
+			while (g_ascii_isspace (*(++p)));
+			c = p;
+			continue;
+		}
+		p ++;
+	}
+	if (res != NULL) {
+		memory_pool_add_destructor (pool, (pool_destruct_func)g_list_free, res);
+	}
+
+	return res;
+}
+
 /*
  * vi:ts=4
  */
