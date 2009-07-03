@@ -311,7 +311,9 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		}
 		else {
 			url_parse_text (task->task_pool, task, text_part, FALSE);
+#if 0
 			url_parse_text (task->task_pool, task, text_part, TRUE);
+#endif
 		}
 
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);

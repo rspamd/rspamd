@@ -384,8 +384,9 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree)
 					param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 					*host_end = '.';
 					msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
-					evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param);
-					param->task->save.saved ++;
+					if (evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param) == 0) {
+						param->task->save.saved ++;
+					}
 				}
 				else {
 					msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
