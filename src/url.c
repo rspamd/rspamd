@@ -341,6 +341,28 @@ get_protocol_length(const unsigned char *url)
 	return (*end == ':') ? end - url : 0;
 }
 
+
+/*
+ * Calcualte new length of unescaped hostlen
+ */
+static unsigned int
+url_calculate_escaped_hostlen (char *host, unsigned int hostlen)
+{
+	unsigned int i, result = hostlen;
+	char *p = host, c;
+
+	for (i = 0; i < hostlen; i ++, p ++) {
+		if (*p == '%' && g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2)) && i < hostlen - 2) {
+			c = X2DIGITS_TO_NUM (*(p + 1), *(p + 2));
+			if (c != '\0') {
+				result -= 2;
+			}
+		}
+	}
+
+	return result;
+}
+
 /* URL-unescape the string S.
 
    This is done by transforming the sequences "%HH" to the character
@@ -351,7 +373,7 @@ get_protocol_length(const unsigned char *url)
    string intact, make a copy before calling this function.  */
 
 static void
-url_unescape (char *s, unsigned int *len)
+url_unescape (char *s)
 {
  	char *t = s;			/* t - tortoise */
 	char *h = s;			/* h - hare     */
@@ -373,7 +395,6 @@ url_unescape (char *s, unsigned int *len)
 				goto copychar;
 			*t = c;
 			h += 2;
-			*len -=2;
 		}
 	}
 	*t = '\0';
@@ -847,8 +868,10 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
      don't), but to support binary characters (which will have been
      converted to %HH by reencode_escapes).  */
 	if (strchr (uri->host, '%')) {
-		url_unescape (uri->host, &uri->hostlen);
+		uri->hostlen = url_calculate_escaped_hostlen (uri->host, uri->hostlen);
 	}
+	url_unescape (uri->host);
+
 	path_simplify (uri->data);
 
 	return URI_ERRNO_OK;
