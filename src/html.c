@@ -371,7 +371,7 @@ add_html_node (struct worker_task *task, memory_pool_t *pool, struct mime_text_p
 			return -1;
 		}
 		data = new->data;
-		if ((data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
+		if (data->tag && (data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
 			parse_tag_url (task, part, data->tag->id, tag_text);
 		}
 		if (data->flags & FL_CLOSING) {
