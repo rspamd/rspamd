@@ -105,13 +105,13 @@ $__FMO_EXCL_OE3790="X-Mailer=/^Microsoft Outlook Express 6.00.3790.3959$/H";
 $FORGED_MUA_OUTLOOK="(${__FORGED_OE} | ${__FORGED_OUTLOOK_DOLLARS}) & !${__FMO_EXCL_O3416} & !${__FMO_EXCL_OE3790} & !${__VISTA_MSGID}";
 
 $__SANE_MSGID="Message-Id=/^[^<>\\ \t\n\r\x0b\x80-\xff]+\@[^<>\\ \t\n\r\x0b\x80-\xff]+\s*$/mH";
-$__MSGID_COMMENT="Messagr-Id=/\(.*\)/mH";
+$__MSGID_COMMENT="Message-Id=/\(.*\)/mH";
 $INVALID_MSGID="${__HAS_MID} & !(${__SANE_MSGID} | ${__MSGID_COMMENT})";
 $HTML_MIME_NO_HTML_TAG="${MIME_HTML_ONLY} & !${__TAG_EXISTS_HTML}";
 $__CD="header_exists(Content-Disposition)";
 $__CTE="header_exists(Content-Transfer-Encoding)";
 $__CT="header_exists(Content-Type)";
-$__MIME_VERSION="header_exists(MIME-Version)";
+$__MIME_VERSION="raw_header_exists(MIME-Version)";
 #$__CT_TEXT_PLAIN="Content-Type=/^text\/plain\b/iH";
 $__CT_TEXT_PLAIN="content_type_is_type(text) & content_type_is_subtype(plain)";
 $MIME_HEADER_CTYPE_ONLY="!${__CD} & !${__CTE} & ${__CT} & !${__MIME_VERSION} & !${__CT_TEXT_PLAIN}";
