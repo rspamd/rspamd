@@ -693,6 +693,7 @@ enum {
 	HEADER_UNKNOWN
 };
 
+
 #ifndef GMIME24
 static void
 header_iterate (memory_pool_t *pool, struct raw_header *h, GList **ret, const char *field)
@@ -735,11 +736,73 @@ header_iterate (memory_pool_t *pool, GMimeHeaderList *ls, GList **ret, const cha
 }
 #endif
 
+
+struct multipart_cb_data {
+	GList *ret;
+	memory_pool_t *pool;
+	const char *field;
+	gboolean try_search;
+	int rec;
+};
+
+#define MAX_REC 10
+
+static void
+#ifdef GMIME24
+multipart_iterate (GMimeObject *parent, GMimeObject *part, gpointer user_data)
+#else
+multipart_iterate (GMimeObject *part, gpointer user_data)
+#endif
+{
+	struct multipart_cb_data *data = user_data;
+	struct raw_header *h;
+	GList *l = NULL;
+	
+	if (data->try_search &&  GMIME_IS_PART (part)) {
+#ifdef GMIME24
+		GMimeHeaderList *ls;
+
+		ls = GMIME_OBJECT(message)->headers;
+		header_iterate (data->pool, ls, &l, data->field);
+#else
+		h = part->headers->headers;
+		header_iterate (data->pool, h, &l, data->field);
+#endif
+		if (l == NULL) {
+			/* Header not found, abandon search results */
+			data->try_search = FALSE;
+			g_list_free (data->ret);
+			data->ret = NULL;
+		}
+		else {
+			data->ret = g_list_concat (l, data->ret);
+		}
+	}
+	else if (data->try_search &&  GMIME_IS_MULTIPART (part)) {
+		/* Maybe endless recursion here ? */
+		if (data->rec++ < MAX_REC) {
+			g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, data); 
+		}
+		else {
+			msg_info ("multipart_iterate: maximum recurse limit is over, stop recursing, %d", data->rec);
+			data->try_search = FALSE;
+		}
+	}
+}
+
 static GList *
 local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char *field)
 {
 	GList *gret = NULL;
 	GMimeObject *part;
+	struct multipart_cb_data cb = {
+		.try_search = TRUE,
+		.rec = 0,
+		.ret = NULL,
+	};
+	cb.pool = pool;
+	cb.field = field;
+
 #ifndef GMIME24
 	struct raw_header *h;
 
@@ -756,6 +819,12 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 		if (part) {
 			h = part->headers->headers;
 			header_iterate (pool, h, &gret, field);
+			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
+				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb);
+				if (cb.ret != NULL) {
+					gret = cb.ret;
+				}
+			}
 			g_object_unref (part);
 		}
 	}
@@ -772,6 +841,12 @@ local_message_get_header(memory_pool_t *pool, GMimeMessage *message, const char 
 		if (part) {
 			ls = part->headers;
 			header_iterate (pool, ls, &gret, field);
+			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
+				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb); 
+				if (cb.ret != NULL) {
+					gret = cb.ret;
+				}
+			}
 			g_object_unref (part);
 		}
 	}

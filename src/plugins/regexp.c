@@ -225,7 +225,7 @@ find_raw_header_pos (const char *headers, const char *headerv)
 				/* Folding */
 				continue;
 			}
-			if (memcmp (p, headerv, headerlen) == 0) {
+			if (g_ascii_strncasecmp (p, headerv, headerlen) == 0) {
 				/* Find semicolon */
 				p += headerlen;
 				if (*p == ':') {
