@@ -76,7 +76,7 @@ $__YAHOO_BULK="Received=/from \[\S+\] by \S+\.(?:groups|scd|dcn)\.yahoo\.com wit
 $__ANY_OUTLOOK_MUA="X-Mailer=/^Microsoft Outlook\b/H";
 $MIME_HTML_ONLY="has_only_html_part()";
 $FORGED_OUTLOOK_HTML="!${__YAHOO_BULK} & ${__ANY_OUTLOOK_MUA} & ${MIME_HTML_ONLY}";
-$SUSPICIOUS_RECIPS="compare_recipients_distance(0.65)";
+$SUSPICIOUS_RECIPS="compare_recipients_distance(0.85)";
 $SORTED_RECIPS="is_recipients_sorted()";
 $TRACKER_ID="/^[a-z0-9]{6,24}[-_a-z0-9]{2,36}[a-z0-9]{6,24}\s*\z/isPr";
 $__FROM_ENCODED_B64="From=/\=\?\S+\?B\?/iX";

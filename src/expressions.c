@@ -1202,7 +1202,7 @@ rspamd_recipients_distance (struct worker_task *task, GList *args)
 		}
 	}
 
-	if ((double)total / (double)hits >= threshold) {
+	if ((double)(hits * num / 2.) / (double)total >= threshold) {
 		return TRUE;
 	}
 
