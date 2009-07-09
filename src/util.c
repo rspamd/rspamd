@@ -1052,7 +1052,7 @@ maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filenam
 gint
 rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 {
-	return g_ascii_strcasecmp ((const char *) v, (const char *) v2) == 0;
+	return g_ascii_strcasecmp ((const char *) v, (const char *) v2);
 }
 
 

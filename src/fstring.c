@@ -306,19 +306,20 @@ fstrhash (f_str_t *str)
 	size_t i;
 	uint32_t hval;
 	uint32_t tmp;
+	char *c = str->begin;
 
 	if (str == NULL) {
 		return 0;
 	}
 	hval = str->len;
 
-	for	(i = 0; i < str->len; i++) {
+	for	(i = 0; i < str->len; i++, c++) {
 		/* 
 		 * xor in the current byte against each byte of hval
 		 * (which alone gaurantees that every bit of input will have
 		 * an effect on the output)
 		 */
-		tmp = *(str->begin + i) & 0xFF;
+		tmp = *c & 0xFF;
 		tmp = tmp | (tmp << 8) | (tmp << 16) | (tmp << 24);
 		hval ^= tmp;
 

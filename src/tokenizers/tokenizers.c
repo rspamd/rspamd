@@ -78,12 +78,11 @@ f_str_t *
 get_next_word (f_str_t *buf, f_str_t *token)
 {
 	size_t remain;
-	char *pos;
+	unsigned char *pos;
 	
 	if (buf == NULL) {
 		return NULL;
 	}
-
 	if (token->begin == NULL) {
 		token->begin = buf->begin;
 	}
@@ -95,15 +94,14 @@ get_next_word (f_str_t *buf, f_str_t *token)
 	if (remain <= 0) {
 		return NULL;
 	}
-
 	pos = token->begin;
 	/* Skip non graph symbols */
-	while (remain > 0 && !g_ascii_isgraph (*pos)) {
+	while (remain > 0 && (!g_ascii_isgraph (*pos) && *pos < 127)) {
 		token->begin ++;
 		pos ++;
 		remain --;
 	}
-	while (remain > 0 && g_ascii_isgraph (*pos)) {
+	while (remain > 0 && (g_ascii_isgraph (*pos) || *pos > 127)) {
 		token->len ++;
 		pos ++;
 		remain --;

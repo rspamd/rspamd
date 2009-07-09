@@ -129,9 +129,8 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	struct stat st;
 	stat_file_t *new_file;	
 	
-	if (statfile_pool_is_open (pool, filename) != NULL) {
-		msg_info ("statfile_pool_open: file %s is already opened", filename);
-		return NULL;
+	if ((new_file = statfile_pool_is_open (pool, filename)) != NULL) {
+		return new_file;
 	}
 
 	if (pool->opened >= STATFILES_MAX - 1) {
@@ -400,9 +399,10 @@ statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, 
 stat_file_t *
 statfile_pool_is_open (statfile_pool_t *pool, char *filename)
 {
-	static stat_file_t f;
+	static stat_file_t f, *ret;
 	f.filename = filename;
-	return bsearch (&f, pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
+	ret = bsearch (&f, pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
+	return ret;
 }
 
 uint32_t

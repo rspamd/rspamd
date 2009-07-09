@@ -49,6 +49,7 @@ struct metric_result {
 	struct metric *metric;							/**< pointer to metric structure			*/
 	double score;									/**< total score							*/
 	GHashTable *symbols;							/**< symbols of metric						*/
+	gboolean checked;								/**< whether metric result is consolidated  */
 };
 
 /**

@@ -29,6 +29,8 @@
 #include <sys/types.h>
 #include "tokenizers.h"
 
+/* Minimum length of token */
+#define MIN_LEN 4
 
 extern const int primes[];
 
@@ -36,7 +38,7 @@ int
 osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **tree)
 {
 	token_node_t *new = NULL;
-	f_str_t token = { NULL, 0, 0 };
+	f_str_t token = { NULL, 0, 0 }, *res;
 	uint32_t hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
 	int i;
 
@@ -52,7 +54,11 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 
 	msg_debug ("osb_tokenize_text: got input length: %zd", input->len);
 
-	while (tokenizer->get_next_word (input, &token)) {
+	while ((res = tokenizer->get_next_word (input, &token)) != NULL) {
+		/* Skip small words */
+		if (token.len < MIN_LEN) {
+			continue;
+		}
 		/* Shift hashpipe */
 		for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i --) {
 			hashpipe[i] = hashpipe[i - 1];

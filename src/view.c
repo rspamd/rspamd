@@ -120,7 +120,7 @@ find_view_by_ip (GList *views, struct worker_task *task)
 	cur = views;
 	while (cur) {
 		v = cur->data;
-		if (radix32tree_find (v->ip_tree, task->from_addr.s_addr) != RADIX_NO_VALUE) {
+		if (radix32tree_find (v->ip_tree, ntohl (task->from_addr.s_addr)) != RADIX_NO_VALUE) {
 			return v;
 		}
 		cur = g_list_next (cur);
