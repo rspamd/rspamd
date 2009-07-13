@@ -163,7 +163,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 		return NULL;
 	}
 	
-	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == NULL) {
+	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == MAP_FAILED) {
 		close (new_file->fd);
 		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
 		pool->opened --;

@@ -218,6 +218,7 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->statfiles);
 	g_hash_table_remove_all (cfg->cfg_params);
 	g_hash_table_unref (cfg->cfg_params);
+	g_list_free (cfg->metrics_list);
 	memory_pool_delete (cfg->cfg_pool);
 }
 
@@ -401,7 +402,7 @@ substitute_all_variables (gpointer key, gpointer value, gpointer data)
 }
 
 static void
-parse_filters_str (struct config_file *cfg, const char *str, enum script_type type)
+parse_filters_str (struct config_file *cfg, const char *str)
 {
 	gchar **strvec, **p;
 	struct filter *cur;
@@ -425,24 +426,9 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				msg_debug ("parse_filters_str: found C filter %s", *p);
-				switch (type) {
-					case SCRIPT_HEADER:
-						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						cfg->header_filters = g_list_prepend (cfg->header_filters, cur);
-						break;
-					case SCRIPT_MIME:
-						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						cfg->mime_filters = g_list_prepend (cfg->mime_filters, cur);
-						break;
-					case SCRIPT_MESSAGE:
-						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						cfg->message_filters = g_list_prepend (cfg->message_filters, cur);
-						break;
-					case SCRIPT_URL:
-						cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-						cfg->url_filters = g_list_prepend (cfg->url_filters, cur);
-						break;
-				}
+				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
+				cfg->filters = g_list_prepend (cfg->filters, cur);
+
 				break;
 			}	
 		}
@@ -453,24 +439,8 @@ parse_filters_str (struct config_file *cfg, const char *str, enum script_type ty
 		}
 		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 		cur->type = PERL_FILTER;
-		switch (type) {
-			case SCRIPT_HEADER:
-				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				cfg->header_filters = g_list_prepend (cfg->header_filters, cur);
-				break;
-			case SCRIPT_MIME:
-				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				cfg->mime_filters = g_list_prepend (cfg->mime_filters, cur);
-				break;
-			case SCRIPT_MESSAGE:
-				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				cfg->message_filters = g_list_prepend (cfg->message_filters, cur);
-				break;
-			case SCRIPT_URL:
-				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				cfg->url_filters = g_list_prepend (cfg->message_filters, cur);
-				break;
-		}
+		cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
+		cfg->filters = g_list_prepend (cfg->filters, cur);
 		p ++;
 	}
 
@@ -512,10 +482,7 @@ post_load_config (struct config_file *cfg)
 
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
 	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
-	parse_filters_str (cfg, cfg->header_filters_str, SCRIPT_HEADER);
-	parse_filters_str (cfg, cfg->mime_filters_str, SCRIPT_MIME);
-	parse_filters_str (cfg, cfg->message_filters_str, SCRIPT_MESSAGE);
-	parse_filters_str (cfg, cfg->url_filters_str, SCRIPT_URL);
+	parse_filters_str (cfg, cfg->filters_str);
     fill_cfg_params (cfg);
 
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID

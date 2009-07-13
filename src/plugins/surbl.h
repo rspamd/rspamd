@@ -17,10 +17,7 @@
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
 
 struct surbl_ctx {
-	int (*header_filter)(struct worker_task *task);
-	int (*mime_filter)(struct worker_task *task);
-	int (*message_filter)(struct worker_task *task);
-	int (*url_filter)(struct worker_task *task);
+	int (*filter)(struct worker_task *task);
 	struct in_addr redirector_addr;
 	uint16_t redirector_port;
 	uint16_t weight;
@@ -64,6 +61,7 @@ struct redirector_param {
 	struct event ev;
 	int sock;
 	GTree *tree;
+	struct suffix_item *suffix;
 };
 
 struct memcached_param {
@@ -71,6 +69,7 @@ struct memcached_param {
 	struct worker_task *task;
 	memcached_ctx_t *ctx;
 	GTree *tree;
+	struct suffix_item *suffix;
 };
 
 struct surbl_bit_item {

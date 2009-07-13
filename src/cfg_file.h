@@ -212,18 +212,13 @@ struct config_file {
 
 	GList *perl_modules;							/**< linked list of perl modules to load				*/
 
-	GList *header_filters;							/**< linked list of all header's filters				*/
-	GList *mime_filters;							/**< linked list of all mime filters					*/
-	GList *message_filters;							/**< linked list of all message's filters				*/
-	GList *url_filters;								/**< linked list of all url's filters					*/
+	GList *filters;									/**< linked list of all filters							*/
 	GList *workers;									/**< linked list of all workers params					*/
-	char *header_filters_str;						/**< string of header's filters							*/
-	char *mime_filters_str;							/**< string of mime's filters							*/
-	char *message_filters_str;						/**< string of message's filters						*/
-	char *url_filters_str;							/**< string for url's filters							*/
+	char *filters_str;								/**< string of filters									*/
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
+	GList* metrics_list;	 						/**< linked list of metrics								*/
 	GHashTable* factors;							/**< hash of factors indexed by symbol name				*/
 	GHashTable* c_modules;							/**< hash of c modules indexed by module name			*/
 	GHashTable* composite_symbols;					/**< hash of composite symbols indexed by its name		*/

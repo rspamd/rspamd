@@ -851,7 +851,7 @@ calculate_check_time (struct timespec *begin, int resolution)
 	return (const char *)res;
 }
 
-void 
+double
 set_counter (const char *name, long int value)
 {
 	struct counter_data *cd;
@@ -876,6 +876,8 @@ set_counter (const char *name, long int value)
 
 		memory_pool_wunlock_rwlock (counters->lock);
 	}
+
+	return cd->value;
 }
 
 typedef void (*insert_func)(gpointer st, gconstpointer key, gpointer value);

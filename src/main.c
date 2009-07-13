@@ -435,8 +435,10 @@ main (int argc, char **argv, char **env)
 	struct sigaction signals;
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
 	struct rlimit rlim;
+	struct metric *metric;
 	FILE *f;
 	pid_t wrk;
+	GList *l;
 #ifndef WITHOUT_PERL
 	char *args[] = { "", "-e", "0", NULL };
 #endif
@@ -608,6 +610,14 @@ main (int argc, char **argv, char **env)
 	/* Perform modules configuring */
 	for (i = 0; i < MODULES_NUM; i ++) {
 		modules[i].module_config_func (cfg);
+	}
+
+	/* Init symbols cache for each metric */
+	l = g_list_first (cfg->metrics_list);
+	while (l) {
+		metric = l->data;
+		init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename);
+		l = g_list_next (l);
 	}
 	
 	spawn_workers (rspamd);

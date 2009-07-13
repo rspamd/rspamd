@@ -144,7 +144,7 @@ factor_consolidation_func (struct worker_task *task, const char *metric_name, co
  * Call perl or C module function for specified part of message 
  */
 static void
-call_filter_by_name (struct worker_task *task, const char *name, enum filter_type filt_type, enum script_type sc_type)
+call_filter_by_name (struct worker_task *task, const char *name, enum filter_type filt_type)
 {
 	struct module_ctx *c_module;
 	int res = 0;
@@ -154,20 +154,7 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 			c_module = g_hash_table_lookup (task->worker->srv->cfg->c_modules, name);
 			if (c_module) {
 				res = 1;
-				switch (sc_type) {
-					case SCRIPT_HEADER:
-						c_module->header_filter (task);
-						break;
-					case SCRIPT_MIME:
-						c_module->mime_filter (task);
-						break;
-					case SCRIPT_URL:
-						c_module->url_filter (task);
-						break;
-					case SCRIPT_MESSAGE:
-						c_module->message_filter (task);
-						break;
-				}
+				c_module->filter (task);
 			}
 			else {
 				msg_debug ("call_filter_by_name: %s is not a C module", name);
@@ -176,35 +163,9 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 		case PERL_FILTER:
 			res = 1;
 #ifndef WITHOUT_PERL
-			switch (sc_type) {
-				case SCRIPT_HEADER:
-					perl_call_header_filter (name, task);
-					break;
-				case SCRIPT_MIME:
-					perl_call_mime_filter (name, task);
-					break;
-				case SCRIPT_URL:
-					perl_call_url_filter (name, task);
-					break;
-				case SCRIPT_MESSAGE:
-					perl_call_message_filter (name, task);
-					break;
-			}
+			perl_call_filter (name, task);
 #elif defined(WITH_LUA)
-			switch (sc_type) {
-				case SCRIPT_HEADER:
-					lua_call_header_filter (name, task);
-					break;
-				case SCRIPT_MIME:
-					lua_call_mime_filter (name, task);
-					break;
-				case SCRIPT_URL:
-					lua_call_url_filter (name, task);
-					break;
-				case SCRIPT_MESSAGE:
-					lua_call_message_filter (name, task);
-					break;
-			}
+			lua_call_filter (name, task);
 #else
 			msg_err ("call_filter_by_name: trying to call perl function while perl support is disabled %s", name);
 #endif
@@ -250,131 +211,77 @@ metric_process_callback_forced (gpointer key, gpointer value, void *data)
 	metric_process_callback_common (key, value, data, TRUE);
 }
 
+/* Return true if metric has score that is more than spam score for it */
+static gboolean
+check_metric_is_spam (struct worker_task *task, struct metric *metric)
+{
+	struct metric_result *res;
+
+	res = g_hash_table_lookup (task->results, metric->name);
+	if (res) {
+		return res->score >= metric->required_score;
+	}
+
+	return FALSE;
+}
+
 static int
 continue_process_filters (struct worker_task *task)
 {
 	GList *cur = task->save.entry;
-	struct filter *filt = cur->data;
+	struct cache_item *item = task->save.item;
+
+	struct metric *metric = cur->data;
 	
-	cur = g_list_next (cur);
-	/* Note: no breaks in this case! */
-	switch (task->save.type) {
-		case SCRIPT_HEADER:
-			while (cur) {
-				filt = cur->data;
-				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER);
-				if (task->save.saved) {
-					task->save.entry = cur;
-					task->save.type = SCRIPT_HEADER;
-					return 0;
-				}
-				cur = g_list_next (cur);
+	while (cur) {
+		metric = cur->data;
+		while (call_symbol_callback (task, metric->cache, &item)) {
+			/* call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER); */
+			if (task->save.saved) {
+				task->save.entry = cur;
+				task->save.item = item;
+				return 0;
 			}
-			/* Process mime filters */
-			cur = g_list_first (task->worker->srv->cfg->mime_filters);
-		case SCRIPT_MIME:
-			while (cur) {
-				filt = cur->data;
-				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MIME);
-				if (task->save.saved) {
-					task->save.entry = cur;
-					task->save.type = SCRIPT_MIME;
-					return 0;
-				}
-				cur = g_list_next (cur);
+			else if (check_metric_is_spam (task, metric)) {
+				break;
 			}
-			/* Process url filters */
-			cur = g_list_first (task->worker->srv->cfg->url_filters);
-		case SCRIPT_URL:
-			while (cur) {
-				filt = cur->data;
-				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_URL);
-				if (task->save.saved) {
-					task->save.entry = cur;
-					task->save.type = SCRIPT_URL;
-					return 0;
-				}
-				cur = g_list_next (cur);
-			}
-			/* Process message filters */
-			cur = g_list_first (task->worker->srv->cfg->message_filters);
-		case SCRIPT_MESSAGE:
-			while (cur) {
-				filt = cur->data;
-				call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MESSAGE);
-				if (task->save.saved) {
-					task->save.entry = cur;
-					task->save.type = SCRIPT_MESSAGE;
-					return 0;
-				}
-				cur = g_list_next (cur);
-			}
-			/* Process all statfiles */
-			process_statfiles (task);
-			/* XXX: ugly direct call */
-			task->dispatcher->write_callback (task);
-			return 1;
+		}
+		cur = g_list_next (cur);
 	}
 
-	return -1;
+	/* Process all statfiles */
+	process_statfiles (task);
+	/* XXX: ugly direct call */
+	task->dispatcher->write_callback (task);
+	return 1;
 }
 
 int 
 process_filters (struct worker_task *task)
 {
 	GList *cur;
-	struct filter *filt;
+	struct metric *metric;
+	struct cache_item *item = NULL;
 
 	if (task->save.saved) {
 		task->save.saved = 0;
 		return continue_process_filters (task);
 	}
 
-	/* Process filters in order that they are listed in config file */
-	cur = task->worker->srv->cfg->header_filters;
+	/* Process metrics symbols */
+	cur = task->worker->srv->cfg->metrics_list;
 	while (cur) {
-		filt = cur->data;
-		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER);
-		if (task->save.saved) {
-			task->save.entry = cur;
-			task->save.type = SCRIPT_HEADER;
-			return 0;
-		}
-		cur = g_list_next (cur);
-	}
-
-	cur = task->worker->srv->cfg->mime_filters;
-	while (cur) {
-		filt = cur->data;
-		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MIME);
-		if (task->save.saved) {
-			task->save.entry = cur;
-			task->save.type = SCRIPT_MIME;
-			return 0;
-		}
-		cur = g_list_next (cur);
-	}
-
-	cur = task->worker->srv->cfg->url_filters;
-	while (cur) {
-		filt = cur->data;
-		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_URL);
-		if (task->save.saved) {
-			task->save.entry = cur;
-			task->save.type = SCRIPT_URL;
-			return 0;
-		}
-		cur = g_list_next (cur);
-	}
-
-	cur = task->worker->srv->cfg->message_filters;
-	while (cur) {
-		filt = cur->data;
-		call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_MESSAGE);
-		if (task->save.saved) {
-			task->save.entry = cur;
-			task->save.type = SCRIPT_MESSAGE;
-			return 0;
+		metric = cur->data;
+		while (call_symbol_callback (task, metric->cache, &item)) {
+			/* call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER); */
+			if (task->save.saved) {
+				task->save.entry = cur;
+				task->save.item = item;
+				return 0;
+			}
+			else if (check_metric_is_spam (task, metric)) {
+				break;
+			}
 		}
 		cur = g_list_next (cur);
 	}

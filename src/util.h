@@ -62,7 +62,7 @@ void file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const
 char* resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from);
 const char* calculate_check_time (struct timespec *begin, int resolution);
 
-void set_counter (const char *name, long int value);
+double set_counter (const char *name, long int value);
 
 gboolean parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename);
 gboolean maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename);

@@ -50,16 +50,6 @@ enum process_type {
 	TYPE_FUZZY,
 };
 
-/** 
- * Filter type
- */
-enum script_type {
-	SCRIPT_HEADER,
-	SCRIPT_MIME,
-	SCRIPT_URL,
-	SCRIPT_MESSAGE,
-};
-
 
 /** 
  * Worker process structure 
@@ -122,8 +112,8 @@ struct counter_data {
  * Save point object for delayed filters processing
  */
 struct save_point {
-	GList *entry;												/**< pointer to saved filter	*/
-	enum script_type type;
+	GList *entry;												/**< pointer to saved metric						*/
+	void *item;													/**< pointer to saved item 							*/
 	unsigned int saved;											/**< how much time we have delayed processing		*/
 };
 
@@ -207,10 +197,7 @@ struct worker_task {
  * Common structure representing C module context
  */
 struct module_ctx {
-	int (*header_filter)(struct worker_task *task);				/**< pointer to headers process function			*/
-	int (*mime_filter)(struct worker_task *task);				/**< pointer to mime parts process function			*/
-	int (*message_filter)(struct worker_task *task);			/**< pointer to the whole message process function	*/
-	int (*url_filter)(struct worker_task *task);				/**< pointer to urls process function				*/
+	int (*filter)(struct worker_task *task);					/**< pointer to headers process function			*/
 };
 
 /**
@@ -219,7 +206,6 @@ struct module_ctx {
 struct c_module {
 	const char *name;											/**< name											*/
 	struct module_ctx *ctx;										/**< pointer to context								*/
-	LIST_ENTRY (c_module) next;									/**< linked list									*/
 };
 
 void start_worker (struct rspamd_worker *worker);

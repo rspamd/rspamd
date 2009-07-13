@@ -38,10 +38,7 @@
 #define DEFAULT_THRESHOLD 0.1
 
 struct chartable_ctx {
-	int (*header_filter)(struct worker_task *task);
-	int (*mime_filter)(struct worker_task *task);
-	int (*message_filter)(struct worker_task *task);
-	int (*url_filter)(struct worker_task *task);
+	int (*filter)(struct worker_task *task);
 	char *metric;
 	char *symbol;
 	double threshold;
@@ -52,16 +49,14 @@ struct chartable_ctx {
 static struct chartable_ctx *chartable_module_ctx = NULL;
 
 static int chartable_mime_filter (struct worker_task *task);
+static void chartable_symbol_callback (struct worker_task *task, void *unused);
 
 int
 chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
-	chartable_module_ctx->header_filter = NULL;
-	chartable_module_ctx->mime_filter = chartable_mime_filter;
-	chartable_module_ctx->message_filter = NULL;
-	chartable_module_ctx->url_filter = NULL;
+	chartable_module_ctx->filter = chartable_mime_filter;
 	chartable_module_ctx->chartable_pool = memory_pool_new (memory_pool_get_size ());
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
@@ -75,6 +70,8 @@ chartable_module_config (struct config_file *cfg)
 {
 	char *value;
 	int res = TRUE;
+	struct metric *metric;
+	double *w;
 
 	if ((value = get_module_opt (cfg, "chartable", "metric")) != NULL) {
 		chartable_module_ctx->metric = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
@@ -101,7 +98,22 @@ chartable_module_config (struct config_file *cfg)
 	else {
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
-	
+
+	metric = g_hash_table_lookup (cfg->metrics, chartable_module_ctx->metric);
+	if (metric == NULL) {
+		msg_err ("chartable_module_config: cannot find metric definition %s", chartable_module_ctx->metric);
+		return FALSE;
+	}
+
+	/* Search in factors hash table */
+	w = g_hash_table_lookup (cfg->factors, chartable_module_ctx->symbol);
+	if (w == NULL) {
+		register_symbol (metric->cache, chartable_module_ctx->symbol, 1, chartable_symbol_callback, NULL);
+	}
+	else {
+		register_symbol (metric->cache, chartable_module_ctx->symbol, *w, chartable_symbol_callback, NULL);
+	}
+
 	return res;
 }
 
@@ -178,8 +190,8 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 	return ((double)mark / (double)total) > chartable_module_ctx->threshold;
 }
 
-static int 
-chartable_mime_filter (struct worker_task *task)
+static void 
+chartable_symbol_callback (struct worker_task *task, void *unused)
 {	
 	GList *cur;
 
@@ -193,6 +205,11 @@ chartable_mime_filter (struct worker_task *task)
 		}
 	}
 
-	return 0;
 }
 
+static int 
+chartable_mime_filter (struct worker_task *task)
+{
+	/* XXX: remove it */
+	return 0;
+}

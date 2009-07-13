@@ -53,11 +53,7 @@ struct autolearn_data {
 };
 
 struct regexp_ctx {
-	int (*header_filter)(struct worker_task *task);
-	int (*mime_filter)(struct worker_task *task);
-	int (*message_filter)(struct worker_task *task);
-	int (*url_filter)(struct worker_task *task);
-	GList *items;
+	int (*filter)(struct worker_task *task);
 	GHashTable *autolearn_symbols;
 	char *metric;
 	char *statfile_prefix;
@@ -70,18 +66,16 @@ static struct regexp_ctx *regexp_module_ctx = NULL;
 static int regexp_common_filter (struct worker_task *task);
 static gboolean rspamd_regexp_match_number (struct worker_task *task, GList *args);
 static gboolean rspamd_raw_header_exists (struct worker_task *task, GList *args);
+static void process_regexp_item (struct worker_task *task, void *user_data);
+
 
 int
 regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
 
-	regexp_module_ctx->header_filter = regexp_common_filter;
-	regexp_module_ctx->mime_filter = NULL;
-	regexp_module_ctx->message_filter = NULL;
-	regexp_module_ctx->url_filter = NULL;
+	regexp_module_ctx->filter = regexp_common_filter;
 	regexp_module_ctx->regexp_pool = memory_pool_new (1024);
-	regexp_module_ctx->items = NULL;
 	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
@@ -155,8 +149,10 @@ regexp_module_config (struct config_file *cfg)
 	GList *cur_opt = NULL;
 	struct module_opt *cur;
 	struct regexp_module_item *cur_item;
+	struct metric *metric;
 	char *value;
 	int res = TRUE;
+	double *w;
 
 	if ((value = get_module_opt (cfg, "regexp", "metric")) != NULL) {
 		regexp_module_ctx->metric = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
@@ -171,6 +167,12 @@ regexp_module_config (struct config_file *cfg)
 	}
 	else {
 		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
+	}
+	
+	metric = g_hash_table_lookup (cfg->metrics, regexp_module_ctx->metric);
+	if (metric == NULL) {
+		msg_err ("regexp_module_config: cannot find metric definition %s", regexp_module_ctx->metric);
+		return FALSE;
 	}
 
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
@@ -188,8 +190,16 @@ regexp_module_config (struct config_file *cfg)
 		if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
 			res = FALSE;
 		}
-		set_counter (cur_item->symbol, 0);
-		regexp_module_ctx->items = g_list_prepend (regexp_module_ctx->items, cur_item);
+
+		/* Search in factors hash table */
+		w = g_hash_table_lookup (cfg->factors, cur->param);
+		if (w == NULL) {
+			register_symbol (metric->cache, cur->param, 1, process_regexp_item, cur_item);
+		}
+		else {
+			register_symbol (metric->cache, cur->param, *w, process_regexp_item, cur_item);
+		}
+		
 		cur_opt = g_list_next (cur_opt);
 	}
 	
@@ -587,47 +597,20 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 }
 
 static void
-process_regexp_item (struct regexp_module_item *item, struct worker_task *task)
-{
-    struct timespec ts1, ts2;
-	uint64_t diff;
+process_regexp_item (struct worker_task *task, void *user_data)
+{	
+	struct regexp_module_item *item = user_data;
 
-	if (check_view (task->cfg->views, item->symbol, task)) {
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
-#elif defined(HAVE_CLOCK_VIRTUAL)
-		clock_gettime (CLOCK_VIRTUAL, &ts1);
-#else
-		clock_gettime (CLOCK_REALTIME, &ts1);
-#endif
-		if (process_regexp_expression (item->expr, task)) {
-			insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
-		}
-
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts2);
-#elif defined(HAVE_CLOCK_VIRTUAL)
-		clock_gettime (CLOCK_VIRTUAL, &ts2);
-#else
-		clock_gettime (CLOCK_REALTIME, &ts2);
-#endif
-
-		diff = (ts2.tv_sec - ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
-		set_counter (item->symbol, diff);
+	if (process_regexp_expression (item->expr, task)) {
+		insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
 	}
 }
 
-static int
+static int 
 regexp_common_filter (struct worker_task *task)
 {
-	GList *cur_expr = g_list_first (regexp_module_ctx->items);
-
-	while (cur_expr) {
-		process_regexp_item ((struct regexp_module_item *)cur_expr->data, task);
-		cur_expr = g_list_next (cur_expr);
-	}
-
-	return 0;
+	/* XXX: remove this shit too */
+	return 0;	
 }
 
 static gboolean 

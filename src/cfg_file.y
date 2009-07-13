@@ -49,7 +49,7 @@ struct rspamd_view *cur_view = NULL;
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
 %token  MEMCACHED WORKER TYPE REQUIRE MODULE
 %token  MODULE_OPT PARAM VARIABLE
-%token  HEADER_FILTERS MIME_FILTERS MESSAGE_FILTERS URL_FILTERS FACTORS METRIC NAME
+%token  FILTERS FACTORS METRIC NAME
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
@@ -84,10 +84,7 @@ command	:
 	| memcached
 	| worker
 	| require
-	| header_filters
-	| mime_filters
-	| message_filters
-	| url_filters
+	| filters
 	| module_opt
 	| variable
 	| factors
@@ -126,30 +123,9 @@ pidfile :
 	;
 
 
-header_filters:
-	HEADER_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->header_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
-		free ($3);
-	}
-	;
-
-mime_filters:
-	MIME_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->mime_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
-		free ($3);
-	}
-	;
-
-message_filters:
-	MESSAGE_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->message_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
-		free ($3);
-	}
-	;
-
-url_filters:
-	URL_FILTERS EQSIGN QUOTEDSTRING {
-		cfg->url_filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
+filters:
+	FILTERS EQSIGN QUOTEDSTRING {
+		cfg->filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
 		free ($3);
 	}
 	;
@@ -372,6 +348,7 @@ metric:
 			cur_metric->classifier = get_classifier ("winnow");
 		}
 		g_hash_table_insert (cfg->metrics, cur_metric->name, cur_metric);
+		cfg->metrics_list = g_list_prepend (cfg->metrics_list, cur_metric);
 		cur_metric = NULL;
 	}
 	;

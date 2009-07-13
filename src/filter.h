@@ -7,6 +7,7 @@
 #define RSPAMD_FILTER_H
 
 #include "config.h"
+#include "symbols_cache.h"
 
 struct worker_task;
 
@@ -19,16 +20,16 @@ enum filter_type { C_FILTER, PERL_FILTER };
  * Filter structure
  */
 struct filter {
-	char *func_name;								/**< function name					*/
-	enum filter_type type;							/**< filter type (c or perl)		*/
+	char *func_name;								/**< function name							*/
+	enum filter_type type;							/**< filter type (c or perl)				*/
 };
 
 /**
  * Rspamd symbol
  */
 struct symbol {
-	double score;									/**< symbol's score					*/
-	GList *options;									/**< list of symbol's options		*/
+	double score;									/**< symbol's score							*/
+	GList *options;									/**< list of symbol's options				*/
 };
 
 /**
@@ -40,6 +41,8 @@ struct metric {
 	metric_cons_func func;							/**< c consolidation function				*/
 	double required_score;							/**< required score for this metric			*/
 	struct classifier *classifier;					/**< classifier that is used for metric		*/
+	struct symbols_cache *cache;					/**< symbols cache for metric 				*/ 
+	char *cache_filename;							/**< filename of cache file					*/
 };
 
 /**

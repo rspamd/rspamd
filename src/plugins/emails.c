@@ -40,10 +40,7 @@
 static const char *email_re_text = "[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+(?:[A-Z]{2}|com|org|net|gov|mil|biz|info|mobi|name|aero|jobs|museum)\\b";
 
 struct email_ctx {
-	int (*header_filter)(struct worker_task *task);
-	int (*mime_filter)(struct worker_task *task);
-	int (*message_filter)(struct worker_task *task);
-	int (*url_filter)(struct worker_task *task);
+	int (*filter)(struct worker_task *task);
 	char *metric;
 	char *symbol;
 	GRegex *email_re;
@@ -57,6 +54,7 @@ struct email_ctx {
 static struct email_ctx *email_module_ctx = NULL;
 
 static int emails_mime_filter (struct worker_task *task);
+static void emails_symbol_callback (struct worker_task *task, void *unused);
 static int emails_command_handler (struct worker_task *task);
 
 int
@@ -66,10 +64,7 @@ emails_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	email_module_ctx = g_malloc (sizeof (struct email_ctx));
 
-	email_module_ctx->header_filter = NULL;
-	email_module_ctx->mime_filter = emails_mime_filter;
-	email_module_ctx->message_filter = NULL;
-	email_module_ctx->url_filter = NULL;
+	email_module_ctx->filter = emails_mime_filter;
 	email_module_ctx->email_pool = memory_pool_new (memory_pool_get_size ());
 	email_module_ctx->email_re = g_regex_new (email_re_text, G_REGEX_RAW | G_REGEX_OPTIMIZE | G_REGEX_CASELESS, 0, &err);
 	email_module_ctx->blacklist = g_hash_table_new (g_str_hash, g_str_equal);
@@ -87,6 +82,8 @@ emails_module_config (struct config_file *cfg)
 {
 	char *value;
 	int res = TRUE;
+	struct metric *metric;
+	double *w;
 
 	if ((value = get_module_opt (cfg, "emails", "metric")) != NULL) {
 		email_module_ctx->metric = memory_pool_strdup (email_module_ctx->email_pool, value);
@@ -109,6 +106,22 @@ emails_module_config (struct config_file *cfg)
 			}
 		}
 	}	
+
+	metric = g_hash_table_lookup (cfg->metrics, email_module_ctx->metric);
+	if (metric == NULL) {
+		msg_err ("emails_module_config: cannot find metric definition %s", email_module_ctx->metric);
+		return FALSE;
+	}
+
+	/* Search in factors hash table */
+	w = g_hash_table_lookup (cfg->factors, email_module_ctx->symbol);
+	if (w == NULL) {
+		register_symbol (metric->cache, email_module_ctx->symbol, 1, emails_symbol_callback, NULL);
+	}
+	else {
+		register_symbol (metric->cache, email_module_ctx->symbol, *w, emails_symbol_callback, NULL);
+	}
+
 	return res;
 }
 
@@ -198,8 +211,8 @@ emails_command_handler (struct worker_task *task)
 	return 0;
 }
 
-static int 
-emails_mime_filter (struct worker_task *task)
+static void 
+emails_symbol_callback (struct worker_task *task, void *unused)
 {	
 	GList *emails, *cur;
 
@@ -220,6 +233,11 @@ emails_mime_filter (struct worker_task *task)
 		}
 	}
 
-	return 0;
 }
 
+static int 
+emails_mime_filter (struct worker_task *task)
+{
+	/* XXX: remove this */
+	return 0;
+}
