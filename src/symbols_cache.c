@@ -136,9 +136,10 @@ mmap_cache_file (struct symbols_cache *cache, int fd)
 static gboolean
 create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 {
-	int i, cklen;
+	int i;
 	GChecksum *cksum;
 	u_char *digest;
+	gsize cklen;
 
 	/* Calculate checksum */
 	cksum = get_mem_cksum (cache);
@@ -225,7 +226,7 @@ init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char
 	int fd;
 	GChecksum *cksum;
 	u_char *mem_sum, *file_sum;
-	int cklen;
+	gsize cklen;
 
 	if (cache == NULL || cache->items == NULL) {
 		return FALSE;
