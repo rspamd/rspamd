@@ -194,10 +194,10 @@ regexp_module_config (struct config_file *cfg)
 		/* Search in factors hash table */
 		w = g_hash_table_lookup (cfg->factors, cur->param);
 		if (w == NULL) {
-			register_symbol (metric->cache, cur->param, 1, process_regexp_item, cur_item);
+			register_symbol (&metric->cache, cur->param, 1, process_regexp_item, cur_item);
 		}
 		else {
-			register_symbol (metric->cache, cur->param, *w, process_regexp_item, cur_item);
+			register_symbol (&metric->cache, cur->param, *w, process_regexp_item, cur_item);
 		}
 		
 		cur_opt = g_list_next (cur_opt);

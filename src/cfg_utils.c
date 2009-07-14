@@ -171,7 +171,6 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 void
 init_defaults (struct config_file *cfg)
 {
-	struct metric *def_metric;
 
 	cfg->memcached_error_time = DEFAULT_UPSTREAM_ERROR_TIME;
 	cfg->memcached_dead_time = DEFAULT_UPSTREAM_DEAD_TIME;
@@ -188,14 +187,6 @@ init_defaults (struct config_file *cfg)
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->statfiles = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
-
-	def_metric = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric));
-	def_metric->name = "default";
-	def_metric->func_name = "factors";
-	def_metric->func = factor_consolidation_func;
-	def_metric->required_score = DEFAULT_SCORE;
-	def_metric->classifier = get_classifier ("winnow");
-	g_hash_table_insert (cfg->metrics, "default", def_metric);
 
 }
 
@@ -479,6 +470,7 @@ void
 post_load_config (struct config_file *cfg)
 {
 	struct timespec ts;
+	struct metric *def_metric;
 
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
 	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
@@ -499,6 +491,18 @@ post_load_config (struct config_file *cfg)
 	if (cfg->clock_res > 3) {
 		cfg->clock_res = 3;
 	}
+
+	if (g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC) == NULL) {
+		def_metric = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric));
+		def_metric->name = DEFAULT_METRIC;
+		def_metric->func_name = "factors";
+		def_metric->func = factor_consolidation_func;
+		def_metric->required_score = DEFAULT_SCORE;
+		def_metric->classifier = get_classifier ("winnow");
+		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
+		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);
+	}
+
 }
 
 

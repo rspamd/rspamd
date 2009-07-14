@@ -46,7 +46,7 @@ int
 cache_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item *i1 = p1, *i2 = p2;
-
+	
 	return strcmp (i1->s->symbol, i2->s->symbol);
 }
 
@@ -70,20 +70,18 @@ static void
 grow_cache (struct symbols_cache *cache)
 {
 	guint old = cache->cur_items, i;
+	void *new;
 
 	cache->cur_items = cache->cur_items * 2;
-	cache->items = g_renew (struct cache_item, cache->items, cache->cur_items);
+	new = g_new0 (struct cache_item, cache->cur_items);
+	memcpy (new, cache->items, old * sizeof (struct cache_item));
+	g_free (cache->items);
+	cache->items = new;
+
 	/* Create new saved_cache_items */
 	for (i = old - 1; i < cache->cur_items; i ++) {
-		cache->items[i].s = g_malloc (sizeof (struct saved_cache_item));
+		cache->items[i].s = g_new0 (struct saved_cache_item, 1);
 	}
-}
-
-static void
-truncate_cache (struct symbols_cache *cache)
-{
-	cache->items = g_renew (struct cache_item, cache->items, cache->used_items);
-	cache->cur_items = cache->used_items;
 }
 
 static GChecksum *
@@ -186,41 +184,37 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 }
 
 void 
-register_symbol (struct symbols_cache *cache, const char *name, double weight, symbol_func_t func, gpointer user_data)
+register_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, gpointer user_data)
 {
 	struct cache_item *item = NULL;
 	int i;
 	
-	if (cache == NULL) {
-		cache = g_new0 (struct symbols_cache, 1);
+	if (*cache == NULL) {
+		*cache = g_new0 (struct symbols_cache, 1);
 	}
-	if (cache->items == NULL) {
-		cache->cur_items = MIN_CACHE;
-		cache->used_items = 0;
-		cache->items = g_new0 (struct cache_item, cache->cur_items);
-		for (i = 0; i < cache->cur_items; i ++) {
-			cache->items[i].s = g_malloc (sizeof (struct saved_cache_item));
-		}
-	}
-
-	for (i = 0; i < cache->cur_items; i ++) {
-		if (cache->items[i].s->symbol[0] != '\0') {
-			item = &cache->items[i];
+	if ((*cache)->items == NULL) {
+		(*cache)->cur_items = MIN_CACHE;
+		(*cache)->used_items = 0;
+		(*cache)->items = g_new0 (struct cache_item, (*cache)->cur_items);
+		for (i = 0; i < (*cache)->cur_items; i ++) {
+			(*cache)->items[i].s = g_new0 (struct saved_cache_item, 1);
 		}
 	}
 	
-	if (item == NULL) {
-		grow_cache (cache);
+	if ((*cache)->used_items >= (*cache)->cur_items) {
+		grow_cache (*cache);
 		/* Call once more */
 		register_symbol (cache, name, weight, func, user_data);
 		return;
 	}
 
+	item = &(*cache)->items[(*cache)->used_items];
+	
 	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
 	item->s->weight = weight;
-	cache->used_items ++;
+	(*cache)->used_items ++;
 	set_counter (item->s->symbol, 0);
 }
 
@@ -237,7 +231,6 @@ init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char
 		return FALSE;
 	}
 	
-	truncate_cache (cache);
 	/* Sort items in cache */
 	qsort (cache->items, cache->used_items, sizeof (struct cache_item), cache_cmp);
 
@@ -288,7 +281,7 @@ init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char
 
 	g_checksum_get_digest (cksum, mem_sum, &cklen);
 	/* Now try to read file sum */
-	if (lseek (fd, SEEK_END, -(cklen)) == -1) {
+	if (lseek (fd, -(cklen), SEEK_END) == -1) {
 		close (fd);
 		g_free (mem_sum);
 		g_checksum_free (cksum);
@@ -340,6 +333,7 @@ call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, str
 			return FALSE;
 		}
 		if (cache->uses ++ >= MAX_USES) {
+			msg_info ("call_symbols_callback: resort symbols cache");
 			memory_pool_wlock_rwlock (cache->lock);
 			cache->uses = 0;
 			/* Resort while having write lock */
@@ -350,7 +344,7 @@ call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, str
 	}
 	else {
 		/* Next pointer */
-		if (*saved_item - cache->items == cache->used_items) {
+		if (*saved_item - cache->items >= cache->used_items - 1) {
 			/* No more items in cache */
 			return FALSE;
 		}
@@ -358,7 +352,6 @@ call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, str
 		item = *saved_item + 1;
 		memory_pool_runlock_rwlock (cache->lock);
 	}
-
 	if (check_view (task->cfg->views, item->s->symbol, task)) {
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
@@ -379,7 +372,6 @@ call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, str
 
 		diff = (ts2.tv_sec - ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
 		item->s->avg_time = set_counter (item->s->symbol, diff);
-		item->s->frequency ++;
 	}
 
 	*saved_item = item;

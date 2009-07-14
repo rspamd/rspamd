@@ -116,10 +116,10 @@ emails_module_config (struct config_file *cfg)
 	/* Search in factors hash table */
 	w = g_hash_table_lookup (cfg->factors, email_module_ctx->symbol);
 	if (w == NULL) {
-		register_symbol (metric->cache, email_module_ctx->symbol, 1, emails_symbol_callback, NULL);
+		register_symbol (&metric->cache, email_module_ctx->symbol, 1, emails_symbol_callback, NULL);
 	}
 	else {
-		register_symbol (metric->cache, email_module_ctx->symbol, *w, emails_symbol_callback, NULL);
+		register_symbol (&metric->cache, email_module_ctx->symbol, *w, emails_symbol_callback, NULL);
 	}
 
 	return res;

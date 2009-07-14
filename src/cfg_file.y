@@ -49,7 +49,7 @@ struct rspamd_view *cur_view = NULL;
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
 %token  MEMCACHED WORKER TYPE REQUIRE MODULE
 %token  MODULE_OPT PARAM VARIABLE
-%token  FILTERS FACTORS METRIC NAME
+%token  FILTERS FACTORS METRIC NAME CACHE_FILE
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
@@ -362,6 +362,7 @@ metriccmd:
 	| metricfunction
 	| metricscore
 	| metricclassifier
+	| metriccache
 	;
 	
 metricname:
@@ -413,6 +414,15 @@ metricclassifier:
 			yyerror ("yyparse: unknown classifier %s", $3);
 			YYERROR;
 		}
+	}
+	;
+
+metriccache:
+	CACHE_FILE EQSIGN QUOTEDSTRING {
+		if (cur_metric == NULL) {
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		}
+		cur_metric->cache_filename = memory_pool_strdup (cfg->cfg_pool, $3);
 	}
 	;
 

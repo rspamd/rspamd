@@ -58,6 +58,7 @@ metric							return METRIC;
 name							return NAME;
 required_score					return REQUIRED_SCORE;
 function						return FUNCTION;
+cache_file						return CACHE_FILE;
 control							return CONTROL;
 password						return PASSWORD;
 lmtp							return LMTP;

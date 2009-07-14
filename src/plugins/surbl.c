@@ -195,10 +195,10 @@ surbl_module_config (struct config_file *cfg)
 				/* Search in factors hash table */
 				w = g_hash_table_lookup (cfg->factors, new_suffix->symbol);
 				if (w == NULL) {
-					register_symbol (metric->cache, new_suffix->symbol, 1, surbl_test_url, NULL);
+					register_symbol (&metric->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 				}
 				else {
-					register_symbol (metric->cache, new_suffix->symbol, *w, surbl_test_url, NULL);
+					register_symbol (&metric->cache, new_suffix->symbol, *w, surbl_test_url, new_suffix);
 				}
 			}
 		}
@@ -227,10 +227,10 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 		w = g_hash_table_lookup (cfg->factors, new_suffix->symbol);
 		if (w == NULL) {
-			register_symbol (metric->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
+			register_symbol (&metric->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 		}
 		else {
-			register_symbol (metric->cache, new_suffix->symbol, *w, surbl_test_url, new_suffix);
+			register_symbol (&metric->cache, new_suffix->symbol, *w, surbl_test_url, new_suffix);
 		}
 	}
 

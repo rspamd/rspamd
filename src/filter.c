@@ -50,6 +50,8 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 	struct metric *metric;
 	struct metric_result *metric_res;
 	struct symbol *s;
+	struct cache_item *item;
+	int i;
 
 	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, metric_name);
 	if (metric == NULL) {
@@ -94,6 +96,17 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		}
 
 		g_hash_table_insert (metric_res->symbols, (gpointer)symbol, s);
+	}
+
+	/* Process cache item */
+	if (metric->cache) {
+		for (i = 0; i < metric->cache->used_items; i ++) {
+			item = &metric->cache->items[i];
+
+			if (flag > 0 && strcmp (item->s->symbol, symbol) == 0) {
+				item->s->frequency ++;
+			}
+		}
 	}
 }
 
@@ -219,6 +232,7 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
+		metric_process_callback_forced (metric->name, res, task);
 		return res->score >= metric->required_score;
 	}
 

@@ -108,10 +108,10 @@ chartable_module_config (struct config_file *cfg)
 	/* Search in factors hash table */
 	w = g_hash_table_lookup (cfg->factors, chartable_module_ctx->symbol);
 	if (w == NULL) {
-		register_symbol (metric->cache, chartable_module_ctx->symbol, 1, chartable_symbol_callback, NULL);
+		register_symbol (&metric->cache, chartable_module_ctx->symbol, 1, chartable_symbol_callback, NULL);
 	}
 	else {
-		register_symbol (metric->cache, chartable_module_ctx->symbol, *w, chartable_symbol_callback, NULL);
+		register_symbol (&metric->cache, chartable_module_ctx->symbol, *w, chartable_symbol_callback, NULL);
 	}
 
 	return res;

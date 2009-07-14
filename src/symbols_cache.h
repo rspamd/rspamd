@@ -41,7 +41,7 @@ gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, c
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_symbol (struct symbols_cache *cache, const char *name, double weight, symbol_func_t func, gpointer user_data);
+void register_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, gpointer user_data);
 
 /**
  * Call function for cached symbol using saved callback
