@@ -63,6 +63,7 @@ extern int yynerrs;
 extern FILE *yyin;
 
 static int dump_vars = 0;
+static int dump_cache = 0;
 
 #ifndef WITHOUT_PERL
 extern void xs_init(pTHX);
@@ -100,7 +101,7 @@ static void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
 {
 	int ch;
-	while ((ch = getopt(argc, argv, "tVhfc:u:g:")) != -1) {
+	while ((ch = getopt(argc, argv, "tVChfc:u:g:")) != -1) {
 		switch (ch) {
 			case 'f':
 				cfg->no_fork = 1;
@@ -115,6 +116,9 @@ read_cmd_line (int argc, char **argv, struct config_file *cfg)
 				break;
 		 	case 'V':
 				dump_vars = 1;
+				break;
+			case 'C':
+				dump_cache = 1;
 				break;
 			case 'u':
 				if (optarg) {
@@ -134,6 +138,7 @@ read_cmd_line (int argc, char **argv, struct config_file *cfg)
 						"Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
 						"-h:        This help message\n"
 						"-t:        Do config test and exit\n"
+						"-C:        Dump symbols cache stats and exit\n"
 						"-V         Print all rspamd variables and exit\n"
 						"-f:        Do not daemonize main process\n"
 						"-c:        Specify config file (./rspamd.conf is used by default)\n"
@@ -186,7 +191,7 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 		case RSPAMD_LOG_CONSOLE:
 			if (!rspamd->cfg->no_fork) {
 				if (is_fatal) {
-					fprintf (stderr, "Cannot log to console while daemonized, disable logging");
+					fprintf (stderr, "Cannot log to console while daemonized, disable logging\n");
 				}
 				rspamd->cfg->log_fd = -1;
 			}
@@ -199,7 +204,7 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 		case RSPAMD_LOG_FILE:
 			if (rspamd->cfg->log_file == NULL || open_log (rspamd->cfg) == -1) {
 				if (is_fatal) {
-					fprintf (stderr, "Fatal error, cannot open logfile, exiting");
+					fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 					exit (EXIT_FAILURE);
 				}
 				else {
@@ -214,7 +219,7 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 		case RSPAMD_LOG_SYSLOG:
 			if (open_log (rspamd->cfg) == -1) {
 				if (is_fatal) {
-					fprintf (stderr, "Fatal error, cannot open syslog facility, exiting");
+					fprintf (stderr, "Fatal error, cannot open syslog facility, exiting\n");
 					exit (EXIT_FAILURE);
 				}
 				else {
@@ -436,6 +441,7 @@ main (int argc, char **argv, char **env)
 	struct rspamd_worker *cur, *cur_tmp, *active_worker;
 	struct rlimit rlim;
 	struct metric *metric;
+	struct cache_item *item;
 	FILE *f;
 	pid_t wrk;
 	GList *l;
@@ -620,6 +626,29 @@ main (int argc, char **argv, char **env)
 			exit (EXIT_FAILURE);
 		}
 		l = g_list_next (l);
+	}
+
+	if (dump_cache) {
+		l = g_list_first (cfg->metrics_list);
+		while (l) {
+			metric = l->data;
+			if (metric->cache) {
+				printf ("Cache for metric: %s\n", metric->name);
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
+				for (i = 0; i < metric->cache->used_items; i ++) {
+					item = &metric->cache->items[i];
+					printf ("-----------------------------------------------------------------\n");
+					printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, 
+																		item->s->weight, item->s->frequency,
+																		item->s->avg_time);
+
+				}
+				printf ("------------------------------------------------=----------------\n");
+			}
+			l = g_list_next (l);
+		}
+		exit (EXIT_SUCCESS);
 	}
 	
 	spawn_workers (rspamd);

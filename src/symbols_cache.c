@@ -63,7 +63,7 @@ cache_logic_cmp (const void *p1, const void *p2)
 		 i2->s->frequency * FREQUENCY_MULT + 
 		 i2->s->avg_time * TIME_MULT;
 	
-	return (int)w1 - w2;
+	return (int)w2 - w1;
 }
 
 static void
