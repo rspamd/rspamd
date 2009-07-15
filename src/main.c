@@ -526,7 +526,7 @@ main (int argc, char **argv, char **env)
 		}
 	}
 
-	if (cfg->config_test || dump_vars) {
+	if (cfg->config_test || dump_vars || dump_cache) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
@@ -539,11 +539,34 @@ main (int argc, char **argv, char **env)
 		if (dump_vars) {
 			dump_cfg_vars ();
 		}
+		if (dump_cache) {
+			l = g_list_first (cfg->metrics_list);
+			while (l) {
+				metric = l->data;
+				if (!init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
+					exit (EXIT_FAILURE);
+				}
+				if (metric->cache) {
+					printf ("Cache for metric: %s\n", metric->name);
+					printf ("-----------------------------------------------------------------\n");
+					printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
+					for (i = 0; i < metric->cache->used_items; i ++) {
+						item = &metric->cache->items[i];
+						printf ("-----------------------------------------------------------------\n");
+						printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, 
+																			item->s->weight, item->s->frequency,
+																			item->s->avg_time);
+
+					}
+					printf ("------------------------------------------------=----------------\n");
+				}
+				l = g_list_next (l);
+			}
+			exit (EXIT_SUCCESS);
+		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
-
-
 
 	/* Set stack size for pcre */
 	getrlimit(RLIMIT_STACK, &rlim);
@@ -628,28 +651,6 @@ main (int argc, char **argv, char **env)
 		l = g_list_next (l);
 	}
 
-	if (dump_cache) {
-		l = g_list_first (cfg->metrics_list);
-		while (l) {
-			metric = l->data;
-			if (metric->cache) {
-				printf ("Cache for metric: %s\n", metric->name);
-				printf ("-----------------------------------------------------------------\n");
-				printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
-				for (i = 0; i < metric->cache->used_items; i ++) {
-					item = &metric->cache->items[i];
-					printf ("-----------------------------------------------------------------\n");
-					printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, 
-																		item->s->weight, item->s->frequency,
-																		item->s->avg_time);
-
-				}
-				printf ("------------------------------------------------=----------------\n");
-			}
-			l = g_list_next (l);
-		}
-		exit (EXIT_SUCCESS);
-	}
 	
 	spawn_workers (rspamd);
 
