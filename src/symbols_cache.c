@@ -79,7 +79,7 @@ grow_cache (struct symbols_cache *cache)
 	cache->items = new;
 
 	/* Create new saved_cache_items */
-	for (i = old - 1; i < cache->cur_items; i ++) {
+	for (i = old; i < cache->cur_items; i ++) {
 		cache->items[i].s = g_new0 (struct saved_cache_item, 1);
 	}
 }

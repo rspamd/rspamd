@@ -558,7 +558,7 @@ main (int argc, char **argv, char **env)
 																			item->s->avg_time);
 
 					}
-					printf ("------------------------------------------------=----------------\n");
+					printf ("-----------------------------------------------------------------\n");
 				}
 				l = g_list_next (l);
 			}
@@ -645,7 +645,7 @@ main (int argc, char **argv, char **env)
 	l = g_list_first (cfg->metrics_list);
 	while (l) {
 		metric = l->data;
-		if (!init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
+		if (metric->cache && !init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
 			exit (EXIT_FAILURE);
 		}
 		l = g_list_next (l);
