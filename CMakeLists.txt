@@ -265,8 +265,14 @@ ELSE (MD5_INCLUDE)
 	MESSAGE(STATUS "WARNING: Using internal MD5 support")
 ENDIF (MD5_INCLUDE)
 
+IF(ENABLE_OPTIMIZATION MATCHES "ON")
+	SET(CMAKE_C_OPT_FLAGS "-O3")
+ELSE(ENABLE_OPTIMIZATION MATCHES "ON")
+	SET(CMAKE_C_OPT_FLAGS "-O")
+ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
+
 SET(CMAKE_C_WARN_FLAGS "-Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value -Wno-declaration-after-statement -Wno-pointer-sign")
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS} -std=c99")
+SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS} -std=c99")
 
 # Platform specific routines
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")

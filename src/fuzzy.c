@@ -63,7 +63,7 @@ fuzzy_roll_hash (char c)
 	rs.h[2] <<= 5;
 	rs.h[2] ^= c;
   
-	return rs.h[1] + rs.h[2] + rs.h[3];
+	return rs.h[0] + rs.h[1] + rs.h[2];
 }
 
 /* A simple non-rolling hash, based on the FNV hash */
