@@ -46,6 +46,7 @@ gboolean rspamd_is_recipients_sorted (struct worker_task *task, GList *args);
 gboolean rspamd_compare_transfer_encoding (struct worker_task *task, GList *args);
 gboolean rspamd_is_html_balanced (struct worker_task *task, GList *args);
 gboolean rspamd_has_html_tag (struct worker_task *task, GList *args);
+gboolean rspamd_has_fake_html (struct worker_task *task, GList *args);
 
 /*
  * List of internal functions of rspamd
@@ -65,6 +66,7 @@ static struct _fl {
 	{ "content_type_is_type", rspamd_content_type_is_type },
 	{ "has_content_part", rspamd_has_content_part },
 	{ "has_content_part_len", rspamd_has_content_part_len },
+	{ "has_fake_html", rspamd_has_fake_html },
 	{ "has_html_tag", rspamd_has_html_tag },
 	{ "has_only_html_part", rspamd_has_only_html_part },
 	{ "header_exists", rspamd_header_exists },
@@ -1605,6 +1607,28 @@ rspamd_has_html_tag (struct worker_task *task, GList *args)
 	return res;
 
 }
+
+gboolean 
+rspamd_has_fake_html (struct worker_task *task, GList *args)
+{
+	struct mime_text_part *p;
+	GList *cur;
+	gboolean res = FALSE;
+	
+	cur = g_list_first (task->text_parts);
+
+	while (cur && res == FALSE) {
+		p = cur->data;
+		if (p->is_html && p->html_nodes == NULL) {
+			res = TRUE;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return res;
+
+}
+
 
 /*
  * vi:ts=4
