@@ -35,6 +35,7 @@
 #include "url.h"
 #include "modules.h"
 #include "message.h"
+#include "map.h"
 
 #include <evdns.h>
 
@@ -366,6 +367,9 @@ start_worker (struct rspamd_worker *worker)
 	/* Accept event */
 	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
+
+	/* Maps events */
+	start_map_watch ();
 
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);

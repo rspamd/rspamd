@@ -28,6 +28,7 @@
 #include "view.h"
 #include "expressions.h"
 #include "cfg_file.h"
+#include "map.h"
 
 struct rspamd_view* 
 init_view (memory_pool_t *pool)
@@ -51,10 +52,8 @@ add_view_from (struct rspamd_view *view, char *line)
 {
 	struct rspamd_regexp *re = NULL;
 
-	if (g_ascii_strncasecmp (line, "file://", sizeof ("file://") - 1) == 0) {
-		if (parse_host_list (view->pool, view->from_hash, line + sizeof ("file://") - 1)) {
-			return TRUE;
-		}
+	if (add_map (line, read_host_list, fin_host_list, (void **)&view->from_hash)) {
+		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
 		view->from_re_list = g_list_prepend (view->from_re_list, re);
@@ -70,10 +69,8 @@ add_view_symbols (struct rspamd_view *view, char *line)
 	struct rspamd_regexp *re = NULL;
 	GList *symbols;
 
-	if (g_ascii_strncasecmp (line, "file://", sizeof ("file://") - 1) == 0) {
-		if (parse_host_list (view->pool, view->symbols_hash, line + sizeof ("file://") - 1)) {
-			return TRUE;
-		}
+	if (add_map (line, read_host_list, fin_host_list, (void **)&view->symbols_hash)) {
+		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
 		view->symbols_re_list = g_list_prepend (view->symbols_re_list, re);
@@ -96,14 +93,11 @@ add_view_symbols (struct rspamd_view *view, char *line)
 gboolean 
 add_view_ip (struct rspamd_view *view, char *line)
 {
-	if (g_ascii_strncasecmp (line, "file://", sizeof ("file://") - 1) == 0) {
-		if (parse_radix_list (view->pool, view->ip_tree, line + sizeof ("file://") - 1)) {
-			return TRUE;
-		}
+	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->symbols_hash)) {
+		return TRUE;
 	}
 
 	return FALSE;
-
 }
 
 

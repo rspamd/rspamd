@@ -30,6 +30,7 @@
 #include "../util.h"
 #include "../message.h"
 #include "../view.h"
+#include "../map.h"
 #include <evdns.h>
 
 #include "surbl.h"
@@ -65,11 +66,11 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
-	surbl_module_ctx->tld2 = g_hash_table_new (g_str_hash, g_str_equal);
+	surbl_module_ctx->tld2 = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	/* Register destructors */
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->tld2);
 
-	surbl_module_ctx->whitelist = g_hash_table_new (g_str_hash, g_str_equal);
+	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	/* Register destructors */
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->whitelist);
 	
@@ -158,17 +159,13 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->metric = DEFAULT_METRIC;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "2tld")) != NULL) {
-		if (g_ascii_strncasecmp (value, "file://", sizeof ("file://") - 1) == 0) {
-			if (parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, value + sizeof ("file://") - 1)) {
-				surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
-			}
+		if (add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->tld2)) {
+			surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
 		}
 	}
 	if ((value = get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
-		if (g_ascii_strncasecmp (value, "file://", sizeof ("file://") - 1) == 0) {
-			if (parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, value + sizeof ("file://") - 1)) {
-				surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
-			}
+		if (add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->whitelist)) {
+			surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
 		}
 	}
 	
@@ -765,14 +762,6 @@ surbl_test_url (struct worker_task *task, void *user_data)
 	struct mime_text_part *part;
 	struct redirector_param param;
 	struct suffix_item *suffix = user_data;
-
-	/* Try to check lists */
-	if (surbl_module_ctx->tld2_file) {
-		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->tld2, surbl_module_ctx->tld2_file);
-	}
-	if (surbl_module_ctx->whitelist_file) {
-		maybe_parse_host_list (surbl_module_ctx->surbl_pool, surbl_module_ctx->whitelist, surbl_module_ctx->whitelist_file);
-	}
 
 	url_tree = g_tree_new ((GCompareFunc)g_ascii_strcasecmp);
 	

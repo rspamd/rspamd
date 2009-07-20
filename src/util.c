@@ -28,25 +28,15 @@
 #include "cfg_file.h"
 #include "main.h"
 
-/* Value in seconds after whitch we would try to do stat on list file */
-#define MON_TIMEOUT 10
 
 sig_atomic_t do_reopen_log = 0;
 extern rspamd_hash_t *counters;
-static char *hash_fill = "1";
-
-struct list_file {
-	char *filename;
-	struct stat st;
-};
 
 struct logger_params {
     GLogFunc log_func;
     struct config_file *cfg;
 };
 
-
-static GHashTable *listfiles = NULL;
 static struct logger_params log_params;
 
 int
@@ -880,181 +870,18 @@ set_counter (const char *name, long int value)
 	return cd->value;
 }
 
-typedef void (*insert_func)(gpointer st, gconstpointer key, gpointer value);
-
-static gboolean
-abstract_parse_list (memory_pool_t *pool, void *arg, insert_func func, const char *filename)
-{
-	int fd;
-	char buf[BUFSIZ], str[BUFSIZ], *s, *p;
-	ssize_t r;
-	enum {
-		READ_SYMBOL,
-		SKIP_COMMENT,
-	} state = READ_SYMBOL;
-
-	struct list_file *new_file;
-
-	if (listfiles == NULL) {
-		listfiles = g_hash_table_new (g_str_hash, g_str_equal);
-	}
-	
-	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_warn ("parse_host_list: cannot open file '%s': %s", filename, strerror (errno));
-		return FALSE;
-	}
-
-	new_file = memory_pool_alloc (pool, sizeof (struct list_file));
-	new_file->filename = memory_pool_strdup (pool, filename);
-	fstat (fd, &new_file->st);
-	g_hash_table_insert (listfiles, new_file->filename, new_file);
-
-	s = str;
-
-	while ((r = read (fd, buf, sizeof (buf) - 1)) > 0) {
-		buf[r] = '\0';
-		p = buf;
-		while (*p) {
-			switch (state) {
-				case READ_SYMBOL:
-					if (*p == '#') {
-						if (s != str) {
-							*s = '\0';
-							s = memory_pool_strdup (pool, str);
-							func (arg, s, hash_fill);
-							s = str;
-						}
-						state = SKIP_COMMENT;
-					}
-					else if (*p == '\r' || *p == '\n') {
-						if (s != str) {
-							*s = '\0';
-							s = memory_pool_strdup (pool, str);
-							func (arg, s, hash_fill);
-							s = str;
-						}
-						while (*p == '\r' || *p == '\n') {
-							p ++;
-						}
-					}
-					else if (g_ascii_isspace (*p)) {
-						p ++;
-					}
-					else {
-						*s = *p;
-						s ++;
-						p ++;
-					}
-					break;
-				case SKIP_COMMENT:
-					if (*p == '\r' || *p == '\n') {
-						while (*p == '\r' || *p == '\n') {
-							p ++;
-						}
-						s = str;
-						state = READ_SYMBOL;
-					}
-					else {
-						p ++;
-					}
-					break;
-			}
-		}
-	}
-
-	close (fd);
-
-	return TRUE;
-}
-
-static void
-radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
-{
-	radix_tree_t *tree = st;
-
-	uint32_t mask = 0xFFFFFFFF;
-	uint32_t ip;
-	char *token, *ipnet;
-	struct in_addr ina;
-	int k;
-	
-	k = strlen ((char *)key) + 1;
-	ipnet = alloca (k);
-	g_strlcpy (ipnet, key, k);
-	token = strsep (&ipnet, "/");
-
-	if (ipnet != NULL) {
-		k = atoi (ipnet);
-		if (k > 32 || k < 0) {
-			msg_warn ("radix_tree_insert_helper: invalid netmask value: %d", k);
-			k = 32;
-		}
-		k = 32 - k;
-		mask = mask << k;
-	}
-
-	if (inet_aton (token, &ina) == 0) {
-		msg_err ("radix_tree_insert_helper: invalid ip address: %s", token);
-		return;
-	}
-
-	ip = ntohl ((uint32_t)ina.s_addr);
-	k = radix32tree_insert (tree, ip, mask, 1);
-	if (k == -1) {
-		msg_warn ("radix_tree_insert_helper: cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
-	}
-	else if (k == 1) {
-		msg_warn ("add_ip_radix: ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
-	}
-}
-
-gboolean 
-parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
-{
-	return abstract_parse_list (pool, (void *)tbl, (insert_func)g_hash_table_insert, filename);
-}
-
-gboolean 
-parse_radix_list (memory_pool_t *pool, radix_tree_t *tree, const char *filename)
-{
-	return abstract_parse_list (pool, (void *)tree, (insert_func)radix_tree_insert_helper, filename);
-}
-
-gboolean
-maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename)
-{
-	struct list_file *lf;
-	struct stat cur_st;
-	time_t cur_time = time (NULL);
-
-	if (listfiles == NULL || (lf = g_hash_table_lookup (listfiles, filename)) == NULL) {
-		/* Do not try to parse unknown files */
-		return FALSE;
-	}
-	
-	if (cur_time - lf->st.st_mtime > MON_TIMEOUT) {
-		/* Try to stat */
-		if (stat (lf->filename, &cur_st) != -1) {
-			if (cur_st.st_mtime > lf->st.st_mtime) {
-				g_hash_table_remove (listfiles, lf->filename);
-				g_hash_table_remove_all (tbl);
-				msg_info ("maybe_parse_host_list: file %s was modified and rereaded", filename);
-				return parse_host_list (pool, tbl, filename);
-			}
-		}
-	}
-
-	return TRUE;
-}
-
 #ifndef g_tolower
 #define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
 #endif
 
-gint
+gboolean
 rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 {
-	return g_ascii_strcasecmp ((const char *) v, (const char *) v2);
+	if (g_ascii_strcasecmp ((const char *) v, (const char *) v2) == 0) {
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 

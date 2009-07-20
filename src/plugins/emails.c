@@ -34,6 +34,7 @@
 #include "../expressions.h"
 #include "../util.h"
 #include "../view.h"
+#include "../map.h"
 
 #define DEFAULT_SYMBOL "R_BAD_EMAIL"
 
@@ -100,10 +101,8 @@ emails_module_config (struct config_file *cfg)
 		email_module_ctx->symbol = DEFAULT_SYMBOL;
 	}
 	if ((value = get_module_opt (cfg, "emails", "blacklist")) != NULL) {
-		if (g_ascii_strncasecmp (value, "file://", sizeof ("file://") - 1) == 0) {
-			if (parse_host_list (email_module_ctx->email_pool, email_module_ctx->blacklist, value + sizeof ("file://") - 1)) {
-				email_module_ctx->blacklist_file = memory_pool_strdup (email_module_ctx->email_pool, value + sizeof ("file://") - 1);
-			}
+		if (add_map (value, read_host_list, fin_host_list, (void **)&email_module_ctx->blacklist)) {
+			email_module_ctx->blacklist_file = memory_pool_strdup (email_module_ctx->email_pool, value + sizeof ("file://") - 1);
 		}
 	}	
 
@@ -216,9 +215,9 @@ emails_symbol_callback (struct worker_task *task, void *unused)
 {	
 	GList *emails, *cur;
 
-	emails = extract_emails (task);
 
 	if (check_view (task->cfg->views, email_module_ctx->symbol, task)) {
+		emails = extract_emails (task);
 		if (email_module_ctx->blacklist && emails) {
 			cur = g_list_first (emails);
 

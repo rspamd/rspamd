@@ -64,12 +64,8 @@ const char* calculate_check_time (struct timespec *begin, int resolution);
 
 double set_counter (const char *name, long int value);
 
-gboolean parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename);
-gboolean maybe_parse_host_list (memory_pool_t *pool, GHashTable *tbl, const char *filename);
-gboolean parse_radix_list (memory_pool_t *pool, radix_tree_t *tree, const char *filename);
-
 guint rspamd_strcase_hash (gconstpointer key);
-gint rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
+gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
 
 
 #endif
