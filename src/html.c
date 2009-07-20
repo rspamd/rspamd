@@ -259,6 +259,51 @@ get_tag_by_name (const char *name)
 	return bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs), sizeof (struct html_tag), tag_cmp);
 }
 
+/* Decode HTML entitles in text */
+static void
+decode_entitles (char *s)
+{
+	char *t = s;			/* t - tortoise */
+	char *h = s;			/* h - hare     */
+	char *end_ptr;
+	int state = 0, val;
+   	
+	while (*h) {
+		switch (state) {
+			/* Out of entitle */
+			case 0:
+				if (*h == '&' && *(h + 1) == '#') {
+					state = 1;	
+					h ++;
+					continue;
+				}
+				else {
+					*t = *h;
+					h ++;
+					t ++;
+				}
+				break;
+			case 1:
+				if (*h == ';') {
+					val = strtoul ((t + 2), &end_ptr, 10);
+					if ((end_ptr != NULL && *end_ptr != ';') || val < 0 || val > 128) {
+						msg_info ("decode_entitles: invalid entitle code, cannot convert, %d", val);
+						*t = 'U';
+					}
+					else {
+						*t = (char)val;
+					}
+					state = 0;
+					t ++;
+				}
+				h ++;
+				break;
+		}
+	}
+	*t = '\0';
+
+}
+
 static void
 parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, char *tag_text)
 {
@@ -331,6 +376,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		
 		url_text = memory_pool_alloc (task->task_pool, len + 1);
 		g_strlcpy (url_text, c, len + 1);
+		decode_entitles (url_text);
 		url = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 		rc = parse_uri (url, url_text, task->task_pool);
 
