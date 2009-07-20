@@ -286,9 +286,10 @@ decode_entitles (char *s)
 			case 1:
 				if (*h == ';') {
 					val = strtoul ((t + 2), &end_ptr, 10);
-					if ((end_ptr != NULL && *end_ptr != ';') || val < 0 || val > 128) {
-						msg_info ("decode_entitles: invalid entitle code, cannot convert, %d", val);
-						*t = 'U';
+					if ((end_ptr != NULL && *end_ptr != ';') || !g_ascii_isalnum ((char)val)) {
+						msg_info ("decode_entitles: invalid entitle code, cannot convert, strtoul returned %d", val);
+						/* Skip undecoded */
+						t = h;
 					}
 					else {
 						*t = (char)val;
