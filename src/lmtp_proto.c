@@ -426,7 +426,7 @@ lmtp_deliver_mta (struct worker_task *task)
 		sock = make_unix_socket (task->cfg->deliver_host, un, FALSE);
 	}
 	else {
-		sock = make_tcp_socket (&task->cfg->deliver_addr, task->cfg->deliver_port, FALSE);
+		sock = make_tcp_socket (&task->cfg->deliver_addr, task->cfg->deliver_port, FALSE, TRUE);
 	}
 	if (sock == -1) {
 		msg_warn ("lmtp_deliver_mta: cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));

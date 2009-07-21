@@ -705,7 +705,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
 	struct redirector_param *param;
 	struct timeval *timeout;
 
-	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, surbl_module_ctx->redirector_port, FALSE);
+	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, surbl_module_ctx->redirector_port, FALSE, TRUE);
 
 	if (s == -1) {
 		msg_info ("register_redirector_call: <%s> cannot create tcp socket failed: %s", 

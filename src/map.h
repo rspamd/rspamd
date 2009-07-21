@@ -29,7 +29,7 @@ struct http_map_data {
 	time_t last_checked;
 };
 
-typedef void (*map_cb_t)(memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+typedef u_char* (*map_cb_t)(memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
 typedef void (*map_fin_cb_t)(memory_pool_t *pool, struct map_cb_data *data);
 
 struct rspamd_map {
@@ -47,9 +47,9 @@ gboolean add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin
 void start_map_watch (void);
 
 /* Common callbacks */
-void read_radix_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+u_char* read_radix_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
 void fin_radix_list (memory_pool_t *pool, struct map_cb_data *data);
-void read_host_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+u_char* read_host_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
 void fin_host_list (memory_pool_t *pool, struct map_cb_data *data);
 
 #endif

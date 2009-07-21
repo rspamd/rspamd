@@ -50,7 +50,7 @@ make_socket_nonblocking (int fd)
 }
 
 int
-make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
+make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
 {
 	int fd, r, optlen, on = 1, s_error;
 	int serrno;
@@ -63,7 +63,7 @@ make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 		return -1;
 	}
 
-	if (make_socket_nonblocking(fd) < 0) {
+	if (async && make_socket_nonblocking(fd) < 0) {
 		goto out;
 	}
 	
@@ -87,7 +87,7 @@ make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server)
 	}
 
 	if (r == -1) {
-		if (errno != EINPROGRESS) {
+		if (!async || errno != EINPROGRESS) {
 			msg_warn ("make_tcp_socket: bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}

@@ -68,7 +68,7 @@ emails_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	email_module_ctx->filter = emails_mime_filter;
 	email_module_ctx->email_pool = memory_pool_new (memory_pool_get_size ());
 	email_module_ctx->email_re = g_regex_new (email_re_text, G_REGEX_RAW | G_REGEX_OPTIMIZE | G_REGEX_CASELESS, 0, &err);
-	email_module_ctx->blacklist = g_hash_table_new (g_str_hash, g_str_equal);
+	email_module_ctx->blacklist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	
 	*ctx = (struct module_ctx *)email_module_ctx;
 	

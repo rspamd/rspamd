@@ -367,7 +367,7 @@ create_listen_socket (struct in_addr *addr, int port, int family, char *path)
 	struct sockaddr_un *un_addr;
 	/* Create listen socket */
 	if (family == AF_INET) {
-		if ((listen_sock = make_tcp_socket (addr, port, TRUE)) == -1) {
+		if ((listen_sock = make_tcp_socket (addr, port, TRUE, TRUE)) == -1) {
 			msg_err ("create_listen_socket: cannot create tcp listen socket. %s", strerror (errno));
 		}
 	}
