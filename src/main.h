@@ -179,6 +179,7 @@ struct worker_task {
 	GList *parts;												/**< list of parsed parts							*/
 	GList *text_parts;											/**< list of text parts								*/
 	char *raw_headers;											/**< list of raw headers							*/
+	GList *received;											/**< list of received headers						*/
 	GList *urls;												/**< list of parsed urls							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/

@@ -29,6 +29,15 @@ struct mime_text_part {
 	fuzzy_hash_t *fuzzy;
 };
 
+struct received_header {
+	char *from_hostname;
+	char *from_ip;
+	char *real_hostname;
+	char *real_ip;
+	char *by_hostname;
+	int is_error;
+};
+
 /**
  * Process message with all filters/statfiles, extract mime parts, urls and 
  * call metrics consolidation functions

@@ -388,12 +388,12 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 static gboolean
 check_autolearn (struct statfile_autolearn_params *params, struct worker_task *task)
 {	
-	const char *metric_name = DEFAULT_METRIC;
+	char *metric_name = DEFAULT_METRIC;
 	struct metric_result *metric_res;
 	GList *cur;
 
 	if (params->metric != NULL) {
-		metric_name = params->metric;
+		metric_name = (char *)params->metric;
 	}
 
 	/* First check threshold */

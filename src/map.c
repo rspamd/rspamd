@@ -102,6 +102,7 @@ parse_http_reply (u_char *chunk, size_t len, struct http_reply *reply)
 {
 	u_char *s, *p, *err_str, *tmp;
 	p = chunk;
+	s = chunk;
 
 	while (p - chunk < len) {
 		switch (reply->parser_state) {

@@ -239,6 +239,220 @@ reg_char:
 }
 
 static void
+parse_qmail_recv (memory_pool_t *pool, char *line, struct received_header *r)
+{
+	char *s, *p, t;
+	
+	/* We are intersted only with received from network headers */
+	if ((p = strstr (line, "from network")) == NULL) {
+		r->is_error = 2;
+		return;
+	}
+	
+	p += sizeof ("from network") - 1;
+	while (g_ascii_isspace (*p) || *p == '[') {
+		p ++;
+	}
+	/* format is ip/host */
+	s = p;
+	if (*p) {
+		while (g_ascii_isdigit (*++p) || *p == '.');
+		if (*p != '/') {
+			r->is_error = 1;
+			return;
+		}
+		else {
+			*p = '\0';
+			r->real_ip = memory_pool_strdup (pool, s);
+			*p = '/';
+			/* Now try to parse hostname */
+			s = ++p;
+			while (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+				p ++;
+			}
+			t = *p;
+			*p = '\0';
+			r->real_hostname = memory_pool_strdup (pool, s);
+			*p = t;
+		}
+	}
+}
+
+static void
+parse_recv_header (memory_pool_t *pool, char *line, struct received_header *r)
+{
+	char *p, *s, t, **res = NULL;
+	int state = 0, next_state = 0;
+	
+	p = line;
+	s = line;
+	while (g_ascii_isspace (*++p));
+
+	while (*p) {
+		switch (state) {
+			/* Initial state, search for from */
+			case 0:
+				if (*p == 'f' || *p == 'F') {
+					if (g_ascii_tolower (*++p) == 'r' && 
+					    g_ascii_tolower (*++p) == 'o' &&
+						g_ascii_tolower (*++p) == 'm') {
+						p ++;
+						state = 99;
+						next_state = 1;	
+					}
+				}
+				else {
+					/* This can be qmail header, parse it separately */
+					parse_qmail_recv (pool, line, r);
+					return;
+				}
+				break;
+			/* Read hostname */
+			case 1:
+				if (*p == '[') {
+					/* This should be IP address */
+					res = &r->from_ip;
+					state = 98;
+					next_state = 3;
+					s = ++p;
+				}
+				else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+					p ++;
+				}
+				else {
+					t = *p;
+					*p = '\0';
+					r->from_hostname = memory_pool_strdup (pool, s);
+					*p = t;
+					state = 99;
+					next_state = 3;
+				}
+				break;
+			/* Try to extract additional info */
+			case 3:
+				/* Try to extract ip or () info or by */
+				if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) == 'y') {
+					p += 2;
+					/* Skip spaces after by */
+					state = 99;
+					next_state = 5;
+				}
+				else if (*p == '(') {
+					state = 99;
+					next_state = 4;
+					p ++;
+				}
+				else if (*p == '[') {
+					/* Got ip before '(' so extract it */
+					s = ++p;
+					res = &r->from_ip;
+					state = 98;
+					next_state = 3;
+				}
+				else {
+					p ++;
+				}
+				break;
+			/* We are in () block. Here can be found real hostname and real ip, this is written by some MTA */
+			case 4:
+				/* End of block */
+				if (*p == ')') {
+					p ++;
+					state = 3;
+				}
+				else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+					p ++;
+				}
+				else if (*p == '[') {
+					s = ++p;
+					state = 98;
+					res = &r->real_ip;
+					next_state = 3;
+				}
+				else {
+					if (s != p) {
+						/* Got some real hostname */
+						/* check whether it is helo or p is not space symbol*/
+						if (!g_ascii_isspace (*p) || *(p + 1) != '[') {
+							/* skip all  */
+							while (*p++ != ')' && *p != '\0');
+							state = 3;
+						}
+						else {
+							t = *p;
+							*p = '\0';
+							r->real_hostname = memory_pool_strdup (pool, s);
+							*p = t;
+							/* Now parse ip */
+							p += 2;
+							s = p;
+							res = &r->real_ip;
+							state = 98;
+							next_state = 4;
+						}
+					}
+					else {
+						r->is_error = 1;
+						return;
+					}
+				}
+				break;
+			/* Got by word */
+			case 5:
+				/* Here can be only hostname */
+				if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+					p ++;
+				}
+				else {
+					/* We got something like hostname */
+					t = *p;
+					*p = '\0';
+					r->by_hostname = memory_pool_strdup (pool, s);
+					*p = t;
+					/* Now end of parsing */
+					return;
+				}
+				break;
+
+			/* Extract ip */
+			case 98:
+				while (g_ascii_isdigit (*++p) || *p == '.');
+				if (*p != ']') {
+					/* Not an ip in fact */
+					state = next_state;
+					p ++;
+				}
+				else {
+					*p = '\0';
+					*res = memory_pool_strdup (pool, s);
+					*p = ']';
+					p ++;
+					state = next_state;
+				}
+				break;
+
+			/* Skip spaces */
+			case 99:
+				if (!g_ascii_isspace (*p)) {
+					state = next_state;
+					s = p;
+				}
+				else {
+					p ++;
+				}
+				break;
+			case 100:
+				r->is_error = 1;
+				return;
+				break;
+		}
+	}
+
+	r->is_error = 1;
+	return;
+}
+
+static void
 free_byte_array_callback (void *pointer)
 {
 	GByteArray *arr = (GByteArray *)pointer;
@@ -445,6 +659,8 @@ process_message (struct worker_task *task)
 	GMimeParser *parser;
 	GMimeStream *stream;
 	GByteArray *tmp;
+	GList *first, *cur;
+	struct received_header *recv;
     
 	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->begin;
@@ -492,6 +708,19 @@ process_message (struct worker_task *task)
 #else
 	task->raw_headers = g_mime_message_get_headers (task->message);
 #endif
+
+	/* Parse received headers */
+ 	first = message_get_header (task->task_pool, message, "Received");
+	cur = first;
+	while (cur) {
+		recv = memory_pool_alloc0 (task->task_pool, sizeof (struct received_header));
+		parse_recv_header (task->task_pool, cur->data, recv);
+		task->received = g_list_prepend (task->received, recv);
+		cur = g_list_next (cur);
+	}
+	if (first) {
+		g_list_free (first);
+	}
 
 	if (task->raw_headers) {
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, task->raw_headers);
