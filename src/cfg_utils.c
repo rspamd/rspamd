@@ -418,6 +418,7 @@ parse_filters_str (struct config_file *cfg, const char *str)
 				cur->type = C_FILTER;
 				msg_debug ("parse_filters_str: found C filter %s", *p);
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
+                cur->module = &modules[i];
 				cfg->filters = g_list_prepend (cfg->filters, cur);
 
 				break;

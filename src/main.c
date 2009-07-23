@@ -442,6 +442,7 @@ main (int argc, char **argv, char **env)
 	struct rlimit rlim;
 	struct metric *metric;
 	struct cache_item *item;
+	struct filter *filt;
 	FILE *f;
 	pid_t wrk;
 	GList *l;
@@ -519,11 +520,17 @@ main (int argc, char **argv, char **env)
 	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
 
 	/* Init C modules */
-	for (i = 0; i < MODULES_NUM; i ++) {
-		cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
-		if (modules[i].module_init_func(cfg, &cur_module) == 0) {
-			g_hash_table_insert (cfg->c_modules, (gpointer)modules[i].name, cur_module);
+    l = g_list_first (rspamd->cfg->filters);
+
+	while (l) {
+		filt = l->data;
+		if (filt->module) {
+			cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
+			if (filt->module->module_init_func(cfg, &cur_module) == 0) {
+				g_hash_table_insert (cfg->c_modules, (gpointer)filt->module->name, cur_module);
+			}
 		}
+		l = g_list_next (l);
 	}
 
 	if (cfg->config_test || dump_vars || dump_cache) {
@@ -531,10 +538,16 @@ main (int argc, char **argv, char **env)
 		event_init ();
 		res = TRUE;
 		/* Perform modules configuring */
-		for (i = 0; i < MODULES_NUM; i ++) {
-			if (!modules[i].module_config_func (cfg)) {
-				res = FALSE;
+		l = g_list_first (rspamd->cfg->filters);
+
+		while (l) {
+			filt = l->data;
+			if (filt->module) {
+				if (filt->module->module_config_func (cfg)) {
+					res = FALSE;
+				}
 			}
+			l = g_list_next (l);
 		}
 		if (dump_vars) {
 			dump_cfg_vars ();
@@ -637,8 +650,16 @@ main (int argc, char **argv, char **env)
 	g_mime_init (0);
 
 	/* Perform modules configuring */
-	for (i = 0; i < MODULES_NUM; i ++) {
-		modules[i].module_config_func (cfg);
+	l = g_list_first (rspamd->cfg->filters);
+
+	while (l) {
+		filt = l->data;
+		if (filt->module) {
+			if (filt->module->module_config_func (cfg)) {
+				res = FALSE;
+			}
+		}
+		l = g_list_next (l);
 	}
 
 	/* Init symbols cache for each metric */
