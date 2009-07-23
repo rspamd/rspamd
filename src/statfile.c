@@ -35,7 +35,7 @@ cmpstatfile (const void *a, const void *b)
 {
 	const stat_file_t *s1 = a, *s2 = b;
 
-	return rspamd_strcase_equal (s1->filename, s2->filename);
+	return g_ascii_strcasecmp (s1->filename, s2->filename);
 }
 
 /* Check whether specified file is statistic file and calculate its len in blocks */
