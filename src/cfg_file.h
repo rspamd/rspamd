@@ -10,7 +10,6 @@
 #include "mem_pool.h"
 #include "upstream.h"
 #include "memcached.h"
-#include "filter.h"
 
 #define DEFAULT_BIND_PORT 768
 #define DEFAULT_CONTROL_PORT 7608

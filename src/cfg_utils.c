@@ -413,6 +413,7 @@ parse_filters_str (struct config_file *cfg, const char *str)
 		cur = NULL;
 		/* Search modules from known C modules */
 		for (i = 0; i < MODULES_NUM; i++) {
+            g_strstrip (*p);
 			if (strcasecmp (modules[i].name, *p) == 0) {
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;

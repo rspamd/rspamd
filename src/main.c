@@ -543,7 +543,7 @@ main (int argc, char **argv, char **env)
 		while (l) {
 			filt = l->data;
 			if (filt->module) {
-				if (filt->module->module_config_func (cfg)) {
+				if (!filt->module->module_config_func (cfg)) {
 					res = FALSE;
 				}
 			}
@@ -655,7 +655,7 @@ main (int argc, char **argv, char **env)
 	while (l) {
 		filt = l->data;
 		if (filt->module) {
-			if (filt->module->module_config_func (cfg)) {
+			if (!filt->module->module_config_func (cfg)) {
 				res = FALSE;
 			}
 		}
