@@ -229,8 +229,8 @@ if (defined ($args{h})) {
     $cfg{'host'} = $args{h};
     if ($args{h} =~ /^\/.*$/) {
         $cfg{'is_unix'} = 1;
-        $do_parse_config = 0;
     }
+    $do_parse_config = 0;
 }
 if (defined ($args{p})) {
     $cfg{'port'} = $args{p};
