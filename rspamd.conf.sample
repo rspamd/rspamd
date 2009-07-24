@@ -291,9 +291,7 @@ factors {
 # Default: no
 raw_mode = yes;
 
-url_filters = "surbl";
-header_filters = "regexp";
-mime_filters = "chartable,emails";
+filters = "surbl,regexp,chartable,emails";
 
 # Definition of view, views may allow to customize rules for different messages
 view {
