@@ -92,7 +92,7 @@ IF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
 	MESSAGE(FATAL_ERROR "Error: yacc and lex are required for build")
 ENDIF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
 
-pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.10)
+pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.16)
 pkg_check_modules(GMIME2 gmime-2.0)
 
 # Try to link with gmime24
