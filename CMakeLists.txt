@@ -7,7 +7,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 2)
-SET(RSPAMD_VERSION_PATCH 5)
+SET(RSPAMD_VERSION_PATCH 6)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
@@ -268,7 +268,7 @@ ENDIF (MD5_INCLUDE)
 IF(ENABLE_OPTIMIZATION MATCHES "ON")
 	SET(CMAKE_C_OPT_FLAGS "-O3")
 ELSE(ENABLE_OPTIMIZATION MATCHES "ON")
-	SET(CMAKE_C_OPT_FLAGS "-O")
+	SET(CMAKE_C_OPT_FLAGS "-O0")
 ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 
 SET(CMAKE_C_WARN_FLAGS "-Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value -Wno-declaration-after-statement -Wno-pointer-sign")
@@ -322,7 +322,8 @@ SET(RSPAMDSRC	src/modules.c
 				src/radix.c
 				src/view.c
 				src/map.c
-				src/symbols_cache.c)
+				src/symbols_cache.c
+				src/fuzzy_storage.c)
 
 IF(ENABLE_PERL MATCHES "ON")
 	LIST(APPEND RSPAMDSRC src/perl.c)

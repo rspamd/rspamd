@@ -27,6 +27,7 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "lmtp.h"
+#include "fuzzy_storage.h"
 
 #ifndef WITHOUT_PERL
 
@@ -302,6 +303,13 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 						pidfile_close (rspamd->pfh);
 						msg_info ("fork_worker: starting lmtp process %d", getpid ());
 						start_lmtp_worker (cur);
+						break;
+					case TYPE_FUZZY:
+						setproctitle ("fuzzy storage");
+						pidfile_close (rspamd->pfh);
+						msg_info ("fork_worker: starting fuzzy storage process %d", getpid ());
+						start_fuzzy_storage (cur);
+						break;
 					case TYPE_WORKER:
 					default:
 						setproctitle ("worker process");
@@ -731,7 +739,7 @@ main (int argc, char **argv, char **env)
 			if (active_worker == NULL) {
 				/* reread_config (rspamd); */
 				TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
-					if (cur->type == TYPE_WORKER || cur->type == TYPE_LMTP) {
+					if (cur->type == TYPE_WORKER || cur->type == TYPE_LMTP || cur->type == TYPE_FUZZY) {
 						/* Start new workers that would reread configuration */
 						active_worker = fork_worker (rspamd, cur->cf);
 					}
