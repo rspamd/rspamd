@@ -30,6 +30,8 @@
 #include "html.h"
 #include "modules.h"
 
+#define RECURSION_LIMIT 30
+
 GByteArray*
 strip_html_tags (struct worker_task *task, memory_pool_t *pool, struct mime_text_part *part, GByteArray *src, int *stateptr)
 {
@@ -582,11 +584,17 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
                    g_mime_message_foreach_part() again here. */
 		
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
+		if (task->parser_recursion++ < RECURSION_LIMIT) {
 #ifdef GMIME24
-		g_mime_message_foreach (message, mime_foreach_callback, task);
+			g_mime_message_foreach (message, mime_foreach_callback, task);
 #else
-		g_mime_message_foreach_part (message, mime_foreach_callback, task);
+			g_mime_message_foreach_part (message, mime_foreach_callback, task);
 #endif
+		}
+		else {
+			msg_err ("mime_foreach_callback: endless recursion detected: %d", task->parser_recursion);
+			return;
+		}
 		g_object_unref (message);
 	} else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
 		/* message/partial */
@@ -601,6 +609,13 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
 		
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
+		if (task->parser_recursion++ < RECURSION_LIMIT) {
+			g_mime_multipart_foreach ((GMimeMultipart *) part, mime_foreach_callback, task);
+		}
+		else {
+			msg_err ("mime_foreach_callback: endless recursion detected: %d", task->parser_recursion);
+			return;
+		}
 	} else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
 #ifdef GMIME24
@@ -687,7 +702,8 @@ process_message (struct worker_task *task)
 	
 	task->message = message;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)destroy_message, task->message);
-
+	
+	task->parser_recursion = 0;
 #ifdef GMIME24
 	g_mime_message_foreach (message, mime_foreach_callback, task);
 #else
