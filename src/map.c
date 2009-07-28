@@ -300,7 +300,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 {
 	struct rspamd_map *new_map;
 	enum fetch_proto proto;
-	const char *def, *p;
+	const char *def, *p, *hostend;
 	struct file_map_data *fdata;
 	struct http_map_data *hdata;
 	char portbuf[6];
@@ -345,7 +345,9 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 		hdata = memory_pool_alloc (map_pool, sizeof (struct http_map_data));
 		/* Try to search port */
 		if ((p = strchr (def, ':')) != NULL) {
+			hostend = p;
 			i = 0;
+			p ++;
 			while (g_ascii_isdigit (*p) && i < sizeof (portbuf) - 1) {
 				portbuf[i ++] = *p ++;
 			}
@@ -364,9 +366,10 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 				msg_info ("add_map: bad http map definition: %s", def);
 				return FALSE;
 			}
+			hostend = p;
 		}
-		hdata->host = memory_pool_alloc (map_pool, p - def + 1);
-		g_strlcpy (hdata->host, def, p - def + 1);
+		hdata->host = memory_pool_alloc (map_pool, hostend - def + 1);
+		g_strlcpy (hdata->host, def, hostend - def + 1);
 		hdata->path = memory_pool_strdup (map_pool, p);
 		/* Now try to resolve */
 		if (!inet_aton (hdata->host, &hdata->addr)) {
