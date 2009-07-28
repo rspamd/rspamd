@@ -278,6 +278,21 @@ parse_seconds (const char *t)
 		if (*err_str == 's' || *err_str == 'S') {
 			result *= 1000;
 		}
+        /* Minutes */
+        else if (*err_str == 'm' || *err_str == 'M') {
+            /* Handle ms correctly */
+            if (*(err_str + 1) == 's' || *(err_str + 1) == 'S') {
+                result *= 60 * 1000;
+            }
+        }
+        /* Hours */
+        else if (*err_str == 'h' || *err_str == 'H') {
+            result *= 60 * 60 * 1000;
+        }
+        /* Days */
+        else if (*err_str == 'd' || *err_str == 'D') {
+            result *= 24 * 60 * 60 * 1000;
+        }
 	}
 
 	return result;
