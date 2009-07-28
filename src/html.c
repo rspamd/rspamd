@@ -265,15 +265,17 @@ decode_entitles (char *s)
 {
 	char *t = s;			/* t - tortoise */
 	char *h = s;			/* h - hare     */
+	char *e = s;
 	char *end_ptr;
-	int state = 0, val;
+	int state = 0, val, base;
    	
 	while (*h) {
 		switch (state) {
 			/* Out of entitle */
 			case 0:
 				if (*h == '&' && *(h + 1) == '#') {
-					state = 1;	
+					state = 1;
+					e = h;
 					h ++;
 					continue;
 				}
@@ -285,9 +287,24 @@ decode_entitles (char *s)
 				break;
 			case 1:
 				if (*h == ';') {
-					val = strtoul ((t + 2), &end_ptr, 10);
+					/* Determine base */
+					if (*(e + 2) == 'x' || *(e + 2) == 'X') {
+						base = 16;
+					}
+					else if (*(e + 2) == 'o' || *(e + 2) == 'O') {
+						base = 8;
+					}
+					else {
+						base = 10;
+					}
+					if (base == 10) {
+						val = strtoul ((e + 2), &end_ptr, base);
+					}
+					else {
+						val = strtoul ((e + 3), &end_ptr, base);
+					}
 					if ((end_ptr != NULL && *end_ptr != ';') || !g_ascii_isalnum ((char)val)) {
-						msg_info ("decode_entitles: invalid entitle code, cannot convert, strtoul returned %d", val);
+						msg_info ("decode_entitles: invalid entitle code, cannot convert, strtoul returned %d, while reading %s", val, end_ptr);
 						/* Skip undecoded */
 						t = h;
 					}
