@@ -676,6 +676,7 @@ http_callback (int fd, short what, void *ud)
 		cbd->data = data;
 		cbd->state = 0;
 		cbd->fd = sock;
+		cbd->reply = NULL;
 		event_add (&cbd->ev, &cbd->tv);
 	}
 }
