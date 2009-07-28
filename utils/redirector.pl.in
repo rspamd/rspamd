@@ -42,7 +42,6 @@ our %cfg = (
     logfile =>  '/var/log/rspamd-redirector.log',
     do_log  =>  0,
     debug   =>  0,
-    check_regexp => 'http://[^/]+/',
     memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, 
                           ],
     digest_bits => 256,
