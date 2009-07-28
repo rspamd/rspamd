@@ -32,6 +32,7 @@ struct surbl_ctx {
 	const char *whitelist_file;
 	GHashTable *tld2;
 	GHashTable *whitelist;
+	GHashTable *redirector_hosts;
 	unsigned use_redirector;
 	memory_pool_t *surbl_pool;
     GRegex *extract_hoster_regexp;

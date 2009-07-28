@@ -43,7 +43,6 @@ our %cfg = (
     do_log  =>  0,
     debug   =>  0,
     check_regexp => 'http://[^/]+/',
-    check_domains =>  [ 'narod.ru', 'test.ru' ],
     memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, 
                           ],
     digest_bits => 256,

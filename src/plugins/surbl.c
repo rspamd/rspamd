@@ -66,13 +66,14 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
-	surbl_module_ctx->tld2 = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-	/* Register destructors */
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->tld2);
 
+	surbl_module_ctx->tld2 = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	/* Register destructors */
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_remove_all, surbl_module_ctx->whitelist);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_destroy, surbl_module_ctx->tld2);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_destroy, surbl_module_ctx->whitelist);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
 	
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->suffixes);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func)g_list_free, surbl_module_ctx->bits);
@@ -142,6 +143,12 @@ surbl_module_config (struct config_file *cfg)
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_read_timeout")) != NULL) {
 		surbl_module_ctx->read_timeout = parse_seconds (value);
+	}
+	else {
+		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;
+	}
+	if ((value = get_module_opt (cfg, "surbl", "redirector_hosts_map")) != NULL) {
+		add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->redirector_hosts);
 	}
 	else {
 		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;
@@ -251,7 +258,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 	GMatchInfo *info;
 	char *result = NULL;
     int len, slen, r;
-   	
+	
 	if (suffix != NULL) {
 		slen = strlen (suffix->suffix);
 	}
@@ -282,8 +289,8 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 			msg_debug ("format_surbl_request: url %s is whitelisted", result);
 			g_set_error (err,
                    SURBL_ERROR,                 /* error domain */
-                   WHITELIST_ERROR,            	/* error code */
-                   "URL is whitelisted: %s", 	/* error message format string */
+                   WHITELIST_ERROR,				/* error code */
+                   "URL is whitelisted: %s",	/* error message format string */
                    result);
 
 			return NULL;
@@ -327,8 +334,8 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 					msg_debug ("format_surbl_request: url %s is whitelisted", result);
 					g_set_error (err,
 						   SURBL_ERROR,                 /* error domain */
-						   WHITELIST_ERROR,            	/* error code */
-						   "URL is whitelisted: %s", 	/* error message format string */
+						   WHITELIST_ERROR,				/* error code */
+						   "URL is whitelisted: %s",	/* error message format string */
 						   result);
 					return NULL;
 				}
@@ -353,8 +360,8 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
 				msg_debug ("format_surbl_request: url %s is whitelisted", result);
 				g_set_error (err,
 					   SURBL_ERROR,                 /* error domain */
-					   WHITELIST_ERROR,            	/* error code */
-					   "URL is whitelisted: %s", 	/* error message format string */
+					   WHITELIST_ERROR,				/* error code */
+					   "URL is whitelisted: %s",	/* error message format string */
 					   result);
 				return NULL;
 			}
@@ -734,12 +741,24 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param *param = data;
 	struct uri *url = value;
+	f_str_t f;
+	char *urlstr, *host_end;
+	GError *err = NULL;
 
 	msg_debug ("surbl_test_url: check url %s", struri (url));
 
+	
 	if (surbl_module_ctx->use_redirector) {
-		register_redirector_call (url, param->task, param->tree, param->suffix);
-		param->task->save.saved++;
+		f.begin = url->host;
+		f.len = url->hostlen;
+		if ((urlstr = format_surbl_request (param->task->task_pool, &f, NULL, &host_end, FALSE, &err)) != NULL) {
+			if (g_hash_table_lookup (surbl_module_ctx->redirector_hosts, urlstr) != NULL) {
+				register_redirector_call (url, param->task, param->tree, param->suffix);
+				param->task->save.saved++;
+				return FALSE;
+			}
+		}
+		make_surbl_requests (url, param->task, param->tree, param->suffix);
 	}
 	else {
 		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
