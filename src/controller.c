@@ -53,21 +53,30 @@ enum command_type {
 
 struct controller_command {
 	char *command;
-	int privilleged;
+	gboolean privilleged;
 	enum command_type type;
 };
 
-static struct controller_command commands[] = {
-	{"password", 0, COMMAND_PASSWORD},
-	{"quit", 0, COMMAND_QUIT},
-	{"reload", 1, COMMAND_RELOAD},
-	{"stat", 0, COMMAND_STAT},
-	{"shutdown", 1, COMMAND_SHUTDOWN},
-	{"uptime", 0, COMMAND_UPTIME},
-	{"learn", 1, COMMAND_LEARN},
-	{"help", 0, COMMAND_HELP},
-	{"counters", 0, COMMAND_COUNTERS},
+struct custom_controller_command {
+	const char *command;
+	gboolean privilleged;
+	gboolean require_message;
+	controller_func_t handler;	
 };
+
+static struct controller_command commands[] = {
+	{"password", FALSE, COMMAND_PASSWORD},
+	{"quit", FALSE, COMMAND_QUIT},
+	{"reload", TRUE, COMMAND_RELOAD},
+	{"stat", FALSE, COMMAND_STAT},
+	{"shutdown", TRUE, COMMAND_SHUTDOWN},
+	{"uptime", FALSE, COMMAND_UPTIME},
+	{"learn", TRUE, COMMAND_LEARN},
+	{"help", FALSE, COMMAND_HELP},
+	{"counters", FALSE, COMMAND_COUNTERS},
+};
+
+static GList *custom_commands = NULL;
 
 static GCompletion *comp;
 static time_t start_time;
@@ -395,6 +404,26 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	}
 }
 
+static gboolean
+process_custom_command (char *line, char **cmd_args, struct controller_session *session)
+{
+	GList *cur;
+	struct custom_controller_command *cmd;
+
+	cur = custom_commands;
+	while (cur) {
+		cmd = cur->data;
+		if (g_ascii_strcasecmp (cmd->command, line) == 0) {
+			/* Call handler */
+			cmd->handler (cmd_args, session);
+			return TRUE;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
 static void
 controller_read_socket (f_str_t *in, void *arg)
 {
@@ -421,9 +450,11 @@ controller_read_socket (f_str_t *in, void *arg)
 						process_command ((struct controller_command *)comp_list->data, &params[1], session);
 						break;
 					case 0:
-						msg_debug ("Unknown command: '%s'", cmd);
-						i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
+						if (!process_custom_command (cmd, &params[1], session)) {
+							msg_debug ("Unknown command: '%s'", cmd);
+							i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
+							rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
+						}
 						break;
 					default:
 						msg_debug ("Ambigious command: '%s'", cmd);
@@ -471,6 +502,15 @@ controller_read_socket (f_str_t *in, void *arg)
 			}
 
 			session->state = STATE_REPLY;
+			break;
+		case STATE_OTHER:
+			if (session->other_handler) {
+				session->other_handler (session, in);
+			}
+			session->state = STATE_REPLY;
+			break;
+		case STATE_WAIT:
+			rspamd_dispatcher_pause (session->dispatcher);
 			break;
 		default:
 			msg_debug ("controller_read_socket: unknown state while reading %d", session->state);
@@ -595,6 +635,18 @@ start_controller (struct rspamd_worker *worker)
 	exit (EXIT_SUCCESS);
 }
 
+void 
+register_custom_controller_command (const char *name, controller_func_t handler, gboolean privilleged, gboolean require_message)
+{
+	struct custom_controller_command *cmd;
+
+	cmd->command = name;
+	cmd->handler = handler;
+	cmd->privilleged = privilleged;
+	cmd->require_message = require_message;
+
+	custom_commands = g_list_prepend (custom_commands, cmd);
+}
 
 /* 
  * vi:ts=4 

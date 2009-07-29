@@ -117,6 +117,8 @@ struct save_point {
 	unsigned int saved;											/**< how much time we have delayed processing		*/
 };
 
+
+
 /**
  * Control session object
  */
@@ -127,6 +129,8 @@ struct controller_session {
 		STATE_LEARN,
 		STATE_REPLY,
 		STATE_QUIT,
+		STATE_OTHER,
+		STATE_WAIT,
 	} state;													/**< current session state							*/
 	int sock;													/**< socket descriptor								*/
 	/* Access to authorized commands */
@@ -142,7 +146,12 @@ struct controller_session {
 	f_str_t *learn_buf;											/**< learn input									*/
 	GList *parts;												/**< extracted mime parts							*/
 	int in_class;												/**< positive or negative learn						*/
+	void (*other_handler)(struct controller_session *session, 
+								f_str_t *in);					/**< other command handler to execute at the end of processing */
+	void *other_data;											/**< and its data 									*/
 };
+
+typedef void (*controller_func_t)(char **args, struct controller_session *session);
 
 /**
  * Worker task structure
@@ -212,6 +221,20 @@ struct c_module {
 
 void start_worker (struct rspamd_worker *worker);
 void start_controller (struct rspamd_worker *worker);
+
+/**
+ * Register custom controller function
+ */
+void register_custom_controller_command (const char *name, controller_func_t handler, gboolean privilleged, gboolean require_message);
+
+/**
+ * Construct new task for worker
+ */
+struct worker_task* construct_task (struct rspamd_worker *worker);
+/**
+ * Destroy task object and remove its IO dispatcher if it exists
+ */
+void free_task (struct worker_task *task, gboolean is_soft);
 
 /**
  * If set, reopen log file on next write

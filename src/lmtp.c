@@ -85,13 +85,13 @@ rcpt_destruct (void *pointer)
  * Free all structures of lmtp proto
  */
 static void
-free_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
+free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 {
 	GList *part;
 	struct mime_part *p;
 
 	if (lmtp) {
-		msg_debug ("free_task: free pointer %p", lmtp->task);
+		msg_debug ("free_lmtp_task: free pointer %p", lmtp->task);
 		if (lmtp->task->memc_ctx) {
 			memc_close_ctx (lmtp->task->memc_ctx);
 		}
@@ -188,7 +188,7 @@ lmtp_write_socket (void *arg)
 			break;
 		case CLOSING_CONNECTION:
 			msg_debug ("lmtp_write_socket: normally closing connection");
-			free_task (lmtp, TRUE);
+			free_lmtp_task (lmtp, TRUE);
 			break;
 		default:
 			msg_debug ("lmtp_write_socket: invalid state while writing to socket %d", lmtp->task->state);
@@ -205,7 +205,7 @@ lmtp_err_socket (GError *err, void *arg)
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
 	msg_info ("lmtp_err_socket: abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
-	free_task (lmtp, FALSE);
+	free_lmtp_task (lmtp, FALSE);
 }
 
 /*
