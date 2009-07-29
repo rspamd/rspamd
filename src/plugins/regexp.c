@@ -335,6 +335,11 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			cur = g_list_first (task->text_parts);
 			while (cur) {
 				part = (struct mime_text_part *)cur->data;
+				/* Skip empty parts */
+				if (part->is_empty) {
+					cur = g_list_next (cur);
+					continue;
+				}
 				if (part->is_raw) {
 					regexp = re->raw_regexp;
 				}
@@ -371,6 +376,11 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 			cur = g_list_first (task->text_parts);
 			while (cur) {
 				part = (struct mime_text_part *)cur->data;
+				/* Skip empty parts */
+				if (part->is_empty) {
+					cur = g_list_next (cur);
+					continue;
+				}
 				if (part->is_raw) {
 					regexp = re->raw_regexp;
 				}

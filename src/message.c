@@ -504,7 +504,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray *part_content, GMimeCo
 }
 
 static void
-process_text_part (struct worker_task *task, GByteArray *part_content, GMimeContentType *type)
+process_text_part (struct worker_task *task, GByteArray *part_content, GMimeContentType *type, gboolean is_empty)
 {
 	struct mime_text_part *text_part;
 
@@ -512,8 +512,14 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		msg_debug ("mime_foreach_callback: got urls from text/html part");
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
-		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->is_html = TRUE;
+		if (is_empty) {
+			text_part->is_empty = TRUE;
+			text_part->orig = NULL;
+			text_part->content = NULL;
+			return;
+		}
+		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
 
@@ -542,9 +548,15 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		msg_debug ("mime_foreach_callback: got urls from text/plain part");
 
 		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+		text_part->is_html = FALSE;
+		if (is_empty) {
+			text_part->is_empty = TRUE;
+			text_part->orig = NULL;
+			text_part->content = NULL;
+			return;
+		}
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->content = text_part->orig;
-		text_part->is_html = FALSE;
 		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
 		text_part->html_urls = NULL;
 		text_part->urls = g_tree_new ( (GCompareFunc)g_ascii_strcasecmp);
@@ -641,9 +653,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 				msg_debug ("mime_foreach_callback: found part with content-type: %s/%s", type->type, type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
 				/* Skip empty parts */
-				if (part_content->len > 0) {
-					process_text_part (task, part_content, type);
-				}
+				process_text_part (task, part_content, type, (part_content->len > 0));
 			}
 			else {
 				msg_warn ("mime_foreach_callback: write to stream failed: %d, %s", errno, strerror (errno));

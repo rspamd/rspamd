@@ -1532,7 +1532,7 @@ rspamd_is_html_balanced (struct worker_task *task, GList *args)
 	cur = g_list_first (task->text_parts);
 	while (cur) {
 		p = cur->data;
-		if (p->is_html) {
+		if (!p->is_empty && p->is_html) {
 			if (p->is_balanced) {
 				res = TRUE;
 			}
@@ -1598,7 +1598,7 @@ rspamd_has_html_tag (struct worker_task *task, GList *args)
 
 	while (cur && res == FALSE) {
 		p = cur->data;
-		if (p->is_html && p->html_nodes) {
+		if (!p->is_empty && p->is_html && p->html_nodes) {
 			g_node_traverse (p->html_nodes, G_PRE_ORDER, G_TRAVERSE_ALL, -1, search_html_node_callback, &cd);
 		}
 		cur = g_list_next (cur);
@@ -1619,7 +1619,7 @@ rspamd_has_fake_html (struct worker_task *task, GList *args)
 
 	while (cur && res == FALSE) {
 		p = cur->data;
-		if (p->is_html && p->html_nodes == NULL) {
+		if (!p->is_empty && p->is_html && p->html_nodes == NULL) {
 			res = TRUE;
 		}
 		cur = g_list_next (cur);
