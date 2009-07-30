@@ -907,6 +907,7 @@ url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_
 					if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
 						new = memory_pool_alloc (pool, sizeof (struct uri));
 						if (new != NULL) {
+							g_strstrip (url_str);
 							rc = parse_uri (new, url_str, pool);
 							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
 								if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
