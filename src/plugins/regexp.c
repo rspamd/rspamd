@@ -512,7 +512,7 @@ optimize_regexp_expression (struct expression **e, GQueue *stack, gboolean res)
 }
 
 static gboolean
-process_regexp_expression (struct expression *expr, struct worker_task *task)
+process_regexp_expression (struct expression *expr, char *symbol, struct worker_task *task)
 {
 	GQueue *stack;
 	gsize cur, op1, op2;
@@ -598,7 +598,7 @@ process_regexp_expression (struct expression *expr, struct worker_task *task)
 		}
 	}
 	else {
-		msg_warn ("process_regexp_expression: regexp expression seems to be invalid: empty stack at the end of expression");
+		msg_warn ("process_regexp_expression: regexp expression seems to be invalid: empty stack at the end of expression, symbol %s", symbol);
 	}
 	
 	g_queue_free (stack);
@@ -611,7 +611,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 {	
 	struct regexp_module_item *item = user_data;
 
-	if (process_regexp_expression (item->expr, task)) {
+	if (process_regexp_expression (item->expr, item->symbol, task)) {
 		insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
 	}
 }
@@ -647,7 +647,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList *args)
 			}
 		}
 		else {
-			if (process_regexp_expression (cur->data, task)) {
+			if (process_regexp_expression (cur->data, "regexp_match_number", task)) {
 				res ++;
 			}
 			if (res >= param_count) {

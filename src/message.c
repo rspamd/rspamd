@@ -653,7 +653,7 @@ mime_foreach_callback (GMimeObject *part, gpointer user_data)
 				msg_debug ("mime_foreach_callback: found part with content-type: %s/%s", type->type, type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
 				/* Skip empty parts */
-				process_text_part (task, part_content, type, (part_content->len > 0));
+				process_text_part (task, part_content, type, (part_content->len <= 0));
 			}
 			else {
 				msg_warn ("mime_foreach_callback: write to stream failed: %d, %s", errno, strerror (errno));
