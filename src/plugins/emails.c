@@ -147,6 +147,11 @@ extract_emails (struct worker_task *task)
 	while (cur) {
 		part = cur->data;
 
+		if (part->is_empty) {
+			cur = g_list_next (cur);
+			continue;
+		}
+
 		rc = g_regex_match_full (email_module_ctx->email_re, (const char *)part->orig->data, part->orig->len, 0, 0, &info, &err);
 		if (rc) {
 			while (g_match_info_matches (info)) {

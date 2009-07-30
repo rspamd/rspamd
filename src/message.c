@@ -511,7 +511,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
 		msg_debug ("mime_foreach_callback: got urls from text/html part");
 
-		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = TRUE;
 		if (is_empty) {
 			text_part->is_empty = TRUE;
@@ -547,7 +547,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 	else if (g_mime_content_type_is_type (type, "text", "plain")) {
 		msg_debug ("mime_foreach_callback: got urls from text/plain part");
 
-		text_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_text_part));
+		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = FALSE;
 		if (is_empty) {
 			text_part->is_empty = TRUE;
