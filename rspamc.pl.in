@@ -188,6 +188,30 @@ sub do_control_command {
             print "Authentication failed\n";
         }
     }
+    elsif ($cfg{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
+        while (defined (my $line = <>)) {
+            $input .= $line;
+        }
+        
+        if (do_ctrl_auth ($sock)) {
+            my $len = length ($input);
+            print "Sending $len bytes...\n";
+            syswrite $sock, $cfg{'command'} . " $len" . $CRLF;
+            syswrite $sock, $input . $CRLF;
+            if (defined (my $reply = <$sock>)) {
+                if ($reply =~ /^OK/) {
+                    print $cfg{'command'} . " succeed\n";
+                }
+                else {
+                    print $cfg{'command'} . " failed\n";
+                }
+            }
+        }
+        else {
+            print "Authentication failed\n";
+        }
+    
+    }
     else {
         syswrite $sock, $cfg{'command'} . $CRLF;
         while (defined (my $line = <$sock>)) {
@@ -240,7 +264,7 @@ if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 0;
 }
-elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS)/i) {
+elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS|FUZZY_ADD|FUZZY_DEL)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 1;
 }

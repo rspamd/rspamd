@@ -46,6 +46,7 @@
 #define DEFAULT_PORT 11335
 
 struct storage_server {
+	struct upstream up;
 	char *name;
 	struct in_addr addr;
 	uint16_t port;
@@ -71,8 +72,10 @@ struct fuzzy_client_session {
 struct fuzzy_learn_session {
 	struct event ev;
 	fuzzy_hash_t *h;
+	int cmd;
 	struct timeval tv;
 	struct controller_session *session;
+	struct storage_server *server;
 	struct worker_task *task;
 };
 
@@ -80,11 +83,13 @@ static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
 
 static int fuzzy_mime_filter (struct worker_task *task);
 static void fuzzy_symbol_callback (struct worker_task *task, void *unused);
+static void fuzzy_add_handler (char **args, struct controller_session *session);
+static void fuzzy_delete_handler (char **args, struct controller_session *session);
 
 static void
 parse_servers_string (char *str)
 {
-	char **strvec, *p, portbuf[5], *name;
+	char **strvec, *p, portbuf[6], *name;
 	int num, i, j, port;
 	struct hostent *hent;
 	struct in_addr addr;
@@ -94,14 +99,15 @@ parse_servers_string (char *str)
 
 	fuzzy_module_ctx->servers = memory_pool_alloc0 (fuzzy_module_ctx->fuzzy_pool, sizeof (struct storage_server) * num);
 
-	for (i = 0; i <= num; i ++) {
+	for (i = 0; i < num; i ++) {
 		g_strstrip (strvec[i]);
 
 		if ((p = strchr (strvec[i], ':')) != NULL) {
 			j = 0;
 			p ++;
-			while (g_ascii_isdigit (*p) && j < sizeof (portbuf) - 1) {
-				portbuf[j ++] = *p ++;
+			while (g_ascii_isdigit (*(p + j)) && j < sizeof (portbuf) - 1) {
+				portbuf[j] = *(p + j);
+				j ++;
 			}
 			portbuf[j] = '\0';
 			port = atoi (portbuf);
@@ -110,8 +116,8 @@ parse_servers_string (char *str)
 			/* Default http port */
 			port = DEFAULT_PORT;
 		}
-		name = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, p - strvec[i] + 1);
-		g_strlcpy (name, strvec[i], p - strvec[i] + 1);
+		name = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, p - strvec[i]);
+		g_strlcpy (name, strvec[i], p - strvec[i]);
 		if (!inet_aton (name, &addr)) {
 			/* Resolve using dns */
 			hent = gethostbyname (name);
@@ -162,21 +168,21 @@ fuzzy_check_module_config (struct config_file *cfg)
 	struct metric *metric;
 	double *w;
 
-	if ((value = get_module_opt (cfg, "fuzzy", "metric")) != NULL) {
+	if ((value = get_module_opt (cfg, "fuzzy_check", "metric")) != NULL) {
 		fuzzy_module_ctx->metric = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
 		g_free (value);
 	}
 	else {
 		fuzzy_module_ctx->metric = DEFAULT_METRIC;
 	}
-	if ((value = get_module_opt (cfg, "fuzzy", "symbol")) != NULL) {
+	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
 		fuzzy_module_ctx->symbol = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
 		g_free (value);
 	}
 	else {
 		fuzzy_module_ctx->symbol = DEFAULT_SYMBOL;
 	}
-	if ((value = get_module_opt (cfg, "fuzzy", "servers")) != NULL) {
+	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
 		parse_servers_string (value);
 	}	
 
@@ -195,6 +201,9 @@ fuzzy_check_module_config (struct config_file *cfg)
 		register_symbol (&metric->cache, fuzzy_module_ctx->symbol, *w, fuzzy_symbol_callback, NULL);
 	}
 
+	register_custom_controller_command ("fuzzy_add", fuzzy_add_handler, TRUE, TRUE);
+	register_custom_controller_command ("fuzzy_del", fuzzy_delete_handler, TRUE, TRUE);
+	
 	return res;
 }
 
@@ -258,18 +267,19 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 {
 	struct fuzzy_learn_session *session = arg;
 	struct fuzzy_cmd cmd;
-	char buf[sizeof ("ERR")];
+	char buf[sizeof ("ERR" CRLF)];
+	int r;
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
 		cmd.blocksize = session->h->block_size;
 		memcpy (cmd.hash, session->h->hash_pipe, sizeof (cmd.hash));
-		cmd.cmd = FUZZY_WRITE;
+		cmd.cmd = session->cmd;
 		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
 			goto err;
 		}
 		else {
-			event_set (&session->ev, fd, EV_READ, fuzzy_io_callback, session);
+			event_set (&session->ev, fd, EV_READ, fuzzy_learn_callback, session);
 			event_add (&session->ev, &session->tv);
 		}
 	}
@@ -277,24 +287,22 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 		if (read (fd, buf, sizeof (buf)) == -1) {
 			goto err;
 		}
-		else if (buf[0] == 'O' && buf[1] == 'K') {
-			insert_result (session->task, fuzzy_module_ctx->metric, fuzzy_module_ctx->symbol, 1, NULL);
-		}
 		goto ok;
 	}
 	
 	return;
 
 	err:
-		msg_err ("fuzzy_io_callback: got error on IO, %d, %s", errno, strerror (errno));
+		msg_err ("fuzzy_learn_callback: got error in IO with server %s:%d, %d, %s", session->server->name,
+					session->server->port, errno, strerror (errno));
 	ok:
 		event_del (&session->ev);
 		close (fd);
 		session->task->save.saved --;
 		if (session->task->save.saved == 0) {
-			/* Call other filters */
-			session->task->save.saved = 1;
-			process_filters (session->task);
+			session->session->state = WRITE_REPLY;
+			r = snprintf (buf, sizeof (buf), "OK" CRLF);
+			rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE);
 		}
 }
 
@@ -344,8 +352,12 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 	struct mime_text_part *part;
 	struct storage_server *selected;
 	GList *cur;
-	int sock, r;
-
+	int sock, r, cmd = 0;
+	char out_buf[BUFSIZ];
+	
+	if (session->other_data) {
+		cmd = GPOINTER_TO_SIZE (session->other_data);
+	}
 	task = construct_task (session->worker);
 	session->other_data = task;
 	session->state = STATE_WAIT;
@@ -381,17 +393,31 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 					s->task = task;
 					s->h = part->fuzzy;
 					s->session = session;
+					s->server = selected;
+					s->cmd = cmd;
 					event_add (&s->ev, &s->tv);
+					task->save.saved ++;
 				}
+			}
+			else {
+				r = snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+				session->state = WRITE_REPLY;
+				return;
 			}
 			cur = g_list_next (cur);
 		}
 	}
 
+	if (task->save.saved == 0) {
+		r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+		session->state = WRITE_REPLY;
+	}
 }
 
 static void
-fuzzy_controller_handler (char **args, struct controller_session *session)
+fuzzy_controller_handler (char **args, struct controller_session *session, int cmd)
 {
 	char *arg, out_buf[BUFSIZ], *err_str;
 	uint32_t size;
@@ -402,20 +428,34 @@ fuzzy_controller_handler (char **args, struct controller_session *session)
 		msg_info ("fuzzy_controller_handler: empty content length");
 		r = snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+		session->state = WRITE_REPLY;
 		return;
 	}
 
 	size = strtoul (arg, &err_str, 10);
 	if (err_str && *err_str != '\0') {
-		msg_debug ("process_command: statfile size is invalid: %s", arg);
 		r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+		session->state = WRITE_REPLY;
 		return;
 	}
 
 	session->state = STATE_OTHER;
 	rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
 	session->other_handler = fuzzy_process_handler;
+	session->other_data = GSIZE_TO_POINTER (cmd);
+}
+
+static void
+fuzzy_add_handler (char **args, struct controller_session *session)
+{
+	fuzzy_controller_handler (args, session, FUZZY_WRITE);
+}
+
+static void
+fuzzy_delete_handler (char **args, struct controller_session *session)
+{
+	fuzzy_controller_handler (args, session, FUZZY_DEL);
 }
 
 static int 

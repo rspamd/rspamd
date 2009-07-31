@@ -466,7 +466,7 @@ controller_read_socket (f_str_t *in, void *arg)
 			if (session->state == STATE_COMMAND) {
 				session->state = STATE_REPLY;
 			}
-			if (session->state != STATE_LEARN) {
+			if (session->state != STATE_LEARN && session->state != STATE_OTHER) {
 				rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE, TRUE);
 			}
 
@@ -639,7 +639,8 @@ void
 register_custom_controller_command (const char *name, controller_func_t handler, gboolean privilleged, gboolean require_message)
 {
 	struct custom_controller_command *cmd;
-
+	
+	cmd = g_malloc (sizeof (struct custom_controller_command));
 	cmd->command = name;
 	cmd->handler = handler;
 	cmd->privilleged = privilleged;

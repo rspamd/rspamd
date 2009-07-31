@@ -268,7 +268,7 @@ fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2)
 
 	/* If we have hashes of different size, input strings are too different */
 	if (h1->block_size != h2->block_size) {
-		return 100;
+		return 0;
 	}
 	
 	l1 = strlen (h1->hash_pipe);
@@ -279,7 +279,7 @@ fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2)
 	}
 
 	res = lev_distance (h1->hash_pipe, l1, h2->hash_pipe, l2);
-	res = (res * 100) / (l1 + l2);
+	res = 100 - (2 * res * 100) / (l1 + l2);
 
 	return res;
 }

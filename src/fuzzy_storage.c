@@ -115,10 +115,10 @@ sync_cache (struct rspamd_worker *wrk)
 		node = cur->data;
 		if (now - node->time > expire) {
 			/* Remove expired item */
+			tmp = cur;
 			cur = g_list_next (cur);
-			hashes->head = g_list_remove_link (hashes->head, cur);
+			g_queue_delete_link (hashes, tmp);
 			g_free (node);
-			g_list_free1 (tmp);
 			continue;
 		}
 		if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
@@ -218,6 +218,7 @@ process_check_command (struct fuzzy_cmd *cmd)
 	GList *cur;
 	struct rspamd_fuzzy_node *h;
 	fuzzy_hash_t s;
+	int prob = 0;
 	
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
@@ -226,11 +227,13 @@ process_check_command (struct fuzzy_cmd *cmd)
 	/* XXX: too slow way */
 	while (cur) {
 		h = cur->data;
-		if (fuzzy_compare_hashes (&h->h, &s) > LEV_LIMIT) {
+		if ((prob = fuzzy_compare_hashes (&h->h, &s)) > LEV_LIMIT) {
+			msg_info ("process_check_command: fuzzy hash was found, probability %d%%", prob);
 			return TRUE;
 		}
 		cur = g_list_next (cur);
 	}
+	msg_info ("process_check_command: fuzzy hash was NOT found, prob is %d%%", prob);
 
 	return FALSE;
 }
@@ -246,6 +249,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	h->time = (uint64_t)time (NULL);
 	g_queue_push_head (hashes, h);
 	mods ++;
+	msg_info ("process_write_command: fuzzy hash was successfully added");
 	
 	return TRUE;
 }
@@ -253,9 +257,10 @@ process_write_command (struct fuzzy_cmd *cmd)
 static gboolean
 process_delete_command (struct fuzzy_cmd *cmd)
 {
-	GList *cur;
+	GList *cur, *tmp;
 	struct rspamd_fuzzy_node *h;
 	fuzzy_hash_t s;
+	gboolean res = FALSE;
 	
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
@@ -265,16 +270,19 @@ process_delete_command (struct fuzzy_cmd *cmd)
 	while (cur) {
 		h = cur->data;
 		if (fuzzy_compare_hashes (&h->h, &s) > LEV_LIMIT) {
-			hashes->head = g_list_remove_link (hashes->head, cur);
 			g_free (h);
-			g_list_free1 (cur);
+			tmp = cur;
+			cur = g_list_next (cur);
+			g_queue_delete_link (hashes, tmp);
+			msg_info ("process_delete_command: fuzzy hash was successfully deleted");
+			res = TRUE;
 			mods ++;
-			return TRUE;
+			continue;
 		}
 		cur = g_list_next (cur);
 	}
 
-	return FALSE;
+	return res;
 }
 
 #define CMD_PROCESS(x)																			\
@@ -346,7 +354,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
  * Accept new connection and construct task
  */
 static void
-accept_socket (int fd, short what, void *arg)
+accept_fuzzy_socket (int fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct sockaddr_storage ss;
@@ -356,21 +364,21 @@ accept_socket (int fd, short what, void *arg)
 	int nfd;
 	
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
-		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
+		msg_warn ("accept_fuzzy_socket: accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
 	if (nfd == 0) {
-		msg_debug ("accept_socket: cannot accept socket as it was already accepted by other worker");
+		msg_debug ("accept_fuzzy_socket: cannot accept socket as it was already accepted by other worker");
 		return;
 	}
 
     if (ss.ss_family == AF_UNIX) {
-        msg_info ("accept_socket: accepted connection from unix socket");
+        msg_info ("accept_fuzzy_socket: accepted connection from unix socket");
     }
     else if (ss.ss_family == AF_INET) {
         sin = (struct sockaddr_in *) &ss;
-        msg_info ("accept_socket: accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
+        msg_info ("accept_fuzzy_socket: accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
     }
 	
 	session = g_malloc (sizeof (struct fuzzy_session));
@@ -439,7 +447,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	evtimer_add (&tev, &tmv);
 
 	/* Accept event */
-	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
+	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
 
 
