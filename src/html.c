@@ -394,7 +394,6 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		
 		url_text = memory_pool_alloc (task->task_pool, len + 1);
 		g_strlcpy (url_text, c, len + 1);
-		g_strstrip (url_text);
 		decode_entitles (url_text);
 		url = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 		rc = parse_uri (url, url_text, task->task_pool);

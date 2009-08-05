@@ -400,6 +400,22 @@ url_unescape (char *s)
 	*t = '\0';
 }
 
+static void
+url_strip (char *s)
+{
+ 	char *t = s;			/* t - tortoise */
+	char *h = s;			/* h - hare     */
+
+    while (*h) {
+        if (g_ascii_isgraph (*h)) {
+            *t = *h;
+            t ++;
+        }
+        h++;
+    }
+    *t = '\0';
+}
+
 /* The core of url_escape_* functions.  Escapes the characters that
    match the provided mask in urlchr_table.
 
@@ -870,6 +886,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 	if (strchr (uri->host, '%')) {
 		uri->hostlen = url_calculate_escaped_hostlen (uri->host, uri->hostlen);
 	}
+
+	url_strip (struri (uri));
 	url_unescape (uri->host);
 
 	path_simplify (uri->data);
