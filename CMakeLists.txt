@@ -37,6 +37,7 @@ INCLUDE(CheckSymbolExists)
 INCLUDE(CheckCSourceCompiles)
 INCLUDE(CheckLibraryExists)
 INCLUDE(FindPkgConfig)
+INCLUDE(CheckCCompilerFlag)
 
 IF(ENABLE_PERL MATCHES "ON")
 
@@ -242,28 +243,6 @@ ENDIF(NOT HAVE_COMPATIBLE_QUEUE_H)
 
 
 SET(CONTRIBSRC "")
-FIND_PATH(MD5_INCLUDE md5.h PATHS 	/opt/include
-									/usr/include
-									/usr/local/include
-									DOC "Path where the openssl header files can be found")
-IF (MD5_INCLUDE)
-	INCLUDE_DIRECTORIES(${MD5_INCLUDE})
-
-	FIND_LIBRARY(MD5_LIBRARY NAMES md PATHS /lib
-                                           	/opt/lib
-                                            /usr/lib
-                                            /usr/local/lib
-                 DOC "Path where the md5 libraries can be found")
-    IF (MD5_LIBRARY)
-    	SET(PROJECT_LIBS "${PROJECT_LIBS} md")
-		MESSAGE(STATUS "INFO: MD5 (libmd) hash function support enabled")
-	ELSE (MD5_LIBRARY)
-		MESSAGE(SEND_ERROR "ERROR: Cannot find libmd.so, aborting")
-	ENDIF (MD5_LIBRARY)
-ELSE (MD5_INCLUDE)
-	SET(CONTRIBSRC compat/md5.c)
-	MESSAGE(STATUS "WARNING: Using internal MD5 support")
-ENDIF (MD5_INCLUDE)
 
 IF(ENABLE_OPTIMIZATION MATCHES "ON")
 	SET(CMAKE_C_OPT_FLAGS "-O3")
@@ -271,8 +250,44 @@ ELSE(ENABLE_OPTIMIZATION MATCHES "ON")
 	SET(CMAKE_C_OPT_FLAGS "-O0")
 ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 
-SET(CMAKE_C_WARN_FLAGS "-Wall -W -Wpointer-arith -Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wno-sign-compare -Wunused-value -Wno-declaration-after-statement -Wno-pointer-sign")
-SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS} -std=c99")
+# Process with warn flags
+CHECK_C_COMPILER_FLAG(-Wall SUPPORT_WALL)
+CHECK_C_COMPILER_FLAG(-Wpointer-arith SUPPORT_WPOINTER)
+CHECK_C_COMPILER_FLAG(-Wno-unused-parameter SUPPORT_WPARAM)
+CHECK_C_COMPILER_FLAG(-Wno-unused-function SUPPORT_WFUNCTION)
+CHECK_C_COMPILER_FLAG(-Wno-sign-compare SUPPORT_WSIGNCOMPARE)
+CHECK_C_COMPILER_FLAG(-Wunused-variable SUPPORT_WUNUSED_VAR)
+CHECK_C_COMPILER_FLAG(-Wno-declaration-after-statement SUPPORT_WDECL)
+CHECK_C_COMPILER_FLAG(-Wno-pointer-sign SUPPORT_WPOINTER_SIGN)
+
+SET(CMAKE_C_WARN_FLAGS "-W")
+
+IF(SUPPORT_WALL)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wall")
+ENDIF(SUPPORT_WALL)
+IF(SUPPORT_WPOINTER)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wpointer-arith")
+ENDIF(SUPPORT_WPOINTER)
+IF(SUPPORT_WPARAM)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-unused-parameter")
+ENDIF(SUPPORT_WPARAM)
+IF(SUPPORT_WFUNCTION)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-unused-function")
+ENDIF(SUPPORT_WFUNCTION)
+IF(SUPPORT_WSIGNCOMPARE)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-sign-compare ")
+ENDIF(SUPPORT_WSIGNCOMPARE)
+IF(SUPPORT_WUNUSED_VAR)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wunused-variable")
+ENDIF(SUPPORT_WUNUSED_VAR)
+IF(SUPPORT_WDECL)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-declaration-after-statement")
+ENDIF(SUPPORT_WDECL)
+IF(SUPPORT_WPOINTER_SIGN)
+SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-pointer-sign")
+ENDIF(SUPPORT_WPOINTER_SIGN)
+
+SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
 
 # Platform specific routines
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -294,7 +309,7 @@ IF(ENABLE_REDIRECTOR MATCHES "ON")
 ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 
 IF(DEBUG_MODE MATCHES "ON")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb ")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 ENDIF(DEBUG_MODE MATCHES "ON")
 
 SET(RSPAMDSRC	src/modules.c
