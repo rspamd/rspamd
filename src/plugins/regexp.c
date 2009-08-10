@@ -244,7 +244,9 @@ find_raw_header_pos (const char *headers, const char *headerv)
 				}
 			}
 		}
-		p ++;
+		if (*p != '\0') {
+			p ++;
+		}
 	}
 
 	return NULL;
