@@ -13,7 +13,7 @@ $__R_MUA_OUTLOOK="X-Mailer=/^Microsoft Outlook Express/Hr";
 $__R_MUA_THEBAT="X-Mailer=/^The Bat!/H";
 $__R_CTYPE_TEXT="content_type_is_type(text)";
 $__R_CTE_7BIT="compare_transfer_encoding(7bit)";
-$__R_BODY_8BIT="/[^\x01-\x7f]/Mr";
+$__R_BODY_8BIT="/[^\x01-\x7f]/Pr";
 $R_BAD_CTE_7BIT="${__R_CTYPE_TEXT} & ${__R_CTE_7BIT} & ${__R_BODY_8BIT}";
 $R_TLD_TK = "/\.tk$/U";
 $R_POCHTA_RU = "${__R_RCVD_POCHTA_RU} & ${R_TLD_TK} & ${SUBJECT_NEEDS_ENCODING}";
