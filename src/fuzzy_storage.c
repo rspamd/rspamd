@@ -46,8 +46,10 @@
 #define DEFAULT_EXPIRE 172800L
 /* Resync value in seconds */
 #define SYNC_TIMEOUT 60
+/* Number of hash buckets */
+#define BUCKETS 1024
 
-static GQueue *hashes;
+static GQueue *hashes[BUCKETS];
 
 /* Number of cache modifications */
 static uint32_t mods = 0;
@@ -80,7 +82,7 @@ sig_handler (int signo)
 static void
 sync_cache (struct rspamd_worker *wrk)
 {
-	int fd;
+	int fd, i;
 	char *filename, *exp_str;
 	GList *cur, *tmp;
 	struct rspamd_fuzzy_node *node;
@@ -110,21 +112,23 @@ sync_cache (struct rspamd_worker *wrk)
 	}
 	
 	now = (uint64_t)time (NULL);
-	cur = hashes->head;
-	while (cur) {
-		node = cur->data;
-		if (now - node->time > expire) {
-			/* Remove expired item */
-			tmp = cur;
+	for (i = 0; i < BUCKETS; i ++) {
+		cur = hashes[i]->head;
+		while (cur) {
+			node = cur->data;
+			if (now - node->time > expire) {
+				/* Remove expired item */
+				tmp = cur;
+				cur = g_list_next (cur);
+				g_queue_delete_link (hashes[i], tmp);
+				g_free (node);
+				continue;
+			}
+			if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
+				msg_err ("sync_cache: cannot write file %s: %s", filename, strerror (errno));
+			}
 			cur = g_list_next (cur);
-			g_queue_delete_link (hashes, tmp);
-			g_free (node);
-			continue;
 		}
-		if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
-			msg_err ("sync_cache: cannot write file %s: %s", filename, strerror (errno));
-		}
-		cur = g_list_next (cur);
 	}
 
 	close (fd);
@@ -166,12 +170,14 @@ sigusr_handler (int fd, short what, void *arg)
 static gboolean
 read_hashes_file (struct rspamd_worker *wrk)
 {
-	int r, fd;
+	int r, fd, i;
 	struct stat st;
 	char *filename;
 	struct rspamd_fuzzy_node *node;
 
-	hashes = g_queue_new ();
+	for (i = 0; i < BUCKETS; i ++) {
+		hashes[i] = g_queue_new ();
+	}
 
 	filename = g_hash_table_lookup (wrk->cf->params, "hashfile");
 	if (filename == NULL) {
@@ -185,11 +191,14 @@ read_hashes_file (struct rspamd_worker *wrk)
 	
 	fstat (fd, &st);
 	
-	do {
+	for (;;) {
 		node = g_malloc (sizeof (struct rspamd_fuzzy_node));
-		g_queue_push_head (hashes, node);
+		r = read (fd, node, sizeof (struct rspamd_fuzzy_node));
+		if (r != sizeof (struct rspamd_fuzzy_node)) {
+			break;	
+		}
+		g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
 	}
-	while ((r = read (fd, node, sizeof (struct rspamd_fuzzy_node))) == sizeof (struct rspamd_fuzzy_node));
 
 	if (r > 0) {
 		msg_warn ("read_hashes_file: ignore garbadge at the end of file, length of garbadge: %d", r);
@@ -222,7 +231,7 @@ process_check_command (struct fuzzy_cmd *cmd)
 	
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
-	cur = hashes->head;
+	cur = hashes[cmd->blocksize % BUCKETS]->head;
 
 	/* XXX: too slow way */
 	while (cur) {
@@ -233,7 +242,7 @@ process_check_command (struct fuzzy_cmd *cmd)
 		}
 		cur = g_list_next (cur);
 	}
-	msg_info ("process_check_command: fuzzy hash was NOT found, prob is %d%%", prob);
+	msg_debug ("process_check_command: fuzzy hash was NOT found, prob is %d%%", prob);
 
 	return FALSE;
 }
@@ -247,7 +256,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
 	h->h.block_size = cmd->blocksize;
 	h->time = (uint64_t)time (NULL);
-	g_queue_push_head (hashes, h);
+	g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
 	mods ++;
 	msg_info ("process_write_command: fuzzy hash was successfully added");
 	
@@ -264,7 +273,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 	
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
-	cur = hashes->head;
+	cur = hashes[cmd->blocksize % BUCKETS]->head;
 
 	/* XXX: too slow way */
 	while (cur) {
@@ -273,7 +282,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 			g_free (h);
 			tmp = cur;
 			cur = g_list_next (cur);
-			g_queue_delete_link (hashes, tmp);
+			g_queue_delete_link (hashes[cmd->blocksize % BUCKETS], tmp);
 			msg_info ("process_delete_command: fuzzy hash was successfully deleted");
 			res = TRUE;
 			mods ++;
