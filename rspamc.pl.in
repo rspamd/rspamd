@@ -25,7 +25,7 @@ $main::VERSION = '@RSPAMD_VERSION@';
 
 sub HELP_MESSAGE {
     print <<EOD;
-Usage: rspamc.pl [-h host] [-p port] [-P] [-c conf_file] [-s statfile] [command]
+Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] [command]
 -h         host to connect or unix socket path
 -p         port to connect (not used with unix sockets)
 -P         ask for control password
@@ -222,7 +222,7 @@ sub do_control_command {
 }
 
 my %args;
-getopt('c:h:p:Ps:', \%args);
+getopt('c:h:p:P:s:', \%args);
 my $cmd = shift;
 my $do_parse_config = 1;
 
@@ -258,6 +258,9 @@ if (defined ($args{h})) {
 }
 if (defined ($args{p})) {
     $cfg{'port'} = $args{p};
+}
+if (defined ($args{P})) {
+    $cfg{'password'} = $args{P};
 }
 
 if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {
