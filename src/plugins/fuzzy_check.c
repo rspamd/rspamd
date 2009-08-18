@@ -67,6 +67,7 @@ struct fuzzy_client_session {
 	struct event ev;
 	struct timeval tv;
 	struct worker_task *task;
+	struct storage_server *server;
 };
 
 struct fuzzy_learn_session {
@@ -249,7 +250,8 @@ fuzzy_io_callback (int fd, short what, void *arg)
 	return;
 
 	err:
-		msg_err ("fuzzy_io_callback: got error on IO, %d, %s", errno, strerror (errno));
+		msg_err ("fuzzy_io_callback: got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port,
+					errno, strerror (errno));
 	ok:
 		event_del (&session->ev);
 		close (fd);
@@ -336,6 +338,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 				session->state = 0;
 				session->h = part->fuzzy;
 				session->task = task;
+				session->server = selected;
 				event_add (&session->ev, &session->tv);
 				task->save.saved ++;
 			}
