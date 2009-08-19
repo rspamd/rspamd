@@ -123,6 +123,7 @@ factors {
 	"R_SPAM_FROM_LIBERO" = 10;
 	"R_FAKE_OUTLOOK"= 8;
 	"R_FAKE_THEBAT"= 8;
+	"R_LOTTO" = 5;
 	"KAM_LOTTO1" = 7;
 	"FORGED_OUTLOOK_HTML" = 5;
 	"SUSPICIOUS_RECIPS" = 3.5;
@@ -153,11 +154,6 @@ factors {
 	"DRUGS_MANYKINDS" = 2;
 	"FAKE_REPLY_C" = 6;
 	"MIME_HTML_ONLY" = 1;
-    # Voweling
-    "FROM_DOMAIN_NOVOWEL" = 7;
-    "FROM_LOCAL_NOVOWEL" = 8;
-    "FROM_LOCAL_HEX" = 8;
-    "FROM_LOCAL_DIGITS" = 8;
     
     # Modules factors
     "R_MIXED_CHARSET" = 5;
@@ -244,6 +240,7 @@ factors {
 	R_FAKE_OUTLOOK="${R_FAKE_OUTLOOK}";
 	R_FAKE_THEBAT="${R_FAKE_THEBAT}";
 	R_MISSING_CHARSET="${R_MISSING_CHARSET}";
+	R_LOTTO="${R_LOTTO}";
 	KAM_LOTTO1="${KAM_LOTTO1}";
 	FORGED_OUTLOOK_HTML="${FORGED_OUTLOOK_HTML}";
 	SUSPICIOUS_RECIPS="${SUSPICIOUS_RECIPS}";
@@ -274,11 +271,6 @@ factors {
 	
 	FAKE_REPLY_C="${FAKE_REPLY_C}";
 	MIME_HTML_ONLY="${MIME_HTML_ONLY}";
-    
-    FROM_DOMAIN_NOVOWEL="${FROM_DOMAIN_NOVOWEL}";
-    FROM_LOCAL_NOVOWEL="${FROM_LOCAL_NOVOWEL}";
-    FROM_LOCAL_HEX="${FROM_LOCAL_HEX}";
-    FROM_LOCAL_DIGITS="${FROM_LOCAL_DIGITS}";
 };
 
 .module 'chartable' {
@@ -305,7 +297,7 @@ filters = "surbl,regexp,chartable,emails";
 view {
 	# All directives here may be duplicated to add specific elements or regexp/files
 	# List of ip/mask for this view
-	#ip = "file:///usr/local/etc/rspamd/ip_internal.inc";
+	ip = "file:///usr/local/etc/rspamd/ip_internal.inc";
 	# From addresses for this view:
 	# list is placed in file:
 	#from = "file:///usr/local/etc/rspamd/from_internal.inc";

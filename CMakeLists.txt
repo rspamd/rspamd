@@ -337,6 +337,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/radix.c
 				src/view.c
 				src/map.c
+                src/bloom.c
 				src/symbols_cache.c
 				src/fuzzy_storage.c)
 
