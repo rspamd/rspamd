@@ -165,3 +165,9 @@ $__HAS_REF="header_exists(References)";
 $__MISSING_REF="!${__HAS_REF}";
 $FAKE_REPLY_C="${__SUBJ_RE} & ${__MISSING_REF} & ${__NO_INR_YES_REF}";
 
+# Vowel rules
+$FROM_DOMAIN_NOVOWEL="From=/\@\S*[bcdfghjklmnpqrstvwxz]{7}/Hi";
+$FROM_LOCAL_NOVOWEL="From=/[bcdfghjklmnpqrstvwxz]{7}\S*\@/Hi";
+$FROM_LOCAL_HEX="From=/[0-9a-f]{11}\S*\@/iH";
+$FROM_LOCAL_DIGITS="From=/\d{11}\S*\@/iH";
+
