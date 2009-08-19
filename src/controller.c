@@ -141,6 +141,8 @@ free_session (struct controller_session *session, gboolean is_soft)
 		rspamd_remove_dispatcher (session->dispatcher);
 	}
 
+	close (session->sock);
+
 	memory_pool_delete (session->session_pool);
 	g_free (session);
 }
@@ -524,9 +526,7 @@ controller_write_socket (void *arg)
 	struct controller_session *session = (struct controller_session *)arg;
 	
 	if (session->state == STATE_QUIT) {
-		msg_info ("closing control connection");
 		/* Free buffers */
-		close (session->sock);
 		free_session (session, TRUE);
 		return;
 	}
@@ -541,10 +541,7 @@ controller_err_socket (GError *err, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
 
-	if (err->code == EOF) {
-		msg_info ("controller_err_socket: client closed control connection");
-	}
-	else {
+	if (err->code != EOF) {
 		msg_info ("controller_err_socket: abnormally closing control connection, error: %s", err->message);
 	}
 	/* Free buffers */
