@@ -287,6 +287,7 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		cur->type = cf->type;
 		cur->pid = fork();
 		cur->cf = cf;
+		cur->pending = FALSE;
 		switch (cur->pid) {
 			case 0:
 				/* Drop privilleges */
@@ -717,7 +718,7 @@ main (int argc, char **argv, char **env)
 					else {
 						if (WIFSIGNALED (res)) {
 							msg_warn ("main: %s process %d terminated abnormally by signal: %d", 
-										(cur->type != TYPE_WORKER) ? "controller" : "worker",
+										(cur->type == TYPE_CONTROLLER) ? "controller" : "worker",
 										cur->pid, WTERMSIG(res));
 						}
 						else {
@@ -735,13 +736,15 @@ main (int argc, char **argv, char **env)
 			do_restart = 0;
 			do_reopen_log = 1;
 
-			msg_info ("main: rspamd "RVERSION " is restarting");
+			msg_info ("main: rspamd " RVERSION " is restarting");
 			if (active_worker == NULL) {
 				/* reread_config (rspamd); */
 				TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
 					if (cur->type == TYPE_WORKER || cur->type == TYPE_LMTP || cur->type == TYPE_FUZZY) {
 						/* Start new workers that would reread configuration */
+						cur->pending = FALSE;
 						active_worker = fork_worker (rspamd, cur->cf);
+						active_worker->pending = TRUE;
 					}
 					/* Immideately send termination request to conroller and wait for SIGCHLD */
 					if (cur->type == TYPE_CONTROLLER) {
@@ -758,13 +761,12 @@ main (int argc, char **argv, char **env)
 			if (active_worker != NULL) {
 				msg_info ("main: worker process %d has been successfully started", active_worker->pid);
 				TAILQ_FOREACH_SAFE (cur, &rspamd->workers, next, cur_tmp) {
-					if (cur != active_worker && !cur->is_dying && cur->type != TYPE_CONTROLLER) {
+					if (!cur->pending && !cur->is_dying && cur->type != TYPE_CONTROLLER) {
 						/* Send to old workers SIGUSR2 */
 						kill (cur->pid, SIGUSR2);
 						cur->is_dying = 1;
 					}
 				}
-				active_worker = NULL;
 			}
 		}
 		if (got_alarm) {

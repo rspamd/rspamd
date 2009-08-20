@@ -36,6 +36,7 @@
 #include "modules.h"
 #include "message.h"
 #include "fuzzy.h"
+#include "bloom.h"
 #include "fuzzy_storage.h"
 
 /* This number is used as limit while comparing two fuzzy hashes, this value can vary from 0 to 100 */
@@ -50,6 +51,7 @@
 #define BUCKETS 1024
 
 static GQueue *hashes[BUCKETS];
+static bloom_filter_t *bf;
 
 /* Number of cache modifications */
 static uint32_t mods = 0;
@@ -121,6 +123,7 @@ sync_cache (struct rspamd_worker *wrk)
 				tmp = cur;
 				cur = g_list_next (cur);
 				g_queue_delete_link (hashes[i], tmp);
+				bloom_del (bf, node->h.hash_pipe);
 				g_free (node);
 				continue;
 			}
@@ -198,6 +201,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 			break;	
 		}
 		g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
+		bloom_add (bf, node->h.hash_pipe);
 	}
 
 	if (r > 0) {
@@ -229,6 +233,10 @@ process_check_command (struct fuzzy_cmd *cmd)
 	fuzzy_hash_t s;
 	int prob = 0;
 	
+	if (!bloom_check (bf, cmd->hash)) {
+		return FALSE;	
+	}
+
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 	cur = hashes[cmd->blocksize % BUCKETS]->head;
@@ -252,11 +260,16 @@ process_write_command (struct fuzzy_cmd *cmd)
 {
 	struct rspamd_fuzzy_node *h;
 
+	if (bloom_check (bf, cmd->hash)) {
+		return FALSE;	
+	}
+
 	h = g_malloc (sizeof (struct rspamd_fuzzy_node));
 	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
 	h->h.block_size = cmd->blocksize;
 	h->time = (uint64_t)time (NULL);
 	g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
+	bloom_add (bf, cmd->hash);
 	mods ++;
 	msg_info ("process_write_command: fuzzy hash was successfully added");
 	
@@ -270,6 +283,10 @@ process_delete_command (struct fuzzy_cmd *cmd)
 	struct rspamd_fuzzy_node *h;
 	fuzzy_hash_t s;
 	gboolean res = FALSE;
+
+	if (!bloom_check (bf, cmd->hash)) {
+		return FALSE;	
+	}
 	
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
@@ -283,6 +300,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 			tmp = cur;
 			cur = g_list_next (cur);
 			g_queue_delete_link (hashes[cmd->blocksize % BUCKETS], tmp);
+			bloom_del (bf, cmd->hash);
 			msg_info ("process_delete_command: fuzzy hash was successfully deleted");
 			res = TRUE;
 			mods ++;
@@ -443,7 +461,8 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);
 
-	
+	/* Init bloom filter */
+	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);
 	/* Try to read hashes from file */
 	if (!read_hashes_file (worker)) {
 		msg_err ("read_hashes_file: cannot read hashes file, it can be created after save procedure");

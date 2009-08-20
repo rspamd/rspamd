@@ -56,8 +56,9 @@ enum process_type {
  */
 struct rspamd_worker {
 	pid_t pid;													/**< pid of worker									*/
-	char is_initialized;										/**< is initialized									*/
-	char is_dying;												/**< if worker is going to shutdown					*/
+	gboolean is_initialized;									/**< is initialized									*/
+	gboolean is_dying;											/**< if worker is going to shutdown					*/
+	gboolean pending;											/**< if worker is pending to run					*/
 	struct rspamd_main *srv;									/**< pointer to server structure					*/
 	enum process_type type;										/**< process type									*/
 	struct event sig_ev;										/**< signals event									*/
