@@ -278,7 +278,7 @@ static gsize
 process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 {
 	char *headerv, *c, t;
-	struct mime_text_part *part, *tmp;
+	struct mime_text_part *part;
 	GList *cur, *headerlist;
 	GRegex *regexp;
 	struct url_regexp_param callback_param;
@@ -352,16 +352,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 					task_cache_add (task, re, 1);
 					return 1;
 				}
-				/* Skip identical parts */
-				while (cur) {
-					cur = g_list_next (cur);
-					if (cur) {
-						tmp = (struct mime_text_part *)cur->data;
-						if (fuzzy_compare_hashes (tmp->fuzzy, part->fuzzy) > 70) {
-							break;
-						}
-					}
-				}
+				cur = g_list_next (cur);
 			}
 			task_cache_add (task, re, 0);
 			return 0;

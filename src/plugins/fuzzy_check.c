@@ -74,6 +74,7 @@ struct fuzzy_learn_session {
 	struct event ev;
 	fuzzy_hash_t *h;
 	int cmd;
+	int *saved;
 	struct timeval tv;
 	struct controller_session *session;
 	struct storage_server *server;
@@ -270,9 +271,6 @@ fuzzy_free_session (void *arg)
 	struct fuzzy_learn_session *session = arg;
 
 	event_del (&session->ev);
-	if (session->task) {
-		free_task (session->task, FALSE);
-	}
 }
 
 static void
@@ -310,8 +308,8 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 					session->server->port, errno, strerror (errno));
 	ok:
 		close (fd);
-		session->task->save.saved --;
-		if (session->task->save.saved == 0) {
+		(*session->saved) --;
+		if (*session->saved == 0) {
 			session->session->state = WRITE_REPLY;
 			r = snprintf (buf, sizeof (buf), "OK" CRLF);
 			rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE);
@@ -331,6 +329,10 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 
 	while (cur) {
 		part = cur->data;
+		if (part->is_empty) {
+			cur = g_list_next (cur);
+			continue;
+		}
 		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
 										 sizeof (struct storage_server), task->ts.tv_sec, 
 										 DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, 
@@ -365,7 +367,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 	struct mime_text_part *part;
 	struct storage_server *selected;
 	GList *cur;
-	int sock, r, cmd = 0;
+	int sock, r, cmd = 0, *saved;
 	char out_buf[BUFSIZ];
 	
 	if (session->other_data) {
@@ -377,12 +379,14 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 
 	task->msg = in;
 	r = process_message (task);
+	saved = memory_pool_alloc0 (session->session_pool, sizeof (int));
 	if (r == -1) {
 		msg_warn ("read_socket: processing of message failed");
 		task->last_error = "MIME processing error";
 		task->error_code = RSPAMD_FILTER_ERROR;
 		free_task (task, FALSE);
 		session->state = WRITE_REPLY;
+		return;
 	}
 	else {
 		/* Plan new event for writing */
@@ -390,6 +394,10 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 
 		while (cur) {
 			part = cur->data;
+			if (part->is_empty) {
+				cur = g_list_next (cur);
+				continue;
+			}
 			selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
 											 sizeof (struct storage_server), task->ts.tv_sec, 
 											 DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, 
@@ -398,6 +406,11 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 			if (selected) {
 				if ((sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 					msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
+					r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+					session->state = WRITE_REPLY;
+					free_task (task, FALSE);
+					return;
 				}	
 				else {
 					s = memory_pool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
@@ -405,13 +418,15 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 					s->tv.tv_sec = IO_TIMEOUT;
 					s->tv.tv_usec = 0;
 					s->task = task;
-					s->h = part->fuzzy;
+					s->h = memory_pool_alloc (session->session_pool, sizeof (fuzzy_hash_t));
+					memcpy (s->h, part->fuzzy, sizeof (fuzzy_hash_t));
 					s->session = session;
 					s->server = selected;
 					s->cmd = cmd;
+					s->saved = saved;
 					event_add (&s->ev, &s->tv);
 					memory_pool_add_destructor (session->session_pool, fuzzy_free_session, s);
-					task->save.saved ++;
+					(*saved) ++;
 				}
 			}
 			else {
@@ -425,10 +440,10 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 		}
 	}
 
-	if (task->save.saved == 0) {
+	free_task (task, FALSE);
+	if (*saved == 0) {
 		r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
-		free_task (task, FALSE);
 		session->state = WRITE_REPLY;
 	}
 }

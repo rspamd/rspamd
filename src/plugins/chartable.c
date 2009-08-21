@@ -194,11 +194,13 @@ static void
 chartable_symbol_callback (struct worker_task *task, void *unused)
 {	
 	GList *cur;
+	struct mime_text_part *part;
 
 	if (check_view (task->cfg->views, chartable_module_ctx->symbol, task)) {
 		cur = g_list_first (task->text_parts);
 		while (cur) {
-			if (check_part ((struct mime_text_part *)cur->data, task->cfg->raw_mode)) {
+			part = cur->data;
+			if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
 				insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);	
 			}
 			cur = g_list_next (cur);

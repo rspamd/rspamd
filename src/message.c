@@ -517,6 +517,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 			text_part->is_empty = TRUE;
 			text_part->orig = NULL;
 			text_part->content = NULL;
+			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
@@ -553,6 +554,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 			text_part->is_empty = TRUE;
 			text_part->orig = NULL;
 			text_part->content = NULL;
+			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);

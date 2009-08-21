@@ -517,6 +517,10 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 	if ((tokens = g_hash_table_lookup (data->tokens, st->tokenizer)) == NULL) {
 		while (cur != NULL) {
 			text_part = (struct mime_text_part *)cur->data;
+			if (text_part->is_empty) {
+				cur = g_list_next (cur);
+				continue;
+			}
 			c.begin = text_part->content->data;
 			c.len = text_part->content->len;
 			/* Tree would be freed at task pool freeing */
