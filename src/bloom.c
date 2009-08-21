@@ -168,7 +168,7 @@ bloom_create (size_t size, size_t nfuncs, ...)
 	if (!(bloom = g_malloc (sizeof (bloom_filter_t)))) {
 		return NULL;
 	}
-	if (!(bloom->a = g_new (char, (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
+	if (!(bloom->a = g_new0 (char, (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
 		g_free (bloom);
 		return NULL;
 	}

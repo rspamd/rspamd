@@ -265,6 +265,17 @@ fuzzy_io_callback (int fd, short what, void *arg)
 }
 
 static void
+fuzzy_free_session (void *arg)
+{
+	struct fuzzy_learn_session *session = arg;
+
+	event_del (&session->ev);
+	if (session->task) {
+		free_task (session->task, FALSE);
+	}
+}
+
+static void
 fuzzy_learn_callback (int fd, short what, void *arg)
 {
 	struct fuzzy_learn_session *session = arg;
@@ -298,7 +309,6 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 		msg_err ("fuzzy_learn_callback: got error in IO with server %s:%d, %d, %s", session->server->name,
 					session->server->port, errno, strerror (errno));
 	ok:
-		event_del (&session->ev);
 		close (fd);
 		session->task->save.saved --;
 		if (session->task->save.saved == 0) {
@@ -371,7 +381,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 		msg_warn ("read_socket: processing of message failed");
 		task->last_error = "MIME processing error";
 		task->error_code = RSPAMD_FILTER_ERROR;
-		task->state = WRITE_ERROR;
+		free_task (task, FALSE);
+		session->state = WRITE_REPLY;
 	}
 	else {
 		/* Plan new event for writing */
@@ -399,12 +410,14 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 					s->server = selected;
 					s->cmd = cmd;
 					event_add (&s->ev, &s->tv);
+					memory_pool_add_destructor (session->session_pool, fuzzy_free_session, s);
 					task->save.saved ++;
 				}
 			}
 			else {
 				r = snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+				free_task (task, FALSE);
 				session->state = WRITE_REPLY;
 				return;
 			}
@@ -415,6 +428,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 	if (task->save.saved == 0) {
 		r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+		free_task (task, FALSE);
 		session->state = WRITE_REPLY;
 	}
 }
