@@ -82,7 +82,6 @@ static GCompletion *comp;
 static time_t start_time;
 
 static char greetingbuf[1024];
-static struct timeval io_tv;
 extern rspamd_hash_t *counters;
 
 static 
@@ -554,6 +553,7 @@ accept_socket (int fd, short what, void *arg)
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct sockaddr_storage ss;
 	struct controller_session *new_session;
+    struct timeval *io_tv;
 	socklen_t addrlen = sizeof(ss);
 	int nfd;
 
@@ -576,8 +576,12 @@ accept_socket (int fd, short what, void *arg)
 	worker->srv->stat->control_connections_count ++;
 
 	/* Set up dispatcher */
+    io_tv = memory_pool_alloc (new_session->session_pool, sizeof (struct timeval));
+	io_tv->tv_sec = CONTROLLER_IO_TIMEOUT;
+	io_tv->tv_usec = 0;
+
 	new_session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, controller_read_socket,
-														controller_write_socket, controller_err_socket, &io_tv,
+														controller_write_socket, controller_err_socket, io_tv,
 														(void *)new_session);
 	rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE);
 }
@@ -624,8 +628,6 @@ start_controller (struct rspamd_worker *worker)
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);
 	
-	io_tv.tv_sec = CONTROLLER_IO_TIMEOUT;
-	io_tv.tv_usec = 0;
 
 	event_loop (0);
 
