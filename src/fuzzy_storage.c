@@ -42,7 +42,7 @@
 /* This number is used as limit while comparing two fuzzy hashes, this value can vary from 0 to 100 */
 #define LEV_LIMIT 99
 /* This number is used as limit while we are making decision to write new hash file or not */
-#define MOD_LIMIT 10
+#define MOD_LIMIT 10000
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
 /* Resync value in seconds */
