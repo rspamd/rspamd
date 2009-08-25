@@ -305,12 +305,12 @@ process_delete_command (struct fuzzy_cmd *cmd)
 #define CMD_PROCESS(x)																			\
 do {																							\
 if (process_##x##_command (&session->cmd)) {													\
-	if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0, &session->sa, session->salen) == -1) {							\
+	if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {							\
 		msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));		\
 	}																							\
 }																								\
 else {																							\
-	if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, &session->sa, session->salen) == -1) {						\
+	if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {						\
 		msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));		\
 	}																							\
 }																								\
@@ -330,7 +330,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 			CMD_PROCESS(delete);
 			break;	
 		default:
-			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, &session->sa, session->salen) == -1) {
+			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
 				msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));
 			}
 			break;
@@ -354,10 +354,11 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 	session.worker = worker;
 	session.fd = fd;
 	session.pos = (u_char *)&session.cmd;
+	session.salen = sizeof (session.sa);
 
 	/* Got some data */
 	if (what == EV_READ) {
-		if ((r = recvfrom (fd, session.pos, sizeof (struct fuzzy_cmd), MSG_WAITALL, &session.sa, &session.salen)) == -1) {
+		if ((r = recvfrom (fd, session.pos, sizeof (struct fuzzy_cmd), MSG_WAITALL, (struct sockaddr *)&session.sa, &session.salen)) == -1) {
 			msg_err ("fuzzy_io_callback: got error while reading from socket: %d, %s", errno, strerror (errno));
 			return;
 		}

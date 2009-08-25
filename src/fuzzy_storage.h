@@ -21,8 +21,8 @@ struct fuzzy_session {
 	struct fuzzy_cmd cmd;
 	int fd;
 	u_char *pos;
-	int salen;
-	struct sockaddr sa;
+	socklen_t salen;
+	struct sockaddr_storage sa;
 };
 
 void start_fuzzy_storage (struct rspamd_worker *worker);
