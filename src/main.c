@@ -425,12 +425,14 @@ spawn_workers (struct rspamd_main *rspamd)
 		cf = cur->data;
 
 		/* Create listen socket */
-		listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, 
+		if (cf->type != TYPE_FUZZY) {
+			listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, 
 											cf->bind_family, cf->bind_host);
-		if (listen_sock == -1) {
-			exit(-errno);
+			if (listen_sock == -1) {
+				exit(-errno);
+			}
+			cf->listen_sock = listen_sock;
 		}
-		cf->listen_sock = listen_sock;
 
 		for (i = 0; i < cf->count; i++) {
 			fork_worker (rspamd, cf);

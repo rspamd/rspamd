@@ -18,11 +18,11 @@ struct fuzzy_cmd {
 
 struct fuzzy_session {
 	struct rspamd_worker *worker;
-	struct event ev;
 	struct fuzzy_cmd cmd;
-	struct timeval tv;
 	int fd;
 	u_char *pos;
+	int salen;
+	struct sockaddr sa;
 };
 
 void start_fuzzy_storage (struct rspamd_worker *worker);

@@ -339,7 +339,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 										 DEFAULT_UPSTREAM_MAXERRORS,
 										 part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 		if (selected) {
-			if ((sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
+			if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 				msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 			}	
 			else {
@@ -404,7 +404,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 											 DEFAULT_UPSTREAM_MAXERRORS,
 											 part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 			if (selected) {
-				if ((sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
+				if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 					msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 					r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
 					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);

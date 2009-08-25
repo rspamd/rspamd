@@ -11,6 +11,8 @@ struct workq;
 
 /* Create socket and bind or connect it to specified address and port */
 int make_tcp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
+/* Create socket and bind or connect it to specified address and port */
+int make_udp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
 /* Accept from socket */
 int accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len);
 /* Create and bind or connect unix socket */

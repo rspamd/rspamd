@@ -50,15 +50,15 @@ make_socket_nonblocking (int fd)
 	return 0;
 }
 
-int
-make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+static int
+make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
 {
 	int fd, r, optlen, on = 1, s_error;
 	int serrno;
 	struct sockaddr_in sin;
 	
 	/* Create socket */
-	fd = socket (AF_INET, SOCK_STREAM, 0);
+	fd = socket (AF_INET, family, 0);
 	if (fd == -1) {
 		msg_warn ("make_tcp_socket: socket failed: %d, '%s'", errno, strerror (errno));
 		return -1;
@@ -111,6 +111,18 @@ make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolea
 	close (fd);
 	errno = serrno;
 	return (-1);
+}
+
+int
+make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+{
+	return make_inet_socket (SOCK_STREAM, addr, port, is_server, async);	
+}
+
+int
+make_udp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+{
+	return make_inet_socket (SOCK_DGRAM, addr, port, is_server, async);	
 }
 
 int
