@@ -650,6 +650,7 @@ open_log (struct config_file *cfg)
 				fprintf (stderr, "open_log: cannot open desired log file: %s, %s", cfg->log_file, strerror (errno));
 				return -1;
 			}
+			cfg->logf = fdopen (cfg->log_fd, "w");
 			return 0;
 	}
 	return -1;
@@ -666,7 +667,9 @@ close_log (struct config_file *cfg)
 			closelog ();
 			break;
 		case RSPAMD_LOG_FILE:
-			close (cfg->log_fd);
+			if (cfg->logf != NULL) {
+				fclose (cfg->logf);
+			}
 			break;
 	}
 
@@ -734,12 +737,10 @@ file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gcha
 {
 	struct config_file *cfg = (struct config_file *)arg;
 	char tmpbuf[128], timebuf[32];
-	int r;
-	struct iovec out[3];
 	time_t now;
 	struct tm *tms;
 	
-	if (cfg->log_fd == -1) {
+	if (cfg->log_fd == -1 || cfg->logf == NULL) {
 		return;
 	}
 #ifdef RSPAMD_MAIN
@@ -752,15 +753,8 @@ file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gcha
 		now = time (NULL);
 		tms = localtime (&now);
 		strftime (timebuf, sizeof (timebuf), "%b %d %H:%M:%S", tms);
-		r = snprintf (tmpbuf, sizeof (tmpbuf), "#%d: %s rspamd ", (int)getpid (), timebuf);
-		out[0].iov_base = tmpbuf;
-		out[0].iov_len = r;
-		out[1].iov_base = (char *)message;
-		out[1].iov_len = strlen (message);
-		out[2].iov_base = "\r\n";
-		out[2].iov_len = 2;
-
-		writev (cfg->log_fd, out, sizeof (out) / sizeof (out[0]));
+		snprintf (tmpbuf, sizeof (tmpbuf), "#%d: %s rspamd ", (int)getpid (), timebuf);
+		fprintf (cfg->logf, "%s%s" CRLF, tmpbuf, message);
 	}
 }
 

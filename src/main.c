@@ -195,9 +195,11 @@ config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 					fprintf (stderr, "Cannot log to console while daemonized, disable logging\n");
 				}
 				rspamd->cfg->log_fd = -1;
+				rspamd->cfg->logf = NULL;
 			}
 			else {
-				rspamd->cfg->log_fd = 2;
+				rspamd->cfg->logf = stderr;
+				rspamd->cfg->log_fd = STDERR_FILENO;
 			}
             rspamd_set_logger (file_log_function, rspamd->cfg);
 			g_log_set_default_handler (file_log_function, rspamd->cfg);
@@ -507,6 +509,7 @@ main (int argc, char **argv, char **env)
 
 	/* First set logger to console logger */
 	cfg->log_fd = STDERR_FILENO;
+	cfg->logf = stderr;
 	rspamd_set_logger (file_log_function, rspamd->cfg);
 	g_log_set_default_handler (file_log_function, cfg);
 
