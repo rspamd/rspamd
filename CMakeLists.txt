@@ -147,6 +147,21 @@ IF(ENABLE_PROFILING MATCHES "ON")
 ENDIF(ENABLE_PROFILING MATCHES "ON")
 
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
+	FIND_PATH(GPERF_INCLUDE google/profiler.h PATHS /opt/include
+													/usr/include
+													/usr/local/include
+											  DOC "Path where google perftools includes can be found")
+	INCLUDE_DIRECTORIES("${GPERF_INCLUDE}")
+	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler PATHS /lib
+													/opt/lib
+													/usr/lib
+													/usr/local/lib
+					DOC "Path where the gperf library can be found")
+	IF(NOT GPERF_LIBRARY)
+		MESSAGE(FATAL_ERROR "gperf tools support is enabled but not found in system")
+	ENDIF(NOT GPERF_LIBRARY)
+	GET_FILENAME_COMPONENT(GPERF_PATH "${GPERF_LIBRARY}" PATH)
+	LINK_DIRECTORIES("${GPERF_PATH}")
 	SET(WITH_GPERF_TOOLS 1)
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
@@ -429,6 +444,7 @@ ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC}
 					  ${CLASSIFIERSSRC} ${PLUGINSSRC} ${YACC_OUTPUT} 
 					  ${LEX_OUTPUT})
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
+SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
 SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
 
 IF(ENABLE_PERL MATCHES "ON")

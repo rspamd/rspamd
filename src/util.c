@@ -28,9 +28,10 @@
 #include "cfg_file.h"
 #include "main.h"
 
-
+#ifdef RSPAMD_MAIN
 sig_atomic_t do_reopen_log = 0;
 extern rspamd_hash_t *counters;
+#endif
 
 struct logger_params {
     GLogFunc log_func;
@@ -669,7 +670,9 @@ rspamd_set_logger (GLogFunc func, struct config_file *cfg)
 int
 reopen_log (struct config_file *cfg)
 {
+#ifdef RSPAMD_MAIN
 	do_reopen_log = 0;
+#endif
 	close_log (cfg);
 	return open_log (cfg);
 }
@@ -692,9 +695,11 @@ void
 syslog_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg)
 {
 	struct config_file *cfg = (struct config_file *)arg;
+#ifdef RSPAMD_MAIN
 	if (do_reopen_log) {
 		reopen_log (cfg);
 	}
+#endif
 
 	if (log_level <= cfg->log_level) {
 		if (log_level >= G_LOG_LEVEL_DEBUG) {
@@ -725,10 +730,11 @@ file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gcha
 	if (cfg->log_fd == -1) {
 		return;
 	}
-
+#ifdef RSPAMD_MAIN
 	if (do_reopen_log) {
 		reopen_log (cfg);
 	}
+#endif
 
 	if (log_level <= cfg->log_level) {
 		now = time (NULL);
@@ -844,6 +850,7 @@ calculate_check_time (struct timespec *begin, int resolution)
 double
 set_counter (const char *name, long int value)
 {
+#ifdef RSPAMD_MAIN
 	struct counter_data *cd;
 	double alpha;
 	char *key;
@@ -868,6 +875,9 @@ set_counter (const char *name, long int value)
 	}
 
 	return cd->value;
+#else
+	return 0;
+#endif
 }
 
 #ifndef g_tolower
@@ -897,6 +907,34 @@ rspamd_strcase_hash (gconstpointer key)
 	}
 	
 	return h;
+}
+
+void 
+gperf_profiler_init (struct config_file *cfg, const char *descr)
+{
+#if defined(WITH_GPERF_TOOLS) && defined(MAIN_RSPAMD)
+	char prof_path[PATH_MAX];
+
+	if (getenv("CPUPROFILE")) {
+
+		/* disable inherited Profiler enabled in master process */
+		ProfilerStop ();
+	}
+	/* Try to create temp directory for gmon.out and chdir to it */
+	if (cfg->profile_path == NULL) {
+		cfg->profile_path = g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
+	}
+
+	snprintf (prof_path, sizeof (prof_path), "%s-%s.%d", cfg->profile_path, descr, (int)getpid ());
+	if (ProfilerStart (prof_path)) {
+		/* start ITIMER_PROF timer */
+		ProfilerRegisterThread();
+	}
+	else {
+		msg_warn ("gperf_frofiler_init: cannot start google perftools profiler");
+	}
+
+#endif
 }
 
 /*

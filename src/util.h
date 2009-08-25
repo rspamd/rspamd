@@ -67,5 +67,7 @@ double set_counter (const char *name, long int value);
 guint rspamd_strcase_hash (gconstpointer key);
 gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
 
+void gperf_profiler_init (struct config_file *cfg, const char *descr);
+
 
 #endif

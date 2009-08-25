@@ -44,6 +44,7 @@ write_buffers (int fd, rspamd_io_dispatcher_t *d)
 	GList *cur;
 	GError *err;
 	rspamd_buffer_t *buf;
+	struct timeval *ntv;
 	ssize_t r;
 
 	/* Fix order */
@@ -87,7 +88,9 @@ write_buffers (int fd, rspamd_io_dispatcher_t *d)
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, fd, EV_WRITE, dispatcher_cb, (void *)d);
-			event_add (d->ev, d->tv);
+			ntv = memory_pool_alloc (d->pool, sizeof (struct timeval));
+			memcpy (ntv, d->tv, sizeof (struct timeval));
+			event_add (d->ev, ntv);
 			return;
 		}
 		cur = g_list_next (cur);
@@ -111,13 +114,17 @@ write_buffers (int fd, rspamd_io_dispatcher_t *d)
 		
 		event_del (d->ev);
 		event_set (d->ev, fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
-		event_add (d->ev, d->tv);
+		ntv = memory_pool_alloc (d->pool, sizeof (struct timeval));
+		memcpy (ntv, d->tv, sizeof (struct timeval));
+		event_add (d->ev, ntv);
 	}
 	else {
 		/* Plan other write event */
 		event_del (d->ev);
 		event_set (d->ev, fd, EV_WRITE, dispatcher_cb, (void *)d);
-		event_add (d->ev, d->tv);
+		ntv = memory_pool_alloc (d->pool, sizeof (struct timeval));
+		memcpy (ntv, d->tv, sizeof (struct timeval));
+		event_add (d->ev, ntv);
 	}
 }
 
@@ -257,6 +264,7 @@ dispatcher_cb (int fd, short what, void *arg)
 {
 	rspamd_io_dispatcher_t *d = (rspamd_io_dispatcher_t *)arg;
 	GError *err;
+	struct timeval *ntv;
 
 	msg_debug ("dispatcher_cb: in dispatcher callback, what: %d, fd: %d", (int)what, fd);
 
@@ -272,7 +280,9 @@ dispatcher_cb (int fd, short what, void *arg)
 			if (d->out_buffers == NULL) {
 				event_del (d->ev);
 				event_set (d->ev, fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
-				event_add (d->ev, d->tv);
+				ntv = memory_pool_alloc (d->pool, sizeof (struct timeval));
+				memcpy (ntv, d->tv, sizeof (struct timeval));
+				event_add (d->ev, ntv);
 			}
 			else {
 				write_buffers (fd, d);
@@ -293,6 +303,7 @@ rspamd_create_dispatcher (int fd, enum io_policy policy,
 							struct timeval *tv, void *user_data)
 {
 	rspamd_io_dispatcher_t *new;
+	struct timeval *ntv;
 
 	if (fd == -1) {
 		return NULL;
@@ -320,7 +331,9 @@ rspamd_create_dispatcher (int fd, enum io_policy policy,
 	new->fd = fd;
 
 	event_set (new->ev, fd, EV_WRITE, dispatcher_cb, (void *)new);
-	event_add (new->ev, new->tv);
+	ntv = memory_pool_alloc (new->pool, sizeof (struct timeval));
+	memcpy (ntv, new->tv, sizeof (struct timeval));
+	event_add (new->ev, ntv);
 
 	return new;
 }
@@ -378,6 +391,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 									size_t len, gboolean delayed, gboolean allocated)
 {
 	rspamd_buffer_t *newbuf;
+	struct timeval *ntv;
 
 	newbuf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
 	if (!allocated) {
@@ -401,7 +415,9 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 		msg_debug ("rspamd_dispatcher_write: plan write event");
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
-		event_add (d->ev, d->tv);
+		ntv = memory_pool_alloc (d->pool, sizeof (struct timeval));
+		memcpy (ntv, d->tv, sizeof (struct timeval));
+		event_add (d->ev, ntv);
 	}
 }
 

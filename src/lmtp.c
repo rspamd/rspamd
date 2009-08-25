@@ -294,6 +294,8 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;
 
+	gperf_profiler_init (worker->srv->cfg, "lmtp");
+
 	event_loop (0);
 	exit (EXIT_SUCCESS);
 }

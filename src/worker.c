@@ -48,10 +48,6 @@ extern PerlInterpreter *perl_interpreter;
 
 #ifdef WITH_GPERF_TOOLS
 #include <glib/gprintf.h>
-/* Declare prototypes */
-int ProfilerStart (u_char* fname);
-void ProfilerStop (void);
-void ProfilerRegisterThread (void);
 #endif
 
 static struct timeval io_tv;
@@ -343,29 +339,7 @@ start_worker (struct rspamd_worker *worker)
 	monstartup ((u_long) &_start, (u_long) &etext);
 #endif
 
-#ifdef WITH_GPERF_TOOLS
-	char prof_path[PATH_MAX];
-
-	if (getenv("CPUPROFILE")) {
-
-		/* disable inherited Profiler enabled in master process */
-		ProfilerStop ();
-	}
-	/* Try to create temp directory for gmon.out and chdir to it */
-	if (worker->srv->cfg->profile_path == NULL) {
-		worker->srv->cfg->profile_path = g_strdup_printf ("%s/rspamd-profile", worker->srv->cfg->temp_dir);
-	}
-
-	snprintf (prof_path, sizeof (prof_path), "%s.%d", worker->srv->cfg->profile_path, (int)getpid ());
-	if (ProfilerStart (prof_path)) {
-		/* start ITIMER_PROF timer */
-		ProfilerRegisterThread();
-	}
-	else {
-		msg_warn ("start_worker: cannot start google perftools profiler");
-	}
-
-#endif
+	gperf_profiler_init (worker->srv->cfg, "worker");
 
 	worker->srv->pid = getpid ();
 

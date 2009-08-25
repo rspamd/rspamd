@@ -627,8 +627,9 @@ start_controller (struct rspamd_worker *worker)
 
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);
-	
 
+	gperf_profiler_init (worker->srv->cfg, "controller");
+	
 	event_loop (0);
 
 	exit (EXIT_SUCCESS);

@@ -269,6 +269,10 @@
 #define HAVE_SETLOCALE 1
 #endif
 
+#ifdef WITH_GPERF_TOOLS
+#include <google/profiler.h>
+#endif
+
 #include <errno.h>
 #include <signal.h>
 #include <event.h>

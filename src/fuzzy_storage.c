@@ -478,6 +478,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
 
+	gperf_profiler_init (worker->srv->cfg, "fuzzy");
 
 	event_loop (0);
 	exit (EXIT_SUCCESS);
