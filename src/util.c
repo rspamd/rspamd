@@ -912,7 +912,7 @@ rspamd_strcase_hash (gconstpointer key)
 void 
 gperf_profiler_init (struct config_file *cfg, const char *descr)
 {
-#if defined(WITH_GPERF_TOOLS) && defined(MAIN_RSPAMD)
+#if defined(WITH_GPERF_TOOLS) && defined(RSPAMD_MAIN)
 	char prof_path[PATH_MAX];
 
 	if (getenv("CPUPROFILE")) {
