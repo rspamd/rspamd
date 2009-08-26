@@ -31,7 +31,7 @@
 #include "cfg_file.h"
 
 #define WEIGHT_MULT 2.0
-#define FREQUENCY_MULT 1.0
+#define FREQUENCY_MULT 100.0
 #define TIME_MULT -1.0
 
 /* After which number of messages try to resort cache */
@@ -41,6 +41,8 @@
  */
 
 #define MIN_CACHE 17
+
+uint64_t total_frequency;
 
 int
 cache_cmp (const void *p1, const void *p2)
@@ -55,12 +57,17 @@ cache_logic_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item *i1 = p1, *i2 = p2;
 	double w1, w2;
-
+	int f1 = 0, f2 = 0;
+	
+	if (total_frequency > 0) {
+		f1 = i1->s->frequency / total_frequency;
+		f2 = i2->s->frequency / total_frequency;
+	}
 	w1 = abs (i1->s->weight) * WEIGHT_MULT +
-		 i1->s->frequency * FREQUENCY_MULT + 
+		 f1 * FREQUENCY_MULT + 
 		 i1->s->avg_time * TIME_MULT;
 	w2 = abs (i2->s->weight) * WEIGHT_MULT +
-		 i2->s->frequency * FREQUENCY_MULT + 
+		 f2 * FREQUENCY_MULT + 
 		 i2->s->avg_time * TIME_MULT;
 	
 	return (int)w2 - w1;
@@ -105,6 +112,13 @@ get_mem_cksum (struct symbols_cache *cache)
 static void
 post_cache_init (struct symbols_cache *cache)
 {
+	int i;
+	
+	total_frequency = 0;
+	for (i = 0; i < cache->used_items; i ++) {
+		total_frequency += cache->items[i].s->frequency;
+	}
+
 	qsort (cache->items, cache->used_items, sizeof (struct cache_item), cache_logic_cmp);
 }
 
