@@ -42,7 +42,8 @@
 
 #define MIN_CACHE 17
 
-uint64_t total_frequency;
+static uint64_t total_frequency;
+static uint32_t nsymbols;
 
 int
 cache_cmp (const void *p1, const void *p2)
@@ -57,11 +58,11 @@ cache_logic_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item *i1 = p1, *i2 = p2;
 	double w1, w2;
-	int f1 = 0, f2 = 0;
+	double f1 = 0, f2 = 0;
 	
 	if (total_frequency > 0) {
-		f1 = i1->s->frequency / total_frequency;
-		f2 = i2->s->frequency / total_frequency;
+		f1 = ((double)i1->s->frequency * nsymbols) / (double)total_frequency;
+		f2 = ((double)i2->s->frequency * nsymbols) / (double)total_frequency;
 	}
 	w1 = abs (i1->s->weight) * WEIGHT_MULT +
 		 f1 * FREQUENCY_MULT + 
@@ -115,6 +116,7 @@ post_cache_init (struct symbols_cache *cache)
 	int i;
 	
 	total_frequency = 0;
+	nsymbols = cache->used_items;
 	for (i = 0; i < cache->used_items; i ++) {
 		total_frequency += cache->items[i].s->frequency;
 	}
