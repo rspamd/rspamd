@@ -303,7 +303,7 @@ decode_entitles (char *s)
 					else {
 						val = strtoul ((e + 3), &end_ptr, base);
 					}
-					if ((end_ptr != NULL && *end_ptr != ';') || !g_ascii_isalnum ((char)val)) {
+					if ((end_ptr != NULL && *end_ptr != ';') || (val == 0 || val > 127)) {
 						msg_info ("decode_entitles: invalid entitle code, cannot convert, strtoul returned %d, while reading %s", val, end_ptr);
 						/* Skip undecoded */
 						t = h;
@@ -388,13 +388,18 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			c++;
 		}
 
-		if (len == 0 || g_ascii_strncasecmp (c, "http://", sizeof ("http://") - 1) != 0) {
+		if (len == 0) {
 			return;
 		}
 		
 		url_text = memory_pool_alloc (task->task_pool, len + 1);
 		g_strlcpy (url_text, c, len + 1);
 		decode_entitles (url_text);
+
+        if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0) {
+            return;
+        }
+
 		url = memory_pool_alloc (task->task_pool, sizeof (struct uri));
 		rc = parse_uri (url, url_text, task->task_pool);
 
