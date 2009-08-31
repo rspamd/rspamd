@@ -57,7 +57,8 @@ static const char *text_url = "((https?|ftp)://)?"
 "|[a-z]{2}"
 "(?(1)|(?=/)))"
 "(?!\\w)"
-"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"
+"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))" /* ip in dotted view */
+"|\\d{5,20}(?(1)|(?=[/:]))" /* ip in numeric view */
 ")"
 "(?::\\d{1,5})?"	/* port */
 "(?!\\.\\w)" /* host part ended, no more of this further on */

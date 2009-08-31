@@ -37,6 +37,7 @@ struct surbl_ctx {
 	memory_pool_t *surbl_pool;
     GRegex *extract_hoster_regexp;
 	GRegex *extract_normal_regexp;
+	GRegex *extract_ip_regexp;
 	GRegex *extract_numeric_regexp;
 };
 
