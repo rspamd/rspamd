@@ -92,9 +92,9 @@ struct memcached_server {
 };
 
 /**
- * Perl module list item
+ * script module list item
  */
-struct perl_module {
+struct script_module {
 	char *path;										/**< path to module										*/
 };
 
@@ -140,7 +140,7 @@ struct statfile {
 };
 
 /**
- * Config option for importing to perl module
+ * Config option for importing to script module
  */
 struct config_scalar {
     void *pointer;									/**< pointer to data									*/
@@ -210,7 +210,7 @@ struct config_file {
 	char *deliver_agent_path;						/**< deliver to pipe instead of socket					*/
 	gboolean deliver_lmtp;							/**< use LMTP instead of SMTP							*/
 
-	GList *perl_modules;							/**< linked list of perl modules to load				*/
+	GList *script_modules;							/**< linked list of script modules to load				*/
 
 	GList *filters;									/**< linked list of all filters							*/
 	GList *workers;									/**< linked list of all workers params					*/

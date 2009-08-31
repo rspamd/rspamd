@@ -10,7 +10,7 @@
 #include "tokenizers/tokenizers.h"
 #include "view.h"
 #ifdef WITH_LUA
-#include "lua-rspamd.h"
+#include "lua/lua_common.h"
 #else
 #include "perl.h"
 #endif
@@ -460,18 +460,18 @@ requirecmd:
 	MODULE EQSIGN QUOTEDSTRING {
 #if !defined(WITHOUT_PERL) || defined(WITH_LUA)
 		struct stat st;
-		struct perl_module *cur;
+		struct script_module *cur;
 		if (stat ($3, &st) == -1) {
 			yyerror ("yyparse: cannot stat file %s, %s", $3, strerror (errno));
 			YYERROR;
 		}
-		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct perl_module));
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
 		if (cur == NULL) {
 			yyerror ("yyparse: g_malloc: %s", strerror(errno));
 			YYERROR;
 		}
 		cur->path = $3;
-		cfg->perl_modules = g_list_prepend (cfg->perl_modules, cur);
+		cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
 #else
 		yyerror ("require command is not available when perl support is not compiled");
 		YYERROR;

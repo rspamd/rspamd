@@ -22,93 +22,27 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "url.h"
-#include "main.h"
-#include "message.h"
-#include "lua-rspamd.h"
-#include "cfg_file.h"
-
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
+#include "lua_common.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
 
-/* Interface definitions */
-#define LUA_FUNCTION_DEF(class, name) static int lua_##class##_##name(lua_State *L)
-#define LUA_INTERFACE_DEF(class, name) { #name, lua_##class##_##name }
-
-#define LUA_GMIME_BRIDGE_GET(class, name, mime_class)									\
-static int																				\
-lua_##class##_##name(lua_State *L)														\
-{																						\
-	GMime##mime_class *obj = lua_check_##class(L);										\
-	if (obj != NULL) {																	\
-		lua_pushstring (L, g_mime_##class##_##name(obj));								\
-	}																					\
-	else {																				\
-		lua_pushnil (L);																\
-	}																					\
-	return 1;																			\
-}																			
-
-#define LUA_GMIME_BRIDGE_SET(class, name, mime_class)									\
-static int																				\
-lua_##class##_##name(lua_State *L)														\
-{																						\
-	const char *str;																	\
-	GMime##mime_class *obj = lua_check_##class(L);										\
-	if (obj != NULL) {																	\
-		str = luaL_checkstring (L, 2);													\
-		g_mime_##class##_##name(obj, str);												\
-	}																					\
-	else {																				\
-		lua_pushnil (L);																\
-	}																					\
-	return 1;																			\
-}																			
-
 lua_State *L = NULL;
 
-/* Task methods */
-LUA_FUNCTION_DEF(task, get_message);
-LUA_FUNCTION_DEF(task, insert_result);
-LUA_FUNCTION_DEF(task, get_urls);
+/* Logger methods */
+LUA_FUNCTION_DEF(logger, err);
+LUA_FUNCTION_DEF(logger, warn);
+LUA_FUNCTION_DEF(logger, info);
+LUA_FUNCTION_DEF(logger, debug);
 
-static const struct luaL_reg tasklib_m[] = {
-	LUA_INTERFACE_DEF(task, get_message),
-	LUA_INTERFACE_DEF(task, insert_result),
-	LUA_INTERFACE_DEF(task, get_urls),
-	{NULL, NULL},
+static const struct luaL_reg loggerlib_m[] = {
+    LUA_INTERFACE_DEF(logger, err),
+    LUA_INTERFACE_DEF(logger, warn),
+    LUA_INTERFACE_DEF(logger, info),
+    LUA_INTERFACE_DEF(logger, debug),
+    {NULL, NULL}
 };
 
-/*  Message methods */
-LUA_FUNCTION_DEF(message, get_subject);
-LUA_FUNCTION_DEF(message, set_subject);
-LUA_FUNCTION_DEF(message, get_message_id);
-LUA_FUNCTION_DEF(message, set_message_id);
-LUA_FUNCTION_DEF(message, get_sender);
-LUA_FUNCTION_DEF(message, set_sender);
-LUA_FUNCTION_DEF(message, get_reply_to);
-LUA_FUNCTION_DEF(message, set_reply_to);
-LUA_FUNCTION_DEF(message, get_header);
-LUA_FUNCTION_DEF(message, set_header);
-
-static const struct luaL_reg msglib_m[] = {
-	LUA_INTERFACE_DEF(message, get_subject),
-	LUA_INTERFACE_DEF(message, set_subject),
-	LUA_INTERFACE_DEF(message, get_message_id),
-	LUA_INTERFACE_DEF(message, set_message_id),
-	LUA_INTERFACE_DEF(message, get_sender),
-	LUA_INTERFACE_DEF(message, set_sender),
-	LUA_INTERFACE_DEF(message, get_reply_to),
-	LUA_INTERFACE_DEF(message, set_reply_to),
-	LUA_INTERFACE_DEF(message, get_header),
-	LUA_INTERFACE_DEF(message, set_header),
-	{NULL, NULL}
-};
 
 void 
 lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func) 
@@ -141,155 +75,55 @@ void lua_setclass (lua_State *L, const char *classname, int objidx)
 	lua_setmetatable (L, objidx);
 }
 
-static struct worker_task *
-lua_check_task (lua_State *L) 
-{
-	void *ud = luaL_checkudata (L, 1, "Rspamd.task");
-	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	return (struct worker_task *)ud;
-}
 
-static GMimeMessage *
-lua_check_message (lua_State *L)
-{
-	void *ud = luaL_checkudata (L, 1, "Rspamd.message");
-	luaL_argcheck (L, ud != NULL, 1, "'message' expected");
-	return (GMimeMessage *)ud;
-}
-/*** Task interface	***/
+
+/*** Logger interface ***/
 static int
-lua_task_get_message (lua_State *L)
+lua_logger_err (lua_State *L)
 {
-	GMimeMessage **pmsg;
-	struct worker_task *task = lua_check_task (L);
-
-	if (task != NULL) {
-		/* XXX write handler for message object */
-		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
-		lua_setclass (L, "Rspamd.message", -1);
-		*pmsg = task->message;
-	}
-	return 1;
-}
-
-static int 
-lua_task_insert_result (lua_State *L)
-{
-	struct worker_task *task = lua_check_task (L);
-	const char *metric_name, *symbol_name;
-	double flag;
-
-	if (task != NULL) {
-		metric_name = luaL_checkstring (L, 2);
-		symbol_name = luaL_checkstring (L, 3);
-		flag = luaL_checknumber (L, 4);
-		insert_result (task, metric_name, symbol_name, flag, NULL);
-	}
-	return 1;
-}
-
-static int 
-lua_task_get_urls (lua_State *L)
-{
-	struct worker_task *task = lua_check_task (L);
-	struct uri *url;
-
-	if (task != NULL) {
-		TAILQ_FOREACH (url, &task->urls, next) {	
-			lua_pushstring (L, struri (url));	
-		}
-	}
-	return 1;
-}
-
-/*** Message interface	***/
-
-LUA_GMIME_BRIDGE_GET(message, get_subject, Message)
-LUA_GMIME_BRIDGE_SET(message, set_subject, Message)
-LUA_GMIME_BRIDGE_GET(message, get_message_id, Message)
-LUA_GMIME_BRIDGE_SET(message, set_message_id, Message)
-LUA_GMIME_BRIDGE_GET(message, get_sender, Message)
-LUA_GMIME_BRIDGE_SET(message, set_sender, Message)
-LUA_GMIME_BRIDGE_GET(message, get_reply_to, Message)
-LUA_GMIME_BRIDGE_SET(message, set_reply_to, Message)
-
-static int
-lua_message_get_header (lua_State *L)
-{
-	const char *headern;
-	GMimeMessage *obj = lua_check_message (L);
-	GList *res = NULL, *cur;
-
-	if (obj != NULL) {
-		headern = luaL_checkstring (L, 2);
-		if (headern) {
-			res = message_get_header (NULL, obj, headern);
-			if (res) {
-				cur = res;
-				while (cur) {
-					lua_pushstring (L, (const char *)cur->data);
-					g_free (cur->data);
-					cur = g_list_next (cur);
-				}
-				g_free (res);
-			}
-			else {
-				lua_pushnil (L);
-			}
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
+    const char *msg;
+    msg = luaL_checkstring (L, 2);
+    msg_err (msg);
+    return 1;
 }
 
 static int
-lua_message_set_header (lua_State *L)
+lua_logger_warn (lua_State *L)
 {
-	const char *headern, *headerv;
-	GMimeMessage *obj = lua_check_message (L);
-
-	if (obj != NULL) {
-		headern = luaL_checkstring (L, 2);
-		headerv = luaL_checkstring (L, 3);
-		if (headern && headerv) {
-			message_set_header (obj, headern, headerv);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-	
-	return 1;
+    const char *msg;
+    msg = luaL_checkstring (L, 2);
+    msg_warn (msg);
+    return 1;
 }
+
+static int
+lua_logger_info (lua_State *L)
+{
+    const char *msg;
+    msg = luaL_checkstring (L, 2);
+    msg_info (msg);
+    return 1;
+}
+
+static int
+lua_logger_debug (lua_State *L)
+{
+    const char *msg;
+    msg = luaL_checkstring (L, 2);
+    msg_debug (msg);
+    return 1;
+}
+
 
 /*** Init functions ***/
-static int
-luaopen_task (lua_State *L)
-{
-	lua_newclass (L, "Rspamd.task", tasklib_m);
-    
-	luaL_openlib (L, "task", tasklib_m, 0);
-    
-	return 1;
-}
 
-static int
-luaopen_message (lua_State *L)
+int
+luaopen_logger (lua_State *L)
 {
-	lua_newclass (L, "Rspamd.message", msglib_m);
-    
-	luaL_openlib (L, "message", msglib_m, 0);
-    
-	return 1;
+    lua_newclass (L, "Rspamd.logger", loggerlib_m);
+	luaL_openlib (L, "logger", loggerlib_m, 0);
+
+    return 1;
 }
 
 static void
@@ -301,19 +135,23 @@ init_lua ()
 
 		luaopen_task (L);
 		luaopen_message (L);
+        luaopen_logger (L);
 	}
 }
 
 void
 init_lua_filters (struct config_file *cfg)
 {
-	struct perl_module *module;
 	char *init_func;
 	size_t funclen;
 	struct config_file **pcfg;
+	GList *cur;
+	struct script_module *module;
 	
 	init_lua ();
-	LIST_FOREACH (module, &cfg->perl_modules, next) {
+	cur = g_list_first (cfg->script_modules);
+	while (cur) {
+		module = cur->data;
 		if (module->path) {
 			luaL_loadfile (L, module->path);
 
@@ -321,7 +159,7 @@ init_lua_filters (struct config_file *cfg)
 			funclen = strlen (module->path) + sizeof (":") + sizeof (MODULE_INIT_FUNC) - 1;
 			init_func = g_malloc (funclen);
 			snprintf (init_func, funclen, "%s:%s", module->path, MODULE_INIT_FUNC);
-			lua_getglobal (L, init_func);
+            lua_getglobal (L, init_func);
 			pcfg = lua_newuserdata (L, sizeof (struct config_file *));
 			lua_setclass (L, "Rspamd.config", -1);
 			*pcfg = cfg;
@@ -330,9 +168,11 @@ init_lua_filters (struct config_file *cfg)
 				msg_info ("lua_init_filters: call to %s failed", init_func);
 			}
 		}
+		cur = g_list_next (cur);
 	}
 }
 
+/* Callback functions */
 
 int
 lua_call_filter (const char *function, struct worker_task *task)
@@ -346,12 +186,12 @@ lua_call_filter (const char *function, struct worker_task *task)
 	*ptask = task;
 	
 	if (lua_pcall (L, 1, 1, 0) != 0) {
-		msg_info ("lua_init_filters: call to %s failed", function);
+		msg_info ("lua_call_filter: call to %s failed", function);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("lua_call_header_filter: function %s must return a number", function);
+		msg_info ("lua_call_filter: function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);  /* pop returned value */

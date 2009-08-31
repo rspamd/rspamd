@@ -41,7 +41,7 @@
 #include "perl.h"
 
 #elif defined(WITH_LUA)
-#include "lua-rspamd.h"
+#include "lua/lua_common.h"
 #endif
 
 /* 2 seconds to fork new process in place of dead one */

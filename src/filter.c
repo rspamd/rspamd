@@ -41,7 +41,7 @@
 #include "perl.h"
 #endif
 #ifdef WITH_LUA
-#include "lua-rspamd.h"
+#include "lua/lua_common.h"
 #endif
 
 void
