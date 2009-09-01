@@ -37,6 +37,14 @@ static const struct luaL_reg configlib_m[] = {
     {NULL, NULL}
 };
 
+/* Metric methods */
+LUA_FUNCTION_DEF(metric, register_symbol);
+
+static const struct luaL_reg metriclib_m[] = {
+	LUA_INTERFACE_DEF(metric, register_symbol),
+	{NULL, NULL}
+};
+
 static struct config_file *
 lua_check_config (lua_State *L)
 {
@@ -45,6 +53,13 @@ lua_check_config (lua_State *L)
 	return (struct config_file *)ud;
 }
 
+static struct metric *
+lua_check_metric (lua_State *L)
+{
+	void *ud = luaL_checkudata (L, 1, "Rspamd.metric");
+	luaL_argcheck (L, ud != NULL, 1, "'metric' expected");
+	return (struct metric *)ud;
+}
 
 /*** Config functions ***/
 static int
@@ -70,6 +85,38 @@ lua_config_get_module_opt (lua_State *L)
 }
 
 static int
+lua_config_get_all_opt (lua_State *L)
+{
+    struct config_file *cfg = lua_check_config (L);
+    const char *mname;
+	GList *cur_opt;
+	struct module_opt *cur;
+
+    if (cfg) {
+        mname = luaL_checkstring (L, 2);
+
+        if (mname) {	
+			cur_opt = g_hash_table_lookup (cfg->modules_opts, mname);
+			if (cur_opt == NULL) {
+				lua_pushnil (L);
+				return 1;
+			}
+	
+			lua_newtable (L);
+			while (cur_opt) {
+				cur = cur_opt->data;
+				lua_set_table_index (L, cur->param, cur->value);
+				cur_opt = g_list_next (cur_opt);
+			}
+			return 1;
+        }
+    }
+    lua_pushnil (L);
+    return 1;
+}
+
+
+static int
 lua_config_get_metric (lua_State *L)
 {
     struct config_file *cfg = lua_check_config (L);
@@ -83,11 +130,58 @@ lua_config_get_metric (lua_State *L)
             pmetric = lua_newuserdata (L, sizeof (struct metric *));
 		    lua_setclass (L, "Rspamd.metric", -1);
 		    *pmetric = metric;
+			return 1;
         }
     }
+
     lua_pushnil (L);
     return 1;
     
+}
+
+/*** Metric functions ***/
+
+struct lua_callback_data {
+	const char *name;
+	lua_State *L;
+};
+
+static void
+lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
+{
+	struct lua_callback_data *cd = ud;
+	struct worker_task **ptask;
+
+	lua_getglobal (cd->L, cd->name);
+	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+	lua_setclass (cd->L, "Rspamd.task", -1);
+	*ptask = task;
+
+	if (lua_pcall(cd->L, 1, 1, 0) != 0) {
+        msg_warn ("lua_metric_symbol_callback: error running function %s: %s",
+					cd->name, lua_tostring(cd->L, -1));
+	}
+}
+
+static int
+lua_metric_register_symbol (lua_State *L)
+{
+	struct metric *metric = lua_check_metric (L);
+	const char *name, *callback;
+	double weight;
+	struct lua_callback_data *cd;
+
+	if (metric) {
+		name = luaL_checkstring (L, 2);
+		weight = luaL_checknumber (L, 3);
+		callback = luaL_checkstring (L, 4);
+		if (name) {
+			cd = g_malloc (sizeof (struct lua_callback_data));
+			cd->name = g_strdup (name);
+			register_symbol (&metric->cache, name, weight, lua_metric_symbol_callback, cd);
+		}
+	}
+	return 1;
 }
 
 int
@@ -99,3 +193,11 @@ luaopen_config (lua_State *L)
     return 1;
 }
 
+int
+luaopen_metric (lua_State *L)
+{
+    lua_newclass (L, "Rspamd.metric", configlib_m);
+	luaL_openlib (L, "metric", configlib_m, 0);
+
+    return 1;
+}

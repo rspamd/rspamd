@@ -162,6 +162,7 @@ lua_message_set_header (lua_State *L)
 	return 1;
 }
 
+
 int
 luaopen_message (lua_State *L)
 {
@@ -170,3 +171,4 @@ luaopen_message (lua_State *L)
     
 	return 1;
 }
+

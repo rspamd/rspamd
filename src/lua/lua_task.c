@@ -24,25 +24,51 @@
 
 
 #include "lua_common.h"
+#include "../message.h"
 
 /* Task methods */
 LUA_FUNCTION_DEF(task, get_message);
 LUA_FUNCTION_DEF(task, insert_result);
 LUA_FUNCTION_DEF(task, get_urls);
+LUA_FUNCTION_DEF(task, get_text_parts);
 
 static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_message),
 	LUA_INTERFACE_DEF(task, insert_result),
 	LUA_INTERFACE_DEF(task, get_urls),
+	LUA_INTERFACE_DEF(task, get_text_parts),
 	{NULL, NULL}
 };
 
+/* Textpart methods */
+LUA_FUNCTION_DEF(textpart, get_content);
+LUA_FUNCTION_DEF(textpart, is_empty);
+LUA_FUNCTION_DEF(textpart, is_html);
+LUA_FUNCTION_DEF(textpart, get_fuzzy);
+
+static const struct luaL_reg textpartlib_m[] = {
+	LUA_INTERFACE_DEF(textpart, get_content),
+	LUA_INTERFACE_DEF(textpart, is_empty),
+	LUA_INTERFACE_DEF(textpart, is_html),
+	LUA_INTERFACE_DEF(textpart, get_fuzzy),
+	{NULL, NULL}
+};
+
+/* Utility functions */
 static struct worker_task *
 lua_check_task (lua_State *L) 
 {
 	void *ud = luaL_checkudata (L, 1, "Rspamd.task");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
 	return (struct worker_task *)ud;
+}
+
+static struct mime_text_part *
+lua_check_textpart (lua_State *L)
+{
+	void *ud = luaL_checkudata (L, 1, "Rspamd.textpart");
+	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
+	return (struct mime_text_part *)ud;
 }
 
 /*** Task interface	***/
@@ -96,12 +122,104 @@ lua_task_get_urls (lua_State *L)
 	return 1;
 }
 
+static int
+lua_task_get_text_parts (lua_State *L)
+{
 
+	struct worker_task *task = lua_check_task (L);
+	GList *cur;
+	struct mime_text_part *part, **ppart;
+
+	if (task != NULL) {
+		cur = task->text_parts;
+		while (cur) {
+			part = cur->data;
+			ppart = lua_newuserdata (L, sizeof (struct mime_text_part *));
+			lua_setclass (L, "Rspamd.textpart", -1);
+			*ppart = part;
+			cur = g_list_next (cur);
+		}
+	}
+	lua_pushnil (L);
+	return 1;
+}
+
+/**** Textpart implementation *****/
+
+static int
+lua_textpart_get_content (lua_State *L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+
+	if (part == NULL || part->is_empty) {
+		lua_pushnil (L);
+		return 1;
+	}
+	
+	lua_pushlstring (L, part->content->data, part->content->len);
+
+	return 1;
+}
+
+static int
+lua_textpart_is_empty (lua_State *L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	lua_pushboolean (L, part->is_empty);
+
+	return 1;
+}
+
+static int
+lua_textpart_is_html (lua_State *L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	lua_pushboolean (L, part->is_html);
+
+	return 1;
+}
+
+static int
+lua_textpart_get_fuzzy (lua_State *L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+
+	if (part == NULL || part->is_empty) {
+		lua_pushnil (L);
+		return 1;
+	}
+	
+	lua_pushlstring (L, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+	return 1;
+}
+
+/* Init part */
 int
 luaopen_task (lua_State *L)
 {
 	lua_newclass (L, "Rspamd.task", tasklib_m);
 	luaL_openlib (L, "task", tasklib_m, 0);
+    
+	return 1;
+}
+
+int
+luaopen_textpart (lua_State *L)
+{
+	lua_newclass (L, "Rspamd.textpart", textpartlib_m);
+	luaL_openlib (L, "textpart", textpartlib_m, 0);
     
 	return 1;
 }

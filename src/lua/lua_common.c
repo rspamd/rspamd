@@ -43,7 +43,7 @@ static const struct luaL_reg loggerlib_m[] = {
     {NULL, NULL}
 };
 
-
+/* Util functions */
 void 
 lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func) 
 {
@@ -66,7 +66,8 @@ lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func)
 	lua_pop (L, 1);
 }
 
-void lua_setclass (lua_State *L, const char *classname, int objidx) 
+void 
+lua_setclass (lua_State *L, const char *classname, int objidx) 
 {
 	luaL_getmetatable (L, classname);
 	if (objidx < 0) {
@@ -75,6 +76,15 @@ void lua_setclass (lua_State *L, const char *classname, int objidx)
 	lua_setmetatable (L, objidx);
 }
 
+/* assume that table is at the top */
+void 
+lua_set_table_index (lua_State *L, const char *index, const char *value) 
+{
+
+	lua_pushstring (L, index);
+	lua_pushstring (L, value);
+	lua_settable(L, -3);
+}
 
 
 /*** Logger interface ***/

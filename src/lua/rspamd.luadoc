@@ -1,0 +1,100 @@
+--- Rspamd interaction package
+-- contains several subclasses:
+-- config - for parsing config files
+-- metric - for handling metrics callbacks
+-- task - for interaction with task object
+-- message - gate to GMime functions
+-- textpart - a single textual part of message
+module Rspamd
+
+--- Each lua module MUST have init function that is called after config file was read:
+-- it should be like
+-- function module:module_init(cfg)
+
+------------------------------------- CONFIG -----------------------------------------
+--
+--- Get module option from config
+-- @param mname module name
+-- @param option option
+-- @return string with value
+function config:get_module_opt (mname, option)
+
+--- Get all module options as a table like ['param' => 'value']
+-- @param mname module name
+-- @return table with options
+function config:get_all_opt (mname)
+
+--- Get specified metric
+-- @param name metric name
+-- @return metric object
+function config:get_metric (name)
+
+------------------------------------- METRIC -----------------------------------------
+
+--- Register symbol in metric
+-- @param symbol name of symbol
+-- @param weight weight of symbol
+-- @param callback fucntion that would be called as callback for symbol
+function metric:register_symbol (symbol, weight, callback)
+
+------------------------------------- TASK -------------------------------------------
+
+--- Get message object from task
+-- @return message object
+function task:get_message ()
+
+--- Insert result to specified metric with specified weight (obsoleted)
+-- @param metric metric name
+-- @param symbol symbol name
+-- @param weight weight of symbol
+function task:insert_result (metric, symbol, weight)
+
+--- Get all urls as array
+-- @return array of urls in textual form
+function task:get_urls ()
+
+--- Get all text parts
+-- @return array of textpart objects
+function task:get_text_parts ()
+
+------------------------------------- TEXTPART ---------------------------------------
+
+--- Get part's content
+-- @return string that contains part's content
+function textpart:get_content ()
+
+--- Check if part is empty
+-- @return boolean value
+function textpart:is_empty ()
+
+--- Check if part is html
+-- @return boolean value
+function textpart:is_html ()
+
+--- Get part's fuzzy
+-- @return string that contains part's fuzzy
+function textpart:get_fuzzy ()
+
+------------------------------------- MESSAGE ----------------------------------------
+
+--- Get message subject
+-- @return message subject
+function message:get_subject ()
+
+--- Get message id
+-- @return message id
+function message:get_message_id ()
+
+--- Get sender of message
+-- @return sender's credits
+function message:get_sender ()
+
+--- Get reply-to field
+-- @return value of reply-to header
+function message:get_reply_to ()
+
+--- Get header
+-- @param header_name name of header
+-- @return array of headers with specified name
+function message:get_header (header_name)
+
