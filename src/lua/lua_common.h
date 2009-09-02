@@ -19,6 +19,7 @@ int luaopen_message (lua_State *L);
 int luaopen_task (lua_State *L);
 int luaopen_config (lua_State *L);
 int luaopen_metric (lua_State *L);
+int luaopen_textpart (lua_State *L);
 void init_lua_filters (struct config_file *cfg);
 
 int lua_call_filter (const char *function, struct worker_task *task);

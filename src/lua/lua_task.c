@@ -60,7 +60,7 @@ lua_check_task (lua_State *L)
 {
 	void *ud = luaL_checkudata (L, 1, "Rspamd.task");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	return (struct worker_task *)ud;
+	return *((struct worker_task **)ud);
 }
 
 static struct mime_text_part *
@@ -68,7 +68,7 @@ lua_check_textpart (lua_State *L)
 {
 	void *ud = luaL_checkudata (L, 1, "Rspamd.textpart");
 	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
-	return (struct mime_text_part *)ud;
+	return *((struct mime_text_part **)ud);
 }
 
 /*** Task interface	***/

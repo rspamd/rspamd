@@ -50,7 +50,7 @@ lua_check_config (lua_State *L)
 {
 	void *ud = luaL_checkudata (L, 1, "Rspamd.config");
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
-	return (struct config_file *)ud;
+	return *((struct config_file **)ud);
 }
 
 static struct metric *
@@ -58,7 +58,7 @@ lua_check_metric (lua_State *L)
 {
 	void *ud = luaL_checkudata (L, 1, "Rspamd.metric");
 	luaL_argcheck (L, ud != NULL, 1, "'metric' expected");
-	return (struct metric *)ud;
+	return *((struct metric **)ud);
 }
 
 /*** Config functions ***/

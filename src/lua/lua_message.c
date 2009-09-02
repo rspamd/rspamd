@@ -89,7 +89,7 @@ lua_check_message (lua_State *L)
 {
 	void *ud = luaL_checkudata (L, 1, "Rspamd.message");
 	luaL_argcheck (L, ud != NULL, 1, "'message' expected");
-	return (GMimeMessage *)ud;
+	return *((GMimeMessage **)ud);
 }
 
 

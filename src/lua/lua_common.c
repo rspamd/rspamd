@@ -146,14 +146,15 @@ init_lua ()
 		luaopen_task (L);
 		luaopen_message (L);
         luaopen_logger (L);
+        luaopen_config (L);
+        luaopen_metric (L);
+        luaopen_textpart (L);
 	}
 }
 
 void
 init_lua_filters (struct config_file *cfg)
 {
-	char *init_func;
-	size_t funclen;
 	struct config_file **pcfg;
 	GList *cur;
 	struct script_module *module;
@@ -163,19 +164,20 @@ init_lua_filters (struct config_file *cfg)
 	while (cur) {
 		module = cur->data;
 		if (module->path) {
-			luaL_loadfile (L, module->path);
+			if (luaL_loadfile (L, module->path) != 0) {
+				msg_info ("lua_init_filters: load of %s failed: %s", module->path, lua_tostring (L, -1));
+		        cur = g_list_next (cur);
+                continue;
+            }
 
 			/* Call module init function */
-			funclen = strlen (module->path) + sizeof (":") + sizeof (MODULE_INIT_FUNC) - 1;
-			init_func = g_malloc (funclen);
-			snprintf (init_func, funclen, "%s:%s", module->path, MODULE_INIT_FUNC);
-            lua_getglobal (L, init_func);
 			pcfg = lua_newuserdata (L, sizeof (struct config_file *));
 			lua_setclass (L, "Rspamd.config", -1);
 			*pcfg = cfg;
+            lua_setglobal (L, "rspamd_config");
 			/* do the call (1 arguments, 1 result) */
-			if (lua_pcall (L, 1, 1, 0) != 0) {
-				msg_info ("lua_init_filters: call to %s failed", init_func);
+            if (lua_pcall(L, 0, LUA_MULTRET, 0) != 0) {
+				msg_info ("lua_init_filters: init of %s failed: %s", module->path, lua_tostring (L, -1));
 			}
 		}
 		cur = g_list_next (cur);

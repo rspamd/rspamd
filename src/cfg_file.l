@@ -51,7 +51,10 @@ connect_timeout					return CONNECT_TIMEOUT;
 protocol						return PROTOCOL;
 memcached						return MEMCACHED;
 servers							return SERVERS;
+
 require							return REQUIRE;
+module                          return MODULE;
+
 filters							return FILTERS;
 factors							return FACTORS;
 metric							return METRIC;

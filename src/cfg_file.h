@@ -95,6 +95,7 @@ struct memcached_server {
  * script module list item
  */
 struct script_module {
+    char *name;                                     /**< name of module                                     */
 	char *path;										/**< path to module										*/
 };
 
