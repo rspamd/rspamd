@@ -30,15 +30,16 @@
 static void *radix_alloc (radix_tree_t *tree);
 
 radix_tree_t *
-radix_tree_create (memory_pool_t *pool)
+radix_tree_create ()
 {
 	radix_tree_t  *tree;
 
-	tree = memory_pool_alloc (pool, sizeof(radix_tree_t));
+	tree = g_malloc (sizeof(radix_tree_t));
 	if (tree == NULL) {
 		return NULL;
 	}
-
+    
+    tree->pool = memory_pool_new (memory_pool_get_size ());
 	tree->size = 0;
 
 	tree->root = radix_alloc (tree);
@@ -50,7 +51,6 @@ radix_tree_create (memory_pool_t *pool)
 	tree->root->left = NULL;
 	tree->root->parent = NULL;
 	tree->root->value = RADIX_NO_VALUE;
-	tree->pool = pool;
 	
 	return tree;
 }
@@ -228,37 +228,10 @@ radix_alloc (radix_tree_t *tree)
 void
 radix_tree_free (radix_tree_t *tree) 
 {
-	radix_node_t  *node, *tmp;
-
-	node = tree->root;
-
-	for (;;) {
-		/* We are at the trie root and we have no more leaves, end of algorithm */
-		if (!node->left && !node->right && !node->parent) {
-			break;
-		}
-
-		/* Traverse to the end of trie */
-		while (node->left || node->right) {
-			if (node->left) {
-				node = node->left;
-			}
-			else {
-				node = node->right;
-			}
-		}
-		/* Found leaf node, free it */
-		if (node->parent->right == node) {
-			node->parent->right = NULL;
-
-		} else {
-			node->parent->left = NULL;
-		}
-
-		tmp = node;
-		/* Go up */
-		node = node->parent;
-	}
+    
+	g_return_if_fail (tree != NULL);
+	memory_pool_delete (tree->pool);
+	g_free (tree);
 }
 
 /* 

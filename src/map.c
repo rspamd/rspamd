@@ -317,7 +317,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 		def = map_line + sizeof ("file://") - 1;
 	}
 	else {
-		msg_err ("add_map: invalid map fetching protocol: %s", map_line);
+		msg_debug ("add_map: invalid map fetching protocol: %s", map_line);
 		return FALSE;
 	}
 	/* Constant pool */
@@ -419,7 +419,7 @@ abstract_parse_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_
 				if (*p == '#') {
 					if (s != str) {
 						*s = '\0';
-						s = memory_pool_strdup (pool, str);
+						s = memory_pool_strdup (pool, g_strstrip (str));
 						if (strlen (s) > 0) {
 							func (data->cur_data, s, hash_fill);
 						}
@@ -431,7 +431,7 @@ abstract_parse_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_
 				else if (*p == '\r' || *p == '\n') {
 					if (s != str) {
 						*s = '\0';
-						s = memory_pool_strdup (pool, str);
+						s = memory_pool_strdup (pool, g_strstrip (str));
 						if (strlen (s) > 0) {
 							func (data->cur_data, s, hash_fill);
 						}
@@ -441,9 +441,6 @@ abstract_parse_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_
 					while (*p == '\r' || *p == '\n') {
 						p ++;
 					}
-				}
-				else if (g_ascii_isspace (*p)) {
-					p ++;
 				}
 				else {
 					*s = *p;
@@ -480,38 +477,52 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 
 	uint32_t mask = 0xFFFFFFFF;
 	uint32_t ip;
-	char *token, *ipnet;
+	char *token, *ipnet, *err_str, **strv, **cur;
 	struct in_addr ina;
 	int k;
 	
-	k = strlen ((char *)key) + 1;
-	ipnet = alloca (k);
-	g_strlcpy (ipnet, key, k);
-	token = strsep (&ipnet, "/");
-
-	if (ipnet != NULL) {
-		k = atoi (ipnet);
-		if (k > 32 || k < 0) {
-			msg_warn ("radix_tree_insert_helper: invalid netmask value: %d", k);
-			k = 32;
+    strv = g_strsplit_set ((char *)key, " ,;", 0);
+	cur = strv;
+    while (*cur) {
+		if (**cur == '\0') {
+			cur ++;
+			continue;
 		}
-		k = 32 - k;
-		mask = mask << k;
+		ipnet = *cur;
+		token = strsep (&ipnet, "/");
+
+		if (ipnet != NULL) {
+			errno = 0;
+			k = strtoul (ipnet, &err_str, 10);
+			if (errno != 0) {
+				msg_warn ("radix_tree_insert_helper: invalid netmask, error detected on symbol: %s, erorr: %s", err_str, strerror (errno));
+				k = 32;
+			}
+			else if (k > 32 || k < 0) {
+				msg_warn ("radix_tree_insert_helper: invalid netmask value: %d", k);
+				k = 32;
+			}
+			k = 32 - k;
+			mask = mask << k;
+		}
+
+		if (inet_aton (token, &ina) == 0) {
+			msg_err ("radix_tree_insert_helper: invalid ip address: %s", token);
+			return;
+		}
+
+		ip = ntohl ((uint32_t)ina.s_addr);
+		k = radix32tree_insert (tree, ip, mask, 1);
+		if (k == -1) {
+			msg_warn ("radix_tree_insert_helper: cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
+		}
+		else if (k == 1) {
+			msg_warn ("add_ip_radix: ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
+		}
+		cur ++;
 	}
 
-	if (inet_aton (token, &ina) == 0) {
-		msg_err ("radix_tree_insert_helper: invalid ip address: %s", token);
-		return;
-	}
-
-	ip = ntohl ((uint32_t)ina.s_addr);
-	k = radix32tree_insert (tree, ip, mask, 1);
-	if (k == -1) {
-		msg_warn ("radix_tree_insert_helper: cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
-	}
-	else if (k == 1) {
-		msg_warn ("add_ip_radix: ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
-	}
+	g_strfreev (strv);
 }
 
 u_char *

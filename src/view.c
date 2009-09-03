@@ -93,7 +93,7 @@ add_view_symbols (struct rspamd_view *view, char *line)
 gboolean 
 add_view_ip (struct rspamd_view *view, char *line)
 {
-	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->symbols_hash)) {
+	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
 		return TRUE;
 	}
 

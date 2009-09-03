@@ -60,7 +60,13 @@ pool_chain_new (memory_pool_ssize_t size)
 	g_assert (size > 0);
 
 	chain = g_slice_alloc (sizeof (struct _pool_chain));
+
+    g_assert (chain != NULL);
+
 	chain->begin = g_slice_alloc (size);
+
+    g_assert (chain->begin != NULL);
+
 	chain->len = size;
 	chain->pos = chain->begin;
 	chain->next = NULL;
@@ -78,10 +84,9 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 
 #if defined(HAVE_MMAP_ANON)
 	chain = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ|PROT_WRITE, MAP_ANON|MAP_SHARED, -1, 0);
+	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *)chain) + sizeof (struct _pool_chain_shared);
-	if (chain == MAP_FAILED) {
-		return NULL;
-	}
+	g_assert (chain->begin != MAP_FAILED);
 #elif defined(HAVE_MMAP_ZERO)
 	int fd;
 
@@ -90,10 +95,9 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 		return NULL;
 	}
 	chain = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *)chain) + sizeof (struct _pool_chain_shared);
-	if (chain == MAP_FAILED) {
-		return NULL;
-	}
+	g_assert (chain->begin != MAP_FAILED);
 #else
 #	error No mmap methods are defined
 #endif
@@ -138,6 +142,8 @@ memory_pool_new (memory_pool_ssize_t size)
 	}
 
 	new = g_slice_alloc (sizeof (memory_pool_t));
+    g_assert (new != NULL);
+
 	new->cur_pool = pool_chain_new (size);
 	new->shared_pool = NULL;
 	new->first_pool = new->cur_pool;
