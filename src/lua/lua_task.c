@@ -58,7 +58,7 @@ static const struct luaL_reg textpartlib_m[] = {
 static struct worker_task *
 lua_check_task (lua_State *L) 
 {
-	void *ud = luaL_checkudata (L, 1, "Rspamd.task");
+	void *ud = luaL_checkudata (L, 1, "rspamd{task}");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
 	return *((struct worker_task **)ud);
 }
@@ -66,7 +66,7 @@ lua_check_task (lua_State *L)
 static struct mime_text_part *
 lua_check_textpart (lua_State *L)
 {
-	void *ud = luaL_checkudata (L, 1, "Rspamd.textpart");
+	void *ud = luaL_checkudata (L, 1, "rspamd{textpart}");
 	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
 	return *((struct mime_text_part **)ud);
 }
@@ -81,7 +81,7 @@ lua_task_get_message (lua_State *L)
 	if (task != NULL) {
 		/* XXX write handler for message object */
 		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
-		lua_setclass (L, "Rspamd.message", -1);
+		lua_setclass (L, "rspamd{message}", -1);
 		*pmsg = task->message;
 	}
 	return 1;
@@ -135,7 +135,7 @@ lua_task_get_text_parts (lua_State *L)
 		while (cur) {
 			part = cur->data;
 			ppart = lua_newuserdata (L, sizeof (struct mime_text_part *));
-			lua_setclass (L, "Rspamd.textpart", -1);
+			lua_setclass (L, "rspamd{textpart}", -1);
 			*ppart = part;
 			cur = g_list_next (cur);
 		}
@@ -209,8 +209,8 @@ lua_textpart_get_fuzzy (lua_State *L)
 int
 luaopen_task (lua_State *L)
 {
-	lua_newclass (L, "Rspamd.task", tasklib_m);
-	luaL_openlib (L, "task", tasklib_m, 0);
+	lua_newclass (L, "rspamd{task}", tasklib_m);
+	luaL_openlib (L, NULL, null_reg, 0);
     
 	return 1;
 }
@@ -218,8 +218,8 @@ luaopen_task (lua_State *L)
 int
 luaopen_textpart (lua_State *L)
 {
-	lua_newclass (L, "Rspamd.textpart", textpartlib_m);
-	luaL_openlib (L, "textpart", textpartlib_m, 0);
+	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
+	luaL_openlib (L, NULL, null_reg, 0);
     
 	return 1;
 }

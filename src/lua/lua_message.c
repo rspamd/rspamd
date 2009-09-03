@@ -87,7 +87,7 @@ static const struct luaL_reg msglib_m[] = {
 static GMimeMessage *
 lua_check_message (lua_State *L)
 {
-	void *ud = luaL_checkudata (L, 1, "Rspamd.message");
+	void *ud = luaL_checkudata (L, 1, "rspamd{message}");
 	luaL_argcheck (L, ud != NULL, 1, "'message' expected");
 	return *((GMimeMessage **)ud);
 }
@@ -166,8 +166,8 @@ lua_message_set_header (lua_State *L)
 int
 luaopen_message (lua_State *L)
 {
-	lua_newclass (L, "Rspamd.message", msglib_m);
-	luaL_openlib (L, "message", msglib_m, 0);
+	lua_newclass (L, "rspamd{message}", msglib_m);
+	luaL_openlib (L, NULL, null_reg, 0);
     
 	return 1;
 }

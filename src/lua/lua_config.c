@@ -48,7 +48,7 @@ static const struct luaL_reg metriclib_m[] = {
 static struct config_file *
 lua_check_config (lua_State *L)
 {
-	void *ud = luaL_checkudata (L, 1, "Rspamd.config");
+	void *ud = luaL_checkudata (L, 1, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
 	return *((struct config_file **)ud);
 }
@@ -56,7 +56,7 @@ lua_check_config (lua_State *L)
 static struct metric *
 lua_check_metric (lua_State *L)
 {
-	void *ud = luaL_checkudata (L, 1, "Rspamd.metric");
+	void *ud = luaL_checkudata (L, 1, "rspamd{metric}");
 	luaL_argcheck (L, ud != NULL, 1, "'metric' expected");
 	return *((struct metric **)ud);
 }
@@ -128,7 +128,7 @@ lua_config_get_metric (lua_State *L)
         metric = g_hash_table_lookup (cfg->metrics, name);
         if (metric) {
             pmetric = lua_newuserdata (L, sizeof (struct metric *));
-		    lua_setclass (L, "Rspamd.metric", -1);
+		    lua_setclass (L, "rspamd{metric}", -1);
 		    *pmetric = metric;
 			return 1;
         }
@@ -154,7 +154,7 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 
 	lua_getglobal (cd->L, cd->name);
 	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
-	lua_setclass (cd->L, "Rspamd.task", -1);
+	lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 
 	if (lua_pcall(cd->L, 1, 1, 0) != 0) {
@@ -187,8 +187,8 @@ lua_metric_register_symbol (lua_State *L)
 int
 luaopen_config (lua_State *L)
 {
-    lua_newclass (L, "Rspamd.config", configlib_m);
-	luaL_openlib (L, "config", configlib_m, 0);
+    lua_newclass (L, "rspamd{config}", configlib_m);
+	luaL_openlib (L, NULL, null_reg, 0);
 
     return 1;
 }
@@ -196,8 +196,8 @@ luaopen_config (lua_State *L)
 int
 luaopen_metric (lua_State *L)
 {
-    lua_newclass (L, "Rspamd.metric", configlib_m);
-	luaL_openlib (L, "metric", configlib_m, 0);
+    lua_newclass (L, "rspamd{metric}", configlib_m);
+	luaL_openlib (L, NULL, null_reg, 0);
 
     return 1;
 }

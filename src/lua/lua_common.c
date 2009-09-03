@@ -28,18 +28,21 @@
 #define MODULE_INIT_FUNC "module_init"
 
 lua_State *L = NULL;
+const luaL_reg null_reg[] = {
+    {NULL, NULL}
+};
 
 /* Logger methods */
-LUA_FUNCTION_DEF(logger, err);
-LUA_FUNCTION_DEF(logger, warn);
-LUA_FUNCTION_DEF(logger, info);
-LUA_FUNCTION_DEF(logger, debug);
+LUA_FUNCTION_DEF(logger, _err);
+LUA_FUNCTION_DEF(logger, _warn);
+LUA_FUNCTION_DEF(logger, _info);
+LUA_FUNCTION_DEF(logger, _debug);
 
 static const struct luaL_reg loggerlib_m[] = {
-    LUA_INTERFACE_DEF(logger, err),
-    LUA_INTERFACE_DEF(logger, warn),
-    LUA_INTERFACE_DEF(logger, info),
-    LUA_INTERFACE_DEF(logger, debug),
+    LUA_INTERFACE_DEF(logger, _err),
+    LUA_INTERFACE_DEF(logger, _warn),
+    LUA_INTERFACE_DEF(logger, _info),
+    LUA_INTERFACE_DEF(logger, _debug),
     {NULL, NULL}
 };
 
@@ -89,7 +92,7 @@ lua_set_table_index (lua_State *L, const char *index, const char *value)
 
 /*** Logger interface ***/
 static int
-lua_logger_err (lua_State *L)
+lua_logger__err (lua_State *L)
 {
     const char *msg;
     msg = luaL_checkstring (L, 2);
@@ -98,7 +101,7 @@ lua_logger_err (lua_State *L)
 }
 
 static int
-lua_logger_warn (lua_State *L)
+lua_logger__warn (lua_State *L)
 {
     const char *msg;
     msg = luaL_checkstring (L, 2);
@@ -107,7 +110,7 @@ lua_logger_warn (lua_State *L)
 }
 
 static int
-lua_logger_info (lua_State *L)
+lua_logger__info (lua_State *L)
 {
     const char *msg;
     msg = luaL_checkstring (L, 2);
@@ -116,7 +119,7 @@ lua_logger_info (lua_State *L)
 }
 
 static int
-lua_logger_debug (lua_State *L)
+lua_logger__debug (lua_State *L)
 {
     const char *msg;
     msg = luaL_checkstring (L, 2);
@@ -128,10 +131,23 @@ lua_logger_debug (lua_State *L)
 /*** Init functions ***/
 
 int
+luaopen_rspamd (lua_State *L)
+{
+	luaL_openlib(L, "rspamd", null_reg, 0);
+    /* make version string available to scripts */
+	lua_pushstring(L, "_VERSION");
+	lua_pushstring(L, RVERSION);
+    lua_rawset(L, -3);
+    
+	return 1;
+}
+
+int
 luaopen_logger (lua_State *L)
 {
-    lua_newclass (L, "Rspamd.logger", loggerlib_m);
-	luaL_openlib (L, "logger", loggerlib_m, 0);
+
+    lua_newclass (L, "rspamd{logger}", loggerlib_m);
+	luaL_openlib (L, NULL, null_reg, 0);
 
     return 1;
 }
@@ -142,13 +158,14 @@ init_lua ()
 	if (L == NULL) {
 		L = lua_open ();
 		luaL_openlibs (L);
-
-		luaopen_task (L);
-		luaopen_message (L);
-        luaopen_logger (L);
-        luaopen_config (L);
-        luaopen_metric (L);
-        luaopen_textpart (L);
+        
+        (void)luaopen_rspamd (L);
+        (void)luaopen_logger (L);
+        (void)luaopen_config (L);
+        (void)luaopen_metric (L);
+		(void)luaopen_task (L);
+        (void)luaopen_textpart (L);
+		(void)luaopen_message (L);
 	}
 }
 
@@ -172,7 +189,7 @@ init_lua_filters (struct config_file *cfg)
 
 			/* Call module init function */
 			pcfg = lua_newuserdata (L, sizeof (struct config_file *));
-			lua_setclass (L, "Rspamd.config", -1);
+			lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
             lua_setglobal (L, "rspamd_config");
 			/* do the call (1 arguments, 1 result) */
@@ -194,7 +211,7 @@ lua_call_filter (const char *function, struct worker_task *task)
 
 	lua_getglobal (L, function);
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
-	lua_setclass (L, "Rspamd.task", -1);
+	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 	
 	if (lua_pcall (L, 1, 1, 0) != 0) {
