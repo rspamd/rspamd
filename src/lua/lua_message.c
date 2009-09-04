@@ -111,6 +111,7 @@ lua_message_get_header (lua_State *L)
 	const char *headern;
 	GMimeMessage *obj = lua_check_message (L);
 	GList *res = NULL, *cur;
+    int i = 1;
 
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
@@ -118,8 +119,10 @@ lua_message_get_header (lua_State *L)
 			res = message_get_header (NULL, obj, headern);
 			if (res) {
 				cur = res;
+                lua_newtable (L);
 				while (cur) {
 					lua_pushstring (L, (const char *)cur->data);
+                    lua_rawseti(L, -2, i++);
 					g_free (cur->data);
 					cur = g_list_next (cur);
 				}
@@ -139,6 +142,7 @@ lua_message_get_header (lua_State *L)
 
 	return 1;
 }
+
 
 static int
 lua_message_set_header (lua_State *L)

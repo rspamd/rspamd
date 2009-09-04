@@ -25,18 +25,27 @@
 
 #include "lua_common.h"
 #include "../message.h"
+#include <evdns.h>
 
 /* Task methods */
 LUA_FUNCTION_DEF(task, get_message);
 LUA_FUNCTION_DEF(task, insert_result);
 LUA_FUNCTION_DEF(task, get_urls);
 LUA_FUNCTION_DEF(task, get_text_parts);
+LUA_FUNCTION_DEF(task, get_raw_headers);
+LUA_FUNCTION_DEF(task, get_received_headers);
+LUA_FUNCTION_DEF(task, resolve_dns_a);
+LUA_FUNCTION_DEF(task, resolve_dns_ptr);
 
 static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_message),
 	LUA_INTERFACE_DEF(task, insert_result),
 	LUA_INTERFACE_DEF(task, get_urls),
 	LUA_INTERFACE_DEF(task, get_text_parts),
+    LUA_INTERFACE_DEF(task, get_raw_headers),
+    LUA_INTERFACE_DEF(task, get_received_headers),
+	LUA_INTERFACE_DEF(task, resolve_dns_a),
+	LUA_INTERFACE_DEF(task, resolve_dns_ptr),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -153,6 +162,165 @@ lua_task_get_text_parts (lua_State *L)
 	return 1;
 }
 
+static int
+lua_task_get_raw_headers (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+
+    if (task) {
+		lua_pushstring (L, task->raw_headers);
+    }
+	else {
+		lua_pushnil (L);
+	}
+
+    return 1;
+}
+
+static int
+lua_task_get_received_headers (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	GList *cur;
+	struct received_header *rh;
+	int i = 1;
+
+    if (task) {
+		lua_newtable (L);
+		cur = g_list_first (task->received);
+		while (cur) {
+			rh = cur->data;
+			lua_newtable (L);
+			lua_set_table_index (L, "from_hostname", rh->from_hostname);
+			lua_set_table_index (L, "from_ip", rh->from_ip);
+			lua_set_table_index (L, "real_hostname", rh->real_hostname);
+			lua_set_table_index (L, "real_ip", rh->real_ip);
+			lua_set_table_index (L, "by_hostname", rh->by_hostname);
+			lua_rawseti(L, -2, i++);
+			cur = g_list_next (cur);
+		}
+    }
+	else {
+		lua_pushnil (L);
+	}
+	
+	return 1;
+}
+
+struct lua_dns_callback_data {
+	lua_State *L;
+	struct worker_task *task;
+	const char *callback;
+	const char *to_resolve;
+};
+
+static void 
+lua_dns_callback (int result, char type, int count, int ttl, void *addresses, void *arg)
+{
+	struct lua_dns_callback_data *cd = arg;
+	int i;
+	struct in_addr ina;
+	struct worker_task **ptask;
+
+	lua_getglobal (cd->L, cd->callback);
+	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+	lua_setclass (cd->L, "rspamd{task}", -1);
+
+	*ptask = cd->task;
+	lua_pushstring (cd->L, cd->to_resolve);
+
+	if (result == DNS_ERR_NONE) {
+		if (type == DNS_IPv4_A) {
+
+			lua_newtable (cd->L);
+			for (i = 1; i <= count; i ++) {
+				memcpy (&ina.s_addr, ((in_addr_t *)addresses) + i - 1, sizeof (in_addr_t));
+				/* Actually this copy memory, so using of inet_ntoa is valid */
+				lua_pushstring (cd->L, inet_ntoa (ina));
+				lua_rawseti (cd->L, -2, i);
+			}
+			lua_pushnil (cd->L);
+		}
+		else if (type == DNS_PTR) {
+			lua_newtable (cd->L);
+			for (i = 1; i <= count; i ++) {
+				lua_pushstring (cd->L, ((char **)addresses)[i - 1]);
+				lua_rawseti (cd->L, -2, i);
+			}
+			lua_pushnil (cd->L);
+		}
+		else {
+			lua_pushnil (cd->L);
+			lua_pushstring (cd->L, "Unknown reply type");
+		}
+	}
+	else {
+		lua_pushnil (cd->L);
+		lua_pushstring (cd->L, evdns_err_to_string (result));
+	}
+
+	if (lua_pcall (cd->L, 4, 0, 0) != 0) {
+		msg_info ("lua_dns_callback: call to %s failed: %s", cd->callback, lua_tostring (cd->L, -1));
+	}
+
+	cd->task->save.saved --;
+	if (cd->task->save.saved == 0) {
+		/* Call other filters */
+		cd->task->save.saved = 1;
+		process_filters (cd->task);
+	}
+
+}
+
+static int
+lua_task_resolve_dns_a (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	struct lua_dns_callback_data *cd;
+
+	if (task) {
+		cd = memory_pool_alloc (task->task_pool, sizeof (struct lua_dns_callback_data));
+		cd->task = task;
+		cd->L = L;
+		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
+		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		if (!cd->to_resolve || !cd->callback) {
+			msg_info ("lua_task_resolve_dns_a: invalid parameters passed to function");
+			return 0;
+		}
+		if (evdns_resolve_ipv4 (cd->to_resolve, DNS_QUERY_NO_SEARCH, lua_dns_callback, (void *)cd) == 0) {
+			task->save.saved ++;
+        }
+	}
+	return 0;
+}
+
+static int
+lua_task_resolve_dns_ptr (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	struct lua_dns_callback_data *cd;
+	struct in_addr *ina;
+
+	if (task) {
+		cd = memory_pool_alloc (task->task_pool, sizeof (struct lua_dns_callback_data));
+		cd->task = task;
+		cd->L = L;
+		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
+		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		ina = memory_pool_alloc (task->task_pool, sizeof (struct in_addr));
+		if (!cd->to_resolve || !cd->callback || !inet_aton (cd->to_resolve, ina)) {
+			msg_info ("lua_task_resolve_dns_a: invalid parameters passed to function");
+			return 0;
+		}
+		if (evdns_resolve_reverse (ina, DNS_QUERY_NO_SEARCH, lua_dns_callback, (void *)cd) == 0) {
+			task->save.saved ++;
+        }
+	}
+	return 0;
+}
+
+
 /**** Textpart implementation *****/
 
 static int
@@ -213,6 +381,7 @@ lua_textpart_get_fuzzy (lua_State *L)
 	lua_pushlstring (L, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 	return 1;
 }
+
 
 /* Init part */
 int

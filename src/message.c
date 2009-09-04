@@ -286,9 +286,9 @@ parse_recv_header (memory_pool_t *pool, char *line, struct received_header *r)
 	char *p, *s, t, **res = NULL;
 	int state = 0, next_state = 0;
 	
+	g_strstrip (line);
 	p = line;
 	s = line;
-	while (g_ascii_isspace (*++p));
 
 	while (*p) {
 		switch (state) {
