@@ -29,20 +29,22 @@
 
 lua_State *L = NULL;
 const luaL_reg null_reg[] = {
+	{"__tostring", lua_class_tostring},
     {NULL, NULL}
 };
 
 /* Logger methods */
-LUA_FUNCTION_DEF(logger, _err);
-LUA_FUNCTION_DEF(logger, _warn);
-LUA_FUNCTION_DEF(logger, _info);
-LUA_FUNCTION_DEF(logger, _debug);
+LUA_FUNCTION_DEF(logger, err);
+LUA_FUNCTION_DEF(logger, warn);
+LUA_FUNCTION_DEF(logger, info);
+LUA_FUNCTION_DEF(logger, debug);
 
 static const struct luaL_reg loggerlib_m[] = {
-    LUA_INTERFACE_DEF(logger, _err),
-    LUA_INTERFACE_DEF(logger, _warn),
-    LUA_INTERFACE_DEF(logger, _info),
-    LUA_INTERFACE_DEF(logger, _debug),
+    LUA_INTERFACE_DEF(logger, err),
+    LUA_INTERFACE_DEF(logger, warn),
+    LUA_INTERFACE_DEF(logger, info),
+    LUA_INTERFACE_DEF(logger, debug),
+	{"__tostring", lua_class_tostring},
     {NULL, NULL}
 };
 
@@ -51,23 +53,50 @@ void
 lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func) 
 {
 	luaL_newmetatable (L, classname); /* mt */
-	/* create __index table to place methods */
-	lua_pushstring (L, "__index");    /* mt,"__index" */
-	lua_newtable (L);                 /* mt,"__index",it */
-	/* put class name into class metatable */
+	lua_pushstring(L, "__index");
+	lua_pushvalue(L, -2);  /* pushes the metatable */
+	lua_settable(L, -3);  /* metatable.__index = metatable */
+
 	lua_pushstring (L, "class");      /* mt,"__index",it,"class" */
 	lua_pushstring (L, classname);    /* mt,"__index",it,"class",classname */
 	lua_rawset (L, -3);               /* mt,"__index",it */
-	/* pass all methods that start with _ to the metatable, and all others
-	 * to the index table */
-	for (; func->name; func++) {     /* mt,"__index",it */
-		lua_pushstring (L, func->name);
-		lua_pushcfunction (L, func->func);
-		lua_rawset (L, func->name[0] == '_' ? -5: -3);
-	}
-	lua_rawset (L, -3);               /* mt */
-	lua_pop (L, 1);
+    
+	luaL_openlib(L, NULL, func, 0);
 }
+
+int 
+lua_class_tostring (lua_State *L) 
+{
+	char buf[32];
+
+	if (!lua_getmetatable (L, 1)) {
+		goto error;
+	}
+    lua_pushstring (L, "__index");
+    lua_gettable (L, -2);
+
+    if (!lua_istable (L, -1)) {
+			goto error;
+	}
+    lua_pushstring (L, "class");
+    lua_gettable (L, -2);
+
+    if (!lua_isstring (L, -1)) {
+		goto error;
+	}
+
+    snprintf (buf, sizeof (buf), "%p", lua_touserdata (L, 1));
+
+    lua_pushfstring (L, "%s: %s", lua_tostring (L, -1), buf);
+
+    return 1;
+
+error:
+    lua_pushstring (L, "invalid object passed to 'lua_common.c:__tostring'");
+    lua_error (L);
+    return 1;
+}
+
 
 void 
 lua_setclass (lua_State *L, const char *classname, int objidx) 
@@ -92,37 +121,37 @@ lua_set_table_index (lua_State *L, const char *index, const char *value)
 
 /*** Logger interface ***/
 static int
-lua_logger__err (lua_State *L)
+lua_logger_err (lua_State *L)
 {
     const char *msg;
-    msg = luaL_checkstring (L, 2);
+    msg = luaL_checkstring (L, 1);
     msg_err (msg);
     return 1;
 }
 
 static int
-lua_logger__warn (lua_State *L)
+lua_logger_warn (lua_State *L)
 {
     const char *msg;
-    msg = luaL_checkstring (L, 2);
+    msg = luaL_checkstring (L, 1);
     msg_warn (msg);
     return 1;
 }
 
 static int
-lua_logger__info (lua_State *L)
+lua_logger_info (lua_State *L)
 {
     const char *msg;
-    msg = luaL_checkstring (L, 2);
+    msg = luaL_checkstring (L, 1);
     msg_info (msg);
     return 1;
 }
 
 static int
-lua_logger__debug (lua_State *L)
+lua_logger_debug (lua_State *L)
 {
     const char *msg;
-    msg = luaL_checkstring (L, 2);
+    msg = luaL_checkstring (L, 1);
     msg_debug (msg);
     return 1;
 }
@@ -146,8 +175,7 @@ int
 luaopen_logger (lua_State *L)
 {
 
-    lua_newclass (L, "rspamd{logger}", loggerlib_m);
-	luaL_openlib (L, NULL, null_reg, 0);
+	luaL_openlib (L, "rspamd_logger", loggerlib_m, 0);
 
     return 1;
 }

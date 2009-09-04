@@ -34,6 +34,7 @@ static const struct luaL_reg configlib_m[] = {
     LUA_INTERFACE_DEF(config, get_module_opt),
     LUA_INTERFACE_DEF(config, get_metric),
     LUA_INTERFACE_DEF(config, get_all_opt),
+	{"__tostring", lua_class_tostring},
     {NULL, NULL}
 };
 
@@ -42,6 +43,7 @@ LUA_FUNCTION_DEF(metric, register_symbol);
 
 static const struct luaL_reg metriclib_m[] = {
 	LUA_INTERFACE_DEF(metric, register_symbol),
+	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -177,7 +179,8 @@ lua_metric_register_symbol (lua_State *L)
 		callback = luaL_checkstring (L, 4);
 		if (name) {
 			cd = g_malloc (sizeof (struct lua_callback_data));
-			cd->name = g_strdup (name);
+			cd->name = g_strdup (callback);
+            cd->L = L;
 			register_symbol (&metric->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
 	}
@@ -188,7 +191,7 @@ int
 luaopen_config (lua_State *L)
 {
     lua_newclass (L, "rspamd{config}", configlib_m);
-	luaL_openlib (L, NULL, null_reg, 0);
+	luaL_openlib (L, "rspamd_config", null_reg, 0);
 
     return 1;
 }
@@ -196,8 +199,8 @@ luaopen_config (lua_State *L)
 int
 luaopen_metric (lua_State *L)
 {
-    lua_newclass (L, "rspamd{metric}", configlib_m);
-	luaL_openlib (L, NULL, null_reg, 0);
+    lua_newclass (L, "rspamd{metric}", metriclib_m);
+	luaL_openlib (L, "rspamd_metric", null_reg, 0);
 
     return 1;
 }

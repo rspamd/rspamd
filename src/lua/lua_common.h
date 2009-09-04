@@ -17,6 +17,7 @@ extern const luaL_reg null_reg[];
 void lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func);
 void lua_setclass (lua_State *L, const char *classname, int objidx);
 void lua_set_table_index (lua_State *L, const char *index, const char *value);
+int lua_class_tostring (lua_State *L);
 int luaopen_message (lua_State *L);
 int luaopen_task (lua_State *L);
 int luaopen_config (lua_State *L);

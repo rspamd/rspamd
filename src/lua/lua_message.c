@@ -79,6 +79,7 @@ static const struct luaL_reg msglib_m[] = {
 	LUA_INTERFACE_DEF(message, set_reply_to),
 	LUA_INTERFACE_DEF(message, get_header),
 	LUA_INTERFACE_DEF(message, set_header),
+	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -167,7 +168,7 @@ int
 luaopen_message (lua_State *L)
 {
 	lua_newclass (L, "rspamd{message}", msglib_m);
-	luaL_openlib (L, NULL, null_reg, 0);
+	luaL_openlib (L, "rspamd_message", null_reg, 0);
     
 	return 1;
 }

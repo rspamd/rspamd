@@ -37,6 +37,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, insert_result),
 	LUA_INTERFACE_DEF(task, get_urls),
 	LUA_INTERFACE_DEF(task, get_text_parts),
+	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -51,6 +52,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF(textpart, is_empty),
 	LUA_INTERFACE_DEF(textpart, is_html),
 	LUA_INTERFACE_DEF(textpart, get_fuzzy),
+	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -106,15 +108,18 @@ lua_task_insert_result (lua_State *L)
 static int 
 lua_task_get_urls (lua_State *L)
 {
+    int i = 1;
 	struct worker_task *task = lua_check_task (L);
 	GList *cur;
 	struct uri *url;
 
 	if (task != NULL) {
+        lua_newtable (L);
 		cur = g_list_first (task->urls);
 		while (cur) {
 			url = cur->data;
 			lua_pushstring (L, struri (url));
+            lua_rawseti(L, -2, i++);
 			cur = g_list_next (cur);
 		}
 	}
@@ -125,20 +130,24 @@ lua_task_get_urls (lua_State *L)
 static int
 lua_task_get_text_parts (lua_State *L)
 {
-
+    int i = 1;
 	struct worker_task *task = lua_check_task (L);
 	GList *cur;
 	struct mime_text_part *part, **ppart;
 
 	if (task != NULL) {
+        lua_newtable (L);
 		cur = task->text_parts;
 		while (cur) {
 			part = cur->data;
 			ppart = lua_newuserdata (L, sizeof (struct mime_text_part *));
-			lua_setclass (L, "rspamd{textpart}", -1);
 			*ppart = part;
+			lua_setclass (L, "rspamd{textpart}", -1);
+            /* Make it array */
+            lua_rawseti(L, -2, i++);
 			cur = g_list_next (cur);
 		}
+        return 1;
 	}
 	lua_pushnil (L);
 	return 1;
@@ -210,7 +219,7 @@ int
 luaopen_task (lua_State *L)
 {
 	lua_newclass (L, "rspamd{task}", tasklib_m);
-	luaL_openlib (L, NULL, null_reg, 0);
+	luaL_openlib (L, "rspamd_task", null_reg, 0);
     
 	return 1;
 }
@@ -219,7 +228,7 @@ int
 luaopen_textpart (lua_State *L)
 {
 	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
-	luaL_openlib (L, NULL, null_reg, 0);
+	luaL_openlib (L, "rspamd_textpart", null_reg, 0);
     
 	return 1;
 }
