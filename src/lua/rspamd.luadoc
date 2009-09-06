@@ -7,9 +7,8 @@
 -- textpart - a single textual part of message
 module Rspamd
 
---- Each lua module MUST have init function that is called after config file was read:
--- it should be like
--- function module:module_init(cfg)
+--- Each lua module has global rspamd_config that can be used for getting config
+-- options and registering callbacks (via metric interface)
 
 ------------------------------------- CONFIG -----------------------------------------
 --
@@ -56,6 +55,31 @@ function task:get_urls ()
 --- Get all text parts
 -- @return array of textpart objects
 function task:get_text_parts ()
+
+--- Get raw headers
+-- @return string that contains raw headers
+function task:get_raw_headers ()
+
+--- Get array of received headers
+-- @return array of received headers that are tables itself
+function task:get_received_headers ()
+
+--- Resolve A record using rspamd async resolver
+-- @param host host to resolve
+-- @param callback name of callback function
+function task:resolve_dns_a (host, callback)
+
+--- Resolve PTR record using rspamd async resolver
+-- @param host host to resolve
+-- @param callback name of callback function
+function task:resolve_dns_ptr (host, callback)
+
+--- Callback function for dns resolving
+-- @param task task object
+-- @param to_resolve ptr or a record that was resolved
+-- @param results results of dns query (array or nil)
+-- @param err resolver error or nil
+function dns_cb(task, to_resolve, results, err)
 
 ------------------------------------- TEXTPART ---------------------------------------
 

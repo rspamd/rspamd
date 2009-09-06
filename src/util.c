@@ -28,6 +28,11 @@
 #include "cfg_file.h"
 #include "main.h"
 
+/* Check log messages intensity once per minute */
+#define CHECK_TIME 60
+/* More than 2 log messages per second */
+#define BUF_INTENSITY 2
+
 #ifdef RSPAMD_MAIN
 sig_atomic_t do_reopen_log = 0;
 extern rspamd_hash_t *counters;
@@ -39,6 +44,12 @@ struct logger_params {
 };
 
 static struct logger_params log_params;
+
+/* Here would be put log messages intensity */
+static uint32_t log_written;
+static time_t last_check;
+static char *io_buf = NULL;
+static gboolean log_buffered = FALSE;
 
 int
 make_socket_nonblocking (int fd)
@@ -651,6 +662,8 @@ open_log (struct config_file *cfg)
 				return -1;
 			}
 			cfg->logf = fdopen (cfg->log_fd, "w");
+			/* Set line buffering */
+			setvbuf (cfg->logf, (char *) NULL, _IOLBF, 0);
 			return 0;
 	}
 	return -1;
@@ -752,9 +765,32 @@ file_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gcha
 	if (log_level <= cfg->log_level) {
 		now = time (NULL);
 		tms = localtime (&now);
+
+		if (last_check == 0) {
+			last_check = now;
+		}
+		else if (now - last_check > CHECK_TIME) {
+			if (log_written / (now - last_check) > BUF_INTENSITY && !log_buffered) {
+				/* Switch to buffered logging */
+				if (io_buf == NULL) {
+					io_buf = g_malloc (BUFSIZ);
+				}
+				setvbuf (cfg->logf, io_buf, _IOFBF, BUFSIZ);
+				log_buffered = TRUE;
+			}
+			else if (log_buffered) {
+				/* Switch to line buffering */
+				setvbuf (cfg->logf, NULL, _IOLBF, 0);
+				log_buffered = FALSE;
+			}
+			last_check = now;
+			log_written = 0;
+		}
+
 		strftime (timebuf, sizeof (timebuf), "%b %d %H:%M:%S", tms);
 		snprintf (tmpbuf, sizeof (tmpbuf), "#%d: %s rspamd ", (int)getpid (), timebuf);
 		fprintf (cfg->logf, "%s%s" CRLF, tmpbuf, message);
+		log_written ++;
 	}
 }
 

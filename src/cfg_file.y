@@ -47,7 +47,7 @@ struct rspamd_view *cur_view = NULL;
 %token  MAXSIZE SIZELIMIT SECONDS BEANSTALK MYSQL USER PASSWORD DATABASE
 %token  TEMPDIR PIDFILE SERVERS ERROR_TIME DEAD_TIME MAXERRORS CONNECT_TIMEOUT PROTOCOL RECONNECT_TIMEOUT
 %token  READ_SERVERS WRITE_SERVER DIRECTORY_SERVERS MAILBOX_QUERY USERS_QUERY LASTLOGIN_QUERY
-%token  MEMCACHED WORKER TYPE REQUIRE MODULE
+%token  MEMCACHED WORKER TYPE MODULES MODULE_PATH
 %token  MODULE_OPT PARAM VARIABLE
 %token  FILTERS FACTORS METRIC NAME CACHE_FILE
 %token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
@@ -83,7 +83,7 @@ command	:
 	| pidfile
 	| memcached
 	| worker
-	| require
+	| modules
 	| filters
 	| module_opt
 	| variable
@@ -447,31 +447,58 @@ factorparam:
 		g_hash_table_insert (cfg->factors, $1, tmp);
 	};
 
-require:
-	REQUIRE OBRACE requirebody EBRACE
+modules:
+	MODULES OBRACE modulesbody EBRACE
 	;
 
-requirebody:
-	requirecmd SEMICOLON
-	| requirebody requirecmd SEMICOLON
+modulesbody:
+	modulescmd SEMICOLON
+	| modulesbody modulescmd SEMICOLON
 	;
 
-requirecmd:
-	MODULE EQSIGN QUOTEDSTRING {
+modulescmd:
+	MODULE_PATH EQSIGN QUOTEDSTRING {
 #if !defined(WITHOUT_PERL) || defined(WITH_LUA)
 		struct stat st;
 		struct script_module *cur;
+        glob_t globbuf;
+        char *pattern;
+        size_t len;
+        int i;
+
 		if (stat ($3, &st) == -1) {
-			yyerror ("yyparse: cannot stat file %s, %s", $3, strerror (errno));
+			yyerror ("yyparse: cannot stat path %s, %s", $3, strerror (errno));
 			YYERROR;
 		}
-		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-		if (cur == NULL) {
-			yyerror ("yyparse: g_malloc: %s", strerror(errno));
-			YYERROR;
-		}
-		cur->path = $3;
-		cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
+
+        globbuf.gl_offs = 0;
+        #ifdef WITH_LUA
+        len = strlen ($3) + sizeof ("*.lua");
+        pattern = g_malloc (len);
+        snprintf (pattern, len, "%s%s", $3, "*.lua");
+        #else
+        len = strlen ($3) + sizeof ("*.pl")
+        pattern = g_malloc (len);
+        snprintf (pattern, len, "%s%s", $3, "*.pl");
+        #endif
+
+        if (glob(pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+            for (i = 0; i < globbuf.gl_pathc; i ++) {
+                cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+                if (cur == NULL) {
+                    yyerror ("yyparse: g_malloc: %s", strerror(errno));
+                    YYERROR;
+                }
+                cur->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
+                cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
+            }
+            globfree (&globbuf);
+        }
+        else {
+            yyerror ("yyparse: glob: %s", strerror (errno));
+            YYERROR;
+        }
+        g_free (pattern);
 #else
 		yyerror ("require command is not available when perl support is not compiled");
 		YYERROR;

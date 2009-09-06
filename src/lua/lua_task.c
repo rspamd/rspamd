@@ -25,6 +25,7 @@
 
 #include "lua_common.h"
 #include "../message.h"
+#include "../expressions.h"
 #include <evdns.h>
 
 /* Task methods */
@@ -36,6 +37,7 @@ LUA_FUNCTION_DEF(task, get_raw_headers);
 LUA_FUNCTION_DEF(task, get_received_headers);
 LUA_FUNCTION_DEF(task, resolve_dns_a);
 LUA_FUNCTION_DEF(task, resolve_dns_ptr);
+LUA_FUNCTION_DEF(task, call_rspamd_function);
 
 static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF(task, get_message),
@@ -46,6 +48,7 @@ static const struct luaL_reg tasklib_m[] = {
     LUA_INTERFACE_DEF(task, get_received_headers),
 	LUA_INTERFACE_DEF(task, resolve_dns_a),
 	LUA_INTERFACE_DEF(task, resolve_dns_ptr),
+	LUA_INTERFACE_DEF(task, call_rspamd_function),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -318,6 +321,43 @@ lua_task_resolve_dns_ptr (lua_State *L)
         }
 	}
 	return 0;
+}
+
+static int
+lua_task_call_rspamd_function (lua_State *L)
+{
+	struct worker_task *task = lua_check_task (L);
+	struct expression_function f;
+	int i, top;
+	gboolean res;
+	char *arg;
+
+	if (task) {
+		f.name = (char *)luaL_checkstring (L, 2);
+		if (f.name) {
+			f.args = NULL;
+			top = lua_gettop (L);
+			/* Get arguments after function name */
+			for (i = 3; i <= top; i ++) {
+				arg = (char *)luaL_checkstring (L, i);
+				if (arg != NULL) {
+					f.args = g_list_prepend (f.args, arg);
+				}
+			}
+			res = call_expression_function (&f, task);
+			lua_pushboolean (L, res);
+			if (f.args) {
+				g_list_free (f.args);
+			}
+
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+
+	return 1;
+
 }
 
 

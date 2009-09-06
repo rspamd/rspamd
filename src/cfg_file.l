@@ -10,7 +10,7 @@
 #include "cfg_file.h"
 #include "cfg_yacc.h"
 #ifdef WITH_LUA
-#include "lua.h"
+extern void add_luabuf (const char *line);
 #else 
 #define add_luabuf(x) yyerror ("lua support diabled")
 #endif
@@ -52,8 +52,8 @@ protocol						return PROTOCOL;
 memcached						return MEMCACHED;
 servers							return SERVERS;
 
-require							return REQUIRE;
-module                          return MODULE;
+modules							return MODULES;
+module_path                     return MODULE_PATH;
 
 filters							return FILTERS;
 factors							return FACTORS;
