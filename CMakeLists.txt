@@ -356,6 +356,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/view.c
 				src/map.c
                 src/bloom.c
+				src/settings.c
 				src/symbols_cache.c
 				src/fuzzy_storage.c)
 
@@ -365,6 +366,8 @@ ENDIF(ENABLE_PERL MATCHES "ON")
 IF(ENABLE_LUA MATCHES "ON")
 	ADD_SUBDIRECTORY(src/lua)
 ENDIF(ENABLE_LUA MATCHES "ON")
+
+ADD_SUBDIRECTORY(src/json)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
@@ -471,6 +474,7 @@ IF(LIBUTIL_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd util)
 ENDIF(LIBUTIL_LIBRARY)
 TARGET_LINK_LIBRARIES(rspamd event)
+TARGET_LINK_LIBRARIES(rspamd rspamd_json)
 TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd ${GMIME2_LIBRARIES})
 

@@ -227,6 +227,8 @@ struct config_file {
     GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	int clock_res;									/**< resolution of clock used							*/
 	GList *views;									/**< views												*/
+    GHashTable* domain_settings;                    /**< settings per-domains                               */
+    GHashTable* user_settings;                      /**< settings per-user                                  */
 };
 
 /**
