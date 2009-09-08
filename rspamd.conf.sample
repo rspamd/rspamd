@@ -306,3 +306,12 @@ view {
 	# Symbols to check, can also be list of files or regexp:
 	symbols = "/^[A-Z]{2}_SURBL_MULTI$/i";
 };
+
+# Settings files
+settings {
+	# json data for user's settings
+	#user_settings = "file:///some/json/file";
+	
+	# json data for domain's settings
+	#domain_settings = "file:///some/other/json/file";
+};
