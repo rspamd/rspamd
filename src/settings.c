@@ -73,9 +73,9 @@ json_read_cb (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data
 
 	if (jb->buf == NULL) {
 		/* Allocate memory for buffer */
-		jb->pos = jb->buf;
 		jb->buflen = len * 2;
 		jb->buf = g_malloc (jb->buflen);
+		jb->pos = jb->buf;
 	}
 
 	off = jb->pos - jb->buf;
@@ -87,7 +87,7 @@ json_read_cb (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data
 		jb->pos = jb->buf + off;
 	}
 
-	memcpy (chunk, jb->pos, len);
+	memcpy (jb->pos, chunk, len);
 	jb->pos += len;
 	
 	/* Say not to copy any part of this buffer */
@@ -115,10 +115,21 @@ json_fin_cb (memory_pool_t *pool, struct map_cb_data *data)
 		if (jb->buf) {
 			g_free (jb->buf);
 		}
-		g_free (jb->buf);
+		g_free (jb);
 	}
 
 	/* Now parse json */
+	if (data->cur_data) {
+		jb = data->cur_data;
+	}
+	else {
+		msg_err ("json_fin_cb: no data read");
+		return;
+	}
+	if (jb->buf == NULL) {
+		msg_err ("json_fin_cb: no data read");
+		return;
+	}
 	/* NULL terminate current buf */
 	*jb->pos = '\0';
 
@@ -183,7 +194,7 @@ json_fin_cb (memory_pool_t *pool, struct map_cb_data *data)
 				if (it_val && json_is_number (it_val)) {
 					score = g_malloc (sizeof (double));
 					*score = json_number_value (it_val);
-					g_hash_table_insert (cur_settings->factors, g_strdup (json_object_iter_key (json_it)), 
+					g_hash_table_insert (cur_settings->metric_scores, g_strdup (json_object_iter_key (json_it)), 
 											score);
 				}
 				json_it = json_object_iter_next(cur_nm, json_it);
@@ -204,12 +215,15 @@ json_fin_cb (memory_pool_t *pool, struct map_cb_data *data)
 gboolean
 read_settings (const char *path, struct config_file *cfg, GHashTable *table)
 {
-	struct json_buf *jb = g_malloc (sizeof (struct json_buf));
+	struct json_buf *jb = g_malloc (sizeof (struct json_buf)), **pjb;
+
+	pjb = g_malloc (sizeof (struct json_buf *));
 	
 	jb->table = table;
 	jb->buf = NULL;
+	*pjb = jb;
 
-	if (!add_map (path, json_read_cb, json_fin_cb, (void **)&jb)) {
+	if (!add_map (path, json_read_cb, json_fin_cb, (void **)pjb)) {
 		msg_err ("read_settings: cannot add map %s", path);
 		return FALSE;
 	}
@@ -222,6 +236,141 @@ init_settings (struct config_file *cfg)
 {
 	cfg->domain_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, settings_free);
 	cfg->user_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, settings_free);
+}
+
+static gboolean
+check_setting (struct worker_task *task, struct rspamd_settings **user_settings, struct rspamd_settings **domain_settings)
+{
+	char *field = NULL, *domain = NULL;
+
+	if (task->deliver_to != NULL) {
+		/* First try to use deliver-to field */
+		field = task->deliver_to;
+	}
+	else if (task->user != NULL) {
+		/* Then user field */
+		field = task->user;
+	}
+	else if (task->rcpt != NULL) {
+		/* Then first recipient */
+		field = task->rcpt->data;
+	}
+	else {
+		return FALSE;
+	}
+
+	domain = strchr (field, '@');
+	if (domain == NULL) {
+		/* First try to search in first recipient */
+		if (task->rcpt) {
+			domain = strchr (task->rcpt->data, '@');
+		}
+	}
+	if (domain != NULL) {
+		domain ++;
+	}
+	
+	/* First try to search per-user settings */
+	if (field != NULL) {
+		*user_settings = g_hash_table_lookup (task->cfg->user_settings, field);
+	}
+	if (domain != NULL) {
+		*domain_settings = g_hash_table_lookup (task->cfg->domain_settings, domain);
+	}
+
+	if (*domain_settings != NULL || *user_settings != NULL) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean 
+check_metric_settings (struct worker_task *task, struct metric *metric, double *score)
+{
+	struct rspamd_settings *us, *ds;
+	double *sc;
+
+	if (check_setting (task, &us, &ds)) {
+		if (us != NULL) {
+			/* First search in user's settings */
+			if ((sc = g_hash_table_lookup (us->metric_scores, metric->name)) != NULL) {
+				*score = *sc;
+				return TRUE;
+			}
+			/* Now check in domain settings */
+			if (ds && (sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
+				*score = *sc;
+				return TRUE;
+			}
+		}
+		else if (ds != NULL) {
+			if ((sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
+				*score = *sc;
+				return TRUE;
+			}
+		}
+	}
+	
+	return FALSE;
+}
+
+gboolean 
+check_factor_settings (struct worker_task *task, const char *symbol, double *factor)
+{
+	struct rspamd_settings *us, *ds;
+	double *fc;
+
+	if (check_setting (task, &us, &ds)) {
+		if (us != NULL) {
+			/* First search in user's settings */
+			if ((fc = g_hash_table_lookup (us->factors, symbol)) != NULL) {
+				*factor = *fc;
+				return TRUE;
+			}
+			/* Now check in domain settings */
+			if (ds && (fc = g_hash_table_lookup (ds->factors, symbol)) != NULL) {
+				*factor = *fc;
+				return TRUE;
+			}
+		}
+		else if (ds != NULL) {
+			if ((fc = g_hash_table_lookup (ds->factors, symbol)) != NULL) {
+				*factor = *fc;
+				return TRUE;
+			}
+		}
+	}
+	
+	return FALSE;
+
+}
+
+
+gboolean 
+check_want_spam (struct worker_task *task)
+{
+	struct rspamd_settings *us, *ds;
+
+	if (check_setting (task, &us, &ds)) {
+		if (us != NULL) {
+			/* First search in user's settings */
+			if (us->want_spam) {
+				return TRUE;
+			}
+			/* Now check in domain settings */
+			if (ds && ds->want_spam) {
+				return TRUE;
+			}
+		}
+		else if (ds != NULL) {
+			if (ds->want_spam) {
+				return TRUE;
+			}
+		}
+	}
+	
+	return FALSE;
 }
 
 /* 

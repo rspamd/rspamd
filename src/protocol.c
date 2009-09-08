@@ -26,6 +26,7 @@
 #include "main.h"
 #include "util.h"
 #include "cfg_file.h"
+#include "settings.h"
 
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
@@ -81,6 +82,7 @@
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 #define USER_HEADER "User"
+#define DELIVER_TO_HEADER "Deliver-To"
 
 static GList *custom_commands = NULL;
 
@@ -255,6 +257,18 @@ parse_header (struct worker_task *task, f_str_t *line)
 				return -1;
 			}
 			break;
+		case 'd':
+		case 'D':
+			/* Deliver-To */
+			if (strncasecmp (headern, DELIVER_TO_HEADER, sizeof (DELIVER_TO_HEADER) - 1) == 0) {
+				task->deliver_to = memory_pool_fstrdup (task->task_pool, line);
+				msg_debug ("parse_header: read deliver-to header, value: %s", task->deliver_to);
+			}
+			else {
+				msg_info ("parse_header: wrong header: %s", headern);
+				return -1;
+			}
+			break;
 		case 'h':
 		case 'H':
 			/* helo */
@@ -337,6 +351,7 @@ parse_header (struct worker_task *task, f_str_t *line)
 		case 'U':
 			if (strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
 				/* XXX: use this header somehow */
+				task->user = memory_pool_fstrdup (task->task_pool, line);
 			}
 			else {
 				return -1;
@@ -495,36 +510,43 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	struct metric_result *metric_res = (struct metric_result *)metric_value;
 	struct metric *m;
 	int is_spam = 0;
-
+	double ms;
+	
 
 	if (metric_name == NULL || metric_value == NULL) {
 		m = g_hash_table_lookup (task->cfg->metrics, "default");
+		if (!check_metric_settings (task, m, &ms)) {
+			ms = m->required_score;
+		}
 		if (task->proto == SPAMC_PROTO) {
 			r = snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF,
-						m != NULL ? m->required_score : 0);
+						m != NULL ? ms : 0);
 		}
 		else {
 			r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF,
-						m != NULL ? m->required_score : 0);
+						m != NULL ? ms : 0);
 		}
 		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
-						"(%s: F: [0/%.2f] [", "default", m != NULL ? m->required_score : 0); 
+						"(%s: F: [0/%.2f] [", "default", m != NULL ? ms : 0); 
 	}
 	else {
-		if (metric_res->score >= metric_res->metric->required_score) {
+		if (!check_metric_settings (task, metric_res->metric, &ms)) {
+			ms = metric_res->metric->required_score;
+		}
+		if (metric_res->score >= ms) {
 			is_spam = 1;
 		}
 		if (task->proto == SPAMC_PROTO) {
 			r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF,
-						(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+						(is_spam) ? "True" : "False", metric_res->score, ms);
 		}
 		else {
 			r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, (char *)metric_name,
-						(is_spam) ? "True" : "False", metric_res->score, metric_res->metric->required_score);
+						(is_spam) ? "True" : "False", metric_res->score, ms);
 		}
 		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 						"(%s: %s: [%.2f/%.2f] [", (char *)metric_name, is_spam ? "T" : "F", 
-						metric_res->score, metric_res->metric->required_score); 
+						metric_res->score, ms); 
 	}
 	if (task->cmd == CMD_PROCESS) {
 #ifndef GMIME24

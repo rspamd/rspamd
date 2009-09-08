@@ -19,18 +19,20 @@ my %cfg = (
     'password'  =>  '',
     'control'   =>  0,
     'statfile'  =>  '',
+	'deliver_to'=>  '',
 );
 
 $main::VERSION = '@RSPAMD_VERSION@';
 
 sub HELP_MESSAGE {
     print <<EOD;
-Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] [command]
+Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] [-d user\@domain] [command]
 -h         host to connect or unix socket path
 -p         port to connect (not used with unix sockets)
--P         ask for control password
+-P         define control password
 -c         config file to parse
 -s         statfile to use for learn commands
+-d         define deliver-to header
 Version:   @RSPAMD_VERSION@
 EOD
 };
@@ -119,6 +121,9 @@ sub do_rspamc_command {
     print "Sending ". length ($input) ." bytes...\n";
 
     syswrite $sock, "$cfg{'command'} RSPAMC/1.0 $CRLF";
+	if ($cfg{'deliver_to'}) {
+		syswrite $sock, "Deliver-To: " . $cfg{'deliver_to'} . $CRLF;
+	}
     syswrite $sock, "Content-Length: " . length ($input) . $CRLF . $CRLF;
     syswrite $sock, $input;
     syswrite $sock, $CRLF;
@@ -222,7 +227,7 @@ sub do_control_command {
 }
 
 my %args;
-getopt('c:h:p:P:s:', \%args);
+getopt('c:h:p:P:s:d:', \%args);
 my $cmd = shift;
 my $do_parse_config = 1;
 
@@ -261,6 +266,9 @@ if (defined ($args{p})) {
 }
 if (defined ($args{P})) {
     $cfg{'password'} = $args{P};
+}
+if (defined ($args{d})) {
+	$cfg{'deliver_to'} = $args{d};
 }
 
 if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {

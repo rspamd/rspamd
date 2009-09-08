@@ -180,6 +180,8 @@ struct worker_task {
 	GList *rcpt;												/**< recipients list								*/
 	unsigned int nrcpt;											/**< number of recipients							*/
 	struct in_addr from_addr;									/**< client addr in numeric form					*/
+	char *deliver_to;											/**< address to deliver								*/
+	char *user;													/**< user to deliver								*/
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
 	memcached_ctx_t *memc_ctx;									/**< memcached context associated with task			*/

@@ -34,6 +34,7 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "expressions.h"
+#include "settings.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -121,18 +122,23 @@ struct consolidation_callback_data {
 static void
 consolidation_callback (gpointer key, gpointer value, gpointer arg)
 {
-	double *factor;
+	double *factor, fs;
 	struct symbol *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
-	
-	factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
-	if (factor == NULL) {
-		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: 1", s->score, (char *)key);
-		data->score += s->score;
+
+	if (check_factor_settings (data->task, key, &fs)) {
+		data->score += fs * s->score;
 	}
 	else {
-		data->score += *factor * s->score;
-		msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
+		factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
+		if (factor == NULL) {
+			msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: 1", s->score, (char *)key);
+			data->score += s->score;
+		}
+		else {
+			data->score += *factor * s->score;
+			msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
+		}
 	}
 }
 
@@ -229,11 +235,15 @@ static gboolean
 check_metric_is_spam (struct worker_task *task, struct metric *metric)
 {
 	struct metric_result *res;
+	double ms;
 
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
 		metric_process_callback_forced (metric->name, res, task);
-		return res->score >= metric->required_score;
+		if (!check_metric_settings (task, metric, &ms)) {
+			ms = metric->required_score;
+		}
+		return res->score >= ms;
 	}
 
 	return FALSE;
@@ -280,6 +290,11 @@ process_filters (struct worker_task *task)
 	if (task->save.saved) {
 		task->save.saved = 0;
 		return continue_process_filters (task);
+	}
+	/* Check want spam setting */
+	if (check_want_spam (task)) {
+		msg_info ("process_filters: disable check for message id <%s>, user wants spam", task->message_id);
+		return 1;
 	}
 
 	/* Process metrics symbols */
@@ -600,14 +615,18 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	char header_name[128], outbuf[1000];
 	GList *symbols = NULL, *cur;
 	struct metric_result *metric_res = (struct metric_result *)metric_value;
+	double ms;
 	
 	snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
-	if (metric_res->score >= metric_res->metric->required_score) {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f; ", metric_res->score, metric_res->metric->required_score);
+	if (!check_metric_settings (task, metric_res->metric, &ms)) {
+		ms = metric_res->metric->required_score;
+	}
+	if (metric_res->score >= ms) {
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f; ", metric_res->score, ms);
 	}
 	else {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f; ", metric_res->score, metric_res->metric->required_score);
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f; ", metric_res->score, ms);
 	}
 
 	symbols = g_hash_table_get_keys (metric_res->symbols);

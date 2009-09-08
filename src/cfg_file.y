@@ -9,6 +9,7 @@
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 #include "view.h"
+#include "settings.h"
 #ifdef WITH_LUA
 #include "lua/lua_common.h"
 #else
@@ -57,6 +58,7 @@ struct rspamd_view *cur_view = NULL;
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS
 %token  AUTOLEARN MIN_MARK MAX_MARK
+%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -97,6 +99,7 @@ command	:
 	| raw_mode
 	| profile_file
 	| view
+    | settings
 	;
 
 tempdir :
@@ -984,6 +987,37 @@ viewsymbols:
 		}
 	}
 	;
+
+settings:
+	SETTINGS OBRACE settingsbody EBRACE
+	;
+
+settingsbody:
+	| settingscmd SEMICOLON
+	| settingsbody settingscmd SEMICOLON
+	;
+
+settingscmd:
+	| usersettings
+	| domainsettings
+	;
+
+usersettings:
+    USER_SETTINGS EQSIGN QUOTEDSTRING {
+        if (!read_settings ($3, cfg, cfg->user_settings)) {
+            yyerror ("yyparse: cannot read settings %s", $3);
+            YYERROR;
+        }
+    }
+    ;
+domainsettings:
+    DOMAIN_SETTINGS EQSIGN QUOTEDSTRING {
+        if (!read_settings ($3, cfg, cfg->domain_settings)) {
+            yyerror ("yyparse: cannot read settings %s", $3);
+            YYERROR;
+        }
+    }
+    ;
 %%
 /* 
  * vi:ts=4 

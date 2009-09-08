@@ -29,6 +29,7 @@
 #include "cfg_file.h"
 #include "main.h"
 #include "filter.h"
+#include "settings.h"
 #include "classifiers/classifiers.h"
 
 #define DEFAULT_SCORE 10.0
@@ -187,6 +188,7 @@ init_defaults (struct config_file *cfg)
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->statfiles = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
+	init_settings (cfg);
 
 }
 

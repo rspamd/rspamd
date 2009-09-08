@@ -55,6 +55,10 @@ servers							return SERVERS;
 modules							return MODULES;
 module_path                     return MODULE_PATH;
 
+settings                        return SETTINGS;
+user_settings                   return USER_SETTINGS;
+domain_settings                 return DOMAIN_SETTINGS;
+
 filters							return FILTERS;
 factors							return FACTORS;
 metric							return METRIC;

@@ -12,6 +12,10 @@ struct rspamd_settings {
 };
 
 
-int read_settings (const char *path, struct config_file *cfg, GHashTable *table);
+gboolean read_settings (const char *path, struct config_file *cfg, GHashTable *table);
+void init_settings (struct config_file *cfg);
+gboolean check_metric_settings (struct worker_task *task, struct metric *metric, double *score);
+gboolean check_factor_settings (struct worker_task *task, const char *symbol, double *factor);
+gboolean check_want_spam (struct worker_task *task);
 
 #endif
