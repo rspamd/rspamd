@@ -39,12 +39,52 @@ worker {
 	password = "q1";
 };
 
+# Settings for fuzzy storage interface
+worker {
+    type = "fuzzy";
+
+	# Bind socket for control interface
+	bind_socket = localhost:11335;
+
+    count = 1;
+	# Path to filesystem storage
+	hashfile = "/tmp/fuzzy.db";
+};
+
+# Options for lmtp worker
+#worker {
+	#type = "lmtp";
+	# Bind socket for lmtp interface
+	#bind_socket = localhost:11335;
+	# Metric that is considered as main. If we have spam result on
+	# this metric, lmtp delivery would be failed
+	#metric = "default";
+	# Number of lmtp workers
+	#count = 1;
+#};
+
+#worker {
+	#type = "delivery";
+	# Path to delivery agent, %f is expanded as mail from address and %r 
+	# is expanded as recipient address
+	# Expample: agent = "/usr/local/bin/procmail -f %f -d %r"
+	#agent = "/dev/null";
+	# Bind socket for lmtp interface
+	# Example: bind_socket = localhost:25
+	
+	# Whether we should use lmtp for MTA delivery
+	#lmtp = no;
+#};
+
+
 # Sample metric definition
 metric {
 	# Name of metric
 	name = "testmetric";
 	# Score to count message as spam by this metric
 	required_score = 10.1;
+	# Symbols cache path for optimal checks planning
+	cache_file = "/tmp/symbols.cache";
 };
 
 # Logging settings
@@ -64,27 +104,36 @@ logging {
 # Default: 100M
 statfile_pool_size = 40M;
 
-
-# Sample statfile definition
-#statfile {
-	# Alias is used for learning and is used as symbol
-	#alias = "test.spam";
-	# Pattern is path to file, can include %r - recipient name and %f - mail from value
-	#pattern = "./test.spam";
-	# Weight in spam/ham classifier
-	#weight = 1.0;
-	# Size of this statfile class
-	#size = 10M;
-	# Tokenizer for this statfile
-	# Deafault: osb-text
-	#tokenizer = "osb-text";
-#};
-#statfile {
-	#alias = "test.ham";
-	#pattern = "./test.ham";
-	#weight = -2.0;
-	#size = 10M;
-#};
+# Classifier definition
+classifier {
+	# Type of classfier
+    type = "winnow";
+	# Tokenizer used
+    tokenizer = "osb-text";
+    # Sample statfile definition
+    statfile {
+        # Alias is used for learning and is used as symbol
+        symbol = "WINNOW_SPAM";
+        # Pattern is path to file, can include %r - recipient name and %f - mail from value
+        path = "/tmp/test.spam";
+        # Size of this statfile class
+        size = 10M;
+        # Tokenizer for this statfile
+        # Deafault: osb-text
+        #tokenizer = "osb-text";
+        autolearn {
+            min_mark = 10.0;
+        };
+    };
+    statfile {
+        symbol = "WINNOW_HAM";
+        path = "/tmp/test.ham";
+        size = 10M;
+        autolearn {
+            max_mark = 0.1;
+        };
+    };
+};
 
 # Factors coefficients
 factors {
@@ -159,30 +208,7 @@ factors {
     "R_MIXED_CHARSET" = 5;
     "R_BAD_EMAIL" = 10.5;
 };
-# Options for lmtp worker
-#worker {
-	#type = "lmtp";
-	# Bind socket for lmtp interface
-	#bind_socket = localhost:11335;
-	# Metric that is considered as main. If we have spam result on
-	# this metric, lmtp delivery would be failed
-	#metric = "default";
-	# Number of lmtp workers
-	#count = 1;
-#};
 
-#worker {
-	#type = "delivery";
-	# Path to delivery agent, %f is expanded as mail from address and %r 
-	# is expanded as recipient address
-	# Expample: agent = "/usr/local/bin/procmail -f %f -d %r"
-	#agent = "/dev/null";
-	# Bind socket for lmtp interface
-	# Example: bind_socket = localhost:25
-	
-	# Whether we should use lmtp for MTA delivery
-	#lmtp = no;
-#};
 
 # SURBL module params, note that single quotes are mandatory here
 .module 'surbl' {
@@ -285,6 +311,14 @@ factors {
     #blacklist = "file:///some/path/emails.lst";
 };
 
+# Module for fuzzy checksum loading
+.module 'fuzzy_check' {
+    metric = "default";
+	symbol = "R_FUZZY";
+	# List of fuzzy storage servers, separated by ',' or ';' or simple by spaces
+	servers = "localhost:11335";
+};
+
 # If enables threat each regexp as raw regex and do not try to convert
 # each text part to utf8 encoding. Save a lot of resources but less
 # portable.
@@ -315,3 +349,19 @@ settings {
 	# json data for domain's settings
 	#domain_settings = "file:///some/other/json/file";
 };
+
+# Example of json config:
+# [
+#     {
+#         "name": "cebka@test.ru",
+#         "metrics":
+#         {
+#             "default": 5.5
+#         },
+#         "factors":
+#         {
+#             "R_FUZZY": 10.1
+#         },
+#         "want_spam": false
+#     }
+# ] 

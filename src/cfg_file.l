@@ -1,8 +1,8 @@
 %x incl
-%x module
-%x lua
-%x worker
-%x classifier
+%x module_lex_state
+%x lua_lex_state
+%x worker_lex_state
+%x classifier_lex_state
 
 %{
 
@@ -33,9 +33,9 @@ extern struct config_file *cfg;
 %%
 [ \t]*#.*						/* ignore comments */;
 .include						BEGIN(incl);
-.module							BEGIN(module);
-.lua							BEGIN(lua);
-worker							BEGIN(worker); return WORKER;
+.module							BEGIN(module_lex_state);
+.lua							BEGIN(lua_lex_state);
+worker							BEGIN(worker_lex_state); return WORKER;
 composites						return COMPOSITES;
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
@@ -76,7 +76,7 @@ enabled							return ENABLED;
 delivery						return DELIVERY;
 agent							return AGENT;
 
-classifier						BEGIN(classifier); return CLASSIFIER;
+classifier						BEGIN(classifier_lex_state); return CLASSIFIER;
 
 logging							return LOGGING;
 
@@ -155,67 +155,67 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 		}
 }
 
-<module>\n								/* ignore EOL */;
-<module>[ \t]+							/* ignore whitespace */;
-<module>[ \t]*#.*						/* ignore comments */;
-<module>\'[a-zA-Z0-9_-]+\'	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return MODULE_OPT; 
-<module>\{	nested_depth ++; return OBRACE;
-<module>\}  if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
-<module>\;	return SEMICOLON;
-<module>=	return EQSIGN;
-<module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
-<module>[a-zA-Z0-9_%-]+	yylval.string=strdup(yytext); return PARAM;
-<module>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
+<module_lex_state>\n								/* ignore EOL */;
+<module_lex_state>[ \t]+							/* ignore whitespace */;
+<module_lex_state>[ \t]*#.*						/* ignore comments */;
+<module_lex_state>\'[a-zA-Z0-9_-]+\'	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return MODULE_OPT; 
+<module_lex_state>\{	nested_depth ++; return OBRACE;
+<module_lex_state>\}  if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
+<module_lex_state>\;	return SEMICOLON;
+<module_lex_state>=	return EQSIGN;
+<module_lex_state>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
+<module_lex_state>[a-zA-Z0-9_%-]+	yylval.string=strdup(yytext); return PARAM;
+<module_lex_state>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
-<worker>\n								/* ignore EOL */;
-<worker>[ \t]+							/* ignore whitespace */;
-<worker>[ \t]*#.*						/* ignore comments */;
-<worker>\{	nested_depth ++; return OBRACE;
-<worker>\}  if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
-<worker>\;	return SEMICOLON;
-<worker>=	return EQSIGN;
-<worker>type							return TYPE;
-<worker>bind_socket						return BINDSOCK;
-<worker>count							return COUNT;
-<worker>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
-<worker>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}	yylval.string=strdup(yytext); return IPADDR;
-<worker>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\/[0-9]{1,2}	yylval.string=strdup(yytext); return IPNETWORK;
-<worker>[*a-zA-Z0-9.-]+:[0-9]{1,5}		yylval.string=strdup(yytext); return HOSTPORT;
-<worker>[a-zA-Z<][a-zA-Z@+>_-]*         yylval.string=strdup(yytext); return STRING;
-<worker>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
-<worker>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
+<worker_lex_state>\n								/* ignore EOL */;
+<worker_lex_state>[ \t]+							/* ignore whitespace */;
+<worker_lex_state>[ \t]*#.*						/* ignore comments */;
+<worker_lex_state>\{	nested_depth ++; return OBRACE;
+<worker_lex_state>\}  if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
+<worker_lex_state>\;	return SEMICOLON;
+<worker_lex_state>=	return EQSIGN;
+<worker_lex_state>type							return TYPE;
+<worker_lex_state>bind_socket						return BINDSOCK;
+<worker_lex_state>count							return COUNT;
+<worker_lex_state>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
+<worker_lex_state>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}	yylval.string=strdup(yytext); return IPADDR;
+<worker_lex_state>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\/[0-9]{1,2}	yylval.string=strdup(yytext); return IPNETWORK;
+<worker_lex_state>[*a-zA-Z0-9.-]+:[0-9]{1,5}		yylval.string=strdup(yytext); return HOSTPORT;
+<worker_lex_state>[a-zA-Z<][a-zA-Z@+>_-]*         yylval.string=strdup(yytext); return STRING;
+<worker_lex_state>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
+<worker_lex_state>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
-<classifier>\n								/* ignore EOL */;
-<classifier>[ \t]+							/* ignore whitespace */;
-<classifier>[ \t]*#.*						/* ignore comments */;
-<classifier>\{	                            nested_depth ++; return OBRACE;
-<classifier>\}                              if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
-<classifier>\;	                            return SEMICOLON;
-<classifier>=	                            return EQSIGN;
-<classifier>type							return TYPE;
-<classifier>bind_socket						return BINDSOCK;
-<classifier>count							return COUNT;
-<classifier>statfile						return STATFILE;
-<classifier>symbol							return SYMBOL;
-<classifier>path							return PATH;
-<classifier>size							return SIZE;
-<classifier>tokenizer						return TOKENIZER;
-<classifier>section							return SECTION;
-<classifier>autolearn						return AUTOLEARN;
-<classifier>min_mark						return MIN_MARK;
-<classifier>max_mark						return MAX_MARK;
-<classifier>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
-<classifier>-?[0-9]+\.?[0-9]*				yylval.fract=strtod(yytext, NULL); return FRACT;
-<classifier>[0-9]+[kKmMgG]?					yylval.limit=parse_limit(yytext); return SIZELIMIT;
-<classifier>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
-<classifier>[a-zA-Z0-9_%-]+	                yylval.string=strdup(yytext); return PARAM;
-<classifier>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
+<classifier_lex_state>\n							/* ignore EOL */;
+<classifier_lex_state>[ \t]+						/* ignore whitespace */;
+<classifier_lex_state>[ \t]*#.*						/* ignore comments */;
+<classifier_lex_state>\{	                        nested_depth ++; return OBRACE;
+<classifier_lex_state>\}                            if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
+<classifier_lex_state>\;                            return SEMICOLON;
+<classifier_lex_state>=	                            return EQSIGN;
+<classifier_lex_state>type							return TYPE;
+<classifier_lex_state>bind_socket					return BINDSOCK;
+<classifier_lex_state>count							return COUNT;
+<classifier_lex_state>statfile						return STATFILE;
+<classifier_lex_state>symbol						return SYMBOL;
+<classifier_lex_state>path							return PATH;
+<classifier_lex_state>size							return SIZE;
+<classifier_lex_state>tokenizer						return TOKENIZER;
+<classifier_lex_state>section						return SECTION;
+<classifier_lex_state>autolearn						return AUTOLEARN;
+<classifier_lex_state>min_mark						return MIN_MARK;
+<classifier_lex_state>max_mark						return MAX_MARK;
+<classifier_lex_state>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
+<classifier_lex_state>-?[0-9]+\.?[0-9]*				yylval.fract=strtod(yytext, NULL); return FRACT;
+<classifier_lex_state>[0-9]+[kKmMgG]?					yylval.limit=parse_limit(yytext); return SIZELIMIT;
+<classifier_lex_state>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
+<classifier_lex_state>[a-zA-Z0-9_%-]+	                yylval.string=strdup(yytext); return PARAM;
+<classifier_lex_state>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
-<lua>\n									/* ignore EOL */;
-<lua>[ \t]+								/* ignore whitespace */;
-<lua>[ \t]*#.*							/* ignore comments */;
-<lua>^.endlua$							BEGIN(INITIAL);
-<lua>.*									add_luabuf(yytext); return LUACODE;
+<lua_lex_state>\n									/* ignore EOL */;
+<lua_lex_state>[ \t]+								/* ignore whitespace */;
+<lua_lex_state>[ \t]*#.*							/* ignore comments */;
+<lua_lex_state>^.endlua$							BEGIN(INITIAL);
+<lua_lex_state>.*									add_luabuf(yytext); return LUACODE;
 
 %%
 /* 
