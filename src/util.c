@@ -681,7 +681,12 @@ close_log (struct config_file *cfg)
 			break;
 		case RSPAMD_LOG_FILE:
 			if (cfg->logf != NULL) {
+				if (fsync (cfg->log_fd) == -1) {
+					msg_err ("close_log: error syncing log file: %s", strerror (errno));
+				}
 				fclose (cfg->logf);
+				/* XXX: I think this is not needed */
+				close (cfg->log_fd);
 			}
 			break;
 	}

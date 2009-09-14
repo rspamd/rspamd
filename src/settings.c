@@ -82,7 +82,7 @@ json_read_cb (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data
 	free = jb->buflen - off;
 
 	if (free < len) {
-		jb->buflen = MAX (free * 2, len * 2);
+		jb->buflen = MAX (jb->buflen * 2, jb->buflen + len * 2);
 		jb->buf = g_realloc (jb->buf, jb->buflen);
 		jb->pos = jb->buf + off;
 	}

@@ -235,7 +235,7 @@ hashtable_close (hashtable_t * hashtable)
 			hashtable->free_key (pair->key);
 		if (hashtable->free_value)
 			hashtable->free_value (pair->value);
-		g_free (pair);
+		g_free (pair); 
 	}
 
 	g_free (hashtable->buckets);
