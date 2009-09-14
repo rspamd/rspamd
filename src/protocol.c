@@ -313,15 +313,7 @@ parse_header (struct worker_task *task, f_str_t *line)
 				task->rcpt = g_list_prepend (task->rcpt, tmp);
 				msg_debug ("parse_header: read rcpt header, value: %s", tmp);
 			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'n':
-		case 'N':
-			/* nrcpt */
-			if (strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
+			else if (strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
 				tmp = memory_pool_fstrdup (task->task_pool, line);
 				task->nrcpt = strtoul (tmp, &err, 10);
 				msg_debug ("parse_header: read rcpt header, value: %d", (int)task->nrcpt);

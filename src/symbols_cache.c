@@ -360,6 +360,9 @@ call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, str
 		item = &cache->items[0];
 	}
 	else {
+		if (cache == NULL) {
+			return FALSE;
+		}
 		/* Next pointer */
 		if (*saved_item - cache->items >= cache->used_items - 1) {
 			/* No more items in cache */

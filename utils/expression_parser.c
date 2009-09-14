@@ -49,4 +49,6 @@ main (int argc, char **argv)
 	}
 
 	memory_pool_delete (pool);
+
+	return 0;
 }

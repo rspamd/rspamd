@@ -2,6 +2,8 @@
 #define RSPAMD_LUA_H
 
 #include "../config.h"
+#ifdef WITH_LUA
+
 #include "../main.h"
 #include "../cfg_file.h"
 #include <lua.h>
@@ -30,4 +32,5 @@ int lua_call_chain_filter (const char *function, struct worker_task *task, int *
 double lua_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name);
 void add_luabuf (const char *line);
 
-#endif
+#endif /* WITH_LUA */
+#endif /* RSPAMD_LUA_H */

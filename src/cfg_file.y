@@ -23,6 +23,7 @@ extern char *yytext;
 
 GList *cur_module_opt = NULL;
 struct metric *cur_metric = NULL;
+struct classifier_config *cur_classifier = NULL;
 struct statfile *cur_statfile = NULL;
 struct statfile_section *cur_section = NULL;
 struct statfile_autolearn_params *cur_autolearn = NULL;
@@ -58,7 +59,7 @@ struct rspamd_view *cur_view = NULL;
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS
 %token  AUTOLEARN MIN_MARK MAX_MARK
-%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS
+%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -93,7 +94,7 @@ command	:
 	| metric
 	| composites
 	| logging
-	| statfile
+    | classifier
 	| statfile_pool_size
 	| luacode
 	| raw_mode
@@ -660,20 +661,81 @@ loggingfile:
 	}
 	;
 
+
+classifier:
+    CLASSIFIER OBRACE classifierbody EBRACE {
+        if (cur_classifier == NULL || cur_classifier->classifier == NULL) {
+            yyerror ("yyparse: invalid classifier definition");
+            YYERROR;
+        }
+        if (cur_classifier->metric == NULL) {
+            cur_classifier->metric = DEFAULT_METRIC;
+        }
+		if (cur_classifier->tokenizer == NULL) {
+			cur_classifier->tokenizer = get_tokenizer ("osb-text");
+		}
+
+        cfg->classifiers = g_list_prepend (cfg->classifiers, cur_classifier);
+        cur_classifier = NULL;
+    }
+    ;
+
+classifierbody:
+    | classifiercmd SEMICOLON
+    | classifierbody classifiercmd SEMICOLON
+    ;
+
+classifiercmd:
+    | statfile
+    | classifiertype
+    | classifiermetric
+	| classifiertokenizer
+    | classifieroption
+    ;
+
+classifiertype:
+    TYPE EQSIGN QUOTEDSTRING {
+        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        if ((cur_classifier->classifier = get_classifier ($3)) == NULL) {
+            yyerror ("yyparse: unknown classifier type: %s", $3);
+            YYERROR;
+        }
+    }
+    ;
+classifiertokenizer:
+	TOKENIZER EQSIGN QUOTEDSTRING {
+        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+		if ((cur_classifier->tokenizer = get_tokenizer ($3)) == NULL) {
+			yyerror ("yyparse: unknown tokenizer %s", $3);
+			YYERROR;
+		}
+	}
+	;
+
+classifiermetric:
+    METRIC EQSIGN QUOTEDSTRING {
+        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier->metric = $3;
+        memory_pool_add_destructor (cfg->cfg_pool, g_free, cur_classifier->metric);
+    }
+    ;
+
+classifieroption:
+    PARAM EQSIGN QUOTEDSTRING {
+        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        g_hash_table_insert (cur_classifier->opts, $1, $3);
+        memory_pool_add_destructor (cfg->cfg_pool, g_free, $1);
+        memory_pool_add_destructor (cfg->cfg_pool, g_free, $3);
+    };
+
 statfile:
 	STATFILE OBRACE statfilebody EBRACE {
-		if (cur_statfile == NULL || cur_statfile->alias == NULL || cur_statfile->pattern == NULL 
-			|| cur_statfile->weight == 0 || cur_statfile->size == 0) {
+		if (cur_statfile == NULL || cur_statfile->path == NULL || cur_statfile->size == 0) {
 			yyerror ("yyparse: not enough arguments in statfile definition");
 			YYERROR;
 		}
-		if (cur_statfile->metric == NULL) {
-			cur_statfile->metric = memory_pool_strdup (cfg->cfg_pool, "default");
-		}
-		if (cur_statfile->tokenizer == NULL) {
-			cur_statfile->tokenizer = get_tokenizer ("osb-text");
-		}
-		g_hash_table_insert (cfg->statfiles, cur_statfile->alias, cur_statfile);
+        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+		cur_classifier->statfiles = g_list_prepend (cur_classifier->statfiles, cur_statfile);
 		cur_statfile = NULL;
 	}
 	;
@@ -684,48 +746,33 @@ statfilebody:
 	;
 
 statfilecmd:
-	| statfilealias
-	| statfilepattern
-	| statfileweight
+	| statfilesymbol
+	| statfilepath
 	| statfilesize
-	| statfilemetric
-	| statfiletokenizer
 	| statfilesection
 	| statfileautolearn
 	;
 	
-statfilealias:
-	ALIAS EQSIGN QUOTEDSTRING {
+statfilesymbol:
+	SYMBOL EQSIGN QUOTEDSTRING {
+        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
 		if (cur_statfile == NULL) {
 			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 		}
-		cur_statfile->alias = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_statfile->symbol = memory_pool_strdup (cfg->cfg_pool, $3);
+        g_hash_table_insert (cfg->classifiers_symbols, $3, cur_classifier);
 	}
 	;
 
-statfilepattern:
-	PATTERN EQSIGN QUOTEDSTRING {
+statfilepath:
+	PATH EQSIGN QUOTEDSTRING {
 		if (cur_statfile == NULL) {
 			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 		}
-		cur_statfile->pattern = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_statfile->path = memory_pool_strdup (cfg->cfg_pool, $3);
 	}
 	;
 
-statfileweight:
-	WEIGHT EQSIGN NUMBER {
-		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
-		}
-		cur_statfile->weight = $3;
-	}
-	| WEIGHT EQSIGN FRACT {
-		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
-		}
-		cur_statfile->weight = $3;
-	}
-	;
 
 statfilesize:
 	SIZE EQSIGN NUMBER {
@@ -742,26 +789,7 @@ statfilesize:
 	}
 	;
 
-statfilemetric:
-	METRIC EQSIGN QUOTEDSTRING {
-		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
-		}
-		cur_statfile->metric = memory_pool_strdup (cfg->cfg_pool, $3);
-	}
-	;
 
-statfiletokenizer:
-	TOKENIZER EQSIGN QUOTEDSTRING {
-		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
-		}
-		if ((cur_statfile->tokenizer = get_tokenizer ($3)) == NULL) {
-			yyerror ("yyparse: unknown tokenizer %s", $3);
-			YYERROR;
-		}
-	}
-	;
 
 statfilesection:
 	SECTION OBRACE sectionbody EBRACE {

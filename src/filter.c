@@ -444,7 +444,7 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 	return FALSE;
 }
 
-static void
+void
 process_autolearn (struct statfile *st, struct worker_task *task, GTree *tokens, 
 					struct classifier *classifier, char *filename, struct classifier_ctx* ctx)
 {
@@ -464,7 +464,7 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree *tokens,
 				}
 			}
 
-			classifier->learn_func (ctx, task->worker->srv->statfile_pool, filename, tokens, 1);
+			classifier->learn_func (ctx, task->worker->srv->statfile_pool, filename, tokens, TRUE);
 		}
 	}
 }
@@ -488,48 +488,27 @@ make_composites (struct worker_task *task)
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
 
-struct statfile_result_data {
-	struct metric *metric;
-	struct classifier_ctx *ctx;
-};
 
 struct statfile_callback_data {
 	GHashTable *tokens;
-	GHashTable *classifiers;
 	struct worker_task *task;
 };
 
 static void
-statfiles_callback (gpointer key, gpointer value, void *arg)
+classifiers_callback (gpointer value, void *arg)
 {
 	struct statfile_callback_data *data= (struct statfile_callback_data *)arg;
 	struct worker_task *task = data->task;
-	struct statfile *st = (struct statfile *)value;
-	struct classifier *classifier;
-	struct statfile_result_data *res_data;
-	struct metric *metric;
+	struct classifier_config *cl = value;
+	struct classifier_ctx *ctx;
 	struct mime_text_part *text_part;
-
+	struct statfile *st;
 	GTree *tokens = NULL;
 	GList *cur;
-
-	char *filename;
 	f_str_t c;
 	
-	if (g_list_length (task->rcpt) == 1) {
-		filename = resolve_stat_filename (task->task_pool, st->pattern, task->from, (char *)task->rcpt->data);
-	}
-	else {
-		/* XXX: handle multiply recipients correctly */
-		filename = resolve_stat_filename (task->task_pool, st->pattern, task->from, "");
-	}
-	
-	if (statfile_pool_open (task->worker->srv->statfile_pool, filename) == NULL && !check_autolearn (st->autolearn, task)) {
-		return;
-	}
-	
 	cur = g_list_first (task->text_parts);
-	if ((tokens = g_hash_table_lookup (data->tokens, st->tokenizer)) == NULL) {
+	if ((tokens = g_hash_table_lookup (data->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
 			text_part = (struct mime_text_part *)cur->data;
 			if (text_part->is_empty) {
@@ -539,50 +518,30 @@ statfiles_callback (gpointer key, gpointer value, void *arg)
 			c.begin = text_part->content->data;
 			c.len = text_part->content->len;
 			/* Tree would be freed at task pool freeing */
-			if (!st->tokenizer->tokenize_func (st->tokenizer, task->task_pool, &c, &tokens)) {
+			if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
 				msg_info ("statfiles_callback: cannot tokenize input");
 				return;
 			}
 			cur = g_list_next (cur);
 		}
-		g_hash_table_insert (data->tokens, st->tokenizer, tokens);
+		g_hash_table_insert (data->tokens, cl->tokenizer, tokens);
 	}
 	
-	metric = g_hash_table_lookup (task->cfg->metrics, st->metric);
-	if (metric == NULL) {
-		classifier = get_classifier ("winnow");
-	} 
-	else {
-		classifier = metric->classifier;
-	}
-	if ((res_data = g_hash_table_lookup (data->classifiers, classifier)) == NULL) {
-		res_data = memory_pool_alloc (task->task_pool, sizeof (struct statfile_result_data));
-		res_data->ctx = classifier->init_func (task->task_pool);
-		res_data->metric = metric;
-		g_hash_table_insert (data->classifiers, classifier, res_data);
-	}
+	ctx = cl->classifier->init_func (task->task_pool, cl);
+	cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task);
 	
-	classifier->classify_func (res_data->ctx, task->worker->srv->statfile_pool, filename, tokens, st->weight);
-
-	if (st->autolearn) {
-		/* Process autolearn */
-		process_autolearn (st, task, tokens, classifier, filename, res_data->ctx);
+	/* Autolearning */
+	cur = g_list_first (cl->statfiles);
+	while (cur) {
+		st = cur->data;
+		if (st->autolearn) {
+			if (check_autolearn (st->autolearn, task)) {
+				/* Process autolearn */
+				process_autolearn (st, task, tokens, cl->classifier, st->path, ctx);
+			}
+		}
+		cur = g_list_next (cur);
 	}
-}
-
-static void
-statfiles_results_callback (gpointer key, gpointer value, void *arg)
-{
-	struct worker_task *task = (struct worker_task *)arg;
-	struct statfile_result_data *res = (struct statfile_result_data *)value;
-	struct classifier *classifier = (struct classifier *)key;
-	double *w;
-	char *filename;
-
-	w = memory_pool_alloc (task->task_pool, sizeof (double));
-	filename = classifier->result_file_func (res->ctx, w);
-	insert_result (task, res->metric->name, classifier->name, *w, NULL);
-	msg_debug ("statfiles_results_callback: got total weight %.2f for metric %s", *w, res->metric->name);
 }
 
 
@@ -593,16 +552,11 @@ process_statfiles (struct worker_task *task)
 	
 	cd.task = task;
 	cd.tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-	cd.classifiers = g_hash_table_new (g_str_hash, g_str_equal);
 
-	g_hash_table_foreach (task->cfg->statfiles, statfiles_callback, &cd);
-	g_hash_table_foreach (cd.classifiers, statfiles_results_callback, task);
-	
+	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cd);
 	g_hash_table_destroy (cd.tokens);
-	g_hash_table_destroy (cd.classifiers);
-	/* Process results */
-	g_hash_table_foreach (task->results, metric_process_callback_forced, task);
 
+	/* Process results */
 	task->state = WRITE_REPLY;
 }
 

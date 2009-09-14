@@ -186,7 +186,7 @@ init_defaults (struct config_file *cfg)
 	cfg->factors = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->c_modules = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->statfiles = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->classifiers_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
 	init_settings (cfg);
 
@@ -207,10 +207,10 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->c_modules);
 	g_hash_table_remove_all (cfg->composite_symbols);
 	g_hash_table_unref (cfg->composite_symbols);
-	g_hash_table_remove_all (cfg->statfiles);
-	g_hash_table_unref (cfg->statfiles);
 	g_hash_table_remove_all (cfg->cfg_params);
 	g_hash_table_unref (cfg->cfg_params);
+	g_hash_table_destroy (cfg->classifiers_symbols);
+	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
 	memory_pool_delete (cfg->cfg_pool);
 }
@@ -602,6 +602,20 @@ parse_comma_list (memory_pool_t *pool, char *line)
 	}
 
 	return res;
+}
+
+struct classifier_config *
+check_classifier_cfg (struct config_file *cfg, struct classifier_config *c)
+{
+	if (c == NULL) {
+		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct classifier_config));
+	}
+	if (c->opts == NULL) {
+		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, c->opts);
+	}
+
+	return c;
 }
 
 /*

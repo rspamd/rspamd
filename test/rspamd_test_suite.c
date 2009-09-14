@@ -30,4 +30,6 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/statfile", rspamd_statfile_test_func);
 
 	g_test_run ();
+
+	return 0;
 }

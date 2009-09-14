@@ -130,14 +130,22 @@ struct statfile_autolearn_params {
  * Statfile config definition
  */
 struct statfile {
-	char *alias;									/**< alias of statfile									*/
-	char *pattern;									/**< filesystem pattern (with %r or %f)					*/
-	double weight;									/**< weight scale										*/
-	char *metric;									/**< metric name										*/
+	char *symbol;									/**< symbol of statfile									*/
+	char *path; 									/**< filesystem pattern (with %r or %f)					*/
 	size_t size;									/**< size of statfile									*/
-	struct tokenizer *tokenizer;					/**< tokenizer used for statfile						*/
 	GList *sections;								/**< list of sections in statfile						*/
 	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
+};
+
+/**
+ * Classifier config definition
+ */
+struct classifier_config {
+    GList *statfiles;                               /**< statfiles list                                     */
+    char *metric;                                   /**< metric of this classifier                          */
+    struct classifier *classifier;                  /**< classifier interface                               */
+	struct tokenizer *tokenizer;					/**< tokenizer used for classifier						*/
+    GHashTable *opts;                               /**< other options                                      */
 };
 
 /**
@@ -223,7 +231,8 @@ struct config_file {
 	GHashTable* factors;							/**< hash of factors indexed by symbol name				*/
 	GHashTable* c_modules;							/**< hash of c modules indexed by module name			*/
 	GHashTable* composite_symbols;					/**< hash of composite symbols indexed by its name		*/
-	GHashTable* statfiles;							/**< hash of defined statfiles indexed by alias			*/
+    GList *classifiers;                             /**< list of all classifiers defined                    */
+    GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
     GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	int clock_res;									/**< resolution of clock used							*/
 	GList *views;									/**< views												*/
@@ -314,7 +323,7 @@ void post_load_config (struct config_file *cfg);
 void unescape_quotes (char *line);
 
 GList* parse_comma_list (memory_pool_t *pool, char *line);
-
+struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
 
 int yylex (void);
 int yyparse (void);

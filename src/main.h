@@ -71,6 +71,7 @@ struct pidfh;
 struct config_file;
 struct tokenizer;
 struct classifier;
+struct classifier_config;
 struct mime_part;
 struct rspamd_view;
 
@@ -140,9 +141,8 @@ struct controller_session {
 	struct config_file *cfg;									/**< pointer to config file							*/
 	char *learn_rcpt;											/**< recipient for learning							*/
 	char *learn_from;											/**< from address for learning						*/
-	struct tokenizer *learn_tokenizer;							/**< tokenizer for learning							*/
-	struct classifier *learn_classifier;						/**< classifier for learning						*/
-	char *learn_filename;										/**< real filename for learning						*/
+	struct classifier_config *learn_classifier;
+	char *learn_symbol;											/**< symbol to train								*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
 	f_str_t *learn_buf;											/**< learn input									*/
 	GList *parts;												/**< extracted mime parts							*/

@@ -35,7 +35,6 @@ struct classifier classifiers[] = {
 	.init_func        = winnow_init, 
 	.classify_func    = winnow_classify, 
 	.learn_func       = winnow_learn, 
-	.result_file_func = winnow_result_file 
 	},
 };
 

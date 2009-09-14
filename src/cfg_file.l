@@ -2,6 +2,7 @@
 %x module
 %x lua
 %x worker
+%x classifier
 
 %{
 
@@ -21,6 +22,7 @@ extern void add_luabuf (const char *line);
 YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
 int line_stack[MAX_INCLUDE_DEPTH];
 int include_stack_ptr = 0;
+int nested_depth = 0;
 extern struct config_file *cfg;
 
 %}
@@ -74,17 +76,7 @@ enabled							return ENABLED;
 delivery						return DELIVERY;
 agent							return AGENT;
 
-statfile						return STATFILE;
-alias							return ALIAS;
-pattern							return PATTERN;
-weight							return WEIGHT;
-size							return SIZE;
-tokenizer						return TOKENIZER;
-classifier						return CLASSIFIER;
-section							return SECTION;
-autolearn						return AUTOLEARN;
-min_mark						return MIN_MARK;
-max_mark						return MAX_MARK;
+classifier						BEGIN(classifier); return CLASSIFIER;
 
 logging							return LOGGING;
 
@@ -167,8 +159,8 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <module>[ \t]+							/* ignore whitespace */;
 <module>[ \t]*#.*						/* ignore comments */;
 <module>\'[a-zA-Z0-9_-]+\'	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; return MODULE_OPT; 
-<module>\{	return OBRACE;
-<module>\}  BEGIN(INITIAL); return EBRACE;
+<module>\{	nested_depth ++; return OBRACE;
+<module>\}  if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
 <module>\;	return SEMICOLON;
 <module>=	return EQSIGN;
 <module>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
@@ -178,8 +170,8 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <worker>\n								/* ignore EOL */;
 <worker>[ \t]+							/* ignore whitespace */;
 <worker>[ \t]*#.*						/* ignore comments */;
-<worker>\{	return OBRACE;
-<worker>\}  BEGIN(INITIAL); return EBRACE;
+<worker>\{	nested_depth ++; return OBRACE;
+<worker>\}  if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
 <worker>\;	return SEMICOLON;
 <worker>=	return EQSIGN;
 <worker>type							return TYPE;
@@ -192,6 +184,32 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <worker>[a-zA-Z<][a-zA-Z@+>_-]*         yylval.string=strdup(yytext); return STRING;
 <worker>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <worker>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
+
+<classifier>\n								/* ignore EOL */;
+<classifier>[ \t]+							/* ignore whitespace */;
+<classifier>[ \t]*#.*						/* ignore comments */;
+<classifier>\{	                            nested_depth ++; return OBRACE;
+<classifier>\}                              if (--nested_depth == 0) { BEGIN(INITIAL); } return EBRACE;
+<classifier>\;	                            return SEMICOLON;
+<classifier>=	                            return EQSIGN;
+<classifier>type							return TYPE;
+<classifier>bind_socket						return BINDSOCK;
+<classifier>count							return COUNT;
+<classifier>statfile						return STATFILE;
+<classifier>symbol							return SYMBOL;
+<classifier>path							return PATH;
+<classifier>size							return SIZE;
+<classifier>tokenizer						return TOKENIZER;
+<classifier>section							return SECTION;
+<classifier>autolearn						return AUTOLEARN;
+<classifier>min_mark						return MIN_MARK;
+<classifier>max_mark						return MAX_MARK;
+<classifier>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
+<classifier>-?[0-9]+\.?[0-9]*				yylval.fract=strtod(yytext, NULL); return FRACT;
+<classifier>[0-9]+[kKmMgG]?					yylval.limit=parse_limit(yytext); return SIZELIMIT;
+<classifier>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
+<classifier>[a-zA-Z0-9_%-]+	                yylval.string=strdup(yytext); return PARAM;
+<classifier>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
 
 <lua>\n									/* ignore EOL */;
 <lua>[ \t]+								/* ignore whitespace */;

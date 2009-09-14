@@ -181,9 +181,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	int r = 0, days, hours, minutes;
 	time_t uptime;
 	unsigned long size = 0;
-	struct statfile *statfile;
-	stat_file_t *file;
-	struct metric *metric;
+	struct classifier_config *cl;
 	memory_pool_stat_t mem_st;
 	char *password = g_hash_table_lookup (session->worker->cf->params, "password");
 
@@ -311,26 +309,16 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					return;
 				}
 
-				statfile = g_hash_table_lookup (session->cfg->statfiles, *cmd_args);
-				if (statfile == NULL) {
+				session->learn_symbol = *cmd_args;
+				cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
+				if (cl == NULL) {
 					r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
 					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 					return;
 
 				}
+				session->learn_classifier = cl;
 
-				metric = g_hash_table_lookup (session->cfg->metrics, statfile->metric);
-
-				session->learn_rcpt = NULL;
-				session->learn_from = NULL;
-				session->learn_filename = NULL;
-				session->learn_tokenizer = statfile->tokenizer;
-				if (metric != NULL) {
-					session->learn_classifier = metric->classifier;
-				}
-				else {
-					session->learn_classifier = get_classifier ("winnow");
-				}
 				/* By default learn positive */
 				session->in_class = 1;
 				/* Get all arguments */
@@ -364,22 +352,6 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 								rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 								return;
 						}
-					}
-				}
-				session->learn_filename = resolve_stat_filename (session->session_pool, statfile->pattern, 
-																	session->learn_rcpt, session->learn_from);
-				if ((file = statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename)) == NULL) {
-					/* Try to create statfile */
-					if (statfile_pool_create (session->worker->srv->statfile_pool, 
-									session->learn_filename, statfile->size / sizeof (struct stat_file_block)) == -1) {
-						r = snprintf (out_buf, sizeof (out_buf), "cannot create statfile %s" CRLF, session->learn_filename);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
-						return;
-					}
-					if ((file = statfile_pool_open (session->worker->srv->statfile_pool, session->learn_filename)) == NULL) {
-						r = snprintf (out_buf, sizeof (out_buf), "cannot open statfile %s" CRLF, session->learn_filename);
-						rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
-						return;
 					}
 				}
                 rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
@@ -479,7 +451,7 @@ controller_read_socket (f_str_t *in, void *arg)
 			while ((content = get_next_text_part (session->session_pool, session->parts, &cur)) != NULL) {
 				c.begin = content->data;
 				c.len = content->len;
-				if (!session->learn_tokenizer->tokenize_func (session->learn_tokenizer, 
+				if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, 
 							session->session_pool, &c, &tokens)) {
 					i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
 					rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
@@ -487,9 +459,9 @@ controller_read_socket (f_str_t *in, void *arg)
 					return;
 				}
 			}
-			cls_ctx = session->learn_classifier->init_func (session->session_pool);
-			session->learn_classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool,
-													session->learn_filename, tokens, session->in_class);
+			cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
+			session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool,
+													session->learn_symbol, tokens, session->in_class);
 			session->worker->srv->stat->messages_learned ++;
 			i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 			rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE);
