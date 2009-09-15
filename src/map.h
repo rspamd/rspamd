@@ -27,6 +27,9 @@ struct http_map_data {
 	char *path;
 	char *host;
 	time_t last_checked;
+	gboolean chunked;
+	uint32_t chunk;
+	uint32_t chunk_read;
 };
 
 typedef u_char* (*map_cb_t)(memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);

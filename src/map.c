@@ -185,12 +185,90 @@ parse_http_reply (u_char *chunk, size_t len, struct http_reply *reply)
 	return s;
 }
 
+static int
+read_chunk_header (u_char *buf, size_t len, struct http_map_data *data)
+{
+	u_char chunkbuf[32], *p, *c;
+	int skip;
+
+	p = chunkbuf;
+	c = buf;
+	while (g_ascii_isxdigit (*c) && p - chunkbuf < sizeof (chunkbuf) - 1) {
+		*p++ = *c++;
+		skip ++;
+	}
+	*p = '\0';
+	data->chunk = strtoul (chunkbuf, NULL, 16);
+	/* Now skip to CRLF */
+	while (*c != '\n' && c - buf < len) {
+		c ++;
+		skip ++;
+	}
+	if (*c == '\n') {
+		skip ++;
+		c ++;
+	}
+	data->chunk_read = 0;
+	
+	return skip;
+}
+
+static gboolean
+read_http_chunked (u_char *buf, size_t len, struct rspamd_map *map, struct http_map_data *data, struct map_cb_data *cbdata)
+{
+	u_char *p = buf, *remain;
+	uint32_t skip = 0, rlen;
+	
+	if (data->chunk == 0) {
+		/* Read first chunk data */
+		skip = read_chunk_header (buf, len, data);
+		p += skip;
+	}
+
+	len -= skip;
+	data->chunk_read += len;
+	if (data->chunk_read >= data->chunk) {
+		/* Read next chunk and feed callback with remaining buffer */
+		remain = map->read_callback (map->pool, p, len - (data->chunk_read - data->chunk), cbdata);
+		if (remain != NULL && remain != p) {
+			/* copy remaining buffer to start of buffer */
+			rlen = len - (remain - p);
+			memmove (p, remain, rlen);
+		}
+
+		p = buf + (len - (data->chunk_read - data->chunk));
+		if (*p != '\r') {
+			msg_info ("read_http_chunked: invalid chunked reply");
+			g_assert (0);
+			return FALSE;
+		}
+		p += 2;
+		len -= p - buf;
+		skip = read_chunk_header (p, len, data);
+		p += skip;
+		len -= skip;
+		if (data->chunk == 0) {
+			return FALSE;
+		}
+	}
+
+	remain = map->read_callback (map->pool, p, len, cbdata);
+	if (remain != NULL && remain != p) {
+		/* copy remaining buffer to start of buffer */
+		rlen = len - (remain - p);
+		memmove (p, remain, rlen);
+	}
+
+	return TRUE;
+}
+
 static gboolean
 read_http_common (struct rspamd_map *map, struct http_map_data *data, struct http_reply *reply, struct map_cb_data *cbdata, int fd)
 {
-	u_char buf[BUFSIZ], *remain;
+	u_char buf[BUFSIZ], *remain, *pos;
 	int rlen;
 	ssize_t r;
+	char *te;
 
 	rlen = 0;
 	if ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 1)) > 0) {
@@ -200,21 +278,35 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 			/* copy remaining buffer to start of buffer */
 			rlen = r - (remain - buf);
 			memmove (buf, remain, rlen);
+			r = rlen;
 		}
 		if (reply->parser_state == 6) {
 			if (reply->code != 200 && reply->code != 304) {
 				msg_err ("read_http: got error reply from server %s, %d", data->host, reply->code);
 				return FALSE;
 			}
-			remain = map->read_callback (map->pool, buf, r - 1, cbdata);
-			if (remain != NULL && remain != buf) {
+			pos = buf;
+			if (!data->chunked && (te = g_hash_table_lookup (reply->headers, "Transfer-Encoding")) != NULL) {
+				if (g_ascii_strcasecmp (te, "chunked") == 0) {
+					data->chunked = TRUE;
+				}
+			}
+			if (data->chunked) {
+				return read_http_chunked (buf, r - 1, map, data, cbdata);
+			}
+			remain = map->read_callback (map->pool, pos, r - 1, cbdata);
+			if (remain != NULL && remain != pos) {
 				/* copy remaining buffer to start of buffer */
-				rlen = r - (remain - buf);
-				memmove (buf, remain, rlen);
+				rlen = r - (remain - pos);
+				memmove (pos, remain, rlen);
 			}
 		}
 	}
-	return FALSE;
+	else {
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static void
