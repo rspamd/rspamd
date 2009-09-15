@@ -28,9 +28,8 @@ OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
 
-# ################################################################################
-# Check Includes
-#
+############################# CONFIG SECTION #############################################
+
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckFunctionExists)
 INCLUDE(CheckSymbolExists)
@@ -281,28 +280,28 @@ CHECK_C_COMPILER_FLAG(-Wno-pointer-sign SUPPORT_WPOINTER_SIGN)
 SET(CMAKE_C_WARN_FLAGS "-W")
 
 IF(SUPPORT_WALL)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wall")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wall")
 ENDIF(SUPPORT_WALL)
 IF(SUPPORT_WPOINTER)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wpointer-arith")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wpointer-arith")
 ENDIF(SUPPORT_WPOINTER)
 IF(SUPPORT_WPARAM)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-unused-parameter")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-unused-parameter")
 ENDIF(SUPPORT_WPARAM)
 IF(SUPPORT_WFUNCTION)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-unused-function")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-unused-function")
 ENDIF(SUPPORT_WFUNCTION)
 IF(SUPPORT_WSIGNCOMPARE)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-sign-compare ")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-sign-compare ")
 ENDIF(SUPPORT_WSIGNCOMPARE)
 IF(SUPPORT_WUNUSED_VAR)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wunused-variable")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wunused-variable")
 ENDIF(SUPPORT_WUNUSED_VAR)
 IF(SUPPORT_WDECL)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-declaration-after-statement")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-declaration-after-statement")
 ENDIF(SUPPORT_WDECL)
 IF(SUPPORT_WPOINTER_SIGN)
-SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-pointer-sign")
+	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -Wno-pointer-sign")
 ENDIF(SUPPORT_WPOINTER_SIGN)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
@@ -315,11 +314,19 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	IF(ENABLE_REDIRECTOR MATCHES "ON")
 		CONFIGURE_FILE(freebsd/redirector.sh.in freebsd/redirector.sh @ONLY)
 	ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
+	IF(NOT ETC_PREFIX)
+		SET(ETC_PREFIX /usr/local/etc)
+		SET(PREFIX /usr/local)
+	ENDIF(NOT ETC_PREFIX)
 
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE -DLINUX")
+	IF(NOT ETC_PREFIX)
+		SET(ETC_PREFIX /etc)
+		SET(PREFIX /usr)
+	ENDIF(NOT ETC_PREFIX)
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 IF(ENABLE_REDIRECTOR MATCHES "ON")
@@ -329,6 +336,8 @@ ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 IF(DEBUG_MODE MATCHES "ON")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 ENDIF(DEBUG_MODE MATCHES "ON")
+
+################################ SOURCES SECTION ###########################
 
 SET(RSPAMDSRC	src/modules.c
 				src/hash.c
@@ -422,6 +431,8 @@ SET(LEX_SRC		src/cfg_file.l)
 STRING(REPLACE "_file.y" "_yacc.c" YACC_OUTPUT ${YACC_SRC})
 STRING(REPLACE "_file.l" "_lex.c" LEX_OUTPUT ${LEX_SRC})
 
+############################ TARGETS SECTION ###############################
+
 ADD_CUSTOM_COMMAND(OUTPUT ${LEX_OUTPUT}
 					COMMAND ${LEX_EXECUTABLE} -o${LEX_OUTPUT} ${LEX_SRC})
 ADD_CUSTOM_COMMAND(OUTPUT ${YACC_OUTPUT}
@@ -446,6 +457,7 @@ CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(rspamc.pl.in rspamc.pl @ONLY)
 CONFIGURE_FILE(rspamd.conf.sample conf/rspamd.conf.sample @ONLY)
 
+######################### LINK SECTION ###############################
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} 
 					  ${CLASSIFIERSSRC} ${PLUGINSSRC} ${YACC_OUTPUT} 
 					  ${LEX_OUTPUT})
@@ -510,20 +522,65 @@ ENDIF(LIBUTIL_LIBRARY)
 TARGET_LINK_LIBRARIES(utils/expression-parser ${GLIB2_LIBRARIES})
 TARGET_LINK_LIBRARIES(utils/expression-parser ${GMIME2_LIBRARIES})
 
+##################### INSTALLATION ##########################################
 
+# Binaries
 INSTALL(PROGRAMS rspamd-${RSPAMD_VERSION} DESTINATION bin RENAME rspamd)
 INSTALL(PROGRAMS rspamc.pl DESTINATION bin RENAME rspamc)
-INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_INSTALL_PREFIX}/etc/rspamd)")
-INSTALL(DIRECTORY conf/ DESTINATION etc/rspamd)
 
+
+# Configs
+INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${ETC_PREFIX}/rspamd)")
+
+INSTALL(FILES conf/2tld.inc RENAME 2tld.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/2tld.inc)
+INSTALL(FILES conf/2tld.inc DESTINATION ${ETC_PREFIX}/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/2tld.inc)
+
+INSTALL(FILES conf/drugs.inc RENAME drugs.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/drugs.inc)
+INSTALL(FILES conf/drugs.inc DESTINATION ${ETC_PREFIX}/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/drugs.inc)
+
+INSTALL(FILES conf/fraud.inc RENAME fraud.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/fraud.inc)
+INSTALL(FILES conf/fraud.inc DESTINATION ${ETC_PREFIX}/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/fraud.inc)
+
+INSTALL(FILES conf/html.inc RENAME html.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/html.inc)
+INSTALL(FILES conf/html.inc DESTINATION ${ETC_PREFIX}/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/html.inc)
+
+INSTALL(FILES conf/headers.inc RENAME headers.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/headers.inc)
+INSTALL(FILES conf/headers.inc DESTINATION ${ETC_PREFIX}/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/headers.inc)
+
+INSTALL(FILES conf/lotto.inc RENAME lotto.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/lotto.inc)
+INSTALL(FILES conf/lotto.inc DESTINATION ${ETC_PREFIX}/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/lotto.inc)
+
+INSTALL(FILES conf/rspamd.conf.sample DESTINATION ${ETC_PREFIX}/)
+
+# Lua plugins
+IF(ENABLE_LUA MATCHES "ON")
+	INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${ETC_PREFIX}/rspamd/plugins)")
+	INSTALL(DIRECTORY src/plugins/lua DESTINATION ${ETC_PREFIX}/rspamd/plugins PATTERN "*.lua")
+ENDIF(ENABLE_LUA MATCHES "ON")
+
+# Perl lib
 IF(ENABLE_PERL MATCHES "ON")
 	INSTALL(CODE "EXECUTE_PROCESS(COMMAND make install WORKING_DIRECTORY perl)")
 ENDIF(ENABLE_PERL MATCHES "ON")
 
+# Redirector
 IF(ENABLE_REDIRECTOR MATCHES "ON")
 	INSTALL(PROGRAMS utils/redirector.pl DESTINATION bin RENAME rspamd-redirector)
 ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 
+# Start scripts
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	INSTALL(PROGRAMS freebsd/rspamd.sh DESTINATION etc/rc.d)
 	IF(ENABLE_REDIRECTOR MATCHES "ON")

@@ -189,7 +189,7 @@ static int
 read_chunk_header (u_char *buf, size_t len, struct http_map_data *data)
 {
 	u_char chunkbuf[32], *p, *c;
-	int skip;
+	int skip = 0;
 
 	p = chunkbuf;
 	c = buf;
@@ -279,6 +279,9 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 			rlen = r - (remain - buf);
 			memmove (buf, remain, rlen);
 			r = rlen;
+		}
+		if (r <= 0) {
+			return TRUE;
 		}
 		if (reply->parser_state == 6) {
 			if (reply->code != 200 && reply->code != 304) {

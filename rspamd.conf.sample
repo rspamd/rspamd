@@ -2,11 +2,11 @@
 # $Id$
 #
 
-.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/drugs.inc
-.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/lotto.inc
-.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/fraud.inc
-.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/headers.inc
-.include @CMAKE_INSTALL_PREFIX@/etc/rspamd/html.inc
+.include @ETC_PREFIX@/rspamd/drugs.inc
+.include @ETC_PREFIX@/rspamd/lotto.inc
+.include @ETC_PREFIX@/rspamd/fraud.inc
+.include @ETC_PREFIX@/rspamd/headers.inc
+.include @ETC_PREFIX@/rspamd/html.inc
 
 
 # pidfile - path to pid file

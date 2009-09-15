@@ -105,14 +105,26 @@ static int
 lua_task_insert_result (lua_State *L)
 {
 	struct worker_task *task = lua_check_task (L);
-	const char *metric_name, *symbol_name;
+	const char *metric_name, *symbol_name, *param;
 	double flag;
+	GList *params = NULL;
+	int i, top;
 
 	if (task != NULL) {
 		metric_name = luaL_checkstring (L, 2);
 		symbol_name = luaL_checkstring (L, 3);
 		flag = luaL_checknumber (L, 4);
-		insert_result (task, metric_name, symbol_name, flag, NULL);
+		top = lua_gettop (L);
+		/* Get additional options */
+		for (i = 5; i <= top; i ++) {
+			param = luaL_checkstring (L, i);
+			params = g_list_prepend (params, memory_pool_strdup (task->task_pool, param));
+		}
+
+		insert_result (task, metric_name, symbol_name, flag, params);
+		if (params != NULL) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, params);
+		}
 	}
 	return 1;
 }

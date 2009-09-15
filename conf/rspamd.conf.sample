@@ -2,11 +2,11 @@
 # $Id$
 #
 
-.include /usr/local/etc/rspamd/drugs.inc
-.include /usr/local/etc/rspamd/lotto.inc
-.include /usr/local/etc/rspamd/fraud.inc
-.include /usr/local/etc/rspamd/headers.inc
-.include /usr/local/etc/rspamd/html.inc
+.include /etc/rspamd/drugs.inc
+.include /etc/rspamd/lotto.inc
+.include /etc/rspamd/fraud.inc
+.include /etc/rspamd/headers.inc
+.include /etc/rspamd/html.inc
 
 
 # pidfile - path to pid file
