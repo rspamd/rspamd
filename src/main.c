@@ -563,6 +563,9 @@ main (int argc, char **argv, char **env)
 			}
 			l = g_list_next (l);
 		}
+		#if defined(WITH_LUA)
+		init_lua_filters (cfg);
+		#endif
 		if (dump_vars) {
 			dump_cfg_vars ();
 		}
