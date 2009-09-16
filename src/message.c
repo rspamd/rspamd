@@ -533,6 +533,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 			url_parse_text (task->task_pool, task, text_part, FALSE);
 		}
 		else {
+			decode_entitles (text_part->content->data, &text_part->content->len);
 			url_parse_text (task->task_pool, task, text_part, FALSE);
 #if 0
 			url_parse_text (task->task_pool, task, text_part, TRUE);

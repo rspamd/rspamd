@@ -260,16 +260,24 @@ get_tag_by_name (const char *name)
 }
 
 /* Decode HTML entitles in text */
-static void
-decode_entitles (char *s)
+void
+decode_entitles (char *s, guint *len)
 {
+	guint l;
 	char *t = s;			/* t - tortoise */
 	char *h = s;			/* h - hare     */
 	char *e = s;
 	char *end_ptr;
 	int state = 0, val, base;
+
+	if (len == NULL || *len == 0) {
+		l = strlen (s);	
+	}
+	else {
+		l = *len;	
+	}
    	
-	while (*h) {
+	while (h - s < l) {
 		switch (state) {
 			/* Out of entitle */
 			case 0:
@@ -319,7 +327,10 @@ decode_entitles (char *s)
 		}
 	}
 	*t = '\0';
-
+	
+	if (len != NULL) {
+		*len = t - s;
+	}
 }
 
 static void
@@ -394,7 +405,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		
 		url_text = memory_pool_alloc (task->task_pool, len + 1);
 		g_strlcpy (url_text, c, len + 1);
-		decode_entitles (url_text);
+		decode_entitles (url_text, NULL);
 
         if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0) {
             return;
