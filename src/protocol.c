@@ -454,7 +454,9 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 			outbuf[OUTBUFSIZ - 1] = '\n';
 		}
 	}
-	r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
+	else {
+		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
+	}
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 						"%s,", (char *)key); 
 

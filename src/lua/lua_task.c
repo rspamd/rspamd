@@ -122,9 +122,6 @@ lua_task_insert_result (lua_State *L)
 		}
 
 		insert_result (task, metric_name, symbol_name, flag, params);
-		if (params != NULL) {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, params);
-		}
 	}
 	return 1;
 }
