@@ -75,6 +75,7 @@ IF(ENABLE_LUA MATCHES "ON")
 		# Automatic check failed, check passed variable
 		IF(LUA_INCLUDE_DIR)
 			INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
+			SET(WITH_LUA 1)
 		ELSE(LUA_INCLUDE_DIR)
 			SET(ENABLE_LUA "OFF")
 			MESSAGE(STATUS "Lua not found, lua support disabled")

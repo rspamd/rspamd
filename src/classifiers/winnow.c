@@ -184,7 +184,9 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *symbol, G
 		cur = g_list_next (cur);
 	}
 
-	statfile_pool_lock_file (pool, data.file);
-	g_tree_foreach (input, learn_callback, &data);
-	statfile_pool_unlock_file (pool, data.file);
+	if (data.file != NULL) {
+		statfile_pool_lock_file (pool, data.file);
+		g_tree_foreach (input, learn_callback, &data);
+		statfile_pool_unlock_file (pool, data.file);
+	}
 }

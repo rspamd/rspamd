@@ -239,7 +239,6 @@ read_http_chunked (u_char *buf, size_t len, struct rspamd_map *map, struct http_
 		p = buf + (len - (data->chunk_read - data->chunk));
 		if (*p != '\r') {
 			msg_info ("read_http_chunked: invalid chunked reply");
-			g_assert (0);
 			return FALSE;
 		}
 		p += 2;
