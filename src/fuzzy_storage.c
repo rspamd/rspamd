@@ -49,6 +49,8 @@
 #define SYNC_TIMEOUT 60
 /* Number of hash buckets */
 #define BUCKETS 1024
+/* Number of insuccessfull bind retries */
+#define MAX_RETRIES 40
 
 static GQueue *hashes[BUCKETS];
 static bloom_filter_t *bf;
@@ -148,6 +150,7 @@ sigterm_handler (int fd, short what, void *arg)
 	
 	mods = MOD_LIMIT + 1;
 	sync_cache (worker);
+	close (worker->cf->listen_sock);
 	(void)event_loopexit (&tv);
 }
 
@@ -164,6 +167,7 @@ sigusr_handler (int fd, short what, void *arg)
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev);
 	event_del (&worker->bind_ev);
+	close (worker->cf->listen_sock);
 	do_reopen_log = 1;
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
@@ -395,6 +399,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 {
 	struct sigaction signals;
 	struct event sev;
+	int retries = 0;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_FUZZY;
@@ -427,9 +432,12 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	evtimer_add (&tev, &tmv);
 
 	/* Accept event */
-	if ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
-		msg_err ("start_fuzzy_storage: cannot bind to socket, exiting");
-		exit (0);
+	while ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
+		sleep (1);
+		if (++retries > MAX_RETRIES) {
+			msg_err ("start_fuzzy_storage: cannot bind to socket, exiting");
+			exit (0);
+		}
 	}
 	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
 	event_add(&worker->bind_ev, NULL);
