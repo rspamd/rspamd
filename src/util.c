@@ -81,7 +81,7 @@ make_socket_blocking (int fd)
 	return 0;
 }
 
-static int 
+int 
 poll_sync_socket (int fd, int timeout, short events)
 {
 	int r;

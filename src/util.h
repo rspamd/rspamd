@@ -20,7 +20,10 @@ int make_unix_socket (const char *, struct sockaddr_un *, gboolean is_server);
 /* Write pid to file */
 int write_pid (struct rspamd_main *);
 /* Make specified socket non-blocking */
-int event_make_socket_nonblocking(int);
+int make_socket_nonblocking (int);
+int make_socket_blocking (int);
+/* Poll sync socket for specified events */
+int poll_sync_socket (int fd, int timeout, short events);
 /* Init signals */
 void init_signals (struct sigaction *, sig_t);
 /* Send specified signal to each worker */
