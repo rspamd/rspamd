@@ -288,11 +288,16 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 }
 
 void
-pass_signal_worker (struct workq *workers, int signo)
+pass_signal_worker (GList *workers, int signo)
 {
 	struct rspamd_worker *cur;
-	TAILQ_FOREACH (cur, workers, next) {
+	GList *l;
+
+	l = workers;
+	while (l) {
+		cur = l->data;
 		kill (cur->pid, signo);
+		l = g_list_next (l);
 	}
 }
 

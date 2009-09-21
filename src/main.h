@@ -64,7 +64,6 @@ struct rspamd_worker {
 	struct event sig_ev;										/**< signals event									*/
 	struct event bind_ev;										/**< socket events									*/
 	struct worker_conf *cf;										/**< worker config data								*/
-	TAILQ_ENTRY (rspamd_worker) next;							/**< chain link to next worker						*/
 };
 
 struct pidfh;
@@ -101,8 +100,6 @@ struct rspamd_main {
 
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
-
-	TAILQ_HEAD (workq, rspamd_worker) workers;					/**< linked list of workers							*/
 };
 
 struct counter_data {

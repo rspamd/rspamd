@@ -24,7 +24,7 @@ int event_make_socket_nonblocking(int);
 /* Init signals */
 void init_signals (struct sigaction *, sig_t);
 /* Send specified signal to each worker */
-void pass_signal_worker (struct workq *, int );
+void pass_signal_worker (GList *, int );
 /* Convert string to lowercase */
 void convert_to_lowercase (char *str, unsigned int size);
 
