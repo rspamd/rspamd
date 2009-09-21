@@ -312,10 +312,10 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 				return 0;
 			}
 			else {
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, headerlist);
 				if (re->regexp == NULL) {
 					msg_debug ("process_regexp: regexp contains only header and it is found %s", re->header);
 					task_cache_add (task, re, 1);
-					g_list_free (headerlist);
 					return 1;
 				}
 				cur = headerlist;
@@ -327,7 +327,6 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 					}
 					cur = g_list_next (cur);
 				}
-				g_list_free (headerlist);
 				task_cache_add (task, re, 0);
 				return 0;
 			}

@@ -36,6 +36,8 @@
 
 #cmakedefine HAVE_NETDB_H        1
 
+#cmakedefine HAVE_POLL_H         1
+
 #cmakedefine HAVE_SYSLOG_H       1
 
 #cmakedefine HAVE_LIBUTIL_H      1
@@ -220,6 +222,11 @@
 /* fcntl */
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
+#endif
+
+/* poll */
+#ifdef HAVE_POLL_H
+#include <poll.h>
 #endif
 
 /* sys/stat */

@@ -418,7 +418,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 	if (map_pool == NULL) {
 		map_pool = memory_pool_new (memory_pool_get_size ());
 	}
-	new_map = memory_pool_alloc (map_pool, sizeof (struct rspamd_map));
+	new_map = memory_pool_alloc0 (map_pool, sizeof (struct rspamd_map));
 	new_map->read_callback = read_callback;
 	new_map->fin_callback = fin_callback;
 	new_map->user_data = user_data;
@@ -430,13 +430,13 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 			msg_warn ("add_map: cannot open file '%s': %s", def, strerror (errno));
 			return FALSE;
 		}
-		fdata = memory_pool_alloc (map_pool, sizeof (struct file_map_data));
+		fdata = memory_pool_alloc0 (map_pool, sizeof (struct file_map_data));
 		fdata->filename = memory_pool_strdup (map_pool, def);
 		fstat (fd, &fdata->st);
 		new_map->map_data = fdata;
 	}
 	else if (proto == PROTO_HTTP) {
-		hdata = memory_pool_alloc (map_pool, sizeof (struct http_map_data));
+		hdata = memory_pool_alloc0 (map_pool, sizeof (struct http_map_data));
 		/* Try to search port */
 		if ((p = strchr (def, ':')) != NULL) {
 			hostend = p;

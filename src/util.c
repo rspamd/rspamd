@@ -32,6 +32,8 @@
 #define CHECK_TIME 60
 /* More than 2 log messages per second */
 #define BUF_INTENSITY 2
+/* Default connect timeout for sync sockets */
+#define CONNECT_TIMEOUT 3
 
 #ifdef RSPAMD_MAIN
 sig_atomic_t do_reopen_log = 0;
@@ -54,11 +56,47 @@ static gboolean log_buffered = FALSE;
 int
 make_socket_nonblocking (int fd)
 {
-	if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
+	int ofl;
+
+	ofl = fcntl (fd, F_GETFL, 0);
+
+	if (fcntl (fd, F_SETFL, ofl | O_NONBLOCK) == -1) {
 		msg_warn ("make_socket_nonblocking: fcntl failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	return 0;
+}
+
+int
+make_socket_blocking (int fd)
+{	
+	int ofl;
+
+	ofl = fcntl (fd, F_GETFL, 0);
+
+	if (fcntl (fd, F_SETFL, ofl & (~O_NONBLOCK)) == -1) {
+		msg_warn ("make_socket_nonblocking: fcntl failed: %d, '%s'", errno, strerror (errno));
+		return -1;
+	}
+	return 0;
+}
+
+static int 
+poll_sync_socket (int fd, int timeout, short events)
+{
+	int r;
+	struct pollfd fds[1];
+
+	fds->fd = fd;
+	fds->events = events;
+	fds->revents = 0;
+	while ((r = poll (fds, 1, timeout)) < 0) {
+		if (errno != EINTR) {
+			break;
+		}
+	}
+
+	return r;
 }
 
 static int
@@ -75,7 +113,7 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 		return -1;
 	}
 
-	if (async && make_socket_nonblocking(fd) < 0) {
+	if (make_socket_nonblocking (fd) < 0) {
 		goto out;
 	}
 	
@@ -99,9 +137,23 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 	}
 
 	if (r == -1) {
-		if (!async || errno != EINPROGRESS) {
+		if (errno != EINPROGRESS) {
 			msg_warn ("make_tcp_socket: bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
+		}
+		if (!async) {
+			/* Try to poll */
+			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
+				errno = ETIMEDOUT;
+				msg_warn ("make_tcp_socket: bind/connect failed: timeout");
+				goto out;
+			}
+			else {
+				/* Make synced again */
+				if (make_socket_blocking (fd) < 0) {
+					goto out;
+				}
+			}
 		}
 	}
 	else {

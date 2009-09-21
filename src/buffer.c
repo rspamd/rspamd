@@ -344,6 +344,9 @@ rspamd_remove_dispatcher (rspamd_io_dispatcher_t *dispatcher)
 	if (dispatcher != NULL) {
 		event_del (dispatcher->ev);
 		memory_pool_delete (dispatcher->pool);
+		if (dispatcher->out_buffers) {
+			g_list_free (dispatcher->out_buffers);
+		}
 		g_free (dispatcher);
 	}
 }
