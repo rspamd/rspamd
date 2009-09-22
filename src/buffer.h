@@ -10,8 +10,8 @@
 #include "mem_pool.h"
 #include "fstring.h"
 
-typedef void (*dispatcher_read_callback_t)(f_str_t *in, void *user_data);
-typedef void (*dispatcher_write_callback_t)(void *user_data);
+typedef gboolean (*dispatcher_read_callback_t)(f_str_t *in, void *user_data);
+typedef gboolean (*dispatcher_write_callback_t)(void *user_data);
 typedef void (*dispatcher_err_callback_t)(GError *err, void *user_data);
 
 /**
@@ -81,7 +81,7 @@ void rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
  * @param data data to write
  * @param len length of data
  */
-void rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
+gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 												  void *data,
 												  size_t len, gboolean delayed, gboolean allocated);
 

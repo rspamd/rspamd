@@ -293,13 +293,13 @@ close_mta_connection (struct mta_callback_data *cd, gboolean is_success)
 	else {
 		out_lmtp_reply (cd->task, LMTP_FAILURE, "", "Delivery failure");
 	}
-	cd->dispatcher->wanna_die = TRUE;
+	rspamd_remove_dispatcher (cd->dispatcher);
 }
 
 /*
  * Callback that is called when there is data to read in buffer
  */
-static void
+static gboolean
 mta_read_socket (f_str_t *in, void *arg)
 {
 	struct mta_callback_data *cd = (struct mta_callback_data *)arg;
@@ -317,7 +317,7 @@ mta_read_socket (f_str_t *in, void *arg)
 	
 	if (fstrstr (in, &contres1) != -1 || fstrstr (in, &contres2) != -1) {
 		/* Skip such lines */
-		return;
+		return TRUE;
 	}
 
 	switch (cd->state) {
@@ -325,7 +325,7 @@ mta_read_socket (f_str_t *in, void *arg)
 			if (!parse_mta_str (in, cd)) {
 				msg_warn ("mta_read_socket: got bad greeting");
 				close_mta_connection (cd, FALSE);
-				return;
+				return FALSE;
 			}
 			hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
 			hostbuf = alloca (hostmax);
@@ -344,7 +344,7 @@ mta_read_socket (f_str_t *in, void *arg)
 			if (!parse_mta_str (in, cd)) {
 				msg_warn ("mta_read_socket: got bad helo");
 				close_mta_connection (cd, FALSE);
-				return;
+				return FALSE;
 			}
 			r = snprintf (outbuf, sizeof (outbuf), "MAIL FROM: <%s>" CRLF, cd->task->from);
 			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
@@ -354,7 +354,7 @@ mta_read_socket (f_str_t *in, void *arg)
 			if (!parse_mta_str (in, cd)) {
 				msg_warn ("mta_read_socket: got bad mail from");
 				close_mta_connection (cd, FALSE);
-				return;
+				return FALSE;
 			}
 			cur = g_list_first (cd->task->rcpt);
 			r = 0;
@@ -370,7 +370,7 @@ mta_read_socket (f_str_t *in, void *arg)
 			if (!parse_mta_str (in, cd)) {
 				msg_warn ("mta_read_socket: got bad rcpt");
 				close_mta_connection (cd, FALSE);
-				return;
+				return FALSE;
 			}
 			r = snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
 			rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
@@ -380,7 +380,7 @@ mta_read_socket (f_str_t *in, void *arg)
 			if (!parse_mta_str (in, cd)) {
 				msg_warn ("mta_read_socket: got bad data");
 				close_mta_connection (cd, FALSE);
-				return;
+				return FALSE;
 			}
 			c = g_mime_object_to_string ((GMimeObject *)cd->task->message);
 			r = strlen (c);
@@ -393,11 +393,13 @@ mta_read_socket (f_str_t *in, void *arg)
 			if (!parse_mta_str (in, cd)) {
 				msg_warn ("mta_read_socket: message not delivered");
 				close_mta_connection (cd, FALSE);
-				return;
+				return FALSE;
 			}
 			close_mta_connection (cd, TRUE);
 			break;
 	}
+
+	return TRUE;
 }
 
 /*

@@ -52,7 +52,7 @@ extern PerlInterpreter *perl_interpreter;
 
 static struct timeval io_tv;
 
-static void write_socket (void *arg);
+static gboolean write_socket (void *arg);
 
 static 
 void sig_handler (int signo)
@@ -147,10 +147,18 @@ free_task (struct worker_task *task, gboolean is_soft)
 	}
 }
 
+static void 
+free_task_hard (void *ud)
+{
+	struct worker_task *task = ud;
+
+	free_task (task, FALSE);
+}
+
 /*
  * Callback that is called when there is data to read in buffer
  */
-static void
+static gboolean
 read_socket (f_str_t *in, void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
@@ -185,7 +193,7 @@ read_socket (f_str_t *in, void *arg)
 				/* Skip filters */
 				task->state = WRITE_REPLY;
 				write_socket (task);
-				return;
+				return TRUE;
 			}
 			r = process_filters (task);
 			if (r == -1) {
@@ -207,12 +215,14 @@ read_socket (f_str_t *in, void *arg)
 			msg_debug ("read_socket: invalid state on reading stage");
 			break;
 	}
+
+	return TRUE;
 }
 
 /*
  * Callback for socket writing
  */
-static void
+static gboolean 
 write_socket (void *arg)
 {
 	struct worker_task *task = (struct worker_task *)arg;
@@ -220,21 +230,26 @@ write_socket (void *arg)
 	switch (task->state) {
 		case WRITE_REPLY:
 			write_reply (task);
-			task->state = CLOSING_CONNECTION;
+			destroy_session (task->s);
+			return FALSE;
 			break;
 		case WRITE_ERROR:
 			write_reply (task);
-			task->state = CLOSING_CONNECTION;
+			destroy_session (task->s);
+			return FALSE;
 			break;
 		case CLOSING_CONNECTION:
 			msg_debug ("write_socket: normally closing connection");
-			free_task (task, TRUE);
+			destroy_session (task->s);
+			return FALSE;
 			break;
 		default:
 			msg_info ("write_socket: abnormally closing connection");
-			free_task (task, TRUE);
+			destroy_session (task->s);
+			return FALSE;
 			break;
 	}
+	return TRUE;
 }
 
 /*
@@ -246,7 +261,7 @@ err_socket (GError *err, void *arg)
 	struct worker_task *task = (struct worker_task *)arg;
 	msg_info ("err_socket: abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
-	free_task (task, FALSE);
+	destroy_session (task->s);
 }
 
 struct worker_task *
@@ -279,6 +294,7 @@ construct_task (struct rspamd_worker *worker)
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)g_hash_table_destroy, new_task->results);
 	new_task->re_cache = g_hash_table_new (g_str_hash, g_str_equal);
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)g_hash_table_destroy, new_task->re_cache);
+	new_task->s = new_async_session (new_task->task_pool, free_task_hard, new_task);
 
 	return new_task;
 }

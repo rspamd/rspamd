@@ -16,6 +16,7 @@
 #include "filter.h"
 #include "buffer.h"
 #include "hash.h"
+#include "events.h"
 #include "util.h"
 
 /* Default values */
@@ -147,6 +148,7 @@ struct controller_session {
 	void (*other_handler)(struct controller_session *session, 
 								f_str_t *in);					/**< other command handler to execute at the end of processing */
 	void *other_data;											/**< and its data 									*/
+    struct rspamd_async_session* s;								/**< async session object							*/
 };
 
 typedef void (*controller_func_t)(char **args, struct controller_session *session);
@@ -181,6 +183,7 @@ struct worker_task {
 	char *user;													/**< user to deliver								*/
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
+    struct rspamd_async_session* s;								/**< async session object							*/
 	memcached_ctx_t *memc_ctx;									/**< memcached context associated with task			*/
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/

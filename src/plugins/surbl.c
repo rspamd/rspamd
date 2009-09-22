@@ -447,6 +447,7 @@ make_surbl_requests (struct uri* url, struct worker_task *task, GTree *tree, str
                 msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
                 if (evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param) == 0) {
                     param->task->save.saved ++;
+					register_async_event (task->s, (event_finalizer_t)dns_callback, NULL, TRUE);
                 }
             }
             else {
@@ -529,6 +530,7 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
         param->task->save.saved = 1;
         process_filters (param->task);
     }
+	remove_forced_event (param->task->s, (event_finalizer_t)dns_callback);
 
 }
 
@@ -650,6 +652,23 @@ register_memcached_call (struct uri *url, struct worker_task *task, GTree *url_t
 }
 
 static void
+free_redirector_session (void *ud)
+{
+    struct redirector_param *param = (struct redirector_param *)ud;
+
+	event_del (&param->ev);
+	close (param->sock);
+	param->task->save.saved --;
+	make_surbl_requests (param->url, param->task, param->tree, param->suffix);
+	if (param->task->save.saved == 0) {
+		/* Call other filters */
+		param->task->save.saved = 1;
+		process_filters (param->task);
+	}
+	
+}
+
+static void
 redirector_callback (int fd, short what, void *arg)
 {
     struct redirector_param *param = (struct redirector_param *)arg;
@@ -671,32 +690,16 @@ redirector_callback (int fd, short what, void *arg)
                 r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
                 if (write (param->sock, url_buf, r) == -1) {
                     msg_err ("redirector_callback: write failed %s", strerror (errno));
-                    event_del (&param->ev);
-                    close (fd);
-                    param->task->save.saved --;
-                    make_surbl_requests (param->url, param->task, param->tree, param->suffix);
-                    if (param->task->save.saved == 0) {
-                        /* Call other filters */
-                        param->task->save.saved = 1;
-                        process_filters (param->task);
-                    }
+					remove_normal_event (param->task->s, free_redirector_session, param);
                     return;
                 }
                 param->state = STATE_READ;
             }
             else {
-                event_del (&param->ev);
-                close (fd);
                 msg_info ("redirector_callback: <%s> connection to redirector timed out while waiting for write",
                             param->task->message_id);
-                param->task->save.saved --;
-                make_surbl_requests (param->url, param->task, param->tree, param->suffix);
-
-                if (param->task->save.saved == 0) {
-                    /* Call other filters */
-                    param->task->save.saved = 1;
-                    process_filters (param->task);
-                }
+				remove_normal_event (param->task->s, free_redirector_session, param);
+				return;
             }
             break;
         case STATE_READ:
@@ -717,28 +720,12 @@ redirector_callback (int fd, short what, void *arg)
                         parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
                     }
                 }
-                event_del (&param->ev);
-                close (fd);
-                param->task->save.saved --;
-                make_surbl_requests (param->url, param->task, param->tree, param->suffix);
-                if (param->task->save.saved == 0) {
-                    /* Call other filters */
-                    param->task->save.saved = 1;
-                    process_filters (param->task);
-                }
+				remove_normal_event (param->task->s, free_redirector_session, param);
             }
             else {
-                event_del (&param->ev);
-                close (fd);
                 msg_info ("redirector_callback: <%s> reading redirector timed out, while waiting for read",
                             param->task->message_id);
-                param->task->save.saved --;
-                make_surbl_requests (param->url, param->task, param->tree, param->suffix);
-                if (param->task->save.saved == 0) {
-                    /* Call other filters */
-                    param->task->save.saved = 1;
-                    process_filters (param->task);
-                }
+				remove_normal_event (param->task->s, free_redirector_session, param);
             }
             break;
     }
@@ -774,6 +761,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree *url_
     timeout->tv_usec = surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000;
     event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
     event_add (&param->ev, timeout);
+	register_async_event (task->s, free_redirector_session, param, FALSE);
 }
 
 static gboolean

@@ -36,7 +36,7 @@
 static char greetingbuf[1024];
 static struct timeval io_tv;
 
-static void lmtp_write_socket (void *arg);
+static gboolean lmtp_write_socket (void *arg);
 
 static 
 void sig_handler (int signo)
@@ -121,7 +121,7 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 /*
  * Callback that is called when there is data to read in buffer
  */
-static void
+static gboolean
 lmtp_read_socket (f_str_t *in, void *arg)
 {
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
@@ -163,12 +163,14 @@ lmtp_read_socket (f_str_t *in, void *arg)
 			msg_debug ("lmtp_read_socket: invalid state while reading from socket %d", lmtp->task->state);
 			break;
 	}
+
+	return TRUE;
 }
 
 /*
  * Callback for socket writing
  */
-static void
+static gboolean
 lmtp_write_socket (void *arg)
 {
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
@@ -189,11 +191,14 @@ lmtp_write_socket (void *arg)
 		case CLOSING_CONNECTION:
 			msg_debug ("lmtp_write_socket: normally closing connection");
 			free_lmtp_task (lmtp, TRUE);
+			return FALSE;
 			break;
 		default:
 			msg_debug ("lmtp_write_socket: invalid state while writing to socket %d", lmtp->task->state);
 			break;
 	}
+
+	return TRUE;
 }
 
 /*

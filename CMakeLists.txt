@@ -360,6 +360,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/controller.c
 				src/cfg_utils.c
 				src/buffer.c
+				src/events.c
 				src/html.c
 				src/lmtp.c
 				src/lmtp_proto.c
