@@ -319,6 +319,19 @@ factors {
 	servers = "localhost:11335";
 };
 
+# LUA module for rbl checks of received headers
+.module 'received_rbl' {
+	# RBL definitions, all would be checked
+    rbl = "insecure-bl.rambler.ru";
+    rbl = "pbl.spamhaus.org";
+};
+
+# Path to lua modules (all *.lua files would be loaded)
+#modules {
+#    module_path = "@CMAKE_INSTALL_PREFIX@/etc/rspamd/plugins/lua/";
+#};
+
+
 # If enables threat each regexp as raw regex and do not try to convert
 # each text part to utf8 encoding. Save a lot of resources but less
 # portable.
