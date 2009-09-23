@@ -282,7 +282,6 @@ fuzzy_learn_fin (void *arg)
 	(*session->saved) --;
 	if (*session->saved == 0) {
 		session->session->state = STATE_REPLY;
-		rspamd_dispatcher_write (session->session->dispatcher, "OK" CRLF, sizeof ("OK" CRLF) - 1, FALSE, FALSE);
 	}
 }
 
