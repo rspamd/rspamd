@@ -384,8 +384,11 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 	task = construct_task (session->worker);
 	session->other_data = task;
 	session->state = STATE_WAIT;
+	
+	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+	task->msg->begin = in->begin;
+	task->msg->len = in->len;
 
-	task->msg = in;
 	saved = memory_pool_alloc0 (session->session_pool, sizeof (int));
 	r = process_message (task);
 	if (r == -1) {
