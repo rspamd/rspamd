@@ -287,6 +287,10 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 				msg_err ("read_http: got error reply from server %s, %d", data->host, reply->code);
 				return FALSE;
 			}
+			else if (reply->code == 304) {
+				/* Do not read anything */
+				return FALSE;
+			}
 			pos = buf;
 			if (!data->chunked && (te = g_hash_table_lookup (reply->headers, "Transfer-Encoding")) != NULL) {
 				if (g_ascii_strcasecmp (te, "chunked") == 0) {
