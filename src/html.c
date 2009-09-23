@@ -438,7 +438,6 @@ static entity entities_defs[] =
     { "lsaquo",     8249 },
     { "rsaquo",     8250 },
     { "euro",       8364 },
-    { NULL,        0 }
 };
 
 

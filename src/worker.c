@@ -295,6 +295,7 @@ construct_task (struct rspamd_worker *worker)
 	new_task->re_cache = g_hash_table_new (g_str_hash, g_str_equal);
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)g_hash_table_destroy, new_task->re_cache);
 	new_task->s = new_async_session (new_task->task_pool, free_task_hard, new_task);
+	new_task->sock = -1;
 
 	return new_task;
 }

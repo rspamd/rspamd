@@ -127,7 +127,7 @@ free_session (void *ud)
 	struct mime_part *p;
     struct controller_session *session = ud;
 	
-	msg_info ("free_session: freeing session %p", session);
+	msg_debug ("free_session: freeing session %p", session);
 	
 	while ((part = g_list_first (session->parts))) {
 		session->parts = g_list_remove_link (session->parts, part);
