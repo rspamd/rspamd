@@ -201,7 +201,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t *d, gboolean skip_read)
 				if (*c == '\n') {
 					res.begin = b;
 					res.len = r;
-					if (*(c - 1) == '\r') {
+					if (r != 0 && *(c - 1) == '\r') {
 						res.len --;
 					}
 					if (d->read_callback) {

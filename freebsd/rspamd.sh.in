@@ -19,7 +19,6 @@ procname="@CMAKE_INSTALL_PREFIX@/bin/rspamd"
 restart_precmd="rspamd_checkconfig"
 reload_precmd="rspamd_checkconfig"
 configtest_cmd="rspamd_checkconfig"
-pidfile="/var/run/rspamd/rspamd.pid"
 
 load_rc_config $name
 
@@ -27,6 +26,8 @@ load_rc_config $name
 : ${rspamd_pidfile="/var/run/rspamd/rspamd.pid"}
 : ${rspamd_user="@RSPAMD_USER@"}
 : ${rspamd_group="@RSPAMD_GROUP@"}
+
+pidfile="$rspamd_pidfile"
 
 stop_postcmd="rm -f $rspamd_pidfile"
 
