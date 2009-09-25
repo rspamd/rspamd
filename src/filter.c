@@ -526,6 +526,10 @@ classifiers_callback (gpointer value, void *arg)
 		}
 		g_hash_table_insert (data->tokens, cl->tokenizer, tokens);
 	}
+
+	if (tokens == NULL) {
+		return;
+	}
 	
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 	cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task);

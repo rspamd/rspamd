@@ -281,6 +281,7 @@ lua_dns_callback (int result, char type, int count, int ttl, void *addresses, vo
 		cd->task->save.saved = 1;
 		process_filters (cd->task);
 	}
+	remove_forced_event (cd->task->s, (event_finalizer_t)lua_dns_callback);
 
 }
 
@@ -302,6 +303,7 @@ lua_task_resolve_dns_a (lua_State *L)
 		}
 		if (evdns_resolve_ipv4 (cd->to_resolve, DNS_QUERY_NO_SEARCH, lua_dns_callback, (void *)cd) == 0) {
 			task->save.saved ++;
+			register_async_event (task->s, (event_finalizer_t)lua_dns_callback, NULL, TRUE);
         }
 	}
 	return 0;
@@ -327,6 +329,7 @@ lua_task_resolve_dns_ptr (lua_State *L)
 		}
 		if (evdns_resolve_reverse (ina, DNS_QUERY_NO_SEARCH, lua_dns_callback, (void *)cd) == 0) {
 			task->save.saved ++;
+			register_async_event (task->s, (event_finalizer_t)lua_dns_callback, NULL, TRUE);
         }
 	}
 	return 0;
