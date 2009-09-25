@@ -306,7 +306,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					return;
 				}
 
-				session->learn_symbol = *cmd_args;
+				session->learn_symbol = memory_pool_strdup (session->session_pool, *cmd_args);
 				cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
 				if (cl == NULL) {
 					r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
@@ -399,12 +399,12 @@ controller_read_socket (f_str_t *in, void *arg)
 {
 	struct controller_session *session = (struct controller_session *)arg;
 	struct classifier_ctx *cls_ctx;
-	int len, i;
+	int len, i, r;
 	char *s, **params, *cmd, out_buf[128];
+    struct worker_task *task;
+    struct mime_text_part *part;
 	GList *comp_list, *cur = NULL;
 	GTree *tokens = NULL;
-	GByteArray *content = NULL;
-	struct mime_part *p;
 	f_str_t c;
 
 	switch (session->state) {
@@ -450,33 +450,50 @@ controller_read_socket (f_str_t *in, void *arg)
 			break;
 		case STATE_LEARN:
 			session->learn_buf = in;
-			process_learn (session);
-			while ((content = get_next_text_part (session->session_pool, session->parts, &cur)) != NULL) {
-				c.begin = content->data;
-				c.len = content->len;
+           	task = construct_task (session->worker);
+	
+	        task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+	        task->msg->begin = in->begin;
+	        task->msg->len = in->len;
+
+	        r = process_message (task);
+        	if (r == -1) {
+                msg_warn ("read_socket: processing of message failed");
+                free_task (task, FALSE);
+                session->state = STATE_REPLY;
+                r = snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+                rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+                return FALSE;
+            } 
+            cur = g_list_first (task->text_parts);
+			while (cur) {
+				part = cur->data;
+				if (part->is_empty) {
+					cur = g_list_next (cur);
+					continue;
+				}
+				c.begin = part->content->data;
+				c.len = part->content->len;
+
 				if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, 
 							session->session_pool, &c, &tokens)) {
 					i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
+					free_task (task, FALSE);
 					if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
                         return FALSE;
                     }
 					session->state = STATE_REPLY;
 					return TRUE;
 				}
+				cur = g_list_next (cur);
 			}
 			cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
 			session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool,
 													session->learn_symbol, tokens, session->in_class);
 			session->worker->srv->stat->messages_learned ++;
 
-			/* Clean learned parts */
-			while ((cur = g_list_first (session->parts))) {
-				session->parts = g_list_remove_link (session->parts, cur);
-				p = (struct mime_part *)cur->data;
-				g_byte_array_free (p->content, FALSE);
-				g_list_free_1 (cur);
-			}
 
+            free_task (task, FALSE);
 			i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
                 return FALSE;

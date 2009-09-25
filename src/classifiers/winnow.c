@@ -149,7 +149,11 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, GTree *input
 void
 winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *symbol, GTree *input, int in_class)
 {
-	struct winnow_callback_data data;
+	struct winnow_callback_data data = { 
+		.file = NULL, 
+		.sum = 0,
+		.count = 0,
+	};
 	GList *cur;
 	struct statfile *st;
 	
@@ -157,8 +161,6 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *symbol, G
 	g_assert (ctx != NULL);
 
 	data.pool = pool;
-	data.sum = 0;
-	data.count = 0;
 	data.in_class = in_class;
 	data.now = time (NULL);
 	data.ctx = ctx;

@@ -51,7 +51,7 @@ sub parse_config {
         if ($ctrl && $_ =~ /}/) {
             $ctrl = 0;
         }
-        if ($_ =~ /^.*type.*=.*(?:lmtp|delivery).*$/i) {
+        if ($_ =~ /^.*type.*=.*(?:lmtp|delivery|fuzzy).*$/i) {
             $skip = 1;
         }
         if ($skip && $_ =~ /}/) {
