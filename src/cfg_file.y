@@ -520,7 +520,7 @@ compositesbody:
 	;
 
 compositescmd:
-	QUOTEDSTRING EQSIGN QUOTEDSTRING {
+	PARAM EQSIGN QUOTEDSTRING {
 		struct expression *expr;
 		if ((expr = parse_expression (cfg->cfg_pool, $3)) == NULL) {
 			yyerror ("yyparse: cannot parse composite expression: %s", $3);

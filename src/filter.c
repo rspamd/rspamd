@@ -338,7 +338,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	stack = g_queue_new ();
 
 	while (expr) {
-		if (expr->type == EXPR_REGEXP) {
+		if (expr->type == EXPR_STR) {
 			/* Find corresponding symbol */
 			if (g_hash_table_lookup (cd->metric_res->symbols, expr->content.operand) == NULL) {
 				cur = 0;
@@ -486,6 +486,8 @@ void
 make_composites (struct worker_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
+	/* Process all metrics */
+	g_hash_table_foreach (task->results, metric_process_callback_forced, task);
 }
 
 
@@ -561,6 +563,7 @@ process_statfiles (struct worker_task *task)
 	g_hash_table_destroy (cd.tokens);
 
 	/* Process results */
+	make_composites (task);
 	task->state = WRITE_REPLY;
 }
 

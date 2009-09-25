@@ -1420,6 +1420,64 @@ factors
 "R_MISSING_CHARSET" = 5; 
 \end_layout
 
+\begin_layout Standard
+Также существует возможность создавать 
+\begin_inset Quotes fld
+\end_inset
+
+составные
+\begin_inset Quotes frd
+\end_inset
+
+ символы - символы, которые являются комбинацией других символов.
+ Это нужно для возможности указывать, что комбинация определенных символов
+ имеет больший (или, наоборот, меньший) вес, чем сумма весов нескольких
+ символов.
+ Составные символы представляют собой логические выражения из других символов,
+ например:
+\end_layout
+
+\begin_layout LyX-Code
+composites {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+COMPOSITE_SYMBOL1 = 
+\begin_inset Quotes fld
+\end_inset
+
+SYMBOL1 & (SYMBOL2 | SYMBOL3)
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+COMPOSITE_SYMBOL2 = 
+\begin_inset Quotes fld
+\end_inset
+
+SYMBOL3 & !SYMBOL4
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+При добавлении составного символа все символы, входящие в него, удаляются
+ из результата.
+ То есть, при срабатывании COMPOSITE_SYMBOL1 из предыдущего примера символы
+ SYMBOL1, SYMBOL2 и SYMBOL3 в ответе не появятся.
+\end_layout
+
 \begin_layout Chapter
 Настройка модулей
 \end_layout

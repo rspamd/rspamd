@@ -36,7 +36,7 @@ extern struct config_file *cfg;
 .module							BEGIN(module_lex_state);
 .lua							BEGIN(lua_lex_state);
 worker							BEGIN(worker_lex_state); return WORKER;
-composites						return COMPOSITES;
+composites						BEGIN(module_lex_state);return COMPOSITES;
 tempdir							return TEMPDIR;
 pidfile							return PIDFILE;
 

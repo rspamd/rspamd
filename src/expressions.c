@@ -446,6 +446,19 @@ parse_expression (memory_pool_t *pool, char *line)
 					}
 					state = READ_OPERATOR;
 				}
+				else if (*(p + 1) == '\0') {
+					/* In fact it is not function, but symbol */
+					p ++;
+					if (c != p) {
+						str = memory_pool_alloc (pool, p - c + 1);
+						g_strlcpy (str, c, (p - c + 1));
+						g_strstrip (str);
+						if (strlen (str) > 0) {
+							insert_expression (pool, &expr, EXPR_STR, 0, str);
+						}
+					}
+					state = SKIP_SPACES;
+				}
 				else {
 					p ++;
 				}
