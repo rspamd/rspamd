@@ -32,7 +32,7 @@ struct stat_file_header {
  * Section header
  */
 struct stat_file_section {
-	uint32_t code;							/**< section's code						*/
+	uint64_t code;							/**< section's code						*/
 	uint64_t length;						/**< section's length in blocks			*/
 };
 
@@ -42,8 +42,8 @@ struct stat_file_section {
 struct stat_file_block {
 	uint32_t hash1;							/**< hash1 (also acts as index)			*/				
 	uint32_t hash2;							/**< hash2								*/
-	float value; 							/**< float value 						*/
 	uint32_t last_access;					/**< last access to block since create time of file	*/
+	float value; 							/**< float value 						*/
 };
 
 /**
@@ -59,7 +59,11 @@ struct stat_file {
  * Common view of statfile object
  */
 typedef struct stat_file_s {
-	char *filename;							/**< name of file						*/
+#ifdef HAVE_PATH_MAX
+	char filename[PATH_MAX];				/**< name of file						*/
+#else
+	char filename[MAXPATHLEN];				/**< name of file						*/
+#endif
 	int fd;									/**< descriptor							*/
 	void *map;								/**< mmaped area						*/
 	off_t seek_pos;							/**< current seek position				*/

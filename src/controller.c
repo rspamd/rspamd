@@ -411,6 +411,9 @@ controller_read_socket (f_str_t *in, void *arg)
 		case STATE_COMMAND:
 			s = fstrcstr (in, session->session_pool);
 			params = g_strsplit (s, " ", -1);
+
+			memory_pool_add_destructor (session->session_pool, (pool_destruct_func)g_strfreev, params);
+
 			len = g_strv_length (params);
 			if (len > 0) {
 				cmd = g_strstrip (params[0]);
@@ -446,7 +449,6 @@ controller_read_socket (f_str_t *in, void *arg)
                 }
 			}
 
-			g_strfreev (params);
 			break;
 		case STATE_LEARN:
 			session->learn_buf = in;

@@ -126,7 +126,11 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, GTree *input
 			}
 		}
 
-		g_tree_foreach (input, classify_callback, &data);
+		if (data.file != NULL) {
+			statfile_pool_lock_file (pool, data.file);
+			g_tree_foreach (input, classify_callback, &data);
+			statfile_pool_unlock_file (pool, data.file);
+		}
 	
 		if (data.count != 0) {
 			*res = (data.sum / data.count);

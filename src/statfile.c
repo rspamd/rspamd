@@ -171,8 +171,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	
 	}
 	
-	/* XXX: this is temporary copy of name to avoid strdup early */
-	new_file->filename = filename;
+	g_strlcpy (new_file->filename, filename, sizeof (new_file->filename));
 	new_file->len = st.st_size;
 	if (statfile_pool_check (new_file) == -1) {
 		pool->opened --;
@@ -180,7 +179,6 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	}
 
 	pool->occupied += st.st_size;
-	new_file->filename = memory_pool_strdup (pool->pool, filename);
 	new_file->open_time = time (NULL);
 	new_file->access_time = new_file->open_time;
 	new_file->lock = memory_pool_get_mutex (pool->pool);
@@ -400,7 +398,7 @@ stat_file_t *
 statfile_pool_is_open (statfile_pool_t *pool, char *filename)
 {
 	static stat_file_t f, *ret;
-	f.filename = filename;
+	g_strlcpy (f.filename, filename, sizeof (f.filename));
 	ret = bsearch (&f, pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
 	return ret;
 }
