@@ -66,6 +66,11 @@ statfile_pool_check (stat_file_t *file)
 	/* Check first section and set new offset */
 	file->cur_section.code = f->section.code;
 	file->cur_section.length = f->section.length;
+    if (file->cur_section.length * sizeof (struct stat_file_block) > file->len) {
+		msg_info ("statfile_pool_check: file %s is truncated: %zd, must be %zd", file->filename, 
+                file->len, file->cur_section.length * sizeof (struct stat_file_block));
+		return -1;
+    }
 	file->seek_pos = sizeof (struct stat_file) - sizeof (struct stat_file_block);
 	
 	return 0;
@@ -119,6 +124,7 @@ statfile_pool_new (size_t max_size)
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
 	new->files = memory_pool_alloc_shared (new->pool, STATFILES_MAX * sizeof (stat_file_t));
+    new->lock = memory_pool_get_mutex (new->pool);
 
 	return new;
 }
@@ -148,23 +154,27 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 		return NULL;
 	}
 
-	while (pool->max <= pool->occupied + st.st_size) {
+	while (pool->max + pool->opened * sizeof (struct stat_file) < pool->occupied + st.st_size) {
 		if (statfile_pool_expire (pool) == -1) {
 			/* Failed to find any more free space in pool */
 			msg_info ("statfile_pool_open: expiration for pool failed, opening file %s failed", filename);
 			return NULL;
 		}
 	}
-
+    
+    memory_pool_lock_mutex (pool->lock);
 	new_file = &pool->files[pool->opened ++];
+    bzero (new_file, sizeof (stat_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1 ) {
 		msg_info ("statfile_pool_open: cannot open file %s, error %d, %s", filename, errno, strerror (errno));
+        memory_pool_unlock_mutex (pool->lock);
 		pool->opened --;
 		return NULL;
 	}
 	
 	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == MAP_FAILED) {
 		close (new_file->fd);
+        memory_pool_unlock_mutex (pool->lock);
 		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
 		pool->opened --;
 		return NULL;
@@ -175,6 +185,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	new_file->len = st.st_size;
 	if (statfile_pool_check (new_file) == -1) {
 		pool->opened --;
+        memory_pool_unlock_mutex (pool->lock);
 		return NULL;
 	}
 
@@ -185,6 +196,7 @@ statfile_pool_open (statfile_pool_t *pool, char *filename)
 	
 	/* Keep sorted */
 	qsort (pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
+    memory_pool_unlock_mutex (pool->lock);
 
 	return new_file;
 }
@@ -199,6 +211,7 @@ statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean keep_sor
 		return -1;
 	}
 	
+    memory_pool_lock_mutex (pool->lock);
 	if (file->lock) {
 		memory_pool_lock_mutex (file->lock);
 	}
@@ -210,12 +223,15 @@ statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean keep_sor
 		close (file->fd);
 	}
 	pool->occupied -= file->len;
-	
+    pool->opened --;
+
 	if (keep_sorted) {
-		memmove (pos, &pool->files[pool->opened--], sizeof (stat_file_t));
+		memmove (pos, &pool->files[pool->opened], sizeof (stat_file_t));
 		/* Keep sorted */
 		qsort (pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
 	}
+    memory_pool_unlock_mutex (pool->lock);
+
 	return 0;
 }
 
@@ -238,8 +254,11 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 		return 0;
 	}
 
+    memory_pool_lock_mutex (pool->lock);
+
 	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1 ) {
 		msg_info ("statfile_pool_create: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+        memory_pool_unlock_mutex (pool->lock);
 		return -1;
 	}
 
@@ -247,6 +266,7 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 	if (write (fd, &header, sizeof (header)) == -1) {
 		msg_info ("statfile_pool_create: cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
+        memory_pool_unlock_mutex (pool->lock);
 		return -1;
 	}
 	
@@ -254,6 +274,7 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 	if (write (fd, &section, sizeof (section)) == -1) {
 		msg_info ("statfile_pool_create: cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
+        memory_pool_unlock_mutex (pool->lock);
 		return -1;
 	}
 	
@@ -261,11 +282,13 @@ statfile_pool_create (statfile_pool_t *pool, char *filename, size_t blocks)
 		if (write (fd, &block, sizeof (block)) == -1) {
 			msg_info ("statfile_pool_create: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
 			close (fd);
+            memory_pool_unlock_mutex (pool->lock);
 			return -1;
 		}
 	}
 
 	close (fd);
+    memory_pool_unlock_mutex (pool->lock);
 	
 	return 0;
 }

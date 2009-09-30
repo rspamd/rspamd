@@ -84,6 +84,7 @@ typedef struct statfile_pool_s {
 	size_t max;								/**< maximum size						*/
 	size_t occupied;						/**< current size						*/
 	memory_pool_t *pool;					/**< memory pool object					*/
+	memory_pool_mutex_t *lock;				/**< mutex								*/
 } statfile_pool_t;
 
 /**
