@@ -30,10 +30,10 @@
 #include "cfg_file.h"
 #include "map.h"
 
-struct rspamd_view* 
-init_view (memory_pool_t *pool)
+struct rspamd_view             *
+init_view (memory_pool_t * pool)
 {
-	struct rspamd_view *new;
+	struct rspamd_view             *new;
 
 	new = memory_pool_alloc0 (pool, sizeof (struct rspamd_view));
 
@@ -41,16 +41,16 @@ init_view (memory_pool_t *pool)
 	new->from_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->symbols_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 
-	memory_pool_add_destructor (new->pool, (pool_destruct_func)g_hash_table_destroy, new->from_hash);
-	memory_pool_add_destructor (new->pool, (pool_destruct_func)g_hash_table_destroy, new->symbols_hash);
+	memory_pool_add_destructor (new->pool, (pool_destruct_func) g_hash_table_destroy, new->from_hash);
+	memory_pool_add_destructor (new->pool, (pool_destruct_func) g_hash_table_destroy, new->symbols_hash);
 
 	return new;
 }
 
-gboolean 
-add_view_from (struct rspamd_view *view, char *line)
+gboolean
+add_view_from (struct rspamd_view * view, char *line)
 {
-	struct rspamd_regexp *re = NULL;
+	struct rspamd_regexp           *re = NULL;
 
 	if (add_map (line, read_host_list, fin_host_list, (void **)&view->from_hash)) {
 		return TRUE;
@@ -63,11 +63,11 @@ add_view_from (struct rspamd_view *view, char *line)
 	return FALSE;
 }
 
-gboolean 
-add_view_symbols (struct rspamd_view *view, char *line)
+gboolean
+add_view_symbols (struct rspamd_view * view, char *line)
 {
-	struct rspamd_regexp *re = NULL;
-	GList *symbols;
+	struct rspamd_regexp           *re = NULL;
+	GList                          *symbols;
 
 	if (add_map (line, read_host_list, fin_host_list, (void **)&view->symbols_hash)) {
 		return TRUE;
@@ -90,8 +90,8 @@ add_view_symbols (struct rspamd_view *view, char *line)
 
 }
 
-gboolean 
-add_view_ip (struct rspamd_view *view, char *line)
+gboolean
+add_view_ip (struct rspamd_view * view, char *line)
 {
 	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
 		return TRUE;
@@ -101,16 +101,16 @@ add_view_ip (struct rspamd_view *view, char *line)
 }
 
 
-struct rspamd_view *
-find_view_by_ip (GList *views, struct worker_task *task)
+struct rspamd_view             *
+find_view_by_ip (GList * views, struct worker_task *task)
 {
-	GList *cur;
-	struct rspamd_view *v;
+	GList                          *cur;
+	struct rspamd_view             *v;
 
 	if (task->from_addr.s_addr == INADDR_NONE) {
 		return NULL;
 	}
-	
+
 	cur = views;
 	while (cur) {
 		v = cur->data;
@@ -123,17 +123,17 @@ find_view_by_ip (GList *views, struct worker_task *task)
 	return NULL;
 }
 
-struct rspamd_view *
-find_view_by_from (GList *views, struct worker_task *task)
+struct rspamd_view             *
+find_view_by_from (GList * views, struct worker_task *task)
 {
-	GList *cur, *cur_re;
-	struct rspamd_view *v;
-	struct rspamd_regexp *re;
+	GList                          *cur, *cur_re;
+	struct rspamd_view             *v;
+	struct rspamd_regexp           *re;
 
 	if (task->from == NULL) {
 		return NULL;
 	}
-	
+
 	cur = views;
 	while (cur) {
 		v = cur->data;
@@ -157,11 +157,11 @@ find_view_by_from (GList *views, struct worker_task *task)
 	return NULL;
 }
 
-static gboolean
+static                          gboolean
 match_view_symbol (struct rspamd_view *v, const char *symbol)
 {
-	GList *cur;
-	struct rspamd_regexp *re;
+	GList                          *cur;
+	struct rspamd_regexp           *re;
 
 	/* First try to lookup in hashtable */
 	if (g_hash_table_lookup (v->symbols_hash, symbol) != NULL) {
@@ -181,17 +181,17 @@ match_view_symbol (struct rspamd_view *v, const char *symbol)
 	return FALSE;
 }
 
-gboolean 
-check_view (GList *views, const char *symbol, struct worker_task *task)
+gboolean
+check_view (GList * views, const char *symbol, struct worker_task * task)
 {
-	struct rspamd_view *selected = NULL;
+	struct rspamd_view             *selected = NULL;
 
 
 	if (views == NULL || (task->view == NULL && task->view_checked == TRUE)) {
 		/* If now views defined just return TRUE to check each symbol */
 		return TRUE;
 	}
-	
+
 	if (task->view != NULL) {
 		goto check_symbol;
 	}
@@ -203,11 +203,11 @@ check_view (GList *views, const char *symbol, struct worker_task *task)
 			return TRUE;
 		}
 	}
-	
+
 	task->view_checked = TRUE;
 	task->view = selected;
 
-check_symbol:
+  check_symbol:
 	/* selected is now not NULL */
 	if (match_view_symbol (task->view, symbol)) {
 		return TRUE;

@@ -16,30 +16,30 @@
     ((type_ *)((char *)ptr_ - (size_t)&((type_ *)0)->member_))
 
 typedef struct {
-	json_t          json;
-	hashtable_t     hashtable;
+	json_t                          json;
+	hashtable_t                     hashtable;
 } json_object_t;
 
 typedef struct {
-	json_t          json;
-	unsigned int    size;
-	unsigned int    entries;
-	json_t        **table;
+	json_t                          json;
+	unsigned int                    size;
+	unsigned int                    entries;
+	json_t                        **table;
 } json_array_t;
 
 typedef struct {
-	json_t          json;
-	char           *value;
+	json_t                          json;
+	char                           *value;
 } json_string_t;
 
 typedef struct {
-	json_t          json;
-	double          value;
+	json_t                          json;
+	double                          value;
 } json_real_t;
 
 typedef struct {
-	json_t          json;
-	int             value;
+	json_t                          json;
+	int                             value;
 } json_integer_t;
 
 #define json_to_object(json_)  container_of(json_, json_object_t, json)
@@ -61,9 +61,9 @@ json_init (json_t * json, json_type type)
 static unsigned int
 hash_string (const void *key)
 {
-	const char     *str = (const char *)key;
-	unsigned int    hash = 5381;
-	unsigned int    c;
+	const char                     *str = (const char *)key;
+	unsigned int                    hash = 5381;
+	unsigned int                    c;
 
 	while ((c = (unsigned int)*str)) {
 		hash = ((hash << 5) + hash) + c;
@@ -85,16 +85,15 @@ value_decref (void *value)
 	json_decref ((json_t *) value);
 }
 
-json_t         *
+json_t                         *
 json_object (void)
 {
-	json_object_t  *object = g_malloc (sizeof (json_object_t));
+	json_object_t                  *object = g_malloc (sizeof (json_object_t));
 	if (!object)
 		return NULL;
 	json_init (&object->json, JSON_OBJECT);
 
-	if (hashtable_init (&object->hashtable, hash_string, string_equal,
-			g_free, value_decref)) {
+	if (hashtable_init (&object->hashtable, hash_string, string_equal, g_free, value_decref)) {
 		g_free (object);
 		return NULL;
 	}
@@ -108,10 +107,10 @@ json_delete_object (json_object_t * object)
 	g_free (object);
 }
 
-json_t         *
+json_t                         *
 json_object_get (const json_t * json, const char *key)
 {
-	json_object_t  *object;
+	json_object_t                  *object;
 
 	if (!json_is_object (json))
 		return NULL;
@@ -123,7 +122,7 @@ json_object_get (const json_t * json, const char *key)
 int
 json_object_set_new_nocheck (json_t * json, const char *key, json_t * value)
 {
-	json_object_t  *object;
+	json_object_t                  *object;
 
 	if (!key || !value)
 		return -1;
@@ -162,7 +161,7 @@ json_object_set_new (json_t * json, const char *key, json_t * value)
 int
 json_object_del (json_t * json, const char *key)
 {
-	json_object_t  *object;
+	json_object_t                  *object;
 
 	if (!json_is_object (json))
 		return -1;
@@ -171,10 +170,10 @@ json_object_del (json_t * json, const char *key)
 	return hashtable_del (&object->hashtable, key);
 }
 
-void           *
+void                           *
 json_object_iter (json_t * json)
 {
-	json_object_t  *object;
+	json_object_t                  *object;
 
 	if (!json_is_object (json))
 		return NULL;
@@ -183,10 +182,10 @@ json_object_iter (json_t * json)
 	return hashtable_iter (&object->hashtable);
 }
 
-void           *
+void                           *
 json_object_iter_next (json_t * json, void *iter)
 {
-	json_object_t  *object;
+	json_object_t                  *object;
 
 	if (!json_is_object (json) || iter == NULL)
 		return NULL;
@@ -195,7 +194,7 @@ json_object_iter_next (json_t * json, void *iter)
 	return hashtable_iter_next (&object->hashtable, iter);
 }
 
-const char     *
+const char                     *
 json_object_iter_key (void *iter)
 {
 	if (!iter)
@@ -204,7 +203,7 @@ json_object_iter_key (void *iter)
 	return (const char *)hashtable_iter_key (iter);
 }
 
-json_t         *
+json_t                         *
 json_object_iter_value (void *iter)
 {
 	if (!iter)
@@ -216,10 +215,10 @@ json_object_iter_value (void *iter)
 
 /*** array ***/
 
-json_t         *
+json_t                         *
 json_array (void)
 {
-	json_array_t   *array = g_malloc (sizeof (json_array_t));
+	json_array_t                   *array = g_malloc (sizeof (json_array_t));
 	if (!array)
 		return NULL;
 	json_init (&array->json, JSON_ARRAY);
@@ -234,7 +233,7 @@ json_array (void)
 static void
 json_delete_array (json_array_t * array)
 {
-	unsigned int    i;
+	unsigned int                    i;
 
 	for (i = 0; i < array->entries; i++)
 		json_decref (array->table[i]);
@@ -252,10 +251,10 @@ json_array_size (const json_t * json)
 	return json_to_array (json)->entries;
 }
 
-json_t         *
+json_t                         *
 json_array_get (const json_t * json, unsigned int index)
 {
-	json_array_t   *array;
+	json_array_t                   *array;
 	if (!json_is_array (json))
 		return NULL;
 	array = json_to_array (json);
@@ -269,7 +268,7 @@ json_array_get (const json_t * json, unsigned int index)
 int
 json_array_set_new (json_t * json, unsigned int index, json_t * value)
 {
-	json_array_t   *array;
+	json_array_t                   *array;
 
 	if (!value)
 		return -1;
@@ -294,7 +293,7 @@ json_array_set_new (json_t * json, unsigned int index, json_t * value)
 int
 json_array_append_new (json_t * json, json_t * value)
 {
-	json_array_t   *array;
+	json_array_t                   *array;
 
 	if (!value)
 		return -1;
@@ -323,10 +322,10 @@ json_array_append_new (json_t * json, json_t * value)
 
 /*** string ***/
 
-json_t         *
+json_t                         *
 json_string_nocheck (const char *value)
 {
-	json_string_t  *string;
+	json_string_t                  *string;
 
 	if (!value)
 		return NULL;
@@ -345,7 +344,7 @@ json_string_nocheck (const char *value)
 	return &string->json;
 }
 
-json_t         *
+json_t                         *
 json_string (const char *value)
 {
 	if (!value || !utf8_check_string (value, -1))
@@ -354,7 +353,7 @@ json_string (const char *value)
 	return json_string_nocheck (value);
 }
 
-const char     *
+const char                     *
 json_string_value (const json_t * json)
 {
 	if (!json_is_string (json))
@@ -373,10 +372,10 @@ json_delete_string (json_string_t * string)
 
 /*** integer ***/
 
-json_t         *
+json_t                         *
 json_integer (int value)
 {
-	json_integer_t *integer = g_malloc (sizeof (json_integer_t));
+	json_integer_t                 *integer = g_malloc (sizeof (json_integer_t));
 	if (!integer)
 		return NULL;
 	json_init (&integer->json, JSON_INTEGER);
@@ -403,10 +402,10 @@ json_delete_integer (json_integer_t * integer)
 
 /*** real ***/
 
-json_t         *
+json_t                         *
 json_real (double value)
 {
-	json_real_t    *real = g_malloc (sizeof (json_real_t));
+	json_real_t                    *real = g_malloc (sizeof (json_real_t));
 	if (!real)
 		return NULL;
 	json_init (&real->json, JSON_REAL);
@@ -447,10 +446,10 @@ json_number_value (const json_t * json)
 
 /*** simple values ***/
 
-json_t         *
+json_t                         *
 json_true (void)
 {
-	static json_t   the_true = {
+	static json_t                   the_true = {
 		.type = JSON_TRUE,
 		.refcount = 1
 	};
@@ -458,10 +457,10 @@ json_true (void)
 }
 
 
-json_t         *
+json_t                         *
 json_false (void)
 {
-	static json_t   the_false = {
+	static json_t                   the_false = {
 		.type = JSON_FALSE,
 		.refcount = 1
 	};
@@ -469,10 +468,10 @@ json_false (void)
 }
 
 
-json_t         *
+json_t                         *
 json_null (void)
 {
-	static json_t   the_null = {
+	static json_t                   the_null = {
 		.type = JSON_NULL,
 		.refcount = 1
 	};

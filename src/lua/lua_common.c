@@ -27,79 +27,79 @@
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
 
-lua_State *L = NULL;
-const luaL_reg null_reg[] = {
+lua_State                      *L = NULL;
+const luaL_reg                  null_reg[] = {
 	{"__tostring", lua_class_tostring},
-    {NULL, NULL}
+	{NULL, NULL}
 };
 
 /* Logger methods */
-LUA_FUNCTION_DEF(logger, err);
-LUA_FUNCTION_DEF(logger, warn);
-LUA_FUNCTION_DEF(logger, info);
-LUA_FUNCTION_DEF(logger, debug);
+LUA_FUNCTION_DEF (logger, err);
+LUA_FUNCTION_DEF (logger, warn);
+LUA_FUNCTION_DEF (logger, info);
+LUA_FUNCTION_DEF (logger, debug);
 
-static const struct luaL_reg loggerlib_m[] = {
-    LUA_INTERFACE_DEF(logger, err),
-    LUA_INTERFACE_DEF(logger, warn),
-    LUA_INTERFACE_DEF(logger, info),
-    LUA_INTERFACE_DEF(logger, debug),
+static const struct luaL_reg    loggerlib_m[] = {
+	LUA_INTERFACE_DEF (logger, err),
+	LUA_INTERFACE_DEF (logger, warn),
+	LUA_INTERFACE_DEF (logger, info),
+	LUA_INTERFACE_DEF (logger, debug),
 	{"__tostring", lua_class_tostring},
-    {NULL, NULL}
+	{NULL, NULL}
 };
 
 /* Util functions */
-void 
-lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func) 
+void
+lua_newclass (lua_State * L, const char *classname, const struct luaL_reg *func)
 {
-	luaL_newmetatable (L, classname); /* mt */
-	lua_pushstring(L, "__index");
-	lua_pushvalue(L, -2);  /* pushes the metatable */
-	lua_settable(L, -3);  /* metatable.__index = metatable */
+	luaL_newmetatable (L, classname);	/* mt */
+	lua_pushstring (L, "__index");
+	lua_pushvalue (L, -2);		/* pushes the metatable */
+	lua_settable (L, -3);		/* metatable.__index = metatable */
 
-	lua_pushstring (L, "class");      /* mt,"__index",it,"class" */
-	lua_pushstring (L, classname);    /* mt,"__index",it,"class",classname */
-	lua_rawset (L, -3);               /* mt,"__index",it */
-    
-	luaL_openlib(L, NULL, func, 0);
+	lua_pushstring (L, "class");	/* mt,"__index",it,"class" */
+	lua_pushstring (L, classname);	/* mt,"__index",it,"class",classname */
+	lua_rawset (L, -3);			/* mt,"__index",it */
+
+	luaL_openlib (L, NULL, func, 0);
 }
 
-int 
-lua_class_tostring (lua_State *L) 
+int
+lua_class_tostring (lua_State * L)
 {
-	char buf[32];
+	char                            buf[32];
 
 	if (!lua_getmetatable (L, 1)) {
 		goto error;
 	}
-    lua_pushstring (L, "__index");
-    lua_gettable (L, -2);
+	lua_pushstring (L, "__index");
+	lua_gettable (L, -2);
 
-    if (!lua_istable (L, -1)) {
-			goto error;
+	if (!lua_istable (L, -1)) {
+		goto error;
 	}
-    lua_pushstring (L, "class");
-    lua_gettable (L, -2);
+	lua_pushstring (L, "class");
+	lua_gettable (L, -2);
 
-    if (!lua_isstring (L, -1)) {
+	if (!lua_isstring (L, -1)) {
 		goto error;
 	}
 
-    snprintf (buf, sizeof (buf), "%p", lua_touserdata (L, 1));
+	snprintf (buf, sizeof (buf), "%p", lua_touserdata (L, 1));
 
-    lua_pushfstring (L, "%s: %s", lua_tostring (L, -1), buf);
+	lua_pushfstring (L, "%s: %s", lua_tostring (L, -1), buf);
 
-    return 1;
+	return 1;
 
-error:
-    lua_pushstring (L, "invalid object passed to 'lua_common.c:__tostring'");
-    lua_error (L);
-    return 1;
+  error:
+	lua_pushstring (L, "invalid object passed to 'lua_common.c:__tostring'");
+	lua_error (L);
+	return 1;
 }
 
 
-void 
-lua_setclass (lua_State *L, const char *classname, int objidx) 
+void
+lua_setclass (lua_State * L, const char *classname, int objidx)
 {
 	luaL_getmetatable (L, classname);
 	if (objidx < 0) {
@@ -109,75 +109,75 @@ lua_setclass (lua_State *L, const char *classname, int objidx)
 }
 
 /* assume that table is at the top */
-void 
-lua_set_table_index (lua_State *L, const char *index, const char *value) 
+void
+lua_set_table_index (lua_State * L, const char *index, const char *value)
 {
 
 	lua_pushstring (L, index);
 	lua_pushstring (L, value);
-	lua_settable(L, -3);
+	lua_settable (L, -3);
 }
 
 
 /*** Logger interface ***/
 static int
-lua_logger_err (lua_State *L)
+lua_logger_err (lua_State * L)
 {
-    const char *msg;
-    msg = luaL_checkstring (L, 1);
-    msg_err (msg);
-    return 1;
+	const char                     *msg;
+	msg = luaL_checkstring (L, 1);
+	msg_err (msg);
+	return 1;
 }
 
 static int
-lua_logger_warn (lua_State *L)
+lua_logger_warn (lua_State * L)
 {
-    const char *msg;
-    msg = luaL_checkstring (L, 1);
-    msg_warn (msg);
-    return 1;
+	const char                     *msg;
+	msg = luaL_checkstring (L, 1);
+	msg_warn (msg);
+	return 1;
 }
 
 static int
-lua_logger_info (lua_State *L)
+lua_logger_info (lua_State * L)
 {
-    const char *msg;
-    msg = luaL_checkstring (L, 1);
-    msg_info (msg);
-    return 1;
+	const char                     *msg;
+	msg = luaL_checkstring (L, 1);
+	msg_info (msg);
+	return 1;
 }
 
 static int
-lua_logger_debug (lua_State *L)
+lua_logger_debug (lua_State * L)
 {
-    const char *msg;
-    msg = luaL_checkstring (L, 1);
-    msg_debug (msg);
-    return 1;
+	const char                     *msg;
+	msg = luaL_checkstring (L, 1);
+	msg_debug (msg);
+	return 1;
 }
 
 
 /*** Init functions ***/
 
 int
-luaopen_rspamd (lua_State *L)
+luaopen_rspamd (lua_State * L)
 {
-	luaL_openlib(L, "rspamd", null_reg, 0);
-    /* make version string available to scripts */
-	lua_pushstring(L, "_VERSION");
-	lua_pushstring(L, RVERSION);
-    lua_rawset(L, -3);
-    
+	luaL_openlib (L, "rspamd", null_reg, 0);
+	/* make version string available to scripts */
+	lua_pushstring (L, "_VERSION");
+	lua_pushstring (L, RVERSION);
+	lua_rawset (L, -3);
+
 	return 1;
 }
 
 int
-luaopen_logger (lua_State *L)
+luaopen_logger (lua_State * L)
 {
 
 	luaL_openlib (L, "rspamd_logger", loggerlib_m, 0);
 
-    return 1;
+	return 1;
 }
 
 static void
@@ -186,13 +186,13 @@ init_lua ()
 	if (L == NULL) {
 		L = lua_open ();
 		luaL_openlibs (L);
-        
-        (void)luaopen_rspamd (L);
-        (void)luaopen_logger (L);
-        (void)luaopen_config (L);
-        (void)luaopen_metric (L);
+
+		(void)luaopen_rspamd (L);
+		(void)luaopen_logger (L);
+		(void)luaopen_config (L);
+		(void)luaopen_metric (L);
 		(void)luaopen_task (L);
-        (void)luaopen_textpart (L);
+		(void)luaopen_textpart (L);
 		(void)luaopen_message (L);
 	}
 }
@@ -200,10 +200,10 @@ init_lua ()
 void
 init_lua_filters (struct config_file *cfg)
 {
-	struct config_file **pcfg;
-	GList *cur;
-	struct script_module *module;
-	
+	struct config_file            **pcfg;
+	GList                          *cur;
+	struct script_module           *module;
+
 	init_lua ();
 	cur = g_list_first (cfg->script_modules);
 	while (cur) {
@@ -211,17 +211,17 @@ init_lua_filters (struct config_file *cfg)
 		if (module->path) {
 			if (luaL_loadfile (L, module->path) != 0) {
 				msg_info ("lua_init_filters: load of %s failed: %s", module->path, lua_tostring (L, -1));
-		        cur = g_list_next (cur);
-                continue;
-            }
+				cur = g_list_next (cur);
+				continue;
+			}
 
 			/* Call module init function */
 			pcfg = lua_newuserdata (L, sizeof (struct config_file *));
 			lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
-            lua_setglobal (L, "rspamd_config");
+			lua_setglobal (L, "rspamd_config");
 			/* do the call (1 arguments, 1 result) */
-            if (lua_pcall(L, 0, LUA_MULTRET, 0) != 0) {
+			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
 				msg_info ("lua_init_filters: init of %s failed: %s", module->path, lua_tostring (L, -1));
 			}
 		}
@@ -234,14 +234,14 @@ init_lua_filters (struct config_file *cfg)
 int
 lua_call_filter (const char *function, struct worker_task *task)
 {
-	int result;
-	struct worker_task **ptask;
+	int                             result;
+	struct worker_task            **ptask;
 
 	lua_getglobal (L, function);
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
 	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
-	
+
 	if (lua_pcall (L, 1, 1, 0) != 0) {
 		msg_info ("lua_call_filter: call to %s failed", function);
 	}
@@ -251,18 +251,18 @@ lua_call_filter (const char *function, struct worker_task *task)
 		msg_info ("lua_call_filter: function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
-	lua_pop (L, 1);  /* pop returned value */
+	lua_pop (L, 1);				/* pop returned value */
 	return result;
 }
 
 int
 lua_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number)
 {
-	int result, i;
+	int                             result, i;
 
 	lua_getglobal (L, function);
 
-	for (i = 0; i < number; i ++) {
+	for (i = 0; i < number; i++) {
 		lua_pushnumber (L, marks[i]);
 	}
 	if (lua_pcall (L, number, 1, 0) != 0) {
@@ -274,7 +274,7 @@ lua_call_chain_filter (const char *function, struct worker_task *task, int *mark
 		msg_info ("lua_call_header_filter: function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
-	lua_pop (L, 1);  /* pop returned value */
+	lua_pop (L, 1);				/* pop returned value */
 	return result;
 }
 
@@ -282,16 +282,16 @@ lua_call_chain_filter (const char *function, struct worker_task *task, int *mark
  * LUA custom consolidation function
  */
 struct consolidation_callback_data {
-	struct worker_task *task;
-	double score;
-	const char *func;
+	struct worker_task             *task;
+	double                          score;
+	const char                     *func;
 };
 
 static void
 lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 {
-	double res;
-	struct symbol *s = (struct symbol *)value;
+	double                          res;
+	struct symbol                  *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
 
 	lua_getglobal (L, data->func);
@@ -307,15 +307,15 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 		msg_info ("lua_consolidation_callback: function %s must return a number", data->func);
 	}
 	res = lua_tonumber (L, -1);
-	lua_pop (L, 1);  /* pop returned value */
+	lua_pop (L, 1);				/* pop returned value */
 	data->score += res;
 }
 
 double
 lua_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name)
 {
-	struct metric_result *metric_res;
-	double res = 0.;
+	struct metric_result           *metric_res;
+	double                          res = 0.;
 	struct consolidation_callback_data data = { task, 0, function_name };
 
 	if (function_name == NULL) {
@@ -335,13 +335,12 @@ lua_consolidation_func (struct worker_task *task, const char *metric_name, const
 void
 add_luabuf (const char *line)
 {
-	int error;
+	int                             error;
 	init_lua ();
 
-	error = luaL_loadbuffer(L, line, strlen(line), "config")  ||
-			lua_pcall(L, 0, 0, 0);
+	error = luaL_loadbuffer (L, line, strlen (line), "config") || lua_pcall (L, 0, 0, 0);
 	if (error) {
-		yyerror ("lua error: %s", lua_tostring(L, -1));
-		lua_pop(L, 1);  /* pop error message from the stack */
+		yyerror ("lua error: %s", lua_tostring (L, -1));
+		lua_pop (L, 1);			/* pop error message from the stack */
 	}
 }

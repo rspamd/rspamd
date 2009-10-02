@@ -37,14 +37,14 @@
 #define HOST "127.0.0.1"
 #define PORT 11211
 
-memcached_param_t cur_param;
+memcached_param_t               cur_param;
 
 static void
-test_memc_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
-{	
-	int s;
-	int r;
-	int *num = ((int *)data);
+test_memc_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
+{
+	int                             s;
+	int                             r;
+	int                            *num = ((int *)data);
 	printf ("result of memc command '%s' is '%s'\n", ctx->cmd, memc_strerror (error));
 	/* Connect */
 	if (*num == 0) {
@@ -66,13 +66,13 @@ test_memc_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
 }
 
 
-int 
+int
 main (int argc, char **argv)
 {
-	memcached_ctx_t mctx;
-	char *addr, buf[512];
-	int num = 0;
-	
+	memcached_ctx_t                 mctx;
+	char                           *addr, buf[512];
+	int                             num = 0;
+
 	event_init ();
 	strcpy (cur_param.key, "testkey");
 	strcpy (buf, "test_value");
@@ -85,7 +85,7 @@ main (int argc, char **argv)
 	else {
 		addr = HOST;
 	}
-	
+
 	mctx.protocol = TCP_TEXT;
 	mctx.timeout.tv_sec = 1;
 	mctx.timeout.tv_usec = 0;
@@ -97,7 +97,7 @@ main (int argc, char **argv)
 	inet_aton (addr, &mctx.addr);
 
 	memc_init_ctx (&mctx);
-	
+
 	event_loop (0);
 	return 0;
 }

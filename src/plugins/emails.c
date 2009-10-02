@@ -38,30 +38,31 @@
 
 #define DEFAULT_SYMBOL "R_BAD_EMAIL"
 
-static const char *email_re_text = "[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+(?:[A-Z]{2}|com|org|net|gov|mil|biz|info|mobi|name|aero|jobs|museum)\\b";
+static const char              *email_re_text =
+	"[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+(?:[A-Z]{2}|com|org|net|gov|mil|biz|info|mobi|name|aero|jobs|museum)\\b";
 
 struct email_ctx {
-	int (*filter)(struct worker_task *task);
-	char *metric;
-	char *symbol;
-	GRegex *email_re;
+	int                             (*filter) (struct worker_task * task);
+	char                           *metric;
+	char                           *symbol;
+	GRegex                         *email_re;
 
-	GHashTable *blacklist;
-	char *blacklist_file;
+	GHashTable                     *blacklist;
+	char                           *blacklist_file;
 
-	memory_pool_t *email_pool;
+	memory_pool_t                  *email_pool;
 };
 
-static struct email_ctx *email_module_ctx = NULL;
+static struct email_ctx        *email_module_ctx = NULL;
 
-static int emails_mime_filter (struct worker_task *task);
-static void emails_symbol_callback (struct worker_task *task, void *unused);
-static int emails_command_handler (struct worker_task *task);
+static int                      emails_mime_filter (struct worker_task *task);
+static void                     emails_symbol_callback (struct worker_task *task, void *unused);
+static int                      emails_command_handler (struct worker_task *task);
 
 int
 emails_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
-	GError *err = NULL;
+	GError                         *err = NULL;
 
 	email_module_ctx = g_malloc (sizeof (struct email_ctx));
 
@@ -69,9 +70,9 @@ emails_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	email_module_ctx->email_pool = memory_pool_new (memory_pool_get_size ());
 	email_module_ctx->email_re = g_regex_new (email_re_text, G_REGEX_RAW | G_REGEX_OPTIMIZE | G_REGEX_CASELESS, 0, &err);
 	email_module_ctx->blacklist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-	
+
 	*ctx = (struct module_ctx *)email_module_ctx;
-	
+
 	register_protocol_command ("emails", emails_command_handler);
 
 	return 0;
@@ -81,10 +82,10 @@ emails_module_init (struct config_file *cfg, struct module_ctx **ctx)
 int
 emails_module_config (struct config_file *cfg)
 {
-	char *value;
-	int res = TRUE;
-	struct metric *metric;
-	double *w;
+	char                           *value;
+	int                             res = TRUE;
+	struct metric                  *metric;
+	double                         *w;
 
 	if ((value = get_module_opt (cfg, "emails", "metric")) != NULL) {
 		email_module_ctx->metric = memory_pool_strdup (email_module_ctx->email_pool, value);
@@ -104,7 +105,7 @@ emails_module_config (struct config_file *cfg)
 		if (add_map (value, read_host_list, fin_host_list, (void **)&email_module_ctx->blacklist)) {
 			email_module_ctx->blacklist_file = memory_pool_strdup (email_module_ctx->email_pool, value + sizeof ("file://") - 1);
 		}
-	}	
+	}
 
 	metric = g_hash_table_lookup (cfg->metrics, email_module_ctx->metric);
 	if (metric == NULL) {
@@ -133,15 +134,15 @@ emails_module_reconfig (struct config_file *cfg)
 	return emails_module_config (cfg);
 }
 
-static GList *
+static GList                   *
 extract_emails (struct worker_task *task)
 {
-	GList *res = NULL, *cur;
-	GMatchInfo *info;
-	GError *err = NULL;
-	struct mime_text_part *part;
-	char *email_str;
-	int rc;
+	GList                          *res = NULL, *cur;
+	GMatchInfo                     *info;
+	GError                         *err = NULL;
+	struct mime_text_part          *part;
+	char                           *email_str;
+	int                             rc;
 
 	cur = g_list_first (task->text_parts);
 	while (cur) {
@@ -158,7 +159,7 @@ extract_emails (struct worker_task *task)
 				email_str = g_match_info_fetch (info, 0);
 				if (email_str != NULL) {
 					res = g_list_prepend (res, email_str);
-					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, email_str);
+					memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, email_str);
 				}
 				/* Get next match */
 				g_match_info_next (info, &err);
@@ -175,29 +176,29 @@ extract_emails (struct worker_task *task)
 		cur = g_list_next (cur);
 	}
 	if (res != NULL) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, res);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, res);
 	}
-	
+
 	return res;
 }
 
-static int 
+static int
 emails_command_handler (struct worker_task *task)
 {
-	GList *emails, *cur;
-	char outbuf[BUFSIZ];
-	int r, num = 0;
+	GList                          *emails, *cur;
+	char                            outbuf[BUFSIZ];
+	int                             r, num = 0;
 
 	emails = extract_emails (task);
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
-	
+
 	r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "Emails: ");
-	
+
 	cur = g_list_first (emails);
 
 	while (cur) {
-		num ++;
+		num++;
 		if (g_list_next (cur) != NULL) {
 			r += snprintf (outbuf + r, sizeof (outbuf) - r - 2, "%s, ", (char *)cur->data);
 		}
@@ -206,8 +207,9 @@ emails_command_handler (struct worker_task *task)
 		}
 		cur = g_list_next (cur);
 	}
-	
-	outbuf[r++] = '\r'; outbuf[r++] = '\n';
+
+	outbuf[r++] = '\r';
+	outbuf[r++] = '\n';
 
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 	msg_info ("process_message: msg ok, id: <%s>, %d emails extracted", task->message_id, num);
@@ -215,10 +217,10 @@ emails_command_handler (struct worker_task *task)
 	return 0;
 }
 
-static void 
+static void
 emails_symbol_callback (struct worker_task *task, void *unused)
-{	
-	GList *emails, *cur;
+{
+	GList                          *emails, *cur;
 
 
 	if (check_view (task->cfg->views, email_module_ctx->symbol, task)) {
@@ -228,9 +230,8 @@ emails_symbol_callback (struct worker_task *task, void *unused)
 
 			while (cur) {
 				if (g_hash_table_lookup (email_module_ctx->blacklist, cur->data) != NULL) {
-					insert_result (task, email_module_ctx->metric, email_module_ctx->symbol, 1, 
-								g_list_prepend (NULL, memory_pool_strdup (task->task_pool, (char *)cur->data)));
-		
+					insert_result (task, email_module_ctx->metric, email_module_ctx->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, (char *)cur->data)));
+
 				}
 				cur = g_list_next (cur);
 			}
@@ -239,7 +240,7 @@ emails_symbol_callback (struct worker_task *task, void *unused)
 
 }
 
-static int 
+static int
 emails_mime_filter (struct worker_task *task)
 {
 	/* XXX: remove this */

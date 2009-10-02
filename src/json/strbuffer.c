@@ -43,16 +43,16 @@ strbuffer_clear (strbuffer_t * strbuff)
 	strbuff->value[0] = '\0';
 }
 
-const char     *
+const char                     *
 strbuffer_value (const strbuffer_t * strbuff)
 {
 	return strbuff->value;
 }
 
-char           *
+char                           *
 strbuffer_steal_value (strbuffer_t * strbuff)
 {
-	char           *result = strbuff->value;
+	char                           *result = strbuff->value;
 	strbuffer_init (strbuff);
 	return result;
 }
@@ -73,8 +73,7 @@ int
 strbuffer_append_bytes (strbuffer_t * strbuff, const char *data, int size)
 {
 	if (strbuff->length + size >= strbuff->size) {
-		strbuff->size = max (strbuff->size * STRBUFFER_FACTOR,
-			strbuff->length + size + 1);
+		strbuff->size = max (strbuff->size * STRBUFFER_FACTOR, strbuff->length + size + 1);
 
 		strbuff->value = realloc (strbuff->value, strbuff->size);
 		if (!strbuff->value)
@@ -92,7 +91,7 @@ char
 strbuffer_pop (strbuffer_t * strbuff)
 {
 	if (strbuff->length > 0) {
-		char            c = strbuff->value[--strbuff->length];
+		char                            c = strbuff->value[--strbuff->length];
 		strbuff->value[strbuff->length] = '\0';
 		return c;
 	}

@@ -30,11 +30,11 @@
 #include "../main.h"
 #include "tokenizers.h"
 
-struct tokenizer tokenizers[] = {
-	{"osb-text", osb_tokenize_text, get_next_word },
+struct tokenizer                tokenizers[] = {
+	{"osb-text", osb_tokenize_text, get_next_word},
 };
 
-const int primes[] = {
+const int                       primes[] = {
 	1, 7,
 	3, 13,
 	5, 29,
@@ -47,12 +47,12 @@ const int primes[] = {
 	797, 3277,
 };
 
-struct tokenizer*
+struct tokenizer               *
 get_tokenizer (char *name)
 {
-	int i;
+	int                             i;
 
-	for (i = 0; i < sizeof (tokenizers) / sizeof (tokenizers[0]); i ++) {
+	for (i = 0; i < sizeof (tokenizers) / sizeof (tokenizers[0]); i++) {
 		if (strcmp (tokenizers[i].name, name) == 0) {
 			return &tokenizers[i];
 		}
@@ -61,11 +61,11 @@ get_tokenizer (char *name)
 	return NULL;
 }
 
-int 
+int
 token_node_compare_func (gconstpointer a, gconstpointer b)
 {
-	const token_node_t *aa = a, *bb = b;
-	
+	const token_node_t             *aa = a, *bb = b;
+
 	if (aa->h1 == bb->h1) {
 		return aa->h2 - bb->h2;
 	}
@@ -74,12 +74,12 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 }
 
 /* Get next word from specified f_str_t buf */
-f_str_t *
-get_next_word (f_str_t *buf, f_str_t *token)
+f_str_t                        *
+get_next_word (f_str_t * buf, f_str_t * token)
 {
-	size_t remain;
-	unsigned char *pos;
-	
+	size_t                          remain;
+	unsigned char                  *pos;
+
 	if (buf == NULL) {
 		return NULL;
 	}
@@ -89,7 +89,7 @@ get_next_word (f_str_t *buf, f_str_t *token)
 
 	token->begin = token->begin + token->len;
 	token->len = 0;
-	
+
 	remain = buf->len - (token->begin - buf->begin);
 	if (remain <= 0) {
 		return NULL;
@@ -97,37 +97,37 @@ get_next_word (f_str_t *buf, f_str_t *token)
 	pos = token->begin;
 	/* Skip non graph symbols */
 	while (remain > 0 && (!g_ascii_isgraph (*pos) && *pos < 127)) {
-		token->begin ++;
-		pos ++;
-		remain --;
+		token->begin++;
+		pos++;
+		remain--;
 	}
 	while (remain > 0 && (g_ascii_isgraph (*pos) || *pos > 127)) {
-		token->len ++;
-		pos ++;
-		remain --;
+		token->len++;
+		pos++;
+		remain--;
 	}
 
 	if (token->len == 0) {
 		return NULL;
 	}
-	
+
 	return token;
 }
 
 int
-tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **tree)
+tokenize_urls (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 {
-	token_node_t *new = NULL;
-	f_str_t url_domain;
-	struct uri *url;
-	GList *cur;
-	uint32_t h;
+	token_node_t                   *new = NULL;
+	f_str_t                         url_domain;
+	struct uri                     *url;
+	GList                          *cur;
+	uint32_t                        h;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
+		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
 	}
-	
+
 	cur = task->urls;
 	while (cur) {
 		url = cur->data;
@@ -148,32 +148,32 @@ tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **tree)
 
 /* Struct to access gmime headers */
 struct raw_header {
-	struct raw_header *next;
-	char *name;
-	char *value;
+	struct raw_header              *next;
+	char                           *name;
+	char                           *value;
 };
 
 typedef struct _GMimeHeader {
-	GHashTable *hash;
-	GHashTable *writers;
-	struct raw_header *headers;
+	GHashTable                     *hash;
+	GHashTable                     *writers;
+	struct raw_header              *headers;
 } local_GMimeHeader;
 
 int
-tokenize_headers (memory_pool_t *pool, struct worker_task *task, GTree **tree)
+tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 {
-	token_node_t *new = NULL;
-	f_str_t headername;
-	f_str_t headervalue;
+	token_node_t                   *new = NULL;
+	f_str_t                         headername;
+	f_str_t                         headervalue;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
+		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
 	}
 #ifndef GMIME24
-	struct raw_header *h;
+	struct raw_header              *h;
 
-	h = GMIME_OBJECT(task->message)->headers->headers;
+	h = GMIME_OBJECT (task->message)->headers->headers;
 	while (h) {
 		if (h->name && h->value) {
 			new = memory_pool_alloc (pool, sizeof (token_node_t));
@@ -190,12 +190,12 @@ tokenize_headers (memory_pool_t *pool, struct worker_task *task, GTree **tree)
 		h = h->next;
 	}
 #else
-	GMimeHeaderList *ls;
-	GMimeHeaderIter *iter;
-	const char *name;
-	const char *value;
+	GMimeHeaderList                *ls;
+	GMimeHeaderIter                *iter;
+	const char                     *name;
+	const char                     *value;
 
-	ls = GMIME_OBJECT(task->message)->headers;
+	ls = GMIME_OBJECT (task->message)->headers;
 
 	if (g_mime_header_list_get_iter (ls, iter)) {
 		while (g_mime_header_iter_is_valid (iter)) {

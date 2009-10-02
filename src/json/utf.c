@@ -43,7 +43,7 @@ utf8_encode (int codepoint, char *buffer, int *size)
 int
 utf8_check_first (char byte)
 {
-	unsigned char   u = (unsigned char)byte;
+	unsigned char                   u = (unsigned char)byte;
 
 	if (u < 0x80)
 		return 1;
@@ -80,8 +80,8 @@ utf8_check_first (char byte)
 int
 utf8_check_full (const char *buffer, int size)
 {
-	int             i, value = 0;
-	unsigned char   u = (unsigned char)buffer[0];
+	int                             i, value = 0;
+	unsigned char                   u = (unsigned char)buffer[0];
 
 	if (size == 2) {
 		value = u & 0x1F;
@@ -116,8 +116,7 @@ utf8_check_full (const char *buffer, int size)
 		return 0;
 	}
 
-	else if ((size == 2 && value < 0x80) ||
-		(size == 3 && value < 0x800) || (size == 4 && value < 0x10000)) {
+	else if ((size == 2 && value < 0x80) || (size == 3 && value < 0x800) || (size == 4 && value < 0x10000)) {
 		/* overlong encoding */
 		return 0;
 	}
@@ -128,13 +127,13 @@ utf8_check_full (const char *buffer, int size)
 int
 utf8_check_string (const char *string, int length)
 {
-	int             i;
+	int                             i;
 
 	if (length == -1)
 		length = strlen (string);
 
 	for (i = 0; i < length; i++) {
-		int             count = utf8_check_first (string[i]);
+		int                             count = utf8_check_first (string[i]);
 		if (count == 0)
 			return 0;
 		else if (count > 1) {

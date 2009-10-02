@@ -33,16 +33,16 @@
 #define HASH_INIT      0x28021967
 
 struct roll_state {
-	uint32_t h[3];
-	char window[ROLL_WINDOW_SIZE];
-	int n;
+	uint32_t                        h[3];
+	char                            window[ROLL_WINDOW_SIZE];
+	int                             n;
 };
 
-static struct roll_state rs;
+static struct roll_state        rs;
 
 
 /* Rolling hash function based on Adler-32 checksum */
-static uint32_t 
+static                          uint32_t
 fuzzy_roll_hash (char c)
 {
 	/* Check window position */
@@ -52,34 +52,34 @@ fuzzy_roll_hash (char c)
 
 	rs.h[1] -= rs.h[0];
 	rs.h[1] += ROLL_WINDOW_SIZE * c;
-  
+
 	rs.h[0] += c;
 	rs.h[0] -= rs.window[rs.n];
-  	
+
 	/* Save current symbol */
 	rs.window[rs.n] = c;
-	rs.n ++;
-  
+	rs.n++;
+
 	rs.h[2] <<= 5;
 	rs.h[2] ^= c;
-  
+
 	return rs.h[0] + rs.h[1] + rs.h[2];
 }
 
 /* A simple non-rolling hash, based on the FNV hash */
-static uint32_t 
+static                          uint32_t
 fuzzy_fnv_hash (char c, uint32_t hval)
 {
 	hval ^= c;
-	hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
+	hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
 	return hval;
 }
 
 /* Calculate blocksize depending on length of input */
-static uint32_t
-fuzzy_blocksize (uint32_t len) 
+static                          uint32_t
+fuzzy_blocksize (uint32_t len)
 {
-	
+
 	if (len < MIN_FUZZY_BLOCK_SIZE) {
 		return MIN_FUZZY_BLOCK_SIZE;
 	}
@@ -88,16 +88,16 @@ fuzzy_blocksize (uint32_t len)
 
 /* Update hash with new symbol */
 void
-fuzzy_update (fuzzy_hash_t *h, char c)
+fuzzy_update (fuzzy_hash_t * h, char c)
 {
 	h->rh = fuzzy_roll_hash (c);
-	h->h = fuzzy_fnv_hash(c, h->h);
-    
+	h->h = fuzzy_fnv_hash (c, h->h);
+
 	if (h->rh % h->block_size == (h->block_size - 1)) {
 		h->hash_pipe[h->hi] = h->h;
 		if (h->hi < FUZZY_HASHLEN - 2) {
 			h->h = HASH_INIT;
-			h->hi ++;
+			h->hi++;
 		}
 	}
 }
@@ -109,24 +109,24 @@ fuzzy_update (fuzzy_hash_t *h, char c)
  */
 uint32_t
 lev_distance (char *s1, int len1, char *s2, int len2)
-{	
-	int i;
-	int *row;  /* we only need to keep one row of costs */
-	int *end;
-	int half, nx;
-	char *sx, *char2p, char1;
-	int *p, D, x, offset, c3;
+{
+	int                             i;
+	int                            *row;	/* we only need to keep one row of costs */
+	int                            *end;
+	int                             half, nx;
+	char                           *sx, *char2p, char1;
+	int                            *p, D, x, offset, c3;
 
 	/* strip common prefix */
 	while (len1 > 0 && len2 > 0 && *s1 == *s2) {
-		len1 --;
-		len2 --;
-		s1 ++;
-		s2 ++;
+		len1--;
+		len2--;
+		s1++;
+		s2++;
 	}
 
 	/* strip common suffix */
-	while (len1 > 0 && len2 > 0 && s1[len1-1] == s2[len2-1]) {
+	while (len1 > 0 && len2 > 0 && s1[len1 - 1] == s2[len2 - 1]) {
 		len1--;
 		len2--;
 	}
@@ -154,12 +154,12 @@ lev_distance (char *s1, int len1, char *s2, int len2)
 		return len2 - (memchr (s2, *s1, len2) != NULL);
 	}
 
-	len1 ++;
-	len2 ++;
+	len1++;
+	len2++;
 	half = len1 >> 1;
 
 	/* initalize first row */
-	row = g_malloc (len2 * sizeof(int));
+	row = g_malloc (len2 * sizeof (int));
 	end = row + len2 - 1;
 	for (i = 0; i < len2; i++) {
 		row[i] = i;
@@ -221,20 +221,20 @@ lev_distance (char *s1, int len1, char *s2, int len2)
 }
 
 /* Calculate fuzzy hash for specified string */
-fuzzy_hash_t *
-fuzzy_init (f_str_t *in, memory_pool_t *pool)
+fuzzy_hash_t                   *
+fuzzy_init (f_str_t * in, memory_pool_t * pool)
 {
-	fuzzy_hash_t *new;
-	int i, repeats = 0;
-	char *c = in->begin, last = '\0';
+	fuzzy_hash_t                   *new;
+	int                             i, repeats = 0;
+	char                           *c = in->begin, last = '\0';
 
 	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
 	new->block_size = fuzzy_blocksize (in->len);
-	
-	for (i = 0; i < in->len; i ++) {
+
+	for (i = 0; i < in->len; i++) {
 		if (*c == last) {
-			repeats ++;
+			repeats++;
 		}
 		else {
 			repeats = 0;
@@ -243,16 +243,16 @@ fuzzy_init (f_str_t *in, memory_pool_t *pool)
 			fuzzy_update (new, *c);
 		}
 		last = *c;
-		c ++;
+		c++;
 	}
 
 	return new;
 }
 
-fuzzy_hash_t *
-fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool)
+fuzzy_hash_t                   *
+fuzzy_init_byte_array (GByteArray * in, memory_pool_t * pool)
 {
-	f_str_t f;
+	f_str_t                         f;
 
 	f.begin = in->data;
 	f.len = in->len;
@@ -262,15 +262,15 @@ fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool)
 
 /* Compare score of difference between two hashes 0 - different hashes, 100 - identical hashes */
 int
-fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2) 
+fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
 {
-	int res, l1, l2;
+	int                             res, l1, l2;
 
 	/* If we have hashes of different size, input strings are too different */
 	if (h1->block_size != h2->block_size) {
 		return 0;
 	}
-	
+
 	l1 = strlen (h1->hash_pipe);
 	l2 = strlen (h2->hash_pipe);
 

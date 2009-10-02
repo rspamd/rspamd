@@ -46,70 +46,70 @@
 #define DEFAULT_PORT 11335
 
 struct storage_server {
-	struct upstream up;
-	char *name;
-	struct in_addr addr;
-	uint16_t port;
+	struct upstream                 up;
+	char                           *name;
+	struct in_addr                  addr;
+	uint16_t                        port;
 };
 
 struct fuzzy_ctx {
-	int (*filter)(struct worker_task *task);
-	char *metric;
-	char *symbol;
-	struct storage_server *servers;
-	int servers_num;
-	memory_pool_t *fuzzy_pool;
+	int                             (*filter) (struct worker_task * task);
+	char                           *metric;
+	char                           *symbol;
+	struct storage_server          *servers;
+	int                             servers_num;
+	memory_pool_t                  *fuzzy_pool;
 };
 
 struct fuzzy_client_session {
-	int state;
-	fuzzy_hash_t *h;
-	struct event ev;
-	struct timeval tv;
-	struct worker_task *task;
-	struct storage_server *server;
+	int                             state;
+	fuzzy_hash_t                   *h;
+	struct event                    ev;
+	struct timeval                  tv;
+	struct worker_task             *task;
+	struct storage_server          *server;
 };
 
 struct fuzzy_learn_session {
-	struct event ev;
-	fuzzy_hash_t *h;
-	int cmd;
-	int *saved;
-	struct timeval tv;
-	struct controller_session *session;
-	struct storage_server *server;
-	struct worker_task *task;
+	struct event                    ev;
+	fuzzy_hash_t                   *h;
+	int                             cmd;
+	int                            *saved;
+	struct timeval                  tv;
+	struct controller_session      *session;
+	struct storage_server          *server;
+	struct worker_task             *task;
 };
 
-static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
+static struct fuzzy_ctx        *fuzzy_module_ctx = NULL;
 
-static int fuzzy_mime_filter (struct worker_task *task);
-static void fuzzy_symbol_callback (struct worker_task *task, void *unused);
-static void fuzzy_add_handler (char **args, struct controller_session *session);
-static void fuzzy_delete_handler (char **args, struct controller_session *session);
+static int                      fuzzy_mime_filter (struct worker_task *task);
+static void                     fuzzy_symbol_callback (struct worker_task *task, void *unused);
+static void                     fuzzy_add_handler (char **args, struct controller_session *session);
+static void                     fuzzy_delete_handler (char **args, struct controller_session *session);
 
 static void
 parse_servers_string (char *str)
 {
-	char **strvec, *p, portbuf[6], *name;
-	int num, i, j, port;
-	struct hostent *hent;
-	struct in_addr addr;
+	char                          **strvec, *p, portbuf[6], *name;
+	int                             num, i, j, port;
+	struct hostent                 *hent;
+	struct in_addr                  addr;
 
 	strvec = g_strsplit (str, ",", 0);
 	num = g_strv_length (strvec);
 
 	fuzzy_module_ctx->servers = memory_pool_alloc0 (fuzzy_module_ctx->fuzzy_pool, sizeof (struct storage_server) * num);
 
-	for (i = 0; i < num; i ++) {
+	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
 
 		if ((p = strchr (strvec[i], ':')) != NULL) {
 			j = 0;
-			p ++;
+			p++;
 			while (g_ascii_isdigit (*(p + j)) && j < sizeof (portbuf) - 1) {
 				portbuf[j] = *(p + j);
-				j ++;
+				j++;
 			}
 			portbuf[j] = '\0';
 			port = atoi (portbuf);
@@ -128,17 +128,17 @@ parse_servers_string (char *str)
 				continue;
 			}
 			else {
-				fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;	
-				fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;	
-				memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, hent->h_addr, sizeof(struct in_addr));
-				fuzzy_module_ctx->servers_num ++;	
+				fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;
+				fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;
+				memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, hent->h_addr, sizeof (struct in_addr));
+				fuzzy_module_ctx->servers_num++;
 			}
 		}
 		else {
-			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;	
-			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;	
-			memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, hent->h_addr, sizeof(struct in_addr));
-			fuzzy_module_ctx->servers_num ++;	
+			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;
+			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;
+			memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, hent->h_addr, sizeof (struct in_addr));
+			fuzzy_module_ctx->servers_num++;
 		}
 
 	}
@@ -156,7 +156,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
 	fuzzy_module_ctx->servers = NULL;
 	fuzzy_module_ctx->servers_num = 0;
-	
+
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
 	return 0;
@@ -165,10 +165,10 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 int
 fuzzy_check_module_config (struct config_file *cfg)
 {
-	char *value;
-	int res = TRUE;
-	struct metric *metric;
-	double *w;
+	char                           *value;
+	int                             res = TRUE;
+	struct metric                  *metric;
+	double                         *w;
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "metric")) != NULL) {
 		fuzzy_module_ctx->metric = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
@@ -186,7 +186,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
 		parse_servers_string (value);
-	}	
+	}
 
 	metric = g_hash_table_lookup (cfg->metrics, fuzzy_module_ctx->metric);
 	if (metric == NULL) {
@@ -205,7 +205,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 
 	register_custom_controller_command ("fuzzy_add", fuzzy_add_handler, TRUE, TRUE);
 	register_custom_controller_command ("fuzzy_del", fuzzy_delete_handler, TRUE, TRUE);
-	
+
 	return res;
 }
 
@@ -221,10 +221,10 @@ fuzzy_check_module_reconfig (struct config_file *cfg)
 static void
 fuzzy_io_fin (void *ud)
 {
-	struct fuzzy_client_session *session = ud;
+	struct fuzzy_client_session    *session = ud;
 
 	event_del (&session->ev);
-	session->task->save.saved --;
+	session->task->save.saved--;
 	if (session->task->save.saved == 0) {
 		/* Call other filters */
 		session->task->save.saved = 1;
@@ -235,9 +235,9 @@ fuzzy_io_fin (void *ud)
 static void
 fuzzy_io_callback (int fd, short what, void *arg)
 {
-	struct fuzzy_client_session *session = arg;
-	struct fuzzy_cmd cmd;
-	char buf[sizeof ("ERR")];
+	struct fuzzy_client_session    *session = arg;
+	struct fuzzy_cmd                cmd;
+	char                            buf[sizeof ("ERR")];
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
@@ -261,25 +261,24 @@ fuzzy_io_callback (int fd, short what, void *arg)
 		}
 		goto ok;
 	}
-	
+
 	return;
 
-	err:
-		msg_err ("fuzzy_io_callback: got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port,
-					errno, strerror (errno));
-	ok:
-		close (fd);
-		remove_normal_event (session->task->s, fuzzy_io_fin, session);
+  err:
+	msg_err ("fuzzy_io_callback: got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
+  ok:
+	close (fd);
+	remove_normal_event (session->task->s, fuzzy_io_fin, session);
 
 }
 
 static void
 fuzzy_learn_fin (void *arg)
 {
-	struct fuzzy_learn_session *session = arg;
+	struct fuzzy_learn_session     *session = arg;
 
 	event_del (&session->ev);
-	(*session->saved) --;
+	(*session->saved)--;
 	if (*session->saved == 0) {
 		session->session->state = STATE_REPLY;
 	}
@@ -288,9 +287,9 @@ fuzzy_learn_fin (void *arg)
 static void
 fuzzy_learn_callback (int fd, short what, void *arg)
 {
-	struct fuzzy_learn_session *session = arg;
-	struct fuzzy_cmd cmd;
-	char buf[sizeof ("ERR" CRLF)];
+	struct fuzzy_learn_session     *session = arg;
+	struct fuzzy_cmd                cmd;
+	char                            buf[sizeof ("ERR" CRLF)];
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
@@ -311,25 +310,24 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 		}
 		goto ok;
 	}
-	
+
 	return;
 
-	err:
-		msg_err ("fuzzy_learn_callback: got error in IO with server %s:%d, %d, %s", session->server->name,
-					session->server->port, errno, strerror (errno));
-	ok:
-		close (fd);
-		remove_normal_event (session->session->s, fuzzy_learn_fin, session);
+  err:
+	msg_err ("fuzzy_learn_callback: got error in IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
+  ok:
+	close (fd);
+	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
 }
 
-static void 
+static void
 fuzzy_symbol_callback (struct worker_task *task, void *unused)
 {
-	struct mime_text_part *part;
-	struct fuzzy_client_session *session;
-	struct storage_server *selected;
-	GList *cur;
-	int sock;
+	struct mime_text_part          *part;
+	struct fuzzy_client_session    *session;
+	struct storage_server          *selected;
+	GList                          *cur;
+	int                             sock;
 
 	cur = task->text_parts;
 
@@ -340,14 +338,12 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 			continue;
 		}
 		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
-										 sizeof (struct storage_server), task->ts.tv_sec, 
-										 DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, 
-										 DEFAULT_UPSTREAM_MAXERRORS,
-										 part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+			sizeof (struct storage_server), task->ts.tv_sec,
+			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 		if (selected) {
 			if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 				msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
-			}	
+			}
 			else {
 				session = memory_pool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
 				event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback, session);
@@ -359,7 +355,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 				session->server = selected;
 				event_add (&session->ev, &session->tv);
 				register_async_event (task->s, fuzzy_io_fin, session, FALSE);
-				task->save.saved ++;
+				task->save.saved++;
 			}
 		}
 		cur = g_list_next (cur);
@@ -367,23 +363,23 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 }
 
 static void
-fuzzy_process_handler (struct controller_session *session, f_str_t *in)
+fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 {
-	struct worker_task *task;
-	struct fuzzy_learn_session *s;
-	struct mime_text_part *part;
-	struct storage_server *selected;
-	GList *cur;
-	int sock, r, cmd = 0, *saved;
-	char out_buf[BUFSIZ];
-	
+	struct worker_task             *task;
+	struct fuzzy_learn_session     *s;
+	struct mime_text_part          *part;
+	struct storage_server          *selected;
+	GList                          *cur;
+	int                             sock, r, cmd = 0, *saved;
+	char                            out_buf[BUFSIZ];
+
 	if (session->other_data) {
 		cmd = GPOINTER_TO_SIZE (session->other_data);
 	}
 	task = construct_task (session->worker);
 	session->other_data = task;
 	session->state = STATE_WAIT;
-	
+
 	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
 	task->msg->begin = in->begin;
 	task->msg->len = in->len;
@@ -409,10 +405,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 				continue;
 			}
 			selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
-											 sizeof (struct storage_server), task->ts.tv_sec, 
-											 DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, 
-											 DEFAULT_UPSTREAM_MAXERRORS,
-											 part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+				sizeof (struct storage_server), task->ts.tv_sec,
+				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 			if (selected) {
 				if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 					msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
@@ -421,7 +415,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 					free_task (task, FALSE);
 					return;
-				}	
+				}
 				else {
 					s = memory_pool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
 					event_set (&s->ev, sock, EV_WRITE, fuzzy_learn_callback, s);
@@ -435,7 +429,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 					s->cmd = cmd;
 					s->saved = saved;
 					event_add (&s->ev, &s->tv);
-					(*saved) ++;
+					(*saved)++;
 					register_async_event (session->s, fuzzy_learn_fin, s, FALSE);
 				}
 			}
@@ -461,9 +455,9 @@ fuzzy_process_handler (struct controller_session *session, f_str_t *in)
 static void
 fuzzy_controller_handler (char **args, struct controller_session *session, int cmd)
 {
-	char *arg, out_buf[BUFSIZ], *err_str;
-	uint32_t size;
-	int r;
+	char                           *arg, out_buf[BUFSIZ], *err_str;
+	uint32_t                        size;
+	int                             r;
 
 	arg = *args;
 	if (!arg || *arg == '\0') {
@@ -500,7 +494,7 @@ fuzzy_delete_handler (char **args, struct controller_session *session)
 	fuzzy_controller_handler (args, session, FUZZY_DEL);
 }
 
-static int 
+static int
 fuzzy_mime_filter (struct worker_task *task)
 {
 	/* XXX: remove this */

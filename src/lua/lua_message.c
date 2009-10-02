@@ -38,7 +38,7 @@ lua_##class##_##name(lua_State *L)														\
 		lua_pushnil (L);																\
 	}																					\
 	return 1;																			\
-}																			
+}
 
 #define LUA_GMIME_BRIDGE_SET(class, name, mime_class)									\
 static int																				\
@@ -54,64 +54,64 @@ lua_##class##_##name(lua_State *L)														\
 		lua_pushnil (L);																\
 	}																					\
 	return 1;																			\
-}																			
+}
 
 /*  Message methods */
-LUA_FUNCTION_DEF(message, get_subject);
-LUA_FUNCTION_DEF(message, set_subject);
-LUA_FUNCTION_DEF(message, get_message_id);
-LUA_FUNCTION_DEF(message, set_message_id);
-LUA_FUNCTION_DEF(message, get_sender);
-LUA_FUNCTION_DEF(message, set_sender);
-LUA_FUNCTION_DEF(message, get_reply_to);
-LUA_FUNCTION_DEF(message, set_reply_to);
-LUA_FUNCTION_DEF(message, get_header);
-LUA_FUNCTION_DEF(message, set_header);
+LUA_FUNCTION_DEF (message, get_subject);
+LUA_FUNCTION_DEF (message, set_subject);
+LUA_FUNCTION_DEF (message, get_message_id);
+LUA_FUNCTION_DEF (message, set_message_id);
+LUA_FUNCTION_DEF (message, get_sender);
+LUA_FUNCTION_DEF (message, set_sender);
+LUA_FUNCTION_DEF (message, get_reply_to);
+LUA_FUNCTION_DEF (message, set_reply_to);
+LUA_FUNCTION_DEF (message, get_header);
+LUA_FUNCTION_DEF (message, set_header);
 
-static const struct luaL_reg msglib_m[] = {
-	LUA_INTERFACE_DEF(message, get_subject),
-	LUA_INTERFACE_DEF(message, set_subject),
-	LUA_INTERFACE_DEF(message, get_message_id),
-	LUA_INTERFACE_DEF(message, set_message_id),
-	LUA_INTERFACE_DEF(message, get_sender),
-	LUA_INTERFACE_DEF(message, set_sender),
-	LUA_INTERFACE_DEF(message, get_reply_to),
-	LUA_INTERFACE_DEF(message, set_reply_to),
-	LUA_INTERFACE_DEF(message, get_header),
-	LUA_INTERFACE_DEF(message, set_header),
+static const struct luaL_reg    msglib_m[] = {
+	LUA_INTERFACE_DEF (message, get_subject),
+	LUA_INTERFACE_DEF (message, set_subject),
+	LUA_INTERFACE_DEF (message, get_message_id),
+	LUA_INTERFACE_DEF (message, set_message_id),
+	LUA_INTERFACE_DEF (message, get_sender),
+	LUA_INTERFACE_DEF (message, set_sender),
+	LUA_INTERFACE_DEF (message, get_reply_to),
+	LUA_INTERFACE_DEF (message, set_reply_to),
+	LUA_INTERFACE_DEF (message, get_header),
+	LUA_INTERFACE_DEF (message, set_header),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
 
 
-static GMimeMessage *
-lua_check_message (lua_State *L)
+static GMimeMessage            *
+lua_check_message (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{message}");
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{message}");
 	luaL_argcheck (L, ud != NULL, 1, "'message' expected");
-	return *((GMimeMessage **)ud);
+	return *((GMimeMessage **) ud);
 }
 
 
 /*** Message interface	***/
 
-LUA_GMIME_BRIDGE_GET(message, get_subject, Message)
-LUA_GMIME_BRIDGE_SET(message, set_subject, Message)
-LUA_GMIME_BRIDGE_GET(message, get_message_id, Message)
-LUA_GMIME_BRIDGE_SET(message, set_message_id, Message)
-LUA_GMIME_BRIDGE_GET(message, get_sender, Message)
-LUA_GMIME_BRIDGE_SET(message, set_sender, Message)
-LUA_GMIME_BRIDGE_GET(message, get_reply_to, Message)
-LUA_GMIME_BRIDGE_SET(message, set_reply_to, Message)
+LUA_GMIME_BRIDGE_GET (message, get_subject, Message)
+	LUA_GMIME_BRIDGE_SET (message, set_subject, Message)
+	LUA_GMIME_BRIDGE_GET (message, get_message_id, Message)
+	LUA_GMIME_BRIDGE_SET (message, set_message_id, Message)
+	LUA_GMIME_BRIDGE_GET (message, get_sender, Message)
+	LUA_GMIME_BRIDGE_SET (message, set_sender, Message)
+	LUA_GMIME_BRIDGE_GET (message, get_reply_to, Message)
+	LUA_GMIME_BRIDGE_SET (message, set_reply_to, Message)
 
-static int
-lua_message_get_header (lua_State *L)
+  static int
+                                  lua_message_get_header (lua_State * L)
 {
-	const char *headern;
-	GMimeMessage *obj = lua_check_message (L);
-	GList *res = NULL, *cur;
-    int i = 1;
+	const char                     *headern;
+	GMimeMessage                   *obj = lua_check_message (L);
+	GList                          *res = NULL, *cur;
+	int                             i = 1;
 
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
@@ -119,10 +119,10 @@ lua_message_get_header (lua_State *L)
 			res = message_get_header (NULL, obj, headern);
 			if (res) {
 				cur = res;
-                lua_newtable (L);
+				lua_newtable (L);
 				while (cur) {
 					lua_pushstring (L, (const char *)cur->data);
-                    lua_rawseti(L, -2, i++);
+					lua_rawseti (L, -2, i++);
 					g_free (cur->data);
 					cur = g_list_next (cur);
 				}
@@ -145,10 +145,10 @@ lua_message_get_header (lua_State *L)
 
 
 static int
-lua_message_set_header (lua_State *L)
+lua_message_set_header (lua_State * L)
 {
-	const char *headern, *headerv;
-	GMimeMessage *obj = lua_check_message (L);
+	const char                     *headern, *headerv;
+	GMimeMessage                   *obj = lua_check_message (L);
 
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
@@ -163,17 +163,16 @@ lua_message_set_header (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
-	
+
 	return 1;
 }
 
 
 int
-luaopen_message (lua_State *L)
+luaopen_message (lua_State * L)
 {
 	lua_newclass (L, "rspamd{message}", msglib_m);
 	luaL_openlib (L, "rspamd_message", null_reg, 0);
-    
+
 	return 1;
 }
-

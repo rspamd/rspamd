@@ -28,15 +28,15 @@
  * Search first occurence of character in string
  */
 ssize_t
-fstrchr (f_str_t *src, char c)
+fstrchr (f_str_t * src, char c)
 {
-	register ssize_t cur = 0;
+	register ssize_t                cur = 0;
 
 	while (cur < src->len) {
 		if (*(src->begin + cur) == c) {
 			return cur;
 		}
-		cur ++;
+		cur++;
 	}
 
 	return -1;
@@ -46,15 +46,15 @@ fstrchr (f_str_t *src, char c)
  * Search last occurence of character in string
  */
 ssize_t
-fstrrchr (f_str_t *src, char c)
+fstrrchr (f_str_t * src, char c)
 {
-	register ssize_t cur = src->len;
+	register ssize_t                cur = src->len;
 
 	while (cur > 0) {
 		if (*(src->begin + cur) == c) {
 			return cur;
 		}
-		cur --;
+		cur--;
 	}
 
 	return -1;
@@ -64,9 +64,9 @@ fstrrchr (f_str_t *src, char c)
  * Search for pattern in orig
  */
 ssize_t
-fstrstr (f_str_t *orig, f_str_t *pattern)
+fstrstr (f_str_t * orig, f_str_t * pattern)
 {
-	register ssize_t cur = 0, pcur = 0;
+	register ssize_t                cur = 0, pcur = 0;
 
 	if (pattern->len > orig->len) {
 		return -1;
@@ -79,12 +79,12 @@ fstrstr (f_str_t *orig, f_str_t *pattern)
 					pcur = 0;
 					break;
 				}
-				cur ++;
-				pcur ++;
+				cur++;
+				pcur++;
 			}
 			return cur - pattern->len;
 		}
-		cur ++;
+		cur++;
 	}
 
 	return -1;
@@ -95,9 +95,9 @@ fstrstr (f_str_t *orig, f_str_t *pattern)
  * Search for pattern in orig ignoring case
  */
 ssize_t
-fstrstri (f_str_t *orig, f_str_t *pattern)
+fstrstri (f_str_t * orig, f_str_t * pattern)
 {
-	register ssize_t cur = 0, pcur = 0;
+	register ssize_t                cur = 0, pcur = 0;
 
 	if (pattern->len > orig->len) {
 		return -1;
@@ -110,12 +110,12 @@ fstrstri (f_str_t *orig, f_str_t *pattern)
 					pcur = 0;
 					break;
 				}
-				cur ++;
-				pcur ++;
+				cur++;
+				pcur++;
 			}
 			return cur - pattern->len;
 		}
-		cur ++;
+		cur++;
 	}
 
 	return -1;
@@ -131,10 +131,10 @@ fstrstri (f_str_t *orig, f_str_t *pattern)
  * 			0 - last word extracted
  */
 int
-fstrtok (f_str_t *text, const char *sep, f_tok_t *state)
+fstrtok (f_str_t * text, const char *sep, f_tok_t * state)
 {
-	register size_t cur;
-	const char *csep = sep;
+	register size_t                 cur;
+	const char                     *csep = sep;
 
 	if (state->pos >= text->len) {
 		return -1;
@@ -150,12 +150,12 @@ fstrtok (f_str_t *text, const char *sep, f_tok_t *state)
 				state->pos = cur + 1;
 				return 1;
 			}
-			csep ++;
+			csep++;
 		}
 		csep = sep;
-		cur ++;
+		cur++;
 	}
-	
+
 	/* Last word */
 	state->word.begin = (text->begin + state->pos);
 	state->word.len = cur - state->pos;
@@ -168,9 +168,9 @@ fstrtok (f_str_t *text, const char *sep, f_tok_t *state)
  * Copy one string into other
  */
 size_t
-fstrcpy (f_str_t *dest, f_str_t *src)
+fstrcpy (f_str_t * dest, f_str_t * src)
 {
-	register size_t cur = 0;
+	register size_t                 cur = 0;
 
 	if (dest->size < src->len) {
 		return 0;
@@ -178,7 +178,7 @@ fstrcpy (f_str_t *dest, f_str_t *src)
 
 	while (cur < src->len && cur < dest->size) {
 		*(dest->begin + cur) = *(src->begin + cur);
-		cur ++;
+		cur++;
 	}
 
 	return cur;
@@ -188,10 +188,10 @@ fstrcpy (f_str_t *dest, f_str_t *src)
  * Concatenate two strings
  */
 size_t
-fstrcat (f_str_t *dest, f_str_t *src)
+fstrcat (f_str_t * dest, f_str_t * src)
 {
-	register size_t cur = 0;
-	char *p = dest->begin + dest->len;
+	register size_t                 cur = 0;
+	char                           *p = dest->begin + dest->len;
 
 	if (dest->size < src->len + dest->len) {
 		return 0;
@@ -199,8 +199,8 @@ fstrcat (f_str_t *dest, f_str_t *src)
 
 	while (cur < src->len) {
 		*p = *(src->begin + cur);
-		p ++;
-		cur ++;
+		p++;
+		cur++;
 	}
 
 	dest->len += src->len;
@@ -212,10 +212,10 @@ fstrcat (f_str_t *dest, f_str_t *src)
 /*
  * Make copy of string to 0-terminated string
  */
-char* 
-fstrcstr (f_str_t *str, memory_pool_t *pool)
+char                           *
+fstrcstr (f_str_t * str, memory_pool_t * pool)
 {
-	char *res;
+	char                           *res;
 	res = memory_pool_alloc (pool, str->len + 1);
 
 	memcpy (res, str->begin, str->len);
@@ -228,7 +228,7 @@ fstrcstr (f_str_t *str, memory_pool_t *pool)
  * Push one character to fstr
  */
 int
-fstrpush (f_str_t *dest, char c)
+fstrpush (f_str_t * dest, char c)
 {
 	if (dest->size < dest->len) {
 		/* Need to reallocate string */
@@ -236,32 +236,32 @@ fstrpush (f_str_t *dest, char c)
 	}
 
 	*(dest->begin + dest->len) = c;
-	dest->len ++;
+	dest->len++;
 	return 1;
 }
 
 /*
  * Allocate memory for f_str_t
  */
-f_str_t*
-fstralloc (memory_pool_t *pool, size_t len)
+f_str_t                        *
+fstralloc (memory_pool_t * pool, size_t len)
 {
-	f_str_t *res = memory_pool_alloc (pool, sizeof (f_str_t));
+	f_str_t                        *res = memory_pool_alloc (pool, sizeof (f_str_t));
 
 	res->begin = memory_pool_alloc (pool, len);
 
 	res->size = len;
-    res->len = 0;
+	res->len = 0;
 	return res;
 }
 
 /*
  * Truncate string to its len
  */
-f_str_t*
-fstrtruncate (memory_pool_t *pool, f_str_t *orig)
+f_str_t                        *
+fstrtruncate (memory_pool_t * pool, f_str_t * orig)
 {
-	f_str_t *res;
+	f_str_t                        *res;
 
 	if (orig == NULL || orig->len == 0 || orig->size <= orig->len) {
 		return orig;
@@ -279,10 +279,10 @@ fstrtruncate (memory_pool_t *pool, f_str_t *orig)
 /*
  * Enlarge string to new size
  */
-f_str_t*
-fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen)
+f_str_t                        *
+fstrgrow (memory_pool_t * pool, f_str_t * orig, size_t newlen)
 {
-	f_str_t *res;
+	f_str_t                        *res;
 
 	if (orig == NULL || orig->len == 0 || orig->size >= newlen) {
 		return orig;
@@ -301,19 +301,19 @@ fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen)
  * Return hash value for a string
  */
 uint32_t
-fstrhash (f_str_t *str)
+fstrhash (f_str_t * str)
 {
-	size_t i;
-	uint32_t hval;
-	uint32_t tmp;
-	char *c = str->begin;
+	size_t                          i;
+	uint32_t                        hval;
+	uint32_t                        tmp;
+	char                           *c = str->begin;
 
 	if (str == NULL) {
 		return 0;
 	}
 	hval = str->len;
 
-	for	(i = 0; i < str->len; i++, c++) {
+	for (i = 0; i < str->len; i++, c++) {
 		/* 
 		 * xor in the current byte against each byte of hval
 		 * (which alone gaurantees that every bit of input will have
@@ -324,7 +324,7 @@ fstrhash (f_str_t *str)
 		hval ^= tmp;
 
 		/* add some bits out of the middle as low order bits */
-		hval = hval + ((hval >> 12) & 0x0000ffff) ;
+		hval = hval + ((hval >> 12) & 0x0000ffff);
 
 		/* swap most and min significative bytes */
 		tmp = (hval << 24) | ((hval >> 24) & 0xff);
@@ -341,21 +341,21 @@ fstrhash (f_str_t *str)
 }
 
 void
-fstrstrip (f_str_t *str)
+fstrstrip (f_str_t * str)
 {
-	char *p = str->begin;
-	int r = 0;
+	char                           *p = str->begin;
+	int                             r = 0;
 
 	while (r < str->len) {
 		if (g_ascii_isspace (*p)) {
-			p ++;
-			r ++;
+			p++;
+			r++;
 		}
 		else {
 			break;
 		}
 	}
-	
+
 	if (r > 0) {
 		memmove (str->begin, p, str->len - r);
 		str->len -= r;
@@ -365,8 +365,8 @@ fstrstrip (f_str_t *str)
 	p = str->begin + str->len;
 	while (r > 0) {
 		if (g_ascii_isspace (*p)) {
-			p --;
-			r --;
+			p--;
+			r--;
 		}
 		else {
 			break;

@@ -40,61 +40,37 @@
     (LOWEST_PORT <= (port) && (port) <= HIGHEST_PORT)
 
 struct _proto {
-	unsigned char *name;
-	int port;
-	uintptr_t *unused;
-	unsigned int need_slashes:1;
-	unsigned int need_slash_after_host:1;
-	unsigned int free_syntax:1;
-	unsigned int need_ssl:1;
+	unsigned char                  *name;
+	int                             port;
+	uintptr_t                      *unused;
+	unsigned int                    need_slashes:1;
+	unsigned int                    need_slash_after_host:1;
+	unsigned int                    free_syntax:1;
+	unsigned int                    need_ssl:1;
 };
 
-static const char *text_url = "((https?|ftp)://)?"
-"(\\b(?<![.\\@A-Za-z0-9-])"	
-"(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
-"(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel"
-"|cc|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se"
-"|[a-z]{2}"
-"(?(1)|(?=/)))"
-"(?!\\w)"
-"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))" /* ip in dotted view */
-"|\\d{5,20}(?(1)|(?=[/:]))" /* ip in numeric view */
-")"
-"(?::\\d{1,5})?"	/* port */
-"(?!\\.\\w)" /* host part ended, no more of this further on */
-"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?" /* path (&query) */
-"(?<![\\s>?!),.'\"\\]:])"
-"(?!@)"
-")";
-static const char *html_url = "(?: src|href)=\"?("
-"((https?|ftp)://)?"
-"(\\b(?<![.\\@A-Za-z0-9-])"	
-"(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
-"(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel"
-"|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se"
-"|[a-z]{2}"
-"(?(1)|(?=/)))"
-"(?!\\w)"
-"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"
-")"
-"(?::\\d{1,5})?"	/* port */
-"(?!\\.\\w)" /* host part ended, no more of this further on */
-"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?" /* path (&query) */
-"(?<![\\s>?!),.'\"\\]:])"
-"(?!@)"
-"))\"?";
+static const char              *text_url = "((https?|ftp)://)?" "(\\b(?<![.\\@A-Za-z0-9-])" "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\." "(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel" "|cc|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se" "|[a-z]{2}" "(?(1)|(?=/)))" "(?!\\w)" "|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"	/* ip in dotted view */
+	"|\\d{5,20}(?(1)|(?=[/:]))"	/* ip in numeric view */
+	")" "(?::\\d{1,5})?"		/* port */
+	"(?!\\.\\w)"				/* host part ended, no more of this further on */
+	"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?"	/* path (&query) */
+	"(?<![\\s>?!),.'\"\\]:])" "(?!@)" ")";
+static const char              *html_url = "(?: src|href)=\"?(" "((https?|ftp)://)?" "(\\b(?<![.\\@A-Za-z0-9-])" "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\." "(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel" "|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se" "|[a-z]{2}" "(?(1)|(?=/)))" "(?!\\w)" "|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))" ")" "(?::\\d{1,5})?"	/* port */
+	"(?!\\.\\w)"				/* host part ended, no more of this further on */
+	"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?"	/* path (&query) */
+	"(?<![\\s>?!),.'\"\\]:])" "(?!@)" "))\"?";
 
-static short url_initialized = 0;
-GRegex *text_re, *html_re;
+static short                    url_initialized = 0;
+GRegex                         *text_re, *html_re;
 
-static const struct _proto protocol_backends[] = {
-	{ "file",	   0, NULL,		1, 0, 0, 0 },
-	{ "ftp",	  21, NULL,		1, 1, 0, 0 },
-	{ "http",	  80, NULL,		1, 1, 0, 0 },
-	{ "https",	 443, NULL,		1, 1, 0, 1 },
+static const struct _proto      protocol_backends[] = {
+	{"file", 0, NULL, 1, 0, 0, 0},
+	{"ftp", 21, NULL, 1, 1, 0, 0},
+	{"http", 80, NULL, 1, 1, 0, 0},
+	{"https", 443, NULL, 1, 1, 0, 1},
 
 	/* Keep these last! */
-	{ NULL,		   0, NULL,			0, 0, 1, 0 },
+	{NULL, 0, NULL, 0, 0, 1, 0},
 };
 
 /* 
@@ -121,11 +97,11 @@ static const struct _proto protocol_backends[] = {
    lookup.  This code assumes ASCII character set and 8-bit chars.  */
 
 enum {
-  /* rfc1738 reserved chars + "$" and ",".  */
-  urlchr_reserved = 1,
+	/* rfc1738 reserved chars + "$" and ",".  */
+	urlchr_reserved = 1,
 
-  /* rfc1738 unsafe chars, plus non-printables.  */
-  urlchr_unsafe   = 2
+	/* rfc1738 unsafe chars, plus non-printables.  */
+	urlchr_unsafe = 2
 };
 
 #define urlchr_test(c, mask) (urlchr_table[(unsigned char)(c)] & (mask))
@@ -147,97 +123,97 @@ enum {
 #define U  urlchr_unsafe
 #define RU R|U
 
-static const unsigned char urlchr_table[256] =
-{
-  U,  U,  U,  U,   U,  U,  U,  U,   /* NUL SOH STX ETX  EOT ENQ ACK BEL */
-  U,  U,  U,  U,   U,  U,  U,  U,   /* BS  HT  LF  VT   FF  CR  SO  SI  */
-  U,  U,  U,  U,   U,  U,  U,  U,   /* DLE DC1 DC2 DC3  DC4 NAK SYN ETB */
-  U,  U,  U,  U,   U,  U,  U,  U,   /* CAN EM  SUB ESC  FS  GS  RS  US  */
-  U,  0,  U, RU,   R,  U,  R,  0,   /* SP  !   "   #    $   %   &   '   */
-  0,  0,  0,  R,   R,  0,  0,  R,   /* (   )   *   +    ,   -   .   /   */
-  0,  0,  0,  0,   0,  0,  0,  0,   /* 0   1   2   3    4   5   6   7   */
-  0,  0, RU,  R,   U,  R,  U,  R,   /* 8   9   :   ;    <   =   >   ?   */
- RU,  0,  0,  0,   0,  0,  0,  0,   /* @   A   B   C    D   E   F   G   */
-  0,  0,  0,  0,   0,  0,  0,  0,   /* H   I   J   K    L   M   N   O   */
-  0,  0,  0,  0,   0,  0,  0,  0,   /* P   Q   R   S    T   U   V   W   */
-  0,  0,  0, RU,   U, RU,  U,  0,   /* X   Y   Z   [    \   ]   ^   _   */
-  U,  0,  0,  0,   0,  0,  0,  0,   /* `   a   b   c    d   e   f   g   */
-  0,  0,  0,  0,   0,  0,  0,  0,   /* h   i   j   k    l   m   n   o   */
-  0,  0,  0,  0,   0,  0,  0,  0,   /* p   q   r   s    t   u   v   w   */
-  0,  0,  0,  U,   U,  U,  0,  U,   /* x   y   z   {    |   }   ~   DEL */
+static const unsigned char      urlchr_table[256] = {
+	U, U, U, U, U, U, U, U,		/* NUL SOH STX ETX  EOT ENQ ACK BEL */
+	U, U, U, U, U, U, U, U,		/* BS  HT  LF  VT   FF  CR  SO  SI  */
+	U, U, U, U, U, U, U, U,		/* DLE DC1 DC2 DC3  DC4 NAK SYN ETB */
+	U, U, U, U, U, U, U, U,		/* CAN EM  SUB ESC  FS  GS  RS  US  */
+	U, 0, U, RU, R, U, R, 0,	/* SP  !   "   #    $   %   &   '   */
+	0, 0, 0, R, R, 0, 0, R,		/* (   )   *   +    ,   -   .   /   */
+	0, 0, 0, 0, 0, 0, 0, 0,		/* 0   1   2   3    4   5   6   7   */
+	0, 0, RU, R, U, R, U, R,	/* 8   9   :   ;    <   =   >   ?   */
+	RU, 0, 0, 0, 0, 0, 0, 0,	/* @   A   B   C    D   E   F   G   */
+	0, 0, 0, 0, 0, 0, 0, 0,		/* H   I   J   K    L   M   N   O   */
+	0, 0, 0, 0, 0, 0, 0, 0,		/* P   Q   R   S    T   U   V   W   */
+	0, 0, 0, RU, U, RU, U, 0,	/* X   Y   Z   [    \   ]   ^   _   */
+	U, 0, 0, 0, 0, 0, 0, 0,		/* `   a   b   c    d   e   f   g   */
+	0, 0, 0, 0, 0, 0, 0, 0,		/* h   i   j   k    l   m   n   o   */
+	0, 0, 0, 0, 0, 0, 0, 0,		/* p   q   r   s    t   u   v   w   */
+	0, 0, 0, U, U, U, 0, U,		/* x   y   z   {    |   }   ~   DEL */
 
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
 
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
-  U, U, U, U,  U, U, U, U,  U, U, U, U,  U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
 };
+
 #undef R
 #undef U
 #undef RU
 
-static const char *
+static const char              *
 url_strerror (enum uri_errno err)
 {
 	switch (err) {
-		case URI_ERRNO_OK:
-			return "Parsing went well";
-		case URI_ERRNO_EMPTY:
-			return "The URI string was empty";
-		case URI_ERRNO_INVALID_PROTOCOL:
-			return "No protocol was found";
-		case URI_ERRNO_NO_SLASHES:
-			return "Slashes after protocol missing";
-		case URI_ERRNO_TOO_MANY_SLASHES:
-			return "Too many slashes after protocol";
-		case URI_ERRNO_TRAILING_DOTS:
-			return "'.' after host";
-		case URI_ERRNO_NO_HOST:
-			return "Host part is missing";
-		case URI_ERRNO_NO_PORT_COLON:
-			return "':' after host without port";
-		case URI_ERRNO_NO_HOST_SLASH:
-			return "Slash after host missing";
-		case URI_ERRNO_IPV6_SECURITY:
-			return "IPv6 security bug detected";
-		case URI_ERRNO_INVALID_PORT:
-			return "Port number is bad";
-		case URI_ERRNO_INVALID_PORT_RANGE:
-			return "Port number is not within 0-65535";
+	case URI_ERRNO_OK:
+		return "Parsing went well";
+	case URI_ERRNO_EMPTY:
+		return "The URI string was empty";
+	case URI_ERRNO_INVALID_PROTOCOL:
+		return "No protocol was found";
+	case URI_ERRNO_NO_SLASHES:
+		return "Slashes after protocol missing";
+	case URI_ERRNO_TOO_MANY_SLASHES:
+		return "Too many slashes after protocol";
+	case URI_ERRNO_TRAILING_DOTS:
+		return "'.' after host";
+	case URI_ERRNO_NO_HOST:
+		return "Host part is missing";
+	case URI_ERRNO_NO_PORT_COLON:
+		return "':' after host without port";
+	case URI_ERRNO_NO_HOST_SLASH:
+		return "Slash after host missing";
+	case URI_ERRNO_IPV6_SECURITY:
+		return "IPv6 security bug detected";
+	case URI_ERRNO_INVALID_PORT:
+		return "Port number is bad";
+	case URI_ERRNO_INVALID_PORT_RANGE:
+		return "Port number is not within 0-65535";
 	}
 	return NULL;
 }
 
 static inline int
-end_of_dir(unsigned char c)
+end_of_dir (unsigned char c)
 {
 	return c == POST_CHAR || c == '#' || c == ';' || c == '?';
 }
 
 static inline int
-is_uri_dir_sep(struct uri *uri, unsigned char pos)
+is_uri_dir_sep (struct uri *uri, unsigned char pos)
 {
 	return (pos == '/');
 }
 
 static int
-check_uri_file(unsigned char *name)
+check_uri_file (unsigned char *name)
 {
-	static const unsigned char chars[] = POST_CHAR_S "#?";
+	static const unsigned char      chars[] = POST_CHAR_S "#?";
 
-	return strcspn(name, chars);
+	return strcspn (name, chars);
 }
 
 static int
 url_init (void)
 {
-	GError *err = NULL;
+	GError                         *err = NULL;
 	if (url_initialized == 0) {
-		text_re = g_regex_new  (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
+		text_re = g_regex_new (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
 		if (err != NULL) {
 			msg_info ("url_init: cannot init text url parsing regexp: %s", err->message);
 			g_error_free (err);
@@ -256,22 +232,22 @@ url_init (void)
 }
 
 enum protocol
-get_protocol(unsigned char *name, int namelen)
+get_protocol (unsigned char *name, int namelen)
 {
 	/* These are really enum protocol values but can take on negative
 	 * values and since 0 <= -1 for enum values it's better to use clean
 	 * integer type. */
-	int start, end;
-	enum protocol protocol;
-	unsigned char *pname;
-	int pnamelen, minlen, compare;
+	int                             start, end;
+	enum protocol                   protocol;
+	unsigned char                  *pname;
+	int                             pnamelen, minlen, compare;
 
 	/* Almost dichotomic search is used here */
 	/* Starting at the HTTP entry which is the most common that will make
 	 * file and NNTP the next entries checked and amongst the third checks
 	 * are proxy and FTP. */
-	start	 = 0;
-	end	 = PROTOCOL_UNKNOWN - 1;
+	start = 0;
+	end = PROTOCOL_UNKNOWN - 1;
 	protocol = PROTOCOL_HTTP;
 
 	while (start <= end) {
@@ -303,33 +279,33 @@ get_protocol(unsigned char *name, int namelen)
 
 
 int
-get_protocol_port(enum protocol protocol)
+get_protocol_port (enum protocol protocol)
 {
 	return protocol_backends[protocol].port;
 }
 
 int
-get_protocol_need_slashes(enum protocol protocol)
+get_protocol_need_slashes (enum protocol protocol)
 {
 	return protocol_backends[protocol].need_slashes;
 }
 
 int
-get_protocol_need_slash_after_host(enum protocol protocol)
+get_protocol_need_slash_after_host (enum protocol protocol)
 {
 	return protocol_backends[protocol].need_slash_after_host;
 }
 
 int
-get_protocol_free_syntax(enum protocol protocol)
+get_protocol_free_syntax (enum protocol protocol)
 {
 	return protocol_backends[protocol].free_syntax;
 }
 
 static int
-get_protocol_length(const unsigned char *url)
+get_protocol_length (const unsigned char *url)
 {
-	unsigned char *end = (unsigned char *) url;
+	unsigned char                  *end = (unsigned char *)url;
 
 	/* Seek the end of the protocol name if any. */
 	/* RFC1738:
@@ -349,10 +325,10 @@ get_protocol_length(const unsigned char *url)
 static unsigned int
 url_calculate_escaped_hostlen (char *host, unsigned int hostlen)
 {
-	unsigned int i, result = hostlen;
-	char *p = host, c;
+	unsigned int                    i, result = hostlen;
+	char                           *p = host, c;
 
-	for (i = 0; i < hostlen; i ++, p ++) {
+	for (i = 0; i < hostlen; i++, p++) {
 		if (*p == '%' && g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2)) && i < hostlen - 2) {
 			c = X2DIGITS_TO_NUM (*(p + 1), *(p + 2));
 			if (c != '\0') {
@@ -376,16 +352,16 @@ url_calculate_escaped_hostlen (char *host, unsigned int hostlen)
 static void
 url_unescape (char *s)
 {
- 	char *t = s;			/* t - tortoise */
-	char *h = s;			/* h - hare     */
-    
+	char                           *t = s;	/* t - tortoise */
+	char                           *h = s;	/* h - hare     */
+
 	for (; *h; h++, t++) {
 		if (*h != '%') {
-			copychar:
+		  copychar:
 			*t = *h;
 		}
-        else {
-			char c;
+		else {
+			char                            c;
 			/* Do nothing if '%' is not followed by two hex digits. */
 			if (!h[1] || !h[2] || !(g_ascii_isxdigit (h[1]) && g_ascii_isxdigit (h[2])))
 				goto copychar;
@@ -404,17 +380,17 @@ url_unescape (char *s)
 static void
 url_strip (char *s)
 {
- 	char *t = s;			/* t - tortoise */
-	char *h = s;			/* h - hare     */
+	char                           *t = s;	/* t - tortoise */
+	char                           *h = s;	/* h - hare     */
 
-    while (*h) {
-        if (g_ascii_isgraph (*h)) {
-            *t = *h;
-            t ++;
-        }
-        h++;
-    }
-    *t = '\0';
+	while (*h) {
+		if (g_ascii_isgraph (*h)) {
+			*t = *h;
+			t++;
+		}
+		h++;
+	}
+	*t = '\0';
 }
 
 /* The core of url_escape_* functions.  Escapes the characters that
@@ -424,13 +400,13 @@ url_strip (char *s)
    will be returned unchanged.  If ALLOW_PASSTHROUGH is zero, a
    freshly allocated string will be returned in all cases.  */
 
-static char *
-url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_pool_t *pool)
+static char                    *
+url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_pool_t * pool)
 {
-	const char *p1;
-	char *p2, *newstr;
-	int newlen;
-	int addition = 0;
+	const char                     *p1;
+	char                           *p2, *newstr;
+	int                             newlen;
+	int                             addition = 0;
 
 	for (p1 = s; *p1; p1++)
 		if (urlchr_test (*p1, mask))
@@ -446,14 +422,14 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_p
 	}
 
 	newlen = (p1 - s) + addition;
-	newstr = (char *) memory_pool_alloc (pool, newlen + 1);
+	newstr = (char *)memory_pool_alloc (pool, newlen + 1);
 
 	p1 = s;
 	p2 = newstr;
 	while (*p1) {
 		/* Quote the characters that match the test mask. */
 		if (urlchr_test (*p1, mask)) {
-			unsigned char c = *p1++;
+			unsigned char                   c = *p1++;
 			*p2++ = '%';
 			*p2++ = XNUM_TO_DIGIT (c >> 4);
 			*p2++ = XNUM_TO_DIGIT (c & 0xf);
@@ -469,8 +445,8 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_p
 /* URL-escape the unsafe characters (see urlchr_table) in a given
    string, returning a freshly allocated string.  */
 
-char *
-url_escape (const char *s, memory_pool_t *pool)
+char                           *
+url_escape (const char *s, memory_pool_t * pool)
 {
 	return url_escape_1 (s, urlchr_unsafe, 0, pool);
 }
@@ -478,8 +454,8 @@ url_escape (const char *s, memory_pool_t *pool)
 /* URL-escape the unsafe characters (see urlchr_table) in a given
    string.  If no characters are unsafe, S is returned.  */
 
-static char *
-url_escape_allow_passthrough (const char *s, memory_pool_t *pool)
+static char                    *
+url_escape_allow_passthrough (const char *s, memory_pool_t * pool)
 {
 	return url_escape_1 (s, urlchr_unsafe, 1, pool);
 }
@@ -518,14 +494,14 @@ char_needs_escaping (const char *p)
    further transformations of the result yield the same output.
 */
 
-static char *
-reencode_escapes (char *s, memory_pool_t *pool)
+static char                    *
+reencode_escapes (char *s, memory_pool_t * pool)
 {
-	const char *p1;
-	char *newstr, *p2;
-	int oldlen, newlen;
+	const char                     *p1;
+	char                           *newstr, *p2;
+	int                             oldlen, newlen;
 
-	int encode_count = 0;
+	int                             encode_count = 0;
 
 	/* First pass: inspect the string to see if there's anything to do,
 	   and to calculate the new length.  */
@@ -549,19 +525,20 @@ reencode_escapes (char *s, memory_pool_t *pool)
 	p2 = newstr;
 
 	while (*p1)
-	  if (char_needs_escaping (p1)) {
-		unsigned char c = *p1++;
-		*p2++ = '%';
-		*p2++ = XNUM_TO_DIGIT (c >> 4);
-		*p2++ = XNUM_TO_DIGIT (c & 0xf);
-	}
-	else {
-	    *p2++ = *p1++;
-	}
+		if (char_needs_escaping (p1)) {
+			unsigned char                   c = *p1++;
+			*p2++ = '%';
+			*p2++ = XNUM_TO_DIGIT (c >> 4);
+			*p2++ = XNUM_TO_DIGIT (c & 0xf);
+		}
+		else {
+			*p2++ = *p1++;
+		}
 
 	*p2 = '\0';
 	return newstr;
 }
+
 /* Unescape CHR in an otherwise escaped STR.  Used to selectively
    escaping of certain characters, such as "/" and ":".  Returns a
    count of unescaped chars.  */
@@ -569,17 +546,17 @@ reencode_escapes (char *s, memory_pool_t *pool)
 static void
 unescape_single_char (char *str, char chr)
 {
-	const char c1 = XNUM_TO_DIGIT (chr >> 4);
-	const char c2 = XNUM_TO_DIGIT (chr & 0xf);
-	char *h = str;		/* hare */
-	char *t = str;		/* tortoise */
+	const char                      c1 = XNUM_TO_DIGIT (chr >> 4);
+	const char                      c2 = XNUM_TO_DIGIT (chr & 0xf);
+	char                           *h = str;	/* hare */
+	char                           *t = str;	/* tortoise */
 
 	for (; *h; h++, t++) {
 		if (h[0] == '%' && h[1] == c1 && h[2] == c2) {
 			*t = chr;
 			h += 2;
 		}
-	    else {
+		else {
 			*t = *h;
 		}
 	}
@@ -589,10 +566,10 @@ unescape_single_char (char *str, char chr)
 /* Escape unsafe and reserved characters, except for the slash
 	 characters.  */
 
-static char *
-url_escape_dir (const char *dir, memory_pool_t *pool)
+static char                    *
+url_escape_dir (const char *dir, memory_pool_t * pool)
 {
-	char *newdir = url_escape_1 (dir, urlchr_unsafe | urlchr_reserved, 1, pool);
+	char                           *newdir = url_escape_1 (dir, urlchr_unsafe | urlchr_reserved, 1, pool);
 	if (newdir == dir)
 		return (char *)dir;
 
@@ -617,53 +594,53 @@ url_escape_dir (const char *dir, memory_pool_t *pool)
 static int
 path_simplify (char *path)
 {
-	char *h = path;		/* hare */
-	char *t = path;		/* tortoise */
-	char *beg = path;		/* boundary for backing the tortoise */
-	char *end = path + strlen (path);
+	char                           *h = path;	/* hare */
+	char                           *t = path;	/* tortoise */
+	char                           *beg = path;	/* boundary for backing the tortoise */
+	char                           *end = path + strlen (path);
 
 	while (h < end) {
 		/* Hare should be at the beginning of a path element. */
 		if (h[0] == '.' && (h[1] == '/' || h[1] == '\0')) {
-	  		/* Ignore "./". */
-	  		h += 2;
+			/* Ignore "./". */
+			h += 2;
 		}
 		else if (h[0] == '.' && h[1] == '.' && (h[2] == '/' || h[2] == '\0')) {
-	  		/* Handle "../" by retreating the tortoise by one path
-	     	   element -- but not past beggining.  */
+			/* Handle "../" by retreating the tortoise by one path
+			   element -- but not past beggining.  */
 			if (t > beg) {
-	      		/* Move backwards until T hits the beginning of the
-		 	       previous path element or the beginning of path. */
+				/* Move backwards until T hits the beginning of the
+				   previous path element or the beginning of path. */
 				for (--t; t > beg && t[-1] != '/'; t--);
-	    	}
-	  		else {
-	      		/* If we're at the beginning, copy the "../" literally
-		 	       move the beginning so a later ".." doesn't remove
-		 	       it.  */
+			}
+			else {
+				/* If we're at the beginning, copy the "../" literally
+				   move the beginning so a later ".." doesn't remove
+				   it.  */
 				beg = t + 3;
 				goto regular;
 			}
 			h += 3;
 		}
 		else {
-			regular:
+		  regular:
 			/* A regular path element.  If H hasn't advanced past T,
-	           simply skip to the next path element.  Otherwise, copy
-	           the path element until the next slash.  */
+			   simply skip to the next path element.  Otherwise, copy
+			   the path element until the next slash.  */
 			if (t == h) {
-	      		/* Skip the path element, including the slash.  */
+				/* Skip the path element, including the slash.  */
 				while (h < end && *h != '/')
 					t++, h++;
 				if (h < end)
 					t++, h++;
-	    	}
-	  		else {
-	      		/* Copy the path element, including the final slash.  */
-	      		while (h < end && *h != '/')
+			}
+			else {
+				/* Copy the path element, including the final slash.  */
+				while (h < end && *h != '/')
 					*t++ = *h++;
-	      		if (h < end)
+				if (h < end)
 					*t++ = *h++;
-	    	}
+			}
 		}
 	}
 
@@ -674,24 +651,25 @@ path_simplify (char *path)
 }
 
 enum uri_errno
-parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
+parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 {
-	unsigned char *prefix_end, *host_end, *p;
-	unsigned char *lbracket, *rbracket;
-	int datalen, n, addrlen;
-	unsigned char *frag_or_post, *user_end, *port_end;
+	unsigned char                  *prefix_end, *host_end, *p;
+	unsigned char                  *lbracket, *rbracket;
+	int                             datalen, n, addrlen;
+	unsigned char                  *frag_or_post, *user_end, *port_end;
 
 	memset (uri, 0, sizeof (*uri));
 
 	/* Nothing to do for an empty url. */
-	if (!*uristring) return URI_ERRNO_EMPTY;
-	
+	if (!*uristring)
+		return URI_ERRNO_EMPTY;
+
 	uri->string = reencode_escapes (uristring, pool);
 	msg_debug ("parse_uri: reencoding escapes in original url: '%s'", struri (uri));
 	uri->protocollen = get_protocol_length (struri (uri));
 
 	/* Assume http as default protocol */
-	if (!uri->protocollen || (uri->protocol = get_protocol (struri(uri), uri->protocollen)) == PROTOCOL_UNKNOWN) {
+	if (!uri->protocollen || (uri->protocol = get_protocol (struri (uri), uri->protocollen)) == PROTOCOL_UNKNOWN) {
 		p = g_strconcat ("http://", uri->string, NULL);
 		uri->string = memory_pool_strdup (pool, p);
 		g_free (p);
@@ -702,7 +680,7 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 		/* Figure out whether the protocol is known */
 		msg_debug ("parse_uri: getting protocol from url: %d", uri->protocol);
 
-		prefix_end = struri (uri) + uri->protocollen; /* ':' */
+		prefix_end = struri (uri) + uri->protocollen;	/* ':' */
 
 		/* Check if there's a digit after the protocol name. */
 		if (g_ascii_isdigit (*prefix_end)) {
@@ -726,7 +704,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 
 			prefix_end += 2;
 
-		} else {
+		}
+		else {
 			msg_debug ("parse_uri: no '/' in uri");
 			return URI_ERRNO_NO_SLASHES;
 		}
@@ -737,7 +716,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 		uri->datalen = strlen (prefix_end);
 		return URI_ERRNO_OK;
 
-	} else if (uri->protocol == PROTOCOL_FILE) {
+	}
+	else if (uri->protocol == PROTOCOL_FILE) {
 		datalen = check_uri_file (prefix_end);
 		frag_or_post = prefix_end + datalen;
 
@@ -745,14 +725,15 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 		if (datalen >= 0) {
 			if (*frag_or_post == '#') {
 				uri->fragment = frag_or_post + 1;
-				uri->fragmentlen = strcspn(uri->fragment, POST_CHAR_S);
+				uri->fragmentlen = strcspn (uri->fragment, POST_CHAR_S);
 				frag_or_post = uri->fragment + uri->fragmentlen;
 			}
 			if (*frag_or_post == POST_CHAR) {
 				uri->post = frag_or_post + 1;
 			}
-		} else {
-			datalen = strlen(prefix_end);
+		}
+		else {
+			datalen = strlen (prefix_end);
 		}
 
 		uri->data = prefix_end;
@@ -772,15 +753,15 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 			uri->ipv6 = 1;
 		else
 			lbracket = rbracket = NULL;
-	} else {
+	}
+	else {
 		rbracket = NULL;
 	}
 
 	/* Possibly skip auth part */
 	host_end = prefix_end + strcspn (prefix_end, "@");
 
-	if (prefix_end + strcspn (prefix_end, "/") > host_end
-	    && *host_end) { /* we have auth info here */
+	if (prefix_end + strcspn (prefix_end, "/") > host_end && *host_end) {	/* we have auth info here */
 
 		/* Allow '@' in the password component */
 		while (strcspn (host_end + 1, "@") < strcspn (host_end + 1, "/?"))
@@ -791,7 +772,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 		if (!user_end || user_end > host_end) {
 			uri->user = prefix_end;
 			uri->userlen = host_end - prefix_end;
-		} else {
+		}
+		else {
 			uri->user = prefix_end;
 			uri->userlen = user_end - prefix_end;
 			uri->password = user_end + 1;
@@ -811,7 +793,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 
 		uri->host = lbracket + 1;
 		uri->hostlen = addrlen;
-	} else {
+	}
+	else {
 		uri->host = prefix_end;
 		uri->hostlen = host_end - prefix_end;
 
@@ -820,7 +803,7 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 			return URI_ERRNO_TRAILING_DOTS;
 	}
 
-	if (*host_end == ':') { /* we have port here */
+	if (*host_end == ':') {		/* we have port here */
 		port_end = host_end + 1 + strcspn (host_end + 1, "/");
 
 		host_end++;
@@ -854,7 +837,8 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 	if (*host_end == '/') {
 		host_end++;
 
-	} else if (get_protocol_need_slash_after_host (uri->protocol) && *host_end != '?') {
+	}
+	else if (get_protocol_need_slash_after_host (uri->protocol) && *host_end != '?') {
 		/* The need for slash after the host component depends on the
 		 * need for a host component. -- The dangerous mind of Jonah */
 		if (!uri->hostlen)
@@ -877,13 +861,13 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 	if (*prefix_end == POST_CHAR) {
 		uri->post = prefix_end + 1;
 	}
-	
+
 	convert_to_lowercase (uri->string, uri->protocollen);
 	convert_to_lowercase (uri->host, uri->hostlen);
 	/* Decode %HH sequences in host name.  This is important not so much
-     to support %HH sequences in host names (which other browser
-     don't), but to support binary characters (which will have been
-     converted to %HH by reencode_escapes).  */
+	   to support %HH sequences in host names (which other browser
+	   don't), but to support binary characters (which will have been
+	   converted to %HH by reencode_escapes).  */
 	if (strchr (uri->host, '%')) {
 		uri->hostlen = url_calculate_escaped_hostlen (uri->host, uri->hostlen);
 	}
@@ -896,15 +880,15 @@ parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool)
 	return URI_ERRNO_OK;
 }
 
-void 
-url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
+void
+url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
-	GMatchInfo *info;
-	GError *err = NULL;
-	int rc;
-	char *url_str = NULL;
-	struct uri *new;
-	
+	GMatchInfo                     *info;
+	GError                         *err = NULL;
+	int                             rc;
+	char                           *url_str = NULL;
+	struct uri                     *new;
+
 	if (!part->orig->data || part->orig->len == 0) {
 		msg_warn ("url_parse_text: got empty text part");
 		return;
@@ -916,7 +900,7 @@ url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_
 		}
 		else {
 			rc = g_regex_match_full (text_re, (const char *)part->content->data, part->content->len, 0, 0, &info, &err);
-		
+
 		}
 		if (rc) {
 			while (g_match_info_matches (info)) {
@@ -937,7 +921,7 @@ url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_
 						}
 					}
 				}
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, url_str);
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, url_str);
 				/* Get next match */
 				g_match_info_next (info, &err);
 			}

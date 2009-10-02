@@ -39,20 +39,20 @@
 #include "tokenizers/tokenizers.h"
 
 #ifndef WITHOUT_PERL
-#include "perl.h"
+#   include "perl.h"
 #endif
 #ifdef WITH_LUA
-#include "lua/lua_common.h"
+#   include "lua/lua_common.h"
 #endif
 
 void
-insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList *opts)
+insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList * opts)
 {
-	struct metric *metric;
-	struct metric_result *metric_res;
-	struct symbol *s;
-	struct cache_item *item;
-	int i;
+	struct metric                  *metric;
+	struct metric_result           *metric_res;
+	struct symbol                  *s;
+	struct cache_item              *item;
+	int                             i;
 
 	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, metric_name);
 	if (metric == NULL) {
@@ -66,11 +66,11 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
 		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
 		metric_res->checked = FALSE;
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, metric_res->symbols);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_destroy, metric_res->symbols);
 		metric_res->metric = metric;
-		g_hash_table_insert (task->results, (gpointer)metric_name, metric_res);
+		g_hash_table_insert (task->results, (gpointer) metric_name, metric_res);
 	}
-	
+
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts) {
 			/* Append new options */
@@ -82,7 +82,7 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		}
 		else if (opts) {
 			s->options = opts;
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, s->options);
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
 		}
 
 		s->score = flag;
@@ -93,19 +93,19 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		s->options = opts;
 
 		if (opts) {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, s->options);
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
 		}
 
-		g_hash_table_insert (metric_res->symbols, (gpointer)symbol, s);
+		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
 
 	/* Process cache item */
 	if (metric->cache) {
-		for (i = 0; i < metric->cache->used_items; i ++) {
+		for (i = 0; i < metric->cache->used_items; i++) {
 			item = &metric->cache->items[i];
 
 			if (flag > 0 && strcmp (item->s->symbol, symbol) == 0) {
-				item->s->frequency ++;
+				item->s->frequency++;
 			}
 		}
 	}
@@ -115,15 +115,15 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
  * Default consolidation function based on factors in config file
  */
 struct consolidation_callback_data {
-	struct worker_task *task;
-	double score;
+	struct worker_task             *task;
+	double                          score;
 };
 
 static void
 consolidation_callback (gpointer key, gpointer value, gpointer arg)
 {
-	double *factor, fs;
-	struct symbol *s = (struct symbol *)value;
+	double                         *factor, fs;
+	struct symbol                  *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
 
 	if (check_factor_settings (data->task, key, &fs)) {
@@ -145,15 +145,15 @@ consolidation_callback (gpointer key, gpointer value, gpointer arg)
 double
 factor_consolidation_func (struct worker_task *task, const char *metric_name, const char *unused)
 {
-	struct metric_result *metric_res;
-	double res = 0.;
+	struct metric_result           *metric_res;
+	double                          res = 0.;
 	struct consolidation_callback_data data = { task, 0 };
 
 	metric_res = g_hash_table_lookup (task->results, metric_name);
 	if (metric_res == NULL) {
 		return res;
 	}
-	
+
 	g_hash_table_foreach (metric_res->symbols, consolidation_callback, &data);
 
 	return data.score;
@@ -165,30 +165,30 @@ factor_consolidation_func (struct worker_task *task, const char *metric_name, co
 static void
 call_filter_by_name (struct worker_task *task, const char *name, enum filter_type filt_type)
 {
-	struct module_ctx *c_module;
-	int res = 0;
-	
+	struct module_ctx              *c_module;
+	int                             res = 0;
+
 	switch (filt_type) {
-		case C_FILTER:
-			c_module = g_hash_table_lookup (task->worker->srv->cfg->c_modules, name);
-			if (c_module) {
-				res = 1;
-				c_module->filter (task);
-			}
-			else {
-				msg_debug ("call_filter_by_name: %s is not a C module", name);
-			}
-			break;
-		case PERL_FILTER:
+	case C_FILTER:
+		c_module = g_hash_table_lookup (task->worker->srv->cfg->c_modules, name);
+		if (c_module) {
 			res = 1;
+			c_module->filter (task);
+		}
+		else {
+			msg_debug ("call_filter_by_name: %s is not a C module", name);
+		}
+		break;
+	case PERL_FILTER:
+		res = 1;
 #ifndef WITHOUT_PERL
-			perl_call_filter (name, task);
+		perl_call_filter (name, task);
 #elif defined(WITH_LUA)
-			lua_call_filter (name, task);
+		lua_call_filter (name, task);
 #else
-			msg_err ("call_filter_by_name: trying to call perl function while perl support is disabled %s", name);
+		msg_err ("call_filter_by_name: trying to call perl function while perl support is disabled %s", name);
 #endif
-			break;
+		break;
 	}
 
 	msg_debug ("call_filter_by_name: filter name: %s, result: %d", name, (int)res);
@@ -197,14 +197,14 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 static void
 metric_process_callback_common (gpointer key, gpointer value, void *data, gboolean is_forced)
 {
-	struct worker_task *task = (struct worker_task *)data;
-	struct metric_result *metric_res = (struct metric_result *)value;
-	
+	struct worker_task             *task = (struct worker_task *)data;
+	struct metric_result           *metric_res = (struct metric_result *)value;
+
 	if (metric_res->checked && !is_forced) {
 		/* Already checked */
 		return;
 	}
-	
+
 	/* Set flag */
 	metric_res->checked = TRUE;
 
@@ -214,8 +214,7 @@ metric_process_callback_common (gpointer key, gpointer value, void *data, gboole
 	else {
 		metric_res->score = factor_consolidation_func (task, metric_res->metric->name, NULL);
 	}
-	msg_debug ("process_metric_callback: got result %.2f from consolidation function for metric %s", 
-					metric_res->score, metric_res->metric->name);
+	msg_debug ("process_metric_callback: got result %.2f from consolidation function for metric %s", metric_res->score, metric_res->metric->name);
 }
 
 static void
@@ -231,11 +230,11 @@ metric_process_callback_forced (gpointer key, gpointer value, void *data)
 }
 
 /* Return true if metric has score that is more than spam score for it */
-static gboolean
+static                          gboolean
 check_metric_is_spam (struct worker_task *task, struct metric *metric)
 {
-	struct metric_result *res;
-	double ms;
+	struct metric_result           *res;
+	double                          ms;
 
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
@@ -252,11 +251,11 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 static int
 continue_process_filters (struct worker_task *task)
 {
-	GList *cur = task->save.entry;
-	struct cache_item *item = task->save.item;
+	GList                          *cur = task->save.entry;
+	struct cache_item              *item = task->save.item;
 
-	struct metric *metric = cur->data;
-	
+	struct metric                  *metric = cur->data;
+
 	while (cur) {
 		metric = cur->data;
 		while (call_symbol_callback (task, metric->cache, &item)) {
@@ -280,12 +279,12 @@ continue_process_filters (struct worker_task *task)
 	return 1;
 }
 
-int 
+int
 process_filters (struct worker_task *task)
 {
-	GList *cur;
-	struct metric *metric;
-	struct cache_item *item = NULL;
+	GList                          *cur;
+	struct metric                  *metric;
+	struct cache_item              *item = NULL;
 
 	if (task->save.saved) {
 		task->save.saved = 0;
@@ -321,20 +320,20 @@ process_filters (struct worker_task *task)
 }
 
 struct composites_data {
-	struct worker_task *task;
-	struct metric_result *metric_res;
+	struct worker_task             *task;
+	struct metric_result           *metric_res;
 };
 
 static void
 composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
-	struct composites_data *cd = (struct composites_data *)data;
-	struct expression *expr = (struct expression *)value;
-	GQueue *stack;
-	GList *symbols = NULL, *s;
-	gsize cur, op1, op2;
-	struct symbol *res;
-	
+	struct composites_data         *cd = (struct composites_data *)data;
+	struct expression              *expr = (struct expression *)value;
+	GQueue                         *stack;
+	GList                          *symbols = NULL, *s;
+	gsize                           cur, op1, op2;
+	struct symbol                  *res;
+
 	stack = g_queue_new ();
 
 	while (expr) {
@@ -357,22 +356,22 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				return;
 			}
 			switch (expr->content.operation) {
-				case '!':
-					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					op1 = !op1;
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
-					break;
-				case '&':
-					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
-				case '|':
-					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
-				default:
-					expr = expr->next;
-					continue;
+			case '!':
+				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+				op1 = !op1;
+				g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
+				break;
+			case '&':
+				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+				op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+				g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+			case '|':
+				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+				op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
+				g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+			default:
+				expr = expr->next;
+				continue;
 			}
 		}
 		expr = expr->next;
@@ -400,12 +399,12 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	return;
 }
 
-static gboolean
+static                          gboolean
 check_autolearn (struct statfile_autolearn_params *params, struct worker_task *task)
-{	
-	char *metric_name = DEFAULT_METRIC;
-	struct metric_result *metric_res;
-	GList *cur;
+{
+	char                           *metric_name = DEFAULT_METRIC;
+	struct metric_result           *metric_res;
+	GList                          *cur;
 
 	if (params->metric != NULL) {
 		metric_name = (char *)params->metric;
@@ -424,8 +423,7 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 	else {
 		/* Process score of metric */
 		metric_process_callback_normal ((void *)metric_name, metric_res, task);
-		if ((params->threshold_min != 0 && metric_res->score > params->threshold_min) || 
-			(params->threshold_max != 0 && metric_res->score < params->threshold_max)) {
+		if ((params->threshold_min != 0 && metric_res->score > params->threshold_min) || (params->threshold_max != 0 && metric_res->score < params->threshold_max)) {
 			/* Now check for specific symbols */
 			if (params->symbols) {
 				cur = params->symbols;
@@ -445,19 +443,17 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 }
 
 void
-process_autolearn (struct statfile *st, struct worker_task *task, GTree *tokens, 
-					struct classifier *classifier, char *filename, struct classifier_ctx* ctx)
+process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens, struct classifier *classifier, char *filename, struct classifier_ctx *ctx)
 {
 	if (check_autolearn (st->autolearn, task)) {
 		if (tokens) {
 			msg_info ("process_autolearn: message with id <%s> autolearned statfile '%s'", task->message_id, filename);
 			/* Check opened */
-			if (! statfile_pool_is_open (task->worker->srv->statfile_pool, filename)) {
+			if (!statfile_pool_is_open (task->worker->srv->statfile_pool, filename)) {
 				/* Try open */
 				if (statfile_pool_open (task->worker->srv->statfile_pool, filename) == NULL) {
 					/* Try create */
-					if (statfile_pool_create (task->worker->srv->statfile_pool, 
-									filename, st->size / sizeof (struct stat_file_block)) == -1) {
+					if (statfile_pool_create (task->worker->srv->statfile_pool, filename, st->size / sizeof (struct stat_file_block)) == -1) {
 						msg_info ("process_autolearn: error while creating statfile %s", filename);
 						return;
 					}
@@ -470,11 +466,11 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree *tokens,
 }
 
 static void
-composites_metric_callback (gpointer key, gpointer value, void *data) 
+composites_metric_callback (gpointer key, gpointer value, void *data)
 {
-	struct worker_task *task = (struct worker_task *)data;
-	struct composites_data *cd = memory_pool_alloc (task->task_pool, sizeof (struct composites_data));
-	struct metric_result *metric_res = (struct metric_result *)value;
+	struct worker_task             *task = (struct worker_task *)data;
+	struct composites_data         *cd = memory_pool_alloc (task->task_pool, sizeof (struct composites_data));
+	struct metric_result           *metric_res = (struct metric_result *)value;
 
 	cd->task = task;
 	cd->metric_res = (struct metric_result *)metric_res;
@@ -482,7 +478,7 @@ composites_metric_callback (gpointer key, gpointer value, void *data)
 	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
 }
 
-void 
+void
 make_composites (struct worker_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
@@ -492,23 +488,23 @@ make_composites (struct worker_task *task)
 
 
 struct statfile_callback_data {
-	GHashTable *tokens;
-	struct worker_task *task;
+	GHashTable                     *tokens;
+	struct worker_task             *task;
 };
 
 static void
 classifiers_callback (gpointer value, void *arg)
 {
-	struct statfile_callback_data *data= (struct statfile_callback_data *)arg;
-	struct worker_task *task = data->task;
-	struct classifier_config *cl = value;
-	struct classifier_ctx *ctx;
-	struct mime_text_part *text_part;
-	struct statfile *st;
-	GTree *tokens = NULL;
-	GList *cur;
-	f_str_t c;
-	
+	struct statfile_callback_data  *data = (struct statfile_callback_data *)arg;
+	struct worker_task             *task = data->task;
+	struct classifier_config       *cl = value;
+	struct classifier_ctx          *ctx;
+	struct mime_text_part          *text_part;
+	struct statfile                *st;
+	GTree                          *tokens = NULL;
+	GList                          *cur;
+	f_str_t                         c;
+
 	cur = g_list_first (task->text_parts);
 	if ((tokens = g_hash_table_lookup (data->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
@@ -532,10 +528,10 @@ classifiers_callback (gpointer value, void *arg)
 	if (tokens == NULL) {
 		return;
 	}
-	
+
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 	cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task);
-	
+
 	/* Autolearning */
 	cur = g_list_first (cl->statfiles);
 	while (cur) {
@@ -554,8 +550,8 @@ classifiers_callback (gpointer value, void *arg)
 void
 process_statfiles (struct worker_task *task)
 {
-	struct statfile_callback_data cd;
-	
+	struct statfile_callback_data   cd;
+
 	cd.task = task;
 	cd.tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
 
@@ -570,14 +566,14 @@ process_statfiles (struct worker_task *task)
 static void
 insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data)
 {
-	struct worker_task *task = (struct worker_task *)data;
-	int r = 0;
+	struct worker_task             *task = (struct worker_task *)data;
+	int                             r = 0;
 	/* Try to be rfc2822 compatible and avoid long headers with folding */
-	char header_name[128], outbuf[1000];
-	GList *symbols = NULL, *cur;
-	struct metric_result *metric_res = (struct metric_result *)metric_value;
-	double ms;
-	
+	char                            header_name[128], outbuf[1000];
+	GList                          *symbols = NULL, *cur;
+	struct metric_result           *metric_res = (struct metric_result *)metric_value;
+	double                          ms;
+
 	snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
 	if (!check_metric_settings (task, metric_res->metric, &ms)) {

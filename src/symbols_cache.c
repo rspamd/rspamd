@@ -42,43 +42,39 @@
 
 #define MIN_CACHE 17
 
-static uint64_t total_frequency;
-static uint32_t nsymbols;
+static uint64_t                 total_frequency;
+static uint32_t                 nsymbols;
 
 int
 cache_cmp (const void *p1, const void *p2)
 {
-	const struct cache_item *i1 = p1, *i2 = p2;
-	
+	const struct cache_item        *i1 = p1, *i2 = p2;
+
 	return strcmp (i1->s->symbol, i2->s->symbol);
 }
 
 int
 cache_logic_cmp (const void *p1, const void *p2)
 {
-	const struct cache_item *i1 = p1, *i2 = p2;
-	double w1, w2;
-	double f1 = 0, f2 = 0;
-	
+	const struct cache_item        *i1 = p1, *i2 = p2;
+	double                          w1, w2;
+	double                          f1 = 0, f2 = 0;
+
 	if (total_frequency > 0) {
 		f1 = ((double)i1->s->frequency * nsymbols) / (double)total_frequency;
 		f2 = ((double)i2->s->frequency * nsymbols) / (double)total_frequency;
 	}
-	w1 = abs (i1->s->weight) * WEIGHT_MULT +
-		 f1 * FREQUENCY_MULT + 
-		 i1->s->avg_time * TIME_MULT;
-	w2 = abs (i2->s->weight) * WEIGHT_MULT +
-		 f2 * FREQUENCY_MULT + 
-		 i2->s->avg_time * TIME_MULT;
-	
+	w1 = abs (i1->s->weight) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
+	w2 = abs (i2->s->weight) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
+
 	return (int)w2 - w1;
 }
 
 static void
 grow_cache (struct symbols_cache *cache)
 {
-	guint old = cache->cur_items, i;
-	void *new;
+	guint                           old = cache->cur_items, i;
+	void                           *new;
 
 	cache->cur_items = cache->cur_items * 2;
 	new = g_new0 (struct cache_item, cache->cur_items);
@@ -87,20 +83,20 @@ grow_cache (struct symbols_cache *cache)
 	cache->items = new;
 
 	/* Create new saved_cache_items */
-	for (i = old; i < cache->cur_items; i ++) {
+	for (i = old; i < cache->cur_items; i++) {
 		cache->items[i].s = g_new0 (struct saved_cache_item, 1);
 	}
 }
 
-static GChecksum *
+static GChecksum               *
 get_mem_cksum (struct symbols_cache *cache)
 {
-	int i;
-	GChecksum *result;
-	
+	int                             i;
+	GChecksum                      *result;
+
 	result = g_checksum_new (G_CHECKSUM_SHA1);
 
-	for (i = 0; i < cache->used_items; i ++) {
+	for (i = 0; i < cache->used_items; i++) {
 		if (cache->items[i].s->symbol[0] != '\0') {
 			g_checksum_update (result, cache->items[i].s->symbol, strlen (cache->items[i].s->symbol));
 		}
@@ -113,22 +109,22 @@ get_mem_cksum (struct symbols_cache *cache)
 static void
 post_cache_init (struct symbols_cache *cache)
 {
-	int i;
-	
+	int                             i;
+
 	total_frequency = 0;
 	nsymbols = cache->used_items;
-	for (i = 0; i < cache->used_items; i ++) {
+	for (i = 0; i < cache->used_items; i++) {
 		total_frequency += cache->items[i].s->frequency;
 	}
 
 	qsort (cache->items, cache->used_items, sizeof (struct cache_item), cache_logic_cmp);
 }
 
-static gboolean
+static                          gboolean
 mmap_cache_file (struct symbols_cache *cache, int fd)
 {
-	void *map;
-	int i;
+	void                           *map;
+	int                             i;
 
 	map = mmap (NULL, cache->used_items * sizeof (struct saved_cache_item), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (map == MAP_FAILED) {
@@ -139,7 +135,7 @@ mmap_cache_file (struct symbols_cache *cache, int fd)
 	/* Close descriptor as it would never be used */
 	close (fd);
 	/* Now free old values for saved cache items and fill them with mmapped ones */
-	for (i = 0; i < cache->used_items; i ++) {
+	for (i = 0; i < cache->used_items; i++) {
 		g_free (cache->items[i].s);
 		cache->items[i].s = ((struct saved_cache_item *)map) + i;
 	}
@@ -149,13 +145,13 @@ mmap_cache_file (struct symbols_cache *cache, int fd)
 }
 
 /* Fd must be opened for writing, after creating file is mmapped */
-static gboolean
+static                          gboolean
 create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 {
-	int i;
-	GChecksum *cksum;
-	u_char *digest;
-	gsize cklen;
+	int                             i;
+	GChecksum                      *cksum;
+	u_char                         *digest;
+	gsize                           cklen;
 
 	/* Calculate checksum */
 	cksum = get_mem_cksum (cache);
@@ -170,7 +166,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 
 	g_checksum_get_digest (cksum, digest, &cklen);
 	/* Now write data to file */
-	for (i = 0; i < cache->used_items; i ++) {
+	for (i = 0; i < cache->used_items; i++) {
 		if (write (fd, cache->items[i].s, sizeof (struct saved_cache_item)) == -1) {
 			msg_err ("create_cache_file: cannot write to file %d, %s", errno, strerror (errno));
 			close (fd);
@@ -200,12 +196,12 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 	return mmap_cache_file (cache, fd);
 }
 
-void 
+void
 register_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, gpointer user_data)
 {
-	struct cache_item *item = NULL;
-	int i;
-	
+	struct cache_item              *item = NULL;
+	int                             i;
+
 	if (*cache == NULL) {
 		*cache = g_new0 (struct symbols_cache, 1);
 	}
@@ -213,11 +209,11 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 		(*cache)->cur_items = MIN_CACHE;
 		(*cache)->used_items = 0;
 		(*cache)->items = g_new0 (struct cache_item, (*cache)->cur_items);
-		for (i = 0; i < (*cache)->cur_items; i ++) {
+		for (i = 0; i < (*cache)->cur_items; i++) {
 			(*cache)->items[i].s = g_new0 (struct saved_cache_item, 1);
 		}
 	}
-	
+
 	if ((*cache)->used_items >= (*cache)->cur_items) {
 		grow_cache (*cache);
 		/* Call once more */
@@ -226,34 +222,34 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 	}
 
 	item = &(*cache)->items[(*cache)->used_items];
-	
+
 	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
 	item->s->weight = weight;
-	(*cache)->used_items ++;
+	(*cache)->used_items++;
 	set_counter (item->s->symbol, 0);
 }
 
-gboolean 
-init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char *filename)
+gboolean
+init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const char *filename)
 {
-	struct stat st;
-	int fd;
-	GChecksum *cksum;
-	u_char *mem_sum, *file_sum;
-	gsize cklen;
+	struct stat                     st;
+	int                             fd;
+	GChecksum                      *cksum;
+	u_char                         *mem_sum, *file_sum;
+	gsize                           cklen;
 
 	if (cache == NULL || cache->items == NULL) {
 		return FALSE;
 	}
-	
+
 	/* Sort items in cache */
 	qsort (cache->items, cache->used_items, sizeof (struct cache_item), cache_cmp);
 
 	/* Init locking */
 	cache->lock = memory_pool_get_rwlock (pool);
-	
+
 	/* Just in-memory cache */
 	if (filename == NULL) {
 		post_cache_init (cache);
@@ -265,7 +261,7 @@ init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char
 		/* Check errno */
 		if (errno == ENOENT) {
 			/* Try to create file */
-			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1 ) {
+			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 				msg_info ("load_symbols_cache: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 				return FALSE;
 			}
@@ -322,7 +318,7 @@ init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char
 		g_checksum_free (cksum);
 		msg_info ("load_symbols_cache: checksum mismatch, recreating file");
 		/* Reopen with rw permissions */
-		if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1 ) {
+		if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 			msg_info ("load_symbols_cache: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 			return FALSE;
 		}
@@ -339,17 +335,17 @@ init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char
 }
 
 gboolean
-call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, struct cache_item **saved_item)
+call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, struct cache_item ** saved_item)
 {
-	struct timespec ts1, ts2;
-	uint64_t diff;
-	struct cache_item *item;
+	struct timespec                 ts1, ts2;
+	uint64_t                        diff;
+	struct cache_item              *item;
 
 	if (*saved_item == NULL) {
 		if (cache == NULL) {
 			return FALSE;
 		}
-		if (cache->uses ++ >= MAX_USES) {
+		if (cache->uses++ >= MAX_USES) {
 			msg_info ("call_symbols_callback: resort symbols cache");
 			memory_pool_wlock_rwlock (cache->lock);
 			cache->uses = 0;

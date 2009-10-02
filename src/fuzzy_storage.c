@@ -52,51 +52,51 @@
 /* Number of insuccessfull bind retries */
 #define MAX_RETRIES 40
 
-static GQueue *hashes[BUCKETS];
-static bloom_filter_t *bf;
+static GQueue                  *hashes[BUCKETS];
+static bloom_filter_t          *bf;
 
 /* Number of cache modifications */
-static uint32_t mods = 0;
+static uint32_t                 mods = 0;
 /* For evtimer */
-static struct timeval tmv;
-static struct event tev;
+static struct timeval           tmv;
+static struct event             tev;
 
 struct rspamd_fuzzy_node {
-	fuzzy_hash_t h;
-	uint64_t time;
+	fuzzy_hash_t                    h;
+	uint64_t                        time;
 };
 
-static void 
+static void
 sig_handler (int signo)
-{	
+{
 	switch (signo) {
-		case SIGINT:
-			/* Ignore SIGINT as we should got SIGTERM after it anyway */
-			return;
-		case SIGTERM:
+	case SIGINT:
+		/* Ignore SIGINT as we should got SIGTERM after it anyway */
+		return;
+	case SIGTERM:
 #ifdef WITH_PROFILER
-			exit (0);
+		exit (0);
 #else
-			_exit (1);
+		_exit (1);
 #endif
-			break;
+		break;
 	}
 }
 
 static void
 sync_cache (struct rspamd_worker *wrk)
 {
-	int fd, i;
-	char *filename, *exp_str;
-	GList *cur, *tmp;
-	struct rspamd_fuzzy_node *node;
-	uint64_t expire, now;
-	
+	int                             fd, i;
+	char                           *filename, *exp_str;
+	GList                          *cur, *tmp;
+	struct rspamd_fuzzy_node       *node;
+	uint64_t                        expire, now;
+
 	/* Check for modifications */
 	if (mods < MOD_LIMIT) {
 		return;
 	}
-	
+
 	msg_info ("sync_cache: syncing fuzzy hash storage");
 	filename = g_hash_table_lookup (wrk->cf->params, "hashfile");
 	if (filename == NULL) {
@@ -114,9 +114,9 @@ sync_cache (struct rspamd_worker *wrk)
 		msg_err ("sync_cache: cannot create hash file %s: %s", filename, strerror (errno));
 		return;
 	}
-	
-	now = (uint64_t)time (NULL);
-	for (i = 0; i < BUCKETS; i ++) {
+
+	now = (uint64_t) time (NULL);
+	for (i = 0; i < BUCKETS; i++) {
 		cur = hashes[i]->head;
 		while (cur) {
 			node = cur->data;
@@ -139,15 +139,15 @@ sync_cache (struct rspamd_worker *wrk)
 	close (fd);
 }
 
-static void 
+static void
 sigterm_handler (int fd, short what, void *arg)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	static struct timeval tv = {
+	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
+	static struct timeval           tv = {
 		.tv_sec = 0,
 		.tv_usec = 0,
 	};
-	
+
 	mods = MOD_LIMIT + 1;
 	sync_cache (worker);
 	close (worker->cf->listen_sock);
@@ -160,9 +160,9 @@ sigterm_handler (int fd, short what, void *arg)
 static void
 sigusr_handler (int fd, short what, void *arg)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
+	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval tv;
+	struct timeval                  tv;
 	tv.tv_sec = SOFT_SHUTDOWN_TIME;
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev);
@@ -174,15 +174,15 @@ sigusr_handler (int fd, short what, void *arg)
 	return;
 }
 
-static gboolean
+static                          gboolean
 read_hashes_file (struct rspamd_worker *wrk)
 {
-	int r, fd, i;
-	struct stat st;
-	char *filename;
-	struct rspamd_fuzzy_node *node;
+	int                             r, fd, i;
+	struct stat                     st;
+	char                           *filename;
+	struct rspamd_fuzzy_node       *node;
 
-	for (i = 0; i < BUCKETS; i ++) {
+	for (i = 0; i < BUCKETS; i++) {
 		hashes[i] = g_queue_new ();
 	}
 
@@ -195,14 +195,14 @@ read_hashes_file (struct rspamd_worker *wrk)
 		msg_err ("read_hashes_file: cannot open hash file %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
-	
+
 	fstat (fd, &st);
-	
+
 	for (;;) {
 		node = g_malloc (sizeof (struct rspamd_fuzzy_node));
 		r = read (fd, node, sizeof (struct rspamd_fuzzy_node));
 		if (r != sizeof (struct rspamd_fuzzy_node)) {
-			break;	
+			break;
 		}
 		g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
 		bloom_add (bf, node->h.hash_pipe);
@@ -219,16 +219,16 @@ read_hashes_file (struct rspamd_worker *wrk)
 	return TRUE;
 }
 
-static gboolean
+static                          gboolean
 process_check_command (struct fuzzy_cmd *cmd)
 {
-	GList *cur;
-	struct rspamd_fuzzy_node *h;
-	fuzzy_hash_t s;
-	int prob = 0;
-	
+	GList                          *cur;
+	struct rspamd_fuzzy_node       *h;
+	fuzzy_hash_t                    s;
+	int                             prob = 0;
+
 	if (!bloom_check (bf, cmd->hash)) {
-		return FALSE;	
+		return FALSE;
 	}
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
@@ -249,39 +249,39 @@ process_check_command (struct fuzzy_cmd *cmd)
 	return FALSE;
 }
 
-static gboolean
+static                          gboolean
 process_write_command (struct fuzzy_cmd *cmd)
 {
-	struct rspamd_fuzzy_node *h;
+	struct rspamd_fuzzy_node       *h;
 
 	if (bloom_check (bf, cmd->hash)) {
-		return FALSE;	
+		return FALSE;
 	}
 
 	h = g_malloc (sizeof (struct rspamd_fuzzy_node));
 	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
 	h->h.block_size = cmd->blocksize;
-	h->time = (uint64_t)time (NULL);
+	h->time = (uint64_t) time (NULL);
 	g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
 	bloom_add (bf, cmd->hash);
-	mods ++;
+	mods++;
 	msg_info ("process_write_command: fuzzy hash was successfully added");
-	
+
 	return TRUE;
 }
 
-static gboolean
+static                          gboolean
 process_delete_command (struct fuzzy_cmd *cmd)
 {
-	GList *cur, *tmp;
-	struct rspamd_fuzzy_node *h;
-	fuzzy_hash_t s;
-	gboolean res = FALSE;
+	GList                          *cur, *tmp;
+	struct rspamd_fuzzy_node       *h;
+	fuzzy_hash_t                    s;
+	gboolean                        res = FALSE;
 
 	if (!bloom_check (bf, cmd->hash)) {
-		return FALSE;	
+		return FALSE;
 	}
-	
+
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 	cur = hashes[cmd->blocksize % BUCKETS]->head;
@@ -297,7 +297,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 			bloom_del (bf, cmd->hash);
 			msg_info ("process_delete_command: fuzzy hash was successfully deleted");
 			res = TRUE;
-			mods ++;
+			mods++;
 			continue;
 		}
 		cur = g_list_next (cur);
@@ -324,20 +324,20 @@ static void
 process_fuzzy_command (struct fuzzy_session *session)
 {
 	switch (session->cmd.cmd) {
-		case FUZZY_CHECK:
-			CMD_PROCESS(check);
-			break;
-		case FUZZY_WRITE:
-			CMD_PROCESS(write);
-			break;	
-		case FUZZY_DEL:
-			CMD_PROCESS(delete);
-			break;	
-		default:
-			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
-				msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));
-			}
-			break;
+	case FUZZY_CHECK:
+		CMD_PROCESS (check);
+		break;
+	case FUZZY_WRITE:
+		CMD_PROCESS (write);
+		break;
+	case FUZZY_DEL:
+		CMD_PROCESS (delete);
+		break;
+	default:
+		if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
+			msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));
+		}
+		break;
 	}
 }
 
@@ -350,14 +350,14 @@ process_fuzzy_command (struct fuzzy_session *session)
 static void
 accept_fuzzy_socket (int fd, short what, void *arg)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	struct fuzzy_session session;
-	ssize_t r;
-	
+	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
+	struct fuzzy_session            session;
+	ssize_t                         r;
+
 
 	session.worker = worker;
 	session.fd = fd;
-	session.pos = (u_char *)&session.cmd;
+	session.pos = (u_char *) & session.cmd;
 	session.salen = sizeof (session.sa);
 
 	/* Got some data */
@@ -375,13 +375,13 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 			return;
 		}
 	}
-}	
+}
 
 static void
 sync_callback (int fd, short what, void *arg)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	/* Timer event */ 
+	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
+	/* Timer event */
 	evtimer_set (&tev, sync_callback, worker);
 	/* Plan event with jitter */
 	tmv.tv_sec = SYNC_TIMEOUT + SYNC_TIMEOUT * g_random_double ();
@@ -397,9 +397,9 @@ sync_callback (int fd, short what, void *arg)
 void
 start_fuzzy_storage (struct rspamd_worker *worker)
 {
-	struct sigaction signals;
-	struct event sev;
-	int retries = 0;
+	struct sigaction                signals;
+	struct event                    sev;
+	int                             retries = 0;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_FUZZY;
@@ -410,9 +410,9 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *) worker);
+	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *)worker);
 	signal_add (&worker->sig_ev, NULL);
-	signal_set (&sev, SIGTERM, sigterm_handler, (void *) worker);
+	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
 	signal_add (&sev, NULL);
 
 	/* Send SIGUSR2 to parent */
@@ -424,7 +424,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	if (!read_hashes_file (worker)) {
 		msg_err ("read_hashes_file: cannot read hashes file, it can be created after save procedure");
 	}
-	/* Timer event */ 
+	/* Timer event */
 	evtimer_set (&tev, sync_callback, worker);
 	/* Plan event with jitter */
 	tmv.tv_sec = SYNC_TIMEOUT + SYNC_TIMEOUT * g_random_double ();
@@ -439,12 +439,11 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 			exit (0);
 		}
 	}
-	event_set(&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
-	event_add(&worker->bind_ev, NULL);
+	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
+	event_add (&worker->bind_ev, NULL);
 
 	gperf_profiler_init (worker->srv->cfg, "fuzzy");
 
 	event_loop (0);
 	exit (EXIT_SUCCESS);
 }
-

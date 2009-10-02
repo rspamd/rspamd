@@ -36,7 +36,7 @@
 																							\
 	a[n * SIZE_BIT / CHAR_BIT] &= (0xF << (4 - (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)));		\
 	a[n * SIZE_BIT / CHAR_BIT] |= (acc << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT));			\
-} while (0);	
+} while (0);
 
 #define DECBIT(a, n, acc) do {																\
 	acc = a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));		\
@@ -50,22 +50,24 @@
 #define GETBIT(a, n) (a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)))
 
 /* Common hash functions */
-unsigned int 
-bloom_sax_hash(const char *key)
+unsigned int
+bloom_sax_hash (const char *key)
 {
-	unsigned int h = 0;
+	unsigned int                    h = 0;
 
-	while(*key) h ^= (h<<5) + (h>>2) + (unsigned char)*key++;
+	while (*key)
+		h ^= (h << 5) + (h >> 2) + (unsigned char)*key++;
 
 	return h;
 }
 
-unsigned int 
-bloom_sdbm_hash(const char *key)
+unsigned int
+bloom_sdbm_hash (const char *key)
 {
-	unsigned int h = 0;
+	unsigned int                    h = 0;
 
-	while(*key) h = (unsigned char)*key++ + (h<<6) + (h<<16) - h;
+	while (*key)
+		h = (unsigned char)*key++ + (h << 6) + (h << 16) - h;
 
 	return h;
 }
@@ -73,22 +75,22 @@ bloom_sdbm_hash(const char *key)
 unsigned int
 bloom_fnv_hash (const char *key)
 {
-	unsigned int h = 0;
-	
+	unsigned int                    h = 0;
+
 	while (*key) {
 		h ^= (unsigned char)*key++;
-		h += (h<<1) + (h<<4) + (h<<7) + (h<<8) + (h<<24);
+		h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
 	}
 
 	return h;
 }
 
-unsigned int 
+unsigned int
 bloom_rs_hash (const char *key)
 {
-	unsigned int b	= 378551;
-	unsigned int a	= 63689;
-	unsigned int hash = 0;
+	unsigned int                    b = 378551;
+	unsigned int                    a = 63689;
+	unsigned int                    hash = 0;
 
 	while (*key) {
 		hash = hash * a + (unsigned char)*key++;
@@ -98,10 +100,10 @@ bloom_rs_hash (const char *key)
 	return hash;
 }
 
-unsigned int 
+unsigned int
 bloom_js_hash (const char *key)
 {
-	unsigned int hash = 1315423911;
+	unsigned int                    hash = 1315423911;
 
 	while (*key) {
 		hash ^= ((hash << 5) + (unsigned char)*key++ + (hash >> 2));
@@ -111,15 +113,15 @@ bloom_js_hash (const char *key)
 }
 
 
-unsigned int 
+unsigned int
 bloom_elf_hash (const char *key)
 {
-	unsigned int hash = 0;
-	unsigned int x	= 0;
+	unsigned int                    hash = 0;
+	unsigned int                    x = 0;
 
 	while (*key) {
 		hash = (hash << 4) + (unsigned char)*key++;
-		if((x = hash & 0xF0000000L) != 0) {
+		if ((x = hash & 0xF0000000L) != 0) {
 			hash ^= (x >> 24);
 		}
 		hash &= ~x;
@@ -129,46 +131,45 @@ bloom_elf_hash (const char *key)
 }
 
 
-unsigned int 
+unsigned int
 bloom_bkdr_hash (const char *key)
 {
-	unsigned int seed = 131; /* 31 131 1313 13131 131313 etc.. */
-	unsigned int hash = 0;
+	unsigned int                    seed = 131;	/* 31 131 1313 13131 131313 etc.. */
+	unsigned int                    hash = 0;
 
 	while (*key) {
-		hash = (hash * seed) + (unsigned char)*key ++;
+		hash = (hash * seed) + (unsigned char)*key++;
 	}
 
 	return hash;
 }
 
 
-unsigned int 
+unsigned int
 bloom_ap_hash (const char *key)
 {
-	unsigned int hash = 0xAAAAAAAA;
-	unsigned int i	= 0;
+	unsigned int                    hash = 0xAAAAAAAA;
+	unsigned int                    i = 0;
 
 	while (*key) {
-		hash ^= ((i & 1) == 0) ? ((hash <<  7) ^ ((unsigned char)*key) * (hash >> 3)) :
-								 (~((hash << 11) + (((unsigned char)*key) ^ (hash >> 5))));
+		hash ^= ((i & 1) == 0) ? ((hash << 7) ^ ((unsigned char)*key) * (hash >> 3)) : (~((hash << 11) + (((unsigned char)*key) ^ (hash >> 5))));
 		key++;
 	}
 
 	return hash;
 }
 
-bloom_filter_t *
+bloom_filter_t                 *
 bloom_create (size_t size, size_t nfuncs, ...)
 {
-	bloom_filter_t          *bloom;
-	va_list         l;
-	int             n;
+	bloom_filter_t                 *bloom;
+	va_list                         l;
+	int                             n;
 
 	if (!(bloom = g_malloc (sizeof (bloom_filter_t)))) {
 		return NULL;
 	}
-	if (!(bloom->a = g_new0 (char, (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
+	if (!(bloom->a = g_new0 (char,  (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
 		g_free (bloom);
 		return NULL;
 	}
@@ -191,7 +192,7 @@ bloom_create (size_t size, size_t nfuncs, ...)
 }
 
 void
-bloom_destroy (bloom_filter_t *bloom)
+bloom_destroy (bloom_filter_t * bloom)
 {
 	g_free (bloom->a);
 	g_free (bloom->funcs);
@@ -199,10 +200,10 @@ bloom_destroy (bloom_filter_t *bloom)
 }
 
 gboolean
-bloom_add (bloom_filter_t *bloom, const char *s)
+bloom_add (bloom_filter_t * bloom, const char *s)
 {
-	size_t          n;
-	u_char			t;
+	size_t                          n;
+	u_char                          t;
 
 	for (n = 0; n < bloom->nfuncs; ++n) {
 		INCBIT (bloom->a, bloom->funcs[n] (s) % bloom->asize, t);
@@ -212,23 +213,23 @@ bloom_add (bloom_filter_t *bloom, const char *s)
 }
 
 gboolean
-bloom_del (bloom_filter_t *bloom, const char *s)
+bloom_del (bloom_filter_t * bloom, const char *s)
 {
-	size_t          n;
-	u_char          t;
+	size_t                          n;
+	u_char                          t;
 
 	for (n = 0; n < bloom->nfuncs; ++n) {
 		DECBIT (bloom->a, bloom->funcs[n] (s) % bloom->asize, t);
 	}
 
 	return TRUE;
-	
+
 }
 
 gboolean
 bloom_check (bloom_filter_t * bloom, const char *s)
 {
-	size_t          n;
+	size_t                          n;
 
 	for (n = 0; n < bloom->nfuncs; ++n) {
 		if (!(GETBIT (bloom->a, bloom->funcs[n] (s) % bloom->asize)))

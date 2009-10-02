@@ -8,8 +8,8 @@
 #include "../config.h"
 #include "hashtable.h"
 
-typedef struct hashtable_list list_t;
-typedef struct hashtable_pair pair_t;
+typedef struct hashtable_list   list_t;
+typedef struct hashtable_pair   pair_t;
 typedef struct hashtable_bucket bucket_t;
 
 #define container_of(ptr_, type_, member_)                      \
@@ -59,14 +59,14 @@ insert_to_bucket (hashtable_t * hashtable, bucket_t * bucket, list_t * list)
 	}
 }
 
-static unsigned int primes[] = {
+static unsigned int             primes[] = {
 	5, 13, 23, 53, 97, 193, 389, 769, 1543, 3079, 6151, 12289, 24593,
 	49157, 98317, 196613, 393241, 786433, 1572869, 3145739, 6291469,
 	12582917, 25165843, 50331653, 100663319, 201326611, 402653189,
 	805306457, 1610612741
 };
 
-static const unsigned int num_primes = sizeof (primes) / sizeof (unsigned int);
+static const unsigned int       num_primes = sizeof (primes) / sizeof (unsigned int);
 
 static inline unsigned int
 num_buckets (hashtable_t * hashtable)
@@ -75,12 +75,11 @@ num_buckets (hashtable_t * hashtable)
 }
 
 
-static pair_t  *
-hashtable_find_pair (hashtable_t * hashtable, bucket_t * bucket,
-	const void *key, unsigned int hash)
+static pair_t                  *
+hashtable_find_pair (hashtable_t * hashtable, bucket_t * bucket, const void *key, unsigned int hash)
 {
-	list_t         *list;
-	pair_t         *pair;
+	list_t                         *list;
+	pair_t                         *pair;
 
 	if (bucket_is_empty (hashtable, bucket))
 		return NULL;
@@ -104,9 +103,9 @@ hashtable_find_pair (hashtable_t * hashtable, bucket_t * bucket,
 static int
 hashtable_do_del (hashtable_t * hashtable, const void *key, unsigned int hash)
 {
-	pair_t         *pair;
-	bucket_t       *bucket;
-	unsigned int    index;
+	pair_t                         *pair;
+	bucket_t                       *bucket;
+	unsigned int                    index;
 
 	index = hash % num_buckets (hashtable);
 	bucket = &hashtable->buckets[index];
@@ -140,9 +139,9 @@ hashtable_do_del (hashtable_t * hashtable, const void *key, unsigned int hash)
 static int
 hashtable_do_rehash (hashtable_t * hashtable)
 {
-	list_t         *list, *next;
-	pair_t         *pair;
-	unsigned int    i, index, new_size;
+	list_t                         *list, *next;
+	pair_t                         *pair;
+	unsigned int                    i, index, new_size;
 
 	g_free (hashtable->buckets);
 
@@ -154,8 +153,7 @@ hashtable_do_rehash (hashtable_t * hashtable)
 		return -1;
 
 	for (i = 0; i < num_buckets (hashtable); i++) {
-		hashtable->buckets[i].first = hashtable->buckets[i].last =
-			&hashtable->list;
+		hashtable->buckets[i].first = hashtable->buckets[i].last = &hashtable->list;
 	}
 
 	list = hashtable->list.next;
@@ -172,11 +170,10 @@ hashtable_do_rehash (hashtable_t * hashtable)
 }
 
 
-hashtable_t    *
-hashtable_create (key_hash_fn hash_key, key_cmp_fn cmp_keys,
-	free_fn free_key, free_fn free_value)
+hashtable_t                    *
+hashtable_create (key_hash_fn hash_key, key_cmp_fn cmp_keys, free_fn free_key, free_fn free_value)
 {
-	hashtable_t    *hashtable = g_malloc (sizeof (hashtable_t));
+	hashtable_t                    *hashtable = g_malloc (sizeof (hashtable_t));
 	if (!hashtable)
 		return NULL;
 
@@ -196,11 +193,9 @@ hashtable_destroy (hashtable_t * hashtable)
 }
 
 int
-hashtable_init (hashtable_t * hashtable,
-	key_hash_fn hash_key, key_cmp_fn cmp_keys,
-	free_fn free_key, free_fn free_value)
+hashtable_init (hashtable_t * hashtable, key_hash_fn hash_key, key_cmp_fn cmp_keys, free_fn free_key, free_fn free_value)
 {
-	unsigned int    i;
+	unsigned int                    i;
 
 	hashtable->size = 0;
 	hashtable->num_buckets = 0;	/* index to primes[] */
@@ -216,8 +211,7 @@ hashtable_init (hashtable_t * hashtable,
 	hashtable->free_value = free_value;
 
 	for (i = 0; i < num_buckets (hashtable); i++) {
-		hashtable->buckets[i].first = hashtable->buckets[i].last =
-			&hashtable->list;
+		hashtable->buckets[i].first = hashtable->buckets[i].last = &hashtable->list;
 	}
 
 	return 0;
@@ -226,8 +220,8 @@ hashtable_init (hashtable_t * hashtable,
 void
 hashtable_close (hashtable_t * hashtable)
 {
-	list_t         *list, *next;
-	pair_t         *pair;
+	list_t                         *list, *next;
+	pair_t                         *pair;
 	for (list = hashtable->list.next; list != &hashtable->list; list = next) {
 		next = list->next;
 		pair = list_to_pair (list);
@@ -235,7 +229,7 @@ hashtable_close (hashtable_t * hashtable)
 			hashtable->free_key (pair->key);
 		if (hashtable->free_value)
 			hashtable->free_value (pair->value);
-		g_free (pair); 
+		g_free (pair);
 	}
 
 	g_free (hashtable->buckets);
@@ -244,9 +238,9 @@ hashtable_close (hashtable_t * hashtable)
 int
 hashtable_set (hashtable_t * hashtable, void *key, void *value)
 {
-	pair_t         *pair;
-	bucket_t       *bucket;
-	unsigned int    hash, index;
+	pair_t                         *pair;
+	bucket_t                       *bucket;
+	unsigned int                    hash, index;
 
 	hash = hashtable->hash_key (key);
 
@@ -276,12 +270,12 @@ hashtable_set (hashtable_t * hashtable, void *key, void *value)
 	return 0;
 }
 
-void           *
+void                           *
 hashtable_get (hashtable_t * hashtable, const void *key)
 {
-	pair_t         *pair;
-	unsigned int    hash;
-	bucket_t       *bucket;
+	pair_t                         *pair;
+	unsigned int                    hash;
+	bucket_t                       *bucket;
 
 	hash = hashtable->hash_key (key);
 	bucket = &hashtable->buckets[hash % num_buckets (hashtable)];
@@ -296,35 +290,35 @@ hashtable_get (hashtable_t * hashtable, const void *key)
 int
 hashtable_del (hashtable_t * hashtable, const void *key)
 {
-	unsigned int    hash = hashtable->hash_key (key);
+	unsigned int                    hash = hashtable->hash_key (key);
 	return hashtable_do_del (hashtable, key, hash);
 }
 
-void           *
+void                           *
 hashtable_iter (hashtable_t * hashtable)
 {
 	return hashtable_iter_next (hashtable, &hashtable->list);
 }
 
-void           *
+void                           *
 hashtable_iter_next (hashtable_t * hashtable, void *iter)
 {
-	list_t         *list = (list_t *) iter;
+	list_t                         *list = (list_t *) iter;
 	if (list->next == &hashtable->list)
 		return NULL;
 	return list->next;
 }
 
-void           *
+void                           *
 hashtable_iter_key (void *iter)
 {
-	pair_t         *pair = list_to_pair ((list_t *) iter);
+	pair_t                         *pair = list_to_pair ((list_t *) iter);
 	return pair->key;
 }
 
-void           *
+void                           *
 hashtable_iter_value (void *iter)
 {
-	pair_t         *pair = list_to_pair ((list_t *) iter);
+	pair_t                         *pair = list_to_pair ((list_t *) iter);
 	return pair->value;
 }

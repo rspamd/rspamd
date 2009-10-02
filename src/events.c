@@ -27,10 +27,10 @@
 #include "events.h"
 
 
-struct rspamd_async_session*
-new_async_session (memory_pool_t *pool, event_finalizer_t fin, void *user_data)
+struct rspamd_async_session    *
+new_async_session (memory_pool_t * pool, event_finalizer_t fin, void *user_data)
 {
-	struct rspamd_async_session *new;
+	struct rspamd_async_session    *new;
 
 	new = memory_pool_alloc (pool, sizeof (struct rspamd_async_session));
 	new->pool = pool;
@@ -39,29 +39,29 @@ new_async_session (memory_pool_t *pool, event_finalizer_t fin, void *user_data)
 	new->wanna_die = FALSE;
 	new->events = g_queue_new ();
 
-	memory_pool_add_destructor (pool, (pool_destruct_func)g_queue_free, new->events);
+	memory_pool_add_destructor (pool, (pool_destruct_func) g_queue_free, new->events);
 
 	return new;
 }
 
-void 
+void
 register_async_event (struct rspamd_async_session *session, event_finalizer_t fin, void *user_data, gboolean forced)
 {
-	struct rspamd_async_event *new, *ev;
-	GList *cur;
+	struct rspamd_async_event      *new, *ev;
+	GList                          *cur;
 
 	if (session == NULL) {
 		msg_info ("register_async_event: session is NULL");
 		return;
 	}
-	
+
 	if (forced) {
 		/* For forced events try first to increase its reference */
 		cur = session->events->head;
 		while (cur) {
 			ev = cur->data;
 			if (ev->forced && ev->fin == fin) {
-				ev->ref ++;
+				ev->ref++;
 				return;
 			}
 			cur = g_list_next (cur);
@@ -76,22 +76,22 @@ register_async_event (struct rspamd_async_session *session, event_finalizer_t fi
 	g_queue_push_head (session->events, new);
 }
 
-void 
+void
 remove_forced_event (struct rspamd_async_session *session, event_finalizer_t fin)
 {
-	struct rspamd_async_event *ev;
-	GList *cur;
+	struct rspamd_async_event      *ev;
+	GList                          *cur;
 
 	if (session == NULL) {
 		msg_info ("remove_forced_event: session is NULL");
 		return;
 	}
-	
+
 	cur = session->events->head;
 	while (cur) {
 		ev = cur->data;
 		if (ev->forced && ev->fin == fin) {
-			ev->ref --;
+			ev->ref--;
 			if (ev->ref == 0) {
 				g_queue_delete_link (session->events, cur);
 			}
@@ -106,17 +106,17 @@ remove_forced_event (struct rspamd_async_session *session, event_finalizer_t fin
 	}
 }
 
-void 
-remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin, void *ud) 
+void
+remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin, void *ud)
 {
-	struct rspamd_async_event *ev;
-	GList *cur;
+	struct rspamd_async_event      *ev;
+	GList                          *cur;
 
 	if (session == NULL) {
 		msg_info ("remove_forced_event: session is NULL");
 		return;
 	}
-	
+
 	cur = session->events->head;
 	while (cur) {
 		ev = cur->data;
@@ -134,16 +134,16 @@ remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin
 gboolean
 destroy_session (struct rspamd_async_session *session)
 {
-	struct rspamd_async_event *ev;
-	GList *cur, *tmp;
+	struct rspamd_async_event      *ev;
+	GList                          *cur, *tmp;
 
 	if (session == NULL) {
 		msg_info ("destroy_session: session is NULL");
 		return FALSE;
 	}
-	
+
 	session->wanna_die = TRUE;
-	
+
 	cur = session->events->head;
 
 	while (cur) {

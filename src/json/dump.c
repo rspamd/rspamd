@@ -8,12 +8,12 @@
 #include "jansson.h"
 #include "strbuffer.h"
 
-typedef int     (*dump_func) (const char *buffer, int size, void *data);
+typedef int                     (*dump_func) (const char *buffer, int size, void *data);
 
 struct string {
-	char           *buffer;
-	int             length;
-	int             size;
+	char                           *buffer;
+	int                             length;
+	int                             size;
 };
 
 static int
@@ -25,21 +25,21 @@ dump_to_strbuffer (const char *buffer, int size, void *data)
 static int
 dump_to_file (const char *buffer, int size, void *data)
 {
-	FILE           *dest = (FILE *) data;
+	FILE                           *dest = (FILE *) data;
 	if (fwrite (buffer, size, 1, dest) != 1)
 		return -1;
 	return 0;
 }
 
 /* 256 spaces (the maximum indentation size) */
-static char     whitespace[] =
+static char                     whitespace[] =
 	"                                                                                                                                                                                                                                                                ";
 
 static int
 dump_indent (uint32_t flags, int depth, dump_func dump, void *data)
 {
 	if (JSON_INDENT (flags) > 0) {
-		int             i, ws_count = JSON_INDENT (flags);
+		int                             i, ws_count = JSON_INDENT (flags);
 
 		if (dump ("\n", 1, data))
 			return -1;
@@ -55,16 +55,16 @@ dump_indent (uint32_t flags, int depth, dump_func dump, void *data)
 static int
 dump_string (const char *str, dump_func dump, void *data)
 {
-	const char     *end;
+	const char                     *end;
 
 	if (dump ("\"", 1, data))
 		return -1;
 
 	end = str;
 	while (1) {
-		const char     *text;
-		char            seq[7];
-		int             length;
+		const char                     *text;
+		char                            seq[7];
+		int                             length;
 
 		while (*end && *end != '\\' && *end != '"' && (*end < 0 || *end > 0x1F))
 			end++;
@@ -121,8 +121,7 @@ dump_string (const char *str, dump_func dump, void *data)
 }
 
 static int
-do_dump (const json_t * json, uint32_t flags, int depth,
-	dump_func dump, void *data)
+do_dump (const json_t * json, uint32_t flags, int depth, dump_func dump, void *data)
 {
 	switch (json_typeof (json)) {
 	case JSON_NULL:
@@ -136,8 +135,8 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 
 	case JSON_INTEGER:
 		{
-			char           *buffer;
-			int             size, ret;
+			char                           *buffer;
+			int                             size, ret;
 
 			size = asprintf (&buffer, "%d", json_integer_value (json));
 			if (size == -1)
@@ -150,8 +149,8 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 
 	case JSON_REAL:
 		{
-			char           *buffer;
-			int             size, ret;
+			char                           *buffer;
+			int                             size, ret;
 
 			size = asprintf (&buffer, "%.17f", json_real_value (json));
 			if (size == -1)
@@ -167,8 +166,8 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 
 	case JSON_ARRAY:
 		{
-			int             i;
-			int             n = json_array_size (json);
+			int                             i;
+			int                             n = json_array_size (json);
 
 			if (dump ("[", 1, data))
 				return -1;
@@ -178,13 +177,11 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 				return -1;
 
 			for (i = 0; i < n; ++i) {
-				if (do_dump (json_array_get (json, i), flags, depth + 1,
-						dump, data))
+				if (do_dump (json_array_get (json, i), flags, depth + 1, dump, data))
 					return -1;
 
 				if (i < n - 1) {
-					if (dump (",", 1, data) ||
-						dump_indent (flags, depth + 1, dump, data))
+					if (dump (",", 1, data) || dump_indent (flags, depth + 1, dump, data))
 						return -1;
 				}
 				else {
@@ -197,7 +194,7 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 
 	case JSON_OBJECT:
 		{
-			void           *iter = json_object_iter ((json_t *) json);
+			void                           *iter = json_object_iter ((json_t *) json);
 
 			if (dump ("{", 1, data))
 				return -1;
@@ -207,18 +204,14 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 				return -1;
 
 			while (iter) {
-				void           *next =
-					json_object_iter_next ((json_t *) json, iter);
+				void                           *next = json_object_iter_next ((json_t *) json, iter);
 
 				dump_string (json_object_iter_key (iter), dump, data);
-				if (dump (": ", 2, data) ||
-					do_dump (json_object_iter_value (iter), flags, depth + 1,
-						dump, data))
+				if (dump (": ", 2, data) || do_dump (json_object_iter_value (iter), flags, depth + 1, dump, data))
 					return -1;
 
 				if (next) {
-					if (dump (",", 1, data) ||
-						dump_indent (flags, depth + 1, dump, data))
+					if (dump (",", 1, data) || dump_indent (flags, depth + 1, dump, data))
 						return -1;
 				}
 				else {
@@ -238,11 +231,11 @@ do_dump (const json_t * json, uint32_t flags, int depth,
 }
 
 
-char           *
+char                           *
 json_dumps (const json_t * json, uint32_t flags)
 {
-	strbuffer_t     strbuff;
-	char           *result;
+	strbuffer_t                     strbuff;
+	char                           *result;
 
 	if (!json_is_array (json) && !json_is_object (json))
 		return NULL;
@@ -276,9 +269,9 @@ json_dumpf (const json_t * json, FILE * output, uint32_t flags)
 int
 json_dump_file (const json_t * json, const char *path, uint32_t flags)
 {
-	int             result;
+	int                             result;
 
-	FILE           *output = fopen (path, "w");
+	FILE                           *output = fopen (path, "w");
 	if (!output)
 		return -1;
 

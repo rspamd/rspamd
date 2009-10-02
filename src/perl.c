@@ -28,44 +28,44 @@
 #include "perl.h"
 #include "cfg_file.h"
 
-#include <EXTERN.h>               /* from the Perl distribution     */
-#include <perl.h>                 /* from the Perl distribution     */
+#include <EXTERN.h>				/* from the Perl distribution     */
+#include <perl.h>				/* from the Perl distribution     */
 
 #ifndef PERL_IMPLICIT_CONTEXT
-#undef  dTHXa
-#define dTHXa(a)
+#   undef  dTHXa
+#   define dTHXa(a)
 #endif
 
 /* Perl module init function */
 #define MODULE_INIT_FUNC "module_init"
 
-PerlInterpreter *perl_interpreter;
+PerlInterpreter                *perl_interpreter;
 
-static HV  *rspamd_task_stash;
-static HV  *rspamd_cfg_stash;
+static HV                      *rspamd_task_stash;
+static HV                      *rspamd_cfg_stash;
 
-extern void boot_DynaLoader (pTHX_ CV* cv);
-extern void boot_Socket (pTHX_ CV* cv);
+extern void                     boot_DynaLoader (pTHX_ CV * cv);
+extern void                     boot_Socket (pTHX_ CV * cv);
 
 void
-xs_init(pTHX)
+xs_init (pTHX)
 {
 	dXSUB_SYS;
 	/* DynaLoader is a special case */
 	newXS ("DynaLoader::boot_DynaLoader", boot_DynaLoader, __FILE__);
 
-	rspamd_task_stash = gv_stashpv("rspamd_task", TRUE);
-	rspamd_cfg_stash = gv_stashpv("rspamd_config", TRUE);
+	rspamd_task_stash = gv_stashpv ("rspamd_task", TRUE);
+	rspamd_cfg_stash = gv_stashpv ("rspamd_config", TRUE);
 }
 
 void
 init_perl_filters (struct config_file *cfg)
 {
-	struct perl_module *module;
-	char *init_func;
-	size_t funclen;
-	SV* sv;
-	
+	struct perl_module             *module;
+	char                           *init_func;
+	size_t                          funclen;
+	SV                             *sv;
+
 	dTHXa (perl_interpreter);
 	PERL_SET_CONTEXT (perl_interpreter);
 
@@ -77,7 +77,7 @@ init_perl_filters (struct config_file *cfg)
 			SAVETMPS;
 
 			PUSHMARK (SP);
-			sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(cfg))), rspamd_cfg_stash));
+			sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV (cfg))), rspamd_cfg_stash));
 			XPUSHs (sv);
 			PUTBACK;
 			/* Call module init function */
@@ -96,8 +96,8 @@ init_perl_filters (struct config_file *cfg)
 int
 perl_call_header_filter (const char *function, struct worker_task *task)
 {
-	int result;
-	SV* sv;
+	int                             result;
+	SV                             *sv;
 
 	dTHXa (perl_interpreter);
 	PERL_SET_CONTEXT (perl_interpreter);
@@ -107,10 +107,10 @@ perl_call_header_filter (const char *function, struct worker_task *task)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV (task))), rspamd_task_stash));
 	XPUSHs (sv);
 	PUTBACK;
-	
+
 	call_pv (function, G_SCALAR);
 
 	SPAGAIN;
@@ -128,28 +128,28 @@ perl_call_header_filter (const char *function, struct worker_task *task)
 int
 perl_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number)
 {
-	int result, i;
-	AV *av;
-	SV *sv;
+	int                             result, i;
+	AV                             *av;
+	SV                             *sv;
 
 	dTHXa (perl_interpreter);
 	PERL_SET_CONTEXT (perl_interpreter);
 
 	dSP;
-	
+
 	ENTER;
 	SAVETMPS;
-	av = newAV();
+	av = newAV ();
 	av_extend (av, number);
-	for (i = 0; i < number; i ++) {
+	for (i = 0; i < number; i++) {
 		av_push (av, sv_2mortal (newSViv (marks[i])));
 	}
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(task))), rspamd_task_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV (task))), rspamd_task_stash));
 	XPUSHs (sv);
-	XPUSHs (sv_2mortal ((SV *)AvARRAY (av)));
+	XPUSHs (sv_2mortal ((SV *) AvARRAY (av)));
 	PUTBACK;
-	
+
 	call_pv (function, G_SCALAR);
 
 	SPAGAIN;
@@ -166,15 +166,15 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 	return result;
 }
 
-void 
-perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)
+void
+perl_call_memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 {
 	struct {
-		SV *callback;
-		struct worker_task *task;
-	} *callback_data = data;
-	SV *sv;
-	
+		SV                             *callback;
+		struct worker_task             *task;
+	}                              *callback_data = data;
+	SV                             *sv;
+
 	dTHXa (perl_interpreter);
 	PERL_SET_CONTEXT (perl_interpreter);
 
@@ -183,14 +183,14 @@ perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *da
 	ENTER;
 	SAVETMPS;
 	PUSHMARK (SP);
-	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV(callback_data->task))), rspamd_task_stash));
+	sv = sv_2mortal (sv_bless (newRV_noinc (newSViv (PTR2IV (callback_data->task))), rspamd_task_stash));
 	XPUSHs (sv);
 	XPUSHs (sv_2mortal (newSViv (error)));
 	XPUSHs (sv_2mortal (newSVpv (ctx->param->buf, ctx->param->bufsize)));
 	PUTBACK;
 
 	call_sv (callback_data->callback, G_SCALAR);
-	
+
 	/* Set save point */
 	callback_data->task->save.saved = 0;
 	process_filters (callback_data->task);
@@ -205,18 +205,18 @@ perl_call_memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *da
  * Perl custom consolidation function
  */
 struct consolidation_callback_data {
-	struct worker_task *task;
-	double score;
-	const char *func;
+	struct worker_task             *task;
+	double                          score;
+	const char                     *func;
 };
 
 static void
 perl_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 {
-	double res;
-	struct symbol *s = (struct symbol *)value;
+	double                          res;
+	struct symbol                  *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
-	
+
 	dTHXa (perl_interpreter);
 	PERL_SET_CONTEXT (perl_interpreter);
 
@@ -225,11 +225,11 @@ perl_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	SAVETMPS;
 
 	PUSHMARK (SP);
-	
+
 	XPUSHs (sv_2mortal (newSVpv ((const char *)key, 0)));
 	XPUSHs (sv_2mortal (newSVnv (s->score)));
 	PUTBACK;
-	
+
 	call_pv (data->func, G_SCALAR);
 
 	SPAGAIN;
@@ -242,8 +242,8 @@ perl_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 double
 perl_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name)
 {
-	struct metric_result *metric_res;
-	double res = 0.;
+	struct metric_result           *metric_res;
+	double                          res = 0.;
 	struct consolidation_callback_data data = { task, 0, function_name };
 
 	if (function_name == NULL) {

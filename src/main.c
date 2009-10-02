@@ -31,133 +31,132 @@
 
 #ifndef WITHOUT_PERL
 
-#include <EXTERN.h>               /* from the Perl distribution     */
-#include <perl.h>                 /* from the Perl distribution     */
+#   include <EXTERN.h>			/* from the Perl distribution     */
+#   include <perl.h>			/* from the Perl distribution     */
 
-# ifndef PERL_IMPLICIT_CONTEXT
-#  undef  dTHXa
-#  define dTHXa(a)
-# endif
-#include "perl.h"
+#   ifndef PERL_IMPLICIT_CONTEXT
+#      undef  dTHXa
+#      define dTHXa(a)
+#   endif
+#   include "perl.h"
 
 #elif defined(WITH_LUA)
-#include "lua/lua_common.h"
+#   include "lua/lua_common.h"
 #endif
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
-struct config_file *cfg;
+struct config_file             *cfg;
 
-rspamd_hash_t *counters;
+rspamd_hash_t                  *counters;
 
-static void sig_handler (int );
-static struct rspamd_worker * fork_worker (struct rspamd_main *, struct worker_conf *);
-	
-sig_atomic_t do_restart;
-sig_atomic_t do_terminate;
-sig_atomic_t child_dead;
-sig_atomic_t child_ready;
-sig_atomic_t got_alarm;
+static void                     sig_handler (int);
+static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
 
-extern int yynerrs;
-extern FILE *yyin;
+sig_atomic_t                    do_restart;
+sig_atomic_t                    do_terminate;
+sig_atomic_t                    child_dead;
+sig_atomic_t                    child_ready;
+sig_atomic_t                    got_alarm;
 
-static int dump_vars = 0;
-static int dump_cache = 0;
+extern int                      yynerrs;
+extern FILE                    *yyin;
+
+static int                      dump_vars = 0;
+static int                      dump_cache = 0;
 
 #ifndef WITHOUT_PERL
-extern void xs_init(pTHX);
-extern PerlInterpreter *perl_interpreter;
+extern void                     xs_init (pTHX);
+extern PerlInterpreter         *perl_interpreter;
 #endif
 
 /* Active workers */
-static GList *active_workers = NULL;
+static GList                   *active_workers = NULL;
 /* List of workers that are pending to start */
-static GList *workers_pending = NULL;
+static GList                   *workers_pending = NULL;
 
-static 
-void sig_handler (int signo)
+static
+	void
+sig_handler (int signo)
 {
 	switch (signo) {
-		case SIGHUP:
-			do_restart = 1;
-			do_reopen_log = 1;
-			break;
-		case SIGINT:
-		case SIGTERM:
-			do_terminate = 1;
-			break;
-		case SIGCHLD:
-			child_dead = 1;
-			break;
-		case SIGUSR2:
-			child_ready = 1;
-			break;
-		case SIGALRM:
-			got_alarm = 1;
-			break;
+	case SIGHUP:
+		do_restart = 1;
+		do_reopen_log = 1;
+		break;
+	case SIGINT:
+	case SIGTERM:
+		do_terminate = 1;
+		break;
+	case SIGCHLD:
+		child_dead = 1;
+		break;
+	case SIGUSR2:
+		child_ready = 1;
+		break;
+	case SIGALRM:
+		got_alarm = 1;
+		break;
 	}
 }
 
-static void 
+static void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
 {
-	int ch;
-	while ((ch = getopt(argc, argv, "tVChfc:u:g:")) != -1) {
+	int                             ch;
+	while ((ch = getopt (argc, argv, "tVChfc:u:g:")) != -1) {
 		switch (ch) {
-			case 'f':
-				cfg->no_fork = 1;
-				break;
-			case 'c':
-				if (optarg && cfg->cfg_name) {
-					cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
-				}
-				break;
-			case 't':
-				cfg->config_test = 1;
-				break;
-		 	case 'V':
-				dump_vars = 1;
-				break;
-			case 'C':
-				dump_cache = 1;
-				break;
-			case 'u':
-				if (optarg) {
-					cfg->rspamd_user = memory_pool_strdup (cfg->cfg_pool, optarg);
-				}
-				break;
-			case 'g':
-				if (optarg) {
-					cfg->rspamd_group = memory_pool_strdup (cfg->cfg_pool, optarg);
-				}
-				break;
-			case 'h':
-			case '?':
-			default:
-				/* Show help message and exit */
-				printf ("Rspamd version " RVERSION "\n"
-						"Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
-						"-h:        This help message\n"
-						"-t:        Do config test and exit\n"
-						"-C:        Dump symbols cache stats and exit\n"
-						"-V         Print all rspamd variables and exit\n"
-						"-f:        Do not daemonize main process\n"
-						"-c:        Specify config file (./rspamd.conf is used by default)\n"
-						"-u:        User to run rspamd as\n"
-						"-g:        Group to run rspamd as\n");
-				exit (0);
-				break;
+		case 'f':
+			cfg->no_fork = 1;
+			break;
+		case 'c':
+			if (optarg && cfg->cfg_name) {
+				cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
+			}
+			break;
+		case 't':
+			cfg->config_test = 1;
+			break;
+		case 'V':
+			dump_vars = 1;
+			break;
+		case 'C':
+			dump_cache = 1;
+			break;
+		case 'u':
+			if (optarg) {
+				cfg->rspamd_user = memory_pool_strdup (cfg->cfg_pool, optarg);
+			}
+			break;
+		case 'g':
+			if (optarg) {
+				cfg->rspamd_group = memory_pool_strdup (cfg->cfg_pool, optarg);
+			}
+			break;
+		case 'h':
+		case '?':
+		default:
+			/* Show help message and exit */
+			printf ("Rspamd version " RVERSION "\n"
+				"Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
+				"-h:        This help message\n"
+				"-t:        Do config test and exit\n"
+				"-C:        Dump symbols cache stats and exit\n"
+				"-V         Print all rspamd variables and exit\n"
+				"-f:        Do not daemonize main process\n"
+				"-c:        Specify config file (./rspamd.conf is used by default)\n" "-u:        User to run rspamd as\n" "-g:        Group to run rspamd as\n");
+			exit (0);
+			break;
 		}
 	}
 }
 
 static void
-drop_priv (struct config_file *cfg) 
+drop_priv (struct config_file *cfg)
 {
-	struct passwd *pwd;
-	struct group *grp;
+	struct passwd                  *pwd;
+	struct group                   *grp;
 
 	if (geteuid () == 0 && cfg->rspamd_user) {
 		pwd = getpwnam (cfg->rspamd_user);
@@ -175,7 +174,7 @@ drop_priv (struct config_file *cfg)
 				msg_err ("drop_priv: cannot setgid to %d (%s), aborting", (int)grp->gr_gid, strerror (errno));
 				exit (-errno);
 			}
-			if (initgroups(cfg->rspamd_user, grp->gr_gid) == -1) {
+			if (initgroups (cfg->rspamd_user, grp->gr_gid) == -1) {
 				msg_err ("drop_priv: initgroups failed (%s), aborting", strerror (errno));
 				exit (-errno);
 			}
@@ -191,76 +190,76 @@ static void
 config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 {
 	switch (rspamd->cfg->log_type) {
-		case RSPAMD_LOG_CONSOLE:
-			if (!rspamd->cfg->no_fork) {
-				if (is_fatal) {
-					fprintf (stderr, "Cannot log to console while daemonized, disable logging\n");
-				}
-				rspamd->cfg->log_fd = -1;
-				rspamd->cfg->logf = NULL;
+	case RSPAMD_LOG_CONSOLE:
+		if (!rspamd->cfg->no_fork) {
+			if (is_fatal) {
+				fprintf (stderr, "Cannot log to console while daemonized, disable logging\n");
+			}
+			rspamd->cfg->log_fd = -1;
+			rspamd->cfg->logf = NULL;
+		}
+		else {
+			rspamd->cfg->logf = stderr;
+			rspamd->cfg->log_fd = STDERR_FILENO;
+		}
+		rspamd_set_logger (file_log_function, rspamd->cfg);
+		g_log_set_default_handler (file_log_function, rspamd->cfg);
+		break;
+	case RSPAMD_LOG_FILE:
+		if (rspamd->cfg->log_file == NULL || open_log (rspamd->cfg) == -1) {
+			if (is_fatal) {
+				fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
+				exit (EXIT_FAILURE);
 			}
 			else {
-				rspamd->cfg->logf = stderr;
-				rspamd->cfg->log_fd = STDERR_FILENO;
+				msg_err ("config_logger: cannot log to file, logfile unaccessable");
 			}
-            rspamd_set_logger (file_log_function, rspamd->cfg);
+		}
+		else {
+			rspamd_set_logger (file_log_function, rspamd->cfg);
 			g_log_set_default_handler (file_log_function, rspamd->cfg);
-			break;
-		case RSPAMD_LOG_FILE:
-			if (rspamd->cfg->log_file == NULL || open_log (rspamd->cfg) == -1) {
-				if (is_fatal) {
-					fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
-					exit (EXIT_FAILURE);
-				}
-				else {
-					msg_err ("config_logger: cannot log to file, logfile unaccessable");
-				}
+		}
+		break;
+	case RSPAMD_LOG_SYSLOG:
+		if (open_log (rspamd->cfg) == -1) {
+			if (is_fatal) {
+				fprintf (stderr, "Fatal error, cannot open syslog facility, exiting\n");
+				exit (EXIT_FAILURE);
 			}
 			else {
-                rspamd_set_logger (file_log_function, rspamd->cfg);
-				g_log_set_default_handler (file_log_function, rspamd->cfg);
+				msg_err ("config_logger: cannot log to syslog");
 			}
-			break;
-		case RSPAMD_LOG_SYSLOG:
-			if (open_log (rspamd->cfg) == -1) {
-				if (is_fatal) {
-					fprintf (stderr, "Fatal error, cannot open syslog facility, exiting\n");
-					exit (EXIT_FAILURE);
-				}
-				else {
-					msg_err ("config_logger: cannot log to syslog");
-				}
-			}
-			else {
-                rspamd_set_logger (syslog_log_function, rspamd->cfg);
-				g_log_set_default_handler (syslog_log_function, rspamd->cfg);
-			}
-			break;
+		}
+		else {
+			rspamd_set_logger (syslog_log_function, rspamd->cfg);
+			g_log_set_default_handler (syslog_log_function, rspamd->cfg);
+		}
+		break;
 	}
 }
 
 static void
 reread_config (struct rspamd_main *rspamd)
 {
-	struct config_file *tmp_cfg;
-	char *cfg_file;
-	FILE *f;
+	struct config_file             *tmp_cfg;
+	char                           *cfg_file;
+	FILE                           *f;
 
-	tmp_cfg = (struct config_file *) g_malloc (sizeof (struct config_file));
+	tmp_cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	if (tmp_cfg) {
 		bzero (tmp_cfg, sizeof (struct config_file));
 		tmp_cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
 		init_defaults (tmp_cfg);
 		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
-		f = fopen (rspamd->cfg->cfg_name , "r");
+		f = fopen (rspamd->cfg->cfg_name, "r");
 		if (f == NULL) {
-			msg_warn ("reread_config: cannot open file: %s", rspamd->cfg->cfg_name );
+			msg_warn ("reread_config: cannot open file: %s", rspamd->cfg->cfg_name);
 		}
 		else {
 			yyin = f;
 			yyrestart (yyin);
 
-			if (yyparse() != 0 || yynerrs > 0) {
+			if (yyparse () != 0 || yynerrs > 0) {
 				msg_warn ("reread_config: yyparse: cannot parse config file, %d errors", yynerrs);
 				fclose (f);
 			}
@@ -278,57 +277,57 @@ reread_config (struct rspamd_main *rspamd)
 	}
 }
 
-static struct rspamd_worker *
-fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf) 
+static struct rspamd_worker    *
+fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 {
-	struct rspamd_worker *cur;
+	struct rspamd_worker           *cur;
 	/* Starting worker process */
 	cur = (struct rspamd_worker *)g_malloc (sizeof (struct rspamd_worker));
 	if (cur) {
 		bzero (cur, sizeof (struct rspamd_worker));
-        active_workers = g_list_prepend (active_workers, cur);
+		active_workers = g_list_prepend (active_workers, cur);
 		cur->srv = rspamd;
 		cur->type = cf->type;
-		cur->pid = fork();
+		cur->pid = fork ();
 		cur->cf = cf;
 		cur->pending = FALSE;
 		switch (cur->pid) {
-			case 0:
-				/* Drop privilleges */
-				drop_priv (cfg);
-				switch (cf->type) {
-					case TYPE_CONTROLLER:
-						setproctitle ("controller process");
-						pidfile_close (rspamd->pfh);
-						msg_info ("fork_worker: starting controller process %d", getpid ());
-						start_controller (cur);
-						break;
-					case TYPE_LMTP:
-						setproctitle ("lmtp process");
-						pidfile_close (rspamd->pfh);
-						msg_info ("fork_worker: starting lmtp process %d", getpid ());
-						start_lmtp_worker (cur);
-						break;
-					case TYPE_FUZZY:
-						setproctitle ("fuzzy storage");
-						pidfile_close (rspamd->pfh);
-						msg_info ("fork_worker: starting fuzzy storage process %d", getpid ());
-						start_fuzzy_storage (cur);
-						break;
-					case TYPE_WORKER:
-					default:
-						setproctitle ("worker process");
-						pidfile_close (rspamd->pfh);
-						msg_info ("fork_worker: starting worker process %d", getpid ());
-						start_worker (cur);
-						break;
-				}
+		case 0:
+			/* Drop privilleges */
+			drop_priv (cfg);
+			switch (cf->type) {
+			case TYPE_CONTROLLER:
+				setproctitle ("controller process");
+				pidfile_close (rspamd->pfh);
+				msg_info ("fork_worker: starting controller process %d", getpid ());
+				start_controller (cur);
 				break;
-			case -1:
-				msg_err ("fork_worker: cannot fork main process. %s", strerror (errno));
-				pidfile_remove (rspamd->pfh);
-				exit (-errno);
+			case TYPE_LMTP:
+				setproctitle ("lmtp process");
+				pidfile_close (rspamd->pfh);
+				msg_info ("fork_worker: starting lmtp process %d", getpid ());
+				start_lmtp_worker (cur);
 				break;
+			case TYPE_FUZZY:
+				setproctitle ("fuzzy storage");
+				pidfile_close (rspamd->pfh);
+				msg_info ("fork_worker: starting fuzzy storage process %d", getpid ());
+				start_fuzzy_storage (cur);
+				break;
+			case TYPE_WORKER:
+			default:
+				setproctitle ("worker process");
+				pidfile_close (rspamd->pfh);
+				msg_info ("fork_worker: starting worker process %d", getpid ());
+				start_worker (cur);
+				break;
+			}
+			break;
+		case -1:
+			msg_err ("fork_worker: cannot fork main process. %s", strerror (errno));
+			pidfile_remove (rspamd->pfh);
+			exit (-errno);
+			break;
 		}
 	}
 
@@ -345,11 +344,11 @@ delay_fork (struct worker_conf *cf)
 
 static void
 dump_module_variables (gpointer key, gpointer value, gpointer data)
-{	
-	GList *cur_opt;
-	struct module_opt *cur;
-	
-	cur_opt = (GList *)value;
+{
+	GList                          *cur_opt;
+	struct module_opt              *cur;
+
+	cur_opt = (GList *) value;
 
 	while (cur_opt) {
 		cur = cur_opt->data;
@@ -376,8 +375,8 @@ dump_cfg_vars ()
 static int
 create_listen_socket (struct in_addr *addr, int port, int family, char *path)
 {
-	int listen_sock = -1;
-	struct sockaddr_un *un_addr;
+	int                             listen_sock = -1;
+	struct sockaddr_un             *un_addr;
 	/* Create listen socket */
 	if (family == AF_INET) {
 		if ((listen_sock = make_tcp_socket (addr, port, TRUE, TRUE)) == -1) {
@@ -385,12 +384,12 @@ create_listen_socket (struct in_addr *addr, int port, int family, char *path)
 		}
 	}
 	else {
-		un_addr = (struct sockaddr_un *) alloca (sizeof (struct sockaddr_un));
+		un_addr = (struct sockaddr_un *)alloca (sizeof (struct sockaddr_un));
 		if (!un_addr || (listen_sock = make_unix_socket (path, un_addr, TRUE)) == -1) {
 			msg_err ("create_listen_socket: cannot create unix listen socket. %s", strerror (errno));
 		}
 	}
-	
+
 	if (listen_sock != -1) {
 		if (listen (listen_sock, -1) == -1) {
 			msg_err ("start_lmtp: cannot listen on socket. %s", strerror (errno));
@@ -403,8 +402,8 @@ create_listen_socket (struct in_addr *addr, int port, int family, char *path)
 static void
 fork_delayed (struct rspamd_main *rspamd)
 {
-	GList *cur;
-	struct worker_conf *cf;
+	GList                          *cur;
+	struct worker_conf             *cf;
 
 	while (workers_pending != NULL) {
 		cur = workers_pending;
@@ -419,9 +418,9 @@ fork_delayed (struct rspamd_main *rspamd)
 static void
 spawn_workers (struct rspamd_main *rspamd)
 {
-	GList *cur;
-	struct worker_conf *cf;
-	int i, listen_sock;
+	GList                          *cur;
+	struct worker_conf             *cf;
+	int                             i, listen_sock;
 
 	cur = cfg->workers;
 
@@ -430,10 +429,9 @@ spawn_workers (struct rspamd_main *rspamd)
 
 		/* Create listen socket */
 		if (cf->type != TYPE_FUZZY) {
-			listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, 
-											cf->bind_family, cf->bind_host);
+			listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
 			if (listen_sock == -1) {
-				exit(-errno);
+				exit (-errno);
 			}
 			cf->listen_sock = listen_sock;
 		}
@@ -446,42 +444,42 @@ spawn_workers (struct rspamd_main *rspamd)
 	}
 }
 
-static const char *
+static const char              *
 get_process_type (enum process_type type)
 {
 	switch (type) {
-		case TYPE_MAIN:
-			return "main";
-		case TYPE_WORKER:
-			return "worker";
-		case TYPE_FUZZY:
-			return "fuzzy";
-		case TYPE_CONTROLLER:
-			return "controller";
-		case TYPE_LMTP:
-			return "lmtp";
+	case TYPE_MAIN:
+		return "main";
+	case TYPE_WORKER:
+		return "worker";
+	case TYPE_FUZZY:
+		return "fuzzy";
+	case TYPE_CONTROLLER:
+		return "controller";
+	case TYPE_LMTP:
+		return "lmtp";
 	}
 
 	return NULL;
 }
 
-int 
+int
 main (int argc, char **argv, char **env)
 {
-	struct rspamd_main *rspamd;
-	struct module_ctx *cur_module = NULL;
-	int res = 0, i;
-	struct sigaction signals;
-	struct rspamd_worker *cur, *active_worker;
-	struct rlimit rlim;
-	struct metric *metric;
-	struct cache_item *item;
-	struct filter *filt;
-	FILE *f;
-	pid_t wrk;
-	GList *l;
+	struct rspamd_main             *rspamd;
+	struct module_ctx              *cur_module = NULL;
+	int                             res = 0, i;
+	struct sigaction                signals;
+	struct rspamd_worker           *cur, *active_worker;
+	struct rlimit                   rlim;
+	struct metric                  *metric;
+	struct cache_item              *item;
+	struct filter                  *filt;
+	FILE                           *f;
+	pid_t                           wrk;
+	GList                          *l;
 #ifndef WITHOUT_PERL
-	char *args[] = { "", "-e", "0", NULL };
+	char                           *args[] = { "", "-e", "0", NULL };
 #endif
 
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
@@ -490,10 +488,10 @@ main (int argc, char **argv, char **env)
 	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	rspamd->cfg = cfg;
 	if (!rspamd || !rspamd->cfg) {
-		fprintf(stderr, "Cannot allocate memory\n");
-		exit(-errno);
+		fprintf (stderr, "Cannot allocate memory\n");
+		exit (-errno);
 	}
-	
+
 	do_terminate = 0;
 	do_restart = 0;
 	child_dead = 0;
@@ -537,15 +535,15 @@ main (int argc, char **argv, char **env)
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, environ);
 #endif
-	
-	f = fopen (rspamd->cfg->cfg_name , "r");
+
+	f = fopen (rspamd->cfg->cfg_name, "r");
 	if (f == NULL) {
-		msg_err ("main: cannot open file: %s", rspamd->cfg->cfg_name );
+		msg_err ("main: cannot open file: %s", rspamd->cfg->cfg_name);
 		return EBADF;
 	}
 	yyin = f;
 
-	if (yyparse() != 0 || yynerrs > 0) {
+	if (yyparse () != 0 || yynerrs > 0) {
 		msg_err ("main: cannot parse config file, %d errors", yynerrs);
 		return EBADF;
 	}
@@ -555,14 +553,14 @@ main (int argc, char **argv, char **env)
 	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
 
 	/* Init C modules */
-    l = g_list_first (rspamd->cfg->filters);
+	l = g_list_first (rspamd->cfg->filters);
 
 	while (l) {
 		filt = l->data;
 		if (filt->module) {
 			cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
-			if (filt->module->module_init_func(cfg, &cur_module) == 0) {
-				g_hash_table_insert (cfg->c_modules, (gpointer)filt->module->name, cur_module);
+			if (filt->module->module_init_func (cfg, &cur_module) == 0) {
+				g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
 			}
 		}
 		l = g_list_next (l);
@@ -584,9 +582,9 @@ main (int argc, char **argv, char **env)
 			}
 			l = g_list_next (l);
 		}
-		#if defined(WITH_LUA)
+#if defined(WITH_LUA)
 		init_lua_filters (cfg);
-		#endif
+#endif
 		if (dump_vars) {
 			dump_cfg_vars ();
 		}
@@ -601,12 +599,10 @@ main (int argc, char **argv, char **env)
 					printf ("Cache for metric: %s\n", metric->name);
 					printf ("-----------------------------------------------------------------\n");
 					printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
-					for (i = 0; i < metric->cache->used_items; i ++) {
+					for (i = 0; i < metric->cache->used_items; i++) {
 						item = &metric->cache->items[i];
 						printf ("-----------------------------------------------------------------\n");
-						printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, 
-																			item->s->weight, item->s->frequency,
-																			item->s->avg_time);
+						printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
 
 					}
 					printf ("-----------------------------------------------------------------\n");
@@ -620,14 +616,14 @@ main (int argc, char **argv, char **env)
 	}
 
 	/* Set stack size for pcre */
-	getrlimit(RLIMIT_STACK, &rlim);
+	getrlimit (RLIMIT_STACK, &rlim);
 	rlim.rlim_cur = 100 * 1024 * 1024;
-	setrlimit(RLIMIT_STACK, &rlim);
-	
+	setrlimit (RLIMIT_STACK, &rlim);
+
 	config_logger (rspamd, TRUE);
 
-	msg_info ("main: rspamd "RVERSION " is starting");
-	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name );
+	msg_info ("main: rspamd " RVERSION " is starting");
+	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name);
 
 	/* Strictly set temp dir */
 	if (!rspamd->cfg->temp_dir) {
@@ -645,9 +641,9 @@ main (int argc, char **argv, char **env)
 		exit (-errno);
 	}
 
-	rspamd->pid = getpid();
+	rspamd->pid = getpid ();
 	rspamd->type = TYPE_MAIN;
-	
+
 	init_signals (&signals, sig_handler);
 
 
@@ -675,7 +671,7 @@ main (int argc, char **argv, char **env)
 #endif
 
 	/* Block signals to use sigsuspend in future */
-	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
+	sigprocmask (SIG_BLOCK, &signals.sa_mask, NULL);
 
 	setproctitle ("main process");
 
@@ -708,7 +704,7 @@ main (int argc, char **argv, char **env)
 		l = g_list_next (l);
 	}
 
-	
+
 	spawn_workers (rspamd);
 
 	/* Signal processing cycle */
@@ -726,54 +722,50 @@ main (int argc, char **argv, char **env)
 			msg_debug ("main: catch SIGCHLD signal, finding terminated worker");
 			/* Remove dead child form childs list */
 			wrk = waitpid (0, &res, 0);
-            l = g_list_first (active_workers);
-            while (l) {
-                cur = l->data;
+			l = g_list_first (active_workers);
+			while (l) {
+				cur = l->data;
 				if (wrk == cur->pid) {
 					/* Catch situations if active worker is abnormally terminated */
 					if (cur == active_worker) {
 						active_worker = NULL;
 					}
-                    active_workers = g_list_remove_link (active_workers, l);
+					active_workers = g_list_remove_link (active_workers, l);
 
 					if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 						/* Normal worker termination, do not fork one more */
-						msg_info ("main: %s process %d terminated normally", 
-									get_process_type (cur->type), cur->pid);
+						msg_info ("main: %s process %d terminated normally", get_process_type (cur->type), cur->pid);
 					}
 					else {
 						if (WIFSIGNALED (res)) {
-							msg_warn ("main: %s process %d terminated abnormally by signal: %d", 
-										get_process_type (cur->type),
-										cur->pid, WTERMSIG(res));
+							msg_warn ("main: %s process %d terminated abnormally by signal: %d", get_process_type (cur->type), cur->pid, WTERMSIG (res));
 						}
 						else {
-							msg_warn ("main: %s process %d terminated abnormally", 
-										get_process_type (cur->type), cur->pid);
+							msg_warn ("main: %s process %d terminated abnormally", get_process_type (cur->type), cur->pid);
 						}
 						/* Fork another worker in replace of dead one */
 						delay_fork (cur->cf);
 					}
-		            g_list_free_1 (l);
+					g_list_free_1 (l);
 					g_free (cur);
 				}
 				l = g_list_next (l);
 			}
 		}
-		if (do_restart) {	
+		if (do_restart) {
 			do_restart = 0;
 			do_reopen_log = 1;
 
 			msg_info ("main: rspamd " RVERSION " is restarting");
-            l = g_list_first (active_workers);
-            while (l) {
-                cur = l->data;
-                /* Start new workers that would reread configuration */
+			l = g_list_first (active_workers);
+			while (l) {
+				cur = l->data;
+				/* Start new workers that would reread configuration */
 				cur->pending = FALSE;
 				active_worker = fork_worker (rspamd, cur->cf);
-                active_worker->pending = TRUE;
+				active_worker->pending = TRUE;
 				l = g_list_next (l);
-            }
+			}
 		}
 		if (child_ready) {
 			child_ready = 0;
@@ -788,8 +780,7 @@ main (int argc, char **argv, char **env)
 						cur->is_dying = 1;
 					}
 					else {
-						msg_info ("main: %s process %d has been successfully started", 
-								get_process_type (cur->type), cur->pid);
+						msg_info ("main: %s process %d has been successfully started", get_process_type (cur->type), cur->pid);
 					}
 					l = g_list_next (l);
 				}
@@ -813,9 +804,9 @@ main (int argc, char **argv, char **env)
 	}
 
 	g_list_free (active_workers);
-	
+
 	msg_info ("main: terminating...");
-	
+
 	free_config (rspamd->cfg);
 	g_free (rspamd->cfg);
 	g_free (rspamd);

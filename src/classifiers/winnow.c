@@ -35,42 +35,42 @@
 #define WINNOW_DEMOTION 0.83
 
 struct winnow_callback_data {
-	statfile_pool_t *pool;
-	struct classifier_ctx *ctx;
-	stat_file_t *file;
-	double sum;
-	int count;
-	int in_class;
-	time_t now;
+	statfile_pool_t                *pool;
+	struct classifier_ctx          *ctx;
+	stat_file_t                    *file;
+	double                          sum;
+	int                             count;
+	int                             in_class;
+	time_t                          now;
 };
 
-static gboolean
-classify_callback (gpointer key, gpointer value, gpointer data) 
+static                          gboolean
+classify_callback (gpointer key, gpointer value, gpointer data)
 {
-	token_node_t *node = key;
-	struct winnow_callback_data *cd = data;
-	float v;
-	
+	token_node_t                   *node = key;
+	struct winnow_callback_data    *cd = data;
+	float                           v;
+
 	/* Consider that not found blocks have value 1 */
 	if ((v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now)) < 0.00001) {
 		cd->sum += 1;
 	}
 	else {
 		cd->sum += v;
-		cd->in_class ++;
+		cd->in_class++;
 	}
 
-	cd->count ++;
+	cd->count++;
 
 	return FALSE;
 }
 
-static gboolean
-learn_callback (gpointer key, gpointer value, gpointer data) 
+static                          gboolean
+learn_callback (gpointer key, gpointer value, gpointer data)
 {
-	token_node_t *node = key;
-	struct winnow_callback_data *cd = data;
-	float v, c;
+	token_node_t                   *node = key;
+	struct winnow_callback_data    *cd = data;
+	float                           v, c;
 
 	c = (cd->in_class) ? WINNOW_PROMOTION : WINNOW_DEMOTION;
 
@@ -82,29 +82,30 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v * c);
 	}
 
-	cd->count ++;
-	
+	cd->count++;
+
 	return FALSE;
 }
 
-struct classifier_ctx* 
-winnow_init (memory_pool_t *pool, struct classifier_config *cfg)
+struct classifier_ctx          *
+winnow_init (memory_pool_t * pool, struct classifier_config *cfg)
 {
-	struct classifier_ctx *ctx = memory_pool_alloc (pool, sizeof (struct classifier_ctx));
+	struct classifier_ctx          *ctx = memory_pool_alloc (pool, sizeof (struct classifier_ctx));
 
 	ctx->pool = pool;
 	ctx->cfg = cfg;
 
 	return ctx;
 }
-void 
-winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task)
+
+void
+winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
 {
-	struct winnow_callback_data data;
-	double *res = memory_pool_alloc (ctx->pool, sizeof (double));
-	double max = 0;
-	GList *cur;
-	struct statfile *st, *sel = NULL;
+	struct winnow_callback_data     data;
+	double                         *res = memory_pool_alloc (ctx->pool, sizeof (double));
+	double                          max = 0;
+	GList                          *cur;
+	struct statfile                *st, *sel = NULL;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -114,7 +115,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, GTree *input
 	data.count = 0;
 	data.now = time (NULL);
 	data.ctx = ctx;
-	
+
 	cur = ctx->cfg->statfiles;
 	while (cur) {
 		st = cur->data;
@@ -131,7 +132,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, GTree *input
 			g_tree_foreach (input, classify_callback, &data);
 			statfile_pool_unlock_file (pool, data.file);
 		}
-	
+
 		if (data.count != 0) {
 			*res = (data.sum / data.count);
 		}
@@ -144,23 +145,23 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t *pool, GTree *input
 		}
 		cur = g_list_next (cur);
 	}
-	
+
 	if (sel != NULL) {
 		insert_result (task, ctx->cfg->metric, sel->symbol, 1, NULL);
 	}
 }
 
 void
-winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *symbol, GTree *input, int in_class)
+winnow_learn (struct classifier_ctx *ctx, statfile_pool_t * pool, char *symbol, GTree * input, int in_class)
 {
-	struct winnow_callback_data data = { 
-		.file = NULL, 
+	struct winnow_callback_data     data = {
+		.file = NULL,
 		.sum = 0,
 		.count = 0,
 	};
-	GList *cur;
-	struct statfile *st;
-	
+	GList                          *cur;
+	struct statfile                *st;
+
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
 
@@ -168,15 +169,14 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, char *symbol, G
 	data.in_class = in_class;
 	data.now = time (NULL);
 	data.ctx = ctx;
-	
+
 	cur = g_list_first (ctx->cfg->statfiles);
 	while (cur) {
 		st = cur->data;
 		if (strcmp (symbol, st->symbol) == 0) {
 			if ((data.file = statfile_pool_open (pool, st->path)) == NULL) {
 				/* Try to create statfile */
-				if (statfile_pool_create (pool, 
-							st->path, st->size / sizeof (struct stat_file_block)) == -1) {
+				if (statfile_pool_create (pool, st->path, st->size / sizeof (struct stat_file_block)) == -1) {
 					msg_err ("winnow_learn: cannot create statfile %s", st->path);
 					return;
 				}

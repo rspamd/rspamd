@@ -55,7 +55,7 @@
 #define MSG_CMD_SKIP "skip"
 /*
  * Return a confirmation that spamd is alive
- */ 
+ */
 #define MSG_CMD_PING "ping"
 /*
  * Process this message as described above and return modified message
@@ -84,13 +84,13 @@
 #define USER_HEADER "User"
 #define DELIVER_TO_HEADER "Deliver-To"
 
-static GList *custom_commands = NULL;
+static GList                   *custom_commands = NULL;
 
-static char *
-separate_command (f_str_t *in, char c)
+static char                    *
+separate_command (f_str_t * in, char c)
 {
-	int r = 0;
-	char *p = in->begin, *b;
+	int                             r = 0;
+	char                           *p = in->begin, *b;
 	b = p;
 
 	while (r < in->len) {
@@ -100,19 +100,19 @@ separate_command (f_str_t *in, char c)
 			in->len -= r + 1;
 			return b;
 		}
-		p ++;
-		r ++;
+		p++;
+		r++;
 	}
 
 	return NULL;
 }
 
 static int
-parse_command (struct worker_task *task, f_str_t *line)
+parse_command (struct worker_task *task, f_str_t * line)
 {
-	char *token;
-	struct custom_command *cmd;
-	GList *cur;
+	char                           *token;
+	struct custom_command          *cmd;
+	GList                          *cur;
 
 	token = separate_command (line, ' ');
 	if (line == NULL || token == NULL) {
@@ -121,82 +121,82 @@ parse_command (struct worker_task *task, f_str_t *line)
 	}
 
 	switch (token[0]) {
-		case 'c':
-		case 'C':
-			/* check */
-			if (g_ascii_strcasecmp (token + 1, MSG_CMD_CHECK + 1) == 0) {
-				task->cmd = CMD_CHECK;	
+	case 'c':
+	case 'C':
+		/* check */
+		if (g_ascii_strcasecmp (token + 1, MSG_CMD_CHECK + 1) == 0) {
+			task->cmd = CMD_CHECK;
+		}
+		else {
+			msg_debug ("parse_command: bad command: %s", token);
+			return -1;
+		}
+		break;
+	case 's':
+	case 'S':
+		/* symbols, skip */
+		if (g_ascii_strcasecmp (token + 1, MSG_CMD_SYMBOLS + 1) == 0) {
+			task->cmd = CMD_SYMBOLS;
+		}
+		else if (g_ascii_strcasecmp (token + 1, MSG_CMD_SKIP + 1) == 0) {
+			task->cmd = CMD_SKIP;
+		}
+		else {
+			msg_debug ("parse_command: bad command: %s", token);
+			return -1;
+		}
+		break;
+	case 'p':
+	case 'P':
+		/* ping, process */
+		if (g_ascii_strcasecmp (token + 1, MSG_CMD_PING + 1) == 0) {
+			task->cmd = CMD_PING;
+		}
+		else if (g_ascii_strcasecmp (token + 1, MSG_CMD_PROCESS + 1) == 0) {
+			task->cmd = CMD_PROCESS;
+		}
+		else {
+			msg_debug ("parse_command: bad command: %s", token);
+			return -1;
+		}
+		break;
+	case 'r':
+	case 'R':
+		/* report, report_ifspam */
+		if (g_ascii_strcasecmp (token + 1, MSG_CMD_REPORT + 1) == 0) {
+			task->cmd = CMD_REPORT;
+		}
+		else if (g_ascii_strcasecmp (token + 1, MSG_CMD_REPORT_IFSPAM + 1) == 0) {
+			task->cmd = CMD_REPORT_IFSPAM;
+		}
+		else {
+			msg_debug ("parse_command: bad command: %s", token);
+			return -1;
+		}
+		break;
+	default:
+		cur = custom_commands;
+		while (cur) {
+			cmd = cur->data;
+			if (g_ascii_strcasecmp (token, cmd->name) == 0) {
+				task->cmd = CMD_OTHER;
+				task->custom_cmd = cmd;
+				break;
 			}
-			else {
-				msg_debug ("parse_command: bad command: %s", token);
-				return -1;
-			}
-			break;
-		case 's':
-		case 'S':
-			/* symbols, skip */
-			if (g_ascii_strcasecmp (token + 1, MSG_CMD_SYMBOLS + 1) == 0) {
-				task->cmd = CMD_SYMBOLS;
-			}
-			else if (g_ascii_strcasecmp (token + 1, MSG_CMD_SKIP + 1) == 0) {
-				task->cmd = CMD_SKIP;
-			}
-			else {
-				msg_debug ("parse_command: bad command: %s", token);
-				return -1;
-			}
-			break;
-		case 'p':
-		case 'P':
-			/* ping, process */
-			if (g_ascii_strcasecmp (token + 1, MSG_CMD_PING + 1) == 0) {
-				task->cmd = CMD_PING;
-			}
-			else if (g_ascii_strcasecmp (token + 1, MSG_CMD_PROCESS + 1) == 0) {
-				task->cmd = CMD_PROCESS;
-			}
-			else {
-				msg_debug ("parse_command: bad command: %s", token);
-				return -1;
-			}
-			break;
-		case 'r':
-		case 'R':
-			/* report, report_ifspam */
-			if (g_ascii_strcasecmp (token + 1, MSG_CMD_REPORT + 1) == 0) {
-				task->cmd = CMD_REPORT;
-			}
-			else if (g_ascii_strcasecmp (token + 1, MSG_CMD_REPORT_IFSPAM + 1) == 0) {
-				task->cmd = CMD_REPORT_IFSPAM;
-			}
-			else {
-				msg_debug ("parse_command: bad command: %s", token);
-				return -1;
-			}
-			break;
-		default:
-			cur = custom_commands;
-			while (cur) {
-				cmd = cur->data;
-				if (g_ascii_strcasecmp (token, cmd->name) == 0) {
-					task->cmd = CMD_OTHER;
-					task->custom_cmd = cmd;
-					break;
-				}
-				cur = g_list_next (cur);
-			}
+			cur = g_list_next (cur);
+		}
 
-			if (cur == NULL) {
-				msg_debug ("parse_command: bad command: %s", token);
-				return -1;
-			}
-			break;
+		if (cur == NULL) {
+			msg_debug ("parse_command: bad command: %s", token);
+			return -1;
+		}
+		break;
 	}
 
 	if (strncasecmp (line->begin, RSPAMC_GREETING, sizeof (RSPAMC_GREETING) - 1) == 0) {
 		task->proto = RSPAMC_PROTO;
 	}
-	else if (strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) -1) == 0) {
+	else if (strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) - 1) == 0) {
 		task->proto = SPAMC_PROTO;
 	}
 	else {
@@ -207,10 +207,10 @@ parse_command (struct worker_task *task, f_str_t *line)
 }
 
 static int
-parse_header (struct worker_task *task, f_str_t *line)
+parse_header (struct worker_task *task, f_str_t * line)
 {
-	char *headern, *err, *tmp;
-	
+	char                           *headern, *err, *tmp;
+
 	/* Check end of headers */
 	if (line->len == 0) {
 		msg_debug ("parse_header: got empty line, assume it as end of headers");
@@ -219,7 +219,7 @@ parse_header (struct worker_task *task, f_str_t *line)
 		}
 		else {
 			if (task->content_length > 0) {
-                rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_CHARACTER, task->content_length);
+				rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_CHARACTER, task->content_length);
 				task->state = READ_MESSAGE;
 			}
 			else {
@@ -242,152 +242,152 @@ parse_header (struct worker_task *task, f_str_t *line)
 	fstrstrip (line);
 
 	switch (headern[0]) {
-		case 'c':
-		case 'C':
-			/* content-length */
-			if (strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
-                if (task->content_length == 0) {
-					tmp = memory_pool_fstrdup (task->task_pool, line);
-				    task->content_length = strtoul (tmp, &err, 10);
-					msg_debug ("parse_header: read Content-Length header, value: %lu", (unsigned long int)task->content_length);
-				}
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'd':
-		case 'D':
-			/* Deliver-To */
-			if (strncasecmp (headern, DELIVER_TO_HEADER, sizeof (DELIVER_TO_HEADER) - 1) == 0) {
-				task->deliver_to = memory_pool_fstrdup (task->task_pool, line);
-				msg_debug ("parse_header: read deliver-to header, value: %s", task->deliver_to);
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'h':
-		case 'H':
-			/* helo */
-			if (strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
-				task->helo = memory_pool_fstrdup (task->task_pool, line);
-				msg_debug ("parse_header: read helo header, value: %s", task->helo);
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'f':
-		case 'F':
-			/* from */
-			if (strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
-				task->from = memory_pool_fstrdup (task->task_pool, line);
-				msg_debug ("parse_header: read from header, value: %s", task->from);
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'q':
-		case 'Q':
-			/* Queue id */
-			if (strncasecmp (headern, QUEUE_ID_HEADER, sizeof (QUEUE_ID_HEADER) - 1) == 0) {
-				task->queue_id = memory_pool_fstrdup (task->task_pool, line);
-				msg_debug ("parse_header: read queue_id header, value: %s", task->queue_id);
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'r':
-		case 'R':
-			/* rcpt */
-			if (strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
+	case 'c':
+	case 'C':
+		/* content-length */
+		if (strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
+			if (task->content_length == 0) {
 				tmp = memory_pool_fstrdup (task->task_pool, line);
-				task->rcpt = g_list_prepend (task->rcpt, tmp);
-				msg_debug ("parse_header: read rcpt header, value: %s", tmp);
+				task->content_length = strtoul (tmp, &err, 10);
+				msg_debug ("parse_header: read Content-Length header, value: %lu", (unsigned long int)task->content_length);
 			}
-			else if (strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
-				tmp = memory_pool_fstrdup (task->task_pool, line);
-				task->nrcpt = strtoul (tmp, &err, 10);
-				msg_debug ("parse_header: read rcpt header, value: %d", (int)task->nrcpt);
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'i':
-		case 'I':
-			/* ip_addr */
-			if (strncasecmp (headern, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
-				tmp = memory_pool_fstrdup (task->task_pool, line);
-				if (!inet_aton (tmp, &task->from_addr)) {
-					msg_info ("parse_header: bad ip header: '%s'", tmp);
-					return -1;
-				}
-				msg_debug ("parse_header: read IP header, value: %s", tmp);
-			}
-			else {
-				msg_info ("parse_header: wrong header: %s", headern);
-				return -1;
-			}
-			break;
-		case 'u':
-		case 'U':
-			if (strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
-				/* XXX: use this header somehow */
-				task->user = memory_pool_fstrdup (task->task_pool, line);
-			}
-			else {
-				return -1;
-			}
-			break;
-		default:
+		}
+		else {
 			msg_info ("parse_header: wrong header: %s", headern);
 			return -1;
+		}
+		break;
+	case 'd':
+	case 'D':
+		/* Deliver-To */
+		if (strncasecmp (headern, DELIVER_TO_HEADER, sizeof (DELIVER_TO_HEADER) - 1) == 0) {
+			task->deliver_to = memory_pool_fstrdup (task->task_pool, line);
+			msg_debug ("parse_header: read deliver-to header, value: %s", task->deliver_to);
+		}
+		else {
+			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 'h':
+	case 'H':
+		/* helo */
+		if (strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
+			task->helo = memory_pool_fstrdup (task->task_pool, line);
+			msg_debug ("parse_header: read helo header, value: %s", task->helo);
+		}
+		else {
+			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 'f':
+	case 'F':
+		/* from */
+		if (strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
+			task->from = memory_pool_fstrdup (task->task_pool, line);
+			msg_debug ("parse_header: read from header, value: %s", task->from);
+		}
+		else {
+			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 'q':
+	case 'Q':
+		/* Queue id */
+		if (strncasecmp (headern, QUEUE_ID_HEADER, sizeof (QUEUE_ID_HEADER) - 1) == 0) {
+			task->queue_id = memory_pool_fstrdup (task->task_pool, line);
+			msg_debug ("parse_header: read queue_id header, value: %s", task->queue_id);
+		}
+		else {
+			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 'r':
+	case 'R':
+		/* rcpt */
+		if (strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
+			tmp = memory_pool_fstrdup (task->task_pool, line);
+			task->rcpt = g_list_prepend (task->rcpt, tmp);
+			msg_debug ("parse_header: read rcpt header, value: %s", tmp);
+		}
+		else if (strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
+			tmp = memory_pool_fstrdup (task->task_pool, line);
+			task->nrcpt = strtoul (tmp, &err, 10);
+			msg_debug ("parse_header: read rcpt header, value: %d", (int)task->nrcpt);
+		}
+		else {
+			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 'i':
+	case 'I':
+		/* ip_addr */
+		if (strncasecmp (headern, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
+			tmp = memory_pool_fstrdup (task->task_pool, line);
+			if (!inet_aton (tmp, &task->from_addr)) {
+				msg_info ("parse_header: bad ip header: '%s'", tmp);
+				return -1;
+			}
+			msg_debug ("parse_header: read IP header, value: %s", tmp);
+		}
+		else {
+			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 'u':
+	case 'U':
+		if (strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
+			/* XXX: use this header somehow */
+			task->user = memory_pool_fstrdup (task->task_pool, line);
+		}
+		else {
+			return -1;
+		}
+		break;
+	default:
+		msg_info ("parse_header: wrong header: %s", headern);
+		return -1;
 	}
 
 	return 0;
 }
 
 int
-read_rspamd_input_line (struct worker_task *task, f_str_t *line)
+read_rspamd_input_line (struct worker_task *task, f_str_t * line)
 {
 	switch (task->state) {
-		case READ_COMMAND:
-			return parse_command (task, line);
-			break;
-		case READ_HEADER:
-			return parse_header (task, line);
-			break;
-		default:
-			return -1;
+	case READ_COMMAND:
+		return parse_command (task, line);
+		break;
+	case READ_HEADER:
+		return parse_header (task, line);
+		break;
+	default:
+		return -1;
 	}
 	return -1;
 }
 
 struct metric_callback_data {
-	struct worker_task *task;
-	char *log_buf;
-	int log_offset;
-	int log_size;
+	struct worker_task             *task;
+	char                           *log_buf;
+	int                             log_offset;
+	int                             log_size;
 };
 
 static void
 show_url_header (struct worker_task *task)
 {
-	int r = 0;
-	char outbuf[OUTBUFSIZ], c;
-	struct uri *url;
-	GList *cur;
-	f_str_t host;
+	int                             r = 0;
+	char                            outbuf[OUTBUFSIZ], c;
+	struct uri                     *url;
+	GList                          *cur;
+	f_str_t                         host;
 
 	r = snprintf (outbuf, sizeof (outbuf), "Urls: ");
 	cur = task->urls;
@@ -402,7 +402,9 @@ show_url_header (struct worker_task *task)
 		}
 		/* Do header folding */
 		if (host.len + r >= OUTBUFSIZ - 3) {
-			outbuf[r ++] = '\r'; outbuf[r ++] = '\n'; outbuf[r] = ' ';
+			outbuf[r++] = '\r';
+			outbuf[r++] = '\n';
+			outbuf[r] = ' ';
 			rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
 			r = 0;
 		}
@@ -429,12 +431,12 @@ show_url_header (struct worker_task *task)
 static void
 metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 {
-	struct metric_callback_data *cd = (struct metric_callback_data *)user_data;
-	struct worker_task *task = cd->task;
-	int r = 0;
-	char outbuf[OUTBUFSIZ];
-	struct symbol *s = (struct symbol *)value;	
-	GList *cur;
+	struct metric_callback_data    *cd = (struct metric_callback_data *)user_data;
+	struct worker_task             *task = cd->task;
+	int                             r = 0;
+	char                            outbuf[OUTBUFSIZ];
+	struct symbol                  *s = (struct symbol *)value;
+	GList                          *cur;
 
 	if (s->options) {
 		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
@@ -457,8 +459,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	else {
 		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
 	}
-	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
-						"%s,", (char *)key); 
+	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (char *)key);
 
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
@@ -466,9 +467,9 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 static void
 show_metric_symbols (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
-	int r = 0;
-	GList *symbols, *cur;
-	char outbuf[OUTBUFSIZ];
+	int                             r = 0;
+	GList                          *symbols, *cur;
+	char                            outbuf[OUTBUFSIZ];
 
 	if (cd->task->proto == SPAMC_PROTO) {
 		symbols = g_hash_table_get_keys (metric_res->symbols);
@@ -497,15 +498,15 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 static void
 show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
 {
-	struct metric_callback_data *cd = (struct metric_callback_data *)user_data;
-	struct worker_task *task = cd->task;
-	int r;
-	char outbuf[OUTBUFSIZ];
-	struct metric_result *metric_res = (struct metric_result *)metric_value;
-	struct metric *m;
-	int is_spam = 0;
-	double ms;
-	
+	struct metric_callback_data    *cd = (struct metric_callback_data *)user_data;
+	struct worker_task             *task = cd->task;
+	int                             r;
+	char                            outbuf[OUTBUFSIZ];
+	struct metric_result           *metric_res = (struct metric_result *)metric_value;
+	struct metric                  *m;
+	int                             is_spam = 0;
+	double                          ms;
+
 
 	if (metric_name == NULL || metric_value == NULL) {
 		m = g_hash_table_lookup (task->cfg->metrics, "default");
@@ -513,15 +514,12 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			ms = m->required_score;
 		}
 		if (task->proto == SPAMC_PROTO) {
-			r = snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF,
-						m != NULL ? ms : 0);
+			r = snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF, m != NULL ? ms : 0);
 		}
 		else {
-			r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF,
-						m != NULL ? ms : 0);
+			r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF, m != NULL ? ms : 0);
 		}
-		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
-						"(%s: F: [0/%.2f] [", "default", m != NULL ? ms : 0); 
+		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: F: [0/%.2f] [", "default", m != NULL ? ms : 0);
 	}
 	else {
 		if (!check_metric_settings (task, metric_res->metric, &ms)) {
@@ -531,16 +529,12 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			is_spam = 1;
 		}
 		if (task->proto == SPAMC_PROTO) {
-			r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF,
-						(is_spam) ? "True" : "False", metric_res->score, ms);
+			r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True" : "False", metric_res->score, ms);
 		}
 		else {
-			r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, (char *)metric_name,
-						(is_spam) ? "True" : "False", metric_res->score, ms);
+			r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, (char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
 		}
-		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
-						"(%s: %s: [%.2f/%.2f] [", (char *)metric_name, is_spam ? "T" : "F", 
-						metric_res->score, ms); 
+		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f] [", (char *)metric_name, is_spam ? "T" : "F", metric_res->score, ms);
 	}
 	if (task->cmd == CMD_PROCESS) {
 #ifndef GMIME24
@@ -557,16 +551,16 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		}
 	}
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %ld, time: %sms",
-							(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
+		(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
 }
 
 static int
 write_check_reply (struct worker_task *task)
 {
-	int r;
-	char outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
-	struct metric_result *metric_res;
-	struct metric_callback_data cd;
+	int                             r;
+	char                            outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
+	struct metric_result           *metric_res;
+	struct metric_callback_data     cd;
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
@@ -584,7 +578,7 @@ write_check_reply (struct worker_task *task)
 			show_metric_result (NULL, NULL, (void *)&cd);
 		}
 		else {
-			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
+			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
 		}
 	}
 	else {
@@ -595,7 +589,7 @@ write_check_reply (struct worker_task *task)
 			show_metric_result (NULL, NULL, (void *)&cd);
 		}
 		else {
-			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
+			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
 		}
 		g_hash_table_remove (task->results, "default");
 
@@ -613,14 +607,13 @@ write_check_reply (struct worker_task *task)
 static int
 write_process_reply (struct worker_task *task)
 {
-	int r;
-	char *outmsg;
-	char outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
-	struct metric_result *metric_res;
-	struct metric_callback_data cd;
+	int                             r;
+	char                           *outmsg;
+	char                            outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
+	struct metric_result           *metric_res;
+	struct metric_callback_data     cd;
 
-	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, 
-					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK", task->msg->len);
+	r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK", task->msg->len);
 
 	cd.task = task;
 	cd.log_buf = logbuf;
@@ -635,7 +628,7 @@ write_process_reply (struct worker_task *task)
 			show_metric_result (NULL, NULL, (void *)&cd);
 		}
 		else {
-			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
+			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
 		}
 	}
 	else {
@@ -646,7 +639,7 @@ write_process_reply (struct worker_task *task)
 			show_metric_result (NULL, NULL, (void *)&cd);
 		}
 		else {
-			show_metric_result ((gpointer)"default", (gpointer)metric_res, (void *)&cd);
+			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
 		}
 		g_hash_table_remove (task->results, "default");
 
@@ -661,7 +654,7 @@ write_process_reply (struct worker_task *task)
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
 	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE, TRUE);
 
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, outmsg);
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, outmsg);
 
 	return 0;
 }
@@ -669,8 +662,8 @@ write_process_reply (struct worker_task *task)
 int
 write_reply (struct worker_task *task)
 {
-	int r;
-	char outbuf[OUTBUFSIZ];
+	int                             r;
+	char                            outbuf[OUTBUFSIZ];
 
 	msg_debug ("write_reply: writing reply to client");
 	if (task->error_code != 0) {
@@ -680,8 +673,7 @@ write_reply (struct worker_task *task)
 			msg_debug ("write_reply: writing error: %s", outbuf);
 		}
 		else {
-			r = snprintf (outbuf, sizeof (outbuf), "%s %d %s" CRLF "%s: %s" CRLF CRLF, RSPAMD_REPLY_BANNER, task->error_code, 
-								SPAMD_ERROR, ERROR_HEADER, task->last_error);
+			r = snprintf (outbuf, sizeof (outbuf), "%s %d %s" CRLF "%s: %s" CRLF CRLF, RSPAMD_REPLY_BANNER, task->error_code, SPAMD_ERROR, ERROR_HEADER, task->last_error);
 			msg_debug ("write_reply: writing error: %s", outbuf);
 		}
 		/* Write to bufferevent error message */
@@ -689,36 +681,35 @@ write_reply (struct worker_task *task)
 	}
 	else {
 		switch (task->cmd) {
-			case CMD_REPORT_IFSPAM:
-			case CMD_REPORT:
-			case CMD_CHECK:
-			case CMD_SYMBOLS:
-				return write_check_reply (task);
-				break;
-			case CMD_PROCESS:
-				return write_process_reply (task);
-				break;
-			case CMD_SKIP:
-				r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
-																SPAMD_OK);
-				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
-				break;
-			case CMD_PING:
-				r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
-				rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
-				break;
-			case CMD_OTHER:
-				return task->custom_cmd->func (task);
+		case CMD_REPORT_IFSPAM:
+		case CMD_REPORT:
+		case CMD_CHECK:
+		case CMD_SYMBOLS:
+			return write_check_reply (task);
+			break;
+		case CMD_PROCESS:
+			return write_process_reply (task);
+			break;
+		case CMD_SKIP:
+			r = snprintf (outbuf, sizeof (outbuf), "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, SPAMD_OK);
+			rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+			break;
+		case CMD_PING:
+			r = snprintf (outbuf, sizeof (outbuf), "%s 0 PONG" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER);
+			rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+			break;
+		case CMD_OTHER:
+			return task->custom_cmd->func (task);
 		}
 	}
 
 	return 0;
 }
 
-void 
+void
 register_protocol_command (const char *name, protocol_reply_func func)
 {
-	struct custom_command *cmd;
+	struct custom_command          *cmd;
 
 	cmd = g_malloc (sizeof (struct custom_command));
 	cmd->name = name;

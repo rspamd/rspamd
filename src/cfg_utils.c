@@ -34,35 +34,38 @@
 
 #define DEFAULT_SCORE 10.0
 
-extern int yylineno;
-extern char *yytext;
+extern int                      yylineno;
+extern char                    *yytext;
 
 int
 add_memcached_server (struct config_file *cf, char *str)
 {
-	char *cur_tok, *err_str;
-	struct memcached_server *mc;
-	struct hostent *hent;
-	uint16_t port;
+	char                           *cur_tok, *err_str;
+	struct memcached_server        *mc;
+	struct hostent                 *hent;
+	uint16_t                        port;
 
-	if (str == NULL) return 0;
+	if (str == NULL)
+		return 0;
 
 	cur_tok = strsep (&str, ":");
 
-	if (cur_tok == NULL || *cur_tok == '\0') return 0;
+	if (cur_tok == NULL || *cur_tok == '\0')
+		return 0;
 
-	if(cf->memcached_servers_num == MAX_MEMCACHED_SERVERS) {
+	if (cf->memcached_servers_num == MAX_MEMCACHED_SERVERS) {
 		yywarn ("yyparse: maximum number of memcached servers is reached %d", MAX_MEMCACHED_SERVERS);
 	}
-	
+
 	mc = &cf->memcached_servers[cf->memcached_servers_num];
-	if (mc == NULL) return 0;
+	if (mc == NULL)
+		return 0;
 	/* cur_tok - server name, str - server port */
 	if (str == NULL) {
 		port = DEFAULT_MEMCACHED_PORT;
 	}
 	else {
-		port = (uint16_t)strtoul (str, &err_str, 10);
+		port = (uint16_t) strtoul (str, &err_str, 10);
 		if (*err_str != '\0') {
 			return 0;
 		}
@@ -75,7 +78,7 @@ add_memcached_server (struct config_file *cf, char *str)
 			return 0;
 		}
 		else {
-			memcpy((char *)&mc->addr, hent->h_addr, sizeof(struct in_addr));
+			memcpy ((char *)&mc->addr, hent->h_addr, sizeof (struct in_addr));
 		}
 	}
 	mc->port = port;
@@ -86,14 +89,15 @@ add_memcached_server (struct config_file *cf, char *str)
 int
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 {
-	char *cur_tok, *err_str;
-	struct hostent *hent;
-	size_t s;
-	char **host;
-	int16_t *family, *port;
-	struct in_addr *addr;
-	
-	if (str == NULL) return 0;
+	char                           *cur_tok, *err_str;
+	struct hostent                 *hent;
+	size_t                          s;
+	char                          **host;
+	int16_t                        *family, *port;
+	struct in_addr                 *addr;
+
+	if (str == NULL)
+		return 0;
 	cur_tok = strsep (&str, ":");
 
 	host = &cf->bind_host;
@@ -101,13 +105,13 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 	*port = DEFAULT_BIND_PORT;
 	family = &cf->bind_family;
 	addr = &cf->bind_addr;
-	
+
 	if (cur_tok[0] == '/' || cur_tok[0] == '.') {
 #ifdef HAVE_DIRNAME
 		/* Try to check path of bind credit */
-		struct stat st;
-		int fd;
-		char *copy = memory_pool_strdup (cfg->cfg_pool, cur_tok);
+		struct stat                     st;
+		int                             fd;
+		char                           *copy = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
 				if ((fd = open (cur_tok, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
@@ -135,9 +139,10 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 		*family = AF_UNIX;
 		return 1;
 
-	} else {
+	}
+	else {
 		if (*str != '\0') {
-			*port = (uint16_t)strtoul (str, &err_str, 10);
+			*port = (uint16_t) strtoul (str, &err_str, 10);
 			if (*err_str != '\0') {
 				yyerror ("parse_bind_line: cannot read numeric value: %s", err_str);
 				return 0;
@@ -146,7 +151,8 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 		if (strcmp (cur_tok, "*") == 0) {
 			*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
 			addr->s_addr = htonl (INADDR_ANY);
-		} else if (!inet_aton (cur_tok, addr)) {
+		}
+		else if (!inet_aton (cur_tok, addr)) {
 			/* Try to call gethostbyname */
 			hent = gethostbyname (cur_tok);
 			if (hent == NULL) {
@@ -154,7 +160,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 			}
 			else {
 				*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
-				memcpy((char *)addr, hent->h_addr, sizeof(struct in_addr));
+				memcpy ((char *)addr, hent->h_addr, sizeof (struct in_addr));
 				s = strlen (cur_tok) + 1;
 			}
 		}
@@ -215,17 +221,17 @@ free_config (struct config_file *cfg)
 	memory_pool_delete (cfg->cfg_pool);
 }
 
-char* 
+char                           *
 get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
 {
-	GList *cur_opt;
-	struct module_opt *cur;
-	
+	GList                          *cur_opt;
+	struct module_opt              *cur;
+
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
 	if (cur_opt == NULL) {
 		return NULL;
 	}
-	
+
 	while (cur_opt) {
 		cur = cur_opt->data;
 		if (strcmp (cur->param, opt_name) == 0) {
@@ -240,10 +246,11 @@ get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
 size_t
 parse_limit (const char *limit)
 {
-	size_t result = 0;
-	char *err_str;
+	size_t                          result = 0;
+	char                           *err_str;
 
-	if (!limit || *limit == '\0') return 0;
+	if (!limit || *limit == '\0')
+		return 0;
 
 	result = strtoul (limit, &err_str, 10);
 
@@ -268,10 +275,11 @@ parse_limit (const char *limit)
 unsigned int
 parse_seconds (const char *t)
 {
-	unsigned int result = 0;
-	char *err_str;
+	unsigned int                    result = 0;
+	char                           *err_str;
 
-	if (!t || *t == '\0') return 0;
+	if (!t || *t == '\0')
+		return 0;
 
 	result = strtoul (t, &err_str, 10);
 
@@ -280,21 +288,21 @@ parse_seconds (const char *t)
 		if (*err_str == 's' || *err_str == 'S') {
 			result *= 1000;
 		}
-        /* Minutes */
-        else if (*err_str == 'm' || *err_str == 'M') {
-            /* Handle ms correctly */
-            if (*(err_str + 1) == 's' || *(err_str + 1) == 'S') {
-                result *= 60 * 1000;
-            }
-        }
-        /* Hours */
-        else if (*err_str == 'h' || *err_str == 'H') {
-            result *= 60 * 60 * 1000;
-        }
-        /* Days */
-        else if (*err_str == 'd' || *err_str == 'D') {
-            result *= 24 * 60 * 60 * 1000;
-        }
+		/* Minutes */
+		else if (*err_str == 'm' || *err_str == 'M') {
+			/* Handle ms correctly */
+			if (*(err_str + 1) == 's' || *(err_str + 1) == 'S') {
+				result *= 60 * 1000;
+			}
+		}
+		/* Hours */
+		else if (*err_str == 'h' || *err_str == 'H') {
+			result *= 60 * 60 * 1000;
+		}
+		/* Days */
+		else if (*err_str == 'd' || *err_str == 'D') {
+			result *= 24 * 60 * 60 * 1000;
+		}
 	}
 
 	return result;
@@ -303,27 +311,23 @@ parse_seconds (const char *t)
 char
 parse_flag (const char *str)
 {
-	if (!str || !*str) return -1;
+	if (!str || !*str)
+		return -1;
 
 	if ((*str == 'Y' || *str == 'y') && *(str + 1) == '\0') {
 		return 1;
 	}
 
-	if ((*str == 'Y' || *str == 'y') &&
-		(*(str + 1) == 'E' || *(str + 1) == 'e') &&
-		(*(str + 2) == 'S' || *(str + 2) == 's') &&
-		*(str + 3) == '\0') {
-		return 1;		
+	if ((*str == 'Y' || *str == 'y') && (*(str + 1) == 'E' || *(str + 1) == 'e') && (*(str + 2) == 'S' || *(str + 2) == 's') && *(str + 3) == '\0') {
+		return 1;
 	}
 
 	if ((*str == 'N' || *str == 'n') && *(str + 1) == '\0') {
 		return 0;
 	}
 
-	if ((*str == 'N' || *str == 'n') &&
-		(*(str + 1) == 'O' || *(str + 1) == 'o') &&
-		*(str + 2) == '\0') {
-		return 0;		
+	if ((*str == 'N' || *str == 'n') && (*(str + 1) == 'O' || *(str + 1) == 'o') && *(str + 2) == '\0') {
+		return 0;
 	}
 
 	return -1;
@@ -333,18 +337,18 @@ parse_flag (const char *str)
  * Try to substitute all variables in given string
  * Return: newly allocated string with substituted variables (original string may be freed if variables are found)
  */
-char *
+char                           *
 substitute_variable (struct config_file *cfg, char *name, char *str, u_char recursive)
 {
-	char *var, *new, *v_begin, *v_end, *p, t;
-	size_t len;
-	gboolean changed = FALSE;
+	char                           *var, *new, *v_begin, *v_end, *p, t;
+	size_t                          len;
+	gboolean                        changed = FALSE;
 
 	if (str == NULL) {
 		yywarn ("substitute_variable: trying to substitute variable in NULL string");
 		return NULL;
 	}
-	
+
 	p = str;
 	while ((v_begin = strstr (p, "${")) != NULL) {
 		len = strlen (str);
@@ -370,13 +374,12 @@ substitute_variable (struct config_file *cfg, char *name, char *str, u_char recu
 		/* Allocate new string */
 		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 3);
 
-		snprintf (new, len - strlen (v_begin) + strlen (var) + 3, "%s(%s)%s",
-						str, var, v_end + 1);
+		snprintf (new, len - strlen (v_begin) + strlen (var) + 3, "%s(%s)%s", str, var, v_end + 1);
 		p = new;
 		str = new;
 		changed = TRUE;
 	}
-	
+
 	if (changed && name != NULL) {
 		g_hash_table_insert (cfg->variables, name, str);
 	}
@@ -387,9 +390,9 @@ substitute_variable (struct config_file *cfg, char *name, char *str, u_char recu
 static void
 substitute_module_variables (gpointer key, gpointer value, gpointer data)
 {
-	struct config_file *cfg = (struct config_file *)data;
-	GList *cur_opt = (GList *)value;
-	struct module_opt *cur;
+	struct config_file             *cfg = (struct config_file *)data;
+	GList                          *cur_opt = (GList *) value;
+	struct module_opt              *cur;
 
 	while (cur_opt) {
 		cur = cur_opt->data;
@@ -403,7 +406,7 @@ substitute_module_variables (gpointer key, gpointer value, gpointer data)
 static void
 substitute_all_variables (gpointer key, gpointer value, gpointer data)
 {
-	struct config_file *cfg = (struct config_file *)data;
+	struct config_file             *cfg = (struct config_file *)data;
 
 	/* Do recursive substitution */
 	(void)substitute_variable (cfg, (char *)key, (char *)value, 1);
@@ -412,12 +415,12 @@ substitute_all_variables (gpointer key, gpointer value, gpointer data)
 static void
 parse_filters_str (struct config_file *cfg, const char *str)
 {
-	gchar **strvec, **p;
-	struct filter *cur;
-	int i;
-	
+	gchar                         **strvec, **p;
+	struct filter                  *cur;
+	int                             i;
+
 	if (str == NULL) {
-		return;	
+		return;
 	}
 
 	strvec = g_strsplit (str, ",", 0);
@@ -430,17 +433,17 @@ parse_filters_str (struct config_file *cfg, const char *str)
 		cur = NULL;
 		/* Search modules from known C modules */
 		for (i = 0; i < MODULES_NUM; i++) {
-            g_strstrip (*p);
+			g_strstrip (*p);
 			if (strcasecmp (modules[i].name, *p) == 0) {
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				msg_debug ("parse_filters_str: found C filter %s", *p);
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-                cur->module = &modules[i];
+				cur->module = &modules[i];
 				cfg->filters = g_list_prepend (cfg->filters, cur);
 
 				break;
-			}	
+			}
 		}
 		if (cur != NULL) {
 			/* Go to next iteration */
@@ -451,7 +454,7 @@ parse_filters_str (struct config_file *cfg, const char *str)
 		cur->type = PERL_FILTER;
 		cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 		cfg->filters = g_list_prepend (cfg->filters, cur);
-		p ++;
+		p++;
 	}
 
 	g_strfreev (strvec);
@@ -463,22 +466,22 @@ parse_filters_str (struct config_file *cfg, const char *str)
 static void
 fill_cfg_params (struct config_file *cfg)
 {
-    struct config_scalar *scalars;
+	struct config_scalar           *scalars;
 
-    scalars = memory_pool_alloc (cfg->cfg_pool, 10 * sizeof (struct config_scalar));
+	scalars = memory_pool_alloc (cfg->cfg_pool, 10 * sizeof (struct config_scalar));
 
-    scalars[0].type = SCALAR_TYPE_STR;
-    scalars[0].pointer = &cfg->cfg_name;
-    g_hash_table_insert (cfg->cfg_params, "cfg_name", &scalars[0]);
-    scalars[1].type = SCALAR_TYPE_STR;
-    scalars[1].pointer = &cfg->pid_file;
-    g_hash_table_insert (cfg->cfg_params, "pid_file", &scalars[1]);
-    scalars[2].type = SCALAR_TYPE_STR;
-    scalars[2].pointer = &cfg->temp_dir;
-    g_hash_table_insert (cfg->cfg_params, "temp_dir", &scalars[2]);
-    scalars[3].type = SCALAR_TYPE_SIZE;
-    scalars[3].pointer = &cfg->max_statfile_size;
-    g_hash_table_insert (cfg->cfg_params, "max_statfile_size", &scalars[3]);
+	scalars[0].type = SCALAR_TYPE_STR;
+	scalars[0].pointer = &cfg->cfg_name;
+	g_hash_table_insert (cfg->cfg_params, "cfg_name", &scalars[0]);
+	scalars[1].type = SCALAR_TYPE_STR;
+	scalars[1].pointer = &cfg->pid_file;
+	g_hash_table_insert (cfg->cfg_params, "pid_file", &scalars[1]);
+	scalars[2].type = SCALAR_TYPE_STR;
+	scalars[2].pointer = &cfg->temp_dir;
+	g_hash_table_insert (cfg->cfg_params, "temp_dir", &scalars[2]);
+	scalars[3].type = SCALAR_TYPE_SIZE;
+	scalars[3].pointer = &cfg->max_statfile_size;
+	g_hash_table_insert (cfg->cfg_params, "max_statfile_size", &scalars[3]);
 
 }
 
@@ -488,13 +491,13 @@ fill_cfg_params (struct config_file *cfg)
 void
 post_load_config (struct config_file *cfg)
 {
-	struct timespec ts;
-	struct metric *def_metric;
+	struct timespec                 ts;
+	struct metric                  *def_metric;
 
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
 	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
 	parse_filters_str (cfg, cfg->filters_str);
-    fill_cfg_params (cfg);
+	fill_cfg_params (cfg);
 
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_getres (CLOCK_PROCESS_CPUTIME_ID, &ts);
@@ -528,10 +531,10 @@ post_load_config (struct config_file *cfg)
 void
 parse_err (const char *fmt, ...)
 {
-	va_list aq;
-	char logbuf[BUFSIZ], readbuf[32];
-	int r;
-	
+	va_list                         aq;
+	char                            logbuf[BUFSIZ], readbuf[32];
+	int                             r;
+
 	va_start (aq, fmt);
 	g_strlcpy (readbuf, yytext, sizeof (readbuf));
 
@@ -545,10 +548,10 @@ parse_err (const char *fmt, ...)
 void
 parse_warn (const char *fmt, ...)
 {
-	va_list aq;
-	char logbuf[BUFSIZ], readbuf[32];
-	int r;
-	
+	va_list                         aq;
+	char                            logbuf[BUFSIZ], readbuf[32];
+	int                             r;
+
 	va_start (aq, fmt);
 	g_strlcpy (readbuf, yytext, sizeof (readbuf));
 
@@ -562,26 +565,26 @@ parse_warn (const char *fmt, ...)
 void
 unescape_quotes (char *line)
 {
-	char *c = line, *t;
+	char                           *c = line, *t;
 
 	while (*c) {
 		if (*c == '\\' && *(c + 1) == '"') {
 			t = c;
 			while (*t) {
 				*t = *(t + 1);
-				t ++;
+				t++;
 			}
 		}
-		c ++;
+		c++;
 	}
 }
 
-GList *
-parse_comma_list (memory_pool_t *pool, char *line)
+GList                          *
+parse_comma_list (memory_pool_t * pool, char *line)
 {
-	GList *res = NULL;
-	char *c, *p, *str;
-	
+	GList                          *res = NULL;
+	char                           *c, *p, *str;
+
 	c = line;
 	p = c;
 
@@ -595,16 +598,16 @@ parse_comma_list (memory_pool_t *pool, char *line)
 			c = p;
 			continue;
 		}
-		p ++;
+		p++;
 	}
 	if (res != NULL) {
-		memory_pool_add_destructor (pool, (pool_destruct_func)g_list_free, res);
+		memory_pool_add_destructor (pool, (pool_destruct_func) g_list_free, res);
 	}
 
 	return res;
 }
 
-struct classifier_config *
+struct classifier_config       *
 check_classifier_cfg (struct config_file *cfg, struct classifier_config *c)
 {
 	if (c == NULL) {
@@ -612,7 +615,7 @@ check_classifier_cfg (struct config_file *cfg, struct classifier_config *c)
 	}
 	if (c->opts == NULL) {
 		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, c->opts);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
 	}
 
 	return c;

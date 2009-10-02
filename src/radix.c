@@ -27,19 +27,19 @@
 #include "radix.h"
 #include "mem_pool.h"
 
-static void *radix_alloc (radix_tree_t *tree);
+static void                    *radix_alloc (radix_tree_t * tree);
 
-radix_tree_t *
+radix_tree_t                   *
 radix_tree_create ()
 {
-	radix_tree_t  *tree;
+	radix_tree_t                   *tree;
 
-	tree = g_malloc (sizeof(radix_tree_t));
+	tree = g_malloc (sizeof (radix_tree_t));
 	if (tree == NULL) {
 		return NULL;
 	}
-    
-    tree->pool = memory_pool_new (memory_pool_get_size ());
+
+	tree->pool = memory_pool_new (memory_pool_get_size ());
 	tree->size = 0;
 
 	tree->root = radix_alloc (tree);
@@ -51,17 +51,16 @@ radix_tree_create ()
 	tree->root->left = NULL;
 	tree->root->parent = NULL;
 	tree->root->value = RADIX_NO_VALUE;
-	
+
 	return tree;
 }
 
 
 int
-radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask,
-	unsigned char value)
+radix32tree_insert (radix_tree_t * tree, uint32_t key, uint32_t mask, unsigned char value)
 {
-	uint32_t		   bit;
-	radix_node_t  *node, *next;
+	uint32_t                        bit;
+	radix_node_t                   *node, *next;
 
 	bit = 0x80000000;
 
@@ -72,7 +71,8 @@ radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask,
 		if (key & bit) {
 			next = node->right;
 
-		} else {
+		}
+		else {
 			next = node->left;
 		}
 
@@ -94,7 +94,7 @@ radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask,
 	}
 	/* Inserting value in trie creating all path components */
 	while (bit & mask) {
-		next = radix_alloc(tree);
+		next = radix_alloc (tree);
 		if (next == NULL) {
 			return -1;
 		}
@@ -107,7 +107,8 @@ radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask,
 		if (key & bit) {
 			node->right = next;
 
-		} else {
+		}
+		else {
 			node->left = next;
 		}
 
@@ -122,11 +123,11 @@ radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask,
 
 
 int
-radix32tree_delete (radix_tree_t *tree, uint32_t key, uint32_t mask)
+radix32tree_delete (radix_tree_t * tree, uint32_t key, uint32_t mask)
 {
-	uint32_t	   bit;
-	radix_node_t  *node;
-	radix_node_t  *tmp;
+	uint32_t                        bit;
+	radix_node_t                   *node;
+	radix_node_t                   *tmp;
 
 	bit = 0x80000000;
 	node = tree->root;
@@ -135,7 +136,8 @@ radix32tree_delete (radix_tree_t *tree, uint32_t key, uint32_t mask)
 		if (key & bit) {
 			node = node->right;
 
-		} else {
+		}
+		else {
 			node = node->left;
 		}
 
@@ -155,11 +157,12 @@ radix32tree_delete (radix_tree_t *tree, uint32_t key, uint32_t mask)
 		return -1;
 	}
 
-	for ( ;; ) {
+	for (;;) {
 		if (node->parent->right == node) {
 			node->parent->right = NULL;
 
-		} else {
+		}
+		else {
 			node->parent->left = NULL;
 		}
 
@@ -184,11 +187,11 @@ radix32tree_delete (radix_tree_t *tree, uint32_t key, uint32_t mask)
 
 
 unsigned char
-radix32tree_find (radix_tree_t *tree, uint32_t key)
+radix32tree_find (radix_tree_t * tree, uint32_t key)
 {
-	uint32_t		   bit;
-	uintptr_t		  value;
-	radix_node_t  *node;
+	uint32_t                        bit;
+	uintptr_t                       value;
+	radix_node_t                   *node;
 
 	bit = 0x80000000;
 	value = RADIX_NO_VALUE;
@@ -202,7 +205,8 @@ radix32tree_find (radix_tree_t *tree, uint32_t key)
 		if (key & bit) {
 			node = node->right;
 
-		} else {
+		}
+		else {
 			node = node->left;
 		}
 
@@ -213,12 +217,12 @@ radix32tree_find (radix_tree_t *tree, uint32_t key)
 }
 
 
-static void *
-radix_alloc (radix_tree_t *tree)
+static void                    *
+radix_alloc (radix_tree_t * tree)
 {
-	char  *p;
+	char                           *p;
 
-	p = memory_pool_alloc (tree->pool, sizeof(radix_node_t));
+	p = memory_pool_alloc (tree->pool, sizeof (radix_node_t));
 
 	tree->size += sizeof (radix_node_t);
 
@@ -226,9 +230,9 @@ radix_alloc (radix_tree_t *tree)
 }
 
 void
-radix_tree_free (radix_tree_t *tree) 
+radix_tree_free (radix_tree_t * tree)
 {
-    
+
 	g_return_if_fail (tree != NULL);
 	memory_pool_delete (tree->pool);
 	g_free (tree);

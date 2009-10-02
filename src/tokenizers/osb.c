@@ -32,24 +32,24 @@
 /* Minimum length of token */
 #define MIN_LEN 4
 
-extern const int primes[];
+extern const int                primes[];
 
 int
-osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **tree)
+osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * input, GTree ** tree)
 {
-	token_node_t *new = NULL;
-	f_str_t token = { NULL, 0, 0 }, *res;
-	uint32_t hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
-	int i;
+	token_node_t                   *new = NULL;
+	f_str_t                         token = { NULL, 0, 0 }, *res;
+	uint32_t                        hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
+	int                             i;
 
 	/* First set all bytes of hashpipe to some common value */
-	for (i = 0; i < FEATURE_WINDOW_SIZE; i ++) {
+	for (i = 0; i < FEATURE_WINDOW_SIZE; i++) {
 		hashpipe[i] = 0xABCDEF;
 	}
-	
+
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		memory_pool_add_destructor (pool, (pool_destruct_func)g_tree_destroy, *tree);
+		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
 	}
 
 	msg_debug ("osb_tokenize_text: got input length: %zd", input->len);
@@ -60,14 +60,14 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *in
 			continue;
 		}
 		/* Shift hashpipe */
-		for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i --) {
+		for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
 			hashpipe[i] = hashpipe[i - 1];
 		}
 		hashpipe[0] = fstrhash (&token);
-		
-		for (i = 1; i < FEATURE_WINDOW_SIZE; i ++) {
-			h1 = hashpipe[0]* primes[0] + hashpipe[i] * primes[i<<1];
-		    h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i<<1)-1];
+
+		for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
+			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
+			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
 			new = memory_pool_alloc (pool, sizeof (token_node_t));
 			new->h1 = h1;
 			new->h2 = h2;

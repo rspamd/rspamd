@@ -38,18 +38,18 @@
 #define DEFAULT_THRESHOLD 0.1
 
 struct chartable_ctx {
-	int (*filter)(struct worker_task *task);
-	char *metric;
-	char *symbol;
-	double threshold;
+	int                             (*filter) (struct worker_task * task);
+	char                           *metric;
+	char                           *symbol;
+	double                          threshold;
 
-	memory_pool_t *chartable_pool;
+	memory_pool_t                  *chartable_pool;
 };
 
-static struct chartable_ctx *chartable_module_ctx = NULL;
+static struct chartable_ctx    *chartable_module_ctx = NULL;
 
-static int chartable_mime_filter (struct worker_task *task);
-static void chartable_symbol_callback (struct worker_task *task, void *unused);
+static int                      chartable_mime_filter (struct worker_task *task);
+static void                     chartable_symbol_callback (struct worker_task *task, void *unused);
 
 int
 chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -60,7 +60,7 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	chartable_module_ctx->chartable_pool = memory_pool_new (memory_pool_get_size ());
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
-	
+
 	return 0;
 }
 
@@ -68,10 +68,10 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 int
 chartable_module_config (struct config_file *cfg)
 {
-	char *value;
-	int res = TRUE;
-	struct metric *metric;
-	double *w;
+	char                           *value;
+	int                             res = TRUE;
+	struct metric                  *metric;
+	double                         *w;
 
 	if ((value = get_module_opt (cfg, "chartable", "metric")) != NULL) {
 		chartable_module_ctx->metric = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
@@ -126,38 +126,36 @@ chartable_module_reconfig (struct config_file *cfg)
 	return chartable_module_config (cfg);
 }
 
-static gboolean
+static                          gboolean
 check_part (struct mime_text_part *part, gboolean raw_mode)
 {
-	unsigned char *p, *p1;
-	gunichar c, t;
-	GUnicodeScript scc, sct;
-	uint32_t mark = 0, total = 0;
-	uint32_t remain = part->content->len;
-	
+	unsigned char                  *p, *p1;
+	gunichar                        c, t;
+	GUnicodeScript                  scc, sct;
+	uint32_t                        mark = 0, total = 0;
+	uint32_t                        remain = part->content->len;
+
 	p = part->content->data;
 
 	if (part->is_raw || raw_mode) {
 		while (remain > 1) {
-			if ((g_ascii_isalpha (*p) && (*(p + 1) & 0x80)) ||
-			   ((*p & 0x80) && g_ascii_isalpha (*(p + 1)))) {
-				mark ++;
-				total ++;
+			if ((g_ascii_isalpha (*p) && (*(p + 1) & 0x80)) || ((*p & 0x80) && g_ascii_isalpha (*(p + 1)))) {
+				mark++;
+				total++;
 			}
 			/* Current and next symbols are of one class */
-			else if (((*p & 0x80) && (*(p + 1) & 0x80)) ||
-					(g_ascii_isalpha (*p) && g_ascii_isalpha (*(p + 1)))) {
-				total ++;		
+			else if (((*p & 0x80) && (*(p + 1) & 0x80)) || (g_ascii_isalpha (*p) && g_ascii_isalpha (*(p + 1)))) {
+				total++;
 			}
-			p ++;
-			remain --;
+			p++;
+			remain--;
 		}
 	}
 	else {
 		while (remain > 0) {
 			c = g_utf8_get_char_validated (p, remain);
-			if (c == (gunichar)-2 || c == (gunichar)-1) {
-				/* Invalid characters detected, stop processing*/
+			if (c == (gunichar) - 2 || c == (gunichar) - 1) {
+				/* Invalid characters detected, stop processing */
 				return FALSE;
 			}
 
@@ -165,20 +163,20 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 			p1 = g_utf8_next_char (p);
 			remain -= p1 - p;
 			p = p1;
-			
+
 			if (remain > 0) {
 				t = g_utf8_get_char_validated (p, remain);
-				if (c == (gunichar)-2 || c == (gunichar)-1) {
-					/* Invalid characters detected, stop processing*/
+				if (c == (gunichar) - 2 || c == (gunichar) - 1) {
+					/* Invalid characters detected, stop processing */
 					return FALSE;
 				}
 				sct = g_unichar_get_script (t);
 				if (g_unichar_isalnum (c) && g_unichar_isalnum (t)) {
 					/* We have two unicode alphanumeric characters, so we can check its script */
 					if (sct != scc) {
-						mark ++;
+						mark++;
 					}
-					total ++;
+					total++;
 				}
 				p1 = g_utf8_next_char (p);
 				remain -= p1 - p;
@@ -190,18 +188,18 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 	return ((double)mark / (double)total) > chartable_module_ctx->threshold;
 }
 
-static void 
+static void
 chartable_symbol_callback (struct worker_task *task, void *unused)
-{	
-	GList *cur;
-	struct mime_text_part *part;
+{
+	GList                          *cur;
+	struct mime_text_part          *part;
 
 	if (check_view (task->cfg->views, chartable_module_ctx->symbol, task)) {
 		cur = g_list_first (task->text_parts);
 		while (cur) {
 			part = cur->data;
 			if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
-				insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);	
+				insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);
 			}
 			cur = g_list_next (cur);
 		}
@@ -209,7 +207,7 @@ chartable_symbol_callback (struct worker_task *task, void *unused)
 
 }
 
-static int 
+static int
 chartable_mime_filter (struct worker_task *task)
 {
 	/* XXX: remove it */
