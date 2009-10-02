@@ -29,6 +29,9 @@
 /* 1 worker by default */
 #define DEFAULT_WORKERS_NUM 1
 
+#define DEFAULT_SCORE 10.0
+#define DEFAULT_REJECT_SCORE 999.0
+
 #define yyerror parse_err
 #define yywarn parse_warn
 

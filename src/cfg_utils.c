@@ -520,6 +520,7 @@ post_load_config (struct config_file *cfg)
 		def_metric->func_name = "factors";
 		def_metric->func = factor_consolidation_func;
 		def_metric->required_score = DEFAULT_SCORE;
+		def_metric->reject_score = DEFAULT_REJECT_SCORE;
 		def_metric->classifier = get_classifier ("winnow");
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
 		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);

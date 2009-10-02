@@ -13,11 +13,14 @@
 #define RSPAMD_PROTOCOL_ERROR 3
 #define RSPAMD_LENGTH_ERROR 4
 
+#define RSPAMC_PROTO_1_0 "1.0"
+#define RSPAMC_PROTO_1_1 "1.1"
+
 /*
  * Reply messages
  */
-#define RSPAMD_REPLY_BANNER "RSPAMD/1.0"
-#define SPAMD_REPLY_BANNER "SPAMD/1.1"
+#define RSPAMD_REPLY_BANNER "RSPAMD"
+#define SPAMD_REPLY_BANNER "SPAMD"
 #define SPAMD_OK "EX_OK"
 /* XXX: try to convert rspamd errors to spamd errors */
 #define SPAMD_ERROR "EX_ERROR"

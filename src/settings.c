@@ -50,6 +50,9 @@ settings_free (gpointer data)
 	if (s->metric_scores) {
 		g_hash_table_destroy (s->metric_scores);
 	}
+	if (s->reject_scores) {
+		g_hash_table_destroy (s->reject_scores);
+	}
 	g_free (s);
 }
 
@@ -149,6 +152,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	for (i = 0; i < nelts; i++) {
 		cur_settings = g_malloc (sizeof (struct rspamd_settings));
 		cur_settings->metric_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		cur_settings->reject_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->statfile_alias = NULL;
 		cur_settings->want_spam = FALSE;
@@ -196,6 +200,21 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 					g_hash_table_insert (cur_settings->metric_scores, g_strdup (json_object_iter_key (json_it)), score);
 				}
 				json_it = json_object_iter_next (cur_nm, json_it);
+			}
+		}
+		/* Rejects object */
+		cur_nm = json_object_get (cur_elt, "rejects");
+		if (cur_nm != NULL && json_is_object (cur_nm)) {
+			json_it = json_object_iter (cur_nm);
+			while (json_it) {
+				it_val = json_object_iter_value (json_it);
+				if (it_val && json_is_number (it_val)) {
+					score = g_malloc (sizeof (double));
+					*score = json_number_value (it_val);
+					g_hash_table_insert (cur_settings->reject_scores, g_strdup (json_object_iter_key (json_it)), 
+											score);
+				}
+				json_it = json_object_iter_next(cur_nm, json_it);
 			}
 		}
 		/* Want spam */
@@ -284,25 +303,36 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 }
 
 gboolean
-check_metric_settings (struct worker_task * task, struct metric * metric, double *score)
+check_metric_settings (struct worker_task * task, struct metric * metric, double *score, double *rscore)
 {
 	struct rspamd_settings         *us, *ds;
-	double                         *sc;
+	double                         *sc, *rs;
+
+	*rscore = DEFAULT_REJECT_SCORE;
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
 			/* First search in user's settings */
+			if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {
+				*rscore = *rs;
+			}
 			if ((sc = g_hash_table_lookup (us->metric_scores, metric->name)) != NULL) {
 				*score = *sc;
 				return TRUE;
 			}
 			/* Now check in domain settings */
+			if (ds && ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL)) {
+				*rscore = *rs;
+			}
 			if (ds && (sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
 				*score = *sc;
 				return TRUE;
 			}
 		}
 		else if (ds != NULL) {
+			if ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL) {
+				*rscore = *rs;
+			}
 			if ((sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
 				*score = *sc;
 				return TRUE;

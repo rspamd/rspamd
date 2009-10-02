@@ -66,6 +66,7 @@ factors							return FACTORS;
 metric							return METRIC;
 name							return NAME;
 required_score					return REQUIRED_SCORE;
+reject_score					return REJECT_SCORE;
 function						return FUNCTION;
 cache_file						return CACHE_FILE;
 control							return CONTROL;

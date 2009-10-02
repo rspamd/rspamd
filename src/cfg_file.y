@@ -52,7 +52,7 @@ struct rspamd_view *cur_view = NULL;
 %token  MEMCACHED WORKER TYPE MODULES MODULE_PATH
 %token  MODULE_OPT PARAM VARIABLE
 %token  FILTERS FACTORS METRIC NAME CACHE_FILE
-%token  REQUIRED_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
+%token  REQUIRED_SCORE REJECT_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
@@ -365,6 +365,7 @@ metriccmd:
 	| metricname
 	| metricfunction
 	| metricscore
+	| metricrjscore
 	| metricclassifier
 	| metriccache
 	;
@@ -406,6 +407,21 @@ metricscore:
 			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->required_score = $3;
+	}
+	;
+
+metricrjscore:
+	REJECT_SCORE EQSIGN NUMBER {
+		if (cur_metric == NULL) {
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		}
+		cur_metric->reject_score = $3;
+	}
+	| REQUIRED_SCORE EQSIGN FRACT {
+		if (cur_metric == NULL) {
+			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		}
+		cur_metric->reject_score = $3;
 	}
 	;
 

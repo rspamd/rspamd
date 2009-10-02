@@ -41,6 +41,7 @@ struct metric {
 	char *func_name;								/**< name of consolidation function			*/
 	metric_cons_func func;							/**< c consolidation function				*/
 	double required_score;							/**< required score for this metric			*/
+	double reject_score;							/**< reject score for this metric			*/
 	struct classifier *classifier;					/**< classifier that is used for metric		*/
 	struct symbols_cache *cache;					/**< symbols cache for metric 				*/ 
 	char *cache_filename;							/**< filename of cache file					*/

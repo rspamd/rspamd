@@ -120,7 +120,7 @@ sub do_rspamc_command {
 
     print "Sending ". length ($input) ." bytes...\n";
 
-    syswrite $sock, "$cfg{'command'} RSPAMC/1.0 $CRLF";
+    syswrite $sock, "$cfg{'command'} RSPAMC/1.1 $CRLF";
 	if ($cfg{'deliver_to'}) {
 		syswrite $sock, "Deliver-To: " . $cfg{'deliver_to'} . $CRLF;
 	}

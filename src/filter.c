@@ -234,12 +234,12 @@ static                          gboolean
 check_metric_is_spam (struct worker_task *task, struct metric *metric)
 {
 	struct metric_result           *res;
-	double                          ms;
+	double                          ms, rs;
 
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
 		metric_process_callback_forced (metric->name, res, task);
-		if (!check_metric_settings (task, metric, &ms)) {
+		if (!check_metric_settings (task, metric, &ms, &rs)) {
 			ms = metric->required_score;
 		}
 		return res->score >= ms;
@@ -572,18 +572,18 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	char                            header_name[128], outbuf[1000];
 	GList                          *symbols = NULL, *cur;
 	struct metric_result           *metric_res = (struct metric_result *)metric_value;
-	double                          ms;
+	double                          ms, rs;
 
 	snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
-	if (!check_metric_settings (task, metric_res->metric, &ms)) {
+	if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
 		ms = metric_res->metric->required_score;
 	}
 	if (metric_res->score >= ms) {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f; ", metric_res->score, ms);
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
 	}
 	else {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f; ", metric_res->score, ms);
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
 	}
 
 	symbols = g_hash_table_get_keys (metric_res->symbols);
