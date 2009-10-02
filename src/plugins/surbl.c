@@ -346,6 +346,7 @@ format_surbl_request (memory_pool_t *pool, f_str_t *hostname, struct suffix_item
             g_match_info_free (info);
             return result;
         }
+        g_match_info_free (info);
     }
     /* Try to match normal domain */
     if (g_regex_match_full (surbl_module_ctx->extract_normal_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {

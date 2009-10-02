@@ -111,8 +111,8 @@ lua_task_insert_result (lua_State *L)
 	int i, top;
 
 	if (task != NULL) {
-		metric_name = luaL_checkstring (L, 2);
-		symbol_name = luaL_checkstring (L, 3);
+		metric_name = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
+		symbol_name = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
 		flag = luaL_checknumber (L, 4);
 		top = lua_gettop (L);
 		/* Get additional options */

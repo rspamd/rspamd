@@ -8,9 +8,9 @@
 -- };
 
 
-metric = 'default'
-symbol = 'RECEIVED_RBL'
-rbls = {}
+local metric = 'default'
+local symbol = 'RECEIVED_RBL'
+local rbls = {}
 
 function dns_cb(task, to_resolve, results, err)
 	if results then

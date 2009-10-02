@@ -544,6 +544,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 			re = parse_regexp (task->cfg->cfg_pool, it->content.operand, task->cfg->raw_mode);
 			if (re == NULL) {
 				msg_warn ("process_regexp_expression: cannot parse regexp, skip expression");
+	            g_queue_free (stack);
 				return FALSE;
 			}
 			it->content.operand = re;
@@ -586,6 +587,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 	if (!g_queue_is_empty (stack)) {
 		op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 		if (op1) {
+			g_queue_free (stack);
 			return TRUE;
 		}
 	}

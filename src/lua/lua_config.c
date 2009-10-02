@@ -174,7 +174,7 @@ lua_metric_register_symbol (lua_State *L)
 	struct lua_callback_data *cd;
 
 	if (metric) {
-		name = luaL_checkstring (L, 2);
+		name = g_strdup (luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		callback = luaL_checkstring (L, 4);
 		if (name) {
