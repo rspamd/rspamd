@@ -174,7 +174,7 @@ read_socket (f_str_t * in, void *arg)
 			task->state = WRITE_ERROR;
 		}
 		if (task->state == WRITE_REPLY || task->state == WRITE_ERROR) {
-			write_socket (task);
+			return write_socket (task);
 		}
 		break;
 	case READ_MESSAGE:
@@ -188,20 +188,19 @@ read_socket (f_str_t * in, void *arg)
 			task->last_error = "MIME processing error";
 			task->error_code = RSPAMD_FILTER_ERROR;
 			task->state = WRITE_ERROR;
-			write_socket (task);
+			return write_socket (task);
 		}
 		if (task->cmd == CMD_OTHER) {
 			/* Skip filters */
 			task->state = WRITE_REPLY;
-			write_socket (task);
-			return TRUE;
+			return write_socket (task);
 		}
 		r = process_filters (task);
 		if (r == -1) {
 			task->last_error = "Filter processing error";
 			task->error_code = RSPAMD_FILTER_ERROR;
 			task->state = WRITE_ERROR;
-			write_socket (task);
+			return write_socket (task);
 		}
 		else if (r == 0) {
 			task->state = WAIT_FILTER;
@@ -209,7 +208,7 @@ read_socket (f_str_t * in, void *arg)
 		}
 		else {
 			process_statfiles (task);
-			write_socket (task);
+			return write_socket (task);
 		}
 		break;
 	default:
