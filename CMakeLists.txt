@@ -363,6 +363,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/events.c
 				src/html.c
 				src/lmtp.c
+				src/spf.c
 				src/lmtp_proto.c
 				src/radix.c
 				src/view.c
@@ -380,6 +381,7 @@ IF(ENABLE_LUA MATCHES "ON")
 ENDIF(ENABLE_LUA MATCHES "ON")
 
 ADD_SUBDIRECTORY(src/json)
+ADD_SUBDIRECTORY(src/evdns)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
@@ -488,6 +490,7 @@ TARGET_LINK_LIBRARIES(rspamd m)
 IF(LIBUTIL_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd util)
 ENDIF(LIBUTIL_LIBRARY)
+TARGET_LINK_LIBRARIES(rspamd rspamd_evdns)
 TARGET_LINK_LIBRARIES(rspamd event)
 TARGET_LINK_LIBRARIES(rspamd rspamd_json)
 TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})

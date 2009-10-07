@@ -26,7 +26,7 @@
 #include "lua_common.h"
 #include "../message.h"
 #include "../expressions.h"
-#include <evdns.h>
+#include "../evdns/evdns.h"
 
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);

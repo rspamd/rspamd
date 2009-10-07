@@ -31,7 +31,7 @@
 #include "../message.h"
 #include "../view.h"
 #include "../map.h"
-#include <evdns.h>
+#include "../evdns/evdns.h"
 
 #include "surbl.h"
 
