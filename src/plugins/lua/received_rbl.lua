@@ -7,7 +7,6 @@
 --      symbol = "RECEIVED_RBL";
 -- };
 
-
 local metric = 'default'
 local symbol = 'RECEIVED_RBL'
 local rbls = {}
@@ -37,17 +36,19 @@ end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('received_rbl')
 if opts then
-	for n,v in pairs(opts) do
-		if n == 'rbl' then
-			table.insert(rbls, v)
-		elseif n == 'metric' then
-			metric = v
-		elseif n == 'symbol' then
-			symbol = v
-		end
-	end
-end
+    if opts['symbol'] then
+        symbol = opts['symbol']
 
--- Register symbol's callback
-local m = rspamd_config:get_metric(metric)
-m:register_symbol(symbol, 1.0, 'received_cb')
+	    for n,v in pairs(opts) do
+		    if n == 'rbl' then
+			    table.insert(rbls, v)
+		    elseif n == 'metric' then
+			    metric = v
+		    end
+	    end
+        -- Register symbol's callback
+        local m = rspamd_config:get_metric(metric)
+        m:register_symbol(symbol, 1.0, 'received_cb')
+    end
+    -- If no symbol defined, do not register this module
+end
