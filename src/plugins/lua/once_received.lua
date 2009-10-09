@@ -12,27 +12,27 @@ function check_quantity_received (task)
 	print (symbol)
 	if table.maxn(recvh) <= 1 then
 		task:insert_result(metric, symbol, 1)
-	end
-	-- Strict checks
-	if symbol_strict then
-		local r = recvh[1]
-		-- Unresolved host
-		if not r['real_hostname'] or r['real_hostname'] == 'unknown' or string.match(r['real_hostname'], '(%d+)\.(%d+)\.(%d+)\.(%d+)') then
-			task:insert_result(metric, symbol_strict, 1)
-		end
-		local i = true
-		for _,h in ipairs(bad_hosts) do
-			if string.find(r['real_hostname'], h) then
-				-- Check for good hostname
-				for _,gh in ipairs(good_hosts) do
-					if string.find(r['real_hostname'], gh) then
-						i = false
-						break
+		-- Strict checks
+		if symbol_strict then
+			local r = recvh[1]
+			-- Unresolved host
+			if not r['real_hostname'] or r['real_hostname'] == 'unknown' or string.match(r['real_hostname'], '(%d+)\.(%d+)\.(%d+)\.(%d+)') then
+				task:insert_result(metric, symbol_strict, 1)
+			end
+			local i = true
+			for _,h in ipairs(bad_hosts) do
+				if string.find(r['real_hostname'], h) then
+					-- Check for good hostname
+					for _,gh in ipairs(good_hosts) do
+						if string.find(r['real_hostname'], gh) then
+							i = false
+							break
+						end
 					end
-				end
-				if i then
-					task:insert_result(metric, symbol_strict, 1, h)
-					return
+					if i then
+						task:insert_result(metric, symbol_strict, 1, h)
+						return
+					end
 				end
 			end
 		end
