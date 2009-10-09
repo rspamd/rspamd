@@ -38,6 +38,10 @@
 #include "../main.h"
 #include "evdns.h"
 
+/* According to SUSv2 */
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
 
 /* for strtok_r */
 #define _REENTRANT

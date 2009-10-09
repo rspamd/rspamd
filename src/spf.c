@@ -90,60 +90,136 @@ check_spf_mech (const char *elt, gboolean *need_shift)
 	}
 }
 
-static void
+static gboolean
 parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 }
 
-static void
+static gboolean
 parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 
 }
 
-static void
+static gboolean
 parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 
 }
 
-static void
+static gboolean
 parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
-
+	/* All is 0/0 */
+	addr->addr = 0;
+	addr->mask = 0;
 }
 
-static void
+static gboolean
 parse_spf_ip4 (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
+	/* ip4:addr[/mask] */
+	const char *pos;
+	char ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
+	int state = 0, dots = 0;
+	struct in_addr in;
+	
+	bzero (ip_buf, sizeof (ip_buf));
+	bzero (mask_buf, sizeof (mask_buf));
+	pos = begin;
 
+	while (*pos) {
+		switch (state) {
+			case 0:
+				/* Require ':' */
+				if (*pos != ':') {
+					return FALSE;
+				}
+				state = 1;
+				pos ++;
+				p = ip_buf;
+				dots = 0;
+				break;
+			case 1:
+				/* Begin parse ip */
+				if (p - ip_buf >= sizeof (ip_buf) || dots > 3) {
+					return FALSE;
+				}
+				if (g_ascii_isdigit (*pos)) {
+					*p ++ = *pos ++;
+				}
+				else if (*pos == '.') {
+					*p ++ = *pos ++;
+					dots ++;
+				}
+				else if (*pos == '/') {
+					pos ++;
+					p = mask_buf;
+					state = 2;
+				}
+				else {
+					/* Invalid character */
+					return FALSE;
+				}
+				break;
+			case 2:
+				/* Parse mask */
+				if (p - mask_buf > 2) {
+					return FALSE;
+				}
+				if (g_ascii_isdigit (*pos)) {
+					*p ++ = *pos ++;
+				}
+				else {
+					return FALSE;
+				}
+				break;
+		}
+	}
+
+	if (!inet_aton (ip_buf, &in)) {
+		return FALSE;
+	}
+	addr->addr = in.s_addr;
+	if (state == 2) {
+		/* Also parse mask */
+		addr->mask = mask_buf[0] * 10 + mask_buf[1];
+		if (addr->mask > 32) {
+			return FALSE;
+		}
+	}
+	else {
+		addr->mask = 32;
+	}
+	
+	return TRUE;
 }
 
-static void
+static gboolean
 parse_spf_include (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 
 }
 
-static void
+static gboolean
 parse_spf_exp (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 
 }
 
-static void
+static gboolean
 parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 
 }
 
-static void
+static gboolean
 parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
@@ -155,7 +231,7 @@ static gboolean
 parse_spf_record (struct worker_task *task, struct spf_record *rec)
 {
 	struct spf_addr *new;
-	gboolean need_shift;
+	gboolean need_shift, res = FALSE;
 	char *begin;
 
 	if (*rec->cur_elt == NULL) {
@@ -177,11 +253,11 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* all or a */
 				if (strncmp (begin, SPF_A, sizeof (SPF_A) - 1) == 0) {
 					begin += sizeof (SPF_A) - 1;
-					parse_spf_a (task, begin, rec, new);
+					res = parse_spf_a (task, begin, rec, new);
 				}
 				else if (strncmp (begin, SPF_ALL, sizeof (SPF_ALL) - 1) == 0) {
 					begin += sizeof (SPF_ALL) - 1;
-					parse_spf_all (task, begin, rec, new);
+					res = parse_spf_all (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command");
@@ -191,11 +267,11 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* include or ip4 */
 				if (strncmp (begin, SPF_IP4, sizeof (SPF_IP4) - 1) == 0) {
 					begin += sizeof (SPF_IP4) - 1;
-					parse_spf_ip4 (task, begin, rec, new);
+					res = parse_spf_ip4 (task, begin, rec, new);
 				}
 				else if (strncmp (begin, SPF_INCLUDE, sizeof (SPF_INCLUDE) - 1) == 0) {
 					begin += sizeof (SPF_INCLUDE) - 1;
-					parse_spf_include (task, begin, rec, new);
+					res = parse_spf_include (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command");
@@ -205,7 +281,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* mx */
 				if (strncmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
 					begin += sizeof (SPF_MX) - 1;
-					parse_spf_mx (task, begin, rec, new);
+					res = parse_spf_mx (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command");
@@ -215,7 +291,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* ptr */
 				if (strncmp (begin, SPF_PTR, sizeof (SPF_PTR) - 1) == 0) {
 					begin += sizeof (SPF_PTR) - 1;
-					parse_spf_ptr (task, begin, rec, new);
+					res = parse_spf_ptr (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command");
@@ -225,11 +301,11 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* exp or exists */
 				if (strncmp (begin, SPF_EXP, sizeof (SPF_EXP) - 1) == 0) {
 					begin += sizeof (SPF_EXP) - 1;
-					parse_spf_exp (task, begin, rec, new);
+					res = parse_spf_exp (task, begin, rec, new);
 				}
 				else if (strncmp (begin, SPF_EXISTS, sizeof (SPF_EXISTS) - 1) == 0) {
 					begin += sizeof (SPF_EXISTS) - 1;
-					parse_spf_exists (task, begin, rec, new);
+					res = parse_spf_exists (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command");
@@ -239,7 +315,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* redirect */
 				if (strncmp (begin, SPF_REDIRECT, sizeof (SPF_REDIRECT) - 1) == 0) {
 					begin += sizeof (SPF_REDIRECT) - 1;
-					parse_spf_redirect (task, begin, rec, new);
+					res = parse_spf_redirect (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command");
@@ -249,8 +325,10 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				msg_info ("parse_spf_record: bad spf command");
 				break;
 		}
-		rec->addrs = g_list_prepend (rec->addrs, new);
-		rec->cur_elt ++;
+		if (res) {
+			rec->addrs = g_list_prepend (rec->addrs, new);
+			rec->cur_elt ++;
+		}
 	}
 }
 
