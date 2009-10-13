@@ -64,8 +64,8 @@ struct regexp_ctx {
 static struct regexp_ctx       *regexp_module_ctx = NULL;
 
 static int                      regexp_common_filter (struct worker_task *task);
-static gboolean                 rspamd_regexp_match_number (struct worker_task *task, GList * args);
-static gboolean                 rspamd_raw_header_exists (struct worker_task *task, GList * args);
+static gboolean                 rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused);
+static gboolean                 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused);
 static void                     process_regexp_item (struct worker_task *task, void *user_data);
 
 
@@ -79,8 +79,8 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
-	register_expression_function ("regexp_match_number", rspamd_regexp_match_number);
-	register_expression_function ("raw_header_exists", rspamd_raw_header_exists);
+	register_expression_function ("regexp_match_number", rspamd_regexp_match_number, NULL);
+	register_expression_function ("raw_header_exists", rspamd_raw_header_exists, NULL);
 
 	return 0;
 }
@@ -620,7 +620,7 @@ regexp_common_filter (struct worker_task *task)
 }
 
 static                          gboolean
-rspamd_regexp_match_number (struct worker_task *task, GList * args)
+rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused)
 {
 	int                             param_count, res = 0;
 	struct expression_argument     *arg;
@@ -657,7 +657,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList * args)
 }
 
 static                          gboolean
-rspamd_raw_header_exists (struct worker_task *task, GList * args)
+rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 

@@ -9,7 +9,6 @@ local good_hosts = {}
 
 function check_quantity_received (task)
 	local recvh = task:get_received_headers()
-	print (symbol)
 	if table.maxn(recvh) <= 1 then
 		task:insert_result(metric, symbol, 1)
 		-- Strict checks

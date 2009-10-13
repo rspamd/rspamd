@@ -2096,6 +2096,7 @@ h("Мама"), h("мыла"), где h - хеш функция.
 {
 \end_layout
 
+\begin_deeper
 \begin_layout LyX-Code
 Header,
 \end_layout
@@ -2104,6 +2105,7 @@ Header,
 { feature_block1..feature_blockN }
 \end_layout
 
+\end_deeper
 \begin_layout LyX-Code
 }
 \end_layout
@@ -2236,6 +2238,43 @@ last_access = now - creation_time.
 
 \begin_layout Chapter
 Протокол rspamc
+\end_layout
+
+\begin_layout Standard
+Формат запроса схож с http:
+\end_layout
+
+\begin_layout LyX-Code
+COMMAND RSPAMC/1.0
+\end_layout
+
+\begin_layout Standard
+При этом допустимы следующие команды:
+\end_layout
+
+\begin_layout Itemize
+CHECK - проверить сообщение и выдать результат по каждой из метрик (не выводя
+ символов)
+\end_layout
+
+\begin_layout Itemize
+SYMBOLS - проверить сообщение, выдать результат по каждой из метрик и символы
+ по каждой из метрик
+\end_layout
+
+\begin_layout Itemize
+PROCESS - проверить сообщение, выдать результат по каждой из метрик, а затем
+ вывести исходное сообщение
+\end_layout
+
+\begin_layout Itemize
+PING - не принимая сообщение выдать готовность к работе
+\end_layout
+
+\begin_layout Standard
+Также в зависимости от подключенных плагинов могут быть доступны другие
+ команды протокола, например URLS (вывести все найденные в сообщении url'и)
+ или EMAILS.
 \end_layout
 
 \begin_layout Standard
@@ -2598,6 +2637,30 @@ end
 get_metric (name) - возвращает объект метрики с данным именем
 \end_layout
 
+\begin_layout Itemize
+register_function(name, callback) - регистрирует функцию lua для использования
+ в логических выражениях rspamd, callback в данном случае - строка с именем
+ функции, пример применения:
+\end_layout
+
+\begin_layout LyX-Code
+function some_func(task, arg1, arg2)
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+return false
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+end
+\end_layout
+
+\begin_layout LyX-Code
+rspamd_config:register_function('lua_func', 'some_func')
+\end_layout
+
 \begin_layout Standard
 Объект метрики используется для регистрации символов:
 \end_layout
@@ -2724,6 +2787,24 @@ get_urls() - возвращает массив строк, содержащих 
 
 \begin_layout Itemize
 get_message() - возвращает объект типа сообщение
+\end_layout
+
+\begin_layout Itemize
+get_recipients() - возвращает массив получателей письма, переданных в ходе
+ smtp диалога (командами RCPT TO:)
+\end_layout
+
+\begin_layout Itemize
+get_from() - возвращает адрес отправителя письма, переданных в ходе smtp
+ диалога (команда MAIL FROM:)
+\end_layout
+
+\begin_layout Itemize
+get_helo() - возвращает значение HELO
+\end_layout
+
+\begin_layout Itemize
+get_from_ip() - возвращает ip адрес, откуда нам пришло данное письмо
 \end_layout
 
 \begin_layout Standard

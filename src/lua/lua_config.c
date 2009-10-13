@@ -24,16 +24,19 @@
 
 
 #include "lua_common.h"
+#include "../expressions.h"
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
 LUA_FUNCTION_DEF (config, get_metric);
 LUA_FUNCTION_DEF (config, get_all_opt);
+LUA_FUNCTION_DEF (config, register_function);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_metric),
 	LUA_INTERFACE_DEF (config, get_all_opt),
+	LUA_INTERFACE_DEF (config, register_function),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -141,12 +144,69 @@ lua_config_get_metric (lua_State * L)
 
 }
 
-/*** Metric functions ***/
-
 struct lua_callback_data {
 	const char                     *name;
 	lua_State                      *L;
 };
+
+static gboolean
+lua_config_function_callback (struct worker_task *task, GList *args, void *user_data)
+{
+	struct lua_callback_data       *cd = user_data;
+	struct worker_task            **ptask;
+	int                             i = 1;
+	struct expression_argument     *arg;
+	GList                          *cur;
+	gboolean                        res = FALSE;
+
+	lua_getglobal (cd->L, cd->name);
+	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+	lua_setclass (cd->L, "rspamd{task}", -1);
+	*ptask = task;
+	/* Now push all arguments */
+	cur = args;
+	while (cur) {
+		arg = get_function_arg (cur->data, task, TRUE);
+		lua_pushstring (cd->L, (const char *)arg->data);
+		cur = g_list_next (cur);
+		i ++;
+	}
+
+	if (lua_pcall (cd->L, i, 1, 0) != 0) {
+		msg_warn ("lua_metric_symbol_callback: error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+	}
+	else {
+		if (lua_isboolean (cd->L, 1)) {
+			res = lua_toboolean (cd->L, 1);
+		}
+	}
+
+	return res;
+}
+
+static int
+lua_config_register_function (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const char                     *name, *callback;
+	struct lua_callback_data       *cd;
+	
+	if (cfg) {
+		name = g_strdup (luaL_checkstring (L, 2));
+	
+		callback = luaL_checkstring (L, 3);
+		if (name) {
+			cd = g_malloc (sizeof (struct lua_callback_data));
+			cd->name = g_strdup (callback);
+			cd->L = L;
+			register_expression_function (cd->name, lua_config_function_callback, cd);
+		}
+	}
+	return 0;
+}
+
+/*** Metric functions ***/
+
 
 static void
 lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
@@ -180,7 +240,7 @@ lua_metric_register_symbol (lua_State * L)
 			cd = g_malloc (sizeof (struct lua_callback_data));
 			cd->name = g_strdup (callback);
 			cd->L = L;
-			register_symbol (&metric->cache, name, weight, lua_metric_symbol_callback, cd);
+			register_symbol (&metric->cache, cd->name, weight, lua_metric_symbol_callback, cd);
 		}
 	}
 	return 1;

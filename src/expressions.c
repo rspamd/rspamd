@@ -31,22 +31,22 @@
 #include "expressions.h"
 #include "html.h"
 
-gboolean                        rspamd_compare_encoding (struct worker_task *task, GList * args);
-gboolean                        rspamd_header_exists (struct worker_task *task, GList * args);
-gboolean                        rspamd_content_type_compare_param (struct worker_task *task, GList * args);
-gboolean                        rspamd_content_type_has_param (struct worker_task *task, GList * args);
-gboolean                        rspamd_content_type_is_subtype (struct worker_task *task, GList * args);
-gboolean                        rspamd_content_type_is_type (struct worker_task *task, GList * args);
-gboolean                        rspamd_parts_distance (struct worker_task *task, GList * args);
-gboolean                        rspamd_recipients_distance (struct worker_task *task, GList * args);
-gboolean                        rspamd_has_content_part (struct worker_task *task, GList * args);
-gboolean                        rspamd_has_content_part_len (struct worker_task *task, GList * args);
-gboolean                        rspamd_has_only_html_part (struct worker_task *task, GList * args);
-gboolean                        rspamd_is_recipients_sorted (struct worker_task *task, GList * args);
-gboolean                        rspamd_compare_transfer_encoding (struct worker_task *task, GList * args);
-gboolean                        rspamd_is_html_balanced (struct worker_task *task, GList * args);
-gboolean                        rspamd_has_html_tag (struct worker_task *task, GList * args);
-gboolean                        rspamd_has_fake_html (struct worker_task *task, GList * args);
+gboolean                        rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_header_exists (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_content_type_compare_param (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_content_type_has_param (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_content_type_is_type (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_parts_distance (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_content_part (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_content_part_len (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_only_html_part (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_is_recipients_sorted (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_compare_transfer_encoding (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_is_html_balanced (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_html_tag (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_fake_html (struct worker_task *task, GList * args, void *unused);
 
 /*
  * List of internal functions of rspamd
@@ -55,24 +55,25 @@ gboolean                        rspamd_has_fake_html (struct worker_task *task, 
 static struct _fl {
 	const char                     *name;
 	rspamd_internal_func_t          func;
+	void                           *user_data;
 } rspamd_functions_list[] = {
 	{
-	"compare_encoding", rspamd_compare_encoding}, {
-	"compare_parts_distance", rspamd_parts_distance}, {
-	"compare_recipients_distance", rspamd_recipients_distance}, {
-	"compare_transfer_encoding", rspamd_compare_transfer_encoding}, {
-	"content_type_compare_param", rspamd_content_type_compare_param}, {
-	"content_type_has_param", rspamd_content_type_has_param}, {
-	"content_type_is_subtype", rspamd_content_type_is_subtype}, {
-	"content_type_is_type", rspamd_content_type_is_type}, {
-	"has_content_part", rspamd_has_content_part}, {
-	"has_content_part_len", rspamd_has_content_part_len}, {
-	"has_fake_html", rspamd_has_fake_html}, {
-	"has_html_tag", rspamd_has_html_tag}, {
-	"has_only_html_part", rspamd_has_only_html_part}, {
-	"header_exists", rspamd_header_exists}, {
-	"is_html_balanced", rspamd_is_html_balanced}, {
-"is_recipients_sorted", rspamd_is_recipients_sorted},};
+	"compare_encoding", rspamd_compare_encoding, NULL}, {
+	"compare_parts_distance", rspamd_parts_distance, NULL}, {
+	"compare_recipients_distance", rspamd_recipients_distance, NULL}, {
+	"compare_transfer_encoding", rspamd_compare_transfer_encoding, NULL}, {
+	"content_type_compare_param", rspamd_content_type_compare_param, NULL}, {
+	"content_type_has_param", rspamd_content_type_has_param, NULL}, {
+	"content_type_is_subtype", rspamd_content_type_is_subtype, NULL}, {
+	"content_type_is_type", rspamd_content_type_is_type, NULL}, {
+	"has_content_part", rspamd_has_content_part, NULL}, {
+	"has_content_part_len", rspamd_has_content_part_len, NULL}, {
+	"has_fake_html", rspamd_has_fake_html, NULL}, {
+	"has_html_tag", rspamd_has_html_tag, NULL}, {
+	"has_only_html_part", rspamd_has_only_html_part, NULL}, {
+	"header_exists", rspamd_header_exists, NULL}, {
+	"is_html_balanced", rspamd_is_html_balanced, NULL}, {
+	"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},};
 
 static struct _fl              *list_ptr = &rspamd_functions_list[0];
 static uint32_t                 functions_number = sizeof (rspamd_functions_list) / sizeof (struct _fl);
@@ -727,7 +728,7 @@ call_expression_function (struct expression_function * func, struct worker_task 
 		return FALSE;
 	}
 
-	return selected->func (task, func->args);
+	return selected->func (task, func->args, selected->user_data);
 }
 
 struct expression_argument     *
@@ -822,7 +823,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 }
 
 void
-register_expression_function (const char *name, rspamd_internal_func_t func)
+register_expression_function (const char *name, rspamd_internal_func_t func, void *user_data)
 {
 	static struct _fl              *new;
 
@@ -837,12 +838,13 @@ register_expression_function (const char *name, rspamd_internal_func_t func)
 	list_allocated = TRUE;
 	new[functions_number - 1].name = name;
 	new[functions_number - 1].func = func;
+	new[functions_number - 1].user_data = user_data;
 	qsort (new, functions_number, sizeof (struct _fl), fl_cmp);
 	list_ptr = new;
 }
 
 gboolean
-rspamd_compare_encoding (struct worker_task *task, GList * args)
+rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 
@@ -861,7 +863,7 @@ rspamd_compare_encoding (struct worker_task *task, GList * args)
 }
 
 gboolean
-rspamd_header_exists (struct worker_task * task, GList * args)
+rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 	GList                          *headerlist;
@@ -891,7 +893,7 @@ rspamd_header_exists (struct worker_task * task, GList * args)
  * and return FALSE otherwise.
  */
 gboolean
-rspamd_parts_distance (struct worker_task * task, GList * args)
+rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 {
 	int                             threshold;
 	struct mime_text_part          *p1, *p2;
@@ -934,7 +936,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args)
 }
 
 gboolean
-rspamd_content_type_compare_param (struct worker_task * task, GList * args)
+rspamd_content_type_compare_param (struct worker_task * task, GList * args, void *unused)
 {
 	char                           *param_name, *param_pattern;
 	const char                     *param_data;
@@ -1000,7 +1002,7 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args)
 }
 
 gboolean
-rspamd_content_type_has_param (struct worker_task * task, GList * args)
+rspamd_content_type_has_param (struct worker_task * task, GList * args, void *unused)
 {
 	char                           *param_name;
 	const char                     *param_data;
@@ -1039,7 +1041,7 @@ typedef struct {
 } localContentType;
 
 gboolean
-rspamd_content_type_is_subtype (struct worker_task *task, GList * args)
+rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *unused)
 {
 	char                           *param_pattern;
 	struct rspamd_regexp           *re;
@@ -1097,7 +1099,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args)
 }
 
 gboolean
-rspamd_content_type_is_type (struct worker_task * task, GList * args)
+rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unused)
 {
 	char                           *param_pattern;
 	struct rspamd_regexp           *re;
@@ -1164,7 +1166,7 @@ struct addr_list {
 #define MIN_RCPT_TO_COMPARE 5
 
 gboolean
-rspamd_recipients_distance (struct worker_task *task, GList * args)
+rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 	InternetAddressList            *cur;
@@ -1230,7 +1232,7 @@ rspamd_recipients_distance (struct worker_task *task, GList * args)
 }
 
 gboolean
-rspamd_has_only_html_part (struct worker_task * task, GList * args)
+rspamd_has_only_html_part (struct worker_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;
@@ -1284,7 +1286,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 }
 
 gboolean
-rspamd_is_recipients_sorted (struct worker_task * task, GList * args)
+rspamd_is_recipients_sorted (struct worker_task * task, GList * args, void *unused)
 {
 	/* Check all types of addresses */
 	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message, GMIME_RECIPIENT_TYPE_TO)) == TRUE) {
@@ -1438,7 +1440,7 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 }
 
 gboolean
-rspamd_has_content_part (struct worker_task * task, GList * args)
+rspamd_has_content_part (struct worker_task * task, GList * args, void *unused)
 {
 	char                           *param_type = NULL, *param_subtype = NULL;
 	struct expression_argument     *arg;
@@ -1460,7 +1462,7 @@ rspamd_has_content_part (struct worker_task * task, GList * args)
 }
 
 gboolean
-rspamd_has_content_part_len (struct worker_task * task, GList * args)
+rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unused)
 {
 	char                           *param_type = NULL, *param_subtype = NULL;
 	int                             min = 0, max = 0;
@@ -1502,7 +1504,7 @@ rspamd_has_content_part_len (struct worker_task * task, GList * args)
 }
 
 gboolean
-rspamd_compare_transfer_encoding (struct worker_task * task, GList * args)
+rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void *unused)
 {
 	GMimeObject                    *part;
 	GMimePartEncodingType           enc_req, part_enc;
@@ -1541,7 +1543,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args)
 }
 
 gboolean
-rspamd_is_html_balanced (struct worker_task * task, GList * args)
+rspamd_is_html_balanced (struct worker_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;
@@ -1589,7 +1591,7 @@ search_html_node_callback (GNode * node, gpointer data)
 }
 
 gboolean
-rspamd_has_html_tag (struct worker_task * task, GList * args)
+rspamd_has_html_tag (struct worker_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;
@@ -1627,7 +1629,7 @@ rspamd_has_html_tag (struct worker_task * task, GList * args)
 }
 
 gboolean
-rspamd_has_fake_html (struct worker_task * task, GList * args)
+rspamd_has_fake_html (struct worker_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;

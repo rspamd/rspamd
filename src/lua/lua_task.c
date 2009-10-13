@@ -38,6 +38,10 @@ LUA_FUNCTION_DEF (task, get_received_headers);
 LUA_FUNCTION_DEF (task, resolve_dns_a);
 LUA_FUNCTION_DEF (task, resolve_dns_ptr);
 LUA_FUNCTION_DEF (task, call_rspamd_function);
+LUA_FUNCTION_DEF (task, get_recipients);
+LUA_FUNCTION_DEF (task, get_from);
+LUA_FUNCTION_DEF (task, get_from_ip);
+LUA_FUNCTION_DEF (task, get_helo);
 
 static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
@@ -49,6 +53,10 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, resolve_dns_a),
 	LUA_INTERFACE_DEF (task, resolve_dns_ptr),
 	LUA_INTERFACE_DEF (task, call_rspamd_function),
+	LUA_INTERFACE_DEF (task, get_recipients),
+	LUA_INTERFACE_DEF (task, get_from),
+	LUA_INTERFACE_DEF (task, get_from_ip),
+	LUA_INTERFACE_DEF (task, get_helo),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -370,6 +378,77 @@ lua_task_call_rspamd_function (lua_State * L)
 
 	return 1;
 
+}
+
+static int
+lua_task_get_recipients (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	int	                            i = 1;
+	GList                          *cur;
+
+	if (task) {
+		cur = task->rcpt;
+		if (cur != NULL) {
+			lua_newtable (L);
+			while (cur) {
+				lua_pushstring (L, (char *)cur->data);
+				lua_rawseti (L, -2, i++);
+			}
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static int
+lua_task_get_from (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	
+	if (task) {
+		if (task->from != NULL) {
+			lua_pushstring (L, (char *)task->from);
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static int
+lua_task_get_from_ip (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	
+	if (task) {
+		if (task->from_addr.s_addr != 0) {
+			lua_pushstring (L, inet_ntoa (task->from_addr));
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static int
+lua_task_get_helo (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	
+	if (task) {
+		if (task->helo != NULL) {
+			lua_pushstring (L, (char *)task->helo);
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
 }
 
 

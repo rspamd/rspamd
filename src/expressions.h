@@ -48,7 +48,7 @@ struct expression {
 	struct expression *next;									/**< chain link										*/
 };
 
-typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args);
+typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args, void *user_data);
 
 /**
  * Parse regexp line to regexp structure
@@ -79,7 +79,7 @@ gboolean call_expression_function (struct expression_function *func, struct work
  * @param name name of function
  * @param func pointer to function
  */
-void register_expression_function (const char *name, rspamd_internal_func_t func);
+void register_expression_function (const char *name, rspamd_internal_func_t func, void *user_data);
 
 /**
  * Add regexp to regexp cache
