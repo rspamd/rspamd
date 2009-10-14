@@ -394,6 +394,7 @@ lua_task_get_recipients (lua_State *L)
 			while (cur) {
 				lua_pushstring (L, (char *)cur->data);
 				lua_rawseti (L, -2, i++);
+				cur = g_list_next (cur);
 			}
 			return 1;
 		}
