@@ -21,11 +21,15 @@ function check_forged_headers(task)
 			count = count + table.maxn(mime_cc)
 		end
 		-- Check recipients count
-		if count <= table.maxn(smtp_rcpt) then
+		if count < table.maxn(smtp_rcpt) then
 			task:insert_result(metric, symbol_rcpt, 1)
 		else
 			-- Find pair for each smtp recipient recipient in To or Cc headers
 			for _,sr in ipairs(smtp_rcpt) do
+				if string.byte(sr, 1) == string.byte('<') then
+					-- Trim brackets
+					sr = string.sub(sr, 2, -2)
+				end
 				if mime_rcpt then
 					for _,mr in ipairs(mime_rcpt) do
 						if string.find(mr, sr) then
