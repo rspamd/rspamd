@@ -41,6 +41,10 @@
 #define SPF_REDIRECT "redirect"
 #define SPF_EXP "exp"
 
+/** SPF limits for avoiding abuse **/
+#define SPF_MAX_NESTING 5
+#define SPF_MAX_DNS_REQUESTS 10
+
 /**
  * State machine for SPF record:
  *
@@ -91,37 +95,8 @@ check_spf_mech (const char *elt, gboolean *need_shift)
 }
 
 static gboolean
-parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 {
-	struct spf_dns_cb *cb;
-}
-
-static gboolean
-parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
-{
-	struct spf_dns_cb *cb;
-
-}
-
-static gboolean
-parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
-{
-	struct spf_dns_cb *cb;
-
-}
-
-static gboolean
-parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
-{
-	/* All is 0/0 */
-	addr->addr = 0;
-	addr->mask = 0;
-}
-
-static gboolean
-parse_spf_ip4 (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
-{
-	/* ip4:addr[/mask] */
 	const char *pos;
 	char ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
 	int state = 0, dots = 0;
@@ -194,8 +169,45 @@ parse_spf_ip4 (struct worker_task *task, const char *begin, struct spf_record *r
 	else {
 		addr->mask = 32;
 	}
-	
+
 	return TRUE;
+
+}
+
+static gboolean
+parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+{
+	struct spf_dns_cb *cb;
+}
+
+static gboolean
+parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+{
+	struct spf_dns_cb *cb;
+
+}
+
+static gboolean
+parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+{
+	struct spf_dns_cb *cb;
+
+}
+
+static gboolean
+parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+{
+	/* All is 0/0 */
+	addr->addr = 0;
+	addr->mask = 0;
+}
+
+static gboolean
+parse_spf_ip4 (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+{
+	/* ip4:addr[/mask] */
+
+	return parse_spf_ipmask (begin, addr);
 }
 
 static gboolean

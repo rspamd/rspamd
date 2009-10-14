@@ -9,26 +9,37 @@ function check_forged_headers(task)
 	local msg = task:get_message()
 	local smtp_rcpt = task:get_recipients()
 	local res = false
-
+	
 	if smtp_rcpt then
 		local mime_rcpt = msg:get_header('To')
 		local mime_cc = msg:get_header('Cc')
+		local count = 0
+		if mime_rcpt then
+			count = table.maxn(mime_rcpt)
+		end
+		if mime_cc then
+			count = count + table.maxn(mime_cc)
+		end
 		-- Check recipients count
-		if table.maxn(mime_rcpt) + table.maxn(mime_cc) <= table.maxn(smtp_rcpt) then
+		if count <= table.maxn(smtp_rcpt) then
 			task:insert_result(metric, symbol_rcpt, 1)
 		else
 			-- Find pair for each smtp recipient recipient in To or Cc headers
 			for _,sr in ipairs(smtp_rcpt) do
-				for _,mr in ipairs(mime_rcpt) do
-					if string.find(mr, sr) then
-						res = true
-						break
+				if mime_rcpt then
+					for _,mr in ipairs(mime_rcpt) do
+						if string.find(mr, sr) then
+							res = true
+							break
+						end
 					end
 				end
-				for _,mr in ipairs(mime_cc) do
-					if string.find(mr, sr) then
-						res = true
-						break
+				if mime_cc then
+					for _,mr in ipairs(mime_cc) do
+						if string.find(mr, sr) then
+							res = true
+							break
+						end
 					end
 				end
 

@@ -1177,13 +1177,14 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const char *fi
 				break;
 			case FUNC_IA:
 				ia_list = (*(fieldfunc[i].rcptfunc)) (message, field);
-				gret = g_list_alloc ();
 				ia = ia_list;
 #ifndef GMIME24
 				while (ia && ia->address) {
 
 					ia_string = internet_address_to_string ((InternetAddress *) ia->address, FALSE);
-					memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
+					if (pool != NULL) {
+						memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
+					}
 					gret = g_list_prepend (gret, ia_string);
 					ia = ia->next;
 				}
@@ -1191,7 +1192,9 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const char *fi
 				i = internet_address_list_length (ia);
 				while (i > 0) {
 					ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
-					memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
+					if (pool != NULL) {
+						memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
+					}
 					gret = g_list_prepend (gret, ia_string);
 					--i;
 				}

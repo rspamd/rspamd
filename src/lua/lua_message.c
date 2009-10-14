@@ -97,16 +97,16 @@ lua_check_message (lua_State * L)
 /*** Message interface	***/
 
 LUA_GMIME_BRIDGE_GET (message, get_subject, Message)
-	LUA_GMIME_BRIDGE_SET (message, set_subject, Message)
-	LUA_GMIME_BRIDGE_GET (message, get_message_id, Message)
-	LUA_GMIME_BRIDGE_SET (message, set_message_id, Message)
-	LUA_GMIME_BRIDGE_GET (message, get_sender, Message)
-	LUA_GMIME_BRIDGE_SET (message, set_sender, Message)
-	LUA_GMIME_BRIDGE_GET (message, get_reply_to, Message)
-	LUA_GMIME_BRIDGE_SET (message, set_reply_to, Message)
+LUA_GMIME_BRIDGE_SET (message, set_subject, Message)
+LUA_GMIME_BRIDGE_GET (message, get_message_id, Message)
+LUA_GMIME_BRIDGE_SET (message, set_message_id, Message)
+LUA_GMIME_BRIDGE_GET (message, get_sender, Message)
+LUA_GMIME_BRIDGE_SET (message, set_sender, Message)
+LUA_GMIME_BRIDGE_GET (message, get_reply_to, Message)
+LUA_GMIME_BRIDGE_SET (message, set_reply_to, Message)
 
-  static int
-                                  lua_message_get_header (lua_State * L)
+static int
+lua_message_get_header (lua_State * L)
 {
 	const char                     *headern;
 	GMimeMessage                   *obj = lua_check_message (L);
@@ -126,7 +126,7 @@ LUA_GMIME_BRIDGE_GET (message, get_subject, Message)
 					g_free (cur->data);
 					cur = g_list_next (cur);
 				}
-				g_free (res);
+				g_list_free (res);
 			}
 			else {
 				lua_pushnil (L);
