@@ -64,6 +64,7 @@ domain_settings                 return DOMAIN_SETTINGS;
 
 filters							return FILTERS;
 factors							return FACTORS;
+grow_factor						return GROW_FACTOR;
 metric							return METRIC;
 name							return NAME;
 required_score					return REQUIRED_SCORE;

@@ -186,6 +186,7 @@ init_defaults (struct config_file *cfg)
 
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
+	cfg->grow_factor = 1;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->metrics = g_hash_table_new (g_str_hash, g_str_equal);

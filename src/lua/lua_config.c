@@ -199,7 +199,7 @@ lua_config_register_function (lua_State *L)
 			cd = g_malloc (sizeof (struct lua_callback_data));
 			cd->name = g_strdup (callback);
 			cd->L = L;
-			register_expression_function (cd->name, lua_config_function_callback, cd);
+			register_expression_function (name, lua_config_function_callback, cd);
 		}
 	}
 	return 0;

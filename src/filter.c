@@ -117,17 +117,28 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 struct consolidation_callback_data {
 	struct worker_task             *task;
 	double                          score;
+	int                             count;
 };
 
 static void
 consolidation_callback (gpointer key, gpointer value, gpointer arg)
 {
-	double                         *factor, fs;
+	double                         *factor, fs, grow = 1;
 	struct symbol                  *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
+	
+	if (data->count > 0) {
+		grow = 1. + (data->task->cfg->grow_factor - 1.) * data->count;
+	}
 
 	if (check_factor_settings (data->task, key, &fs)) {
-		data->score += fs * s->score;
+		if (s->score > 0) {
+			data->score += fs * s->score * grow;
+			data->count ++;
+		}
+		else {
+			data->score += fs * s->score;
+		}
 	}
 	else {
 		factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
@@ -136,7 +147,13 @@ consolidation_callback (gpointer key, gpointer value, gpointer arg)
 			data->score += s->score;
 		}
 		else {
-			data->score += *factor * s->score;
+			if (s->score > 0) {
+				data->score += *factor * s->score * grow;
+				data->count ++;
+			}
+			else {
+				data->score += *factor * s->score;
+			}
 			msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
 		}
 	}
@@ -147,7 +164,11 @@ factor_consolidation_func (struct worker_task *task, const char *metric_name, co
 {
 	struct metric_result           *metric_res;
 	double                          res = 0.;
-	struct consolidation_callback_data data = { task, 0 };
+	struct consolidation_callback_data data = { 
+		.task = task, 
+		.score = 0,
+		.count = 0
+	};
 
 	metric_res = g_hash_table_lookup (task->results, metric_name);
 	if (metric_res == NULL) {

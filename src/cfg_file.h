@@ -238,6 +238,7 @@ struct config_file {
     GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
     GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	int clock_res;									/**< resolution of clock used							*/
+	double grow_factor;								/**< grow factor for consolidation callback				*/
 	GList *views;									/**< views												*/
     GHashTable* domain_settings;                    /**< settings per-domains                               */
     GHashTable* user_settings;                      /**< settings per-user                                  */

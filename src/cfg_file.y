@@ -59,7 +59,7 @@ struct rspamd_view *cur_view = NULL;
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS
 %token  AUTOLEARN MIN_MARK MAX_MARK
-%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK
+%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK GROW_FACTOR
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -465,7 +465,13 @@ factorparam:
 		double *tmp = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
 		*tmp = $3;
 		g_hash_table_insert (cfg->factors, $1, tmp);
-	};
+	}
+	| GROW_FACTOR EQSIGN FRACT {
+		cfg->grow_factor = $3;
+	}
+	| GROW_FACTOR EQSIGN NUMBER {
+		cfg->grow_factor = $3;
+	}
 
 modules:
 	MODULES OBRACE modulesbody EBRACE
