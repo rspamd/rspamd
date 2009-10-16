@@ -209,6 +209,9 @@ check_view (GList * views, const char *symbol, struct worker_task * task)
 
   check_symbol:
 	/* selected is now not NULL */
+	if (task->view->skip_check) {
+		return FALSE;
+	}
 	if (match_view_symbol (task->view, symbol)) {
 		return TRUE;
 	}

@@ -37,7 +37,7 @@ struct rspamd_view *cur_view = NULL;
 {
 	char *string;
 	size_t limit;
-	char flag;
+	gboolean flag;
 	unsigned int seconds;
 	unsigned int number;
 	double fract;
@@ -59,7 +59,7 @@ struct rspamd_view *cur_view = NULL;
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS
 %token  AUTOLEARN MIN_MARK MAX_MARK
-%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH
+%token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -417,7 +417,7 @@ metricrjscore:
 		}
 		cur_metric->reject_score = $3;
 	}
-	| REQUIRED_SCORE EQSIGN FRACT {
+	| REJECT_SCORE EQSIGN FRACT {
 		if (cur_metric == NULL) {
 			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
@@ -995,6 +995,7 @@ viewcmd:
 	| viewip
 	| viewfrom
 	| viewsymbols
+	| viewskipcheck
 	;
 	
 viewip:
@@ -1029,6 +1030,14 @@ viewsymbols:
 			yyerror ("yyparse: invalid symbols line in view definition: symbols = '%s'", $3);
 			YYERROR;
 		}
+	}
+	;
+viewskipcheck:
+	SKIP_CHECK EQSIGN FLAG {
+		if (cur_view == NULL) {
+			cur_view = init_view (cfg->cfg_pool);
+		}
+		cur_view->skip_check = $3;
 	}
 	;
 

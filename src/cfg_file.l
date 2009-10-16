@@ -44,6 +44,7 @@ view							return VIEW;
 ip								return IP;
 from							return FROM;
 symbols							return SYMBOLS;
+skip_check						return SKIP_CHECK;
 
 error_time                      return ERROR_TIME;
 dead_time                       return DEAD_TIME;

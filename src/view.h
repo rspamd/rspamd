@@ -13,6 +13,7 @@ struct rspamd_view {
 
 	GHashTable *symbols_hash;
 	GList *symbols_re_list;
+	gboolean skip_check;
 
 	memory_pool_t *pool;
 };
