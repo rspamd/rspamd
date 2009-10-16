@@ -472,9 +472,9 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 			/* Check opened */
 			if (!statfile_pool_is_open (task->worker->srv->statfile_pool, filename)) {
 				/* Try open */
-				if (statfile_pool_open (task->worker->srv->statfile_pool, filename) == NULL) {
+				if (statfile_pool_open (task->worker->srv->statfile_pool, filename, st->size, FALSE) == NULL) {
 					/* Try create */
-					if (statfile_pool_create (task->worker->srv->statfile_pool, filename, st->size / sizeof (struct stat_file_block)) == -1) {
+					if (statfile_pool_create (task->worker->srv->statfile_pool, filename, st->size) == -1) {
 						msg_info ("process_autolearn: error while creating statfile %s", filename);
 						return;
 					}

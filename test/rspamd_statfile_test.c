@@ -41,7 +41,7 @@ rspamd_statfile_test_func ()
 
 	/* Create new file */
 	g_assert (statfile_pool_create (pool, TEST_FILENAME, 65535) != -1);
-	g_assert ((st = statfile_pool_open (pool, TEST_FILENAME)) != NULL);
+	g_assert ((st = statfile_pool_open (pool, TEST_FILENAME, 65535, FALSE)) != NULL);
 	
 	/* Get and set random blocks */
 	statfile_pool_lock_file (pool, st);

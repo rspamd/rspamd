@@ -120,7 +120,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	while (cur) {
 		st = cur->data;
 		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
-			if ((data.file = statfile_pool_open (pool, st->path)) == NULL) {
+			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 				msg_warn ("winnow_classify: cannot open %s, skip it", st->path);
 				cur = g_list_next (cur);
 				continue;
@@ -174,13 +174,13 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t * pool, char *symbol, 
 	while (cur) {
 		st = cur->data;
 		if (strcmp (symbol, st->symbol) == 0) {
-			if ((data.file = statfile_pool_open (pool, st->path)) == NULL) {
+			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 				/* Try to create statfile */
-				if (statfile_pool_create (pool, st->path, st->size / sizeof (struct stat_file_block)) == -1) {
+				if (statfile_pool_create (pool, st->path, st->size) == -1) {
 					msg_err ("winnow_learn: cannot create statfile %s", st->path);
 					return;
 				}
-				if ((data.file = statfile_pool_open (pool, st->path)) == NULL) {
+				if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 					msg_err ("winnow_learn: cannot create statfile %s", st->path);
 					return;
 				}

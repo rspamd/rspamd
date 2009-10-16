@@ -100,7 +100,7 @@ statfile_pool_t* statfile_pool_new (size_t max_size);
  * @param filename name of statfile to open
  * @return 0 if specified statfile is attached and -1 in case of error
  */
-stat_file_t* statfile_pool_open (statfile_pool_t *pool, char *filename);
+stat_file_t* statfile_pool_open (statfile_pool_t *pool, char *filename, size_t len, gboolean forced);
 
 /**
  * Create new statfile but DOES NOT attach it to pool, use @see statfile_pool_open for attaching

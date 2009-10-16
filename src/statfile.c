@@ -29,6 +29,11 @@
 
 /* Maximum number of statistics files */
 #define STATFILES_MAX 255
+static void statfile_pool_set_block_common (
+				statfile_pool_t * pool, stat_file_t * file, 
+				uint32_t h1, uint32_t h2, 
+				time_t t, float value, 
+				gboolean from_now);
 
 static int
 cmpstatfile (const void *a, const void *b)
@@ -128,8 +133,72 @@ statfile_pool_new (size_t max_size)
 	return new;
 }
 
+static stat_file_t *
+statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, size_t size)
+{
+	char                           *backup;
+	int                             fd;
+	stat_file_t                    *new;
+	u_char                         *map, *pos;
+	struct stat_file_block         *block;
+
+	/* First of all rename old file */
+	memory_pool_lock_mutex (pool->lock);
+
+	backup = g_strconcat (filename, ".old", NULL);
+	if (rename (filename, backup) == -1) {
+		msg_err ("statfile_pool_reindex: cannot rename %s to %s: %s", filename, backup, strerror (errno));
+		g_free (backup);
+		memory_pool_unlock_mutex (pool->lock);
+		return NULL;
+	}
+
+	memory_pool_unlock_mutex (pool->lock);
+
+	/* Now create new file with required size */
+	if (statfile_pool_create (pool, filename, size) != 0) {
+		msg_err ("statfile_pool_reindex: cannot create new file");
+		g_free (backup);
+		return NULL;
+	}
+	/* Now open new file and start copying */
+	fd = open (backup, O_RDONLY);
+	new = statfile_pool_open (pool, filename, size, TRUE);
+
+	if (fd == -1 || new == NULL) {
+		msg_err ("statfile_pool_reindex: cannot open file: %s", strerror (errno));
+		g_free (backup);
+		return NULL;
+	}
+
+	/* Now start reading blocks from old statfile */
+	if ((map = mmap (NULL, old_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		msg_err ("statfile_pool_reindex: cannot mmap file: %s", strerror (errno));
+		close (fd);
+		g_free (backup);
+		return NULL;
+	}
+
+	pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
+	while (pos - map < old_size) {
+		block = (struct stat_file_block *)pos;
+		if (block->hash1 != 0 && block->value != 0) {
+			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, block->last_access, block->value, FALSE);
+		}
+		pos += sizeof (block);
+	}
+	
+	munmap (map, old_size);
+	close (fd);
+	unlink (backup);
+	g_free (backup);
+
+	return new;
+
+}
+
 stat_file_t                    *
-statfile_pool_open (statfile_pool_t * pool, char *filename)
+statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolean forced)
 {
 	struct stat                     st;
 	stat_file_t                    *new_file;
@@ -148,12 +217,20 @@ statfile_pool_open (statfile_pool_t * pool, char *filename)
 		return NULL;
 	}
 
-	if (st.st_size > pool->max) {
+	if (!forced && st.st_size > pool->max) {
 		msg_info ("statfile_pool_open: cannot attach file to pool, too large: %zd", (size_t) st.st_size);
 		return NULL;
 	}
 
-	while (pool->max + pool->opened * sizeof (struct stat_file) < pool->occupied + st.st_size) {
+	memory_pool_lock_mutex (pool->lock);
+	if (!forced && abs (st.st_size - size) > sizeof (struct stat_file_block)) {
+		memory_pool_unlock_mutex (pool->lock);
+		msg_warn ("statfile_pool_open: need to reindex statfile old size: %zd, new size: %zd", st.st_size, size);
+		return statfile_pool_reindex (pool, filename, st.st_size, size);
+	}
+	memory_pool_unlock_mutex (pool->lock);
+
+	while (!forced && (pool->max + pool->opened * sizeof (struct stat_file) * 2 < pool->occupied + st.st_size)) {
 		if (statfile_pool_expire (pool) == -1) {
 			/* Failed to find any more free space in pool */
 			msg_info ("statfile_pool_open: expiration for pool failed, opening file %s failed", filename);
@@ -235,7 +312,7 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 }
 
 int
-statfile_pool_create (statfile_pool_t * pool, char *filename, size_t blocks)
+statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 {
 	struct stat_file_header         header = {
 		.magic = {'r', 's', 'd'},
@@ -247,6 +324,8 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t blocks)
 	};
 	struct stat_file_block          block = { 0, 0, 0, 0 };
 	int                             fd;
+	unsigned int                    buflen, nblocks;
+	char                           *buf = NULL;
 
 	if (statfile_pool_is_open (pool, filename) != NULL) {
 		msg_info ("statfile_pool_open: file %s is already opened", filename);
@@ -254,6 +333,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t blocks)
 	}
 
 	memory_pool_lock_mutex (pool->lock);
+	nblocks = (size - sizeof (struct stat_file_header) - sizeof (struct stat_file_section)) / sizeof (struct stat_file_block);
 
 	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 		msg_info ("statfile_pool_create: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
@@ -269,25 +349,52 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t blocks)
 		return -1;
 	}
 
-	section.length = (uint64_t) blocks;
+	section.length = (uint64_t) nblocks;
 	if (write (fd, &section, sizeof (section)) == -1) {
 		msg_info ("statfile_pool_create: cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		memory_pool_unlock_mutex (pool->lock);
 		return -1;
 	}
+	
+	/* Buffer for write 256 blocks at once */
+	if (nblocks > 256) {
+		buflen = MIN (nblocks / 256 * sizeof (block), sizeof (block) * 256);
+		buf = g_malloc0 (buflen);
+	}
 
-	while (blocks--) {
-		if (write (fd, &block, sizeof (block)) == -1) {
-			msg_info ("statfile_pool_create: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
-			close (fd);
-			memory_pool_unlock_mutex (pool->lock);
-			return -1;
+	while (nblocks) {
+		if (nblocks > 256) {
+			/* Just write buffer */
+			if (write (fd, buf, buflen) == -1) {
+				msg_info ("statfile_pool_create: cannot write blocks buffer to file %s, error %d, %s", filename, errno, strerror (errno));
+				close (fd);
+				memory_pool_unlock_mutex (pool->lock);
+				g_free (buf);
+				return -1;
+			}
+			nblocks -= 256;
+		}
+		else {
+			if (write (fd, &block, sizeof (block)) == -1) {
+				msg_info ("statfile_pool_create: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
+				close (fd);
+				if (buf) {
+					g_free (buf);
+				}
+				memory_pool_unlock_mutex (pool->lock);
+				return -1;
+			}
+			nblocks --;
 		}
 	}
 
 	close (fd);
 	memory_pool_unlock_mutex (pool->lock);
+
+	if (buf) {
+		g_free (buf);
+	}
 
 	return 0;
 }
@@ -353,8 +460,8 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 	return 0;
 }
 
-void
-statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now, float value)
+static void
+statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t t, float value, gboolean from_now)
 {
 	struct stat_file_block         *block, *to_expire = NULL;
 	struct stat_file_header        *header;
@@ -362,7 +469,9 @@ statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 	u_char                         *c;
 
 
-	file->access_time = now;
+	if (from_now) {
+		file->access_time = t;
+	}
 	if (!file->map) {
 		return;
 	}
@@ -380,7 +489,12 @@ statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 		}
 		/* First try to find block in chain */
 		if (block->hash1 == h1 && block->hash2 == h2) {
-			block->last_access = now - (time_t) header->create_time;
+			if (from_now) {
+				block->last_access = t - (time_t) header->create_time;
+			}
+			else {
+				block->last_access = t;
+			}
 			block->value = value;
 			return;
 		}
@@ -391,7 +505,12 @@ statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 			block->hash1 = h1;
 			block->hash2 = h2;
 			block->value = value;
-			block->last_access = now - (time_t) header->create_time;
+			if (from_now) {
+				block->last_access = t - (time_t) header->create_time;
+			}
+			else {
+				block->last_access = t;
+			}
 			return;
 		}
 		if (block->last_access > oldest) {
@@ -410,10 +529,21 @@ statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 		c = (u_char *) file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 		block = (struct stat_file_block *)c;
 	}
-	block->last_access = now - (time_t) header->create_time;
+	if (from_now) {
+		block->last_access = t - (time_t) header->create_time;
+	}
+	else {
+		block->last_access = t;
+	}
 	block->hash1 = h1;
 	block->hash2 = h2;
 	block->value = value;
+}
+
+void
+statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now, float value)
+{
+	statfile_pool_set_block_common (pool, file, h1, h2, now, value, TRUE);
 }
 
 stat_file_t                    *
