@@ -26,7 +26,7 @@ function check_forged_headers(task)
 		else
 			-- Find pair for each smtp recipient recipient in To or Cc headers
 			for _,sr in ipairs(smtp_rcpt) do
-				if string.byte(sr, 1) == string.byte('<') then
+				if sr:byte(1) == utf8.ltsym then
 					-- Trim brackets
 					sr = string.sub(sr, 2, -2)
 				end

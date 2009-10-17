@@ -34,7 +34,8 @@ struct spf_record {
 	char **elts;
 
 	char **cur_elt;
-	spf_action_t cur_action;
+	int nested;
+	int dns_requests;
 
 	GList *addrs;
 	char *cur_domain;
