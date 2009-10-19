@@ -51,6 +51,8 @@ extern PerlInterpreter         *perl_interpreter;
 #endif
 
 static struct timeval           io_tv;
+/* Detect whether this worker is mime worker */
+static gboolean                 is_mime;
 
 static gboolean                 write_socket (void *arg);
 
@@ -296,6 +298,7 @@ construct_task (struct rspamd_worker *worker)
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) g_hash_table_destroy, new_task->re_cache);
 	new_task->s = new_async_session (new_task->task_pool, free_task_hard, new_task);
 	new_task->sock = -1;
+	new_task->is_mime = TRUE;
 
 	return new_task;
 }
@@ -334,6 +337,7 @@ accept_socket (int fd, short what, void *arg)
 	new_task = construct_task (worker);
 
 	new_task->sock = nfd;
+	new_task->is_mime = is_mime;
 	worker->srv->stat->connections_count++;
 
 	/* Set up dispatcher */
@@ -348,6 +352,7 @@ void
 start_worker (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
+	char                           *is_mime_str;
 
 #ifdef WITH_PROFILER
 	extern void                     _start (void), etext (void);
@@ -374,6 +379,14 @@ start_worker (struct rspamd_worker *worker)
 
 	/* Maps events */
 	start_map_watch ();
+	/* Check whether we are mime worker */
+	is_mime_str = g_hash_table_lookup (worker->cf->params, "mime");
+	if (is_mime_str != NULL && (g_ascii_strcasecmp (is_mime_str, "no") == 0 || g_ascii_strcasecmp (is_mime_str, "false") == 0)) {
+		is_mime = FALSE;
+	}
+	else {
+		is_mime = TRUE;
+	}
 
 	/* Send SIGUSR2 to parent */
 	kill (getppid (), SIGUSR2);

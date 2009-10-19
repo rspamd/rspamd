@@ -173,6 +173,7 @@ struct worker_task {
 	enum rspamd_command cmd;									/**< command										*/
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	
 	int sock;													/**< socket descriptor								*/
+    gboolean is_mime;                                           /**< if this task is mime task                      */
 	char *helo;													/**< helo header value								*/
 	char *from;													/**< from header value								*/
 	char *queue_id;												/**< queue id if specified							*/
@@ -182,6 +183,7 @@ struct worker_task {
 	struct in_addr from_addr;									/**< client addr in numeric form					*/
 	char *deliver_to;											/**< address to deliver								*/
 	char *user;													/**< user to deliver								*/
+	char *subject;												/**< subject (for non-mime)							*/
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
     struct rspamd_async_session* s;								/**< async session object							*/

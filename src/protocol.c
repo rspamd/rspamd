@@ -79,6 +79,7 @@
 #define IP_ADDR_HEADER "IP"
 #define NRCPT_HEADER "Recipient-Number"
 #define RCPT_HEADER "Rcpt"
+#define SUBJECT_HEADER "Subject"
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 #define USER_HEADER "User"
@@ -347,6 +348,15 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("parse_header: wrong header: %s", headern);
+			return -1;
+		}
+		break;
+	case 's':
+	case 'S':
+		if (strncasecmp (headern, SUBJECT_HEADER, sizeof (SUBJECT_HEADER) - 1) == 0) {
+			task->subject = memory_pool_fstrdup (task->task_pool, line);
+		}
+		else {
 			return -1;
 		}
 		break;

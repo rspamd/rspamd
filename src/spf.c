@@ -230,6 +230,11 @@ parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec
 	int hostlen;
 	
 	CHECK_REC (rec);
+	
+	if (begin == NULL || *begin != ':') {
+		return FALSE;
+	}
+	begin ++;
 
 	bzero (mask_buf, sizeof (mask_buf));
 	p = strchr (begin, '/');

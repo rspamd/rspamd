@@ -693,84 +693,140 @@ process_message (struct worker_task *task)
 	GMimeStream                    *stream;
 	GByteArray                     *tmp;
 	GList                          *first, *cur;
+	GMimePart                      *part;
+	GMimeDataWrapper               *wrapper;
 	struct received_header         *recv;
+	char                           *mid;
 
 	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->begin;
 	tmp->len = task->msg->len;
+
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
 	/* 
-	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
-	 * pool allocator
-	 */
+	* This causes g_mime_stream not to free memory by itself as it is memory allocated by
+	* pool allocator
+	*/
 	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
 
-	msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
-	/* create a new parser object to parse the stream */
-	parser = g_mime_parser_new_with_stream (stream);
-	g_object_unref (stream);
+	if (task->is_mime) {
 
-	/* parse the message from the stream */
-	message = g_mime_parser_construct_message (parser);
+		msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
+		/* create a new parser object to parse the stream */
+		parser = g_mime_parser_new_with_stream (stream);
+		g_object_unref (stream);
 
-	if (message == NULL) {
-		msg_warn ("process_message: cannot construct mime from stream");
-		return -1;
-	}
+		/* parse the message from the stream */
+		message = g_mime_parser_construct_message (parser);
 
-	task->message = message;
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) destroy_message, task->message);
+		if (message == NULL) {
+			msg_warn ("process_message: cannot construct mime from stream");
+			return -1;
+		}
 
-	task->parser_recursion = 0;
+		task->message = message;
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) destroy_message, task->message);
+
+		task->parser_recursion = 0;
 #ifdef GMIME24
-	g_mime_message_foreach (message, mime_foreach_callback, task);
+		g_mime_message_foreach (message, mime_foreach_callback, task);
 #else
-	g_mime_message_foreach_part (message, mime_foreach_callback, task);
+		g_mime_message_foreach_part (message, mime_foreach_callback, task);
 #endif
 
-	msg_debug ("process_message: found %d parts in message", task->parts_count);
-	if (task->queue_id == NULL) {
-		task->queue_id = (char *)g_mime_message_get_message_id (task->message);
-	}
-	task->message_id = g_mime_message_get_message_id (task->message);
-	if (task->message_id == NULL) {
-		task->message_id = "undef";
-	}
+		msg_debug ("process_message: found %d parts in message", task->parts_count);
+		if (task->queue_id == NULL) {
+			task->queue_id = (char *)g_mime_message_get_message_id (task->message);
+		}
+		task->message_id = g_mime_message_get_message_id (task->message);
+		if (task->message_id == NULL) {
+			task->message_id = "undef";
+		}
 
 #ifdef GMIME24
-	task->raw_headers = g_mime_object_get_headers (GMIME_OBJECT (task->message));
+		task->raw_headers = g_mime_object_get_headers (GMIME_OBJECT (task->message));
 #else
-	task->raw_headers = g_mime_message_get_headers (task->message);
+		task->raw_headers = g_mime_message_get_headers (task->message);
 #endif
 
-	/* Parse received headers */
-	first = message_get_header (task->task_pool, message, "Received");
-	cur = first;
-	while (cur) {
-		recv = memory_pool_alloc0 (task->task_pool, sizeof (struct received_header));
-		parse_recv_header (task->task_pool, cur->data, recv);
-		task->received = g_list_prepend (task->received, recv);
-		cur = g_list_next (cur);
-	}
-	if (first) {
-		g_list_free (first);
-	}
+		/* Parse received headers */
+		first = message_get_header (task->task_pool, message, "Received");
+		cur = first;
+		while (cur) {
+			recv = memory_pool_alloc0 (task->task_pool, sizeof (struct received_header));
+			parse_recv_header (task->task_pool, cur->data, recv);
+			task->received = g_list_prepend (task->received, recv);
+			cur = g_list_next (cur);
+		}
+		if (first) {
+			g_list_free (first);
+		}
 
-	if (task->raw_headers) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers);
-	}
+		if (task->raw_headers) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers);
+		}
 
-	task->rcpts = g_mime_message_get_all_recipients (message);
-	if (task->rcpts) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) internet_address_list_destroy, task->rcpts);
+		task->rcpts = g_mime_message_get_all_recipients (message);
+		if (task->rcpts) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) internet_address_list_destroy, task->rcpts);
+		}
+
+
+		/* free the parser (and the stream) */
+		g_object_unref (parser);
+	}
+	else {
+		/* We got only message, no mime headers or anything like this */
+		/* Construct fake message for it */
+		task->message = g_mime_message_new (TRUE);
+		if (task->from) {
+			g_mime_message_set_sender (task->message, task->from);
+		}
+		/* Construct part for it */
+		part = g_mime_part_new_with_type ("text", "html");
+#ifdef GMIME24
+		wrapper = g_mime_data_wrapper_new_with_stream (stream, GMIME_CONTENT_ENCODING_8BIT);
+#else
+		wrapper = g_mime_data_wrapper_new_with_stream (stream, GMIME_PART_ENCODING_8BIT);
+#endif
+		g_mime_part_set_content_object (part, wrapper);
+		g_mime_message_set_mime_part (task->message, GMIME_OBJECT (part));
+		/* Register destructors */
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, wrapper);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, part);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) destroy_message, task->message);
+		/* Now parse in a normal way */
+		task->parser_recursion = 0;
+#ifdef GMIME24
+		g_mime_message_foreach (task->message, mime_foreach_callback, task);
+#else
+		g_mime_message_foreach_part (task->message, mime_foreach_callback, task);
+#endif
+		/* Generate message ID */
+		mid = g_mime_utils_generate_message_id ("localhost.localdomain");
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, mid);
+		g_mime_message_set_message_id (task->message, mid);
+		task->message_id = mid;
+		task->queue_id = mid;
+		/* Set headers for message */
+		if (task->subject) {
+			g_mime_message_set_subject (task->message, task->subject);
+		}
+		/* Add recipients */
+#ifndef GMIME24
+		if (task->rcpt) {
+			cur = task->rcpt;
+			while (cur) {
+				g_mime_message_add_recipient (task->message, GMIME_RECIPIENT_TYPE_TO, NULL, (char *)cur->data);
+				cur = g_list_next (cur);
+			}
+		}
+#endif
 	}
 
 	if (task->worker) {
 		task->worker->srv->stat->messages_scanned++;
 	}
-
-	/* free the parser (and the stream) */
-	g_object_unref (parser);
 
 	return 0;
 }
