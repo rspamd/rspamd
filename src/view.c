@@ -163,6 +163,10 @@ match_view_symbol (struct rspamd_view *v, const char *symbol)
 	GList                          *cur;
 	struct rspamd_regexp           *re;
 
+	/* Special case */
+	if (symbol == NULL) {
+		return TRUE;
+	}
 	/* First try to lookup in hashtable */
 	if (g_hash_table_lookup (v->symbols_hash, symbol) != NULL) {
 		return TRUE;
@@ -216,5 +220,14 @@ check_view (GList * views, const char *symbol, struct worker_task * task)
 		return TRUE;
 	}
 
+	return FALSE;
+}
+
+gboolean
+check_skip (GList * views, struct worker_task * task)
+{
+	if (check_view (views, NULL, task) == FALSE) {
+		return TRUE;
+	}
 	return FALSE;
 }

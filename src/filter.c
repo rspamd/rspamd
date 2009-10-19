@@ -35,6 +35,7 @@
 #include "util.h"
 #include "expressions.h"
 #include "settings.h"
+#include "view.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -311,8 +312,17 @@ process_filters (struct worker_task *task)
 		task->save.saved = 0;
 		return continue_process_filters (task);
 	}
+	/* Check skip */
+	if (check_skip (task->cfg->views, task)) {
+		task->is_skipped = TRUE;
+		task->state = WRITE_REPLY;
+		msg_info ("process_filters: disable check for message id <%s>, view wants spam", task->message_id);
+		return 1;
+	}
 	/* Check want spam setting */
 	if (check_want_spam (task)) {
+		task->is_skipped = TRUE;
+		task->state = WRITE_REPLY;
 		msg_info ("process_filters: disable check for message id <%s>, user wants spam", task->message_id);
 		return 1;
 	}
@@ -527,6 +537,8 @@ classifiers_callback (gpointer value, void *arg)
 	f_str_t                         c;
 
 	cur = g_list_first (task->text_parts);
+	ctx = cl->classifier->init_func (task->task_pool, cl);
+
 	if ((tokens = g_hash_table_lookup (data->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
 			text_part = (struct mime_text_part *)cur->data;
@@ -550,7 +562,6 @@ classifiers_callback (gpointer value, void *arg)
 		return;
 	}
 
-	ctx = cl->classifier->init_func (task->task_pool, cl);
 	cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task);
 
 	/* Autolearning */
@@ -572,7 +583,10 @@ void
 process_statfiles (struct worker_task *task)
 {
 	struct statfile_callback_data   cd;
-
+	
+	if (task->is_skipped) {
+		return;
+	}
 	cd.task = task;
 	cd.tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
 

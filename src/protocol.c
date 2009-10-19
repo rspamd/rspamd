@@ -540,13 +540,23 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		}
 		else {
 			if (strcmp (task->proto_ver, RSPAMC_PROTO_1_1) == 0) {
-				r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f / %.2f" CRLF, ms, rs);
+                if (!task->is_skipped) {
+				    r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f / %.2f" CRLF, ms, rs);
+                }
+                else {
+				    r = snprintf (outbuf, sizeof (outbuf), "Metric: default; Skip; 0 / %.2f / %.2f" CRLF, ms, rs);
+                }
 			}
 			else {
 				r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF, ms);
 			}
 		}
-		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: F: [0/%.2f/%.2f] [", "default", ms, rs);
+        if (!task->is_skipped) {
+		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: F: [0/%.2f/%.2f] [", "default", ms, rs);
+        }
+        else {
+		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: S: [0/%.2f/%.2f] [", "default", ms, rs);
+        }
 	}
 	else {
 		if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
@@ -561,16 +571,29 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		}
 		else {
 			if (strcmp (task->proto_ver, RSPAMC_PROTO_1_1) == 0) {
-				r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f / %.2f" CRLF, 
+                if (!task->is_skipped) {
+				    r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f / %.2f" CRLF, 
 						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms, rs);
+                }
+                else {
+				    r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; Skip; %.2f / %.2f / %.2f" CRLF, 
+						(char *)metric_name, metric_res->score, ms, rs);
+                }
 			}
 			else {
 				r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, 
 						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
 			}
 		}
-		cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
+        if (!task->is_skipped) {
+		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
 				(char *)metric_name, is_spam ? "T" : "F", metric_res->score, ms, rs);
+        }
+        else {
+		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
+				(char *)metric_name, "S", metric_res->score, ms, rs);
+        
+        }
 	}
 	if (task->cmd == CMD_PROCESS) {
 #ifndef GMIME24

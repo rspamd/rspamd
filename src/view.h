@@ -25,5 +25,6 @@ gboolean add_view_ip (struct rspamd_view *view, char *line);
 gboolean add_view_symbols (struct rspamd_view *view, char *line);
 
 gboolean check_view (GList *views, const char *symbol, struct worker_task *task);
+gboolean check_skip (GList *views, struct worker_task *task);
 
 #endif

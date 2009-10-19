@@ -174,6 +174,7 @@ struct worker_task {
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	
 	int sock;													/**< socket descriptor								*/
     gboolean is_mime;                                           /**< if this task is mime task                      */
+    gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
 	char *helo;													/**< helo header value								*/
 	char *from;													/**< from header value								*/
 	char *queue_id;												/**< queue id if specified							*/
