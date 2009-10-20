@@ -445,7 +445,7 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 	block = (struct stat_file_block *)c;
 
 	for (i = 0; i < CHAIN_LENGTH; i++) {
-		if (i + blocknum > file->cur_section.length) {
+		if (i + blocknum >= file->cur_section.length) {
 			break;
 		}
 		if (block->hash1 == h1 && block->hash2 == h2) {
@@ -482,7 +482,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 	block = (struct stat_file_block *)c;
 
 	for (i = 0; i < CHAIN_LENGTH; i++) {
-		if (i + blocknum > file->cur_section.length) {
+		if (i + blocknum >= file->cur_section.length) {
 			/* Need to expire some block in chain */
 			msg_debug ("statfile_pool_set_block: chain %u is full, starting expire", blocknum);
 			break;
