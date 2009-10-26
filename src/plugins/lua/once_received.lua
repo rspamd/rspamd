@@ -15,7 +15,7 @@ function check_quantity_received (task)
 		if symbol_strict then
 			local r = recvh[1]
 			-- Unresolved host
-			if not r['real_hostname'] or r['real_hostname'] == 'unknown' or string.match(r['real_hostname'], '(%d+)\.(%d+)\.(%d+)\.(%d+)') then
+			if not r['real_hostname'] or r['real_hostname'] == 'unknown' or string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
 				task:insert_result(metric, symbol_strict, 1)
 			end
 			local i = true

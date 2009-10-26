@@ -13,7 +13,7 @@ local rbls = {}
 
 function dns_cb(task, to_resolve, results, err)
 	if results then
-		local _,_,rbl = string.find(to_resolve, '%d+\.%d+\.%d+\.%d+\.(.+)')
+		local _,_,rbl = string.find(to_resolve, '%d+%.%d+%.%d+%.%d+%.(.+)')
 		task:insert_result(metric, symbol, 1, rbl)
 	end
 end
@@ -23,7 +23,7 @@ function received_cb (task)
     for _,rh in ipairs(recvh) do
         for k,v in pairs(rh) do
 			if k == 'real_ip' then
-				local _,_,o1,o2,o3,o4 = string.find(v, '(%d+)\.(%d+)\.(%d+)\.(%d+)')
+				local _,_,o1,o2,o3,o4 = string.find(v, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
 				for _,rbl in ipairs(rbls) do
 					rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rbl
 					task:resolve_dns_a(rbl_str, 'dns_cb')
