@@ -182,6 +182,7 @@ struct worker_task {
 	GList *rcpt;												/**< recipients list								*/
 	unsigned int nrcpt;											/**< number of recipients							*/
 	struct in_addr from_addr;									/**< client addr in numeric form					*/
+	struct in_addr client_addr;									/**< client addr in numeric form					*/
 	char *deliver_to;											/**< address to deliver								*/
 	char *user;													/**< user to deliver								*/
 	char *subject;												/**< subject (for non-mime)							*/

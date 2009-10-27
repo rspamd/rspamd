@@ -326,15 +326,18 @@ accept_socket (int fd, short what, void *arg)
 		return;
 	}
 
+
+	new_task = construct_task (worker);
+
 	if (ss.ss_family == AF_UNIX) {
 		msg_info ("accept_socket: accepted connection from unix socket");
+		new_task->client_addr.s_addr = INADDR_NONE;
 	}
 	else if (ss.ss_family == AF_INET) {
 		sin = (struct sockaddr_in *)&ss;
 		msg_info ("accept_socket: accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
+		memcpy (&new_task->client_addr, &sin->sin_addr, sizeof (struct in_addr));
 	}
-
-	new_task = construct_task (worker);
 
 	new_task->sock = nfd;
 	new_task->is_mime = is_mime;

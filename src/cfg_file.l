@@ -42,6 +42,7 @@ pidfile							return PIDFILE;
 
 view							return VIEW;
 ip								return IP;
+client_ip						return CLIENT_IP;
 from							return FROM;
 symbols							return SYMBOLS;
 skip_check						return SKIP_CHECK;

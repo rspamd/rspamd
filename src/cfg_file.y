@@ -57,7 +57,7 @@ struct rspamd_view *cur_view = NULL;
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
-%token  VIEW IP FROM SYMBOLS
+%token  VIEW IP FROM SYMBOLS CLIENT_IP
 %token  AUTOLEARN MIN_MARK MAX_MARK
 %token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK GROW_FACTOR
 
@@ -999,6 +999,7 @@ viewbody:
 
 viewcmd:
 	| viewip
+	| viewclientip
 	| viewfrom
 	| viewsymbols
 	| viewskipcheck
@@ -1010,6 +1011,18 @@ viewip:
 			cur_view = init_view (cfg->cfg_pool);
 		}
 		if (!add_view_ip (cur_view, $3)) {
+			yyerror ("yyparse: invalid ip line in view definition: ip = '%s'", $3);
+			YYERROR;
+		}
+	}
+	;
+
+viewclientip:
+	CLIENT_IP EQSIGN QUOTEDSTRING {
+		if (cur_view == NULL) {
+			cur_view = init_view (cfg->cfg_pool);
+		}
+		if (!add_view_client_ip (cur_view, $3)) {
 			yyerror ("yyparse: invalid ip line in view definition: ip = '%s'", $3);
 			YYERROR;
 		}

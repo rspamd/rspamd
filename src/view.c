@@ -100,8 +100,18 @@ add_view_ip (struct rspamd_view * view, char *line)
 	return FALSE;
 }
 
+gboolean
+add_view_client_ip (struct rspamd_view * view, char *line)
+{
+	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
+		return TRUE;
+	}
 
-struct rspamd_view             *
+	return FALSE;
+}
+
+
+static struct rspamd_view             *
 find_view_by_ip (GList * views, struct worker_task *task)
 {
 	GList                          *cur;
@@ -123,7 +133,29 @@ find_view_by_ip (GList * views, struct worker_task *task)
 	return NULL;
 }
 
-struct rspamd_view             *
+static struct rspamd_view             *
+find_view_by_client_ip (GList * views, struct worker_task *task)
+{
+	GList                          *cur;
+	struct rspamd_view             *v;
+
+	if (task->client_addr.s_addr == INADDR_NONE) {
+		return NULL;
+	}
+
+	cur = views;
+	while (cur) {
+		v = cur->data;
+		if (radix32tree_find (v->client_ip_tree, ntohl (task->client_addr.s_addr)) != RADIX_NO_VALUE) {
+			return v;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return NULL;
+}
+
+static struct rspamd_view             *
 find_view_by_from (GList * views, struct worker_task *task)
 {
 	GList                          *cur, *cur_re;
@@ -201,10 +233,12 @@ check_view (GList * views, const char *symbol, struct worker_task * task)
 	}
 
 	if ((selected = find_view_by_ip (views, task)) == NULL) {
-		if ((selected = find_view_by_from (views, task)) == NULL) {
-			/* No matching view for this task */
-			task->view_checked = TRUE;
-			return TRUE;
+		if ((selected = find_view_by_client_ip (views, task)) == NULL) {
+			if ((selected = find_view_by_from (views, task)) == NULL) {
+				/* No matching view for this task */
+				task->view_checked = TRUE;
+				return TRUE;
+			}
 		}
 	}
 
