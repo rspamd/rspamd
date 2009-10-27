@@ -15,15 +15,18 @@ function check_quantity_received (task)
 		if symbol_strict then
 			local r = recvh[1]
 			-- Unresolved host
-			if not r['real_hostname'] or r['real_hostname'] == 'unknown' or string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
+			if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
 				task:insert_result(metric, symbol_strict, 1)
 			end
+
 			local i = true
+			local hn = string.lower(r['real_hostname'])
+
 			for _,h in ipairs(bad_hosts) do
-				if string.find(r['real_hostname'], h) then
+				if string.find(hn, h) then
 					-- Check for good hostname
 					for _,gh in ipairs(good_hosts) do
-						if string.find(r['real_hostname'], gh) then
+						if string.find(hn, gh) then
 							i = false
 							break
 						end
@@ -48,9 +51,9 @@ if opts then
 			if n == 'symbol_strict' then
 				symbol_strict = v
 			elseif n == 'bad_host' then
-			    table.insert(bad_hosts, v)
+			    table.insert(bad_hosts, string.lower(v))
 			elseif n == 'good_host' then
-			    table.insert(good_hosts, v)
+			    table.insert(good_hosts, string.lower(v))
 		    elseif n == 'metric' then
 			    metric = v
 		    end
