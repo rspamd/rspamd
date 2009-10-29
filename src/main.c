@@ -748,6 +748,7 @@ main (int argc, char **argv, char **env)
 					}
 					g_list_free_1 (l);
 					g_free (cur);
+					break;
 				}
 				l = g_list_next (l);
 			}
@@ -779,7 +780,7 @@ main (int argc, char **argv, char **env)
 						kill (cur->pid, SIGUSR2);
 						cur->is_dying = 1;
 					}
-					else {
+					else if (!cur->is_dying) {
 						msg_info ("main: %s process %d has been successfully started", get_process_type (cur->type), cur->pid);
 					}
 					l = g_list_next (l);

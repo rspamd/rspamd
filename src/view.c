@@ -40,8 +40,9 @@ init_view (memory_pool_t * pool)
 	new->pool = pool;
 	new->from_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->symbols_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->ip_tree = radix_tree_create ();
+	new->client_ip_tree = radix_tree_create ();
 
-	memory_pool_add_destructor (new->pool, (pool_destruct_func) g_hash_table_destroy, new->from_hash);
 	memory_pool_add_destructor (new->pool, (pool_destruct_func) g_hash_table_destroy, new->symbols_hash);
 
 	return new;
