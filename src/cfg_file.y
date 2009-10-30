@@ -234,16 +234,7 @@ workercmd:
 
 bindsock:
 	BINDSOCK EQSIGN bind_cred {
-		if (cur_worker == NULL) {
-			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
-			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
-			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
-#ifdef HAVE_SC_NPROCESSORS_ONLN
-			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
-#else
-			cur_worker->count = DEFAULT_WORKERS_NUM;
-#endif
-		}
+		cur_worker = check_worker_conf (cfg, cur_worker);
 
 		if (!parse_bind_line (cfg, cur_worker, $3)) {
 			yyerror ("yyparse: parse_bind_line");
@@ -273,28 +264,22 @@ bind_cred:
 
 workertype:
 	TYPE EQSIGN QUOTEDSTRING {
-		if (cur_worker == NULL) {
-			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
-			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
-			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
-#ifdef HAVE_SC_NPROCESSORS_ONLN
-			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
-#else
-			cur_worker->count = DEFAULT_WORKERS_NUM;
-#endif
-		}
-		
+		cur_worker = check_worker_conf (cfg, cur_worker);
 		if (g_ascii_strcasecmp ($3, "normal") == 0) {
 			cur_worker->type = TYPE_WORKER;
+			cur_worker->has_socket = TRUE;
 		}
 		else if (g_ascii_strcasecmp ($3, "controller") == 0) {
 			cur_worker->type = TYPE_CONTROLLER;
+			cur_worker->has_socket = TRUE;
 		}
 		else if (g_ascii_strcasecmp ($3, "lmtp") == 0) {
 			cur_worker->type = TYPE_LMTP;
+			cur_worker->has_socket = TRUE;
 		}
 		else if (g_ascii_strcasecmp ($3, "fuzzy") == 0) {
 			cur_worker->type = TYPE_FUZZY;
+			cur_worker->has_socket = FALSE;
 		}
 		else {
 			yyerror ("yyparse: unknown worker type: %s", $3);
@@ -305,16 +290,7 @@ workertype:
 
 workercount:
 	COUNT EQSIGN NUMBER {
-		if (cur_worker == NULL) {
-			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
-			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
-			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
-#ifdef HAVE_SC_NPROCESSORS_ONLN
-			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
-#else
-			cur_worker->count = DEFAULT_WORKERS_NUM;
-#endif
-		}
+		cur_worker = check_worker_conf (cfg, cur_worker);
 
 		if ($3 > 0) {
 			cur_worker->count = $3;
@@ -328,16 +304,7 @@ workercount:
 
 workerparam:
 	STRING EQSIGN QUOTEDSTRING {
-		if (cur_worker == NULL) {
-			cur_worker = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
-			cur_worker->params = g_hash_table_new (g_str_hash, g_str_equal);
-			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, cur_worker->params);
-#ifdef HAVE_SC_NPROCESSORS_ONLN
-			cur_worker->count = sysconf (_SC_NPROCESSORS_ONLN);
-#else
-			cur_worker->count = DEFAULT_WORKERS_NUM;
-#endif
-		}
+		cur_worker = check_worker_conf (cfg, cur_worker);
 		
 		g_hash_table_insert (cur_worker->params, $1, $3);
 	}

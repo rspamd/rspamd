@@ -109,11 +109,20 @@ sync_cache (struct rspamd_worker *wrk)
 	else {
 		expire = DEFAULT_EXPIRE;
 	}
+	
+	/* Sync section */
+	if ((fd = open (filename, O_WRONLY)) != -1) {
+		/* Aqquire a lock */
+		(void)lock_file (fd, FALSE);
+		(void)unlock_file (fd, FALSE);
+	}
 
 	if ((fd = open (filename, O_WRONLY | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH)) == -1) {
 		msg_err ("sync_cache: cannot create hash file %s: %s", filename, strerror (errno));
 		return;
 	}
+
+	(void)lock_file (fd, FALSE);
 
 	now = (uint64_t) time (NULL);
 	for (i = 0; i < BUCKETS; i++) {
@@ -136,6 +145,7 @@ sync_cache (struct rspamd_worker *wrk)
 		}
 	}
 
+	(void)unlock_file (fd, FALSE);
 	close (fd);
 }
 
@@ -196,6 +206,8 @@ read_hashes_file (struct rspamd_worker *wrk)
 		return FALSE;
 	}
 
+	(void)lock_file (fd, FALSE);
+
 	fstat (fd, &st);
 
 	for (;;) {
@@ -207,6 +219,9 @@ read_hashes_file (struct rspamd_worker *wrk)
 		g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
 		bloom_add (bf, node->h.hash_pipe);
 	}
+
+	(void)unlock_file (fd, FALSE);
+	close (fd);
 
 	if (r > 0) {
 		msg_warn ("read_hashes_file: ignore garbadge at the end of file, length of garbadge: %d", r);
@@ -414,9 +429,6 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	signal_add (&worker->sig_ev, NULL);
 	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
 	signal_add (&sev, NULL);
-
-	/* Send SIGUSR2 to parent */
-	kill (getppid (), SIGUSR2);
 
 	/* Init bloom filter */
 	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);

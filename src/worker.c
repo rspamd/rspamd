@@ -391,9 +391,6 @@ start_worker (struct rspamd_worker *worker)
 		is_mime = TRUE;
 	}
 
-	/* Send SIGUSR2 to parent */
-	kill (getppid (), SIGUSR2);
-
 	event_loop (0);
 	exit (EXIT_SUCCESS);
 }

@@ -611,9 +611,6 @@ start_controller (struct rspamd_worker *worker)
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add (&worker->bind_ev, NULL);
 
-	/* Send SIGUSR2 to parent */
-	kill (getppid (), SIGUSR2);
-
 	gperf_profiler_init (worker->srv->cfg, "controller");
 
 	event_loop (0);

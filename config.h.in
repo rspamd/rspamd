@@ -92,6 +92,8 @@
 
 #cmakedefine HAVE_WAITPID        1
 
+#cmakedefine HAVE_FLOCK          1
+
 #cmakedefine DEBUG_MODE          1
 
 #cmakedefine GMIME24             1

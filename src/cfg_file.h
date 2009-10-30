@@ -177,6 +177,8 @@ struct worker_conf {
 	int count;										/**< number of workers									*/
 	GHashTable *params;								/**< params for worker									*/
 	int listen_sock;								/**< listening socket desctiptor						*/
+	GQueue *active_workers;							/**< linked list of spawned workers						*/
+	gboolean has_socket;							/**< whether we should make listening socket in main process */
 };
 
 /**
@@ -328,6 +330,7 @@ void unescape_quotes (char *line);
 
 GList* parse_comma_list (memory_pool_t *pool, char *line);
 struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
+struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
 
 int yylex (void);
 int yyparse (void);

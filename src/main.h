@@ -22,7 +22,7 @@
 /* Default values */
 #define FIXED_CONFIG_FILE ETC_PREFIX "/rspamd.conf"
 /* Time in seconds to exit for old worker */
-#define SOFT_SHUTDOWN_TIME 60
+#define SOFT_SHUTDOWN_TIME 10
 /* Default metric name */
 #define DEFAULT_METRIC "default"
 /* 60 seconds for worker's IO */
@@ -101,6 +101,7 @@ struct rspamd_main {
 
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
+    GHashTable *workers;                                        /**< workers pool indexed by pid                    */
 };
 
 struct counter_data {

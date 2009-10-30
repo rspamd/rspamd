@@ -292,9 +292,6 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	hostbuf[hostmax - 1] = '\0';
 	snprintf (greetingbuf, sizeof (greetingbuf), "%d rspamd version %s LMTP on %s Ready\r\n", LMTP_OK, RVERSION, hostbuf);
 
-	/* Send SIGUSR2 to parent */
-	kill (getppid (), SIGUSR2);
-
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;
 

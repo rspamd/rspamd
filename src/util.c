@@ -340,18 +340,19 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 	sigaction (SIGPIPE, &sigpipe_act, NULL);
 }
 
-void
-pass_signal_worker (GList * workers, int signo)
+static void
+pass_signal_cb (gpointer key, gpointer value, gpointer ud)
 {
-	struct rspamd_worker           *cur;
-	GList                          *l;
+	struct rspamd_worker           *cur = value;
+    int                             signo = GPOINTER_TO_INT (ud);
 
-	l = workers;
-	while (l) {
-		cur = l->data;
-		kill (cur->pid, signo);
-		l = g_list_next (l);
-	}
+	kill (cur->pid, signo);
+}
+
+void
+pass_signal_worker (GHashTable * workers, int signo)
+{
+    g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
 }
 
 void
@@ -1035,6 +1036,100 @@ gperf_profiler_init (struct config_file *cfg, const char *descr)
 
 #endif
 }
+
+#ifdef HAVE_FLOCK
+/* Flock version */
+gboolean 
+lock_file (int fd, gboolean async)
+{
+    int flags;
+
+    if (async) {
+        flags = LOCK_EX | LOCK_NB;
+    }
+    else {
+        flags = LOCK_EX;
+    }
+
+    if (flock (fd, flags) == -1) {
+        if (async && errno == EAGAIN) {
+            return FALSE;
+        }
+        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+gboolean 
+unlock_file (int fd, gboolean async)
+{
+    int flags;
+
+    if (async) {
+        flags = LOCK_UN | LOCK_NB;
+    }
+    else {
+        flags = LOCK_UN;
+    }
+
+    if (flock (fd, flags) == -1) {
+        if (async && errno == EAGAIN) {
+            return FALSE;
+        }
+        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        return FALSE;
+    }
+
+    return TRUE;
+
+}
+#else
+/* Fctnl version */
+gboolean 
+lock_file (int fd, gboolean async)
+{
+    struct flock fl = {
+        .l_type = F_WRLCK,
+        .l_whence = SEEK_SET,
+        .l_start = 0,
+        .l_len = 0
+    };
+
+    if (fcntl (fd, async ? F_SETLK : F_SETLKW, &fl) == -1) {
+        if (async && (errno == EAGAIN || errno == EACCES)) {
+            return FALSE;
+        }
+        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+gboolean 
+unlock_file (int fd, gboolean async)
+{
+    struct flock fl = {
+        .l_type = F_UNLCK,
+        .l_whence = SEEK_SET,
+        .l_start = 0,
+        .l_len = 0
+    };
+
+    if (fcntl (fd, async ? F_SETLK : F_SETLKW, &fl) == -1) {
+        if (async && (errno == EAGAIN || errno == EACCES)) {
+            return FALSE;
+        }
+        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        return FALSE;
+    }
+
+    return TRUE;
+
+}
+#endif
 
 /*
  * vi:ts=4

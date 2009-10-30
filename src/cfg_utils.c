@@ -623,6 +623,24 @@ check_classifier_cfg (struct config_file *cfg, struct classifier_config *c)
 	return c;
 }
 
+struct worker_conf *
+check_worker_conf (struct config_file *cfg, struct worker_conf *c)
+{
+	if (c == NULL) {
+		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+		c->params = g_hash_table_new (g_str_hash, g_str_equal);
+		c->active_workers = g_queue_new ();
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, c->params);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_queue_free, c->active_workers);
+#ifdef HAVE_SC_NPROCESSORS_ONLN
+		c->count = sysconf (_SC_NPROCESSORS_ONLN);
+#else
+		c->count = DEFAULT_WORKERS_NUM;
+#endif
+	}
+	
+	return c;
+}
 /*
  * vi:ts=4
  */

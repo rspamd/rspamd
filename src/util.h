@@ -27,7 +27,7 @@ int poll_sync_socket (int fd, int timeout, short events);
 /* Init signals */
 void init_signals (struct sigaction *, sig_t);
 /* Send specified signal to each worker */
-void pass_signal_worker (GList *, int );
+void pass_signal_worker (GHashTable *, int );
 /* Convert string to lowercase */
 void convert_to_lowercase (char *str, unsigned int size);
 
@@ -68,6 +68,9 @@ char* resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, cha
 const char* calculate_check_time (struct timespec *begin, int resolution);
 
 double set_counter (const char *name, long int value);
+
+gboolean lock_file (int fd, gboolean async);
+gboolean unlock_file (int fd, gboolean async);
 
 guint rspamd_strcase_hash (gconstpointer key);
 gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
