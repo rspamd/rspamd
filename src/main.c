@@ -674,24 +674,6 @@ main (int argc, char **argv, char **env)
 		exit (-errno);
 	}
 
-#ifndef WITHOUT_PERL
-	/* Init perl interpreter */
-	dTHXa (perl_interpreter);
-	PERL_SYS_INIT3 (&argc, &argv, &env);
-	perl_interpreter = perl_alloc ();
-	if (perl_interpreter == NULL) {
-		msg_err ("main: cannot allocate perl interpreter, %s", strerror (errno));
-		exit (-errno);
-	}
-
-	PERL_SET_CONTEXT (perl_interpreter);
-	perl_construct (perl_interpreter);
-	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
-	init_perl_filters (cfg);
-#elif defined(WITH_LUA)
-	init_lua_filters (cfg);
-#endif
-
 	/* Block signals to use sigsuspend in future */
 	sigprocmask (SIG_BLOCK, &signals.sa_mask, NULL);
 
@@ -725,6 +707,24 @@ main (int argc, char **argv, char **env)
 		}
 		l = g_list_next (l);
 	}
+
+#ifndef WITHOUT_PERL
+	/* Init perl interpreter */
+	dTHXa (perl_interpreter);
+	PERL_SYS_INIT3 (&argc, &argv, &env);
+	perl_interpreter = perl_alloc ();
+	if (perl_interpreter == NULL) {
+		msg_err ("main: cannot allocate perl interpreter, %s", strerror (errno));
+		exit (-errno);
+	}
+
+	PERL_SET_CONTEXT (perl_interpreter);
+	perl_construct (perl_interpreter);
+	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
+	init_perl_filters (cfg);
+#elif defined(WITH_LUA)
+	init_lua_filters (cfg);
+#endif
 
 	rspamd->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 	spawn_workers (rspamd, TRUE);

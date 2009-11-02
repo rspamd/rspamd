@@ -41,6 +41,8 @@ LUA_FUNCTION_DEF (task, call_rspamd_function);
 LUA_FUNCTION_DEF (task, get_recipients);
 LUA_FUNCTION_DEF (task, get_from);
 LUA_FUNCTION_DEF (task, get_from_ip);
+LUA_FUNCTION_DEF (task, get_from_ip_num);
+LUA_FUNCTION_DEF (task, get_client_ip_num);
 LUA_FUNCTION_DEF (task, get_helo);
 
 static const struct luaL_reg    tasklib_m[] = {
@@ -56,6 +58,8 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, get_from_ip),
+	LUA_INTERFACE_DEF (task, get_from_ip_num),
+	LUA_INTERFACE_DEF (task, get_client_ip_num),
 	LUA_INTERFACE_DEF (task, get_helo),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -428,6 +432,38 @@ lua_task_get_from_ip (lua_State *L)
 	if (task) {
 		if (task->from_addr.s_addr != 0) {
 			lua_pushstring (L, inet_ntoa (task->from_addr));
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static int
+lua_task_get_from_ip_num (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	
+	if (task) {
+		if (task->from_addr.s_addr != 0) {
+			lua_pushinteger (L, ntohl (task->from_addr.s_addr));
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static int
+lua_task_get_client_ip_num (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	
+	if (task) {
+		if (task->client_addr.s_addr != 0) {
+			lua_pushinteger (L, ntohl (task->client_addr.s_addr));
 			return 1;
 		}
 	}

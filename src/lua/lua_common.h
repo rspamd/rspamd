@@ -24,6 +24,8 @@ int luaopen_message (lua_State *L);
 int luaopen_task (lua_State *L);
 int luaopen_config (lua_State *L);
 int luaopen_metric (lua_State *L);
+int luaopen_radix (lua_State *L);
+int luaopen_hash_table (lua_State *L);
 int luaopen_textpart (lua_State *L);
 void init_lua_filters (struct config_file *cfg);
 

@@ -191,6 +191,8 @@ init_lua ()
 		(void)luaopen_logger (L);
 		(void)luaopen_config (L);
 		(void)luaopen_metric (L);
+		(void)luaopen_radix (L);
+		(void)luaopen_hash_table (L);
 		(void)luaopen_task (L);
 		(void)luaopen_textpart (L);
 		(void)luaopen_message (L);

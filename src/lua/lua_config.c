@@ -25,18 +25,24 @@
 
 #include "lua_common.h"
 #include "../expressions.h"
+#include "../map.h"
+#include "../radix.h"
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
 LUA_FUNCTION_DEF (config, get_metric);
 LUA_FUNCTION_DEF (config, get_all_opt);
 LUA_FUNCTION_DEF (config, register_function);
+LUA_FUNCTION_DEF (config, add_radix_map);
+LUA_FUNCTION_DEF (config, add_hash_map);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_metric),
 	LUA_INTERFACE_DEF (config, get_all_opt),
 	LUA_INTERFACE_DEF (config, register_function),
+	LUA_INTERFACE_DEF (config, add_radix_map),
+	LUA_INTERFACE_DEF (config, add_hash_map),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -46,6 +52,24 @@ LUA_FUNCTION_DEF (metric, register_symbol);
 
 static const struct luaL_reg    metriclib_m[] = {
 	LUA_INTERFACE_DEF (metric, register_symbol),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
+/* Radix tree */
+LUA_FUNCTION_DEF (radix, get_key);
+
+static const struct luaL_reg    radixlib_m[] = {
+	LUA_INTERFACE_DEF (radix, get_key),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
+/* Hash table */
+LUA_FUNCTION_DEF (hash_table, get_key);
+
+static const struct luaL_reg    hashlib_m[] = {
+	LUA_INTERFACE_DEF (hash_table, get_key),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -64,6 +88,22 @@ lua_check_metric (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{metric}");
 	luaL_argcheck (L, ud != NULL, 1, "'metric' expected");
 	return *((struct metric **)ud);
+}
+
+static radix_tree_t           *
+lua_check_radix (lua_State * L)
+{
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{radix}");
+	luaL_argcheck (L, ud != NULL, 1, "'radix' expected");
+	return **((radix_tree_t ***)ud);
+}
+
+static GHashTable           *
+lua_check_hash_table (lua_State * L)
+{
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{hash_table}");
+	luaL_argcheck (L, ud != NULL, 1, "'hash_table' expected");
+	return **((GHashTable ***)ud);
 }
 
 /*** Config functions ***/
@@ -205,6 +245,66 @@ lua_config_register_function (lua_State *L)
 	return 0;
 }
 
+static int
+lua_config_add_radix_map (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const char                     *map_line;
+	radix_tree_t                   **r, ***ud;
+
+	if (cfg) {
+		map_line = luaL_checkstring (L, 2);
+		r = g_malloc (sizeof (radix_tree_t *));
+		*r = radix_tree_create ();
+		if (!add_map (map_line, read_radix_list, fin_radix_list, (void **)r)) {
+			msg_warn ("add_radix_map: invalid radix map %s", map_line);
+			radix_tree_free (*r);
+			g_free (r);
+			lua_pushnil (L);
+			return 1;
+		}
+		ud = lua_newuserdata (L, sizeof (radix_tree_t *));
+		*ud = r;
+		lua_setclass (L, "rspamd{radix}", -1);
+
+		return 1;
+	}
+
+	lua_pushnil (L);
+	return 1;
+
+}
+
+static int
+lua_config_add_hash_map (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const char                     *map_line;
+	GHashTable                    **r, ***ud;
+
+	if (cfg) {
+		map_line = luaL_checkstring (L, 2);
+		r = g_malloc (sizeof (GHashTable *));
+		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		if (!add_map (map_line, read_host_list, fin_host_list, (void **)r)) {
+			msg_warn ("add_radix_map: invalid hash map %s", map_line);
+			g_hash_table_destroy (*r);
+			g_free (r);
+			lua_pushnil (L);
+			return 1;
+		}
+		ud = lua_newuserdata (L, sizeof (GHashTable *));
+		*ud = r;
+		lua_setclass (L, "rspamd{hash_table}", -1);
+
+		return 1;
+	}
+
+	lua_pushnil (L);
+	return 1;
+
+}
+
 /*** Metric functions ***/
 
 
@@ -240,9 +340,48 @@ lua_metric_register_symbol (lua_State * L)
 			cd = g_malloc (sizeof (struct lua_callback_data));
 			cd->name = g_strdup (callback);
 			cd->L = L;
-			register_symbol (&metric->cache, cd->name, weight, lua_metric_symbol_callback, cd);
+			register_symbol (&metric->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
 	}
+	return 1;
+}
+
+/* Radix and hash table functions */
+static int
+lua_radix_get_key (lua_State * L)
+{
+	radix_tree_t                  *radix = lua_check_radix (L);
+	uint32_t                       key;
+
+	if (radix) {
+		key = luaL_checkint (L, 2);
+
+		if (radix32tree_find (radix, key) != RADIX_NO_VALUE) {
+			lua_pushboolean (L, 1);
+			return 1;
+		}
+	}
+
+	lua_pushboolean (L, 0);
+	return 1;
+}
+
+static int
+lua_hash_table_get_key (lua_State * L)
+{
+	GHashTable                    *tbl = lua_check_hash_table (L);
+	const char                    *key;
+
+	if (tbl) {
+		key = luaL_checkstring (L, 2);
+
+		if (g_hash_table_lookup (tbl, key) != NULL) {
+			lua_pushboolean (L, 1);
+			return 1;
+		}
+	}
+
+	lua_pushboolean (L, 0);
 	return 1;
 }
 
@@ -260,6 +399,24 @@ luaopen_metric (lua_State * L)
 {
 	lua_newclass (L, "rspamd{metric}", metriclib_m);
 	luaL_openlib (L, "rspamd_metric", null_reg, 0);
+
+	return 1;
+}
+
+int
+luaopen_radix (lua_State * L)
+{
+	lua_newclass (L, "rspamd{radix}", radixlib_m);
+	luaL_openlib (L, "rspamd_radix", null_reg, 0);
+
+	return 1;
+}
+
+int
+luaopen_hash_table (lua_State * L)
+{
+	lua_newclass (L, "rspamd{hash_table}", hashlib_m);
+	luaL_openlib (L, "rspamd_hash_table", null_reg, 0);
 
 	return 1;
 }
