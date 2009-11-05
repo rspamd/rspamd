@@ -115,27 +115,6 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 #ifdef HAVE_SA_SIGINFO
 
 static const char *
-strsigcode (int code)
-{
-	switch (code) {
-		case SI_USER:
-			return "kill(2) or raise(3)";
-			break;
-		case SI_KERNEL:
-			return "sent by the kernel";
-			break;
-		case SI_TIMER:
-			return "POSIX timer expired";
-			break;
-		case SI_SIGIO:
-			return "queued SIGIO";
-			break;
-		default:
-			return "unknown reason";
-	}
-}
-
-static const char *
 chldsigcode (int code) {
 	switch (code) {
 		case CLD_EXITED:
@@ -163,9 +142,8 @@ print_signals_info ()
 					(long int)inf->si_pid, chldsigcode (inf->si_code));
 		}
 		else {
-			msg_info ("main: got signal: '%s'; received from pid: %ld; uid: %ld; reason: '%s'",
-					g_strsignal (inf->si_signo), (long int)inf->si_pid, (long int)inf->si_uid, 
-					strsigcode (inf->si_code));
+			msg_info ("main: got signal: '%s'; received from pid: %ld; uid: %ld",
+					g_strsignal (inf->si_signo), (long int)inf->si_pid, (long int)inf->si_uid);
 		}
 		g_free (inf);
 	}
