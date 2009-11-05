@@ -22,11 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/types.h>
-#include <glib.h>
-#include <string.h>
-#include <stdlib.h>
-
+#include "config.h"
 #include "mem_pool.h"
 #include "filter.h"
 #include "main.h"

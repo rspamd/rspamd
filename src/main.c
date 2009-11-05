@@ -51,13 +51,16 @@ struct config_file             *cfg;
 
 rspamd_hash_t                  *counters;
 
-static void                     sig_handler (int);
 static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
 
 sig_atomic_t                    do_restart;
 sig_atomic_t                    do_terminate;
 sig_atomic_t                    child_dead;
 sig_atomic_t                    got_alarm;
+
+#ifdef HAVE_SA_SIGINFO
+GQueue                         *signals_info;
+#endif
 
 extern int                      yynerrs;
 extern FILE                    *yyin;
@@ -73,10 +76,21 @@ extern PerlInterpreter         *perl_interpreter;
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
 
-static
-	void
+#ifndef HAVE_SA_SIGINFO
+static void
 sig_handler (int signo)
+#else
+static void
+sig_handler (int signo, siginfo_t *info, void *unused)
+#endif
 {
+#ifdef HAVE_SA_SIGINFO
+	siginfo_t *new_info;
+	new_info = g_malloc (sizeof (siginfo_t));
+	memcpy (new_info, info, sizeof (siginfo_t));
+	g_queue_push_head (signals_info, new_info);
+#endif
+
 	switch (signo) {
 	case SIGHUP:
 		do_restart = 1;
@@ -97,6 +111,67 @@ sig_handler (int signo)
 		break;
 	}
 }
+
+#ifdef HAVE_SA_SIGINFO
+
+static const char *
+strsigcode (int code)
+{
+	switch (code) {
+		case SI_USER:
+			return "kill(2) or raise(3)";
+			break;
+		case SI_KERNEL:
+			return "sent by the kernel";
+			break;
+		case SI_TIMER:
+			return "POSIX timer expired";
+			break;
+		case SI_SIGIO:
+			return "queued SIGIO";
+			break;
+		default:
+			return "unknown reason";
+	}
+}
+
+static const char *
+chldsigcode (int code) {
+	switch (code) {
+		case CLD_EXITED:
+			return "Child exited normally";
+		case CLD_KILLED:
+			return "Child has terminated abnormally but did not create a core file";
+		case CLD_DUMPED:
+			return "Child has terminated abnormally and created a core file";
+		case CLD_TRAPPED:
+			return "Traced child has trapped";
+		default:
+			return "Unknown reason";
+	}
+}
+
+/* Prints info about incoming signals by parsing siginfo structures */
+static void
+print_signals_info ()
+{
+	siginfo_t *inf;
+
+	while ((inf = g_queue_pop_head (signals_info))) {
+		if (inf->si_signo == SIGCHLD) {
+			msg_info ("main: got SIGCHLD from child: %ld; reason: '%s'",
+					(long int)inf->si_pid, chldsigcode (inf->si_code));
+		}
+		else {
+			msg_info ("main: got signal: '%s'; received from pid: %ld; uid: %ld; reason: '%s'",
+					g_strsignal (inf->si_signo), (long int)inf->si_pid, (long int)inf->si_uid, 
+					strsigcode (inf->si_code));
+		}
+		g_free (inf);
+	}
+}
+#endif
+
 
 static void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
@@ -506,6 +581,9 @@ main (int argc, char **argv, char **env)
 	char                           *args[] = { "", "-e", "0", NULL };
 #endif
 
+#ifdef HAVE_SA_SIGINFO
+	signals_info = g_queue_new ();
+#endif
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
 	rspamd->server_pool = memory_pool_new (memory_pool_get_size ());
@@ -734,6 +812,9 @@ main (int argc, char **argv, char **env)
 		msg_debug ("main: calling sigsuspend");
 		sigemptyset (&signals.sa_mask);
 		sigsuspend (&signals.sa_mask);
+#ifdef HAVE_SA_SIGINFO
+		print_signals_info ();
+#endif
 		if (do_terminate) {
 			msg_debug ("main: catch termination signal, waiting for childs");
 			pass_signal_worker (rspamd->workers, SIGTERM);

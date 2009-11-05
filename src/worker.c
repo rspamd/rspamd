@@ -56,9 +56,13 @@ static gboolean                 is_mime;
 
 static gboolean                 write_socket (void *arg);
 
-static
-	void
+#ifndef HAVE_SA_SIGINFO
+static void
 sig_handler (int signo)
+#else
+static void
+sig_handler (int signo, siginfo_t *info, void *unused)
+#endif
 {
 	switch (signo) {
 	case SIGINT:

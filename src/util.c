@@ -305,8 +305,13 @@ write_pid (struct rspamd_main *main)
 	return 0;
 }
 
+#ifdef HAVE_SA_SIGINFO
 void
-init_signals (struct sigaction *signals, sig_t sig_handler)
+init_signals (struct sigaction *signals, void (*sig_handler)(int, siginfo_t *, void *))
+#else
+void
+init_signals (struct sigaction *signals, sighandler_t sig_handler)
+#endif
 {
 	struct sigaction                sigpipe_act;
 	/* Setting up signal handlers */
@@ -322,8 +327,14 @@ init_signals (struct sigaction *signals, sig_t sig_handler)
 	sigaddset (&signals->sa_mask, SIGALRM);
 
 
+#ifdef HAVE_SA_SIGINFO
+	signals->sa_flags = SA_SIGINFO;
+	signals->sa_handler = NULL;
+	signals->sa_sigaction = sig_handler;
+#else
 	signals->sa_handler = sig_handler;
 	signals->sa_flags = 0;
+#endif
 	sigaction (SIGTERM, signals, NULL);
 	sigaction (SIGINT, signals, NULL);
 	sigaction (SIGHUP, signals, NULL);

@@ -25,7 +25,11 @@ int make_socket_blocking (int);
 /* Poll sync socket for specified events */
 int poll_sync_socket (int fd, int timeout, short events);
 /* Init signals */
-void init_signals (struct sigaction *, sig_t);
+#ifdef HAVE_SA_SIGINFO
+void init_signals (struct sigaction *sa, void (*sig_handler)(int, siginfo_t *, void *));
+#else
+void init_signals (struct sigaction *sa, sighandler_t);
+#endif
 /* Send specified signal to each worker */
 void pass_signal_worker (GHashTable *, int );
 /* Convert string to lowercase */

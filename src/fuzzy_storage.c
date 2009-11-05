@@ -66,8 +66,13 @@ struct rspamd_fuzzy_node {
 	uint64_t                        time;
 };
 
+#ifndef HAVE_SA_SIGINFO
 static void
 sig_handler (int signo)
+#else
+static void
+sig_handler (int signo, siginfo_t *info, void *unused)
+#endif
 {
 	switch (signo) {
 	case SIGINT:
