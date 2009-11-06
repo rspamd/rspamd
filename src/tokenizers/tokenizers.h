@@ -17,6 +17,7 @@
 typedef struct token_node_s {
 	uint32_t h1;
 	uint32_t h2;
+	float value;
 } token_node_t;
 
 /* Common tokenizer structure */

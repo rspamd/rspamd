@@ -77,11 +77,13 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	/* Consider that not found blocks have value 1 */
 	if ((v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now)) < 0.00001) {
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
+		node->value = c;
 	}
 	else {
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v * c);
+		node->value = v * c;
 	}
-
+	
 	cd->count++;
 
 	return FALSE;

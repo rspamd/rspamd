@@ -344,36 +344,37 @@ ENDIF(DEBUG_MODE MATCHES "ON")
 ################################ SOURCES SECTION ###########################
 
 SET(RSPAMDSRC	src/modules.c
-				src/hash.c
-				src/worker.c
-				src/util.c
-				src/url.c
-				src/upstream.c
-				src/statfile.c
-				src/protocol.c
-				src/message.c
-				src/fuzzy.c
-				src/expressions.c
-				src/mem_pool.c
-				src/memcached.c
-				src/main.c
-				src/fstring.c
-				src/filter.c
-				src/controller.c
-				src/cfg_utils.c
+				src/binlog.c
+                src/bloom.c
 				src/buffer.c
+				src/cfg_utils.c
+				src/controller.c
 				src/events.c
+				src/expressions.c
+				src/filter.c
+				src/fstring.c
+				src/fuzzy.c
+				src/fuzzy_storage.c
+				src/hash.c
 				src/html.c
 				src/lmtp.c
-				src/spf.c
 				src/lmtp_proto.c
-				src/radix.c
-				src/view.c
+				src/main.c
 				src/map.c
-                src/bloom.c
+				src/memcached.c
+				src/mem_pool.c
+				src/message.c
+				src/protocol.c
+				src/radix.c
 				src/settings.c
+				src/spf.c
+				src/statfile.c
 				src/symbols_cache.c
-				src/fuzzy_storage.c)
+				src/upstream.c
+				src/url.c
+				src/util.c
+				src/view.c
+				src/worker.c)
 
 IF(ENABLE_PERL MATCHES "ON")
 	LIST(APPEND RSPAMDSRC src/perl.c)
