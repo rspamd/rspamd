@@ -205,6 +205,7 @@ struct config_file {
 	char *log_file;									/**< path to logfile in case of file logging			*/
 	int log_fd;										/**< log descriptor in case of file logging				*/
 	FILE *logf;
+	gboolean log_urls;								/**< whether we should log URLs                         */
 
 	size_t max_statfile_size;						/**< maximum size for statfile							*/
 

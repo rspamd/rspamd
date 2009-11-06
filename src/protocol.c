@@ -87,6 +87,9 @@
 
 static GList                   *custom_commands = NULL;
 
+/* For default metric, dirty hack, but much faster than hash lookup */
+static double default_score, default_required_score;
+
 static char                    *
 separate_command (f_str_t * in, char c)
 {
@@ -414,6 +417,10 @@ show_url_header (struct worker_task *task)
 	cur = task->urls;
 	while (cur) {
 		url = cur->data;
+        if (task->cfg->log_urls) {
+            /* Write this url to log as well */
+            msg_info ("process_message: url found: <%s>, score: [%.2f / %.2f]", struri (url), default_score, default_required_score);
+        }
 		host.begin = url->host;
 		host.len = url->hostlen;
 		/* Skip long hosts to avoid protocol coollisions */
@@ -530,7 +537,9 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 
 
 	if (metric_name == NULL || metric_value == NULL) {
-		m = g_hash_table_lookup (task->cfg->metrics, "default");
+		m = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
+        default_required_score = m->required_score;
+        default_score = 0;
 		if (!check_metric_settings (task, m, &ms, &rs)) {
 			ms = m->required_score;
 			rs = m->reject_score;
@@ -559,6 +568,12 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
         }
 	}
 	else {
+        /* XXX: dirty hack */
+        if (strcmp (metric_res->metric->name, DEFAULT_METRIC) == 0) {
+            default_required_score = metric_res->metric->required_score;
+            default_score = metric_res->score;
+        }
+
 		if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
 			ms = metric_res->metric->required_score;
 			rs = metric_res->metric->reject_score;

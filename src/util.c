@@ -749,8 +749,6 @@ close_log (struct config_file *cfg)
 				msg_err ("close_log: error syncing log file: %s", strerror (errno));
 			}
 			fclose (cfg->logf);
-			/* XXX: I think this is not needed */
-			close (cfg->log_fd);
 		}
 		break;
 	}

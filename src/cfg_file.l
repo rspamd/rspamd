@@ -88,6 +88,7 @@ log_type						return LOG_TYPE;
 console							return LOG_TYPE_CONSOLE;
 syslog							return LOG_TYPE_SYSLOG;
 file							return LOG_TYPE_FILE;
+log_urls						return LOG_URLS;
 
 log_level						return LOG_LEVEL;
 DEBUG							return LOG_LEVEL_DEBUG;
