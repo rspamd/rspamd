@@ -32,6 +32,7 @@
 #include "expressions.h"
 #include "settings.h"
 #include "view.h"
+#include "binlog.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -488,6 +489,7 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 			}
 
 			classifier->learn_func (ctx, task->worker->srv->statfile_pool, st->symbol, tokens, TRUE);
+			maybe_write_binlog (ctx->cfg, st->symbol, tokens);
 		}
 	}
 }

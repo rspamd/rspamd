@@ -40,65 +40,90 @@ extern char                    *yytext;
 int
 add_memcached_server (struct config_file *cf, char *str)
 {
-	char                           *cur_tok, *err_str;
 	struct memcached_server        *mc;
-	struct hostent                 *hent;
 	uint16_t                        port;
 
 	if (str == NULL)
 		return 0;
 
-	cur_tok = strsep (&str, ":");
-
-	if (cur_tok == NULL || *cur_tok == '\0')
-		return 0;
-
 	if (cf->memcached_servers_num == MAX_MEMCACHED_SERVERS) {
 		yywarn ("yyparse: maximum number of memcached servers is reached %d", MAX_MEMCACHED_SERVERS);
+		return 0;
 	}
 
 	mc = &cf->memcached_servers[cf->memcached_servers_num];
-	if (mc == NULL)
-		return 0;
 	/* cur_tok - server name, str - server port */
-	if (str == NULL) {
-		port = DEFAULT_MEMCACHED_PORT;
-	}
-	else {
-		port = (uint16_t) strtoul (str, &err_str, 10);
-		if (*err_str != '\0') {
-			return 0;
-		}
+	port = DEFAULT_MEMCACHED_PORT;
+
+	if (!parse_host_port (str, &mc->addr, &port)) {
+		return 0;
 	}
 
-	if (!inet_aton (cur_tok, &mc->addr)) {
-		/* Try to call gethostbyname */
-		hent = gethostbyname (cur_tok);
-		if (hent == NULL) {
-			return 0;
-		}
-		else {
-			memcpy ((char *)&mc->addr, hent->h_addr, sizeof (struct in_addr));
-		}
-	}
 	mc->port = port;
 	cf->memcached_servers_num++;
 	return 1;
 }
 
+gboolean
+parse_host_port (const char *str, struct in_addr *ina, uint16_t *port)
+{
+	char                           **tokens, *err_str;
+	struct hostent                 *hent;
+	unsigned int                    port_parsed, saved_errno = errno;
+
+	tokens = g_strsplit (str, ":", 0);
+	if (!tokens || !tokens[0]) {
+		return FALSE;
+	}
+	
+	/* Now try to parse host and write address to ina */
+	if (!inet_aton (tokens[0], ina)) {
+		/* Try to call gethostbyname */
+		hent = gethostbyname (tokens[0]);
+		if (hent == NULL) {
+			msg_warn ("parse_host_port: cannot resolve %s", tokens[0]);
+			goto err;
+		}
+		else {
+			memcpy (ina, hent->h_addr, sizeof (struct in_addr));	
+		}
+	}
+	if (tokens[1] != NULL) {
+		/* Port part */
+		errno = 0;
+		port_parsed = strtoul (tokens[1], &err_str, 10);
+		if (*err_str != '\0' || errno != 0) {
+			msg_warn ("parse_host_port: cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+			goto err;
+		}
+		if (port_parsed > G_MAXUINT16) {
+			errno = ERANGE;
+			msg_warn ("parse_host_port: cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
+			goto err;
+		}
+		*port = port_parsed;
+	}
+	
+	/* Restore errno */
+	errno = saved_errno;
+	g_strfreev (tokens);
+	return TRUE;
+
+err:
+	errno = saved_errno;
+	g_strfreev (tokens);
+	return FALSE;
+}
+
 int
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 {
-	char                           *cur_tok, *err_str;
-	struct hostent                 *hent;
-	size_t                          s;
 	char                          **host;
 	int16_t                        *family, *port;
 	struct in_addr                 *addr;
 
 	if (str == NULL)
 		return 0;
-	cur_tok = strsep (&str, ":");
 
 	host = &cf->bind_host;
 	port = &cf->bind_port;
@@ -106,70 +131,46 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 	family = &cf->bind_family;
 	addr = &cf->bind_addr;
 
-	if (cur_tok[0] == '/' || cur_tok[0] == '.') {
+	if (str[0] == '/' || str[0] == '.') {
 #ifdef HAVE_DIRNAME
 		/* Try to check path of bind credit */
 		struct stat                     st;
 		int                             fd;
-		char                           *copy = memory_pool_strdup (cfg->cfg_pool, cur_tok);
+		char                           *copy = memory_pool_strdup (cfg->cfg_pool, str);
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
-				if ((fd = open (cur_tok, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-					yyerror ("parse_bind_line: cannot open path %s for making socket, %s", cur_tok, strerror (errno));
+				if ((fd = open (str, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+					yyerror ("parse_bind_line: cannot open path %s for making socket, %s", str, strerror (errno));
 					return 0;
 				}
 				else {
 					close (fd);
-					unlink (cur_tok);
+					unlink (str);
 				}
 			}
 			else {
-				yyerror ("parse_bind_line: cannot stat path %s for making socket, %s", cur_tok, strerror (errno));
+				yyerror ("parse_bind_line: cannot stat path %s for making socket, %s", str, strerror (errno));
 				return 0;
 			}
 		}
 		else {
-			if (unlink (cur_tok) == -1) {
-				yyerror ("parse_bind_line: cannot remove path %s for making socket, %s", cur_tok, strerror (errno));
+			if (unlink (str) == -1) {
+				yyerror ("parse_bind_line: cannot remove path %s for making socket, %s", str, strerror (errno));
 				return 0;
 			}
 		}
 #endif
-		*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
+		*host = memory_pool_strdup (cfg->cfg_pool, str);
 		*family = AF_UNIX;
 		return 1;
-
 	}
 	else {
-		if (*str != '\0') {
-			*port = (uint16_t) strtoul (str, &err_str, 10);
-			if (*err_str != '\0') {
-				yyerror ("parse_bind_line: cannot read numeric value: %s", err_str);
-				return 0;
-			}
-		}
-		if (strcmp (cur_tok, "*") == 0) {
-			*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
-			addr->s_addr = htonl (INADDR_ANY);
-		}
-		else if (!inet_aton (cur_tok, addr)) {
-			/* Try to call gethostbyname */
-			hent = gethostbyname (cur_tok);
-			if (hent == NULL) {
-				return 0;
-			}
-			else {
-				*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
-				memcpy ((char *)addr, hent->h_addr, sizeof (struct in_addr));
-				s = strlen (cur_tok) + 1;
-			}
-		}
-		else {
-			*host = memory_pool_strdup (cfg->cfg_pool, cur_tok);
-		}
-		*family = AF_INET;
+		if (parse_host_port (str, addr, port)) {
+			*host = memory_pool_strdup (cfg->cfg_pool, str);
+			*family = AF_INET;
 
-		return 1;
+			return 1;
+		}
 	}
 
 	return 0;

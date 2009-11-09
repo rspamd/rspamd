@@ -51,9 +51,12 @@ struct rspamd_binlog {
 	struct rspamd_index_block *cur_idx;
 };
 
+struct classifier_config;
+
 struct rspamd_binlog* binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rotate_jitter);
 void binlog_close (struct rspamd_binlog *log);
 gboolean binlog_insert (struct rspamd_binlog *log, GTree *nodes);
 gboolean binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, GByteArray **rep);
+void maybe_write_binlog (struct classifier_config *ccf, const char *symbol, GTree *nodes);
 
 #endif

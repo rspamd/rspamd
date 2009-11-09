@@ -55,7 +55,7 @@ struct rspamd_view *cur_view = NULL;
 %token  REQUIRED_SCORE REJECT_SCORE FUNCTION FRACT COMPOSITES CONTROL PASSWORD
 %token  LOGGING LOG_TYPE LOG_TYPE_CONSOLE LOG_TYPE_SYSLOG LOG_TYPE_FILE
 %token  LOG_LEVEL LOG_LEVEL_DEBUG LOG_LEVEL_INFO LOG_LEVEL_WARNING LOG_LEVEL_ERROR LOG_FACILITY LOG_FILENAME LOG_URLS
-%token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER
+%token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER BINLOG BINLOG_MASTER BINLOG_ROTATE
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS CLIENT_IP
 %token  AUTOLEARN MIN_MARK MAX_MARK
@@ -748,6 +748,9 @@ statfilecmd:
 	| statfilesize
 	| statfilesection
 	| statfileautolearn
+	| statfilebinlog
+	| statfilebinlogrotate
+	| statfilebinlogmaster
 	;
 	
 statfilesymbol:
@@ -925,6 +928,53 @@ autolearnsymbols:
 		cur_autolearn->symbols = parse_comma_list (cfg->cfg_pool, $3);
 	}
 	;
+
+statfilebinlog:
+	BINLOG EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if (cur_statfile->binlog == NULL) {
+			cur_statfile->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+		}
+		if (g_ascii_strcasecmp ($3, "master") == 0) {
+			cur_statfile->binlog->affinity = AFFINITY_MASTER;
+		}
+		else if (g_ascii_strcasecmp ($3, "slave") == 0) {
+			cur_statfile->binlog->affinity = AFFINITY_SLAVE;
+		}
+		else {
+			cur_statfile->binlog->affinity = AFFINITY_NONE;
+		}
+	}
+	;
+
+statfilebinlogrotate:
+	BINLOG_ROTATE EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if (cur_statfile->binlog == NULL) {
+			cur_statfile->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+		}
+		cur_statfile->binlog->rotate_time = parse_seconds ($3);
+	}
+	;
+
+statfilebinlogmaster:
+	BINLOG_MASTER EQSIGN QUOTEDSTRING {
+		if (cur_statfile == NULL) {
+			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		}
+		if (cur_statfile->binlog == NULL) {
+			cur_statfile->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+		}
+		if (!parse_host_port ($3, &cur_statfile->binlog->master_addr, &cur_statfile->binlog->master_port)) {
+			YYERROR;
+		}
+	}
+	;
+
 
 statfile_pool_size:
 	STATFILE_POOL_SIZE EQSIGN SIZELIMIT {

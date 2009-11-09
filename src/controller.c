@@ -32,6 +32,7 @@
 #include "modules.h"
 #include "tokenizers/tokenizers.h"
 #include "classifiers/classifiers.h"
+#include "binlog.h"
 
 #define CRLF "\r\n"
 #define END "END" CRLF
@@ -477,7 +478,8 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool, session->learn_symbol, tokens, session->in_class);
 		session->worker->srv->stat->messages_learned++;
 
-
+		maybe_write_binlog (session->learn_classifier, session->learn_symbol, tokens);
+		
 		free_task (task, FALSE);
 		i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {

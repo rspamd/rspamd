@@ -129,6 +129,25 @@ struct statfile_autolearn_params {
 	GList *symbols;									/**< list of symbols									*/
 };
 
+/** 
+ * Sync affinity
+ */
+enum sync_affinity {
+	AFFINITY_NONE = 0,
+	AFFINITY_MASTER,
+	AFFINITY_SLAVE
+};
+
+/**
+ * Binlog params
+ */
+struct statfile_binlog_params {
+	enum sync_affinity affinity;
+	time_t rotate_time;
+	struct in_addr master_addr;
+	uint16_t master_port;
+};
+
 /**
  * Statfile config definition
  */
@@ -138,6 +157,7 @@ struct statfile {
 	size_t size;									/**< size of statfile									*/
 	GList *sections;								/**< list of sections in statfile						*/
 	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
+	struct statfile_binlog_params *binlog;			/**< binlog params										*/
 };
 
 /**
@@ -254,6 +274,14 @@ struct config_file {
  * @return 1 if line was successfully parsed and 0 in case of error
  */
 int add_memcached_server (struct config_file *cf, char *str);
+
+/**
+ * Parse host:port line
+ * @param ina host address
+ * @param port port
+ * @return TRUE if string was parsed
+ */
+gboolean parse_host_port (const char *str, struct in_addr *ina, uint16_t *port);
 
 /**
  * Parse bind credits

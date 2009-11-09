@@ -24,12 +24,16 @@
 
 #include "config.h"
 #include "binlog.h"
+#include "cfg_file.h"
 #include "tokenizers/tokenizers.h"
 
 #define BINLOG_SUFFIX ".binlog"
 #define BACKUP_SUFFIX ".old"
 #define VALID_MAGIC { 'r', 's', 'l' }
 #define VALID_VERSION { '1', '0' }
+
+static GHashTable *binlog_opened = NULL;
+static memory_pool_t *binlog_pool = NULL;
 
 static gboolean 
 binlog_write_header (struct rspamd_binlog *log)
@@ -82,14 +86,6 @@ binlog_write_header (struct rspamd_binlog *log)
 		unlock_file (log->fd, FALSE);
 		return FALSE;
 	}
-	g_free (log->cur_idx);
-	/* Now mmap it to memory */
-	if ((log->cur_idx = mmap (NULL, sizeof (struct rspamd_index_block), 
-					PROT_READ | PROT_WRITE, MAP_SHARED, log->fd, log->metaindex->indexes[0])) == MAP_FAILED) {
-		msg_warn ("binlog_write_header: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
-		unlock_file (log->fd, FALSE);
-		return FALSE;
-	}
 
 	unlock_file (log->fd, FALSE);
 
@@ -113,15 +109,23 @@ binlog_check_file (struct rspamd_binlog *log)
 		return FALSE;
 	}
 	/* Now mmap metaindex and current index */
-	if ((log->metaindex = mmap (NULL, sizeof (struct rspamd_binlog_metaindex), 
-					PROT_READ | PROT_WRITE, MAP_SHARED, log->fd, sizeof (struct rspamd_binlog_header))) == MAP_FAILED) {
-		msg_warn ("binlog_check file: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
+	if (log->metaindex == NULL) {
+		log->metaindex = g_malloc (sizeof (struct rspamd_binlog_metaindex));
+	}
+	if ((read (log->fd, log->metaindex, sizeof (struct rspamd_binlog_metaindex))) != sizeof (struct rspamd_binlog_metaindex)) {
+		msg_warn ("binlog_check file: cannot read metaindex of file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Current index */
-	if ((log->cur_idx = mmap (NULL, sizeof (struct rspamd_index_block), 
-					PROT_READ | PROT_WRITE, MAP_SHARED, log->fd, log->metaindex->indexes[log->metaindex->last_index])) == MAP_FAILED) {
-		msg_warn ("binlog_check_file: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
+	if (log->cur_idx == NULL) {
+		log->cur_idx = g_malloc (sizeof (struct rspamd_index_block));
+	}
+	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
+		msg_info ("binlog_check_file: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	if ((read (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))) != sizeof (struct rspamd_index_block)) {
+		msg_warn ("binlog_check_file: cannot read index in file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -162,8 +166,11 @@ binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rota
 	new = memory_pool_alloc0 (pool, sizeof (struct rspamd_binlog));
 	new->pool = pool;
 	new->rotate_time = rotate_time;
-	new->rotate_jitter = g_random_int_range (0, rotate_jitter);
 	new->fd = -1;
+
+	if (rotate_time) {
+		new->rotate_jitter = g_random_int_range (0, rotate_jitter);
+	}
 	
 	new->filename = memory_pool_alloc (pool, len + sizeof (BINLOG_SUFFIX));
 	g_strlcpy (new->filename, path, len + 1);
@@ -197,10 +204,10 @@ binlog_close (struct rspamd_binlog *log)
 {
 	if (log) {
 		if (log->metaindex) {
-			munmap (log->metaindex, sizeof (struct rspamd_binlog_metaindex));
+			g_free (log->metaindex);
 		}
 		if (log->cur_idx) {
-			munmap (log->cur_idx, sizeof (struct rspamd_index_block));
+			g_free (log->cur_idx);
 		}
 		close (log->fd);
 	}
@@ -230,22 +237,45 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 {
 	off_t seek;
 	struct rspamd_binlog_index *idx;
-	
-	/* Seek to end of file */
-	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
-		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
-	
+
 	lock_file (log->fd, FALSE);
 	/* Write index */
 	log->cur_idx->last_index ++;
+	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index] + G_STRUCT_OFFSET (struct rspamd_index_block, last_index), SEEK_SET) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	if (write (log->fd, &log->cur_idx->last_index, sizeof (log->cur_idx->last_index)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot write index to file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	
 	log->cur_seq ++;	
 
 	idx = &log->cur_idx->indexes[log->cur_idx->last_index];
 	idx->seek = seek;
 	idx->time = (uint64_t)time (NULL);
 	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
+	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index] + 
+				log->cur_idx->last_index * sizeof (struct rspamd_binlog_index), SEEK_SET) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	if (write (log->fd, idx, sizeof (struct rspamd_binlog_index)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot write index to file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+
+	/* Seek to end of file */
+	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
 	
 	/* Now write all nodes to file */
 	g_tree_foreach (nodes, binlog_tree_callback, (gpointer)log);
@@ -260,34 +290,34 @@ create_new_metaindex_block (struct rspamd_binlog *log)
 {
 	off_t seek;
 	
-	/* Seek to end of file */
-	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
-		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
 
 	lock_file (log->fd, FALSE);
 	
 	log->metaindex->last_index ++;
 	/* Offset to metaindex */
 	log->metaindex->indexes[log->metaindex->last_index] = seek;
-	munmap (log->cur_idx, sizeof (struct rspamd_index_block));
-	/* Alloc, write, mmap */
-	log->cur_idx = g_malloc (sizeof (struct rspamd_index_block));
+	/* Overwrite all metaindexes */
+	if (lseek (log->fd, sizeof (struct rspamd_binlog_header), SEEK_SET) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	if (write (log->fd, log->metaindex, sizeof (struct rspamd_binlog_metaindex)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("create_new_metaindex_block: cannot write metaindex in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
 	bzero (log->cur_idx, sizeof (struct rspamd_index_block));
+	/* Seek to end of file */
+	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
 	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))  == -1) {
 		unlock_file (log->fd, FALSE);
 		g_free (log->cur_idx);
 		msg_warn ("create_new_metaindex_block: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
-		return FALSE;
-	}
-	g_free (log->cur_idx);
-	/* Now mmap it to memory */
-	if ((log->cur_idx = mmap (NULL, sizeof (struct rspamd_index_block), 
-					PROT_READ | PROT_WRITE, MAP_SHARED, log->fd, seek)) == MAP_FAILED) {
-		log->cur_idx = NULL;
-		unlock_file (log->fd, FALSE);
-		msg_warn ("create_new_metaindex_block: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	unlock_file (log->fd, FALSE);
@@ -300,7 +330,7 @@ maybe_rotate_binlog (struct rspamd_binlog *log)
 {
 	uint64_t now = time (NULL);
 
-	if ((now - log->header.create_time) > log->rotate_time + log->rotate_jitter) {
+	if (log->rotate_time && ((now - log->header.create_time) > log->rotate_time + log->rotate_jitter)) {
 		return TRUE;
 	}
 	return FALSE;
@@ -316,11 +346,11 @@ rotate_binlog (struct rspamd_binlog *log)
 
 	/* Unmap mapped fragments */
 	if (log->metaindex) {
-		munmap (log->metaindex, sizeof (struct rspamd_binlog_metaindex));
+		g_free (log->metaindex);
 		log->metaindex = NULL;
 	}
 	if (log->cur_idx) {
-		munmap (log->cur_idx, sizeof (struct rspamd_index_block));
+		g_free (log->cur_idx);
 		log->cur_idx = NULL;
 	}
 	/* Format backup name */
@@ -403,7 +433,7 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, G
 	}
 	else {
 		/* Unmap old fragment */
-		munmap ((*rep)->data, (*rep)->len);
+		g_free ((*rep)->data);
 	}
 	
 	if (from_rev == log->cur_seq) {
@@ -420,14 +450,21 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, G
 	else if (metaindex_num != log->metaindex->last_index) {
 		/* Need to remap index block */
 		lock_file (log->fd, FALSE);
-		if ((idxb = mmap (NULL, sizeof (struct rspamd_index_block), 
-					PROT_READ | PROT_WRITE, MAP_SHARED, 
-					log->fd, log->metaindex->indexes[metaindex_num])) == MAP_FAILED) {
-			unlock_file (log->fd, FALSE);
-			msg_warn ("binlog_sync: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
-			return FALSE;
-		}
+		idxb = g_malloc (sizeof (struct rspamd_index_block));
 		idx_mapped = TRUE;
+		if (lseek (log->fd, log->metaindex->indexes[metaindex_num], SEEK_SET) == -1) {
+			unlock_file (log->fd, FALSE);
+			msg_warn ("binlog_sync: cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
+			res = FALSE;
+			goto end;
+		}
+		if ((read (log->fd, &idxb, sizeof (struct rspamd_index_block))) != sizeof (struct rspamd_index_block)) {
+			unlock_file (log->fd, FALSE);
+			msg_warn ("binlog_sync: cannot read index from file %s, error %d, %s", log->filename, errno, strerror (errno));
+			res = FALSE;
+			goto end;
+		}
+		unlock_file (log->fd, FALSE);
 	}
 	else {
 		idxb = log->cur_idx;
@@ -441,18 +478,87 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, G
 
 	/* Now fill reply structure */
 	(*rep)->len = idx->len;
-	/* MMap result */
-	if (((*rep)->data = mmap (NULL, idx->len, PROT_READ, MAP_SHARED, log->fd, idx->seek)) == MAP_FAILED) {
-		msg_warn ("binlog_sync: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
+	/* Read result */
+	if (lseek (log->fd, idx->seek, SEEK_SET) == -1) {
+		msg_warn ("binlog_sync: cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
+		res = FALSE;
+		goto end;
+	}
+	
+	(*rep)->data = g_malloc (idx->len);
+	if ((read (log->fd, (*rep)->data, idx->len)) != idx->len) {
+		msg_warn ("binlog_sync: cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
 		res = FALSE;
 		goto end;
 	}
 
 end:
 	if (idx_mapped) {
-		munmap (idxb, sizeof (struct rspamd_index_block));
+		g_free (idxb);
 	}
 
 	return res;
 }
+
+static gboolean
+maybe_init_static ()
+{
+	if (!binlog_opened) {
+		binlog_opened = g_hash_table_new (g_direct_hash, g_direct_equal);
+		if (!binlog_opened) {
+			return FALSE;
+		}
+	}
+
+	if (!binlog_pool) {
+		binlog_pool = memory_pool_new (memory_pool_get_size ());
+		if (!binlog_pool) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+void 
+maybe_write_binlog (struct classifier_config *ccf, const char *symbol, GTree *nodes)
+{
+	struct rspamd_binlog *log;
+	struct statfile *st = NULL;
+	GList *cur;
+
+	if (ccf == NULL) {
+		return;
+	}
+
+	cur = g_list_first (ccf->statfiles);
+	while (cur) {
+		st = cur->data;
+		if (strcmp (symbol, st->symbol) == 0) {
+			break;
+		}
+		st = NULL;
+		cur = g_list_next (cur);
+	}
+
+	if (st == NULL || nodes == NULL || st->binlog == NULL || st->binlog->affinity != AFFINITY_MASTER) {
+		return;
+	}
+
+	if (!maybe_init_static ()) {
+		return;
+	}
+
+	if ((log = g_hash_table_lookup (binlog_opened, st)) == NULL) {
+		if ((log = binlog_open (binlog_pool, st->path, st->binlog->rotate_time, st->binlog->rotate_time / 2)) != NULL) {
+			g_hash_table_insert (binlog_opened, st, log);
+		}
+		else {
+			return;
+		}
+	}
+
+	(void)binlog_insert (log, nodes);
+}
+
 
