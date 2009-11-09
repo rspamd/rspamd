@@ -360,7 +360,7 @@ sub _revive_dead {
   my $now = time();
   foreach my $s ($self->{dead_hosts}) {
     # revive after minute of downtime
-    if ($s->{dead} == 1 && $now - $s->{t} > 60) {
+    if (defined($s->{dead}) && $s->{dead} == 1 && $now - $s->{t} > 60) {
       $s->{dead} = 0;
       push(@{$self->{alive_hosts}}, $s->{host});
     }
