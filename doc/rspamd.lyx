@@ -1421,6 +1421,35 @@ factors
 \end_layout
 
 \begin_layout Standard
+В секции 
+\begin_inset Quotes fld
+\end_inset
+
+factors
+\begin_inset Quotes frd
+\end_inset
+
+ также можно задать параметр grow_factor, который задает коэффициент приращения
+ при добавлении символов в метрику.
+ Работает это так: допустим, добавляется первый символ - его реальный вес
+ будет равен 1 * factor (то есть, если factor равен 1, то и реальный вес
+ будет равен 1), после чего следующий символ будет иметь реальный вес grow_facto
+r * factor (например, если grow_factor = 1.1, то реальный вес будет 1.1 *
+ factor), далее следующий будет иметь вес (1 + ((grow_factor) - 1)*2)*factor
+ (то есть, при предыдущем grow_factor, реальный вес будет 1.2 * factor, следующий
+ символ 1.3, затем 1.4 и.т.д.).
+ Данная возможность позволяет увеличивать вес письмам, проходящим по нескольким
+ правилам.
+ Правила с отрицательным весом не увеличивают grow_factor и не модифицируются
+ им (то есть, реальный вес таких правил равен 1 * factor).
+ Пример задания параметра grow_factor:
+\end_layout
+
+\begin_layout LyX-Code
+grow_factor = 1.1;
+\end_layout
+
+\begin_layout Standard
 Также существует возможность создавать 
 \begin_inset Quotes fld
 \end_inset
@@ -1476,6 +1505,323 @@ SYMBOL3 & !SYMBOL4
  из результата.
  То есть, при срабатывании COMPOSITE_SYMBOL1 из предыдущего примера символы
  SYMBOL1, SYMBOL2 и SYMBOL3 в ответе не появятся.
+\end_layout
+
+\begin_layout Section
+Представления и настройки
+\end_layout
+
+\begin_layout Subsection
+Представления
+\end_layout
+
+\begin_layout Standard
+В rspamd существует возможность настройки правил, которые будут проверяться,
+ исходя из определенных критериев.
+ Представления настраиваются в конфигурационном файле rspamd и позволяют
+ разделить правила, исходя из входящих данных, например, заголовок From
+ письма или же по ip, откуда нам пришло данное письмо.
+ Представления проверяются при проверке любого правила и при совпадении
+ данных письма проверяются не все символы, а те, которые заданы данным представл
+ением.
+ При настройки представлений задаются входные данные письма (from и ip)
+ и символы, которые должны проверяться.
+ Входные данные могут дублироваться, то есть, можно задать несколько from
+ и несколько ip, задаются эти параметры либо в виде регулярных выражений:
+\end_layout
+
+\begin_layout LyX-Code
+from = 
+\begin_inset Quotes fld
+\end_inset
+
+/^.*@somedomain.com$
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+from = 
+\begin_inset Quotes fld
+\end_inset
+
+/^.*@otherdoma[a-z]+.com$
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout Standard
+либо в виде map:
+\end_layout
+
+\begin_layout LyX-Code
+from = 
+\begin_inset Quotes fld
+\end_inset
+
+file:///usr/local/etc/rspamd/from.map
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout LyX-Code
+ip = 
+\begin_inset Quotes fld
+\end_inset
+
+http://somehost:81/ip.map
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout Standard
+Символы также могут быть заданы несколькими директивами symbols (которые
+ будут объединены в список):
+\end_layout
+
+\begin_layout LyX-Code
+symbols = 
+\begin_inset Quotes fld
+\end_inset
+
+/^.*URIBL.*$/
+\begin_inset Quotes frd
+\end_inset
+
+;
+\end_layout
+
+\begin_layout Standard
+Пример задания представления в конфигурационном файле:
+\end_layout
+
+\begin_layout LyX-Code
+view {     
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+ip = "file:///usr/local/etc/rspamd/ip_internal.inc";     
+\end_layout
+
+\begin_layout LyX-Code
+skip_check = yes; 
+\end_layout
+
+\begin_layout LyX-Code
+from = "file:///usr/local/etc/rspamd/from_internal.inc";
+\end_layout
+
+\begin_layout LyX-Code
+symbols = "/^.*URIBL.*$/";
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+Директива 
+\begin_inset Quotes fld
+\end_inset
+
+skip_check
+\begin_inset Quotes frd
+\end_inset
+
+ используется для пропуска всех проверок rspamd для данного представлений.
+ В результате при использовании протокола rspamc 1.1 вместо маркера спама
+ (True или False) будет маркер пропуска (Skip).
+ При использовании spamc или же rspamc 1.0 будет стандартный маркер False
+ (так как реально у письма будет 0 баллов).
+\end_layout
+
+\begin_layout Subsection
+Пользовательские настройки
+\end_layout
+
+\begin_layout Standard
+Пользовательские настройки, в отличие от представлений, дают возможность
+ выбора правил, а также настройки граничных значений баллов письма, исходя
+ из получателя письма.
+ При этом, настройки можно задавать индивидуально пользователю или же всему
+ домену пользователя.
+ Индивидуальные настройки пользователя перекрывают настройки домена.
+ При выборе настроек используются следующие данные (учитывая последовательность)
+:
+\end_layout
+
+\begin_layout Enumerate
+проверяется заголовок Deliver-To, передаваемый при использовании протокола
+ rspamc;
+\end_layout
+
+\begin_layout Enumerate
+проверяется заголовок User, передаваемый MTA exim при использовании любого
+ протокола;
+\end_layout
+
+\begin_layout Enumerate
+проверяется первый получатель письма из заголовка rspamc Rcpt;
+\end_layout
+
+\begin_layout Enumerate
+проверяется первый получатель письма из заголовка mime To.
+\end_layout
+
+\begin_layout Standard
+Необходимо обратить внимание , что при наличии нескольких получателей, будет
+ проверяться только первый из них, чтобы избегать двусмысленного поведения.
+ Сами настройки задаются в json файлах, так как данные файлы могут содержать
+ очень много информации о пользователях, и хранить это все в конфигурационном
+ файле нецелесообразно.
+ Для задания пользовательских настроек используется секция 
+\begin_inset Quotes fld
+\end_inset
+
+settings
+\begin_inset Quotes frd
+\end_inset
+
+, которая содержит всего два параметра: user_settings и domain_settings.
+ Например:
+\end_layout
+
+\begin_layout LyX-Code
+settings {     
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+user_settings = "http://somehost/users.php";
+\end_layout
+
+\begin_layout LyX-Code
+domain_settings = "http://somehost/domains.php"; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+Формат соответствующих json файлов достаточно прост - это массив объектов,
+ задающих настройки.
+ Объект настройки содержит следующие параметры:
+\end_layout
+
+\begin_layout Itemize
+name - имя пользователя или домена;
+\end_layout
+
+\begin_layout Itemize
+metrics - объект, задающий предельные очки по метрикам, вида 
+\begin_inset Quotes fld
+\end_inset
+
+metric_name
+\begin_inset Quotes frd
+\end_inset
+
+ -> score;
+\end_layout
+
+\begin_layout Itemize
+factors - объект, задающий индивидуальные настройки множителей вида 
+\begin_inset Quotes fld
+\end_inset
+
+symbol
+\begin_inset Quotes frd
+\end_inset
+
+ -> score;
+\end_layout
+
+\begin_layout Itemize
+want_spam - булево значение, при задании его как true, rspamd отключает
+ проверки для данного пользователя.
+\end_layout
+
+\begin_layout Standard
+Пример json настроек:
+\end_layout
+
+\begin_layout LyX-Code
+[
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+"name":"somedomain.ru",
+\end_layout
+
+\begin_layout LyX-Code
+"metrics":{"default":11},
+\end_layout
+
+\begin_layout LyX-Code
+"factors":{"R_FUZZY":10.1},
+\end_layout
+
+\begin_layout LyX-Code
+"want_spam":false
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+},
+\end_layout
+
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+"name":"some.other.domain.com",
+\end_layout
+
+\begin_layout LyX-Code
+"metrics":{"default":5.5},
+\end_layout
+
+\begin_layout LyX-Code
+"factors":{"URIBL":20.3},
+\end_layout
+
+\begin_layout LyX-Code
+"want_spam":false
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+]
+\end_layout
+
+\begin_layout Standard
+Файлы настроек перезагружаются по мере обновления, как и любые другие файлы
+ списков.
 \end_layout
 
 \begin_layout Chapter
@@ -3015,6 +3361,164 @@ end
 \end_deeper
 \begin_layout LyX-Code
 end
+\end_layout
+
+\begin_layout Section
+Использование файлов-списков
+\end_layout
+
+\begin_layout Standard
+В lua плагинах можно задавать и использовать файлы списков, как это описано
+ в п.
+ 4.1.
+ Это полезно, когда в lua необходимо использовать некоторые данные, которые
+ бы асинхронно обновлялись в процессе работы rspamd.
+ API по работе со списками сожержит следующие функции:
+\end_layout
+
+\begin_layout Itemize
+rspamd_config:add_radix_map (string) - добавляет определение списка, содержащего
+ ip адреса и сети.
+ При удачном добавлении возвращается объект типа rspamd_radix, который может
+ использоваться в обработчиках символов для определения наличия в каком-либо
+ списке заданного ip;
+\end_layout
+
+\begin_layout Itemize
+rspamd_config:add_hash_map (string) - добавляет определение списка строк
+ (доменов), при успешном добавлении возвращает объект типа rspamd_hash.
+\end_layout
+
+\begin_layout Standard
+Использовать списки целесообразно в функциях-обработчкиках, так как сразу
+ же после добавления эти списки могут оказаться пустыми.
+ Объекты, возвращаемые функциями, регистрирующими файлы списков, имеют метод
+ get_key, позволяющий определить наличие какого-либо элемента в списке.
+ Для списков ip адресов этот объект принимает целое число, для списка строк
+ - строку.
+ Простой пример использования списков.
+\end_layout
+
+\begin_layout Standard
+Регистрация:
+\end_layout
+
+\begin_layout LyX-Code
+local radix_list = nil
+\end_layout
+
+\begin_layout LyX-Code
+local host_list = nil
+\end_layout
+
+\begin_layout LyX-Code
+radix_list = rspamd_config:add_radix_map ('http://somehost/ip.list')
+\end_layout
+
+\begin_layout LyX-Code
+host_list = rspamd_config:add_hash_map ('http://otherhost/host.list')
+\end_layout
+
+\begin_layout Standard
+Использование в обработчике символа:
+\end_layout
+
+\begin_layout LyX-Code
+function check_whitelist (task)
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+-- check client's ip 		
+\end_layout
+
+\begin_layout LyX-Code
+local ipn = task:get_from_ip_num() 		
+\end_layout
+
+\begin_layout LyX-Code
+if ipn and radix_list then 			
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+local key = radix_list:get_key(ipn) 			
+\end_layout
+
+\begin_layout LyX-Code
+if key then 				
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+task:insert_result(metric, symbol_ip, 1) 			
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+end 		
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+end
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+-- check client's from domain 		
+\end_layout
+
+\begin_layout LyX-Code
+local from = task:get_from() 		
+\end_layout
+
+\begin_layout LyX-Code
+if from and host_list then 		
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+-- extract domain part	
+\end_layout
+
+\begin_layout LyX-Code
+local _,_,domain = string.find(from, '@(.+)>?$') 			
+\end_layout
+
+\begin_layout LyX-Code
+local key = host_list:get_key(domain) 			
+\end_layout
+
+\begin_layout LyX-Code
+if key then 				
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+task:insert_result(metric, symbol_from, 1) 			
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+end 		
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+end
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+end
+\end_layout
+
+\begin_layout LyX-Code
+
 \end_layout
 
 \begin_layout Chapter
