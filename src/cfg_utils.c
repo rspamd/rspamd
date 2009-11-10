@@ -78,14 +78,20 @@ parse_host_port (const char *str, struct in_addr *ina, uint16_t *port)
 	
 	/* Now try to parse host and write address to ina */
 	if (!inet_aton (tokens[0], ina)) {
-		/* Try to call gethostbyname */
-		hent = gethostbyname (tokens[0]);
-		if (hent == NULL) {
-			msg_warn ("parse_host_port: cannot resolve %s", tokens[0]);
-			goto err;
+		if (strcmp (tokens[0], "*") == 0) {
+			/* Special case */
+			ina->s_addr = htonl (INADDR_ANY);
 		}
 		else {
-			memcpy (ina, hent->h_addr, sizeof (struct in_addr));	
+			/* Try to call gethostbyname */
+			hent = gethostbyname (tokens[0]);
+			if (hent == NULL) {
+				msg_warn ("parse_host_port: cannot resolve %s", tokens[0]);
+				goto err;
+			}
+			else {
+				memcpy (ina, hent->h_addr, sizeof (struct in_addr));	
+			}
 		}
 	}
 	if (tokens[1] != NULL) {
