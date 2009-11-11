@@ -51,9 +51,9 @@ if opts then
 			if n == 'symbol_strict' then
 				symbol_strict = v
 			elseif n == 'bad_host' then
-			    table.insert(bad_hosts, string.lower(v))
+			    bad_hosts = v
 			elseif n == 'good_host' then
-			    table.insert(good_hosts, string.lower(v))
+			    good_hosts = v
 		    elseif n == 'metric' then
 			    metric = v
 		    end

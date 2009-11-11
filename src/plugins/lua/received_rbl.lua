@@ -38,14 +38,13 @@ local opts =  rspamd_config:get_all_opt('received_rbl')
 if opts then
     if opts['symbol'] then
         symbol = opts['symbol']
-
-	    for n,v in pairs(opts) do
-		    if n == 'rbl' then
-			    table.insert(rbls, v)
-		    elseif n == 'metric' then
-			    metric = v
-		    end
-	    end
+        
+        if opts['metric'] then
+            metric = opts['metric']
+        end
+        if opts['rbl'] then
+            rbls = opts['rbl']
+        end
         -- Register symbol's callback
         local m = rspamd_config:get_metric(metric)
         m:register_symbol(symbol, 1.0, 'received_cb')

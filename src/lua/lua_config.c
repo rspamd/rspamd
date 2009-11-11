@@ -130,12 +130,22 @@ lua_config_get_module_opt (lua_State * L)
 }
 
 static int
+opt_compare (gconstpointer a, gconstpointer b)
+{
+	const struct module_opt        *o1 = a,
+								   *o2 = b;
+	
+	return g_ascii_strcasecmp (o1->param, o2->param);
+}
+
+static int
 lua_config_get_all_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
 	const char                     *mname;
-	GList                          *cur_opt;
-	struct module_opt              *cur;
+	GList                          *cur_opt, *next_opt;
+	struct module_opt              *opt, *tmp;
+	int                             i;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -146,12 +156,54 @@ lua_config_get_all_opt (lua_State * L)
 				lua_pushnil (L);
 				return 1;
 			}
+			/* Sort options in alphabet order by param name */
+			cur_opt = g_list_sort (cur_opt, opt_compare);
+			g_hash_table_insert (cfg->modules_opts, (gpointer)mname, cur_opt);
 
 			lua_newtable (L);
 			while (cur_opt) {
-				cur = cur_opt->data;
-				lua_set_table_index (L, cur->param, cur->value);
-				cur_opt = g_list_next (cur_opt);
+				opt = cur_opt->data;
+				next_opt = g_list_next (cur_opt);
+				if (next_opt) {
+					tmp = next_opt->data;
+					if (g_ascii_strcasecmp (tmp->param, opt->param) == 0) {
+						/* We have some common values */
+						lua_pushstring (L, opt->param);
+						lua_newtable (L);
+						/* Now stack looks like:
+						 * table - parent associated table of options
+						 * key - string key of this option
+						 * table - array of values, beginig from 1
+						 */
+						
+						for (i = 1; ; i++) {
+							lua_pushinteger (L, i);
+							lua_pushstring (L, opt->value);
+							lua_settable (L, -3);
+
+							cur_opt = g_list_next (cur_opt);
+							if (!cur_opt) {
+								break;
+							}
+							tmp = cur_opt->data;
+							if (g_ascii_strcasecmp (tmp->param, opt->param) != 0) {
+								break;
+							}
+							opt = tmp;
+						}
+						/* Now set index in parent table */
+						lua_settable (L, -3);
+						/* Now continue in outter cycle */
+						continue;
+					}
+					else {
+						lua_set_table_index (L, opt->param, opt->value);
+					}
+				}
+				else {
+					lua_set_table_index (L, opt->param, opt->value);
+				}
+				cur_opt = next_opt;
 			}
 			return 1;
 		}
