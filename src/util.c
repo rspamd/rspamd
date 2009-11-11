@@ -258,10 +258,10 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 	}
 	if (is_server) {
 		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (int));
-		r = bind (fd, (struct sockaddr *)addr, sizeof (struct sockaddr_in));
+		r = bind (fd, (struct sockaddr *)addr, SUN_LEN (addr));
 	}
 	else {
-		r = connect (fd, (struct sockaddr *)addr, sizeof (struct sockaddr_in));
+		r = connect (fd, (struct sockaddr *)addr, SUN_LEN (addr));
 	}
 
 	if (r == -1) {
