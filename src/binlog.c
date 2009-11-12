@@ -58,25 +58,16 @@ binlog_write_header (struct rspamd_binlog *log)
 	/* Metaindex */
 	log->metaindex = g_malloc (sizeof (struct rspamd_binlog_metaindex));
 	bzero (log->metaindex, sizeof (struct rspamd_binlog_metaindex));
+	/* Offset to metaindex */
+	log->metaindex->indexes[0] = sizeof (struct rspamd_binlog_metaindex) + sizeof (struct rspamd_binlog_header);
+
 	if (write (log->fd, log->metaindex, sizeof (struct rspamd_binlog_metaindex))  == -1) {
 		g_free (log->metaindex);
 		msg_warn ("binlog_write_header: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
 		unlock_file (log->fd, FALSE);
 		return FALSE;
 	}
-	g_free (log->metaindex);
-	/* Now mmap metaindex to memory */
-	if ((log->metaindex = mmap (NULL, sizeof (struct rspamd_binlog_metaindex), 
-					PROT_READ | PROT_WRITE, MAP_SHARED, log->fd, sizeof (struct rspamd_binlog_header))) == MAP_FAILED) {
-		msg_warn ("binlog_write_header: cannot mmap file %s, error %d, %s", log->filename, errno, strerror (errno));
-		unlock_file (log->fd, FALSE);
-		return FALSE;
-	}
 
-	/* First index block */
-
-	/* Offset to metaindex */
-	log->metaindex->indexes[0] = sizeof (struct rspamd_binlog_metaindex) + sizeof (struct rspamd_binlog_header);
 	/* Alloc, write, mmap */
 	log->cur_idx = g_malloc (sizeof (struct rspamd_index_block));
 	bzero (log->cur_idx, sizeof (struct rspamd_index_block));
@@ -239,36 +230,7 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 	struct rspamd_binlog_index *idx;
 
 	lock_file (log->fd, FALSE);
-	/* Write index */
-	log->cur_idx->last_index ++;
-	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index] + G_STRUCT_OFFSET (struct rspamd_index_block, last_index), SEEK_SET) == -1) {
-		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
-	if (write (log->fd, &log->cur_idx->last_index, sizeof (log->cur_idx->last_index)) == -1) {
-		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot write index to file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
-	
 	log->cur_seq ++;	
-
-	idx = &log->cur_idx->indexes[log->cur_idx->last_index];
-	idx->seek = seek;
-	idx->time = (uint64_t)time (NULL);
-	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
-	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index] + 
-				log->cur_idx->last_index * sizeof (struct rspamd_binlog_index), SEEK_SET) == -1) {
-		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
-	if (write (log->fd, idx, sizeof (struct rspamd_binlog_index)) == -1) {
-		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot write index to file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
 
 	/* Seek to end of file */
 	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
@@ -276,10 +238,27 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
-	
+
 	/* Now write all nodes to file */
 	g_tree_foreach (nodes, binlog_tree_callback, (gpointer)log);
 
+	/* Write index */
+	idx = &log->cur_idx->indexes[log->cur_idx->last_index];
+	idx->seek = seek;
+	idx->time = (uint64_t)time (NULL);
+	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
+	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot seek in file: %s, error: %s, seek: %ld, op: insert index", log->filename, 
+				strerror (errno), log->metaindex->indexes[log->metaindex->last_index]);
+		return FALSE;
+	}
+	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("binlog_insert: cannot write index to file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	log->cur_idx->last_index ++;
 	unlock_file (log->fd, FALSE);
 	
 	return TRUE;
@@ -289,11 +268,22 @@ static gboolean
 create_new_metaindex_block (struct rspamd_binlog *log)
 {
 	off_t seek;
-	
 
 	lock_file (log->fd, FALSE);
 	
 	log->metaindex->last_index ++;
+	/* Seek to end of file */
+	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
+		unlock_file (log->fd, FALSE);
+		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		return FALSE;
+	}
+	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))  == -1) {
+		unlock_file (log->fd, FALSE);
+		g_free (log->cur_idx);
+		msg_warn ("create_new_metaindex_block: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
+		return FALSE;
+	}
 	/* Offset to metaindex */
 	log->metaindex->indexes[log->metaindex->last_index] = seek;
 	/* Overwrite all metaindexes */
@@ -308,18 +298,6 @@ create_new_metaindex_block (struct rspamd_binlog *log)
 		return FALSE;
 	}
 	bzero (log->cur_idx, sizeof (struct rspamd_index_block));
-	/* Seek to end of file */
-	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
-		unlock_file (log->fd, FALSE);
-		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
-		return FALSE;
-	}
-	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))  == -1) {
-		unlock_file (log->fd, FALSE);
-		g_free (log->cur_idx);
-		msg_warn ("create_new_metaindex_block: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
-		return FALSE;
-	}
 	unlock_file (log->fd, FALSE);
 
 	return TRUE;

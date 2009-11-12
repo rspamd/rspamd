@@ -9,12 +9,13 @@
 #define BINLOG_IDX_LEN 200
 #define METAINDEX_LEN 1024
 
+/* Assume 8 bytes words */
 struct rspamd_binlog_header {
 	char magic[3];
 	char version[2];
 	char padding[3];
 	uint64_t create_time;
-} __attribute__((__packed__));
+};
 
 struct rspamd_binlog_index {
 	uint64_t time;
