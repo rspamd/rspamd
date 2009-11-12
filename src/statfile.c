@@ -27,6 +27,9 @@
 #include "statfile.h"
 #include "main.h"
 
+#define RSPAMD_STATFILE_VERSION {'1', '2'}
+#define BACKUP_SUFFIX ".old"
+
 /* Maximum number of statistics files */
 #define STATFILES_MAX 255
 static void statfile_pool_set_block_common (
@@ -43,12 +46,80 @@ cmpstatfile (const void *a, const void *b)
 	return g_ascii_strcasecmp (s1->filename, s2->filename);
 }
 
+/* Convert statfile version 1.0 to statfile version 1.2, saving backup */
+struct stat_file_header_10 {
+	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
+	u_char version[2];						/**< version of statfile				*/
+	u_char padding[3];						/**< padding							*/
+	uint64_t create_time;					/**< create time (time_t->uint64_t)		*/
+};
+
+static gboolean
+convert_statfile_10 (stat_file_t * file)
+{
+	char *backup_name;
+	struct stat st;
+	struct stat_file_header         header = {
+		.magic = {'r', 's', 'd'},
+		.version = RSPAMD_STATFILE_VERSION,
+		.padding = {0, 0, 0},
+		.revision = 0,
+		.rev_time = 0
+	};
+
+
+	/* Format backup name */
+	backup_name = g_strdup_printf ("%s.%s", file->filename, BACKUP_SUFFIX);
+	
+	msg_info ("convert_statfile_10: convert old statfile %s to version %c.%c, backup in %s", file->filename, 
+			header.version[0], header.version[1], backup_name);
+
+	if (stat (backup_name, &st) != -1) {
+		msg_info ("convert_statfile_10: replace old %s", backup_name);
+		unlink (backup_name);
+	}
+
+	rename (file->filename, backup_name);
+	g_free (backup_name);
+
+	/* XXX: maybe race condition here */
+	unlock_file (file->fd, FALSE);
+	close (file->fd);
+	if ((file->fd = open (file->filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+		msg_info ("convert_statfile_10: cannot create file %s, error %d, %s", file->filename, errno, strerror (errno));
+		return FALSE;
+	}
+	lock_file (file->fd, FALSE);
+	/* Now make new header and copy it to new file */
+	if (write (file->fd, &header, sizeof (header)) == -1) {
+		msg_info ("convert_statfile_10: cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
+		return FALSE;
+	}
+	/* Now write old map to new file */
+	if (write (file->fd, ((u_char *)file->map + sizeof (struct stat_file_header_10)),
+						file->len - sizeof (struct stat_file_header_10)) == -1) {
+		msg_info ("convert_statfile_10: cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
+		return FALSE;
+	}
+	/* Unmap old memory and map new */
+	munmap (file->map, file->len);
+	file->len = file->len + sizeof (struct stat_file_header) - sizeof (struct stat_file_header_10);
+	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == MAP_FAILED) {
+		msg_info ("convert_statfile_10: cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 /* Check whether specified file is statistic file and calculate its len in blocks */
 static int
 statfile_pool_check (stat_file_t * file)
 {
 	struct stat_file               *f;
 	char                           *c;
+	static char                     valid_version[] = RSPAMD_STATFILE_VERSION;
+
 
 	if (!file || !file->map) {
 		return -1;
@@ -62,9 +133,20 @@ statfile_pool_check (stat_file_t * file)
 	f = (struct stat_file *)file->map;
 	c = f->header.magic;
 	/* Check magic and version */
-	if (*c++ != 'r' || *c++ != 's' || *c++ != 'd' ||
-		/* version */ *c++ != 1 || *c != 0) {
+	if (*c++ != 'r' || *c++ != 's' || *c++ != 'd') {
 		msg_info ("statfile_pool_check: file %s is invalid stat file", file->filename);
+		return -1;
+	}
+	/* Now check version and convert old version to new one (that can be used for sync */
+	if (*c == 1 && *(c + 1) == 0) {
+		if (!convert_statfile_10 (file)) {
+			return -1;
+		}
+		f = (struct stat_file *)file->map;
+	}
+	else if (memcmp (c, valid_version, sizeof (valid_version)) != 0) {
+		/* Unknown version */
+		msg_info ("statfile_pool_check: file %s has invalid version %c.%c", file->filename, '0' + *c, '0' + *(c + 1));
 		return -1;
 	}
 
@@ -223,7 +305,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	}
 
 	memory_pool_lock_mutex (pool->lock);
-	if (!forced && abs (st.st_size - size) > sizeof (struct stat_file_block)) {
+	if (!forced && abs (st.st_size - size) > sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
 		msg_warn ("statfile_pool_open: need to reindex statfile old size: %zd, new size: %zd", st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
@@ -259,11 +341,15 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 
 	g_strlcpy (new_file->filename, filename, sizeof (new_file->filename));
 	new_file->len = st.st_size;
+	/* Aqquire lock for this operation */
+	lock_file (new_file->fd, FALSE);
 	if (statfile_pool_check (new_file) == -1) {
 		pool->opened--;
 		memory_pool_unlock_mutex (pool->lock);
+		unlock_file (new_file->fd, FALSE);
 		return NULL;
 	}
+	unlock_file (new_file->fd, FALSE);
 
 	pool->occupied += st.st_size;
 	new_file->open_time = time (NULL);
@@ -316,8 +402,10 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 {
 	struct stat_file_header         header = {
 		.magic = {'r', 's', 'd'},
-		.version = {1, 0},
+		.version = RSPAMD_STATFILE_VERSION,
 		.padding = {0, 0, 0},
+		.revision = 0,
+		.rev_time = 0
 	};
 	struct stat_file_section        section = {
 		.code = STATFILE_SECTION_COMMON,
@@ -661,4 +749,38 @@ statfile_get_section_by_name (const char *name)
 	}
 
 	return 0;
+}
+
+gboolean 
+statfile_set_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t rev, time_t time)
+{
+	struct stat_file_header        *header;
+
+	if (pool == NULL || file == NULL || file->map == NULL) {
+		return FALSE;
+	}
+	
+	header = (struct stat_file_header *)file->map;
+
+	header->revision = rev;
+	header->rev_time = time;
+
+	return FALSE;
+}
+
+gboolean 
+statfile_get_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t *rev, time_t *time)
+{
+	struct stat_file_header        *header;
+
+	if (pool == NULL || file == NULL || file->map == NULL) {
+		return FALSE;
+	}
+	
+	header = (struct stat_file_header *)file->map;
+
+	*rev = header->revision;
+	*time = header->rev_time;
+
+	return FALSE;
 }

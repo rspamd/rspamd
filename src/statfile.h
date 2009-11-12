@@ -23,10 +23,13 @@
  */
 struct stat_file_header {
 	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
-	u_char version[2];						/**< version of statfile (1.0)			*/
+	u_char version[2];						/**< version of statfile				*/
 	u_char padding[3];						/**< padding							*/
 	uint64_t create_time;					/**< create time (time_t->uint64_t)		*/
-} __attribute__((__packed__));
+	uint64_t revision;						/**< revision number					*/
+	uint64_t rev_time;						/**< revision time						*/
+	u_char unused[255];						/**< some bytes that can be used in future */
+};
 
 /**
  * Section header
@@ -205,5 +208,25 @@ gboolean statfile_pool_add_section (statfile_pool_t *pool, stat_file_t *file, ui
  * @return code of section or 0 if name of section is unknown
  */
 uint32_t statfile_get_section_by_name (const char *name);
+
+/**
+ * Set statfile revision and revision time
+ * @param pool statfile pool object
+ * @param filename name of statfile
+ * @param revision number of revision
+ * @param time time of revision
+ * @return TRUE if revision was set
+ */
+gboolean statfile_set_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t rev, time_t time);
+
+/**
+ * Set statfile revision and revision time
+ * @param pool statfile pool object
+ * @param filename name of statfile
+ * @param revision saved number of revision
+ * @param time saved time of revision
+ * @return TRUE if revision was saved in rev and time
+ */
+gboolean statfile_get_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t *rev, time_t *time);
 
 #endif
