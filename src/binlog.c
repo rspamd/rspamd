@@ -120,6 +120,9 @@ binlog_check_file (struct rspamd_binlog *log)
 		return FALSE;
 	}
 
+	log->cur_seq = log->cur_idx->last_index;
+	log->cur_time = log->cur_idx->indexes[log->cur_idx->last_index].time;
+
 	return TRUE;
 
 }
@@ -246,6 +249,7 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 	idx = &log->cur_idx->indexes[log->cur_idx->last_index];
 	idx->seek = seek;
 	idx->time = (uint64_t)time (NULL);
+	log->cur_time = idx->time;
 	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
 	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
 		unlock_file (log->fd, FALSE);
@@ -498,33 +502,22 @@ maybe_init_static ()
 	return TRUE;
 }
 
-void 
-maybe_write_binlog (struct classifier_config *ccf, const char *symbol, GTree *nodes)
+gboolean 
+maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_file_t *file, GTree *nodes)
 {
 	struct rspamd_binlog *log;
-	struct statfile *st = NULL;
-	GList *cur;
 
 	if (ccf == NULL) {
-		return;
+		return FALSE;
 	}
 
-	cur = g_list_first (ccf->statfiles);
-	while (cur) {
-		st = cur->data;
-		if (strcmp (symbol, st->symbol) == 0) {
-			break;
-		}
-		st = NULL;
-		cur = g_list_next (cur);
-	}
-
+	
 	if (st == NULL || nodes == NULL || st->binlog == NULL || st->binlog->affinity != AFFINITY_MASTER) {
-		return;
+		return FALSE;
 	}
 
 	if (!maybe_init_static ()) {
-		return;
+		return FALSE;
 	}
 
 	if ((log = g_hash_table_lookup (binlog_opened, st)) == NULL) {
@@ -532,11 +525,16 @@ maybe_write_binlog (struct classifier_config *ccf, const char *symbol, GTree *no
 			g_hash_table_insert (binlog_opened, st, log);
 		}
 		else {
-			return;
+			return FALSE;
 		}
 	}
 
-	(void)binlog_insert (log, nodes);
+	if (binlog_insert (log, nodes)) {
+		(void)statfile_set_revision (file, log->cur_seq, log->cur_time);
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 

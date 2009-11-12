@@ -385,6 +385,8 @@ controller_read_socket (f_str_t * in, void *arg)
 {
 	struct controller_session      *session = (struct controller_session *)arg;
 	struct classifier_ctx          *cls_ctx;
+	stat_file_t                    *statfile;
+	struct statfile                *st;
 	int                             len, i, r;
 	char                           *s, **params, *cmd, out_buf[128];
 	struct worker_task             *task;
@@ -474,11 +476,27 @@ controller_read_socket (f_str_t * in, void *arg)
 			}
 			cur = g_list_next (cur);
 		}
+		
+		/* Get or create statfile */
+		statfile = get_statfile_by_symbol (session->worker->srv->statfile_pool, session->learn_classifier,
+						session->learn_symbol, &st, TRUE);
+		if (statfile == NULL) {
+			free_task (task, FALSE);
+			i = snprintf (out_buf, sizeof (out_buf), "learn failed" CRLF);
+			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+				return FALSE;
+			}
+			return TRUE;
+		}
+		
+		/* Init classifier */
 		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
-		session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool, session->learn_symbol, tokens, session->in_class);
+		
+		/* XXX: remove this awful legacy */
+		session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool, statfile, tokens, session->in_class);
 		session->worker->srv->stat->messages_learned++;
 
-		maybe_write_binlog (session->learn_classifier, session->learn_symbol, tokens);
+		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
 		
 		free_task (task, FALSE);
 		i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);

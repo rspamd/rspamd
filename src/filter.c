@@ -473,23 +473,23 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 void
 process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens, struct classifier *classifier, char *filename, struct classifier_ctx *ctx)
 {
+	stat_file_t                    *statfile;
+	struct statfile                *unused;
+
 	if (check_autolearn (st->autolearn, task)) {
 		if (tokens) {
 			msg_info ("process_autolearn: message with id <%s> autolearned statfile '%s'", task->message_id, filename);
-			/* Check opened */
-			if (!statfile_pool_is_open (task->worker->srv->statfile_pool, filename)) {
-				/* Try open */
-				if (statfile_pool_open (task->worker->srv->statfile_pool, filename, st->size, FALSE) == NULL) {
-					/* Try create */
-					if (statfile_pool_create (task->worker->srv->statfile_pool, filename, st->size) == -1) {
-						msg_info ("process_autolearn: error while creating statfile %s", filename);
-						return;
-					}
-				}
+			
+			/* Get or create statfile */
+			statfile = get_statfile_by_symbol (task->worker->srv->statfile_pool, ctx->cfg,
+						st->symbol, &unused, TRUE);
+			
+			if (statfile == NULL) {
+				return;
 			}
 
-			classifier->learn_func (ctx, task->worker->srv->statfile_pool, st->symbol, tokens, TRUE);
-			maybe_write_binlog (ctx->cfg, st->symbol, tokens);
+			classifier->learn_func (ctx, task->worker->srv->statfile_pool, statfile, tokens, TRUE);
+			maybe_write_binlog (ctx->cfg, st, statfile, tokens);
 		}
 	}
 }

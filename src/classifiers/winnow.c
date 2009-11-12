@@ -154,15 +154,13 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 }
 
 void
-winnow_learn (struct classifier_ctx *ctx, statfile_pool_t * pool, char *symbol, GTree * input, int in_class)
+winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *file, GTree * input, int in_class)
 {
 	struct winnow_callback_data     data = {
 		.file = NULL,
 		.sum = 0,
 		.count = 0,
 	};
-	GList                          *cur;
-	struct statfile                *st;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -172,25 +170,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t * pool, char *symbol, 
 	data.now = time (NULL);
 	data.ctx = ctx;
 
-	cur = g_list_first (ctx->cfg->statfiles);
-	while (cur) {
-		st = cur->data;
-		if (strcmp (symbol, st->symbol) == 0) {
-			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-				/* Try to create statfile */
-				if (statfile_pool_create (pool, st->path, st->size) == -1) {
-					msg_err ("winnow_learn: cannot create statfile %s", st->path);
-					return;
-				}
-				if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-					msg_err ("winnow_learn: cannot create statfile %s", st->path);
-					return;
-				}
-			}
-			break;
-		}
-		cur = g_list_next (cur);
-	}
+	data.file = file;
 
 	if (data.file != NULL) {
 		statfile_pool_lock_file (pool, data.file);

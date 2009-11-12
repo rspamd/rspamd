@@ -27,6 +27,7 @@
 #include "util.h"
 #include "cfg_file.h"
 #include "main.h"
+#include "statfile.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -1094,7 +1095,7 @@ unlock_file (int fd, gboolean async)
     return TRUE;
 
 }
-#else
+#else /* HAVE_FLOCK */
 /* Fctnl version */
 gboolean 
 lock_file (int fd, gboolean async)
@@ -1138,7 +1139,49 @@ unlock_file (int fd, gboolean async)
     return TRUE;
 
 }
-#endif
+#endif /* HAVE_FLOCK */
+
+#ifdef RSPAMD_MAIN
+stat_file_t *
+get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf, 
+        const char *symbol, struct statfile **st, gboolean try_create)
+{
+    stat_file_t *res = NULL;
+    GList *cur;
+
+    if (pool == NULL || ccf == NULL || symbol == NULL) {
+        return NULL;
+    }
+
+    cur = g_list_first (ccf->statfiles);
+	while (cur) {
+		*st = cur->data;
+		if (strcmp (symbol, (*st)->symbol) == 0) {
+			break;
+		}
+		*st = NULL;
+		cur = g_list_next (cur);
+	}
+    if (*st == NULL) {
+        return NULL;
+    }
+
+    if ((res = statfile_pool_is_open (pool, (*st)->path)) == NULL) {
+		if ((res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE)) == NULL) {
+			msg_warn ("get_statfile_by_symbol: cannot open %s", (*st)->path);
+            if (try_create) {
+                if (statfile_pool_create (pool, (*st)->path, (*st)->size) == -1) {
+					msg_err ("get_statfile_by_symbol: cannot create statfile %s", (*st)->path);
+					return NULL;
+				}
+                res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE);
+            }
+		}
+	}
+    
+    return res;
+}
+#endif /* RSPAMD_MAIN */
 
 /*
  * vi:ts=4

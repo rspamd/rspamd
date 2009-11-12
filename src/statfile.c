@@ -752,11 +752,11 @@ statfile_get_section_by_name (const char *name)
 }
 
 gboolean 
-statfile_set_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t rev, time_t time)
+statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time)
 {
 	struct stat_file_header        *header;
 
-	if (pool == NULL || file == NULL || file->map == NULL) {
+	if (file == NULL || file->map == NULL) {
 		return FALSE;
 	}
 	
@@ -765,15 +765,15 @@ statfile_set_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t rev, t
 	header->revision = rev;
 	header->rev_time = time;
 
-	return FALSE;
+	return TRUE;
 }
 
 gboolean 
-statfile_get_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t *rev, time_t *time)
+statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time)
 {
 	struct stat_file_header        *header;
 
-	if (pool == NULL || file == NULL || file->map == NULL) {
+	if (file == NULL || file->map == NULL) {
 		return FALSE;
 	}
 	
@@ -782,5 +782,5 @@ statfile_get_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t *rev, 
 	*rev = header->revision;
 	*time = header->rev_time;
 
-	return FALSE;
+	return TRUE;
 }

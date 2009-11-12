@@ -217,7 +217,7 @@ uint32_t statfile_get_section_by_name (const char *name);
  * @param time time of revision
  * @return TRUE if revision was set
  */
-gboolean statfile_set_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t rev, time_t time);
+gboolean statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time);
 
 /**
  * Set statfile revision and revision time
@@ -227,6 +227,7 @@ gboolean statfile_set_revision (statfile_pool_t *pool, stat_file_t *file, uint64
  * @param time saved time of revision
  * @return TRUE if revision was saved in rev and time
  */
-gboolean statfile_get_revision (statfile_pool_t *pool, stat_file_t *file, uint64_t *rev, time_t *time);
+gboolean statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time);
+
 
 #endif

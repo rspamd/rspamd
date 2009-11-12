@@ -4,10 +4,13 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "radix.h"
+#include "statfile.h"
 
 struct config_file;
 struct rspamd_main;
 struct workq;
+struct statfile;
+struct classifier_config;
 
 /* Create socket and bind or connect it to specified address and port */
 int make_tcp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
@@ -81,5 +84,9 @@ gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
 
 void gperf_profiler_init (struct config_file *cfg, const char *descr);
 
+#ifdef RSPAMD_MAIN
+stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf, 
+		const char *symbol, struct statfile **st, gboolean try_create);
+#endif
 
 #endif
