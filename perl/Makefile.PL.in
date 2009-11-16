@@ -1,22 +1,6 @@
 use ExtUtils::MakeMaker;
 WriteMakefile(
-    NAME         => 'Mail::Rspamd',
     AUTHOR       => 'Vsevolod Stakhov <vsevolod@highsecure.ru>',
-    XS           => { 'Rspamd.xs'  => 'Rspamd.c' },
-    VERSION_FROM => 'Rspamd.pm', # finds $VERSION
-    LIBS         => ['${GLIB_LDFLAGS} ${GMIME_LDFLAGS} -levent'],   # e.g., '-lm'
-    DEFINE       => '',
-    INC          => '${GLIB_CFLAGS} ${GMIME_CFLAGS}',
-    PM		     => { 'Rspamd.pod' => '$(INST_LIBDIR)/Rspamd.pod',
-     	              'Rspamd.pm' => '$(INST_LIBDIR)/Rspamd.pm'},
-    depend       => {
-	    'Rspamd.so'  => 'Rspamd.o',
-	    'Rspamd.o'   => 'Rspamd.c',
-	    'Rspamd.c'   => qw{
-Rspamd/ContentType.xs            Rspamd/Part.xs                   Rspamd/Hash.xs
-Rspamd/InternetAddress.xs        Rspamd/Message.xs                Rspamd/Object.xs
-Rspamd/TextPart.xs
-},
-	},
+    VERSION_FROM => 'lib/Mail/Rspamd/Client.pm', # finds $VERSION
 );
 

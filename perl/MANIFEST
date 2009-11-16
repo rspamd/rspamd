@@ -1,0 +1,3 @@
+Makefile.PL
+MANIFEST
+lib/Mail/Rspamd/Client.pm

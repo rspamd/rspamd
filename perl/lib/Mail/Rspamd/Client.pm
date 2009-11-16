@@ -32,6 +32,9 @@ package Mail::Rspamd::Client;
 use IO::Socket;
 use IO::Select;
 
+use vars qw($VERSION);
+$VERSION = "1.00";
+
 my $EOL = "\015\012";
 my $BLANK = $EOL x 2;
 my $PROTOVERSION = 'RSPAMC/1.0';
@@ -131,30 +134,30 @@ sub check {
 
   local $SIG{PIPE} = 'IGNORE';
 
-  if (!(print $remote "$command $PROTOVERSION$EOL")) {
+  if (!(syswrite($remote, "$command $PROTOVERSION$EOL"))) {
     $self->_mark_dead($remote);
     return 0;
   }
-  print $remote "Content-length: $msgsize$EOL";
-  print $remote "User: $self->{username}$EOL" if ($self->{username});
-  print $remote "From: $self->{from}$EOL" if ($self->{from});
-  print $remote "IP: $self->{ip}$EOL" if ($self->{ip});
-  print $remote "Subject: $self->{subject}$EOL" if ($self->{subject});
+  syswrite $remote, "Content-length: $msgsize$EOL";
+  syswrite $remote, "User: $self->{username}$EOL" if ($self->{username});
+  syswrite $remote, "From: $self->{from}$EOL" if ($self->{from});
+  syswrite $remote, "IP: $self->{ip}$EOL" if ($self->{ip});
+  syswrite $remote, "Subject: $self->{subject}$EOL" if ($self->{subject});
   if (ref $self->{rcpt} eq "ARRAY") {
     foreach ($self->{rcpt}) {
-      print $remote "Rcpt: $_ $EOL";
+      syswrite $remote, "Rcpt: $_ $EOL";
     }
   }
-  print $remote "$EOL";
-  print $remote $msg;
-  print $remote "$EOL";
+  syswrite $remote, $EOL;
+  syswrite $remote, $msg;
+  syswrite $remote, $EOL;
   
   return undef unless $self->_get_io_readiness($remote, 0);
+		
+  my $in;
+  return undef unless sysread($remote, $in, 512);
 
-  my $line = <$remote>;
-  return undef unless (defined $line);
-
-  my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($line);
+  my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($in);
 
   $self->{resp_code} = $resp_code;
   $self->{resp_msg} = $resp_msg;
@@ -162,8 +165,8 @@ sub check {
   return undef unless ($resp_code == 0);
 
   my $cur_metric;
-
-  while ($self->_get_io_readiness($remote, 0) && ($line = <$remote>)) {
+  my @lines = split (/^/, $in);
+  foreach my $line (@lines) {
     if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+)!) {
       $metrics{$1} = {
         isspam => $2,
@@ -192,15 +195,14 @@ sub _auth {
 
   local $SIG{PIPE} = 'IGNORE';
 
-  if (!(print $sock "PASSWORD $self->{password}$EOL")) {
+  if (!(syswrite($sock, "PASSWORD $self->{password}$EOL"))) {
     $self->_mark_dead($remote);
     return 0;
   }
 
   return 0 unless $self->_get_io_readiness($sock, 0);
 
-  if (defined (my $reply = <$sock>)) {
-    my $end = <$sock>;
+  if (sysread($sock, $reply, 255)) {
     if ($reply =~ /^password accepted/) {
       return 1;
     }
@@ -238,16 +240,16 @@ sub learn {
 
   local $SIG{PIPE} = 'IGNORE';
 
-  if (!(print $remote "$command $statfile $msgsize$EOL")) {
+  if (!(syswrite ($remote, "$command $statfile $msgsize$EOL"))) {
     $self->_mark_dead($remote);
     return 0;
   }
 
-  print $remote $msg;
-  print $remote "$EOL";
+  syswrite($remote, $msg);
+  syswrite($remote, $EOL);
   
   return undef unless $self->_get_io_readiness($remote, 0);
-  if (defined (my $reply = <$sock>)) {
+  if (sysread ($remote, $reply, 255)) {
     if ($reply =~ /^learn ok/) {
       close $remote;
       return 1;
@@ -276,16 +278,17 @@ sub ping {
   return 0 unless ($remote);
   local $SIG{PIPE} = 'IGNORE';
 
-  if (!(print $remote "PING $PROTOVERSION$EOL")) {
+  if (!(syswrite($remote, "PING $PROTOVERSION$EOL"))) {
     $self->_mark_dead($remote);
     return 0;
   }
-  print $remote "$EOL";
+  syswrite($remote, $EOL);
 
   return undef unless $self->_get_io_readiness($remote, 0);
-  my $line = <$remote>;
+	my $line;
+  sysread ($remote, $line, 255);
   close $remote;
-  return undef unless (defined $line);
+  return undef unless $line;
 
   my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($line);
   return 0 unless ($resp_msg eq 'PONG');
