@@ -30,7 +30,6 @@ the spamd protocol.
 package Mail::Rspamd::Client;
 
 use IO::Socket;
-use IO::Select;
 
 use vars qw($VERSION);
 $VERSION = "1.00";
@@ -154,8 +153,14 @@ sub check {
   
   return undef unless $self->_get_io_readiness($remote, 0);
 		
-  my $in;
-  return undef unless sysread($remote, $in, 512);
+  my $in, $res, $offset = 0;
+	do {
+		$res = sysread($remote, $in, 512, $offset);
+		if ($res > 0 && $res < 512) {
+				$self->_get_io_readiness($remote, 0);
+		}
+		$offset += $res;
+  } while ($res > 0);
 
   my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($in);
 
@@ -415,18 +420,17 @@ sub _mark_dead {
 
 sub _get_io_readiness {
   my ($self, $sock, $is_write) = @_;
-  my $s = IO::Select->new();
-  $s->add($sock);
+	my $w = '';
+	vec($w, fileno($sock), 1) = 1;
 
   if ($is_write) {
-    @ready = $s->can_write($self->{timeout});
+    return select(undef, $w, undef, $self->{timeout});
   }
   else {
-    @ready = $s->can_read($self->{timeout});
+    return select($w, undef,undef, $self->{timeout});
   }
   
-
-  scalar(@ready);
+	undef;
 }
 
 =head2 _parse_response_line
