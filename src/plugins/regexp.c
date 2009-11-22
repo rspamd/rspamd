@@ -66,6 +66,7 @@ static struct regexp_ctx       *regexp_module_ctx = NULL;
 static int                      regexp_common_filter (struct worker_task *task);
 static gboolean                 rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused);
+static gboolean                 rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused);
 static void                     process_regexp_item (struct worker_task *task, void *user_data);
 
 
@@ -81,6 +82,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 	register_expression_function ("regexp_match_number", rspamd_regexp_match_number, NULL);
 	register_expression_function ("raw_header_exists", rspamd_raw_header_exists, NULL);
+	register_expression_function ("check_smtp_data", rspamd_check_smtp_data, NULL);
 
 	return 0;
 }
@@ -275,7 +277,7 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static                          gsize
-process_regexp (struct rspamd_regexp *re, struct worker_task *task)
+process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *additional)
 {
 	char                           *headerv, *c, t;
 	struct mime_text_part          *part;
@@ -293,6 +295,18 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task)
 	if ((r = task_cache_check (task, re)) != -1) {
 		msg_debug ("process_regexp: regexp /%s/ is found in cache, result: %d", re->regexp_text, r);
 		return r == 1;
+	}
+	
+	if (additional != NULL) {
+		/* We have additional parameter defined, so ignore type of regexp expression and use it for parsing */
+		if (g_regex_match_full (regexp, additional, strlen (additional), 0, 0, NULL, NULL) == TRUE) {
+			task_cache_add (task, re, 1);
+			return 1;
+		}
+		else {
+			task_cache_add (task, re, 0);
+			return 0;
+		}
 	}
 
 	switch (re->type) {
@@ -504,7 +518,7 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 }
 
 static                          gboolean
-process_regexp_expression (struct expression *expr, char *symbol, struct worker_task *task)
+process_regexp_expression (struct expression *expr, char *symbol, struct worker_task *task, const char *additional)
 {
 	GQueue                         *stack;
 	gsize                           cur, op1, op2;
@@ -517,7 +531,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 	while (it) {
 		if (it->type == EXPR_REGEXP_PARSED) {
 			/* Find corresponding symbol */
-			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task);
+			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task, additional);
 			msg_debug ("process_regexp_expression: regexp %s found", cur ? "is" : "is not");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
@@ -607,7 +621,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 {
 	struct regexp_module_item      *item = user_data;
 
-	if (process_regexp_expression (item->expr, item->symbol, task)) {
+	if (process_regexp_expression (item->expr, item->symbol, task, NULL)) {
 		insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
 	}
 }
@@ -643,7 +657,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused
 			}
 		}
 		else {
-			if (process_regexp_expression (cur->data, "regexp_match_number", task)) {
+			if (process_regexp_expression (cur->data, "regexp_match_number", task, NULL)) {
 				res++;
 			}
 			if (res >= param_count) {
@@ -675,4 +689,125 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 	}
 
 	return TRUE;
+}
+
+static                          gboolean
+rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
+{
+	struct expression_argument     *arg;
+	GList                          *cur, *rcpt_list = NULL;
+	char                           *type, *what = NULL;
+
+	if (args == NULL) {
+		msg_warn ("rspamd_check_smtp_data: no parameters to function");
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+
+	if (!arg || !arg->data) {
+		msg_warn ("rspamd_check_smtp_data: no parameters to function");
+		return FALSE;
+	}
+	else {
+		type = arg->data;
+		switch (*type) {
+			case 'f':
+			case 'F':
+				if (g_ascii_strcasecmp (type, "from") == 0) {
+					what = task->from;
+				}
+				else {
+					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					return FALSE;
+				}
+				break;
+			case 'h':
+			case 'H':
+				if (g_ascii_strcasecmp (type, "helo") == 0) {
+					what = task->helo;
+				}
+				else {
+					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					return FALSE;
+				}
+				break;
+			case 'u':
+			case 'U':
+				if (g_ascii_strcasecmp (type, "user") == 0) {
+					what = task->user;
+				}
+				else {
+					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					return FALSE;
+				}
+				break;
+			case 's':
+			case 'S':
+				if (g_ascii_strcasecmp (type, "subject") == 0) {
+					what = task->subject;
+				}
+				else {
+					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					return FALSE;
+				}
+				break;
+			case 'r':
+			case 'R':
+				if (g_ascii_strcasecmp (type, "rcpt") == 0) {
+					rcpt_list = task->rcpt;
+				}
+				else {
+					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					return FALSE;
+				}
+				break;
+			default:
+				msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+				return FALSE;
+		}
+	}
+
+	if (what == NULL && rcpt_list == NULL) {
+		/* Not enough data so regexp would NOT be found anyway */
+		return FALSE;
+	}
+	
+	/* We would process only one more argument, others are ignored */
+	cur = args->next;
+	if (cur) {
+		arg = get_function_arg (cur->data, task, FALSE);
+		if (arg && arg->type == EXPRESSION_ARGUMENT_NORMAL) {
+			if (what != NULL) {
+				if (g_ascii_strcasecmp (cur->data, what) == 0) {
+					return TRUE;
+				}
+			}
+			else {
+				while (rcpt_list) {
+					if (g_ascii_strcasecmp (cur->data, rcpt_list->data) == 0) {
+						return TRUE;
+					}
+					rcpt_list = g_list_next (rcpt_list);
+				}
+			}
+		}
+		else {
+			if (what != NULL) {
+				if (process_regexp_expression (cur->data, "regexp_check_smtp_data", task, what)) {
+					return TRUE;
+				}
+			}
+			else {
+				while (rcpt_list) {
+					if (process_regexp_expression (cur->data, "regexp_check_smtp_data", task, rcpt_list->data)) {
+						return TRUE;
+					}
+					rcpt_list = g_list_next (rcpt_list);
+				}
+			}
+		}
+	}
+
+	return FALSE;
 }

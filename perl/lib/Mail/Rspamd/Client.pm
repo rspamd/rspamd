@@ -154,7 +154,7 @@ sub check {
   return undef unless $self->_get_io_readiness($remote, 0);
 		
   my $in, $res, $offset = 0;
-	do {
+  do {
 		$res = sysread($remote, $in, 512, $offset);
 		if ($res > 0 && $res < 512) {
 				$self->_get_io_readiness($remote, 0);
