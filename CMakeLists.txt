@@ -368,6 +368,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/settings.c
 				src/spf.c
 				src/statfile.c
+				src/statfile_sync.c
 				src/symbols_cache.c
 				src/upstream.c
 				src/url.c
