@@ -56,9 +56,10 @@ struct rspamd_binlog {
 struct classifier_config;
 
 struct rspamd_binlog* binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rotate_jitter);
+struct rspamd_binlog* get_binlog_by_statfile (struct statfile *st);
 void binlog_close (struct rspamd_binlog *log);
 gboolean binlog_insert (struct rspamd_binlog *log, GTree *nodes);
-gboolean binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, GByteArray **rep);
+gboolean binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, GByteArray **rep);
 gboolean maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_file_t *file, GTree *nodes);
 
 #endif

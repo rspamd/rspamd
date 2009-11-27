@@ -156,7 +156,7 @@ binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rota
 	struct rspamd_binlog *new;
 	int len = strlen (path);
 	struct stat st;
-	
+
 	new = memory_pool_alloc0 (pool, sizeof (struct rspamd_binlog));
 	new->pool = pool;
 	new->rotate_time = rotate_time;
@@ -398,12 +398,12 @@ binlog_insert (struct rspamd_binlog *log, GTree *nodes)
 }
 
 gboolean 
-binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, GByteArray **rep)
+binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, GByteArray **rep)
 {
 	uint32_t metaindex_num;
 	struct rspamd_index_block *idxb;
 	struct rspamd_binlog_index *idx;
-	gboolean idx_mapped = FALSE, res = TRUE;
+	gboolean idx_mapped = FALSE, res = TRUE, is_first = FALSE;
 
 	if (!log || !log->metaindex || !log->cur_idx) {
 		msg_info ("binlog_sync: improperly opened binlog: %s", log->filename);
@@ -412,6 +412,7 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, G
 
 	if (*rep == NULL) {
 		*rep = g_malloc (sizeof (GByteArray));
+		is_first = TRUE;
 	}
 	else {
 		/* Unmap old fragment */
@@ -440,7 +441,7 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, G
 			res = FALSE;
 			goto end;
 		}
-		if ((read (log->fd, &idxb, sizeof (struct rspamd_index_block))) != sizeof (struct rspamd_index_block)) {
+		if ((read (log->fd, idxb, sizeof (struct rspamd_index_block))) != sizeof (struct rspamd_index_block)) {
 			unlock_file (log->fd, FALSE);
 			msg_warn ("binlog_sync: cannot read index from file %s, error %d, %s", log->filename, errno, strerror (errno));
 			res = FALSE;
@@ -453,9 +454,12 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t from_time, G
 	}
 	/* Now check specified index */
 	idx = &idxb->indexes[from_rev % BINLOG_IDX_LEN];
-	if (idx->time != from_time) {
+	if (is_first && idx->time != *from_time) {
 		res = FALSE;
 		goto end;
+	}
+	else {
+		*from_time = idx->time;
 	}
 
 	/* Now fill reply structure */
@@ -537,4 +541,27 @@ maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_fil
 	return FALSE;
 }
 
+struct rspamd_binlog* 
+get_binlog_by_statfile (struct statfile *st)
+{
+	struct rspamd_binlog *log;
 
+	if (st == NULL || st->binlog == NULL || st->binlog->affinity != AFFINITY_MASTER) {
+		return NULL;
+	}
+
+	if (!maybe_init_static ()) {
+		return NULL;
+	}
+
+	if ((log = g_hash_table_lookup (binlog_opened, st)) == NULL) {
+		if ((log = binlog_open (binlog_pool, st->path, st->binlog->rotate_time, st->binlog->rotate_time / 2)) != NULL) {
+			g_hash_table_insert (binlog_opened, st, log);
+		}
+		else {
+			return NULL;
+		}
+	}
+	
+	return log;
+}
