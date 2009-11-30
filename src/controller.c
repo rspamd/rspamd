@@ -200,7 +200,7 @@ write_whole_statfile (struct controller_session *session, char *symbol, struct c
 	/* Begin to copy all blocks into array */
 	statfile_get_revision (statfile, &rev, (time_t *)&time);
 	len = statfile->cur_section.length * sizeof (struct rspamd_binlog_element);
-	i = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu", (long unsigned)rev, (long unsigned)time, (long unsigned)len);
+	i = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)len);
 	rspamd_dispatcher_write (session->dispatcher, out_buf, i, TRUE, FALSE);
 	out = memory_pool_alloc (session->session_pool, len);
 
@@ -289,7 +289,7 @@ process_sync_command (struct controller_session *session, char **args)
 	}
 
 	while (binlog_sync (binlog, rev, &time, &data)) {
-		r = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu", (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
+		r = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE);
 		if (!rspamd_dispatcher_write (session->dispatcher, data->data, data->len, TRUE, FALSE)) {
 			if (data != NULL) {

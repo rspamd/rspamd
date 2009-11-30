@@ -214,7 +214,7 @@ static                          gboolean
 read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http_map_data *data, struct map_cb_data *cbdata)
 {
 	u_char                         *p = buf, *remain;
-	uint32_t                        skip = 0, rlen;
+	uint32_t                        skip = 0;
 
 	if (data->chunk == 0) {
 		/* Read first chunk data */
@@ -229,8 +229,8 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 		remain = map->read_callback (map->pool, p, len - (data->chunk_read - data->chunk), cbdata);
 		if (remain != NULL && remain != p) {
 			/* copy remaining buffer to start of buffer */
-			rlen = len - (remain - p);
-			memmove (p, remain, rlen);
+			data->rlen = len - (remain - p);
+			memmove (p, remain, data->rlen);
 		}
 
 		p = buf + (len - (data->chunk_read - data->chunk));
@@ -249,10 +249,10 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 	}
 
 	remain = map->read_callback (map->pool, p, len, cbdata);
-	if (remain != NULL && remain != p) {
+	if (remain != NULL && remain != p + len) {
 		/* copy remaining buffer to start of buffer */
-		rlen = len - (remain - p);
-		memmove (p, remain, rlen);
+		data->rlen = len - (remain - p);
+		memmove (p, remain, data->rlen);
 	}
 
 	return TRUE;
@@ -261,20 +261,20 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 static                          gboolean
 read_http_common (struct rspamd_map *map, struct http_map_data *data, struct http_reply *reply, struct map_cb_data *cbdata, int fd)
 {
-	u_char                          buf[BUFSIZ], *remain, *pos;
-	int                             rlen;
+	u_char                         *remain, *pos;
 	ssize_t                         r;
 	char                           *te;
-
-	rlen = 0;
-	if ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 1)) > 0) {
-		buf[r++] = '\0';
-		remain = parse_http_reply (buf, r - 1, reply);
-		if (remain != NULL && remain != buf) {
-			/* copy remaining buffer to start of buffer */
-			rlen = r - (remain - buf);
-			memmove (buf, remain, rlen);
-			r = rlen;
+	
+	if ((r = read (fd, data->read_buf + data->rlen, sizeof (data->read_buf) - data->rlen)) > 0) {
+		r += data->rlen;
+		data->rlen = 0;
+		remain = parse_http_reply (data->read_buf, r, reply);
+		if (remain != NULL && remain != data->read_buf) {
+			/* copy remaining data->read_buffer to start of data->read_buffer */
+			data->rlen = r - (remain - data->read_buf);
+			memmove (data->read_buf, remain, data->rlen);
+			r = data->rlen;
+			data->rlen = 0;
 		}
 		if (r <= 0) {
 			return TRUE;
@@ -288,20 +288,20 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 				/* Do not read anything */
 				return FALSE;
 			}
-			pos = buf;
+			pos = data->read_buf;
 			if (!data->chunked && (te = g_hash_table_lookup (reply->headers, "Transfer-Encoding")) != NULL) {
 				if (g_ascii_strcasecmp (te, "chunked") == 0) {
 					data->chunked = TRUE;
 				}
 			}
 			if (data->chunked) {
-				return read_http_chunked (buf, r - 1, map, data, cbdata);
+				return read_http_chunked (data->read_buf, r, map, data, cbdata);
 			}
-			remain = map->read_callback (map->pool, pos, r - 1, cbdata);
-			if (remain != NULL && remain != pos) {
-				/* copy remaining buffer to start of buffer */
-				rlen = r - (remain - pos);
-				memmove (pos, remain, rlen);
+			remain = map->read_callback (map->pool, pos, r, cbdata);
+			if (remain != NULL && remain != pos + r) {
+				/* copy remaining data->read_buffer to start of data->read_buffer */
+				data->rlen = r - (remain - pos);
+				memmove (pos, remain, data->rlen);
 			}
 		}
 	}
@@ -466,6 +466,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 		hdata->host = memory_pool_alloc (map_pool, hostend - def + 1);
 		g_strlcpy (hdata->host, def, hostend - def + 1);
 		hdata->path = memory_pool_strdup (map_pool, p);
+		hdata->rlen = 0;
 		/* Now try to resolve */
 		if (!inet_aton (hdata->host, &hdata->addr)) {
 			/* Resolve using dns */
@@ -531,11 +532,11 @@ abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct ma
 						func (data->cur_data, s, hash_fill);
 					}
 					s = str;
-					start = p;
 				}
-				while (*p == '\r' || *p == '\n') {
+				while ((*p == '\r' || *p == '\n') && p - chunk < len) {
 					p++;
 				}
+				start = p;
 			}
 			else {
 				*s = *p;
@@ -546,7 +547,7 @@ abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct ma
 			/* SKIP_COMMENT */
 		case 1:
 			if (*p == '\r' || *p == '\n') {
-				while (*p == '\r' || *p == '\n') {
+				while ((*p == '\r' || *p == '\n') && p - chunk < len) {
 					p++;
 				}
 				s = str;

@@ -180,7 +180,7 @@ sync_read (f_str_t * in, void *arg)
 		case SYNC_STATE_READ_LINE:
 			/* Try to parse line from server */
 			if (!parse_revision_line (ctx, in)) {
-				msg_info ("sync_read: cannot parse line");
+				msg_info ("sync_read: cannot parse line: %S", in);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
 				return FALSE;

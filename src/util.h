@@ -89,4 +89,8 @@ stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_co
 		const char *symbol, struct statfile **st, gboolean try_create);
 #endif
 
+int rspamd_sprintf (u_char *buf, const char *fmt, ...);
+int rspamd_snprintf (u_char *buf, size_t max, const char *fmt, ...);
+u_char *rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args);
+
 #endif

@@ -28,6 +28,8 @@ struct http_map_data {
 	char *host;
 	time_t last_checked;
 	gboolean chunked;
+	u_char read_buf[BUFSIZ];
+	uint32_t rlen;
 	uint32_t chunk;
 	uint32_t chunk_read;
 };

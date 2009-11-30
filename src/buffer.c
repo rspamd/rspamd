@@ -70,7 +70,7 @@ write_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			buf->pos += r;
 			if (BUFREMAIN (buf) != 0) {
 				/* Continue with this buffer */
-				msg_debug ("write_buffers: wrote %ld bytes of %ld", (long int)r, (long int)buf->data->len);
+				msg_debug ("write_buffers: wrote %z bytes of %z", r, buf->data->len);
 				continue;
 			}
 		}
@@ -185,7 +185,8 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			*pos += r;
 			*len += r;
 		}
-		msg_debug ("read_buffers: read %ld characters, policy is %s, watermark is: %ld", (long int)r, d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", (long int)d->nchars);
+		msg_debug ("read_buffers: read %z characters, policy is %s, watermark is: %z", r, 
+				d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", d->nchars);
 	}
 
 	saved_policy = d->policy;
@@ -369,7 +370,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 		}
 	}
 
-	msg_debug ("rspamd_set_dispatcher_policy: new input length watermark is %ld", (long int)d->nchars);
+	msg_debug ("rspamd_set_dispatcher_policy: new input length watermark is %uz", d->nchars);
 }
 
 gboolean

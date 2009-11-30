@@ -117,6 +117,7 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 static const char *
 chldsigcode (int code) {
 	switch (code) {
+#ifdef CLD_EXITED
 		case CLD_EXITED:
 			return "Child exited normally";
 		case CLD_KILLED:
@@ -125,6 +126,7 @@ chldsigcode (int code) {
 			return "Child has terminated abnormally and created a core file";
 		case CLD_TRAPPED:
 			return "Traced child has trapped";
+#endif
 		default:
 			return "Unknown reason";
 	}
@@ -138,12 +140,12 @@ print_signals_info ()
 
 	while ((inf = g_queue_pop_head (signals_info))) {
 		if (inf->si_signo == SIGCHLD) {
-			msg_info ("main: got SIGCHLD from child: %ld; reason: '%s'",
-					(long int)inf->si_pid, chldsigcode (inf->si_code));
+			msg_info ("main: got SIGCHLD from child: %P; reason: '%s'",
+					inf->si_pid, chldsigcode (inf->si_code));
 		}
 		else {
-			msg_info ("main: got signal: '%s'; received from pid: %ld; uid: %ld",
-					g_strsignal (inf->si_signo), (long int)inf->si_pid, (long int)inf->si_uid);
+			msg_info ("main: got signal: '%s'; received from pid: %P; uid: %l",
+					g_strsignal (inf->si_signo), inf->si_pid, (long int)inf->si_uid);
 		}
 		g_free (inf);
 	}
@@ -349,26 +351,26 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			case TYPE_CONTROLLER:
 				setproctitle ("controller process");
 				pidfile_close (rspamd->pfh);
-				msg_info ("fork_worker: starting controller process %d", getpid ());
+				msg_info ("fork_worker: starting controller process %P", getpid ());
 				start_controller (cur);
 				break;
 			case TYPE_LMTP:
 				setproctitle ("lmtp process");
 				pidfile_close (rspamd->pfh);
-				msg_info ("fork_worker: starting lmtp process %d", getpid ());
+				msg_info ("fork_worker: starting lmtp process %P", getpid ());
 				start_lmtp_worker (cur);
 				break;
 			case TYPE_FUZZY:
 				setproctitle ("fuzzy storage");
 				pidfile_close (rspamd->pfh);
-				msg_info ("fork_worker: starting fuzzy storage process %d", getpid ());
+				msg_info ("fork_worker: starting fuzzy storage process %P", getpid ());
 				start_fuzzy_storage (cur);
 				break;
 			case TYPE_WORKER:
 			default:
 				setproctitle ("worker process");
 				pidfile_close (rspamd->pfh);
-				msg_info ("fork_worker: starting worker process %d", getpid ());
+				msg_info ("fork_worker: starting worker process %P", getpid ());
 				start_worker (cur);
 				break;
 			}
@@ -523,7 +525,7 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_worker         *w = value;
 
 	kill (w->pid, SIGUSR2);
-	msg_info ("rspamd_restart: send signal to worker %ld", (long int)w->pid);
+	msg_info ("rspamd_restart: send signal to worker %P", w->pid);
 }
 
 static gboolean
@@ -534,7 +536,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	waitpid (w->pid, &res, 0);
 
-	msg_debug ("main(cleaning): %s process %d terminated", get_process_type (w->type), w->pid);
+	msg_debug ("main(cleaning): %s process %P terminated", get_process_type (w->type), w->pid);
 	g_free (w);
 
 	return TRUE;
@@ -811,14 +813,14 @@ main (int argc, char **argv, char **env)
 
 				if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 					/* Normal worker termination, do not fork one more */
-					msg_info ("main: %s process %d terminated normally", get_process_type (cur->type), cur->pid);
+					msg_info ("main: %s process %P terminated normally", get_process_type (cur->type), cur->pid);
 				}
 				else {
 					if (WIFSIGNALED (res)) {
-						msg_warn ("main: %s process %d terminated abnormally by signal: %d", get_process_type (cur->type), cur->pid, WTERMSIG (res));
+						msg_warn ("main: %s process %P terminated abnormally by signal: %d", get_process_type (cur->type), cur->pid, WTERMSIG (res));
 					}
 					else {
-						msg_warn ("main: %s process %d terminated abnormally", get_process_type (cur->type), cur->pid);
+						msg_warn ("main: %s process %P terminated abnormally", get_process_type (cur->type), cur->pid);
 					}
 					/* Fork another worker in replace of dead one */
 					delay_fork (cur->cf);
@@ -827,7 +829,7 @@ main (int argc, char **argv, char **env)
 				g_free (cur);
 			}
 			else {
-				msg_err ("main: got SIGCHLD, but pid %ld is not found in workers hash table, something goes wrong", (long int)wrk);
+				msg_err ("main: got SIGCHLD, but pid %P is not found in workers hash table, something goes wrong", wrk);
 			}
 		}
 		if (do_restart) {

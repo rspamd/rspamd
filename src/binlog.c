@@ -253,7 +253,7 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
 	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot seek in file: %s, error: %s, seek: %ld, op: insert index", log->filename, 
+		msg_info ("binlog_insert: cannot seek in file: %s, error: %s, seek: %L, op: insert index", log->filename, 
 				strerror (errno), log->metaindex->indexes[log->metaindex->last_index]);
 		return FALSE;
 	}
@@ -456,6 +456,7 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, 
 	idx = &idxb->indexes[from_rev % BINLOG_IDX_LEN];
 	if (is_first && idx->time != *from_time) {
 		res = FALSE;
+		*from_time = 0;
 		goto end;
 	}
 	else {

@@ -36,9 +36,13 @@
 
 #ifdef CRLF
 #undef CRLF
+#undef CR
+#undef LF
 #endif
 
 #define CRLF "\r\n"
+#define CR '\r'
+#define LF '\n'
 
 /** 
  * Process type: main or worker
