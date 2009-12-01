@@ -186,7 +186,7 @@ write_whole_statfile (struct controller_session *session, char *symbol, struct c
 	struct statfile                *st;
 	char                            out_buf[BUFSIZ];
 	int                             i;
-	uint64_t                        rev, time, len, pos;
+	uint64_t                        rev, ti, len, pos;
 	char                           *out;
 	struct rspamd_binlog_element    log_elt;
 	struct stat_file_block         *stat_elt;
@@ -198,21 +198,32 @@ write_whole_statfile (struct controller_session *session, char *symbol, struct c
 	}
 	
 	/* Begin to copy all blocks into array */
-	statfile_get_revision (statfile, &rev, (time_t *)&time);
+	statfile_get_revision (statfile, &rev, (time_t *)&ti);
+	if (ti == 0) {
+		/* Not tracked file */
+		ti = time (NULL);
+		statfile_set_revision (statfile, rev, ti);
+	}
 	len = statfile->cur_section.length * sizeof (struct rspamd_binlog_element);
-	i = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)len);
-	rspamd_dispatcher_write (session->dispatcher, out_buf, i, TRUE, FALSE);
 	out = memory_pool_alloc (session->session_pool, len);
 
 	for (i = 0, pos = 0; i < statfile->cur_section.length; i ++) {
 		stat_elt = (struct stat_file_block *)((u_char *)statfile->map + statfile->seek_pos + i * sizeof (struct stat_file_block));
-		log_elt.h1 = stat_elt->hash1;
-		log_elt.h2 = stat_elt->hash2;
-		log_elt.value = stat_elt->value;
-		memcpy (out + pos, &log_elt, sizeof (log_elt));
-		pos += sizeof (struct rspamd_binlog_element);
+		if (fabs (stat_elt->value) > 0.001) {
+			/* Write only those values which value is not 0 */
+			log_elt.h1 = stat_elt->hash1;
+			log_elt.h2 = stat_elt->hash2;
+			log_elt.value = stat_elt->value;
+
+			memcpy (out + pos, &log_elt, sizeof (log_elt));
+			pos += sizeof (struct rspamd_binlog_element);
+		}
 	}
-	if (!rspamd_dispatcher_write (session->dispatcher, out, len, TRUE, TRUE)) {
+
+	i = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %uL" CRLF, rev, ti, pos);
+	rspamd_dispatcher_write (session->dispatcher, out_buf, i, TRUE, FALSE);
+
+	if (!rspamd_dispatcher_write (session->dispatcher, out, pos, TRUE, TRUE)) {
 		return FALSE;
 	}
 	

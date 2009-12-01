@@ -33,7 +33,7 @@
 
 /* XXX: hardcoding this value is not very smart */
 #define MAX_SYNC_TIME 60
-#define IO_TIMEOUT 5
+#define IO_TIMEOUT 20
 
 
 enum rspamd_sync_state {
@@ -103,7 +103,8 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 		ctx->is_busy = FALSE;
 		return TRUE;
 	}
-
+	
+	msg_info ("got string: %V", in);
 	/* Now try to extract 3 numbers from string: revision, time and length */
 	p = in->begin;
 	val = &ctx->new_rev;
@@ -175,12 +176,13 @@ sync_read (f_str_t * in, void *arg)
 			statfile_get_revision (ctx->real_statfile, &rev, &ti);
 			rev = snprintf (buf, sizeof (buf), "sync %s %ld %ld" CRLF, ctx->st->symbol, (long int)rev, (long int)ti);
 			ctx->state = SYNC_STATE_READ_LINE;
-			rspamd_dispatcher_write (ctx->dispatcher, buf, rev, FALSE, FALSE);	
+			return rspamd_dispatcher_write (ctx->dispatcher, buf, rev, FALSE, FALSE);	
 			break;
 		case SYNC_STATE_READ_LINE:
 			/* Try to parse line from server */
 			if (!parse_revision_line (ctx, in)) {
-				msg_info ("sync_read: cannot parse line: %S", in);
+				msg_info ("sync_read: cannot parse line: %*s", in->len, in->begin);
+				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
 				return FALSE;
@@ -191,6 +193,8 @@ sync_read (f_str_t * in, void *arg)
 			}
 			else {
 				/* Quit this session */
+				msg_info ("sync_read: no sync needed for: %s", ctx->st->symbol);
+				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
 				/* Immideately return from callback */ 
@@ -201,6 +205,7 @@ sync_read (f_str_t * in, void *arg)
 			/* In now contains all blocks of specified revision, so we can read them directly */
 			if (!read_blocks (ctx, in)) {
 				msg_info ("sync_read: cannot read blocks");
+				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
 				return FALSE;
@@ -211,6 +216,7 @@ sync_read (f_str_t * in, void *arg)
 			ctx->state = SYNC_STATE_READ_LINE;
 			break;
 		case SYNC_STATE_QUIT:
+			close (ctx->sock);
 			rspamd_remove_dispatcher (ctx->dispatcher);
 			ctx->is_busy = FALSE;
 			return FALSE;
@@ -226,6 +232,7 @@ sync_err (GError *err, void *arg)
 
 	msg_info ("sync_err: abnormally closing connection, error: %s", err->message);
 	ctx->is_busy = FALSE;
+	close (ctx->sock);
 	rspamd_remove_dispatcher (ctx->dispatcher);
 }
 

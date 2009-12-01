@@ -1344,6 +1344,9 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 
 			case 's':
 				p = va_arg(args, u_char *);
+				if (p == NULL) {
+					p = "(NULL)";
+				}
 
 				if (slen == (size_t) -1) {
 					while (*p && buf < last) {
