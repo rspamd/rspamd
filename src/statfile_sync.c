@@ -87,7 +87,7 @@ static                          gboolean
 parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 {
 	int i, state = 0;
-	char *p, *c, t;
+	char *p, *c, numbuf[sizeof("18446744073709551615")];
 	uint64_t *val;
 
 	/* First of all try to find END line */
@@ -104,18 +104,19 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 		return TRUE;
 	}
 	
-	msg_info ("got string: %V", in);
 	/* Now try to extract 3 numbers from string: revision, time and length */
 	p = in->begin;
 	val = &ctx->new_rev;
 	for (i = 0; i < in->len; i ++, p ++) {
 		if (g_ascii_isspace (*p) || i == in->len - 1) {
 			if (state == 1) {
-				t = *p;
-				*p = '\0';
+				if (i == in->len - 1) {
+					/* One more character */
+					p ++;
+				}
+				g_strlcpy (numbuf, c, MIN (p - c + 1, sizeof (numbuf)));
 				errno = 0;
-				*val = strtoull (c, NULL, 10);
-				*p = t;
+				*val = strtoull (numbuf, NULL, 10);
 				if (errno != 0) {
 					msg_info ("parse_revision_line: cannot parse number %s", strerror (errno));
 					return FALSE;
@@ -193,7 +194,7 @@ sync_read (f_str_t * in, void *arg)
 			}
 			else {
 				/* Quit this session */
-				msg_info ("sync_read: no sync needed for: %s", ctx->st->symbol);
+				msg_info ("sync_read: sync ended for: %s", ctx->st->symbol);
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
@@ -212,8 +213,8 @@ sync_read (f_str_t * in, void *arg)
 			}
 			statfile_set_revision (ctx->real_statfile, ctx->new_rev, ctx->new_time);
 			/* Now try to read other revision or END line */
-			rspamd_set_dispatcher_policy (ctx->dispatcher, BUFFER_LINE, 0);
 			ctx->state = SYNC_STATE_READ_LINE;
+			rspamd_set_dispatcher_policy (ctx->dispatcher, BUFFER_LINE, 0);
 			break;
 		case SYNC_STATE_QUIT:
 			close (ctx->sock);

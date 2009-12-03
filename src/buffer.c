@@ -208,6 +208,9 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 						return;
 					}
 					/* Move remaining string to begin of buffer (draining) */
+					/* Reinit pointers as buffer may be changed */
+					len = &d->in_buf->data->len;
+					pos = &d->in_buf->pos;
 					memmove (d->in_buf->data->begin, c + 1, *len - r - 1);
 					b = d->in_buf->data->begin;
 					c = b;
@@ -236,6 +239,8 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					return;
 				}
 				/* Move remaining string to begin of buffer (draining) */
+				len = &d->in_buf->data->len;
+				pos = &d->in_buf->pos;
 				memmove (d->in_buf->data->begin, c, *len - r);
 				b = d->in_buf->data->begin;
 				c = b;

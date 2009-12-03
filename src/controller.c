@@ -295,10 +295,6 @@ process_sync_command (struct controller_session *session, char **args)
         return FALSE;
 	}
 	
-	if (rev == 0) {
-		return write_whole_statfile (session, symbol, ccf);
-	}
-
 	while (binlog_sync (binlog, rev, &time, &data)) {
 		r = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE);
