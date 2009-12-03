@@ -321,6 +321,63 @@ process_sync_command (struct controller_session *session, char **args)
 	return TRUE;
 }
 
+static gboolean
+process_stat_command (struct controller_session *session)
+{
+	char                            out_buf[BUFSIZ], *numbuf;
+	int                             r;
+	uint64_t                        used, total, rev;
+	time_t                          ti;
+	memory_pool_stat_t              mem_st;
+	struct classifier_config       *ccf;
+	stat_file_t                    *statfile;
+	struct statfile                *st;
+	GList                          *cur_cl, *cur_st;
+
+	memory_pool_stat (&mem_st);
+	r = snprintf (out_buf, sizeof (out_buf), "Messages scanned: %u" CRLF, session->worker->srv->stat->messages_scanned);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %u" CRLF, session->worker->srv->stat->messages_learned);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %u" CRLF, session->worker->srv->stat->connections_count);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF, session->worker->srv->stat->control_connections_count);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %ld" CRLF, (long int)mem_st.pools_allocated);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %ld" CRLF, (long int)mem_st.pools_freed);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %ld" CRLF, (long int)mem_st.bytes_allocated);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %ld" CRLF, (long int)mem_st.chunks_allocated);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %ld" CRLF, (long int)mem_st.shared_chunks_allocated);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %ld" CRLF, (long int)mem_st.chunks_freed);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %ld" CRLF, (long int)mem_st.oversized_chunks);
+	/* Now write statistics for each statfile */
+	cur_cl = g_list_first (session->cfg->classifiers);
+	while (cur_cl) {
+		ccf = cur_cl->data;
+		cur_st = g_list_first (ccf->statfiles);
+		while (cur_st) {
+			st = cur_st->data;
+			if ((statfile = statfile_pool_is_open (session->worker->srv->statfile_pool, st->path)) == NULL) {
+				statfile = statfile_pool_open (session->worker->srv->statfile_pool, st->path, st->size, FALSE);
+			}
+			if (statfile) {
+				used = statfile_get_used_blocks (statfile);
+				total = statfile_get_total_blocks (statfile);
+				statfile_get_revision (statfile, &rev, &ti);
+				if (total != (uint64_t)-1 && used != (uint64_t)-1) {
+					numbuf = g_format_size_for_display (st->size);
+					r += snprintf (out_buf + r, sizeof (out_buf) - r, 
+							"Statfile: %s (version %lu); length: %s; free blocks: %lu; total blocks: %lu; free: %.2f%%" CRLF,
+							st->symbol, (long unsigned)rev, numbuf, 
+							(long unsigned)(total - used), (long unsigned)total,
+							(double)((double)(total - used) / (double)total) * 100.);
+					g_free (numbuf);
+				}
+			}
+			cur_st = g_list_next (cur_st);
+		}
+		cur_cl = g_list_next (cur_cl);
+	}
+
+	return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+}
+
 static void
 process_command (struct controller_command *cmd, char **cmd_args, struct controller_session *session)
 {
@@ -329,7 +386,6 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	time_t                          uptime;
 	unsigned long                   size = 0;
 	struct classifier_config       *cl;
-	memory_pool_stat_t              mem_st;
 	char                           *password = g_hash_table_lookup (session->worker->cf->params, "password");
 
 	switch (cmd->type) {
@@ -369,19 +425,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		break;
 	case COMMAND_STAT:
 		if (check_auth (cmd, session)) {
-			memory_pool_stat (&mem_st);
-			r = snprintf (out_buf, sizeof (out_buf), "Messages scanned: %u" CRLF, session->worker->srv->stat->messages_scanned);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %u" CRLF, session->worker->srv->stat->messages_learned);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %u" CRLF, session->worker->srv->stat->connections_count);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF, session->worker->srv->stat->control_connections_count);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %ld" CRLF, (long int)mem_st.pools_allocated);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %ld" CRLF, (long int)mem_st.pools_freed);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %ld" CRLF, (long int)mem_st.bytes_allocated);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %ld" CRLF, (long int)mem_st.chunks_allocated);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %ld" CRLF, (long int)mem_st.shared_chunks_allocated);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %ld" CRLF, (long int)mem_st.chunks_freed);
-			r += snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %ld" CRLF, (long int)mem_st.oversized_chunks);
-			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+			(void)process_stat_command (session);
 		}
 		break;
 	case COMMAND_SHUTDOWN:
@@ -545,6 +589,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	GList                          *comp_list, *cur = NULL;
 	GTree                          *tokens = NULL;
 	f_str_t                         c;
+	double                          sum;
 
 	switch (session->state) {
 	case STATE_COMMAND:
@@ -644,13 +689,14 @@ controller_read_socket (f_str_t * in, void *arg)
 		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
 		
 		/* XXX: remove this awful legacy */
-		session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool, statfile, tokens, session->in_class);
+		session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool, 
+																statfile, tokens, session->in_class, &sum);
 		session->worker->srv->stat->messages_learned++;
 
 		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
 		
 		free_task (task, FALSE);
-		i = snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF);
+		i = snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
 		}

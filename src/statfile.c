@@ -35,7 +35,7 @@
 static void statfile_pool_set_block_common (
 				statfile_pool_t * pool, stat_file_t * file, 
 				uint32_t h1, uint32_t h2, 
-				time_t t, float value, 
+				time_t t, double value, 
 				gboolean from_now);
 
 static int
@@ -209,7 +209,7 @@ statfile_pool_new (size_t max_size)
 	bzero (new, sizeof (statfile_pool_t));
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
-	new->files = memory_pool_alloc_shared (new->pool, STATFILES_MAX * sizeof (stat_file_t));
+	new->files = memory_pool_alloc (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = memory_pool_get_mutex (new->pool);
 
 	return new;
@@ -405,7 +405,8 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 		.version = RSPAMD_STATFILE_VERSION,
 		.padding = {0, 0, 0},
 		.revision = 0,
-		.rev_time = 0
+		.rev_time = 0,
+		.used_blocks = 0
 	};
 	struct stat_file_section        section = {
 		.code = STATFILE_SECTION_COMMON,
@@ -422,6 +423,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 
 	memory_pool_lock_mutex (pool->lock);
 	nblocks = (size - sizeof (struct stat_file_header) - sizeof (struct stat_file_section)) / sizeof (struct stat_file_block);
+	header.total_blocks = nblocks;
 
 	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 		msg_info ("statfile_pool_create: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
@@ -513,7 +515,7 @@ statfile_pool_unlock_file (statfile_pool_t * pool, stat_file_t * file)
 	memory_pool_unlock_mutex (file->lock);
 }
 
-float
+double
 statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now)
 {
 	struct stat_file_block         *block;
@@ -549,7 +551,7 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 }
 
 static void
-statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t t, float value, gboolean from_now)
+statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t t, double value, gboolean from_now)
 {
 	struct stat_file_block         *block, *to_expire = NULL;
 	struct stat_file_header        *header;
@@ -599,6 +601,8 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 			else {
 				block->last_access = t;
 			}
+			header->used_blocks ++;
+
 			return;
 		}
 		if (block->last_access > oldest) {
@@ -629,7 +633,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 }
 
 void
-statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now, float value)
+statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now, double value)
 {
 	statfile_pool_set_block_common (pool, file, h1, h2, now, value, TRUE);
 }
@@ -783,4 +787,37 @@ statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time)
 	*time = header->rev_time;
 
 	return TRUE;
+}
+
+uint64_t 
+statfile_get_used_blocks (stat_file_t *file)
+{
+	struct stat_file_header        *header;
+
+	if (file == NULL || file->map == NULL) {
+		return (uint64_t)-1;
+	}
+	
+	header = (struct stat_file_header *)file->map;
+
+	return header->used_blocks;
+}
+
+uint64_t 
+statfile_get_total_blocks (stat_file_t *file)
+{
+	struct stat_file_header        *header;
+
+	if (file == NULL || file->map == NULL) {
+		return (uint64_t)-1;
+	}
+	
+	header = (struct stat_file_header *)file->map;
+
+	/* If total blocks is 0 we have old version of header, so set total blocks correctly */
+	if (header->total_blocks == 0) {
+		header->total_blocks = file->cur_section.length;
+	}
+
+	return header->total_blocks;
 }

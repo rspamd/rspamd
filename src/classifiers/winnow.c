@@ -49,13 +49,11 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 {
 	token_node_t                   *node = key;
 	struct winnow_callback_data    *cd = data;
-	float                           v;
+	double                           v;
 
 	/* Consider that not found blocks have value 1 */
-	if ((v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now)) < 0.00001) {
-		cd->sum += 1;
-	}
-	else {
+	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
+	if (fabs (v) > 0.00001) {
 		cd->sum += v;
 		cd->in_class++;
 	}
@@ -70,12 +68,13 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 {
 	token_node_t                   *node = key;
 	struct winnow_callback_data    *cd = data;
-	float                           v, c;
+	double                           v, c;
 
 	c = (cd->in_class) ? WINNOW_PROMOTION : WINNOW_DEMOTION;
 
 	/* Consider that not found blocks have value 1 */
-	if ((v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now)) < 0.00001) {
+	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
+	if (fabs (v) < 0.00001) {
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
 		node->value = c;
 	}
@@ -83,7 +82,8 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v * c);
 		node->value = v * c;
 	}
-	
+
+	cd->sum += node->value;
 	cd->count++;
 
 	return FALSE;
@@ -104,8 +104,8 @@ void
 winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
 {
 	struct winnow_callback_data     data;
-	double                         *res = memory_pool_alloc (ctx->pool, sizeof (double));
-	double                          max = 0;
+	char                           *sumbuf;
+	double                          res = 0., max = 0.;
 	GList                          *cur;
 	struct statfile                *st, *sel = NULL;
 
@@ -136,25 +136,28 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		}
 
 		if (data.count != 0) {
-			*res = (data.sum / data.count);
+			res = data.sum / data.count;
 		}
 		else {
-			*res = 0;
+			res = 0;
 		}
-		if (*res > max) {
-			max = *res;
+		if (res > max) {
+			max = res;
 			sel = st;
 		}
 		cur = g_list_next (cur);
 	}
 
 	if (sel != NULL) {
-		insert_result (task, ctx->cfg->metric, sel->symbol, 1, NULL);
+		sumbuf = memory_pool_alloc (task->task_pool, 32);
+		snprintf (sumbuf, 32, "%.2f", max);
+		cur = g_list_prepend (NULL, sumbuf);
+		insert_result (task, ctx->cfg->metric, sel->symbol, 1, cur);
 	}
 }
 
 void
-winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *file, GTree * input, int in_class)
+winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *file, GTree * input, int in_class, double *sum)
 {
 	struct winnow_callback_data     data = {
 		.file = NULL,
@@ -172,9 +175,19 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *fi
 
 	data.file = file;
 
+
 	if (data.file != NULL) {
 		statfile_pool_lock_file (pool, data.file);
 		g_tree_foreach (input, learn_callback, &data);
 		statfile_pool_unlock_file (pool, data.file);
+	}
+	
+	if (sum) {
+		if (data.count != 0) {
+			*sum = data.sum / data.count;
+		}
+		else {
+			*sum = 0;
+		}
 	}
 }

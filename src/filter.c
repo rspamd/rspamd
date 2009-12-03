@@ -488,7 +488,7 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 				return;
 			}
 
-			classifier->learn_func (ctx, task->worker->srv->statfile_pool, statfile, tokens, TRUE);
+			classifier->learn_func (ctx, task->worker->srv->statfile_pool, statfile, tokens, TRUE, NULL);
 			maybe_write_binlog (ctx->cfg, st, statfile, tokens);
 		}
 	}

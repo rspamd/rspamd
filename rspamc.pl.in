@@ -169,8 +169,8 @@ sub do_control_command {
             syswrite $sock, "learn $cfg{'statfile'} $len" . $CRLF;
             syswrite $sock, $input . $CRLF;
             if (defined (my $reply = <$sock>)) {
-                if ($reply =~ /^learn ok/) {
-                    print "Learn succeed\n";
+                if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
+                    print "Learn succeed. Sum weight: $1\n";
                 }
                 else {
                     print "Learn failed\n";

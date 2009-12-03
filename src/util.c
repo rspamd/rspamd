@@ -1153,6 +1153,7 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
     GList *cur;
 
     if (pool == NULL || ccf == NULL || symbol == NULL) {
+		msg_err ("get_statfile_by_symbol: invalid input arguments");
         return NULL;
     }
 
@@ -1166,6 +1167,7 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
 		cur = g_list_next (cur);
 	}
     if (*st == NULL) {
+		msg_info ("get_statfile_by_symbol: cannot find statfile with symbol %s", symbol);
         return NULL;
     }
 
@@ -1178,6 +1180,9 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
 					return NULL;
 				}
                 res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE);
+				if (res == NULL) {
+					msg_err ("get_statfile_by_symbol: cannot open statfile %s after creation", (*st)->path);
+				}
             }
 		}
 	}

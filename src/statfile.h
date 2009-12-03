@@ -28,7 +28,9 @@ struct stat_file_header {
 	uint64_t create_time;					/**< create time (time_t->uint64_t)		*/
 	uint64_t revision;						/**< revision number					*/
 	uint64_t rev_time;						/**< revision time						*/
-	u_char unused[255];						/**< some bytes that can be used in future */
+	uint64_t used_blocks;					/**< used blocks number					*/
+	uint64_t total_blocks;					/**< total number of blocks				*/
+	u_char unused[239];						/**< some bytes that can be used in future */
 };
 
 /**
@@ -46,7 +48,7 @@ struct stat_file_block {
 	uint32_t hash1;							/**< hash1 (also acts as index)			*/				
 	uint32_t hash2;							/**< hash2								*/
 	uint32_t last_access;					/**< last access to block since create time of file	*/
-	float value; 							/**< float value 						*/
+	double value; 							/**< double value 						*/
 };
 
 /**
@@ -152,7 +154,7 @@ void statfile_pool_unlock_file (statfile_pool_t *pool, stat_file_t *file);
  * @param now current time
  * @return block value or 0 if block is not found
  */
-float statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now);
+double statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now);
 
 /**
  * Set specified block in statfile
@@ -163,7 +165,7 @@ float statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, uint32_
  * @param now current time
  * @param value value of block
  */
-void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now, float value);
+void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now, double value);
 
 /**
  * Check whether statfile is opened
@@ -211,7 +213,6 @@ uint32_t statfile_get_section_by_name (const char *name);
 
 /**
  * Set statfile revision and revision time
- * @param pool statfile pool object
  * @param filename name of statfile
  * @param revision number of revision
  * @param time time of revision
@@ -221,7 +222,6 @@ gboolean statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time);
 
 /**
  * Set statfile revision and revision time
- * @param pool statfile pool object
  * @param filename name of statfile
  * @param revision saved number of revision
  * @param time saved time of revision
@@ -229,5 +229,18 @@ gboolean statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time);
  */
 gboolean statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time);
 
+/**
+ * Get statfile used blocks
+ * @param file file to get number of used blocks
+ * @return number of used blocks or (uint64_t)-1 in case of error
+ */
+uint64_t statfile_get_used_blocks (stat_file_t *file);
+
+/**
+ * Get statfile total blocks
+ * @param file file to get number of used blocks
+ * @return number of used blocks or (uint64_t)-1 in case of error
+ */
+uint64_t statfile_get_total_blocks (stat_file_t *file);
 
 #endif
