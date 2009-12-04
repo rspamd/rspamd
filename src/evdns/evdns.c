@@ -71,6 +71,7 @@ typedef unsigned int uint;
 #define TYPE_A	       EVDNS_TYPE_A
 #define TYPE_CNAME     5
 #define TYPE_TXT	   EVDNS_TYPE_TXT
+#define TYPE_MX        EVDNS_TYPE_MX
 #define TYPE_PTR       EVDNS_TYPE_PTR
 #define TYPE_AAAA      EVDNS_TYPE_AAAA
 
@@ -133,6 +134,10 @@ struct reply {
 		struct {
 			char name[HOST_NAME_MAX];
 		} ptr;
+		struct {
+			char name[HOST_NAME_MAX];
+			u32 priority;
+		} mx;
 		/* TXT field may be longer than 508 bytes, but UDP packets are limited to 512 octets */
 		struct {
 			char data[508];
@@ -704,6 +709,18 @@ reply_callback(struct evdns_request *const req, u32 ttl, u32 err, struct reply *
 			req->user_callback(err, 0, 0, 0, NULL, req->user_pointer);
 		}
 		return; 
+	case TYPE_MX:
+		if (reply) {
+			struct evdns_mx mx;
+			mx.host = reply->data.mx.name;
+			mx.priority = reply->data.mx.priority;
+			req->user_callback(DNS_ERR_NONE, DNS_MX, 1, ttl,
+								&mx, req->user_pointer);
+		}
+		else {
+			req->user_callback(err, 0, 0, 0, NULL, req->user_pointer);
+		}
+		return; 
 	}
 	g_assert(0);
 }
@@ -987,6 +1004,18 @@ reply_parse(struct evdns_base *base, u8 *packet, int length) {
 			}
 			memcpy(&reply.data.txt.data, packet + j + 1, MIN(sizeof(reply.data.txt.data), datalength - 1));
 			j += datalength;
+			ttl_r = MIN(ttl_r, ttl);
+			reply.have_answer = 1;
+			break;
+		} else if (type == TYPE_MX) {
+			if (req->request_type != TYPE_MX) {
+				j += datalength;
+				continue;
+			}
+			GET16(reply.data.mx.priority);
+			if (name_parse(packet, length, &j, reply.data.mx.name,
+						   sizeof(reply.data.mx.name))<0)
+				goto err;
 			ttl_r = MIN(ttl_r, ttl);
 			reply.have_answer = 1;
 			break;
@@ -2610,6 +2639,16 @@ evdns_resolve_txt(const char *in, int flags, evdns_callback_type callback, void 
 	struct evdns_request *req;
 	g_assert(in);
 	req = request_new(current_base, TYPE_TXT, in, flags, callback, ptr);
+	if (!req) return 1;
+	request_submit(req);
+	return 0;
+}
+
+int
+evdns_resolve_mx(const char *in, int flags, evdns_callback_type callback, void *ptr) {
+	struct evdns_request *req;
+	g_assert(in);
+	req = request_new(current_base, TYPE_MX, in, flags, callback, ptr);
 	if (!req) return 1;
 	request_submit(req);
 	return 0;

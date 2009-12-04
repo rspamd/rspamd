@@ -29,7 +29,7 @@
 #include "message.h"
 #include "filter.h"
 
-#define SPF_VER_STR "spf=v1"
+#define SPF_VER_STR "v=spf1"
 #define SPF_ALL "all"
 #define SPF_A "a"
 #define SPF_IP4 "ip4"
@@ -79,7 +79,9 @@ do {														\
 		return FALSE;										\
 	}														\
 } while (0)													\
-	
+
+static gboolean parse_spf_record (struct worker_task *task, struct spf_record *rec);
+static void start_spf_parse (struct spf_record *rec, char *begin);
 
 /* Determine spf mech */
 static spf_mech_t
@@ -184,17 +186,64 @@ parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 
 }
 
+static char *
+parse_spf_hostmask (struct worker_task *task, const char *begin, struct spf_addr *addr, struct spf_record *rec)
+{
+	char *host = NULL, *p,  mask_buf[3];
+	int hostlen;
+
+	bzero (mask_buf, sizeof (mask_buf));
+	if (*begin == '\0' || *begin == '/') {
+		/* Assume host as host to resolve from record */
+		host = rec->cur_domain;
+	}
+	p = strchr (begin, '/');
+	if (p != NULL) {
+		/* Extract mask */
+		g_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
+		addr->mask = mask_buf[0] * 10 + mask_buf[1];
+		if (addr->mask > 32) {
+			return FALSE;
+		}
+		if (host == NULL) {
+			hostlen = p - begin;
+			host = memory_pool_alloc (task->task_pool, hostlen);
+			g_strlcpy (host, begin, hostlen);
+		}
+	}
+	else {
+		addr->mask = 32;
+		if (host == NULL) {
+			g_strlcpy (host, begin, strlen (begin));
+		}
+	}
+
+	return host;
+}
+
 static void
 spf_record_dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
 	struct spf_dns_cb *cb = data;
 	char *begin;
+	struct evdns_mx *mx;
 
 	if (result == DNS_ERR_NONE) {
 		if (addresses != NULL) {
 			/* Add all logic for all DNS states here */
 			switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
+					if (type == DNS_MX) {
+						mx = (struct evdns_mx *)addresses;
+						/* Now resolve A record for this MX */
+						if (evdns_resolve_ipv4 (mx->host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+							return;
+						}
+					}
+					else if (type == DNS_IPv4_A) {
+						/* XXX: process only one record */
+						cb->addr->addr = *((uint32_t *)addresses);
+					}
 					break;
 				case SPF_RESOLVE_A:
 					if (type == DNS_IPv4_A) {
@@ -205,10 +254,28 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 				case SPF_RESOLVE_PTR:
 					break;
 				case SPF_RESOLVE_REDIRECT:
+					if (type == DNS_TXT) {
+						if (addresses != NULL) {
+							begin = *(char **)addresses;
+							start_spf_parse (cb->rec, begin);
+						}
+					}
 					break;
 				case SPF_RESOLVE_INCLUDE:
+					if (type == DNS_TXT) {
+						if (addresses != NULL) {
+							begin = *(char **)addresses;
+							start_spf_parse (cb->rec, begin);
+						}
+					}
 					break;
 				case SPF_RESOLVE_EXP:
+					break;
+				case SPF_RESOLVE_EXISTS:
+					if (type == DNS_IPv4_A) {
+						/* If specified address resolves, we can accept connection from every IP */
+						cb->addr->addr = INADDR_ANY;
+					}
 					break;
 			}
 		}
@@ -226,8 +293,7 @@ static gboolean
 parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	char *host, *p,  mask_buf[3];
-	int hostlen;
+	char *host;
 	
 	CHECK_REC (rec);
 	
@@ -235,25 +301,13 @@ parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec
 		return FALSE;
 	}
 	begin ++;
-
-	bzero (mask_buf, sizeof (mask_buf));
-	p = strchr (begin, '/');
-	if (p != NULL) {
-		/* Extract mask */
-		g_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
-		addr->mask = mask_buf[0] * 10 + mask_buf[1];
-		if (addr->mask > 32) {
-			return FALSE;
-		}
-		hostlen = p - begin;
-		host = memory_pool_alloc (task->task_pool, hostlen);
-		g_strlcpy (host, begin, hostlen);
-	}
-	else {
-		addr->mask = 32;
-		g_strlcpy (host, begin, strlen (begin));
-	}
 	
+	host = parse_spf_hostmask (task, begin, addr, rec);
+	
+	if (!host) {
+		return FALSE;
+	}
+
 	rec->dns_requests ++;
 	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
@@ -274,19 +328,47 @@ parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec
 static gboolean
 parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
-	struct spf_dns_cb *cb;
-
 	CHECK_REC (rec);
-
+	
+	msg_info ("parse_spf_ptr: ptr parsing is unimplemented");
+	return FALSE;
 }
 
 static gboolean
 parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-
+	char *host;
+	
 	CHECK_REC (rec);
+	
+	if (begin == NULL) {
+		return FALSE;
+	}
+	if (*begin == ':') {
+		begin ++;
+	}
+	
+	host = parse_spf_hostmask (task, begin, addr, rec);
+	
+	if (!host) {
+		return FALSE;
+	}
 
+	rec->dns_requests ++;
+	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+	cb->rec = rec;
+	cb->addr = addr;
+	cb->cur_action = SPF_RESOLVE_MX;
+
+	if (evdns_resolve_mx (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+		task->save.saved++;
+		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
+		
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static gboolean
@@ -295,6 +377,8 @@ parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *r
 	/* All is 0/0 */
 	addr->addr = 0;
 	addr->mask = 0;
+
+	return TRUE;
 }
 
 static gboolean
@@ -310,33 +394,99 @@ static gboolean
 parse_spf_include (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
+	char              *domain;
 
 	CHECK_REC (rec);
 
+	if (begin == NULL || *begin != ':') {
+		return FALSE;
+	}
+	begin ++;
+	rec->dns_requests ++;
+
+	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+	cb->rec = rec;
+	cb->addr = addr;
+	cb->cur_action = SPF_RESOLVE_REDIRECT;
+	domain = memory_pool_strdup (task->task_pool, begin);
+
+	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+		task->save.saved++;
+		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
+		
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static gboolean
 parse_spf_exp (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
-	struct spf_dns_cb *cb;
-
 	CHECK_REC (rec);
+
+	msg_info ("parse_spf_exp: exp record is ignored");
+	return TRUE;
 }
 
 static gboolean
 parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
+	char              *domain;
 
 	CHECK_REC (rec);
+
+	if (begin == NULL || *begin != ':') {
+		return FALSE;
+	}
+	begin ++;
+	rec->dns_requests ++;
+
+	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+	cb->rec = rec;
+	cb->addr = addr;
+	cb->cur_action = SPF_RESOLVE_INCLUDE;
+	domain = memory_pool_strdup (task->task_pool, begin);
+
+	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+		task->save.saved++;
+		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
+		
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static gboolean
 parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
+	char              *host;
 
 	CHECK_REC (rec);
+	
+	if (begin == NULL || *begin != ':') {
+		return FALSE;
+	}
+	begin ++;
+	rec->dns_requests ++;
+
+	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+	cb->rec = rec;
+	cb->addr = addr;
+	cb->cur_action = SPF_RESOLVE_EXISTS;
+	host = memory_pool_strdup (task->task_pool, begin);
+
+	if (evdns_resolve_ipv4 (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+		task->save.saved++;
+		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
+		
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 /* Read current element and try to parse record */
@@ -346,20 +496,21 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 	struct spf_addr *new;
 	gboolean need_shift, res = FALSE;
 	char *begin;
-
-	if (*rec->cur_elt == NULL) {
+	
+	rec->cur_elt = rec->elts[rec->elt_num];
+	if (rec->cur_elt == NULL) {
 		return TRUE;
 	}
 	else {
 		/* Check spf mech */
 		new = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
-		new->mech = check_spf_mech (*rec->cur_elt, &need_shift);
+		new->mech = check_spf_mech (rec->cur_elt, &need_shift);
 		if (need_shift) {
-			begin = (*rec->cur_elt)++;
+			rec->cur_elt ++;
 		}
-		else {
-			begin = *rec->cur_elt;
-		}
+		begin = rec->cur_elt; 
+
+
 		/* Now check what we have */
 		switch (*begin) {
 			case 'a':
@@ -373,7 +524,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_all (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command");
+					msg_info ("parse_spf_record: bad spf command: %s", begin);
 				}
 				break;
 			case 'i':
@@ -387,7 +538,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_include (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command");
+					msg_info ("parse_spf_record: bad spf command: %s", begin);
 				}
 				break;
 			case 'm':
@@ -397,7 +548,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_mx (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command");
+					msg_info ("parse_spf_record: bad spf command: %s", begin);
 				}
 				break;
 			case 'p':
@@ -407,7 +558,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_ptr (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command");
+					msg_info ("parse_spf_record: bad spf command: %s", begin);
 				}
 				break;
 			case 'e':
@@ -421,7 +572,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_exists (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command");
+					msg_info ("parse_spf_record: bad spf command: %s", begin);
 				}
 				break;
 			case 'r':
@@ -431,17 +582,40 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_redirect (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command");
+					msg_info ("parse_spf_record: bad spf command: %s", begin);
 				}
 				break;
 			default:
-				msg_info ("parse_spf_record: bad spf command");
+				msg_info ("parse_spf_record: bad spf command: %s", begin);
 				break;
 		}
 		if (res) {
 			rec->addrs = g_list_prepend (rec->addrs, new);
-			rec->cur_elt ++;
+			rec->elt_num ++;
 		}
+	}
+
+	return res;
+}
+
+static void
+start_spf_parse (struct spf_record *rec, char *begin)
+{
+	if (strncmp (begin, SPF_VER_STR, sizeof (SPF_VER_STR) - 1) == 0) {
+		begin += sizeof (SPF_VER_STR) - 1;
+		while (g_ascii_isspace (*begin) && *begin) {
+			begin ++;
+		}
+		rec->elts = g_strsplit (begin, " ", 0);
+		rec->elt_num = 0;
+		if (rec->elts) {
+			memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
+			rec->cur_elt = rec->elts[0];
+			while (parse_spf_record (rec->task, rec));
+		}
+	}
+	else {
+		msg_info ("start_spf_parse: bad spf record version: %*s", sizeof (SPF_VER_STR) - 1, begin);
 	}
 }
 
@@ -453,19 +627,8 @@ spf_dns_callback (int result, char type, int count, int ttl, void *addresses, vo
 
 	if (result == DNS_ERR_NONE && type == DNS_TXT) {
 		if (addresses != NULL) {
-			begin = (char *)addresses;
-			if (strncmp (begin, SPF_VER_STR, sizeof (SPF_VER_STR) - 1) == 0) {
-				begin += sizeof (SPF_VER_STR) - 1;
-				while (g_ascii_isspace (*begin) && *begin) {
-					begin ++;
-				}
-			}
-			rec->elts = g_strsplit (begin, " ", 0);
-			if (rec->elts) {
-				memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
-				rec->cur_elt = rec->elts;
-				while (!parse_spf_record (rec->task, rec));
-			}
+			begin = *(char **)addresses;
+			start_spf_parse (rec, begin);
 		}
 	}
 
@@ -489,9 +652,8 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 	rec->task = task;
 	rec->callback = callback;
 
-	domain = strchr (task->from, '@');
-	if (domain != NULL) {
-		rec->cur_domain = memory_pool_strdup (task->task_pool, domain);
+	if (task->from && (domain = strchr (task->from, '@'))) {
+		rec->cur_domain = memory_pool_strdup (task->task_pool, domain + 1);
 		if ((domain = strchr (rec->cur_domain, '>')) != NULL) {
 			*domain = '\0';
 		}
@@ -509,6 +671,11 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 		if (domains != NULL) {
 			rec->cur_domain = memory_pool_strdup (task->task_pool, domains->data);
 			g_list_free (domains);
+			if ((domain = strchr (rec->cur_domain, '@')) == NULL) {
+				return FALSE;
+			}
+			rec->cur_domain = domain + 1;
+
 			if ((domain = strchr (rec->cur_domain, '>')) != NULL) {
 				*domain = '\0';
 			}

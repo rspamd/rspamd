@@ -21,6 +21,7 @@ typedef enum spf_action_e {
 	SPF_RESOLVE_PTR,
 	SPF_RESOLVE_REDIRECT,
 	SPF_RESOLVE_INCLUDE,
+	SPF_RESOLVE_EXISTS,
 	SPF_RESOLVE_EXP
 } spf_action_t;
 
@@ -33,7 +34,8 @@ struct spf_addr {
 struct spf_record {
 	char **elts;
 
-	char **cur_elt;
+	char *cur_elt;
+	int elt_num;
 	int nested;
 	int dns_requests;
 

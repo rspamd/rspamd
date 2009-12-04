@@ -235,10 +235,21 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 
 		p = buf + (len - (data->chunk_read - data->chunk));
 		if (*p != '\r') {
-			msg_info ("read_http_chunked: invalid chunked reply");
-			return FALSE;
+			if (*p == '0') {
+				return TRUE;
+			}
+			else {
+				msg_info ("read_http_chunked: invalid chunked reply: %*s", len, buf);
+				return FALSE;
+			}
 		}
 		p += 2;
+		if (len == p - buf) {
+			/* Next chunk data is not available */
+			data->chunk = 0;
+			return TRUE;
+		}
+
 		len -= p - buf;
 		skip = read_chunk_header (p, len, data);
 		p += skip;

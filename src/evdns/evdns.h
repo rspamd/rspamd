@@ -58,6 +58,7 @@
 #define DNS_PTR 2
 #define DNS_IPv6_AAAA 3
 #define DNS_TXT 4
+#define DNS_MX  15
 
 #define DNS_QUERY_NO_SEARCH 1
 
@@ -77,6 +78,11 @@ typedef void (*evdns_callback_type) (int result, char type, int count, int ttl, 
 
 struct evdns_base;
 struct event_base;
+
+struct evdns_mx {
+	char *host;
+	int priority;
+};
 
 /**
   Initialize the asynchronous DNS library.
@@ -663,6 +669,16 @@ int evdns_resolve_reverse_ipv6(const struct in6_addr *in, int flags, evdns_callb
   @return 0 if successful, or -1 if an error occurred
 */
 int evdns_resolve_txt(const char *in, int flags, evdns_callback_type callback, void *ptr);
+
+/**
+  Lookup a MX entry for a specified DNS name.
+  @param name a DNS name
+  @param flags either 0, or DNS_QUERY_NO_SEARCH to disable searching for this query.
+  @param callback a callback function to invoke when the request is completed
+  @param ptr an argument to pass to the callback function
+  @return 0 if successful, or -1 if an error occurred
+*/
+int evdns_resolve_mx(const char *in, int flags, evdns_callback_type callback, void *ptr);
 
 
 /**
