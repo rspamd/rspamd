@@ -175,6 +175,7 @@ parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 		/* Also parse mask */
 		addr->mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
 		if (addr->mask > 32) {
+			msg_info ("parse_spf_ipmask: bad ipmask value: '%s'", begin);
 			return FALSE;
 		}
 	}
@@ -227,6 +228,7 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 	struct spf_dns_cb *cb = data;
 	char *begin;
 	struct evdns_mx *mx;
+	GList *tmp = NULL;
 
 	if (result == DNS_ERR_NONE) {
 		if (addresses != NULL) {
@@ -257,6 +259,10 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 					if (type == DNS_TXT) {
 						if (addresses != NULL) {
 							begin = *(char **)addresses;
+							if (cb->rec->addrs) {
+								g_list_free (cb->rec->addrs);
+								cb->rec->addrs = NULL;
+							}
 							start_spf_parse (cb->rec, begin);
 						}
 					}
@@ -265,7 +271,14 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 					if (type == DNS_TXT) {
 						if (addresses != NULL) {
 							begin = *(char **)addresses;
+							if (cb->rec->addrs) {
+								tmp = cb->rec->addrs;
+								cb->rec->addrs = NULL;
+							}
 							start_spf_parse (cb->rec, begin);
+							if (tmp) {
+								cb->rec->addrs = g_list_concat (tmp, cb->rec->addrs);
+							}
 						}
 					}
 					break;
@@ -283,7 +296,11 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 
 	cb->rec->task->save.saved--;
 	if (cb->rec->task->save.saved == 0 && cb->rec->callback) {
-		cb->rec->callback (cb->rec, cb->rec->task);
+		if (cb->rec->addrs) {
+			cb->rec->callback (cb->rec, cb->rec->task);
+			g_list_free (cb->rec->addrs);
+			cb->rec->addrs = NULL;
+		}
 	}
 	remove_forced_event (cb->rec->task->s, (event_finalizer_t) spf_record_dns_callback);
 
@@ -489,11 +506,17 @@ parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record
 	return FALSE;
 }
 
+#define NEW_ADDR(x) do {														\
+	(x) = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));		\
+	(x)->mech = check_spf_mech (rec->cur_elt, &need_shift);						\
+	(x)->spf_string = memory_pool_strdup (task->task_pool, begin);				\
+} while (0);
+
 /* Read current element and try to parse record */
 static gboolean
 parse_spf_record (struct worker_task *task, struct spf_record *rec)
 {
-	struct spf_addr *new;
+	struct spf_addr *new = NULL;
 	gboolean need_shift, res = FALSE;
 	char *begin;
 	
@@ -503,12 +526,13 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 	}
 	else {
 		/* Check spf mech */
-		new = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
-		new->mech = check_spf_mech (rec->cur_elt, &need_shift);
 		if (need_shift) {
 			rec->cur_elt ++;
 		}
-		begin = rec->cur_elt; 
+		begin = rec->cur_elt;
+		if (*begin == '?' || *begin == '+' || *begin == '-' || *begin == '~') {
+			begin ++;
+		}
 
 
 		/* Now check what we have */
@@ -516,10 +540,12 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 			case 'a':
 				/* all or a */
 				if (strncmp (begin, SPF_ALL, sizeof (SPF_ALL) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_ALL) - 1;
 					res = parse_spf_all (task, begin, rec, new);
 				}
 				else if (strncmp (begin, SPF_A, sizeof (SPF_A) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_A) - 1;
 					res = parse_spf_a (task, begin, rec, new);
 				}
@@ -530,12 +556,13 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 			case 'i':
 				/* include or ip4 */
 				if (strncmp (begin, SPF_IP4, sizeof (SPF_IP4) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_IP4) - 1;
 					res = parse_spf_ip4 (task, begin, rec, new);
 				}
 				else if (strncmp (begin, SPF_INCLUDE, sizeof (SPF_INCLUDE) - 1) == 0) {
 					begin += sizeof (SPF_INCLUDE) - 1;
-					res = parse_spf_include (task, begin, rec, new);
+					res = parse_spf_include (task, begin, rec, NULL);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command: %s", begin);
@@ -544,6 +571,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 			case 'm':
 				/* mx */
 				if (strncmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_MX) - 1;
 					res = parse_spf_mx (task, begin, rec, new);
 				}
@@ -554,6 +582,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 			case 'p':
 				/* ptr */
 				if (strncmp (begin, SPF_PTR, sizeof (SPF_PTR) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_PTR) - 1;
 					res = parse_spf_ptr (task, begin, rec, new);
 				}
@@ -565,9 +594,10 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* exp or exists */
 				if (strncmp (begin, SPF_EXP, sizeof (SPF_EXP) - 1) == 0) {
 					begin += sizeof (SPF_EXP) - 1;
-					res = parse_spf_exp (task, begin, rec, new);
+					res = parse_spf_exp (task, begin, rec, NULL);
 				}
 				else if (strncmp (begin, SPF_EXISTS, sizeof (SPF_EXISTS) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_EXISTS) - 1;
 					res = parse_spf_exists (task, begin, rec, new);
 				}
@@ -579,7 +609,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				/* redirect */
 				if (strncmp (begin, SPF_REDIRECT, sizeof (SPF_REDIRECT) - 1) == 0) {
 					begin += sizeof (SPF_REDIRECT) - 1;
-					res = parse_spf_redirect (task, begin, rec, new);
+					res = parse_spf_redirect (task, begin, rec, NULL);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command: %s", begin);
@@ -590,13 +620,16 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				break;
 		}
 		if (res) {
-			rec->addrs = g_list_prepend (rec->addrs, new);
+			if (new != NULL) {
+				rec->addrs = g_list_prepend (rec->addrs, new);
+			}
 			rec->elt_num ++;
 		}
 	}
 
 	return res;
 }
+#undef NEW_ADDR
 
 static void
 start_spf_parse (struct spf_record *rec, char *begin)
@@ -612,6 +645,9 @@ start_spf_parse (struct spf_record *rec, char *begin)
 			memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
 			rec->cur_elt = rec->elts[0];
 			while (parse_spf_record (rec->task, rec));
+			if (rec->addrs) {
+				rec->addrs = g_list_reverse (rec->addrs);
+			}
 		}
 	}
 	else {

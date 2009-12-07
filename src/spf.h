@@ -29,6 +29,7 @@ struct spf_addr {
 	uint32_t addr;
 	uint32_t mask;
 	spf_mech_t mech;
+	char *spf_string;
 };
 
 struct spf_record {
