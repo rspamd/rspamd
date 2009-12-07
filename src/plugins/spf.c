@@ -135,6 +135,36 @@ spf_module_reconfig (struct config_file *cfg)
 static void 
 spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 {
+	GList *cur;
+	struct spf_addr *addr;
+	uint32_t s, m;
+
+	if (record) {
+		record->addrs = g_list_reverse (record->addrs);
+		cur = g_list_first (record->addrs);
+		s = ntohl (task->from_addr.s_addr);
+		while (cur) {
+			addr = cur->data;
+			m = (1 << addr->mask) - 1;
+			if ((s & m) == (addr->addr & m)) {
+				switch (addr->mech) {
+					case SPF_FAIL:
+						insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_fail, 1, NULL);
+						break;
+					case SPF_SOFT_FAIL:
+					case SPF_NEUTRAL:
+						insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_softfail, 1, NULL);
+						break;
+					default:
+						insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_allow, 1, NULL);
+						break;
+				}
+				/* Stop parsing */
+				break;
+			}
+			cur = g_list_next (cur);
+		}
+	}
 	if (task->save.saved == 0) {
 		/* Call other filters */
 		task->save.saved = 1;
@@ -146,7 +176,9 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 static void 
 spf_symbol_callback (struct worker_task *task, void *unused)
 {
-	if (!resolve_spf (task, spf_plugin_callback)) {
-		msg_info ("spf_symbol_callback: cannot make spf request for [%s]", task->message_id);
+	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
+		if (!resolve_spf (task, spf_plugin_callback)) {
+			msg_info ("spf_symbol_callback: cannot make spf request for [%s]", task->message_id);
+		}
 	}
 }

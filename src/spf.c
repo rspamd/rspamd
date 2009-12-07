@@ -90,7 +90,7 @@ check_spf_mech (const char *elt, gboolean *need_shift)
 	g_assert (elt != NULL);
 	
 	*need_shift = TRUE;
-	
+
 	switch (*elt) {
 		case '-':
 			return SPF_FAIL;
@@ -170,10 +170,10 @@ parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 	if (!inet_aton (ip_buf, &in)) {
 		return FALSE;
 	}
-	addr->addr = in.s_addr;
+	addr->addr = ntohl (in.s_addr);
 	if (state == 2) {
 		/* Also parse mask */
-		addr->mask = mask_buf[0] * 10 + mask_buf[1];
+		addr->mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
 		if (addr->mask > 32) {
 			return FALSE;
 		}
@@ -242,13 +242,13 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 					}
 					else if (type == DNS_IPv4_A) {
 						/* XXX: process only one record */
-						cb->addr->addr = *((uint32_t *)addresses);
+						cb->addr->addr = ntohl (*((uint32_t *)addresses));
 					}
 					break;
 				case SPF_RESOLVE_A:
 					if (type == DNS_IPv4_A) {
 						/* XXX: process only one record */
-						cb->addr->addr = *((uint32_t *)addresses);
+						cb->addr->addr = ntohl (*((uint32_t *)addresses));
 					}
 					break;
 				case SPF_RESOLVE_PTR:
@@ -274,7 +274,7 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 				case SPF_RESOLVE_EXISTS:
 					if (type == DNS_IPv4_A) {
 						/* If specified address resolves, we can accept connection from every IP */
-						cb->addr->addr = INADDR_ANY;
+						cb->addr->addr = ntohl (INADDR_ANY);
 					}
 					break;
 			}
@@ -437,7 +437,7 @@ parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_reco
 
 	CHECK_REC (rec);
 
-	if (begin == NULL || *begin != ':') {
+	if (begin == NULL || *begin != '=') {
 		return FALSE;
 	}
 	begin ++;
@@ -499,7 +499,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 	
 	rec->cur_elt = rec->elts[rec->elt_num];
 	if (rec->cur_elt == NULL) {
-		return TRUE;
+		return FALSE;
 	}
 	else {
 		/* Check spf mech */
@@ -515,13 +515,13 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 		switch (*begin) {
 			case 'a':
 				/* all or a */
-				if (strncmp (begin, SPF_A, sizeof (SPF_A) - 1) == 0) {
-					begin += sizeof (SPF_A) - 1;
-					res = parse_spf_a (task, begin, rec, new);
-				}
-				else if (strncmp (begin, SPF_ALL, sizeof (SPF_ALL) - 1) == 0) {
+				if (strncmp (begin, SPF_ALL, sizeof (SPF_ALL) - 1) == 0) {
 					begin += sizeof (SPF_ALL) - 1;
 					res = parse_spf_all (task, begin, rec, new);
+				}
+				else if (strncmp (begin, SPF_A, sizeof (SPF_A) - 1) == 0) {
+					begin += sizeof (SPF_A) - 1;
+					res = parse_spf_a (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command: %s", begin);
