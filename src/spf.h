@@ -42,8 +42,13 @@ struct spf_record {
 
 	GList *addrs;
 	char *cur_domain;
+	char *sender;
+	char *sender_domain;
+	char *local_part;
 	struct worker_task *task;
 	spf_cb_t callback;
+
+	gboolean in_include;
 };
 
 

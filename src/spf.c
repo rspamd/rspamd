@@ -215,7 +215,7 @@ parse_spf_hostmask (struct worker_task *task, const char *begin, struct spf_addr
 	else {
 		addr->mask = 32;
 		if (host == NULL) {
-			g_strlcpy (host, begin, strlen (begin));
+			host = memory_pool_strdup (task->task_pool, begin);
 		}
 	}
 
@@ -228,7 +228,7 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 	struct spf_dns_cb *cb = data;
 	char *begin;
 	struct evdns_mx *mx;
-	GList *tmp = NULL;
+	GList *tmp = NULL, *elt, *last;
 
 	if (result == DNS_ERR_NONE) {
 		if (addresses != NULL) {
@@ -275,9 +275,25 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 								tmp = cb->rec->addrs;
 								cb->rec->addrs = NULL;
 							}
+							cb->rec->in_include = TRUE;
 							start_spf_parse (cb->rec, begin);
+							cb->rec->in_include = FALSE;
+
 							if (tmp) {
-								cb->rec->addrs = g_list_concat (tmp, cb->rec->addrs);
+								elt = g_list_find (tmp, cb->addr);
+								if (elt) {
+									/* Insert new list in place of include element */
+									last = g_list_last (cb->rec->addrs);
+
+									elt->prev->next = cb->rec->addrs;
+									elt->next->prev = last;
+
+									cb->rec->addrs->prev = elt->prev;
+									last->next = elt->next;
+
+									cb->rec->addrs = tmp;
+									g_list_free1 (elt);
+								}
 							}
 						}
 					}
@@ -288,9 +304,43 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 					if (type == DNS_IPv4_A) {
 						/* If specified address resolves, we can accept connection from every IP */
 						cb->addr->addr = ntohl (INADDR_ANY);
+						cb->addr->mask = 0;
 					}
 					break;
 			}
+		}
+	}
+	else if (result == DNS_ERR_NOTEXIST) {
+		switch (cb->cur_action) {
+				case SPF_RESOLVE_MX:
+					if (type == DNS_MX) {
+						msg_info ("spf_dns_callback: cannot find MX record for %s", cb->rec->cur_domain);
+						cb->addr->addr = ntohl (INADDR_NONE);
+					}
+					else if (type == DNS_IPv4_A) {
+						msg_info ("spf_dns_callback: cannot resolve MX record for %s", cb->rec->cur_domain);
+						cb->addr->addr = ntohl (INADDR_NONE);
+					}
+					break;
+				case SPF_RESOLVE_A:
+					if (type == DNS_IPv4_A) {
+						/* XXX: process only one record */
+						cb->addr->addr = ntohl (INADDR_NONE);
+					}
+					break;
+				case SPF_RESOLVE_PTR:
+					break;
+				case SPF_RESOLVE_REDIRECT:
+					msg_info ("spf_dns_callback: cannot resolve TXT record for redirect action");
+					break;
+				case SPF_RESOLVE_INCLUDE:
+					msg_info ("spf_dns_callback: cannot resolve TXT record for include action");
+					break;
+				case SPF_RESOLVE_EXP:
+					break;
+				case SPF_RESOLVE_EXISTS:
+					cb->addr->addr = ntohl (INADDR_NONE);
+					break;
 		}
 	}
 
@@ -392,8 +442,15 @@ static gboolean
 parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	/* All is 0/0 */
-	addr->addr = 0;
-	addr->mask = 0;
+	if (rec->in_include) {
+		/* Ignore all record in include */
+		addr->addr = 0;
+		addr->mask = 32;
+	}
+	else {
+		addr->addr = 0;
+		addr->mask = 0;
+	}
 
 	return TRUE;
 }
@@ -424,7 +481,7 @@ parse_spf_include (struct worker_task *task, const char *begin, struct spf_recor
 	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_REDIRECT;
+	cb->cur_action = SPF_RESOLVE_INCLUDE;
 	domain = memory_pool_strdup (task->task_pool, begin);
 
 	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
@@ -490,6 +547,7 @@ parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record
 	begin ++;
 	rec->dns_requests ++;
 
+	addr->mask = 32;
 	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
@@ -504,6 +562,259 @@ parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record
 	}
 
 	return FALSE;
+}
+
+static void
+reverse_spf_ip (char *ip, int len)
+{
+	char ipbuf[sizeof("255.255.255.255") - 1], *p, *c;
+	int t = 0, l = len;
+
+	if (len > sizeof (ipbuf)) {
+		msg_info ("reverse_spf_ip: cannot reverse string of length %d", len);
+		return;
+	}
+
+	p = ipbuf + len;
+	c = ip; 
+	while (-- l) {
+		if (*c == '.') {
+			memcpy (p, c - t, t);
+			*--p = '.';
+			c ++;
+			t = 0;
+			continue;
+		}
+
+		t ++;
+		c ++;
+		p --;
+	}
+
+	memcpy (p - 1, c - t, t + 1);
+
+	memcpy (ip, ipbuf, len);
+}
+
+static char *
+expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
+{
+	char *p, *c, *new, *tmp;
+	int len = 0, slen = 0, state = 0;
+
+	p = begin;
+	/* Calculate length */
+	while (*p) {
+		switch (state) {
+			case 0:
+				/* Skip any character and wait for % in input */
+				if (*p == '%') {
+					state = 1;
+				}
+				else {
+					len ++;
+				}
+
+				slen ++;
+				p ++;
+				break;
+			case 1:
+				/* We got % sign, so we should whether wait for { or for - or for _ or for % */
+				if (*p == '%' || *p == '-') {
+					/* Just a single % sign or space */
+					len ++;
+				}
+				else if (*p == '_') {
+					/* %20 */
+					len += sizeof ("%20") - 1;
+				}
+				else if (*p == '{') {
+					state = 2;
+				}
+				else {
+					/* Something unknown */
+					msg_info ("expand_spf_macro: bad spf element: %s", begin);
+					return begin;
+				}
+				p ++;
+				slen ++;
+				break;
+			case 2:
+				/* Read macro name */
+				switch (*p) {
+					case 'i':
+						len += sizeof ("255.255.255.255") - 1;
+						break;
+					case 's':
+						len += strlen (rec->sender);
+						break;
+					case 'l':
+						len += strlen (rec->local_part);
+						break;
+					case 'o':
+						len += strlen (rec->sender_domain);
+						break;
+					case 'd':
+						len += strlen (rec->cur_domain);
+						break;
+					case 'v':
+						len += sizeof ("in-addr") - 1;
+						break;
+					case 'h':
+						if (task->helo) {
+							len += strlen (task->helo);
+						}
+						break;
+					default:
+						msg_info ("expand_spf_macro: unknown or unsupported spf macro %c in %s", *p, begin);
+						return begin;
+				}
+				p ++;
+				slen ++;
+				state = 3;
+				break;
+			case 3:
+				/* Read modifier */
+				if (*p == '}') {
+					state = 0;
+				}
+				else if (*p != 'r' && !g_ascii_isdigit (*p)) {
+					msg_info ("expand_spf_macro: unknown or unsupported spf modifier %c in %s", *p, begin);
+					return begin;
+				} 
+				p ++;
+				slen ++;
+				break;
+		}
+	}
+
+	if (slen == len) {
+		/* No expansion needed */
+		return begin;
+	}
+	
+	new = memory_pool_alloc (task->task_pool, len + 1);
+
+	c = new;
+	p = begin;
+	state = 0;
+	/* Begin macro expansion */
+
+	while (*p) {
+		switch (state) {
+			case 0:
+				/* Skip any character and wait for % in input */
+				if (*p == '%') {
+					state = 1;
+				}
+				else {
+					*c = *p;
+					c ++;
+				}
+
+				p ++;
+				break;
+			case 1:
+				/* We got % sign, so we should whether wait for { or for - or for _ or for % */
+				if (*p == '%') {
+					/* Just a single % sign or space */
+					*c++ = '%';
+				}
+				else if (*p == '-') {
+					*c++ = ' ';
+				}
+				else if (*p == '_') {
+					/* %20 */
+					*c++ = '%';
+					*c++ = '2';
+					*c++ = '0';
+				}
+				else if (*p == '{') {
+					state = 2;
+				}
+				else {
+					/* Something unknown */
+					msg_info ("expand_spf_macro: bad spf element: %s", begin);
+					return begin;
+				}
+				p ++;
+				break;
+			case 2:
+				/* Read macro name */
+				switch (*p) {
+					case 'i':
+						tmp = inet_ntoa (task->from_addr);
+						len = strlen (tmp);
+						memcpy (c, tmp, len);
+						c += len;
+						break;
+					case 's':
+						len = strlen (rec->sender);
+						memcpy (c, rec->sender, len);
+						c += len;
+						break;
+					case 'l':
+						len = strlen (rec->local_part);
+						memcpy (c, rec->local_part, len);
+						c += len;
+						break;
+					case 'o':
+						len = strlen (rec->sender_domain);
+						memcpy (c, rec->sender_domain, len);
+						c += len;
+						break;
+					case 'd':
+						len = strlen (rec->cur_domain);
+						memcpy (c, rec->cur_domain, len);
+						c += len;
+						break;
+					case 'v':
+						len = sizeof ("in-addr") - 1;
+						memcpy (c, "in-addr", len);
+						c += len;
+						break;
+					case 'h':
+						if (task->helo) {
+							tmp = strchr (task->helo, '@');
+							if (tmp) {
+								len = strlen (tmp + 1);
+								memcpy (c, tmp + 1, len);
+								c += len;
+							}
+						}
+						break;
+					default:
+						msg_info ("expand_spf_macro: unknown or unsupported spf macro %c in %s", *p, begin);
+						return begin;
+				}
+				p ++;
+				state = 3;
+				break;
+			case 3:
+				/* Read modifier */
+				if (*p == '}') {
+					state = 0;
+				}
+				else if (*p == 'r' && len != 0) {
+					reverse_spf_ip (c - len, len);
+					len = 0;
+				} 
+				else if (g_ascii_isdigit (*p)) {
+					/*XXX: try to implement domain strimming */
+				}
+				else {
+					msg_info ("expand_spf_macro: unknown or unsupported spf modifier %c in %s", *p, begin);
+					return begin;
+				} 
+				p ++;
+				break;
+		}
+	}
+	/* Null terminate */
+	*c = '\0';
+	msg_info ("expanded string: %s", new);
+	return new;
+	
 }
 
 #define NEW_ADDR(x) do {														\
@@ -525,11 +836,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 		return FALSE;
 	}
 	else {
-		/* Check spf mech */
-		if (need_shift) {
-			rec->cur_elt ++;
-		}
-		begin = rec->cur_elt;
+		begin = expand_spf_macro (task, rec, rec->cur_elt);
 		if (*begin == '?' || *begin == '+' || *begin == '-' || *begin == '~') {
 			begin ++;
 		}
@@ -561,8 +868,9 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_ip4 (task, begin, rec, new);
 				}
 				else if (strncmp (begin, SPF_INCLUDE, sizeof (SPF_INCLUDE) - 1) == 0) {
+					NEW_ADDR (new);
 					begin += sizeof (SPF_INCLUDE) - 1;
-					res = parse_spf_include (task, begin, rec, NULL);
+					res = parse_spf_include (task, begin, rec, new);
 				}
 				else {
 					msg_info ("parse_spf_record: bad spf command: %s", begin);
@@ -689,10 +997,18 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 	rec->callback = callback;
 
 	if (task->from && (domain = strchr (task->from, '@'))) {
+		rec->sender = task->from;
+
+		rec->local_part = memory_pool_strdup (task->task_pool, task->from);
+		*(rec->local_part + (domain - task->from)) = '\0';
+		if (*rec->local_part == '<') {
+			memmove (rec->local_part, rec->local_part + 1, strlen (rec->local_part));
+		}
 		rec->cur_domain = memory_pool_strdup (task->task_pool, domain + 1);
 		if ((domain = strchr (rec->cur_domain, '>')) != NULL) {
 			*domain = '\0';
 		}
+		rec->sender_domain = rec->cur_domain;
 
 		if (evdns_resolve_txt (rec->cur_domain, DNS_QUERY_NO_SEARCH, spf_dns_callback, (void *)rec) == 0) {
 			task->save.saved++;
@@ -707,14 +1023,23 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 		if (domains != NULL) {
 			rec->cur_domain = memory_pool_strdup (task->task_pool, domains->data);
 			g_list_free (domains);
+
 			if ((domain = strchr (rec->cur_domain, '@')) == NULL) {
 				return FALSE;
 			}
+			rec->sender = memory_pool_strdup (task->task_pool, rec->cur_domain);
+			rec->local_part = rec->cur_domain;
+			*domain = '\0';
 			rec->cur_domain = domain + 1;
+
+			if ((domain = strchr (rec->local_part, '<')) != NULL) {
+				memmove (rec->local_part, domain + 1, strlen (domain));
+			}
 
 			if ((domain = strchr (rec->cur_domain, '>')) != NULL) {
 				*domain = '\0';
 			}
+			rec->sender_domain = rec->cur_domain;
 			if (evdns_resolve_txt (rec->cur_domain, DNS_QUERY_NO_SEARCH, spf_dns_callback, (void *)rec) == 0) {
 				task->save.saved++;
 				register_async_event (task->s, (event_finalizer_t) spf_dns_callback, NULL, TRUE);
