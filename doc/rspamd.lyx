@@ -62,7 +62,7 @@
 \end_layout
 
 \begin_layout Date
-25.09.2009
+10.12.2009
 \end_layout
 
 \begin_layout Author
@@ -1375,6 +1375,92 @@ max_mark = 0.1;
 };
 \end_layout
 
+\begin_layout Subsection
+Настройка синхронизации статистики
+\end_layout
+
+\begin_layout Standard
+Статистические данные можно синхронизировать между несколькими rspamd.
+ Для этого используется master/slave синхронизация и бинарный лог изменений
+ в статистическом файле.
+ Для настройки синхронизации используются следующие параметры при определении
+ статистического файла:
+\end_layout
+
+\begin_layout LyX-Code
+statfile {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+binlog = "slave";
+\end_layout
+
+\begin_layout LyX-Code
+binlog_master = "somehost:11334";
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+statfile {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+binlog = "master";
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+При настройке slave для синхронизации указывается адрес master для данного
+ файла.
+ Этот адрес фактически является адресом контроллера, который сконфигурирован
+ работать с данным файлом как master.
+ Если rspamd настроен работать с данным файлом статистики как master, то
+ создается специальный файл с таким же именем, как файл статистики, но имеющим
+ суффикс .binlog.
+ В данный файл записываются ревизии и изменения, внесенные в файл статистики.
+ Данный файл хранит фиксированное число изменений и ротируется при переполнении.
+ Синхронизация производится всеми slave хостами с промежутком от 1-й до
+ 2-х минут.
+ При этом, нет разницы, в каком состоянии был файл статистики на slave хосте
+ - после синхронизации файл статистики на slave будет в точности совпадать
+ с файлом статистики на master'е.
+ Обновления файлов статистики являются инкрементальными, то есть передаются
+ только изменения, а не файлы целиком.
+ Синхронизация файлов статистики позволяет легко построить кластер rspamd,
+ которые работают и обучаются идентично (хотя обучение должно производиться
+ через контроллер мастера).
+\end_layout
+
 \begin_layout Section
 Настройка коэффициентов символов
 \end_layout
@@ -2236,6 +2322,73 @@ has_html_tag - возвращает TRUE, если заданный html тег 
  выражений.
 \end_layout
 
+\begin_layout Section
+Настройка модуля spf
+\end_layout
+
+\begin_layout Standard
+Модуль spf предназначен для проверки spf записей для отправителя письма.
+ Технология SPF позволяет определить в DNS TXT запись для данного домена
+ с определениями, с каких ip адресов или сетей допустима отправка почты
+ для данного домена.
+ Также spf позволяет создавать 
+\begin_inset Quotes fld
+\end_inset
+
+черные списки
+\begin_inset Quotes frd
+\end_inset
+
+ для данного домена - адреса, с которых запрещена отправка почты для домена.
+ Rspamd может получать spf записи, и проверять, возможна ли отправка почты
+ данного домена с данного ip.
+ При этом возможно добавление 3-х символов:
+\end_layout
+
+\begin_layout Itemize
+FAIL - отправка запрещена
+\end_layout
+
+\begin_layout Itemize
+SOFTFAIL - отправка явно не разрешена, но и явно не запрещена
+\end_layout
+
+\begin_layout Itemize
+ALLOW - отправка явно разрешена
+\end_layout
+
+\begin_layout Standard
+Для задания этих символов можно использовать настройки модуля spf:
+\end_layout
+
+\begin_layout LyX-Code
+.module 'spf' {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+symbol_fail = "SPF_FAIL";
+\end_layout
+
+\begin_layout LyX-Code
+symbol_softfail = "SPF_SOFTFAIL";
+\end_layout
+
+\begin_layout LyX-Code
+symbol_allow = "SPF_ALLOW";
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+Коэффициенты для данных символов лучше определить следующим образом: высокий
+ вес для символа FAIL, достаточно низкий вес для символа SOFTFAIL и отрицательны
+й вес для символа ALLOW.
+\end_layout
+
 \begin_layout Chapter
 Cтатистические алгоритмы
 \end_layout
@@ -2500,7 +2653,7 @@ uint32_t hash2;
 \end_layout
 
 \begin_layout LyX-Code
-float value; 
+double value; 
 \end_layout
 
 \begin_layout LyX-Code
@@ -3517,8 +3670,169 @@ end
 end
 \end_layout
 
+\begin_layout Chapter
+Perl API rspamd
+\end_layout
+
+\begin_layout Standard
+Для обработки сообщений системой rspamd было создано простое perl api для
+ проверки сообщений системой rspamd и обучения системы rspamd.
+ Данное API содержится в модуле Mail::Rspamd::Client.
+ Использование API достаточно тривиально:
+\end_layout
+
+\begin_layout LyX-Code
+#!/usr/bin/perl -w
+\end_layout
+
 \begin_layout LyX-Code
 
+\end_layout
+
+\begin_layout LyX-Code
+use Mail::Rspamd::Client;
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+my $testmsg; 
+\end_layout
+
+\begin_layout LyX-Code
+while (<>) { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+$testmsg .= $_; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+my $client = new Mail::Rspamd::Client(
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+{
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+port => 11333, 
+\end_layout
+
+\begin_layout LyX-Code
+hosts => ['localhost:11333',], 
+\end_layout
+
+\begin_layout LyX-Code
+ip => '127.0.0.1'
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+);
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+if ($client->ping()) { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+print "Ping is ok
+\backslash
+n"; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout LyX-Code
+my $result = $client->check($testmsg);
+\end_layout
+
+\begin_layout LyX-Code
+
+\end_layout
+
+\begin_layout LyX-Code
+if ($result && $result->{'default'}->{'isspam'} eq 'True') { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+print "spam
+\backslash
+n"; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+} else { 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+print "ham
+\backslash
+n"; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+}
+\end_layout
+
+\begin_layout Standard
+Результаты обработки сообщения возвращаются в виде ссылки на хеш, который
+ индексирован по метрикам.
+ Каждая из метрик, в свою очередь, также является ссылкой на хеш, содержащий
+ поля:
+\end_layout
+
+\begin_layout Itemize
+isspam - строка 'True' или 'False' 
+\end_layout
+
+\begin_layout Itemize
+score - вес сообщения
+\end_layout
+
+\begin_layout Itemize
+threshold - предельный вес данной метрики
+\end_layout
+
+\begin_layout Itemize
+symbols - массив символов для данного сообщения
+\end_layout
+
+\begin_layout Standard
+Модуль имеет внутреннюю логику работы с несколькими серверами rspamd, выбирая
+ каждый раз случайный сервер, а также помечая долго не работающие сервера,
+ исключая их из списка активных на некоторое время.
+ При создании Mail::Rspamd::Client также можно указать параметр from (значение
+ SMTP команды mail from), параметр rcpt (массив SMTP команд rcpt to) и user
+ (авторизированный пользователь SMTP).
 \end_layout
 
 \begin_layout Chapter
@@ -3526,7 +3840,232 @@ end
 \end_layout
 
 \begin_layout Standard
-TODO
+HTTP редиректор представляет собой утилиту, которая умеет проверять различные
+ способы HTTP редиректов и выдавать реальный URL для любого заданного.
+ Данная утилита предназначена для проверки URL'ей вида tinyurl.com, youfrog.com
+ и прочих сервисов 
+\begin_inset Quotes fld
+\end_inset
+
+коротких
+\begin_inset Quotes frd
+\end_inset
+
+ URL'ей.
+ HTTP редиректор работает как обычный HTTP сервер и принимает стандартные
+ запросы вида:
+\end_layout
+
+\begin_layout LyX-Code
+GET /url_to_resolve HTTP/1.0
+\end_layout
+
+\begin_layout LyX-Code
+ 
+\end_layout
+
+\begin_layout Standard
+Для работы URL редиректор требует ряд perl модулей:
+\end_layout
+
+\begin_layout Itemize
+HTTP::Request - обработка HTTP запросов;
+\end_layout
+
+\begin_layout Itemize
+POE (Component::Server::TCP Filter::HTTPD Component::Client::HTTP) - для
+ асинхронной обработки соединений;
+\end_layout
+
+\begin_layout Itemize
+HTML::HeadParser - для парсинга HTTP заголовков;
+\end_layout
+
+\begin_layout Itemize
+SWF::Element - для обработки SWF (adobe flash) редиректов;
+\end_layout
+
+\begin_layout Itemize
+Cache::Memcached::Fast - для хранения кеша URL'ей;
+\end_layout
+
+\begin_layout Itemize
+Digest::SHA256 - для индексации хеша;
+\end_layout
+
+\begin_layout Itemize
+Proc::Daemon, Proc::PidUtil - для демонизации и управления процессом;
+\end_layout
+
+\begin_layout Itemize
+URI::Escape - для нормализации URL'ей.
+\end_layout
+
+\begin_layout Standard
+Настройка утилиты осуществляется правкой скрипта rspamd-redirector, конфигурацио
+нные параметры находятся в хеше %cfg:
+\end_layout
+
+\begin_layout LyX-Code
+our %cfg = ( 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+port => 8080,                               # Порт для приема соединений
+\end_layout
+
+\begin_layout LyX-Code
+max_size => 102400,                         # Максимальный размер принимаемых
+ данных
+\end_layout
+
+\begin_layout LyX-Code
+http_timeout => 5,                          # Таймаут соединений (секунды)
+\end_layout
+
+\begin_layout LyX-Code
+max_rec => 5,                               # Максимум подзапросов
+\end_layout
+
+\begin_layout LyX-Code
+pidfile => '/var/run/rspamd/redirector.pid',# Путь до файла pid'а
+\end_layout
+
+\begin_layout LyX-Code
+logfile => '/var/log/rspamd-redirector.log',# Путь до log файла
+\end_layout
+
+\begin_layout LyX-Code
+do_log => 0,                                # Включить логирование запросов
+\end_layout
+
+\begin_layout LyX-Code
+debug => 0,                                 # Включить отладочную информацию
+\end_layout
+
+\begin_layout LyX-Code
+memcached_servers =>                        # Сервера кеша URL'ей
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+[ 
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+{ address => 'localhost:11211', weight => 2.5 }, 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+], 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+digest_bits => 256,                          # Число бит в ключе кеша
+\end_layout
+
+\begin_layout LyX-Code
+cache_expire => 3600,                        # Время в секундах хранения
+ записи кеша
+\end_layout
+
+\begin_layout LyX-Code
+user => '@RSPAMD_USER@',                     # Пользователь
+\end_layout
+
+\begin_layout LyX-Code
+group => '@RSPAMD_GROUP@',                   # Группа
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+);
+\end_layout
+
+\begin_layout Standard
+Для работы с redirector'ом необходимо учитывать следующее: при определенни
+ редиректа rspamd-redirector делает полноценный http запрос, то есть, если
+ мы будем пытаться разрешить запросы с различными GET параметрами в URL
+ (например http://some_evil_host/unsubscribe?email=good@email.com), то тем
+ самым можем занести 
+\begin_inset Quotes fld
+\end_inset
+
+хорошие
+\begin_inset Quotes frd
+\end_inset
+
+ адреса в списки спамеров.
+ Кроме этого, появляется возможность организовать атаку на некоторый http
+ сервер, послав много писем, содержащих его адрес.
+ Поэтому проверять редиректы можно только у проверенных доменов.
+ Для этого используются настройки модуля surbl в самом rspamd (так как именно
+ модуль surbl отвечает за работу с редиректором):
+\end_layout
+
+\begin_layout LyX-Code
+.module 'surbl' {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+...
+\end_layout
+
+\begin_layout LyX-Code
+redirector = "localhost:8080"; 	
+\end_layout
+
+\begin_layout LyX-Code
+# Connect timeout for redirector 	
+\end_layout
+
+\begin_layout LyX-Code
+redirector_connect_timeout = "1s"; 	
+\end_layout
+
+\begin_layout LyX-Code
+# IO timeout for redirector 
+\end_layout
+
+\begin_layout LyX-Code
+redirector_read_timeout = "10s";
+\end_layout
+
+\begin_layout LyX-Code
+# Maps for hosts that should be checked with redirector
+\end_layout
+
+\begin_layout LyX-Code
+redirector_hosts_map = "http://some_host/redirector.hosts";
+\end_layout
+
+\begin_layout LyX-Code
+...
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+При этом список redirector_hosts_map содержит домены, которые будут перед
+ проверкой по surbl листам проверяться на наличие редиректов (то есть, именно
+ в том виде, что будет при surbl запросе - 2 или 3 компонента имени хоста).
+ Кеш URL'ей обязателен для работы редиректора, так как в противном случае
+ массовая рассылка с одинаковым URL'ем приведет к большому числу http запросов.
+ Кроме этого, кеш URL'ей существенно ускоряет работу редиректора.
+ Лог файл редиректора позволяет увидеть, какие редиректы были распознаны
+ и их тип: HTTP редирект, HTML редирект (тег meta refresh), JavaScript редирект
+ (location = ...), SWF редирект или же кешированный редирект (найденный в memcached
+).
+ Взаимодействие с редиректором возможно не только из rspamd, но и из любого
+ другого приложения, работающего по HTTP протоколу.
 \end_layout
 
 \begin_layout Chapter
@@ -3534,7 +4073,116 @@ TODO
 \end_layout
 
 \begin_layout Standard
-TODO
+Нечеткий хеш (fuzzy hash) отличается от обычного тем, что при небольшом
+ изменении в исходном тексте, он также меняется незначительно.
+ Традиционный (криптографический) хеш в таком случае меняется сильно.
+ Эта особенность позволяет использовать нечеткие хеши для определения степени
+ похожести текстов (у похожих текстов будут похожие нечеткие хеши).
+ Эта операция является более быстрой, чем сравнение текстов, кроме этого,
+ нечеткие хеши можно хранить, сравнивая с ними впоследствие полученные сообщения.
+ В rspamd есть возможность использования хранилища нечетких хешей для проверки
+ сообщений.
+ При этом считаются хеши всех текстовых частей сообщения, а затем эти хеши
+ проверяются на наличие в хранилище (с определенным процентом ошибки).
+ Для хранилища хешей создается специальный процесс fuzzy, который работает
+ с рабочим процессом rspamd по UDP протоколу.
+ Несколько хранилищ создают общее хранилище хешей, каждый из элементов которого
+ содержит часть хешей.
+ При добавлении или удалении нового хранилища в общее хранилище, все данные
+ хешей теряются (возможно, это будет устранено в будущем).
+ При проверке хеша выбирается одно из хранилищ (соответственно хешу) и на
+ него шлется запрос.
+ При записи хеша выбирается то же самое хранилище, что и при проверке.
+ Запись и удаление хеша из общего хранилища обеспечивается командами fuzzy_add
+ и fuzzy_del на любом из контроллеров, использующих данное хранилище.
+ Это можно делать, например, используя клиент rspamc:
+\end_layout
+
+\begin_layout LyX-Code
+rspamc fuzzy_add < message_to_add.eml
+\end_layout
+
+\begin_layout LyX-Code
+rspamd fuzzy_del < message_to_del.eml
+\end_layout
+
+\begin_layout Standard
+Настройка хранилища обеспечивается созданием записи для процесса fuzzy storage:
+\end_layout
+
+\begin_layout LyX-Code
+worker {     
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+type = "fuzzy";
+\end_layout
+
+\begin_layout LyX-Code
+# Bind socket for fuzzy interface 	
+\end_layout
+
+\begin_layout LyX-Code
+bind_socket = *:11335;
+\end_layout
+
+\begin_layout LyX-Code
+count = 1; 	
+\end_layout
+
+\begin_layout LyX-Code
+# Path to filesystem storage 	
+\end_layout
+
+\begin_layout LyX-Code
+hashfile = "/tmp/fuzzy.db"; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+Настройка hashfile используется для указания файла, в который периодически
+ будут записываться полученные в хранилище хеши (частота синхронизации с
+ файлом зависит от интенсивности модификаций в хранилище, также синхронизация
+ происходит при завершении процесса fuzzy storage).
+ Для настройки клиентской части хранилища используется модуль fuzzy_check:
+\end_layout
+
+\begin_layout LyX-Code
+.module 'fuzzy_check' {
+\end_layout
+
+\begin_deeper
+\begin_layout LyX-Code
+metric = "default"; 	
+\end_layout
+
+\begin_layout LyX-Code
+symbol = "R_FUZZY"; 	
+\end_layout
+
+\begin_layout LyX-Code
+# List of fuzzy storage servers, separated by ',' or ';' or simple by spaces
+ 	
+\end_layout
+
+\begin_layout LyX-Code
+servers = "localhost:11335;some_host:11335"; 
+\end_layout
+
+\end_deeper
+\begin_layout LyX-Code
+};
+\end_layout
+
+\begin_layout Standard
+После настройки клиентской части с указанными серверами начинает работать
+ как рабочий процесс (для проверки сообщений), так и контроллер (для записи/удал
+ения хешей из хранилища).
 \end_layout
 
 \end_body
