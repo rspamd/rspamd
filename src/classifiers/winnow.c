@@ -54,7 +54,12 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 	/* Consider that not found blocks have value 1 */
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
 	if (fabs (v) > 0.00001) {
-		cd->sum += v;
+        if (cd->sum + v > G_MAXDOUBLE / 2.) {
+            cd->sum = G_MAXDOUBLE / 2.;
+        }
+        else {
+		    cd->sum += v;
+        }
 		cd->in_class++;
 	}
 
@@ -80,10 +85,23 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	}
 	else {
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v * c);
-		node->value = v * c;
+        /* Set some limit on growing */
+        if (v > G_MAXDOUBLE / 2.) {
+            node->value = v;
+        }
+        else {
+		    node->value = v * c;
+        }
 	}
 
-	cd->sum += node->value;
+
+    if (cd->sum + node->value > G_MAXDOUBLE / 2.) {
+        cd->sum = G_MAXDOUBLE / 2.;
+    }
+    else {
+	    cd->sum += node->value;
+    }
+
 	cd->count++;
 
 	return FALSE;

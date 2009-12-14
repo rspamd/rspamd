@@ -154,7 +154,7 @@ statfile_pool_check (stat_file_t * file)
 	file->cur_section.code = f->section.code;
 	file->cur_section.length = f->section.length;
 	if (file->cur_section.length * sizeof (struct stat_file_block) > file->len) {
-		msg_info ("statfile_pool_check: file %s is truncated: %zd, must be %zd", file->filename, file->len, file->cur_section.length * sizeof (struct stat_file_block));
+		msg_info ("statfile_pool_check: file %s is truncated: %z, must be %z", file->filename, file->len, file->cur_section.length * sizeof (struct stat_file_block));
 		return -1;
 	}
 	file->seek_pos = sizeof (struct stat_file) - sizeof (struct stat_file_block);
@@ -265,7 +265,7 @@ statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, 
 	while (pos - map < old_size) {
 		block = (struct stat_file_block *)pos;
 		if (block->hash1 != 0 && block->value != 0) {
-			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, block->last_access, block->value, FALSE);
+			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, 0, block->value, FALSE);
 		}
 		pos += sizeof (block);
 	}
@@ -347,6 +347,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 		pool->opened--;
 		memory_pool_unlock_mutex (pool->lock);
 		unlock_file (new_file->fd, FALSE);
+        munmap (new_file->map, st.st_size);
 		return NULL;
 	}
 	unlock_file (new_file->fd, FALSE);
@@ -411,7 +412,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 	struct stat_file_section        section = {
 		.code = STATFILE_SECTION_COMMON,
 	};
-	struct stat_file_block          block = { 0, 0, 0, 0 };
+	struct stat_file_block          block = { 0, 0, 0 };
 	int                             fd;
 	unsigned int                    buflen, nblocks;
 	char                           *buf = NULL;
@@ -539,7 +540,6 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 			break;
 		}
 		if (block->hash1 == h1 && block->hash2 == h2) {
-			block->last_access = now - (time_t) header->create_time;
 			return block->value;
 		}
 		c += sizeof (struct stat_file_block);
@@ -550,13 +550,15 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 	return 0;
 }
 
+#define RANDOM_EXPIRE G_MAXINT / CHAIN_LENGTH
 static void
 statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t t, double value, gboolean from_now)
 {
 	struct stat_file_block         *block, *to_expire = NULL;
 	struct stat_file_header        *header;
-	unsigned int                    i, blocknum, oldest = 0;
+	unsigned int                    i, blocknum;
 	u_char                         *c;
+    double                          min = G_MAXDOUBLE;
 
 
 	if (from_now) {
@@ -579,12 +581,6 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 		}
 		/* First try to find block in chain */
 		if (block->hash1 == h1 && block->hash2 == h2) {
-			if (from_now) {
-				block->last_access = t - (time_t) header->create_time;
-			}
-			else {
-				block->last_access = t;
-			}
 			block->value = value;
 			return;
 		}
@@ -595,17 +591,18 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 			block->hash1 = h1;
 			block->hash2 = h2;
 			block->value = value;
-			if (from_now) {
-				block->last_access = t - (time_t) header->create_time;
-			}
-			else {
-				block->last_access = t;
-			}
 			header->used_blocks ++;
 
 			return;
 		}
-		if (block->last_access > oldest) {
+		
+		/* Expire block if we have some random value that is lower than RANDOM_EXPIRE value */
+		if (g_random_int () < RANDOM_EXPIRE) {
+			to_expire = block;
+			break;
+		}
+		/* Expire block with minimum value otherwise */
+		if (block->value < min) {
 			to_expire = block;
 		}
 		c += sizeof (struct stat_file_block);
@@ -621,12 +618,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 		c = (u_char *) file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 		block = (struct stat_file_block *)c;
 	}
-	if (from_now) {
-		block->last_access = t - (time_t) header->create_time;
-	}
-	else {
-		block->last_access = t;
-	}
+
 	block->hash1 = h1;
 	block->hash2 = h2;
 	block->value = value;
@@ -686,7 +678,7 @@ gboolean
 statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t code, uint64_t length)
 {
 	struct stat_file_section        sect;
-	struct stat_file_block          block = { 0, 0, 0, 0 };
+	struct stat_file_block          block = { 0, 0, 0 };
 
 	if (lseek (file->fd, 0, SEEK_END) == -1) {
 		msg_info ("statfile_pool_add_section: cannot lseek file %s, error %d, %s", file->filename, errno, strerror (errno));

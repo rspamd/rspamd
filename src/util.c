@@ -954,8 +954,8 @@ calculate_check_time (struct timespec *begin, int resolution)
 
 	diff = (ts.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
 		(ts.tv_nsec - begin->tv_nsec) / 1000000.;	/* Nanoseconds */
-	rspamd_sprintf (fmt, "%%.%df", resolution);
-	rspamd_snprintf (res, sizeof (res), fmt, diff);
+	sprintf (fmt, "%%.%df", resolution);
+	snprintf (res, sizeof (res), fmt, diff);
 
 	return (const char *)res;
 }

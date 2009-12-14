@@ -756,16 +756,6 @@ main (int argc, char **argv, char **env)
 		l = g_list_next (l);
 	}
 
-	/* Init symbols cache for each metric */
-	l = g_list_first (cfg->metrics_list);
-	while (l) {
-		metric = l->data;
-		if (metric->cache && !init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
-			exit (EXIT_FAILURE);
-		}
-		l = g_list_next (l);
-	}
-
 #ifndef WITHOUT_PERL
 	/* Init perl interpreter */
 	dTHXa (perl_interpreter);
@@ -783,6 +773,16 @@ main (int argc, char **argv, char **env)
 #elif defined(WITH_LUA)
 	init_lua_filters (cfg);
 #endif
+
+	/* Init symbols cache for each metric */
+	l = g_list_first (cfg->metrics_list);
+	while (l) {
+		metric = l->data;
+		if (metric->cache && !init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
+			exit (EXIT_FAILURE);
+		}
+		l = g_list_next (l);
+	}
 
 	rspamd->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 	spawn_workers (rspamd, TRUE);

@@ -47,7 +47,6 @@ struct stat_file_section {
 struct stat_file_block {
 	uint32_t hash1;							/**< hash1 (also acts as index)			*/				
 	uint32_t hash2;							/**< hash2								*/
-	uint32_t last_access;					/**< last access to block since create time of file	*/
 	double value; 							/**< double value 						*/
 };
 
