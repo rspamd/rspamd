@@ -285,8 +285,12 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 									/* Insert new list in place of include element */
 									last = g_list_last (cb->rec->addrs);
 
-									elt->prev->next = cb->rec->addrs;
-									elt->next->prev = last;
+									if (elt->prev) {
+										elt->prev->next = cb->rec->addrs;
+									}
+									if (elt->next) {
+										elt->next->prev = last;
+									}
 
 									cb->rec->addrs->prev = elt->prev;
 									last->next = elt->next;

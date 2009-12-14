@@ -168,7 +168,7 @@ sub check {
   $self->{resp_code} = $resp_code;
   $self->{resp_msg} = $resp_msg;
 
-  return undef unless ($resp_code == 0);
+  return undef unless (defined($resp_code) && $resp_code == 0);
 
   my $cur_metric;
   my @lines = split (/^/, $in);
@@ -297,7 +297,7 @@ sub ping {
   return undef unless $line;
 
   my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($line);
-  return 0 unless ($resp_msg eq 'PONG');
+  return 0 unless (defined($resp_msg) && $resp_msg eq 'PONG');
 
   return 1;
 }
