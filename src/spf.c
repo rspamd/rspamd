@@ -285,18 +285,29 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 									/* Insert new list in place of include element */
 									last = g_list_last (cb->rec->addrs);
 
-									if (elt->prev) {
-										elt->prev->next = cb->rec->addrs;
-									}
-									if (elt->next) {
-										elt->next->prev = last;
+									if (elt->prev == NULL && elt->next == NULL) {
+										g_list_free1 (elt);
 									}
 
-									cb->rec->addrs->prev = elt->prev;
-									last->next = elt->next;
+									else {
 
-									cb->rec->addrs = tmp;
-									g_list_free1 (elt);
+										if (elt->prev) {
+											elt->prev->next = cb->rec->addrs;
+										}
+										else {
+											/* Elt is the first element, so we need to shift temporary list */
+											tmp = elt->next;
+										}
+										if (elt->next) {
+											elt->next->prev = last;
+											last->next = elt->next;
+										}
+
+										cb->rec->addrs->prev = elt->prev;
+
+										cb->rec->addrs = tmp;
+										g_list_free1 (elt);
+									}
 								}
 							}
 						}
