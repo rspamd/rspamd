@@ -30,6 +30,9 @@
 #include "../main.h"
 #include "../filter.h"
 #include "../cfg_file.h"
+#ifdef WITH_LUA
+#include "../lua/lua_common.h"
+#endif
 
 #define WINNOW_PROMOTION 1.23
 #define WINNOW_DEMOTION 0.83
@@ -135,8 +138,20 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	data.count = 0;
 	data.now = time (NULL);
 	data.ctx = ctx;
-
-	cur = ctx->cfg->statfiles;
+    
+    if (ctx->cfg->pre_callbacks) {
+#ifdef WITH_LUA
+        cur = call_classifier_pre_callbacks (ctx->cfg, task);
+        if (cur) {
+            memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+        }
+#else
+	    cur = ctx->cfg->statfiles;
+#endif
+    }
+    else {
+	    cur = ctx->cfg->statfiles;
+    }
 	while (cur) {
 		st = cur->data;
 		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
@@ -170,7 +185,10 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		snprintf (sumbuf, 32, "%.2f", max);
 		cur = g_list_prepend (NULL, sumbuf);
-		insert_result (task, ctx->cfg->metric, sel->symbol, 1, cur);
+#ifdef WITH_LUA
+        max = call_classifier_post_callbacks (ctx->cfg, task, max);
+#endif
+		insert_result (task, ctx->cfg->metric, sel->symbol, max, cur);
 	}
 }
 

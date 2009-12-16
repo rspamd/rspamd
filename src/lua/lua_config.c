@@ -27,6 +27,7 @@
 #include "../expressions.h"
 #include "../map.h"
 #include "../radix.h"
+#include "../classifiers/classifiers.h"
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
@@ -35,6 +36,7 @@ LUA_FUNCTION_DEF (config, get_all_opt);
 LUA_FUNCTION_DEF (config, register_function);
 LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
+LUA_FUNCTION_DEF (config, get_classifier);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -43,6 +45,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_function),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, add_hash_map),
+	LUA_INTERFACE_DEF (config, get_classifier),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -227,6 +230,39 @@ lua_config_get_metric (lua_State * L)
 			pmetric = lua_newuserdata (L, sizeof (struct metric *));
 			lua_setclass (L, "rspamd{metric}", -1);
 			*pmetric = metric;
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+
+}
+
+static int
+lua_config_get_classifier (lua_State * L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	struct classifier_config       *clc = NULL, **pclc = NULL;
+	const char                     *name;
+	GList                          *cur;
+
+	if (cfg) {
+		name = luaL_checkstring (L, 2);
+
+		cur = g_list_first (cfg->classifiers);
+		while (cur) {
+			clc = cur->data;
+			if (g_ascii_strcasecmp (clc->classifier->name, name) == 0) {
+				pclc = &clc;
+				break;
+			}
+			cur = g_list_next (cur);
+		}
+		if (pclc) {
+			pclc = lua_newuserdata (L, sizeof (struct classifier_config *));
+			lua_setclass (L, "rspamd{classifier}", -1);
+			*pclc = clc;
 			return 1;
 		}
 	}

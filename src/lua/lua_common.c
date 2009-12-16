@@ -196,6 +196,8 @@ init_lua ()
 		(void)luaopen_task (L);
 		(void)luaopen_textpart (L);
 		(void)luaopen_message (L);
+		(void)luaopen_classifier (L);
+		(void)luaopen_statfile (L);
 	}
 }
 

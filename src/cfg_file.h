@@ -169,6 +169,8 @@ struct classifier_config {
     struct classifier *classifier;                  /**< classifier interface                               */
 	struct tokenizer *tokenizer;					/**< tokenizer used for classifier						*/
     GHashTable *opts;                               /**< other options                                      */
+	GList *pre_callbacks;							/**< list of callbacks that are called before classification */
+	GList *post_callbacks;							/**< list of callbacks that are called after classification */
 };
 
 /**
