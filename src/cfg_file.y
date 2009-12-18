@@ -58,7 +58,7 @@ struct rspamd_view *cur_view = NULL;
 %token  STATFILE ALIAS PATTERN WEIGHT STATFILE_POOL_SIZE SIZE TOKENIZER CLASSIFIER BINLOG BINLOG_MASTER BINLOG_ROTATE
 %token	DELIVERY LMTP ENABLED AGENT SECTION LUACODE RAW_MODE PROFILE_FILE COUNT
 %token  VIEW IP FROM SYMBOLS CLIENT_IP
-%token  AUTOLEARN MIN_MARK MAX_MARK
+%token  AUTOLEARN MIN_MARK MAX_MARK MAXFILES MAXCORE
 %token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK GROW_FACTOR
 
 %type	<string>	STRING
@@ -229,6 +229,8 @@ workercmd:
 	| bindsock
 	| workertype
 	| workercount
+	| workerlimitfiles
+	| workerlimitcore
 	| workerparam
 	;
 
@@ -299,6 +301,20 @@ workercount:
 			yyerror ("yyparse: invalid number of workers: %d", $3);
 			YYERROR;
 		}
+	}
+	;
+
+workerlimitfiles:
+	MAXFILES EQSIGN NUMBER {
+		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker->rlimit_nofile = $3;
+	}
+	;
+
+workerlimitcore:
+	MAXCORE EQSIGN NUMBER  {
+		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker->rlimit_maxcore = $3;
 	}
 	;
 

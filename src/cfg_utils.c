@@ -34,6 +34,9 @@
 
 #define DEFAULT_SCORE 10.0
 
+#define DEFAULT_RLIMIT_NOFILE 2048
+#define DEFAULT_RLIMIT_MAXCORE 0
+
 extern int                      yylineno;
 extern char                    *yytext;
 
@@ -644,6 +647,8 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 #else
 		c->count = DEFAULT_WORKERS_NUM;
 #endif
+		c->rlimit_nofile = DEFAULT_RLIMIT_NOFILE;
+		c->rlimit_maxcore = DEFAULT_RLIMIT_MAXCORE;
 	}
 	
 	return c;

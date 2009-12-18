@@ -144,28 +144,30 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 		s = ntohl (task->from_addr.s_addr);
 		while (cur) {
 			addr = cur->data;
-			if (addr->mask == 0) {
-				m = 0;
-			}
-			else {
-				m = G_MAXUINT32 << (32 - addr->mask);
-			}
-			if ((s & m) == (addr->addr & m)) {
-				switch (addr->mech) {
-					case SPF_FAIL:
-						insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
-						break;
-					case SPF_SOFT_FAIL:
-					case SPF_NEUTRAL:
-						insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
-						break;
-					default:
-						insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
-						break;
-				}
-				/* Stop parsing */
-				break;
-			}
+            if (addr != NULL) {
+                if (addr->mask == 0) {
+                    m = 0;
+                }
+                else {
+                    m = G_MAXUINT32 << (32 - addr->mask);
+                }
+                if ((s & m) == (addr->addr & m)) {
+                    switch (addr->mech) {
+                        case SPF_FAIL:
+                            insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
+                            break;
+                        case SPF_SOFT_FAIL:
+                        case SPF_NEUTRAL:
+                            insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
+                            break;
+                        default:
+                            insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
+                            break;
+                    }
+                    /* Stop parsing */
+                    break;
+                }
+            }
 			cur = g_list_next (cur);
 		}
 	}

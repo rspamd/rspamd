@@ -329,6 +329,31 @@ reread_config (struct rspamd_main *rspamd)
 	}
 }
 
+static void
+set_worker_limits (struct worker_conf *cf)
+{
+	struct rlimit                   rlmt;
+
+	if (cf->rlimit_nofile != 0) {
+		rlmt.rlim_cur = (rlim_t) cf->rlimit_nofile;
+		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
+
+		if (setrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
+			msg_warn ("set_worker_limits: cannot set files rlimit: %d, %s", cf->rlimit_nofile, strerror (errno));
+        }
+	}
+
+	if (cf->rlimit_maxcore != 0) {
+		rlmt.rlim_cur = (rlim_t) cf->rlimit_maxcore;
+		rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
+
+		if (setrlimit(RLIMIT_CORE, &rlmt) == -1) {
+			msg_warn ("set_worker_limits: cannot set max core rlimit: %d, %s", cf->rlimit_maxcore, strerror (errno));
+        }
+	}
+
+}
+
 static struct rspamd_worker    *
 fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 {
@@ -347,6 +372,8 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		case 0:
 			/* Drop privilleges */
 			drop_priv (cfg);
+			/* Set limits */
+			set_worker_limits (cf);
 			switch (cf->type) {
 			case TYPE_CONTROLLER:
 				setproctitle ("controller process");

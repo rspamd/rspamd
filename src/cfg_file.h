@@ -197,8 +197,10 @@ struct worker_conf {
 	uint16_t bind_port;								/**< bind port in case of TCP socket					*/
 	uint16_t bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
 	int count;										/**< number of workers									*/
-	GHashTable *params;								/**< params for worker									*/
 	int listen_sock;								/**< listening socket desctiptor						*/
+	uint32_t rlimit_nofile;							/**< max files limit									*/
+	uint32_t rlimit_maxcore;						/**< maximum core file size								*/
+	GHashTable *params;								/**< params for worker									*/
 	GQueue *active_workers;							/**< linked list of spawned workers						*/
 	gboolean has_socket;							/**< whether we should make listening socket in main process */
 };
@@ -267,6 +269,7 @@ struct config_file {
 	GList *views;									/**< views												*/
     GHashTable* domain_settings;                    /**< settings per-domains                               */
     GHashTable* user_settings;                      /**< settings per-user                                  */
+
 };
 
 /**

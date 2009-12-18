@@ -63,6 +63,9 @@ settings                        return SETTINGS;
 user_settings                   return USER_SETTINGS;
 domain_settings                 return DOMAIN_SETTINGS;
 
+maxfiles						return MAXFILES;
+maxcore							return MAXCORE;
+
 filters							return FILTERS;
 factors							return FACTORS;
 grow_factor						return GROW_FACTOR;
