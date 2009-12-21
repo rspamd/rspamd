@@ -180,7 +180,7 @@ surbl_module_config (struct config_file *cfg)
 
 	metric = g_hash_table_lookup (cfg->metrics, surbl_module_ctx->metric);
 	if (metric == NULL) {
-		msg_err ("surbl_module_config: cannot find metric definition %s", surbl_module_ctx->metric);
+		msg_err ("cannot find metric definition %s", surbl_module_ctx->metric);
 		return FALSE;
 	}
 
@@ -194,7 +194,7 @@ surbl_module_config (struct config_file *cfg)
 				*str = '\0';
 				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
 				new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-				msg_debug ("surbl_module_config: add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
+				msg_debug ("add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 				*str = '_';
 				surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 				/* Search in factors hash table */
@@ -214,7 +214,7 @@ surbl_module_config (struct config_file *cfg)
 					new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
 					new_bit->bit = bit;
 					new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-					msg_debug ("surbl_module_config: add new bit suffix: %d with symbol: %s", (int)new_bit->bit, new_bit->symbol);
+					msg_debug ("add new bit suffix: %d with symbol: %s", (int)new_bit->bit, new_bit->symbol);
 					surbl_module_ctx->bits = g_list_prepend (surbl_module_ctx->bits, new_bit);
 				}
 			}
@@ -226,7 +226,7 @@ surbl_module_config (struct config_file *cfg)
 		new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
 		new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SUFFIX);
 		new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SYMBOL);
-		msg_debug ("surbl_module_config: add default surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
+		msg_debug ("add default surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 		w = g_hash_table_lookup (cfg->factors, new_suffix->symbol);
 		if (w == NULL) {
@@ -278,7 +278,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 			octet3 = g_match_info_fetch (info, 3);
 			octet4 = g_match_info_fetch (info, 4);
 			result = memory_pool_alloc (pool, len);
-			msg_debug ("format_surbl_request: got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
+			msg_debug ("got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
 			r = snprintf (result, len, "%s.%s.%s.%s", octet4, octet3, octet2, octet1);
 			if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
 				g_free (octet1);
@@ -286,7 +286,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 				g_free (octet3);
 				g_free (octet4);
 				g_match_info_free (info);
-				msg_debug ("format_surbl_request: url %s is whitelisted", result);
+				msg_debug ("url %s is whitelisted", result);
 				g_set_error (err, SURBL_ERROR,	/* error domain */
 					WHITELIST_ERROR,	/* error code */
 					"URL is whitelisted: %s",	/* error message format string */
@@ -314,7 +314,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 			ip_num = strtoull (ip, NULL, 10);
 			if (errno != 0) {
 				g_match_info_free (info);
-				msg_info ("format_surbl_request: cannot convert ip to number '%s': %s", ip, strerror (errno));
+				msg_info ("cannot convert ip to number '%s': %s", ip, strerror (errno));
 				g_set_error (err, SURBL_ERROR,	/* error domain */
 					CONVERSION_ERROR,	/* error code */
 					"URL cannot be decoded");
@@ -357,14 +357,14 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 				hpart1 = g_match_info_fetch (info, 1);
 				hpart2 = g_match_info_fetch (info, 2);
 				hpart3 = g_match_info_fetch (info, 3);
-				msg_debug ("format_surbl_request: got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
+				msg_debug ("got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
 				r = snprintf (result, len, "%s.%s.%s", hpart1, hpart2, hpart3);
 				if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
 					g_free (hpart1);
 					g_free (hpart2);
 					g_free (hpart3);
 					g_match_info_free (info);
-					msg_debug ("format_surbl_request: url %s is whitelisted", result);
+					msg_debug ("url %s is whitelisted", result);
 					g_set_error (err, SURBL_ERROR,	/* error domain */
 						WHITELIST_ERROR,	/* error code */
 						"URL is whitelisted: %s",	/* error message format string */
@@ -389,7 +389,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 			if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
 				g_free (part1);
 				g_free (part2);
-				msg_debug ("format_surbl_request: url %s is whitelisted", result);
+				msg_debug ("url %s is whitelisted", result);
 				g_set_error (err, SURBL_ERROR,	/* error domain */
 					WHITELIST_ERROR,	/* error code */
 					"URL is whitelisted: %s",	/* error message format string */
@@ -400,7 +400,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 				r += snprintf (result + r, len - r, ".%s", suffix->suffix);
 			}
 			*host_end = result + r - slen - 1;
-			msg_debug ("format_surbl_request: got normal 2-d level domain %s.%s", part1, part2);
+			msg_debug ("got normal 2-d level domain %s.%s", part1, part2);
 		}
 		g_free (part1);
 		g_free (part2);
@@ -435,18 +435,18 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree, st
 				*host_end = '\0';
 				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 				*host_end = '.';
-				msg_debug ("surbl_test_url: send surbl dns request %s", surbl_req);
+				debug_task ("send surbl dns request %s", surbl_req);
 				if (evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param) == 0) {
 					param->task->save.saved++;
 					register_async_event (task->s, (event_finalizer_t) dns_callback, NULL, TRUE);
 				}
 			}
 			else {
-				msg_debug ("make_surbl_requests: request %s is already sent", surbl_req);
+				debug_task ("request %s is already sent", surbl_req);
 			}
 		}
 		else if (err != NULL && err->code != WHITELIST_ERROR) {
-			msg_info ("surbl_test_url: cannot format url string for surbl %s, %s", struri (url), err->message);
+			msg_info ("cannot format url string for surbl %s, %s", struri (url), err->message);
 			g_error_free (err);
 			return;
 		}
@@ -455,7 +455,7 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree, st
 		}
 	}
 	else {
-		msg_debug ("make_surbl_requests: skipping symbol that is not in view: %s", suffix->symbol);
+		debug_task ("skipping symbol that is not in view: %s", suffix->symbol);
 	}
 }
 
@@ -472,7 +472,7 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 
 		while (cur) {
 			bit = (struct surbl_bit_item *)cur->data;
-			msg_debug ("process_dns_results: got result(%d) AND bit(%d): %d", (int)addr, (int)ntohl (bit->bit), (int)bit->bit & (int)ntohl (addr));
+			debug_task ("got result(%d) AND bit(%d): %d", (int)addr, (int)ntohl (bit->bit), (int)bit->bit & (int)ntohl (addr));
 			if (((int)bit->bit & (int)ntohl (addr)) != 0) {
 				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
 				*c = '\0';
@@ -498,15 +498,16 @@ static void
 dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
 {
 	struct dns_param               *param = (struct dns_param *)data;
+	struct worker_task             *task = param->task;
 
-	msg_debug ("dns_callback: in surbl request callback");
+	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
-		msg_info ("surbl_check: <%s> domain [%s] is in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
+		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
 		process_dns_results (param->task, param->suffix, param->host_resolve, (uint32_t) (((in_addr_t *) addresses)[0]));
 	}
 	else {
-		msg_debug ("surbl_check: <%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
+		debug_task ("<%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
 	}
 
 	param->task->save.saved--;
@@ -528,7 +529,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 	switch (ctx->op) {
 	case CMD_CONNECT:
 		if (error != OK) {
-			msg_info ("memcached_callback: memcached returned error %s on CONNECT stage", memc_strerror (error));
+			msg_info ("memcached returned error %s on CONNECT stage", memc_strerror (error));
 			memc_close_ctx (param->ctx);
 			param->task->save.saved--;
 			if (param->task->save.saved == 0) {
@@ -543,7 +544,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 		break;
 	case CMD_READ:
 		if (error != OK) {
-			msg_info ("memcached_callback: memcached returned error %s on READ stage", memc_strerror (error));
+			msg_info ("memcached returned error %s on READ stage", memc_strerror (error));
 			memc_close_ctx (param->ctx);
 			param->task->save.saved--;
 			if (param->task->save.saved == 0) {
@@ -556,7 +557,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 			url_count = (int *)param->ctx->param->buf;
 			/* Do not check DNS for urls that have count more than max_urls */
 			if (*url_count > surbl_module_ctx->max_urls) {
-				msg_info ("memcached_callback: url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
+				msg_info ("url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
 				/* 
 				 * XXX: try to understand why we should use memcached here
 				 * insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
@@ -568,7 +569,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 		break;
 	case CMD_WRITE:
 		if (error != OK) {
-			msg_info ("memcached_callback: memcached returned error %s on WRITE stage", memc_strerror (error));
+			msg_info ("memcached returned error %s on WRITE stage", memc_strerror (error));
 		}
 		memc_close_ctx (param->ctx);
 		param->task->save.saved--;
@@ -615,7 +616,7 @@ register_memcached_call (struct uri *url, struct worker_task *task, GTree * url_
 		task->cfg->memcached_servers_num, sizeof (struct memcached_server),
 		time (NULL), task->cfg->memcached_error_time, task->cfg->memcached_dead_time, task->cfg->memcached_maxerrors, cur_param->key, strlen (cur_param->key));
 	if (selected == NULL) {
-		msg_err ("surbl_register_memcached_call: no memcached servers can be selected");
+		msg_err ("no memcached servers can be selected");
 		return;
 	}
 	param->ctx->callback = memcached_callback;
@@ -656,6 +657,7 @@ static void
 redirector_callback (int fd, short what, void *arg)
 {
 	struct redirector_param        *param = (struct redirector_param *)arg;
+	struct worker_task             *task = param->task;
 	char                            url_buf[1024];
 	int                             r;
 	struct timeval                 *timeout;
@@ -673,14 +675,14 @@ redirector_callback (int fd, short what, void *arg)
 			event_add (&param->ev, timeout);
 			r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
 			if (write (param->sock, url_buf, r) == -1) {
-				msg_err ("redirector_callback: write failed %s", strerror (errno));
+				msg_err ("write failed %s", strerror (errno));
 				remove_normal_event (param->task->s, free_redirector_session, param);
 				return;
 			}
 			param->state = STATE_READ;
 		}
 		else {
-			msg_info ("redirector_callback: <%s> connection to redirector timed out while waiting for write", param->task->message_id);
+			msg_info ("<%s> connection to redirector timed out while waiting for write", param->task->message_id);
 			remove_normal_event (param->task->s, free_redirector_session, param);
 			return;
 		}
@@ -698,14 +700,14 @@ redirector_callback (int fd, short what, void *arg)
 					}
 				}
 				if (*p == '\0') {
-					msg_debug ("redirector_callback: <%s> got reply from redirector: '%s' -> '%s'", param->task->message_id, struri (param->url), c);
+					debug_task ("<%s> got reply from redirector: '%s' -> '%s'", param->task->message_id, struri (param->url), c);
 					parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
 				}
 			}
 			remove_normal_event (param->task->s, free_redirector_session, param);
 		}
 		else {
-			msg_info ("redirector_callback: <%s> reading redirector timed out, while waiting for read", param->task->message_id);
+			msg_info ("<%s> reading redirector timed out, while waiting for read", param->task->message_id);
 			remove_normal_event (param->task->s, free_redirector_session, param);
 		}
 		break;
@@ -723,7 +725,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	s = make_tcp_socket (&surbl_module_ctx->redirector_addr, surbl_module_ctx->redirector_port, FALSE, TRUE);
 
 	if (s == -1) {
-		msg_info ("register_redirector_call: <%s> cannot create tcp socket failed: %s", task->message_id, strerror (errno));
+		msg_info ("<%s> cannot create tcp socket failed: %s", task->message_id, strerror (errno));
 		task->save.saved--;
 		make_surbl_requests (url, task, url_tree, suffix);
 		return;
@@ -748,12 +750,13 @@ static                          gboolean
 tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param        *param = data;
+	struct worker_task             *task = param->task;
 	struct uri                     *url = value;
 	f_str_t                         f;
 	char                           *urlstr, *host_end;
 	GError                         *err = NULL;
 
-	msg_debug ("surbl_test_url: check url %s", struri (url));
+	debug_task ("check url %s", struri (url));
 
 
 	if (surbl_module_ctx->use_redirector) {
@@ -874,7 +877,7 @@ urls_command_handler (struct worker_task *task)
 	outbuf[r++] = '\n';
 
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, TRUE);
-	msg_info ("process_message: msg ok, id: <%s>, %d urls extracted", task->message_id, num);
+	msg_info ("msg ok, id: <%s>, %d urls extracted", task->message_id, num);
 	g_tree_destroy (url_tree);
 
 	return 0;

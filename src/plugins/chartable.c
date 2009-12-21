@@ -91,7 +91,7 @@ chartable_module_config (struct config_file *cfg)
 		errno = 0;
 		chartable_module_ctx->threshold = strtod (value, NULL);
 		if (errno != 0) {
-			msg_warn ("chartable_module_config: invalid numeric value '%s': %s", value, strerror (errno));
+			msg_warn ("invalid numeric value '%s': %s", value, strerror (errno));
 			chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 		}
 	}
@@ -101,7 +101,7 @@ chartable_module_config (struct config_file *cfg)
 
 	metric = g_hash_table_lookup (cfg->metrics, chartable_module_ctx->metric);
 	if (metric == NULL) {
-		msg_err ("chartable_module_config: cannot find metric definition %s", chartable_module_ctx->metric);
+		msg_err ("cannot find metric definition %s", chartable_module_ctx->metric);
 		return FALSE;
 	}
 

@@ -757,7 +757,7 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 	else {
 		new = construct_html_node (pool, tag_text);
 		if (new == NULL) {
-			msg_debug ("add_html_node: cannot construct HTML node for text '%s'", tag_text);
+			debug_task ("cannot construct HTML node for text '%s'", tag_text);
 			return -1;
 		}
 		data = new->data;
@@ -766,12 +766,12 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 		}
 		if (data->flags & FL_CLOSING) {
 			if (!*cur_level) {
-				msg_debug ("add_html_node: bad parent node");
+				debug_task ("bad parent node");
 				return FALSE;
 			}
 			g_node_append (*cur_level, new);
 			if (!check_balance (new, cur_level)) {
-				msg_debug ("add_html_node: mark part as unbalanced as it has not pairable closing tags");
+				debug_task ("mark part as unbalanced as it has not pairable closing tags");
 				part->is_balanced = FALSE;
 			}
 		}

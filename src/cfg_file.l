@@ -100,6 +100,8 @@ WARNING							return LOG_LEVEL_WARNING;
 ERROR							return LOG_LEVEL_ERROR;
 log_facility					return LOG_FACILITY;
 log_file						return LOG_FILENAME;
+log_buffer                      return LOG_BUFFER;
+debug_ip                        return DEBUG_IP;
 profile_file					return PROFILE_FILE;
 
 statfile_pool_size				return STATFILE_POOL_SIZE;

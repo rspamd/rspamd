@@ -124,7 +124,7 @@ parse_servers_string (char *str)
 			/* Resolve using dns */
 			hent = gethostbyname (name);
 			if (hent == NULL) {
-				msg_info ("parse_servers_string: cannot resolve: %s", name);
+				msg_info ("cannot resolve: %s", name);
 				continue;
 			}
 			else {
@@ -190,7 +190,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 
 	metric = g_hash_table_lookup (cfg->metrics, fuzzy_module_ctx->metric);
 	if (metric == NULL) {
-		msg_err ("fuzzy_module_config: cannot find metric definition %s", fuzzy_module_ctx->metric);
+		msg_err ("cannot find metric definition %s", fuzzy_module_ctx->metric);
 		return FALSE;
 	}
 
@@ -265,7 +265,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 	return;
 
   err:
-	msg_err ("fuzzy_io_callback: got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
+	msg_err ("got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
   ok:
 	close (fd);
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
@@ -314,7 +314,7 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 	return;
 
   err:
-	msg_err ("fuzzy_learn_callback: got error in IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
+	msg_err ("got error in IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
   ok:
 	close (fd);
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
@@ -342,7 +342,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 		if (selected) {
 			if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
-				msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
+				msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 			}
 			else {
 				session = memory_pool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
@@ -387,7 +387,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	saved = memory_pool_alloc0 (session->session_pool, sizeof (int));
 	r = process_message (task);
 	if (r == -1) {
-		msg_warn ("read_socket: processing of message failed");
+		msg_warn ("processing of message failed");
 		free_task (task, FALSE);
 		session->state = STATE_REPLY;
 		r = snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
@@ -409,7 +409,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
 			if (selected) {
 				if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
-					msg_warn ("fuzzy_symbol_callback: cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
+					msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 					session->state = STATE_REPLY;
 					r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
 					rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
@@ -461,7 +461,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 
 	arg = *args;
 	if (!arg || *arg == '\0') {
-		msg_info ("fuzzy_controller_handler: empty content length");
+		msg_info ("empty content length");
 		r = snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 		session->state = STATE_REPLY;

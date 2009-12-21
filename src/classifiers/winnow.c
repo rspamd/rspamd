@@ -156,7 +156,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		st = cur->data;
 		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
 			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-				msg_warn ("winnow_classify: cannot open %s, skip it", st->path);
+				msg_warn ("cannot open %s, skip it", st->path);
 				cur = g_list_next (cur);
 				continue;
 			}

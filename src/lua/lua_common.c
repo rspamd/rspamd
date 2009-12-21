@@ -214,7 +214,7 @@ init_lua_filters (struct config_file *cfg)
 		module = cur->data;
 		if (module->path) {
 			if (luaL_loadfile (L, module->path) != 0) {
-				msg_info ("lua_init_filters: load of %s failed: %s", module->path, lua_tostring (L, -1));
+				msg_info ("load of %s failed: %s", module->path, lua_tostring (L, -1));
 				cur = g_list_next (cur);
 				continue;
 			}
@@ -226,7 +226,7 @@ init_lua_filters (struct config_file *cfg)
 			lua_setglobal (L, "rspamd_config");
 			/* do the call (1 arguments, 1 result) */
 			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-				msg_info ("lua_init_filters: init of %s failed: %s", module->path, lua_tostring (L, -1));
+				msg_info ("init of %s failed: %s", module->path, lua_tostring (L, -1));
 			}
 		}
 		cur = g_list_next (cur);
@@ -247,12 +247,12 @@ lua_call_filter (const char *function, struct worker_task *task)
 	*ptask = task;
 
 	if (lua_pcall (L, 1, 1, 0) != 0) {
-		msg_info ("lua_call_filter: call to %s failed", function);
+		msg_info ("call to %s failed", function);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("lua_call_filter: function %s must return a number", function);
+		msg_info ("function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);				/* pop returned value */
@@ -270,12 +270,12 @@ lua_call_chain_filter (const char *function, struct worker_task *task, int *mark
 		lua_pushnumber (L, marks[i]);
 	}
 	if (lua_pcall (L, number, 1, 0) != 0) {
-		msg_info ("lua_init_filters: call to %s failed", function);
+		msg_info ("call to %s failed", function);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("lua_call_header_filter: function %s must return a number", function);
+		msg_info ("function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);				/* pop returned value */
@@ -303,12 +303,12 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	lua_pushstring (L, (const char *)key);
 	lua_pushnumber (L, s->score);
 	if (lua_pcall (L, 2, 1, 0) != 0) {
-		msg_info ("lua_consolidation_callback: call to %s failed", data->func);
+		msg_info ("call to %s failed", data->func);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("lua_consolidation_callback: function %s must return a number", data->func);
+		msg_info ("function %s must return a number", data->func);
 	}
 	res = lua_tonumber (L, -1);
 	lua_pop (L, 1);				/* pop returned value */

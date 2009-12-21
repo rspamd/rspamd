@@ -94,9 +94,10 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 {
 	GList                          *part;
 	struct mime_part               *p;
+	struct worker_task             *task = lmtp->task;
 
 	if (lmtp) {
-		msg_debug ("free_lmtp_task: free pointer %p", lmtp->task);
+		debug_task ("free pointer %p", lmtp->task);
 		if (lmtp->task->memc_ctx) {
 			memc_close_ctx (lmtp->task->memc_ctx);
 		}
@@ -137,7 +138,7 @@ lmtp_read_socket (f_str_t * in, void *arg)
 	case READ_COMMAND:
 	case READ_HEADER:
 		if (read_lmtp_input_line (lmtp, in) != 0) {
-			msg_info ("read_lmtp_socket: closing lmtp connection due to protocol error");
+			msg_info ("closing lmtp connection due to protocol error");
 			lmtp->task->state = CLOSING_CONNECTION;
 		}
 		/* Task was read, recall read handler once more with new state to process message and write reply */
@@ -165,7 +166,7 @@ lmtp_read_socket (f_str_t * in, void *arg)
 		}
 		break;
 	default:
-		msg_debug ("lmtp_read_socket: invalid state while reading from socket %d", lmtp->task->state);
+		debug_task ("invalid state while reading from socket %d", lmtp->task->state);
 		break;
 	}
 
@@ -179,6 +180,7 @@ static                          gboolean
 lmtp_write_socket (void *arg)
 {
 	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
+	struct worker_task             *task = lmtp->task;
 
 	switch (lmtp->task->state) {
 	case WRITE_REPLY:
@@ -194,12 +196,12 @@ lmtp_write_socket (void *arg)
 		lmtp->task->state = CLOSING_CONNECTION;
 		break;
 	case CLOSING_CONNECTION:
-		msg_debug ("lmtp_write_socket: normally closing connection");
+		debug_task ("normally closing connection");
 		free_lmtp_task (lmtp, TRUE);
 		return FALSE;
 		break;
 	default:
-		msg_debug ("lmtp_write_socket: invalid state while writing to socket %d", lmtp->task->state);
+		debug_task ("invalid state while writing to socket %d", lmtp->task->state);
 		break;
 	}
 
@@ -213,7 +215,7 @@ static void
 lmtp_err_socket (GError * err, void *arg)
 {
 	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
-	msg_info ("lmtp_err_socket: abnormally closing connection, error: %s", err->message);
+	msg_info ("abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
 	free_lmtp_task (lmtp, FALSE);
 }
@@ -226,21 +228,31 @@ accept_socket (int fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	struct sockaddr_storage         ss;
+	struct sockaddr_in             *sin;
 	struct worker_task             *new_task;
 	struct rspamd_lmtp_proto       *lmtp;
 	socklen_t                       addrlen = sizeof (ss);
 	int                             nfd;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
-		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
+		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 
 	lmtp = g_malloc (sizeof (struct rspamd_lmtp_proto));
-	new_task = g_malloc (sizeof (struct worker_task));
-	bzero (new_task, sizeof (struct worker_task));
-	new_task->worker = worker;
-	new_task->state = READ_COMMAND;
+
+	new_task = construct_task (worker);
+
+	if (ss.ss_family == AF_UNIX) {
+		msg_info ("accepted connection from unix socket");
+		new_task->client_addr.s_addr = INADDR_NONE;
+	}
+	else if (ss.ss_family == AF_INET) {
+		sin = (struct sockaddr_in *)&ss;
+		msg_info ("accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
+		memcpy (&new_task->client_addr, &sin->sin_addr, sizeof (struct in_addr));
+	}
+
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
 	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
@@ -254,6 +266,7 @@ accept_socket (int fd, short what, void *arg)
 
 	/* Set up dispatcher */
 	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, lmtp_read_socket, lmtp_write_socket, lmtp_err_socket, &io_tv, (void *)lmtp);
+	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
 	rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE);
 }
 

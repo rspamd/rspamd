@@ -116,7 +116,7 @@ perl_call_header_filter (const char *function, struct worker_task *task)
 	SPAGAIN;
 
 	result = POPi;
-	msg_debug ("header_filter: call of %s with returned mark %d\n", function, result);
+	debug_task ("call of %s with returned mark %d\n", function, result);
 
 	PUTBACK;
 	FREETMPS;
@@ -155,7 +155,7 @@ perl_call_chain_filter (const char *function, struct worker_task *task, int *mar
 	SPAGAIN;
 
 	result = POPi;
-	msg_debug ("chain_filter: call of %s returned mark %d\n", function, result);
+	debug_task ("call of %s returned mark %d\n", function, result);
 
 	PUTBACK;
 	FREETMPS;

@@ -89,7 +89,7 @@ parse_host_port (const char *str, struct in_addr *ina, uint16_t *port)
 			/* Try to call gethostbyname */
 			hent = gethostbyname (tokens[0]);
 			if (hent == NULL) {
-				msg_warn ("parse_host_port: cannot resolve %s", tokens[0]);
+				msg_warn ("cannot resolve %s", tokens[0]);
 				goto err;
 			}
 			else {
@@ -102,12 +102,12 @@ parse_host_port (const char *str, struct in_addr *ina, uint16_t *port)
 		errno = 0;
 		port_parsed = strtoul (tokens[1], &err_str, 10);
 		if (*err_str != '\0' || errno != 0) {
-			msg_warn ("parse_host_port: cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+			msg_warn ("cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
 			goto err;
 		}
 		if (port_parsed > G_MAXUINT16) {
 			errno = ERANGE;
-			msg_warn ("parse_host_port: cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
+			msg_warn ("cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
 			goto err;
 		}
 		*port = port_parsed;
@@ -448,7 +448,7 @@ parse_filters_str (struct config_file *cfg, const char *str)
 			if (strcasecmp (modules[i].name, *p) == 0) {
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
-				msg_debug ("parse_filters_str: found C filter %s", *p);
+				msg_debug ("found C filter %s", *p);
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
 				cur->module = &modules[i];
 				cfg->filters = g_list_prepend (cfg->filters, cur);

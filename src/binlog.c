@@ -48,7 +48,7 @@ binlog_write_header (struct rspamd_binlog *log)
 	lock_file (log->fd, FALSE);
 	
 	if (write (log->fd, &header, sizeof (struct rspamd_binlog_header)) == -1) {
-		msg_warn ("binlog_write_header: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -63,7 +63,7 @@ binlog_write_header (struct rspamd_binlog *log)
 
 	if (write (log->fd, log->metaindex, sizeof (struct rspamd_binlog_metaindex))  == -1) {
 		g_free (log->metaindex);
-		msg_warn ("binlog_write_header: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
 		unlock_file (log->fd, FALSE);
 		return FALSE;
 	}
@@ -73,7 +73,7 @@ binlog_write_header (struct rspamd_binlog *log)
 	bzero (log->cur_idx, sizeof (struct rspamd_index_block));
 	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))  == -1) {
 		g_free (log->cur_idx);
-		msg_warn ("binlog_write_header: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
 		unlock_file (log->fd, FALSE);
 		return FALSE;
 	}
@@ -89,14 +89,14 @@ binlog_check_file (struct rspamd_binlog *log)
 	static char valid_magic[] = VALID_MAGIC, valid_version[] = VALID_VERSION;
 
 	if (read (log->fd, &log->header, sizeof (struct rspamd_binlog_header)) != sizeof (struct rspamd_binlog_header)) {
-		msg_warn ("binlog_check_file: cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
 	/* Now check all fields */
 	if (memcmp (&log->header.magic, valid_magic, sizeof (valid_magic)) != 0 || 
 			memcmp (&log->header.version, valid_version, sizeof (valid_version)) != 0) {
-		msg_warn ("binlog_check_file: cannot validate file %s");
+		msg_warn ("cannot validate file %s");
 		return FALSE;
 	}
 	/* Now mmap metaindex and current index */
@@ -104,7 +104,7 @@ binlog_check_file (struct rspamd_binlog *log)
 		log->metaindex = g_malloc (sizeof (struct rspamd_binlog_metaindex));
 	}
 	if ((read (log->fd, log->metaindex, sizeof (struct rspamd_binlog_metaindex))) != sizeof (struct rspamd_binlog_metaindex)) {
-		msg_warn ("binlog_check file: cannot read metaindex of file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot read metaindex of file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Current index */
@@ -112,11 +112,11 @@ binlog_check_file (struct rspamd_binlog *log)
 		log->cur_idx = g_malloc (sizeof (struct rspamd_index_block));
 	}
 	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
-		msg_info ("binlog_check_file: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
 	if ((read (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))) != sizeof (struct rspamd_index_block)) {
-		msg_warn ("binlog_check_file: cannot read index in file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot read index in file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -131,7 +131,7 @@ static gboolean
 binlog_create (struct rspamd_binlog *log)
 {
 	if ((log->fd = open (log->filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-		msg_info ("binlog_create: cannot create file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_info ("cannot create file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -142,7 +142,7 @@ static gboolean
 binlog_open_real (struct rspamd_binlog *log)
 {
 	if ((log->fd = open (log->filename, O_RDWR)) == -1) {
-		msg_info ("binlog_open: cannot open file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_info ("cannot open file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	
@@ -173,7 +173,7 @@ binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rota
 	if (stat (new->filename, &st) == -1) {
 		/* Check errno to check whether we should create this file */
 		if (errno != ENOENT) {
-			msg_err ("binlog_open: cannot stat file: %s, error %s", new->filename, strerror (errno));
+			msg_err ("cannot stat file: %s, error %s", new->filename, strerror (errno));
 			return NULL;
 		}
 		else {
@@ -219,7 +219,7 @@ binlog_tree_callback (gpointer key, gpointer value, gpointer data)
 	elt.value = node->value;
 	
 	if (write (log->fd, &elt, sizeof (elt)) == -1) {
-		msg_info ("write_binlog_tree: cannot write token to file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot write token to file: %s, error: %s", log->filename, strerror (errno));
 		return TRUE;
 	}
 
@@ -238,7 +238,7 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 	/* Seek to end of file */
 	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
 
@@ -253,13 +253,13 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
 	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot seek in file: %s, error: %s, seek: %L, op: insert index", log->filename, 
+		msg_info ("cannot seek in file: %s, error: %s, seek: %L, op: insert index", log->filename, 
 				strerror (errno), log->metaindex->indexes[log->metaindex->last_index]);
 		return FALSE;
 	}
 	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block)) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("binlog_insert: cannot write index to file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot write index to file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
 	log->cur_idx->last_index ++;
@@ -279,13 +279,13 @@ create_new_metaindex_block (struct rspamd_binlog *log)
 	/* Seek to end of file */
 	if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
 	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block))  == -1) {
 		unlock_file (log->fd, FALSE);
 		g_free (log->cur_idx);
-		msg_warn ("create_new_metaindex_block: cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot write file %s, error %d, %s", log->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Offset to metaindex */
@@ -293,12 +293,12 @@ create_new_metaindex_block (struct rspamd_binlog *log)
 	/* Overwrite all metaindexes */
 	if (lseek (log->fd, sizeof (struct rspamd_binlog_header), SEEK_SET) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("create_new_metaindex_block: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
 	if (write (log->fd, log->metaindex, sizeof (struct rspamd_binlog_metaindex)) == -1) {
 		unlock_file (log->fd, FALSE);
-		msg_info ("create_new_metaindex_block: cannot write metaindex in file: %s, error: %s", log->filename, strerror (errno));
+		msg_info ("cannot write metaindex in file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
 	bzero (log->cur_idx, sizeof (struct rspamd_index_block));
@@ -339,7 +339,7 @@ rotate_binlog (struct rspamd_binlog *log)
 	backup_name = g_strdup_printf ("%s.%s", log->filename, BACKUP_SUFFIX);
 
 	if (stat (backup_name, &st) != -1) {
-		msg_info ("rotate_binlog: replace old %s", backup_name);
+		msg_info ("replace old %s", backup_name);
 		unlink (backup_name);
 	}
 
@@ -360,7 +360,7 @@ binlog_insert (struct rspamd_binlog *log, GTree *nodes)
 	off_t seek;
 
 	if (!log || !log->metaindex || !log->cur_idx || !nodes) {
-		msg_info ("binlog_insert: improperly opened binlog: %s", log->filename);
+		msg_info ("improperly opened binlog: %s", log->filename);
 		return FALSE;
 	}
 
@@ -380,7 +380,7 @@ binlog_insert (struct rspamd_binlog *log, GTree *nodes)
 	if (log->metaindex->last_index < METAINDEX_LEN) {
 		/* Create new index block */
 		if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
-			msg_info ("binlog_insert: cannot seek in file: %s, error: %s", log->filename, strerror (errno));
+			msg_info ("cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 			return FALSE;
 		}
 		if (!create_new_metaindex_block (log)) {
@@ -406,7 +406,7 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, 
 	gboolean idx_mapped = FALSE, res = TRUE, is_first = FALSE;
 
 	if (!log || !log->metaindex || !log->cur_idx) {
-		msg_info ("binlog_sync: improperly opened binlog: %s", log->filename);
+		msg_info ("improperly opened binlog: %s", log->filename);
 		return FALSE;
 	}
 
@@ -437,13 +437,13 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, 
 		idx_mapped = TRUE;
 		if (lseek (log->fd, log->metaindex->indexes[metaindex_num], SEEK_SET) == -1) {
 			unlock_file (log->fd, FALSE);
-			msg_warn ("binlog_sync: cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
+			msg_warn ("cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
 			res = FALSE;
 			goto end;
 		}
 		if ((read (log->fd, idxb, sizeof (struct rspamd_index_block))) != sizeof (struct rspamd_index_block)) {
 			unlock_file (log->fd, FALSE);
-			msg_warn ("binlog_sync: cannot read index from file %s, error %d, %s", log->filename, errno, strerror (errno));
+			msg_warn ("cannot read index from file %s, error %d, %s", log->filename, errno, strerror (errno));
 			res = FALSE;
 			goto end;
 		}
@@ -467,14 +467,14 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, 
 	(*rep)->len = idx->len;
 	/* Read result */
 	if (lseek (log->fd, idx->seek, SEEK_SET) == -1) {
-		msg_warn ("binlog_sync: cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
 		res = FALSE;
 		goto end;
 	}
 	
 	(*rep)->data = g_malloc (idx->len);
 	if ((read (log->fd, (*rep)->data, idx->len)) != idx->len) {
-		msg_warn ("binlog_sync: cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
+		msg_warn ("cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
 		res = FALSE;
 		goto end;
 	}

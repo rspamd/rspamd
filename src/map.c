@@ -69,7 +69,7 @@ connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_as
 	int                             sock;
 
 	if ((sock = make_tcp_socket (&data->addr, data->port, FALSE, is_async)) == -1) {
-		msg_info ("connect_http: cannot connect to http server %s: %d, %s", data->host, errno, strerror (errno));
+		msg_info ("cannot connect to http server %s: %d, %s", data->host, errno, strerror (errno));
 		return -1;
 	}
 
@@ -90,7 +90,7 @@ write_http_request (struct rspamd_map *map, struct http_map_data *data, int sock
 	r += snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
 
 	if (write (sock, outbuf, r) == -1) {
-		msg_err ("write_http_request: failed to write request: %d, %s", errno, strerror (errno));
+		msg_err ("failed to write request: %d, %s", errno, strerror (errno));
 	}
 }
 
@@ -113,7 +113,7 @@ parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
 				/* Try to parse HTTP reply code */
 				reply->code = strtoul (++p, (char **)&err_str, 10);
 				if (*err_str != ' ') {
-					msg_info ("parse_http_reply: error while reading HTTP status code: %s", p);
+					msg_info ("error while reading HTTP status code: %s", p);
 					return NULL;
 				}
 				/* Now skip to end of status string */
@@ -239,7 +239,7 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 				return TRUE;
 			}
 			else {
-				msg_info ("read_http_chunked: invalid chunked reply: %*s", len, buf);
+				msg_info ("invalid chunked reply: %*s", len, buf);
 				return FALSE;
 			}
 		}
@@ -292,7 +292,7 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 		}
 		if (reply->parser_state == 6) {
 			if (reply->code != 200 && reply->code != 304) {
-				msg_err ("read_http: got error reply from server %s, %d", data->host, reply->code);
+				msg_err ("got error reply from server %s, %d", data->host, reply->code);
 				return FALSE;
 			}
 			else if (reply->code == 304) {
@@ -331,7 +331,7 @@ read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 	struct http_reply              *repl;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err ("read_map_file: bad callback for reading map file");
+		msg_err ("bad callback for reading map file");
 		return;
 	}
 
@@ -371,12 +371,12 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	int                             fd, rlen;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err ("read_map_file: bad callback for reading map file");
+		msg_err ("bad callback for reading map file");
 		return;
 	}
 
 	if ((fd = open (data->filename, O_RDONLY)) == -1) {
-		msg_warn ("read_map_file: cannot open file '%s': %s", data->filename, strerror (errno));
+		msg_warn ("cannot open file '%s': %s", data->filename, strerror (errno));
 		return;
 	}
 
@@ -423,7 +423,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 		def = map_line + sizeof ("file://") - 1;
 	}
 	else {
-		msg_debug ("add_map: invalid map fetching protocol: %s", map_line);
+		msg_debug ("invalid map fetching protocol: %s", map_line);
 		return FALSE;
 	}
 	/* Constant pool */
@@ -439,7 +439,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 	/* Now check for each proto separately */
 	if (proto == PROTO_FILE) {
 		if ((fd = open (def, O_RDONLY)) == -1) {
-			msg_warn ("add_map: cannot open file '%s': %s", def, strerror (errno));
+			msg_warn ("cannot open file '%s': %s", def, strerror (errno));
 			return FALSE;
 		}
 		fdata = memory_pool_alloc0 (map_pool, sizeof (struct file_map_data));
@@ -458,7 +458,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 				portbuf[i++] = *p++;
 			}
 			if (*p != '/') {
-				msg_info ("add_map: bad http map definition: %s", def);
+				msg_info ("bad http map definition: %s", def);
 				return FALSE;
 			}
 			portbuf[i] = '\0';
@@ -469,7 +469,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 			hdata->port = 80;
 			/* Now separate host from path */
 			if ((p = strchr (def, '/')) == NULL) {
-				msg_info ("add_map: bad http map definition: %s", def);
+				msg_info ("bad http map definition: %s", def);
 				return FALSE;
 			}
 			hostend = p;
@@ -483,7 +483,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 			/* Resolve using dns */
 			hent = gethostbyname (hdata->host);
 			if (hent == NULL) {
-				msg_info ("add_map: cannot resolve: %s", hdata->host);
+				msg_info ("cannot resolve: %s", hdata->host);
 				return FALSE;
 			}
 			else {
@@ -492,7 +492,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 		}
 		/* Now try to connect */
 		if ((s = make_tcp_socket (&hdata->addr, hdata->port, FALSE, FALSE)) == -1) {
-			msg_info ("add_map: cannot connect to http server %s: %d, %s", hdata->host, errno, strerror (errno));
+			msg_info ("cannot connect to http server %s: %d, %s", hdata->host, errno, strerror (errno));
 			return FALSE;
 		}
 		close (s);
@@ -602,29 +602,28 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 			errno = 0;
 			k = strtoul (ipnet, &err_str, 10);
 			if (errno != 0) {
-				msg_warn ("radix_tree_insert_helper: invalid netmask, error detected on symbol: %s, erorr: %s", err_str, strerror (errno));
+				msg_warn ("invalid netmask, error detected on symbol: %s, erorr: %s", err_str, strerror (errno));
 				k = 32;
 			}
 			else if (k > 32 || k < 0) {
-				msg_warn ("radix_tree_insert_helper: invalid netmask value: %d", k);
+				msg_warn ("invalid netmask value: %d", k);
 				k = 32;
 			}
-			k = 32 - k;
-			mask = mask << k;
+			mask = mask << (32 - k);
 		}
 
 		if (inet_aton (token, &ina) == 0) {
-			msg_err ("radix_tree_insert_helper: invalid ip address: %s", token);
+			msg_err ("invalid ip address: %s", token);
 			return;
 		}
 
 		ip = ntohl ((uint32_t) ina.s_addr);
 		k = radix32tree_insert (tree, ip, mask, 1);
 		if (k == -1) {
-			msg_warn ("radix_tree_insert_helper: cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
+			msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
 		}
 		else if (k == 1) {
-			msg_warn ("add_ip_radix: ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
+			msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
 		}
 		cur++;
 	}
@@ -729,7 +728,7 @@ http_async_callback (int fd, short what, void *ud)
 			event_add (&cbd->ev, &cbd->tv);
 		}
 		else {
-			msg_err ("http_async_callback: bad state when got write readiness");
+			msg_err ("bad state when got write readiness");
 			free_http_cbdata (cbd);
 			return;
 		}
@@ -740,7 +739,7 @@ http_async_callback (int fd, short what, void *ud)
 				/* Handle Not-Modified in a special way */
 				if (cbd->reply->code == 304) {
 					cbd->data->last_checked = time (NULL);
-					msg_info ("http_async_callback: data is not modified for server %s", cbd->data->host);
+					msg_info ("data is not modified for server %s", cbd->data->host);
 				}
 				else if (cbd->cbdata.cur_data != NULL) {
 					cbd->map->fin_callback (cbd->map->pool, &cbd->cbdata);
@@ -749,7 +748,7 @@ http_async_callback (int fd, short what, void *ud)
 				}
 				if (cbd->state == 1 && cbd->reply->code == 200) {
 					/* Write to log that data is modified */
-					msg_info ("http_async_callback: rereading map data from %s", cbd->data->host);
+					msg_info ("rereading map data from %s", cbd->data->host);
 				}
 
 				free_http_cbdata (cbd);
@@ -757,13 +756,13 @@ http_async_callback (int fd, short what, void *ud)
 			}
 			else if (cbd->state == 1) {
 				/* Write to log that data is modified */
-				msg_info ("http_async_callback: rereading map data from %s", cbd->data->host);
+				msg_info ("rereading map data from %s", cbd->data->host);
 			}
 			cbd->state = 2;
 		}
 	}
 	else {
-		msg_err ("http_async_callback: connection with http server terminated incorrectly");
+		msg_err ("connection with http server terminated incorrectly");
 		free_http_cbdata (cbd);
 	}
 }

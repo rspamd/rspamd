@@ -56,9 +56,6 @@ main (int argc, char **argv)
 	}
 	
 	task.cfg = memory_pool_alloc0 (task.task_pool, sizeof (struct config_file));
-	task.cfg->log_level = G_LOG_LEVEL_CRITICAL;
-	task.cfg->log_fd = STDERR_FILENO;
-	g_log_set_default_handler (file_log_function, task.cfg);
 
 	task.msg = memory_pool_alloc (task.task_pool, sizeof (f_str_t));
 	task.msg->begin = buf;

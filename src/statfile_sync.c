@@ -118,7 +118,7 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 				errno = 0;
 				*val = strtoull (numbuf, NULL, 10);
 				if (errno != 0) {
-					msg_info ("parse_revision_line: cannot parse number %s", strerror (errno));
+					msg_info ("cannot parse number %s", strerror (errno));
 					return FALSE;
 				}
 				state = 2;
@@ -182,7 +182,7 @@ sync_read (f_str_t * in, void *arg)
 		case SYNC_STATE_READ_LINE:
 			/* Try to parse line from server */
 			if (!parse_revision_line (ctx, in)) {
-				msg_info ("sync_read: cannot parse line: %*s", in->len, in->begin);
+				msg_info ("cannot parse line: %*s", in->len, in->begin);
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
@@ -194,7 +194,7 @@ sync_read (f_str_t * in, void *arg)
 			}
 			else {
 				/* Quit this session */
-				msg_info ("sync_read: sync ended for: %s", ctx->st->symbol);
+				msg_info ("sync ended for: %s", ctx->st->symbol);
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
@@ -205,7 +205,7 @@ sync_read (f_str_t * in, void *arg)
 		case SYNC_STATE_READ_REV:
 			/* In now contains all blocks of specified revision, so we can read them directly */
 			if (!read_blocks (ctx, in)) {
-				msg_info ("sync_read: cannot read blocks");
+				msg_info ("cannot read blocks");
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
@@ -231,7 +231,7 @@ sync_err (GError *err, void *arg)
 {
 	struct rspamd_sync_ctx *ctx = arg;
 
-	msg_info ("sync_err: abnormally closing connection, error: %s", err->message);
+	msg_info ("abnormally closing connection, error: %s", err->message);
 	ctx->is_busy = FALSE;
 	close (ctx->sock);
 	rspamd_remove_dispatcher (ctx->dispatcher);
@@ -252,12 +252,12 @@ sync_timer_callback (int fd, short what, void *ud)
 	
 	if (ctx->is_busy) {
 		/* Sync is in progress */
-		msg_info ("sync_timer_callback: syncronization process is in progress, do not start new one");
+		msg_info ("syncronization process is in progress, do not start new one");
 		return;
 	}
 
 	if ((ctx->sock = make_tcp_socket (&ctx->st->binlog->master_addr, ctx->st->binlog->master_port, FALSE, TRUE)) == -1) {
-		msg_info ("sync_timer_callback: cannot connect to %s", inet_ntoa (ctx->st->binlog->master_addr));
+		msg_info ("cannot connect to %s", inet_ntoa (ctx->st->binlog->master_addr));
 		return;
 	}
 	/* Now create and activate dispatcher */
@@ -268,7 +268,7 @@ sync_timer_callback (int fd, short what, void *ud)
 	ctx->state = SYNC_STATE_GREETING;
 	ctx->is_busy = TRUE;
 
-	msg_info ("sync_timer_callback: starting synchronization of %s", ctx->st->symbol);
+	msg_info ("starting synchronization of %s", ctx->st->symbol);
 
 }
 
@@ -285,9 +285,9 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st)
 	/* Open statfile and attach it to pool */
 	if ((ctx->real_statfile = statfile_pool_is_open (pool, st->path)) == NULL) {
 		if ((ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-			msg_warn ("add_statfile_watch: cannot open %s", st->path);
+			msg_warn ("cannot open %s", st->path);
 			if (statfile_pool_create (pool, st->path, st->size) == -1) {
-				msg_err ("add_statfile_watch: cannot create statfile %s", st->path);
+				msg_err ("cannot create statfile %s", st->path);
 				return FALSE;
 			}
 			ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE);

@@ -318,7 +318,7 @@ parse_expression (memory_pool_t * pool, char *line)
 		return NULL;
 	}
 
-	msg_debug ("parse_expression: parsing expression {{ %s }}", line);
+	msg_debug ("parsing expression {{ %s }}", line);
 
 	function_stack = g_queue_new ();
 	p = line;
@@ -409,7 +409,7 @@ parse_expression (memory_pool_t * pool, char *line)
 					str = memory_pool_alloc (pool, p - c + 2);
 					g_strlcpy (str, c - 1, (p - c + 2));
 					g_strstrip (str);
-					msg_debug ("parse_expression: found regexp: %s", str);
+					msg_debug ("found regexp: %s", str);
 					if (strlen (str) > 0) {
 						insert_expression (pool, &expr, EXPR_REGEXP, 0, str);
 					}
@@ -514,7 +514,7 @@ parse_expression (memory_pool_t * pool, char *line)
 	g_queue_free (function_stack);
 	if (state != SKIP_SPACES) {
 		/* In fact we got bad expression */
-		msg_warn ("parse_expression: expression \"%s\" is invalid", line);
+		msg_warn ("expression \"%s\" is invalid", line);
 		return NULL;
 	}
 	/* Pop everything from stack */
@@ -546,7 +546,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 		line++;
 	}
 	if (line == '\0') {
-		msg_warn ("parse_regexp: got empty regexp");
+		msg_warn ("got empty regexp");
 		return NULL;
 	}
 	/* First try to find header name */
@@ -585,7 +585,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 	}
 	else {
 		/* We got header name earlier but have not found // expression, so it is invalid regexp */
-		msg_warn ("parse_regexp: got no header name (eg. header=) but without corresponding regexp, %s", src);
+		msg_warn ("got no header name (eg. header=) but without corresponding regexp, %s", src);
 		return NULL;
 	}
 	/* Find end */
@@ -594,7 +594,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 		end++;
 	}
 	if (end == begin || *end != '/') {
-		msg_warn ("parse_regexp: no trailing / in regexp %s", src);
+		msg_warn ("no trailing / in regexp %s", src);
 		return NULL;
 	}
 	/* Parse flags */
@@ -693,7 +693,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 
 	if (result->regexp == NULL || err != NULL) {
 		*end = '/';
-		msg_warn ("parse_regexp: could not read regexp: %s while reading regexp %s", err->message, src);
+		msg_warn ("could not read regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
 	if ((regexp_flags & G_REGEX_RAW) != 0) {
@@ -706,7 +706,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 	*end = '/';
 
 	if (result->raw_regexp == NULL || err != NULL) {
-		msg_warn ("parse_regexp: could not read raw regexp: %s while reading regexp %s", err->message, src);
+		msg_warn ("could not read raw regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
 
@@ -724,7 +724,7 @@ call_expression_function (struct expression_function * func, struct worker_task 
 
 	selected = bsearch (&key, list_ptr, functions_number, sizeof (struct _fl), fl_cmp);
 	if (selected == NULL) {
-		msg_warn ("call_expression_function: call to undefined function %s", key.name);
+		msg_warn ("call to undefined function %s", key.name);
 		return FALSE;
 	}
 
@@ -740,7 +740,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 	struct expression              *it;
 
 	if (expr == NULL) {
-		msg_warn ("get_function_arg: NULL expression passed");
+		msg_warn ("NULL expression passed");
 		return NULL;
 	}
 	if (expr->next == NULL) {
@@ -755,7 +755,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 			res->data = GSIZE_TO_POINTER (cur);
 		}
 		else {
-			msg_warn ("get_function_arg: cannot parse argument: it contains operator or bool expression that is not wanted");
+			msg_warn ("cannot parse argument: it contains operator or bool expression that is not wanted");
 			return NULL;
 		}
 		return res;
@@ -775,12 +775,12 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 			}
 			else if (it->type == EXPR_FUNCTION) {
 				cur = (gsize) call_expression_function ((struct expression_function *)it->content.operand, task);
-				msg_debug ("get_function_arg: function %s returned %s", ((struct expression_function *)it->content.operand)->name, cur ? "true" : "false");
+				debug_task ("function %s returned %s", ((struct expression_function *)it->content.operand)->name, cur ? "true" : "false");
 			}
 			else if (it->type == EXPR_OPERATION) {
 				if (g_queue_is_empty (stack)) {
 					/* Queue has no operands for operation, exiting */
-					msg_debug ("get_function_arg: invalid expression");
+					debug_task ("invalid expression");
 					g_queue_free (stack);
 					return NULL;
 				}
@@ -817,7 +817,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 		return res;
 	}
 
-	msg_warn ("get_function_arg: invalid expression argument");
+	msg_warn ("invalid expression argument");
 
 	return NULL;
 }
@@ -854,7 +854,7 @@ rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused)
 
 	arg = get_function_arg (args->data, task, TRUE);
 	if (arg->type == EXPRESSION_ARGUMENT_BOOL) {
-		msg_warn ("rspamd_compare_encoding: invalid argument to function is passed");
+		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -874,7 +874,7 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 
 	arg = get_function_arg (args->data, task, TRUE);
 	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
-		msg_warn ("rspamd_header_exists: invalid argument to function is passed");
+		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -901,7 +901,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
-		msg_debug ("rspamd_parts_distance: no threshold is specified, assume it 100");
+		debug_task ("no threshold is specified, assume it 100");
 		threshold = 100;
 	}
 	else {
@@ -909,7 +909,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		arg = get_function_arg (args->data, task, TRUE);
 		threshold = strtoul ((char *)arg->data, NULL, 10);
 		if (errno != 0) {
-			msg_info ("rspamd_parts_distance: bad numeric value for threshold \"%s\", assume it 100", (char *)args->data);
+			msg_info ("bad numeric value for threshold \"%s\", assume it 100", (char *)args->data);
 			threshold = 100;
 		}
 	}
@@ -919,7 +919,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		p1 = cur->data;
 		cur = g_list_next (cur);
 		if (cur == NULL) {
-			msg_info ("rspamd_parts_distance: bad parts list");
+			msg_info ("bad parts list");
 			return FALSE;
 		}
 		p2 = cur->data;
@@ -928,7 +928,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		}
 	}
 	else {
-		msg_debug ("rspamd_parts_distance: message has too many text parts, so do not try to compare them with each other");
+		debug_task ("message has too many text parts, so do not try to compare them with each other");
 		return FALSE;
 	}
 
@@ -947,14 +947,14 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 	int                             r;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 	arg = get_function_arg (args->data, task, TRUE);
 	param_name = arg->data;
 	args = g_list_next (args);
 	if (args == NULL) {
-		msg_warn ("rspamd_content_type_compare_param: too few params to function");
+		msg_warn ("too few params to function");
 		return FALSE;
 	}
 	arg = get_function_arg (args->data, task, TRUE);
@@ -973,7 +973,7 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 			if ((re = re_cache_check (param_pattern)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
-					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+					msg_warn ("cannot compile regexp for function");
 					return FALSE;
 				}
 				re_cache_add (param_pattern, re);
@@ -1011,7 +1011,7 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 	const GMimeContentType         *ct;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 	arg = get_function_arg (args->data, task, TRUE);
@@ -1021,7 +1021,7 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 		ct = g_mime_object_get_content_type (part);
 		g_object_unref (part);
 
-		msg_debug ("rspamd_content_type_has_param: checking %s param", param_name);
+		debug_task ("checking %s param", param_name);
 
 		if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
 			return FALSE;
@@ -1051,7 +1051,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 	int                             r;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1071,7 +1071,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 			if ((re = re_cache_check (param_pattern)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
-					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+					msg_warn ("cannot compile regexp for function");
 					return FALSE;
 				}
 				re_cache_add (param_pattern, re);
@@ -1109,7 +1109,7 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 	int                             r;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1130,7 +1130,7 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 			if ((re = re_cache_check (param_pattern)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
-					msg_warn ("rspamd_content_type_compare_param: cannot compile regexp for function");
+					msg_warn ("cannot compile regexp for function");
 					return FALSE;
 				}
 				re_cache_add (param_pattern, re);
@@ -1177,7 +1177,7 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 	int                             num, i, j, hits = 0, total = 0;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_content_type_compare_param: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1185,7 +1185,7 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 	errno = 0;
 	threshold = strtod ((char *)arg->data, NULL);
 	if (errno != 0) {
-		msg_warn ("rspamd_recipients_distance: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+		msg_warn ("invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
 		return FALSE;
 	}
 
@@ -1313,7 +1313,7 @@ compare_subtype (struct worker_task *task, const localContentType * ct, char *su
 		if ((re = re_cache_check (subtype)) == NULL) {
 			re = parse_regexp (task->cfg->cfg_pool, subtype, task->cfg->raw_mode);
 			if (re == NULL) {
-				msg_warn ("compare_subtype: cannot compile regexp for function");
+				msg_warn ("cannot compile regexp for function");
 				return FALSE;
 			}
 			re_cache_add (subtype, re);
@@ -1380,7 +1380,7 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 			if ((re = re_cache_check (param_type)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_type, task->cfg->raw_mode);
 				if (re == NULL) {
-					msg_warn ("rspamd_has_content_part: cannot compile regexp for function");
+					msg_warn ("cannot compile regexp for function");
 					cur = g_list_next (cur);
 					continue;
 				}
@@ -1446,7 +1446,7 @@ rspamd_has_content_part (struct worker_task * task, GList * args, void *unused)
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_has_content_part: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1469,7 +1469,7 @@ rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unus
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_has_content_part_len: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1485,7 +1485,7 @@ rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unus
 			errno = 0;
 			min = strtoul (arg->data, NULL, 10);
 			if (errno != 0) {
-				msg_warn ("rspamd_has_content_part_len: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+				msg_warn ("invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
 				return FALSE;
 			}
 			args = args->next;
@@ -1493,7 +1493,7 @@ rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unus
 				arg = get_function_arg (args->data, task, TRUE);
 				max = strtoul (arg->data, NULL, 10);
 				if (errno != 0) {
-					msg_warn ("rspamd_has_content_part_len: invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+					msg_warn ("invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
 					return FALSE;
 				}
 			}
@@ -1511,7 +1511,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_compare_transfer_encoding: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1522,7 +1522,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 #else
 	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
 #endif
-		msg_warn ("rspamd_compare_transfer_encoding: bad encoding type: %s", (char *)arg->data);
+		msg_warn ("bad encoding type: %s", (char *)arg->data);
 		return FALSE;
 	}
 
@@ -1531,7 +1531,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 		if (GMIME_IS_PART (part)) {
 			part_enc = g_mime_part_get_encoding (GMIME_PART (part));
 
-			msg_debug ("rspamd_compare_transfer_encoding: got encoding in part: %d and compare with %d", (int)part_enc, (int)enc_req);
+			debug_task ("got encoding in part: %d and compare with %d", (int)part_enc, (int)enc_req);
 			g_object_unref (part);
 
 			return part_enc == enc_req;
@@ -1601,14 +1601,14 @@ rspamd_has_html_tag (struct worker_task * task, GList * args, void *unused)
 	struct html_callback_data       cd;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_has_html_tag: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
 	arg = get_function_arg (args->data, task, TRUE);
 	tag = get_tag_by_name (arg->data);
 	if (tag == NULL) {
-		msg_warn ("rspamd_has_html_tag: unknown tag type passed as argument: %s", (char *)arg->data);
+		msg_warn ("unknown tag type passed as argument: %s", (char *)arg->data);
 		return FALSE;
 	}
 

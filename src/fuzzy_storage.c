@@ -102,7 +102,7 @@ sync_cache (struct rspamd_worker *wrk)
 		return;
 	}
 
-	msg_info ("sync_cache: syncing fuzzy hash storage");
+	msg_info ("syncing fuzzy hash storage");
 	filename = g_hash_table_lookup (wrk->cf->params, "hashfile");
 	if (filename == NULL) {
 		return;
@@ -123,7 +123,7 @@ sync_cache (struct rspamd_worker *wrk)
 	}
 
 	if ((fd = open (filename, O_WRONLY | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH)) == -1) {
-		msg_err ("sync_cache: cannot create hash file %s: %s", filename, strerror (errno));
+		msg_err ("cannot create hash file %s: %s", filename, strerror (errno));
 		return;
 	}
 
@@ -144,7 +144,7 @@ sync_cache (struct rspamd_worker *wrk)
 				continue;
 			}
 			if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
-				msg_err ("sync_cache: cannot write file %s: %s", filename, strerror (errno));
+				msg_err ("cannot write file %s: %s", filename, strerror (errno));
 			}
 			cur = g_list_next (cur);
 		}
@@ -207,7 +207,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	}
 
 	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_err ("read_hashes_file: cannot open hash file %s: %s", filename, strerror (errno));
+		msg_err ("cannot open hash file %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 
@@ -229,10 +229,10 @@ read_hashes_file (struct rspamd_worker *wrk)
 	close (fd);
 
 	if (r > 0) {
-		msg_warn ("read_hashes_file: ignore garbadge at the end of file, length of garbadge: %d", r);
+		msg_warn ("ignore garbadge at the end of file, length of garbadge: %d", r);
 	}
 	else if (r == -1) {
-		msg_err ("read_hashes_file: cannot open read file %s: %s", filename, strerror (errno));
+		msg_err ("cannot open read file %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 
@@ -259,12 +259,12 @@ process_check_command (struct fuzzy_cmd *cmd)
 	while (cur) {
 		h = cur->data;
 		if ((prob = fuzzy_compare_hashes (&h->h, &s)) > LEV_LIMIT) {
-			msg_info ("process_check_command: fuzzy hash was found, probability %d%%", prob);
+			msg_info ("fuzzy hash was found, probability %d%%", prob);
 			return TRUE;
 		}
 		cur = g_list_next (cur);
 	}
-	msg_debug ("process_check_command: fuzzy hash was NOT found, prob is %d%%", prob);
+	msg_debug ("fuzzy hash was NOT found, prob is %d%%", prob);
 
 	return FALSE;
 }
@@ -285,7 +285,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
 	bloom_add (bf, cmd->hash);
 	mods++;
-	msg_info ("process_write_command: fuzzy hash was successfully added");
+	msg_info ("fuzzy hash was successfully added");
 
 	return TRUE;
 }
@@ -315,7 +315,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 			cur = g_list_next (cur);
 			g_queue_delete_link (hashes[cmd->blocksize % BUCKETS], tmp);
 			bloom_del (bf, cmd->hash);
-			msg_info ("process_delete_command: fuzzy hash was successfully deleted");
+			msg_info ("fuzzy hash was successfully deleted");
 			res = TRUE;
 			mods++;
 			continue;
@@ -330,12 +330,12 @@ process_delete_command (struct fuzzy_cmd *cmd)
 do {																							\
 if (process_##x##_command (&session->cmd)) {													\
 	if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {							\
-		msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));		\
+		msg_err ("error while writing reply: %s", strerror (errno));		\
 	}																							\
 }																								\
 else {																							\
 	if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {						\
-		msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));		\
+		msg_err ("error while writing reply: %s", strerror (errno));		\
 	}																							\
 }																								\
 } while(0)
@@ -355,7 +355,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 		break;
 	default:
 		if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
-			msg_err ("process_fuzzy_command: error while writing reply: %s", strerror (errno));
+			msg_err ("error while writing reply: %s", strerror (errno));
 		}
 		break;
 	}
@@ -383,7 +383,7 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 	/* Got some data */
 	if (what == EV_READ) {
 		if ((r = recvfrom (fd, session.pos, sizeof (struct fuzzy_cmd), MSG_WAITALL, (struct sockaddr *)&session.sa, &session.salen)) == -1) {
-			msg_err ("fuzzy_io_callback: got error while reading from socket: %d, %s", errno, strerror (errno));
+			msg_err ("got error while reading from socket: %d, %s", errno, strerror (errno));
 			return;
 		}
 		else if (r == sizeof (struct fuzzy_cmd)) {
@@ -391,7 +391,7 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 			process_fuzzy_command (&session);
 		}
 		else {
-			msg_err ("fuzzy_io_callback: got incomplete data while reading from socket: %d, %s", errno, strerror (errno));
+			msg_err ("got incomplete data while reading from socket: %d, %s", errno, strerror (errno));
 			return;
 		}
 	}
@@ -439,7 +439,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);
 	/* Try to read hashes from file */
 	if (!read_hashes_file (worker)) {
-		msg_err ("read_hashes_file: cannot read hashes file, it can be created after save procedure");
+		msg_err ("cannot read hashes file, it can be created after save procedure");
 	}
 	/* Timer event */
 	evtimer_set (&tev, sync_callback, worker);
@@ -452,7 +452,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	while ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
 		sleep (1);
 		if (++retries > MAX_RETRIES) {
-			msg_err ("start_fuzzy_storage: cannot bind to socket, exiting");
+			msg_err ("cannot bind to socket, exiting");
 			exit (0);
 		}
 	}

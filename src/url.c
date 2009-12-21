@@ -215,13 +215,13 @@ url_init (void)
 	if (url_initialized == 0) {
 		text_re = g_regex_new (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
 		if (err != NULL) {
-			msg_info ("url_init: cannot init text url parsing regexp: %s", err->message);
+			msg_info ("cannot init text url parsing regexp: %s", err->message);
 			g_error_free (err);
 			return -1;
 		}
 		html_re = g_regex_new (html_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
 		if (err != NULL) {
-			msg_info ("url_init: cannot init html url parsing regexp: %s", err->message);
+			msg_info ("cannot init html url parsing regexp: %s", err->message);
 			g_error_free (err);
 			return -1;
 		}
@@ -665,7 +665,7 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 		return URI_ERRNO_EMPTY;
 
 	uri->string = reencode_escapes (uristring, pool);
-	msg_debug ("parse_uri: reencoding escapes in original url: '%s'", struri (uri));
+	msg_debug ("reencoding escapes in original url: '%s'", struri (uri));
 	uri->protocollen = get_protocol_length (struri (uri));
 
 	/* Assume http as default protocol */
@@ -678,7 +678,7 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 	}
 	else {
 		/* Figure out whether the protocol is known */
-		msg_debug ("parse_uri: getting protocol from url: %d", uri->protocol);
+		msg_debug ("getting protocol from url: %d", uri->protocol);
 
 		prefix_end = struri (uri) + uri->protocollen;	/* ':' */
 
@@ -689,7 +689,7 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 			prefix_end++;
 		}
 		if (*prefix_end != ':') {
-			msg_debug ("parse_uri: invalid protocol in uri");
+			msg_debug ("invalid protocol in uri");
 			return URI_ERRNO_INVALID_PROTOCOL;
 		}
 		prefix_end++;
@@ -698,7 +698,7 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 
 		if (prefix_end[0] == '/' && prefix_end[1] == '/') {
 			if (prefix_end[2] == '/') {
-				msg_debug ("parse_uri: too many '/' in uri");
+				msg_debug ("too many '/' in uri");
 				return URI_ERRNO_TOO_MANY_SLASHES;
 			}
 
@@ -706,7 +706,7 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 
 		}
 		else {
-			msg_debug ("parse_uri: no '/' in uri");
+			msg_debug ("no '/' in uri");
 			return URI_ERRNO_NO_SLASHES;
 		}
 	}
@@ -890,7 +890,7 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 	struct uri                     *new;
 
 	if (!part->orig->data || part->orig->len == 0) {
-		msg_warn ("url_parse_text: got empty text part");
+		msg_warn ("got empty text part");
 		return;
 	}
 
@@ -905,7 +905,7 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 		if (rc) {
 			while (g_match_info_matches (info)) {
 				url_str = g_match_info_fetch (info, is_html ? 1 : 0);
-				msg_debug ("url_parse_text: extracted string with regexp: '%s', html is %s", url_str, is_html ? "on" : "off");
+				debug_task ("extracted string with regexp: '%s', html is %s", url_str, is_html ? "on" : "off");
 				if (url_str != NULL) {
 					if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
 						new = memory_pool_alloc (pool, sizeof (struct uri));
@@ -927,11 +927,11 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 			}
 		}
 		else if (err != NULL) {
-			msg_debug ("url_parse_text: error matching regexp: %s", err->message);
+			debug_task ("error matching regexp: %s", err->message);
 			g_free (err);
 		}
 		else {
-			msg_debug ("url_parse_text: cannot find url pattern in given string");
+			debug_task ("cannot find url pattern in given string");
 		}
 		g_match_info_free (info);
 	}

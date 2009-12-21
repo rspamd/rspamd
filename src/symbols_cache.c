@@ -128,7 +128,7 @@ mmap_cache_file (struct symbols_cache *cache, int fd)
 
 	map = mmap (NULL, cache->used_items * sizeof (struct saved_cache_item), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (map == MAP_FAILED) {
-		msg_err ("mmap_cache_file: cannot mmap cache file: %d, %s", errno, strerror (errno));
+		msg_err ("cannot mmap cache file: %d, %s", errno, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -156,7 +156,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 	/* Calculate checksum */
 	cksum = get_mem_cksum (cache);
 	if (cksum == NULL) {
-		msg_err ("load_symbols_cache: cannot calculate checksum for symbols");
+		msg_err ("cannot calculate checksum for symbols");
 		close (fd);
 		return FALSE;
 	}
@@ -168,7 +168,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 	/* Now write data to file */
 	for (i = 0; i < cache->used_items; i++) {
 		if (write (fd, cache->items[i].s, sizeof (struct saved_cache_item)) == -1) {
-			msg_err ("create_cache_file: cannot write to file %d, %s", errno, strerror (errno));
+			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
 			close (fd);
 			g_checksum_free (cksum);
 			g_free (digest);
@@ -177,7 +177,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 	}
 	/* Write checksum */
 	if (write (fd, digest, cklen) == -1) {
-		msg_err ("create_cache_file: cannot write to file %d, %s", errno, strerror (errno));
+		msg_err ("cannot write to file %d, %s", errno, strerror (errno));
 		close (fd);
 		g_checksum_free (cksum);
 		g_free (digest);
@@ -189,7 +189,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 	g_free (digest);
 	/* Reopen for reading */
 	if ((fd = open (filename, O_RDWR)) == -1) {
-		msg_info ("create_cache_file: cannot open file %s, error %d, %s", errno, strerror (errno));
+		msg_info ("cannot open file %s, error %d, %s", errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -262,7 +262,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 		if (errno == ENOENT) {
 			/* Try to create file */
 			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-				msg_info ("load_symbols_cache: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+				msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 				return FALSE;
 			}
 			else {
@@ -270,13 +270,13 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 			}
 		}
 		else {
-			msg_info ("load_symbols_cache: cannot stat file %s, error %d, %s", filename, errno, strerror (errno));
+			msg_info ("cannot stat file %s, error %d, %s", filename, errno, strerror (errno));
 			return FALSE;
 		}
 	}
 	else {
 		if ((fd = open (filename, O_RDWR)) == -1) {
-			msg_info ("load_symbols_cache: cannot open file %s, error %d, %s", filename, errno, strerror (errno));
+			msg_info ("cannot open file %s, error %d, %s", filename, errno, strerror (errno));
 			return FALSE;
 		}
 	}
@@ -284,7 +284,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 	/* Calculate checksum */
 	cksum = get_mem_cksum (cache);
 	if (cksum == NULL) {
-		msg_err ("load_symbols_cache: cannot calculate checksum for symbols");
+		msg_err ("cannot calculate checksum for symbols");
 		close (fd);
 		return FALSE;
 	}
@@ -298,7 +298,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 		close (fd);
 		g_free (mem_sum);
 		g_checksum_free (cksum);
-		msg_err ("load_symbols_cache: cannot seek to read checksum, %d, %s", errno, strerror (errno));
+		msg_err ("cannot seek to read checksum, %d, %s", errno, strerror (errno));
 		return FALSE;
 	}
 	file_sum = g_malloc (cklen);
@@ -307,7 +307,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 		g_free (mem_sum);
 		g_free (file_sum);
 		g_checksum_free (cksum);
-		msg_err ("load_symbols_cache: cannot read checksum, %d, %s", errno, strerror (errno));
+		msg_err ("cannot read checksum, %d, %s", errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -316,10 +316,10 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 		g_free (mem_sum);
 		g_free (file_sum);
 		g_checksum_free (cksum);
-		msg_info ("load_symbols_cache: checksum mismatch, recreating file");
+		msg_info ("checksum mismatch, recreating file");
 		/* Reopen with rw permissions */
 		if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-			msg_info ("load_symbols_cache: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+			msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 			return FALSE;
 		}
 		else {
@@ -346,7 +346,7 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, s
 			return FALSE;
 		}
 		if (cache->uses++ >= MAX_USES) {
-			msg_info ("call_symbols_callback: resort symbols cache");
+			msg_info ("resort symbols cache");
 			memory_pool_wlock_rwlock (cache->lock);
 			cache->uses = 0;
 			/* Resort while having write lock */

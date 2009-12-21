@@ -126,11 +126,11 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		jb = data->cur_data;
 	}
 	else {
-		msg_err ("json_fin_cb: no data read");
+		msg_err ("no data read");
 		return;
 	}
 	if (jb->buf == NULL) {
-		msg_err ("json_fin_cb: no data read");
+		msg_err ("no data read");
 		return;
 	}
 	/* NULL terminate current buf */
@@ -138,13 +138,13 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 
 	js = json_loads (jb->buf, &je);
 	if (!js) {
-		msg_err ("json_fin_cb: cannot load json data: parse error %s, on line %d", je.text, je.line);
+		msg_err ("cannot load json data: parse error %s, on line %d", je.text, je.line);
 		return;
 	}
 
 	if (!json_is_array (js)) {
 		json_decref (js);
-		msg_err ("json_fin_cb: loaded json is not an array");
+		msg_err ("loaded json is not an array");
 		return;
 	}
 
@@ -160,13 +160,13 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		cur_elt = json_array_get (js, i);
 		if (!cur_elt || !json_is_object (cur_elt)) {
 			json_decref (js);
-			msg_err ("json_fin_cb: loaded json is not an object");
+			msg_err ("loaded json is not an object");
 			return;
 		}
 		cur_nm = json_object_get (cur_elt, "name");
 		if (cur_nm == NULL || !json_is_string (cur_nm)) {
 			json_decref (js);
-			msg_err ("json_fin_cb: name is not a string or not exists");
+			msg_err ("name is not a string or not exists");
 			return;
 		}
 		cur_name = g_strdup (json_string_value (cur_nm));
@@ -241,7 +241,7 @@ read_settings (const char *path, struct config_file *cfg, GHashTable * table)
 	*pjb = jb;
 
 	if (!add_map (path, json_read_cb, json_fin_cb, (void **)pjb)) {
-		msg_err ("read_settings: cannot add map %s", path);
+		msg_err ("cannot add map %s", path);
 		return FALSE;
 	}
 

@@ -135,7 +135,7 @@ free_session (void *ud)
 	struct mime_part               *p;
 	struct controller_session      *session = ud;
 
-	msg_debug ("free_session: freeing session %p", session);
+	msg_debug ("freeing session %p", session);
 
 	while ((part = g_list_first (session->parts))) {
 		session->parts = g_list_remove_link (session->parts, part);
@@ -244,34 +244,34 @@ process_sync_command (struct controller_session *session, char **args)
 
 	arg = *args;
 	if (!arg || *arg == '\0') {
-		msg_info ("process_sync_command: bad arguments to sync command, need symbol");
+		msg_info ("bad arguments to sync command, need symbol");
 		return FALSE;
 	}
 	symbol = arg;
 	arg = *(args + 1);
 	if (!arg || *arg == '\0') {
-		msg_info ("process_sync_command: bad arguments to sync command, need revision");
+		msg_info ("bad arguments to sync command, need revision");
 		return FALSE;
 	}
 	rev = strtoull (arg, &err_str, 10);
 	if (err_str && *err_str != 0) {
-		msg_info ("process_sync_command: bad arguments to sync commanc: %s", arg);
+		msg_info ("bad arguments to sync commanc: %s", arg);
 		return FALSE;
 	}
 	arg = *(args + 2);
 	if (!arg || *arg == '\0') {
-		msg_info ("process_sync_command: bad arguments to sync command, need time");
+		msg_info ("bad arguments to sync command, need time");
 		return FALSE;
 	}
 	time = strtoull (arg, &err_str, 10);
 	if (err_str && *err_str != 0) {
-		msg_info ("process_sync_command: bad arguments to sync commanc: %s", arg);
+		msg_info ("bad arguments to sync commanc: %s", arg);
 		return FALSE;
 	}
 
 	ccf = g_hash_table_lookup (session->cfg->classifiers_symbols, symbol);
 	if (ccf == NULL) {
-		msg_info ("process_sync_command: bad symbol: %s", symbol);
+		msg_info ("bad symbol: %s", symbol);
 		return FALSE;
 	}
 	
@@ -285,13 +285,13 @@ process_sync_command (struct controller_session *session, char **args)
 		cur = g_list_next (cur);
 	}
     if (st == NULL) {
-		msg_info ("process_sync_command: bad symbol: %s", symbol);
+		msg_info ("bad symbol: %s", symbol);
         return FALSE;
     }
 	
 	binlog = get_binlog_by_statfile (st);
 	if (binlog == NULL) {
-		msg_info ("process_sync_command: cannot open binlog: %s", symbol);
+		msg_info ("cannot open binlog: %s", symbol);
         return FALSE;
 	}
 	
@@ -392,7 +392,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 	case COMMAND_PASSWORD:
 		arg = *cmd_args;
 		if (!arg || *arg == '\0') {
-			msg_debug ("process_command: empty password passed");
+			msg_debug ("empty password passed");
 			r = snprintf (out_buf, sizeof (out_buf), "password command requires one argument" CRLF);
 			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			return;
@@ -463,21 +463,21 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		if (check_auth (cmd, session)) {
 			arg = *cmd_args;
 			if (!arg || *arg == '\0') {
-				msg_debug ("process_command: no statfile specified in learn command");
+				msg_debug ("no statfile specified in learn command");
 				r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				return;
 			}
 			arg = *(cmd_args + 1);
 			if (arg == NULL || *arg == '\0') {
-				msg_debug ("process_command: no statfile size specified in learn command");
+				msg_debug ("no statfile size specified in learn command");
 				r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				return;
 			}
 			size = strtoul (arg, &err_str, 10);
 			if (err_str && *err_str != '\0') {
-				msg_debug ("process_command: statfile size is invalid: %s", arg);
+				msg_debug ("statfile size is invalid: %s", arg);
 				r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
 				rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 				return;
@@ -608,7 +608,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				break;
 			case 0:
 				if (!process_custom_command (cmd, &params[1], session)) {
-					msg_debug ("Unknown command: '%s'", cmd);
+					msg_debug ("'%s'", cmd);
 					i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
 					if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 						return FALSE;
@@ -616,7 +616,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				}
 				break;
 			default:
-				msg_debug ("Ambigious command: '%s'", cmd);
+				msg_debug ("'%s'", cmd);
 				i = snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
@@ -644,7 +644,7 @@ controller_read_socket (f_str_t * in, void *arg)
 
 		r = process_message (task);
 		if (r == -1) {
-			msg_warn ("read_socket: processing of message failed");
+			msg_warn ("processing of message failed");
 			free_task (task, FALSE);
 			session->state = STATE_REPLY;
 			r = snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
@@ -713,7 +713,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		rspamd_dispatcher_pause (session->dispatcher);
 		break;
 	default:
-		msg_debug ("controller_read_socket: unknown state while reading %d", session->state);
+		msg_debug ("unknown state while reading %d", session->state);
 		break;
 	}
 
@@ -747,7 +747,7 @@ controller_err_socket (GError * err, void *arg)
 	struct controller_session      *session = (struct controller_session *)arg;
 
 	if (err->code != EOF) {
-		msg_info ("controller_err_socket: abnormally closing control connection, error: %s", err->message);
+		msg_info ("abnormally closing control connection, error: %s", err->message);
 	}
 
 	/* Free buffers */
@@ -765,13 +765,13 @@ accept_socket (int fd, short what, void *arg)
 	int                             nfd;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
-		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
+		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 
 	new_session = g_malloc (sizeof (struct controller_session));
 	if (new_session == NULL) {
-		msg_err ("accept_socket: cannot allocate memory for task, %s", strerror (errno));
+		msg_err ("cannot allocate memory for task, %s", strerror (errno));
 		return;
 	}
 	bzero (new_session, sizeof (struct controller_session));
@@ -818,7 +818,7 @@ start_controller (struct rspamd_worker *worker)
 
 	/* Start statfile synchronization */
 	if (!start_statfile_sync (worker->srv->statfile_pool, worker->srv->cfg)) {
-		msg_info ("start_controller: cannot start statfile synchronization, statfiles would not be synchronized");
+		msg_info ("cannot start statfile synchronization, statfiles would not be synchronized");
 	}
 
 	/* Init command completion */

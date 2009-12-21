@@ -18,6 +18,7 @@
 #include "hash.h"
 #include "events.h"
 #include "util.h"
+#include "logger.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE ETC_PREFIX "/rspamd.conf"
@@ -27,12 +28,6 @@
 #define DEFAULT_METRIC "default"
 /* 60 seconds for worker's IO */
 #define WORKER_IO_TIMEOUT 60
-
-/* Logging in postfix style */
-#define msg_err(args...)	rspamd_log_function(G_LOG_LEVEL_CRITICAL, ##args)
-#define msg_warn(args...)	rspamd_log_function(G_LOG_LEVEL_WARNING, ##args)
-#define msg_info(args...)	rspamd_log_function(G_LOG_LEVEL_INFO, ##args)
-#define msg_debug(args...)	rspamd_log_function(G_LOG_LEVEL_DEBUG, ##args)
 
 #ifdef CRLF
 #undef CRLF

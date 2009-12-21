@@ -37,22 +37,9 @@
 #define CONNECT_TIMEOUT 3
 
 #ifdef RSPAMD_MAIN
-sig_atomic_t                    do_reopen_log = 0;
 extern rspamd_hash_t           *counters;
 #endif
 
-struct logger_params {
-	GLogFunc                        log_func;
-	struct config_file             *cfg;
-};
-
-static struct logger_params     log_params;
-
-/* Here would be put log messages intensity */
-static uint32_t                 log_written;
-static time_t                   last_check;
-static char                    *io_buf = NULL;
-static gboolean                 log_buffered = FALSE;
 static u_char* rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero, unsigned int hexadecimal, unsigned int width);
 
 int
@@ -63,7 +50,7 @@ make_socket_nonblocking (int fd)
 	ofl = fcntl (fd, F_GETFL, 0);
 
 	if (fcntl (fd, F_SETFL, ofl | O_NONBLOCK) == -1) {
-		msg_warn ("make_socket_nonblocking: fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	return 0;
@@ -77,7 +64,7 @@ make_socket_blocking (int fd)
 	ofl = fcntl (fd, F_GETFL, 0);
 
 	if (fcntl (fd, F_SETFL, ofl & (~O_NONBLOCK)) == -1) {
-		msg_warn ("make_socket_nonblocking: fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	return 0;
@@ -111,7 +98,7 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 	/* Create socket */
 	fd = socket (AF_INET, family, 0);
 	if (fd == -1) {
-		msg_warn ("make_tcp_socket: socket failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 
@@ -121,7 +108,7 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("make_tcp_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 
@@ -140,14 +127,14 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
-			msg_warn ("make_tcp_socket: bind/connect failed: %d, '%s'", errno, strerror (errno));
+			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
 		if (!async) {
 			/* Try to poll */
 			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
 				errno = ETIMEDOUT;
-				msg_warn ("make_tcp_socket: bind/connect failed: timeout");
+				msg_warn ("bind/connect failed: timeout");
 				goto out;
 			}
 			else {
@@ -200,7 +187,7 @@ accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t * len)
 		if (errno == EAGAIN) {
 			return 0;
 		}
-		msg_warn ("accept_from_socket: accept failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("accept failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	if (make_socket_nonblocking (nfd) < 0) {
@@ -209,7 +196,7 @@ accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t * len)
 
 	/* Set close on exec */
 	if (fcntl (nfd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("accept_from_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 
@@ -245,7 +232,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 	fd = socket (PF_LOCAL, SOCK_STREAM, 0);
 
 	if (fd == -1) {
-		msg_warn ("make_unix_socket: socket failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 
@@ -255,7 +242,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("make_unix_socket: fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 	if (is_server) {
@@ -268,7 +255,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
-			msg_warn ("make_unix_socket: bind/connect failed: %d, '%s'", errno, strerror (errno));
+			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
 	}
@@ -713,162 +700,6 @@ pidfile_remove (struct pidfh *pfh)
 }
 #endif
 
-
-/* Logging utility functions */
-int
-open_log (struct config_file *cfg)
-{
-	switch (cfg->log_type) {
-	case RSPAMD_LOG_CONSOLE:
-		/* Do nothing with console */
-		return 0;
-	case RSPAMD_LOG_SYSLOG:
-		openlog ("rspamd", LOG_NDELAY | LOG_PID, cfg->log_facility);
-		return 0;
-	case RSPAMD_LOG_FILE:
-		cfg->log_fd = open (cfg->log_file, O_CREAT | O_WRONLY | O_APPEND, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
-		if (cfg->log_fd == -1) {
-			fprintf (stderr, "open_log: cannot open desired log file: %s, %s", cfg->log_file, strerror (errno));
-			return -1;
-		}
-		cfg->logf = fdopen (cfg->log_fd, "w");
-		/* Set line buffering */
-		setvbuf (cfg->logf, (char *)NULL, _IOLBF, 0);
-		return 0;
-	}
-	return -1;
-}
-
-void
-close_log (struct config_file *cfg)
-{
-	switch (cfg->log_type) {
-	case RSPAMD_LOG_CONSOLE:
-		/* Do nothing with console */
-		break;
-	case RSPAMD_LOG_SYSLOG:
-		closelog ();
-		break;
-	case RSPAMD_LOG_FILE:
-		if (cfg->logf != NULL) {
-			if (fsync (cfg->log_fd) == -1) {
-				msg_err ("close_log: error syncing log file: %s", strerror (errno));
-			}
-			fclose (cfg->logf);
-		}
-		break;
-	}
-
-}
-
-void
-rspamd_set_logger (GLogFunc func, struct config_file *cfg)
-{
-	log_params.log_func = func;
-	log_params.cfg = cfg;
-}
-
-int
-reopen_log (struct config_file *cfg)
-{
-#ifdef RSPAMD_MAIN
-	do_reopen_log = 0;
-#endif
-	close_log (cfg);
-	return open_log (cfg);
-}
-
-void
-rspamd_log_function (GLogLevelFlags log_level, const char *fmt, ...)
-{
-	static char                     logbuf[BUFSIZ];
-	va_list                         vp;
-    u_char                         *end;
-
-	if (log_level <= log_params.cfg->log_level) {
-		va_start (vp, fmt);
-		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
-		*end = '\0';
-		va_end (vp);
-		log_params.log_func (NULL, log_level, logbuf, log_params.cfg);
-	}
-}
-
-void
-syslog_log_function (const gchar * log_domain, GLogLevelFlags log_level, const gchar * message, gpointer arg)
-{
-	struct config_file             *cfg = (struct config_file *)arg;
-#ifdef RSPAMD_MAIN
-	if (do_reopen_log) {
-		reopen_log (cfg);
-	}
-#endif
-
-	if (log_level <= cfg->log_level) {
-		if (log_level >= G_LOG_LEVEL_DEBUG) {
-			syslog (LOG_DEBUG, "%s", message);
-		}
-		else if (log_level >= G_LOG_LEVEL_INFO) {
-			syslog (LOG_INFO, "%s", message);
-		}
-		else if (log_level >= G_LOG_LEVEL_WARNING) {
-			syslog (LOG_WARNING, "%s", message);
-		}
-		else if (log_level >= G_LOG_LEVEL_CRITICAL) {
-			syslog (LOG_ERR, "%s", message);
-		}
-	}
-}
-
-void
-file_log_function (const gchar * log_domain, GLogLevelFlags log_level, const gchar * message, gpointer arg)
-{
-	struct config_file             *cfg = (struct config_file *)arg;
-	char                            tmpbuf[128], timebuf[32];
-	time_t                          now;
-	struct tm                      *tms;
-
-	if (cfg->log_fd == -1 || cfg->logf == NULL) {
-		return;
-	}
-#ifdef RSPAMD_MAIN
-	if (do_reopen_log) {
-		reopen_log (cfg);
-	}
-#endif
-
-	if (log_level <= cfg->log_level) {
-		now = time (NULL);
-		tms = localtime (&now);
-
-		if (last_check == 0) {
-			last_check = now;
-		}
-		else if (now - last_check > CHECK_TIME) {
-			if (log_written / (now - last_check) > BUF_INTENSITY && !log_buffered) {
-				/* Switch to buffered logging */
-				if (io_buf == NULL) {
-					io_buf = g_malloc (BUFSIZ);
-				}
-				setvbuf (cfg->logf, io_buf, _IOFBF, BUFSIZ);
-				log_buffered = TRUE;
-			}
-			else if (log_buffered) {
-				/* Switch to line buffering */
-				setvbuf (cfg->logf, NULL, _IOLBF, 0);
-				log_buffered = FALSE;
-			}
-			last_check = now;
-			log_written = 0;
-		}
-
-		strftime (timebuf, sizeof (timebuf), "%b %d %H:%M:%S", tms);
-		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P: %s rspamd %Z", getpid (), timebuf);
-		fprintf (cfg->logf, "%s%s" CRLF, tmpbuf, message);
-		log_written++;
-	}
-}
-
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
 char                           *
 resolve_stat_filename (memory_pool_t * pool, char *pattern, char *rcpt, char *from)
@@ -1048,7 +879,7 @@ gperf_profiler_init (struct config_file *cfg, const char *descr)
 		ProfilerRegisterThread ();
 	}
 	else {
-		msg_warn ("gperf_frofiler_init: cannot start google perftools profiler");
+		msg_warn ("cannot start google perftools profiler");
 	}
 
 #endif
@@ -1072,7 +903,7 @@ lock_file (int fd, gboolean async)
         if (async && errno == EAGAIN) {
             return FALSE;
         }
-        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        msg_warn ("lock on file failed: %s", strerror (errno));
         return FALSE;
     }
 
@@ -1095,7 +926,7 @@ unlock_file (int fd, gboolean async)
         if (async && errno == EAGAIN) {
             return FALSE;
         }
-        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        msg_warn ("lock on file failed: %s", strerror (errno));
         return FALSE;
     }
 
@@ -1118,7 +949,7 @@ lock_file (int fd, gboolean async)
         if (async && (errno == EAGAIN || errno == EACCES)) {
             return FALSE;
         }
-        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        msg_warn ("lock on file failed: %s", strerror (errno));
         return FALSE;
     }
 
@@ -1139,7 +970,7 @@ unlock_file (int fd, gboolean async)
         if (async && (errno == EAGAIN || errno == EACCES)) {
             return FALSE;
         }
-        msg_warn ("lock_file: lock on file failed: %s", strerror (errno));
+        msg_warn ("lock on file failed: %s", strerror (errno));
         return FALSE;
     }
 
@@ -1157,7 +988,7 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
     GList *cur;
 
     if (pool == NULL || ccf == NULL || symbol == NULL) {
-		msg_err ("get_statfile_by_symbol: invalid input arguments");
+		msg_err ("invalid input arguments");
         return NULL;
     }
 
@@ -1171,21 +1002,21 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
 		cur = g_list_next (cur);
 	}
     if (*st == NULL) {
-		msg_info ("get_statfile_by_symbol: cannot find statfile with symbol %s", symbol);
+		msg_info ("cannot find statfile with symbol %s", symbol);
         return NULL;
     }
 
     if ((res = statfile_pool_is_open (pool, (*st)->path)) == NULL) {
 		if ((res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE)) == NULL) {
-			msg_warn ("get_statfile_by_symbol: cannot open %s", (*st)->path);
+			msg_warn ("cannot open %s", (*st)->path);
             if (try_create) {
                 if (statfile_pool_create (pool, (*st)->path, (*st)->size) == -1) {
-					msg_err ("get_statfile_by_symbol: cannot create statfile %s", (*st)->path);
+					msg_err ("cannot create statfile %s", (*st)->path);
 					return NULL;
 				}
                 res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE);
 				if (res == NULL) {
-					msg_err ("get_statfile_by_symbol: cannot open statfile %s after creation", (*st)->path);
+					msg_err ("cannot open statfile %s after creation", (*st)->path);
 				}
             }
 		}

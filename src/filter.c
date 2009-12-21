@@ -124,6 +124,7 @@ consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	double                         *factor, fs, grow = 1;
 	struct symbol                  *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
+    struct worker_task             *task = data->task;
 	
 	if (data->count > 0) {
 		grow = 1. + (data->task->cfg->grow_factor - 1.) * data->count;
@@ -141,7 +142,7 @@ consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	else {
 		factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
 		if (factor == NULL) {
-			msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: 1", s->score, (char *)key);
+			debug_task ("got %.2f score for metric %s, factor: 1", s->score, (char *)key);
 			data->score += s->score;
 		}
 		else {
@@ -152,7 +153,7 @@ consolidation_callback (gpointer key, gpointer value, gpointer arg)
 			else {
 				data->score += *factor * s->score;
 			}
-			msg_debug ("consolidation_callback: got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
+			debug_task ("got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
 		}
 	}
 }
@@ -195,7 +196,7 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 			c_module->filter (task);
 		}
 		else {
-			msg_debug ("call_filter_by_name: %s is not a C module", name);
+			debug_task ("%s is not a C module", name);
 		}
 		break;
 	case PERL_FILTER:
@@ -205,12 +206,12 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 #elif defined(WITH_LUA)
 		lua_call_filter (name, task);
 #else
-		msg_err ("call_filter_by_name: trying to call perl function while perl support is disabled %s", name);
+		msg_err ("trying to call perl function while perl support is disabled %s", name);
 #endif
 		break;
 	}
 
-	msg_debug ("call_filter_by_name: filter name: %s, result: %d", name, (int)res);
+	debug_task ("filter name: %s, result: %d", name, (int)res);
 }
 
 static void
@@ -233,7 +234,7 @@ metric_process_callback_common (gpointer key, gpointer value, void *data, gboole
 	else {
 		metric_res->score = factor_consolidation_func (task, metric_res->metric->name, NULL);
 	}
-	msg_debug ("process_metric_callback: got result %.2f from consolidation function for metric %s", metric_res->score, metric_res->metric->name);
+	debug_task ("got result %.2f from consolidation function for metric %s", metric_res->score, metric_res->metric->name);
 }
 
 static void
@@ -313,14 +314,14 @@ process_filters (struct worker_task *task)
 	if (check_skip (task->cfg->views, task)) {
 		task->is_skipped = TRUE;
 		task->state = WRITE_REPLY;
-		msg_info ("process_filters: disable check for message id <%s>, view wants spam", task->message_id);
+		msg_info ("disable check for message id <%s>, view wants spam", task->message_id);
 		return 1;
 	}
 	/* Check want spam setting */
 	if (check_want_spam (task)) {
 		task->is_skipped = TRUE;
 		task->state = WRITE_REPLY;
-		msg_info ("process_filters: disable check for message id <%s>, user wants spam", task->message_id);
+		msg_info ("disable check for message id <%s>, user wants spam", task->message_id);
 		return 1;
 	}
 
@@ -445,7 +446,7 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 			/* For ham messages */
 			return TRUE;
 		}
-		msg_debug ("check_autolearn: metric %s has no results", metric_name);
+		debug_task ("metric %s has no results", metric_name);
 		return FALSE;
 	}
 	else {
@@ -478,7 +479,7 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 
 	if (check_autolearn (st->autolearn, task)) {
 		if (tokens) {
-			msg_info ("process_autolearn: message with id <%s> autolearned statfile '%s'", task->message_id, filename);
+			msg_info ("message with id <%s> autolearned statfile '%s'", task->message_id, filename);
 			
 			/* Get or create statfile */
 			statfile = get_statfile_by_symbol (task->worker->srv->statfile_pool, ctx->cfg,
@@ -548,7 +549,7 @@ classifiers_callback (gpointer value, void *arg)
 			c.len = text_part->content->len;
 			/* Tree would be freed at task pool freeing */
 			if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
-				msg_info ("statfiles_callback: cannot tokenize input");
+				msg_info ("cannot tokenize input");
 				return;
 			}
 			cur = g_list_next (cur);

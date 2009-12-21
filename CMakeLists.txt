@@ -358,6 +358,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/html.c
 				src/lmtp.c
 				src/lmtp_proto.c
+				src/logger.c
 				src/main.c
 				src/map.c
 				src/memcached.c
@@ -413,6 +414,8 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/util.c
 				src/radix.c
 				src/fuzzy.c
+				src/map.c
+				src/logger.c
 				src/memcached.c
 				src/message.c
 				src/html.c

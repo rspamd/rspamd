@@ -2307,7 +2307,7 @@ out2:
 	CLOSE_SOCKET(ns->socket);
 out1:
 	g_free(ns);
-	msg_warn("Unable to add nameserver %s: error %d", debug_ntop(address), err);
+	msg_warn("error %d", debug_ntop(address), err);
 	return err;
 }
 

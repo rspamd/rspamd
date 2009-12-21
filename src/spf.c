@@ -175,7 +175,7 @@ parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 		/* Also parse mask */
 		addr->mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
 		if (addr->mask > 32) {
-			msg_info ("parse_spf_ipmask: bad ipmask value: '%s'", begin);
+			msg_info ("bad ipmask value: '%s'", begin);
 			return FALSE;
 		}
 	}
@@ -329,11 +329,11 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 		switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
 					if (type == DNS_MX) {
-						msg_info ("spf_dns_callback: cannot find MX record for %s", cb->rec->cur_domain);
+						msg_info ("cannot find MX record for %s", cb->rec->cur_domain);
 						cb->addr->addr = ntohl (INADDR_NONE);
 					}
 					else if (type == DNS_IPv4_A) {
-						msg_info ("spf_dns_callback: cannot resolve MX record for %s", cb->rec->cur_domain);
+						msg_info ("cannot resolve MX record for %s", cb->rec->cur_domain);
 						cb->addr->addr = ntohl (INADDR_NONE);
 					}
 					break;
@@ -346,10 +346,10 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 				case SPF_RESOLVE_PTR:
 					break;
 				case SPF_RESOLVE_REDIRECT:
-					msg_info ("spf_dns_callback: cannot resolve TXT record for redirect action");
+					msg_info ("cannot resolve TXT record for redirect action");
 					break;
 				case SPF_RESOLVE_INCLUDE:
-					msg_info ("spf_dns_callback: cannot resolve TXT record for include action");
+					msg_info ("cannot resolve TXT record for include action");
 					break;
 				case SPF_RESOLVE_EXP:
 					break;
@@ -412,7 +412,7 @@ parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *r
 {
 	CHECK_REC (rec);
 	
-	msg_info ("parse_spf_ptr: ptr parsing is unimplemented");
+	msg_info ("ptr parsing is unimplemented");
 	return FALSE;
 }
 
@@ -514,7 +514,7 @@ parse_spf_exp (struct worker_task *task, const char *begin, struct spf_record *r
 {
 	CHECK_REC (rec);
 
-	msg_info ("parse_spf_exp: exp record is ignored");
+	msg_info ("exp record is ignored");
 	return TRUE;
 }
 
@@ -586,7 +586,7 @@ reverse_spf_ip (char *ip, int len)
 	int t = 0, l = len;
 
 	if (len > sizeof (ipbuf)) {
-		msg_info ("reverse_spf_ip: cannot reverse string of length %d", len);
+		msg_info ("cannot reverse string of length %d", len);
 		return;
 	}
 
@@ -648,7 +648,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 				}
 				else {
 					/* Something unknown */
-					msg_info ("expand_spf_macro: bad spf element: %s", begin);
+					msg_info ("bad spf element: %s", begin);
 					return begin;
 				}
 				p ++;
@@ -681,7 +681,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 						}
 						break;
 					default:
-						msg_info ("expand_spf_macro: unknown or unsupported spf macro %c in %s", *p, begin);
+						msg_info ("unknown or unsupported spf macro %c in %s", *p, begin);
 						return begin;
 				}
 				p ++;
@@ -694,7 +694,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 					state = 0;
 				}
 				else if (*p != 'r' && !g_ascii_isdigit (*p)) {
-					msg_info ("expand_spf_macro: unknown or unsupported spf modifier %c in %s", *p, begin);
+					msg_info ("unknown or unsupported spf modifier %c in %s", *p, begin);
 					return begin;
 				} 
 				p ++;
@@ -749,7 +749,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 				}
 				else {
 					/* Something unknown */
-					msg_info ("expand_spf_macro: bad spf element: %s", begin);
+					msg_info ("bad spf element: %s", begin);
 					return begin;
 				}
 				p ++;
@@ -799,7 +799,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 						}
 						break;
 					default:
-						msg_info ("expand_spf_macro: unknown or unsupported spf macro %c in %s", *p, begin);
+						msg_info ("unknown or unsupported spf macro %c in %s", *p, begin);
 						return begin;
 				}
 				p ++;
@@ -818,7 +818,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 					/*XXX: try to implement domain strimming */
 				}
 				else {
-					msg_info ("expand_spf_macro: unknown or unsupported spf modifier %c in %s", *p, begin);
+					msg_info ("unknown or unsupported spf modifier %c in %s", *p, begin);
 					return begin;
 				} 
 				p ++;
@@ -827,7 +827,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 	}
 	/* Null terminate */
 	*c = '\0';
-	msg_info ("expanded string: %s", new);
+	msg_info ("%s", new);
 	return new;
 	
 }
@@ -872,7 +872,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_a (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command: %s", begin);
+					msg_info ("bad spf command: %s", begin);
 				}
 				break;
 			case 'i':
@@ -888,7 +888,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_include (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command: %s", begin);
+					msg_info ("bad spf command: %s", begin);
 				}
 				break;
 			case 'm':
@@ -899,7 +899,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_mx (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command: %s", begin);
+					msg_info ("bad spf command: %s", begin);
 				}
 				break;
 			case 'p':
@@ -910,7 +910,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_ptr (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command: %s", begin);
+					msg_info ("bad spf command: %s", begin);
 				}
 				break;
 			case 'e':
@@ -925,7 +925,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_exists (task, begin, rec, new);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command: %s", begin);
+					msg_info ("bad spf command: %s", begin);
 				}
 				break;
 			case 'r':
@@ -935,11 +935,11 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_redirect (task, begin, rec, NULL);
 				}
 				else {
-					msg_info ("parse_spf_record: bad spf command: %s", begin);
+					msg_info ("bad spf command: %s", begin);
 				}
 				break;
 			default:
-				msg_info ("parse_spf_record: bad spf command: %s", begin);
+				msg_info ("bad spf command: %s", begin);
 				break;
 		}
 		if (res) {
@@ -974,7 +974,7 @@ start_spf_parse (struct spf_record *rec, char *begin)
 		}
 	}
 	else {
-		msg_info ("start_spf_parse: bad spf record version: %*s", sizeof (SPF_VER_STR) - 1, begin);
+		msg_info ("bad spf record version: %*s", sizeof (SPF_VER_STR) - 1, begin);
 	}
 }
 

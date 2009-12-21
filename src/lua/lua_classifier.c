@@ -90,7 +90,7 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 2, 1, 0) != 0) {
-			msg_warn ("call_classifier_pre_callbacks: error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+			msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
 		}
 		else {
 			if (lua_istable (cd->L, 1)) {
@@ -138,7 +138,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 		lua_pushnumber (cd->L, out);
 
 		if (lua_pcall (cd->L, 3, 1, 0) != 0) {
-			msg_warn ("call_classifier_pre_callbacks: error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+			msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
 		}
 		else {
 			if (lua_isnumber (cd->L, 1)) {

@@ -301,7 +301,7 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 	}
 
 	if (lua_pcall (cd->L, i, 1, 0) != 0) {
-		msg_warn ("lua_metric_symbol_callback: error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+		msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
 	}
 	else {
 		if (lua_isboolean (cd->L, 1)) {
@@ -345,7 +345,7 @@ lua_config_add_radix_map (lua_State *L)
 		r = g_malloc (sizeof (radix_tree_t *));
 		*r = radix_tree_create ();
 		if (!add_map (map_line, read_radix_list, fin_radix_list, (void **)r)) {
-			msg_warn ("add_radix_map: invalid radix map %s", map_line);
+			msg_warn ("invalid radix map %s", map_line);
 			radix_tree_free (*r);
 			g_free (r);
 			lua_pushnil (L);
@@ -375,7 +375,7 @@ lua_config_add_hash_map (lua_State *L)
 		r = g_malloc (sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 		if (!add_map (map_line, read_host_list, fin_host_list, (void **)r)) {
-			msg_warn ("add_radix_map: invalid hash map %s", map_line);
+			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
 			g_free (r);
 			lua_pushnil (L);
@@ -408,7 +408,7 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 	*ptask = task;
 
 	if (lua_pcall (cd->L, 1, 1, 0) != 0) {
-		msg_warn ("lua_metric_symbol_callback: error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+		msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
 	}
 }
 

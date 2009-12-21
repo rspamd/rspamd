@@ -109,7 +109,7 @@ emails_module_config (struct config_file *cfg)
 
 	metric = g_hash_table_lookup (cfg->metrics, email_module_ctx->metric);
 	if (metric == NULL) {
-		msg_err ("emails_module_config: cannot find metric definition %s", email_module_ctx->metric);
+		msg_err ("cannot find metric definition %s", email_module_ctx->metric);
 		return FALSE;
 	}
 
@@ -166,10 +166,10 @@ extract_emails (struct worker_task *task)
 			}
 		}
 		else if (err != NULL) {
-			msg_debug ("extract_emails: error matching regexp: %s", err->message);
+			debug_task ("error matching regexp: %s", err->message);
 		}
 		else {
-			msg_debug ("extract_emails: cannot find url pattern in given string");
+			debug_task ("cannot find url pattern in given string");
 		}
 		g_match_info_free (info);
 
@@ -212,7 +212,7 @@ emails_command_handler (struct worker_task *task)
 	outbuf[r++] = '\n';
 
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
-	msg_info ("process_message: msg ok, id: <%s>, %d emails extracted", task->message_id, num);
+	msg_info ("msg ok, id: <%s>, %d emails extracted", task->message_id, num);
 
 	return 0;
 }

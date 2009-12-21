@@ -94,7 +94,7 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 
 	e = parse_expression (regexp_module_ctx->regexp_pool, line);
 	if (e == NULL) {
-		msg_warn ("read_regexp_expression: %s = \"%s\" is invalid regexp expression", symbol, line);
+		msg_warn ("%s = \"%s\" is invalid regexp expression", symbol, line);
 		return FALSE;
 	}
 	chain->expr = e;
@@ -103,7 +103,7 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 		if (cur->type == EXPR_REGEXP) {
 			cur->content.operand = parse_regexp (pool, cur->content.operand, cfg->raw_mode);
 			if (cur->content.operand == NULL) {
-				msg_warn ("read_regexp_expression: cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
+				msg_warn ("cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
 				return FALSE;
 			}
 			cur->type = EXPR_REGEXP_PARSED;
@@ -137,11 +137,11 @@ parse_autolearn_param (const char *param, const char *value, struct config_file 
 			}
 		}
 		else {
-			msg_warn ("parse_autolearn_param: cannot extract statfile name from %s", p);
+			msg_warn ("cannot extract statfile name from %s", p);
 		}
 	}
 	else {
-		msg_warn ("parse_autolearn_param: cannot extract symbol name from %s", p);
+		msg_warn ("cannot extract symbol name from %s", p);
 	}
 }
 
@@ -173,7 +173,7 @@ regexp_module_config (struct config_file *cfg)
 
 	metric = g_hash_table_lookup (cfg->metrics, regexp_module_ctx->metric);
 	if (metric == NULL) {
-		msg_err ("regexp_module_config: cannot find metric definition %s", regexp_module_ctx->metric);
+		msg_err ("cannot find metric definition %s", regexp_module_ctx->metric);
 		return FALSE;
 	}
 
@@ -288,12 +288,12 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 
 
 	if (re == NULL) {
-		msg_info ("process_regexp: invalid regexp passed");
+		msg_info ("invalid regexp passed");
 		return 0;
 	}
 
 	if ((r = task_cache_check (task, re)) != -1) {
-		msg_debug ("process_regexp: regexp /%s/ is found in cache, result: %d", re->regexp_text, r);
+		debug_task ("regexp /%s/ is found in cache, result: %d", re->regexp_text, r);
 		return r == 1;
 	}
 	
@@ -311,15 +311,15 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 
 	switch (re->type) {
 	case REGEXP_NONE:
-		msg_warn ("process_regexp: bad error detected: /%s/ has invalid regexp type", re->regexp_text);
+		msg_warn ("bad error detected: /%s/ has invalid regexp type", re->regexp_text);
 		return 0;
 	case REGEXP_HEADER:
 		if (re->header == NULL) {
-			msg_info ("process_regexp: header regexp without header name: '%s'", re->regexp_text);
+			msg_info ("header regexp without header name: '%s'", re->regexp_text);
 			task_cache_add (task, re, 0);
 			return 0;
 		}
-		msg_debug ("process_regexp: checking header regexp: %s = /%s/", re->header, re->regexp_text);
+		debug_task ("checking header regexp: %s = /%s/", re->header, re->regexp_text);
 		headerlist = message_get_header (task->task_pool, task->message, re->header);
 		if (headerlist == NULL) {
 			task_cache_add (task, re, 0);
@@ -328,13 +328,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		else {
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, headerlist);
 			if (re->regexp == NULL) {
-				msg_debug ("process_regexp: regexp contains only header and it is found %s", re->header);
+				debug_task ("regexp contains only header and it is found %s", re->header);
 				task_cache_add (task, re, 1);
 				return 1;
 			}
 			cur = headerlist;
 			while (cur) {
-				msg_debug ("process_regexp: found header \"%s\" with value \"%s\"", re->header, (char *)cur->data);
+				debug_task ("found header \"%s\" with value \"%s\"", re->header, (char *)cur->data);
 				if (cur->data && g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
 					task_cache_add (task, re, 1);
 					return 1;
@@ -346,7 +346,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		}
 		break;
 	case REGEXP_MIME:
-		msg_debug ("process_regexp: checking mime regexp: /%s/", re->regexp_text);
+		debug_task ("checking mime regexp: /%s/", re->regexp_text);
 		cur = g_list_first (task->text_parts);
 		while (cur) {
 			part = (struct mime_text_part *)cur->data;
@@ -370,7 +370,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		task_cache_add (task, re, 0);
 		return 0;
 	case REGEXP_MESSAGE:
-		msg_debug ("process_regexp: checking message regexp: /%s/", re->regexp_text);
+		debug_task ("checking message regexp: /%s/", re->regexp_text);
 		if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
 			task_cache_add (task, re, 1);
 			return 1;
@@ -378,7 +378,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		task_cache_add (task, re, 0);
 		return 0;
 	case REGEXP_URL:
-		msg_debug ("process_regexp: checking url regexp: /%s/", re->regexp_text);
+		debug_task ("checking url regexp: /%s/", re->regexp_text);
 		cur = g_list_first (task->text_parts);
 		while (cur) {
 			part = (struct mime_text_part *)cur->data;
@@ -410,9 +410,9 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		}
 		return 0;
 	case REGEXP_RAW_HEADER:
-		msg_debug ("process_regexp: checking for raw header: %s with regexp: /%s/", re->header, re->regexp_text);
+		debug_task ("checking for raw header: %s with regexp: /%s/", re->header, re->regexp_text);
 		if (task->raw_headers == NULL) {
-			msg_debug ("process_regexp: cannot check for raw header in message, no headers found");
+			debug_task ("cannot check for raw header in message, no headers found");
 			task_cache_add (task, re, 0);
 			return 0;
 		}
@@ -444,7 +444,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		/* Temporary null terminate this part of string */
 		t = *c;
 		*c = '\0';
-		msg_debug ("process_regexp: found raw header \"%s\" with value \"%s\"", re->header, headerv);
+		debug_task ("found raw header \"%s\" with value \"%s\"", re->header, headerv);
 		if (g_regex_match (re->raw_regexp, headerv, 0, NULL) == TRUE) {
 			*c = t;
 			task_cache_add (task, re, 1);
@@ -454,7 +454,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		task_cache_add (task, re, 0);
 		return 0;
 	default:
-		msg_warn ("process_regexp: bad error detected: %p is not a valid regexp object", re);
+		msg_warn ("bad error detected: %p is not a valid regexp object", re);
 	}
 
 	/* Not reached */
@@ -480,7 +480,7 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 			/* If this operation is just ! just inverse res and check for further operators */
 			if (it->content.operation == '!') {
 				if (is_nearest) {
-					msg_debug ("optimize_regexp_expression: found '!' operator, inversing result");
+					msg_debug ("found '!' operator, inversing result");
 					res = !res;
 					*e = it;
 				}
@@ -493,12 +493,12 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 			/* Check whether we found corresponding operator for this operand */
 			if (skip_level <= 0) {
 				if (it->content.operation == '|' && res == TRUE) {
-					msg_debug ("optimize_regexp_expression: found '|' and previous expression is true");
+					msg_debug ("found '|' and previous expression is true");
 					*e = it;
 					ret = TRUE;
 				}
 				else if (it->content.operation == '&' && res == FALSE) {
-					msg_debug ("optimize_regexp_expression: found '&' and previous expression is false");
+					msg_debug ("found '&' and previous expression is false");
 					*e = it;
 					ret = TRUE;
 				}
@@ -532,7 +532,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 		if (it->type == EXPR_REGEXP_PARSED) {
 			/* Find corresponding symbol */
 			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task, additional);
-			msg_debug ("process_regexp_expression: regexp %s found", cur ? "is" : "is not");
+			debug_task ("regexp %s found", cur ? "is" : "is not");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
 			}
@@ -542,7 +542,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 		}
 		else if (it->type == EXPR_FUNCTION) {
 			cur = (gsize) call_expression_function ((struct expression_function *)it->content.operand, task);
-			msg_debug ("process_regexp_expression: function %s returned %s", ((struct expression_function *)it->content.operand)->name, cur ? "true" : "false");
+			debug_task ("function %s returned %s", ((struct expression_function *)it->content.operand)->name, cur ? "true" : "false");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
 			}
@@ -558,7 +558,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 			}
 			re = parse_regexp (task->cfg->cfg_pool, it->content.operand, task->cfg->raw_mode);
 			if (re == NULL) {
-				msg_warn ("process_regexp_expression: cannot parse regexp, skip expression");
+				msg_warn ("cannot parse regexp, skip expression");
 				g_queue_free (stack);
 				return FALSE;
 			}
@@ -570,11 +570,11 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 		else if (it->type == EXPR_OPERATION) {
 			if (g_queue_is_empty (stack)) {
 				/* Queue has no operands for operation, exiting */
-				msg_warn ("process_regexp_expression: regexp expression seems to be invalid: empty stack while reading operation");
+				msg_warn ("regexp expression seems to be invalid: empty stack while reading operation");
 				g_queue_free (stack);
 				return FALSE;
 			}
-			msg_debug ("process_regexp_expression: got operation %c", it->content.operation);
+			debug_task ("got operation %c", it->content.operation);
 			switch (it->content.operation) {
 			case '!':
 				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
@@ -608,7 +608,7 @@ process_regexp_expression (struct expression *expr, char *symbol, struct worker_
 		}
 	}
 	else {
-		msg_warn ("process_regexp_expression: regexp expression seems to be invalid: empty stack at the end of expression, symbol %s", symbol);
+		msg_warn ("regexp expression seems to be invalid: empty stack at the end of expression, symbol %s", symbol);
 	}
 
 	g_queue_free (stack);
@@ -641,7 +641,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused
 	GList                          *cur;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_regexp_match_number: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
@@ -681,7 +681,7 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 
 	arg = get_function_arg (args->data, task, TRUE);
 	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
-		msg_warn ("rspamd_raw_header_exists: invalid argument to function is passed");
+		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
 	if (find_raw_header_pos (task->raw_headers, (char *)arg->data) == NULL) {
@@ -699,14 +699,14 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 	char                           *type, *what = NULL;
 
 	if (args == NULL) {
-		msg_warn ("rspamd_check_smtp_data: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
 	arg = get_function_arg (args->data, task, TRUE);
 
 	if (!arg || !arg->data) {
-		msg_warn ("rspamd_check_smtp_data: no parameters to function");
+		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 	else {
@@ -718,7 +718,7 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 					what = task->from;
 				}
 				else {
-					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					msg_warn ("bad argument to function: %s", type);
 					return FALSE;
 				}
 				break;
@@ -728,7 +728,7 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 					what = task->helo;
 				}
 				else {
-					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					msg_warn ("bad argument to function: %s", type);
 					return FALSE;
 				}
 				break;
@@ -738,7 +738,7 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 					what = task->user;
 				}
 				else {
-					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					msg_warn ("bad argument to function: %s", type);
 					return FALSE;
 				}
 				break;
@@ -748,7 +748,7 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 					what = task->subject;
 				}
 				else {
-					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					msg_warn ("bad argument to function: %s", type);
 					return FALSE;
 				}
 				break;
@@ -758,12 +758,12 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 					rcpt_list = task->rcpt;
 				}
 				else {
-					msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+					msg_warn ("bad argument to function: %s", type);
 					return FALSE;
 				}
 				break;
 			default:
-				msg_warn ("rspamd_check_smtp_data: bad argument to function: %s", type);
+				msg_warn ("bad argument to function: %s", type);
 				return FALSE;
 		}
 	}

@@ -52,8 +52,6 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
 	}
 
-	msg_debug ("osb_tokenize_text: got input length: %zd", input->len);
-
 	while ((res = tokenizer->get_next_word (input, &token)) != NULL) {
 		/* Skip small words */
 		if (token.len < MIN_LEN) {

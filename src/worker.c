@@ -67,6 +67,7 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
+		close_log ();
 #ifdef WITH_GPERF_TOOLS
 		ProfilerStop ();
 #endif
@@ -121,7 +122,7 @@ free_task (struct worker_task *task, gboolean is_soft)
 	struct mime_part               *p;
 
 	if (task) {
-		msg_debug ("free_task: free pointer %p", task);
+		debug_task ("free pointer %p", task);
 		if (task->memc_ctx) {
 			memc_close_ctx (task->memc_ctx);
 		}
@@ -187,10 +188,10 @@ read_socket (f_str_t * in, void *arg)
 		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
 		task->msg->begin = in->begin;
 		task->msg->len = in->len;
-		msg_debug ("read_socket: got string of length %ld", (long int)task->msg->len);
+		debug_task ("got string of length %ld", (long int)task->msg->len);
 		r = process_message (task);
 		if (r == -1) {
-			msg_warn ("read_socket: processing of message failed");
+			msg_warn ("processing of message failed");
 			task->last_error = "MIME processing error";
 			task->error_code = RSPAMD_FILTER_ERROR;
 			task->state = WRITE_ERROR;
@@ -218,7 +219,7 @@ read_socket (f_str_t * in, void *arg)
 		}
 		break;
 	default:
-		msg_debug ("read_socket: invalid state on reading stage");
+		debug_task ("invalid state on reading stage");
 		break;
 	}
 
@@ -245,12 +246,12 @@ write_socket (void *arg)
 		return FALSE;
 		break;
 	case CLOSING_CONNECTION:
-		msg_debug ("write_socket: normally closing connection");
+		debug_task ("normally closing connection");
 		destroy_session (task->s);
 		return FALSE;
 		break;
 	default:
-		msg_info ("write_socket: abnormally closing connection");
+		msg_info ("abnormally closing connection");
 		destroy_session (task->s);
 		return FALSE;
 		break;
@@ -265,7 +266,7 @@ static void
 err_socket (GError * err, void *arg)
 {
 	struct worker_task             *task = (struct worker_task *)arg;
-	msg_info ("err_socket: abnormally closing connection, error: %s", err->message);
+	msg_info ("abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
 	destroy_session (task->s);
 }
@@ -277,7 +278,6 @@ construct_task (struct rspamd_worker *worker)
 
 	new_task = g_malloc (sizeof (struct worker_task));
 
-	msg_debug ("accept_socket: new task allocated: %p", new_task);
 	bzero (new_task, sizeof (struct worker_task));
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;
@@ -321,12 +321,11 @@ accept_socket (int fd, short what, void *arg)
 	int                             nfd;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
-		msg_warn ("accept_socket: accept failed: %s", strerror (errno));
+		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
 	if (nfd == 0) {
-		msg_debug ("accept_socket: cannot accept socket as it was already accepted by other worker");
 		return;
 	}
 
@@ -334,12 +333,12 @@ accept_socket (int fd, short what, void *arg)
 	new_task = construct_task (worker);
 
 	if (ss.ss_family == AF_UNIX) {
-		msg_info ("accept_socket: accepted connection from unix socket");
+		msg_info ("accepted connection from unix socket");
 		new_task->client_addr.s_addr = INADDR_NONE;
 	}
 	else if (ss.ss_family == AF_INET) {
 		sin = (struct sockaddr_in *)&ss;
-		msg_info ("accept_socket: accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
+		msg_info ("accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
 		memcpy (&new_task->client_addr, &sin->sin_addr, sizeof (struct in_addr));
 	}
 
@@ -349,6 +348,7 @@ accept_socket (int fd, short what, void *arg)
 
 	/* Set up dispatcher */
 	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, read_socket, write_socket, err_socket, &io_tv, (void *)new_task);
+	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
 
 }
 
@@ -396,6 +396,8 @@ start_worker (struct rspamd_worker *worker)
 	}
 
 	event_loop (0);
+	
+	close_log ();
 	exit (EXIT_SUCCESS);
 }
 

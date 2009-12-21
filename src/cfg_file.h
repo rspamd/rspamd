@@ -227,8 +227,9 @@ struct config_file {
 	int log_facility;								/**< log facility in case of syslog						*/
 	int log_level;									/**< log level trigger									*/
 	char *log_file;									/**< path to logfile in case of file logging			*/
-	int log_fd;										/**< log descriptor in case of file logging				*/
-	FILE *logf;
+	gboolean log_buffered;							/**< whether logging is buffered						*/
+	uint32_t log_buf_size;							/**< length of log buffer								*/
+	char *debug_ip_map;							    /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;								/**< whether we should log URLs                         */
 
 	size_t max_statfile_size;						/**< maximum size for statfile							*/

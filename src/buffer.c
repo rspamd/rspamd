@@ -70,7 +70,7 @@ write_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			buf->pos += r;
 			if (BUFREMAIN (buf) != 0) {
 				/* Continue with this buffer */
-				msg_debug ("write_buffers: wrote %z bytes of %z", r, buf->data->len);
+				debug_ip (d->peer_addr, "wrote %z bytes of %z", r, buf->data->len);
 				continue;
 			}
 		}
@@ -83,7 +83,7 @@ write_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			}
 		}
 		else if (r == -1 && errno == EAGAIN) {
-			msg_debug ("write_buffers: partially write data, retry");
+			debug_ip (d->peer_addr, "partially write data, retry");
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, fd, EV_WRITE, dispatcher_cb, (void *)d);
@@ -98,11 +98,11 @@ write_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 		g_list_free (d->out_buffers);
 		d->out_buffers = NULL;
 
-		msg_debug ("write_buffers: all buffers were written successfully");
+		debug_ip (d->peer_addr, "all buffers were written successfully");
 
 		if (is_delayed && d->write_callback) {
 			if (!d->write_callback (d->user_data)) {
-				msg_debug ("write_buffers: callback set wanna_die flag, terminating");
+				debug_ip (d->peer_addr, "callback set wanna_die flag, terminating");
 				return FALSE;
 			}
 		}
@@ -178,14 +178,14 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			}
 		}
 		else if (r == -1 && errno == EAGAIN) {
-			msg_debug ("read_buffers: partially read data, retry");
+			debug_ip (d->peer_addr, "partially read data, retry");
 			return;
 		}
 		else {
 			*pos += r;
 			*len += r;
 		}
-		msg_debug ("read_buffers: read %z characters, policy is %s, watermark is: %z", r, 
+		debug_ip (d->peer_addr, "read %z characters, policy is %s, watermark is: %z", r, 
 				d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", d->nchars);
 	}
 
@@ -218,7 +218,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					*pos = b + *len;
 					r = 0;
 					if (d->policy != saved_policy) {
-						msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
+						debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
 						read_buffers (fd, d, TRUE);
 						return;
 					}
@@ -247,7 +247,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 				*len -= r;
 				*pos = b + *len;
 				if (d->policy != saved_policy) {
-					msg_debug ("read_buffers: policy changed during callback, restart buffer's processing");
+					debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
 					read_buffers (fd, d, TRUE);
 					return;
 				}
@@ -265,7 +265,7 @@ dispatcher_cb (int fd, short what, void *arg)
 	rspamd_io_dispatcher_t         *d = (rspamd_io_dispatcher_t *) arg;
 	GError                         *err;
 
-	msg_debug ("dispatcher_cb: in dispatcher callback, what: %d, fd: %d", (int)what, fd);
+	debug_ip (d->peer_addr, "in dispatcher callback, what: %d, fd: %d", (int)what, fd);
 
 	switch (what) {
 	case EV_TIMEOUT:
@@ -375,7 +375,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 		}
 	}
 
-	msg_debug ("rspamd_set_dispatcher_policy: new input length watermark is %uz", d->nchars);
+	debug_ip (d->peer_addr, "new input length watermark is %uz", d->nchars);
 }
 
 gboolean
@@ -402,7 +402,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 	d->out_buffers = g_list_prepend (d->out_buffers, newbuf);
 
 	if (!delayed) {
-		msg_debug ("rspamd_dispatcher_write: plan write event");
+		debug_ip (d->peer_addr, "plan write event");
 		return write_buffers (d->fd, d, FALSE);
 	}
 	return TRUE;

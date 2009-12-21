@@ -107,7 +107,7 @@ spf_module_config (struct config_file *cfg)
 
 	metric = g_hash_table_lookup (cfg->metrics, spf_module_ctx->metric);
 	if (metric == NULL) {
-		msg_err ("spf_module_config: cannot find metric definition %s", spf_module_ctx->metric);
+		msg_err ("cannot find metric definition %s", spf_module_ctx->metric);
 		return FALSE;
 	}
 
@@ -184,7 +184,7 @@ spf_symbol_callback (struct worker_task *task, void *unused)
 {
 	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 		if (!resolve_spf (task, spf_plugin_callback)) {
-			msg_info ("spf_symbol_callback: cannot make spf request for [%s]", task->message_id);
+			msg_info ("cannot make spf request for [%s]", task->message_id);
 		}
 	}
 }

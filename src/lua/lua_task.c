@@ -284,7 +284,7 @@ lua_dns_callback (int result, char type, int count, int ttl, void *addresses, vo
 	}
 
 	if (lua_pcall (cd->L, 4, 0, 0) != 0) {
-		msg_info ("lua_dns_callback: call to %s failed: %s", cd->callback, lua_tostring (cd->L, -1));
+		msg_info ("call to %s failed: %s", cd->callback, lua_tostring (cd->L, -1));
 	}
 
 	cd->task->save.saved--;
@@ -310,7 +310,7 @@ lua_task_resolve_dns_a (lua_State * L)
 		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
 		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
 		if (!cd->to_resolve || !cd->callback) {
-			msg_info ("lua_task_resolve_dns_a: invalid parameters passed to function");
+			msg_info ("invalid parameters passed to function");
 			return 0;
 		}
 		if (evdns_resolve_ipv4 (cd->to_resolve, DNS_QUERY_NO_SEARCH, lua_dns_callback, (void *)cd) == 0) {
@@ -336,7 +336,7 @@ lua_task_resolve_dns_ptr (lua_State * L)
 		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
 		ina = memory_pool_alloc (task->task_pool, sizeof (struct in_addr));
 		if (!cd->to_resolve || !cd->callback || !inet_aton (cd->to_resolve, ina)) {
-			msg_info ("lua_task_resolve_dns_a: invalid parameters passed to function");
+			msg_info ("invalid parameters passed to function");
 			return 0;
 		}
 		if (evdns_resolve_reverse (ina, DNS_QUERY_NO_SEARCH, lua_dns_callback, (void *)cd) == 0) {

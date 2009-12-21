@@ -39,6 +39,7 @@ typedef struct rspamd_io_dispatcher_s {
 	enum io_policy policy;											/**< IO policy				*/
 	size_t nchars;													/**< how many chars to read	*/
 	int fd;															/**< descriptor				*/
+	uint32_t peer_addr;												/**< address of peer for debugging */
 	gboolean wanna_die;												/**< if dispatcher should be stopped */
 	dispatcher_read_callback_t read_callback;						/**< read callback			*/
 	dispatcher_write_callback_t write_callback;						/**< write callback			*/

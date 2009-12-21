@@ -114,7 +114,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 	case LMTP_READ_LHLO:
 		/* Search LHLO line */
 		if ((i = fstrstri (line, &lhlo_command)) == -1) {
-			msg_info ("read_lmtp_input_line: LHLO expected but not found");
+			msg_info ("LHLO expected but not found");
 			out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need LHLO here");
 			return -1;
 		}
@@ -137,7 +137,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 	case LMTP_READ_FROM:
 		/* Search MAIL FROM: line */
 		if ((i = fstrstri (line, &mail_command)) == -1) {
-			msg_info ("read_lmtp_input_line: MAIL expected but not found");
+			msg_info ("MAIL expected but not found");
 			out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need MAIL here");
 			return -1;
 		}
@@ -155,7 +155,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 	case LMTP_READ_RCPT:
 		/* Search RCPT_TO: line */
 		if ((i = fstrstri (line, &rcpt_command)) == -1) {
-			msg_info ("read_lmtp_input_line: RCPT expected but not found");
+			msg_info ("RCPT expected but not found");
 			out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Need RCPT here");
 			return -1;
 		}
@@ -167,7 +167,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			rcpt = extract_mail (lmtp->task->task_pool, &fstr);
 			if (*rcpt == '<' && *(rcpt + 1) == '>') {
 				/* Invalid or empty rcpt not allowed */
-				msg_info ("read_lmtp_input_line: bad recipient");
+				msg_info ("bad recipient");
 				out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Bad recipient");
 				return -1;
 			}
@@ -181,7 +181,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 	case LMTP_READ_DATA:
 		/* Search DATA line */
 		if ((i = fstrstri (line, &data_command)) == -1) {
-			msg_info ("read_lmtp_input_line: DATA expected but not found");
+			msg_info ("DATA expected but not found");
 			out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need DATA here");
 			return -1;
 		}
@@ -321,7 +321,7 @@ mta_read_socket (f_str_t * in, void *arg)
 	switch (cd->state) {
 	case LMTP_WANT_GREETING:
 		if (!parse_mta_str (in, cd)) {
-			msg_warn ("mta_read_socket: got bad greeting");
+			msg_warn ("got bad greeting");
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
@@ -340,7 +340,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		break;
 	case LMTP_WANT_MAIL:
 		if (!parse_mta_str (in, cd)) {
-			msg_warn ("mta_read_socket: got bad helo");
+			msg_warn ("got bad helo");
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
@@ -350,7 +350,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		break;
 	case LMTP_WANT_RCPT:
 		if (!parse_mta_str (in, cd)) {
-			msg_warn ("mta_read_socket: got bad mail from");
+			msg_warn ("got bad mail from");
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
@@ -366,7 +366,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		break;
 	case LMTP_WANT_DATA:
 		if (!parse_mta_str (in, cd)) {
-			msg_warn ("mta_read_socket: got bad rcpt");
+			msg_warn ("got bad rcpt");
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
@@ -376,7 +376,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		break;
 	case LMTP_WANT_DOT:
 		if (!parse_mta_str (in, cd)) {
-			msg_warn ("mta_read_socket: got bad data");
+			msg_warn ("got bad data");
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
@@ -389,7 +389,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		cd->state = LMTP_WANT_CLOSING;
 	case LMTP_WANT_CLOSING:
 		if (!parse_mta_str (in, cd)) {
-			msg_warn ("mta_read_socket: message not delivered");
+			msg_warn ("message not delivered");
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
@@ -407,7 +407,7 @@ static void
 mta_err_socket (GError * err, void *arg)
 {
 	struct mta_callback_data       *cd = (struct mta_callback_data *)arg;
-	msg_info ("mta_err_socket: abnormaly terminating connection with MTA");
+	msg_info ("abnormaly terminating connection with MTA");
 	close_mta_connection (cd, FALSE);
 }
 
@@ -429,7 +429,7 @@ lmtp_deliver_mta (struct worker_task *task)
 		sock = make_tcp_socket (&task->cfg->deliver_addr, task->cfg->deliver_port, FALSE, TRUE);
 	}
 	if (sock == -1) {
-		msg_warn ("lmtp_deliver_mta: cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));
+		msg_warn ("cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));
 	}
 
 	cd = memory_pool_alloc (task->task_pool, sizeof (struct mta_callback_data));
@@ -537,13 +537,13 @@ lmtp_deliver_lda (struct worker_task *task)
 
 	/* Format arguments in shell style */
 	if (!g_shell_parse_argv (args, &argc, &argv, NULL)) {
-		msg_info ("lmtp_deliver_lda: cannot parse arguments");
+		msg_info ("cannot parse arguments");
 		return -1;
 	}
 
 	if (pipe (p) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot open pipe: %s", strerror (errno));
+		msg_info ("cannot open pipe: %s", strerror (errno));
 		return -1;
 	}
 
@@ -551,13 +551,13 @@ lmtp_deliver_lda (struct worker_task *task)
 #ifdef HAVE_VFORK
 	if ((cpid = vfork ()) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot fork: %s", strerror (errno));
+		msg_info ("cannot fork: %s", strerror (errno));
 		return -1;
 	}
 #else
 	if ((cpid = fork ()) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot fork: %s", strerror (errno));
+		msg_info ("cannot fork: %s", strerror (errno));
 		return -1;
 	}
 #endif
@@ -580,7 +580,7 @@ lmtp_deliver_lda (struct worker_task *task)
 
 	if (g_mime_object_write_to_stream ((GMimeObject *) task->message, stream) == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: cannot write stream to lda");
+		msg_info ("cannot write stream to lda");
 		return -1;
 	}
 
@@ -600,7 +600,7 @@ lmtp_deliver_lda (struct worker_task *task)
 #endif
 	if (rc == -1) {
 		g_strfreev (argv);
-		msg_info ("lmtp_deliver_lda: lda returned error code");
+		msg_info ("lda returned error code");
 		return -1;
 	}
 	else if (WIFEXITED (rc)) {
@@ -611,7 +611,7 @@ lmtp_deliver_lda (struct worker_task *task)
 		}
 		else {
 			g_strfreev (argv);
-			msg_info ("lmtp_deliver_lda: lda returned error code %d", ecode);
+			msg_info ("lda returned error code %d", ecode);
 			return -1;
 		}
 	}
@@ -637,8 +637,9 @@ int
 write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 {
 	int                             r;
+	struct worker_task             *task = lmtp->task;
 
-	msg_debug ("write_lmtp_reply: writing reply to client");
+	debug_task ("writing reply to client");
 	if (lmtp->task->error_code != 0) {
 		out_lmtp_reply (lmtp->task, lmtp->task->error_code, "", lmtp->task->last_error);
 	}

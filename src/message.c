@@ -490,7 +490,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 
 	res_str = g_convert_with_fallback (part_content->data, part_content->len, "UTF-8", charset, NULL, &read_bytes, &write_bytes, &err);
 	if (res_str == NULL) {
-		msg_warn ("convert_text_to_utf: cannot convert from %s to utf8: %s", charset, err ? err->message : "unknown problem");
+		msg_warn ("cannot convert from %s to utf8: %s", charset, err ? err->message : "unknown problem");
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
@@ -510,7 +510,7 @@ process_text_part (struct worker_task *task, GByteArray * part_content, GMimeCon
 	struct mime_text_part          *text_part;
 
 	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
-		msg_debug ("mime_foreach_callback: got urls from text/html part");
+		debug_task ("got urls from text/html part");
 
 		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = TRUE;
@@ -548,7 +548,7 @@ process_text_part (struct worker_task *task, GByteArray * part_content, GMimeCon
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 	else if (g_mime_content_type_is_type (type, "text", "plain")) {
-		msg_debug ("mime_foreach_callback: got urls from text/plain part");
+		debug_task ("got urls from text/plain part");
 
 		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = FALSE;
@@ -608,7 +608,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 		}
 		else {
-			msg_err ("mime_foreach_callback: endless recursion detected: %d", task->parser_recursion);
+			msg_err ("endless recursion detected: %d", task->parser_recursion);
 			return;
 		}
 		g_object_unref (message);
@@ -631,7 +631,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			g_mime_multipart_foreach ((GMimeMultipart *) part, mime_foreach_callback, task);
 		}
 		else {
-			msg_err ("mime_foreach_callback: endless recursion detected: %d", task->parser_recursion);
+			msg_err ("endless recursion detected: %d", task->parser_recursion);
 			return;
 		}
 	}
@@ -643,7 +643,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		type = (GMimeContentType *) g_mime_part_get_content_type (GMIME_PART (part));
 #endif
 		if (type == NULL) {
-			msg_warn ("mime_foreach_callback: type of part is unknown, assume text/plain");
+			msg_warn ("type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_mime_content_type_destroy, type);
 		}
@@ -657,18 +657,18 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
-				msg_debug ("mime_foreach_callback: found part with content-type: %s/%s", type->type, type->subtype);
+				debug_task ("found part with content-type: %s/%s", type->type, type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
 				/* Skip empty parts */
 				process_text_part (task, part_content, type, (part_content->len <= 0));
 			}
 			else {
-				msg_warn ("mime_foreach_callback: write to stream failed: %d, %s", errno, strerror (errno));
+				msg_warn ("write to stream failed: %d, %s", errno, strerror (errno));
 			}
 			g_object_unref (wrapper);
 		}
 		else {
-			msg_warn ("mime_foreach_callback: cannot get wrapper for mime part, type of part: %s/%s", type->type, type->subtype);
+			msg_warn ("cannot get wrapper for mime part, type of part: %s/%s", type->type, type->subtype);
 		}
 	}
 	else {
@@ -681,7 +681,7 @@ destroy_message (void *pointer)
 {
 	GMimeMessage                   *msg = pointer;
 
-	msg_debug ("destroy_message: freeing pointer %p", msg);
+	msg_debug ("freeing pointer %p", msg);
 	g_object_unref (msg);
 }
 
@@ -711,7 +711,7 @@ process_message (struct worker_task *task)
 
 	if (task->is_mime) {
 
-		msg_debug ("process_message: construct mime parser from string length %ld", (long int)task->msg->len);
+		debug_task ("construct mime parser from string length %ld", (long int)task->msg->len);
 		/* create a new parser object to parse the stream */
 		parser = g_mime_parser_new_with_stream (stream);
 		g_object_unref (stream);
@@ -720,7 +720,7 @@ process_message (struct worker_task *task)
 		message = g_mime_parser_construct_message (parser);
 
 		if (message == NULL) {
-			msg_warn ("process_message: cannot construct mime from stream");
+			msg_warn ("cannot construct mime from stream");
 			return -1;
 		}
 
@@ -734,7 +734,7 @@ process_message (struct worker_task *task)
 		g_mime_message_foreach_part (message, mime_foreach_callback, task);
 #endif
 
-		msg_debug ("process_message: found %d parts in message", task->parts_count);
+		debug_task ("found %d parts in message", task->parts_count);
 		if (task->queue_id == NULL) {
 			task->queue_id = (char *)g_mime_message_get_message_id (task->message);
 		}
@@ -948,7 +948,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 			g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, data);
 		}
 		else {
-			msg_info ("multipart_iterate: maximum recurse limit is over, stop recursing, %d", data->rec);
+			msg_info ("maximum recurse limit is over, stop recursing, %d", data->rec);
 			data->try_search = FALSE;
 		}
 	}

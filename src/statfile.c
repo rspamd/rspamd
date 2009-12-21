@@ -71,11 +71,11 @@ convert_statfile_10 (stat_file_t * file)
 	/* Format backup name */
 	backup_name = g_strdup_printf ("%s.%s", file->filename, BACKUP_SUFFIX);
 	
-	msg_info ("convert_statfile_10: convert old statfile %s to version %c.%c, backup in %s", file->filename, 
+	msg_info ("convert old statfile %s to version %c.%c, backup in %s", file->filename, 
 			header.version[0], header.version[1], backup_name);
 
 	if (stat (backup_name, &st) != -1) {
-		msg_info ("convert_statfile_10: replace old %s", backup_name);
+		msg_info ("replace old %s", backup_name);
 		unlink (backup_name);
 	}
 
@@ -86,26 +86,26 @@ convert_statfile_10 (stat_file_t * file)
 	unlock_file (file->fd, FALSE);
 	close (file->fd);
 	if ((file->fd = open (file->filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-		msg_info ("convert_statfile_10: cannot create file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot create file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	lock_file (file->fd, FALSE);
 	/* Now make new header and copy it to new file */
 	if (write (file->fd, &header, sizeof (header)) == -1) {
-		msg_info ("convert_statfile_10: cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Now write old map to new file */
 	if (write (file->fd, ((u_char *)file->map + sizeof (struct stat_file_header_10)),
 						file->len - sizeof (struct stat_file_header_10)) == -1) {
-		msg_info ("convert_statfile_10: cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Unmap old memory and map new */
 	munmap (file->map, file->len);
 	file->len = file->len + sizeof (struct stat_file_header) - sizeof (struct stat_file_header_10);
 	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == MAP_FAILED) {
-		msg_info ("convert_statfile_10: cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -126,7 +126,7 @@ statfile_pool_check (stat_file_t * file)
 	}
 
 	if (file->len < sizeof (struct stat_file)) {
-		msg_info ("statfile_pool_check: file %s is too short to be stat file: %zd", file->filename, file->len);
+		msg_info ("file %s is too short to be stat file: %zd", file->filename, file->len);
 		return -1;
 	}
 
@@ -134,7 +134,7 @@ statfile_pool_check (stat_file_t * file)
 	c = f->header.magic;
 	/* Check magic and version */
 	if (*c++ != 'r' || *c++ != 's' || *c++ != 'd') {
-		msg_info ("statfile_pool_check: file %s is invalid stat file", file->filename);
+		msg_info ("file %s is invalid stat file", file->filename);
 		return -1;
 	}
 	/* Now check version and convert old version to new one (that can be used for sync */
@@ -146,7 +146,7 @@ statfile_pool_check (stat_file_t * file)
 	}
 	else if (memcmp (c, valid_version, sizeof (valid_version)) != 0) {
 		/* Unknown version */
-		msg_info ("statfile_pool_check: file %s has invalid version %c.%c", file->filename, '0' + *c, '0' + *(c + 1));
+		msg_info ("file %s has invalid version %c.%c", file->filename, '0' + *c, '0' + *(c + 1));
 		return -1;
 	}
 
@@ -154,7 +154,7 @@ statfile_pool_check (stat_file_t * file)
 	file->cur_section.code = f->section.code;
 	file->cur_section.length = f->section.length;
 	if (file->cur_section.length * sizeof (struct stat_file_block) > file->len) {
-		msg_info ("statfile_pool_check: file %s is truncated: %z, must be %z", file->filename, file->len, file->cur_section.length * sizeof (struct stat_file_block));
+		msg_info ("file %s is truncated: %z, must be %z", file->filename, file->len, file->cur_section.length * sizeof (struct stat_file_block));
 		return -1;
 	}
 	file->seek_pos = sizeof (struct stat_file) - sizeof (struct stat_file_block);
@@ -229,7 +229,7 @@ statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, 
 
 	backup = g_strconcat (filename, ".old", NULL);
 	if (rename (filename, backup) == -1) {
-		msg_err ("statfile_pool_reindex: cannot rename %s to %s: %s", filename, backup, strerror (errno));
+		msg_err ("cannot rename %s to %s: %s", filename, backup, strerror (errno));
 		g_free (backup);
 		memory_pool_unlock_mutex (pool->lock);
 		return NULL;
@@ -239,7 +239,7 @@ statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, 
 
 	/* Now create new file with required size */
 	if (statfile_pool_create (pool, filename, size) != 0) {
-		msg_err ("statfile_pool_reindex: cannot create new file");
+		msg_err ("cannot create new file");
 		g_free (backup);
 		return NULL;
 	}
@@ -248,14 +248,14 @@ statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, 
 	new = statfile_pool_open (pool, filename, size, TRUE);
 
 	if (fd == -1 || new == NULL) {
-		msg_err ("statfile_pool_reindex: cannot open file: %s", strerror (errno));
+		msg_err ("cannot open file: %s", strerror (errno));
 		g_free (backup);
 		return NULL;
 	}
 
 	/* Now start reading blocks from old statfile */
 	if ((map = mmap (NULL, old_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err ("statfile_pool_reindex: cannot mmap file: %s", strerror (errno));
+		msg_err ("cannot mmap file: %s", strerror (errno));
 		close (fd);
 		g_free (backup);
 		return NULL;
@@ -290,24 +290,24 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	}
 
 	if (pool->opened >= STATFILES_MAX - 1) {
-		msg_err ("sttafile_pool_open: reached hard coded limit of statfiles opened: %d", STATFILES_MAX);
+		msg_err ("reached hard coded limit of statfiles opened: %d", STATFILES_MAX);
 		return NULL;
 	}
 
 	if (stat (filename, &st) == -1) {
-		msg_info ("statfile_pool_open: cannot stat file %s, error %s, %d", filename, strerror (errno), errno);
+		msg_info ("cannot stat file %s, error %s, %d", filename, strerror (errno), errno);
 		return NULL;
 	}
 
 	if (!forced && st.st_size > pool->max) {
-		msg_info ("statfile_pool_open: cannot attach file to pool, too large: %zd", (size_t) st.st_size);
+		msg_info ("cannot attach file to pool, too large: %zd", (size_t) st.st_size);
 		return NULL;
 	}
 
 	memory_pool_lock_mutex (pool->lock);
 	if (!forced && abs (st.st_size - size) > sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
-		msg_warn ("statfile_pool_open: need to reindex statfile old size: %zd, new size: %zd", st.st_size, size);
+		msg_warn ("need to reindex statfile old size: %zd, new size: %zd", st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
 	}
 	memory_pool_unlock_mutex (pool->lock);
@@ -315,7 +315,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	while (!forced && (pool->max + pool->opened * sizeof (struct stat_file) * 2 < pool->occupied + st.st_size)) {
 		if (statfile_pool_expire (pool) == -1) {
 			/* Failed to find any more free space in pool */
-			msg_info ("statfile_pool_open: expiration for pool failed, opening file %s failed", filename);
+			msg_info ("expiration for pool failed, opening file %s failed", filename);
 			return NULL;
 		}
 	}
@@ -324,7 +324,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	new_file = &pool->files[pool->opened++];
 	bzero (new_file, sizeof (stat_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1) {
-		msg_info ("statfile_pool_open: cannot open file %s, error %d, %s", filename, errno, strerror (errno));
+		msg_info ("cannot open file %s, error %d, %s", filename, errno, strerror (errno));
 		memory_pool_unlock_mutex (pool->lock);
 		pool->opened--;
 		return NULL;
@@ -333,7 +333,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == MAP_FAILED) {
 		close (new_file->fd);
 		memory_pool_unlock_mutex (pool->lock);
-		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
+		msg_info ("cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
 		pool->opened--;
 		return NULL;
 
@@ -370,7 +370,7 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	stat_file_t                    *pos;
 
 	if ((pos = statfile_pool_is_open (pool, file->filename)) == NULL) {
-		msg_info ("statfile_pool_open: file %s is not opened", file->filename);
+		msg_info ("file %s is not opened", file->filename);
 		return -1;
 	}
 
@@ -418,7 +418,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 	char                           *buf = NULL;
 
 	if (statfile_pool_is_open (pool, filename) != NULL) {
-		msg_info ("statfile_pool_open: file %s is already opened", filename);
+		msg_info ("file %s is already opened", filename);
 		return 0;
 	}
 
@@ -427,14 +427,14 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 	header.total_blocks = nblocks;
 
 	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-		msg_info ("statfile_pool_create: cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+		msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 		memory_pool_unlock_mutex (pool->lock);
 		return -1;
 	}
 
 	header.create_time = (uint64_t) time (NULL);
 	if (write (fd, &header, sizeof (header)) == -1) {
-		msg_info ("statfile_pool_create: cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
+		msg_info ("cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		memory_pool_unlock_mutex (pool->lock);
 		return -1;
@@ -442,7 +442,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 
 	section.length = (uint64_t) nblocks;
 	if (write (fd, &section, sizeof (section)) == -1) {
-		msg_info ("statfile_pool_create: cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
+		msg_info ("cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		memory_pool_unlock_mutex (pool->lock);
 		return -1;
@@ -458,7 +458,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 		if (nblocks > 256) {
 			/* Just write buffer */
 			if (write (fd, buf, buflen) == -1) {
-				msg_info ("statfile_pool_create: cannot write blocks buffer to file %s, error %d, %s", filename, errno, strerror (errno));
+				msg_info ("cannot write blocks buffer to file %s, error %d, %s", filename, errno, strerror (errno));
 				close (fd);
 				memory_pool_unlock_mutex (pool->lock);
 				g_free (buf);
@@ -468,7 +468,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 		}
 		else {
 			if (write (fd, &block, sizeof (block)) == -1) {
-				msg_info ("statfile_pool_create: cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
+				msg_info ("cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
 				close (fd);
 				if (buf) {
 					g_free (buf);
@@ -576,7 +576,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 	for (i = 0; i < CHAIN_LENGTH; i++) {
 		if (i + blocknum >= file->cur_section.length) {
 			/* Need to expire some block in chain */
-			msg_debug ("statfile_pool_set_block: chain %u is full, starting expire", blocknum);
+			msg_debug ("chain %u is full, starting expire", blocknum);
 			break;
 		}
 		/* First try to find block in chain */
@@ -587,7 +587,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 		/* Check whether we have a free block in chain */
 		if (block->hash1 == 0 && block->hash2 == 0) {
 			/* Write new block here */
-			msg_debug ("statfile_pool_set_block: found free block %u in chain %u, set h1=%u, h2=%u", i, blocknum, h1, h2);
+			msg_debug ("found free block %u in chain %u, set h1=%u, h2=%u", i, blocknum, h1, h2);
 			block->hash1 = h1;
 			block->hash2 = h2;
 			block->value = value;
@@ -681,7 +681,7 @@ statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 	struct stat_file_block          block = { 0, 0, 0 };
 
 	if (lseek (file->fd, 0, SEEK_END) == -1) {
-		msg_info ("statfile_pool_add_section: cannot lseek file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot lseek file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -689,13 +689,13 @@ statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 	sect.length = length;
 
 	if (write (file->fd, &sect, sizeof (sect)) == -1) {
-		msg_info ("statfile_pool_add_section: cannot write block to file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot write block to file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
 	while (length--) {
 		if (write (file->fd, &block, sizeof (block)) == -1) {
-			msg_info ("statfile_pool_add_section: cannot write block to file %s, error %d, %s", file->filename, errno, strerror (errno));
+			msg_info ("cannot write block to file %s, error %d, %s", file->filename, errno, strerror (errno));
 			return FALSE;
 		}
 	}
@@ -707,19 +707,19 @@ statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 	file->len += length;
 
 	if (file->len > pool->max) {
-		msg_info ("statfile_pool_open: cannot attach file to pool, too large: %lu", (long int)file->len);
+		msg_info ("cannot attach file to pool, too large: %lu", (long int)file->len);
 		return FALSE;
 	}
 
 	while (pool->max <= pool->occupied + file->len) {
 		if (statfile_pool_expire (pool) == -1) {
 			/* Failed to find any more free space in pool */
-			msg_info ("statfile_pool_open: expiration for pool failed, opening file %s failed", file->filename);
+			msg_info ("expiration for pool failed, opening file %s failed", file->filename);
 			return FALSE;
 		}
 	}
 	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == NULL) {
-		msg_info ("statfile_pool_open: cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
+		msg_info ("cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	statfile_pool_unlock_file (pool, file);

@@ -60,6 +60,7 @@ struct rspamd_view *cur_view = NULL;
 %token  VIEW IP FROM SYMBOLS CLIENT_IP
 %token  AUTOLEARN MIN_MARK MAX_MARK MAXFILES MAXCORE
 %token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK GROW_FACTOR
+%token  LOG_BUFFER DEBUG_IP
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -583,6 +584,8 @@ loggingcmd:
 	| loggingfacility
 	| loggingfile
 	| loggingurls
+	| loggingbuffer
+	| loggingdebugip
 	;
 
 loggingtype:
@@ -675,6 +678,20 @@ loggingurls:
 		if ($3 != 0) {
 			cfg->log_urls = TRUE;
 		}
+	}
+	;
+
+loggingbuffer:
+	LOG_BUFFER EQSIGN NUMBER
+	| LOG_BUFFER EQSIGN SIZELIMIT {
+		cfg->log_buf_size = $3;
+		cfg->log_buffered = TRUE;
+	}
+	;
+
+loggingdebugip:
+	DEBUG_IP EQSIGN QUOTEDSTRING {
+		cfg->debug_ip_map = $3;
 	}
 	;
 

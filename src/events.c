@@ -51,7 +51,7 @@ register_async_event (struct rspamd_async_session *session, event_finalizer_t fi
 	GList                          *cur;
 
 	if (session == NULL) {
-		msg_info ("register_async_event: session is NULL");
+		msg_info ("session is NULL");
 		return;
 	}
 
@@ -83,7 +83,7 @@ remove_forced_event (struct rspamd_async_session *session, event_finalizer_t fin
 	GList                          *cur;
 
 	if (session == NULL) {
-		msg_info ("remove_forced_event: session is NULL");
+		msg_info ("session is NULL");
 		return;
 	}
 
@@ -113,7 +113,7 @@ remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin
 	GList                          *cur;
 
 	if (session == NULL) {
-		msg_info ("remove_forced_event: session is NULL");
+		msg_info ("session is NULL");
 		return;
 	}
 
@@ -138,7 +138,7 @@ destroy_session (struct rspamd_async_session *session)
 	GList                          *cur, *tmp;
 
 	if (session == NULL) {
-		msg_info ("destroy_session: session is NULL");
+		msg_info ("session is NULL");
 		return FALSE;
 	}
 
