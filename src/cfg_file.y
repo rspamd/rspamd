@@ -122,7 +122,10 @@ tempdir :
 
 pidfile :
 	PIDFILE EQSIGN QUOTEDSTRING {
-		cfg->pid_file = $3;
+		if (cfg->pid_file == NULL) {
+			/* Allow override this value from command line */
+			cfg->pid_file = $3;
+		}
 	}
 	;
 

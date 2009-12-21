@@ -296,6 +296,10 @@ int
 write_pid (struct rspamd_main *main)
 {
 	pid_t                           pid;
+
+	if (main->cfg->pid_file == NULL) {
+		return -1;
+	}
 	main->pfh = pidfile_open (main->cfg->pid_file, 0644, &pid);
 
 	if (main->pfh == NULL) {
@@ -568,7 +572,7 @@ pidfile_open (const char *path, mode_t mode, pid_t * pidptr)
 	 * pidfile_write() can be called multiple times.
 	 */
 	fd = open (pfh->pf_path, O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK, mode);
-	flock (fd, LOCK_EX | LOCK_NB);
+	lock_file (fd, TRUE);
 	if (fd == -1) {
 		count = 0;
 		rqtp.tv_sec = 0;
@@ -682,7 +686,7 @@ _pidfile_remove (struct pidfh *pfh, int freeit)
 
 	if (unlink (pfh->pf_path) == -1)
 		error = errno;
-	if (flock (pfh->pf_fd, LOCK_UN) == -1) {
+	if (! unlock_file (pfh->pf_fd, FALSE)) {
 		if (error == 0)
 			error = errno;
 	}

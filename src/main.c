@@ -157,7 +157,7 @@ static void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
 {
 	int                             ch;
-	while ((ch = getopt (argc, argv, "tVChfc:u:g:")) != -1) {
+	while ((ch = getopt (argc, argv, "tVChfc:u:g:p:")) != -1) {
 		switch (ch) {
 		case 'f':
 			cfg->no_fork = 1;
@@ -186,6 +186,11 @@ read_cmd_line (int argc, char **argv, struct config_file *cfg)
 				cfg->rspamd_group = memory_pool_strdup (cfg->cfg_pool, optarg);
 			}
 			break;
+		case 'p':
+			if (optarg) {
+				cfg->pid_file = memory_pool_strdup (cfg->cfg_pool, optarg);
+			}
+			break;
 		case 'h':
 		case '?':
 		default:
@@ -197,7 +202,11 @@ read_cmd_line (int argc, char **argv, struct config_file *cfg)
 				"-C:        Dump symbols cache stats and exit\n"
 				"-V         Print all rspamd variables and exit\n"
 				"-f:        Do not daemonize main process\n"
-				"-c:        Specify config file (./rspamd.conf is used by default)\n" "-u:        User to run rspamd as\n" "-g:        Group to run rspamd as\n");
+				"-c:        Specify config file (./rspamd.conf is used by default)\n" 
+				"-u:        User to run rspamd as\n" 
+				"-g:        Group to run rspamd as\n"
+				"-p:        Path to pidfile\n"
+			);
 			exit (0);
 			break;
 		}
@@ -752,7 +761,6 @@ main (int argc, char **argv, char **env)
 	rspamd->type = TYPE_MAIN;
 
 	init_signals (&signals, sig_handler);
-
 
 	if (write_pid (rspamd) == -1) {
 		msg_err ("main: cannot write pid file %s", rspamd->cfg->pid_file);
