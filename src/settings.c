@@ -53,6 +53,9 @@ settings_free (gpointer data)
 	if (s->reject_scores) {
 		g_hash_table_destroy (s->reject_scores);
 	}
+	if (s->whitelist) {
+		g_hash_table_destroy (s->whitelist);
+	}
 	g_free (s);
 }
 
@@ -101,7 +104,7 @@ void
 json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
-	int                             nelts, i;
+	int                             nelts, i, n, a;
 	json_t                         *js, *cur_elt, *cur_nm, *it_val;
 	json_error_t                    je;
 	struct rspamd_settings         *cur_settings;
@@ -154,6 +157,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		cur_settings->metric_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->reject_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		cur_settings->whitelist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->statfile_alias = NULL;
 		cur_settings->want_spam = FALSE;
 
@@ -215,6 +219,18 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 											score);
 				}
 				json_it = json_object_iter_next(cur_nm, json_it);
+			}
+		}
+		/* Whitelist object */
+		cur_nm = json_object_get (cur_elt, "whitelist");
+		if (cur_nm != NULL && json_is_array (cur_nm)) {
+			n = json_array_size(cur_nm);
+			for(a = 0; a < n; a++) {
+				it_val = json_array_get(cur_nm, a);
+				if (it_val && json_is_string (it_val)) {
+					g_hash_table_insert (cur_settings->whitelist, g_strdup (json_string_value (it_val)), g_strdup (json_string_value (it_val)));
+				}
+		    
 			}
 		}
 		/* Want spam */
@@ -302,6 +318,29 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 	return FALSE;
 }
 
+static				gboolean
+check_whitelist(struct worker_task *task, struct rspamd_settings *s)
+{
+	char *src_email = NULL, *src_domain = NULL;
+
+	if (task->from != NULL) {
+		src_email = task->from;
+	} else {
+		return FALSE;
+	}
+
+	src_domain = strchr (src_email, '@');
+	if(src_domain != NULL) {
+		src_domain++;
+	}
+
+	if (((g_hash_table_lookup (s->whitelist, src_email) != NULL) ||
+			( (src_domain != NULL) && (g_hash_table_lookup (s->whitelist, src_domain) != NULL)) )) {
+		return TRUE;
+	}
+	return FALSE;
+}
+
 gboolean
 check_metric_settings (struct worker_task * task, struct metric * metric, double *score, double *rscore)
 {
@@ -312,7 +351,11 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
-			/* First search in user's settings */
+			/* First look in user white list */
+			if (check_whitelist(task, us)) {
+				*score = DEFAULT_REJECT_SCORE;
+				return TRUE;
+			}
 			if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {
 				*rscore = *rs;
 			}
@@ -330,6 +373,10 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 			}
 		}
 		else if (ds != NULL) {
+			if (check_whitelist(task, ds)) {
+				*score = DEFAULT_REJECT_SCORE;
+				return TRUE;
+			}
 			if ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL) {
 				*rscore = *rs;
 			}

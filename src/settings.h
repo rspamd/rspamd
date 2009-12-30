@@ -8,6 +8,7 @@ struct rspamd_settings {
 	GHashTable *metric_scores;			/**< hash table of metric require scores for this setting		*/
 	GHashTable *reject_scores;			/**< hash table of metric reject scores for this setting		*/
 	GHashTable *factors;				/**< hash table of new factors for this setting			*/
+	GHashTable *whitelist;				/**< hash table of whitelist for this setting			*/
 	char *statfile_alias;				/**< alias for statfile used							*/
 	gboolean want_spam;					/**< if true disable rspamd checks						*/
 };
