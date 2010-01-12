@@ -349,9 +349,6 @@ sub _create_connection {
       if ($self->_get_io_readiness($remote, 1) != 0) {
         return $remote;
       }
-      else {
-        next;
-      }
     } while ($tries < 5);
 
     return undef unless $server;
