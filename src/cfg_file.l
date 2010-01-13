@@ -217,6 +217,7 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <classifier_lex_state>binlog						return BINLOG;
 <classifier_lex_state>binlog_master					return BINLOG_MASTER;
 <classifier_lex_state>binlog_rotate					return BINLOG_ROTATE;
+<classifier_lex_state>normalizer					return NORMALIZER;
 <classifier_lex_state>[0-9]+							yylval.number=strtol(yytext, NULL, 10); return NUMBER;
 <classifier_lex_state>-?[0-9]+\.?[0-9]*				yylval.fract=strtod(yytext, NULL); return FRACT;
 <classifier_lex_state>[0-9]+[kKmMgG]?					yylval.limit=parse_limit(yytext); return SIZELIMIT;

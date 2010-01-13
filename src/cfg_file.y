@@ -60,7 +60,7 @@ struct rspamd_view *cur_view = NULL;
 %token  VIEW IP FROM SYMBOLS CLIENT_IP
 %token  AUTOLEARN MIN_MARK MAX_MARK MAXFILES MAXCORE
 %token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK GROW_FACTOR
-%token  LOG_BUFFER DEBUG_IP
+%token  LOG_BUFFER DEBUG_IP NORMALIZER
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -769,6 +769,7 @@ statfile:
 		}
         cur_classifier = check_classifier_cfg (cfg, cur_classifier);
 		cur_classifier->statfiles = g_list_prepend (cur_classifier->statfiles, cur_statfile);
+        cfg->statfiles = g_list_prepend (cfg->statfiles, cur_statfile);
 		cur_statfile = NULL;
 	}
 	;
@@ -787,6 +788,7 @@ statfilecmd:
 	| statfilebinlog
 	| statfilebinlogrotate
 	| statfilebinlogmaster
+    | statfilenormalizer
 	;
 	
 statfilesymbol:
@@ -1010,6 +1012,15 @@ statfilebinlogmaster:
 		}
 	}
 	;
+
+statfilenormalizer:
+    NORMALIZER EQSIGN QUOTEDSTRING {
+        if (!parse_normalizer (cfg, cur_statfile, $3)) {
+            yyerror ("cannot parse normalizer string: %s", $3);
+            YYERROR;
+        }
+    }
+    ;
 
 
 statfile_pool_size:

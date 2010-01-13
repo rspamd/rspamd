@@ -201,12 +201,15 @@ init_lua ()
 	}
 }
 
+
+
 void
 init_lua_filters (struct config_file *cfg)
 {
 	struct config_file            **pcfg;
-	GList                          *cur;
+	GList                          *cur, *tmp;
 	struct script_module           *module;
+    struct statfile                *st;
 
 	init_lua ();
 	cur = g_list_first (cfg->script_modules);
@@ -231,6 +234,23 @@ init_lua_filters (struct config_file *cfg)
 		}
 		cur = g_list_next (cur);
 	}
+    /* Init statfiles normalizers */
+    cur = g_list_first (cfg->statfiles);
+    while (cur) {
+        st = cur->data;
+        if (st->normalizer == lua_normalizer_func) {
+            tmp = st->normalizer_data;
+            if (tmp && (tmp = g_list_next (tmp))) {
+                if (tmp->data) {
+                    /* Code must be loaded from data */
+                    if (luaL_loadstring (L, tmp->data) != 0) {
+                        msg_info ("cannot load normalizer code %s", tmp->data);
+                    }
+                }
+            }
+        }
+        cur = g_list_next (cur);
+    }
 }
 
 /* Callback functions */
@@ -347,4 +367,32 @@ add_luabuf (const char *line)
 		yyerror ("lua error: %s", lua_tostring (L, -1));
 		lua_pop (L, 1);			/* pop error message from the stack */
 	}
+}
+
+double 
+lua_normalizer_func (double score, void *params)
+{
+    GList                          *p = params;
+    double                          res = score;
+
+    /* Call specified function and put input score on stack */
+    if (!p->data) {
+        msg_info ("bad function name while calling normalizer");
+        return score;
+    }
+
+    lua_getglobal (L, p->data);
+    lua_pushnumber (L, score);
+
+    if (lua_pcall (L, 1, 1, 0) != 0) {
+		msg_info ("call to %s failed", p->data);
+	}
+
+	/* retrieve result */
+	if (!lua_isnumber (L, -1)) {
+		msg_info ("function %s must return a number", p->data);
+	}
+	res = lua_tonumber (L, -1);
+
+    return res;
 }

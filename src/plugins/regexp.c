@@ -299,7 +299,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 	
 	if (additional != NULL) {
 		/* We have additional parameter defined, so ignore type of regexp expression and use it for parsing */
-		if (g_regex_match_full (regexp, additional, strlen (additional), 0, 0, NULL, NULL) == TRUE) {
+		if (g_regex_match_full (re->regexp, additional, strlen (additional), 0, 0, NULL, NULL) == TRUE) {
 			task_cache_add (task, re, 1);
 			return 1;
 		}

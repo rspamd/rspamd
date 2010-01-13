@@ -31,6 +31,9 @@
 #include "filter.h"
 #include "settings.h"
 #include "classifiers/classifiers.h"
+#ifdef WITH_LUA
+#include "lua/lua_common.h"
+#endif
 
 #define DEFAULT_SCORE 10.0
 
@@ -653,6 +656,110 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 	
 	return c;
 }
+
+static double
+internal_normalizer_func (double score, void *data)
+{
+    double max = *(double *)data;
+
+    if (score < 0) {
+        return score;
+    }
+    else if (score > 0.001 && score > 1) {
+        return 1;
+    }
+    else if (score > 1 && score < max / 2.) {
+        return MIN(max, score * score);
+    }
+    else if (score < max) {
+        return score;
+    }
+    else if (score > max) {
+        return max;
+    }
+
+    return score;
+}
+
+static gboolean
+parse_internal_normalizer (struct config_file *cfg, struct statfile *st, const char *line)
+{
+    double *max;
+    char *err;
+
+    /* Line contains maximum value for internal normalizer */
+    max = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+
+    errno = 0;
+    *max = strtod (line, &err);
+    
+    if (errno != 0 || *err != '\0') {
+        msg_err ("cannot parse max number for internal normalizer");
+        return FALSE;
+    }
+
+    st->normalizer = internal_normalizer_func;
+    st->normalizer_data = (void *)max;
+    return TRUE;
+}
+
+#ifdef WITH_LUA
+static gboolean
+parse_lua_normalizer (struct config_file *cfg, struct statfile *st, const char *line)
+{
+    char *code_begin;
+    GList *params = NULL;
+    int len;
+
+    code_begin = strchr (line, ':');
+    
+    if (code_begin == NULL) {
+        /* Just function name without code */
+        params = g_list_prepend (g_list_prepend (NULL, NULL), memory_pool_strdup (cfg->cfg_pool, line));
+    }
+    else {
+        /* Postpone actual code load as lua libraries are not loaded */
+        /* Put code to list */
+        params = g_list_prepend (NULL, code_begin + 1);
+        /* Put function name */
+        len = code_begin - line;
+        code_begin = memory_pool_alloc (cfg->cfg_pool, len + 1);
+        g_strlcpy (code_begin, line, len + 1);
+        params = g_list_prepend (params, code_begin);
+    }
+    memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, params);
+    st->normalizer = lua_normalizer_func;
+    st->normalizer_data = params;
+    return TRUE;
+}
+#endif
+
+
+gboolean 
+parse_normalizer (struct config_file *cfg, struct statfile *st, const char *line)
+{
+    char *params_begin;
+
+    params_begin = strchr (line, ':');
+    if (params_begin == NULL) {
+        msg_err ("no parameters are specified for normalizer %s", line);
+        return FALSE;
+    }
+
+    /* Try to guess normalizer */
+    if (g_ascii_strncasecmp (line, "internal", sizeof ("points")) == 0) {
+        return parse_internal_normalizer (cfg, st, params_begin + 1);
+    }
+#ifdef WITH_LUA
+    else if (g_ascii_strncasecmp (line, "points", sizeof ("points")) == 0) {
+        return parse_lua_normalizer (cfg, st, params_begin + 1);
+    }
+#endif
+    
+    msg_err ("unknown normalizer %s", line);
+    return FALSE;
+}
+
 /*
  * vi:ts=4
  */

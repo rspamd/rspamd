@@ -148,6 +148,8 @@ struct statfile_binlog_params {
 	uint16_t master_port;
 };
 
+typedef double (*statfile_normalize_func)(double score, void *params);
+
 /**
  * Statfile config definition
  */
@@ -158,6 +160,8 @@ struct statfile {
 	GList *sections;								/**< list of sections in statfile						*/
 	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
 	struct statfile_binlog_params *binlog;			/**< binlog params										*/
+    statfile_normalize_func normalizer;             /**< function that is used as normaliser                */
+    void *normalizer_data;                          /**< normalizer function params                         */
 };
 
 /**
@@ -263,6 +267,7 @@ struct config_file {
 	GHashTable* c_modules;							/**< hash of c modules indexed by module name			*/
 	GHashTable* composite_symbols;					/**< hash of composite symbols indexed by its name		*/
     GList *classifiers;                             /**< list of all classifiers defined                    */
+    GList *statfiles;                               /**< list of all statfiles in config file order         */
     GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
     GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	int clock_res;									/**< resolution of clock used							*/
@@ -366,6 +371,7 @@ void unescape_quotes (char *line);
 GList* parse_comma_list (memory_pool_t *pool, char *line);
 struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
 struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
+gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const char *line);
 
 int yylex (void);
 int yyparse (void);

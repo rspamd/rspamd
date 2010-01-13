@@ -39,5 +39,7 @@ void add_luabuf (const char *line);
 GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task);
 double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in);
 
+double lua_normalizer_func (double score, void *params);
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */
