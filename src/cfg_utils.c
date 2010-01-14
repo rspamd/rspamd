@@ -665,7 +665,7 @@ internal_normalizer_func (double score, void *data)
     if (score < 0) {
         return score;
     }
-    else if (score > 0.001 && score > 1) {
+    else if (score > 0.001 && score < 1) {
         return 1;
     }
     else if (score > 1 && score < max / 2.) {
