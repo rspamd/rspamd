@@ -27,6 +27,7 @@
 #include "util.h"
 #include "cfg_file.h"
 #include "settings.h"
+#include "message.h"
 
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
@@ -405,6 +406,28 @@ struct metric_callback_data {
 };
 
 static void
+write_hashes_to_log (struct worker_task *task, char *logbuf, int offset, int size) 
+{
+	GList                          *cur;
+	struct mime_text_part          *text_part;
+	
+	cur = task->text_parts;
+
+	while (cur && offset < size) {
+		text_part = cur->data;
+		if (text_part->fuzzy) {
+			if (cur->next != NULL) {
+				offset += snprintf (logbuf + offset, size - offset, " part: %Xd,", text_part->fuzzy->h);
+			}
+			else {
+				offset += snprintf (logbuf + offset, size - offset, " part: %Xd", text_part->fuzzy->h);
+			}
+		}
+		cur = g_list_next (cur);
+	}
+}
+
+static void
 show_url_header (struct worker_task *task)
 {
 	int                             r = 0;
@@ -673,6 +696,8 @@ write_check_reply (struct worker_task *task)
 		/* URL stat */
 		show_url_header (task);
 	}
+	
+	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
 	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 
@@ -724,6 +749,7 @@ write_process_reply (struct worker_task *task)
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
 		/* URL stat */
 	}
+	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
 
 	outmsg = g_mime_object_to_string (GMIME_OBJECT (task->message));
