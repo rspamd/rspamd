@@ -16,6 +16,7 @@ my %cfg = (
     'host'      => 'localhost',
     'port'      => '11333',
     'is_unix'   =>  0,
+	'require_input'	=> 0,
     'password'  =>  '',
     'control'   =>  0,
     'statfile'  =>  '',
@@ -26,13 +27,14 @@ $main::VERSION = '@RSPAMD_VERSION@';
 
 sub HELP_MESSAGE {
     print <<EOD;
-Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] [-d user\@domain] [command]
+Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] [-d user\@domain] [command] [path]
 -h         host to connect or unix socket path
 -p         port to connect (not used with unix sockets)
 -P         define control password
 -c         config file to parse
 -s         statfile to use for learn commands
 -d         define deliver-to header
+imap format: imap:user:<username>:password:<password>:host:<hostname>:mbox:<mboxname>
 Version:   @RSPAMD_VERSION@
 EOD
 };
@@ -78,6 +80,41 @@ sub parse_config {
 
 }
 
+sub make_tcp_socket {
+	my ($host, $port) = @_; 
+	my $proto = getprotobyname('tcp');
+	my $sin;
+
+	socket ($sock, PF_INET, SOCK_STREAM, $proto) or die "cannot create tcp socket";
+	if ($host eq '*') {
+		$host = '127.0.0.1';
+	}
+	if (inet_aton ($host)) {
+		$sin = sockaddr_in ($port, inet_aton($host));
+	}
+	else {
+		my $addr = gethostbyname($host);
+		if (!$addr) {
+			die "cannot resolve $host";
+		}
+		$sin = sockaddr_in ($port, $addr);
+	}
+	
+	connect ($sock, $sin) or die "cannot connect to socket $host:$port";
+
+	return $sock;
+}
+
+sub make_ssl_socket {
+	my ($host, $port) = @_; 
+	
+	eval {
+		use IO::Socket::SSL;
+	} or die 'cannot connect to imap without IO::Socket::SSL';
+
+	return IO::Socket::SSL->new("$host:$port");
+}
+
 sub connect_socket {
     my $sock;
 
@@ -87,36 +124,14 @@ sub connect_socket {
         connect ($sock, $sun) or die "cannot connect to socket $cfg{'host'}";
     }
     else {
-        my $proto = getprotobyname('tcp');
-        my $sin;
-        socket ($sock, PF_INET, SOCK_STREAM, $proto) or die "cannot create tcp socket";
-        if ($cfg{'host'} eq '*') {
-            $cfg{'host'} = '127.0.0.1';
-        }
-        if (inet_aton ($cfg{'host'})) {
-            $sin = sockaddr_in ($cfg{'port'}, inet_aton($cfg{'host'}));
-        }
-        else {
-            my $addr = gethostbyname($cfg{'host'});
-            if (!$addr) {
-                die "cannot resolve $cfg{'host'}";
-            }
-            $sin = sockaddr_in ($cfg{'port'}, $addr);
-        }
-        
-        connect ($sock, $sin) or die "cannot connect to socket $cfg{'host'}:$cfg{'port'}";
+		$sock = make_tcp_socket ($cfg{'host'}, $cfg{'port'});
     }
     return $sock;
 }
 
 # Currently just read stdin for user's message and pass it to rspamd
 sub do_rspamc_command {
-    my ($sock) = @_;
-
-    my $input;
-    while (defined (my $line = <>)) {
-        $input .= $line;
-    }
+    my ($sock, $input) = @_;
 
     print "Sending ". length ($input) ." bytes...\n";
 
@@ -147,7 +162,7 @@ sub do_ctrl_auth {
 }
 
 sub do_control_command {
-    my ($sock) = @_;
+    my ($sock, $input) = @_;
 
     # Read greeting first
     if (defined (my $greeting = <$sock>)) {
@@ -156,12 +171,8 @@ sub do_control_command {
         }
     }
     if ($cfg{'command'} =~ /^learn$/i) {
-        my $input;
         die "statfile is not specified to learn command" if !$cfg{'statfile'};
-
-        while (defined (my $line = <>)) {
-            $input .= $line;
-        }
+        
         
         if (do_ctrl_auth ($sock)) {
             my $len = length ($input);
@@ -194,10 +205,6 @@ sub do_control_command {
         }
     }
     elsif ($cfg{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
-        while (defined (my $line = <>)) {
-            $input .= $line;
-        }
-        
         if (do_ctrl_auth ($sock)) {
             my $len = length ($input);
             print "Sending $len bytes...\n";
@@ -226,9 +233,184 @@ sub do_control_command {
     }
 }
 
+sub process_file {
+	my $file = shift;
+
+	print "Process file: $file\n";
+	open(FILE, "< $file") or return;
+	
+	my $input;
+	while (defined (my $line = <FILE>)) {
+		$input .= $line;
+	}
+	
+	close FILE;
+	do_cmd ($input);
+}
+
+sub process_directory {
+	my $dir = shift;
+
+	opendir (DIR, $dir) or return;
+
+	while (defined (my $file = readdir (DIR))) {
+		$file = "$dir/$file";
+		if (-f $file) {
+			process_file ($file);
+		}	
+	}
+	closedir (DIR);
+}
+
+sub check_imap_reply {
+	my $sock = shift;
+	my $seq = shift;
+
+	while (defined (<$sock>)) {
+		chomp;
+		next if ($_ =~ /^\*/);
+		if ($_ =~ /^$seq OK/) {
+			return 1;
+		}
+		return 0;
+	}
+
+	return 0;
+}
+
+sub parse_imap_sequences {
+	my $sock = shift;
+	my $seq = shift;
+	my $input;
+	my $got_body = 0;
+
+	while (defined (<$sock>)) {
+		if (!$got_body && $_ =~ /^\*/) {
+			$got_body = 1;
+			next;
+		}
+		if ($_ =~ /^$seq OK/) {
+			return $input;
+		}
+		elsif ($got_body) {
+			$input .= $_ . $CRLF;
+		}
+
+		return undef;
+	}
+
+	return undef;
+
+}
+
+sub process_imap_body {
+	my $sock = shift;
+	my $seq = shift;
+	my $input;
+
+	while (defined (<$sock>)) {
+		chomp;
+		if ($_ =~ /^\* SEARCH (.+)$/) {
+			@res = split (/\s/, $1);
+			next;
+		}
+		elsif ($_ =~ /^$seq OK/) {
+			return \@res;
+		}
+		return undef;
+	}
+
+}
+
+sub process_imap {
+	my ($ssl, $user, $password, $host, $mbox) = @_;
+	my $seq = 1;
+	my $sock;
+	print "Process imap: host: $host, mbox: $mbox\n";
+
+	# Stupid code that does not take care of timeouts etc, just trying to extract messages
+	if ($ssl) {
+		$sock = make_ssl_socket ($host, 'imaps');
+	}
+	else {
+		$sock = make_tcp_socket ($host, 143);
+	}
+	syswrite $sock, "$seq LOGIN $user $password$CRLF";
+	if (!check_imap_reply ($sock, $seq)) {
+		return;
+	}
+	$seq ++;
+	syswrite $sock, "$seq SELECT $mbox$CRLF";
+	if (!check_imap_reply ($sock, $seq)) {
+		return;
+	}
+	$seq ++;
+	syswrite $sock, "$seq FIND ALL$CRLF";
+	my $messages;
+	if (!defined ($messages = parse_imap_sequences ($sock, $seq))) {
+		return;
+	}
+	$seq ++;
+	foreach my $message (@{ $messages }){
+		syswrite $sock, "$seq FETCH $message body[]$CRLF";
+		if (defined (my $input = parse_imap_body ($sock, $seq))) {
+			do_cmd ($input);
+		}
+		$seq ++;
+	} 
+	syswrite $sock, "$seq LOGOUT$CRLF";
+	close $sock;
+}
+
+# Single item
+sub process_item {
+	my $item = shift;
+	
+	print "Processing $item\n";
+	if (defined ($item)) {
+		if ($item =~ qr|^imap(s?):user:([^:]+):password:([^:]):host:([^:]):mbox:(.+)$|) {
+			process_imap_folder ($1, $2, $3, $4, $5);
+		}
+		elsif (-f $item) {
+			process_file ($item);
+		}
+		elsif (-d $item) {
+			process_directory ($item);
+		}
+		else {
+			warn "urecognized argument: $item";
+		}
+	}
+}
+
+# Do specified command for each file in path or 
+sub process_path {
+	foreach (@_) {
+		process_item($_);
+	}
+}
+
+# Do specified command for specified input
+sub do_cmd {
+	my $input = shift;
+
+    my $sock = connect_socket ();
+
+    if ($cfg{'control'}) {
+        do_control_command ($sock, $input);
+    }
+    else {
+        do_rspamc_command ($sock, $input);
+    }
+
+    close ($sock);
+}
+
+############################# Main part ###########################################
 my %args;
 getopt('c:h:p:P:s:d:', \%args);
 my $cmd = shift;
+my @path = shift;
 my $do_parse_config = 1;
 
 if (!defined ($cmd) || $cmd eq '') {
@@ -283,17 +465,23 @@ else {
     die "unknown command $cmd";
 }
 
+if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|FUZZY_ADD|FUZZY_DEL/i) {
+	$cfg{'require_input'} = 1;
+}
+
 if ($do_parse_config != 0) {
     parse_config ($cfg{'control'});
 }
 
-my $sock = connect_socket ();
-
-if ($cfg{'control'}) {
-    do_control_command ($sock);
+if (!defined ($path[0]) || ! $cfg{'require_input'}) {
+	my $input;
+	if ($cfg{'require_input'}) {
+		while (defined (my $line = <>)) {
+			$input .= $line;
+		}
+	}
+	do_cmd ($input);
 }
 else {
-    do_rspamc_command ($sock);
+	process_path (@path);
 }
-
-close ($sock);
