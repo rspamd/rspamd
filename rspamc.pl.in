@@ -9,6 +9,7 @@
 
 use Socket qw(:DEFAULT :crlf);
 use Getopt::Std;
+use IO::Socket::SSL;
 
 my %cfg = (
     'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
@@ -107,10 +108,6 @@ sub make_tcp_socket {
 
 sub make_ssl_socket {
 	my ($host, $port) = @_; 
-	
-	eval {
-		use IO::Socket::SSL;
-	} or die 'cannot connect to imap without IO::Socket::SSL';
 
 	return IO::Socket::SSL->new("$host:$port");
 }
@@ -266,36 +263,47 @@ sub check_imap_reply {
 	my $sock = shift;
 	my $seq = shift;
 
-	while (defined (<$sock>)) {
-		chomp;
-		next if ($_ =~ /^\*/);
-		if ($_ =~ /^$seq OK/) {
+	my $input;
+
+	while (defined ($input = <$sock>)) {
+		chomp $input;
+		if ($input =~ /BAD|NO (.+)$/) {
+			$_[0] = $1;
+			return 0;
+		}
+		next if ($input =~ /^\*/);
+		if ($input =~ /^$seq OK/) {
 			return 1;
 		}
+
+		$_[0] = $input;
 		return 0;
 	}
 
+	$_[0] = "timeout";
+	
 	return 0;
 }
 
-sub parse_imap_sequences {
+sub parse_imap_body {
 	my $sock = shift;
 	my $seq = shift;
 	my $input;
 	my $got_body = 0;
 
-	while (defined (<$sock>)) {
-		if (!$got_body && $_ =~ /^\*/) {
+	while (defined (my $line = <$sock>)) {
+		if (!$got_body && $line =~ /^\*/) {
 			$got_body = 1;
 			next;
 		}
-		if ($_ =~ /^$seq OK/) {
+		if ($line =~ /^$seq OK/) {
 			return $input;
 		}
 		elsif ($got_body) {
-			$input .= $_ . $CRLF;
+			$input .= $line;
+			next;
 		}
-
+		
 		return undef;
 	}
 
@@ -303,18 +311,18 @@ sub parse_imap_sequences {
 
 }
 
-sub process_imap_body {
+sub parse_imap_sequences {
 	my $sock = shift;
 	my $seq = shift;
 	my $input;
 
-	while (defined (<$sock>)) {
-		chomp;
-		if ($_ =~ /^\* SEARCH (.+)$/) {
+	while (defined ($input = <$sock>)) {
+		chomp $input;
+		if ($input =~ /^\* SEARCH (.+)$/) {
 			@res = split (/\s/, $1);
 			next;
 		}
-		elsif ($_ =~ /^$seq OK/) {
+		elsif ($input =~ /^$seq OK/) {
 			return \@res;
 		}
 		return undef;
@@ -326,6 +334,18 @@ sub process_imap {
 	my ($ssl, $user, $password, $host, $mbox) = @_;
 	my $seq = 1;
 	my $sock;
+
+	if (!$password) {
+		eval {
+			use Term::ReadKey;
+			print "Enter IMAP password: ";
+			ReadMode 'noecho';
+			$password = ReadLine 0;
+			chomp $password;
+			ReadMode 'normal';
+			print "\n";
+		} or die "cannot get password. Check that Term::ReadKey is installed";
+	}
 	print "Process imap: host: $host, mbox: $mbox\n";
 
 	# Stupid code that does not take care of timeouts etc, just trying to extract messages
@@ -335,19 +355,27 @@ sub process_imap {
 	else {
 		$sock = make_tcp_socket ($host, 143);
 	}
+	my $reply = <$sock>;
+	if (!defined ($reply) || $reply !~ /^\* OK/) {
+		print "Imap server is not ready\n";
+		return;
+	}
 	syswrite $sock, "$seq LOGIN $user $password$CRLF";
-	if (!check_imap_reply ($sock, $seq)) {
+	if (!check_imap_reply ($sock, $seq, $reply)) {
+		print "Cannot login to imap server: $reply\n";
 		return;
 	}
 	$seq ++;
 	syswrite $sock, "$seq SELECT $mbox$CRLF";
-	if (!check_imap_reply ($sock, $seq)) {
+	if (!check_imap_reply ($sock, $seq, $reply)) {
+		print "Cannot select mbox $mbox: $reply\n";
 		return;
 	}
 	$seq ++;
-	syswrite $sock, "$seq FIND ALL$CRLF";
+	syswrite $sock, "$seq SEARCH ALL$CRLF";
 	my $messages;
 	if (!defined ($messages = parse_imap_sequences ($sock, $seq))) {
+		print "Cannot make search\n";
 		return;
 	}
 	$seq ++;
@@ -368,8 +396,8 @@ sub process_item {
 	
 	print "Processing $item\n";
 	if (defined ($item)) {
-		if ($item =~ qr|^imap(s?):user:([^:]+):password:([^:]):host:([^:]):mbox:(.+)$|) {
-			process_imap_folder ($1, $2, $3, $4, $5);
+		if ($item =~ qr|^imap(s?):user:([^:]+):password:([^:]*):host:([^:]+):mbox:(.+)$|) {
+			process_imap ($1, $2, $3, $4, $5);
 		}
 		elsif (-f $item) {
 			process_file ($item);
