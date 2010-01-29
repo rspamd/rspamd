@@ -98,9 +98,6 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 
 	if (lmtp) {
 		debug_task ("free pointer %p", lmtp->task);
-		if (lmtp->task->memc_ctx) {
-			memc_close_ctx (lmtp->task->memc_ctx);
-		}
 		while ((part = g_list_first (lmtp->task->parts))) {
 			lmtp->task->parts = g_list_remove_link (lmtp->task->parts, part);
 			p = (struct mime_part *)part->data;

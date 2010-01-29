@@ -294,6 +294,7 @@
 #include <signal.h>
 #include <event.h>
 #include <glib.h>
+#include <gmodule.h>
 
 #ifndef NO_GMIME
 #include <gmime/gmime.h>

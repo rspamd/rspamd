@@ -189,7 +189,6 @@ struct worker_task {
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
     struct rspamd_async_session* s;								/**< async session object							*/
-	memcached_ctx_t *memc_ctx;									/**< memcached context associated with task			*/
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
 	InternetAddressList *rcpts;									/**< list of all recipients 						*/
