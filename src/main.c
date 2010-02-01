@@ -610,6 +610,7 @@ main (int argc, char **argv, char **env)
 
 	/* First set logger to console logger */
 	rspamd_set_logger (RSPAMD_LOG_CONSOLE, rspamd->cfg);
+	(void)open_log ();
 	g_log_set_default_handler (rspamd_glib_log_function, cfg);
 
 #ifndef HAVE_SETPROCTITLE
