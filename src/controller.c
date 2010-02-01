@@ -651,16 +651,29 @@ controller_read_socket (f_str_t * in, void *arg)
 			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 			return FALSE;
 		}
-		cur = g_list_first (task->text_parts);
-		while (cur) {
-			part = cur->data;
-			if (part->is_empty) {
-				cur = g_list_next (cur);
-				continue;
+		if ((s = g_hash_table_lookup (session->learn_classifier->opts, "header")) != NULL) {
+			cur = message_get_header (task->task_pool, task->message, s);
+			if (cur) {
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 			}
-			c.begin = part->content->data;
-			c.len = part->content->len;
-
+		}
+		else {
+			cur = g_list_first (task->text_parts);
+		}
+		while (cur) {
+			if (s != NULL) {
+				c.len = strlen (cur->data);
+				c.begin = cur->data;
+			}
+			else {
+				part = cur->data;
+				if (part->is_empty) {
+					cur = g_list_next (cur);
+					continue;
+				}
+				c.begin = part->content->data;
+				c.len = part->content->len;
+			}
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
 				i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
 				free_task (task, FALSE);

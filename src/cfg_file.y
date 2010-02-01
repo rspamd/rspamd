@@ -60,7 +60,7 @@ struct rspamd_view *cur_view = NULL;
 %token  VIEW IP FROM SYMBOLS CLIENT_IP
 %token  AUTOLEARN MIN_MARK MAX_MARK MAXFILES MAXCORE
 %token  SETTINGS USER_SETTINGS DOMAIN_SETTINGS SYMBOL PATH SKIP_CHECK GROW_FACTOR
-%token  LOG_BUFFER DEBUG_IP NORMALIZER
+%token  LOG_BUFFER DEBUG_IP NORMALIZER HEADER_ONLY
 
 %type	<string>	STRING
 %type	<string>	VARIABLE
@@ -353,7 +353,6 @@ metriccmd:
 	| metricfunction
 	| metricscore
 	| metricrjscore
-	| metricclassifier
 	| metriccache
 	;
 	
@@ -409,18 +408,6 @@ metricrjscore:
 			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->reject_score = $3;
-	}
-	;
-
-metricclassifier:
-	CLASSIFIER EQSIGN QUOTEDSTRING {
-		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
-		}
-		if ((cur_metric->classifier = get_classifier ($3)) == NULL) {
-			yyerror ("yyparse: unknown classifier %s", $3);
-			YYERROR;
-		}
 	}
 	;
 

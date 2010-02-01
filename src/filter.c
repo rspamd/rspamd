@@ -534,23 +534,44 @@ classifiers_callback (gpointer value, void *arg)
 	GTree                          *tokens = NULL;
 	GList                          *cur;
 	f_str_t                         c;
-
-	cur = g_list_first (task->text_parts);
+	char                           *header = NULL;
+	
+	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
+		cur = message_get_header (task->task_pool, task->message, header);
+		if (cur) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+		}
+	}
+	else {
+		cur = g_list_first (task->text_parts);
+	}
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 
 	if ((tokens = g_hash_table_lookup (data->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
-			text_part = (struct mime_text_part *)cur->data;
-			if (text_part->is_empty) {
-				cur = g_list_next (cur);
-				continue;
+			if (header) {
+				c.len = strlen (cur->data);
+				if (c.len > 0) {
+					c.begin = cur->data;
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
+						msg_info ("cannot tokenize input");
+						return;
+					}
+				}
 			}
-			c.begin = text_part->content->data;
-			c.len = text_part->content->len;
-			/* Tree would be freed at task pool freeing */
-			if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
-				msg_info ("cannot tokenize input");
-				return;
+			else {
+				text_part = (struct mime_text_part *)cur->data;
+				if (text_part->is_empty) {
+					cur = g_list_next (cur);
+					continue;
+				}
+				c.begin = text_part->content->data;
+				c.len = text_part->content->len;
+				/* Tree would be freed at task pool freeing */
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
+					msg_info ("cannot tokenize input");
+					return;
+				}
 			}
 			cur = g_list_next (cur);
 		}
