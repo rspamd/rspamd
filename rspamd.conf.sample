@@ -114,24 +114,27 @@ classifier {
     statfile {
         # Alias is used for learning and is used as symbol
         symbol = "WINNOW_SPAM";
-        # Pattern is path to file, can include %r - recipient name and %f - mail from value
-        path = "/tmp/test.spam";
+        # Pattern is path to file        
+		path = "/tmp/test.spam";
         # Size of this statfile class
         size = 10M;
-        # Tokenizer for this statfile
-        # Deafault: osb-text
-        #tokenizer = "osb-text";
-        autolearn {
-            min_mark = 10.0;
-        };
+
+		# Used for normalizing results, number means maximum score for this
+		# class
+		normalizer="internal:10";
+		# Autolearn params
+        #autolearn {
+        #    min_mark = 10.0;
+        #};
     };
     statfile {
         symbol = "WINNOW_HAM";
         path = "/tmp/test.ham";
         size = 10M;
-        autolearn {
-            max_mark = 0.1;
-        };
+		# Autolearn params
+        #autolearn {
+        #    max_mark = 0.1;
+        #};
     };
 };
 
@@ -355,13 +358,13 @@ view {
 };
 
 # Settings files
-settings {
+#settings {
 	# json data for user's settings
 	#user_settings = "file:///some/json/file";
 	
 	# json data for domain's settings
 	#domain_settings = "file:///some/other/json/file";
-};
+#};
 
 # Example of json config:
 # [
