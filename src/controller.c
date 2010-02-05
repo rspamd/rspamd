@@ -686,6 +686,17 @@ controller_read_socket (f_str_t * in, void *arg)
 			cur = g_list_next (cur);
 		}
 		
+		/* Handle messages without text */
+		if (tokens == NULL) {
+			i = snprintf (out_buf, sizeof (out_buf), "learn fail, no tokens can be extracted (no text data)" CRLF);
+			free_task (task, FALSE);
+			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+				return FALSE;
+			}
+			session->state = STATE_REPLY;
+			return TRUE;
+		}
+	
 		/* Get or create statfile */
 		statfile = get_statfile_by_symbol (session->worker->srv->statfile_pool, session->learn_classifier,
 						session->learn_symbol, &st, TRUE);
