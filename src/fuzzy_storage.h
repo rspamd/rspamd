@@ -13,6 +13,7 @@
 struct fuzzy_cmd {
 	u_char cmd;
 	uint32_t blocksize;
+	int32_t value;
 	u_char hash[FUZZY_HASHLEN];
 };
 

@@ -22,6 +22,7 @@ my %cfg = (
     'control'   =>  0,
     'statfile'  =>  '',
 	'deliver_to'=>  '',
+	'weight'    =>  1,
 );
 
 $main::VERSION = '@RSPAMD_VERSION@';
@@ -35,7 +36,8 @@ Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] 
 -c         config file to parse
 -s         statfile to use for learn commands
 -d         define deliver-to header
-imap format: imap:user:<username>:password:<password>:host:<hostname>:mbox:<mboxname>
+-w         define weight for fuzzy operations
+imap format: imap:user:<username>:password:[<password>]:host:<hostname>:mbox:<mboxname>
 Version:   @RSPAMD_VERSION@
 EOD
 };
@@ -146,16 +148,19 @@ sub do_rspamc_command {
 
 sub do_ctrl_auth {
     my ($sock) = @_;
+	my $res = 0;
 
     syswrite $sock, "password $cfg{'password'}" . $CRLF;
     if (defined (my $reply = <$sock>)) {
-        my $end = <$sock>;
         if ($reply =~ /^password accepted/) {
-            return 1;
+            $res = 1;
         }
     }
+	
+	# END
+	return 0 unless <$sock>;
 
-    return 0;
+    return $res;
 }
 
 sub do_control_command {
@@ -205,7 +210,7 @@ sub do_control_command {
         if (do_ctrl_auth ($sock)) {
             my $len = length ($input);
             print "Sending $len bytes...\n";
-            syswrite $sock, $cfg{'command'} . " $len" . $CRLF;
+            syswrite $sock, $cfg{'command'} . " $len $cfg{'weight'}" . $CRLF;
             syswrite $sock, $input . $CRLF;
             if (defined (my $reply = <$sock>)) {
                 if ($reply =~ /^OK/) {
@@ -436,7 +441,7 @@ sub do_cmd {
 
 ############################# Main part ###########################################
 my %args;
-getopt('c:h:p:P:s:d:', \%args);
+getopt('c:h:p:P:s:d:w:', \%args);
 my $cmd = shift;
 my @path = shift;
 my $do_parse_config = 1;
@@ -479,6 +484,9 @@ if (defined ($args{P})) {
 }
 if (defined ($args{d})) {
 	$cfg{'deliver_to'} = $args{d};
+}
+if (defined ($args{w})) {
+	$cfg{'weight'} = $args{w};
 }
 
 if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {

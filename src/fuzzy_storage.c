@@ -62,6 +62,7 @@ static struct timeval           tmv;
 static struct event             tev;
 
 struct rspamd_fuzzy_node {
+	int32_t                         value;
 	fuzzy_hash_t                    h;
 	uint64_t                        time;
 };
@@ -239,7 +240,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	return TRUE;
 }
 
-static                          gboolean
+static                          int
 process_check_command (struct fuzzy_cmd *cmd)
 {
 	GList                          *cur;
@@ -248,7 +249,7 @@ process_check_command (struct fuzzy_cmd *cmd)
 	int                             prob = 0;
 
 	if (!bloom_check (bf, cmd->hash)) {
-		return FALSE;
+		return 0;
 	}
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
@@ -260,11 +261,37 @@ process_check_command (struct fuzzy_cmd *cmd)
 		h = cur->data;
 		if ((prob = fuzzy_compare_hashes (&h->h, &s)) > LEV_LIMIT) {
 			msg_info ("fuzzy hash was found, probability %d%%", prob);
-			return TRUE;
+			return h->value;
 		}
 		cur = g_list_next (cur);
 	}
 	msg_debug ("fuzzy hash was NOT found, prob is %d%%", prob);
+
+	return 0;
+}
+
+static                          gboolean
+update_hash (struct fuzzy_cmd *cmd)
+{
+	GList                          *cur;
+	struct rspamd_fuzzy_node       *h;
+	fuzzy_hash_t                    s;
+	int                             prob = 0;
+
+	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
+	s.block_size = cmd->blocksize;
+	cur = hashes[cmd->blocksize % BUCKETS]->head;
+
+	/* XXX: too slow way */
+	while (cur) {
+		h = cur->data;
+		if ((prob = fuzzy_compare_hashes (&h->h, &s)) > LEV_LIMIT) {
+			h->value += cmd->value;
+			msg_info ("fuzzy hash was found, probability %d%%, set new value to %d", prob, h->value);
+			return TRUE;
+		}
+		cur = g_list_next (cur);
+	}
 
 	return FALSE;
 }
@@ -275,7 +302,9 @@ process_write_command (struct fuzzy_cmd *cmd)
 	struct rspamd_fuzzy_node       *h;
 
 	if (bloom_check (bf, cmd->hash)) {
-		return FALSE;
+		if (update_hash (cmd)) {
+			return TRUE;
+		}
 	}
 
 	h = g_malloc (sizeof (struct rspamd_fuzzy_node));
@@ -343,9 +372,22 @@ else {																							\
 static void
 process_fuzzy_command (struct fuzzy_session *session)
 {
+	int r;
+	char buf[64];
+
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
-		CMD_PROCESS (check);
+		if ((r = process_check_command (&session->cmd))) {
+			r = snprintf (buf, sizeof (buf), "OK %d" CRLF, r);
+			if (sendto (session->fd, buf, r, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
+				msg_err ("error while writing reply: %s", strerror (errno));
+			}
+		}
+		else {
+			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
+				msg_err ("error while writing reply: %s", strerror (errno));
+			}
+		}
 		break;
 	case FUZZY_WRITE:
 		CMD_PROCESS (write);
