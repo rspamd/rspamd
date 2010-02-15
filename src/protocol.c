@@ -125,6 +125,8 @@ parse_command (struct worker_task *task, f_str_t * line)
 		return -1;
 	}
 
+	task->proto_ver = RSPAMC_PROTO_1_1;
+
 	switch (token[0]) {
 	case 'c':
 	case 'C':
@@ -211,7 +213,6 @@ parse_command (struct worker_task *task, f_str_t * line)
 	}
 	else if (strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) - 1) == 0) {
 		task->proto = SPAMC_PROTO;
-		task->proto_ver = RSPAMC_PROTO_1_1;
 	}
 	else {
 		return -1;
