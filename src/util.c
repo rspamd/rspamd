@@ -215,19 +215,17 @@ accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t * len)
 int
 make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server)
 {
-	size_t                          len = strlen (path);
 	int                             fd, s_error, r, optlen, serrno, on = 1;
 
-	if (len > sizeof (addr->sun_path) - 1 || path == NULL)
+	if (path == NULL)
 		return -1;
-
-#ifdef FREEBSD
-	addr->sun_len = sizeof (struct sockaddr_un);
-#endif
 
 	addr->sun_family = AF_UNIX;
 
-	strncpy (addr->sun_path, path, len);
+	g_strlcpy (addr->sun_path, path, sizeof (addr->sun_path));
+#ifdef FREEBSD
+	addr->sun_len = SUN_LEN (addr);
+#endif
 
 	fd = socket (PF_LOCAL, SOCK_STREAM, 0);
 
