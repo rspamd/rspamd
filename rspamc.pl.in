@@ -9,7 +9,6 @@
 
 use Socket qw(:DEFAULT :crlf);
 use Getopt::Std;
-use IO::Socket::SSL;
 
 my %cfg = (
     'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
@@ -23,6 +22,7 @@ my %cfg = (
     'statfile'  =>  '',
 	'deliver_to'=>  '',
 	'weight'    =>  1,
+	'imap_search' => 'ALL',
 );
 
 $main::VERSION = '@RSPAMD_VERSION@';
@@ -35,9 +35,32 @@ Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] 
 -P         define control password
 -c         config file to parse
 -s         statfile to use for learn commands
+
+Additional options:
 -d         define deliver-to header
 -w         define weight for fuzzy operations
+-S         define search string for IMAP operations
+
+Notes:
 imap format: imap:user:<username>:password:[<password>]:host:<hostname>:mbox:<mboxname>
+Password may be omitted and then it would be asked in terminal
+imaps requires IO::Socket::SSL
+
+IMAP search strings samples:
+ALL - All messages in the mailbox;
+FROM <string> - Messages that contain the specified string in the envelope structure's FROM field;
+HEADER <field-name> <string> - Messages that have a header with the specified field-name and that 
+             contains the specified string in the text of the header (what comes after the colon);
+NEW - Messages that have the \\Recent flag set but not the \\Seen flag. 
+             This is functionally equivalent to "(RECENT UNSEEN)".
+OLD - Messages that do not have the \\Recent flag set.
+SEEN - Messages that have the \\Seen flag set.
+SENTBEFORE <date> - Messages whose [RFC-2822] Date: header (disregarding time and timezone) 
+             is earlier than the specified date.
+TO <string> - Messages that contain the specified string in the envelope structure's TO field.
+TEXT <string> - Messages that contain the specified string in the header or body of the message.
+OR <search-key1> <search-key2> - Messages that match either search key (same for AND and NOT operations).
+
 Version:   @RSPAMD_VERSION@
 EOD
 };
@@ -45,8 +68,12 @@ EOD
 # Load rspamd config params
 sub parse_config {
     my ($is_ctrl) = @_;
-
-    open CONF, "< $cfg{'conf_file'}" or die "config file $cfg{'conf_file'} cannot be opened";
+	
+	if (! open CONF, "< $cfg{'conf_file'}") {
+		print "Config file $cfg{'conf_file'} cannot be opened\n";
+		main::HELP_MESSAGE();
+		exit;
+	}
 
     my $ctrl = 0, $skip = 0;
     while (<CONF>) {
@@ -110,6 +137,10 @@ sub make_tcp_socket {
 
 sub make_ssl_socket {
 	my ($host, $port) = @_; 
+	
+	eval {
+		use IO::Socket::SSL;
+	} or die "IO::Socket::SSL required for imaps";
 
 	return IO::Socket::SSL->new("$host:$port");
 }
@@ -377,7 +408,7 @@ sub process_imap {
 		return;
 	}
 	$seq ++;
-	syswrite $sock, "$seq SEARCH ALL$CRLF";
+	syswrite $sock, "$seq SEARCH $cfg{imap_search}$CRLF";
 	my $messages;
 	if (!defined ($messages = parse_imap_sequences ($sock, $seq))) {
 		print "Cannot make search\n";
@@ -441,7 +472,7 @@ sub do_cmd {
 
 ############################# Main part ###########################################
 my %args;
-getopt('c:h:p:P:s:d:w:', \%args);
+getopt('c:h:p:P:s:d:w:S:', \%args);
 my $cmd = shift;
 my @path = shift;
 my $do_parse_config = 1;
@@ -460,6 +491,10 @@ if (defined ($args{c})) {
      }
 
 }
+if (defined ($args{S})) {
+	$cfg{'imap_search'} = $args{S};
+}
+
 if (defined ($args{s})) {
     if ($args{s}) {
         $cfg{'statfile'} = $args{s};
