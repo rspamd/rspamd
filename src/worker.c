@@ -214,6 +214,9 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->urls) {
 			g_list_free (task->urls);
 		}
+		if (task->messages) {
+			g_list_free (task->messages);
+		}
 		memory_pool_delete (task->task_pool);
 		if (task->dispatcher) {
 			if (is_soft) {

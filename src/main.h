@@ -199,6 +199,7 @@ struct worker_task {
 	GList *urls;												/**< list of parsed urls							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/
+	GList *messages;											/**< list of messages that would be reported		*/
 	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
 	struct config_file *cfg;									/**< pointer to config object						*/
 	struct save_point save;										/**< save point for delayed processing				*/

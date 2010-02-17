@@ -155,13 +155,16 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
                     switch (addr->mech) {
                         case SPF_FAIL:
                             insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
+							task->messages = g_list_prepend (task->messages, "(SPF): spf fail");
                             break;
                         case SPF_SOFT_FAIL:
                         case SPF_NEUTRAL:
                             insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
+							task->messages = g_list_prepend (task->messages, "(SPF): spf softfail");
                             break;
                         default:
                             insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
+							task->messages = g_list_prepend (task->messages, "(SPF): spf allow");
                             break;
                     }
                     /* Stop parsing */

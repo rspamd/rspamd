@@ -887,6 +887,12 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					begin += sizeof (SPF_INCLUDE) - 1;
 					res = parse_spf_include (task, begin, rec, new);
 				}
+				else if (strncmp (begin, SPF_IP6, sizeof (SPF_IP4) - 1) == 0) {
+					begin += sizeof (SPF_IP6) - 1;
+					msg_info ("ignoring ip6 spf command as IPv6 is not supported: %s", begin);
+					new = NULL;
+					res = TRUE;
+				}
 				else {
 					msg_info ("bad spf command: %s", begin);
 				}

@@ -490,7 +490,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 {
 	char                           *arg, out_buf[BUFSIZ], *err_str;
 	uint32_t                        size;
-	int                             r, value, *sargs;
+	int                             r, value = 1, *sargs;
 
 	/* Process size */
 	arg = args[0];
@@ -510,11 +510,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 	}
 	/* Process value */
 	arg = args[1];
-	if (!arg || *arg == '\0') {
-		msg_info ("empty value, assume it 1");
-		value = 1;
-	}
-	else {
+	if (arg && *arg != '\0') {
 		value = strtol (arg, &err_str, 10);
 	}
 

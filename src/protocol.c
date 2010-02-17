@@ -547,6 +547,7 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 	}
 }
 
+
 static void
 show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
 {
@@ -652,6 +653,22 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
 }
 
+static void
+show_messages (struct worker_task *task)
+{
+	int                             r = 0;
+	char                            outbuf[OUTBUFSIZ];
+	GList                          *cur;
+	
+	cur = task->messages;
+	while (cur) {
+		r += snprintf (outbuf + r, sizeof (outbuf) - r, "Message: %s" CRLF, (char *)cur->data);
+		cur = g_list_next (cur);
+	}
+
+	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+}
+
 static int
 write_check_reply (struct worker_task *task)
 {
@@ -694,6 +711,8 @@ write_check_reply (struct worker_task *task)
 
 		/* Write result for each metric separately */
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		/* Messages */
+		show_messages (task);
 		/* URL stat */
 		show_url_header (task);
 	}
@@ -748,7 +767,8 @@ write_process_reply (struct worker_task *task)
 
 		/* Write result for each metric separately */
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
-		/* URL stat */
+		/* Messages */
+		show_messages (task);
 	}
 	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
