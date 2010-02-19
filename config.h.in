@@ -113,6 +113,8 @@
 
 #cmakedefine HAVE_ASM_PAUSE      1
 
+#cmakedefine BUILD_STATIC        1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
@@ -294,7 +296,10 @@
 #include <signal.h>
 #include <event.h>
 #include <glib.h>
+
+#ifndef BUILD_STATIC
 #include <gmodule.h>
+#endif
 
 #ifndef NO_GMIME
 #include <gmime/gmime.h>

@@ -50,6 +50,8 @@ extern PerlInterpreter         *perl_interpreter;
 #   include <glib/gprintf.h>
 #endif
 
+#ifndef BUILD_STATIC
+
 #define MODULE_INIT_FUNC "module_init"
 #define MODULE_FINIT_FUNC "module_fin"
 #define MODULE_BEFORE_CONNECT_FUNC "before_connect"
@@ -59,12 +61,14 @@ extern PerlInterpreter         *perl_interpreter;
 struct custom_filter {
 	char *filename;					/*< filename           */
 	GModule *handle;				/*< returned by dlopen */
-	void (*init_func)(void);		/*< called at start of worker */
+	void (*init_func)(struct config_file *cfg);		/*< called at start of worker */
 	void* (*before_connect)(void);	/*< called when clients connects */
 	gboolean (*process_line)(const char *line, size_t len, char **output, void *user_data); /*< called when client send data line */
 	void (*after_connect)(char **output, char **log_line, void *user_data);	/*< called when client disconnects */
 	void (*fin_func)(void);	
 };
+
+#endif
 
 static struct timeval           io_tv;
 /* Detect whether this worker is mime worker */
@@ -76,6 +80,8 @@ static GList                   *custom_filters;
 
 static gboolean                 write_socket (void *arg);
 
+sig_atomic_t                    wanna_die = 0;
+
 #ifndef HAVE_SA_SIGINFO
 static void
 sig_handler (int signo)
@@ -84,18 +90,21 @@ static void
 sig_handler (int signo, siginfo_t *info, void *unused)
 #endif
 {
+	struct timeval                  tv;
+
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
-		close_log ();
+		if (!wanna_die) {
+			wanna_die = 1;
+			tv.tv_sec = 0;
+			tv.tv_usec = 0;
+			event_loopexit (&tv);
+
 #ifdef WITH_GPERF_TOOLS
-		ProfilerStop ();
+			ProfilerStop ();
 #endif
-#ifdef WITH_PROFILER
-		exit (0);
-#else
-		_exit (1);
-#endif
+		}
 		break;
 	}
 }
@@ -109,13 +118,15 @@ sigusr_handler (int fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
 	struct timeval                  tv;
-	tv.tv_sec = SOFT_SHUTDOWN_TIME;
-	tv.tv_usec = 0;
-	event_del (&worker->sig_ev);
-	event_del (&worker->bind_ev);
-	do_reopen_log = 1;
-	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
-	event_loopexit (&tv);
+	if (! wanna_die) {
+		tv.tv_sec = SOFT_SHUTDOWN_TIME;
+		tv.tv_usec = 0;
+		event_del (&worker->sig_ev);
+		event_del (&worker->bind_ev);
+		do_reopen_log = 1;
+		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
+		event_loopexit (&tv);
+	}
 	return;
 }
 
@@ -132,6 +143,7 @@ rcpt_destruct (void *pointer)
 	}
 }
 
+#ifndef BUILD_STATIC	
 static void
 fin_custom_filters (struct worker_task *task)
 {
@@ -190,6 +202,19 @@ parse_line_custom (struct worker_task *task, f_str_t *in)
 
 	return res;
 }
+#else
+/* Stubs */
+static void
+fin_custom_filters (struct worker_task *task)
+{
+
+}
+static gboolean
+parse_line_custom (struct worker_task *task, f_str_t *in)
+{
+	return FALSE;
+}
+#endif
 
 /*
  * Free all structures of worker_task
@@ -457,6 +482,7 @@ accept_socket (int fd, short what, void *arg)
 	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
 	
 	/* Init custom filters */
+#ifndef BUILD_STATIC	
 	if (is_custom) {
 		cur = custom_filters;
 		while (cur) {
@@ -470,10 +496,13 @@ accept_socket (int fd, short what, void *arg)
 		/* Keep user data in the same order as custom filters */
 		new_task->rcpt = g_list_reverse (new_task->rcpt);
 	}
+#endif
+
 }
 
+#ifndef BUILD_STATIC
 static gboolean
-load_custom_filter (const char *file) 
+load_custom_filter (struct config_file *cfg, const char *file) 
 {
 	struct custom_filter           *filt;
 	struct stat                     st;
@@ -503,7 +532,8 @@ load_custom_filter (const char *file)
 		g_free (filt);
 		return FALSE;
 	}
-
+	
+	filt->init_func (cfg);
 	filt->filename = g_strdup (file);
 	custom_filters = g_list_prepend (custom_filters, filt);
 
@@ -526,7 +556,7 @@ load_custom_filters (struct rspamd_worker *worker, const char *path)
 	}
 	
 	for (i = 0; i < gp.gl_pathc; i ++) {
-		if (! load_custom_filter (gp.gl_pathv[i])) {
+		if (! load_custom_filter (worker->srv->cfg, gp.gl_pathv[i])) {
 			globfree (&gp);
 			return FALSE;
 		}
@@ -556,6 +586,8 @@ unload_custom_filters (void)
 
 	g_list_free (custom_filters);
 }
+
+#endif
 
 /*
  * Start worker process
@@ -589,13 +621,15 @@ start_worker (struct rspamd_worker *worker)
 	/* Accept event */
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add (&worker->bind_ev, NULL);
-	
+
+#ifndef BUILD_STATIC	
 	/* Check if this worker is not usual rspamd worker, but uses custom filters from specified path */
 	is_custom_str = g_hash_table_lookup (worker->cf->params, "custom_filters");
 	if (is_custom_str && g_module_supported () && load_custom_filters (worker, is_custom_str)) {
 		is_custom = TRUE;
 	}
 	else {
+#endif
 		/* Maps events */
 		start_map_watch ();
 		/* Check whether we are mime worker */
@@ -606,16 +640,20 @@ start_worker (struct rspamd_worker *worker)
 		else {
 			is_mime = TRUE;
 		}
+#ifndef BUILD_STATIC	
 	}
+#endif
 
 	event_loop (0);
 	
-	close_log ();
-	exit (EXIT_SUCCESS);
-	
+#ifndef BUILD_STATIC	
 	if (is_custom) {
 		unload_custom_filters ();
 	}
+#endif
+
+	close_log ();
+	exit (EXIT_SUCCESS);
 }
 
 /* 
