@@ -63,6 +63,7 @@ OR <search-key1> <search-key2> - Messages that match either search key (same for
 
 Version:   @RSPAMD_VERSION@
 EOD
+exit;
 };
 
 # Load rspamd config params
@@ -472,7 +473,11 @@ sub do_cmd {
 
 ############################# Main part ###########################################
 my %args;
+
+HELP_MESSAGE() unless scalar @ARGV >= 1;
+
 getopt('c:h:p:P:s:d:w:S:', \%args);
+
 my $cmd = shift;
 my @path = shift;
 my $do_parse_config = 1;
@@ -501,7 +506,6 @@ if (defined ($args{s})) {
     }
     else {
         main::HELP_MESSAGE();
-        exit;
     }
 }
 if (defined ($args{h})) {
