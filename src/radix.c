@@ -55,9 +55,14 @@ radix_tree_create ()
 	return tree;
 }
 
+enum radix_insert_type {
+	RADIX_INSERT,
+	RADIX_ADD,
+	RADIX_REPLACE
+};
 
-int
-radix32tree_insert (radix_tree_t * tree, uint32_t key, uint32_t mask, unsigned char value)
+static uintptr_t
+radix32tree_insert_common (radix_tree_t * tree, uint32_t key, uint32_t mask, uintptr_t value, enum radix_insert_type type)
 {
 	uint32_t                        bit;
 	radix_node_t                   *node, *next;
@@ -70,7 +75,6 @@ radix32tree_insert (radix_tree_t * tree, uint32_t key, uint32_t mask, unsigned c
 	while (bit & mask) {
 		if (key & bit) {
 			next = node->right;
-
 		}
 		else {
 			next = node->left;
@@ -86,10 +90,21 @@ radix32tree_insert (radix_tree_t * tree, uint32_t key, uint32_t mask, unsigned c
 
 	if (next) {
 		if (node->value != RADIX_NO_VALUE) {
-			return 1;
+			/* Value was found, switch on insert type */
+			switch (type) {
+				case RADIX_INSERT:
+					return 1;
+				case RADIX_ADD:
+					node->value += value;
+					return value;
+				case RADIX_REPLACE:
+					node->value = value;
+					return 1;
+			}
 		}
 
 		node->value = value;
+		node->key = key;
 		return 0;
 	}
 	/* Inserting value in trie creating all path components */
@@ -117,8 +132,63 @@ radix32tree_insert (radix_tree_t * tree, uint32_t key, uint32_t mask, unsigned c
 	}
 
 	node->value = value;
+	node->key = key;
 
 	return 0;
+}
+
+int 
+radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value)
+{
+	return (int)radix32tree_insert_common (tree, key, mask, value, RADIX_INSERT);
+}
+
+uintptr_t 
+radix32tree_add (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value)
+{
+	return radix32tree_insert_common (tree, key, mask, value, RADIX_ADD);
+}
+
+int 
+radix32tree_replace (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value)
+{
+	return (int)radix32tree_insert_common (tree, key, mask, value, RADIX_REPLACE);
+}
+
+/*
+ * per recursion step:
+ * ptr + ptr + ptr + int = 4 words
+ * result = 1 word
+ * 5 words total in stack
+ */
+static gboolean
+radix_recurse_nodes (radix_node_t *node, radix_tree_traverse_func func, void *user_data, int level)
+{
+	if (node->left) {
+		if (radix_recurse_nodes (node->left, func, user_data, level + 1)) {
+			return TRUE;
+		}
+	}
+	
+	if (node->value != RADIX_NO_VALUE) {
+		if (func (node->key, level, node->value, user_data)) {
+			return TRUE;
+		}
+	}
+
+	if (node->right) {
+		if (radix_recurse_nodes (node->right, func, user_data, level + 1)) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+void
+radix32tree_traverse (radix_tree_t *tree, radix_tree_traverse_func func, void *user_data)
+{
+	radix_recurse_nodes (tree->root, func, user_data, 0); 
 }
 
 
@@ -186,7 +256,7 @@ radix32tree_delete (radix_tree_t * tree, uint32_t key, uint32_t mask)
 }
 
 
-unsigned char
+uintptr_t
 radix32tree_find (radix_tree_t * tree, uint32_t key)
 {
 	uint32_t                        bit;
