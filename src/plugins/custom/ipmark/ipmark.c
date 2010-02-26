@@ -54,8 +54,8 @@ void after_connect (char **output, char **log_line, void *user_data);
 void module_fin (void);	
 
 /* Internal variables */
-char *filename = NULL;
-radix_tree_t *radix = NULL;
+static char *filename = NULL;
+static radix_tree_t *radix = NULL;
 
 /* Implementation */
 
@@ -259,7 +259,7 @@ parse_line (const char *line, size_t len, char **output, void *user_data)
 	const char *p;
 	char *c = ip_buf, *err_str;
 	struct in_addr ina;
-	int state = 0, next_state, dots;
+	int state = 0, next_state = 0, dots = 0;
 	int16_t value;
 	uint32_t mask;
 	enum ipmark_command cmd;
