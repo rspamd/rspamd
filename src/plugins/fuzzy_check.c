@@ -246,6 +246,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 	if (what == EV_WRITE) {
 		/* Send command to storage */
 		cmd.blocksize = session->h->block_size;
+		cmd.value = 0;
 		memcpy (cmd.hash, session->h->hash_pipe, sizeof (cmd.hash));
 		cmd.cmd = FUZZY_CHECK;
 		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {

@@ -104,7 +104,11 @@ convert_statfile_10 (stat_file_t * file)
 	/* Unmap old memory and map new */
 	munmap (file->map, file->len);
 	file->len = file->len + sizeof (struct stat_file_header) - sizeof (struct stat_file_header_10);
+#ifdef HAVE_MMAP_NOCORE
+	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NOCORE, file->fd, 0)) == MAP_FAILED) {
+#else
 	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == MAP_FAILED) {
+#endif
 		msg_info ("cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}

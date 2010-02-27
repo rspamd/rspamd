@@ -82,6 +82,8 @@
 
 #cmakedefine HAVE_MMAP_ANON      1
 
+#cmakedefine HAVE_MMAP_NOCORE    1
+
 #cmakedefine HAVE_COMPATIBLE_QUEUE_H    1
 
 #cmakedefine HAVE_SC_NPROCESSORS_ONLN 1

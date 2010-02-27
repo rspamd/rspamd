@@ -29,7 +29,10 @@
 #include "message.h"
 #include "filter.h"
 
-#define SPF_VER_STR "v=spf1"
+#define SPF_VER1_STR "v=spf1"
+#define SPF_VER2_STR "spf2."
+#define SPF_SCOPE_PRA "pra"
+#define SPF_SCOPE_MFROM "mfrom"
 #define SPF_ALL "all"
 #define SPF_A "a"
 #define SPF_IP4 "ip4"
@@ -70,6 +73,7 @@ struct spf_dns_cb {
 	struct spf_record *rec;
 	struct spf_addr *addr;
 	spf_action_t cur_action;
+	gboolean in_include;
 };
 
 #define CHECK_REC(rec)										\
@@ -259,7 +263,8 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 					if (type == DNS_TXT) {
 						if (addresses != NULL) {
 							begin = *(char **)addresses;
-							if (cb->rec->addrs) {
+
+							if (!cb->in_include && cb->rec->addrs) {
 								g_list_free (cb->rec->addrs);
 								cb->rec->addrs = NULL;
 							}
@@ -288,7 +293,6 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 									if (elt->prev == NULL && elt->next == NULL) {
 										g_list_free1 (elt);
 									}
-
 									else {
 
 										if (elt->prev) {
@@ -297,13 +301,18 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 										else {
 											/* Elt is the first element, so we need to shift temporary list */
 											tmp = elt->next;
+											tmp->prev = NULL;
 										}
 										if (elt->next) {
 											elt->next->prev = last;
-											last->next = elt->next;
+											if (last != NULL) {
+												last->next = elt->next;
+											}
 										}
-
-										cb->rec->addrs->prev = elt->prev;
+										
+										if (cb->rec->addrs != NULL) {
+											cb->rec->addrs->prev = elt->prev;
+										}
 
 										cb->rec->addrs = tmp;
 										g_list_free1 (elt);
@@ -395,6 +404,7 @@ parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_A;
+	cb->in_include = rec->in_include;
 
 	if (evdns_resolve_ipv4 (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
 		task->save.saved++;
@@ -442,6 +452,7 @@ parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *re
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_MX;
+	cb->in_include = rec->in_include;
 
 	if (evdns_resolve_mx (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
 		task->save.saved++;
@@ -497,6 +508,7 @@ parse_spf_include (struct worker_task *task, const char *begin, struct spf_recor
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_INCLUDE;
+	cb->in_include = rec->in_include;
 	domain = memory_pool_strdup (task->task_pool, begin);
 
 	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
@@ -535,7 +547,8 @@ parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_reco
 	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_INCLUDE;
+	cb->cur_action = SPF_RESOLVE_REDIRECT;
+	cb->in_include = rec->in_include;
 	domain = memory_pool_strdup (task->task_pool, begin);
 
 	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
@@ -567,6 +580,7 @@ parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_EXISTS;
+	cb->in_include = rec->in_include;
 	host = memory_pool_strdup (task->task_pool, begin);
 
 	if (evdns_resolve_ipv4 (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
@@ -850,6 +864,11 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 	if (rec->cur_elt == NULL) {
 		return FALSE;
 	}
+	else if (*rec->cur_elt == '\0') {
+		/* Silently skip empty elements */
+		rec->elt_num ++;
+		return TRUE;
+	}
 	else {
 		begin = expand_spf_macro (task, rec, rec->cur_elt);
 		if (*begin == '?' || *begin == '+' || *begin == '-' || *begin == '~') {
@@ -961,14 +980,66 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 #undef NEW_ADDR
 
 static void
+parse_spf_scopes (struct spf_record *rec, char **begin)
+{
+	for (;;) {
+		if (g_ascii_strncasecmp (*begin, SPF_SCOPE_PRA, sizeof (SPF_SCOPE_PRA) - 1) == 0) {
+			*begin += sizeof (SPF_SCOPE_PRA) - 1;
+			/* XXX: Implement actual PRA check */
+			/* extract_pra_info (rec); */
+			continue;
+		}
+		else if (g_ascii_strncasecmp (*begin, SPF_SCOPE_MFROM, sizeof (SPF_SCOPE_MFROM) - 1) == 0) {
+			/* mfrom is standart spf1 check */
+			*begin += sizeof (SPF_SCOPE_MFROM) - 1;
+			continue;
+		}
+		else if (**begin != ',') {
+			break;
+		}
+		(*begin) ++;
+	}
+}
+
+static void
 start_spf_parse (struct spf_record *rec, char *begin)
 {
-	if (strncmp (begin, SPF_VER_STR, sizeof (SPF_VER_STR) - 1) == 0) {
-		begin += sizeof (SPF_VER_STR) - 1;
+	/* Skip spaces */
+	while (g_ascii_isspace (*begin)) {
+		begin ++;
+	}
+
+	if (g_ascii_strncasecmp (begin, SPF_VER1_STR, sizeof (SPF_VER1_STR) - 1) == 0) {
+		begin += sizeof (SPF_VER1_STR) - 1;
 		while (g_ascii_isspace (*begin) && *begin) {
 			begin ++;
 		}
-		rec->elts = g_strsplit (begin, " ", 0);
+		rec->elts = g_strsplit_set (begin, " ", 0);
+		rec->elt_num = 0;
+		if (rec->elts) {
+			memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
+			rec->cur_elt = rec->elts[0];
+			while (parse_spf_record (rec->task, rec));
+			if (rec->addrs) {
+				rec->addrs = g_list_reverse (rec->addrs);
+			}
+		}
+	}
+	else if (g_ascii_strncasecmp (begin, SPF_VER2_STR, sizeof (SPF_VER2_STR) - 1) == 0) {
+		/* Skip one number of record, so no we are here spf2.0/ */
+		begin += sizeof (SPF_VER2_STR);
+		if (*begin != '/') {
+			msg_info ("sender id string has not valid skope");
+		}
+		else {
+			begin ++;
+			parse_spf_scopes (rec, &begin);
+		}
+		/* Now common spf record */
+		while (g_ascii_isspace (*begin) && *begin) {
+			begin ++;
+		}
+		rec->elts = g_strsplit_set (begin, " ", 0);
 		rec->elt_num = 0;
 		if (rec->elts) {
 			memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
@@ -980,7 +1051,7 @@ start_spf_parse (struct spf_record *rec, char *begin)
 		}
 	}
 	else {
-		msg_info ("bad spf record version: %*s", sizeof (SPF_VER_STR) - 1, begin);
+		msg_info ("bad spf record version: %*s", sizeof (SPF_VER1_STR) - 1, begin);
 	}
 }
 
