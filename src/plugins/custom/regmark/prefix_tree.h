@@ -6,7 +6,7 @@
 #define LETTERS_NUMBER 26
 
 typedef struct prefix_tree_leaf_s {
-	uintptr_t data;
+	GTree *data;
 } prefix_tree_leaf_t;
 
 typedef struct prefix_tree_level_s {

@@ -25,6 +25,13 @@
 #include "../../../config.h"
 #include "prefix_tree.h"
 
+static gint 
+compare_prefixes (gconstpointer a, gconstpointer b, gpointer unused)
+{
+	const char *s1 = a, *s2 = b;
+
+	return strcmp (s1, s2);
+}
 
 prefix_tree_t* 
 prefix_tree_new (int levels)
@@ -50,6 +57,8 @@ add_string_common (prefix_tree_t *tree, const char *input, int skip_levels, gboo
 	int cur_level = 0, num;
 	prefix_tree_level_t *cur;
 	uintptr_t res = 0;
+	char *prefix, tmp[256];
+	const char *orig = input;
 
 	if (tree == NULL) {
 		return 0;
@@ -59,31 +68,38 @@ add_string_common (prefix_tree_t *tree, const char *input, int skip_levels, gboo
 		cur = &tree->nodes[cur_level];
 		if (*input >= 'A' && *input <= 'Z') {
 			num = *input - 'A';
+			if (cur_level < skip_levels) {
+				continue;
+			}
 			/* Go throught each level and check specified letter */
-			if (cur->leafs[num].data == 0) {
+			if (cur->leafs[num].data == NULL) {
 				/* Create new leaf */
 				if (read_only) {
 					return res;
 				}
 				else {
-					cur->leafs[num].data = 1;
+					/* Create new tree */
+					prefix = g_malloc (cur_level * sizeof (char) + 1);
+					g_strlcpy (prefix, orig, cur_level + 1);
+					cur->leafs[num].data = g_tree_new_full (compare_prefixes, NULL, g_free, NULL);
+					g_tree_insert (cur->leafs[num].data, prefix, GUINT_TO_POINTER (1));
+					return 1;
 				}
 			}
 			else {
 				/* Got some node, so check it */
-				if (cur_level > skip_levels) {
+				g_strlcpy (tmp, orig, MIN (sizeof (tmp), cur_level + 1));
+				if ((res = (uintptr_t)g_tree_lookup (cur->leafs[num].data, tmp)) != 0) {
 					if (! read_only) {
-						cur->leafs[num].data ++;
+						g_tree_insert (cur->leafs[num].data, tmp, GUINT_TO_POINTER (res + 1));
 					}
-					if (! get_longest) {
-						/* Get maximum after skip */
-						if (res < cur->leafs[num].data) {
-							res = cur->leafs[num].data;
-						}
+					return res + 1;
+				}
+				else {
+					if (! read_only) {
+						g_tree_insert (cur->leafs[num].data, g_strdup (tmp), GUINT_TO_POINTER (1));
 					}
-					else {
-						res = cur->leafs[num].data;
-					}
+					return 1;
 				}
 			}
 		}
@@ -121,7 +137,15 @@ check_string_longest (prefix_tree_t *tree, const char *input, int skip_levels)
 void 
 prefix_tree_free (prefix_tree_t *tree)
 {
+	int i, j;
 	if (tree != NULL) {
+		for (i = 0; i < tree->levels; i ++) {
+			for (j = 0; j < LETTERS_NUMBER; j ++) {
+				if (tree->nodes[i].leafs[j].data != NULL) {
+					g_tree_destroy (tree->nodes[i].leafs[j].data);
+				}
+			}
+		}
 		g_free (tree->nodes);
 		g_free (tree);
 	}
