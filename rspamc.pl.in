@@ -234,7 +234,8 @@ sub do_control_command {
 		print "Sending $len bytes...\n";
 		syswrite $sock, "weights $cfg{'statfile'} $len" . $CRLF;
 		syswrite $sock, $input . $CRLF;
-		if (defined (my $reply = <$sock>)) {
+		while (defined (my $reply = <$sock>)) {
+			last if $line =~ /^END/;
 			print $_;
 		}
     }
@@ -544,7 +545,7 @@ if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 0;
 }
-elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS|FUZZY_ADD|FUZZY_DEL)/i) {
+elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS|FUZZY_ADD|FUZZY_DEL|WEIGHTS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 1;
 }

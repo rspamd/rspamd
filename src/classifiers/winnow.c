@@ -235,16 +235,13 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 		w = memory_pool_alloc (task->task_pool, sizeof (struct classify_weight));
 		if (data.count != 0) {
 			res = data.sum / data.count;
-			w->name = st->symbol;
-			w->weight = res;
-			resl = g_list_prepend (resl, w);
 		}
 		else {
 			res = 0;
-			w->name = st->symbol;
-			w->weight = res;
-			resl = g_list_prepend (resl, w);
 		}
+		w->name = st->symbol;
+		w->weight = res;
+		resl = g_list_prepend (resl, w);
 		cur = g_list_next (cur);
 	}
 	

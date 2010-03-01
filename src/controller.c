@@ -851,10 +851,6 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 
 		free_task (task, FALSE);
-		i = snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
-		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-			return FALSE;
-		}
 
 		session->state = STATE_REPLY;
 		break;

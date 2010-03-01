@@ -722,7 +722,7 @@ write_check_reply (struct worker_task *task)
 	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 
 	if (default_score >= default_required_score) {
-		task->worker->srv->stat->messages_ham ++;
+		task->worker->srv->stat->messages_spam ++;
 	}
 	else {
 		task->worker->srv->stat->messages_ham ++;
