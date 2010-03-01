@@ -30,12 +30,13 @@
 #include "classifiers.h"
 
 struct classifier               classifiers[] = {
-	{
+		{
 			.name = "winnow",
 			.init_func = winnow_init,
 			.classify_func = winnow_classify,
 			.learn_func = winnow_learn,
-		},
+			.weights_func = winnow_weights
+		}
 };
 
 struct classifier              *

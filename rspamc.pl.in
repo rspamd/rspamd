@@ -211,7 +211,7 @@ sub do_control_command {
         if (do_ctrl_auth ($sock)) {
             my $len = length ($input);
             print "Sending $len bytes...\n";
-            syswrite $sock, "learn $cfg{'statfile'} $len" . $CRLF;
+            syswrite $sock, "learn $cfg{'statfile'} $len -w $cfg{weight}" . $CRLF;
             syswrite $sock, $input . $CRLF;
             if (defined (my $reply = <$sock>)) {
                 if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
@@ -225,6 +225,18 @@ sub do_control_command {
         else {
             print "Authentication failed\n";
         }
+    }
+    if ($cfg{'command'} =~ /^weights$/i) {
+        die "statfile is not specified to weights command" if !$cfg{'statfile'};
+        
+        
+		my $len = length ($input);
+		print "Sending $len bytes...\n";
+		syswrite $sock, "weights $cfg{'statfile'} $len" . $CRLF;
+		syswrite $sock, $input . $CRLF;
+		if (defined (my $reply = <$sock>)) {
+			print $_;
+		}
     }
     elsif ($cfg{'command'} =~ /(reload|shutdown)/i) {
         if (do_ctrl_auth ($sock)) {
@@ -540,7 +552,7 @@ else {
     die "unknown command $cmd";
 }
 
-if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|FUZZY_ADD|FUZZY_DEL/i) {
+if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|FUZZY_ADD|FUZZY_DEL|WEIGHTS/i) {
 	$cfg{'require_input'} = 1;
 }
 

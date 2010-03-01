@@ -47,7 +47,7 @@ enum process_type {
 	TYPE_WORKER,
 	TYPE_CONTROLLER,
 	TYPE_LMTP,
-	TYPE_FUZZY,
+	TYPE_FUZZY
 };
 
 
@@ -131,6 +131,7 @@ struct controller_session {
 		STATE_QUIT,
 		STATE_OTHER,
 		STATE_WAIT,
+		STATE_WEIGHTS
 	} state;													/**< current session state							*/
 	int sock;													/**< socket descriptor								*/
 	/* Access to authorized commands */
@@ -141,6 +142,7 @@ struct controller_session {
 	char *learn_from;											/**< from address for learning						*/
 	struct classifier_config *learn_classifier;
 	char *learn_symbol;											/**< symbol to train								*/
+	double learn_multiplier;									/**< multiplier for learning						*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
 	f_str_t *learn_buf;											/**< learn input									*/
 	GList *parts;												/**< extracted mime parts							*/
@@ -165,7 +167,7 @@ struct worker_task {
 		WRITE_REPLY,
 		WRITE_ERROR,
 		WAIT_FILTER,
-		CLOSING_CONNECTION,
+		CLOSING_CONNECTION
 	} state;													/**< current session state							*/
 	size_t content_length;										/**< length of user's input							*/
 	enum rspamd_protocol proto;									/**< protocol (rspamc or spamc)						*/

@@ -721,6 +721,13 @@ write_check_reply (struct worker_task *task)
 	msg_info ("%s", logbuf);
 	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 
+	if (default_score >= default_required_score) {
+		task->worker->srv->stat->messages_ham ++;
+	}
+	else {
+		task->worker->srv->stat->messages_ham ++;
+	}
+
 	return 0;
 }
 
@@ -777,6 +784,13 @@ write_process_reply (struct worker_task *task)
 
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
 	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE, TRUE);
+
+	if (default_score >= default_required_score) {
+		task->worker->srv->stat->messages_spam ++;
+	}
+	else {
+		task->worker->srv->stat->messages_ham ++;
+	}
 
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, outmsg);
 

@@ -42,6 +42,7 @@ struct winnow_callback_data {
 	struct classifier_ctx          *ctx;
 	stat_file_t                    *file;
 	double                          sum;
+	double                          multiplier;
 	int                             count;
 	int                             in_class;
 	time_t                          now;
@@ -77,8 +78,9 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	token_node_t                   *node = key;
 	struct winnow_callback_data    *cd = data;
 	double                           v, c;
-
+	
 	c = (cd->in_class) ? WINNOW_PROMOTION : WINNOW_DEMOTION;
+	c *= cd->multiplier;
 
 	/* Consider that not found blocks have value 1 */
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
@@ -195,13 +197,74 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	}
 }
 
+GList *
+winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
+{
+	struct winnow_callback_data     data;
+	double                          res = 0.;
+	GList                          *cur, *resl = NULL;
+	struct statfile                *st;
+	struct classify_weight         *w;
+
+	g_assert (pool != NULL);
+	g_assert (ctx != NULL);
+
+	data.pool = pool;
+	data.sum = 0;
+	data.count = 0;
+	data.now = time (NULL);
+	data.ctx = ctx;
+    
+	cur = ctx->cfg->statfiles;
+	while (cur) {
+		st = cur->data;
+		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
+			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
+				msg_warn ("cannot open %s, skip it", st->path);
+				cur = g_list_next (cur);
+				continue;
+			}
+		}
+
+		if (data.file != NULL) {
+			statfile_pool_lock_file (pool, data.file);
+			g_tree_foreach (input, classify_callback, &data);
+			statfile_pool_unlock_file (pool, data.file);
+		}
+
+		w = memory_pool_alloc (task->task_pool, sizeof (struct classify_weight));
+		if (data.count != 0) {
+			res = data.sum / data.count;
+			w->name = st->symbol;
+			w->weight = res;
+			resl = g_list_prepend (resl, w);
+		}
+		else {
+			res = 0;
+			w->name = st->symbol;
+			w->weight = res;
+			resl = g_list_prepend (resl, w);
+		}
+		cur = g_list_next (cur);
+	}
+	
+	if (resl != NULL) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, resl);
+	}
+
+	return resl;
+
+}
+
+
 void
-winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *file, GTree * input, int in_class, double *sum)
+winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *file, GTree * input, int in_class, double *sum, double multiplier)
 {
 	struct winnow_callback_data     data = {
 		.file = NULL,
 		.sum = 0,
 		.count = 0,
+		.multiplier = multiplier
 	};
 
 	g_assert (pool != NULL);
