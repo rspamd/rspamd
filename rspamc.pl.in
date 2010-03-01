@@ -235,8 +235,8 @@ sub do_control_command {
 		syswrite $sock, "weights $cfg{'statfile'} $len" . $CRLF;
 		syswrite $sock, $input . $CRLF;
 		while (defined (my $reply = <$sock>)) {
-			last if $line =~ /^END/;
-			print $_;
+			last if $reply =~ /^END/;
+			print $reply;
 		}
     }
     elsif ($cfg{'command'} =~ /(reload|shutdown)/i) {

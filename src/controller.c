@@ -338,8 +338,12 @@ process_stat_command (struct controller_session *session)
 
 	memory_pool_stat (&mem_st);
 	r = snprintf (out_buf, sizeof (out_buf), "Messages scanned: %u" CRLF, session->worker->srv->stat->messages_scanned);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %u" CRLF, session->worker->srv->stat->messages_spam);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %u" CRLF, session->worker->srv->stat->messages_ham);
+	if (session->worker->srv->stat->messages_scanned > 0) {
+		r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %u, %.2f%%" CRLF, session->worker->srv->stat->messages_spam,
+								(double)session->worker->srv->stat->messages_spam / (double)session->worker->srv->stat->messages_scanned * 100.);
+		r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %u, %.2f%%" CRLF, session->worker->srv->stat->messages_ham,
+								(double)session->worker->srv->stat->messages_ham / (double)session->worker->srv->stat->messages_scanned * 100.);
+	}
 	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %u" CRLF, session->worker->srv->stat->messages_learned);
 	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %u" CRLF, session->worker->srv->stat->connections_count);
 	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF, session->worker->srv->stat->control_connections_count);
