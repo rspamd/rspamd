@@ -13,9 +13,7 @@ use Getopt::Std;
 my %cfg = (
     'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
     'command'   => 'SYMBOLS',
-    'host'      => 'localhost',
-    'port'      => '11333',
-    'is_unix'   =>  0,
+    'hosts'      => ['localhost:11333', ],
 	'require_input'	=> 0,
     'password'  =>  '',
     'control'   =>  0,
@@ -29,9 +27,9 @@ $main::VERSION = '@RSPAMD_VERSION@';
 
 sub HELP_MESSAGE {
     print <<EOD;
-Usage: rspamc.pl [-h host] [-p port] [-P password] [-c conf_file] [-s statfile] [-d user\@domain] [command] [path]
--h         host to connect or unix socket path
--p         port to connect (not used with unix sockets)
+Usage: rspamc.pl [-h host] [-H hosts_list] [-P password] [-c conf_file] [-s statfile] [-d user\@domain] [command] [path]
+-h         host to connect (in format host:port) or unix socket path 
+-H         path to file that contains list of hosts
 -P         define control password
 -c         config file to parse
 -s         statfile to use for learn commands
@@ -93,13 +91,11 @@ sub parse_config {
         if (!$skip && ((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
                 && $_ =~ /^\s*bind_socket\s*=\s*((([^:]+):(\d+))|(\/\S*))/i) {
             if ($3 && $4) {
-                $cfg{'host'} = $3;
-                $cfg{'port'} = $4;
+                $cfg{'hosts'} = [ "$3:$4" ];
                 $cfg{'is_unix'} = 0;
             }
             else {
-                $cfg{'host'} = $5;
-                $cfg{'is_unix'} = 1;
+                $cfg{'hosts'} = [ "$5" ];
             }
         }
         if ($ctrl && $is_ctrl && $_ =~ /^\s*password\s*=\s*"(\S+)"/) {
@@ -116,7 +112,10 @@ sub make_tcp_socket {
 	my $proto = getprotobyname('tcp');
 	my $sin;
 
-	socket ($sock, PF_INET, SOCK_STREAM, $proto) or die "cannot create tcp socket";
+	if (!socket ($sock, PF_INET, SOCK_STREAM, $proto)) {
+		print "Cannot create tcp socket\n";
+		return undef;
+	}
 	if ($host eq '*') {
 		$host = '127.0.0.1';
 	}
@@ -126,12 +125,18 @@ sub make_tcp_socket {
 	else {
 		my $addr = gethostbyname($host);
 		if (!$addr) {
-			die "cannot resolve $host";
+			print "Cannot resolve $host\n";
+			close $sock;
+			return undef;
 		}
 		$sin = sockaddr_in ($port, $addr);
 	}
 	
-	connect ($sock, $sin) or die "cannot connect to socket $host:$port";
+	if (! connect ($sock, $sin)) {
+		print "Cannot connect to socket $host:$port\n";
+		close $sock;
+		return undef;
+	}
 
 	return $sock;
 }
@@ -147,16 +152,25 @@ sub make_ssl_socket {
 }
 
 sub connect_socket {
+	my $hostdef = shift;
     my $sock;
 
-    if ($cfg{'is_unix'}) {
-        socket ($sock, PF_UNIX, SOCK_STREAM, 0) or die "cannot create unix socket";
-        my $sun = sockaddr_un($cfg{'host'});
-        connect ($sock, $sun) or die "cannot connect to socket $cfg{'host'}";
+    if ($hostdef =~ /^\//) {
+        if (! socket ($sock, PF_UNIX, SOCK_STREAM, 0)) {
+			print "Cannot create unix socket\n";
+			return undef;
+		}
+        my $sun = sockaddr_un($hostdef);
+        if (!connect ($sock, $sun)) {
+			print "Cannot connect to socket $hostdef\n";
+			close $sock;
+			return undef;
+		}
     }
-    else {
-		$sock = make_tcp_socket ($cfg{'host'}, $cfg{'port'});
+    elsif ($hostdef =~ /^\s*(([^:]+):(\d+))\s*$/) {
+		$sock = make_tcp_socket ($2, $3);
     }
+
     return $sock;
 }
 
@@ -176,6 +190,8 @@ sub do_rspamc_command {
     while (defined (my $line = <$sock>)) {
         print $line;
     }
+
+	return 1;
 }
 
 sub do_ctrl_auth {
@@ -201,7 +217,8 @@ sub do_control_command {
     # Read greeting first
     if (defined (my $greeting = <$sock>)) {
         if ($greeting !~ /^Rspamd version/) {
-            die "not rspamd greeting line $greeting";
+            print "Not rspamd greeting line $greeting";
+			return 0;
         }
     }
     if ($cfg{'command'} =~ /^learn$/i) {
@@ -216,14 +233,17 @@ sub do_control_command {
             if (defined (my $reply = <$sock>)) {
                 if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
                     print "Learn succeed. Sum weight: $1\n";
+					return 1;
                 }
                 else {
                     print "Learn failed\n";
+					return 0;
                 }
             }
         }
         else {
             print "Authentication failed\n";
+			return 0;
         }
     }
     if ($cfg{'command'} =~ /^weights$/i) {
@@ -249,6 +269,7 @@ sub do_control_command {
         }
         else {
             print "Authentication failed\n";
+			return 0;
         }
     }
     elsif ($cfg{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
@@ -260,14 +281,17 @@ sub do_control_command {
             if (defined (my $reply = <$sock>)) {
                 if ($reply =~ /^OK/) {
                     print $cfg{'command'} . " succeed\n";
+					return 1;
                 }
                 else {
                     print $cfg{'command'} . " failed\n";
+					return 0;
                 }
             }
         }
         else {
             print "Authentication failed\n";
+			return 0;
         }
     
     }
@@ -278,6 +302,8 @@ sub do_control_command {
             print $line;
         }
     }
+
+	return 1;
 }
 
 sub process_file {
@@ -471,17 +497,61 @@ sub process_path {
 # Do specified command for specified input
 sub do_cmd {
 	my $input = shift;
+	my $res;
 
-    my $sock = connect_socket ();
+	print "*" x 20 . "\n";
+	foreach my $hostdef (@{ $cfg{'hosts'} }) {
+		print "Do $cfg{command} on $hostdef\n";
+		my $sock = connect_socket ($hostdef);
+		
+		if (! $sock) {
+			print "Result: failed (on connect stage)\n";
+			print "*" x 20 . "\n";
+			next;
+		}
 
-    if ($cfg{'control'}) {
-        do_control_command ($sock, $input);
-    }
-    else {
-        do_rspamc_command ($sock, $input);
-    }
+		if ($cfg{'control'}) {
+			$res = do_control_command ($sock, $input);
+		}
+		else {
+			$res = do_rspamc_command ($sock, $input);
+		}
 
-    close ($sock);
+		close ($sock);
+		if (! $res) {
+			print "Result: failed (on command stage)\n";
+		}
+		else {
+			print "Result: OK\n";
+		}
+		print "*" x 20 . "\n";
+	}
+}
+
+sub load_hosts_file {
+	my $file = shift;
+
+	open (HOSTS, "< $file") or die "cannot open file $file";
+	$cfg{'hosts'} = [ ];
+	while (<HOSTS>) {
+		chomp;
+		next if $_ =~ /^\s*#/;	
+		if ($_ =~ /^\s*(([^:]+):(\d+))\s*$/) {
+			push (@{ $cfg{'hosts'} }, $1);
+		}
+		elsif ($_ =~ /^\s*([^:]+)\s*$/) {
+			if ($cfg{'control'}) {
+				push (@{ $cfg{'hosts'} }, "$1:11334");
+			}
+			else {
+				push (@{ $cfg{'hosts'} }, "$1:11333");
+			}
+		}
+		elsif ($_ =~ /^\s*(\/\S*)\s*$/) {
+			push (@{ $cfg{'hosts'} }, "$1");
+		}
+	}
+	close FILE;
 }
 
 ############################# Main part ###########################################
@@ -489,7 +559,7 @@ my %args;
 
 HELP_MESSAGE() unless scalar @ARGV >= 1;
 
-getopt('c:h:p:P:s:d:w:S:', \%args);
+getopt('c:h:P:s:d:w:S:H:', \%args);
 
 my $cmd = shift;
 my @path = shift;
@@ -522,14 +592,8 @@ if (defined ($args{s})) {
     }
 }
 if (defined ($args{h})) {
-    $cfg{'host'} = $args{h};
-    if ($args{h} =~ /^\/.*$/) {
-        $cfg{'is_unix'} = 1;
-    }
+    $cfg{'hosts'} = [ $args{h} ];
     $do_parse_config = 0;
-}
-if (defined ($args{p})) {
-    $cfg{'port'} = $args{p};
 }
 if (defined ($args{P})) {
     $cfg{'password'} = $args{P};
@@ -559,6 +623,10 @@ if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|F
 
 if ($do_parse_config != 0) {
     parse_config ($cfg{'control'});
+}
+
+if (defined ($args{H})) {
+	load_hosts_file ($args{H});
 }
 
 if (!defined ($path[0]) || ! $cfg{'require_input'}) {
