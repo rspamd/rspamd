@@ -9,6 +9,8 @@
 
 use Socket qw(:DEFAULT :crlf);
 use Getopt::Std;
+use Data::Dumper;
+use Mail::Rspamd::Client;
 
 my %cfg = (
     'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
@@ -64,470 +66,6 @@ EOD
 exit;
 };
 
-# Load rspamd config params
-sub parse_config {
-    my ($is_ctrl) = @_;
-	
-	if (! open CONF, "< $cfg{'conf_file'}") {
-		print "Config file $cfg{'conf_file'} cannot be opened\n";
-		main::HELP_MESSAGE();
-		exit;
-	}
-
-    my $ctrl = 0, $skip = 0;
-    while (<CONF>) {
-        if ($_ =~ /^.*type.*=.*controller.*$/i) {
-            $ctrl = 1;
-        }
-        if ($ctrl && $_ =~ /}/) {
-            $ctrl = 0;
-        }
-        if ($_ =~ /^.*type.*=.*(?:lmtp|delivery|fuzzy).*$/i) {
-            $skip = 1;
-        }
-        if ($skip && $_ =~ /}/) {
-            $skip = 0;
-        }
-        if (!$skip && ((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
-                && $_ =~ /^\s*bind_socket\s*=\s*((([^:]+):(\d+))|(\/\S*))/i) {
-            if ($3 && $4) {
-                $cfg{'hosts'} = [ "$3:$4" ];
-                $cfg{'is_unix'} = 0;
-            }
-            else {
-                $cfg{'hosts'} = [ "$5" ];
-            }
-        }
-        if ($ctrl && $is_ctrl && $_ =~ /^\s*password\s*=\s*"(\S+)"/) {
-            $cfg{'password'} = $1;
-        }
-    }
-
-    close CONF;
-
-}
-
-sub make_tcp_socket {
-	my ($host, $port) = @_; 
-	my $proto = getprotobyname('tcp');
-	my $sin;
-
-	if (!socket ($sock, PF_INET, SOCK_STREAM, $proto)) {
-		print "Cannot create tcp socket\n";
-		return undef;
-	}
-	if ($host eq '*') {
-		$host = '127.0.0.1';
-	}
-	if (inet_aton ($host)) {
-		$sin = sockaddr_in ($port, inet_aton($host));
-	}
-	else {
-		my $addr = gethostbyname($host);
-		if (!$addr) {
-			print "Cannot resolve $host\n";
-			close $sock;
-			return undef;
-		}
-		$sin = sockaddr_in ($port, $addr);
-	}
-	
-	if (! connect ($sock, $sin)) {
-		print "Cannot connect to socket $host:$port\n";
-		close $sock;
-		return undef;
-	}
-
-	return $sock;
-}
-
-sub make_ssl_socket {
-	my ($host, $port) = @_; 
-	
-	eval {
-		use IO::Socket::SSL;
-	} or die "IO::Socket::SSL required for imaps";
-
-	return IO::Socket::SSL->new("$host:$port");
-}
-
-sub connect_socket {
-	my $hostdef = shift;
-    my $sock;
-
-    if ($hostdef =~ /^\//) {
-        if (! socket ($sock, PF_UNIX, SOCK_STREAM, 0)) {
-			print "Cannot create unix socket\n";
-			return undef;
-		}
-        my $sun = sockaddr_un($hostdef);
-        if (!connect ($sock, $sun)) {
-			print "Cannot connect to socket $hostdef\n";
-			close $sock;
-			return undef;
-		}
-    }
-    elsif ($hostdef =~ /^\s*(([^:]+):(\d+))\s*$/) {
-		$sock = make_tcp_socket ($2, $3);
-    }
-
-    return $sock;
-}
-
-# Currently just read stdin for user's message and pass it to rspamd
-sub do_rspamc_command {
-    my ($sock, $input) = @_;
-
-    print "Sending ". length ($input) ." bytes...\n";
-
-    syswrite $sock, "$cfg{'command'} RSPAMC/1.1 $CRLF";
-	if ($cfg{'deliver_to'}) {
-		syswrite $sock, "Deliver-To: " . $cfg{'deliver_to'} . $CRLF;
-	}
-    syswrite $sock, "Content-Length: " . length ($input) . $CRLF . $CRLF;
-    syswrite $sock, $input;
-    syswrite $sock, $CRLF;
-    while (defined (my $line = <$sock>)) {
-        print $line;
-    }
-
-	return 1;
-}
-
-sub do_ctrl_auth {
-    my ($sock) = @_;
-	my $res = 0;
-
-    syswrite $sock, "password $cfg{'password'}" . $CRLF;
-    if (defined (my $reply = <$sock>)) {
-        if ($reply =~ /^password accepted/) {
-            $res = 1;
-        }
-    }
-	
-	# END
-	return 0 unless <$sock>;
-
-    return $res;
-}
-
-sub do_control_command {
-    my ($sock, $input) = @_;
-
-    # Read greeting first
-    if (defined (my $greeting = <$sock>)) {
-        if ($greeting !~ /^Rspamd version/) {
-            print "Not rspamd greeting line $greeting";
-			return 0;
-        }
-    }
-    if ($cfg{'command'} =~ /^learn$/i) {
-        die "statfile is not specified to learn command" if !$cfg{'statfile'};
-        
-        
-        if (do_ctrl_auth ($sock)) {
-            my $len = length ($input);
-            print "Sending $len bytes...\n";
-            syswrite $sock, "learn $cfg{'statfile'} $len -w $cfg{weight}" . $CRLF;
-            syswrite $sock, $input . $CRLF;
-            if (defined (my $reply = <$sock>)) {
-                if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
-                    print "Learn succeed. Sum weight: $1\n";
-					return 1;
-                }
-                else {
-                    print "Learn failed\n";
-					return 0;
-                }
-            }
-        }
-        else {
-            print "Authentication failed\n";
-			return 0;
-        }
-    }
-    if ($cfg{'command'} =~ /^weights$/i) {
-        die "statfile is not specified to weights command" if !$cfg{'statfile'};
-        
-        
-		my $len = length ($input);
-		print "Sending $len bytes...\n";
-		syswrite $sock, "weights $cfg{'statfile'} $len" . $CRLF;
-		syswrite $sock, $input . $CRLF;
-		while (defined (my $reply = <$sock>)) {
-			last if $reply =~ /^END/;
-			print $reply;
-		}
-    }
-    elsif ($cfg{'command'} =~ /(reload|shutdown)/i) {
-        if (do_ctrl_auth ($sock)) {
-            syswrite $sock, $cfg{'command'} . $CRLF;
-            while (defined (my $line = <$sock>)) {
-                last if $line =~ /^END/;
-                print $line;
-            }
-        }
-        else {
-            print "Authentication failed\n";
-			return 0;
-        }
-    }
-    elsif ($cfg{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
-        if (do_ctrl_auth ($sock)) {
-            my $len = length ($input);
-            print "Sending $len bytes...\n";
-            syswrite $sock, $cfg{'command'} . " $len $cfg{'weight'}" . $CRLF;
-            syswrite $sock, $input . $CRLF;
-            if (defined (my $reply = <$sock>)) {
-                if ($reply =~ /^OK/) {
-                    print $cfg{'command'} . " succeed\n";
-					return 1;
-                }
-                else {
-                    print $cfg{'command'} . " failed\n";
-					return 0;
-                }
-            }
-        }
-        else {
-            print "Authentication failed\n";
-			return 0;
-        }
-    
-    }
-    else {
-        syswrite $sock, $cfg{'command'} . $CRLF;
-        while (defined (my $line = <$sock>)) {
-            last if $line =~ /^END/;
-            print $line;
-        }
-    }
-
-	return 1;
-}
-
-sub process_file {
-	my $file = shift;
-
-	print "Process file: $file\n";
-	open(FILE, "< $file") or return;
-	
-	my $input;
-	while (defined (my $line = <FILE>)) {
-		$input .= $line;
-	}
-	
-	close FILE;
-	do_cmd ($input);
-}
-
-sub process_directory {
-	my $dir = shift;
-
-	opendir (DIR, $dir) or return;
-
-	while (defined (my $file = readdir (DIR))) {
-		$file = "$dir/$file";
-		if (-f $file) {
-			process_file ($file);
-		}	
-	}
-	closedir (DIR);
-}
-
-sub check_imap_reply {
-	my $sock = shift;
-	my $seq = shift;
-
-	my $input;
-
-	while (defined ($input = <$sock>)) {
-		chomp $input;
-		if ($input =~ /BAD|NO (.+)$/) {
-			$_[0] = $1;
-			return 0;
-		}
-		next if ($input =~ /^\*/);
-		if ($input =~ /^$seq OK/) {
-			return 1;
-		}
-
-		$_[0] = $input;
-		return 0;
-	}
-
-	$_[0] = "timeout";
-	
-	return 0;
-}
-
-sub parse_imap_body {
-	my $sock = shift;
-	my $seq = shift;
-	my $input;
-	my $got_body = 0;
-
-	while (defined (my $line = <$sock>)) {
-		if (!$got_body && $line =~ /^\*/) {
-			$got_body = 1;
-			next;
-		}
-		if ($line =~ /^$seq OK/) {
-			return $input;
-		}
-		elsif ($got_body) {
-			$input .= $line;
-			next;
-		}
-		
-		return undef;
-	}
-
-	return undef;
-
-}
-
-sub parse_imap_sequences {
-	my $sock = shift;
-	my $seq = shift;
-	my $input;
-
-	while (defined ($input = <$sock>)) {
-		chomp $input;
-		if ($input =~ /^\* SEARCH (.+)$/) {
-			@res = split (/\s/, $1);
-			next;
-		}
-		elsif ($input =~ /^$seq OK/) {
-			return \@res;
-		}
-		return undef;
-	}
-
-}
-
-sub process_imap {
-	my ($ssl, $user, $password, $host, $mbox) = @_;
-	my $seq = 1;
-	my $sock;
-
-	if (!$password) {
-		eval {
-			use Term::ReadKey;
-			print "Enter IMAP password: ";
-			ReadMode 'noecho';
-			$password = ReadLine 0;
-			chomp $password;
-			ReadMode 'normal';
-			print "\n";
-		} or die "cannot get password. Check that Term::ReadKey is installed";
-	}
-	print "Process imap: host: $host, mbox: $mbox\n";
-
-	# Stupid code that does not take care of timeouts etc, just trying to extract messages
-	if ($ssl) {
-		$sock = make_ssl_socket ($host, 'imaps');
-	}
-	else {
-		$sock = make_tcp_socket ($host, 143);
-	}
-	my $reply = <$sock>;
-	if (!defined ($reply) || $reply !~ /^\* OK/) {
-		print "Imap server is not ready\n";
-		return;
-	}
-	syswrite $sock, "$seq LOGIN $user $password$CRLF";
-	if (!check_imap_reply ($sock, $seq, $reply)) {
-		print "Cannot login to imap server: $reply\n";
-		return;
-	}
-	$seq ++;
-	syswrite $sock, "$seq SELECT $mbox$CRLF";
-	if (!check_imap_reply ($sock, $seq, $reply)) {
-		print "Cannot select mbox $mbox: $reply\n";
-		return;
-	}
-	$seq ++;
-	syswrite $sock, "$seq SEARCH $cfg{imap_search}$CRLF";
-	my $messages;
-	if (!defined ($messages = parse_imap_sequences ($sock, $seq))) {
-		print "Cannot make search\n";
-		return;
-	}
-	$seq ++;
-	foreach my $message (@{ $messages }){
-		syswrite $sock, "$seq FETCH $message body[]$CRLF";
-		if (defined (my $input = parse_imap_body ($sock, $seq))) {
-			do_cmd ($input);
-		}
-		$seq ++;
-	} 
-	syswrite $sock, "$seq LOGOUT$CRLF";
-	close $sock;
-}
-
-# Single item
-sub process_item {
-	my $item = shift;
-	
-	print "Processing $item\n";
-	if (defined ($item)) {
-		if ($item =~ qr|^imap(s?):user:([^:]+):password:([^:]*):host:([^:]+):mbox:(.+)$|) {
-			process_imap ($1, $2, $3, $4, $5);
-		}
-		elsif (-f $item) {
-			process_file ($item);
-		}
-		elsif (-d $item) {
-			process_directory ($item);
-		}
-		else {
-			warn "urecognized argument: $item";
-		}
-	}
-}
-
-# Do specified command for each file in path or 
-sub process_path {
-	foreach (@_) {
-		process_item($_);
-	}
-}
-
-# Do specified command for specified input
-sub do_cmd {
-	my $input = shift;
-	my $res;
-
-	print "*" x 20 . "\n";
-	foreach my $hostdef (@{ $cfg{'hosts'} }) {
-		print "Do $cfg{command} on $hostdef\n";
-		my $sock = connect_socket ($hostdef);
-		
-		if (! $sock) {
-			print "Result: failed (on connect stage)\n";
-			print "*" x 20 . "\n";
-			next;
-		}
-
-		if ($cfg{'control'}) {
-			$res = do_control_command ($sock, $input);
-		}
-		else {
-			$res = do_rspamc_command ($sock, $input);
-		}
-
-		close ($sock);
-		if (! $res) {
-			print "Result: failed (on command stage)\n";
-		}
-		else {
-			print "Result: OK\n";
-		}
-		print "*" x 20 . "\n";
-	}
-}
-
 sub load_hosts_file {
 	my $file = shift;
 
@@ -551,7 +89,48 @@ sub load_hosts_file {
 			push (@{ $cfg{'hosts'} }, "$1");
 		}
 	}
-	close FILE;
+	close HOSTS;
+}
+
+# Load rspamd config params
+sub parse_config {
+    my ($is_ctrl) = @_;
+	
+	if (! open CONF, "< $cfg{'conf_file'}") {
+		print "Config file $cfg{'conf_file'} cannot be opened\n";
+		return;
+	}
+
+    my $ctrl = 0, $skip = 0;
+    while (<CONF>) {
+        if ($_ =~ /^.*type.*=.*controller.*$/i) {
+            $ctrl = 1;
+        }
+        if ($ctrl && $_ =~ /}/) {
+            $ctrl = 0;
+        }
+        if ($_ =~ /^.*type.*=.*(?:lmtp|delivery|fuzzy).*$/i) {
+            $skip = 1;
+        }
+        if ($skip && $_ =~ /}/) {
+            $skip = 0;
+        }
+        if (!$skip && ((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
+                && $_ =~ /^\s*bind_socket\s*=\s*((([^:]+):(\d+))|(\/\S*))/i) {
+            if ($3 && $4) {
+                $cfg{'hosts'} = [ "$3:$4" ];
+            }
+            else {
+                $cfg{'hosts'} = [ "$5" ];
+            }
+        }
+        if ($ctrl && $is_ctrl && $_ =~ /^\s*password\s*=\s*"(\S+)"/) {
+            $cfg{'password'} = $1;
+        }
+    }
+
+    close CONF;
+
 }
 
 ############################# Main part ###########################################
@@ -605,7 +184,7 @@ if (defined ($args{w})) {
 	$cfg{'weight'} = $args{w};
 }
 
-if ($cmd =~ /(SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS)/i) {
+if ($cmd =~ /(SYMBOLS|PROCESS|CHECK|URLS|EMAILS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 0;
 }
@@ -629,6 +208,8 @@ if (defined ($args{H})) {
 	load_hosts_file ($args{H});
 }
 
+my $rspamd = Mail::Rspamd::Client->new(\%cfg);
+
 if (!defined ($path[0]) || ! $cfg{'require_input'}) {
 	my $input;
 	if ($cfg{'require_input'}) {
@@ -636,8 +217,11 @@ if (!defined ($path[0]) || ! $cfg{'require_input'}) {
 			$input .= $line;
 		}
 	}
-	do_cmd ($input);
+	
+	my $res = $rspamd->do_all_cmd ($input);
+	print Dumper($res);
 }
 else {
-	process_path (@path);
+	my $res = $rspamd->process_path (@path);
+	print Dumper($res);
 }
