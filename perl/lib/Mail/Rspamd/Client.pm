@@ -130,367 +130,6 @@ sub make_ssl_socket {
 }
 
 
-# Currently just read stdin for user's message and pass it to rspamd
-sub _do_rspamc_command {
-	my ($self, $remote, $msg) = @_;
-
-	my %metrics;
-
-
-	my $msgsize = length($msg.$EOL);
-
-	local $SIG{PIPE} = 'IGNORE';
-
-	if (!(syswrite($remote, "$self->{command} $PROTOVERSION$EOL"))) {
-		$self->_mark_dead($remote);
-		return 0;
-	}
-	syswrite $remote, "Content-length: $msgsize$EOL";
-	syswrite $remote, "User: $self->{username}$EOL" if ($self->{username});
-	syswrite $remote, "From: $self->{from}$EOL" if ($self->{from});
-	syswrite $remote, "IP: $self->{ip}$EOL" if ($self->{ip});
-	syswrite $remote, "Subject: $self->{subject}$EOL" if ($self->{subject});
-	if (ref $self->{rcpt} eq "ARRAY") {
-		foreach ($self->{rcpt}) {
-			syswrite $remote, "Rcpt: $_ $EOL";
-		}
-	}
-	syswrite $remote, $EOL;
-	syswrite $remote, $msg;
-	syswrite $remote, $EOL;
-	
-	return undef unless $self->_get_io_readiness($remote, 0);
-			
-	my ($in, $res);
-	my $offset = 0;
-	do {
-		$res = sysread($remote, $in, 512, $offset);
-		if ($res > 0 && $res < 512) {
-			$self->_get_io_readiness($remote, 0);
-		}
-		$offset += $res;
-	} while ($res > 0);
-
-	my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($in);
-
-	$self->{resp_code} = $resp_code;
-	$self->{resp_msg} = $resp_msg;
-
-	return undef unless (defined($resp_code) && $resp_code == 0);
-
-	my $cur_metric;
-	my @lines = split (/^/, $in);
-	foreach my $line (@lines) {
-		if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+)!) {
-			$metrics{$1} = {
-				isspam => $2,
-				score => $3 + 0,
-				threshold => $4 + 0,
-				symbols => [],
-				urls => [],
-				messages => [],
-			};
-			$cur_metric = $1;
-		}
-		elsif ($line =~ /^Symbol: (\S+)/ && $cur_metric) {
-			my $symref = $metrics{$cur_metric}->{'symbols'};
-			push(@$symref, $1);
-		}
-		elsif ($line =~ /^Urls: (\S+)/ && $cur_metric) {
-			@{ $metrics{$cur_metric}->{'urls'} } = split /\s/, $1;
-		}
-		elsif ($line =~ /^Message: (\S+)/ && $cur_metric) {
-			my $symref = $metrics{$cur_metric}->{'messages'};
-			push(@$symref, $1);
-		}
-		elsif ($line =~ /^${EOL}$/) {
-			last;
-		}
-	}
-
-	close $remote;
-
-	return \%metrics;
-
-}
-
-
-sub _do_control_command {
-	my ($self, $remote, $msg) = @_;
-
-	local $SIG{PIPE} = 'IGNORE';
-	my %res;
-	
-	$res{error_code} = 0;
-
-    # Read greeting first
-    if (defined (my $greeting = <$remote>)) {
-        if ($greeting !~ /^Rspamd version/) {
-            $res{error} = "Not rspamd greeting line $greeting";
-			$res{error_code} = 500;
-			return \%res;
-        }
-    }
-
-    if ($self->{'command'} =~ /^learn$/i) {
-        if (!$self->{'statfile'}) {
-			$res{error} = "Statfile is not specified to learn command";
-			$res{error_code} = 500;
-			return \%res;
-		}
-        
-        if ($self->_auth ($remote)) {
-            my $len = length ($msg);
-            syswrite $remote, "learn $self->{statfile} $len -w $self->{weight}" . $EOL;
-            syswrite $remote, $input . $EOL;
-			return undef unless $self->_get_io_readiness($remote, 0);
-            if (defined (my $reply = <$remote>)) {
-                if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
-                    $res{error} = "Learn succeed. Sum weight: $1\n";
-					return \%res;
-                }
-                else {
-					$res{error_code} = 500;
-                    $res{error} = "Learn failed\n";
-					return \%res;
-                }
-            }
-        }
-        else {
-			$res{error_code} = 403;
-            $res{error} = "Authentication failed\n";
-			return \%res;
-        }
-    }
-    elsif ($self->{'command'} =~ /^weights$/i) {
-        if (!$self->{'statfile'}) {
-			$res{error_code} = 500;
-			$res{error} = "Statfile is not specified to weights command";
-			return \%res;
-		}
-        
-		my $len = length ($input);
-		$res{error} = "Sending $len bytes...\n";
-		syswrite $remote, "weights $self->{'statfile'} $len" . $EOL;
-		syswrite $remote, $input . $EOL;
-		return undef unless $self->_get_io_readiness($remote, 0);
-		while (defined (my $reply = <$remote>)) {
-			last if $reply =~ /^END/;
-			$res{error} .= $reply;
-		}
-    }
-    elsif ($self->{'command'} =~ /(reload|shutdown)/i) {
-        if ($self->_auth ($remote)) {
-            syswrite $remote, $self->{'command'} . $EOL;
-            while (defined (my $line = <$remote>)) {
-                last if $line =~ /^END/;
-                $res{error} .= $line;
-            }
-        }
-        else {
-			$res{error_code} = 403;
-            $res{error} = "Authentication failed\n";
-			return \%res;
-        }
-    }
-    elsif ($self->{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
-        if ($self->_auth ($remote)) {
-            my $len = length ($input);
-            syswrite $remote, $self->{'command'} . " $len $self->{'weight'}" . $EOL;
-            syswrite $remote, $input . $EOL;
-			return undef unless $self->_get_io_readiness($remote, 0);
-            if (defined (my $reply = <$remote>)) {
-                if ($reply =~ /^OK/) {
-                    $res{error} = $self->{'command'} . " succeed\n";
-					return \%res;
-                }
-                else {
-					$res{error_code} = 500;
-                    $res{error} = $self->{'command'} . " failed\n";
-					return \%res;
-                }
-            }
-        }
-        else {
-			$res{error_code} = 403;
-            $res{error} = "Authentication failed\n";
-			return \%res;
-        }
-    
-    }
-    else {
-        syswrite $remote, $self->{'command'} . $EOL;
-        while (defined (my $line = <$remote>)) {
-            last if $line =~ /^END/;
-            $res{error} .= $line;
-        }
-    }
-
-	return \%res;
-}
-
-sub _process_file {
-	my $self = shift;
-	my $file = shift;
-
-	open(FILE, "< $file") or return;
-	
-	my $input;
-	while (defined (my $line = <FILE>)) {
-		$input .= $line;
-	}
-	
-	close FILE;
-	$self->do_all_cmd ($input);
-}
-
-sub _process_directory {
-	my $self = shift;
-	my $dir = shift;
-
-	opendir (DIR, $dir) or return;
-
-	while (defined (my $file = readdir (DIR))) {
-		$file = "$dir/$file";
-		if (-f $file) {
-			$self->_process_file ($file);
-		}	
-	}
-	closedir (DIR);
-}
-
-sub _check_imap_reply {
-	my $self = shift;
-	my $sock = shift;
-	my $seq = shift;
-
-	my $input;
-
-	while (defined ($input = <$sock>)) {
-		chomp $input;
-		if ($input =~ /BAD|NO (.+)$/) {
-			$_[0] = $1;
-			return 0;
-		}
-		next if ($input =~ /^\*/);
-		if ($input =~ /^$seq OK/) {
-			return 1;
-		}
-
-		$_[0] = $input;
-		return 0;
-	}
-
-	$_[0] = "timeout";
-	
-	return 0;
-}
-
-sub _parse_imap_body {
-	my $self = shift;
-	my $sock = shift;
-	my $seq = shift;
-	my $input;
-	my $got_body = 0;
-
-	while (defined (my $line = <$sock>)) {
-		if (!$got_body && $line =~ /^\*/) {
-			$got_body = 1;
-			next;
-		}
-		if ($line =~ /^$seq OK/) {
-			return $input;
-		}
-		elsif ($got_body) {
-			$input .= $line;
-			next;
-		}
-		
-		return undef;
-	}
-
-	return undef;
-
-}
-
-sub _parse_imap_sequences {
-	my $self = shift;
-	my $sock = shift;
-	my $seq = shift;
-	my $input;
-
-	while (defined ($input = <$sock>)) {
-		chomp $input;
-		if ($input =~ /^\* SEARCH (.+)$/) {
-			@res = split (/\s/, $1);
-			next;
-		}
-		elsif ($input =~ /^$seq OK/) {
-			return \@res;
-		}
-		return undef;
-	}
-
-}
-
-sub process_imap {
-	my ($self, $ssl, $user, $password, $host, $mbox) = @_;
-	my $seq = 1;
-	my $sock;
-
-	if (!$password) {
-		eval {
-			use Term::ReadKey;
-			$self->{error} = "Enter IMAP password: ";
-			ReadMode 'noecho';
-			$password = ReadLine 0;
-			chomp $password;
-			ReadMode 'normal';
-			$self->{error} = "\n";
-		} or die "cannot get password. Check that Term::ReadKey is installed";
-	}
-
-	# Stupid code that does not take care of timeouts etc, just trying to extract messages
-	if ($ssl) {
-		$sock = $self->_make_ssl_socket ($host, 'imaps');
-	}
-	else {
-		$sock = $self->_make_tcp_socket ($host, 143);
-	}
-	my $reply = <$sock>;
-	if (!defined ($reply) || $reply !~ /^\* OK/) {
-		$self->{error} = "Imap server is not ready";
-		return;
-	}
-	syswrite $sock, "$seq LOGIN $user $password$EOL";
-	if (!$self->_check_imap_reply ($sock, $seq, $reply)) {
-		$self->{error} = "Cannot login to imap server: $reply";
-		return;
-	}
-	$seq ++;
-	syswrite $sock, "$seq SELECT $mbox$EOL";
-	if (!$self->_check_imap_reply ($sock, $seq, $reply)) {
-		$self->{error} = "Cannot select mbox $mbox: $reply";
-		return;
-	}
-	$seq ++;
-	syswrite $sock, "$seq SEARCH $self->{imap_search}$EOL";
-	my $messages;
-	if (!defined ($messages = $self->_parse_imap_sequences ($sock, $seq))) {
-		$self->{error} = "Cannot make search";
-		return;
-	}
-	$seq ++;
-	foreach my $message (@{ $messages }){
-		syswrite $sock, "$seq FETCH $message body[]$EOL";
-		if (defined (my $input = $self->_parse_imap_body ($sock, $seq))) {
-			$self->do_all_cmd ($input);
-		}
-		$seq ++;
-	} 
-	syswrite $sock, "$seq LOGOUT$EOL";
-	close $sock;
-}
 
 =head2 process_item
 
@@ -504,6 +143,7 @@ The return value is a hash reference containing results of each command for each
 =cut
 
 sub process_item {
+	my $self = shift;
 	my $item = shift;
 	
 	if (defined ($item)) {
@@ -534,6 +174,7 @@ The return value is a hash reference containing results of each command for each
 
 =cut
 sub process_path {
+	my $self = shift;
 	my %res;
 	foreach (@_) {
 		$res{$_} = $self->process_item($_);
@@ -565,6 +206,7 @@ sub do_all_cmd {
 		my $remote = $self->_create_connection($hostdef);
 
 		if (! $remote) {
+			$res{$hostdef}->{error_code} = 404;
 			$res{$hostdef}->{error} = "Cannot connect to $hostdef";
 		}
 		else {
@@ -591,14 +233,20 @@ C<$is_check_p> either calls PROCESS or CHECK.
 
 The return value is a hash reference containing metrics indexed by name. Each metric
 is hash that contains data:
-
+=over 
+=item *
 isspam
 
+=item *
 score
 
+=item *
 threshold
 
+=item *
 symbols - array of symbols
+
+=back
 
 =cut
 
@@ -619,14 +267,20 @@ This method makes a call to the spamd server
 
 The return value is a hash reference containing metrics indexed by name. Each metric
 is hash that contains data:
-
+=over
+=item *
 isspam
 
+=item *
 score
 
+=item *
 threshold
 
+=item *
 symbols - array of symbols
+
+=back
 
 =cut
 
@@ -648,13 +302,20 @@ This method makes a call to the spamd server
 The return value is a hash reference containing metrics indexed by name. Each metric
 is hash that contains data:
 
+=over
+=item *
 isspam
 
+=item *
 score
 
+=item *
 threshold
 
+=item *
 symbols - array of symbols
+
+=back
 
 =cut
 sub process {
@@ -708,7 +369,7 @@ sub urls {
 
 =head2 learn
 
-public instance (\%) check (String $msg, String $statfile, Boolean in_class)
+public instance (\%) learn (String $msg)
 
 Description:
 This method makes a call to the spamd learning a statfile with message.
@@ -723,6 +384,14 @@ sub learn {
 	return $self->_do_control_command ($self, $msg);
 }
 
+=head2 weights
+
+public instance (\%) weights (String $msg)
+
+Description:
+This method makes a call to the spamd showing weights of message by each statfile.
+
+=cut
 sub weights {
 	my ($self, $msg) = @_;
 	
@@ -731,6 +400,14 @@ sub weights {
 	return $self->_do_control_command ($self, $msg);
 }
 
+=head2 fuzzy_add
+
+public instance (\%) fuzzy_add (String $msg)
+
+Description:
+This method makes a call to the spamd adding specified message to fuzzy storage.
+
+=cut
 sub fuzzy_add {
 	my ($self, $msg) = @_;
 	
@@ -738,6 +415,14 @@ sub fuzzy_add {
 
 	return $self->_do_control_command ($self, $msg);
 }
+=head2 fuzzy_del
+
+public instance (\%) fuzzy_add (String $msg)
+
+Description:
+This method makes a call to the spamd removing specified message from fuzzy storage.
+
+=cut
 sub fuzzy_del {
 	my ($self, $msg) = @_;
 	
@@ -746,6 +431,14 @@ sub fuzzy_del {
 	return $self->_do_control_command ($self, $msg);
 }
 
+=head2 stat
+
+public instance (\%) stat ()
+
+Description:
+This method makes a call to the spamd and get statistics.
+
+=cut
 sub stat {
 	my ($self) = @_;
 	
@@ -753,6 +446,14 @@ sub stat {
 
 	return $self->_do_control_command ($self, undef);
 }
+=head2 uptime
+
+public instance (\%) uptime ()
+
+Description:
+This method makes a call to the spamd and get uptime.
+
+=cut
 sub uptime {
 	my ($self) = @_;
 	
@@ -760,6 +461,14 @@ sub uptime {
 
 	return $self->_do_control_command ($self, undef);
 }
+=head2 counters
+
+public instance (\%) counters ()
+
+Description:
+This method makes a call to the spamd and get counters.
+
+=cut
 sub counters {
 	my ($self) = @_;
 	
@@ -864,8 +573,25 @@ sub _create_connection {
     }
     elsif ($hostdef =~ /^\s*(([^:]+):(\d+))\s*$/) {
 		$remote = IO::Socket::INET->new( Proto     => "tcp",
-					PeerAddr  => $server->{host},
-					PeerPort  => $server->{port},
+					PeerAddr  => $2,
+					PeerPort  => $3,
+					Blocking  => 0,
+				);
+		# Get write readiness
+		if (defined ($remote)) {
+			if ($self->_get_io_readiness($remote, 1) != 0) {
+				return $remote;
+			}
+			else {
+				close ($remote);
+				return undef;
+			}
+		}
+    }
+    elsif ($hostdef =~ /^\s*([^:]+)\s*$/) {
+		$remote = IO::Socket::INET->new( Proto     => "tcp",
+					PeerAddr  => $1,
+					PeerPort  => $self->{control} ? 11334 : 11333,
 					Blocking  => 0,
 				);
 		# Get write readiness
@@ -1058,6 +784,402 @@ sub _clear_errors {
 	$self->{resp_code} = undef;
 	$self->{resp_msg} = undef;
 	$self->{error} = undef;
+}
+
+# Currently just read stdin for user's message and pass it to rspamd
+sub _do_rspamc_command {
+	my ($self, $remote, $msg) = @_;
+
+	my %metrics;
+
+
+	my $msgsize = length($msg.$EOL);
+
+	local $SIG{PIPE} = 'IGNORE';
+
+	if (!(syswrite($remote, "$self->{command} $PROTOVERSION$EOL"))) {
+		$self->_mark_dead($remote);
+		return 0;
+	}
+	syswrite $remote, "Content-length: $msgsize$EOL";
+	syswrite $remote, "User: $self->{username}$EOL" if ($self->{username});
+	syswrite $remote, "From: $self->{from}$EOL" if ($self->{from});
+	syswrite $remote, "IP: $self->{ip}$EOL" if ($self->{ip});
+	syswrite $remote, "Subject: $self->{subject}$EOL" if ($self->{subject});
+	if (ref $self->{rcpt} eq "ARRAY") {
+		foreach ($self->{rcpt}) {
+			syswrite $remote, "Rcpt: $_ $EOL";
+		}
+	}
+	syswrite $remote, $EOL;
+	syswrite $remote, $msg;
+	syswrite $remote, $EOL;
+	
+	return undef unless $self->_get_io_readiness($remote, 0);
+			
+	my ($in, $res);
+	my $offset = 0;
+	do {
+		$res = sysread($remote, $in, 512, $offset);
+		if ($res > 0 && $res < 512) {
+			$self->_get_io_readiness($remote, 0);
+		}
+		$offset += $res;
+	} while ($res > 0);
+
+	my ($version, $resp_code, $resp_msg) = $self->_parse_response_line($in);
+
+	$self->{resp_code} = $resp_code;
+	$self->{resp_msg} = $resp_msg;
+
+	return undef unless (defined($resp_code) && $resp_code == 0);
+
+	my $cur_metric;
+	my @lines = split (/^/, $in);
+	foreach my $line (@lines) {
+		if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+)!) {
+			$metrics{$1} = {
+				isspam => $2,
+				score => $3 + 0,
+				threshold => $4 + 0,
+				symbols => [],
+				urls => [],
+				messages => [],
+			};
+			$cur_metric = $1;
+		}
+		elsif ($line =~ /^Symbol: (\S+);\s*(.+)${EOL}$/ && $cur_metric) {
+			# Line with parameters
+			my $symref = $metrics{$cur_metric}->{'symbols'};
+			push(@$symref, "$1($2)");
+		}
+		elsif ($line =~ /^Symbol: (\S+)/ && $cur_metric) {
+			my $symref = $metrics{$cur_metric}->{'symbols'};
+			push(@$symref, $1);
+		}
+		elsif ($line =~ /^Urls: (.+)$/ && $cur_metric) {
+			@{ $metrics{$cur_metric}->{'urls'} } = split /,\s+/, $1;
+		}
+		elsif ($line =~ /^Message: (.+)/ && $cur_metric) {
+			my $symref = $metrics{$cur_metric}->{'messages'};
+			push(@$symref, $1);
+		}
+		elsif ($line =~ /^${EOL}$/) {
+			last;
+		}
+	}
+
+	close $remote;
+
+	return \%metrics;
+
+}
+
+
+sub _do_control_command {
+	my ($self, $remote, $msg) = @_;
+
+	local $SIG{PIPE} = 'IGNORE';
+	my %res = (
+		error_code	=> 0,
+		error		=> '',
+	);
+
+	unless ($self->_get_io_readiness($remote, 0)) {
+		$res{error} = "Timeout while reading data from socket";
+		$res{error_code} = 501;
+		return \%res;
+	}
+
+    # Read greeting first
+    if (defined (my $greeting = <$remote>)) {
+        if ($greeting !~ /^Rspamd version/) {
+            $res{error} = "Not rspamd greeting line $greeting";
+			$res{error_code} = 500;
+			return \%res;
+        }
+    }
+
+    if ($self->{'command'} =~ /^learn$/i) {
+        if (!$self->{'statfile'}) {
+			$res{error} = "Statfile is not specified to learn command";
+			$res{error_code} = 500;
+			return \%res;
+		}
+        
+        if ($self->_auth ($remote)) {
+            my $len = length ($msg);
+            syswrite $remote, "learn $self->{statfile} $len -w $self->{weight}" . $EOL;
+            syswrite $remote, $input . $EOL;
+			unless ($self->_get_io_readiness($remote, 0)) {
+				$res{error} = "Timeout while reading data from socket";
+				$res{error_code} = 501;
+				return \%res;
+			}
+            if (defined (my $reply = <$remote>)) {
+                if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
+                    $res{error} = "Learn succeed. Sum weight: $1\n";
+					return \%res;
+                }
+                else {
+					$res{error_code} = 500;
+                    $res{error} = "Learn failed\n";
+					return \%res;
+                }
+            }
+        }
+        else {
+			$res{error_code} = 403;
+            $res{error} = "Authentication failed\n";
+			return \%res;
+        }
+    }
+    elsif ($self->{'command'} =~ /^weights$/i) {
+        if (!$self->{'statfile'}) {
+			$res{error_code} = 500;
+			$res{error} = "Statfile is not specified to weights command";
+			return \%res;
+		}
+        
+		my $len = length ($input);
+		$res{error} = "Sending $len bytes...\n";
+		syswrite $remote, "weights $self->{'statfile'} $len" . $EOL;
+		syswrite $remote, $input . $EOL;
+		unless ($self->_get_io_readiness($remote, 0)) {
+			$res{error} = "Timeout while reading data from socket";
+			$res{error_code} = 501;
+			return \%res;
+		}
+		while (defined (my $reply = <$remote>)) {
+			last if $reply =~ /^END/;
+			$res{error} .= $reply;
+		}
+    }
+    elsif ($self->{'command'} =~ /(reload|shutdown)/i) {
+        if ($self->_auth ($remote)) {
+            syswrite $remote, $self->{'command'} . $EOL;
+			unless ($self->_get_io_readiness($remote, 0)) {
+				$res{error} = "Timeout while reading data from socket";
+				$res{error_code} = 501;
+				return \%res;
+			}
+            while (defined (my $line = <$remote>)) {
+                last if $line =~ /^END/;
+                $res{error} .= $line;
+            }
+        }
+        else {
+			$res{error_code} = 403;
+            $res{error} = "Authentication failed\n";
+			return \%res;
+        }
+    }
+    elsif ($self->{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
+        if ($self->_auth ($remote)) {
+            my $len = length ($input);
+            syswrite $remote, $self->{'command'} . " $len $self->{'weight'}" . $EOL;
+            syswrite $remote, $input . $EOL;
+			unless ($self->_get_io_readiness($remote, 0)) {
+				$res{error} = "Timeout while reading data from socket";
+				$res{error_code} = 501;
+				return \%res;
+			}
+            if (defined (my $reply = <$remote>)) {
+                if ($reply =~ /^OK/) {
+                    $res{error} = $self->{'command'} . " succeed\n";
+					return \%res;
+                }
+                else {
+					$res{error_code} = 500;
+                    $res{error} = $self->{'command'} . " failed\n";
+					return \%res;
+                }
+            }
+        }
+        else {
+			$res{error_code} = 403;
+            $res{error} = "Authentication failed\n";
+			return \%res;
+        }
+    
+    }
+    else {
+        syswrite $remote, $self->{'command'} . $EOL;
+		unless ($self->_get_io_readiness($remote, 0)) {
+			$res{error} = "Timeout while reading data from socket";
+			$res{error_code} = 501;
+			return \%res;
+		}
+        while (defined (my $line = <$remote>)) {
+            last if $line =~ /^END/;
+            $res{error} .= $line;
+        }
+    }
+
+	return \%res;
+}
+
+sub _process_file {
+	my $self = shift;
+	my $file = shift;
+
+	open(FILE, "< $file") or return;
+	
+	my $input;
+	while (defined (my $line = <FILE>)) {
+		$input .= $line;
+	}
+	
+	close FILE;
+	$self->do_all_cmd ($input);
+}
+
+sub _process_directory {
+	my $self = shift;
+	my $dir = shift;
+
+	opendir (DIR, $dir) or return;
+
+	while (defined (my $file = readdir (DIR))) {
+		$file = "$dir/$file";
+		if (-f $file) {
+			$self->_process_file ($file);
+		}	
+	}
+	closedir (DIR);
+}
+
+sub _check_imap_reply {
+	my $self = shift;
+	my $sock = shift;
+	my $seq = shift;
+
+	my $input;
+
+	while (defined ($input = <$sock>)) {
+		chomp $input;
+		if ($input =~ /BAD|NO (.+)$/) {
+			$_[0] = $1;
+			return 0;
+		}
+		next if ($input =~ /^\*/);
+		if ($input =~ /^$seq OK/) {
+			return 1;
+		}
+
+		$_[0] = $input;
+		return 0;
+	}
+
+	$_[0] = "timeout";
+	
+	return 0;
+}
+
+sub _parse_imap_body {
+	my $self = shift;
+	my $sock = shift;
+	my $seq = shift;
+	my $input;
+	my $got_body = 0;
+
+	while (defined (my $line = <$sock>)) {
+		if (!$got_body && $line =~ /^\*/) {
+			$got_body = 1;
+			next;
+		}
+		if ($line =~ /^$seq OK/) {
+			return $input;
+		}
+		elsif ($got_body) {
+			$input .= $line;
+			next;
+		}
+		
+		return undef;
+	}
+
+	return undef;
+
+}
+
+sub _parse_imap_sequences {
+	my $self = shift;
+	my $sock = shift;
+	my $seq = shift;
+	my $input;
+
+	while (defined ($input = <$sock>)) {
+		chomp $input;
+		if ($input =~ /^\* SEARCH (.+)$/) {
+			@res = split (/\s/, $1);
+			next;
+		}
+		elsif ($input =~ /^$seq OK/) {
+			return \@res;
+		}
+		return undef;
+	}
+
+}
+
+sub process_imap {
+	my ($self, $ssl, $user, $password, $host, $mbox) = @_;
+	my $seq = 1;
+	my $sock;
+
+	if (!$password) {
+		eval {
+			use Term::ReadKey;
+			$self->{error} = "Enter IMAP password: ";
+			ReadMode 'noecho';
+			$password = ReadLine 0;
+			chomp $password;
+			ReadMode 'normal';
+			$self->{error} = "\n";
+		} or die "cannot get password. Check that Term::ReadKey is installed";
+	}
+
+	# Stupid code that does not take care of timeouts etc, just trying to extract messages
+	if ($ssl) {
+		$sock = $self->_make_ssl_socket ($host, 'imaps');
+	}
+	else {
+		$sock = $self->_make_tcp_socket ($host, 143);
+	}
+	my $reply = <$sock>;
+	if (!defined ($reply) || $reply !~ /^\* OK/) {
+		$self->{error} = "Imap server is not ready";
+		return;
+	}
+	syswrite $sock, "$seq LOGIN $user $password$EOL";
+	if (!$self->_check_imap_reply ($sock, $seq, $reply)) {
+		$self->{error} = "Cannot login to imap server: $reply";
+		return;
+	}
+	$seq ++;
+	syswrite $sock, "$seq SELECT $mbox$EOL";
+	if (!$self->_check_imap_reply ($sock, $seq, $reply)) {
+		$self->{error} = "Cannot select mbox $mbox: $reply";
+		return;
+	}
+	$seq ++;
+	syswrite $sock, "$seq SEARCH $self->{imap_search}$EOL";
+	my $messages;
+	if (!defined ($messages = $self->_parse_imap_sequences ($sock, $seq))) {
+		$self->{error} = "Cannot make search";
+		return;
+	}
+	$seq ++;
+	foreach my $message (@{ $messages }){
+		syswrite $sock, "$seq FETCH $message body[]$EOL";
+		if (defined (my $input = $self->_parse_imap_body ($sock, $seq))) {
+			$self->do_all_cmd ($input);
+		}
+		$seq ++;
+	} 
+	syswrite $sock, "$seq LOGOUT$EOL";
+	close $sock;
 }
 
 1;

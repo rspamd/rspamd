@@ -9,7 +9,7 @@
 
 use Socket qw(:DEFAULT :crlf);
 use Getopt::Std;
-use Data::Dumper;
+use Term::Cap;
 use Mail::Rspamd::Client;
 
 my %cfg = (
@@ -24,6 +24,8 @@ my %cfg = (
 	'weight'    =>  1,
 	'imap_search' => 'ALL',
 );
+
+my $terminal;
 
 $main::VERSION = '@RSPAMD_VERSION@';
 
@@ -133,6 +135,50 @@ sub parse_config {
 
 }
 
+sub print_control_result {
+	my ($host, $res) = @_;
+
+	$terminal->Tputs( 'md', 1, *STDOUT );
+	print "Results for host $host:\n\n";
+	$terminal->Tputs( 'me', 1, *STDOUT );
+	if ($res->{error_code} == 0) {
+		print "$res->{error}\n";
+	}
+	else {
+		print "Error occured: $res->{error_code}:\n$res->{error}\n";
+	}
+}
+
+sub print_rspamc_result {
+	my ($host, $res) = @_;
+
+	$terminal->Tputs( 'md', 1, *STDOUT );
+	print "Results for host $host:\n\n";
+	$terminal->Tputs( 'me', 1, *STDOUT );
+
+	if (defined($res->{error})) {
+		print "Error occured: $res->{error}\n\n";
+	}
+	else {
+		while (my ($metric, $result) = each (%{ $res })) {
+			$terminal->Tputs( 'md', 1, *STDOUT );
+			print "$metric: ";
+			$terminal->Tputs( 'me', 1, *STDOUT );
+			print "$result->{isspam}, [ $result->{score} / $result->{threshold} ]\n";
+
+			$terminal->Tputs( 'md', 1, *STDOUT );
+			print "Symbols: ";
+			$terminal->Tputs( 'me', 1, *STDOUT );
+			print join("; ", @{ $result->{symbols} }) . "\n";
+			print "Urls: " . join(", ", @{ $result->{urls} }) . "\n";
+			foreach my $msg (@{ $result->{messages} }) {
+				print "Message: $msg\n";
+			}
+			print "\n\n";
+		}
+	}
+}
+
 ############################# Main part ###########################################
 my %args;
 
@@ -210,6 +256,8 @@ if (defined ($args{H})) {
 
 my $rspamd = Mail::Rspamd::Client->new(\%cfg);
 
+$terminal = Tgetent Term::Cap { TERM => undef, OSPEED => 9600 };
+
 if (!defined ($path[0]) || ! $cfg{'require_input'}) {
 	my $input;
 	if ($cfg{'require_input'}) {
@@ -219,9 +267,27 @@ if (!defined ($path[0]) || ! $cfg{'require_input'}) {
 	}
 	
 	my $res = $rspamd->do_all_cmd ($input);
-	print Dumper($res);
+	while (my ($host, $result) =  each (%{ $res })) {
+		if ($cfg{control}) {
+			print_control_result ($host, $result);
+		}
+		else {
+			print_rspamc_result ($host, $result);
+		}
+	}
 }
 else {
 	my $res = $rspamd->process_path (@path);
-	print Dumper($res);
+
+	while (my ($item, $result) =  each (%{ $res })) {
+		print "Results for item $item:\n";
+		while (my ($host, $r) =  each (%{ $result })) {
+			if ($cfg{control}) {
+				print_control_result ($host, $r);
+			}
+			else {
+				print_rspamc_result ($host, $r);
+			}
+		}
+	}
 }
