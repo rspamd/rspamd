@@ -200,21 +200,27 @@ sub do_all_cmd {
 
 	my %res;
 	
-	foreach my $hostdef (@{ $self->{'hosts'} }) {
-		$self->_clear_errors();
+	if (!$self->{'hosts'} || scalar (@{ $self->{'hosts'} }) == 0) {
+		$res{'error'} = 'Hosts list is empty';
+		$res{'error_code'} = 404;
+	}
+	else {
+		foreach my $hostdef (@{ $self->{'hosts'} }) {
+			$self->_clear_errors();
 
-		my $remote = $self->_create_connection($hostdef);
+			my $remote = $self->_create_connection($hostdef);
 
-		if (! $remote) {
-			$res{$hostdef}->{error_code} = 404;
-			$res{$hostdef}->{error} = "Cannot connect to $hostdef";
-		}
-		else {
-			if ($self->{'control'}) {
-				$res{$hostdef} = $self->_do_control_command ($remote, $input);
+			if (! $remote) {
+				$res{$hostdef}->{error_code} = 404;
+				$res{$hostdef}->{error} = "Cannot connect to $hostdef";
 			}
 			else {
-				$res{$hostdef} = $self->_do_rspamc_command ($remote, $input);
+				if ($self->{'control'}) {
+					$res{$hostdef} = $self->_do_control_command ($remote, $input);
+				}
+				else {
+					$res{$hostdef} = $self->_do_rspamc_command ($remote, $input);
+				}
 			}
 		}
 	}
@@ -254,8 +260,9 @@ sub check {
 	my ($self, $msg) = @_;
 	
 	$self->{command} = 'CHECK';
+	$self->{control} = 0;
 
-	return $self->_do_rspamc_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 symbols
@@ -288,8 +295,9 @@ sub symbols {
 	my ($self, $msg) = @_;
 	
 	$self->{command} = 'SYMBOLS';
+	$self->{control} = 0;
 
-	return $self->_do_rspamc_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 process
@@ -322,8 +330,9 @@ sub process {
 	my ($self, $msg) = @_;
 	
 	$self->{command} = 'PROCESS';
+	$self->{control} = 0;
 
-	return $self->_do_rspamc_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 emails
@@ -342,8 +351,9 @@ sub emails {
 	my ($self, $msg) = @_;
 	
 	$self->{command} = 'EMAILS';
+	$self->{control} = 0;
 
-	return $self->_do_rspamc_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 urls
@@ -362,8 +372,9 @@ sub urls {
 	my ($self, $msg) = @_;
 	
 	$self->{command} = 'URLS';
+	$self->{control} = 0;
 
-	return $self->_do_rspamc_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 
@@ -380,8 +391,9 @@ sub learn {
 	my ($self, $msg) = @_;
 	
 	$self->{command} = 'LEARN';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 weights
@@ -395,9 +407,10 @@ This method makes a call to the spamd showing weights of message by each statfil
 sub weights {
 	my ($self, $msg) = @_;
 	
-	$self->{command} = 'WEIGHTS';
+	$self->{command} = 'weights';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 fuzzy_add
@@ -411,9 +424,10 @@ This method makes a call to the spamd adding specified message to fuzzy storage.
 sub fuzzy_add {
 	my ($self, $msg) = @_;
 	
-	$self->{command} = 'FUZZY_ADD';
+	$self->{command} = 'fuzzy_add';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 =head2 fuzzy_del
 
@@ -426,9 +440,10 @@ This method makes a call to the spamd removing specified message from fuzzy stor
 sub fuzzy_del {
 	my ($self, $msg) = @_;
 	
-	$self->{command} = 'FUZZY_DEL';
+	$self->{command} = 'fuzzy_del';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, $msg);
+	return $self->do_all_cmd ($msg);
 }
 
 =head2 stat
@@ -442,9 +457,10 @@ This method makes a call to the spamd and get statistics.
 sub stat {
 	my ($self) = @_;
 	
-	$self->{command} = 'STAT';
+	$self->{command} = 'stat';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, undef);
+	return $self->do_all_cmd (undef);
 }
 =head2 uptime
 
@@ -457,9 +473,10 @@ This method makes a call to the spamd and get uptime.
 sub uptime {
 	my ($self) = @_;
 	
-	$self->{command} = 'UPTIME';
+	$self->{command} = 'uptime';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, undef);
+	return $self->do_all_cmd (undef);
 }
 =head2 counters
 
@@ -472,9 +489,10 @@ This method makes a call to the spamd and get counters.
 sub counters {
 	my ($self) = @_;
 	
-	$self->{command} = 'UPTIME';
+	$self->{command} = 'counters';
+	$self->{control} = 1;
 
-	return $self->_do_control_command ($self, undef);
+	return $self->do_all_cmd (undef);
 }
 
 =head2 ping
@@ -488,15 +506,25 @@ if the server responded correctly.
 =cut
 
 sub ping {
-	my ($self) = @_;
-
-	my $remote = $self->_create_connection();
-
-	return 0 unless ($remote);
+	my $self = shift;
+	my $host = shift;
+	
+	my $remote;
+	$self->{control} = 0;
+	if (defined($host)) {
+		$remote = $self->_create_connection($host);
+	}
+	else {
+		# Create connection to random host from cluster
+		$remote = $self->_create_connection();
+	}
+	
+	return undef unless $remote;
 	local $SIG{PIPE} = 'IGNORE';
 
 	if (!(syswrite($remote, "PING $PROTOVERSION$EOL"))) {
 		$self->_mark_dead($remote);
+		close($remote);
 		return 0;
 	}
 	syswrite($remote, $EOL);
@@ -679,7 +707,9 @@ This method returns one server from rspamd cluster or undef if there are no suit
 =cut
 sub _select_server {
 	my($self) = @_;
-		
+	
+	return undef unless $self->{alive_hosts};
+
 	$self->_revive_dead();
 	my $alive_num = scalar(@{$self->{alive_hosts}});
 	if (!$alive_num) {
@@ -712,6 +742,7 @@ This method marks upstream as dead for some time. It can be revived by _revive_d
 sub _mark_dead {
 	my ($self, $server) = @_;
 	
+	return undef unless $self->{hosts};
 	my $now = time();
 	$self->{dead_hosts}->{$server} = {
 		host => $server,
@@ -791,7 +822,7 @@ sub _do_rspamc_command {
 	my ($self, $remote, $msg) = @_;
 
 	my %metrics;
-
+	my ($in, $res);
 
 	my $msgsize = length($msg.$EOL);
 
@@ -799,7 +830,12 @@ sub _do_rspamc_command {
 
 	if (!(syswrite($remote, "$self->{command} $PROTOVERSION$EOL"))) {
 		$self->_mark_dead($remote);
-		return 0;
+		my %r = (
+			error => 'cannot connect to rspamd',
+			error_code => 502,
+		);
+		close($remote);
+		return \%r;
 	}
 	syswrite $remote, "Content-length: $msgsize$EOL";
 	syswrite $remote, "User: $self->{username}$EOL" if ($self->{username});
@@ -815,9 +851,15 @@ sub _do_rspamc_command {
 	syswrite $remote, $msg;
 	syswrite $remote, $EOL;
 	
-	return undef unless $self->_get_io_readiness($remote, 0);
+	unless ($self->_get_io_readiness($remote, 0)) {
+		close $remote;
+		my %r = (
+			error => 'timed out while waiting for reply',
+			error_code => 502,
+		);
+		return \%r;
+	}
 			
-	my ($in, $res);
 	my $offset = 0;
 	do {
 		$res = sysread($remote, $in, 512, $offset);
@@ -832,7 +874,14 @@ sub _do_rspamc_command {
 	$self->{resp_code} = $resp_code;
 	$self->{resp_msg} = $resp_msg;
 
-	return undef unless (defined($resp_code) && $resp_code == 0);
+	unless (defined($resp_code) && $resp_code == 0) {
+		close $remote;
+		my %r = (
+			error => 'invalid reply',
+			error_code => 500,
+		);
+		return \%r
+	}
 
 	my $cur_metric;
 	my @lines = split (/^/, $in);
@@ -888,6 +937,7 @@ sub _do_control_command {
 	unless ($self->_get_io_readiness($remote, 0)) {
 		$res{error} = "Timeout while reading data from socket";
 		$res{error_code} = 501;
+		close($remote);
 		return \%res;
 	}
 
@@ -896,6 +946,7 @@ sub _do_control_command {
         if ($greeting !~ /^Rspamd version/) {
             $res{error} = "Not rspamd greeting line $greeting";
 			$res{error_code} = 500;
+			close($remote);
 			return \%res;
         }
     }
@@ -904,6 +955,7 @@ sub _do_control_command {
         if (!$self->{'statfile'}) {
 			$res{error} = "Statfile is not specified to learn command";
 			$res{error_code} = 500;
+			close($remote);
 			return \%res;
 		}
         
@@ -914,16 +966,19 @@ sub _do_control_command {
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
+				close($remote);
 				return \%res;
 			}
             if (defined (my $reply = <$remote>)) {
                 if ($reply =~ /^learn ok, sum weight: ([0-9.]+)/) {
                     $res{error} = "Learn succeed. Sum weight: $1\n";
+					close($remote);
 					return \%res;
                 }
                 else {
 					$res{error_code} = 500;
                     $res{error} = "Learn failed\n";
+					close($remote);
 					return \%res;
                 }
             }
@@ -931,6 +986,7 @@ sub _do_control_command {
         else {
 			$res{error_code} = 403;
             $res{error} = "Authentication failed\n";
+			close($remote);
 			return \%res;
         }
     }
@@ -938,6 +994,7 @@ sub _do_control_command {
         if (!$self->{'statfile'}) {
 			$res{error_code} = 500;
 			$res{error} = "Statfile is not specified to weights command";
+			close($remote);
 			return \%res;
 		}
         
@@ -948,6 +1005,7 @@ sub _do_control_command {
 		unless ($self->_get_io_readiness($remote, 0)) {
 			$res{error} = "Timeout while reading data from socket";
 			$res{error_code} = 501;
+			close($remote);
 			return \%res;
 		}
 		while (defined (my $reply = <$remote>)) {
@@ -961,6 +1019,7 @@ sub _do_control_command {
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
+				close($remote);
 				return \%res;
 			}
             while (defined (my $line = <$remote>)) {
@@ -971,6 +1030,7 @@ sub _do_control_command {
         else {
 			$res{error_code} = 403;
             $res{error} = "Authentication failed\n";
+			close($remote);
 			return \%res;
         }
     }
@@ -982,16 +1042,19 @@ sub _do_control_command {
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
+				close($remote);
 				return \%res;
 			}
             if (defined (my $reply = <$remote>)) {
                 if ($reply =~ /^OK/) {
                     $res{error} = $self->{'command'} . " succeed\n";
+					close($remote);
 					return \%res;
                 }
                 else {
 					$res{error_code} = 500;
                     $res{error} = $self->{'command'} . " failed\n";
+					close($remote);
 					return \%res;
                 }
             }
@@ -999,6 +1062,7 @@ sub _do_control_command {
         else {
 			$res{error_code} = 403;
             $res{error} = "Authentication failed\n";
+			close($remote);
 			return \%res;
         }
     
@@ -1008,6 +1072,7 @@ sub _do_control_command {
 		unless ($self->_get_io_readiness($remote, 0)) {
 			$res{error} = "Timeout while reading data from socket";
 			$res{error_code} = 501;
+			close($remote);
 			return \%res;
 		}
         while (defined (my $line = <$remote>)) {
@@ -1016,6 +1081,7 @@ sub _do_control_command {
         }
     }
 
+	close($remote);
 	return \%res;
 }
 
