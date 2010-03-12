@@ -123,8 +123,8 @@ sub make_ssl_socket {
 	my ($host, $port) = @_; 
 	
 	eval {
-		use IO::Socket::SSL;
-	} or $self->{error} = "IO::Socket::SSL required for imaps";
+		require IO::Socket::SSL;
+	} or$self->{error} = "IO::Socket::SSL required for imaps";
 
 	return IO::Socket::SSL->new("$host:$port");
 }
@@ -1196,7 +1196,7 @@ sub process_imap {
 
 	if (!$password) {
 		eval {
-			use Term::ReadKey;
+			require Term::ReadKey;
 			$self->{error} = "Enter IMAP password: ";
 			ReadMode 'noecho';
 			$password = ReadLine 0;
