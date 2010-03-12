@@ -124,6 +124,7 @@ sub make_ssl_socket {
 	
 	eval {
 		require IO::Socket::SSL;
+		IO::Socket::SSL->import(LIST);
 	} or$self->{error} = "IO::Socket::SSL required for imaps";
 
 	return IO::Socket::SSL->new("$host:$port");
@@ -1197,11 +1198,12 @@ sub process_imap {
 	if (!$password) {
 		eval {
 			require Term::ReadKey;
+			Term::ReadKey->import( LIST );
 			$self->{error} = "Enter IMAP password: ";
-			ReadMode 'noecho';
-			$password = ReadLine 0;
+			Term::ReadKey->ReadMode('noecho');
+			$password = Term::ReadKey->ReadLine(0);
 			chomp $password;
-			ReadMode 'normal';
+			Term::ReadKey->ReadMode('normal');
 			$self->{error} = "\n";
 		} or die "cannot get password. Check that Term::ReadKey is installed";
 	}
