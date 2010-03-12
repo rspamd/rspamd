@@ -16,7 +16,7 @@ use Data::Dumper;
 
 my %cfg = (
 	'hosts'      => ['localhost:11333'],
-
+	'timeout'	=> 1,
 );
 
 sub new {
@@ -44,7 +44,14 @@ sub new {
 		$self->{'addr'} = $args->{'addr'};
 	}
 	if ($args->{'config'}) {
-		eval($args->{'config'});
+		open CFG, "< $args->{'config'}";
+		my $cf;
+		$cfg{'hosts'} = [];
+		while (<CFG>) {
+			chomp;
+			push (@{$cfg{'hosts'}}, $_); 
+		}
+		close CFG;
 	}
 
 	bless($self, $class);
@@ -56,7 +63,8 @@ sub _handle_ping {
 	my $self = shift;
 	my (@servers_alive, @servers_dead);
 	
-	my $rspamd = Mail::Rspamd::Client->new({});
+	my $rspamd = Mail::Rspamd::Client->new({timeout=>$cfg{timeout}});
+	my $number = 0;
 
 	# Walk throught selection of servers
 	foreach (@{ $cfg{'hosts'} }) {
@@ -66,10 +74,11 @@ sub _handle_ping {
 		else {
 			push(@servers_dead, $_);
 		}
+		$number ++;
 	}
 	
 	print header;
-	print qq!<select multiple="multiple" id="id_servers" name="servers">!;
+	print qq!<select multiple="multiple" id="id_servers" name="servers" size="$number">!;
 	
 	foreach (@servers_alive) {
 		print qq!<option value="$_" style="color:#8CC543">$_</option>!;
@@ -286,7 +295,7 @@ sub _handle_form {
 	if (!@servers || scalar(@servers) == 0) {
 		@servers = @{ $cfg{'hosts'} };
 	}
-	my $rspamd = Mail::Rspamd::Client->new({hosts => \@servers});
+	my $rspamd = Mail::Rspamd::Client->new({hosts => \@servers, timeout=>$cfg{timeout}});
 	my $cmd = $cgi->param('command');
 	if (!$cmd) {
 		return undef;
