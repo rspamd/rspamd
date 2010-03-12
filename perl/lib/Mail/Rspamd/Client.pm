@@ -30,7 +30,7 @@ package Mail::Rspamd::Client;
 use IO::Socket;
 
 use vars qw($VERSION);
-$VERSION = "1.01";
+$VERSION = "1.02";
 
 my $EOL = "\015\012";
 my $BLANK = $EOL x 2;
