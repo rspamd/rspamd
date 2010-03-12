@@ -15,7 +15,7 @@ use IO::String;
 use Data::Dumper;
 
 my %cfg = (
-	'hosts'      => ['localhost:11333', 'spam22'],
+	'hosts'      => ['localhost:11333'],
 
 );
 
@@ -476,4 +476,4 @@ EOT
 $port = 8080 unless int($port);
 $host = 'localhost' unless $host;
 
-RspamdWebInterface->new({port=>$port, standalone=>$standalone, config=>$cfg, host=>$host})->run();
+RspamdWebInterface->new({port=>$port, standalone=>$standalone, config=>$cfg, addr=>$host})->run();
