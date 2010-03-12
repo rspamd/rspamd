@@ -28,7 +28,6 @@ sub new {
 		addr => 'localhost',
 		port => 8080,
 		standalone => 0,
-		server_name => 'localhost',
 	};
 
 	if ($args->{'standalone'}) {
@@ -36,9 +35,6 @@ sub new {
 	}
 	if ($args->{'port'}) {
 		$self->{'port'} = $args->{'port'};
-	}
-	if ($args->{'server_name'}) {
-		$self->{'server_name'} = $args->{'server_name'};
 	}
 	if ($args->{'addr'}) {
 		$self->{'addr'} = $args->{'addr'};
@@ -413,7 +409,7 @@ sub _run_standalone {
 			}
 		}
 		$ENV{SERVER_PORT} = $self->{port};
-		$ENV{SERVER_NAME} = $self->{server_name};
+		$ENV{SERVER_NAME} = $self->{addr};
 		if (my $size = $ENV{CONTENT_LENGTH}) {
 			$content = '';
 			while (length($content) < $size) {
