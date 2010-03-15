@@ -670,6 +670,9 @@ sub _auth {
 
 	if (sysread($sock, $reply, 255)) {
 		if ($reply =~ /^password accepted/) {
+			return 0 unless $self->_get_io_readiness($sock, 0);
+			# read "END"
+			sysread($sock, $reply, 255);
 			return 1;
 		}
 	}
