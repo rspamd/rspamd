@@ -122,7 +122,12 @@ sub parse_config {
         if (!$skip && ((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
                 && $_ =~ /^\s*bind_socket\s*=\s*((([^:]+):(\d+))|(\/\S*))/i) {
             if ($3 && $4) {
-                $cfg{'hosts'} = [ "$3:$4" ];
+				if ($3 eq '*') {
+					$cfg{'hosts'} = [ "127.0.0.1:$4" ];
+				}
+				else {
+					$cfg{'hosts'} = [ "$3:$4" ];
+				}
             }
             else {
                 $cfg{'hosts'} = [ "$5" ];
