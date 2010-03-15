@@ -101,7 +101,7 @@ sub parse_config {
     my ($is_ctrl) = @_;
 	
 	if (! open CONF, "< $cfg{'conf_file'}") {
-		print "Config file $cfg{'conf_file'} cannot be opened\n";
+		print STDERR "Config file $cfg{'conf_file'} cannot be opened\n";
 		return;
 	}
 
@@ -195,7 +195,6 @@ getopt('c:h:P:s:d:w:S:H:i:', \%args);
 
 my $cmd = shift;
 my @path = shift;
-my $do_parse_config = 1;
 
 if (!defined ($cmd) || $cmd eq '') {
     $cmd = 'SYMBOLS';
@@ -204,13 +203,30 @@ if (!defined ($cmd) || $cmd eq '') {
 if (defined ($args{c})) {
      if (-r $args{c}) {
             $cfg{'conf_file'} = $args{c};
-            $do_parse_config = 1;
      }
      else {
         die "config file $args{c} is not readable";
      }
 
 }
+
+if ($cmd =~ /(SYMBOLS|PROCESS|CHECK|URLS|EMAILS)/i) {
+    $cfg{'command'} = $1;
+    $cfg{'control'} = 0;
+}
+elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS|FUZZY_ADD|FUZZY_DEL|WEIGHTS)/i) {
+    $cfg{'command'} = $1;
+    $cfg{'control'} = 1;
+}
+else {
+    die "unknown command $cmd";
+}
+
+if (-r $cfg{'conf_file'}) {
+	# Try to parse config
+    parse_config ($cfg{'control'});
+}
+
 if (defined ($args{S})) {
 	$cfg{'imap_search'} = $args{S};
 }
@@ -240,24 +256,11 @@ if (defined ($args{i})) {
 	$cfg{'ip'} = $args{i};
 }
 
-if ($cmd =~ /(SYMBOLS|PROCESS|CHECK|URLS|EMAILS)/i) {
-    $cfg{'command'} = $1;
-    $cfg{'control'} = 0;
-}
-elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS|FUZZY_ADD|FUZZY_DEL|WEIGHTS)/i) {
-    $cfg{'command'} = $1;
-    $cfg{'control'} = 1;
-}
-else {
-    die "unknown command $cmd";
-}
-
 if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|FUZZY_ADD|FUZZY_DEL|WEIGHTS/i) {
 	$cfg{'require_input'} = 1;
 }
 
 if ($do_parse_config != 0) {
-    parse_config ($cfg{'control'});
 }
 
 if (defined ($args{H})) {

@@ -661,7 +661,7 @@ sub _auth {
 
 	local $SIG{PIPE} = 'IGNORE';
 
-	if (!(syswrite($sock, "PASSWORD $self->{password}$EOL"))) {
+	if (!(syswrite($sock, "password $self->{password}$EOL"))) {
 		$self->_mark_dead($remote);
 		return 0;
 	}
