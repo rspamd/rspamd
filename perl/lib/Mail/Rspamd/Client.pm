@@ -981,7 +981,7 @@ sub _do_control_command {
                 }
                 else {
 					$res{error_code} = 500;
-                    $res{error} = "Learn failed\n";
+                    $res{error} = "Learn failed: $reply\n";
 					close($remote);
 					return \%res;
                 }

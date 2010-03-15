@@ -260,9 +260,6 @@ if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|F
 	$cfg{'require_input'} = 1;
 }
 
-if ($do_parse_config != 0) {
-}
-
 if (defined ($args{H})) {
 	load_hosts_file ($args{H});
 }
