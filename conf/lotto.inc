@@ -12,5 +12,5 @@ $__KAM_LOTTO5="/(freelotto group|Royal Heritage Lottery|UK National (Online)? Lo
 $__KAM_LOTTO6="/(Dear Lucky Winner|Winning Notification|Attention:Winner|Dear Winner)/isrP";
 $__KAM_LOTTO7="Subject=/(Your Lucky Day|(Attention:|ONLINE) WINNER)/iH";
 $KAM_LOTTO1="regexp_match_number(3, ${__KAM_LOTTO1}, ${__KAM_LOTTO2}, ${__KAM_LOTTO3}, ${__KAM_LOTTO4}, ${__KAM_LOTTO5}, ${__KAM_LOTTO6}, ${__KAM_LOTTO7})";
-#$R_LOTTO="regexp_match_number(3, ${__KAM_LOTTO1},  ${__KAM_LOTTO2}, ${__KAM_LOTTO3}, ${__KAM_LOTTO4}, ${__KAM_LOTTO5}, ${__KAM_LOTTO6})";
+$R_LOTTO="regexp_match_number(3, ${__KAM_LOTTO1},  ${__KAM_LOTTO2}, ${__KAM_LOTTO3}, ${__KAM_LOTTO4}, ${__KAM_LOTTO5}, ${__KAM_LOTTO6})";
 

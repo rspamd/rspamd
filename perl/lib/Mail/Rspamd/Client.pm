@@ -28,6 +28,7 @@ the spamd protocol.
 package Mail::Rspamd::Client;
 
 use IO::Socket;
+use Carp;
 
 use vars qw($VERSION);
 $VERSION = "1.02";
@@ -125,7 +126,7 @@ sub make_ssl_socket {
 	eval {
 		require IO::Socket::SSL;
 		IO::Socket::SSL->import(LIST);
-	} or$self->{error} = "IO::Socket::SSL required for imaps";
+	} or croak "IO::Socket::SSL required for imaps";
 
 	return IO::Socket::SSL->new("$host:$port");
 }
@@ -240,6 +241,7 @@ C<$is_check_p> either calls PROCESS or CHECK.
 
 The return value is a hash reference containing metrics indexed by name. Each metric
 is hash that contains data:
+
 =over 
 =item *
 isspam
@@ -275,6 +277,7 @@ This method makes a call to the spamd server
 
 The return value is a hash reference containing metrics indexed by name. Each metric
 is hash that contains data:
+
 =over
 =item *
 isspam
@@ -1205,7 +1208,7 @@ sub process_imap {
 			chomp $password;
 			Term::ReadKey->ReadMode('normal');
 			$self->{error} = "\n";
-		} or die "cannot get password. Check that Term::ReadKey is installed";
+		} or croak "cannot get password. Check that Term::ReadKey is installed";
 	}
 
 	# Stupid code that does not take care of timeouts etc, just trying to extract messages

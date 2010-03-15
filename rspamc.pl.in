@@ -23,6 +23,7 @@ my %cfg = (
 	'deliver_to'=>  '',
 	'weight'    =>  1,
 	'imap_search' => 'ALL',
+	'ip'		=> '127.0.0.1',
 );
 
 my $terminal;
@@ -42,6 +43,7 @@ Additional options:
 -d         define deliver-to header
 -w         define weight for fuzzy operations
 -S         define search string for IMAP operations
+-i         emulate that message was send from specified IP
 
 Notes:
 imap format: imap:user:<username>:password:[<password>]:host:<hostname>:mbox:<mboxname>
@@ -184,7 +186,7 @@ my %args;
 
 HELP_MESSAGE() unless scalar @ARGV >= 1;
 
-getopt('c:h:P:s:d:w:S:H:', \%args);
+getopt('c:h:P:s:d:w:S:H:i:', \%args);
 
 my $cmd = shift;
 my @path = shift;
@@ -228,6 +230,9 @@ if (defined ($args{d})) {
 }
 if (defined ($args{w})) {
 	$cfg{'weight'} = $args{w};
+}
+if (defined ($args{i})) {
+	$cfg{'ip'} = $args{i};
 }
 
 if ($cmd =~ /(SYMBOLS|PROCESS|CHECK|URLS|EMAILS)/i) {

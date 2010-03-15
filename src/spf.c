@@ -314,6 +314,11 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 											cb->rec->addrs->prev = elt->prev;
 										}
 
+										/* Shift temporary list */
+										while (tmp->prev) {
+											tmp = tmp->prev;
+										}
+
 										cb->rec->addrs = tmp;
 										g_list_free1 (elt);
 									}
@@ -370,8 +375,8 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 
 	cb->rec->task->save.saved--;
 	if (cb->rec->task->save.saved == 0 && cb->rec->callback) {
+		cb->rec->callback (cb->rec, cb->rec->task);
 		if (cb->rec->addrs) {
-			cb->rec->callback (cb->rec, cb->rec->task);
 			g_list_free (cb->rec->addrs);
 			cb->rec->addrs = NULL;
 		}
