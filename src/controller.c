@@ -533,7 +533,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					case 'm':
 						arg = *(cmd_args + 1);
 						if (!arg || *arg == '\0') {
-							r = snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF);
+							r = snprintf (out_buf, sizeof (out_buf), "multiplier is not defined" CRLF);
 							rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 							return;
 						}

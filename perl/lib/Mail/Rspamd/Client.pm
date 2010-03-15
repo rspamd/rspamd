@@ -965,7 +965,7 @@ sub _do_control_command {
         
         if ($self->_auth ($remote)) {
             my $len = length ($msg);
-            syswrite $remote, "learn $self->{statfile} $len -w $self->{weight}" . $EOL;
+            syswrite $remote, "learn $self->{statfile} $len -m $self->{weight}" . $EOL;
             syswrite $remote, $msg . $EOL;
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
