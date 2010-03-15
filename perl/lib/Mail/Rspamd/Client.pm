@@ -966,7 +966,7 @@ sub _do_control_command {
         if ($self->_auth ($remote)) {
             my $len = length ($msg);
             syswrite $remote, "learn $self->{statfile} $len -w $self->{weight}" . $EOL;
-            syswrite $remote, $input . $EOL;
+            syswrite $remote, $msg . $EOL;
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
@@ -1002,10 +1002,10 @@ sub _do_control_command {
 			return \%res;
 		}
         
-		my $len = length ($input);
+		my $len = length ($msg);
 		$res{error} = "Sending $len bytes...\n";
 		syswrite $remote, "weights $self->{'statfile'} $len" . $EOL;
-		syswrite $remote, $input . $EOL;
+		syswrite $remote, $msg . $EOL;
 		unless ($self->_get_io_readiness($remote, 0)) {
 			$res{error} = "Timeout while reading data from socket";
 			$res{error_code} = 501;
@@ -1040,9 +1040,9 @@ sub _do_control_command {
     }
     elsif ($self->{'command'} =~ /(fuzzy_add|fuzzy_del)/i) {
         if ($self->_auth ($remote)) {
-            my $len = length ($input);
+            my $len = length ($msg);
             syswrite $remote, $self->{'command'} . " $len $self->{'weight'}" . $EOL;
-            syswrite $remote, $input . $EOL;
+            syswrite $remote, $msg . $EOL;
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
