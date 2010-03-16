@@ -59,6 +59,7 @@ struct fuzzy_ctx {
 	struct storage_server          *servers;
 	int                             servers_num;
 	memory_pool_t                  *fuzzy_pool;
+	double                          max_score;
 };
 
 struct fuzzy_client_session {
@@ -148,6 +149,27 @@ parse_servers_string (char *str)
 
 }
 
+static double
+fuzzy_normalize (int32_t in)
+{
+	double ms = fuzzy_module_ctx->max_score, ams = fabs (ms), ain = fabs (in);
+	
+	if (ams > 0.001) {
+		if (ain < ams / 2.) {
+			return in;
+		}
+		else if (ain < ams * 2.) {
+			ain = ain / 3. + ams / 3.;
+			return in > 0 ? ain : -(ain);
+		}
+		else {
+			return in > 0 ? ms : -(ms);
+		}
+	}
+	
+	return (double)in;
+}
+
 int
 fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
@@ -185,6 +207,14 @@ fuzzy_check_module_config (struct config_file *cfg)
 	else {
 		fuzzy_module_ctx->symbol = DEFAULT_SYMBOL;
 	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "max_score")) != NULL) {
+		fuzzy_module_ctx->max_score = strtod (value, NULL);
+		g_free (value);
+	}
+	else {
+		fuzzy_module_ctx->max_score = 0.;
+	}
+	
 	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
 		parse_servers_string (value);
 	}
@@ -242,6 +272,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 	struct fuzzy_cmd                cmd;
 	char                            buf[62], *err_str;
 	int                             value;
+	double                          nval;
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
@@ -266,8 +297,10 @@ fuzzy_io_callback (int fd, short what, void *arg)
 			/* Now try to get value */
 			value = strtol (buf + 3, &err_str, 10);
 			*err_str = '\0';
-			insert_result (session->task, fuzzy_module_ctx->metric, fuzzy_module_ctx->symbol, value, g_list_prepend (NULL, 
-						memory_pool_strdup (session->task->task_pool, buf + 3)));
+			nval = fuzzy_normalize (value);
+			snprintf (buf, sizeof (buf), "%d / %.2f", value, nval);
+			insert_result (session->task, fuzzy_module_ctx->metric, fuzzy_module_ctx->symbol, nval, g_list_prepend (NULL, 
+						memory_pool_strdup (session->task->task_pool, buf)));
 		}
 		goto ok;
 	}

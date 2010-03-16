@@ -862,7 +862,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		if (session->other_handler) {
 			session->other_handler (session, in);
 		}
-		session->state = STATE_REPLY;
+		rspamd_dispatcher_pause (session->dispatcher);
 		break;
 	case STATE_WAIT:
 		rspamd_dispatcher_pause (session->dispatcher);

@@ -241,7 +241,6 @@ if (defined ($args{s})) {
 }
 if (defined ($args{h})) {
     $cfg{'hosts'} = [ $args{h} ];
-    $do_parse_config = 0;
 }
 if (defined ($args{P})) {
     $cfg{'password'} = $args{P};
