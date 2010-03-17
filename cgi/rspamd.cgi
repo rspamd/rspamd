@@ -17,6 +17,8 @@ use Data::Dumper;
 my %cfg = (
 	'hosts'      => ['localhost:11333'],
 	'timeout'	=> 1,
+	'password'	=> '',
+	'statfiles' => ['WINNOW_HAM', 'WINNOW_SPAM'],
 );
 
 sub new {
@@ -128,7 +130,7 @@ sub _show_html {
 			     ),
 	  br,
 	  "<label for=\"id_statfile\">Statfile:</label>",
-	  textfield(-name=>'statfile', -id=>'id_statfile'),
+	  popup_menu(-name=>'statfile', -id=>'id_statfile', -values=>$cfg{'statfiles'}),
 	  br,
 	  "<label for=\"id_file\">File:</label>",
 	  filefield(-name=>'upload_file', -id=>'id_file'),
@@ -291,7 +293,7 @@ sub _handle_form {
 	if (!@servers || scalar(@servers) == 0) {
 		@servers = @{ $cfg{'hosts'} };
 	}
-	my $rspamd = Mail::Rspamd::Client->new({hosts => \@servers, timeout=>$cfg{timeout}});
+	my $rspamd = Mail::Rspamd::Client->new({hosts => \@servers, timeout=>$cfg{timeout}, password=>$cfg{password}});
 	my $cmd = $cgi->param('command');
 	if (!$cmd) {
 		return undef;

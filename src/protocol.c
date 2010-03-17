@@ -721,6 +721,7 @@ write_check_reply (struct worker_task *task)
 	msg_info ("%s", logbuf);
 	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 
+	task->worker->srv->stat->messages_scanned++;
 	if (default_score >= default_required_score) {
 		task->worker->srv->stat->messages_spam ++;
 	}
@@ -785,6 +786,7 @@ write_process_reply (struct worker_task *task)
 	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
 	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE, TRUE);
 
+	task->worker->srv->stat->messages_scanned++;
 	if (default_score >= default_required_score) {
 		task->worker->srv->stat->messages_spam ++;
 	}

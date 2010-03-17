@@ -824,10 +824,6 @@ process_message (struct worker_task *task)
 #endif
 	}
 
-	if (task->worker) {
-		task->worker->srv->stat->messages_scanned++;
-	}
-
 	return 0;
 }
 

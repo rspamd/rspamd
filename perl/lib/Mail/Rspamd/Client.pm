@@ -394,7 +394,7 @@ This method makes a call to the spamd learning a statfile with message.
 sub learn {
 	my ($self, $msg) = @_;
 	
-	$self->{command} = 'LEARN';
+	$self->{command} = 'learn';
 	$self->{control} = 1;
 
 	return $self->do_all_cmd ($msg);

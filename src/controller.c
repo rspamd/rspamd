@@ -982,6 +982,7 @@ start_controller (struct rspamd_worker *worker)
 	}
 	comp = g_completion_new (completion_func);
 	g_completion_add_items (comp, comp_list);
+	g_completion_set_compare (comp, g_ascii_strncasecmp);
 	/* Fill hostname buf */
 	hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
 	hostbuf = alloca (hostmax);
