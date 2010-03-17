@@ -60,6 +60,7 @@ static uint32_t                 mods = 0;
 /* For evtimer */
 static struct timeval           tmv;
 static struct event             tev;
+static struct rspamd_stat      *server_stat;
 
 struct rspamd_fuzzy_node {
 	int32_t                         value;
@@ -141,6 +142,8 @@ sync_cache (struct rspamd_worker *wrk)
 				cur = g_list_next (cur);
 				g_queue_delete_link (hashes[i], tmp);
 				bloom_del (bf, node->h.hash_pipe);
+				server_stat->fuzzy_hashes_expired ++;
+				server_stat->fuzzy_hashes --;
 				g_free (node);
 				continue;
 			}
@@ -224,6 +227,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 		}
 		g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
 		bloom_add (bf, node->h.hash_pipe);
+		server_stat->fuzzy_hashes ++;
 	}
 
 	(void)unlock_file (fd, FALSE);
@@ -314,6 +318,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
 	bloom_add (bf, cmd->hash);
 	mods++;
+	server_stat->fuzzy_hashes ++;
 	msg_info ("fuzzy hash was successfully added");
 
 	return TRUE;
@@ -345,6 +350,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 			g_queue_delete_link (hashes[cmd->blocksize % BUCKETS], tmp);
 			bloom_del (bf, cmd->hash);
 			msg_info ("fuzzy hash was successfully deleted");
+			server_stat->fuzzy_hashes --;
 			res = TRUE;
 			mods++;
 			continue;
@@ -468,6 +474,8 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 
 	event_init ();
 
+	server_stat = worker->srv->stat;
+
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
@@ -502,6 +510,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	event_add (&worker->bind_ev, NULL);
 
 	gperf_profiler_init (worker->srv->cfg, "fuzzy");
+
 
 	event_loop (0);
 	exit (EXIT_SUCCESS);

@@ -84,6 +84,8 @@ struct rspamd_stat {
 	unsigned int connections_count;								/**< total connections count						*/
 	unsigned int control_connections_count;						/**< connections count to control interface			*/
 	unsigned int messages_learned;								/**< messages learned								*/
+	unsigned int fuzzy_hashes;									/**< number of fuzzy hashes stored					*/
+	unsigned int fuzzy_hashes_expired;							/**< number of fuzzy hashes expired					*/
 };
 
 /**

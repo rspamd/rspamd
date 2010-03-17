@@ -354,6 +354,8 @@ process_stat_command (struct controller_session *session)
 	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %ld" CRLF, (long int)mem_st.shared_chunks_allocated);
 	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %ld" CRLF, (long int)mem_st.chunks_freed);
 	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %ld" CRLF, (long int)mem_st.oversized_chunks);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes stored: %u" CRLF, session->worker->srv->stat->fuzzy_hashes);
+	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes expired: %u" CRLF, session->worker->srv->stat->fuzzy_hashes_expired);
 	/* Now write statistics for each statfile */
 	cur_cl = g_list_first (session->cfg->classifiers);
 	while (cur_cl) {
