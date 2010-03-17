@@ -95,7 +95,7 @@ sub _show_html {
 	  start_html(-title=>'Rspamd control', -script=>[{-type=>'JAVASCRIPT', -src=>'http://www.google.com/jsapi'},
 				{-type=>'JAVASCRIPT', -code=>'google.load("jquery", "1");'}]),
 	  h1('Manage rspamd cluster'),
-	  start_form(-method=>'POST', -enctype=>&CGI::MULTIPART),
+	  start_form(-method=>'POST', -enctype=>&CGI::MULTIPART, -action=>$ENV{PATH_INFO}),
 	  "<label for=\"id_servers\">Servers:</label>",
 	  "<div id=\"servers_div\">",
 	  scrolling_list(-name => 'servers',  
