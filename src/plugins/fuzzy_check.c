@@ -69,6 +69,7 @@ struct fuzzy_client_session {
 	struct timeval                  tv;
 	struct worker_task             *task;
 	struct storage_server          *server;
+	int                             fd;
 };
 
 struct fuzzy_learn_session {
@@ -81,6 +82,7 @@ struct fuzzy_learn_session {
 	struct controller_session      *session;
 	struct storage_server          *server;
 	struct worker_task             *task;
+	int                             fd;
 };
 
 static struct fuzzy_ctx        *fuzzy_module_ctx = NULL;
@@ -256,6 +258,7 @@ fuzzy_io_fin (void *ud)
 	struct fuzzy_client_session    *session = ud;
 
 	event_del (&session->ev);
+	close (session->fd);
 	session->task->save.saved--;
 	if (session->task->save.saved == 0) {
 		/* Call other filters */
@@ -304,13 +307,15 @@ fuzzy_io_callback (int fd, short what, void *arg)
 		}
 		goto ok;
 	}
+	else {
+		goto err;	
+	}
 
 	return;
 
   err:
 	msg_err ("got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
   ok:
-	close (fd);
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
 
 }
@@ -321,6 +326,7 @@ fuzzy_learn_fin (void *arg)
 	struct fuzzy_learn_session     *session = arg;
 
 	event_del (&session->ev);
+	close (session->fd);
 	(*session->saved)--;
 	if (*session->saved == 0) {
 		session->session->state = STATE_REPLY;
@@ -360,6 +366,9 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 		}
 		goto err;
 	}
+	else {
+		goto err;	
+	}
 
 	return;
 
@@ -368,7 +377,6 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 	r = snprintf (buf, sizeof (buf), "Error" CRLF);
 	rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE);
   ok:
-	close (fd);
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
 }
 
@@ -407,6 +415,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 				session->state = 0;
 				session->h = part->fuzzy;
 				session->task = task;
+				session->fd = sock;
 				session->server = selected;
 				event_add (&session->ev, &session->tv);
 				register_async_event (task->s, fuzzy_io_fin, session, FALSE);
@@ -494,6 +503,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 					s->cmd = cmd;
 					s->value = value;
 					s->saved = saved;
+					s->fd = sock;
 					event_add (&s->ev, &s->tv);
 					(*saved)++;
 					register_async_event (session->s, fuzzy_learn_fin, s, FALSE);
