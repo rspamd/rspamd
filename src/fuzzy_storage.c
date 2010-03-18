@@ -287,6 +287,10 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 		h = cur->data;
 		if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
 			msg_info ("fuzzy hash was found, probability %d%%", prob);
+			if (update_value) {
+				msg_info ("new hash weight: %d", h->value);
+				h->value += update_value;
+			}
 			return h->value;
 		}
 		cur = g_list_next (cur);
@@ -299,10 +303,12 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 			msg_info ("fuzzy hash was found, probability %d%%", prob);
 			if (update_value) {
 				h->value += update_value;
+				msg_info ("new hash weight: %d", h->value);
 			}
 			if (h->value > FREQUENT_SCORE) {
 				g_queue_unlink (hash, cur);
 				g_queue_push_head_link (frequent, cur);
+				msg_info ("moved hash to frequent list");
 			}
 			return h->value;
 		}
