@@ -151,6 +151,8 @@ LINK_DIRECTORIES(${GMIME2_LIBRARY_DIRS})
 SET(CMAKE_REQUIRED_LIBRARIES m)
 SET(CMAKE_REQUIRED_INCLUDES sys/mman.h stdlib.h stdio.h unistd.h time.h sched.h)
 
+# Check for libevent
+
 FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATHS /lib
                                            		/opt/lib
                                             	/usr/lib
@@ -159,6 +161,33 @@ FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATHS /lib
 IF(NOT LIBEVENT_LIBRARY)
 	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
 ENDIF(NOT LIBEVENT_LIBRARY)
+
+FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
+										/usr/include
+										/usr/local/include
+										DOC "Path where the libevent header files can be found")
+
+GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
+INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
+LINK_DIRECTORIES("${LIBEVENT_PATH}")
+
+# Find libjudy
+#FIND_LIBRARY(LIBJUDY_LIBRARY NAMES judy PATHS /lib
+#                                           		/opt/lib
+#                                            	/usr/lib
+#                                            	/usr/local/lib
+#                 DOC "Path where the lijudy library can be found")
+#IF(LIBJUDY_LIBRARY)
+#	FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
+#											/usr/include
+#											/usr/local/include
+#											DOC "Path where the judy header files can be found")
+#
+#	GET_FILENAME_COMPONENT(LIBJUDY_PATH "${LIBJUDY_LIBRARY}" PATH)
+#	INCLUDE_DIRECTORIES("${LIBJUDY_INCLUDE}")
+#	LINK_DIRECTORIES("${LIBJUDY_PATH}")
+#	SET(WITH_JUDY 1)
+#ENDIF(LIBJUDY_LIBRARY)
 
 IF(ENABLE_PROFILING MATCHES "ON")
 	SET(WITH_PROFILER 1)
@@ -193,14 +222,6 @@ IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 
-FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
-										/usr/include
-										/usr/local/include
-										DOC "Path where the libevent header files can be found")
-
-GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
-INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
-LINK_DIRECTORIES("${LIBEVENT_PATH}")
 
 FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	/lib
                                            		/opt/lib
@@ -532,6 +553,9 @@ TARGET_LINK_LIBRARIES(rspamd m)
 IF(LIBUTIL_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd util)
 ENDIF(LIBUTIL_LIBRARY)
+IF(LIBJUDY_LIBRARY)
+	TARGET_LINK_LIBRARIES(rspamd judy)
+ENDIF(LIBJUDY_LIBRARY)
 TARGET_LINK_LIBRARIES(rspamd rspamd_evdns)
 TARGET_LINK_LIBRARIES(rspamd event)
 TARGET_LINK_LIBRARIES(rspamd rspamd_json)

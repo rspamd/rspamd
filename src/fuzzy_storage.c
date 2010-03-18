@@ -51,8 +51,11 @@
 #define BUCKETS 1024
 /* Number of insuccessfull bind retries */
 #define MAX_RETRIES 40
+/* Weight of hash to consider it frequent */
+#define FREQUENT_SCORE 100
 
 static GQueue                  *hashes[BUCKETS];
+static GQueue                  *frequent;
 static bloom_filter_t          *bf;
 
 /* Number of cache modifications */
@@ -88,6 +91,14 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 #endif
 		break;
 	}
+}
+
+static gint
+compare_nodes (gconstpointer a, gconstpointer b, gpointer unused)
+{
+	const struct rspamd_fuzzy_node *n1 = a, *n2 = b;
+
+	return n1->value - n2->value;
 }
 
 static void
@@ -132,6 +143,14 @@ sync_cache (struct rspamd_worker *wrk)
 	(void)lock_file (fd, FALSE);
 
 	now = (uint64_t) time (NULL);
+	cur = frequent->head;
+	while (cur) {
+		node = cur->data;
+		if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
+			msg_err ("cannot write file %s: %s", filename, strerror (errno));
+		}
+		cur = g_list_next (cur);
+	}
 	for (i = 0; i < BUCKETS; i++) {
 		cur = hashes[i]->head;
 		while (cur) {
@@ -204,6 +223,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	for (i = 0; i < BUCKETS; i++) {
 		hashes[i] = g_queue_new ();
 	}
+	frequent = g_queue_new ();
 
 	filename = g_hash_table_lookup (wrk->cf->params, "hashfile");
 	if (filename == NULL) {
@@ -225,9 +245,20 @@ read_hashes_file (struct rspamd_worker *wrk)
 		if (r != sizeof (struct rspamd_fuzzy_node)) {
 			break;
 		}
-		g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
+		if (node->value > FREQUENT_SCORE) {
+			g_queue_push_head (frequent, node);
+		}
+		else {
+			g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
+		}
 		bloom_add (bf, node->h.hash_pipe);
 		server_stat->fuzzy_hashes ++;
+	}
+
+	/* Sort everything */
+	g_queue_sort (frequent, compare_nodes, NULL);
+	for (i = 0; i < BUCKETS; i ++) {
+		g_queue_sort (hashes[i], compare_nodes, NULL);
 	}
 
 	(void)unlock_file (fd, FALSE);
@@ -244,13 +275,47 @@ read_hashes_file (struct rspamd_worker *wrk)
 	return TRUE;
 }
 
-static                          int
-process_check_command (struct fuzzy_cmd *cmd)
+static inline int
+check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 {
 	GList                          *cur;
 	struct rspamd_fuzzy_node       *h;
-	fuzzy_hash_t                    s;
 	int                             prob = 0;
+	
+	cur = frequent->head;
+	while (cur) {
+		h = cur->data;
+		if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
+			msg_info ("fuzzy hash was found, probability %d%%", prob);
+			return h->value;
+		}
+		cur = g_list_next (cur);
+	}
+
+	cur = hash->head;
+	while (cur) {
+		h = cur->data;
+		if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
+			msg_info ("fuzzy hash was found, probability %d%%", prob);
+			if (update_value) {
+				h->value += update_value;
+			}
+			if (h->value > FREQUENT_SCORE) {
+				g_queue_unlink (hash, cur);
+				g_queue_push_head_link (frequent, cur);
+			}
+			return h->value;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return 0;
+}
+
+static                          int
+process_check_command (struct fuzzy_cmd *cmd)
+{
+	fuzzy_hash_t                    s;
 
 	if (!bloom_check (bf, cmd->hash)) {
 		return 0;
@@ -258,46 +323,21 @@ process_check_command (struct fuzzy_cmd *cmd)
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
-	cur = hashes[cmd->blocksize % BUCKETS]->head;
 
-	/* XXX: too slow way */
-	while (cur) {
-		h = cur->data;
-		if ((prob = fuzzy_compare_hashes (&h->h, &s)) > LEV_LIMIT) {
-			msg_info ("fuzzy hash was found, probability %d%%", prob);
-			return h->value;
-		}
-		cur = g_list_next (cur);
-	}
-	msg_debug ("fuzzy hash was NOT found, prob is %d%%", prob);
-
-	return 0;
+	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0);
 }
 
 static                          gboolean
 update_hash (struct fuzzy_cmd *cmd)
 {
 	GList                          *cur;
-	struct rspamd_fuzzy_node       *h;
 	fuzzy_hash_t                    s;
-	int                             prob = 0;
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 	cur = hashes[cmd->blocksize % BUCKETS]->head;
 
-	/* XXX: too slow way */
-	while (cur) {
-		h = cur->data;
-		if ((prob = fuzzy_compare_hashes (&h->h, &s)) > LEV_LIMIT) {
-			h->value += cmd->value;
-			msg_info ("fuzzy hash was found, probability %d%%, set new value to %d", prob, h->value);
-			return TRUE;
-		}
-		cur = g_list_next (cur);
-	}
-
-	return FALSE;
+	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value);
 }
 
 static                          gboolean
@@ -324,11 +364,40 @@ process_write_command (struct fuzzy_cmd *cmd)
 	return TRUE;
 }
 
-static                          gboolean
-process_delete_command (struct fuzzy_cmd *cmd)
+static gboolean
+delete_hash (GQueue *hash, fuzzy_hash_t *s)
 {
 	GList                          *cur, *tmp;
 	struct rspamd_fuzzy_node       *h;
+	gboolean                        res = FALSE;
+	
+	cur = hash->head;
+
+	/* XXX: too slow way */
+	while (cur) {
+		h = cur->data;
+		if (fuzzy_compare_hashes (&h->h, s) > LEV_LIMIT) {
+			g_free (h);
+			tmp = cur;
+			cur = g_list_next (cur);
+			g_queue_delete_link (hash, tmp);
+			bloom_del (bf, s->hash_pipe);
+			msg_info ("fuzzy hash was successfully deleted");
+			server_stat->fuzzy_hashes --;
+			mods++;
+			res = TRUE;
+			continue;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return res;
+
+}
+
+static                          gboolean
+process_delete_command (struct fuzzy_cmd *cmd)
+{
 	fuzzy_hash_t                    s;
 	gboolean                        res = FALSE;
 
@@ -338,24 +407,13 @@ process_delete_command (struct fuzzy_cmd *cmd)
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
-	cur = hashes[cmd->blocksize % BUCKETS]->head;
 
-	/* XXX: too slow way */
-	while (cur) {
-		h = cur->data;
-		if (fuzzy_compare_hashes (&h->h, &s) > LEV_LIMIT) {
-			g_free (h);
-			tmp = cur;
-			cur = g_list_next (cur);
-			g_queue_delete_link (hashes[cmd->blocksize % BUCKETS], tmp);
-			bloom_del (bf, cmd->hash);
-			msg_info ("fuzzy hash was successfully deleted");
-			server_stat->fuzzy_hashes --;
-			res = TRUE;
-			mods++;
-			continue;
-		}
-		cur = g_list_next (cur);
+	res = delete_hash (frequent, &s);
+	if (!res) {
+		res = delete_hash (hashes[cmd->blocksize % BUCKETS], &s);
+	}
+	else {
+		(void)delete_hash (hashes[cmd->blocksize % BUCKETS], &s);
 	}
 
 	return res;
