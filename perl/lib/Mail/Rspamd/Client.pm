@@ -807,6 +807,25 @@ sub _parse_response_line {
 	return split(/\s+/, $line, 3);
 }
 
+sub _write_message {
+	my $self = shift;
+	my $remote = shift;
+	my $message = shift;
+	my $len = shift;
+
+	my $written = 0;
+
+	while ($written < $len) {
+		last unless ($self->_get_io_readiness($remote, 1));
+		my $cur = syswrite $remote, $message, $len, $written;
+		
+		last if ($cur <= 0);
+		$written += $cur;
+	}
+
+	return $written == $len;
+}
+
 =head2 _clear_errors
 
 private instance () _clear_errors ()
@@ -855,7 +874,16 @@ sub _do_rspamc_command {
 		}
 	}
 	syswrite $remote, $EOL;
-	syswrite $remote, $msg;
+
+	if (! $self->_write_message($remote, $msg, length($msg))) {
+		my %r = (
+			error => 'error writing message to rspamd',
+			error_code => 502,
+		);
+		close $remote;
+		return \%r;
+	}
+
 	syswrite $remote, $EOL;
 	
 	unless ($self->_get_io_readiness($remote, 0)) {
@@ -870,6 +898,14 @@ sub _do_rspamc_command {
 	my $offset = 0;
 	do {
 		$res = sysread($remote, $in, 512, $offset);
+		if (!defined ($res)) {
+			close $remote;
+			my %r = (
+				error => 'IO error while reading data from socket: ' . $!,
+				error_code => 503,
+			);
+			return \%r;
+		}
 		if ($res > 0 && $res < 512) {
 			$self->_get_io_readiness($remote, 0);
 		}
@@ -969,7 +1005,12 @@ sub _do_control_command {
         if ($self->_auth ($remote)) {
             my $len = length ($msg);
             syswrite $remote, "learn $self->{statfile} $len -m $self->{weight}" . $EOL;
-            syswrite $remote, $msg . $EOL;
+			if (! $self->_write_message($remote, $msg, length($msg))) {
+				$res{error} = 'error writing message to rspamd';
+				$res{error_code} = 502;
+				close $remote;
+				return \%res;
+			}
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
@@ -1008,7 +1049,12 @@ sub _do_control_command {
 		my $len = length ($msg);
 		$res{error} = "Sending $len bytes...\n";
 		syswrite $remote, "weights $self->{'statfile'} $len" . $EOL;
-		syswrite $remote, $msg . $EOL;
+		if (! $self->_write_message($remote, $msg, length($msg))) {
+			$res{error} = 'error writing message to rspamd';
+			$res{error_code} = 502;
+			close $remote;
+			return \%res;
+		}
 		unless ($self->_get_io_readiness($remote, 0)) {
 			$res{error} = "Timeout while reading data from socket";
 			$res{error_code} = 501;
@@ -1045,7 +1091,12 @@ sub _do_control_command {
         if ($self->_auth ($remote)) {
             my $len = length ($msg);
             syswrite $remote, $self->{'command'} . " $len $self->{'weight'}" . $EOL;
-            syswrite $remote, $msg . $EOL;
+			if (! $self->_write_message($remote, $msg, length($msg))) {
+				$res{error} = 'error writing message to rspamd';
+				$res{error_code} = 502;
+				close $remote;
+				return \%res;
+			}
 			unless ($self->_get_io_readiness($remote, 0)) {
 				$res{error} = "Timeout while reading data from socket";
 				$res{error_code} = 501;
