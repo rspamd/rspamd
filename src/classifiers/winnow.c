@@ -27,6 +27,7 @@
  */
 
 #include "classifiers.h"
+#include "../tokenizers/tokenizers.h"
 #include "../main.h"
 #include "../filter.h"
 #include "../cfg_file.h"
@@ -127,10 +128,11 @@ void
 winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
 {
 	struct winnow_callback_data     data;
-	char                           *sumbuf;
+	char                           *sumbuf, *value;
 	double                          res = 0., max = 0.;
 	GList                          *cur;
 	struct statfile                *st, *sel = NULL;
+	int                             nodes, minnodes;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -141,6 +143,15 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	data.now = time (NULL);
 	data.ctx = ctx;
     
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+		minnodes = strtol (value, NULL, 10);
+		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
+		if (nodes < minnodes) {
+			msg_info ("do not classify message as it has too few tokens: %d, while %d min", nodes, minnodes);
+			return;
+		}
+	}
+
     if (ctx->cfg->pre_callbacks) {
 #ifdef WITH_LUA
         cur = call_classifier_pre_callbacks (ctx->cfg, task);
@@ -205,6 +216,8 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 	GList                          *cur, *resl = NULL;
 	struct statfile                *st;
 	struct classify_weight         *w;
+	char                           *value;
+	int                             nodes, minnodes;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -214,6 +227,15 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 	data.count = 0;
 	data.now = time (NULL);
 	data.ctx = ctx;
+
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+		minnodes = strtol (value, NULL, 10);
+		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
+		if (nodes < minnodes) {
+			msg_info ("do not classify message as it has too few tokens: %d, while %d min", nodes, minnodes);
+			return NULL;
+		}
+	}
     
 	cur = ctx->cfg->statfiles;
 	while (cur) {
@@ -263,6 +285,8 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *fi
 		.count = 0,
 		.multiplier = multiplier
 	};
+	char                           *value;
+	int                             nodes, minnodes;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -274,6 +298,15 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *fi
 
 	data.file = file;
 
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+		minnodes = strtol (value, NULL, 10);
+		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
+		if (nodes < minnodes) {
+			msg_info ("do not learn message as it has too few tokens: %d, while %d min", nodes, minnodes);
+			*sum = 0;
+			return;
+		}
+	}
 
 	if (data.file != NULL) {
 		statfile_pool_lock_file (pool, data.file);
