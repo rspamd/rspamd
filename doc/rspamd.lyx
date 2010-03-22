@@ -1,4 +1,4 @@
-#LyX 1.6.2 created this file. For more info see http://www.lyx.org/
+#LyX 1.6.4 created this file. For more info see http://www.lyx.org/
 \lyxformat 345
 \begin_document
 \begin_header
@@ -62,7 +62,7 @@
 \end_layout
 
 \begin_layout Date
-10.12.2009
+22.03.2010
 \end_layout
 
 \begin_layout Author
@@ -2981,7 +2981,7 @@ fuzzy_add - добавляет fuzzy hash в хранилище
 \end_layout
 
 \begin_layout Itemize
-fuzzy_del - удаляет fuzzy_hash из хранилища
+fuzzy_del - удаляет fuzzy hash из хранилища
 \end_layout
 
 \end_deeper
@@ -3833,6 +3833,45 @@ symbols - массив символов для данного сообщения
  При создании Mail::Rspamd::Client также можно указать параметр from (значение
  SMTP команды mail from), параметр rcpt (массив SMTP команд rcpt to) и user
  (авторизированный пользователь SMTP).
+ Полный список параметров:
+\end_layout
+
+\begin_layout Itemize
+username - имя пользователя (строка)
+\end_layout
+
+\begin_layout Itemize
+ip - ip адрес, с которого пришло сообщение (строка)
+\end_layout
+
+\begin_layout Itemize
+subject - тема письма (для не mime сообщений)
+\end_layout
+
+\begin_layout Itemize
+timeout - время ожидания в секундах (число)
+\end_layout
+
+\begin_layout Itemize
+password - пароль для команд котроллера (строка)
+\end_layout
+
+\begin_layout Itemize
+statfile - имя символа файла статистики для обучения (строка)
+\end_layout
+
+\begin_layout Itemize
+weight - вес сообщения для команд fuzzy_add и learn (число)
+\end_layout
+
+\begin_layout Itemize
+imap_search - строка поиска по IMAP (строка)
+\end_layout
+
+\begin_layout Standard
+Для выполнения команды на всех серверах используется команда do_all_cmd,
+ возвращающая хеш вида host => %results.
+ 
 \end_layout
 
 \begin_layout Chapter
@@ -4139,9 +4178,36 @@ count = 1;
 hashfile = "/tmp/fuzzy.db"; 
 \end_layout
 
+\begin_layout LyX-Code
+# Expire time for hashes in storage (h - for hours, d - for days)
+\end_layout
+
+\begin_layout LyX-Code
+expire = "10d";
+\end_layout
+
 \end_deeper
 \begin_layout LyX-Code
 };
+\end_layout
+
+\begin_layout Standard
+Для увеличения производительности хранилища можно заменить нечеткий поиск
+ на поиск точного соответствия, а также установкой libJudy (
+\begin_inset CommandInset href
+LatexCommand href
+name "judy arrays"
+target "http://judy.sourceforge.net"
+
+\end_inset
+
+).
+ После этого необходимо пересобрать rspamd (libJudy обнаруживается автоматически
+) и указать в настройках fuzzy worker'а параметр:
+\end_layout
+
+\begin_layout LyX-Code
+use_judy = "yes";
 \end_layout
 
 \begin_layout Standard
@@ -4183,6 +4249,50 @@ servers = "localhost:11335;some_host:11335";
 После настройки клиентской части с указанными серверами начинает работать
  как рабочий процесс (для проверки сообщений), так и контроллер (для записи/удал
 ения хешей из хранилища).
+ 
+\end_layout
+
+\begin_layout Chapter
+CGI интерфейс rspamd
+\end_layout
+
+\begin_layout Standard
+Rspamd имеет простой интерфейс для управления кластером серверов при помощи
+ веб браузера.
+ Интерфейс позволяет выполнять основные команды (проверка сообщений, обучение
+ rspamd, операции с fuzzy хешами, статистика) на выбранных серверах.
+ Для передачи сообщения rspamd используется либо поле текстового ввода,
+ либо непосредственная загрузка файла.
+ Если используется поле текстового ввода и сообщение вводится в него без
+ mime заголовков (например, для обучения), то интерфейс автоматически вставляет
+ заголовки по умолчанию и передает составленное таким образом сообщение
+ для обработки rspamd.
+ Запуск CGI интерфейса возможен двумя способами: как standalone сервера
+ и как cgi скрипта.
+ Первый способ подходит для тестовой работы или же для использования в один
+ поток.
+ Второй способ лишен этиго недостатка, но требует наличия настроенного веб
+ сервера.
+ Для работы с rspamd используется модуль Mail::Rspamd::Client, описанный
+ ранее.
+ Аргументы запуска CGI интерфейса:
+\end_layout
+
+\begin_layout Itemize
+-standalone - запуск в виде standalone http сервера
+\end_layout
+
+\begin_layout Itemize
+-port - порт для запуска
+\end_layout
+
+\begin_layout Itemize
+-host - имя хоста для запуска standalone сервера
+\end_layout
+
+\begin_layout Itemize
+-cfg - имя файла, содержащего список серверов, с которыми будет работать
+ CGI интерфейс
 \end_layout
 
 \end_body
