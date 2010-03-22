@@ -493,9 +493,17 @@ spawn_workers (struct rspamd_main *rspamd, gboolean make_sockets)
 			}
 			cf->listen_sock = listen_sock;
 		}
-
-		for (i = 0; i < cf->count; i++) {
+		
+		if (cf->type == TYPE_FUZZY) {
+			if (cf->count > 1) {
+				msg_err ("cannot spawn more than 1 fuzzy storage worker, so spawn one");
+			}
 			fork_worker (rspamd, cf);
+		}
+		else {
+			for (i = 0; i < cf->count; i++) {
+				fork_worker (rspamd, cf);
+			}
 		}
 
 		cur = g_list_next (cur);

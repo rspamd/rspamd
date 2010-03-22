@@ -172,22 +172,22 @@ INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
 LINK_DIRECTORIES("${LIBEVENT_PATH}")
 
 # Find libjudy
-#FIND_LIBRARY(LIBJUDY_LIBRARY NAMES judy PATHS /lib
-#                                           		/opt/lib
-#                                            	/usr/lib
-#                                            	/usr/local/lib
-#                 DOC "Path where the lijudy library can be found")
-#IF(LIBJUDY_LIBRARY)
-#	FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
-#											/usr/include
-#											/usr/local/include
-#											DOC "Path where the judy header files can be found")
-#
-#	GET_FILENAME_COMPONENT(LIBJUDY_PATH "${LIBJUDY_LIBRARY}" PATH)
-#	INCLUDE_DIRECTORIES("${LIBJUDY_INCLUDE}")
-#	LINK_DIRECTORIES("${LIBJUDY_PATH}")
-#	SET(WITH_JUDY 1)
-#ENDIF(LIBJUDY_LIBRARY)
+FIND_LIBRARY(LIBJUDY_LIBRARY NAMES Judy PATHS /lib
+                                           		/opt/lib
+                                            	/usr/lib
+                                            	/usr/local/lib
+                 DOC "Path where the libjudy library can be found")
+IF(LIBJUDY_LIBRARY)
+	FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
+											/usr/include
+											/usr/local/include
+											DOC "Path where the judy header files can be found")
+
+	GET_FILENAME_COMPONENT(LIBJUDY_PATH "${LIBJUDY_LIBRARY}" PATH)
+	INCLUDE_DIRECTORIES("${LIBJUDY_INCLUDE}")
+	LINK_DIRECTORIES("${LIBJUDY_PATH}")
+	SET(WITH_JUDY 1)
+ENDIF(LIBJUDY_LIBRARY)
 
 IF(ENABLE_PROFILING MATCHES "ON")
 	SET(WITH_PROFILER 1)
@@ -554,7 +554,7 @@ IF(LIBUTIL_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd util)
 ENDIF(LIBUTIL_LIBRARY)
 IF(LIBJUDY_LIBRARY)
-	TARGET_LINK_LIBRARIES(rspamd judy)
+	TARGET_LINK_LIBRARIES(rspamd Judy)
 ENDIF(LIBJUDY_LIBRARY)
 TARGET_LINK_LIBRARIES(rspamd rspamd_evdns)
 TARGET_LINK_LIBRARIES(rspamd event)

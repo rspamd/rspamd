@@ -308,6 +308,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 		goto ok;
 	}
 	else {
+		errno = ETIMEDOUT;
 		goto err;	
 	}
 
@@ -365,9 +366,14 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 			rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE);
 			goto ok;
 		}
-		goto err;
+		else {
+			r = snprintf (buf, sizeof (buf), "ERR" CRLF);
+			rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE);
+			goto ok;
+		}
 	}
 	else {
+		errno = ETIMEDOUT;
 		goto err;	
 	}
 
