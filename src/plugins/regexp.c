@@ -158,14 +158,12 @@ regexp_module_config (struct config_file *cfg)
 
 	if ((value = get_module_opt (cfg, "regexp", "metric")) != NULL) {
 		regexp_module_ctx->metric = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
-		g_free (value);
 	}
 	else {
 		regexp_module_ctx->metric = DEFAULT_METRIC;
 	}
 	if ((value = get_module_opt (cfg, "regexp", "statfile_prefix")) != NULL) {
 		regexp_module_ctx->statfile_prefix = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
-		g_free (value);
 	}
 	else {
 		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;

@@ -24,6 +24,12 @@
 
 /***MODULE:chartable
  * rspamd module that make marks based on symbol chains
+ *
+ * Allowed options:
+ * - metric (string): metric to insert symbol (default: 'default')
+ * - symbol (string): symbol to insert (default: 'R_BAD_CHARSET')
+ * - threshold (double): value that would be used as threshold in expression characters_changed / total_characters
+ *   (e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), default: 0.1
  */
 
 #include "../config.h"
@@ -75,14 +81,12 @@ chartable_module_config (struct config_file *cfg)
 
 	if ((value = get_module_opt (cfg, "chartable", "metric")) != NULL) {
 		chartable_module_ctx->metric = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
-		g_free (value);
 	}
 	else {
 		chartable_module_ctx->metric = DEFAULT_METRIC;
 	}
 	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {
 		chartable_module_ctx->symbol = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
-		g_free (value);
 	}
 	else {
 		chartable_module_ctx->symbol = DEFAULT_SYMBOL;

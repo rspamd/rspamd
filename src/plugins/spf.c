@@ -24,6 +24,12 @@
 
 /***MODULE:spf
  * rspamd module that checks spf records of incoming email
+ *
+ * Allowed options:
+ * - metric (string): metric to insert symbol (default: 'default')
+ * - symbol_allow (string): symbol to insert (default: 'R_SPF_ALLOW')
+ * - symbol_fail (string): symbol to insert (default: 'R_SPF_FAIL')
+ * - symbol_softfail (string): symbol to insert (default: 'R_SPF_SOFTFAIL')
  */
 
 #include "../config.h"
@@ -78,28 +84,24 @@ spf_module_config (struct config_file *cfg)
 	
 	if ((value = get_module_opt (cfg, "spf", "metric")) != NULL) {
 		spf_module_ctx->metric = memory_pool_strdup (spf_module_ctx->spf_pool, value);
-		g_free (value);
 	}
 	else {
 		spf_module_ctx->metric = DEFAULT_METRIC;
 	}
 	if ((value = get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
 		spf_module_ctx->symbol_fail = memory_pool_strdup (spf_module_ctx->spf_pool, value);
-		g_free (value);
 	}
 	else {
 		spf_module_ctx->symbol_fail = DEFAULT_SYMBOL_FAIL;
 	}
 	if ((value = get_module_opt (cfg, "spf", "symbol_softfail")) != NULL) {
 		spf_module_ctx->symbol_softfail = memory_pool_strdup (spf_module_ctx->spf_pool, value);
-		g_free (value);
 	}
 	else {
 		spf_module_ctx->symbol_softfail = DEFAULT_SYMBOL_SOFTFAIL;
 	}
 	if ((value = get_module_opt (cfg, "spf", "symbol_allow")) != NULL) {
 		spf_module_ctx->symbol_allow = memory_pool_strdup (spf_module_ctx->spf_pool, value);
-		g_free (value);
 	}
 	else {
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;

@@ -24,6 +24,22 @@
 
 /***MODULE:surbl
  * rspamd module that implements SURBL url checking
+ *
+ * Allowed options:
+ * - metric (string): metric to insert symbol (default: 'default')
+ * - weight (integer): weight of symbol
+ * Redirecotor options:
+ * - redirector (string): address of http redirector utility in format "host:port"
+ * - redirector_connect_timeout (seconds): redirector connect timeout (default: 1s)
+ * - redirector_read_timeout (seconds): timeout for reading data (default: 5s)
+ * - redirector_hosts_map (map string): map that contains domains to check with redirector
+ * Surbl options:
+ * - 2tld (map string): map of domains that should be checked via surbl using 3 (e.g. somehost.domain.com)
+ *   components of domain name instead of normal 2 (e.g. domain.com)
+ * - whitelist (map string): map of domains that should be whitelisted for surbl checks
+ * - max_urls (integer): maximum allowed number of urls in message to be checked
+ * - suffix (string): surbl address (for example insecure-bl.rambler.ru), may contain %b if bits are used (read documentation about it)
+ * - bit (string): describes a prefix for a single bit
  */
 
 #include "../config.h"

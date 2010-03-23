@@ -24,6 +24,15 @@
 
 /***MODULE:fuzzy
  * rspamd module that checks fuzzy checksums for messages
+ *
+ * Allowed options:
+ * - metric (string): metric to insert symbol (default: 'default')
+ * - symbol (string): symbol to insert (default: 'R_FUZZY')
+ * - max_score (double): maximum score to that weights of hashes would be normalized (default: 0 - no normalization)
+ * - min_length (integer): minimum length (in characters) for text part to be checked for fuzzy hash (default: 0 - no limit)
+ * - whitelist (map string): map of ip addresses that should not be checked with this module
+ * - servers (string): list of fuzzy servers in format "server1:port,server2:port" - these servers would be used for checking and storing
+ *   fuzzy hashes
  */
 
 #include "../config.h"
@@ -60,6 +69,8 @@ struct fuzzy_ctx {
 	int                             servers_num;
 	memory_pool_t                  *fuzzy_pool;
 	double                          max_score;
+	uint32_t                        min_hash_len;
+	radix_tree_t                   *whitelist;
 };
 
 struct fuzzy_client_session {
@@ -197,26 +208,41 @@ fuzzy_check_module_config (struct config_file *cfg)
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "metric")) != NULL) {
 		fuzzy_module_ctx->metric = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
-		g_free (value);
 	}
 	else {
 		fuzzy_module_ctx->metric = DEFAULT_METRIC;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
 		fuzzy_module_ctx->symbol = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
-		g_free (value);
 	}
 	else {
 		fuzzy_module_ctx->symbol = DEFAULT_SYMBOL;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "max_score")) != NULL) {
 		fuzzy_module_ctx->max_score = strtod (value, NULL);
-		g_free (value);
 	}
 	else {
 		fuzzy_module_ctx->max_score = 0.;
 	}
-	
+
+	if ((value = get_module_opt (cfg, "fuzzy_check", "min_length")) != NULL) {
+		fuzzy_module_ctx->min_hash_len = strtoul (value, NULL, 10);
+	}
+	else {
+		fuzzy_module_ctx->min_hash_len = 0.;
+	}
+
+	if ((value = get_module_opt (cfg, "fuzzy_check", "whitelist")) != NULL) {
+		fuzzy_module_ctx->whitelist = radix_tree_create ();
+		if (!add_map (value, read_radix_list, fin_radix_list, (void **)&fuzzy_module_ctx->whitelist)) {
+			msg_err ("cannot add whitelist '%s'", value);	
+		}
+	}
+	else {
+		fuzzy_module_ctx->whitelist = NULL;
+	}
+
+
 	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
 		parse_servers_string (value);
 	}
@@ -397,6 +423,14 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 	GList                          *cur;
 	int                             sock;
 
+	/* Check whitelist */
+	if (fuzzy_module_ctx->whitelist && task->from_addr.s_addr != 0) {
+		if (radix32tree_find (fuzzy_module_ctx->whitelist, ntohl ((uint32_t) task->from_addr.s_addr)) != RADIX_NO_VALUE) {
+			msg_info ("address %s is whitelisted, skip fuzzy check", inet_ntoa (task->from_addr));
+			return;
+		}
+	}
+
 	cur = task->text_parts;
 
 	while (cur) {
@@ -405,6 +439,15 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 			cur = g_list_next (cur);
 			continue;
 		}
+
+		/* Check length of hash */
+		if (fuzzy_module_ctx->min_hash_len != 0 && 
+				strlen (part->fuzzy->hash_pipe) * part->fuzzy->block_size < fuzzy_module_ctx->min_hash_len) {
+			msg_info ("part hash is shorter than %d symbols, skip fuzzy check", fuzzy_module_ctx->min_hash_len);
+			cur = g_list_next (cur);
+			continue;
+		}
+
 		/* Get upstream */
 		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
 			sizeof (struct storage_server), task->ts.tv_sec,

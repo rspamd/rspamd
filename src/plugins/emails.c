@@ -24,6 +24,11 @@
 
 /***MODULE:email
  * rspamd module that extracts emails from messages and check them via blacklist
+ * 
+ * Allowed options:
+ * - metric (string): metric to insert symbol (default: 'default')
+ * - symbol (string): symbol to insert (default: 'R_BAD_EMAIL')
+ * - blacklist (map string): map that contains list of bad emails
  */
 
 #include "../config.h"
@@ -89,14 +94,12 @@ emails_module_config (struct config_file *cfg)
 
 	if ((value = get_module_opt (cfg, "emails", "metric")) != NULL) {
 		email_module_ctx->metric = memory_pool_strdup (email_module_ctx->email_pool, value);
-		g_free (value);
 	}
 	else {
 		email_module_ctx->metric = DEFAULT_METRIC;
 	}
 	if ((value = get_module_opt (cfg, "emails", "symbol")) != NULL) {
 		email_module_ctx->symbol = memory_pool_strdup (email_module_ctx->email_pool, value);
-		g_free (value);
 	}
 	else {
 		email_module_ctx->symbol = DEFAULT_SYMBOL;
