@@ -351,11 +351,14 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 		pvalue = JudySLGet (jtree, s->hash_pipe, PJE0);
 		if (pvalue != NULL) {
 			h = *((struct rspamd_fuzzy_node **)pvalue);
-			msg_info ("fuzzy hash was found in judy tree");
-			if (update_value) {
-				h->value += update_value;
+			/* Also check block size */
+			if (h->h.block_size== s->block_size) {
+				msg_info ("fuzzy hash was found in judy tree");
+				if (update_value) {
+					h->value += update_value;
+				}
+				return h->value;
 			}
-			return h->value;
 		}
 	}
 	else {
