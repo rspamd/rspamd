@@ -372,6 +372,7 @@ GList* parse_comma_list (memory_pool_t *pool, char *line);
 struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
 struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
 gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const char *line);
+gboolean read_xml_config (struct config_file *cfg, const char *filename);
 
 int yylex (void);
 int yyparse (void);

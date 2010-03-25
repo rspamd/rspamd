@@ -24,13 +24,13 @@
 
 
 #include "config.h"
-#include <math.h>
 
 #include "cfg_file.h"
 #include "main.h"
 #include "filter.h"
 #include "settings.h"
 #include "classifiers/classifiers.h"
+#include "cfg_xml.h"
 #ifdef WITH_LUA
 #include "lua/lua_common.h"
 #endif
@@ -758,6 +758,55 @@ parse_normalizer (struct config_file *cfg, struct statfile *st, const char *line
     
     msg_err ("unknown normalizer %s", line);
     return FALSE;
+}
+
+static GMarkupParser xml_parser = {
+	.start_element = rspamd_xml_start_element,
+	.end_element = rspamd_xml_end_element,
+	.passthrough = NULL,
+	.text = rspamd_xml_text,
+	.error = rspamd_xml_error,
+};
+
+gboolean
+read_xml_config (struct config_file *cfg, const char *filename)
+{
+	struct stat st;
+	int fd;
+	gchar *data;
+	gboolean res;
+	GMarkupParseContext *ctx;
+	GError *err = NULL;
+
+	struct rspamd_xml_userdata ud;
+
+	if (stat (filename, &st) == -1) {
+		msg_err ("cannot stat %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+	if ((fd = open (filename, O_RDONLY)) == -1) {
+		msg_err ("cannot open %s: %s", filename, strerror (errno));
+		return FALSE;
+	
+	}
+	/* Now mmap this file to simplify reading process */
+	if ((data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		msg_err ("cannot mmap %s: %s", filename, strerror (errno));
+		close (fd);
+		return FALSE;
+	}
+	close (fd);
+	
+	/* Prepare xml parser */
+	ud.cfg = cfg;
+	ud.state = XML_READ_START;
+
+	ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
+	res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
+
+	munmap (data, st.st_size);
+
+	return res;
 }
 
 /*

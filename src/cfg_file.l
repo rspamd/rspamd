@@ -130,6 +130,14 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <incl>[ \t]*      /* eat the whitespace */
 <incl>[^ \t\n]+   { /* got the include file name */
 		/* got the include file name */
+		/* Handle XML case */
+		int len = strlen (yytext);
+		if (strcmp (yytext + len - 4, ".xml") == 0) {
+			if (!read_xml_config (cfg, yytext)) {
+				yyerror ("invalid xml detected");	
+			}
+			BEGIN(INITIAL);	
+		}
 		if ( include_stack_ptr >= MAX_INCLUDE_DEPTH ) {
 			yyerror ("yylex: includes nested too deeply" );
 			return -1;

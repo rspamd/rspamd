@@ -395,6 +395,7 @@ SET(RSPAMDSRC	src/modules.c
                 src/bloom.c
 				src/buffer.c
 				src/cfg_utils.c
+				src/cfg_xml.c
 				src/controller.c
 				src/events.c
 				src/expressions.c
