@@ -41,10 +41,10 @@
 #define DEFAULT_RLIMIT_MAXCORE 0
 
 extern int                      yylineno;
-extern char                    *yytext;
+extern gchar                    *yytext;
 
 int
-add_memcached_server (struct config_file *cf, char *str)
+add_memcached_server (struct config_file *cf, gchar *str)
 {
 	struct memcached_server        *mc;
 	uint16_t                        port;
@@ -71,9 +71,9 @@ add_memcached_server (struct config_file *cf, char *str)
 }
 
 gboolean
-parse_host_port (const char *str, struct in_addr *ina, uint16_t *port)
+parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port)
 {
-	char                           **tokens, *err_str;
+	gchar                           **tokens, *err_str;
 	struct hostent                 *hent;
 	unsigned int                    port_parsed, saved_errno = errno;
 
@@ -128,9 +128,9 @@ err:
 }
 
 int
-parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
+parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 {
-	char                          **host;
+	gchar                          **host;
 	int16_t                        *family, *port;
 	struct in_addr                 *addr;
 
@@ -148,7 +148,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str)
 		/* Try to check path of bind credit */
 		struct stat                     st;
 		int                             fd;
-		char                           *copy = memory_pool_strdup (cfg->cfg_pool, str);
+		gchar                           *copy = memory_pool_strdup (cfg->cfg_pool, str);
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
 				if ((fd = open (str, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
@@ -235,8 +235,8 @@ free_config (struct config_file *cfg)
 	memory_pool_delete (cfg->cfg_pool);
 }
 
-char                           *
-get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
+gchar                           *
+get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 {
 	GList                          *cur_opt;
 	struct module_opt              *cur;
@@ -257,11 +257,11 @@ get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
 	return NULL;
 }
 
-size_t
-parse_limit (const char *limit)
+gsize
+parse_limit (const gchar *limit)
 {
-	size_t                          result = 0;
-	char                           *err_str;
+	gsize                          result = 0;
+	gchar                           *err_str;
 
 	if (!limit || *limit == '\0')
 		return 0;
@@ -287,10 +287,10 @@ parse_limit (const char *limit)
 }
 
 unsigned int
-parse_seconds (const char *t)
+parse_seconds (const gchar *t)
 {
 	unsigned int                    result = 0;
-	char                           *err_str;
+	gchar                           *err_str;
 
 	if (!t || *t == '\0')
 		return 0;
@@ -322,8 +322,8 @@ parse_seconds (const char *t)
 	return result;
 }
 
-char
-parse_flag (const char *str)
+gchar
+parse_flag (const gchar *str)
 {
 	if (!str || !*str)
 		return -1;
@@ -351,11 +351,11 @@ parse_flag (const char *str)
  * Try to substitute all variables in given string
  * Return: newly allocated string with substituted variables (original string may be freed if variables are found)
  */
-char                           *
-substitute_variable (struct config_file *cfg, char *name, char *str, u_char recursive)
+gchar                           *
+substitute_variable (struct config_file *cfg, gchar *name, gchar *str, guchar recursive)
 {
-	char                           *var, *new, *v_begin, *v_end, *p, t;
-	size_t                          len;
+	gchar                           *var, *new, *v_begin, *v_end, *p, t;
+	gsize                          len;
 	gboolean                        changed = FALSE;
 
 	if (str == NULL) {
@@ -423,11 +423,11 @@ substitute_all_variables (gpointer key, gpointer value, gpointer data)
 	struct config_file             *cfg = (struct config_file *)data;
 
 	/* Do recursive substitution */
-	(void)substitute_variable (cfg, (char *)key, (char *)value, 1);
+	(void)substitute_variable (cfg, (gchar *)key, (gchar *)value, 1);
 }
 
 static void
-parse_filters_str (struct config_file *cfg, const char *str)
+parse_filters_str (struct config_file *cfg, const gchar *str)
 {
 	gchar                         **strvec, **p;
 	struct filter                  *cur;
@@ -544,10 +544,10 @@ post_load_config (struct config_file *cfg)
 
 
 void
-parse_err (const char *fmt, ...)
+parse_err (const gchar *fmt, ...)
 {
 	va_list                         aq;
-	char                            logbuf[BUFSIZ], readbuf[32];
+	gchar                            logbuf[BUFSIZ], readbuf[32];
 	int                             r;
 
 	va_start (aq, fmt);
@@ -561,10 +561,10 @@ parse_err (const char *fmt, ...)
 }
 
 void
-parse_warn (const char *fmt, ...)
+parse_warn (const gchar *fmt, ...)
 {
 	va_list                         aq;
-	char                            logbuf[BUFSIZ], readbuf[32];
+	gchar                            logbuf[BUFSIZ], readbuf[32];
 	int                             r;
 
 	va_start (aq, fmt);
@@ -578,9 +578,9 @@ parse_warn (const char *fmt, ...)
 }
 
 void
-unescape_quotes (char *line)
+unescape_quotes (gchar *line)
 {
-	char                           *c = line, *t;
+	gchar                           *c = line, *t;
 
 	while (*c) {
 		if (*c == '\\' && *(c + 1) == '"') {
@@ -595,10 +595,10 @@ unescape_quotes (char *line)
 }
 
 GList                          *
-parse_comma_list (memory_pool_t * pool, char *line)
+parse_comma_list (memory_pool_t * pool, gchar *line)
 {
 	GList                          *res = NULL;
-	char                           *c, *p, *str;
+	gchar                           *c, *p, *str;
 
 	c = line;
 	p = c;
@@ -682,10 +682,10 @@ internal_normalizer_func (double score, void *data)
 }
 
 static gboolean
-parse_internal_normalizer (struct config_file *cfg, struct statfile *st, const char *line)
+parse_internal_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line)
 {
     double *max;
-    char *err;
+    gchar *err;
 
     /* Line contains maximum value for internal normalizer */
     max = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
@@ -705,9 +705,9 @@ parse_internal_normalizer (struct config_file *cfg, struct statfile *st, const c
 
 #ifdef WITH_LUA
 static gboolean
-parse_lua_normalizer (struct config_file *cfg, struct statfile *st, const char *line)
+parse_lua_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line)
 {
-    char *code_begin;
+    gchar *code_begin;
     GList *params = NULL;
     int len;
 
@@ -736,9 +736,9 @@ parse_lua_normalizer (struct config_file *cfg, struct statfile *st, const char *
 
 
 gboolean 
-parse_normalizer (struct config_file *cfg, struct statfile *st, const char *line)
+parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line)
 {
-    char *params_begin;
+    gchar *params_begin;
 
     params_begin = strchr (line, ':');
     if (params_begin == NULL) {
@@ -769,7 +769,7 @@ static GMarkupParser xml_parser = {
 };
 
 gboolean
-read_xml_config (struct config_file *cfg, const char *filename)
+read_xml_config (struct config_file *cfg, const gchar *filename)
 {
 	struct stat st;
 	int fd;

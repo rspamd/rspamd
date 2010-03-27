@@ -4,6 +4,8 @@
 #include "config.h"
 #include "cfg_file.h"
 
+#define MAX_NAME 8192
+
 #define XML_START_MISSING 1
 #define XML_PARAM_MISSING 2
 #define XML_EXTRA_ELEMENT 3
@@ -30,9 +32,13 @@ enum xml_read_state {
 struct rspamd_xml_userdata {
 	enum xml_read_state state;
 	struct config_file *cfg;
-	gchar *section_name;
+	gchar section_name[MAX_NAME];
 	gpointer other_data;
+	GHashTable *cur_attrs;
 };
+
+/* Text is NULL terminated here */
+typedef gboolean (*element_handler_func) (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 
 /* Called for open tags <foo bar="baz"> */
 void rspamd_xml_start_element (GMarkupParseContext	*context,

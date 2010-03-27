@@ -77,10 +77,10 @@ enum rspamd_log_type {
  */
 struct rspamd_regexp {
 	enum rspamd_regexp_type type;					/**< regexp type										*/
-	char *regexp_text;								/**< regexp text representation							*/
+	gchar *regexp_text;								/**< regexp text representation							*/
 	GRegex *regexp;									/**< glib regexp structure								*/
 	GRegex *raw_regexp;								/**< glib regexp structure for raw matching				*/
-	char *header;									/**< header name for header regexps						*/
+	gchar *header;									/**< header name for header regexps						*/
 };
 
 /**
@@ -98,16 +98,16 @@ struct memcached_server {
  * script module list item
  */
 struct script_module {
-    char *name;                                     /**< name of module                                     */
-	char *path;										/**< path to module										*/
+    gchar *name;                                     /**< name of module                                     */
+	gchar *path;										/**< path to module										*/
 };
 
 /**
  * Module option
  */
 struct module_opt {
-	char *param;									/**< parameter name										*/
-	char *value;									/**< paramater value									*/
+	gchar *param;									/**< parameter name										*/
+	gchar *value;									/**< paramater value									*/
 };
 
 /**
@@ -123,7 +123,7 @@ struct statfile_section {
  * Statfile autolearn parameters
  */
 struct statfile_autolearn_params {
-	const char *metric;								/**< metric name for autolearn triggering 				*/
+	const gchar *metric;							/**< metric name for autolearn triggering 				*/
 	double threshold_min;							/**< threshold mark										*/
 	double threshold_max;							/**< threshold mark										*/
 	GList *symbols;									/**< list of symbols									*/
@@ -154,9 +154,9 @@ typedef double (*statfile_normalize_func)(double score, void *params);
  * Statfile config definition
  */
 struct statfile {
-	char *symbol;									/**< symbol of statfile									*/
-	char *path; 									/**< filesystem pattern (with %r or %f)					*/
-	size_t size;									/**< size of statfile									*/
+	gchar *symbol;									/**< symbol of statfile									*/
+	gchar *path; 									/**< filesystem pattern (with %r or %f)					*/
+	gsize size;									/**< size of statfile									*/
 	GList *sections;								/**< list of sections in statfile						*/
 	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
 	struct statfile_binlog_params *binlog;			/**< binlog params										*/
@@ -169,7 +169,7 @@ struct statfile {
  */
 struct classifier_config {
     GList *statfiles;                               /**< statfiles list                                     */
-    char *metric;                                   /**< metric of this classifier                          */
+    gchar *metric;                                  /**< metric of this classifier                          */
     struct classifier *classifier;                  /**< classifier interface                               */
 	struct tokenizer *tokenizer;					/**< tokenizer used for classifier						*/
     GHashTable *opts;                               /**< other options                                      */
@@ -196,7 +196,7 @@ struct config_scalar {
  */
 struct worker_conf {
 	int type;										/**< worker type										*/
-	char *bind_host;								/**< bind line											*/
+	gchar *bind_host;								/**< bind line											*/
 	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
 	uint16_t bind_port;								/**< bind port in case of TCP socket					*/
 	uint16_t bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
@@ -213,14 +213,14 @@ struct worker_conf {
  * Structure that stores all config data
  */
 struct config_file {
-	char *rspamd_user;								/**< user to run as										*/
-	char *rspamd_group;								/**< group to run as									*/
+	gchar *rspamd_user;								/**< user to run as										*/
+	gchar *rspamd_group;							/**< group to run as									*/
 	memory_pool_t *cfg_pool;						/**< memory pool for config								*/
-	char *cfg_name;									/**< name of config file								*/
-	char *pid_file;									/**< name of pid file									*/
-	char *temp_dir;									/**< dir for temp files									*/
+	gchar *cfg_name;								/**< name of config file								*/
+	gchar *pid_file;								/**< name of pid file									*/
+	gchar *temp_dir;								/**< dir for temp files									*/
 #ifdef WITH_GPERF_TOOLS
-	char *profile_path;
+	gchar *profile_path;
 #endif
 
 	gboolean no_fork;								/**< if 1 do not call daemon()							*/
@@ -230,16 +230,16 @@ struct config_file {
 	enum rspamd_log_type log_type;					/**< log type											*/
 	int log_facility;								/**< log facility in case of syslog						*/
 	int log_level;									/**< log level trigger									*/
-	char *log_file;									/**< path to logfile in case of file logging			*/
+	gchar *log_file;								/**< path to logfile in case of file logging			*/
 	gboolean log_buffered;							/**< whether logging is buffered						*/
 	uint32_t log_buf_size;							/**< length of log buffer								*/
-	char *debug_ip_map;							    /**< turn on debugging for specified ip addresses       */
+	gchar *debug_ip_map;						    /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;								/**< whether we should log URLs                         */
 
-	size_t max_statfile_size;						/**< maximum size for statfile							*/
+	gsize max_statfile_size;						/**< maximum size for statfile							*/
 
 	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];	/**< memcached servers				*/
-	size_t memcached_servers_num;					/**< number of memcached servers						*/
+	gsize memcached_servers_num;					/**< number of memcached servers						*/
 	memc_proto_t memcached_protocol;				/**< memcached protocol									*/
 	unsigned int memcached_error_time;				/**< memcached error time (see upstream documentation)	*/
 	unsigned int memcached_dead_time;				/**< memcached dead time								*/
@@ -247,18 +247,18 @@ struct config_file {
 	unsigned int memcached_connect_timeout;			/**< connection timeout									*/
 
 	gboolean delivery_enable;						/**< is delivery agent is enabled						*/
-	char *deliver_host;								/**< host for mail deliviring							*/
+	gchar *deliver_host;							/**< host for mail deliviring							*/
 	struct in_addr deliver_addr;					/**< its address										*/
 	uint16_t deliver_port;							/**< port for deliviring								*/
 	uint16_t deliver_family;						/**< socket family for delivirnig						*/
-	char *deliver_agent_path;						/**< deliver to pipe instead of socket					*/
+	gchar *deliver_agent_path;						/**< deliver to pipe instead of socket					*/
 	gboolean deliver_lmtp;							/**< use LMTP instead of SMTP							*/
 
 	GList *script_modules;							/**< linked list of script modules to load				*/
 
 	GList *filters;									/**< linked list of all filters							*/
 	GList *workers;									/**< linked list of all workers params					*/
-	char *filters_str;								/**< string of filters									*/
+	gchar *filters_str;								/**< string of filters									*/
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
@@ -284,7 +284,7 @@ struct config_file {
  * @param str line that describes server's credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-int add_memcached_server (struct config_file *cf, char *str);
+int add_memcached_server (struct config_file *cf, gchar *str);
 
 /**
  * Parse host:port line
@@ -292,7 +292,7 @@ int add_memcached_server (struct config_file *cf, char *str);
  * @param port port
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port (const char *str, struct in_addr *ina, uint16_t *port);
+gboolean parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port);
 
 /**
  * Parse bind credits
@@ -301,7 +301,7 @@ gboolean parse_host_port (const char *str, struct in_addr *ina, uint16_t *port);
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-int parse_bind_line (struct config_file *cfg, struct worker_conf *cf, char *str);
+int parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
 
 /**
  * Init default values
@@ -322,28 +322,28 @@ void free_config (struct config_file *cfg);
  * @param opt_name name of option to get
  * @return module value or NULL if option does not defined
  */
-char* get_module_opt (struct config_file *cfg, char *module_name, char *opt_name);
+gchar* get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name);
 
 /**
  * Parse limit
  * @param limit string representation of limit (eg. 1M)
  * @return numeric value of limit
  */
-size_t parse_limit (const char *limit);
+gsize parse_limit (const gchar *limit);
 
 /**
  * Parse seconds
  * @param t string representation of seconds (eg. 1D)
  * @return numeric value of string
  */
-unsigned int parse_seconds (const char *t);
+unsigned int parse_seconds (const gchar *t);
 
 /**
  * Parse flag
  * @param str string representation of flag (eg. 'on')
  * @return numeric value of flag (0 or 1)
  */
-char parse_flag (const char *str);
+gchar parse_flag (const gchar *str);
 
 /**
  * Substitutes variable in specified string, may be recursive (eg. ${var1${var2}})
@@ -353,7 +353,7 @@ char parse_flag (const char *str);
  * @param recursive whether do recursive scanning
  * @return new string with substituted variables (uses cfg memory pool for allocating)
  */
-char* substitute_variable (struct config_file *cfg, char *name, char *str, u_char recursive);
+gchar* substitute_variable (struct config_file *cfg, gchar *name, gchar *str, guchar recursive);
 
 /**
  * Do post load actions for config
@@ -366,19 +366,19 @@ void post_load_config (struct config_file *cfg);
  * Replace all \" with a single " in given string
  * @param line input string
  */
-void unescape_quotes (char *line);
+void unescape_quotes (gchar *line);
 
-GList* parse_comma_list (memory_pool_t *pool, char *line);
+GList* parse_comma_list (memory_pool_t *pool, gchar *line);
 struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
 struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
-gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const char *line);
-gboolean read_xml_config (struct config_file *cfg, const char *filename);
+gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line);
+gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
 
 int yylex (void);
 int yyparse (void);
 void yyrestart (FILE *);
-void parse_err (const char *fmt, ...);
-void parse_warn (const char *fmt, ...);
+void parse_err (const gchar *fmt, ...);
+void parse_warn (const gchar *fmt, ...);
 
 #endif /* ifdef CFG_FILE_H */
 /* 
