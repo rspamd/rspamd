@@ -28,8 +28,11 @@
 
 #include "config.h"
 #include "cfg_xml.h"
+#include "main.h"
 #include "logger.h"
 #include "util.h"
+#include "classifiers/classifiers.h"
+#include "tokenizers/tokenizers.h"
 
 /* Maximum attributes for param */
 #define MAX_PARAM 64
@@ -41,25 +44,6 @@
 	0,				\
 	NULL			\
 }					\
-
-/* Basic xml parsing functions */
-gboolean xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-
-/* Numeric params */
-gboolean xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-gboolean xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-gboolean xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-gboolean xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-gboolean xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-gboolean xml_handle_uint16 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-
-/* Flags */
-gboolean xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-
-/* Specific params */
-gboolean worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-gboolean handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset);
-
 
 enum xml_config_section {
 	XML_SECTION_MAIN,
@@ -113,11 +97,71 @@ static struct xml_parser_rule grammar[] = {
 		NULL_ATTR
 	},
 	{ XML_SECTION_LOGGING, {
+			{
+				"type",
+				handle_log_type,
+				0,
+				NULL
+			},
+			{
+				"level",
+				handle_log_level,
+				0,
+				NULL
+			},
+			{
+				"log_urls",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, log_urls),
+				NULL
+			},
+			{
+				"log_buffer",
+				xml_handle_uint32,
+				G_STRUCT_OFFSET (struct config_file, log_buf_size),
+				NULL
+			},
+			{
+				"debug_ip",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, debug_ip_map),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
 	},
 	{ XML_SECTION_WORKER, {
+			{
+				"type",
+				worker_handle_type,
+				0,
+				NULL
+			},
+			{
+				"bind_socket",
+				worker_handle_bind,
+				0,
+				NULL
+			},
+			{
+				"count",
+				xml_handle_uint16,
+				G_STRUCT_OFFSET (struct worker_conf, count),
+				NULL
+			},
+			{
+				"maxfiles",
+				xml_handle_uint32,
+				G_STRUCT_OFFSET (struct worker_conf, rlimit_nofile),
+				NULL
+			},
+			{
+				"maxcore",
+				xml_handle_uint32,
+				G_STRUCT_OFFSET (struct worker_conf, rlimit_maxcore),
+				NULL
+			},
 			NULL_ATTR
 		},
 		{
@@ -125,9 +169,33 @@ static struct xml_parser_rule grammar[] = {
 			worker_handle_param,
 			0,
 			NULL
-		},
+		}
 	},
 	{ XML_SECTION_METRIC, {
+			{
+				"name",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct metric, name),
+				NULL
+			},
+			{
+				"required_score",
+				xml_handle_double,
+				G_STRUCT_OFFSET (struct metric, required_score),
+				NULL
+			},
+			{
+				"reject_score",
+				xml_handle_double,
+				G_STRUCT_OFFSET (struct metric, reject_score),
+				NULL
+			},
+			{
+				"cache_file",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct metric, cache_filename),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
@@ -156,7 +224,12 @@ static struct xml_parser_rule grammar[] = {
 	{ XML_SECTION_MODULE, {
 			NULL_ATTR
 		},
-		NULL_ATTR
+		{
+			NULL,
+			handle_module_opt,
+			0,
+			NULL
+		}
 	},
 	{ XML_SECTION_MODULES, {
 			NULL_ATTR
@@ -242,7 +315,7 @@ process_attrs (struct config_file *cfg, const gchar **attribute_names, const gch
 }
 
 static gboolean
-call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, const gchar *value, gpointer dest_struct, enum xml_config_section section)
+call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *value, gpointer dest_struct, enum xml_config_section section)
 {
 	struct xml_parser_rule         *rule;
 	struct xml_config_param        *param;
@@ -272,58 +345,235 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, const gc
 	return FALSE;
 }
 
-gboolean 
-worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
-{
+/* Handlers */
+/* Specific handlers */
 
+gboolean 
+handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	char                           *val;
+	if (g_ascii_strcasecmp (data, "file") == 0) {
+		/* Find filename attribute */
+		if ((val = g_hash_table_lookup (attrs, "filename")) == NULL) {
+			msg_err ("cannot log to file that is not specified");
+			return FALSE;
+		}
+		cfg->log_type = RSPAMD_LOG_FILE;
+		cfg->log_file = val;
+	}
+	else if (g_ascii_strcasecmp (data, "console") == 0) {
+		cfg->log_type = RSPAMD_LOG_CONSOLE;
+	}
+	else if (g_ascii_strcasecmp (data, "syslog") == 0) {
+		if ((val = g_hash_table_lookup (attrs, "facility")) == NULL) {
+			msg_err ("cannot log to syslog when facility is not specified");
+			return FALSE;
+		}
+		cfg->log_type = RSPAMD_LOG_SYSLOG;
+		/* Rather ugly check */
+		if (g_ascii_strncasecmp (val, "LOG_AUTH", sizeof ("LOG_AUTH") - 1) == 0) {
+			cfg->log_facility = LOG_AUTH;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_CRON", sizeof ("LOG_CRON") - 1) == 0) {
+			cfg->log_facility = LOG_CRON;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_DAEMON", sizeof ("LOG_DAEMON") - 1) == 0) {
+			cfg->log_facility = LOG_DAEMON;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_MAIL", sizeof ("LOG_MAIL") - 1) == 0) {
+			cfg->log_facility = LOG_MAIL;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_USER", sizeof ("LOG_USER") - 1) == 0) {
+			cfg->log_facility = LOG_USER;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL0", sizeof ("LOG_LOCAL0") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL0;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL1", sizeof ("LOG_LOCAL1") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL1;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL2", sizeof ("LOG_LOCAL2") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL2;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL3", sizeof ("LOG_LOCAL3") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL3;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL4", sizeof ("LOG_LOCAL4") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL4;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL5", sizeof ("LOG_LOCAL5") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL5;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL6", sizeof ("LOG_LOCAL6") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL6;
+		}
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL7", sizeof ("LOG_LOCAL7") - 1) == 0) {
+			cfg->log_facility = LOG_LOCAL7;
+		}
+		else {
+			msg_err ("invalid logging facility: %s", val);
+			return FALSE;
+		}
+	}
+	else {
+		msg_err ("invalid logging type: %s", data);
+		return FALSE;
+	}
+	
+	return TRUE;
 }
 
 gboolean 
-handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
+	if (g_ascii_strcasecmp (data, "error") == 0) {
+		cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
+	}
+	else if (g_ascii_strcasecmp (data, "warning") == 0) {
+		cfg->log_level = G_LOG_LEVEL_WARNING;
+	}
+	else if (g_ascii_strcasecmp (data, "info") == 0) {
+		cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
+	}
+	else if (g_ascii_strcasecmp (data, "debug") == 0) {
+		cfg->log_level = G_LOG_LEVEL_DEBUG;
+	}
+	else {
+		msg_err ("unknown log level: %s", data);
+		return FALSE;
+	}
 
+	return TRUE;
 }
 
-static void
-xml_parse_module_opt (struct rspamd_xml_userdata *ud, const gchar *text, gsize len)
+gboolean 
+worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	char	                       *val;
+	struct worker_conf             *wrk = ctx->other_data;
+	char                           *name;
+
+	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+		msg_err ("worker param tag must have \"name\" attribute");
+		return FALSE;
+	}
+
+	g_hash_table_insert (wrk->params, name, memory_pool_strdup (cfg->cfg_pool, data));
+
+	return TRUE;
+}
+gboolean 
+worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct worker_conf             *wrk = ctx->other_data;
+
+	
+	if (g_ascii_strcasecmp (data, "normal") == 0) {
+		wrk->type = TYPE_WORKER;
+		wrk->has_socket = TRUE;
+	}
+	else if (g_ascii_strcasecmp (data, "controller") == 0) {
+		wrk->type = TYPE_CONTROLLER;
+		wrk->has_socket = TRUE;
+	}
+	else if (g_ascii_strcasecmp (data, "lmtp") == 0) {
+		wrk->type = TYPE_LMTP;
+		wrk->has_socket = TRUE;
+	}
+	else if (g_ascii_strcasecmp (data, "fuzzy") == 0) {
+		wrk->type = TYPE_FUZZY;
+		wrk->has_socket = FALSE;
+	}
+	else {
+		msg_err ("unknown worker type: %s", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean 
+worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct worker_conf             *wrk = ctx->other_data;
+
+	if (!parse_bind_line (cfg, wrk, data)) {
+		msg_err ("cannot parse bind_socket: %s", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean 
+handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	char                           *name, *err;
+	double                         *value;
+
+	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+		msg_err ("factor tag must have \"name\" attribute");
+		return FALSE;
+	}
+
+	value = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+
+	errno = 0;
+	*value = strtod (data, &err);
+	if (errno != 0 || (err != NULL && *err != 0)) {
+		msg_err ("invalid number: %s, %s", data, strerror (errno));
+		return FALSE;
+	}
+	
+	g_hash_table_insert (cfg->factors, name, value);
+
+	return TRUE;
+}
+
+gboolean 
+handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	char	                       *name;
 	GList                          *cur_opt;
 	struct module_opt              *cur;
 	
-	val = xml_asciiz_string (ud->cfg->cfg_pool, text, len);
-	cur_opt = g_hash_table_lookup (ud->cfg->modules_opts, ud->section_name);
+	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+		msg_err ("param tag must have \"name\" attribute");
+		return FALSE;
+	}
+
+	cur_opt = g_hash_table_lookup (cfg->modules_opts, ctx->section_name);
 	if (cur_opt == NULL) {
 		/* Insert new option structure */
-		cur = memory_pool_alloc (ud->cfg->cfg_pool, sizeof (struct module_opt));
-		cur->param = memory_pool_strdup (ud->cfg->cfg_pool, ud->other_data);
-		cur->value = val;
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
+		cur->param = name;
+		cur->value = data;
 		cur_opt = g_list_prepend (NULL, cur);
-		g_hash_table_insert (ud->cfg->modules_opts, memory_pool_strdup (ud->cfg->cfg_pool, ud->section_name), cur_opt);
+		g_hash_table_insert (cfg->modules_opts, memory_pool_strdup (cfg->cfg_pool, ctx->section_name), cur_opt);
 	}
 	else {
 		/* First try to find option with this name */
 		while (cur_opt) {
 			cur = cur_opt->data;
-			if (strcmp (cur->param, ud->other_data) == 0) {
+			if (strcmp (cur->param, name) == 0) {
 				/* cur->value is in pool */
-				cur->value = val;
-				return;
+				cur->value = data;
+				return TRUE;
 			}
 			cur_opt = g_list_next (cur_opt);
 		}
 		/* Not found, insert */
-		cur = memory_pool_alloc (ud->cfg->cfg_pool, sizeof (struct module_opt));
-		cur->param = memory_pool_strdup (ud->cfg->cfg_pool, ud->other_data);
-		cur->value = val;
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
+		cur->param = name;
+		cur->value = data;
 		cur_opt = g_list_prepend (cur_opt, cur);
 	}
 
+	return TRUE;
 }
 
 /* Common handlers */
 gboolean 
-xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	/* Simply assign pointer to pointer */
 	gchar                       **dest;
@@ -336,7 +586,7 @@ xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 
 
 gboolean 
-xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	gsize                      *dest;
 
@@ -347,7 +597,7 @@ xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 }
 
 gboolean 
-xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	time_t                      *dest;
 
@@ -358,7 +608,7 @@ xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 }
 
 gboolean 
-xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	gboolean                    *dest;
 
@@ -377,7 +627,7 @@ xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 }
 
 gboolean 
-xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	double                      *dest;
 	char                        *err = NULL;
@@ -394,7 +644,7 @@ xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 }
 
 gboolean 
-xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	int                         *dest;
 	char                        *err = NULL;
@@ -411,7 +661,7 @@ xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashT
 }
 
 gboolean 
-xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	uint32_t                    *dest;
 	char                        *err = NULL;
@@ -428,7 +678,7 @@ xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 }
 
 gboolean 
-xml_handle_uint16 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, const gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_uint16 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	uint16_t                    *dest;
 	char                        *err = NULL;
@@ -444,6 +694,7 @@ xml_handle_uint16 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 	return TRUE;
 }
 
+/* XML callbacks */
 void 
 rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_name, const gchar **attribute_names,
 								const gchar **attribute_values, gpointer user_data, GError **error)
@@ -485,6 +736,8 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				if (extract_attr ("name", attribute_names, attribute_values, &res)) {
 					g_strlcpy (ud->section_name, res, sizeof (res));
 					ud->state = XML_READ_METRIC;
+					/* Create object */
+					ud->other_data = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct metric));
 				}
 				else {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'name' is required for tag 'metric'");
@@ -495,6 +748,8 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				if (extract_attr ("type", attribute_names, attribute_values, &res)) {
 					g_strlcpy (ud->section_name, res, sizeof (res));
 					ud->state = XML_READ_CLASSIFIER;
+					/* Create object */
+					ud->other_data = check_classifier_cfg (ud->cfg, NULL);
 				}
 				else {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'type' is required for tag 'classifier'");
@@ -503,6 +758,8 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			}
 			else if (g_ascii_strcasecmp (element_name, "worker") == 0) {
 				ud->state = XML_READ_WORKER;
+				/* Create object */
+				ud->other_data = check_worker_conf (ud->cfg, NULL);
 			}
 			else {
 				/* Other params */
@@ -576,9 +833,26 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			break;
 		case XML_READ_METRIC:
 			CHECK_TAG ("metric", FALSE);
+			if (res) {
+				struct metric *m = ud->other_data;
+				if (m->name == NULL) {
+					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "metric attribute \"name\" is required but missing");
+					ud->state = XML_ERROR;
+					return;
+				}
+				if (m->classifier == NULL) {
+					m->classifier = get_classifier ("winnow");
+				}
+				g_hash_table_insert (ud->cfg->metrics, m->name, m);
+				ud->cfg->metrics_list = g_list_prepend (ud->cfg->metrics_list, m);
+			}	
 			break;
 		case XML_READ_WORKER:
 			CHECK_TAG ("worker", FALSE);
+			if (res) {
+				/* Insert object to list */
+				ud->cfg->workers = g_list_prepend (ud->cfg->workers, ud->other_data);
+			}
 			break;
 		case XML_READ_VARIABLE:
 			CHECK_TAG ("variable", TRUE);

@@ -200,7 +200,7 @@ struct worker_conf {
 	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
 	uint16_t bind_port;								/**< bind port in case of TCP socket					*/
 	uint16_t bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
-	int count;										/**< number of workers									*/
+	uint16_t count;									/**< number of workers									*/
 	int listen_sock;								/**< listening socket desctiptor						*/
 	uint32_t rlimit_nofile;							/**< max files limit									*/
 	uint32_t rlimit_maxcore;						/**< maximum core file size								*/
