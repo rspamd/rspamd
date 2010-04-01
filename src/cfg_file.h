@@ -266,16 +266,18 @@ struct config_file {
 	GHashTable* factors;							/**< hash of factors indexed by symbol name				*/
 	GHashTable* c_modules;							/**< hash of c modules indexed by module name			*/
 	GHashTable* composite_symbols;					/**< hash of composite symbols indexed by its name		*/
-    GList *classifiers;                             /**< list of all classifiers defined                    */
-    GList *statfiles;                               /**< list of all statfiles in config file order         */
-    GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
-    GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
+	GList *classifiers;                             /**< list of all classifiers defined                    */
+	GList *statfiles;                               /**< list of all statfiles in config file order         */
+	GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
+	GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	int clock_res;									/**< resolution of clock used							*/
 	double grow_factor;								/**< grow factor for consolidation callback				*/
 	GList *views;									/**< views												*/
-    GHashTable* domain_settings;                    /**< settings per-domains                               */
-    GHashTable* user_settings;                      /**< settings per-user                                  */
-
+	GHashTable* domain_settings;                    /**< settings per-domains                               */
+	GHashTable* user_settings;                      /**< settings per-user                                  */
+	
+	gchar* checksum;								/**< real checksum of config file						*/ 
+	gchar* dump_checksum;							/**< dump checksum of config file						*/ 
 };
 
 /**
@@ -360,6 +362,12 @@ gchar* substitute_variable (struct config_file *cfg, gchar *name, gchar *str, gu
  * @param cfg config file
  */
 void post_load_config (struct config_file *cfg);
+
+/**
+ * Calculate checksum for config file
+ * @param cfg config file
+ */
+gboolean get_config_checksum (struct config_file *cfg);
 
 
 /**

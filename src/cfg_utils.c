@@ -230,6 +230,9 @@ free_config (struct config_file *cfg)
 	g_hash_table_remove_all (cfg->cfg_params);
 	g_hash_table_unref (cfg->cfg_params);
 	g_hash_table_destroy (cfg->classifiers_symbols);
+	if (cfg->checksum) {
+		g_free (cfg->checksum);
+	}
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
 	memory_pool_delete (cfg->cfg_pool);
@@ -499,6 +502,37 @@ fill_cfg_params (struct config_file *cfg)
 
 }
 
+gboolean
+get_config_checksum (struct config_file *cfg) 
+{
+	int                             fd;
+	void                           *map;
+	struct stat                     st;
+
+	/* Compute checksum for config file that should be used by xml dumper */
+	if ((fd = open (cfg->cfg_name, O_RDONLY)) == -1) {
+		msg_err ("config file %s is no longer available, cannot calculate checksum");
+		return FALSE;
+	}
+	if (stat (cfg->cfg_name, &st) == -1) {
+		msg_err ("cannot stat %s: %s", cfg->cfg_name, strerror (errno));
+		return FALSE;
+	}
+
+	/* Now mmap this file to simplify reading process */
+	if ((map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		msg_err ("cannot mmap %s: %s", cfg->cfg_name, strerror (errno));
+		close (fd);
+		return FALSE;
+	}
+	close (fd);
+	
+	/* Get checksum for a file */
+	cfg->checksum = g_compute_checksum_for_string (G_CHECKSUM_MD5, map, st.st_size);
+	munmap (map, st.st_size);
+	
+	return TRUE;
+}
 /* 
  * Perform post load actions
  */
@@ -539,7 +573,7 @@ post_load_config (struct config_file *cfg)
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
 		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);
 	}
-
+	
 }
 
 

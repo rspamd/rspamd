@@ -163,7 +163,6 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 		if ( --include_stack_ptr < 0 ) {
 			include_stack_ptr = 0;
 			yylineno = 1;
-			post_load_config (cfg);
 			yyterminate ();
 		}
 		else {

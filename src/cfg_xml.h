@@ -21,11 +21,9 @@ enum xml_read_state {
 	XML_READ_METRIC,
 	XML_READ_WORKER,
 	XML_READ_VARIABLE,
-	XML_READ_PIDFILE,
-	XML_READ_STATFILE_POOL,
-	XML_READ_FILTERS,
 	XML_READ_LOGGING,
 	XML_ERROR,
+	XML_READ_VALUE,
 	XML_END
 };
 
@@ -39,6 +37,8 @@ struct rspamd_xml_userdata {
 
 /* Text is NULL terminated here */
 typedef gboolean (*element_handler_func) (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
+
+/* Callbacks */
 
 /* Called for open tags <foo bar="baz"> */
 void rspamd_xml_start_element (GMarkupParseContext	*context,
@@ -92,4 +92,9 @@ gboolean handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx
 gboolean handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 gboolean handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 gboolean handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
+
+
+/* Dumper functions */
+gboolean xml_dump_config (struct config_file *cfg, const char *filename);
+
 #endif

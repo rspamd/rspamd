@@ -638,6 +638,12 @@ main (int argc, char **argv, char **env)
 	}
 
 	fclose (f);
+	/* Dump it to xml */
+	if (get_config_checksum (rspamd->cfg)) {
+		xml_dump_config (rspamd->cfg, "/tmp/rspamd.xml");
+	}
+	/* Do post-load actions */
+	post_load_config (rspamd->cfg);
 	/* Init counters */
 	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
 
