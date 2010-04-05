@@ -16,6 +16,7 @@
 
 extern const luaL_reg null_reg[];
 
+/* Common utility functions */
 void lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func);
 void lua_setclass (lua_State *L, const char *classname, int objidx);
 void lua_set_table_index (lua_State *L, const char *index, const char *value);
@@ -29,17 +30,25 @@ int luaopen_hash_table (lua_State *L);
 int luaopen_textpart (lua_State *L);
 int luaopen_classifier (lua_State *L);
 int luaopen_statfile (lua_State * L);
+void init_lua ();
 void init_lua_filters (struct config_file *cfg);
 
+/* Filters functions */
 int lua_call_filter (const char *function, struct worker_task *task);
 int lua_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number);
 double lua_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name);
 void add_luabuf (const char *line);
 
+/* Classify functions */
 GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task);
 double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in);
 
 double lua_normalizer_func (double score, void *params);
+
+/* Config file functions */
+void lua_post_load_config (struct config_file *cfg);
+void lua_process_element (struct config_file *cfg, const char *name, struct module_opt *opt, int idx);
+
 
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

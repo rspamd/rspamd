@@ -624,6 +624,7 @@ main (int argc, char **argv, char **env)
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, environ);
 #endif
+	init_lua ();
 
 	f = fopen (rspamd->cfg->cfg_name, "r");
 	if (f == NULL) {
@@ -677,9 +678,7 @@ main (int argc, char **argv, char **env)
 			}
 			l = g_list_next (l);
 		}
-#if defined(WITH_LUA)
 		init_lua_filters (cfg);
-#endif
 		if (dump_vars) {
 			dump_cfg_vars ();
 		}
@@ -784,9 +783,9 @@ main (int argc, char **argv, char **env)
 	perl_construct (perl_interpreter);
 	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
 	init_perl_filters (cfg);
-#elif defined(WITH_LUA)
-	init_lua_filters (cfg);
 #endif
+
+	init_lua_filters (cfg);
 
 	/* Init symbols cache for each metric */
 	l = g_list_first (cfg->metrics_list);

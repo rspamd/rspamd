@@ -243,6 +243,7 @@ get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 {
 	GList                          *cur_opt;
 	struct module_opt              *cur;
+	static char                     numbuf[64];
 
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
 	if (cur_opt == NULL) {
@@ -252,7 +253,31 @@ get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 	while (cur_opt) {
 		cur = cur_opt->data;
 		if (strcmp (cur->param, opt_name) == 0) {
-			return cur->value;
+			/* Check if it is lua variable */
+			if (! cur->is_lua) {
+				/* Plain variable */
+				return cur->value;
+			}
+			else {
+				/* Check type */
+				switch (cur->lua_type) {
+					case LUA_VAR_NUM:
+						/* numbuf is static, so it is safe to return it "as is" */
+						snprintf (numbuf, sizeof (numbuf), "%f", *(double *)cur->actual_data);
+						return numbuf;
+					case LUA_VAR_BOOLEAN:
+						snprintf (numbuf, sizeof (numbuf), "%s", *(gboolean *)cur->actual_data ? "yes" : "no");
+						return numbuf;
+					case LUA_VAR_STRING:
+						return (char *)cur->actual_data;
+					case LUA_VAR_FUNCTION:
+						msg_info ("option %s is dynamic, so it cannot be aqquired statically", opt_name);
+						return NULL;
+					case LUA_VAR_UNKNOWN:
+						msg_info ("option %s has unknown type, maybe there is error in LUA code", opt_name);
+						return NULL;
+				}
+			}
 		}
 		cur_opt = g_list_next (cur_opt);
 	}
@@ -573,7 +598,9 @@ post_load_config (struct config_file *cfg)
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
 		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);
 	}
-	
+
+	/* Lua options */
+	(void)lua_post_load_config (cfg);
 }
 
 

@@ -98,8 +98,8 @@ struct memcached_server {
  * script module list item
  */
 struct script_module {
-    gchar *name;                                     /**< name of module                                     */
-	gchar *path;										/**< path to module										*/
+    gchar *name;									/**< name of module                                     */
+	gchar *path;									/**< path to module										*/
 };
 
 /**
@@ -108,6 +108,15 @@ struct script_module {
 struct module_opt {
 	gchar *param;									/**< parameter name										*/
 	gchar *value;									/**< paramater value									*/
+	gpointer actual_data;							/**< parsed data										*/
+	gboolean is_lua;								/**< actually this is lua variable						*/
+	enum {
+		LUA_VAR_NUM,
+		LUA_VAR_BOOLEAN,
+		LUA_VAR_STRING,
+		LUA_VAR_FUNCTION,
+		LUA_VAR_UNKNOWN
+	} lua_type;										/**< type of lua variable								*/
 };
 
 /**
@@ -278,6 +287,7 @@ struct config_file {
 	
 	gchar* checksum;								/**< real checksum of config file						*/ 
 	gchar* dump_checksum;							/**< dump checksum of config file						*/ 
+	gpointer lua_state;								/**< pointer to lua state								*/
 };
 
 /**

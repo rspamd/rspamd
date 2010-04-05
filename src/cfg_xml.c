@@ -33,6 +33,7 @@
 #include "util.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
+#include "lua/lua_common.h"
 
 /* Maximum attributes for param */
 #define MAX_PARAM 64
@@ -80,6 +81,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, pid_file),
 				NULL
 			},
+            {
+				"lua",
+				handle_lua,
+				0,
+				NULL
+            },
 			{
 				"raw_mode",
 				xml_handle_boolean,
@@ -550,21 +557,29 @@ handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTa
 gboolean 
 handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	char	                       *name;
+	char	                       *name, *val;
 	GList                          *cur_opt;
 	struct module_opt              *cur;
+	gboolean                        is_lua = FALSE;
 	
 	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
 		msg_err ("param tag must have \"name\" attribute");
 		return FALSE;
 	}
-
+	
+	/* Check for lua */
+	if ((val = g_hash_table_lookup (attrs, "lua")) != NULL) {
+		if (g_ascii_strcasecmp (val, "yes") == 0) {
+			is_lua = TRUE;
+		}
+	}
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, ctx->section_name);
 	if (cur_opt == NULL) {
 		/* Insert new option structure */
-		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
+		cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
 		cur->param = name;
 		cur->value = data;
+		cur->is_lua = is_lua;
 		cur_opt = g_list_prepend (NULL, cur);
 		g_hash_table_insert (cfg->modules_opts, memory_pool_strdup (cfg->cfg_pool, ctx->section_name), cur_opt);
 	}
@@ -575,15 +590,52 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 			if (strcmp (cur->param, name) == 0) {
 				/* cur->value is in pool */
 				cur->value = data;
+				cur->is_lua = is_lua;
 				return TRUE;
 			}
 			cur_opt = g_list_next (cur_opt);
 		}
 		/* Not found, insert */
-		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
+		cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
 		cur->param = name;
 		cur->value = data;
-		cur_opt = g_list_prepend (cur_opt, cur);
+		cur->is_lua = is_lua;
+		/* Slow way, but we cannot prepend here as we need to modify pointer inside module_options hash */
+		cur_opt = g_list_append (cur_opt, cur);
+	}
+
+	return TRUE;
+}
+
+/* Handle lua tag */
+gboolean 
+handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	gchar                        *val;
+	lua_State                    *L = cfg->lua_state;
+
+	/* First check for global variable 'config' */
+	lua_getglobal (L, "config");
+
+	if (lua_isnil (L, 1)) {
+		/* Assign global table to set up attributes */
+		lua_newtable (L);
+		lua_setglobal (L, "config");
+		/* Now config table can be used for configuring rspamd */
+	}
+	/* First check "src" attribute */
+	if ((val = g_hash_table_lookup (attrs, "src")) != NULL) {
+		if (luaL_dofile (L, val) != 0) {
+			msg_err ("cannot load lua file %s: %s", val, lua_tostring (L, -1));
+			return FALSE;
+		}
+	}
+	else if (data != NULL && *data != '\0') {
+		/* Try to load a string */
+		if (luaL_dostring (L, data) != 0) {
+			msg_err ("cannot load lua chunk: %s", lua_tostring (L, -1));
+			return FALSE;
+		}
 	}
 
 	return TRUE;

@@ -180,7 +180,7 @@ luaopen_logger (lua_State * L)
 	return 1;
 }
 
-static void
+void
 init_lua ()
 {
 	if (L == NULL) {
@@ -211,7 +211,6 @@ init_lua_filters (struct config_file *cfg)
 	struct script_module           *module;
     struct statfile                *st;
 
-	init_lua ();
 	cur = g_list_first (cfg->script_modules);
 	while (cur) {
 		module = cur->data;
@@ -251,6 +250,8 @@ init_lua_filters (struct config_file *cfg)
         }
         cur = g_list_next (cur);
     }
+	/* Assign state */
+	cfg->lua_state = L;
 }
 
 /* Callback functions */
