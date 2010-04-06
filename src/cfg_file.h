@@ -103,6 +103,16 @@ struct script_module {
 };
 
 /**
+ * Type of lua variable
+ */
+enum lua_var_type {
+	LUA_VAR_NUM,
+	LUA_VAR_BOOLEAN,
+	LUA_VAR_STRING,
+	LUA_VAR_FUNCTION,
+	LUA_VAR_UNKNOWN
+};
+/**
  * Module option
  */
 struct module_opt {
@@ -110,13 +120,7 @@ struct module_opt {
 	gchar *value;									/**< paramater value									*/
 	gpointer actual_data;							/**< parsed data										*/
 	gboolean is_lua;								/**< actually this is lua variable						*/
-	enum {
-		LUA_VAR_NUM,
-		LUA_VAR_BOOLEAN,
-		LUA_VAR_STRING,
-		LUA_VAR_FUNCTION,
-		LUA_VAR_UNKNOWN
-	} lua_type;										/**< type of lua variable								*/
+	enum lua_var_type lua_type;						/**< type of lua variable								*/
 };
 
 /**

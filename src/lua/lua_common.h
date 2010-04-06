@@ -30,7 +30,7 @@ int luaopen_hash_table (lua_State *L);
 int luaopen_textpart (lua_State *L);
 int luaopen_classifier (lua_State *L);
 int luaopen_statfile (lua_State * L);
-void init_lua ();
+void init_lua (struct config_file *cfg);
 void init_lua_filters (struct config_file *cfg);
 
 /* Filters functions */
@@ -48,6 +48,8 @@ double lua_normalizer_func (double score, void *params);
 /* Config file functions */
 void lua_post_load_config (struct config_file *cfg);
 void lua_process_element (struct config_file *cfg, const char *name, struct module_opt *opt, int idx);
+gboolean lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, 
+							enum lua_var_type expected_type, gpointer *res);
 
 
 #endif /* WITH_LUA */

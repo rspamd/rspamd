@@ -181,7 +181,7 @@ luaopen_logger (lua_State * L)
 }
 
 void
-init_lua ()
+init_lua (struct config_file *cfg)
 {
 	if (L == NULL) {
 		L = lua_open ();
@@ -198,6 +198,7 @@ init_lua ()
 		(void)luaopen_message (L);
 		(void)luaopen_classifier (L);
 		(void)luaopen_statfile (L);
+		cfg->lua_state = L;
 	}
 }
 
@@ -361,7 +362,6 @@ void
 add_luabuf (const char *line)
 {
 	int                             error;
-	init_lua ();
 
 	error = luaL_loadbuffer (L, line, strlen (line), "config") || lua_pcall (L, 0, 0, 0);
 	if (error) {

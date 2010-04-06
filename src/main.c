@@ -28,6 +28,7 @@
 #include "util.h"
 #include "lmtp.h"
 #include "fuzzy_storage.h"
+#include "cfg_xml.h"
 
 #ifndef WITHOUT_PERL
 
@@ -65,8 +66,14 @@ GQueue                         *signals_info;
 extern int                      yynerrs;
 extern FILE                    *yyin;
 
-static int                      dump_vars = 0;
-static int                      dump_cache = 0;
+static gboolean                 config_test;
+static gboolean                 no_fork;
+static gchar                   *cfg_name;
+static gchar                   *rspamd_user;
+static gchar                   *rspamd_group;
+static gchar                   *rspamd_pidfile;
+static gboolean                 dump_vars;
+static gboolean                 dump_cache;
 
 #ifndef WITHOUT_PERL
 extern void                     xs_init (pTHX);
@@ -75,6 +82,21 @@ extern PerlInterpreter         *perl_interpreter;
 
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
+
+/* Commandline options */
+static GOptionEntry entries[] = 
+{
+  { "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test, "Do config test and exit", NULL },
+  { "no-fork", 'f', 0, G_OPTION_ARG_NONE, &no_fork, "Do not daemonize main process", NULL },
+  { "config", 'c', 0, G_OPTION_ARG_STRING, &cfg_name, "Specify config file", NULL },
+  { "user", 'u', 0, G_OPTION_ARG_STRING, &rspamd_user, "User to run rspamd as", NULL },
+  { "group", 'g', 0, G_OPTION_ARG_STRING, &rspamd_group, "Group to run rspamd as", NULL },
+  { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
+  { "dump-vars", 'V', 0, G_OPTION_ARG_NONE, &dump_vars, "Print all rspamd variables and exit", NULL },
+  { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
+  { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
+};
+
 
 #ifndef HAVE_SA_SIGINFO
 static void
@@ -156,61 +178,22 @@ print_signals_info ()
 static void
 read_cmd_line (int argc, char **argv, struct config_file *cfg)
 {
-	int                             ch;
-	while ((ch = getopt (argc, argv, "tVChfc:u:g:p:")) != -1) {
-		switch (ch) {
-		case 'f':
-			cfg->no_fork = 1;
-			break;
-		case 'c':
-			if (optarg && cfg->cfg_name) {
-				cfg->cfg_name = memory_pool_strdup (cfg->cfg_pool, optarg);
-			}
-			break;
-		case 't':
-			cfg->config_test = 1;
-			break;
-		case 'V':
-			dump_vars = 1;
-			break;
-		case 'C':
-			dump_cache = 1;
-			break;
-		case 'u':
-			if (optarg) {
-				cfg->rspamd_user = memory_pool_strdup (cfg->cfg_pool, optarg);
-			}
-			break;
-		case 'g':
-			if (optarg) {
-				cfg->rspamd_group = memory_pool_strdup (cfg->cfg_pool, optarg);
-			}
-			break;
-		case 'p':
-			if (optarg) {
-				cfg->pid_file = memory_pool_strdup (cfg->cfg_pool, optarg);
-			}
-			break;
-		case 'h':
-		case '?':
-		default:
-			/* Show help message and exit */
-			printf ("Rspamd version " RVERSION "\n"
-				"Usage: rspamd [-t] [-h] [-n] [-f] [-c config_file]\n"
-				"-h:        This help message\n"
-				"-t:        Do config test and exit\n"
-				"-C:        Dump symbols cache stats and exit\n"
-				"-V         Print all rspamd variables and exit\n"
-				"-f:        Do not daemonize main process\n"
-				"-c:        Specify config file (./rspamd.conf is used by default)\n" 
-				"-u:        User to run rspamd as\n" 
-				"-g:        Group to run rspamd as\n"
-				"-p:        Path to pidfile\n"
-			);
-			exit (0);
-			break;
-		}
+	GError                         *error = NULL;
+	GOptionContext                 *context;
+
+	context = g_option_context_new ("- run rspamd daemon");
+	g_option_context_set_summary (context, "Summary:\n  Rspamd daemon version " RVERSION);
+	g_option_context_add_main_entries (context, entries, NULL);
+	if (!g_option_context_parse (context, &argc, &argv, &error)) {
+		fprintf (stderr, "option parsing failed: %s\n", error->message);
+		exit (1);
 	}
+	cfg->no_fork = no_fork;
+	cfg->config_test = config_test;
+	cfg->rspamd_user = rspamd_user;
+	cfg->rspamd_group = rspamd_group;
+	cfg->cfg_name = cfg_name;
+	cfg->pid_file = rspamd_pidfile;
 }
 
 static void
@@ -598,8 +581,10 @@ main (int argc, char **argv, char **env)
 
 	bzero (&signals, sizeof (struct sigaction));
 
-	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, FIXED_CONFIG_FILE);
 	read_cmd_line (argc, argv, rspamd->cfg);
+	if (rspamd->cfg->cfg_name == NULL) {
+		rspamd->cfg->cfg_name = FIXED_CONFIG_FILE;
+	}
 
 	if (cfg->config_test) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -624,7 +609,7 @@ main (int argc, char **argv, char **env)
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, environ);
 #endif
-	init_lua ();
+	init_lua (cfg);
 
 	f = fopen (rspamd->cfg->cfg_name, "r");
 	if (f == NULL) {

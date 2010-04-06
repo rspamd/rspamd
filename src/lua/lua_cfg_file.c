@@ -121,7 +121,7 @@ lua_process_element (struct config_file *cfg, const char *name, struct module_op
 			opt->lua_type = LUA_VAR_STRING;
 			break;
 		case LUA_TFUNCTION:
-			opt->actual_data = (gpointer)lua_topointer (L, idx);
+			opt->actual_data = memory_pool_strdup (cfg->cfg_pool, lua_tostring (L, idx));
 			opt->lua_type = LUA_VAR_FUNCTION;
 			break;
 		case LUA_TNIL:
@@ -152,7 +152,7 @@ lua_module_callback (gpointer key, gpointer value, gpointer ud)
 			lua_getglobal (L, "config");
 			if (lua_istable (L, -1)) {
 				lua_pushstring (L, opt->param);
-      			lua_gettable (L, -2);
+				lua_gettable (L, -2);
 				if (lua_isnil (L, -1)) {
 					/* Try to get global variable */
 					lua_getglobal (L, opt->param);
@@ -193,4 +193,104 @@ lua_post_load_config (struct config_file *cfg)
 
 	/* Now parse all lua params */
 	g_hash_table_foreach (cfg->modules_opts, lua_module_callback, cfg);
+}
+
+/* Handle lua dynamic config param */
+gboolean
+lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, enum lua_var_type expected_type, gpointer *res)
+{
+	lua_State                            *L = task->cfg->lua_state;
+	GList                                *cur;
+	struct module_opt                    *opt;
+	struct worker_task                  **ptask;
+	double                                num_res;
+	gboolean                              bool_res;
+	gchar                                *str_res;
+
+	if ((cur = g_hash_table_lookup (task->cfg->modules_opts, mname)) == NULL) {
+		*res = NULL;
+		return FALSE;
+	}
+	
+	/* Search for specified option */
+	while (cur) {
+		opt = cur->data;
+		if (opt->is_lua && g_ascii_strcasecmp (opt->param, optname) == 0) {
+			if (opt->lua_type == expected_type) {
+				/* Just push pointer to res */
+				*res = opt->actual_data;
+				return TRUE;
+			}
+			else if (opt->lua_type == LUA_VAR_FUNCTION) {
+				/* Call specified function and expect result of given expected_type */
+				/* First check function in config table */
+				lua_getglobal (L, "config");
+				if (lua_istable (L, -1)) {
+					lua_pushstring (L, opt->actual_data);
+					lua_gettable (L, -2);
+					if (lua_isnil (L, -1)) {
+						/* Try to get global variable */
+						lua_getglobal (L, opt->actual_data);
+					}
+				}
+				else {
+					/* Try to get global variable */
+					lua_getglobal (L, opt->actual_data);
+				}
+				if (lua_isnil (L, -1)) {
+					msg_err ("function with name %s is not defined", (gchar *)opt->actual_data);
+					return FALSE;
+				}
+				/* Now we got function in top of stack */
+				ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+				lua_setclass (L, "rspamd{task}", -1);
+				*ptask = task;
+				/* Call function */
+				if (lua_pcall (L, 1, 1, 0) != 0) {
+					msg_info ("call to %s failed: %s", (gchar *)opt->actual_data, lua_tostring (L, -1));
+					*res = NULL;
+					return FALSE;
+				}
+				/* Get result of specified type */
+				switch (expected_type) {
+					case LUA_VAR_NUM:
+						if (!lua_isnumber (L, -1)) {
+							*res = NULL;
+							return FALSE;
+						}
+						num_res = lua_tonumber (L, -1);
+						*res = memory_pool_alloc (task->task_pool, sizeof (double));
+						**(double **)res = num_res;
+						return TRUE;
+					case LUA_VAR_BOOLEAN:
+						if (!lua_isboolean (L, -1)) {
+							*res = NULL;
+							return FALSE;
+						}
+						bool_res = lua_toboolean (L, -1);
+						*res = memory_pool_alloc (task->task_pool, sizeof (gboolean));
+						**(gboolean **)res = bool_res;
+						return TRUE;
+					case LUA_VAR_STRING:
+						if (!lua_isstring (L, -1)) {
+							*res = NULL;
+							return FALSE;
+						}
+						str_res = memory_pool_strdup (task->task_pool, lua_tostring (L, -1));
+						*res = str_res;
+						return TRUE;
+					case LUA_VAR_FUNCTION:
+					case LUA_VAR_UNKNOWN:
+						msg_err ("cannot expect function or unknown types");
+						*res = NULL;
+						return FALSE;
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	/* Option not found */
+	*res = NULL;
+	return FALSE;
 }

@@ -34,6 +34,9 @@
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 #include "lua/lua_common.h"
+#include "view.h"
+#include "expressions.h"
+#include "settings.h"
 
 /* Maximum attributes for param */
 #define MAX_PARAM 64
@@ -52,11 +55,11 @@ enum xml_config_section {
 	XML_SECTION_WORKER,
 	XML_SECTION_METRIC,
 	XML_SECTION_CLASSIFIER,
+	XML_SECTION_STATFILE,
 	XML_SECTION_FACTORS,
 	XML_SECTION_MODULE,
 	XML_SECTION_MODULES,
-	XML_SECTION_VIEW,
-	XML_SECTION_SETTINGS
+	XML_SECTION_VIEW
 };
 
 struct xml_config_param {
@@ -115,6 +118,30 @@ static struct xml_parser_rule grammar[] = {
 				"filters",
 				xml_handle_string,
 				G_STRUCT_OFFSET (struct config_file, filters_str),
+				NULL
+			},
+			{
+				"variable",
+				handle_variable,
+				0,
+				NULL
+			},
+			{
+				"composite",
+				handle_composite,
+				0,
+				NULL
+			},
+			{
+				"user_settings",
+				handle_user_settings,
+				0,
+				NULL
+			},
+			{
+				"domain_settings",
+				handle_domain_settings,
+				0,
 				NULL
 			},
 			NULL_ATTR
@@ -226,6 +253,71 @@ static struct xml_parser_rule grammar[] = {
 		NULL_ATTR
 	},
 	{ XML_SECTION_CLASSIFIER, {
+			{
+				"metric",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct classifier_config, metric),
+				NULL
+			},
+			{
+				"tokenizer",
+				handle_classifier_tokenizer,
+				0,
+				NULL
+			},
+			{
+				"option",
+				handle_classifier_opt,
+				0,
+				NULL
+			},
+			NULL_ATTR
+		},
+		NULL_ATTR
+	},
+	{ XML_SECTION_STATFILE, {
+			{
+				"symbol",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct statfile, symbol),
+				NULL
+			},
+			{
+				"path",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct statfile, path),
+				NULL
+			},
+			{
+				"size",
+				xml_handle_size,
+				G_STRUCT_OFFSET (struct statfile, size),
+				NULL
+			},
+			{
+				"normalizer",
+				handle_statfile_normalizer,
+				0,
+				NULL
+			},
+			{
+				"binlog",
+				handle_statfile_binlog,
+				0,
+				NULL
+			},
+			{
+				"binlog_rotate",
+				handle_statfile_binlog_rotate,
+				0,
+				NULL
+			},
+			{
+				"binlog_master",
+				handle_statfile_binlog_master,
+				0,
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
@@ -257,20 +349,51 @@ static struct xml_parser_rule grammar[] = {
 		}
 	},
 	{ XML_SECTION_MODULES, {
+			{
+				"path",
+				handle_module_path,
+				0,
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
 	},
 	{ XML_SECTION_VIEW, {
+			{
+				"skip_check",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct rspamd_view, skip_check),
+				NULL
+			},
+			{
+				"ip",
+				handle_view_ip,
+				0,
+				NULL
+			},
+			{
+				"client_ip",
+				handle_view_client_ip,
+				0,
+				NULL
+			},
+			{
+				"from",
+				handle_view_from,
+				0,
+				NULL
+			},
+			{
+				"symbols",
+				handle_view_symbols,
+				0,
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
 	},
-	{ XML_SECTION_SETTINGS, {
-			NULL_ATTR
-		},
-		NULL_ATTR
-	}
 };
 
 GQuark
@@ -373,6 +496,7 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *v
 /* Handlers */
 /* Specific handlers */
 
+/* Logging section */
 gboolean 
 handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
@@ -471,10 +595,11 @@ handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 	return TRUE;
 }
 
+/* Worker section */
 gboolean 
 worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	struct worker_conf             *wrk = ctx->other_data;
+	struct worker_conf             *wrk = ctx->section_pointer;
 	char                           *name;
 
 	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
@@ -489,7 +614,7 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, G
 gboolean 
 worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	struct worker_conf             *wrk = ctx->other_data;
+	struct worker_conf             *wrk = ctx->section_pointer;
 
 	
 	if (g_ascii_strcasecmp (data, "normal") == 0) {
@@ -519,7 +644,7 @@ worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 gboolean 
 worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	struct worker_conf             *wrk = ctx->other_data;
+	struct worker_conf             *wrk = ctx->section_pointer;
 
 	if (!parse_bind_line (cfg, wrk, data)) {
 		msg_err ("cannot parse bind_socket: %s", data);
@@ -529,6 +654,7 @@ worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	return TRUE;
 }
 
+/* Factors section */
 gboolean 
 handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
@@ -554,6 +680,7 @@ handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTa
 	return TRUE;
 }
 
+/* Modules section */
 gboolean 
 handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
@@ -636,6 +763,243 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 			msg_err ("cannot load lua chunk: %s", lua_tostring (L, -1));
 			return FALSE;
 		}
+	}
+
+	return TRUE;
+}
+
+/* Modules section */
+gboolean 
+handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct stat st;
+	struct script_module *cur;
+	glob_t globbuf;
+	char *pattern;
+	size_t len;
+	int i;
+
+	if (stat (data, &st) == -1) {
+		msg_err ("cannot stat path %s, %s", data, strerror (errno));
+		return FALSE;
+	}
+
+	globbuf.gl_offs = 0;
+	len = strlen (data) + sizeof ("*.lua");
+	pattern = g_malloc (len);
+	snprintf (pattern, len, "%s%s", data, "*.lua");
+
+	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+		for (i = 0; i < globbuf.gl_pathc; i ++) {
+			cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+			cur->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
+			cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
+		}
+		globfree (&globbuf);
+	}
+	else {
+		msg_err ("glob failed: %s", strerror (errno));
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+
+/* Variables and composites */
+gboolean 
+handle_variable (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	gchar                        *val;
+	
+	if ((val = g_hash_table_lookup (attrs, "name")) == NULL) {
+		msg_err ("'name' attribute is required for tag 'variable'");
+		return FALSE;
+	}
+
+	g_hash_table_insert (cfg->variables, val, memory_pool_strdup (cfg->cfg_pool, data));
+	return TRUE;
+}
+
+gboolean 
+handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	gchar                        *val;
+	struct expression            *expr;
+	
+	if ((val = g_hash_table_lookup (attrs, "name")) == NULL) {
+		msg_err ("'name' attribute is required for tag 'composite'");
+		return FALSE;
+	}
+
+	if ((expr = parse_expression (cfg->cfg_pool, data)) == NULL) {
+		msg_err ("cannot parse composite expression: %s", data);
+		return FALSE;
+	}
+	g_hash_table_insert (cfg->composite_symbols, val, expr);
+
+	return TRUE;
+}
+
+/* View section */
+gboolean 
+handle_view_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct rspamd_view          *view = ctx->section_pointer;
+
+	if (!add_view_ip (view, data)) {
+		msg_err ("invalid ip line in view definition: ip = '%s'", data);
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+gboolean 
+handle_view_client_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct rspamd_view          *view = ctx->section_pointer;
+
+	if (!add_view_client_ip (view, data)) {
+		msg_err ("invalid ip line in view definition: ip = '%s'", data);
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+gboolean 
+handle_view_from (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct rspamd_view          *view = ctx->section_pointer;
+
+	if (!add_view_from (view, data)) {
+		msg_err ("invalid from line in view definition: ip = '%s'", data);
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+gboolean 
+handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct rspamd_view          *view = ctx->section_pointer;
+
+	if (!add_view_symbols (view, data)) {
+		msg_err ("invalid symbols line in view definition: ip = '%s'", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/* Settings */
+gboolean 
+handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	if (!read_settings (data, cfg, cfg->user_settings)) {
+		msg_err ("cannot read settings %s", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+gboolean 
+handle_domain_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	if (!read_settings (data, cfg, cfg->domain_settings)) {
+		msg_err ("cannot read settings %s", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/* Classifier */
+gboolean 
+handle_classifier_tokenizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct classifier_config     *ccf = ctx->section_pointer;
+	
+	if ((ccf->tokenizer = get_tokenizer (data)) == NULL) {
+		msg_err ("unknown tokenizer %s", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean 
+handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct classifier_config     *ccf = ctx->section_pointer;
+	gchar                        *val;
+	
+	if ((val = g_hash_table_lookup (attrs, "name")) == NULL) {
+		msg_err ("'name' attribute is required for tag 'option'");
+		return FALSE;
+	}
+
+	g_hash_table_insert (ccf->opts, val, memory_pool_strdup (cfg->cfg_pool, data));
+	return TRUE;
+}
+
+/* Statfile */
+gboolean 
+handle_statfile_normalizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct statfile             *st = ctx->section_pointer;
+	
+	if (!parse_normalizer (cfg, st, data)) {
+		msg_err ("cannot parse normalizer string: %s", data);
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+
+gboolean 
+handle_statfile_binlog (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct statfile             *st = ctx->section_pointer;
+
+	if (st->binlog == NULL) {
+		st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+	}
+	if (g_ascii_strcasecmp (data, "master") == 0) {
+		st->binlog->affinity = AFFINITY_MASTER;
+	}
+	else if (g_ascii_strcasecmp (data, "slave") == 0) {
+		st->binlog->affinity = AFFINITY_SLAVE;
+	}
+	else {
+		st->binlog->affinity = AFFINITY_NONE;
+	}
+
+	return TRUE;
+}
+
+gboolean 
+handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct statfile             *st = ctx->section_pointer;
+
+	if (st->binlog == NULL) {
+		st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+	}
+	st->binlog->rotate_time = parse_seconds (data);
+	
+	return TRUE;
+}
+
+gboolean 
+handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct statfile             *st = ctx->section_pointer;
+	if (st->binlog == NULL) {
+		st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+	}
+
+	if (!parse_host_port (data, &st->binlog->master_addr, &st->binlog->master_port)) {
+		msg_err ("cannot parse master address: %s", data);
+		return FALSE;
 	}
 
 	return TRUE;
@@ -807,7 +1171,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 					g_strlcpy (ud->section_name, res, sizeof (ud->section_name));
 					ud->state = XML_READ_METRIC;
 					/* Create object */
-					ud->other_data = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct metric));
+					ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct metric));
 				}
 				else {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'name' is required for tag 'metric'");
@@ -819,7 +1183,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 					g_strlcpy (ud->section_name, res, sizeof (ud->section_name));
 					ud->state = XML_READ_CLASSIFIER;
 					/* Create object */
-					ud->other_data = check_classifier_cfg (ud->cfg, NULL);
+					ud->section_pointer = check_classifier_cfg (ud->cfg, NULL);
 				}
 				else {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'type' is required for tag 'classifier'");
@@ -829,28 +1193,30 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			else if (g_ascii_strcasecmp (element_name, "worker") == 0) {
 				ud->state = XML_READ_WORKER;
 				/* Create object */
-				ud->other_data = check_worker_conf (ud->cfg, NULL);
+				ud->section_pointer = check_worker_conf (ud->cfg, NULL);
 			}
-			else if (g_ascii_strcasecmp (element_name, "variable") == 0) {
-				if (extract_attr ("name", attribute_names, attribute_values, &res)) {
-					g_strlcpy (ud->section_name, res, sizeof (ud->section_name));
-					ud->state = XML_READ_VARIABLE;
-				}
-				else {
-					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'name' is required for tag 'variable'");
-					ud->state = XML_ERROR;
-				}
-				
-			} 
+			else if (g_ascii_strcasecmp (element_name, "view") == 0) {
+				ud->state = XML_READ_VIEW;
+				/* Create object */
+				ud->section_pointer = init_view (ud->cfg->cfg_pool);
+			}
 			else {
 				/* Extract other tags */
 				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 				ud->state = XML_READ_VALUE;
 			}
 			break;
+		case XML_READ_CLASSIFIER:
+			if (g_ascii_strcasecmp (element_name, "statfile") == 0) {
+				ud->state = XML_READ_STATFILE;
+
+				/* Now section pointer is statfile and parent pointer is classifier */
+				ud->parent_pointer = ud->section_pointer;
+				ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct statfile));
+			}
+			break;
 		case XML_READ_MODULE:
 		case XML_READ_FACTORS:
-		case XML_READ_CLASSIFIER:
 		case XML_READ_STATFILE:
 		case XML_READ_WORKER:
 		case XML_READ_LOGGING:
@@ -882,6 +1248,9 @@ void
 rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name, gpointer user_data, GError **error)
 {
 	struct rspamd_xml_userdata *ud = user_data;
+	struct metric              *m;
+	struct classifier_config   *ccf;
+	struct statfile            *st;
 	gboolean res;
 	
 	switch (ud->state) {
@@ -893,6 +1262,21 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			break;
 		case XML_READ_STATFILE:
 			CHECK_TAG ("statfile", FALSE);
+			if (res) {
+				ccf = ud->parent_pointer;
+				st = ud->section_pointer;
+				/* Check statfile and insert it into classifier */
+				if (st->path == NULL || st->size == 0 || st->symbol == NULL) {
+					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "not enough arguments in statfile definition");
+					ud->state = XML_ERROR;
+				}
+				ccf->statfiles = g_list_prepend (ccf->statfiles, st);
+				ud->cfg->statfiles = g_list_prepend (ud->cfg->statfiles, st);
+				g_hash_table_insert (ud->cfg->classifiers_symbols, st->symbol, ccf);
+				ud->section_pointer = ccf;
+				ud->parent_pointer = NULL;
+				ud->state = XML_READ_CLASSIFIER;
+			}
 			break;
 		case XML_READ_FACTORS:
 			CHECK_TAG ("factors", FALSE);
@@ -900,7 +1284,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		case XML_READ_METRIC:
 			CHECK_TAG ("metric", FALSE);
 			if (res) {
-				struct metric *m = ud->other_data;
+				m = ud->section_pointer;
 				if (m->name == NULL) {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "metric attribute \"name\" is required but missing");
 					ud->state = XML_ERROR;
@@ -917,11 +1301,15 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			CHECK_TAG ("worker", FALSE);
 			if (res) {
 				/* Insert object to list */
-				ud->cfg->workers = g_list_prepend (ud->cfg->workers, ud->other_data);
+				ud->cfg->workers = g_list_prepend (ud->cfg->workers, ud->section_pointer);
 			}
 			break;
-		case XML_READ_VARIABLE:
-			CHECK_TAG ("variable", TRUE);
+		case XML_READ_VIEW:
+			CHECK_TAG ("view", FALSE);
+			if (res) {
+				/* Insert object to list */
+				ud->cfg->views = g_list_prepend (ud->cfg->views, ud->section_pointer);
+			}
 			break;
 		case XML_READ_VALUE:
 			/* Check tags parity */
@@ -959,13 +1347,13 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 
 	switch (ud->state) {
 		case XML_READ_MODULE:
-			if (!call_param_handler (ud, ud->section_name, val, ud->other_data, XML_SECTION_MODULE)) {
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_MODULE)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_CLASSIFIER:
-			if (!call_param_handler (ud, ud->section_name, val, ud->other_data, XML_SECTION_CLASSIFIER)) {
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_CLASSIFIER)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
@@ -979,18 +1367,23 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 			}
 			break;
 		case XML_READ_METRIC:
-			if (!call_param_handler (ud, ud->section_name, val, ud->other_data, XML_SECTION_METRIC)) {
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_METRIC)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_WORKER:
-			if (!call_param_handler (ud, ud->section_name, val, ud->other_data, XML_SECTION_WORKER)) {
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_WORKER)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
-		case XML_READ_VARIABLE:
+		case XML_READ_VIEW:
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_VIEW)) {
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				ud->state = XML_ERROR;
+			}
+			break;
 		case XML_READ_VALUE:
 			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_MAIN)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
