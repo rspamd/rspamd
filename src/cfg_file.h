@@ -169,12 +169,13 @@ typedef double (*statfile_normalize_func)(double score, void *params);
 struct statfile {
 	gchar *symbol;									/**< symbol of statfile									*/
 	gchar *path; 									/**< filesystem pattern (with %r or %f)					*/
-	gsize size;									/**< size of statfile									*/
+	gsize size;										/**< size of statfile									*/
 	GList *sections;								/**< list of sections in statfile						*/
 	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
 	struct statfile_binlog_params *binlog;			/**< binlog params										*/
     statfile_normalize_func normalizer;             /**< function that is used as normaliser                */
     void *normalizer_data;                          /**< normalizer function params                         */
+	gchar *normalizer_str;							/**< source string (for dump)							*/
 };
 
 /**
@@ -239,6 +240,7 @@ struct config_file {
 	gboolean no_fork;								/**< if 1 do not call daemon()							*/
 	gboolean config_test;							/**< if TRUE do only config file test					*/
 	gboolean raw_mode;								/**< work in raw mode instead of utf one				*/
+	gboolean convert_config;						/**< convert config to XML format						*/
 
 	enum rspamd_log_type log_type;					/**< log type											*/
 	int log_facility;								/**< log facility in case of syslog						*/

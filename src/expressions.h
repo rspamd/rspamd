@@ -45,6 +45,7 @@ struct expression {
 		void *operand;
 		char operation;
 	} content;													/**< union for storing operand or operation code 	*/
+	const gchar *orig;											/**< original line									*/
 	struct expression *next;									/**< chain link										*/
 };
 

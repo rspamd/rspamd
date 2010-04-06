@@ -1426,24 +1426,24 @@ xml_dump_main (struct config_file *cfg, FILE *f)
 	fprintf (f, "<!-- Main section -->" CRLF);
 
 	escaped_str = g_markup_escape_text (cfg->temp_dir, -1); 
-	fprintf (f, "  <tempdir>%s</tempdir>" CRLF, escaped_str);
+	fprintf (f, "<tempdir>%s</tempdir>" CRLF, escaped_str);
 	g_free (escaped_str);
 
 	escaped_str = g_markup_escape_text (cfg->pid_file, -1); 
-	fprintf (f, "  <pidfile>%s</pidfile>" CRLF, escaped_str);
+	fprintf (f, "<pidfile>%s</pidfile>" CRLF, escaped_str);
 	g_free (escaped_str);
 
 	escaped_str = g_markup_escape_text (cfg->filters_str, -1); 
-	fprintf (f, "  <filters>%s</filters>" CRLF, escaped_str);
+	fprintf (f, "<filters>%s</filters>" CRLF, escaped_str);
 	g_free (escaped_str);
 
 	if (cfg->checksum)  {
 		escaped_str = g_markup_escape_text (cfg->checksum, -1); 
-		fprintf (f, "  <checksum>%s</checksum>" CRLF, escaped_str);
+		fprintf (f, "<checksum>%s</checksum>" CRLF, escaped_str);
 		g_free (escaped_str);
 	}
 
-	fprintf (f, "  <raw_mode>%s</raw_mode>" CRLF, cfg->raw_mode ? "yes" : "no");
+	fprintf (f, "<raw_mode>%s</raw_mode>" CRLF, cfg->raw_mode ? "yes" : "no");
 
 	/* Print footer comment */
 	fprintf (f, "<!-- End of main section -->" CRLF);
@@ -1460,7 +1460,7 @@ xml_variable_callback (gpointer key, gpointer value, gpointer user_data)
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  "  <variable name=\"%s\">%s</variable>" CRLF, escaped_key, escaped_value);
+	fprintf (f,  "<variable name=\"%s\">%s</variable>" CRLF, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1476,6 +1476,38 @@ xml_dump_variables (struct config_file *cfg, FILE *f)
 
 	/* Print footer comment */
 	fprintf (f, "<!-- End of variables section -->" CRLF);
+
+	return TRUE;
+}
+
+/* Composites section */
+static void
+xml_composite_callback (gpointer key, gpointer value, gpointer user_data)
+{
+	FILE *f = user_data;
+	struct expression *expr;
+	char *escaped_key, *escaped_value;
+	
+	expr = value;
+
+	escaped_key = g_markup_escape_text (key, -1); 
+	escaped_value = g_markup_escape_text (expr->orig, -1);
+	fprintf (f,  "<composite name=\"%s\">%s</composite>" CRLF, escaped_key, escaped_value);
+	g_free (escaped_key);
+	g_free (escaped_value);
+}
+
+static gboolean
+xml_dump_composites (struct config_file *cfg, FILE *f)
+{
+	/* Print header comment */
+	fprintf (f, "<!-- Composites section -->" CRLF);
+
+	/* Iterate through variables */
+	g_hash_table_foreach (cfg->composite_symbols, xml_composite_callback, (gpointer)f);
+
+	/* Print footer comment */
+	fprintf (f, "<!-- End of composites section -->" CRLF);
 
 	return TRUE;
 }
@@ -1589,6 +1621,73 @@ xml_dump_modules (struct config_file *cfg, FILE *f)
 	return TRUE;
 }
 
+/* Classifiers dump */
+static void
+xml_classifier_callback (gpointer key, gpointer value, gpointer user_data)
+{
+	FILE *f = user_data;
+	char *escaped_key, *escaped_value;
+
+	escaped_key = g_markup_escape_text (key, -1); 
+	escaped_value = g_markup_escape_text (value, -1);
+	fprintf (f,  " <param name=\"%s\">%s</param>" CRLF, escaped_key, escaped_value);
+	g_free (escaped_key);
+	g_free (escaped_value);
+}
+
+static gboolean
+xml_dump_classifiers (struct config_file *cfg, FILE *f)
+{
+	GList *cur, *cur_st;
+	struct classifier_config *ccf;
+	struct statfile *st;
+
+	/* Print header comment */
+	fprintf (f, "<!-- Classifiers section -->" CRLF);
+
+	/* Iterate through classifiers */
+	cur = g_list_first (cfg->classifiers);
+	while (cur) {
+		ccf = cur->data;
+		fprintf (f, "<classifier type=\"%s\">" CRLF, ccf->classifier->name);
+		fprintf (f, " <tokenizer>%s</tokenizer>" CRLF, ccf->tokenizer->name);
+		fprintf (f, " <metric>%s</metric>" CRLF, ccf->metric);
+		g_hash_table_foreach (ccf->opts, xml_classifier_callback, f);
+		/* Statfiles */
+		cur_st = g_list_first (ccf->statfiles);
+		while (cur_st) {
+			st = cur_st->data;
+			fprintf (f, " <statfile>" CRLF);
+			fprintf (f, "  <symbol>%s</symbol>" CRLF "  <size>%lu</size>" CRLF "  <path>%s</path>" CRLF,
+						st->symbol, (long unsigned)st->size, st->path);
+			fprintf (f, "  <normalizer>%s</normalizer>" CRLF, st->normalizer_str);
+			/* Binlog */
+			if (st->binlog) {
+				if (st->binlog->affinity == AFFINITY_MASTER) {
+					fprintf (f, "  <binlog>master</binlog>" CRLF);
+				}
+				else if (st->binlog->affinity == AFFINITY_SLAVE) {
+					fprintf (f, "  <binlog>slave</binlog>" CRLF);
+					fprintf (f, "  <binlog_master>%s:%d</binlog_master>" CRLF, 
+							inet_ntoa (st->binlog->master_addr), ntohs (st->binlog->master_port)); 
+				}
+				fprintf (f, "  <binlog_rotate>%lu</binlog_rotate>" CRLF, (long unsigned)st->binlog->rotate_time);
+			}
+			fprintf (f, " </statfile>" CRLF);
+			cur_st = g_list_next (cur_st);
+		}
+
+		fprintf (f, "</classifier>" CRLF);
+		cur = g_list_next (cur);
+	}
+
+	/* Print footer comment */
+	fprintf (f, "<!-- End of modules section -->" CRLF);
+
+	return TRUE;
+
+}
+
 #define CHECK_RES do { if (!res) { fclose (f); return FALSE; } } while (0)
 gboolean 
 xml_dump_config (struct config_file *cfg, const char *filename)
@@ -1609,9 +1708,13 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	CHECK_RES;
 	res = xml_dump_variables (cfg, f);
 	CHECK_RES;
+	res = xml_dump_composites (cfg, f);
+	CHECK_RES;
 	res = xml_dump_workers (cfg, f);
 	CHECK_RES;
 	res = xml_dump_modules (cfg, f);
+	CHECK_RES;
+	res = xml_dump_classifiers (cfg, f);
 	CHECK_RES;
 	/* Footer */
 	fprintf (f, "</rspamd>" CRLF);

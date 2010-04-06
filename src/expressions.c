@@ -242,12 +242,13 @@ is_regexp_flag (char a)
 }
 
 static void
-insert_expression (memory_pool_t * pool, struct expression **head, int type, char op, void *operand)
+insert_expression (memory_pool_t * pool, struct expression **head, int type, char op, void *operand, const char *orig)
 {
 	struct expression              *new, *cur;
 
 	new = memory_pool_alloc (pool, sizeof (struct expression));
 	new->type = type;
+	new->orig = orig;
 	if (new->type != EXPR_OPERATION) {
 		new->content.operand = operand;
 	}
@@ -301,7 +302,7 @@ parse_expression (memory_pool_t * pool, char *line)
 	struct expression_function     *func = NULL, *old;
 	struct expression              *arg;
 	GQueue                         *function_stack;
-	char                           *p, *c, *str, op;
+	char                           *p, *c, *str, op, *copy;
 	gboolean                        in_regexp = FALSE;
 	int                             brackets = 0;
 
@@ -321,6 +322,7 @@ parse_expression (memory_pool_t * pool, char *line)
 	msg_debug ("parsing expression {{ %s }}", line);
 
 	function_stack = g_queue_new ();
+	copy = memory_pool_strdup (pool, line);
 	p = line;
 	c = p;
 	while (*p) {
@@ -352,7 +354,7 @@ parse_expression (memory_pool_t * pool, char *line)
 				while (stack && stack->op != '(') {
 					op = delete_expression_stack (&stack);
 					if (op != '(') {
-						insert_expression (pool, &expr, EXPR_OPERATION, op, NULL);
+						insert_expression (pool, &expr, EXPR_OPERATION, op, NULL, copy);
 					}
 				}
 				if (stack) {
@@ -377,7 +379,7 @@ parse_expression (memory_pool_t * pool, char *line)
 						while ((stack != NULL) && (logic_priority (stack->op) >= logic_priority (*p))) {
 							op = delete_expression_stack (&stack);
 							if (op != '(') {
-								insert_expression (pool, &expr, EXPR_OPERATION, op, NULL);
+								insert_expression (pool, &expr, EXPR_OPERATION, op, NULL, copy);
 							}
 						}
 						stack = push_expression_stack (pool, stack, *p);
@@ -411,7 +413,7 @@ parse_expression (memory_pool_t * pool, char *line)
 					g_strstrip (str);
 					msg_debug ("found regexp: %s", str);
 					if (strlen (str) > 0) {
-						insert_expression (pool, &expr, EXPR_REGEXP, 0, str);
+						insert_expression (pool, &expr, EXPR_REGEXP, 0, str, copy);
 					}
 				}
 				c = p;
@@ -437,7 +439,7 @@ parse_expression (memory_pool_t * pool, char *line)
 				g_strstrip (func->name);
 				state = READ_FUNCTION_ARGUMENT;
 				g_queue_push_tail (function_stack, func);
-				insert_expression (pool, &expr, EXPR_FUNCTION, 0, func);
+				insert_expression (pool, &expr, EXPR_FUNCTION, 0, func, copy);
 				c = ++p;
 			}
 			else if (is_operation_symbol (*p)) {
@@ -447,7 +449,7 @@ parse_expression (memory_pool_t * pool, char *line)
 					g_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					if (strlen (str) > 0) {
-						insert_expression (pool, &expr, EXPR_STR, 0, str);
+						insert_expression (pool, &expr, EXPR_STR, 0, str, copy);
 					}
 				}
 				state = READ_OPERATOR;
@@ -460,7 +462,7 @@ parse_expression (memory_pool_t * pool, char *line)
 					g_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					if (strlen (str) > 0) {
-						insert_expression (pool, &expr, EXPR_STR, 0, str);
+						insert_expression (pool, &expr, EXPR_STR, 0, str, copy);
 					}
 				}
 				state = SKIP_SPACES;
@@ -521,7 +523,7 @@ parse_expression (memory_pool_t * pool, char *line)
 	while (stack != NULL) {
 		op = delete_expression_stack (&stack);
 		if (op != '(') {
-			insert_expression (pool, &expr, EXPR_OPERATION, op, NULL);
+			insert_expression (pool, &expr, EXPR_OPERATION, op, NULL, copy);
 		}
 	}
 

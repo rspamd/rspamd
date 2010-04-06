@@ -1006,6 +1006,7 @@ statfilenormalizer:
             yyerror ("cannot parse normalizer string: %s", $3);
             YYERROR;
         }
+		cur_statfile->normalizer_str = memory_pool_strdup (cfg->cfg_pool, $3);
     }
     ;
 
