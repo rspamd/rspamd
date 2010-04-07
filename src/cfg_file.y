@@ -1140,6 +1140,7 @@ usersettings:
             yyerror ("yyparse: cannot read settings %s", $3);
             YYERROR;
         }
+		cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, $3);
     }
     ;
 domainsettings:
@@ -1148,6 +1149,7 @@ domainsettings:
             yyerror ("yyparse: cannot read settings %s", $3);
             YYERROR;
         }
+		cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, $3);
     }
     ;
 %%

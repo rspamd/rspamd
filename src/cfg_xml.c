@@ -41,6 +41,8 @@
 /* Maximum attributes for param */
 #define MAX_PARAM 64
 
+#define EOL "\n"
+
 #define NULL_ATTR 	\
 {					\
 	NULL,			\
@@ -412,7 +414,7 @@ extract_attr (const gchar *attr, const gchar **attribute_names, const gchar **at
 	cur_value = attribute_values;
 
 	while (*cur_attr && *cur_value) {
-		if (g_ascii_strcasecmp (*cur_attr, attr)) {
+		if (g_ascii_strcasecmp (*cur_attr, attr) == 0) {
 			*res = (gchar *) *cur_value;
 			return TRUE;
 		}
@@ -700,7 +702,7 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 			is_lua = TRUE;
 		}
 	}
-	cur_opt = g_hash_table_lookup (cfg->modules_opts, ctx->section_name);
+	cur_opt = g_hash_table_lookup (cfg->modules_opts, ctx->section_pointer);
 	if (cur_opt == NULL) {
 		/* Insert new option structure */
 		cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
@@ -708,7 +710,7 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 		cur->value = data;
 		cur->is_lua = is_lua;
 		cur_opt = g_list_prepend (NULL, cur);
-		g_hash_table_insert (cfg->modules_opts, memory_pool_strdup (cfg->cfg_pool, ctx->section_name), cur_opt);
+		g_hash_table_insert (cfg->modules_opts, memory_pool_strdup (cfg->cfg_pool, ctx->section_pointer), cur_opt);
 	}
 	else {
 		/* First try to find option with this name */
@@ -886,6 +888,7 @@ handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, G
 		msg_err ("invalid symbols line in view definition: ip = '%s'", data);
 		return FALSE;
 	}
+	cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, data);
 
 	return TRUE;
 }
@@ -898,6 +901,7 @@ handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 		msg_err ("cannot read settings %s", data);
 		return FALSE;
 	}
+	cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, data);
 
 	return TRUE;
 }
@@ -1134,7 +1138,8 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 								const gchar **attribute_values, gpointer user_data, GError **error)
 {
 	struct rspamd_xml_userdata *ud = user_data;
-	gchar *res;
+	struct classifier_config   *ccf;
+	gchar                      *res;
 
 	switch (ud->state) {
 		case XML_READ_START:
@@ -1152,7 +1157,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			if (g_ascii_strcasecmp (element_name, "module") == 0) {
 				/* Read module data */
 				if (extract_attr ("name", attribute_names, attribute_values, &res)) {
-					g_strlcpy (ud->section_name, res, sizeof (ud->section_name));
+					ud->section_pointer = res;
 					ud->state = XML_READ_MODULE;
 				}
 				else {
@@ -1180,10 +1185,16 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			}
 			else if (g_ascii_strcasecmp (element_name, "classifier") == 0) {
 				if (extract_attr ("type", attribute_names, attribute_values, &res)) {
-					g_strlcpy (ud->section_name, res, sizeof (ud->section_name));
 					ud->state = XML_READ_CLASSIFIER;
 					/* Create object */
-					ud->section_pointer = check_classifier_cfg (ud->cfg, NULL);
+					ccf = check_classifier_cfg (ud->cfg, NULL);
+					if ((ccf->classifier = get_classifier (res)) == NULL) {
+						*error = g_error_new (xml_error_quark (), XML_INVALID_ATTR, "invalid classifier type: %s", res);
+						ud->state = XML_ERROR;
+					}
+					else {
+						ud->section_pointer = ccf;
+					}
 				}
 				else {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'type' is required for tag 'classifier'");
@@ -1203,6 +1214,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			else {
 				/* Extract other tags */
 				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 				ud->state = XML_READ_VALUE;
 			}
 			break;
@@ -1214,12 +1226,18 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->parent_pointer = ud->section_pointer;
 				ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct statfile));
 			}
+			else {
+				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				/* Save attributes */
+				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
+			}
 			break;
 		case XML_READ_MODULE:
 		case XML_READ_FACTORS:
 		case XML_READ_STATFILE:
 		case XML_READ_WORKER:
 		case XML_READ_LOGGING:
+			g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			/* Save attributes */
 			ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 			break;
@@ -1269,6 +1287,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 				if (st->path == NULL || st->size == 0 || st->symbol == NULL) {
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "not enough arguments in statfile definition");
 					ud->state = XML_ERROR;
+					return;
 				}
 				ccf->statfiles = g_list_prepend (ccf->statfiles, st);
 				ud->cfg->statfiles = g_list_prepend (ud->cfg->statfiles, st);
@@ -1343,56 +1362,64 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 	char *val;
 	struct config_file *cfg = ud->cfg;
 
+	if (*text == '\n') {
+		return;
+	}
+
 	val = xml_asciiz_string (cfg->cfg_pool, text, text_len);
 
 	switch (ud->state) {
 		case XML_READ_MODULE:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_MODULE)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_CLASSIFIER:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_CLASSIFIER)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_STATFILE:
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_STATFILE)) {
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
+				ud->state = XML_ERROR;
+			}
 			break;
 		case XML_READ_FACTORS:
 			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_CLASSIFIER)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_METRIC:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_METRIC)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_WORKER:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_WORKER)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_VIEW:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_VIEW)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_VALUE:
 			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_MAIN)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
 		case XML_READ_LOGGING:
 			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_LOGGING)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag's '%s' data: %s", ud->section_name, val);
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
 			break;
@@ -1423,30 +1450,42 @@ xml_dump_main (struct config_file *cfg, FILE *f)
 	char *escaped_str;
 	
 	/* Print header comment */
-	fprintf (f, "<!-- Main section -->" CRLF);
+	fprintf (f, "<!-- Main section -->" EOL);
 
 	escaped_str = g_markup_escape_text (cfg->temp_dir, -1); 
-	fprintf (f, "<tempdir>%s</tempdir>" CRLF, escaped_str);
+	fprintf (f, "<tempdir>%s</tempdir>" EOL, escaped_str);
 	g_free (escaped_str);
 
 	escaped_str = g_markup_escape_text (cfg->pid_file, -1); 
-	fprintf (f, "<pidfile>%s</pidfile>" CRLF, escaped_str);
+	fprintf (f, "<pidfile>%s</pidfile>" EOL, escaped_str);
 	g_free (escaped_str);
 
 	escaped_str = g_markup_escape_text (cfg->filters_str, -1); 
-	fprintf (f, "<filters>%s</filters>" CRLF, escaped_str);
+	fprintf (f, "<filters>%s</filters>" EOL, escaped_str);
 	g_free (escaped_str);
+	
+	if (cfg->user_settings_str) {
+		escaped_str = g_markup_escape_text (cfg->user_settings_str, -1); 
+		fprintf (f, "<user_settings>%s</user_settings>" EOL, escaped_str);
+		g_free (escaped_str);
+	}
+	if (cfg->domain_settings_str) {
+		escaped_str = g_markup_escape_text (cfg->domain_settings_str, -1); 
+		fprintf (f, "<domain_settings>%s</domain_settings>" EOL, escaped_str);
+		g_free (escaped_str);
+	}
+	fprintf (f, "<statfile_pool_size>%llu</statfile_pool_size>" EOL, (long long unsigned)cfg->max_statfile_size);
 
 	if (cfg->checksum)  {
 		escaped_str = g_markup_escape_text (cfg->checksum, -1); 
-		fprintf (f, "<checksum>%s</checksum>" CRLF, escaped_str);
+		fprintf (f, "<checksum>%s</checksum>" EOL, escaped_str);
 		g_free (escaped_str);
 	}
 
-	fprintf (f, "<raw_mode>%s</raw_mode>" CRLF, cfg->raw_mode ? "yes" : "no");
+	fprintf (f, "<raw_mode>%s</raw_mode>" EOL, cfg->raw_mode ? "yes" : "no");
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of main section -->" CRLF);
+	fprintf (f, "<!-- End of main section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1460,7 +1499,7 @@ xml_variable_callback (gpointer key, gpointer value, gpointer user_data)
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  "<variable name=\"%s\">%s</variable>" CRLF, escaped_key, escaped_value);
+	fprintf (f,  "<variable name=\"%s\">%s</variable>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1469,13 +1508,13 @@ static gboolean
 xml_dump_variables (struct config_file *cfg, FILE *f)
 {
 	/* Print header comment */
-	fprintf (f, "<!-- Variables section -->" CRLF);
+	fprintf (f, "<!-- Variables section -->" EOL);
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->variables, xml_variable_callback, (gpointer)f);
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of variables section -->" CRLF);
+	fprintf (f, "<!-- End of variables section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1492,7 +1531,7 @@ xml_composite_callback (gpointer key, gpointer value, gpointer user_data)
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (expr->orig, -1);
-	fprintf (f,  "<composite name=\"%s\">%s</composite>" CRLF, escaped_key, escaped_value);
+	fprintf (f,  "<composite name=\"%s\">%s</composite>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1501,13 +1540,13 @@ static gboolean
 xml_dump_composites (struct config_file *cfg, FILE *f)
 {
 	/* Print header comment */
-	fprintf (f, "<!-- Composites section -->" CRLF);
+	fprintf (f, "<!-- Composites section -->" EOL);
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->composite_symbols, xml_composite_callback, (gpointer)f);
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of composites section -->" CRLF);
+	fprintf (f, "<!-- End of composites section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1521,7 +1560,7 @@ xml_worker_param_callback (gpointer key, gpointer value, gpointer user_data)
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  "    <param name=\"%s\">%s</param>" CRLF, escaped_key, escaped_value);
+	fprintf (f,  "    <param name=\"%s\">%s</param>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1534,47 +1573,47 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 	char *escaped_str;
 
 	/* Print header comment */
-	fprintf (f, "<!-- Workers section -->" CRLF);
+	fprintf (f, "<!-- Workers section -->" EOL);
 
 	/* Iterate through list */
 	cur = g_list_first (cfg->workers);
 	while (cur) {
 		wrk = cur->data;
 		
-		fprintf (f, "<worker>" CRLF);
+		fprintf (f, "<worker>" EOL);
 		switch (wrk->type) {
 			case TYPE_WORKER:
-				fprintf (f, "  <type>normal</type>" CRLF);
+				fprintf (f, "  <type>normal</type>" EOL);
 				break;
 			case TYPE_CONTROLLER:
-				fprintf (f, "  <type>controller</type>" CRLF);
+				fprintf (f, "  <type>controller</type>" EOL);
 				break;
 			case TYPE_FUZZY:
-				fprintf (f, "  <type>fuzzy</type>" CRLF);
+				fprintf (f, "  <type>fuzzy</type>" EOL);
 				break;
 			case TYPE_LMTP:
-				fprintf (f, "  <type>lmtp</type>" CRLF);
+				fprintf (f, "  <type>lmtp</type>" EOL);
 				break;
 		}
 		escaped_str = g_markup_escape_text (wrk->bind_host, -1); 
-		fprintf (f, "  <bind_socket>%s</bind_socket>" CRLF, escaped_str);
+		fprintf (f, "  <bind_socket>%s</bind_socket>" EOL, escaped_str);
 		g_free (escaped_str);
 
-		fprintf (f, "  <count>%u</count>" CRLF, wrk->count);
-		fprintf (f, "  <maxfiles>%u</maxfiles>" CRLF, wrk->rlimit_nofile);
-		fprintf (f, "  <maxcore>%u</maxcore>" CRLF, wrk->rlimit_maxcore);
+		fprintf (f, "  <count>%u</count>" EOL, wrk->count);
+		fprintf (f, "  <maxfiles>%u</maxfiles>" EOL, wrk->rlimit_nofile);
+		fprintf (f, "  <maxcore>%u</maxcore>" EOL, wrk->rlimit_maxcore);
 		
 		/* Now dump other attrs */
-		fprintf (f, "<!-- Other params -->" CRLF);
+		fprintf (f, "<!-- Other params -->" EOL);
 		g_hash_table_foreach (wrk->params, xml_worker_param_callback, f);
 
-		fprintf (f, "</worker>" CRLF);
+		fprintf (f, "</worker>" EOL);
 
 		cur = g_list_next (cur);
 	}
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of workers section -->" CRLF);
+	fprintf (f, "<!-- End of workers section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1589,8 +1628,8 @@ xml_module_callback (gpointer key, gpointer value, gpointer user_data)
 	struct module_opt *opt;
 	
 	escaped_key = g_markup_escape_text (key, -1); 
-	fprintf (f, "<!-- %s -->" CRLF, escaped_key);
-	fprintf (f, "<module name=\"%s\">" CRLF, escaped_key);
+	fprintf (f, "<!-- %s -->" EOL, escaped_key);
+	fprintf (f, "<module name=\"%s\">" EOL, escaped_key);
 	g_free (escaped_key);
 
 	cur = g_list_first (value);
@@ -1598,25 +1637,25 @@ xml_module_callback (gpointer key, gpointer value, gpointer user_data)
 		opt = cur->data;
 		escaped_key = g_markup_escape_text (opt->param, -1); 
 		escaped_value = g_markup_escape_text (opt->value, -1);
-		fprintf (f,  "  <option name=\"%s\">%s</option>" CRLF, escaped_key, escaped_value);
+		fprintf (f,  "  <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
 		g_free (escaped_key);
 		g_free (escaped_value);
 		cur = g_list_next (cur);
 	}
-	fprintf (f, "</module>" CRLF);
+	fprintf (f, "</module>" EOL EOL);
 }
 
 static gboolean
 xml_dump_modules (struct config_file *cfg, FILE *f)
 {
 	/* Print header comment */
-	fprintf (f, "<!-- Modules section -->" CRLF);
+	fprintf (f, "<!-- Modules section -->" EOL);
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->modules_opts, xml_module_callback, (gpointer)f);
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of modules section -->" CRLF);
+	fprintf (f, "<!-- End of modules section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1630,7 +1669,7 @@ xml_classifier_callback (gpointer key, gpointer value, gpointer user_data)
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  " <param name=\"%s\">%s</param>" CRLF, escaped_key, escaped_value);
+	fprintf (f,  " <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1643,50 +1682,147 @@ xml_dump_classifiers (struct config_file *cfg, FILE *f)
 	struct statfile *st;
 
 	/* Print header comment */
-	fprintf (f, "<!-- Classifiers section -->" CRLF);
+	fprintf (f, "<!-- Classifiers section -->" EOL);
 
 	/* Iterate through classifiers */
 	cur = g_list_first (cfg->classifiers);
 	while (cur) {
 		ccf = cur->data;
-		fprintf (f, "<classifier type=\"%s\">" CRLF, ccf->classifier->name);
-		fprintf (f, " <tokenizer>%s</tokenizer>" CRLF, ccf->tokenizer->name);
-		fprintf (f, " <metric>%s</metric>" CRLF, ccf->metric);
+		fprintf (f, "<classifier type=\"%s\">" EOL, ccf->classifier->name);
+		fprintf (f, " <tokenizer>%s</tokenizer>" EOL, ccf->tokenizer->name);
+		fprintf (f, " <metric>%s</metric>" EOL, ccf->metric);
 		g_hash_table_foreach (ccf->opts, xml_classifier_callback, f);
 		/* Statfiles */
 		cur_st = g_list_first (ccf->statfiles);
 		while (cur_st) {
 			st = cur_st->data;
-			fprintf (f, " <statfile>" CRLF);
-			fprintf (f, "  <symbol>%s</symbol>" CRLF "  <size>%lu</size>" CRLF "  <path>%s</path>" CRLF,
+			fprintf (f, " <statfile>" EOL);
+			fprintf (f, "  <symbol>%s</symbol>" EOL "  <size>%lu</size>" EOL "  <path>%s</path>" EOL,
 						st->symbol, (long unsigned)st->size, st->path);
-			fprintf (f, "  <normalizer>%s</normalizer>" CRLF, st->normalizer_str);
+			fprintf (f, "  <normalizer>%s</normalizer>" EOL, st->normalizer_str);
 			/* Binlog */
 			if (st->binlog) {
 				if (st->binlog->affinity == AFFINITY_MASTER) {
-					fprintf (f, "  <binlog>master</binlog>" CRLF);
+					fprintf (f, "  <binlog>master</binlog>" EOL);
 				}
 				else if (st->binlog->affinity == AFFINITY_SLAVE) {
-					fprintf (f, "  <binlog>slave</binlog>" CRLF);
-					fprintf (f, "  <binlog_master>%s:%d</binlog_master>" CRLF, 
+					fprintf (f, "  <binlog>slave</binlog>" EOL);
+					fprintf (f, "  <binlog_master>%s:%d</binlog_master>" EOL, 
 							inet_ntoa (st->binlog->master_addr), ntohs (st->binlog->master_port)); 
 				}
-				fprintf (f, "  <binlog_rotate>%lu</binlog_rotate>" CRLF, (long unsigned)st->binlog->rotate_time);
+				fprintf (f, "  <binlog_rotate>%lu</binlog_rotate>" EOL, (long unsigned)st->binlog->rotate_time);
 			}
-			fprintf (f, " </statfile>" CRLF);
+			fprintf (f, " </statfile>" EOL);
 			cur_st = g_list_next (cur_st);
 		}
 
-		fprintf (f, "</classifier>" CRLF);
+		fprintf (f, "</classifier>" EOL);
 		cur = g_list_next (cur);
 	}
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of modules section -->" CRLF);
+	fprintf (f, "<!-- End of classifiers section -->" EOL EOL);
 
 	return TRUE;
 
 }
+
+/* Logging section */
+static gboolean
+xml_dump_logging (struct config_file *cfg, FILE *f)
+{
+	gchar *escaped_value;
+
+	/* Print header comment */
+	fprintf (f, "<!-- Logging section -->" EOL);
+	fprintf (f, "<logging>" EOL);
+	
+	/* Level */
+	if (cfg->log_level < G_LOG_LEVEL_WARNING) {
+		fprintf (f, " <level>error</level>" EOL);
+	}
+	else if (cfg->log_level < G_LOG_LEVEL_MESSAGE) {
+		fprintf (f, " <level>warning</level>" EOL);
+	}
+	else if (cfg->log_level < G_LOG_LEVEL_DEBUG) {
+		fprintf (f, " <level>info</level>" EOL);
+	}
+	else {
+		fprintf (f, " <level>debug</level>" EOL);
+	}
+	
+	/* Other options */
+	fprintf (f, " <log_urls>%s</log_urls>" EOL, cfg->log_urls ? "yes" : "no");
+	if (cfg->log_buf_size != 0) {
+		fprintf (f, " <log_buffer>%u</log_buffer>" EOL, (unsigned)cfg->log_buf_size);
+	}
+	if (cfg->debug_ip_map != NULL) {
+		escaped_value = g_markup_escape_text (cfg->debug_ip_map, -1);
+		fprintf (f, " <debug_ip>%s</debug_ip>" EOL, escaped_value);
+		g_free (escaped_value);
+	}
+	
+	/* Handle type */
+	if (cfg->log_type == RSPAMD_LOG_FILE) {
+		escaped_value = g_markup_escape_text (cfg->log_file, -1);
+		fprintf (f, " <type filename=\"%s\">file</type>" EOL, escaped_value);
+		g_free (escaped_value);
+	}
+	else if (cfg->log_type == RSPAMD_LOG_CONSOLE) {
+		fprintf (f, " <type>console</type>" EOL);
+	}
+	else if (cfg->log_type == RSPAMD_LOG_SYSLOG) {
+		escaped_value = NULL;
+		switch (cfg->log_facility) {
+			case LOG_AUTH:
+				escaped_value = "LOG_AUTH";
+				break;
+			case LOG_CRON:
+				escaped_value = "LOG_CRON";
+				break;
+			case LOG_DAEMON:
+				escaped_value = "LOG_DAEMON";
+				break;
+			case LOG_MAIL:
+				escaped_value = "LOG_MAIL";
+				break;
+			case LOG_USER:
+				escaped_value = "LOG_USER";
+				break;
+			case LOG_LOCAL0:
+				escaped_value = "LOG_LOCAL0";
+				break;
+			case LOG_LOCAL1:
+				escaped_value = "LOG_LOCAL1";
+				break;
+			case LOG_LOCAL2:
+				escaped_value = "LOG_LOCAL2";
+				break;
+			case LOG_LOCAL3:
+				escaped_value = "LOG_LOCAL3";
+				break;
+			case LOG_LOCAL4:
+				escaped_value = "LOG_LOCAL4";
+				break;
+			case LOG_LOCAL5:
+				escaped_value = "LOG_LOCAL5";
+				break;
+			case LOG_LOCAL6:
+				escaped_value = "LOG_LOCAL6";
+				break;
+			case LOG_LOCAL7:
+				escaped_value = "LOG_LOCAL7";
+				break;
+		}
+		fprintf (f, " <type facility=\"%s\">syslog</type>" EOL, escaped_value);
+	}
+	fprintf (f, "</logging>" EOL);
+	/* Print footer comment */
+	fprintf (f, "<!-- End of logging section -->" EOL EOL);
+
+	return TRUE;
+}
+
 
 #define CHECK_RES do { if (!res) { fclose (f); return FALSE; } } while (0)
 gboolean 
@@ -1702,9 +1838,11 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	}
 	
 	/* Header */
-	fprintf (f, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" CRLF "<rspamd>" CRLF);
+	fprintf (f, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" EOL "<rspamd>" EOL);
 	/* Now dump all parts of config */
 	res = xml_dump_main (cfg, f);
+	CHECK_RES;
+	res = xml_dump_logging (cfg, f);
 	CHECK_RES;
 	res = xml_dump_variables (cfg, f);
 	CHECK_RES;
@@ -1717,7 +1855,7 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	res = xml_dump_classifiers (cfg, f);
 	CHECK_RES;
 	/* Footer */
-	fprintf (f, "</rspamd>" CRLF);
+	fprintf (f, "</rspamd>" EOL);
 	fclose (f);
 
 	return TRUE;

@@ -290,6 +290,8 @@ struct config_file {
 	GList *views;									/**< views												*/
 	GHashTable* domain_settings;                    /**< settings per-domains                               */
 	GHashTable* user_settings;                      /**< settings per-user                                  */
+	gchar* domain_settings_str;						/**< string representation of settings					*/
+	gchar* user_settings_str;
 	
 	gchar* checksum;								/**< real checksum of config file						*/ 
 	gchar* dump_checksum;							/**< dump checksum of config file						*/ 

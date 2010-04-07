@@ -72,6 +72,7 @@ static gchar                   *cfg_name;
 static gchar                   *rspamd_user;
 static gchar                   *rspamd_group;
 static gchar                   *rspamd_pidfile;
+static gchar                   *convert_config;
 static gboolean                 dump_vars;
 static gboolean                 dump_cache;
 
@@ -94,6 +95,7 @@ static GOptionEntry entries[] =
   { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
   { "dump-vars", 'V', 0, G_OPTION_ARG_NONE, &dump_vars, "Print all rspamd variables and exit", NULL },
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
+  { "convert-config", 'X', 0, G_OPTION_ARG_STRING, &convert_config, "Convert old style of config to xml one", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -535,11 +537,95 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	return TRUE;
 }
 
+static gboolean
+convert_old_config (struct rspamd_main *rspamd) 
+{
+	FILE *f;
+
+	f = fopen (rspamd->cfg->cfg_name, "r");
+	if (f == NULL) {
+		msg_err ("cannot open file: %s", rspamd->cfg->cfg_name);
+		return EBADF;
+	}
+	yyin = f;
+
+	if (yyparse () != 0 || yynerrs > 0) {
+		msg_err ("cannot parse config file, %d errors", yynerrs);
+		return EBADF;
+	}
+
+	/* Strictly set temp dir */
+	if (!rspamd->cfg->temp_dir) {
+		msg_warn ("tempdir is not set, trying to use $TMPDIR");
+		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
+
+		if (!rspamd->cfg->temp_dir) {
+			msg_warn ("$TMPDIR is empty too, using /tmp as default");
+			rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
+		}
+	}
+
+
+	fclose (f);
+	/* Dump it to xml */
+	if (get_config_checksum (rspamd->cfg)) {
+		if (xml_dump_config (rspamd->cfg, convert_config)) {
+			rspamd->cfg->cfg_name = convert_config;
+			return TRUE;
+		}
+	}
+	
+	return FALSE;
+}
+
+static gboolean
+load_rspamd_config (struct rspamd_main *rspamd)
+{
+	GList                          *l;
+	struct filter                  *filt;
+	struct module_ctx              *cur_module = NULL;
+
+	if (! read_xml_config (rspamd->cfg, rspamd->cfg->cfg_name)) {
+		return FALSE;
+	}
+
+	/* Strictly set temp dir */
+	if (!rspamd->cfg->temp_dir) {
+		msg_warn ("tempdir is not set, trying to use $TMPDIR");
+		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
+
+		if (!rspamd->cfg->temp_dir) {
+			msg_warn ("$TMPDIR is empty too, using /tmp as default");
+			rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
+		}
+	}
+
+	/* Do post-load actions */
+	post_load_config (rspamd->cfg);
+	/* Init counters */
+	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
+
+	/* Init C modules */
+	l = g_list_first (rspamd->cfg->filters);
+
+	while (l) {
+		filt = l->data;
+		if (filt->module) {
+			cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
+			if (filt->module->module_init_func (cfg, &cur_module) == 0) {
+				g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
+			}
+		}
+		l = g_list_next (l);
+	}
+	
+	return TRUE;
+}
+
 int
 main (int argc, char **argv, char **env)
 {
 	struct rspamd_main             *rspamd;
-	struct module_ctx              *cur_module = NULL;
 	int                             res = 0, i;
 	struct sigaction                signals;
 	struct rspamd_worker           *cur;
@@ -547,7 +633,6 @@ main (int argc, char **argv, char **env)
 	struct metric                  *metric;
 	struct cache_item              *item;
 	struct filter                  *filt;
-	FILE                           *f;
 	pid_t                           wrk;
 	GList                          *l;
 #ifndef WITHOUT_PERL
@@ -610,41 +695,15 @@ main (int argc, char **argv, char **env)
 	init_title (argc, argv, environ);
 #endif
 	init_lua (cfg);
-
-	f = fopen (rspamd->cfg->cfg_name, "r");
-	if (f == NULL) {
-		msg_err ("cannot open file: %s", rspamd->cfg->cfg_name);
-		return EBADF;
-	}
-	yyin = f;
-
-	if (yyparse () != 0 || yynerrs > 0) {
-		msg_err ("cannot parse config file, %d errors", yynerrs);
-		return EBADF;
-	}
-
-	fclose (f);
-	/* Dump it to xml */
-	if (get_config_checksum (rspamd->cfg)) {
-		xml_dump_config (rspamd->cfg, "/tmp/rspamd.xml");
-	}
-	/* Do post-load actions */
-	post_load_config (rspamd->cfg);
-	/* Init counters */
-	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
-
-	/* Init C modules */
-	l = g_list_first (rspamd->cfg->filters);
-
-	while (l) {
-		filt = l->data;
-		if (filt->module) {
-			cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
-			if (filt->module->module_init_func (cfg, &cur_module) == 0) {
-				g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
-			}
+	
+	if (convert_config != NULL) {
+		if (! convert_old_config (rspamd)) {
+			exit (EXIT_FAILURE);
 		}
-		l = g_list_next (l);
+	}
+
+	if (! load_rspamd_config (rspamd)) {
+		exit (EXIT_FAILURE);
 	}
 
 	if (cfg->config_test || dump_vars || dump_cache) {
@@ -703,17 +762,6 @@ main (int argc, char **argv, char **env)
 
 	msg_info ("rspamd " RVERSION " is starting");
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name);
-
-	/* Strictly set temp dir */
-	if (!rspamd->cfg->temp_dir) {
-		msg_warn ("tempdir is not set, trying to use $TMPDIR");
-		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
-
-		if (!rspamd->cfg->temp_dir) {
-			msg_warn ("$TMPDIR is empty too, using /tmp as default");
-			rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
-		}
-	}
 
 	if (!rspamd->cfg->no_fork && daemon (0, 0) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");

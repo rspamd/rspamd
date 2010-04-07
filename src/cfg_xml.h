@@ -10,6 +10,7 @@
 #define XML_PARAM_MISSING 2
 #define XML_EXTRA_ELEMENT 3
 #define XML_UNMATCHED_TAG 4
+#define XML_INVALID_ATTR 5
 
 enum xml_read_state {
 	XML_READ_START,
