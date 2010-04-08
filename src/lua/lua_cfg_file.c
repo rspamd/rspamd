@@ -31,13 +31,13 @@
 
 /* Check element with specified name in list, and append it to list if no element with such name was found */
 static void
-lua_check_element (memory_pool_t *pool, const gchar *name, GList *options, struct module_opt **opt) 
+lua_check_element (memory_pool_t *pool, const gchar *name, GList **options, struct module_opt **opt) 
 {
 	struct module_opt                   *cur;
 	GList                               *cur_opt;
 	gboolean                             found = FALSE;
 
-	cur_opt = options;
+	cur_opt = *options;
 
 	while (cur_opt) {
 		cur = cur_opt->data;
@@ -57,7 +57,7 @@ lua_check_element (memory_pool_t *pool, const gchar *name, GList *options, struc
 		/* New option */
 		*opt = memory_pool_alloc0 (pool, sizeof (struct module_opt));
 		(*opt)->is_lua = TRUE;
-		(void)g_list_append (options, *opt);
+		*options = g_list_prepend (*options, *opt);
 	}
 }
 
@@ -81,8 +81,9 @@ lua_process_module (lua_State *L, const gchar *param, struct config_file *cfg)
 		/* key - -2, value - -1 */
 		name = luaL_checkstring (L, -2);
 		if (name != NULL) {
-			lua_check_element (cfg->cfg_pool, name, cur_opt, &cur);
+			lua_check_element (cfg->cfg_pool, name, &cur_opt, &cur);
 			lua_process_element (cfg, name, cur, -1);
+			g_hash_table_insert (cfg->modules_opts, (gpointer)param, cur_opt);
 		}
 	}
 	

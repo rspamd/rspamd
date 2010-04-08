@@ -702,36 +702,24 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 			is_lua = TRUE;
 		}
 	}
-	cur_opt = g_hash_table_lookup (cfg->modules_opts, ctx->section_pointer);
-	if (cur_opt == NULL) {
-		/* Insert new option structure */
-		cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
-		cur->param = name;
-		cur->value = data;
-		cur->is_lua = is_lua;
-		cur_opt = g_list_prepend (NULL, cur);
-		g_hash_table_insert (cfg->modules_opts, memory_pool_strdup (cfg->cfg_pool, ctx->section_pointer), cur_opt);
-	}
-	else {
-		/* First try to find option with this name */
-		while (cur_opt) {
-			cur = cur_opt->data;
-			if (strcmp (cur->param, name) == 0) {
-				/* cur->value is in pool */
-				cur->value = data;
-				cur->is_lua = is_lua;
-				return TRUE;
-			}
-			cur_opt = g_list_next (cur_opt);
+	cur_opt = ctx->section_pointer;
+	/* First try to find option with this name */
+	while (cur_opt) {
+		cur = cur_opt->data;
+		if (strcmp (cur->param, name) == 0) {
+			/* cur->value is in pool */
+			cur->value = data;
+			cur->is_lua = is_lua;
+			return TRUE;
 		}
-		/* Not found, insert */
-		cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
-		cur->param = name;
-		cur->value = data;
-		cur->is_lua = is_lua;
-		/* Slow way, but we cannot prepend here as we need to modify pointer inside module_options hash */
-		cur_opt = g_list_append (cur_opt, cur);
+		cur_opt = g_list_next (cur_opt);
 	}
+	/* Not found, insert */
+	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
+	cur->param = name;
+	cur->value = data;
+	cur->is_lua = is_lua;
+	ctx->section_pointer = g_list_prepend (ctx->section_pointer, cur);
 
 	return TRUE;
 }
@@ -1157,7 +1145,9 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			if (g_ascii_strcasecmp (element_name, "module") == 0) {
 				/* Read module data */
 				if (extract_attr ("name", attribute_names, attribute_values, &res)) {
-					ud->section_pointer = res;
+					ud->parent_pointer = memory_pool_strdup (ud->cfg->cfg_pool, res);
+					/* Empty list */
+					ud->section_pointer = NULL;
 					ud->state = XML_READ_MODULE;
 				}
 				else {
@@ -1274,6 +1264,13 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 	switch (ud->state) {
 		case XML_READ_MODULE:
 			CHECK_TAG ("module", FALSE);
+			if (res) {
+				if (ud->section_pointer != NULL) {
+					g_hash_table_insert (ud->cfg->modules_opts, ud->parent_pointer, ud->section_pointer);
+					ud->parent_pointer = NULL;
+					ud->section_pointer = NULL;
+				}
+			}
 			break;
 		case XML_READ_CLASSIFIER:
 			CHECK_TAG ("classifier", FALSE);
