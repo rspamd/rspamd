@@ -458,7 +458,6 @@ modulesbody:
 
 modulescmd:
 	MODULE_PATH EQSIGN QUOTEDSTRING {
-#if !defined(WITHOUT_PERL) || defined(WITH_LUA)
 		struct stat st;
 		struct script_module *cur;
         glob_t globbuf;
@@ -472,15 +471,9 @@ modulescmd:
 		}
 
         globbuf.gl_offs = 0;
-        #ifdef WITH_LUA
         len = strlen ($3) + sizeof ("*.lua");
         pattern = g_malloc (len);
         snprintf (pattern, len, "%s%s", $3, "*.lua");
-        #else
-        len = strlen ($3) + sizeof ("*.pl")
-        pattern = g_malloc (len);
-        snprintf (pattern, len, "%s%s", $3, "*.pl");
-        #endif
 
         if (glob(pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
             for (i = 0; i < globbuf.gl_pathc; i ++) {
@@ -499,10 +492,6 @@ modulescmd:
             YYERROR;
         }
         g_free (pattern);
-#else
-		yyerror ("require command is not available when perl support is not compiled");
-		YYERROR;
-#endif
 	}
 	;
 

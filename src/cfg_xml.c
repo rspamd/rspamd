@@ -491,7 +491,8 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *v
 			}
 		}
 	}
-
+	
+	msg_err ("could not find handler for tag %s at section %d", name, section);
 	return FALSE;
 }
 
@@ -773,24 +774,34 @@ handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 		msg_err ("cannot stat path %s, %s", data, strerror (errno));
 		return FALSE;
 	}
+	
+	/* Handle directory */
+	if (S_ISDIR (st.st_mode)) {
+		globbuf.gl_offs = 0;
+		len = strlen (data) + sizeof ("*.lua");
+		pattern = g_malloc (len);
+		snprintf (pattern, len, "%s%s", data, "*.lua");
 
-	globbuf.gl_offs = 0;
-	len = strlen (data) + sizeof ("*.lua");
-	pattern = g_malloc (len);
-	snprintf (pattern, len, "%s%s", data, "*.lua");
-
-	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-		for (i = 0; i < globbuf.gl_pathc; i ++) {
-			cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-			cur->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
-			cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
+		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+			for (i = 0; i < globbuf.gl_pathc; i ++) {
+				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+				cur->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
+				cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
+			}
+			globfree (&globbuf);
 		}
-		globfree (&globbuf);
+		else {
+			msg_err ("glob failed: %s", strerror (errno));
+			return FALSE;
+		}
 	}
 	else {
-		msg_err ("glob failed: %s", strerror (errno));
-		return FALSE;
+		/* Handle single file */
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+		cur->path = memory_pool_strdup (cfg->cfg_pool, data);
+		cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
 	}
+
 	
 	return TRUE;
 }
@@ -1158,6 +1169,9 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			else if (g_ascii_strcasecmp (element_name, "factors") == 0) {
 				ud->state = XML_READ_FACTORS;	
 			}
+			else if (g_ascii_strcasecmp (element_name, "modules") == 0) {
+				ud->state = XML_READ_MODULES;	
+			}
 			else if (g_ascii_strcasecmp (element_name, "logging") == 0) {
 				ud->state = XML_READ_LOGGING;	
 			}
@@ -1223,6 +1237,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			}
 			break;
 		case XML_READ_MODULE:
+		case XML_READ_MODULES:
 		case XML_READ_FACTORS:
 		case XML_READ_STATFILE:
 		case XML_READ_WORKER:
@@ -1296,6 +1311,9 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			break;
 		case XML_READ_FACTORS:
 			CHECK_TAG ("factors", FALSE);
+			break;
+		case XML_READ_MODULES:
+			CHECK_TAG ("modules", FALSE);
 			break;
 		case XML_READ_METRIC:
 			CHECK_TAG ("metric", FALSE);
@@ -1372,6 +1390,12 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 				ud->state = XML_ERROR;
 			}
 			break;
+		case XML_READ_MODULES:
+			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_MODULES)) {
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
+				ud->state = XML_ERROR;
+			}
+			break;
 		case XML_READ_CLASSIFIER:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_CLASSIFIER)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
@@ -1427,12 +1451,49 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 
 }
 
+static inline const gchar *
+xml_state_to_string (struct rspamd_xml_userdata *ud)
+{
+	switch (ud->state) {
+		case XML_READ_START:
+			return "read start tag";
+		case XML_READ_PARAM:
+			return "read param";
+		case XML_READ_MODULE:
+			return "read module section";
+		case XML_READ_MODULES:
+			return "read modules section";
+		case XML_READ_CLASSIFIER:
+			return "read classifier section";
+		case XML_READ_STATFILE:
+			return "read statfile section";
+		case XML_READ_FACTORS:
+			return "read factors section";
+		case XML_READ_METRIC:
+			return "read metric section";
+		case XML_READ_WORKER:
+			return "read worker section";
+		case XML_READ_VIEW:
+			return "read view section";
+		case XML_READ_LOGGING:
+			return "read logging section";
+		case XML_READ_VALUE:
+			return "read value";
+		case XML_ERROR:
+			return "error occured";
+		case XML_END:
+			return "read final tag";
+	}
+	/* Unreached */
+	return "unknown state";
+}
+
 void 
 rspamd_xml_error (GMarkupParseContext *context, GError *error, gpointer user_data)
 {
 	struct rspamd_xml_userdata *ud = user_data;
 	
-	msg_err ("xml parser error: %s, at state %d", error->message, ud->state);
+	msg_err ("xml parser error: %s, at state \"%s\"", error->message, xml_state_to_string (ud));
 }
 
 
@@ -1820,6 +1881,34 @@ xml_dump_logging (struct config_file *cfg, FILE *f)
 	return TRUE;
 }
 
+/* Modules */
+static gboolean
+xml_dump_modules_paths (struct config_file *cfg, FILE *f)
+{
+	GList                          *cur;
+	gchar                          *escaped_value;
+	struct script_module           *module;
+
+	/* Print header comment */
+	fprintf (f, "<!-- Modules section -->" EOL);
+	fprintf (f, "<modules>" EOL);
+
+	cur = cfg->script_modules;
+	while (cur) {
+		module = cur->data;
+		escaped_value = g_markup_escape_text (module->path, -1);
+		fprintf (f, " <path>%s</path>" EOL, escaped_value);
+		g_free (escaped_value);
+		cur = g_list_next (cur);
+	}
+
+	fprintf (f, "</modules>" EOL);
+	/* Print footer comment */
+	fprintf (f, "<!-- End of modules section -->" EOL EOL);
+
+	return TRUE;
+}
+
 
 #define CHECK_RES do { if (!res) { fclose (f); return FALSE; } } while (0)
 gboolean 
@@ -1850,6 +1939,8 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	res = xml_dump_modules (cfg, f);
 	CHECK_RES;
 	res = xml_dump_classifiers (cfg, f);
+	CHECK_RES;
+	res = xml_dump_modules_paths (cfg, f);
 	CHECK_RES;
 	/* Footer */
 	fprintf (f, "</rspamd>" EOL);
