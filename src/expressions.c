@@ -30,6 +30,7 @@
 #include "fuzzy.h"
 #include "expressions.h"
 #include "html.h"
+#include "lua/lua_common.h"
 
 gboolean                        rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused);
 gboolean                        rspamd_header_exists (struct worker_task *task, GList * args, void *unused);
@@ -721,13 +722,26 @@ gboolean
 call_expression_function (struct expression_function * func, struct worker_task * task)
 {
 	struct _fl                     *selected, key;
+#ifdef RSPAMD_MAIN
+	gboolean                        res;
+#endif
 
 	key.name = func->name;
 
 	selected = bsearch (&key, list_ptr, functions_number, sizeof (struct _fl), fl_cmp);
 	if (selected == NULL) {
-		msg_warn ("call to undefined function %s", key.name);
+		/* Try to check lua function */
+#ifdef RSPAMD_MAIN
+		if (! lua_call_expression_func (func->name, task, func->args, &res)) {
+			msg_warn ("call to undefined function %s", key.name);
+			return FALSE;
+		}
+		else {
+			return res;
+		}
+#else
 		return FALSE;
+#endif
 	}
 
 	return selected->func (task, func->args, selected->user_data);

@@ -23,6 +23,7 @@
  */
 
 #include "lua_common.h"
+#include "../expressions.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -262,6 +263,7 @@ lua_call_filter (const char *function, struct worker_task *task)
 {
 	int                             result;
 	struct worker_task            **ptask;
+	lua_State                      *L = task->cfg->lua_state;
 
 	lua_getglobal (L, function);
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
@@ -285,6 +287,7 @@ int
 lua_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number)
 {
 	int                             result, i;
+	lua_State                      *L = task->cfg->lua_state;
 
 	lua_getglobal (L, function);
 
@@ -304,6 +307,56 @@ lua_call_chain_filter (const char *function, struct worker_task *task, int *mark
 	return result;
 }
 
+/* Call custom lua function in rspamd expression */
+gboolean 
+lua_call_expression_func (const char *function, struct worker_task *task, GList *args, gboolean *res)
+{
+	lua_State                      *L = task->cfg->lua_state;
+	struct worker_task            **ptask;
+	GList                          *cur;
+	struct expression_argument     *arg;
+	int                             nargs = 0;
+
+	lua_getglobal (L, function);
+	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+	lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+	
+	/* Now push all arguments */
+	cur = args;
+	while (cur) {
+		arg = get_function_arg (cur->data, task, FALSE);
+		if (arg) {
+			switch (arg->type) {
+				case EXPRESSION_ARGUMENT_NORMAL:
+					lua_pushstring (L, (const gchar *)arg->data);
+					break;
+				case EXPRESSION_ARGUMENT_BOOL:
+					lua_pushboolean (L, (gboolean) GPOINTER_TO_SIZE (arg->data));
+					break;
+				default:
+					msg_err ("cannot pass custom params to lua function");
+					return FALSE;
+			}
+		}
+		nargs ++;
+		cur = g_list_next (cur);
+	}
+
+	if (lua_pcall (L, nargs, 1, 0) != 0) {
+		msg_info ("call to %s failed", function);
+		return FALSE;
+	}
+
+	if (!lua_isboolean (L, -1)) {
+		msg_info ("function %s must return a boolean", function);
+		return FALSE;
+	}
+	*res = lua_toboolean (L, -1);
+	
+	return TRUE;
+}
+
 /*
  * LUA custom consolidation function
  */
@@ -319,6 +372,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	double                          res;
 	struct symbol                  *s = (struct symbol *)value;
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
+	lua_State                      *L = data->task->cfg->lua_state;
 
 	lua_getglobal (L, data->func);
 
