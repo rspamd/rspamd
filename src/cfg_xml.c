@@ -331,14 +331,15 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, grow_factor),
 				NULL
 			},
+			{
+				"factor",
+				handle_factor,
+				0,
+				NULL
+			},
 			NULL_ATTR
 		},
-		{
-			NULL,
-			handle_factor,
-			0,
-			NULL
-		}
+		NULL_ATTR
 	},
 	{ XML_SECTION_MODULE, {
 			NULL_ATTR
@@ -1409,7 +1410,7 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 			}
 			break;
 		case XML_READ_FACTORS:
-			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_CLASSIFIER)) {
+			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_FACTORS)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}
@@ -1573,6 +1574,33 @@ xml_dump_variables (struct config_file *cfg, FILE *f)
 
 	/* Print footer comment */
 	fprintf (f, "<!-- End of variables section -->" EOL EOL);
+
+	return TRUE;
+}
+
+/* Dump factors section */
+static void
+xml_factors_callback (gpointer key, gpointer value, gpointer user_data)
+{
+	FILE *f = user_data;
+	char *escaped_key;
+
+	escaped_key = g_markup_escape_text (key, -1); 
+	fprintf (f,  " <factor name=\"%s\">%.2f</factor>" EOL, escaped_key, *(double *)value);
+	g_free (escaped_key);
+}
+
+static gboolean
+xml_dump_factors (struct config_file *cfg, FILE *f)
+{
+	/* Print header comment */
+	fprintf (f, "<!-- Factors section -->" EOL "<factors>" EOL );
+
+	/* Iterate through variables */
+	g_hash_table_foreach (cfg->factors, xml_factors_callback, (gpointer)f);
+
+	/* Print footer comment */
+	fprintf (f, "</factors>" EOL "<!-- End of factors section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1931,6 +1959,8 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	res = xml_dump_logging (cfg, f);
 	CHECK_RES;
 	res = xml_dump_variables (cfg, f);
+	CHECK_RES;
+	res = xml_dump_factors (cfg, f);
 	CHECK_RES;
 	res = xml_dump_composites (cfg, f);
 	CHECK_RES;

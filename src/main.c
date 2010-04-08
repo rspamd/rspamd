@@ -48,11 +48,12 @@
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
-struct config_file             *cfg;
 
 rspamd_hash_t                  *counters;
 
 static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
+static gboolean                 load_rspamd_config (struct config_file *cfg);
+static void                     init_metrics_cache (struct config_file *cfg);
 
 sig_atomic_t                    do_restart;
 sig_atomic_t                    do_terminate;
@@ -63,8 +64,10 @@ sig_atomic_t                    got_alarm;
 GQueue                         *signals_info;
 #endif
 
+/* Yacc vars */
 extern int                      yynerrs;
 extern FILE                    *yyin;
+struct config_file             *yacc_cfg;
 
 static gboolean                 config_test;
 static gboolean                 no_fork;
@@ -76,13 +79,11 @@ static gchar                   *convert_config;
 static gboolean                 dump_vars;
 static gboolean                 dump_cache;
 
-#ifndef WITHOUT_PERL
-extern void                     xs_init (pTHX);
-extern PerlInterpreter         *perl_interpreter;
-#endif
-
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
+
+/* List of active listen sockets indexed by worker type */
+static GHashTable              *listen_sockets;
 
 /* Commandline options */
 static GOptionEntry entries[] = 
@@ -252,7 +253,8 @@ reread_config (struct rspamd_main *rspamd)
 {
 	struct config_file             *tmp_cfg;
 	char                           *cfg_file;
-	FILE                           *f;
+	GList                          *l;
+	struct filter                  *filt;
 
 	tmp_cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	if (tmp_cfg) {
@@ -260,29 +262,34 @@ reread_config (struct rspamd_main *rspamd)
 		tmp_cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
 		init_defaults (tmp_cfg);
 		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
-		f = fopen (rspamd->cfg->cfg_name, "r");
-		if (f == NULL) {
-			msg_warn ("cannot open file: %s", rspamd->cfg->cfg_name);
+		/* Save some variables */
+		tmp_cfg->cfg_name = cfg_file;
+		tmp_cfg->lua_state = rspamd->cfg->lua_state;
+
+		if (! load_rspamd_config (tmp_cfg)) {
+			msg_err ("cannot parse new config file, revert to old one");
+			free_config (tmp_cfg);
 		}
 		else {
-			yyin = f;
-			yyrestart (yyin);
+			msg_debug ("replacing config");
+			free_config (rspamd->cfg);
+			close_log ();
+			g_free (rspamd->cfg);
+			rspamd->cfg = tmp_cfg;
+			post_load_config (rspamd->cfg);
+			config_logger (rspamd, FALSE);
+			/* Perform modules configuring */
+			l = g_list_first (rspamd->cfg->filters);
 
-			if (yyparse () != 0 || yynerrs > 0) {
-				msg_warn ("yyparse: cannot parse config file, %d errors", yynerrs);
-				fclose (f);
+			while (l) {
+				filt = l->data;
+				if (filt->module) {
+					(void)filt->module->module_config_func (rspamd->cfg);
+				}
+				l = g_list_next (l);
 			}
-			else {
-				msg_debug ("replacing config");
-				free_config (rspamd->cfg);
-				close_log ();
-				g_free (rspamd->cfg);
-				rspamd->cfg = tmp_cfg;
-				rspamd->cfg->cfg_name = cfg_file;
-				config_logger (rspamd, FALSE);
-				open_log ();
-				msg_info ("config rereaded successfully");
-			}
+			init_metrics_cache (rspamd->cfg);
+			msg_info ("config rereaded successfully");
 		}
 	}
 }
@@ -320,18 +327,18 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 	cur = (struct rspamd_worker *)g_malloc (sizeof (struct rspamd_worker));
 	if (cur) {
 		bzero (cur, sizeof (struct rspamd_worker));
-		g_queue_push_head (cf->active_workers, cur);
 		cur->srv = rspamd;
 		cur->type = cf->type;
 		cur->pid = fork ();
-		cur->cf = cf;
+		cur->cf = g_malloc (sizeof (struct worker_conf));
+		memcpy (cur->cf, cf, sizeof (struct worker_conf));
 		cur->pending = FALSE;
 		switch (cur->pid) {
 		case 0:
 			/* Update pid for logging */
 			update_log_pid ();
 			/* Drop privilleges */
-			drop_priv (cfg);
+			drop_priv (rspamd->cfg);
 			/* Set limits */
 			set_worker_limits (cf);
 			switch (cf->type) {
@@ -410,7 +417,7 @@ dump_all_variables (gpointer key, gpointer value, gpointer data)
 
 
 static void
-dump_cfg_vars ()
+dump_cfg_vars (struct config_file *cfg)
 {
 	g_hash_table_foreach (cfg->variables, dump_all_variables, NULL);
 }
@@ -459,22 +466,30 @@ fork_delayed (struct rspamd_main *rspamd)
 }
 
 static void
-spawn_workers (struct rspamd_main *rspamd, gboolean make_sockets)
+spawn_workers (struct rspamd_main *rspamd)
 {
 	GList                          *cur;
 	struct worker_conf             *cf;
 	int                             i, listen_sock;
+	gpointer                        p;
 
-	cur = cfg->workers;
+	cur = rspamd->cfg->workers;
 
 	while (cur) {
 		cf = cur->data;
 
-		if (make_sockets && cf->has_socket) {
-			/* Create listen socket */
-			listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
-			if (listen_sock == -1) {
-				exit (-errno);
+		if (cf->has_socket) {
+			if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (cf->type))) == NULL) {
+				/* Create listen socket */
+				listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
+				if (listen_sock == -1) {
+					exit (-errno);
+				}
+				g_hash_table_insert (listen_sockets, GINT_TO_POINTER (cf->type), GINT_TO_POINTER (listen_sock));
+			}
+			else {
+				/* We had socket for this type of worker */
+				listen_sock = GPOINTER_TO_INT (p);
 			}
 			cf->listen_sock = listen_sock;
 		}
@@ -532,6 +547,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	waitpid (w->pid, &res, 0);
 
 	msg_debug ("%s process %P terminated", get_process_type (w->type), w->pid);
+	g_free (w->cf);
 	g_free (w);
 
 	return TRUE;
@@ -548,7 +564,8 @@ convert_old_config (struct rspamd_main *rspamd)
 		return EBADF;
 	}
 	yyin = f;
-
+	
+	yacc_cfg = rspamd->cfg;
 	if (yyparse () != 0 || yynerrs > 0) {
 		msg_err ("cannot parse config file, %d errors", yynerrs);
 		return EBADF;
@@ -579,39 +596,37 @@ convert_old_config (struct rspamd_main *rspamd)
 }
 
 static gboolean
-load_rspamd_config (struct rspamd_main *rspamd)
+load_rspamd_config (struct config_file *cfg)
 {
 	GList                          *l;
 	struct filter                  *filt;
 	struct module_ctx              *cur_module = NULL;
 
-	if (! read_xml_config (rspamd->cfg, rspamd->cfg->cfg_name)) {
+	if (! read_xml_config (cfg, cfg->cfg_name)) {
 		return FALSE;
 	}
 
 	/* Strictly set temp dir */
-	if (!rspamd->cfg->temp_dir) {
+	if (!cfg->temp_dir) {
 		msg_warn ("tempdir is not set, trying to use $TMPDIR");
-		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
+		cfg->temp_dir = memory_pool_strdup (cfg->cfg_pool, getenv ("TMPDIR"));
 
-		if (!rspamd->cfg->temp_dir) {
+		if (!cfg->temp_dir) {
 			msg_warn ("$TMPDIR is empty too, using /tmp as default");
-			rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
+			cfg->temp_dir = memory_pool_strdup (cfg->cfg_pool, "/tmp");
 		}
 	}
 
 	/* Do post-load actions */
-	post_load_config (rspamd->cfg);
-	/* Init counters */
-	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
+	post_load_config (cfg);
 
 	/* Init C modules */
-	l = g_list_first (rspamd->cfg->filters);
+	l = g_list_first (cfg->filters);
 
 	while (l) {
 		filt = l->data;
 		if (filt->module) {
-			cur_module = memory_pool_alloc (rspamd->cfg->cfg_pool, sizeof (struct module_ctx));
+			cur_module = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_ctx));
 			if (filt->module->module_init_func (cfg, &cur_module) == 0) {
 				g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
 			}
@@ -622,22 +637,64 @@ load_rspamd_config (struct rspamd_main *rspamd)
 	return TRUE;
 }
 
+static void
+init_metrics_cache (struct config_file *cfg) 
+{
+	struct metric                  *metric;
+	GList                          *l;
+
+	/* Init symbols cache for each metric */
+	l = g_list_first (cfg->metrics_list);
+	while (l) {
+		metric = l->data;
+		if (metric->cache && !init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
+			exit (EXIT_FAILURE);
+		}
+		l = g_list_next (l);
+	}
+}
+
+static void
+print_metrics_cache (struct config_file *cfg) 
+{
+	struct metric                  *metric;
+	GList                          *l;
+	struct cache_item              *item;
+	int                             i;
+
+	l = g_list_first (cfg->metrics_list);
+	while (l) {
+		metric = l->data;
+		if (!init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
+			exit (EXIT_FAILURE);
+		}
+		if (metric->cache) {
+			printf ("Cache for metric: %s\n", metric->name);
+			printf ("-----------------------------------------------------------------\n");
+			printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
+			for (i = 0; i < metric->cache->used_items; i++) {
+				item = &metric->cache->items[i];
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+
+			}
+			printf ("-----------------------------------------------------------------\n");
+		}
+		l = g_list_next (l);
+	}
+}
+
 int
 main (int argc, char **argv, char **env)
 {
 	struct rspamd_main             *rspamd;
-	int                             res = 0, i;
+	int                             res = 0;
 	struct sigaction                signals;
 	struct rspamd_worker           *cur;
 	struct rlimit                   rlim;
-	struct metric                  *metric;
-	struct cache_item              *item;
 	struct filter                  *filt;
 	pid_t                           wrk;
 	GList                          *l;
-#ifndef WITHOUT_PERL
-	char                           *args[] = { "", "-e", "0", NULL };
-#endif
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
@@ -645,8 +702,7 @@ main (int argc, char **argv, char **env)
 	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	bzero (rspamd, sizeof (struct rspamd_main));
 	rspamd->server_pool = memory_pool_new (memory_pool_get_size ());
-	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
-	rspamd->cfg = cfg;
+	rspamd->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	if (!rspamd || !rspamd->cfg) {
 		fprintf (stderr, "Cannot allocate memory\n");
 		exit (-errno);
@@ -656,6 +712,10 @@ main (int argc, char **argv, char **env)
 	do_restart = 0;
 	child_dead = 0;
 	do_reopen_log = 0;
+
+#ifndef HAVE_SETPROCTITLE
+	init_title (argc, argv, environ);
+#endif
 
 	rspamd->stat = memory_pool_alloc_shared (rspamd->server_pool, sizeof (struct rspamd_stat));
 	bzero (rspamd->stat, sizeof (struct rspamd_stat));
@@ -671,11 +731,11 @@ main (int argc, char **argv, char **env)
 		rspamd->cfg->cfg_name = FIXED_CONFIG_FILE;
 	}
 
-	if (cfg->config_test) {
-		cfg->log_level = G_LOG_LEVEL_DEBUG;
+	if (rspamd->cfg->config_test) {
+		rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
-		cfg->log_level = G_LOG_LEVEL_CRITICAL;
+		rspamd->cfg->log_level = G_LOG_LEVEL_CRITICAL;
 	}
 
 #ifdef HAVE_SETLOCALE
@@ -689,12 +749,14 @@ main (int argc, char **argv, char **env)
 	/* First set logger to console logger */
 	rspamd_set_logger (RSPAMD_LOG_CONSOLE, rspamd->cfg);
 	(void)open_log ();
-	g_log_set_default_handler (rspamd_glib_log_function, cfg);
+	g_log_set_default_handler (rspamd_glib_log_function, rspamd->cfg);
 
-#ifndef HAVE_SETPROCTITLE
-	init_title (argc, argv, environ);
-#endif
-	init_lua (cfg);
+	init_lua (rspamd->cfg);
+
+	/* Init counters */
+	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
+	/* Init listen sockets hash */
+	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 	
 	if (convert_config != NULL) {
 		if (! convert_old_config (rspamd)) {
@@ -702,11 +764,11 @@ main (int argc, char **argv, char **env)
 		}
 	}
 
-	if (! load_rspamd_config (rspamd)) {
+	if (! load_rspamd_config (rspamd->cfg)) {
 		exit (EXIT_FAILURE);
 	}
 
-	if (cfg->config_test || dump_vars || dump_cache) {
+	if (rspamd->cfg->config_test || dump_vars || dump_cache) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
@@ -716,37 +778,18 @@ main (int argc, char **argv, char **env)
 		while (l) {
 			filt = l->data;
 			if (filt->module) {
-				if (!filt->module->module_config_func (cfg)) {
+				if (!filt->module->module_config_func (rspamd->cfg)) {
 					res = FALSE;
 				}
 			}
 			l = g_list_next (l);
 		}
-		init_lua_filters (cfg);
+		init_lua_filters (rspamd->cfg);
 		if (dump_vars) {
-			dump_cfg_vars ();
+			dump_cfg_vars (rspamd->cfg);
 		}
 		if (dump_cache) {
-			l = g_list_first (cfg->metrics_list);
-			while (l) {
-				metric = l->data;
-				if (!init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
-					exit (EXIT_FAILURE);
-				}
-				if (metric->cache) {
-					printf ("Cache for metric: %s\n", metric->name);
-					printf ("-----------------------------------------------------------------\n");
-					printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
-					for (i = 0; i < metric->cache->used_items; i++) {
-						item = &metric->cache->items[i];
-						printf ("-----------------------------------------------------------------\n");
-						printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
-
-					}
-					printf ("-----------------------------------------------------------------\n");
-				}
-				l = g_list_next (l);
-			}
+			print_metrics_cache (rspamd->cfg);
 			exit (EXIT_SUCCESS);
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
@@ -784,7 +827,7 @@ main (int argc, char **argv, char **env)
 	setproctitle ("main process");
 
 	/* Init statfile pool */
-	rspamd->statfile_pool = statfile_pool_new (cfg->max_statfile_size);
+	rspamd->statfile_pool = statfile_pool_new (rspamd->cfg->max_statfile_size);
 
 	event_init ();
 	g_mime_init (0);
@@ -795,45 +838,22 @@ main (int argc, char **argv, char **env)
 	while (l) {
 		filt = l->data;
 		if (filt->module) {
-			if (!filt->module->module_config_func (cfg)) {
+			if (!filt->module->module_config_func (rspamd->cfg)) {
 				res = FALSE;
 			}
 		}
 		l = g_list_next (l);
 	}
 
-#ifndef WITHOUT_PERL
-	/* Init perl interpreter */
-	dTHXa (perl_interpreter);
-	PERL_SYS_INIT3 (&argc, &argv, &env);
-	perl_interpreter = perl_alloc ();
-	if (perl_interpreter == NULL) {
-		msg_err ("cannot allocate perl interpreter, %s", strerror (errno));
-		exit (-errno);
-	}
-
-	PERL_SET_CONTEXT (perl_interpreter);
-	perl_construct (perl_interpreter);
-	perl_parse (perl_interpreter, xs_init, 3, args, NULL);
-	init_perl_filters (cfg);
-#endif
-
-	init_lua_filters (cfg);
+	init_lua_filters (rspamd->cfg);
 
 	/* Init symbols cache for each metric */
-	l = g_list_first (cfg->metrics_list);
-	while (l) {
-		metric = l->data;
-		if (metric->cache && !init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
-			exit (EXIT_FAILURE);
-		}
-		l = g_list_next (l);
-	}
+	init_metrics_cache (rspamd->cfg);
 
 	flush_log_buf ();
 
 	rspamd->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
-	spawn_workers (rspamd, TRUE);
+	spawn_workers (rspamd);
 
 	/* Signal processing cycle */
 	for (;;) {
@@ -857,7 +877,6 @@ main (int argc, char **argv, char **env)
 				/* Unlink dead process from queue and hash table */
 
 				g_hash_table_remove (rspamd->workers, GSIZE_TO_POINTER (wrk));
-				g_queue_remove (cur->cf->active_workers, cur);
 
 				if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 					/* Normal worker termination, do not fork one more */
@@ -886,7 +905,8 @@ main (int argc, char **argv, char **env)
 
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd->workers, kill_old_workers, NULL);
-			spawn_workers (rspamd, FALSE);
+			reread_config (rspamd);
+			spawn_workers (rspamd);
 
 		}
 		if (got_alarm) {

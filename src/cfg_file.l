@@ -1,6 +1,5 @@
 %x incl
 %x module_lex_state
-%x lua_lex_state
 %x worker_lex_state
 %x classifier_lex_state
 
@@ -10,11 +9,6 @@
 #include "config.h"
 #include "cfg_file.h"
 #include "cfg_yacc.h"
-#ifdef WITH_LUA
-extern void add_luabuf (const char *line);
-#else 
-#define add_luabuf(x) yyerror ("lua support diabled")
-#endif
 
 #define ECHO do {} while(0)
 
@@ -23,7 +17,7 @@ YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
 int line_stack[MAX_INCLUDE_DEPTH];
 int include_stack_ptr = 0;
 int nested_depth = 0;
-extern struct config_file *cfg;
+extern struct config_file *yacc_cfg;
 
 %}
 
@@ -34,7 +28,6 @@ extern struct config_file *cfg;
 [ \t]*#.*						/* ignore comments */;
 .include						BEGIN(incl);
 .module							BEGIN(module_lex_state);
-.lua							BEGIN(lua_lex_state);
 worker							BEGIN(worker_lex_state); return WORKER;
 composites						BEGIN(module_lex_state);return COMPOSITES;
 tempdir							return TEMPDIR;
@@ -133,7 +126,7 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 		/* Handle XML case */
 		int len = strlen (yytext);
 		if (strcmp (yytext + len - 4, ".xml") == 0) {
-			if (!read_xml_config (cfg, yytext)) {
+			if (!read_xml_config (yacc_cfg, yytext)) {
 				yyerror ("invalid xml detected");	
 			}
 			BEGIN(INITIAL);	
@@ -232,12 +225,6 @@ yes|YES|no|NO|[yY]|[nN]			yylval.flag=parse_flag(yytext); return FLAG;
 <classifier_lex_state>\$[a-zA-Z_][a-zA-Z0-9_]+		yylval.string=strdup(yytext + 1); return VARIABLE;
 <classifier_lex_state>[a-zA-Z0-9_%-]+	                yylval.string=strdup(yytext); return PARAM;
 <classifier_lex_state>\".+[^\\]\"	yylval.string=strdup(yytext + 1); yylval.string[strlen(yylval.string) - 1] = '\0'; unescape_quotes(yylval.string); return QUOTEDSTRING;
-
-<lua_lex_state>\n									/* ignore EOL */;
-<lua_lex_state>[ \t]+								/* ignore whitespace */;
-<lua_lex_state>[ \t]*#.*							/* ignore comments */;
-<lua_lex_state>^.endlua$							BEGIN(INITIAL);
-<lua_lex_state>.*									add_luabuf(yytext); return LUACODE;
 
 %%
 /* 

@@ -17,7 +17,7 @@
 #endif
 #define YYDEBUG 1
 
-extern struct config_file *cfg;
+extern struct config_file *yacc_cfg;
 extern int yylineno;
 extern char *yytext;
 
@@ -116,16 +116,16 @@ tempdir :
 			yyerror ("yyparse: \"%s\" is not a directory", $3); 
 			YYERROR;
 		}
-		cfg->temp_dir = memory_pool_strdup (cfg->cfg_pool, $3);
+		yacc_cfg->temp_dir = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 		free ($3);
 	}
 	;
 
 pidfile :
 	PIDFILE EQSIGN QUOTEDSTRING {
-		if (cfg->pid_file == NULL) {
+		if (yacc_cfg->pid_file == NULL) {
 			/* Allow override this value from command line */
-			cfg->pid_file = $3;
+			yacc_cfg->pid_file = $3;
 		}
 	}
 	;
@@ -133,7 +133,7 @@ pidfile :
 
 filters:
 	FILTERS EQSIGN QUOTEDSTRING {
-		cfg->filters_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		yacc_cfg->filters_str = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 		free ($3);
 	}
 	;
@@ -167,7 +167,7 @@ memcached_server:
 
 memcached_params:
 	memcached_hosts {
-		if (!add_memcached_server (cfg, $1)) {
+		if (!add_memcached_server (yacc_cfg, $1)) {
 			yyerror ("yyparse: add_memcached_server");
 			YYERROR;
 		}
@@ -182,32 +182,32 @@ memcached_hosts:
 	;
 memcached_error_time:
 	ERROR_TIME EQSIGN NUMBER {
-		cfg->memcached_error_time = $3;
+		yacc_cfg->memcached_error_time = $3;
 	}
 	;
 memcached_dead_time:
 	DEAD_TIME EQSIGN NUMBER {
-		cfg->memcached_dead_time = $3;
+		yacc_cfg->memcached_dead_time = $3;
 	}
 	;
 memcached_maxerrors:
 	MAXERRORS EQSIGN NUMBER {
-		cfg->memcached_maxerrors = $3;
+		yacc_cfg->memcached_maxerrors = $3;
 	}
 	;
 memcached_connect_timeout:
 	CONNECT_TIMEOUT EQSIGN SECONDS {
-		cfg->memcached_connect_timeout = $3;
+		yacc_cfg->memcached_connect_timeout = $3;
 	}
 	;
 
 memcached_protocol:
 	PROTOCOL EQSIGN STRING {
 		if (strncasecmp ($3, "udp", sizeof ("udp") - 1) == 0) {
-			cfg->memcached_protocol = UDP_TEXT;
+			yacc_cfg->memcached_protocol = UDP_TEXT;
 		}
 		else if (strncasecmp ($3, "tcp", sizeof ("tcp") - 1) == 0) {
-			cfg->memcached_protocol = TCP_TEXT;
+			yacc_cfg->memcached_protocol = TCP_TEXT;
 		}
 		else {
 			yyerror ("yyparse: cannot recognize protocol: %s", $3);
@@ -219,7 +219,7 @@ memcached_protocol:
 /* Workers section */
 worker:
 	WORKER OBRACE workerbody EBRACE {
-		cfg->workers = g_list_prepend (cfg->workers, cur_worker);
+		yacc_cfg->workers = g_list_prepend (yacc_cfg->workers, cur_worker);
 		cur_worker = NULL;
 	}
 	;
@@ -240,9 +240,9 @@ workercmd:
 
 bindsock:
 	BINDSOCK EQSIGN bind_cred {
-		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker = check_worker_conf (yacc_cfg, cur_worker);
 
-		if (!parse_bind_line (cfg, cur_worker, $3)) {
+		if (!parse_bind_line (yacc_cfg, cur_worker, $3)) {
 			yyerror ("yyparse: parse_bind_line");
 			YYERROR;
 		}		
@@ -270,7 +270,7 @@ bind_cred:
 
 workertype:
 	TYPE EQSIGN QUOTEDSTRING {
-		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker = check_worker_conf (yacc_cfg, cur_worker);
 		if (g_ascii_strcasecmp ($3, "normal") == 0) {
 			cur_worker->type = TYPE_WORKER;
 			cur_worker->has_socket = TRUE;
@@ -296,7 +296,7 @@ workertype:
 
 workercount:
 	COUNT EQSIGN NUMBER {
-		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker = check_worker_conf (yacc_cfg, cur_worker);
 
 		if ($3 > 0) {
 			cur_worker->count = $3;
@@ -310,21 +310,21 @@ workercount:
 
 workerlimitfiles:
 	MAXFILES EQSIGN NUMBER {
-		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker = check_worker_conf (yacc_cfg, cur_worker);
 		cur_worker->rlimit_nofile = $3;
 	}
 	;
 
 workerlimitcore:
 	MAXCORE EQSIGN NUMBER  {
-		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker = check_worker_conf (yacc_cfg, cur_worker);
 		cur_worker->rlimit_maxcore = $3;
 	}
 	;
 
 workerparam:
 	STRING EQSIGN QUOTEDSTRING {
-		cur_worker = check_worker_conf (cfg, cur_worker);
+		cur_worker = check_worker_conf (yacc_cfg, cur_worker);
 		
 		g_hash_table_insert (cur_worker->params, $1, $3);
 	}
@@ -338,8 +338,8 @@ metric:
 		if (cur_metric->classifier == NULL) {
 			cur_metric->classifier = get_classifier ("winnow");
 		}
-		g_hash_table_insert (cfg->metrics, cur_metric->name, cur_metric);
-		cfg->metrics_list = g_list_prepend (cfg->metrics_list, cur_metric);
+		g_hash_table_insert (yacc_cfg->metrics, cur_metric->name, cur_metric);
+		yacc_cfg->metrics_list = g_list_prepend (yacc_cfg->metrics_list, cur_metric);
 		cur_metric = NULL;
 	}
 	;
@@ -359,18 +359,18 @@ metriccmd:
 metricname:
 	NAME EQSIGN QUOTEDSTRING {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
-		cur_metric->name = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_metric->name = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 	}
 	;
 
 metricfunction:
 	FUNCTION EQSIGN QUOTEDSTRING {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
-		cur_metric->func_name = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_metric->func_name = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 #ifdef WITH_LUA
 		cur_metric->func = lua_consolidation_func;
 #elif !defined(WITHOUT_PERL)
@@ -384,13 +384,13 @@ metricfunction:
 metricscore:
 	REQUIRED_SCORE EQSIGN NUMBER {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->required_score = $3;
 	}
 	| REQUIRED_SCORE EQSIGN FRACT {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->required_score = $3;
 	}
@@ -399,13 +399,13 @@ metricscore:
 metricrjscore:
 	REJECT_SCORE EQSIGN NUMBER {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->reject_score = $3;
 	}
 	| REJECT_SCORE EQSIGN FRACT {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
 		cur_metric->reject_score = $3;
 	}
@@ -414,9 +414,9 @@ metricrjscore:
 metriccache:
 	CACHE_FILE EQSIGN QUOTEDSTRING {
 		if (cur_metric == NULL) {
-			cur_metric = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+			cur_metric = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct metric));
 		}
-		cur_metric->cache_filename = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_metric->cache_filename = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 	}
 	;
 
@@ -431,20 +431,20 @@ factorsbody:
 
 factorparam:
 	QUOTEDSTRING EQSIGN FRACT {
-		double *tmp = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+		double *tmp = memory_pool_alloc (yacc_cfg->cfg_pool, sizeof (double));
 		*tmp = $3;
-		g_hash_table_insert (cfg->factors, $1, tmp);
+		g_hash_table_insert (yacc_cfg->factors, $1, tmp);
 	}
 	| QUOTEDSTRING EQSIGN NUMBER {
-		double *tmp = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+		double *tmp = memory_pool_alloc (yacc_cfg->cfg_pool, sizeof (double));
 		*tmp = $3;
-		g_hash_table_insert (cfg->factors, $1, tmp);
+		g_hash_table_insert (yacc_cfg->factors, $1, tmp);
 	}
 	| GROW_FACTOR EQSIGN FRACT {
-		cfg->grow_factor = $3;
+		yacc_cfg->grow_factor = $3;
 	}
 	| GROW_FACTOR EQSIGN NUMBER {
-		cfg->grow_factor = $3;
+		yacc_cfg->grow_factor = $3;
 	}
 
 modules:
@@ -477,13 +477,13 @@ modulescmd:
 
         if (glob(pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
             for (i = 0; i < globbuf.gl_pathc; i ++) {
-                cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+                cur = memory_pool_alloc (yacc_cfg->cfg_pool, sizeof (struct script_module));
                 if (cur == NULL) {
                     yyerror ("yyparse: g_malloc: %s", strerror(errno));
                     YYERROR;
                 }
-                cur->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
-                cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
+                cur->path = memory_pool_strdup (yacc_cfg->cfg_pool, globbuf.gl_pathv[i]);
+                yacc_cfg->script_modules = g_list_prepend (yacc_cfg->script_modules, cur);
             }
             globfree (&globbuf);
         }
@@ -507,16 +507,16 @@ compositesbody:
 compositescmd:
 	PARAM EQSIGN QUOTEDSTRING {
 		struct expression *expr;
-		if ((expr = parse_expression (cfg->cfg_pool, $3)) == NULL) {
+		if ((expr = parse_expression (yacc_cfg->cfg_pool, $3)) == NULL) {
 			yyerror ("yyparse: cannot parse composite expression: %s", $3);
 			YYERROR;
 		}
-		g_hash_table_insert (cfg->composite_symbols, $1, expr);
+		g_hash_table_insert (yacc_cfg->composite_symbols, $1, expr);
 	}
 	;
 module_opt:
 	MODULE_OPT OBRACE moduleoptbody EBRACE {
-		g_hash_table_insert (cfg->modules_opts, $1, cur_module_opt);
+		g_hash_table_insert (yacc_cfg->modules_opts, $1, cur_module_opt);
 		cur_module_opt = NULL;
 	}
 	;
@@ -529,19 +529,19 @@ moduleoptbody:
 optcmd:
 	PARAM EQSIGN QUOTEDSTRING {
 		struct module_opt *mopt;
-		mopt = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_opt));
+		mopt = memory_pool_alloc (yacc_cfg->cfg_pool, sizeof (struct module_opt));
 		mopt->param = $1;
 		mopt->value = $3;
 		cur_module_opt = g_list_prepend (cur_module_opt, mopt);
 	}
 	| VARIABLE EQSIGN QUOTEDSTRING {
-		g_hash_table_insert (cfg->variables, $1, $3);
+		g_hash_table_insert (yacc_cfg->variables, $1, $3);
 	}
 	;
 
 variable:
 	VARIABLE EQSIGN QUOTEDSTRING {
-		g_hash_table_insert (cfg->variables, $1, $3);
+		g_hash_table_insert (yacc_cfg->variables, $1, $3);
 	}
 	;
 
@@ -566,71 +566,71 @@ loggingcmd:
 
 loggingtype:
 	LOG_TYPE EQSIGN LOG_TYPE_CONSOLE {
-		cfg->log_type = RSPAMD_LOG_CONSOLE;
+		yacc_cfg->log_type = RSPAMD_LOG_CONSOLE;
 	}
 	| LOG_TYPE EQSIGN LOG_TYPE_SYSLOG {
-		cfg->log_type = RSPAMD_LOG_SYSLOG;
+		yacc_cfg->log_type = RSPAMD_LOG_SYSLOG;
 	}
 	| LOG_TYPE EQSIGN LOG_TYPE_FILE {
-		cfg->log_type = RSPAMD_LOG_FILE;
+		yacc_cfg->log_type = RSPAMD_LOG_FILE;
 	}
 	;
 
 logginglevel:
 	LOG_LEVEL EQSIGN LOG_LEVEL_DEBUG {
-		cfg->log_level = G_LOG_LEVEL_DEBUG;
+		yacc_cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	| LOG_LEVEL EQSIGN LOG_LEVEL_INFO {
-		cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
+		yacc_cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
 	}
 	| LOG_LEVEL EQSIGN LOG_LEVEL_WARNING {
-		cfg->log_level = G_LOG_LEVEL_WARNING;
+		yacc_cfg->log_level = G_LOG_LEVEL_WARNING;
 	}
 	| LOG_LEVEL EQSIGN LOG_LEVEL_ERROR {
-		cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
+		yacc_cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
 	}
 	;
 
 loggingfacility:
 	LOG_FACILITY EQSIGN QUOTEDSTRING {
 		if (strncasecmp ($3, "LOG_AUTH", sizeof ("LOG_AUTH") - 1) == 0) {
-			cfg->log_facility = LOG_AUTH;
+			yacc_cfg->log_facility = LOG_AUTH;
 		}
 		else if (strncasecmp ($3, "LOG_CRON", sizeof ("LOG_CRON") - 1) == 0) {
-			cfg->log_facility = LOG_CRON;
+			yacc_cfg->log_facility = LOG_CRON;
 		}
 		else if (strncasecmp ($3, "LOG_DAEMON", sizeof ("LOG_DAEMON") - 1) == 0) {
-			cfg->log_facility = LOG_DAEMON;
+			yacc_cfg->log_facility = LOG_DAEMON;
 		}
 		else if (strncasecmp ($3, "LOG_MAIL", sizeof ("LOG_MAIL") - 1) == 0) {
-			cfg->log_facility = LOG_MAIL;
+			yacc_cfg->log_facility = LOG_MAIL;
 		}
 		else if (strncasecmp ($3, "LOG_USER", sizeof ("LOG_USER") - 1) == 0) {
-			cfg->log_facility = LOG_USER;
+			yacc_cfg->log_facility = LOG_USER;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL0", sizeof ("LOG_LOCAL0") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL0;
+			yacc_cfg->log_facility = LOG_LOCAL0;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL1", sizeof ("LOG_LOCAL1") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL1;
+			yacc_cfg->log_facility = LOG_LOCAL1;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL2", sizeof ("LOG_LOCAL2") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL2;
+			yacc_cfg->log_facility = LOG_LOCAL2;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL3", sizeof ("LOG_LOCAL3") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL3;
+			yacc_cfg->log_facility = LOG_LOCAL3;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL4", sizeof ("LOG_LOCAL4") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL4;
+			yacc_cfg->log_facility = LOG_LOCAL4;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL5", sizeof ("LOG_LOCAL5") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL5;
+			yacc_cfg->log_facility = LOG_LOCAL5;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL6", sizeof ("LOG_LOCAL6") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL6;
+			yacc_cfg->log_facility = LOG_LOCAL6;
 		}
 		else if (strncasecmp ($3, "LOG_LOCAL7", sizeof ("LOG_LOCAL7") - 1) == 0) {
-			cfg->log_facility = LOG_LOCAL7;
+			yacc_cfg->log_facility = LOG_LOCAL7;
 		}
 		else {
 			yyerror ("yyparse: invalid logging facility: %s", $3);
@@ -643,7 +643,7 @@ loggingfacility:
 
 loggingfile:
 	LOG_FILENAME EQSIGN QUOTEDSTRING {
-		cfg->log_file = memory_pool_strdup (cfg->cfg_pool, $3);
+		yacc_cfg->log_file = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 
 		free ($3);
 	}
@@ -652,7 +652,7 @@ loggingfile:
 loggingurls:
 	LOG_URLS EQSIGN FLAG {
 		if ($3 != 0) {
-			cfg->log_urls = TRUE;
+			yacc_cfg->log_urls = TRUE;
 		}
 	}
 	;
@@ -660,14 +660,14 @@ loggingurls:
 loggingbuffer:
 	LOG_BUFFER EQSIGN NUMBER
 	| LOG_BUFFER EQSIGN SIZELIMIT {
-		cfg->log_buf_size = $3;
-		cfg->log_buffered = TRUE;
+		yacc_cfg->log_buf_size = $3;
+		yacc_cfg->log_buffered = TRUE;
 	}
 	;
 
 loggingdebugip:
 	DEBUG_IP EQSIGN QUOTEDSTRING {
-		cfg->debug_ip_map = $3;
+		yacc_cfg->debug_ip_map = $3;
 	}
 	;
 
@@ -684,7 +684,7 @@ classifier:
 			cur_classifier->tokenizer = get_tokenizer ("osb-text");
 		}
 
-        cfg->classifiers = g_list_prepend (cfg->classifiers, cur_classifier);
+        yacc_cfg->classifiers = g_list_prepend (yacc_cfg->classifiers, cur_classifier);
         cur_classifier = NULL;
     }
     ;
@@ -704,7 +704,7 @@ classifiercmd:
 
 classifiertype:
     TYPE EQSIGN QUOTEDSTRING {
-        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier = check_classifier_cfg (yacc_cfg, cur_classifier);
         if ((cur_classifier->classifier = get_classifier ($3)) == NULL) {
             yyerror ("yyparse: unknown classifier type: %s", $3);
             YYERROR;
@@ -713,7 +713,7 @@ classifiertype:
     ;
 classifiertokenizer:
 	TOKENIZER EQSIGN QUOTEDSTRING {
-        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier = check_classifier_cfg (yacc_cfg, cur_classifier);
 		if ((cur_classifier->tokenizer = get_tokenizer ($3)) == NULL) {
 			yyerror ("yyparse: unknown tokenizer %s", $3);
 			YYERROR;
@@ -723,18 +723,18 @@ classifiertokenizer:
 
 classifiermetric:
     METRIC EQSIGN QUOTEDSTRING {
-        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier = check_classifier_cfg (yacc_cfg, cur_classifier);
         cur_classifier->metric = $3;
-        memory_pool_add_destructor (cfg->cfg_pool, g_free, cur_classifier->metric);
+        memory_pool_add_destructor (yacc_cfg->cfg_pool, g_free, cur_classifier->metric);
     }
     ;
 
 classifieroption:
     PARAM EQSIGN QUOTEDSTRING {
-        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier = check_classifier_cfg (yacc_cfg, cur_classifier);
         g_hash_table_insert (cur_classifier->opts, $1, $3);
-        memory_pool_add_destructor (cfg->cfg_pool, g_free, $1);
-        memory_pool_add_destructor (cfg->cfg_pool, g_free, $3);
+        memory_pool_add_destructor (yacc_cfg->cfg_pool, g_free, $1);
+        memory_pool_add_destructor (yacc_cfg->cfg_pool, g_free, $3);
     };
 
 statfile:
@@ -743,9 +743,9 @@ statfile:
 			yyerror ("yyparse: not enough arguments in statfile definition");
 			YYERROR;
 		}
-        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier = check_classifier_cfg (yacc_cfg, cur_classifier);
 		cur_classifier->statfiles = g_list_prepend (cur_classifier->statfiles, cur_statfile);
-        cfg->statfiles = g_list_prepend (cfg->statfiles, cur_statfile);
+        yacc_cfg->statfiles = g_list_prepend (yacc_cfg->statfiles, cur_statfile);
 		cur_statfile = NULL;
 	}
 	;
@@ -769,21 +769,21 @@ statfilecmd:
 	
 statfilesymbol:
 	SYMBOL EQSIGN QUOTEDSTRING {
-        cur_classifier = check_classifier_cfg (cfg, cur_classifier);
+        cur_classifier = check_classifier_cfg (yacc_cfg, cur_classifier);
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
-		cur_statfile->symbol = memory_pool_strdup (cfg->cfg_pool, $3);
-        g_hash_table_insert (cfg->classifiers_symbols, $3, cur_classifier);
+		cur_statfile->symbol = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
+        g_hash_table_insert (yacc_cfg->classifiers_symbols, $3, cur_classifier);
 	}
 	;
 
 statfilepath:
 	PATH EQSIGN QUOTEDSTRING {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
-		cur_statfile->path = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_statfile->path = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 	}
 	;
 
@@ -791,13 +791,13 @@ statfilepath:
 statfilesize:
 	SIZE EQSIGN NUMBER {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		cur_statfile->size = $3;
 	}
 	| SIZE EQSIGN SIZELIMIT {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		cur_statfile->size = $3;
 	}
@@ -808,7 +808,7 @@ statfilesize:
 statfilesection:
 	SECTION OBRACE sectionbody EBRACE {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		if (cur_section == NULL || cur_section->code == 0) {
 			yyerror ("yyparse: error in section definition");
@@ -833,7 +833,7 @@ sectioncmd:
 sectionname:
 	NAME EQSIGN QUOTEDSTRING {
 		if (cur_section == NULL) {
-			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+			cur_section = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_section));
 		}
 		cur_section->code = statfile_get_section_by_name ($3);
 	}
@@ -842,13 +842,13 @@ sectionname:
 sectionsize:
 	SIZE EQSIGN NUMBER {
 		if (cur_section == NULL) {
-			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+			cur_section = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_section));
 		}
 		cur_section->size = $3;
 	}
 	| SIZE EQSIGN SIZELIMIT {
 		if (cur_section == NULL) {
-			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+			cur_section = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_section));
 		}
 		cur_section->size = $3;
 	}
@@ -857,13 +857,13 @@ sectionsize:
 sectionweight:
 	WEIGHT EQSIGN NUMBER {
 		if (cur_section == NULL) {
-			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+			cur_section = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_section));
 		}
 		cur_section->weight = $3;
 	}
 	| WEIGHT EQSIGN FRACT {
 		if (cur_section == NULL) {
-			cur_section = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_section));
+			cur_section = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_section));
 		}
 		cur_section->weight = $3;
 	}
@@ -872,7 +872,7 @@ sectionweight:
 statfileautolearn:
 	AUTOLEARN OBRACE autolearnbody EBRACE {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		if (cur_autolearn == NULL) {
 			yyerror ("yyparse: error in autolearn definition");
@@ -898,22 +898,22 @@ autolearncmd:
 autolearnmetric:
 	METRIC EQSIGN QUOTEDSTRING {
 		if (cur_autolearn == NULL) {
-			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+			cur_autolearn = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
 		}
-		cur_autolearn->metric = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_autolearn->metric = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
 	}
 	;
 
 autolearnmin:
 	MIN_MARK EQSIGN NUMBER {
 		if (cur_autolearn == NULL) {
-			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+			cur_autolearn = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
 		}
 		cur_autolearn->threshold_min = $3;
 	}
 	| MIN_MARK EQSIGN FRACT {
 		if (cur_autolearn == NULL) {
-			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+			cur_autolearn = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
 		}
 		cur_autolearn->threshold_min = $3;
 	}
@@ -922,13 +922,13 @@ autolearnmin:
 autolearnmax:
 	MAX_MARK EQSIGN NUMBER {
 		if (cur_autolearn == NULL) {
-			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+			cur_autolearn = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
 		}
 		cur_autolearn->threshold_max = $3;
 	}
 	| MAX_MARK EQSIGN FRACT {
 		if (cur_autolearn == NULL) {
-			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+			cur_autolearn = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
 		}
 		cur_autolearn->threshold_max = $3;
 	}
@@ -937,19 +937,19 @@ autolearnmax:
 autolearnsymbols:
 	SYMBOLS EQSIGN QUOTEDSTRING {
 		if (cur_autolearn == NULL) {
-			cur_autolearn = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
+			cur_autolearn = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_autolearn_params));
 		}
-		cur_autolearn->symbols = parse_comma_list (cfg->cfg_pool, $3);
+		cur_autolearn->symbols = parse_comma_list (yacc_cfg->cfg_pool, $3);
 	}
 	;
 
 statfilebinlog:
 	BINLOG EQSIGN QUOTEDSTRING {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		if (cur_statfile->binlog == NULL) {
-			cur_statfile->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+			cur_statfile->binlog = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 		}
 		if (g_ascii_strcasecmp ($3, "master") == 0) {
 			cur_statfile->binlog->affinity = AFFINITY_MASTER;
@@ -966,10 +966,10 @@ statfilebinlog:
 statfilebinlogrotate:
 	BINLOG_ROTATE EQSIGN QUOTEDSTRING {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		if (cur_statfile->binlog == NULL) {
-			cur_statfile->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+			cur_statfile->binlog = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 		}
 		cur_statfile->binlog->rotate_time = parse_seconds ($3);
 	}
@@ -978,10 +978,10 @@ statfilebinlogrotate:
 statfilebinlogmaster:
 	BINLOG_MASTER EQSIGN QUOTEDSTRING {
 		if (cur_statfile == NULL) {
-			cur_statfile = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+			cur_statfile = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile));
 		}
 		if (cur_statfile->binlog == NULL) {
-			cur_statfile->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+			cur_statfile->binlog = memory_pool_alloc0 (yacc_cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 		}
 		if (!parse_host_port ($3, &cur_statfile->binlog->master_addr, &cur_statfile->binlog->master_port)) {
 			YYERROR;
@@ -991,21 +991,21 @@ statfilebinlogmaster:
 
 statfilenormalizer:
     NORMALIZER EQSIGN QUOTEDSTRING {
-        if (!parse_normalizer (cfg, cur_statfile, $3)) {
+        if (!parse_normalizer (yacc_cfg, cur_statfile, $3)) {
             yyerror ("cannot parse normalizer string: %s", $3);
             YYERROR;
         }
-		cur_statfile->normalizer_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		cur_statfile->normalizer_str = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
     }
     ;
 
 
 statfile_pool_size:
 	STATFILE_POOL_SIZE EQSIGN SIZELIMIT {
-		cfg->max_statfile_size = $3;
+		yacc_cfg->max_statfile_size = $3;
 	}
 	| STATFILE_POOL_SIZE EQSIGN NUMBER {
-		cfg->max_statfile_size = $3;
+		yacc_cfg->max_statfile_size = $3;
 	}
 	;
 
@@ -1016,14 +1016,14 @@ luacode:
 
 raw_mode:
 	RAW_MODE EQSIGN FLAG {
-		cfg->raw_mode = $3;
+		yacc_cfg->raw_mode = $3;
 	}
 	;
 
 profile_file:
 	PROFILE_FILE EQSIGN QUOTEDSTRING {
 #ifdef WITH_GPREF_TOOLS
-		cfg->profile_path = $3;
+		yacc_cfg->profile_path = $3;
 #else
 		yywarn ("yyparse: profile_file directive is ignored as gperf support is not enabled");
 #endif
@@ -1036,7 +1036,7 @@ view:
 			yyerror ("yyparse: not enough arguments in view definition");
 			YYERROR;
 		}
-		cfg->views = g_list_prepend (cfg->views, cur_view);
+		yacc_cfg->views = g_list_prepend (yacc_cfg->views, cur_view);
 		cur_view = NULL;
 	}
 	;
@@ -1057,7 +1057,7 @@ viewcmd:
 viewip:
 	IP EQSIGN QUOTEDSTRING {
 		if (cur_view == NULL) {
-			cur_view = init_view (cfg->cfg_pool);
+			cur_view = init_view (yacc_cfg->cfg_pool);
 		}
 		if (!add_view_ip (cur_view, $3)) {
 			yyerror ("yyparse: invalid ip line in view definition: ip = '%s'", $3);
@@ -1069,7 +1069,7 @@ viewip:
 viewclientip:
 	CLIENT_IP EQSIGN QUOTEDSTRING {
 		if (cur_view == NULL) {
-			cur_view = init_view (cfg->cfg_pool);
+			cur_view = init_view (yacc_cfg->cfg_pool);
 		}
 		if (!add_view_client_ip (cur_view, $3)) {
 			yyerror ("yyparse: invalid ip line in view definition: ip = '%s'", $3);
@@ -1081,7 +1081,7 @@ viewclientip:
 viewfrom:
 	FROM EQSIGN QUOTEDSTRING {
 		if (cur_view == NULL) {
-			cur_view = init_view (cfg->cfg_pool);
+			cur_view = init_view (yacc_cfg->cfg_pool);
 		}
 		if (!add_view_from (cur_view, $3)) {
 			yyerror ("yyparse: invalid from line in view definition: from = '%s'", $3);
@@ -1092,7 +1092,7 @@ viewfrom:
 viewsymbols:
 	SYMBOLS EQSIGN QUOTEDSTRING {
 		if (cur_view == NULL) {
-			cur_view = init_view (cfg->cfg_pool);
+			cur_view = init_view (yacc_cfg->cfg_pool);
 		}
 		if (!add_view_symbols (cur_view, $3)) {
 			yyerror ("yyparse: invalid symbols line in view definition: symbols = '%s'", $3);
@@ -1103,7 +1103,7 @@ viewsymbols:
 viewskipcheck:
 	SKIP_CHECK EQSIGN FLAG {
 		if (cur_view == NULL) {
-			cur_view = init_view (cfg->cfg_pool);
+			cur_view = init_view (yacc_cfg->cfg_pool);
 		}
 		cur_view->skip_check = $3;
 	}
@@ -1125,20 +1125,20 @@ settingscmd:
 
 usersettings:
     USER_SETTINGS EQSIGN QUOTEDSTRING {
-        if (!read_settings ($3, cfg, cfg->user_settings)) {
+        if (!read_settings ($3, yacc_cfg, yacc_cfg->user_settings)) {
             yyerror ("yyparse: cannot read settings %s", $3);
             YYERROR;
         }
-		cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		yacc_cfg->user_settings_str = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
     }
     ;
 domainsettings:
     DOMAIN_SETTINGS EQSIGN QUOTEDSTRING {
-        if (!read_settings ($3, cfg, cfg->domain_settings)) {
+        if (!read_settings ($3, yacc_cfg, yacc_cfg->domain_settings)) {
             yyerror ("yyparse: cannot read settings %s", $3);
             YYERROR;
         }
-		cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, $3);
+		yacc_cfg->domain_settings_str = memory_pool_strdup (yacc_cfg->cfg_pool, $3);
     }
     ;
 %%
