@@ -255,11 +255,22 @@ fuzzy_check_module_config (struct config_file *cfg)
 
 	/* Search in factors hash table */
 	w = g_hash_table_lookup (cfg->factors, fuzzy_module_ctx->symbol);
+
 	if (w == NULL) {
-		register_symbol (&metric->cache, fuzzy_module_ctx->symbol, 1, fuzzy_symbol_callback, NULL);
+		if (fabs (fuzzy_module_ctx->max_score) < 0.001) {
+			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, 1, fuzzy_symbol_callback, NULL);
+		}
+		else {
+			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);
+		}
 	}
 	else {
-		register_symbol (&metric->cache, fuzzy_module_ctx->symbol, *w, fuzzy_symbol_callback, NULL);
+		if (fabs (fuzzy_module_ctx->max_score) < 0.001) {
+			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, *w, fuzzy_symbol_callback, NULL);
+		}
+		else {
+			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, *w * fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);
+		}
 	}
 
 	register_custom_controller_command ("fuzzy_add", fuzzy_add_handler, TRUE, TRUE);

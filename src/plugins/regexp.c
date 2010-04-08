@@ -202,7 +202,16 @@ regexp_module_config (struct config_file *cfg)
 				res = FALSE;
 			}
 		}
-
+		else {
+			msg_err ("unknown variable type for %s", cur->param);
+			res = FALSE;
+		}
+		
+		if ( !res) {
+			/* Stop on errors */
+			break;
+		}
+		
 		/* Search in factors hash table */
 		w = g_hash_table_lookup (cfg->factors, cur->param);
 		if (w == NULL) {
