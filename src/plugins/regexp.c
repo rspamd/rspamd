@@ -37,6 +37,7 @@
 #include "../util.h"
 #include "../expressions.h"
 #include "../view.h"
+#include "../lua/lua_common.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 
@@ -44,6 +45,7 @@ struct regexp_module_item {
 	struct expression              *expr;
 	char                           *symbol;
 	long int                        avg_time;
+	gpointer                        lua_function;
 };
 
 struct autolearn_data {
@@ -187,8 +189,18 @@ regexp_module_config (struct config_file *cfg)
 		}
 		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 		cur_item->symbol = cur->param;
-		if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
-			res = FALSE;
+		if (cur->is_lua && cur->lua_type == LUA_VAR_STRING) {
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->actual_data, cfg)) {
+				res = FALSE;
+			}
+		}
+		else if (cur->is_lua && cur->lua_type == LUA_VAR_FUNCTION) {
+			cur_item->lua_function = cur->actual_data;
+		}
+		else if (! cur->is_lua) {
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
+				res = FALSE;
+			}
 		}
 
 		/* Search in factors hash table */
@@ -618,9 +630,19 @@ static void
 process_regexp_item (struct worker_task *task, void *user_data)
 {
 	struct regexp_module_item      *item = user_data;
-
-	if (process_regexp_expression (item->expr, item->symbol, task, NULL)) {
-		insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+	gboolean                        res = FALSE;
+	
+	if (item->lua_function) {
+		/* Just call function */
+		if (lua_call_expression_func (item->lua_function, task, NULL, &res) && res) {
+			insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+		}
+	}
+	else {
+		/* Process expression */
+		if (process_regexp_expression (item->expr, item->symbol, task, NULL)) {
+			insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+		}
 	}
 }
 
