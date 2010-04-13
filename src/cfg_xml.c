@@ -730,13 +730,13 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 gboolean 
 handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	gchar                        *val;
+	gchar                        *val, *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State                    *L = cfg->lua_state;
 
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
 
-	if (lua_isnil (L, 1)) {
+	if (lua_isnil (L, -1)) {
 		/* Assign global table to set up attributes */
 		lua_newtable (L);
 		lua_setglobal (L, "config");
@@ -744,9 +744,40 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 	}
 	/* First check "src" attribute */
 	if ((val = g_hash_table_lookup (attrs, "src")) != NULL) {
-		if (luaL_dofile (L, val) != 0) {
-			msg_err ("cannot load lua file %s: %s", val, lua_tostring (L, -1));
-			return FALSE;
+		/* Chdir */
+		tmp1 = g_strdup (val);
+		tmp2 = g_strdup (val);
+		lua_dir = dirname (tmp1);
+		lua_file = basename (tmp2);
+		if (lua_dir && lua_file) {
+			cur_dir = g_malloc (PATH_MAX);
+			getcwd (cur_dir, PATH_MAX);
+			if (chdir (lua_dir) != -1) {
+				if (luaL_dofile (L, lua_file) != 0) {
+					msg_err ("cannot load lua file %s: %s", val, lua_tostring (L, -1));
+					chdir (cur_dir);
+					g_free (cur_dir);
+					g_free (tmp1);
+					g_free (tmp2);
+					return FALSE;
+				}
+			}
+			else {
+				msg_err ("cannot chdir to %s: %s", lua_dir, strerror (errno));;
+				chdir (cur_dir);
+				g_free (cur_dir);
+				g_free (tmp1);
+				g_free (tmp2);
+				return FALSE;
+			
+			}
+			chdir (cur_dir);
+			g_free (cur_dir);
+			g_free (tmp1);
+			g_free (tmp2);
+		}
+		else {
+			msg_err ("directory for file %s does not exists", val);
 		}
 	}
 	else if (data != NULL && *data != '\0') {

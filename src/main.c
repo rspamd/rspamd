@@ -264,7 +264,7 @@ reread_config (struct rspamd_main *rspamd)
 		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
-		tmp_cfg->lua_state = rspamd->cfg->lua_state;
+		init_lua (tmp_cfg);
 
 		if (! load_rspamd_config (tmp_cfg)) {
 			msg_err ("cannot parse new config file, revert to old one");
