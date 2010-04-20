@@ -465,6 +465,37 @@ fork_delayed (struct rspamd_main *rspamd)
 	}
 }
 
+static inline uintptr_t
+make_listen_key (struct in_addr *addr, int port, int family, char *path)
+{
+	uintptr_t                       res = 0;
+	char                           *key;
+
+	if (family == AF_INET) {
+		/* Make fnv hash from bytes of addr and port */
+		key = (char *)&addr->s_addr;
+		while (key - (char *)&addr->s_addr < sizeof (addr->s_addr)) {
+			res ^= (char)*key++;
+			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
+		}
+		key = (char *)&port;
+		while (key - (char *)&port < sizeof (addr->s_addr)) {
+			res ^= (char)*key++;
+			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
+		}
+	}
+	else {
+		/* Make fnv hash from bytes of path */
+		key = path;
+		while (*key) {
+			res ^= (char)*key++;
+			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
+		}
+	}
+
+	return res;
+}
+
 static void
 spawn_workers (struct rspamd_main *rspamd)
 {
@@ -479,13 +510,16 @@ spawn_workers (struct rspamd_main *rspamd)
 		cf = cur->data;
 
 		if (cf->has_socket) {
-			if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (cf->type))) == NULL) {
+			if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
+								make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)))) == NULL) {
 				/* Create listen socket */
 				listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
 				if (listen_sock == -1) {
 					exit (-errno);
 				}
-				g_hash_table_insert (listen_sockets, GINT_TO_POINTER (cf->type), GINT_TO_POINTER (listen_sock));
+				g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
+								make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)), 
+								GINT_TO_POINTER (listen_sock));
 			}
 			else {
 				/* We had socket for this type of worker */

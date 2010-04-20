@@ -57,6 +57,7 @@ lua_check_element (memory_pool_t *pool, const gchar *name, GList **options, stru
 		/* New option */
 		*opt = memory_pool_alloc0 (pool, sizeof (struct module_opt));
 		(*opt)->is_lua = TRUE;
+		(*opt)->param = memory_pool_strdup (pool, name);
 		*options = g_list_prepend (*options, *opt);
 	}
 }
@@ -76,7 +77,6 @@ lua_process_module (lua_State *L, const gchar *param, struct config_file *cfg)
 	}
 
 	/* Now iterate throught module table */
-	lua_gettable (L, -1);
 	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 		/* key - -2, value - -1 */
 		name = luaL_checkstring (L, -2);

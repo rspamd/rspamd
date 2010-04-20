@@ -184,7 +184,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		if (data.count != 0) {
 			res = data.sum / data.count;
             if (st->normalizer != NULL) {
-                res = st->normalizer (res, st->normalizer_data);
+                res = st->normalizer (task->cfg, res, st->normalizer_data);
             }
 		}
 		else {

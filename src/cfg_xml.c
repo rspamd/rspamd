@@ -705,18 +705,7 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 		}
 	}
 	cur_opt = ctx->section_pointer;
-	/* First try to find option with this name */
-	while (cur_opt) {
-		cur = cur_opt->data;
-		if (strcmp (cur->param, name) == 0) {
-			/* cur->value is in pool */
-			cur->value = data;
-			cur->is_lua = is_lua;
-			return TRUE;
-		}
-		cur_opt = g_list_next (cur_opt);
-	}
-	/* Not found, insert */
+	/* Insert option */
 	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
 	cur->param = name;
 	cur->value = data;

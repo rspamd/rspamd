@@ -776,7 +776,7 @@ controller_read_socket (f_str_t * in, void *arg)
 
 		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
 		if (st->normalizer != NULL) {
-			sum = st->normalizer (sum, st->normalizer_data);
+			sum = st->normalizer (session->cfg, sum, st->normalizer_data);
 		}
 		
 		free_task (task, FALSE);

@@ -44,7 +44,7 @@ void add_luabuf (const char *line);
 GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task);
 double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in);
 
-double lua_normalizer_func (double score, void *params);
+double lua_normalizer_func (struct config_file *cfg, double score, void *params);
 
 /* Config file functions */
 void lua_post_load_config (struct config_file *cfg);

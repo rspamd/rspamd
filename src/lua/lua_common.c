@@ -28,7 +28,6 @@
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
 
-lua_State                      *L = NULL;
 const luaL_reg                  null_reg[] = {
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -184,24 +183,25 @@ luaopen_logger (lua_State * L)
 void
 init_lua (struct config_file *cfg)
 {
-	if (L == NULL) {
-		L = lua_open ();
-		luaL_openlibs (L);
+	lua_State                      *L;
 
-		(void)luaopen_rspamd (L);
-		(void)luaopen_logger (L);
-		(void)luaopen_config (L);
-		(void)luaopen_metric (L);
-		(void)luaopen_radix (L);
-		(void)luaopen_hash_table (L);
-		(void)luaopen_task (L);
-		(void)luaopen_textpart (L);
-		(void)luaopen_message (L);
-		(void)luaopen_classifier (L);
-		(void)luaopen_statfile (L);
-		cfg->lua_state = L;
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
-	}
+	L = lua_open ();
+	luaL_openlibs (L);
+
+	(void)luaopen_rspamd (L);
+	(void)luaopen_logger (L);
+	(void)luaopen_config (L);
+	(void)luaopen_metric (L);
+	(void)luaopen_radix (L);
+	(void)luaopen_hash_table (L);
+	(void)luaopen_task (L);
+	(void)luaopen_textpart (L);
+	(void)luaopen_message (L);
+	(void)luaopen_classifier (L);
+	(void)luaopen_statfile (L);
+	cfg->lua_state = L;
+	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
+
 }
 
 
@@ -213,6 +213,7 @@ init_lua_filters (struct config_file *cfg)
 	GList                          *cur, *tmp;
 	struct script_module           *module;
     struct statfile                *st;
+	lua_State                      *L = cfg->lua_state;
 
 	cur = g_list_first (cfg->script_modules);
 	while (cur) {
@@ -413,23 +414,12 @@ lua_consolidation_func (struct worker_task *task, const char *metric_name, const
 	return data.score;
 }
 
-void
-add_luabuf (const char *line)
-{
-	int                             error;
-
-	error = luaL_loadbuffer (L, line, strlen (line), "config") || lua_pcall (L, 0, 0, 0);
-	if (error) {
-		yyerror ("lua error: %s", lua_tostring (L, -1));
-		lua_pop (L, 1);			/* pop error message from the stack */
-	}
-}
-
 double 
-lua_normalizer_func (double score, void *params)
+lua_normalizer_func (struct config_file *cfg, double score, void *params)
 {
     GList                          *p = params;
     double                          res = score;
+	lua_State                      *L = cfg->lua_state;
 
     /* Call specified function and put input score on stack */
     if (!p->data) {

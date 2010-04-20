@@ -719,7 +719,7 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 }
 
 static double
-internal_normalizer_func (double score, void *data)
+internal_normalizer_func (struct config_file *cfg, double score, void *data)
 {
     double max = *(double *)data;
 
