@@ -49,10 +49,13 @@ sub new {
 	$class = ref($class) || $class;
 
 	my $self = {
-		workers	=> {},
+		workers	=> [],
 		modules	=> {},
 		classifiers	=> {},
 		factors => {},
+		options => {},
+		variables => {},
+		logging	=> {},
 		parser_state => {
 			state => PARSER_STATE_START,
 			valid => 1,
@@ -130,21 +133,28 @@ sub _handle_start_element {
 			}
 			elsif ($lce eq 'worker') {
 				$self->{parser_state}->{state} = PARSER_STATE_WORKER;
+				$self->{parser_state}->{worker} = { options => {} };
 			}
 			elsif ($lce eq 'metric') {
 				$self->parser_state->state = PARSER_STATE_METRIC;
-				$self->_get_attr(@attrs, 'name', 'name', 1);
+				$self->_get_attr('name', 'name', 1, @attrs);
+				$self->{parser_state}->{metric} = {};
 			}
 			elsif ($lce eq 'module') {
-				$self->parser_state->state = PARSER_STATE_MODULE;
-				$self->_get_attr(@attrs, 'name', 'name', 1);
+				$self->{parser_state}->{state} = PARSER_STATE_MODULE;
+				$self->_get_attr('name', 'name', 1, @attrs);
+				$self->{parser_state}->{module} = {};
 			}
 			elsif ($lce eq 'classifier') {
-				$self->parser_state->state = PARSER_STATE_METRIC;
-				$self->_get_attr(@attrs, 'type', 'type', 1);
+				$self->{parser_state}->{state} = PARSER_STATE_CLASSIFIER;
+				$self->_get_attr('type', 'type', 1, @attrs);
+				$self->{parser_state}->{classifier} = { statfiles => []};
 			}
 			elsif ($lce eq 'factors') {
 				$self->{parser_state}->{state} = PARSER_STATE_FACTORS;
+			}
+			elsif ($lce eq 'variable') {
+				$self->_get_attr('name', 'name', 1, @attrs);
 			}
 			else {
 				# Other element
@@ -154,7 +164,7 @@ sub _handle_start_element {
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_MODULE) {
 			my $lce = lc $element;
 			if ($lce eq 'option') {
-				$self->_get_attr(@attrs, 'name', 'option', 1);
+				$self->_get_attr('name', 'option', 1, @attrs);
 			}
 			else {
 				$self->{parser_state}->{valid} = 0;
@@ -164,13 +174,19 @@ sub _handle_start_element {
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
 			my $lce = lc $element;
 			if ($lce eq 'factor') {
-				$self->_get_attr(@attrs, 'name', 'name', 1);
+				$self->_get_attr('name', 'name', 1, @attrs);
 			}
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_CLASSIFIER) {
 			my $lce = lc $element;
 			if ($lce eq 'statfile') {
 				$self->{parser_state}->{state} = PARSER_STATE_STATFILE;
+			}
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_WORKER) {
+			my $lce = lc $element;
+			if ($lce eq 'param') {
+				$self->_get_attr('name', 'name', 1, @attrs);
 			}
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_END) {
@@ -217,6 +233,13 @@ sub _handle_end_element {
 				$self->{parser_state}->{classifier} = undef;
 			}
 		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_METRIC) {
+			if ($lce eq 'metric') {
+				$self->{metrics}->{ $self->{parser_state}->{name} } = $self->{parser_state}->{metric};
+				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
+				$self->{parser_state}->{metric} = undef;
+			}
+		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_STATFILE) {
 			if ($lce eq 'statfile') {
 				push(@{$self->{parser_state}->{classifier}->{statfiles}}, $self->{parser_state}->{statfile});
@@ -229,6 +252,16 @@ sub _handle_end_element {
 				$self->{modules}->{ $self->{parser_state}->{name} } = $self->{parser_state}->{module};
 				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
 				$self->{parser_state}->{module} = undef;
+			}
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_LOGGING) {
+			if ($lce eq 'logging') {
+				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
+			}
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
+			if ($lce eq 'factors') {
+				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
 			}
 		}
 	}
@@ -244,15 +277,53 @@ Handle data of xml tag
 =cut
 sub _handle_text {
 	my ($self, $parser, $string) = @_;
+	
+	my $data;
+
+	if (defined ($string) && $string =~ /^\s*(\S*(?:\s+\S+)*)\s*$/) {
+		$data = $1;
+	}
+	else {
+		return undef;
+	}
+	if (!$data) {
+		return undef;
+	}
 
 	if ($self->{parser_state}->{valid}) {
 		if ($self->{parser_state}->{state} == PARSER_STATE_MAIN) {
-			if (defined ($string)) {
-				chomp $string;
-				if ($string) {
-					$self->{ $self->{parser_state}->{element} } = $string;
-				}
+			if ($self->{parser_state}->{element} eq 'variable') {
+				$self->{variables}->{ $self->{parser_state}->{name} } = $data;
 			}
+			else {
+				$self->{options}->{ $self->{parser_state}->{element} } = $data;
+			}
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_LOGGING) {
+			$self->{logging}->{ $self->{parser_state}->{element} } = $data;
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_WORKER) {
+			if ($self->{parser_state}->{element} eq 'param') {
+				$self->{parser_state}->{worker}->{options}->{$self->{parser_state}->{name}} = $data;
+			}
+			else {
+				$self->{parser_state}->{worker}->{ $self->{parser_state}->{element} } = $data;
+			}
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_CLASSIFIER) {
+			$self->{parser_state}->{classifier}->{ $self->{parser_state}->{element} } = $data;
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_STATFILE) {
+			$self->{parser_state}->{statfile}->{ $self->{parser_state}->{element} } = $data;
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_MODULE) {
+			$self->{parser_state}->{module}->{ $self->{parser_state}->{option} } = $data;
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
+			$self->{factors}->{ $self->{parser_state}->{name} } = $data;
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_METRIC) {
+			$self->{parser_state}->{metric}->{ $self->{parser_state}->{element} } = $data;
 		}
 	}
 }
@@ -268,21 +339,28 @@ Extract specified attr and put it to parser_state
 sub _get_attr {
 	my ($self, $name, $hash_name, $required, @attrs) = @_;
 	my $found = 0;
+	my $param = 1;
 
 	foreach (@attrs) {
-		if (lc $_ eq $name) {
-			$self->parser_state->{$hash_name} = lc shift;
-			$found = 1;
+		if ($found) {
+			$self->{parser_state}->{$hash_name} = $_;
 			last;
 		}
 		else {
-			# Shift value
-			shift;
+			if ($param) {
+				if (lc $_ eq $name) {
+					$found = 1;
+				}
+				$param = 0;
+			}
+			else {
+				$param = 1;
+			}
 		}
 	}
 
 	if (!$found && $required) {
-		$self->{error} = "Attribute '$name' is required for tag $self->{element}";
-		$self->parser_state->{'valid'} = 0;
+		$self->{error} = "Attribute '$name' is required for tag '$self->{parser_state}->{element}'";
+		$self->{parser_state}->{'valid'} = 0;
 	}
 }
