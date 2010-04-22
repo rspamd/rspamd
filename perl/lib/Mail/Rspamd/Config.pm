@@ -29,6 +29,7 @@ use constant PARSER_STATE_LOGGING => 6;
 use constant PARSER_STATE_FACTORS => 7;
 use constant PARSER_STATE_METRIC => 8;
 use constant PARSER_STATE_VIEW => 9;
+use constant PARSER_STATE_MODULES => 10;
 use constant PARSER_STATE_END => -1;
 
 
@@ -56,6 +57,9 @@ sub new {
 		options => {},
 		variables => {},
 		logging	=> {},
+		lua => [],
+		composites => {},
+		paths => [],
 		parser_state => {
 			state => PARSER_STATE_START,
 			valid => 1,
@@ -98,6 +102,30 @@ sub load {
                                      Char  => sub { $self->_handle_text(@_) } });
 	
 	$parser->parsefile($self->{file});
+}
+
+=head2 save
+
+public save (String $file)
+
+Description:
+Dumps rspamd config to xml file.
+
+=cut
+
+sub save {
+	my ($self, $file) = @_;
+
+	if (defined ($file)) {
+		$self->{'file'} = $file;
+	}
+
+	if (!defined ($self->{'file'})) {
+		carp 'cannot open file specified';
+		return undef;
+	}
+	
+	$self->_dump();
 }
 
 =head2 _handle_start_element
@@ -155,6 +183,15 @@ sub _handle_start_element {
 			}
 			elsif ($lce eq 'variable') {
 				$self->_get_attr('name', 'name', 1, @attrs);
+			}
+			elsif ($lce eq 'lua') {
+				$self->_get_attr('src', 'src', 1, @attrs);
+			}
+			elsif ($lce eq 'composite') {
+				$self->_get_attr('name', 'name', 1, @attrs);
+			}
+			elsif ($lce eq 'modules') {
+				$self->{parser_state}->{state} = PARSER_STATE_MODULES;
 			}
 			else {
 				# Other element
@@ -264,6 +301,11 @@ sub _handle_end_element {
 				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
 			}
 		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
+			if ($lce eq 'modules') {
+				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
+			}
+		}
 	}
 }
 
@@ -295,6 +337,12 @@ sub _handle_text {
 			if ($self->{parser_state}->{element} eq 'variable') {
 				$self->{variables}->{ $self->{parser_state}->{name} } = $data;
 			}
+			elsif ($self->{parser_state}->{element} eq 'composite') {
+				$self->{composites}->{ $self->{parser_state}->{name} } = $data;
+			}
+			elsif ($self->{parser_state}->{element} eq 'lua') {
+				push(@{$self->{lua}}, $self->{parser_state}->{src});
+			}
 			else {
 				$self->{options}->{ $self->{parser_state}->{element} } = $data;
 			}
@@ -321,6 +369,9 @@ sub _handle_text {
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
 			$self->{factors}->{ $self->{parser_state}->{name} } = $data;
+		}
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_MODULES) {
+			push(@{$self->{paths}}, $data);
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_METRIC) {
 			$self->{parser_state}->{metric}->{ $self->{parser_state}->{element} } = $data;
@@ -364,3 +415,136 @@ sub _get_attr {
 		$self->{parser_state}->{'valid'} = 0;
 	}
 }
+
+=head2 _dump
+
+private _dump()
+
+Description:
+Dumps rspamd config to xml file
+
+=cut
+sub _dump {
+	my ($self) = @_;
+
+	open(XML, "> $self->{file}") or carp "cannot open file '$self->file'";
+
+	print XML "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rspamd>\n";
+	
+	print XML "<!-- Main section -->\n";
+	while(my ($k, $v) = each (%{$self->{options}})) {
+		my $ek = $self->_xml_escape($k);
+		print XML "<$ek>" . $self->_xml_escape($v) . "</$ek>\n";
+	}
+	foreach my $lua(@{$self->{lua}}) {
+		print XML "<lua src=\"". $self->_xml_escape($lua) ."\">lua</lua>\n";
+	}
+	print XML "<!-- End of main section -->\n\n";
+
+	print XML "<!-- Variables section -->\n";
+	while(my ($k, $v) = each (%{$self->{variables}})) {
+		my $ek = $self->_xml_escape($k);
+		print XML "<variable name=\"$ek\">" . $self->_xml_escape($v) . "</variable>\n";
+	}
+	print XML "<!-- End of variables section -->\n\n";
+
+	print XML "<!-- Composites section -->\n";
+	while(my ($k, $v) = each (%{$self->{composites}})) {
+		my $ek = $self->_xml_escape($k);
+		print XML "<composite name=\"$ek\">" . $self->_xml_escape($v) . "</composite>\n";
+	}
+	print XML "<!-- End of composites section -->\n\n";
+
+	print XML "<!-- Workers section -->\n";
+	foreach my $worker (@{$self->{workers}}) {
+		print XML "<worker>\n";
+		while (my ($k, $v) = each (%{$worker})) {
+			my $ek = $self->_xml_escape($k);
+			if ($k eq 'options') {
+				while (my ($kk, $vv) = each (%{$v})) {
+					print XML "  <param name=\"". $self->_xml_escape($kk) ."\">" . $self->_xml_escape($vv) . "</param>\n";
+				}
+			}
+			else {
+				print XML "  <$ek>" . $self->_xml_escape($v) . "</$ek>\n";
+			}
+		}
+		print XML "</worker>\n";
+	}
+	print XML "<!-- End of workers section -->\n\n";
+
+	print XML "<!-- Factors section -->\n<factors>\n";
+	while (my ($k, $v) = each (%{$self->{factors}})) {
+		print XML "  <factor name=\"". $self->_xml_escape($k) ."\">" . $self->_xml_escape($v) . "</factor>\n";
+	}
+	print XML "</factors>\n<!-- End of factors section -->\n\n";
+
+	print XML "<!-- Logging section -->\n<logging>\n";
+	while (my ($k, $v) = each (%{$self->{logging}})) {
+		my $ek = $self->_xml_escape($k);
+		print XML "  <$ek>" . $self->_xml_escape($v) . "</$ek>\n";
+	}
+	print XML "</logging>\n<!-- End of logging section -->\n\n";
+
+	print XML "<!-- Classifiers section -->\n";
+	while (my ($type, $classifier) = each(%{$self->{classifiers}})) {
+		print XML "<classifier type=\"". $self->_xml_escape($type) ."\">\n";
+		while (my ($k, $v) = each (%{$classifier})) {
+			my $ek = $self->_xml_escape($k);
+			if ($k eq 'statfiles') {
+				foreach my $statfile (@{$v}) {
+					print XML "  <statfile>\n";
+					while (my ($kk, $vv) = each (%{$statfile})) {
+						my $ekk = $self->_xml_escape($kk);
+						print XML "    <$ekk>" . $self->_xml_escape($vv) . "</$ekk>\n";
+					}
+					print XML "  </statfile>\n";
+				}
+			}
+			else {
+				print XML "  <$ek>" . $self->_xml_escape($v) . "</$ek>\n";
+			}
+		}
+		print XML "</classifier>\n";
+	}
+	print XML "<!-- End of classifiers section -->\n\n";
+
+	print XML "<!-- Modules section -->\n";
+	while (my ($name, $module) = each(%{$self->{modules}})) {
+		print XML "<module name=\"". $self->_xml_escape($name) ."\">\n";
+		while (my ($k, $v) = each (%{$module})) {
+			my $ek = $self->_xml_escape($k);
+			print XML "  <option name=\"$ek\">" . $self->_xml_escape($v) . "</option>\n";
+		}
+		print XML "</module>\n";
+	}
+	print XML "<!-- End of modules section -->\n\n";
+
+	print XML "<!-- Paths section -->\n<modules>\n";
+	foreach my $module(@{$self->{paths}}) {
+		print XML "  <module>" . $self->_xml_escape($module) . "</module>\n";
+	}
+	print XML "</modules>\n<!-- End of paths section -->\n\n";
+
+	print XML "</rspamd>\n";
+}
+
+=head2 _xml_escape
+
+private _xml_escape()
+
+Description:
+Escapes characters in xml string
+
+=cut
+sub _xml_escape {
+  my $data = $_[1];
+  if ($data =~ /[\&\<\>\"]/) {
+    $data =~ s/\&/\&amp\;/g;
+    $data =~ s/\</\&lt\;/g;
+    $data =~ s/\>/\&gt\;/g;
+    $data =~ s/\"/\&quot\;/g;
+  }
+  return $data;
+}
+
