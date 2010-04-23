@@ -47,6 +47,7 @@
 
 #include "../../../config.h"
 #include "../../../cfg_file.h"
+#include "../../../main.h"
 #include "metaphone.h"
 #include "prefix_tree.h"
 
@@ -134,31 +135,38 @@ parse_line (const char *line, size_t len, char **output, void *user_data)
 {
 	const char *p = line;
 	char *name, *metaname = NULL;
-	int levels;
+	int levels = 0;
 	uintptr_t res = 0;
 
-	while (p - line < len) {
-		if (g_ascii_isspace (*p)) {
+	while (p - line <= len) {
+		if (g_ascii_isspace (*p) || p - line == len) {
 			name = g_malloc (p - line + 1);
-			g_strlcpy (name, line, p - line);
-			metaphone (name, 0, &metaname);
-			/* Skip spaces */
-			while (p - line < len && g_ascii_isspace (*p++));
-			levels = strtol (p, NULL, 10);
-			if (levels <= 0) {
-				levels = strlen (name);
-			}
-			if (metaname) {
-				res = add_string (tree, metaname, levels);
-				*output = g_strdup_printf ("OK: %u", (unsigned int)res);
+			g_strlcpy (name, line, p - line + 1);
+			if (metaphone (name, 0, &metaname)) {
+				/* Skip spaces */
+				while (p - line <= len && g_ascii_isspace (*p)) {
+					p ++;
+				}
+				levels = strtol (p, NULL, 10);
+				if (levels <= 0) {
+					levels = strlen (metaname) / 2;
+				}
+				if (metaname) {
+					res = add_string (tree, metaname, levels);
+					*output = g_strdup_printf ("OK: %u" CRLF, (unsigned int)res);
+					g_free (metaname);
+					g_free (name);
+					return TRUE;
+				}
 				g_free (metaname);
 			}
 			break;
 		}
+		p ++;
 	}
 
 	if (res == 0) {
-		*output = g_strdup ("ERR");
+		*output = g_strdup ("ERR" CRLF);
 	}
 
 	return TRUE;

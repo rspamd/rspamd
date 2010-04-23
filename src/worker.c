@@ -149,7 +149,7 @@ fin_custom_filters (struct worker_task *task)
 {
 	GList                          *cur, *curd;
 	struct custom_filter           *filt;
-	char                           *output, *log;
+	char                           *output = NULL, *log = NULL;
 
 	cur = custom_filters;
 	curd = task->rcpt;
@@ -178,7 +178,7 @@ parse_line_custom (struct worker_task *task, f_str_t *in)
 {
 	GList                          *cur, *curd;
 	struct custom_filter           *filt;
-	char                           *output;
+	char                           *output = NULL;
 	gboolean                        res = TRUE;
 
 	cur = custom_filters;
@@ -350,34 +350,34 @@ write_socket (void *arg)
 	switch (task->state) {
 	case WRITE_REPLY:
 		write_reply (task);
-		destroy_session (task->s);
 		if (is_custom) {
 			fin_custom_filters (task);
 		}
+		destroy_session (task->s);
 		return FALSE;
 		break;
 	case WRITE_ERROR:
 		write_reply (task);
-		destroy_session (task->s);
 		if (is_custom) {
 			fin_custom_filters (task);
 		}
+		destroy_session (task->s);
 		return FALSE;
 		break;
 	case CLOSING_CONNECTION:
 		debug_task ("normally closing connection");
-		destroy_session (task->s);
 		if (is_custom) {
 			fin_custom_filters (task);
 		}
+		destroy_session (task->s);
 		return FALSE;
 		break;
 	default:
 		msg_info ("abnormally closing connection");
-		destroy_session (task->s);
 		if (is_custom) {
 			fin_custom_filters (task);
 		}
+		destroy_session (task->s);
 		return FALSE;
 		break;
 	}
@@ -393,10 +393,10 @@ err_socket (GError * err, void *arg)
 	struct worker_task             *task = (struct worker_task *)arg;
 	msg_info ("abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
-	destroy_session (task->s);
 	if (is_custom) {
 		fin_custom_filters (task);
 	}
+	destroy_session (task->s);
 }
 
 struct worker_task             *
@@ -626,6 +626,7 @@ start_worker (struct rspamd_worker *worker)
 	/* Check if this worker is not usual rspamd worker, but uses custom filters from specified path */
 	is_custom_str = g_hash_table_lookup (worker->cf->params, "custom_filters");
 	if (is_custom_str && g_module_supported () && load_custom_filters (worker, is_custom_str)) {
+		msg_info ("starting custom process, loaded modules from %s", is_custom_str);
 		is_custom = TRUE;
 	}
 	else {

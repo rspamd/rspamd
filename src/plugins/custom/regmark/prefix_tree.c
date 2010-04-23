@@ -69,6 +69,8 @@ add_string_common (prefix_tree_t *tree, const char *input, int skip_levels, gboo
 		if (*input >= 'A' && *input <= 'Z') {
 			num = *input - 'A';
 			if (cur_level < skip_levels) {
+				input ++;
+				cur_level ++;
 				continue;
 			}
 			/* Go throught each level and check specified letter */
@@ -91,7 +93,7 @@ add_string_common (prefix_tree_t *tree, const char *input, int skip_levels, gboo
 				g_strlcpy (tmp, orig, MIN (sizeof (tmp), cur_level + 1));
 				if ((res = (uintptr_t)g_tree_lookup (cur->leafs[num].data, tmp)) != 0) {
 					if (! read_only) {
-						g_tree_insert (cur->leafs[num].data, tmp, GUINT_TO_POINTER (res + 1));
+						g_tree_insert (cur->leafs[num].data, g_strdup (tmp), GUINT_TO_POINTER (res + 1));
 					}
 					return res + 1;
 				}
