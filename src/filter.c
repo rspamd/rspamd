@@ -286,7 +286,9 @@ continue_process_filters (struct worker_task *task)
 				return 0;
 			}
 			else if (check_metric_is_spam (task, metric)) {
-				break;
+				if (!task->pass_all_filters) {
+					break;
+				}
 			}
 		}
 		cur = g_list_next (cur);
@@ -337,7 +339,9 @@ process_filters (struct worker_task *task)
 				return 0;
 			}
 			else if (check_metric_is_spam (task, metric)) {
-				break;
+				if (!task->pass_all_filters) {
+					break;
+				}
 			}
 		}
 		cur = g_list_next (cur);

@@ -213,6 +213,7 @@ struct worker_task {
 	struct timespec ts;											/**< time of connection								*/
 	struct rspamd_view *view;									/**< matching view									*/
 	gboolean view_checked;
+	gboolean pass_all_filters;									/**< pass task throught every rule					*/
 	uint32_t parser_recursion;									/**< for avoiding recursion stack overflow			*/
 };
 

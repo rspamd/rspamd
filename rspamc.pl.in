@@ -44,6 +44,7 @@ Additional options:
 -w         define weight for fuzzy operations
 -S         define search string for IMAP operations
 -i         emulate that message was send from specified IP
+-p         pass message throught all filters
 
 Notes:
 imap format: imap:user:<username>:password:[<password>]:host:<hostname>:mbox:<mboxname>
@@ -191,7 +192,7 @@ my %args;
 
 HELP_MESSAGE() unless scalar @ARGV >= 1;
 
-getopt('c:h:P:s:d:w:S:H:i:', \%args);
+getopt('pc:h:P:s:d:w:S:H:i:', \%args);
 
 my $cmd = shift;
 my @path = shift;
@@ -253,6 +254,9 @@ if (defined ($args{w})) {
 }
 if (defined ($args{i})) {
 	$cfg{'ip'} = $args{i};
+}
+if (exists ($args{p})) {
+	$cfg{'pass_all'} = 1;
 }
 
 if ($cmd =~ /SYMBOLS|SCAN|PROCESS|CHECK|REPORT_IFSPAM|REPORT|URLS|EMAILS|LEARN|FUZZY_ADD|FUZZY_DEL|WEIGHTS/i) {

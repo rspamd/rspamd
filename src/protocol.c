@@ -84,6 +84,7 @@
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 #define USER_HEADER "User"
+#define PASS_HEADER "Pass"
 #define DELIVER_TO_HEADER "Deliver-To"
 
 static GList                   *custom_commands = NULL;
@@ -200,7 +201,7 @@ parse_command (struct worker_task *task, f_str_t * line)
 		break;
 	}
 
-	if (strncasecmp (line->begin, RSPAMC_GREETING, sizeof (RSPAMC_GREETING) - 1) == 0) {
+	if (g_ascii_strncasecmp (line->begin, RSPAMC_GREETING, sizeof (RSPAMC_GREETING) - 1) == 0) {
 		task->proto = RSPAMC_PROTO;
 		task->proto_ver = RSPAMC_PROTO_1_0;
 		if (*(line->begin + sizeof (RSPAMC_GREETING) - 1) == '/') {
@@ -211,7 +212,7 @@ parse_command (struct worker_task *task, f_str_t * line)
 			}
 		}
 	}
-	else if (strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) - 1) == 0) {
+	else if (g_ascii_strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) - 1) == 0) {
 		task->proto = SPAMC_PROTO;
 	}
 	else {
@@ -262,7 +263,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'c':
 	case 'C':
 		/* content-length */
-		if (strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, CONTENT_LENGTH_HEADER, sizeof (CONTENT_LENGTH_HEADER) - 1) == 0) {
 			if (task->content_length == 0) {
 				tmp = memory_pool_fstrdup (task->task_pool, line);
 				task->content_length = strtoul (tmp, &err, 10);
@@ -277,7 +278,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'd':
 	case 'D':
 		/* Deliver-To */
-		if (strncasecmp (headern, DELIVER_TO_HEADER, sizeof (DELIVER_TO_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, DELIVER_TO_HEADER, sizeof (DELIVER_TO_HEADER) - 1) == 0) {
 			task->deliver_to = memory_pool_fstrdup (task->task_pool, line);
 			debug_task ("read deliver-to header, value: %s", task->deliver_to);
 		}
@@ -289,7 +290,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'h':
 	case 'H':
 		/* helo */
-		if (strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
 			task->helo = memory_pool_fstrdup (task->task_pool, line);
 			debug_task ("read helo header, value: %s", task->helo);
 		}
@@ -301,7 +302,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'f':
 	case 'F':
 		/* from */
-		if (strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
 			task->from = memory_pool_fstrdup (task->task_pool, line);
 			debug_task ("read from header, value: %s", task->from);
 		}
@@ -313,7 +314,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'q':
 	case 'Q':
 		/* Queue id */
-		if (strncasecmp (headern, QUEUE_ID_HEADER, sizeof (QUEUE_ID_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, QUEUE_ID_HEADER, sizeof (QUEUE_ID_HEADER) - 1) == 0) {
 			task->queue_id = memory_pool_fstrdup (task->task_pool, line);
 			debug_task ("read queue_id header, value: %s", task->queue_id);
 		}
@@ -325,12 +326,12 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'r':
 	case 'R':
 		/* rcpt */
-		if (strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
 			tmp = memory_pool_fstrdup (task->task_pool, line);
 			task->rcpt = g_list_prepend (task->rcpt, tmp);
 			debug_task ("read rcpt header, value: %s", tmp);
 		}
-		else if (strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
+		else if (g_ascii_strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
 			tmp = memory_pool_fstrdup (task->task_pool, line);
 			task->nrcpt = strtoul (tmp, &err, 10);
 			debug_task ("read rcpt header, value: %d", (int)task->nrcpt);
@@ -343,7 +344,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'i':
 	case 'I':
 		/* ip_addr */
-		if (strncasecmp (headern, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
 			tmp = memory_pool_fstrdup (task->task_pool, line);
 			if (!inet_aton (tmp, &task->from_addr)) {
 				msg_info ("bad ip header: '%s'", tmp);
@@ -356,9 +357,19 @@ parse_header (struct worker_task *task, f_str_t * line)
 			return -1;
 		}
 		break;
+	case 'p':
+	case 'P':
+		/* Pass header */
+		if (g_ascii_strncasecmp (headern, PASS_HEADER, sizeof (PASS_HEADER) - 1) == 0) {
+			if (line->len == sizeof ("all") - 1 && g_ascii_strncasecmp (line->begin, "all", sizeof ("all") - 1) == 0) {
+				task->pass_all_filters = TRUE;
+				msg_info ("pass all filters");
+			} 
+		}
+		break;
 	case 's':
 	case 'S':
-		if (strncasecmp (headern, SUBJECT_HEADER, sizeof (SUBJECT_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, SUBJECT_HEADER, sizeof (SUBJECT_HEADER) - 1) == 0) {
 			task->subject = memory_pool_fstrdup (task->task_pool, line);
 		}
 		else {
@@ -367,7 +378,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		break;
 	case 'u':
 	case 'U':
-		if (strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
+		if (g_ascii_strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
 			/* XXX: use this header somehow */
 			task->user = memory_pool_fstrdup (task->task_pool, line);
 		}

@@ -94,6 +94,9 @@ sub new {
 	else {
 		$self->{weight} = 1;
 	}
+	if ($args->{pass_all}) {
+		$self->{pass_all} = 1;
+	}
 	if ($args->{imap_search}) {
 		$self->{imap_search} = $args->{imap_search};
 	}
@@ -868,6 +871,7 @@ sub _do_rspamc_command {
 	syswrite $remote, "From: $self->{from}$EOL" if ($self->{from});
 	syswrite $remote, "IP: $self->{ip}$EOL" if ($self->{ip});
 	syswrite $remote, "Subject: $self->{subject}$EOL" if ($self->{subject});
+	syswrite $remote, "Pass: all$EOL" if ($self->{pass_all});
 	if (ref $self->{rcpt} eq "ARRAY") {
 		foreach ($self->{rcpt}) {
 			syswrite $remote, "Rcpt: $_ $EOL";
