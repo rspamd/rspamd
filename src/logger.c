@@ -29,12 +29,36 @@
 #include "main.h"
 #include "map.h"
 
+/* How much message should be repeated before it is count to be repeated one */
+#define REPEATS_MIN 3
+#define REPEATS_MAX 300
 
 #ifdef RSPAMD_MAIN
 sig_atomic_t                    do_reopen_log = 0;
 #endif
 
-rspamd_logger_t *rspamd_log;
+typedef struct rspamd_logger_s {
+	rspamd_log_func_t        log_func;
+	struct config_file		*cfg;
+	struct {
+		uint32_t size;
+		uint32_t used;
+		u_char *buf;
+	}                        io_buf;
+	int                      fd;
+	gboolean                 is_buffered;
+	gboolean                 enabled;
+	enum rspamd_log_type     type;
+	pid_t                    pid;
+	enum process_type		 process_type;
+	radix_tree_t            *debug_ip;
+	uint32_t                 last_line_cksum;
+	uint32_t                 repeats;
+	gchar                   *saved_message;
+	gchar                   *saved_function;
+} rspamd_logger_t;
+
+rspamd_logger_t *rspamd_log = NULL;
 
 static const char lf_chr = '\n';
 
@@ -46,6 +70,23 @@ static void
 file_log_function (const gchar * log_domain, const gchar *function, 
 					GLogLevelFlags log_level, const gchar * message, 
 					gboolean forced, gpointer arg);
+
+static inline uint32_t
+rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
+{
+	const gchar                    *bp = message;
+	const gchar                    *be = bp + mlen;
+	uint32_t                        hval = 0;
+
+    while (bp < be) {
+		hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
+		hval ^= (uint32_t)*bp++;
+    }
+
+    /* return our new hash value */
+    return hval;
+	
+}
 
 static void
 direct_write_log_line (void *data, int count, gboolean is_iov)
@@ -115,6 +156,7 @@ open_log (void)
 void
 close_log (void)
 {
+	char            tmpbuf[256];
 	flush_log_buf ();
 
 	switch (rspamd_log->type) {
@@ -126,6 +168,21 @@ close_log (void)
 		break;
 	case RSPAMD_LOG_FILE:
 		if (rspamd_log->enabled) {
+			if (rspamd_log->repeats > REPEATS_MIN) {
+				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %u times", rspamd_log->repeats);
+				rspamd_log->repeats = 0;
+				if (rspamd_log->saved_message) {
+					file_log_function (NULL, rspamd_log->saved_function, rspamd_log->cfg->log_level, rspamd_log->saved_message, TRUE, NULL);
+					g_free (rspamd_log->saved_message);
+					g_free (rspamd_log->saved_function);
+					rspamd_log->saved_message = NULL;
+					rspamd_log->saved_function = NULL;
+				}	
+				/* It is safe to use temporary buffer here as it is not static */
+				file_log_function (NULL, __FUNCTION__, rspamd_log->cfg->log_level, tmpbuf, TRUE, NULL);
+				return;
+			}
+
 			if (fsync (rspamd_log->fd) == -1) {
 				msg_err ("error syncing log file: %s", strerror (errno));
 			}
@@ -138,7 +195,7 @@ close_log (void)
 }
 
 void
-rspamd_set_logger (enum rspamd_log_type type, struct config_file *cfg)
+rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct config_file *cfg)
 {
 	char                          **strvec, *p, *err;
 	int                             num, i, k;
@@ -152,6 +209,7 @@ rspamd_set_logger (enum rspamd_log_type type, struct config_file *cfg)
 
 	rspamd_log->type = type;
 	rspamd_log->pid = getpid ();
+	rspamd_log->process_type = ptype;
 
 	switch (type) {
 		case RSPAMD_LOG_CONSOLE:
@@ -225,9 +283,10 @@ reopen_log (void)
 }
 
 void
-update_log_pid (void)
+update_log_pid (enum process_type ptype)
 {
 	rspamd_log->pid = getpid ();
+	rspamd_log->process_type = ptype;
 }
 
 void
@@ -358,6 +417,9 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 	struct tm                      *tms;
 	struct iovec                    iov[3];
 	int                             r;
+	uint32_t                        cksum;
+	size_t                          mlen;
+	const char                     *cptype = NULL;
 
 	if (! rspamd_log->enabled) {
 		return;
@@ -369,20 +431,85 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 #endif
 
 	if (forced || log_level <= rspamd_log->cfg->log_level) {
+		/* Check repeats */
+		mlen = strlen (message);
+		cksum = rspamd_log_calculate_cksum (message, mlen);
+		if (cksum == rspamd_log->last_line_cksum) {
+			rspamd_log->repeats ++;
+			if (rspamd_log->repeats > REPEATS_MIN && rspamd_log->repeats < REPEATS_MAX) {
+				/* Do not log anything */
+				if (rspamd_log->saved_message == 0) {
+					rspamd_log->saved_message = g_strdup (message);
+					rspamd_log->saved_function = g_strdup (function);
+				}
+				return;
+			}
+			else if (rspamd_log->repeats > REPEATS_MAX) {
+				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %u times", rspamd_log->repeats);
+				rspamd_log->repeats = 0;
+				/* It is safe to use temporary buffer here as it is not static */
+				if (rspamd_log->saved_message) {
+					file_log_function (log_domain, rspamd_log->saved_function, log_level, rspamd_log->saved_message, forced, arg);
+				}	
+				file_log_function (log_domain, __FUNCTION__, log_level, tmpbuf, forced, arg);
+				file_log_function (log_domain, function, log_level, message, forced, arg);
+				rspamd_log->repeats = REPEATS_MIN + 1;
+				return;
+			}
+		}
+		else {
+			rspamd_log->last_line_cksum = cksum;
+			if (rspamd_log->repeats > REPEATS_MIN) {
+				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %u times", rspamd_log->repeats);
+				rspamd_log->repeats = 0;
+				if (rspamd_log->saved_message) {
+					file_log_function (log_domain, rspamd_log->saved_function, log_level, rspamd_log->saved_message, forced, arg);
+					g_free (rspamd_log->saved_message);
+					g_free (rspamd_log->saved_function);
+					rspamd_log->saved_message = NULL;
+					rspamd_log->saved_function = NULL;
+				}	
+				file_log_function (log_domain, __FUNCTION__, log_level, tmpbuf, forced, arg);
+				/* It is safe to use temporary buffer here as it is not static */
+				file_log_function (log_domain, function, log_level, message, forced, arg);
+				return;
+			}
+			else {
+				rspamd_log->repeats = 0;
+			}
+		}
+
 		now = time (NULL);
 		tms = localtime (&now);
 
 		strftime (timebuf, sizeof (timebuf), "%b %d %H:%M:%S", tms);
+		switch (rspamd_log->process_type) {
+			case TYPE_MAIN:
+				cptype = "main";
+				break;
+			case TYPE_WORKER:
+				cptype = "worker";
+				break;
+			case TYPE_CONTROLLER:
+				cptype = "controller";
+				break;
+			case TYPE_LMTP:
+				cptype = "lmtp";
+				break;
+			case TYPE_FUZZY:
+				cptype = "fuzzy";
+				break;
+		}
 		if (function == NULL) {
-			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P: %s rspamd ", rspamd_log->pid, timebuf);
+			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P(%s): %s rspamd ", rspamd_log->pid, cptype, timebuf);
 		}
 		else {
-			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P: %s rspamd %s: ", rspamd_log->pid, timebuf, function);
+			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P(%s): %s rspamd %s: ", rspamd_log->pid, cptype, timebuf, function);
 		}
 		iov[0].iov_base = tmpbuf;
 		iov[0].iov_len = r;
 		iov[1].iov_base = (void *)message;
-		iov[1].iov_len = strlen (message);
+		iov[1].iov_len = mlen;
 		iov[2].iov_base = (void *)&lf_chr;
 		iov[2].iov_len = 1;
 		

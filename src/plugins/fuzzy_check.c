@@ -283,6 +283,8 @@ int
 fuzzy_check_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (fuzzy_module_ctx->fuzzy_pool);
+	fuzzy_module_ctx->servers = NULL;
+	fuzzy_module_ctx->servers_num = 0;
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
 
 	return fuzzy_check_module_config (cfg);

@@ -6,7 +6,7 @@
 #
 
 PORTNAME=		rspamd
-PORTVERSION=	0.2.9
+PORTVERSION=	0.3.0
 CATEGORIES=		mail
 MASTER_SITES=	SF/${PORTNAME}/${PORTNAME}/${PORTNAME}-${PORTVERSION}
 
@@ -27,7 +27,6 @@ USE_PERL5=		yes
 
 OPTIONS=		RSPAMD_GPERF "Enable google perf-tools profiling" off \
 				RSPAMD_JUDY "Enable judy arrays usage for performance" off \
-				RSPAMD_LUA	"Enable lua plugins support in rspamd" on \
 				RSPAMD_OPTFLAGS "Turn on compiler optimizations" off \
 				RSPAMD_REDIRECTOR "Install HTTP redirector" off \
 				RSPAMD_STATIC "Build static version of rspamd" off
@@ -47,13 +46,8 @@ LIB_DEPENDS+=	profiler.0:${PORTSDIR}/devel/google-perftools
 LIB_DEPENDS+=	Judy:${PORTSDIR}/devel/judy
 .endif
 
-.if defined(WITH_RSPAMD_LUA)
 USE_LUA=	5.1-
 PLIST_SUB+=		LUA=""
-.else
-CMAKE_ARGS+=	-DENABLE_LUA=OFF
-PLIST_SUB+=		LUA="@comment"
-.endif
 
 .if defined(WITH_RSPAMD_OPTFLAGS)
 CMAKE_ARGS+=	-DENABLE_OPTIMIZATION=ON

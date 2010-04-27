@@ -41,6 +41,6 @@ extra_commands="reload configtest"
 sig_reload="USR1"
 
 command="$procname"
-command_args="-u ${rspamd_user} -g ${rspamd_group} -c @CMAKE_INSTALL_PREFIX@/etc/rspamd.conf"
+command_args="-u ${rspamd_user} -g ${rspamd_group} -c @CMAKE_INSTALL_PREFIX@/etc/rspamd.xml"
 
 run_rc_command "$1"

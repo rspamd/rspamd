@@ -5,30 +5,17 @@
 #include "cfg_file.h"
 #include "radix.h"
 
+/* Forwarded declaration */
+enum process_type;
+
 typedef void (*rspamd_log_func_t)(const gchar * log_domain, const gchar *function,
 								  GLogLevelFlags log_level, const gchar * message, 
 								  gboolean forced, gpointer arg);
 
-typedef struct rspamd_logger_s {
-	rspamd_log_func_t        log_func;
-	struct config_file		*cfg;
-	struct {
-		uint32_t size;
-		uint32_t used;
-		u_char *buf;
-	}                        io_buf;
-	int                      fd;
-	gboolean                 is_buffered;
-	gboolean                 enabled;
-	enum rspamd_log_type     type;
-	pid_t                    pid;
-	radix_tree_t            *debug_ip;
-} rspamd_logger_t;
-
 /**
  * Init logger
  */
-void rspamd_set_logger (enum rspamd_log_type type, struct config_file *cfg);
+void rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct config_file *cfg);
 /**
  * Open log file or initialize other structures
  */
@@ -44,7 +31,7 @@ int reopen_log (void);
 /**
  * Set log pid
  */
-void update_log_pid (void);
+void update_log_pid (enum process_type ptype);
 
 /**
  * Flush log buffer for some types of logging
