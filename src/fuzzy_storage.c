@@ -77,8 +77,9 @@ static struct rspamd_stat      *server_stat;
 
 struct rspamd_fuzzy_node {
 	int32_t                         value;
-	fuzzy_hash_t                    h;
+	int32_t                         flag;
 	uint64_t                        time;
+	fuzzy_hash_t                    h;
 };
 
 #ifndef HAVE_SA_SIGINFO

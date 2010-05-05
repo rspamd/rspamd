@@ -88,6 +88,7 @@ struct fuzzy_learn_session {
 	fuzzy_hash_t                   *h;
 	int                             cmd;
 	int                             value;
+	int                             flag;
 	int                            *saved;
 	struct timeval                  tv;
 	struct controller_session      *session;
@@ -313,7 +314,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 	struct fuzzy_client_session    *session = arg;
 	struct fuzzy_cmd                cmd;
 	char                            buf[62], *err_str;
-	int                             value;
+	int                             value = 0, flag = 0, r;
 	double                          nval;
 
 	if (what == EV_WRITE) {
@@ -332,15 +333,20 @@ fuzzy_io_callback (int fd, short what, void *arg)
 	}
 	else if (what == EV_READ) {
 		/* Got reply */
-		if (read (fd, buf, sizeof (buf)) == -1) {
+		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
 			goto err;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
+			buf[r] = 0;
 			/* Now try to get value */
 			value = strtol (buf + 3, &err_str, 10);
+			if (*err_str == ' ') {
+				/* Now read flag */
+				flag = strtol (err_str + 1, &err_str, 10);
+			}
 			*err_str = '\0';
 			nval = fuzzy_normalize (value);
-			snprintf (buf, sizeof (buf), "%d / %.2f", value, nval);
+			snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
 			insert_result (session->task, fuzzy_module_ctx->metric, fuzzy_module_ctx->symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
 		}
@@ -388,6 +394,7 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 		memcpy (cmd.hash, session->h->hash_pipe, sizeof (cmd.hash));
 		cmd.cmd = session->cmd;
 		cmd.value = session->value;
+		cmd.flag = session->flag;
 		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
 			goto err;
 		}
@@ -497,7 +504,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	struct mime_text_part          *part;
 	struct storage_server          *selected;
 	GList                          *cur;
-	int                             sock, r, cmd = 0, value = 0, *saved, *sargs;
+	int                             sock, r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
 	char                            out_buf[BUFSIZ];
 
 	/* Extract arguments */
@@ -505,6 +512,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		sargs = session->other_data;
 		cmd = sargs[0];
 		value = sargs[1];
+		flag = sargs[2];
 	}
 	
 	/* Prepare task */
@@ -565,6 +573,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 					s->server = selected;
 					s->cmd = cmd;
 					s->value = value;
+					s->flag = flag;
 					s->saved = saved;
 					s->fd = sock;
 					event_add (&s->ev, &s->tv);
@@ -597,7 +606,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 {
 	char                           *arg, out_buf[BUFSIZ], *err_str;
 	uint32_t                        size;
-	int                             r, value = 1, *sargs;
+	int                             r, value = 1, flag = 0, *sargs;
 
 	/* Process size */
 	arg = args[0];
@@ -608,8 +617,9 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 		session->state = STATE_REPLY;
 		return;
 	}
+	errno = 0;
 	size = strtoul (arg, &err_str, 10);
-	if (err_str && *err_str != '\0') {
+	if (errno != 0 || (err_str && *err_str != '\0')) {
 		r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 		session->state = STATE_REPLY;
@@ -618,16 +628,32 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 	/* Process value */
 	arg = args[1];
 	if (arg && *arg != '\0') {
+		errno = 0;
 		value = strtol (arg, &err_str, 10);
+		if (errno != 0 || *err_str != '\0') {
+			msg_info ("error converting numeric argument %s", arg);
+			value = 0;
+		}
+	}
+	/* Process flag */
+	arg = args[2];
+	if (arg && *arg != '\0') {
+		errno = 0;
+		flag = strtol (arg, &err_str, 10);
+		if (errno != 0 || *err_str != '\0') {
+			msg_info ("error converting numeric argument %s", arg);
+			flag = 0;
+		}
 	}
 
 	session->state = STATE_OTHER;
 	rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
 	session->other_handler = fuzzy_process_handler;
 	/* Prepare args */
-	sargs = memory_pool_alloc (session->session_pool, sizeof (int) * 2);
+	sargs = memory_pool_alloc (session->session_pool, sizeof (int) * 3);
 	sargs[0] = cmd;
 	sargs[1] = value;
+	sargs[2] = flag;
 	session->other_data = sargs;
 }
 

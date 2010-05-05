@@ -22,6 +22,8 @@ struct mime_text_part {
 	gboolean is_raw;
 	gboolean is_balanced;
 	gboolean is_empty;
+	gboolean is_utf;
+	const gchar *real_charset;
 	GByteArray *orig;
 	GByteArray *content;
 	GNode *html_nodes;
