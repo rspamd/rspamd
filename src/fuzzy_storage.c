@@ -339,7 +339,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	return TRUE;
 }
 
-static inline int
+static inline struct rspamd_fuzzy_node *
 check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 {
 	GList                          *cur;
@@ -358,7 +358,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 				if (update_value) {
 					h->value += update_value;
 				}
-				return h->value;
+				return h;
 			}
 		}
 	}
@@ -373,7 +373,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 				msg_info ("new hash weight: %d", h->value);
 				h->value += update_value;
 			}
-			return h->value;
+			return h;
 		}
 		cur = g_list_next (cur);
 	}
@@ -392,7 +392,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 				g_queue_push_head_link (frequent, cur);
 				msg_info ("moved hash to frequent list");
 			}
-			return h->value;
+			return h;
 		}
 		cur = g_list_next (cur);
 	}
@@ -400,13 +400,14 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 	}
 #endif
 
-	return 0;
+	return NULL;
 }
 
 static                          int
-process_check_command (struct fuzzy_cmd *cmd)
+process_check_command (struct fuzzy_cmd *cmd, int *flag)
 {
 	fuzzy_hash_t                    s;
+	struct rspamd_fuzzy_node       *h;
 
 	if (!bloom_check (bf, cmd->hash)) {
 		return 0;
@@ -415,7 +416,15 @@ process_check_command (struct fuzzy_cmd *cmd)
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 
-	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0);
+	h = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0);
+
+	if (h == NULL) {
+		return 0;
+	}
+	else {
+		*flag = h->flag;
+		return h->value;
+	}
 }
 
 static                          gboolean
@@ -426,7 +435,7 @@ update_hash (struct fuzzy_cmd *cmd)
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 
-	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value);
+	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value) != NULL;
 }
 
 static                          gboolean
@@ -448,6 +457,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	h->h.block_size = cmd->blocksize;
 	h->time = (uint64_t) time (NULL);
 	h->value = cmd->value;
+	h->flag = cmd->flag;
 #ifdef WITH_JUDY
 	if (use_judy) {
 		pvalue = JudySLIns (&jtree, h->h.hash_pipe, PJE0);
@@ -562,13 +572,13 @@ else {																							\
 static void
 process_fuzzy_command (struct fuzzy_session *session)
 {
-	int r;
+	int r, flag = 0;
 	char buf[64];
 
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
-		if ((r = process_check_command (&session->cmd))) {
-			r = snprintf (buf, sizeof (buf), "OK %d" CRLF, r);
+		if ((r = process_check_command (&session->cmd, &flag))) {
+			r = snprintf (buf, sizeof (buf), "OK %d %d" CRLF, r, flag);
 			if (sendto (session->fd, buf, r, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
 				msg_err ("error while writing reply: %s", strerror (errno));
 			}

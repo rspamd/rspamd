@@ -71,6 +71,7 @@ struct fuzzy_ctx {
 	double                          max_score;
 	uint32_t                        min_hash_len;
 	radix_tree_t                   *whitelist;
+	GHashTable                     *flags;
 };
 
 struct fuzzy_client_session {
@@ -103,6 +104,37 @@ static int                      fuzzy_mime_filter (struct worker_task *task);
 static void                     fuzzy_symbol_callback (struct worker_task *task, void *unused);
 static void                     fuzzy_add_handler (char **args, struct controller_session *session);
 static void                     fuzzy_delete_handler (char **args, struct controller_session *session);
+
+/* Flags string is in format <numeric_flag>:<SYMBOL>[, <numeric_flag>:<SYMBOL>...] */
+static void
+parse_flags_string (char *str)
+{
+	char                          **strvec, *p, *item, *err_str;
+	int                             num, i, flag;
+	
+	strvec = g_strsplit (str, ", ;", 0);
+	num = g_strv_length (strvec);
+
+	for (i = 0; i < num; i ++) {
+		item = strvec[i];
+		if ((p = strchr (item, ':')) != NULL) {
+			*p = '\0';
+			p ++;
+			/* Now in p we have name of symbol and in item we have its number */
+			errno = 0;
+			flag = strtol (item, &err_str, 10);
+			if (errno != 0 || (err_str && *err_str != '\0')) {
+				msg_info ("cannot parse flag %s: %s", item, strerror (errno));
+			}
+			else {
+				/* Add flag to hash table */
+				g_hash_table_insert (fuzzy_module_ctx->flags, GINT_TO_POINTER(flag), memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, p));
+			}
+		}
+	}
+
+	g_strfreev (strvec);
+}
 
 static void
 parse_servers_string (char *str)
@@ -193,6 +225,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
 	fuzzy_module_ctx->servers = NULL;
 	fuzzy_module_ctx->servers_num = 0;
+	fuzzy_module_ctx->flags = g_hash_table_new (g_int_hash, g_int_equal);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
@@ -243,9 +276,11 @@ fuzzy_check_module_config (struct config_file *cfg)
 		fuzzy_module_ctx->whitelist = NULL;
 	}
 
-
 	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
 		parse_servers_string (value);
+	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "flags")) != NULL) {
+		parse_flags_string (value);
 	}
 
 	metric = g_hash_table_lookup (cfg->metrics, fuzzy_module_ctx->metric);
@@ -287,7 +322,8 @@ fuzzy_check_module_reconfig (struct config_file *cfg)
 	fuzzy_module_ctx->servers = NULL;
 	fuzzy_module_ctx->servers_num = 0;
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
-
+	
+	g_hash_table_remove_all (fuzzy_module_ctx->flags);
 	return fuzzy_check_module_config (cfg);
 }
 
@@ -313,7 +349,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 {
 	struct fuzzy_client_session    *session = arg;
 	struct fuzzy_cmd                cmd;
-	char                            buf[62], *err_str;
+	char                            buf[62], *err_str, *symbol;
 	int                             value = 0, flag = 0, r;
 	double                          nval;
 
@@ -346,8 +382,13 @@ fuzzy_io_callback (int fd, short what, void *arg)
 			}
 			*err_str = '\0';
 			nval = fuzzy_normalize (value);
+			/* Get symbol by flag */
+			if ((symbol = g_hash_table_lookup (fuzzy_module_ctx->flags, GINT_TO_POINTER (flag))) == NULL) {
+				/* Default symbol */
+				symbol = fuzzy_module_ctx->symbol;
+			}
 			snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
-			insert_result (session->task, fuzzy_module_ctx->metric, fuzzy_module_ctx->symbol, nval, g_list_prepend (NULL, 
+			insert_result (session->task, fuzzy_module_ctx->metric, symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
 		}
 		goto ok;
