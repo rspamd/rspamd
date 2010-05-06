@@ -57,6 +57,10 @@
 #define MAX_RETRIES 40
 /* Weight of hash to consider it frequent */
 #define DEFAULT_FREQUENT_SCORE 100
+/* Magic sequence for hashes file */
+#define FUZZY_FILE_MAGIC "rsh"
+/* Current version of fuzzy hash file format */
+#define CURRENT_FUZZY_VERSION 1
 
 static GQueue                  *hashes[BUCKETS];
 static GQueue                  *frequent;
@@ -81,6 +85,7 @@ struct rspamd_fuzzy_node {
 	uint64_t                        time;
 	fuzzy_hash_t                    h;
 };
+
 
 #ifndef HAVE_SA_SIGINFO
 static void
@@ -116,7 +121,7 @@ static void
 sync_cache (struct rspamd_worker *wrk)
 {
 	int                             fd, i;
-	char                           *filename, *exp_str;
+	char                           *filename, *exp_str, header[4];
 	GList                          *cur, *tmp;
 	struct rspamd_fuzzy_node       *node;
 	uint64_t                        expire, now;
@@ -151,6 +156,14 @@ sync_cache (struct rspamd_worker *wrk)
 	(void)lock_file (fd, FALSE);
 
 	now = (uint64_t) time (NULL);
+	
+	/* Fill header */
+	memcpy (header, FUZZY_FILE_MAGIC, 3);
+	header[3] = (char)CURRENT_FUZZY_VERSION;
+	if (write (fd, header, sizeof (header)) == -1) {
+		msg_err ("cannot write file %s while writing header: %s", filename, strerror (errno));
+		goto end;
+	}
 
 #ifdef WITH_JUDY
 	if (use_judy) {
@@ -172,6 +185,7 @@ sync_cache (struct rspamd_worker *wrk)
 			}
 			if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
 				msg_err ("cannot write file %s: %s", filename, strerror (errno));
+				goto end;
 			}
 			pvalue = JudySLNext (jtree, indexbuf, PJE0);
 		}
@@ -203,6 +217,7 @@ sync_cache (struct rspamd_worker *wrk)
 			}
 			if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
 				msg_err ("cannot write file %s: %s", filename, strerror (errno));
+				goto end;
 			}
 			cur = g_list_next (cur);
 		}
@@ -211,6 +226,7 @@ sync_cache (struct rspamd_worker *wrk)
 	}
 #endif
 
+end:
 	(void)unlock_file (fd, FALSE);
 	close (fd);
 }
@@ -239,6 +255,7 @@ sigusr_handler (int fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
 	struct timeval                  tv;
+
 	tv.tv_sec = SOFT_SHUTDOWN_TIME;
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev);
@@ -253,10 +270,15 @@ sigusr_handler (int fd, short what, void *arg)
 static                          gboolean
 read_hashes_file (struct rspamd_worker *wrk)
 {
-	int                             r, fd, i;
+	int                             r, fd, i, version = 0;
 	struct stat                     st;
-	char                           *filename;
+	char                           *filename, header[4];
 	struct rspamd_fuzzy_node       *node;
+	struct {
+		int32_t                         value;
+		uint64_t                        time;
+		fuzzy_hash_t                    h;
+	}								legacy_node;
 #ifdef WITH_JUDY
 	PPvoid_t                         pvalue;
 
@@ -287,11 +309,42 @@ read_hashes_file (struct rspamd_worker *wrk)
 
 	fstat (fd, &st);
 
+	/* First of all try to read magic and version number */
+	if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
+		if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
+			/* We have version in last byte of header */
+			version = (int)header[3];
+			if (version > CURRENT_FUZZY_VERSION) {
+				msg_err ("unsupported version of fuzzy hash file: %d", version);
+				return FALSE;
+			}
+		}
+		else {
+			/* Old version */
+			version = 0;
+			msg_info ("got old version of fuzzy hashes storage, it would be converted to new version %d automatically", CURRENT_FUZZY_VERSION);
+			/* Rewind file */
+			(void)lseek (fd, 0, SEEK_SET);
+		}
+	}
+
 	for (;;) {
 		node = g_malloc (sizeof (struct rspamd_fuzzy_node));
-		r = read (fd, node, sizeof (struct rspamd_fuzzy_node));
-		if (r != sizeof (struct rspamd_fuzzy_node)) {
-			break;
+		if (version == 0) {
+			r = read (fd, &legacy_node, sizeof (legacy_node));
+			if (r != sizeof (legacy_node)) {
+				break;
+			}
+			node->value = legacy_node.value;
+			node->time = legacy_node.time;
+			memcpy (&node->h, &legacy_node.h, sizeof (fuzzy_hash_t));
+			node->flag = 0;
+		}
+		else {
+			r = read (fd, node, sizeof (struct rspamd_fuzzy_node));
+			if (r != sizeof (struct rspamd_fuzzy_node)) {
+				break;
+			}
 		}
 #ifdef WITH_JUDY
 		if (use_judy) {

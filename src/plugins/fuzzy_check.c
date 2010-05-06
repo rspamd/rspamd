@@ -225,7 +225,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
 	fuzzy_module_ctx->servers = NULL;
 	fuzzy_module_ctx->servers_num = 0;
-	fuzzy_module_ctx->flags = g_hash_table_new (g_int_hash, g_int_equal);
+	fuzzy_module_ctx->flags = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
