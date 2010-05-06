@@ -236,7 +236,7 @@ drop_priv (struct config_file *cfg)
 static void
 config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 {
-	rspamd_set_logger (rspamd->cfg->log_type, RSPAMD_MAIN, rspamd->cfg);
+	rspamd_set_logger (rspamd->cfg->log_type, TYPE_MAIN, rspamd->cfg);
 	if (open_log () == -1) {
 		if (is_fatal) {
 			fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
@@ -781,7 +781,7 @@ main (int argc, char **argv, char **env)
 #endif
 
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, RSPAMD_MAIN, rspamd->cfg);
+	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd->cfg);
 	(void)open_log ();
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd->cfg);
 

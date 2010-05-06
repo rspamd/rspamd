@@ -512,7 +512,7 @@ ENDIF(PERL_EXECUTABLE)
 
 CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(rspamc.pl.in rspamc.pl @ONLY)
-CONFIGURE_FILE(rspamd.conf.sample conf/rspamd.conf.sample @ONLY)
+CONFIGURE_FILE(rspamd.xml.sample conf/rspamd.xml.sample @ONLY)
 
 ######################### LINK SECTION ###############################
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} 
@@ -659,11 +659,15 @@ IF(NOT EXISTS ${ETC_PREFIX}/rspamd/lotto.inc)
 INSTALL(FILES conf/lotto.inc DESTINATION ${ETC_PREFIX}/rspamd)
 ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/lotto.inc)
 
-INSTALL(FILES conf/rspamd.conf.sample DESTINATION ${ETC_PREFIX}/)
+INSTALL(FILES conf/rspamd.xml.sample DESTINATION ${ETC_PREFIX}/)
 
 # Lua plugins
 INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${ETC_PREFIX}/rspamd/plugins)")
 INSTALL(DIRECTORY src/plugins/lua DESTINATION ${ETC_PREFIX}/rspamd/plugins PATTERN "*.lua")
+
+# Lua config
+INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${ETC_PREFIX}/rspamd/lua)")
+INSTALL(DIRECTORY conf/lua DESTINATION ${ETC_PREFIX}/rspamd/ PATTERN "*.lua")
 
 # Perl lib
 IF(PERL_EXECUTABLE)

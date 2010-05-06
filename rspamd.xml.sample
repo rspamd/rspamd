@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rspamd>
+<!-- Main section -->
+<tempdir>/tmp</tempdir>
+<pidfile>/var/run/rspamd.pid</pidfile>
+<filters>regexp,surbl,chartable,emails,fuzzy_check,spf</filters>
+<statfile_pool_size>262144000</statfile_pool_size>
+<raw_mode>yes</raw_mode>
+<lua src="@ETC_PREFIX@/rspamd/lua/rspamd.lua">fake</lua>
+<!-- End of main section -->
+
+<!-- Logging section -->
+<logging>
+ <level>info</level>
+ <log_urls>yes</log_urls>
+ <type>console</type>
+</logging>
+<!-- End of logging section -->
+
+
+<!-- Factors section -->
+<factors>
+ <factor name="R_SPAM_FROM_MTU">8.00</factor>
+ <factor name="R_WWW_EKONF_COM">10.00</factor>
+ <factor name="R_TINYURL">2.00</factor>
+ <factor name="MISSING_SUBJECT">2.00</factor>
+ <factor name="FORGED_OUTLOOK_TAGS">2.10</factor>
+ <factor name="R_FAKE_THEBAT">8.00</factor>
+ <factor name="FORGED_SENDER">5.00</factor>
+ <factor name="DRUGS_MANYKINDS">2.00</factor>
+ <factor name="ADVANCE_FEE_2">3.30</factor>
+ <factor name="ADVANCE_FEE_3">2.12</factor>
+ <factor name="SUSPICIOUS_RECIPS">3.50</factor>
+ <factor name="FAKE_REPLY_C">6.00</factor>
+ <factor name="MIME_HTML_ONLY">1.00</factor>
+ <factor name="AB_SURBL_MULTI">5.50</factor>
+ <factor name="FORGED_MSGID_YAHOO">2.00</factor>
+ <factor name="SC_SURBL_MULTI">5.50</factor>
+ <factor name="FORGED_MUA_THEBAT_BOUN">2.00</factor>
+ <factor name="R_MISSING_CHARSET">5.00</factor>
+ <factor name="RCVD_DOUBLE_IP_SPAM">2.00</factor>
+ <factor name="OB_SURBL_MULTI">5.50</factor>
+ <factor name="FORGED_OUTLOOK_HTML">5.00</factor>
+ <factor name="HTML_MIME_NO_HTML_TAG">2.00</factor>
+ <factor name="R_BAD_EMAIL">10.50</factor>
+ <factor name="R_SPAM_FROM_LIBERO">10.00</factor>
+ <factor name="WINNOW_SPAM">0.00</factor>
+ <factor name="WHITELIST_IP">-2.00</factor>
+ <factor name="R_UNDISC_RCPT">5.00</factor>
+ <factor name="DRUGS_ANXIETY">2.00</factor>
+ <factor name="DRUGS_ANXIETY_EREC">2.00</factor>
+ <factor name="PH_SURBL_MULTI">5.50</factor>
+ <factor name="R_WHITE_ON_WHITE">9.00</factor>
+ <factor name="FAKE_HTML">1.00</factor>
+ <factor name="winnow">5.00</factor>
+ <factor name="R_SPAM_FROM_VERSATEL">10.00</factor>
+ <factor name="HTML_SHORT_LINK_IMG_2">3.00</factor>
+ <factor name="FORGED_MUA_OUTLOOK">3.00</factor>
+ <factor name="R_FREE_HOSTING">4.00</factor>
+ <factor name="DRUGS_ERECTILE">2.00</factor>
+ <factor name="R_FREE_HOSTING_NAROD">3.00</factor>
+ <factor name="PIZDA">100.00</factor>
+ <factor name="R_SPAM_FROM_ONO">10.00</factor>
+ <factor name="FM_FAKE_HELO_VERIZON">2.00</factor>
+ <factor name="REPTO_QUOTE_YAHOO">2.00</factor>
+ <factor name="MISSING_MIMEOLE">5.00</factor>
+ <factor name="RAMBLER_URIBL">0.50</factor>
+ <factor name="R_SPAM_FROM_VALUEHOST">10.00</factor>
+ <factor name="R_MIXED_CHARSET">5.00</factor>
+ <factor name="SORTED_RECIPS">3.50</factor>
+ <factor name="R_RCVD_SPAMBOTS">3.00</factor>
+ <factor name="JP_SURBL_MULTI">5.50</factor>
+ <factor name="R_TO_SEEMS_AUTO">3.00</factor>
+ <factor name="SUBJECT_NEEDS_ENCODING">1.00</factor>
+ <factor name="TRACKER_ID">3.84</factor>
+ <factor name="KAM_LOTTO1">7.00</factor>
+ <factor name="R_NO_SPACE_IN_FROM">3.00</factor>
+ <factor name="R_SAJDING">8.00</factor>
+ <factor name="R_BAD_CTE_7BIT">6.00</factor>
+ <factor name="WS_SURBL_MULTI">5.50</factor>
+ <factor name="R_POCHTA_RU">10.00</factor>
+ <factor name="R_FLASH_REDIR_IMGSHACK">10.00</factor>
+ <factor name="INVALID_MSGID">5.00</factor>
+ <factor name="R_FORGED_MPOP_WEBMAIL">8.00</factor>
+ <factor name="MISSING_MID">3.00</factor>
+ <factor name="DRUGS_DIET">2.00</factor>
+ <factor name="FORGED_RECIPIENTS">3.00</factor>
+ <factor name="RATWARE_MS_HASH">2.00</factor>
+ <factor name="HTML_TAG_BALANCE_HEAD">5.00</factor>
+ <factor name="STOX_REPLY_TYPE">1.00</factor>
+ <factor name="WINNOW_HAM">0.00</factor>
+ <factor name="MIME_HEADER_CTYPE_ONLY">2.00</factor>
+ <factor name="R_FAKE_OUTLOOK">8.00</factor>
+</factors>
+<!-- End of factors section -->
+
+<!-- Composites section -->
+<!-- End of composites section -->
+
+<!-- Workers section -->
+<worker>
+  <type>fuzzy</type>
+  <bind_socket>localhost:11335</bind_socket>
+  <count>1</count>
+  <maxfiles>2048</maxfiles>
+  <maxcore>0</maxcore>
+<!-- Other params -->
+    <param name="hashfile">/tmp/fuzzy.db</param>
+    <param name="use_judy">yes</param>
+</worker>
+<worker>
+  <type>controller</type>
+  <bind_socket>localhost:11334</bind_socket>
+  <count>1</count>
+  <maxfiles>2048</maxfiles>
+  <maxcore>0</maxcore>
+<!-- Other params -->
+    <param name="password">q1</param>
+</worker>
+<worker>
+  <type>normal</type>
+  <bind_socket>localhost:11333</bind_socket>
+  <count>1</count>
+  <maxfiles>2048</maxfiles>
+  <maxcore>0</maxcore>
+<!-- Other params -->
+</worker>
+<!-- End of workers section -->
+
+<!-- Modules section -->
+<!-- fuzzy_check -->
+<module name="fuzzy_check">
+  <option name="servers">localhost:11335</option>
+  <option name="symbol">R_FUZZY</option>
+  <option name="min_length">300</option>
+  <option name="max_score">10</option>
+  <option name="metric">default</option>
+</module>
+
+<!-- forged_recipients -->
+<module name="forged_recipients">
+  <option name="symbol_sender">FORGED_SENDER</option>
+  <option name="symbol_rcpt">FORGED_RECIPIENTS</option>
+</module>
+
+<!-- maillist -->
+<module name="maillist">
+  <option name="symbol">MAILLIST</option>
+</module>
+
+<!-- surbl -->
+<module name="surbl">
+  <option name="whitelist">file://@ETC_PREFIX@/rspamd/surbl-whitelist.inc</option>
+  <option name="2tld">file://@ETC_PREFIX@/rspamd/2tld.inc</option>
+  <option name="metric">default</option>
+  <option name="bit_64">JP</option>
+  <option name="bit_32">AB</option>
+  <option name="bit_16">OB</option>
+  <option name="bit_8">PH</option>
+  <option name="bit_4">WS</option>
+  <option name="bit_2">SC</option>
+  <option name="suffix_RAMBLER_URIBL">uribl.rambler.ru</option>
+  <option name="suffix_%b_SURBL_MULTI">multi.surbl.org</option>
+  <option name="redirector_read_timeout">10s</option>
+  <option name="redirector_connect_timeout">1s</option>
+  <option name="redirector">localhost:8080</option>
+</module>
+
+<!-- received_rbl -->
+<module name="received_rbl">
+  <option name="symbol">RECEIVED_RBL</option>
+  <option name="rbl">pbl.spamhaus.org</option>
+  <option name="rbl">xbl.spamhaus.org</option>
+  <option name="rbl">insecure-bl.rambler.ru</option>
+</module>
+
+<!-- emails -->
+<module name="emails">
+  <option name="symbol">R_BAD_EMAIL</option>
+  <option name="metric">default</option>
+</module>
+
+<!-- whitelist -->
+<module name="whitelist">
+  <option name="ip_whitelist">http://cebka.pp.ru/stuff/grey_whitelist.conf</option>
+  <option name="symbol_ip">WHITELIST_IP</option>
+</module>
+
+<!-- chartable -->
+<module name="chartable">
+  <option name="threshold">0.1</option>
+  <option name="symbol">R_MIXED_CHARSET</option>
+  <option name="metric">default</option>
+</module>
+
+<!-- once_received -->
+<module name="once_received">
+  <option name="good_host">mail</option>
+  <option name="bad_host">static</option>
+  <option name="bad_host">dynamic</option>
+  <option name="symbol_strict">ONCE_RECEIVED_STRICT</option>
+  <option name="symbol">ONCE_RECEIVED</option>
+</module>
+
+<!-- End of modules section -->
+
+<!-- Classifiers section -->
+<classifier type="winnow">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <option name="min_tokens">20</option>
+ <statfile>
+  <symbol>WINNOW_HAM</symbol>
+  <size>104857600</size>
+  <path>/tmp/test.ham</path>
+  <normalizer>internal:10</normalizer>
+  <binlog>master</binlog>
+  <binlog_rotate>0</binlog_rotate>
+ </statfile>
+ <statfile>
+  <symbol>WINNOW_SPAM</symbol>
+  <size>104857600</size>
+  <path>/tmp/test.spam</path>
+  <normalizer>internal:10</normalizer>
+  <binlog>master</binlog>
+  <binlog_rotate>0</binlog_rotate>
+ </statfile>
+</classifier>
+<!-- End of classifiers section -->
+
+<!-- Modules section -->
+<modules>
+	<path>@ETC_PREFIX@/rspamd/plugins/lua/</path>
+</modules>
+<!-- End of modules section -->
+
+</rspamd>
