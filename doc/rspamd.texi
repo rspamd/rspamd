@@ -1,0 +1,344 @@
+\input texinfo
+@settitle "Rspamd Spam Filtering System"
+@titlepage
+
+@title Rspamd Spam Filtering System
+@subtitle A User's Guide for Rspamd
+
+@author Vsevolod Stakhov
+
+
+@end titlepage
+@contents
+
+@chapter Rspamd purposes and features.
+
+@section Introduction.
+Rspamd filtering system is created as a replacement of popular
+@code{spamassassin}
+spamd and is designed to be fast, modular and easily extendable system. Rspamd
+core is written in @code{C} language using event driven paradigma. Plugins for rspamd
+can be written in @code{lua}. Rspamd is designed to process connections
+completely asynchronous and do not block anywhere in code. Spam filtering system
+contains of several processes among them are:
+@itemize @bullet
+@item Main process
+@item Workers processes
+@item Controller process
+@item Other processes
+@end itemize
+Main process manages all other processes, accepting signals from OS (for example
+SIGHUP) and spawn all types of processes if any of them die. Workers processes
+do all tasks for filtering e-mail (or HTML messages in case of using rspamd as
+non-MIME filter). Controller process is designed to manage rspamd itself (for
+example get statistics or learning rspamd). Other processes can do different
+jobs among them now are implemented @code{LMTP} worker that implements
+@code{LMTP} protocol for filtering mail and fuzzy hashes storage server. 
+
+@section Features.
+The main features of rspamd are:
+@itemize @bullet
+@item Completely asynchronous filtering that allows a big number of simultenious
+connections.
+@item Easily extendable architecture that can be extended by plugins written in
+@code{lua} and by dynamicaly loaded plugins written in @code{c}.
+@item Ability to work in cluster: rspamd is able to perform statfiles
+synchronization, dynamic load of lists via HTTP, to use distributed fuzzy hashes
+storage.
+@item Advanced statistics: rspamd now is shipped with winnow-osb classifier that
+provides more accurate statistics than traditional bayesian algorithms based on
+single words.
+@item Internal optimizer: rspamd first of all try to check rules that were met
+more often, so for huge spam storms it works very fast as it just checks only
+that rules that @emph{can} happen and skip all others.
+@item Ability to manage the whole cluster by using controller process.
+@item Compatibility with existing @code{spamassassin} SPAMC protocol.
+@item Extended @code{RSPAMC} protocol that allows to pass many additional data
+from SMTP dialog to rspamd filter.
+@item Internal support of IMAP in rspamc client for automated learning.
+@item Internal support of many anti-spam technologies, among them are
+@code{SPF} and @code{SURBL}.
+@item Active support and development of new features.
+@end itemize
+
+@chapter Installation of rspamd.
+
+@section Obtaining of rspamd.
+
+The main rspamd site is @url{http://rspamd.sourceforge.net/, sourceforge}. Here
+you can obtain source code package as well as pre-packed packages for different
+operating systems and architectures. Also, you can use SCM
+@url{http://mercurial.selenic.com, mercurial} for accessing rspamd development
+repository that can be found here:
+@url{http://rspamd.hg.sourceforge.net:8000/hgroot/rspamd/rspamd}. Rspamd is
+shipped with all modules and sample config by default. But there are some
+requirements for building and running rspamd.
+
+@section Requirements.
+
+For building rspamd from sources you need @code{CMake} system. CMake is very
+nice source building system and I decided to use it instead of GNU autotools.
+CMake can be obtained here: @url{http://cmake.org}. Also rspamd uses gmime and
+glib for MIME parsing and many other purposes (note that you are NOT required
+to install any GUI libraries -  nor glib, nor gmime are GUI libraries). Gmime
+and glib can be obtained from gnome site: @url{http://ftp.gnome.org/}. For
+plugins and configuration system you also need lua language interpreter and
+libraries. They can be easily obtained from @url{http://lua.org, official lua
+site}. Also for rspamc client you need @code{perl} interpreter that could be
+installed from @url{http://www.perl.org}.
+
+@section Building and Installation.
+
+Build process of rspamd is rather simple:
+@itemize @bullet
+@item Configure rspamd build environment, using cmake:
+@example
+$ cmake .
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/cebka/rspamd
+@end example
+@noindent
+For special configuring options you can use
+@example
+$ ccmake .
+ CMAKE_BUILD_TYPE                                                                                                                                           
+ CMAKE_INSTALL_PREFIX             /usr/local                                                                                                                
+ DEBUG_MODE                       ON                                                                                                                        
+ ENABLE_GPERF_TOOLS               OFF                                                                                                                       
+ ENABLE_OPTIMIZATION              OFF                                                                                                                       
+ ENABLE_PERL                      OFF                                                                                                                       
+ ENABLE_PROFILING                 OFF                                                                                                                       
+ ENABLE_REDIRECTOR                OFF                                                                                                                       
+ ENABLE_STATIC                    OFF                                                                                                                       
+@end example
+@noindent
+Options allows building rspamd as static module (note that in this case
+dynamicaly loaded plugins are @strong{NOT} supported), linking rspamd with
+google performance tools for benchmarking and include some other flags while
+building.
+@item Build rspamd sources:
+@example
+$ make
+[  6%] Built target rspamd_lua
+[ 11%] Built target rspamd_json
+[ 12%] Built target rspamd_evdns
+[ 12%] Built target perlmodule
+[ 58%] Built target rspamd
+[ 76%] Built target test/rspamd-test
+[ 85%] Built target utils/expression-parser
+[ 94%] Built target utils/url-extracter
+[ 97%] Built target rspamd_ipmark
+[100%] Built target rspamd_regmark
+@end example
+@noindent
+@item Install rspamd (as superuser):
+@example
+# make install
+Install the project...
+...
+@end example
+@noindent
+@end itemize
+
+After installation you would have several new files installed:
+@itemize @bullet
+
+@item Binaries:
+@itemize @bullet
+@item PREFIX/bin/rspamd - main rspamd executable
+@item PREFIX/bin/rspamc - rspamd client program
+@end itemize
+@item Sample configuration files and rules:
+@itemize @bullet
+@item PREFIX/etc/rspamd.xml.sample - sample main config file
+@item PREFIX/etc/rspamd/lua/*.lua - rspamd rules
+@end itemize
+@item Lua plugins:
+@itemize @bullet
+@item PREFIX/etc/rspamd/plugins/lua/*.lua - lua plugins
+@end itemize
+
+@end itemize
+For @code{FreeBSD} system there also would be start script for running rspamd in
+@emph{PREFIX/etc/rc.d/rspamd.sh}.
+
+@section Running rspamd.
+
+Rspamd can be started by running main rspamd executable -
+@code{PREFIX/bin/rspamd}. There are several command-line options that can be
+passed to rspamd. All of them can be displayed by passing --help argument:
+@example
+$ rspamd --help
+Usage:
+  rspamd [OPTION...] - run rspamd daemon
+
+Summary:
+  Rspamd daemon version 0.3.0
+
+Help Options:
+  -?, --help               Show help options
+
+Application Options:
+  -t, --config-test        Do config test and exit
+  -f, --no-fork            Do not daemonize main process
+  -c, --config             Specify config file
+  -u, --user               User to run rspamd as
+  -g, --group              Group to run rspamd as
+  -p, --pid                Path to pidfile
+  -V, --dump-vars          Print all rspamd variables and exit
+  -C, --dump-cache         Dump symbols cache stats and exit
+  -X, --convert-config     Convert old style of config to xml one
+@end example
+@noindent
+
+All options are optional: by default rspamd would try to read
+@code{PREFIX/etc/rspamd.xml} config file and run as daemon. Also there is test
+mode that can be turned on by passing @emph{-t} argument. In test mode rspamd
+would read config file and checks its syntax, if config file is OK, then exit
+code is zero and non zero otherwise. Test mode is useful for testing new config
+file without restarting of rspamd. With @emph{-C} and @emph{-V} arguments it is
+possible to dump variables or symbols cache data. The last ability can be used
+for determining which symbols are most often, which are most slow and to watch
+to real order of rules inside rspamd. @emph{-X} option can be used to convert
+old style (pre 0.3.0) config to xml one:
+@example
+$ rspamd -c ./rspamd.conf -X ./rspamd.xml
+@end example
+@noindent
+After this command new xml config would be dumped to rspamd.xml file.
+
+@section Managing rspamd with signals.
+First of all it is important to note that all user's signals should be sent to
+rspamd main process and not to its children (as for child processes these
+signals may have other meanings). To determine which process is main you can use
+two ways:
+@itemize @bullet
+@item by reading pidfile:
+@example
+$ cat pidfile
+@end example
+@noindent
+@item by getting process info:
+@example
+$ ps auxwww | grep rspamd
+nobody 28378  0.0  0.2 49744  9424   rspamd: main process (rspamd)
+nobody 64082  0.0  0.2 50784  9520   rspamd: worker process (rspamd)
+nobody 64083  0.0  0.3 51792 11036   rspamd: worker process (rspamd)
+nobody 64084  0.0  2.7 158288 114200 rspamd: controller process (rspamd)
+nobody 64085  0.0  1.8 116304 75228  rspamd: fuzzy storage (rspamd)
+
+$ ps auxwww | grep rspamd | grep main
+nobody 28378  0.0  0.2 49744  9424   rspamd: main process (rspamd)
+@end example
+@noindent
+@end itemize
+
+After getting pid of main process it is possible to manage rspamd with signals:
+@itemize @bullet
+@item SIGHUP - restart rspamd: reread config file, start new workers (as well as
+controller and other processes), stop accepting connections by old workers,
+reopen all log files. Note that old workers would be terminated after one minute
+that should allow to process all pending requests. All new requests to rspamd
+would be processed by newly started workers.
+@item SIGTERM - terminate rspamd system.
+@end itemize
+
+These signals may be used in start scripts as it is done in @code{FreeBSD} start
+script. Restarting of rspamd is doing rather softly: no connections would be
+dropped and if new config is syntaxically incorrect old config would be used.
+
+@chapter Configuring of rspamd.
+
+@section Principles of work.
+
+We need to define several terms to explain configuration of rspamd. Rspamd
+operates with @strong{rules}, each rule defines some actions that should be done with
+message to obtain result. Result is called @strong{symbol} - a symbolic
+representation of rule. For example, if we have a rule to check DNS record for
+a url that contains in message we may insert resulting symbol if this DNS record
+is found. Each symbol has several attributes:
+@itemize @bullet
+@item name - symbolic name of symbol (usually uppercase, e.g. MIME_HTML_ONLY)
+@item weight - numeric weight of this symbol (this means how important this rule is), may
+be negative
+@item options - list of symbolic options that defines additional information about
+processing this rule
+@end itemize
+
+Weights of symbols are called @strong{factors}. Also when symbol is inserted it
+is possible to define additional multiplier to factor. This can be used for
+rules that have dynamic weights, for example statistical rules (when probability
+is higher weight must be higher as well).
+
+All symbols and corresponding rules are combined in @strong{metrics}. Metric
+defines a group of symbols that are designed for common purposes. Each metric
+has maximum weight: if sum of all rules' results (symbols) is bigger than this
+limit then this message is considered as spam in this metric. The default metric
+is called @emph{default} and rules that have not explicitly specified metric
+would insert their results to this default metric.
+
+Let's impress how this technics works:
+@enumerate 1
+@item First of all when rspamd is running each module (lua, internal or external
+dynamic module) can register symbols in any defined metric. After this process
+rspamd has a cache of symbols for each metric. This cache can be saved to file
+for speeding up process of optimizing order of calling of symbols.
+@item Rspamd gets a message from client and parse it with mime parsing and do
+other parsing jobs like extracting text parts, urls, and stripping html tags.
+@item For each metric rspamd is looking to metric's cache and select rules to
+check according to their order (this order depends on frequence of symbol, its
+weight and execution time).
+@item Rspamd calls rules of metric till the sum weight of symbols in metric is
+less than its limit.
+@item If sum weight of symbols is more than limit the processing of rules is
+stopped and message is counted as spam in this metric.
+@end enumerate
+
+After processing rules rspamd is also does statistic check of message. Rspamd
+statistic module is presented as a set of @strong{classifiers}. Each classifier
+defines algorithm of statistic checks of messages. Also classifier definition
+contains definition of @strong{statistic files} (or @strong{statfiles} shortly).
+Each statfile contains of number of patterns that are extracted from messages.
+These patterns are put into statfiles during learning process. A short example:
+you define classifier that contains two statfiles: @emph{ham} and @emph{spam}.
+Than you find 10000 messages that are spam and 10000 messages that contains ham.
+Then you learn rspamd with these messages. After this process @emph{ham}
+statfile contains patterns from ham messages and @emph{spam} statfile contains
+patterns from spam messages. Then when you are checking message via this
+statfiles messages that are like spam would have more probability/weight in
+@emph{spam} statfile than in @emph{ham} statfile and classifier would insert
+symbol of @emph{spam} statfile and would calculate how this message is like
+patterns that are contained in @emph{spam} statfile. But rspamd is not limiting
+you to define one classifier or two statfiles. It is possible to define a number
+of classifiers and a number of statfiles inside a classifier. It can be useful
+for personal statistic or for specific spam patterns. Note that each classifier
+can insert only one symbol - a symbol of statfile with max weight/probability.
+Also note that statfiles check is allways done after all rules. So statistic can
+@strong{correct} result of rules.
+
+Now some words about @strong{modules}. All rspamd rules are contained in
+modules. Modules can be internal (like SURBL, SPF, fuzzy check, email and
+others) and external written in @code{lua} language. In fact there is no differ
+in the way, how rules of these modules are called:
+@enumerate 1
+@item Rspamd loads config and loads specified modules.
+@item Rspamd calls init function for each module passing configurations
+arguments.
+@item Each module examines configuration arguments and register its rules (or
+not register depending on configuration) in rspamd metrics (or in a single
+metric).
+@item During metrics process rspamd calls registered callbacks for module's
+rules.
+@item These rules may insert results to metric.
+@end enumerate
+
+So there is no actual difference between lua and internal modules, each are just
+providing callbacks for processing messages. Also inside callback it is possible
+to change state of message's processing. For example this can be done when it is
+required to make DNS or other network request and to wait result. So modules can
+pause message's processing while waiting for some event. This is true for lua
+modules as well.
+
+@bye
