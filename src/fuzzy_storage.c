@@ -668,6 +668,12 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	struct fuzzy_session            session;
 	ssize_t                         r;
+	struct {
+		u_char                      cmd;
+		uint32_t                    blocksize;
+		int32_t                     value;
+		u_char                      hash[FUZZY_HASHLEN];
+	}								legacy_cmd;
 
 
 	session.worker = worker;
@@ -683,6 +689,16 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 		}
 		else if (r == sizeof (struct fuzzy_cmd)) {
 			/* Assume that the whole command was read */
+			process_fuzzy_command (&session);
+		}
+		else if (r == sizeof (legacy_cmd)) {
+			/* Process requests from old rspamd */
+			memcpy (&legacy_cmd, session.pos, sizeof (legacy_cmd));
+			session.cmd.cmd = legacy_cmd.cmd;
+			session.cmd.blocksize = legacy_cmd.blocksize;
+			session.cmd.value = legacy_cmd.value;
+			session.cmd.flag = 0;
+			memcpy (session.cmd.hash, legacy_cmd.hash, sizeof (legacy_cmd.hash));
 			process_fuzzy_command (&session);
 		}
 		else {
