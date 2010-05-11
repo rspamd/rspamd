@@ -451,8 +451,8 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			/* If uptime more than 2 hours, print as a number of days. */
 			if (uptime >= 2 * 3600) {
 				days = uptime / 86400;
-				hours = uptime / 3600 - days * 3600;
-				minutes = uptime / 60 - hours * 60 - days * 3600;
+				hours = uptime / 3600 - days * 24;
+				minutes = uptime / 60 - hours * 60 - days * 1440;
 				r = snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, days, days > 1 ? "s" : " ", hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ");
 			}
 			/* If uptime is less than 1 minute print only seconds */
@@ -462,7 +462,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			/* Else print the minutes and seconds. */
 			else {
 				hours = uptime / 3600;
-				minutes = uptime / 60 - hours * 3600;
+				minutes = uptime / 60 - hours * 60;
 				uptime -= hours * 3600 + minutes * 60;
 				r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minite%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (int)uptime, uptime > 1 ? "s" : " ");
 			}
