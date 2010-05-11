@@ -64,6 +64,7 @@ struct rspamd_worker {
 	struct event sig_ev;										/**< signals event									*/
 	struct event bind_ev;										/**< socket events									*/
 	struct worker_conf *cf;										/**< worker config data								*/
+	gpointer ctx;												/**< worker's specific data							*/
 };
 
 struct pidfh;

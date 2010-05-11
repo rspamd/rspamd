@@ -80,7 +80,7 @@ static GList                   *custom_filters;
 
 static gboolean                 write_socket (void *arg);
 
-sig_atomic_t                    wanna_die = 0;
+static sig_atomic_t                    wanna_die = 0;
 
 #ifndef HAVE_SA_SIGINFO
 static void

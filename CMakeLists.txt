@@ -410,6 +410,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/radix.c
 				src/settings.c
 				src/spf.c
+				src/smtp.c
 				src/statfile.c
 				src/statfile_sync.c
 				src/symbols_cache.c
