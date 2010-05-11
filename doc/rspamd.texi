@@ -13,6 +13,7 @@
 
 @chapter Rspamd purposes and features.
 
+@node introduction
 @section Introduction.
 Rspamd filtering system is created as a replacement of popular
 @code{spamassassin}
@@ -35,6 +36,7 @@ example get statistics or learning rspamd). Other processes can do different
 jobs among them now are implemented @code{LMTP} worker that implements
 @code{LMTP} protocol for filtering mail and fuzzy hashes storage server. 
 
+@node features
 @section Features.
 The main features of rspamd are:
 @itemize @bullet
@@ -63,6 +65,7 @@ from SMTP dialog to rspamd filter.
 
 @chapter Installation of rspamd.
 
+@node obtaining
 @section Obtaining of rspamd.
 
 The main rspamd site is @url{http://rspamd.sourceforge.net/, sourceforge}. Here
@@ -74,6 +77,7 @@ repository that can be found here:
 shipped with all modules and sample config by default. But there are some
 requirements for building and running rspamd.
 
+@node requirements
 @section Requirements.
 
 For building rspamd from sources you need @code{CMake} system. CMake is very
@@ -87,6 +91,7 @@ libraries. They can be easily obtained from @url{http://lua.org, official lua
 site}. Also for rspamc client you need @code{perl} interpreter that could be
 installed from @url{http://www.perl.org}.
 
+@node building
 @section Building and Installation.
 
 Build process of rspamd is rather simple:
@@ -164,6 +169,7 @@ After installation you would have several new files installed:
 For @code{FreeBSD} system there also would be start script for running rspamd in
 @emph{PREFIX/etc/rc.d/rspamd.sh}.
 
+@node running
 @section Running rspamd.
 
 Rspamd can be started by running main rspamd executable -
@@ -195,13 +201,13 @@ Application Options:
 
 All options are optional: by default rspamd would try to read
 @code{PREFIX/etc/rspamd.xml} config file and run as daemon. Also there is test
-mode that can be turned on by passing @emph{-t} argument. In test mode rspamd
+mode that can be turned on by passing @option{-t} argument. In test mode rspamd
 would read config file and checks its syntax, if config file is OK, then exit
 code is zero and non zero otherwise. Test mode is useful for testing new config
-file without restarting of rspamd. With @emph{-C} and @emph{-V} arguments it is
+file without restarting of rspamd. With @option{-C} and @option{-V} arguments it is
 possible to dump variables or symbols cache data. The last ability can be used
 for determining which symbols are most often, which are most slow and to watch
-to real order of rules inside rspamd. @emph{-X} option can be used to convert
+to real order of rules inside rspamd. @option{-X} option can be used to convert
 old style (pre 0.3.0) config to xml one:
 @example
 $ rspamd -c ./rspamd.conf -X ./rspamd.xml
@@ -209,6 +215,7 @@ $ rspamd -c ./rspamd.conf -X ./rspamd.xml
 @noindent
 After this command new xml config would be dumped to rspamd.xml file.
 
+@node signals
 @section Managing rspamd with signals.
 First of all it is important to note that all user's signals should be sent to
 rspamd main process and not to its children (as for child processes these
@@ -251,6 +258,7 @@ dropped and if new config is syntaxically incorrect old config would be used.
 
 @chapter Configuring of rspamd.
 
+@node principles
 @section Principles of work.
 
 We need to define several terms to explain configuration of rspamd. Rspamd
@@ -341,10 +349,11 @@ required to make DNS or other network request and to wait result. So modules can
 pause message's processing while waiting for some event. This is true for lua
 modules as well.
 
+@node config structure
 @section Rspamd config file structure.
 
 Rspamd config file is placed in PREFIX/etc/rspamd.xml by default. You can
-specify other location by passing @emph{-c} option to rspamd. Rspamd config file
+specify other location by passing @option{-c} option to rspamd. Rspamd config file
 contains configuration parameters in XML format. XML was selected for rather
 simple manual editing config file and for simple automatic generation as well as
 for dynamic configuration. I've decided to move rules logic from XML file to
@@ -411,9 +420,10 @@ So common structure of rspamd.xml can be described this way:
 </rspamd>
 @end example
 
-Each of these section would be described further in details.
+Each of these sections would be described further in details.
 
 @section Rspamd configuration atoms.
+@node config atoms
 
 There are several primitive types of rspamd configuration parameters:
 @itemize @bullet
@@ -456,5 +466,100 @@ list}. IP list contains of ip addresses in dot notation (e.g.
 that begin with @emph{#} symbol are considered as comments and are ignored while
 parsing. Domains list is very like ip list with difference that it contains
 domain names.
+
+@section Main rspamd configuration section.
+
+Main rspamd configurtion section contains several definitions that determine
+main parameters of rspamd for example path to pidfile, temporary directory, lua
+includes, several limits e.t.c. Here is list of this directives explained:
+
+@multitable @columnfractions .2 .8
+@headitem Tag @tab Mean
+
+@item @var{<tempdir>}
+@tab Defines temporary directory for rspamd. Default is to use @env{TEMP}
+environment variable or @code{/tmp}.
+
+@item @var{<pidfile>}
+@tab Path to rspamd pidfile. Here would be stored a pid of main process.
+Pidfile is used to manage rspamd from start scripts.
+
+@item @var{<statfile_pool_size>}
+@tab Limit of statfile pool size: a total number of bytes that can be used for
+mapping statistic files. Rspamd is using LRU system and would unmap the most
+unused statfile when this limit would be reached. The common sense is to set
+this variable equal to total size of all statfiles, but it can be less than this
+in case of dynamic statfiles (for per-user statistic).
+
+@item @var{<filters>}
+@tab List of enabled internal filters. Items in this list can be separated by
+spaces, semicolons or commas. If internal filter is not specified in this line
+it would not be loaded or enabled.
+
+@item @var{<raw_mode>}
+@tab Boolean flag that specify whether rspamd should try to convert all
+messages to UTF8 or not. If @var{raw_mode} is enabled all messages are
+processed @emph{as is} and are not converted. Raw mode is faster than utf mode
+but it may confuse statistics and regular expressions.
+
+@item @var{<lua>}
+@tab Defines path to lua file that should be loaded fro configuration. Path to
+this file is defined in @strong{src} attribute. Text inside tag is required but
+is not parsed (this is stupid limitation of parser's design).
+@end multitable
+
+@section Rspamd logging configuration.
+
+Rspamd has a number of logging variants. First of all there are three types of
+logs that are supported by rspamd: console loggging (just output log messages to
+console), file logging (output log messages to file) and logging via syslog.
+Also it is possible to filter logging to specific level:
+@itemize @bullet
+@item error - log only critical errors
+@item warning - log errors and warnings
+@item info - log all non-debug messages
+@item debug - log all including debug messages (huge amount of logging)
+@end itemize
+Also it is possible to turn on debug messages for specific ip addresses. This
+ability is usefull for testing.
+
+For each logging type there are special mandatory parameters: log facility for
+syslog (read @emph{syslog (3)} manual page for details about facilities), log
+file for file logging. Also file logging may be buffered for speeding up. For
+reducing logging noise rspamd detects for sequential identic log messages and
+replace them with total number of repeats:
+@example
+#81123(fuzzy): May 11 19:41:54 rspamd file_log_function: Last message repeated 155 times
+#81123(fuzzy): May 11 19:41:54 rspamd process_write_command: fuzzy hash was successfully added
+@end example
+
+Here is summary of logging parameters:
+
+
+@multitable @columnfractions .2 .8
+@headitem Tag @tab Mean
+@item @var{<type>}
+@tab Defines logging type (file, console or syslog). For each type mandatory
+attriute must be present:
+@itemize @bullet
+@item @emph{filename} - path to log file for file logging type;
+@item @emph{facility} - syslog logging facility.
+@end itemize
+
+@item @var{<level>}
+@tab Defines loggging level (error, warning, info or debug).
+
+@item @var{<log_buffer>}
+@tab For file and console logging defines buffer in bytes (kilo, mega or giga
+bytes) that would be used for logging output.
+
+@item @var{<log_urls>}
+@tab Flag that defines whether all urls in message would be logged. Useful for
+testing.
+
+@item @var{<debug_ip>}
+@tab List that contains ip addresses for which debugging would be turned on. For
+more information about ip lists look at @ref{config atoms}.
+@end multitable
 
 @bye
