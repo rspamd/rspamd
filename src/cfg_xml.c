@@ -1258,6 +1258,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			}
 			break;
 		case XML_READ_MODULE:
+		case XML_READ_METRIC:
 		case XML_READ_MODULES:
 		case XML_READ_FACTORS:
 		case XML_READ_STATFILE:
