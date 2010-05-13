@@ -562,4 +562,137 @@ testing.
 more information about ip lists look at @ref{config atoms}.
 @end multitable
 
+@section Factors configuration.
+
+Setting of rspamd factors is the main way to change rules' weights. Factors set
+up weights for all rules: for those that have static weights (for example simple
+regexp rules) and for those that have dynamic weights (for example statistic
+rules). In all cases the base weight of rule is multiplied by factor value. For
+static rules base weight is usually 1.0. So we have:
+@itemize @bullet
+@item @math{w_{symbol} = w_{static} * factor} - for static rules
+@item @math{w_{symbol} = w_{dynamic} * factor} - for dynamic rules
+@end itemize
+Also there is an ability to add so called "grow factor" - additional multiplier
+that would be used when we have more than one symbol in metric. So for each
+added symbol this factor would increment its power. This can be written as:
+@math{w_{total} = w_1 * gf ^ 0 + w_2 * gf ^ 1 + ... + w_n * gf ^ {n - 1}}
+Grow multiplier is used to increment weight of rules when message got many
+symbols (likely spammy). Note that only rules with positive weights would
+increase grow factor, those with negative weights would just be added. Also note
+that grow factor can be less than 1 but it is uncommon use (in this case we
+would have weight lowering when we have many symbols for this message). Factors
+can be set up with config section @emph{factors}:
+@example
+<factors>
+ <factor name="MIME_HTML_ONLY">0.1</factor>
+ <grow_factor>1.1</grow_factor>
+</factors>
+@end example
+
+Note that you basically need to add factor when you add additional rules. The
+decision of weight of newly added rule basically depends on its importance. For
+example you are absolutely sure that some rule would add a symbol on only spam
+messages, so you can increase weight of such rule so it would filter such spam.
+But if you increase weight of rules you should be more or less sure that it
+would not increase false positive errors rate to unacceptable level (false
+positive errors are errors when good mail is treated as spam). Rspamd comes with
+a set of default rules and default weights of that rules are placed in
+rspamd.xml.sample. In most cases it is reasonable to change them for your mail
+system, for example increase weights of some rules or decrease for others. Also
+note that default grow factor is 1.0 that means that weights of rules do not
+depend on count of added symbols. For some situations it useful to set grow
+factor to value more than 1.0. Also by modifying factors it is possible to
+manage static multiplier for dynamic rules.
+
+@section Workers configuration.
+
+Workers are rspamd processes that are doing specific jobs. Now are supported 4
+types of workers:
+@enumerate 1
+@item Normal worker - a typical worker that process messages.
+@item Controller worker - a worker that manages rspamd, get statistics and do
+learning tasks.
+@item Fuzzy storage worker - a worker that contains a collection of fuzzy
+hashes.
+@item LMTP worker - experimental worker that acts as LMTP server.
+@end enumerate
+
+These types of workers has some common parameters:
+@multitable @columnfractions .2 .8
+@headitem Parameter @tab Mean
+@item type
+@tab Type of worker (normal, controller, lmtp or fuzzy)
+@item bind_socket
+@tab Socket credits to bind this worker to. Inet and unix sockets are supported:
+@example
+<bind_socket>localhost:11333</bind_socket>
+<bind_socket>/var/run/rspamd.sock</bind_socket>
+@end example
+@noindent
+Also for inet sockets you may specify @code{*} as address to bind to all
+available inet interfaces:
+@example
+<bind_socket>*:11333</bind_socket>
+@end example
+@noindent
+@item count
+@tab Number of worker processes of this type. By default this number is
+equialent to number of logical processors in system.
+@item maxfiles
+@tab Maximum number of file descriptors available to this worker process.
+@item maxcore
+@tab Maximum size of core file that would be dumped in cause of critical errors
+(in mega/kilo/giga bytes).
+@end multitable
+
+Also each of workers types can have specific parameters:
+@itemize @bullet
+@item Normal worker:
+@itemize @bullet
+@item @var{custom_filters} - path to dynamically loaded plugins that would do real
+check of incoming messages. These modules are described further.
+@item @var{mime} - if this parameter is "no" than this worker assumes that incoming
+messages are in non-mime format (e.g. forum's messages) and standart mime
+headers are added to them.
+@end itemize
+@item Controller worker:
+@itemize @bullet
+@item @var{password} - a password that would be used to access to contorller's
+privilleged commands.
+@end itemize
+@item Fuzzy worker:
+@itemize @bullet
+@item @var{hashfile} - a path to file where fuzzy hashes would be permamently stored.
+@item @var{use_judy} - if libJudy is present in system use it for faster storage.
+@item @var{frequent_score} - if judy is not turned on use this score to place hashes
+with score that is more than this value to special faster list (this is designed
+to increase lookup speed for frequent hashes).
+@item @var{expire} - time to expire of fuzzy hashes after their placement in storage.
+@end itemize
+@end itemize
+
+These parameters can be set inside worker's definition:
+@example
+<worker>
+  <type>fuzzy</type>
+  <bind_socket>*:11335</bind_socket>
+  <count>1</count>
+  <maxfiles>2048</maxfiles>
+  <maxcore>0</maxcore>
+<!-- Other params -->
+    <param name="use_judy">yes</param>
+    <param name="hashfile">/spool/rspamd/fuzzy.db</param>
+    <param name="expire">10d</param>
+</worker>
+@end example
+@noindent
+
+The purpose of each worker's type would be described later. The main parameters
+that could be defined are bind sockets for workers, their count, password for
+controller's commands and parameters for fuzzy storage. Default config provides
+reasonable values of this parameters (except password of course), so for basic
+configuration you may just replace controller's password to more secure one.
+
+
 @bye
