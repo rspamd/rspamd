@@ -284,7 +284,7 @@ reread_config (struct rspamd_main *rspamd)
 				filt = l->data;
 				if (filt->module) {
 					(void)filt->module->module_reconfig_func (rspamd->cfg);
-					msg_info ("reconfig of %s", filt->module->name);
+					msg_debug ("reconfig of %s", filt->module->name);
 				}
 				l = g_list_next (l);
 			}

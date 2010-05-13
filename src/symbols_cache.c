@@ -241,7 +241,7 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 	item->user_data = user_data;
 	item->s->weight = weight;
 	(*cache)->used_items++;
-	msg_info ("used items: %d, added symbol: %s", (*cache)->used_items, name);
+	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	set_counter (item->s->symbol, 0);
 }
 
