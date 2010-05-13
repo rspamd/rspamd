@@ -288,6 +288,7 @@ reread_config (struct rspamd_main *rspamd)
 				}
 				l = g_list_next (l);
 			}
+			init_lua_filters (rspamd->cfg);
 			init_metrics_cache (rspamd->cfg);
 			msg_info ("config rereaded successfully");
 		}

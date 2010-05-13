@@ -1310,6 +1310,15 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			break;
 		case XML_READ_CLASSIFIER:
 			CHECK_TAG ("classifier", FALSE);
+			if (res) {
+				ccf = ud->section_pointer;
+				if (ccf->statfiles == NULL) {
+					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "classifier cannot contains no statfiles");
+					ud->state = XML_ERROR;
+					return;
+				}
+				ud->cfg->classifiers = g_list_prepend (ud->cfg->classifiers, ccf);
+			}
 			break;
 		case XML_READ_STATFILE:
 			CHECK_TAG ("statfile", FALSE);
@@ -1618,6 +1627,9 @@ xml_dump_factors (struct config_file *cfg, FILE *f)
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->factors, xml_factors_callback, (gpointer)f);
+
+	/* Grow factor */
+	fprintf (f, " <grow_factor>%.2f</grow_factor>" EOL, cfg->grow_factor);
 
 	/* Print footer comment */
 	fprintf (f, "</factors>" EOL "<!-- End of factors section -->" EOL EOL);
