@@ -74,6 +74,7 @@ typedef struct memory_pool_s {
 	struct _pool_chain *first_pool;			/**< first page								*/
 	struct _pool_chain_shared *shared_pool;	/**< shared chain							*/
 	struct _pool_destructors *destructors;	/**< destructors chain						*/
+	GHashTable *variables;					/**< private memory pool variables			*/
 } memory_pool_t;
 
 /**
@@ -234,6 +235,24 @@ void memory_pool_stat (memory_pool_stat_t *st);
  * @return size of memory page in system
  */
 memory_pool_ssize_t memory_pool_get_size ();
+
+/**
+ * Set memory pool variable
+ * @param pool memory pool object
+ * @param name name of variable
+ * @param gpointer value value of variable
+ * @param destructor pointer to function-destructor
+ */
+void memory_pool_set_variable (memory_pool_t *pool, const gchar *name, gpointer value, pool_destruct_func destructor);
+
+/**
+ * Get memory pool variable
+ * @param pool memory pool object
+ * @param name name of variable
+ * @return NULL or pointer to variable data
+ */
+gpointer memory_pool_get_variable (memory_pool_t *pool, const gchar *name);
+
 
 /**
  * Macro that return free space in pool page

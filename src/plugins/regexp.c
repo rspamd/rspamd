@@ -78,7 +78,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
 
 	regexp_module_ctx->filter = regexp_common_filter;
-	regexp_module_ctx->regexp_pool = memory_pool_new (1024);
+	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
 	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
@@ -231,7 +231,7 @@ int
 regexp_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (regexp_module_ctx->regexp_pool);
-	regexp_module_ctx->regexp_pool = memory_pool_new (1024);
+	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
 
 	return regexp_module_config (cfg);
 }

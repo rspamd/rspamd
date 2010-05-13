@@ -90,23 +90,31 @@ fl_cmp (const void *s1, const void *s2)
 }
 
 /* Cache for regular expressions that are used in functions */
-static GHashTable              *re_cache = NULL;
-
 void                           *
-re_cache_check (const char *line)
+re_cache_check (const char *line, memory_pool_t *pool)
 {
+	GHashTable              *re_cache;
+	
+	re_cache = memory_pool_get_variable (pool, "re_cache");
+
 	if (re_cache == NULL) {
 		re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
 		return NULL;
 	}
 	return g_hash_table_lookup (re_cache, line);
 }
 
 void
-re_cache_add (char *line, void *pointer)
+re_cache_add (char *line, void *pointer, memory_pool_t *pool)
 {
+	GHashTable              *re_cache;
+	
+	re_cache = memory_pool_get_variable (pool, "re_cache");
+
 	if (re_cache == NULL) {
 		re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
 	}
 
 	g_hash_table_insert (re_cache, line, pointer);
@@ -677,7 +685,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 	}
 
 	/* Avoid multiply regexp structures for similar regexps */
-	if ((check = (struct rspamd_regexp *)re_cache_check (begin)) != NULL) {
+	if ((check = (struct rspamd_regexp *)re_cache_check (begin, pool)) != NULL) {
 		/* Additional check for headers */
 		if (result->type == REGEXP_HEADER || result->type == REGEXP_RAW_HEADER) {
 			if (result->header && check->header) {
@@ -714,7 +722,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 	}
 
 	/* Add to cache for further usage */
-	re_cache_add (result->regexp_text, result);
+	re_cache_add (result->regexp_text, result, pool);
 	return result;
 }
 
@@ -986,13 +994,13 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 		}
 		if (*param_pattern == '/') {
 			/* This is regexp, so compile and create g_regexp object */
-			if ((re = re_cache_check (param_pattern)) == NULL) {
+			if ((re = re_cache_check (param_pattern, task->cfg->cfg_pool)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
 					msg_warn ("cannot compile regexp for function");
 					return FALSE;
 				}
-				re_cache_add (param_pattern, re);
+				re_cache_add (param_pattern, re, task->cfg->cfg_pool);
 			}
 			if ((r = task_cache_check (task, re)) == -1) {
 				if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
@@ -1084,13 +1092,13 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 
 		if (*param_pattern == '/') {
 			/* This is regexp, so compile and create g_regexp object */
-			if ((re = re_cache_check (param_pattern)) == NULL) {
+			if ((re = re_cache_check (param_pattern, task->cfg->cfg_pool)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
 					msg_warn ("cannot compile regexp for function");
 					return FALSE;
 				}
-				re_cache_add (param_pattern, re);
+				re_cache_add (param_pattern, re, task->cfg->cfg_pool);
 			}
 			if ((r = task_cache_check (task, re)) == -1) {
 				if (g_regex_match (re->regexp, ct->subtype, 0, NULL) == TRUE) {
@@ -1143,13 +1151,13 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 
 		if (*param_pattern == '/') {
 			/* This is regexp, so compile and create g_regexp object */
-			if ((re = re_cache_check (param_pattern)) == NULL) {
+			if ((re = re_cache_check (param_pattern, task->cfg->cfg_pool)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
 				if (re == NULL) {
 					msg_warn ("cannot compile regexp for function");
 					return FALSE;
 				}
-				re_cache_add (param_pattern, re);
+				re_cache_add (param_pattern, re, task->cfg->cfg_pool);
 			}
 			if ((r = task_cache_check (task, re)) == -1) {
 				if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
@@ -1326,13 +1334,13 @@ compare_subtype (struct worker_task *task, const localContentType * ct, char *su
 
 	if (*subtype == '/') {
 		/* This is regexp, so compile and create g_regexp object */
-		if ((re = re_cache_check (subtype)) == NULL) {
+		if ((re = re_cache_check (subtype, task->cfg->cfg_pool)) == NULL) {
 			re = parse_regexp (task->cfg->cfg_pool, subtype, task->cfg->raw_mode);
 			if (re == NULL) {
 				msg_warn ("cannot compile regexp for function");
 				return FALSE;
 			}
-			re_cache_add (subtype, re);
+			re_cache_add (subtype, re, task->cfg->cfg_pool);
 		}
 		if ((r = task_cache_check (task, re)) == -1) {
 			if (g_regex_match (re->regexp, subtype, 0, NULL) == TRUE) {
@@ -1393,14 +1401,14 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 
 		if (*param_type == '/') {
 			/* This is regexp, so compile and create g_regexp object */
-			if ((re = re_cache_check (param_type)) == NULL) {
+			if ((re = re_cache_check (param_type, task->cfg->cfg_pool)) == NULL) {
 				re = parse_regexp (task->cfg->cfg_pool, param_type, task->cfg->raw_mode);
 				if (re == NULL) {
 					msg_warn ("cannot compile regexp for function");
 					cur = g_list_next (cur);
 					continue;
 				}
-				re_cache_add (param_type, re);
+				re_cache_add (param_type, re, task->cfg->cfg_pool);
 			}
 			if ((r = task_cache_check (task, re)) == -1) {
 				if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {

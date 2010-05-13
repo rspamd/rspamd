@@ -120,8 +120,18 @@ post_cache_init (struct symbols_cache *cache)
 	qsort (cache->items, cache->used_items, sizeof (struct cache_item), cache_logic_cmp);
 }
 
+/* Unmap cache file */
+static void
+unmap_cache_file (gpointer arg)
+{
+	struct symbols_cache           *cache = arg;
+	
+	/* A bit ugly usage */
+	munmap (cache->map, cache->used_items * sizeof (struct saved_cache_item));
+}
+
 static                          gboolean
-mmap_cache_file (struct symbols_cache *cache, int fd)
+mmap_cache_file (struct symbols_cache *cache, int fd, memory_pool_t *pool)
 {
 	void                           *map;
 	int                             i;
@@ -134,19 +144,21 @@ mmap_cache_file (struct symbols_cache *cache, int fd)
 	}
 	/* Close descriptor as it would never be used */
 	close (fd);
+	cache->map = map;
 	/* Now free old values for saved cache items and fill them with mmapped ones */
 	for (i = 0; i < cache->used_items; i++) {
 		g_free (cache->items[i].s);
 		cache->items[i].s = ((struct saved_cache_item *)map) + i;
 	}
-
+	
 	post_cache_init (cache);
+
 	return TRUE;
 }
 
 /* Fd must be opened for writing, after creating file is mmapped */
 static                          gboolean
-create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
+create_cache_file (struct symbols_cache *cache, const char *filename, int fd, memory_pool_t *pool)
 {
 	int                             i;
 	GChecksum                      *cksum;
@@ -193,7 +205,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd)
 		return FALSE;
 	}
 
-	return mmap_cache_file (cache, fd);
+	return mmap_cache_file (cache, fd, pool);
 }
 
 void
@@ -205,6 +217,7 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 	if (*cache == NULL) {
 		*cache = g_new0 (struct symbols_cache, 1);
 	}
+
 	if ((*cache)->items == NULL) {
 		(*cache)->cur_items = MIN_CACHE;
 		(*cache)->used_items = 0;
@@ -228,7 +241,27 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 	item->user_data = user_data;
 	item->s->weight = weight;
 	(*cache)->used_items++;
+	msg_info ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	set_counter (item->s->symbol, 0);
+}
+
+static void
+free_cache (gpointer arg)
+{
+	struct symbols_cache           *cache = arg;
+	int                             i;
+	
+	if (cache->map == NULL) {
+		/* Free items in memory, otherwise  */
+		for (i = 0; i < cache->cur_items; i++) {
+			g_free (cache->items[i].s);
+		}
+	}
+	else {
+		unmap_cache_file (cache);
+	}
+
+	g_free (cache);
 }
 
 gboolean
@@ -239,6 +272,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 	GChecksum                      *cksum;
 	u_char                         *mem_sum, *file_sum;
 	gsize                           cklen;
+	gboolean                        res;
 
 	if (cache == NULL || cache->items == NULL) {
 		return FALSE;
@@ -255,6 +289,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 		post_cache_init (cache);
 		return TRUE;
 	}
+	
 
 	/* First of all try to stat file */
 	if (stat (filename, &st) == -1) {
@@ -266,7 +301,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 				return FALSE;
 			}
 			else {
-				return create_cache_file (cache, filename, fd);
+				return create_cache_file (cache, filename, fd, pool);
 			}
 		}
 		else {
@@ -323,7 +358,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 			return FALSE;
 		}
 		else {
-			return create_cache_file (cache, filename, fd);
+			return create_cache_file (cache, filename, fd, pool);
 		}
 	}
 
@@ -331,7 +366,9 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 	g_free (file_sum);
 	g_checksum_free (cksum);
 	/* MMap cache file and copy saved_cache structures */
-	return mmap_cache_file (cache, fd);
+	res = mmap_cache_file (cache, fd, pool);
+	memory_pool_add_destructor (pool, (pool_destruct_func)free_cache, cache);
+	return res;
 }
 
 gboolean

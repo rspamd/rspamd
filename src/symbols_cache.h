@@ -27,6 +27,7 @@ struct symbols_cache {
 	guint cur_items;
 	guint used_items;
 	guint uses;
+	gpointer map;
 	memory_pool_rwlock_t *lock;
 };
 

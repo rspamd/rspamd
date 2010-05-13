@@ -52,7 +52,7 @@
 rspamd_hash_t                  *counters;
 
 static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
-static gboolean                 load_rspamd_config (struct config_file *cfg);
+static gboolean                 load_rspamd_config (struct config_file *cfg, gboolean init_modules);
 static void                     init_metrics_cache (struct config_file *cfg);
 
 sig_atomic_t                    do_restart;
@@ -266,7 +266,7 @@ reread_config (struct rspamd_main *rspamd)
 		tmp_cfg->cfg_name = cfg_file;
 		init_lua (tmp_cfg);
 
-		if (! load_rspamd_config (tmp_cfg)) {
+		if (! load_rspamd_config (tmp_cfg, FALSE)) {
 			msg_err ("cannot parse new config file, revert to old one");
 			free_config (tmp_cfg);
 		}
@@ -276,7 +276,6 @@ reread_config (struct rspamd_main *rspamd)
 			close_log ();
 			g_free (rspamd->cfg);
 			rspamd->cfg = tmp_cfg;
-			post_load_config (rspamd->cfg);
 			config_logger (rspamd, FALSE);
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
@@ -285,6 +284,7 @@ reread_config (struct rspamd_main *rspamd)
 				filt = l->data;
 				if (filt->module) {
 					(void)filt->module->module_reconfig_func (rspamd->cfg);
+					msg_info ("reconfig of %s", filt->module->name);
 				}
 				l = g_list_next (l);
 			}
@@ -630,7 +630,7 @@ convert_old_config (struct rspamd_main *rspamd)
 }
 
 static gboolean
-load_rspamd_config (struct config_file *cfg)
+load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 {
 	GList                          *l;
 	struct filter                  *filt;
@@ -653,19 +653,21 @@ load_rspamd_config (struct config_file *cfg)
 
 	/* Do post-load actions */
 	post_load_config (cfg);
+	
+	if (init_modules) {
+		/* Init C modules */
+		l = g_list_first (cfg->filters);
 
-	/* Init C modules */
-	l = g_list_first (cfg->filters);
-
-	while (l) {
-		filt = l->data;
-		if (filt->module) {
-			cur_module = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_ctx));
-			if (filt->module->module_init_func (cfg, &cur_module) == 0) {
-				g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
+		while (l) {
+			filt = l->data;
+			if (filt->module) {
+				cur_module = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_ctx));
+				if (filt->module->module_init_func (cfg, &cur_module) == 0) {
+					g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
+				}
 			}
+			l = g_list_next (l);
 		}
-		l = g_list_next (l);
 	}
 	
 	return TRUE;
@@ -798,7 +800,7 @@ main (int argc, char **argv, char **env)
 		}
 	}
 
-	if (! load_rspamd_config (rspamd->cfg)) {
+	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 

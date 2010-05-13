@@ -148,6 +148,8 @@ memory_pool_new (memory_pool_ssize_t size)
 	new->shared_pool = NULL;
 	new->first_pool = new->cur_pool;
 	new->destructors = NULL;
+	/* Set it upon first call of set variable */
+	new->variables = NULL;
 
 	mem_pool_stat->pools_allocated++;
 
@@ -460,6 +462,9 @@ memory_pool_delete (memory_pool_t * pool)
 		mem_pool_stat->chunks_freed++;
 		STAT_UNLOCK ();
 	}
+	if (pool->variables) {
+		g_hash_table_destroy (pool->variables);
+	}
 
 	mem_pool_stat->pools_freed++;
 	g_slice_free (memory_pool_t, pool);
@@ -569,6 +574,30 @@ memory_pool_wunlock_rwlock (memory_pool_rwlock_t * lock)
 {
 	memory_pool_unlock_mutex (lock->__w_lock);
 }
+
+void 
+memory_pool_set_variable (memory_pool_t *pool, const gchar *name, gpointer value, pool_destruct_func destructor)
+{
+	if (pool->variables == NULL) {
+		pool->variables = g_hash_table_new (g_str_hash, g_str_equal);
+	}
+
+	g_hash_table_insert (pool->variables, memory_pool_strdup (pool, name), value);
+	if (destructor != NULL) {
+		memory_pool_add_destructor (pool, destructor, value);
+	}
+}
+
+gpointer
+memory_pool_get_variable (memory_pool_t *pool, const gchar *name)
+{
+	if (pool->variables == NULL) {
+		return NULL;
+	}
+
+	return g_hash_table_lookup (pool->variables, name);
+}
+
 
 /*
  * vi:ts=4
