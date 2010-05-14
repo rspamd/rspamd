@@ -33,7 +33,7 @@ reconf['R_BAD_CTE_7BIT'] = string.format('(%s) & (%s) & (%s)', r_ctype_text, r_c
 reconf['MISSING_TO']= '!header_exists(To)';
 
 -- Detects undisclosed recipients
-local undisc_rcpt = 'To=/^<?undisclosed-recipient/Hi'
+local undisc_rcpt = 'To=/^<?undisclosed[- ]recipient/Hi'
 reconf['R_UNDISC_RCPT'] = string.format('(%s) | (%s)', reconf['MISSING_TO'], undisc_rcpt)
 
 -- Detects missing Message-Id

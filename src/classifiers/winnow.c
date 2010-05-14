@@ -138,8 +138,6 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	g_assert (ctx != NULL);
 
 	data.pool = pool;
-	data.sum = 0;
-	data.count = 0;
 	data.now = time (NULL);
 	data.ctx = ctx;
     
@@ -167,6 +165,8 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
     }
 	while (cur) {
 		st = cur->data;
+		data.sum = 0;
+		data.count = 0;
 		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
 			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 				msg_warn ("cannot open %s, skip it", st->path);
