@@ -29,6 +29,11 @@
  * - metric (string): metric to insert symbol (default: 'default')
  * - symbol (string): symbol to insert (default: 'R_FUZZY')
  * - max_score (double): maximum score to that weights of hashes would be normalized (default: 0 - no normalization)
+ *
+ * - fuzzy_map (string): a string that contains map in format { fuzzy_key => [ symbol, weight ] } where fuzzy_key is number of 
+ *   fuzzy list. This string itself should be in format 1:R_FUZZY_SAMPLE1:10,2:R_FUZZY_SAMPLE2:1 etc, where first number is fuzzy
+ *   key, second is symbol to insert and third - weight for normalization
+ *
  * - min_length (integer): minimum length (in characters) for text part to be checked for fuzzy hash (default: 0 - no limit)
  * - whitelist (map string): map of ip addresses that should not be checked with this module
  * - servers (string): list of fuzzy servers in format "server1:port,server2:port" - these servers would be used for checking and storing
@@ -61,6 +66,12 @@ struct storage_server {
 	uint16_t                        port;
 };
 
+struct fuzzy_mapping {
+	uint32_t fuzzy_flag;
+	char *symbol;
+	double weight;
+};
+
 struct fuzzy_ctx {
 	int                             (*filter) (struct worker_task * task);
 	char                           *metric;
@@ -71,7 +82,7 @@ struct fuzzy_ctx {
 	double                          max_score;
 	uint32_t                        min_hash_len;
 	radix_tree_t                   *whitelist;
-	GHashTable                     *flags;
+	GHashTable                     *mappings;
 };
 
 struct fuzzy_client_session {
@@ -105,32 +116,44 @@ static void                     fuzzy_symbol_callback (struct worker_task *task,
 static void                     fuzzy_add_handler (char **args, struct controller_session *session);
 static void                     fuzzy_delete_handler (char **args, struct controller_session *session);
 
-/* Flags string is in format <numeric_flag>:<SYMBOL>[, <numeric_flag>:<SYMBOL>...] */
+/* Flags string is in format <numeric_flag>:<SYMBOL>:weight[, <numeric_flag>:<SYMBOL>:weight...] */
 static void
 parse_flags_string (char *str)
 {
-	char                          **strvec, *p, *item, *err_str;
-	int                             num, i, flag;
+	char                          **strvec, *item, *err_str, **map_str;
+	int                             num, i, t;
+	struct fuzzy_mapping           *map;
 	
 	strvec = g_strsplit (str, ", ;", 0);
 	num = g_strv_length (strvec);
 
 	for (i = 0; i < num; i ++) {
 		item = strvec[i];
-		if ((p = strchr (item, ':')) != NULL) {
-			*p = '\0';
-			p ++;
-			/* Now in p we have name of symbol and in item we have its number */
+		map_str = g_strsplit (item, ":", 3);
+		t = g_strv_length (map_str);
+		if (t != 3 && t != 2) {
+			msg_err ("invalid fuzzy mapping: %s", item);
+		}
+		else {
+			map = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mapping));
+			map->symbol = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, map_str[1]);
+
 			errno = 0;
-			flag = strtol (item, &err_str, 10);
+			map->fuzzy_flag = strtol (map_str[0], &err_str, 10);
 			if (errno != 0 || (err_str && *err_str != '\0')) {
-				msg_info ("cannot parse flag %s: %s", item, strerror (errno));
+				msg_info ("cannot parse flag %s: %s", map_str[0], strerror (errno));
+			}
+			else if (t == 2) {
+				/* Weight is skipped in definition */
+				map->weight = fuzzy_module_ctx->max_score;
 			}
 			else {
+				map->weight = strtol (map_str[2], &err_str, 10);
 				/* Add flag to hash table */
-				g_hash_table_insert (fuzzy_module_ctx->flags, GINT_TO_POINTER(flag), memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, p));
+				g_hash_table_insert (fuzzy_module_ctx->mappings, GINT_TO_POINTER(map->fuzzy_flag), map);
 			}
 		}
+		g_strfreev (map_str);
 	}
 
 	g_strfreev (strvec);
@@ -196,9 +219,9 @@ parse_servers_string (char *str)
 }
 
 static double
-fuzzy_normalize (int32_t in)
+fuzzy_normalize (int32_t in, double weight)
 {
-	double ms = fuzzy_module_ctx->max_score, ams = fabs (ms), ain = fabs (in);
+	double ms = weight, ams = fabs (ms), ain = fabs (in);
 	
 	if (ams > 0.001) {
 		if (ain < ams / 2.) {
@@ -225,7 +248,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
 	fuzzy_module_ctx->servers = NULL;
 	fuzzy_module_ctx->servers_num = 0;
-	fuzzy_module_ctx->flags = g_hash_table_new (g_direct_hash, g_direct_equal);
+	fuzzy_module_ctx->mappings = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
@@ -279,7 +302,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
 		parse_servers_string (value);
 	}
-	if ((value = get_module_opt (cfg, "fuzzy_check", "flags")) != NULL) {
+	if ((value = get_module_opt (cfg, "fuzzy_check", "fuzzy_map")) != NULL) {
 		parse_flags_string (value);
 	}
 
@@ -323,7 +346,7 @@ fuzzy_check_module_reconfig (struct config_file *cfg)
 	fuzzy_module_ctx->servers_num = 0;
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
 	
-	g_hash_table_remove_all (fuzzy_module_ctx->flags);
+	g_hash_table_remove_all (fuzzy_module_ctx->mappings);
 	return fuzzy_check_module_config (cfg);
 }
 
@@ -349,6 +372,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 {
 	struct fuzzy_client_session    *session = arg;
 	struct fuzzy_cmd                cmd;
+	struct fuzzy_mapping           *map;
 	char                            buf[62], *err_str, *symbol;
 	int                             value = 0, flag = 0, r;
 	double                          nval;
@@ -381,12 +405,18 @@ fuzzy_io_callback (int fd, short what, void *arg)
 				flag = strtol (err_str + 1, &err_str, 10);
 			}
 			*err_str = '\0';
-			nval = fuzzy_normalize (value);
-			/* Get symbol by flag */
-			if ((symbol = g_hash_table_lookup (fuzzy_module_ctx->flags, GINT_TO_POINTER (flag))) == NULL) {
-				/* Default symbol */
+			/* Get mapping by flag */
+			if ((map = g_hash_table_lookup (fuzzy_module_ctx->mappings, GINT_TO_POINTER (flag))) == NULL) {
+				/* Default symbol and default weight */
 				symbol = fuzzy_module_ctx->symbol;
+				nval = fuzzy_normalize (value, fuzzy_module_ctx->max_score);
 			}
+			else {
+				/* Get symbol and weight from map */
+				symbol = map->symbol;
+				nval = fuzzy_normalize (value, map->weight);
+			}
+
 			snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
 			insert_result (session->task, fuzzy_module_ctx->metric, symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
