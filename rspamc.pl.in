@@ -8,7 +8,6 @@
 # By default rspamc.pl would read ./rspamd.conf and default command is SYMBOLS
 
 use Socket qw(:DEFAULT :crlf);
-use Getopt::Std;
 use Term::Cap;
 use Mail::Rspamd::Client;
 
@@ -68,7 +67,7 @@ OR <search-key1> <search-key2> - Messages that match either search key (same for
 
 Version:   @RSPAMD_VERSION@
 EOD
-exit;
+	exit;
 };
 
 sub load_hosts_file {
@@ -192,10 +191,51 @@ my %args;
 
 HELP_MESSAGE() unless scalar @ARGV >= 1;
 
-getopt('pc:h:P:s:d:w:S:H:i:', \%args);
+while (my $opt = shift @ARGV) {
+	if ($opt eq '-c') {
+		$args{c} = shift @ARGV;
+	}
+	elsif ($opt eq '-h') {
+		$args{h} = shift @ARGV;
+	}
+	elsif ($opt eq '-P') {
+		$args{P} = shift @ARGV;
+	}
+	elsif ($opt eq '-s') {
+		$args{s} = shift @ARGV;
+	}
+	elsif ($opt eq '-w') {
+		$args{w} = shift @ARGV;
+	}
+	elsif ($opt eq '-d') {
+		$args{d} = shift @ARGV;
+	}
+	elsif ($opt eq '-S') {
+		$args{S} = shift @ARGV;
+	}
+	elsif ($opt eq '-H') {
+		$args{H} = shift @ARGV;
+	}
+	elsif ($opt eq '-i') {
+		$args{i} = shift @ARGV;
+	}
+	elsif ($opt eq '-p') {
+		$args{p} = 1;
+	}
+	elsif ($opt eq '-?' || $opt eq '--help') {
+		HELP_MESSAGE();
+	}
+	elsif ($opt eq '--') {
+		last;
+	}
+	else {
+		unshift @ARGV,$opt;
+		last;
+	}
+}
 
-my $cmd = shift;
-my @path = shift;
+my $cmd = shift @ARGV;
+my @path = shift @ARGV;
 
 if (!defined ($cmd) || $cmd eq '') {
     $cmd = 'SYMBOLS';
