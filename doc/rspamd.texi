@@ -621,9 +621,9 @@ hashes.
 These types of workers has some common parameters:
 @multitable @columnfractions .2 .8
 @headitem Parameter @tab Mean
-@item type
+@item @emph{<type>}
 @tab Type of worker (normal, controller, lmtp or fuzzy)
-@item bind_socket
+@item @emph{<bind_socket>}
 @tab Socket credits to bind this worker to. Inet and unix sockets are supported:
 @example
 <bind_socket>localhost:11333</bind_socket>
@@ -636,12 +636,12 @@ available inet interfaces:
 <bind_socket>*:11333</bind_socket>
 @end example
 @noindent
-@item count
+@item @emph{<count>}
 @tab Number of worker processes of this type. By default this number is
 equialent to number of logical processors in system.
-@item maxfiles
+@item @emph{<maxfiles>}
 @tab Maximum number of file descriptors available to this worker process.
-@item maxcore
+@item @emph{<maxcore>}
 @tab Maximum size of core file that would be dumped in cause of critical errors
 (in mega/kilo/giga bytes).
 @end multitable
@@ -650,25 +650,25 @@ Also each of workers types can have specific parameters:
 @itemize @bullet
 @item Normal worker:
 @itemize @bullet
-@item @var{custom_filters} - path to dynamically loaded plugins that would do real
+@item @var{<custom_filters>} - path to dynamically loaded plugins that would do real
 check of incoming messages. These modules are described further.
-@item @var{mime} - if this parameter is "no" than this worker assumes that incoming
+@item @var{<mime>} - if this parameter is "no" than this worker assumes that incoming
 messages are in non-mime format (e.g. forum's messages) and standart mime
 headers are added to them.
 @end itemize
 @item Controller worker:
 @itemize @bullet
-@item @var{password} - a password that would be used to access to contorller's
+@item @var{<password>} - a password that would be used to access to contorller's
 privilleged commands.
 @end itemize
 @item Fuzzy worker:
 @itemize @bullet
-@item @var{hashfile} - a path to file where fuzzy hashes would be permamently stored.
-@item @var{use_judy} - if libJudy is present in system use it for faster storage.
-@item @var{frequent_score} - if judy is not turned on use this score to place hashes
+@item @var{<hashfile>} - a path to file where fuzzy hashes would be permamently stored.
+@item @var{<use_judy>} - if libJudy is present in system use it for faster storage.
+@item @var{<frequent_score>} - if judy is not turned on use this score to place hashes
 with score that is more than this value to special faster list (this is designed
 to increase lookup speed for frequent hashes).
-@item @var{expire} - time to expire of fuzzy hashes after their placement in storage.
+@item @var{<expire>} - time to expire of fuzzy hashes after their placement in storage.
 @end itemize
 @end itemize
 
@@ -694,5 +694,330 @@ controller's commands and parameters for fuzzy storage. Default config provides
 reasonable values of this parameters (except password of course), so for basic
 configuration you may just replace controller's password to more secure one.
 
+@section Classifiers configuration.
+
+@subsection Common classifiers options.
+
+Each classifier has mandatory option @var{type} that defines internal algorithm
+that is used for classifying. Currently only @code{winnow} is supported. You can
+read theoretical description of algorithm used here: 
+@url{http://www.siefkes.net/papers/winnow-spam.pdf}
+
+The common classifier configuration consists of base classifier parameters and
+definitions of two (or more than two) statfiles. During classify process rspamd
+check each statfile in classifier and select those that has more
+probability/weight than others. If all statfiles has zero weight this classifier
+do not add any symbols. Among common classifiers options are:
+@multitable @columnfractions .2 .8
+@headitem Tag @tab Mean
+@item @var{<tokenizer>}
+@tab Tokenizer to extract tokens from messages. Currently only @emph{osb}
+tokenizer is supported
+@item @var{<metric>}
+@tab Metric to which this classifier would insert symbol.
+@end multitable
+
+Also option @var{min_tokens} is supported to specify minimum number of tokens to
+work with (this is usefull to avoid classifying of short messages as statistic
+is practically useless for small amount of tokens). Here is example of base
+classifier config:
+@example
+<classifier type="winnow">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <option name="min_tokens">20</option>
+ <statfile>
+  ...
+ </statfile>
+</classifier>
+@end example
+
+@subsection Statfiles options.
+
+The most common statfile options are @var{symbol} and @var{size}. The first one defines
+which symbol would be inserted if this statfile would have maximal weight inside
+classifier and size defines statfile size on disk and in memory. Note that
+statfiles are mapped directly to memory and you should practically note
+parameter @var{statfile_pool_size} of main section which defines maximum ammount
+of memory for mapping statistic files. Also note that statistic files are
+of constant size: if you defines 100 megabytes statfile it would occupy 100
+megabytes of disc space and 100 megabytes of memory when it is used (mapped).
+Each statfile is indexed by tokens and contains so called "token chains". This
+mechanizm would be described further but note that each statfile has parameter
+"free tokens" that defines how much space is available for new tokens. If
+statfile has no free space the most unused tokens would be removed from
+statfile.
+
+Here is list of common options of statfiles:
+@multitable @columnfractions .2 .8
+@headitem Tag @tab Mean
+@item @var{<symbol>}
+@tab Defines symbol to insert for this statfile.
+@item @var{<size>}
+@tab Size of this statfile in bytes (kilo/mega/giga bytes).
+@item @var{<path>}
+@tab Filesystem path to statistic file.
+@item @var{<normalizer>}
+@tab Defines weight normalization structure. Can be lua function name or
+internal normalizer. Internal normalizer is defined in format:
+"internal:<max_weight>" where max_weight is fractional number that limits the
+maximum weight of this statfile's symbol (this is so called dynamic weight).
+@item @var{<binlog>}
+@tab Defines binlog affinity: master or slave. This option is used for statfiles
+binary sync that would be described further.
+@item @var{<binlog_master>}
+@tab Defines credits of binlog master for this statfile.
+@item @var{<binlog_rotate>}
+@tab Defines rotate time for binlog.
+@end multitable
+
+Internal normalization of statfile weight works in this way:
+@itemize @bullet
+@item @math{R_{score} = 1} when @math{W_{statfile} < 1}
+@item @math{R_{score} = W_statfile ^ 2} when @math{1 < W_{statfile} < max / 2}
+@item @math{R_{score} = W_statfile} when @math{max / 2 < W_{statfile} < max}
+@item @math{R_{score} = max} when @math{W_{statfile} > max}
+@end itemize
+
+The final result weight would be: @math{weight = R_{score} * W_{factor}}.
+Here is sample classifier configuration with two statfiles that can be used for
+spam/ham classifying:
+
+@example
+<factors>
+   <factor name="WINNOW_HAM">-1.00</factor>
+   <factor name="WINNOW_SPAM">1.00</factor>
+...
+</factors>
+
+<!-- Classifiers section -->
+<classifier type="winnow">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <option name="min_tokens">20</option>
+ <statfile>
+  <symbol>WINNOW_HAM</symbol>
+  <size>100M</size>
+  <path>/var/run/rspamd/data.ham</path>
+  <normalizer>internal:3</normalizer>
+ </statfile>
+ <statfile>
+  <symbol>WINNOW_SPAM</symbol>
+  <size>100M</size>
+  <path>/var/run/rspamd/data.spam</path>
+  <normalizer>internal:3</normalizer>
+ </statfile>
+</classifier>
+<!-- End of classifiers section -->
+@end example
+@noindent
+In this sample we define classifier that contains two statfiles:
+@emph{WINNOW_SPAM} and @emph{WINNOW_HAM}. Each statfile has 100 megabytes size
+(so they would occupy 200Mb while classifying). Also each statfile has maximum
+weight of 3 so with such factors (-1 for WINNOW_HAM and 1 for WINNOW_SPAM) the
+result weight of symbols would be 0..3 for @emph{WINNOW_SPAM} and 0..-3 for
+@emph{WINNOW_HAM}.
+
+@section Modules config.
+
+@subsection Lua modules loading.
+For loading custom lua modules you should use @emph{<modules>} section:
+@example
+<modules>
+ <module>/usr/local/etc/rspamd/plugins/lua</module>
+</modules>
+@end example
+@noindent
+Each @emph{<module>} directive defines path to lua modules. If this is a
+directory so all @code{*.lua} files inside that directory would be loaded. If
+this is a file it would be loaded directly.
+
+@subsection Modules configuration.
+Each module can have its own config section (this is true not only for internal
+module but also for lua modules). Such section is called @emph{<module>} with
+mandatory attribute @emph{"name"}. Each module can be configured by
+@emph{<option>} directives. These directives must also have @emph{"name"}
+attribute. So module configuration is done in @code{param = value} style:
+@example
+<module name="fuzzy_check">
+  <option name="servers">localhost:11335</option>
+  <option name="symbol">R_FUZZY</option>
+  <option name="min_length">300</option>
+  <option name="max_score">10</option>
+  <option name="metric">default</option>
+</module>
+@end example
+@noindent
+The common parameters are:
+@itemize @bullet
+@item symbol - symbol that this module should insert.
+@item metric - a metric in which this module shoul work.
+@end itemize
+But each module can have its own unique parameters. So it would be discussed
+furhter in detailed modules description. Also note that for internal modules you
+should edit @emph{<filters>} parameter in main section: this parameter defines
+which internal modules would be turned on in this configuration.
+
+@chapter Rspamd clients interaction.
+
+@section Introduction.
+After you have basic config file you may test rspamd functionality by using
+whether telnet like utility or @emph{rspamc} client. For testing newly installed
+config it is possible to run config file test:
+@example
+$ rspamd -t
+syntax OK
+@end example
+
+Rspamc utility is written in @code{perl} language and uses perl modules that are
+shipped with rspamd: @emph{Mail::Rspamd::Client} for client's protocol and
+@emph{Mail::Rspamd::Config} for reading and writing configuration. The
+documentation for these modules can be found by commands:
+@example
+$ perldoc Mail::Rspamd::Client
+$ perldoc Mail::Rspamd::Config
+@end example
+
+So other way to access rspamd is to use perl client API:
+@example
+use Mail::Rspamd::Client;
+my $config = {
+	hosts => ['localhost:11333'],
+};
+
+my $client = new Mail::Rspamd::Client(%config);
+
+if (! $client->ping()) {
+	die "Cannot ping rspamd: $client->{error}";
+}
+
+my $result = $client->check($testmsg);
+
+if ($result->{'default'}->{isspam} eq 'True') {
+	# do something with spam message here
+}
+@end example
+
+@section Rspamc protocol.
+Rspamc protocol is an extension over traditional spamc protocol that is used by
+spamassassin. This protocol looks like traditional HTTP session: first line is
+method with version, headers can be passed by next lines and the message itself
+is waited after empty line:
+@example
+<REQUEST>
+SYMBOLS RSPAMC/1.1
+Content-Length: 2200
+
+<message octets>
+
+<REPLY>
+RSPAMD/1.1 0 OK
+Metric: default; True; 10.40 / 10.00 / 0.00
+Symbol: R_UNDISC_RCPT
+Symbol: ONCE_RECEIVED
+Symbol: R_MISSING_CHARSET
+Urls: 
+@end example
+@noindent
+The format of method line can be presented as:
+@example
+<COMMAND> RSPAMC/<version>
+@end example
+@noindent
+Version can be 1.0 and 1.1. The main difference that in 1.1 metrics output also
+has @emph{reject score} - hard limit of score for metric. This would be
+discussed while describing user's options. Commands are:
+@multitable @columnfractions .2 .8
+@headitem Command @tab Mean
+@item CHECK
+@tab Check a message and output results for each metric. But do not output
+symbols.
+@item SYMBOLS
+@tab Same as @emph{CHECK} but output symbols.
+@item PROCESS
+@tab Same as @emph{SYMBOLS} but output also original message with inserted
+X-Spam headers.
+@item PING
+@tab Do not do any processing, just check rspamd state:
+@example
+$ telnet localhost 11333
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+PING RSPAMC/1.1
+
+RSPAMD/1.1 0 PONG
+Connection closed by foreign host.
+@end example
+@noindent
+@end multitable
+
+After command there should be one mandatory header: @strong{Content-Length} that
+defines message's length in bytes and optional headers:
+@multitable @columnfractions .2 .8
+@headitem Header @tab Mean
+@item @var{Deliver-To:}
+@tab Defines actual delivery recipient of message. Can be used for personalized
+statistic and for user specific options.
+@item @var{IP:}
+@tab Defines IP from which this message is received.
+@item @var{Helo:}
+@tab Defines SMTP helo.
+@item @var{From:}
+@tab Defines SMTP mail from command data.
+@item @var{Queue-Id:}
+@tab Defines SMTP queue id for message (can be used instead of message id in
+logging).
+@item @var{Rcpt:}
+@tab Defines SMTP recipient (it may be several @emph{Rcpt:} headers).
+@item @var{Pass:}
+@tab If this header has @emph{"all"} value, all filters would be checked for
+this message.
+@item @var{Subject:}
+@tab Defines subject of message (is used for non-mime messages).
+@item @var{User:}
+@tab Defines SMTP user (this is currently unused in rspamd however).
+@end multitable
+So rspamc protocol allows to pass many data from MTA to rspamd. This is used to
+increase speed of processing and for building filters (like SPF filter). Also
+note that rspamd support spamassassin spamc protocol and you can even pass
+rspamc headers in spamc mode, but reply of rspamd in spamc mode would be much
+shorter: it would only use "default" metric and won't show additional options
+for symbols. Rspamc reply looks like this:
+@example
+RSPAMD/1.1 0 OK
+Metric: default; True; 10.40 / 10.00 / 0.00
+Symbol: R_UNDISC_RCPT
+Symbol: ONCE_RECEIVED
+Symbol: R_MISSING_CHARSET
+Urls: 
+@end example
+@noindent
+First line is method reply: @code{<PROTOCOL>/<VERSION> <ERROR_CODE> <ERROR_REPLY>}.
+Error code is 0 when no error occured. After first reply line there are metrics
+output. For @emph{SYMBOLS} and @emph{PROCESS} commands there are symbols lines
+after each metric. And for @emph{PROCESS} command there would be original
+message after all metrics results. Metric result line looks like this:
+@example
+Metric: <name>; <result>; <score> / <required_score> / <reject_score>
+@end example
+@noindent
+For 1.0 version of rspamc protocol @emph{reject_score} parameter is not printed.
+Symbol line looks like this:
+@example
+Symbol: <Name>[; param1[, param2...]]
+@end example
+@noindent
+Some symbols can have parameters attached. It is useful for example for RBL
+checks (you can insert additional data after symbol name), for statistic and
+fuzzy checks. Also rspamd inserts @emph{Urls} line in which all urls that are
+contained in message are printed in comma-separated list.
+Note that this protocol is used for normal workers. Controller, fuzzy storage
+and lmtp/smtp workers are using other protocols. For example controller's
+protocol is oriented on interactive sessions: you can pass many commands to
+controller before disconnecting. Fuzzy storage is using UDP for making
+interaction with storage faster. LMTP/SMTP workers are using lmtp and smtp
+protocols. All of these protocols would be described in further chapters about
+rspamd workers.
 
 @bye

@@ -44,7 +44,6 @@
  <factor name="HTML_MIME_NO_HTML_TAG">2.00</factor>
  <factor name="R_BAD_EMAIL">10.50</factor>
  <factor name="R_SPAM_FROM_LIBERO">10.00</factor>
- <factor name="WINNOW_SPAM">0.00</factor>
  <factor name="WHITELIST_IP">-2.00</factor>
  <factor name="R_UNDISC_RCPT">5.00</factor>
  <factor name="DRUGS_ANXIETY">2.00</factor>
@@ -52,14 +51,12 @@
  <factor name="PH_SURBL_MULTI">5.50</factor>
  <factor name="R_WHITE_ON_WHITE">9.00</factor>
  <factor name="FAKE_HTML">1.00</factor>
- <factor name="winnow">5.00</factor>
  <factor name="R_SPAM_FROM_VERSATEL">10.00</factor>
  <factor name="HTML_SHORT_LINK_IMG_2">3.00</factor>
  <factor name="FORGED_MUA_OUTLOOK">3.00</factor>
  <factor name="R_FREE_HOSTING">4.00</factor>
  <factor name="DRUGS_ERECTILE">2.00</factor>
  <factor name="R_FREE_HOSTING_NAROD">3.00</factor>
- <factor name="PIZDA">100.00</factor>
  <factor name="R_SPAM_FROM_ONO">10.00</factor>
  <factor name="FM_FAKE_HELO_VERIZON">2.00</factor>
  <factor name="REPTO_QUOTE_YAHOO">2.00</factor>
@@ -88,7 +85,8 @@
  <factor name="RATWARE_MS_HASH">2.00</factor>
  <factor name="HTML_TAG_BALANCE_HEAD">5.00</factor>
  <factor name="STOX_REPLY_TYPE">1.00</factor>
- <factor name="WINNOW_HAM">0.00</factor>
+ <factor name="WINNOW_SPAM">1.00</factor>
+ <factor name="WINNOW_HAM">-1.00</factor>
  <factor name="MIME_HEADER_CTYPE_ONLY">2.00</factor>
  <factor name="R_FAKE_OUTLOOK">8.00</factor>
 </factors>
@@ -211,19 +209,15 @@
  <option name="min_tokens">20</option>
  <statfile>
   <symbol>WINNOW_HAM</symbol>
-  <size>104857600</size>
-  <path>/tmp/test.ham</path>
-  <normalizer>internal:10</normalizer>
-  <binlog>master</binlog>
-  <binlog_rotate>0</binlog_rotate>
+  <size>100M</size>
+  <path>/var/run/rspamd/data.ham</path>
+  <normalizer>internal:3</normalizer>
  </statfile>
  <statfile>
   <symbol>WINNOW_SPAM</symbol>
-  <size>104857600</size>
-  <path>/tmp/test.spam</path>
-  <normalizer>internal:10</normalizer>
-  <binlog>master</binlog>
-  <binlog_rotate>0</binlog_rotate>
+  <size>100M</size>
+  <path>/var/run/rspamd/data.spam</path>
+  <normalizer>internal:3</normalizer>
  </statfile>
 </classifier>
 <!-- End of classifiers section -->
