@@ -881,21 +881,21 @@ $ perldoc Mail::Rspamd::Config
 So other way to access rspamd is to use perl client API:
 @example
 use Mail::Rspamd::Client;
-my $config = {
+my $config = @{
 	hosts => ['localhost:11333'],
-};
+@};
 
 my $client = new Mail::Rspamd::Client(%config);
 
-if (! $client->ping()) {
-	die "Cannot ping rspamd: $client->{error}";
-}
+if (! $client->ping()) @{
+	die "Cannot ping rspamd: $client->@{error@}";
+@}
 
 my $result = $client->check($testmsg);
 
-if ($result->{'default'}->{isspam} eq 'True') {
+if ($result->{'default'}->@{isspam@} eq 'True') @{
 	# do something with spam message here
-}
+@}
 @end example
 
 @section Rspamc protocol.
@@ -1019,5 +1019,351 @@ controller before disconnecting. Fuzzy storage is using UDP for making
 interaction with storage faster. LMTP/SMTP workers are using lmtp and smtp
 protocols. All of these protocols would be described in further chapters about
 rspamd workers.
+
+@section Controller protocol.
+
+Rspamd controller can also be accessed by telnet, by rspamc client or by using
+perl module Mail::Rspamd::Client. Controller protocol accepts commands and it is
+possible to send several commands during a single session. Here is an example
+telnet session:
+@example
+>telnet localhost 11334
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+Rspamd version 0.3.0 is running on spam1.rambler.ru
+stat
+Messages scanned: 1526901
+Messages treated as spam: 238171, 15.60%
+Messages treated as ham: 1288730, 84.40%
+Messages learned: 0
+Connections count: 1529758
+Control connections count: 15
+Pools allocated: 3059589
+Pools freed: 3056134
+Bytes allocated: 98545852799
+Memory chunks allocated: 8745374
+Shared chunks allocated: 7
+Chunks freed: 8737507
+Oversized chunks: 768784
+Fuzzy hashes stored: 0
+Fuzzy hashes expired: 0
+Statfile: WINNOW_SPAM (version 186); length: 100.0 MB; free blocks: 748504; total blocks: 6553581; free: 11.42%
+Statfile: WINNOW_HAM (version 186); length: 100.0 MB; free blocks: 748504; total blocks: 6553581; free: 11.42%
+END
+@end example
+@noindent
+
+So you can see that reply from controller is ended with line that contains word
+@strong{END}. It is also possible to get summary help for controller's commands:
+@example
+help
+Rspamd CLI commands (* - privilleged command):
+    help - this help message
+(*) learn <statfile> <size> [-r recipient] [-m multiplier] [-f from] [-n] - learn message to specified statfile
+    quit - quit CLI session
+(*) reload - reload rspamd
+(*) shutdown - shutdown rspamd
+    stat - show different rspamd stat
+    counters - show rspamd counters
+    uptime - rspamd uptime
+END
+@end example
+@noindent
+
+Note that some commands are privilleged ones - you are required to enter a
+password for them:
+@example
+>telnet localhost 11334
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+Rspamd version 0.3.0 is running on spam1.rambler.ru
+reload
+not authorized
+END
+
+password q1
+password accepted
+END
+
+reload
+reload request sent
+END
+Connection closed by foreign host.
+@end example
+@noindent
+
+This password is configured in rspamd.xml in worker section where you are
+describing controller:
+@example
+<worker>
+  <type>controller</type>
+  ...
+<!-- Other params -->
+    <param name="password">q1</param>
+</worker>
+@end example
+
+In many cases it is more easy to use rspamc to access controller. Here is
+example of learning statfiles using rspamc CLI:
+@example
+% ./rspamc.pl -h localhost:11334 -P q1 -s WINNOW_HAM learn < /tmp/exim.eml
+Results for host localhost:11334:
+
+Learn succeed. Sum weight: 1.51
+
+% ./rspamc.pl -h localhost:11334 -P q1 -s WINNOW_SPAM learn < /tmp/bad.eml
+Results for host localhost:11334:
+
+Learn succeed. Sum weight: 1.51
+@end example
+
+Note that rspamc handles password issues and other things like timeouts and
+error handling inside and makes this tasks rather easy.
+
+@section More about rspamc client.
+
+Rspamc is small and simple client that allows to simplify common tasks for
+rspamd manage. Rspamc is written in perl language and requires some modules for
+its work:
+@itemize @bullet
+@item Mail::Rspamd::Client - a module that contains common function for
+accessing rspamd, shipped with rspamd and installed automatically
+@item Term::Cap - a module that allows basic interaction with terminal, can be
+obtained via @url{http://www.cpan.org, cpan}.
+@end itemize
+Rspamc accepts several command line options:
+
+@example
+% ./rspamc.pl --help
+Usage: rspamc.pl [-h host] [-H hosts_list] [-P password] [-c conf_file] [-s statfile] [-d user@@domain] [command] [path]
+-h         host to connect (in format host:port) or unix socket path 
+-H         path to file that contains list of hosts
+-P         define control password
+-c         config file to parse
+-s         statfile to use for learn commands
+
+Additional options:
+-d         define deliver-to header
+-w         define weight for fuzzy operations
+-S         define search string for IMAP operations
+-i         emulate that message was send from specified IP
+-p         pass message throught all filters
+
+Notes:
+imap format: imap:user:<username>:password:[<password>]:host:<hostname>:mbox:<mboxname>
+Password may be omitted and then it would be asked in terminal
+imaps requires IO::Socket::SSL
+
+IMAP search strings samples:
+ALL - All messages in the mailbox;
+FROM <string> - Messages that contain the specified string in the envelope structure's FROM field;
+HEADER <field-name> <string> - Messages that have a header with the specified field-name and that 
+             contains the specified string in the text of the header (what comes after the colon);
+NEW - Messages that have the Recent flag set but not the Seen flag. 
+             This is functionally equivalent to "(RECENT UNSEEN)".
+OLD - Messages that do not have the Recent flag set.
+SEEN - Messages that have the Seen flag set.
+SENTBEFORE <date> - Messages whose [RFC-2822] Date: header (disregarding time and timezone) 
+             is earlier than the specified date.
+TO <string> - Messages that contain the specified string in the envelope structure's TO field.
+TEXT <string> - Messages that contain the specified string in the header or body of the message.
+OR <search-key1> <search-key2> - Messages that match either search key (same for AND and NOT operations).
+
+Version:   0.3.0
+@end example
+@noindent
+
+After options you should specify command to execute, for example:
+@example
+% rspamc symbols < /tmp/exim.eml
+@end example
+@noindent
+After command name you may specify objects to apply to: files, directories or
+even imap folders:
+@itemize @bullet
+@item A single file:
+@example
+% rspamc symbols /tmp/exim.eml
+@end example
+@noindent
+@item A list of files:
+@example
+% rspamc symbols /tmp/*.eml
+@end example
+@noindent
+@item Directories:
+@example
+% rspamc symbols /tmp/*.eml /tmp/to_scan/
+@end example
+@noindent
+@item IMAP folder:
+@example
+% rspamc symbols imap:user:username:password::host:localhost:mbox:INBOX
+Enter IMAP password:
+@end example
+@noindent
+Note that it is possible to specify empty password and be prompted for a
+password during execution (you also need perl module Term::ReadKey for turning
+on noecho input of password).
+@end itemize
+For fetching imap messages you may also use search string by specifying -S
+option. Some examples of IMAP search strings can be found in a help message. For
+more complex things you may read rfc3501 about imap4 search strings. This may be
+found for example here: @url{http://www.faqs.org/rfcs/rfc3501.html}. IMAP access
+may be usefull for setting up automatic learning scripts. Also it is possible to
+use SSL version of imap by specifying @strong{imaps} instead @strong{imap} as
+first component. Note that for SSL access you need @emph{IO::Socket::SSL} perl
+module.
+
+@chapter Statistics and hashes storage.
+
+@section Introduction.
+First of all we need to strictly define purposes of hashes and statistic. Hashes
+are used to find very close messages (for example messages where there are only
+several words changed), while statistic can find @strong{probability} of
+belonging message to specified class of messages. So when you learn rspamd with
+message's hash you just add this hash to storage and when you learn rspamd
+statistic you add tokens from message to specified class. So statistic is
+probabilistic method to filter message, while fuzzy hashes can detect specific
+patterns in messages and filter them.
+
+@section Classifiers and statistic.
+@subsection Tokenization.
+Now rspamd supports OSB-Winnow statistic algorithm. Let's describe it in
+details. First of all message is separeted into a set of tokens. The algorithm
+of extracting tokens is rather simple now:
+@enumerate 1
+@item Extract graph symbols till first non-graph symbol (whitespace, punctuation
+etc), the group of graph symbols forms a token, non-graphs are separators.
+@item Fill an array with token till @strong{window size} is reached (currently
+this size is 5 tokens).
+@item Get pairs of tokens from array and extract their hashes:
+@itemize @bullet
+@item * . . . * -> token1 (h1, h5);
+@item . * . . * -> token2 (h2, h5);
+@item . . * . * -> token3 (h3, h5);
+@item . . . * * -> token4 (h4, h5);
+@end itemize
+@noindent
+@item Insert these tokens to statfile (indexed by first hash).
+@item Shift window on next word.
+@end enumerate
+So after tokenizing process we would have tokens each of that contains 2 hashes of 2
+words from message. This mechanics allows to count not only words itself but
+also its combinations into a message, so providing more accurate statistic.
+
+@subsection Classifying.
+For classifying process @strong{winnow} algorithm is used. In this statistic
+algtorithm we operate not with probabilities but with weights. Each token has
+its own weight and when we learn some statfile with tokens rspamd does several
+things:
+@enumerate 1
+@item Try to find token inside statfile.
+@item If a token found multiply its weight by so called @strong{promotion
+factor} (that is now 1.23).
+@item If token not found insert it into statfile with weight 1.
+@end enumerate
+
+If it is needed to lower token weight, so its weight is multiplied with
+@strong{demotion factor} (currently 0.83). Classify process is even more simple:
+@enumerate 1
+@item Extract tokens from a message.
+@item For each statfile check weight of obtained tokens and store summary
+weight.
+@item Compare sums for each statfile and select statfile with the most big sum.
+@item Do weight normalization and insert symbol of selected statfile.
+@end enumerate
+
+@subsection Statfiles synchronization.
+Rspamd allows to make master/slave statfiles synchronization. This is done by
+writing changes to statfiles to special @emph{binary log}. Binary log is a file
+on filesystem named like statfile but with @emph{.binlog} suffix. Binary log
+consist of two level indexes and binary changes to each statfile. So after each
+learning process the version of affected statfiles is increased by 1 and a
+record is written to binary log. Binary logs have fixed size limit and may have
+time limit (rotate time). The process of synchronization may be described as:
+@enumerate 1
+@item Slave rspamd periodically asks master for version of statfiles monitored.
+@item If master has version that is larger than slave's one the synchronization
+process starts.
+@item During synchronization process master looks at version reported by client
+in binary log.
+@item If version is found all records that are @strong{after} client's version
+are sent to client.
+@item Client accepts changes and apply binary patches one-by-one incrementing
+statfile's version.
+@item If version that client reports is not found in binary log the completely
+statfile is sent to client (slow way, but practically that would take place only
+once for fresh slaves).
+@end enumerate
+
+Here is example configuration for master statfile:
+@example
+ <statfile>
+  <symbol>WINNOW_HAM</symbol>
+  <size>100M</size>
+  <path>/spool/rspamd/data.ham</path>
+  <normalizer>internal:3</normalizer>
+  <binlog>master</binlog>
+  <binlog_rotate>1d</binlog_rotate>
+ </statfile>
+@end example
+@noindent
+Here we define binlog affinity (master) that automatically create binlog file
+@file{/spool/rspamd/data.ham.binlog} and set up time limit for it (1 day).
+For slaves you should first of all set up controller worker to accept network
+connections (statfile synchronization is done via controller workers). The
+second task is to define affinity for slave and master's address:
+@example
+ <statfile>
+  <symbol>WINNOW_HAM</symbol>
+  <size>100M</size>
+  <path>/spool/rspamd/data.ham</path>
+  <normalizer>internal:3</normalizer>
+  <binlog>slave</binlog>
+  <binlog_master>spam10:11334</binlog_master>
+ </statfile>
+@end example
+
+@subsection Conclusion.
+Statfiles synchronization allows to set up rspamd cluster that uses the common
+statfiles and easily learn the whole cluster without unnecessary overhead.
+
+@section Hashes and hash storage.
+@subsection Fuzzy hashes.
+Hashes that are used in rspamd for messages are not cryptoghraphic. Instead of
+them fuzzy hashes are used. Fuzzy hashes is technics that allows to obtain
+common hashes for common messages (for cryptographic hashes you usually get very
+different hashes even if input messages are very common but not identical). The
+main principle of fuzzy hashing is to break up text parts of message into small
+pieces (blocks) and calculate hash for each block using so called @emph{rolling
+hash}. After this process the final hash is forming by setting bytes in it from
+blocks. So if we have 2 messages each of that contains 100 blocks and 99 of them 
+are identical we would have 2 hashes that differs only in one byte. So we can
+consider that one message is 99% like other message. 
+
+@subsection Fuzzy storage.
+In rspamd hashes can be stored in fuzzy storage. Fuzzy storage is a special
+worker that can store hashes and reply about score of hashes. Inside fuzzy
+storage each hash has its own weight and list number. List number is integer
+that specify to which list this hash is related. This number can be used in
+fuzzy_check plugin inside rspamd to add custom symbol. There are two ways of
+storing fuzzy hashes: store them in a set of linear linked lists and storing
+hashes in very fast judy tree. First way is good for a relatively small number
+of fuzzy hashes. Also in this case @emph{fuzzy match} is used, so you can find
+not only identical hashes but also common hashes. But for large number of hashes
+this method is very slow. The second way requires libJudy in system (can be
+found at @url{http://judy.sourceforge.net}) and turns off @emph{fuzzy matching}
+- only identical hashes would be found. On the other hand you may store millions
+of hashes in judy tree not loosing nor memory, nor CPU.
+
+@subsection Conclusion.
+Fuzzy hashes is efficient way to make up different black or white lists. Fuzzy
+storage can be distributed over several machines (if you specify several storage
+servers rspamd would select upstream by hash of fuzzy hash). Also storage can
+contain several lists identified by number. Each hash has its own weight that
+allows to set up dynamic rules that add different score from different hashes.
 
 @bye

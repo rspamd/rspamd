@@ -1251,7 +1251,7 @@ sub _parse_imap_sequences {
 
 }
 
-sub process_imap {
+sub _process_imap {
 	my ($self, $ssl, $user, $password, $host, $mbox) = @_;
 	my $seq = 1;
 	my $sock;
@@ -1259,13 +1259,13 @@ sub process_imap {
 	if (!$password) {
 		eval {
 			require Term::ReadKey;
-			Term::ReadKey->import( LIST );
-			$self->{error} = "Enter IMAP password: ";
-			Term::ReadKey->ReadMode('noecho');
-			$password = Term::ReadKey->ReadLine(0);
+			Term::ReadKey->import( qw(ReadMode ReadLine) );
+			print "Enter IMAP password: ";
+			ReadMode(2);
+			$password = ReadLine(0);
 			chomp $password;
-			Term::ReadKey->ReadMode('normal');
-			$self->{error} = "\n";
+			ReadMode(0);
+			print "\n";
 		} or croak "cannot get password. Check that Term::ReadKey is installed";
 	}
 
@@ -1274,7 +1274,15 @@ sub process_imap {
 		$sock = $self->_make_ssl_socket ($host, 'imaps');
 	}
 	else {
-		$sock = $self->_make_tcp_socket ($host, 143);
+		$sock = IO::Socket::INET->new( Proto     => "tcp",
+						PeerAddr  => $host,
+						PeerPort  => 'imap',
+						Blocking  => 1,
+					);
+	}
+	unless ($sock) {
+		$self->{error} = "Cannot connect to imap server: $!";
+		return;
 	}
 	my $reply = <$sock>;
 	if (!defined ($reply) || $reply !~ /^\* OK/) {
