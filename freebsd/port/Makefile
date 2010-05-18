@@ -76,4 +76,8 @@ USE_LDCONFIG=	no
 PLIST_SUB+=		CPLUGINS=""
 .endif
 
+.if ${OSVERSION} < 600000
+CMAKE_ARGS+= -DCMAKE_EXE_LINKER_FLAGS=-lpthread
+.endif
+
 .include <bsd.port.post.mk>
