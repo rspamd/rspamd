@@ -1366,4 +1366,473 @@ servers rspamd would select upstream by hash of fuzzy hash). Also storage can
 contain several lists identified by number. Each hash has its own weight that
 allows to set up dynamic rules that add different score from different hashes.
 
+@chapter Rspamd modules.
+
+@section Introduction.
+
+This chapter describes modules that are shipped with rspamd. Here you can find
+details about modules configuration, principles of working, tricks to make spam
+filtering effective. First sections describe internal modules written in C:
+regexp (regular expressions), surbl (black list for URLs), fuzzy_check (checks
+for fuzzy hashes), chartable (check for character sets in messages) and emails
+(check for blacklisted email addresses in messages). Modules configuration can
+be done in lua or in config file itself. 
+
+@subsection Lua configuration.
+You may use lua for setting configuration options for modules. With lua you can
+write rather complex rules that can contain not only text lines, but also some
+lua functions that would be called while processing messages. For loading lua
+configuration you should add line to rspamd.xml:
+@example
+<lua src="/usr/local/etc/rspamd/lua/my.lua">fake</lua>
+@end example
+@noindent
+It is possible to load several scripts this way. Inside lua file there would be
+defined global table with name @var{config}. This table should contain
+configuration options for modules indexed by module. This can be written this
+way:
+@example
+config['module_name'] = {}
+local mconfig = config['module_name']
+
+mconfig['option_name'] = 'option value'
+
+local a = 'aa'
+local b = 'bb'
+
+mconfig['other_option'] = string.format('%s, %s', a, b)
+@end example
+@noindent
+In this simple example we defines new element of table that is associated with
+module named 'module_name'. Then we assign to it an empty table (@code{@{@}})
+and associate local variable mconfig. Then we set some elements of this table,
+that is equialent to setting module options like that:
+@example
+option_name = option_value
+other_option = aa, bb
+@end example
+@noindent
+Also you may assign to elements of modules tables some functions. That functions
+should accept one argument - worker task object and return result specific for
+that option: number, string, boolean. This can be shown on this simple example:
+@example
+
+local function test (task)
+	if task:get_ip() == '127.0.0.1' then
+		return 1
+	else
+		return 0
+	end
+end
+
+mconfig['some_option'] = test
+@end example
+In this example we assign to module option 'some_option' a function that check
+for message's ip and return 1 if that ip is '127.0.0.1'.
+
+So using lua for configuration can help for making complex rules and for
+structuring rules - you can place options for specific modules to specific files
+and use lua function @code{dofile} for loading them (or add other @code{<lua>}
+tag to rspamd.xml).
+
+@subsection XML configuration.
+
+Options for rspamd modules can be set up from xml file too. This can be used for
+simple and/or temporary rules and should not be used for complex rules as this
+would make xml file too hard to read and edit. Thought it is surely possible but
+not recommended from points of config file understanding. Here is a simple
+example of module config options:
+@example
+<module name="module_name">
+ <option name="option_name">option_value</option>
+ <option name="other_option">aa, bb</option>
+</module>
+@end example
+@noindent
+Note that you need to encode xml entitles like @code{&} - @code{&amp;} and so
+on. Also only utf8 encoding is allowed. In sample rspamd configuration all
+modules except regexp module are configured via xml as they have only settings
+and regexp module has rules that are sometimes rather complex.
+
+@section Regexp module.
+
+@subsection Introduction.
+Regexp module is one of the most important rspamd modules. Regexp module can
+load regular expressions and filter messages according to them. Also it is
+possible to use logical expressions of regexps to create complex rules of
+filtering. It is allowed to use logical operators:
+@itemize @bullet
+@item & - logical @strong{AND} function
+@item | - logical @strong{OR} function
+@item ! - logical @strong{NOT} function
+@end itemize
+Also it is possible to use brackets for making priorities in expressions. Regexp
+module operates with @emph{regexp items} that can be combined with logical
+operators into logical @emph{regexp expresions}. Each expression is associated
+with its symbol and if it evaluates to true with this message the symbol would
+be inserted. Note that rspamd uses internal optimization of logical expressions
+(for example if we have expression 'rule1 & rule2' rule2 would not be evaluated
+if rule1 is false) and internal regexp cache (so if rule1 and rule2 have common
+items they would be evaluated only once). So if you need speed optimization of
+your rules you should take this fact into consideration.
+
+@subsection Regular expressions.
+Rspamd uses perl compatible regular expressions. You may read about perl regular
+expression syntax here: @url{http://perldoc.perl.org/perlre.html}. In rspamd
+regular expressions must be enclosed in slashes:
+@example
+/^\\d+$/
+@end example
+@noindent
+If '/' symbol must be placed into regular expression it should be escaped:
+@example
+/^\\/\\w+$/
+@end example
+@noindent
+After last slash it is possible to place regular expression modificators:
+@multitable @columnfractions 0.1 0.9
+@headitem Modificator @tab Mean
+@item @strong{i} @tab Ignore case for this expression.
+@item @strong{m} @tab Assume this expression as multiline.
+@item @strong{s} @tab Assume @emph{.} as all characters including newline
+characters (should be used with @strong{m} flag).
+@item @strong{x} @tab Assume this expression as extended regexp.
+@item @strong{u} @tab Performs ungreedy matches.
+@item @strong{o} @tab Optimize regular expression.
+@item @strong{r} @tab Assume this expression as @emph{raw} (this is actual for
+utf8 mode of rspamd).
+@item @strong{H} @tab Search expression in message's headers.
+@item @strong{X} @tab Search expression in raw message's headers (without mime
+decoding).
+@item @strong{M} @tab Search expression in the whole message (must be used
+carefully as @strong{the whole message} would be checked with this expression).
+@item @strong{P} @tab Search expression in all text parts.
+@item @strong{U} @tab Search expression in all urls.
+@end multitable
+
+You can combine flags with each other:
+@example
+/^some text$/iP
+@end example
+@noindent
+All regexp must be with type: H, X, M, P or U as rspamd should know where to
+search for specified pattern. Header regexps (H and X) have special syntax if
+you need to check specific header, for example @emph{From} header:
+@example
+From=/^evil.*$/Hi
+@end example
+@noindent
+If header name is not specified all headers would be matched. Raw headers is
+matching is usefull for searching for mime specific headers like MIME-Version.
+The problem is that gmime that is used for mime parsing adds some headers
+implicitly, for example @emph{MIME-Version} and you should match them using raw
+headers. Also if header's value is encoded (base64 or quoted-printable encoding)
+you can search for decoded version using H modificator and for raw using X
+modificator. This is usefull for finding bad encodings types or for unnecessary
+encoding.
+
+@subsection Internal function.
+Rspamd provides several internal functions for simplifying message processing.
+You can use internal function as items in logical expressions as they like
+regular expressions return logical value (true or false). Here is list of
+internal functions with their arguments:
+@multitable @columnfractions 0.3 0.2 0.5
+@headitem Function @tab Arguments @tab Description
+@item header_exists 
+@tab header name 
+@tab Returns true if specified header exists.
+
+@item compare_parts_distance
+@tab number
+@tab If message has two parts (text/plain and text/html) compare how much they
+differs (html messages are compared with stripped tags). The difference is
+number in percents (0 is identically parts and 100 is totally different parts).
+So if difference is more than number this function returns true.
+
+@item compare_transfer_encoding
+@tab string
+@tab Compares header Content-Transfer-Encoding with specified string.
+
+@item content_type_compare_param
+@tab param_name, param_value
+@tab Compares specified parameter of Content-Type header with regexp or certain
+string:
+@example
+content_type_compare_param(Charset, /windows-\d+/)
+content_type_compare_param(Charset, ascii)
+@end example
+@noindent 
+
+@item content_type_has_param
+@tab param_name
+@tab Returns true if content-type has specified parameter.
+
+@item content_type_is_subtype
+@tab subtype_name
+@tab Return true if content-type is of specified subtype (for example for
+text/plain subtype is 'plain').
+
+@item content_type_is_type
+@tab type_name
+@tab Return true if content-type is of specified type (for example for
+text/plain subtype is 'text'):
+@example
+content_type_is_type(text)
+content_type_is_subtype(/?.html/)
+@end example
+@noindent
+
+@item regexp_match_number 
+@tab number,[regexps list]
+@tab Returns true if specified number of regexps matches for this message. This
+can be used for making rules when you do not know which regexps should match but
+if 2 of them matches the symbol shoul be inserted. For example:
+@example
+regexp_match_number(2, /^some evil text.*$/Pi, From=/^hacker.*$/H, header_exists(Subject))
+@end example
+@noindent
+	
+@item has_only_html_part
+@tab nothing
+@tab Returns true when message has only HTML part
+
+@item compare_recipients_distance
+@tab number
+@tab Like compare_parts_distance calculate difference between recipients. Number
+is used as minimum percent of difference. Note that this function would check
+distance only when there are more than 5 recipients in message.
+
+@item is_recipients_sorted
+@tab nothing
+@tab Returns true if recipients list is sorted. This function would also works
+for more than 5 recipients.
+
+@item is_html_balanced
+@tab nothing
+@tab Returns true when all HTML tags in message are balanced.
+
+@item has_html_tag
+@tab tag_name
+@tab Returns true if tag 'tag_name' exists in message.
+
+@end multitable
+
+These internal functions can be easily implemented in lua but I've decided to
+make them built-in as they are widely used in our rules. In fact this list may
+be extended in future.
+
+@subsection Conclusion.
+Rspamd regexp module is powerfull tool for matching different patterns in
+messages. You may use logical expressions of regexps and internal rspamd
+functions to make rules. Rspamd is shipped with many rules for regexp module
+(most of them are taken from spamassassin rules as rspamd originally was a
+replacement of spamassassin) so you can look at them in ETCDIR/rspamd/lua/regexp
+directory. There are many built-in rules with detailed comments. Also note that
+if you add logical rule into XML file you need to escape all XML entitles (like
+@emph{&} operators). When you make complex rules from many parts do not forget
+to add brackets for parts inside expression as you would not predict order of
+checks otherwise. Rspamd regexp module has internal logical optimization and
+regexp cache, so you may use identical regexp many times - they would be matched
+only once. And in logical expression you may optimize performance by putting
+likely TRUE regexp first in @emph{OR} expression and likely FALSE expression
+first in @emph{AND} expression. A number of internal functions can simplify
+complex expressions and for making common filters. Lua functions can be added in
+rules as well (they should return boolean value).
+
+@section SURBL module.
+
+Surbl module is designed for checking urls via blacklists. You may read about
+surbls at @url{http://www.surbl.org}. Here is the sequence of operations that is
+done by surbl module:
+@enumerate 1
+@item Extract all urls in message and get domains for each url.
+@item Check to special list called '2tld' and extract 3 components for domains
+from that list and 2 components for domains that are not listed:
+@example
+http://virtual.somehost.domain.com/some_path
+-> somehost.domain.com if domain.com is in 2tld list
+-> domain.com if not in 2tld
+@end example
+@noindent
+@item Remove duplicates from domain lists
+@item For each registered surbl do dns request in form @emph{domain.surbl_name}
+@item Get result and insert symbol if that name resolves
+@item It is possible to examine bits in returned IP address and insert different
+symbol for each bit that is turned on in result.
+@end enumerate
+All DNS requests are done asynchronously so you may not bother about blocking.
+SURBL module has several configuration options:
+@itemize @bullet
+@item @emph{metric} - metric to insert symbol to.
+@item @emph{2tld} - list argument of domains for those 3 components of domain name
+would be extracted.
+@item @emph{max_urls} - maximum number of urls to check.
+@item @emph{whitelist} - map of domains for which surbl checks would not be performed.
+@item @emph{suffix} - a name of surbl. It is possible to add several suffixes:
+@example
+suffix_RAMBLER_URIBL = insecure-bl.rambler.ru
+or in xml:
+ <param name="suffix_RAMBLER_URIBL">insecure-bl.rambler.ru</param>
+@end example
+@noindent
+It is possible to add %b to symbol name for checking specific bits:
+@example
+suffix_%b_SURBL_MULTI = multi.surbl.org
+then you may define replaces for %b in symbol name for each bit in result:
+bit_2 = SC -> sc.surbl.org
+bit_4 = WS -> ws.surbl.org
+bit_8 = PH -> ph.surbl.org
+bit_16 = OB -> ob.surbl.org
+bit_32 = AB -> ab.surbl.org
+bit_64 = JP -> jp.surbl.org
+@end example
+@noindent
+So we make one DNS request and check for specific list by checking bits in
+result ip. This is described in surbl page:
+@url{http://www.surbl.org/lists.html#multi}. Note that result symbol would NOT
+contain %b as it would be replaced by bit name. Also if several bits are set
+several corresponding symbols would be added.
+@end itemize
+
+Also surbl module can use redirector - a special daemon that can check for
+redirects. It uses HTTP/1.0 for requests and accepts a url and returns resolved
+result. Redirector is shipped with rspamd but not enabled by default. You may
+enable it on stage of configuring but note that it requires many perl modules
+for its work. Rspamd redirector is described in details further. Here are surbl
+options for working with redirector:
+@itemize @bullet
+@item @emph{redirector}: adress of redirector (in format host:port)
+@item @emph{redirector_connect_timeout} (seconds): redirector connect timeout (default: 1s)
+@item @emph{redirector_read_timeout} (seconds): timeout for reading data (default: 5s)
+@item @emph{redirector_hosts_map} (map string): map that contains domains to check with redirector
+@end itemize
+
+So surbl module is an easy to use way to check message's urls and it may be used
+in every configuration as it filters rather big ammount of email spam and scam.
+
+@section SPF module.
+
+SPF module is designed to make checks of spf records of sender's domains. SPF
+records are placed in TXT DNS items for domains that have enabled spf. You may
+read about SPF at @url{http://en.wikipedia.org/wiki/Sender_Policy_Framework}.
+There are 3 results of spf check for domain:
+@itemize @bullet
+@item ALLOW - this ip is allowed to send messages for this domain
+@item FAIL - this ip is @strong{not} allowed to send messages for this domain
+@item SOFTFAIL - it is unknown whether this ip is allowed to send mail for this
+domain
+@end itemize
+SPF supports different mechanizms for checking: dns subrequests, macroses,
+includes, blacklists. Rspamd supports the most of them. Also for security
+reasons there is internal limits for DNS subrequests and inclusions recursion.
+SPF module support very small ammount of options:
+@itemize @bullet
+@item @emph{metric} (string): metric to insert symbol (default: 'default')
+@item @emph{symbol_allow} (string): symbol to insert (default: 'R_SPF_ALLOW')
+@item @emph{symbol_fail} (string): symbol to insert (default: 'R_SPF_FAIL')
+@item @emph{symbol_softfail} (string): symbol to insert (default: 'R_SPF_SOFTFAIL')
+@end itemize
+
+@section Chartable module.
+
+Chartable is a simple module that detects different charsets in a message. This
+module is aimed to protect from emails that contains symbols from different
+character sets that looks like each other. Chartable module works differently
+for raw and utf modes: in utf modes it detects different characters from unicode
+tables and in raw modes only ASCII and non-ASCII symbols. Configuration of whis
+module is very simple:
+@itemize @bullet
+@item @emph{metric} (string): metric to insert symbol (default: 'default')
+@item @emph{symbol} (string): symbol to insert (default: 'R_BAD_CHARSET')
+@item @emph{threshold} (double): value that would be used as threshold in expression 
+@math{N_{charset-changes} / N_{chars}}
+(e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), 
+default: 0.1
+@end itemize
+
+@section Fuzzy check module.
+
+Fuzzy check module provides a client for rspamd fuzzy storage. Fuzzy check can
+work with a cluster of rspamd fuzzy storages and the specific storage is
+selected by value of hash of message's hash. The available configuration options
+are:
+@itemize @bullet
+@item @emph{metric} (string): metric to insert symbol (default: 'default')
+@item @emph{symbol} (string): symbol to insert (default: 'R_FUZZY')
+@item @emph{max_score} (double): maximum score to that weights of hashes would be 
+normalized (default: 0 - no normalization)
+@item @emph{fuzzy_map} (string): a string that contains map in format { fuzzy_key => [
+symbol, weight ] } where fuzzy_key is number of fuzzy list. This string itself
+should be in format 1:R_FUZZY_SAMPLE1:10,2:R_FUZZY_SAMPLE2:1 etc, where first
+number is fuzzy key, second is symbol to insert and third - weight for
+normalization
+@item @emph{min_length} (integer): minimum length (in characters) for text part to be
+checked for fuzzy hash (default: 0 - no limit)
+@item @emph{whitelist} (map string): map of ip addresses that should not be checked
+with this module
+@item @emph{servers} (string): list of fuzzy servers in format
+"server1:port,server2:port" - these servers would be used for checking and
+storing fuzzy hashes
+@end itemize
+
+@section Forged recipients.
+
+Forged recipients is a lua module that compares recipients provided by smtp
+dialog and recipients from @emph{To:} header. Also it is possible to compare
+@emph{From:} header with SMTP from. So you may set @strong{symbol_rcpt} option
+to set up symbol that would be inserted when recipients differs and
+@strong{symbol_sender} when senders differs.
+
+@section Maillist.
+
+Maillist is a module that detects whether this message is send by using one of
+popular mailing list systems (among supported are ezmlm, mailman and
+subscribe.ru systems). The module has only option @strong{symbol} that defines a
+symbol that would be inserted if this message is sent via mailing list.
+
+@section Once received.
+
+This lua module checks received headers of message and insert symbol if only one
+received header is presented in message (that usually signals that this mail is
+sent directly to our MTA). Also it is possible to insert @emph{strict} symbol
+that indicates that host from which we receive this message is either
+unresolveable or has bad patterns (like 'dynamic', 'broadband' etc) that
+indicates widely used botnets. Configuration options are:
+@itemize @bullet
+@item @emph{symbol}: symbol to insert for messages with one received header.
+@item @emph{symbol_strict}: symbol to insert for messages with one received
+header and containing bad patterns or unresolveable sender.
+@item @emph{bad_host}: defines pattern that would be count as "bad".
+@item @emph{good_host}: defines pattern that would be count as "good" (no strict
+symbol would be inserted), note that "good" has a priority over "bad" pattern.
+@end itemize
+You can define several "good" and "bad" patterns for this module.
+
+@section Received rbl.
+
+Received rbl module checks for all received headers and make dns requests to IP
+black lists. This can be used for checking whether this email was transfered by
+some blacklisted gateway. Here are options available:
+@itemize @bullet
+@item @emph{symbol}: symbol to insert if message contains blacklisted received
+headers
+@item @emph{rbl}: a name of rbl to check, it is possible to define specific
+symbol for this rbl by adding symbol name after semicolon:
+@example
+rbl = pbl.spamhaus.org:RECEIVED_PBL
+@end example
+@end itemize
+
+@section Conclusion.
+
+Rspamd is shipped with some ammount of modules that provides basic functionality
+fro checking emails. You are allowed to add custom rules for regexp module and
+to set up available parameters for other modules. Also you may write your own
+modules (in C or Lua) but this would be described further in this documentation.
+You may set configuration options for modules from lua or from xml depends on
+its complexity. Internal modules are enabled and disabled by @strong{filters}
+configuration option. Lua modules are loaded and usually can be disabled by
+removing their configuration section from xml file or by removing corresponding
+line from @strong{modules} section.
+
 @bye
