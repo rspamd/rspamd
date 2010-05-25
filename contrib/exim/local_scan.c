@@ -22,7 +22,7 @@
     http://www.exim.org/exim-html-4.50/doc/html/spec_toc.html#TOC333
     
     For RSPAMD details please visit
-    http://cebka.pp.ru/trac/
+    http://rspamd.sourceforge.net
 */
 
 /* Comment out the row below to use socket type AF_INET

@@ -13,7 +13,6 @@
 
 @chapter Rspamd purposes and features.
 
-@node introduction
 @section Introduction.
 Rspamd filtering system is created as a replacement of popular
 @code{spamassassin}
@@ -36,7 +35,6 @@ example get statistics or learning rspamd). Other processes can do different
 jobs among them now are implemented @code{LMTP} worker that implements
 @code{LMTP} protocol for filtering mail and fuzzy hashes storage server. 
 
-@node features
 @section Features.
 The main features of rspamd are:
 @itemize @bullet
@@ -65,7 +63,6 @@ from SMTP dialog to rspamd filter.
 
 @chapter Installation of rspamd.
 
-@node obtaining
 @section Obtaining of rspamd.
 
 The main rspamd site is @url{http://rspamd.sourceforge.net/, sourceforge}. Here
@@ -77,7 +74,6 @@ repository that can be found here:
 shipped with all modules and sample config by default. But there are some
 requirements for building and running rspamd.
 
-@node requirements
 @section Requirements.
 
 For building rspamd from sources you need @code{CMake} system. CMake is very
@@ -91,7 +87,6 @@ libraries. They can be easily obtained from @url{http://lua.org, official lua
 site}. Also for rspamc client you need @code{perl} interpreter that could be
 installed from @url{http://www.perl.org}.
 
-@node building
 @section Building and Installation.
 
 Build process of rspamd is rather simple:
@@ -169,7 +164,6 @@ After installation you would have several new files installed:
 For @code{FreeBSD} system there also would be start script for running rspamd in
 @emph{PREFIX/etc/rc.d/rspamd.sh}.
 
-@node running
 @section Running rspamd.
 
 Rspamd can be started by running main rspamd executable -
@@ -215,7 +209,6 @@ $ rspamd -c ./rspamd.conf -X ./rspamd.xml
 @noindent
 After this command new xml config would be dumped to rspamd.xml file.
 
-@node signals
 @section Managing rspamd with signals.
 First of all it is important to note that all user's signals should be sent to
 rspamd main process and not to its children (as for child processes these
@@ -258,7 +251,6 @@ dropped and if new config is syntaxically incorrect old config would be used.
 
 @chapter Configuring of rspamd.
 
-@node principles
 @section Principles of work.
 
 We need to define several terms to explain configuration of rspamd. Rspamd
@@ -349,7 +341,6 @@ required to make DNS or other network request and to wait result. So modules can
 pause message's processing while waiting for some event. This is true for lua
 modules as well.
 
-@node config structure
 @section Rspamd config file structure.
 
 Rspamd config file is placed in PREFIX/etc/rspamd.xml by default. You can
@@ -423,7 +414,6 @@ So common structure of rspamd.xml can be described this way:
 Each of these sections would be described further in details.
 
 @section Rspamd configuration atoms.
-@node config atoms
 
 There are several primitive types of rspamd configuration parameters:
 @itemize @bullet
@@ -559,7 +549,7 @@ testing.
 
 @item @var{<debug_ip>}
 @tab List that contains ip addresses for which debugging would be turned on. For
-more information about ip lists look at @ref{config atoms}.
+more information about ip lists look at config atoms section.
 @end multitable
 
 @section Factors configuration.
@@ -893,7 +883,7 @@ if (! $client->ping()) @{
 
 my $result = $client->check($testmsg);
 
-if ($result->{'default'}->@{isspam@} eq 'True') @{
+if ($result->@{'default'@}->@{isspam@} eq 'True') @{
 	# do something with spam message here
 @}
 @end example
@@ -1392,7 +1382,7 @@ defined global table with name @var{config}. This table should contain
 configuration options for modules indexed by module. This can be written this
 way:
 @example
-config['module_name'] = {}
+config['module_name'] = @{@}
 local mconfig = config['module_name']
 
 mconfig['option_name'] = 'option value'
@@ -1761,8 +1751,8 @@ are:
 @item @emph{symbol} (string): symbol to insert (default: 'R_FUZZY')
 @item @emph{max_score} (double): maximum score to that weights of hashes would be 
 normalized (default: 0 - no normalization)
-@item @emph{fuzzy_map} (string): a string that contains map in format { fuzzy_key => [
-symbol, weight ] } where fuzzy_key is number of fuzzy list. This string itself
+@item @emph{fuzzy_map} (string): a string that contains map in format @{ fuzzy_key => [
+symbol, weight ] @} where fuzzy_key is number of fuzzy list. This string itself
 should be in format 1:R_FUZZY_SAMPLE1:10,2:R_FUZZY_SAMPLE2:1 etc, where first
 number is fuzzy key, second is symbol to insert and third - weight for
 normalization
