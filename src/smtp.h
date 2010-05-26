@@ -23,7 +23,7 @@ struct smtp_worker_ctx {
 	memory_pool_t *pool;
 	char *smtp_banner;
 	uint32_t smtp_delay;
-	uint32_t smtp_timeout;
+	struct timeval smtp_timeout;
 
 	gboolean use_xclient;
 	gboolean helo_required;
@@ -40,7 +40,9 @@ enum rspamd_smtp_state {
 	SMTP_STATE_RCPT,
 	SMTP_STATE_DATA,
 	SMTP_STATE_EOD,
-	SMTP_STATE_END
+	SMTP_STATE_END,
+	SMTP_STATE_ERROR,
+	SMTP_STATE_WRITE_ERROR
 };
 
 struct smtp_session {
@@ -51,10 +53,17 @@ struct smtp_session {
 	struct worker_task *task;
 	struct in_addr client_addr;
 	char *hostname;
+	char *error;
 	int sock;
+	
+	struct rspamd_async_session *s;
+	rspamd_io_dispatcher_t *dispatcher;
+
 	struct smtp_upstream *upstream;
 	int upstream_sock;
 	gboolean resolved;
 };
+
+void start_smtp_worker (struct rspamd_worker *worker);
 
 #endif

@@ -27,6 +27,7 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "lmtp.h"
+#include "smtp.h"
 #include "fuzzy_storage.h"
 #include "cfg_xml.h"
 
@@ -355,6 +356,12 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 				msg_info ("starting lmtp process %P", getpid ());
 				start_lmtp_worker (cur);
 				break;
+			case TYPE_SMTP:
+				setproctitle ("smtp process");
+				pidfile_close (rspamd->pfh);
+				msg_info ("starting smtp process %P", getpid ());
+				start_smtp_worker (cur);
+				break;
 			case TYPE_FUZZY:
 				setproctitle ("fuzzy storage");
 				pidfile_close (rspamd->pfh);
@@ -559,6 +566,8 @@ get_process_type (enum process_type type)
 		return "controller";
 	case TYPE_LMTP:
 		return "lmtp";
+	case TYPE_SMTP:
+		return "smtp";
 	}
 
 	return NULL;

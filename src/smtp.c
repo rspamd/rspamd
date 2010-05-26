@@ -33,6 +33,9 @@
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
 
+/* SMTP error messages */
+
+
 static sig_atomic_t                    wanna_die = 0;
 
 
@@ -63,6 +66,41 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 	}
 }
 
+char *
+make_smtp_error (struct smtp_session *session, int error_code, const char *format, ...)
+{
+	va_list                         vp;
+	char                           *result = NULL, *p;
+	size_t                          len;
+	
+	va_start (vp, format);
+	len = g_printf_string_upper_bound (format, vp);
+	result = memory_pool_alloc (session->pool, len + sizeof ("65535 "));
+	p = result + snprintf (result, len, "%d ", error_code);
+	vsnprintf (p, len - (p - result), format, vp);
+	va_end (vp);
+
+	return result;
+}
+
+static void
+free_smtp_session (gpointer arg)
+{
+	struct smtp_session            *session = arg;
+	
+	if (session) {
+		if (session->task) {
+			free_task (session->task, FALSE);
+		}
+		if (session->dispatcher) {
+			rspamd_remove_dispatcher (session->dispatcher);
+		}
+		memory_pool_delete (session->pool);
+		close (session->sock);
+		g_free (session);
+	}
+}
+
 /*
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
@@ -82,6 +120,128 @@ sigusr_handler (int fd, short what, void *arg)
 		event_loopexit (&tv);
 	}
 	return;
+}
+
+static gboolean
+read_smtp_command (struct smtp_session *session, f_str_t *line)
+{
+	/* XXX: write dialog implementation */
+
+	return FALSE;
+}
+
+/*
+ * Callback that is called when there is data to read in buffer
+ */
+static                          gboolean
+smtp_read_socket (f_str_t * in, void *arg)
+{
+	struct smtp_session            *session = arg;
+
+	switch (session->state) {
+		case SMTP_STATE_RESOLVE_REVERSE:
+		case SMTP_STATE_RESOLVE_NORMAL:
+		case SMTP_STATE_DELAY:
+			session->error = make_smtp_error (session, 550, "%s Improper use of SMTP command pipelining");
+			session->state = SMTP_STATE_ERROR;
+			break;
+		case SMTP_STATE_GREETING:
+		case SMTP_STATE_HELO:
+		case SMTP_STATE_FROM:
+		case SMTP_STATE_RCPT:
+		case SMTP_STATE_DATA:
+			return read_smtp_command (session, in);
+			break;
+		default:
+			session->error = make_smtp_error (session, 550, "%s Internal error");
+			session->state = SMTP_STATE_ERROR;
+			break;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Callback for socket writing
+ */
+static                          gboolean
+smtp_write_socket (void *arg)
+{
+	struct smtp_session            *session = arg;
+
+	if (session->state == SMTP_STATE_WRITE_ERROR) {
+		rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+		destroy_session (session->s);
+		return FALSE;
+	}
+	
+	return TRUE;
+}
+
+/*
+ * Called if something goes wrong
+ */
+static void
+smtp_err_socket (GError * err, void *arg)
+{
+	struct smtp_session            *session = arg;
+
+	msg_info ("abnormally closing connection, error: %s", err->message);
+	/* Free buffers */
+	destroy_session (session->s);
+}
+
+/*
+ * Write greeting to client
+ */
+static void
+write_smtp_greeting (struct smtp_session *session)
+{
+	if (session->ctx->smtp_banner) {
+		rspamd_dispatcher_write (session->dispatcher, session->ctx->smtp_banner, 0, FALSE, TRUE);
+	}
+}
+
+/*
+ * Return from a delay
+ */
+static void
+smtp_delay_handler (int fd, short what, void *arg)
+{
+	struct smtp_session            *session = arg;
+
+	if (session->state == SMTP_STATE_DELAY) {
+		session->state = SMTP_STATE_GREETING;
+		write_smtp_greeting (session);
+	}
+	else {
+		session->state = SMTP_STATE_WRITE_ERROR;
+		smtp_write_socket (session);
+	}
+}
+
+/*
+ * Make delay for a client
+ */
+static void
+smtp_make_delay (struct smtp_session *session)
+{
+	struct event                  *tev;
+	struct timeval                *tv;
+
+	if (session->ctx->smtp_delay != 0 && session->state == SMTP_STATE_DELAY) {
+		tev = memory_pool_alloc (session->pool, sizeof (struct event));
+		tv = memory_pool_alloc (session->pool, sizeof (struct timeval));
+		tv->tv_sec = session->ctx->smtp_delay / 1000;
+		tv->tv_usec = session->ctx->smtp_delay - tv->tv_sec * 1000;
+
+		evtimer_set (tev, smtp_delay_handler, session);
+		evtimer_add (tev, tv);
+	}
+	else if (session->state == SMTP_STATE_DELAY) {
+		session->state = SMTP_STATE_GREETING;
+		write_smtp_greeting (session);
+	}
 }
 
 /*
@@ -106,7 +266,7 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 					session->hostname = memory_pool_strdup (session->pool, "tempfail");
 				}
 				session->state = SMTP_STATE_DELAY;
-				/* XXX: make_delay (session); */
+				smtp_make_delay (session);
 			}
 			else {
 				if (addresses) {
@@ -126,7 +286,7 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 					session->hostname = memory_pool_strdup (session->pool, "tempfail");
 				}
 				session->state = SMTP_STATE_DELAY;
-				/* XXX: make_delay (session); */
+				smtp_make_delay (session);
 			}
 			else {
 				res = 0;
@@ -143,13 +303,18 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 					session->hostname = memory_pool_strdup (session->pool, "unknown");
 				}
 				session->state = SMTP_STATE_DELAY;
-				/* XXX: make_delay (session); */
+				smtp_make_delay (session);
 			}
 			break;
+		case SMTP_STATE_ERROR:
+			session->state = SMTP_STATE_WRITE_ERROR;
+			smtp_write_socket (session);
+			break;
 		default:
-			msg_info ("this callback is called on unknown state: %d", session->state);
-			session->state = SMTP_STATE_DELAY;
-			/* XXX: make_delay (session); */
+			/* 
+			 * This callback is called on unknown state, usually this indicates
+			 * an error (invalid pipelining)
+			 */
 			break;
 	}
 }
@@ -201,6 +366,13 @@ accept_socket (int fd, short what, void *arg)
 		g_free (session);
 		close (nfd);
 	}
+	
+	/* Set up dispatcher */
+	session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, 
+							smtp_read_socket, smtp_write_socket, smtp_err_socket, &session->ctx->smtp_timeout, session);
+	session->dispatcher->peer_addr = session->client_addr.s_addr;
+	/* Set up async session */
+	session->s = new_async_session (session->pool, free_smtp_session, session);
 
 }
 
@@ -343,12 +515,14 @@ config_smtp_worker (struct rspamd_worker *worker)
 {
 	struct smtp_worker_ctx         *ctx;
 	char                           *value, *err_str;
+	uint32_t                        timeout;
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
 	ctx->pool = memory_pool_new (memory_pool_get_size ());
 	
 	/* Set default values */
-	ctx->smtp_timeout = 300 * 1000;
+	ctx->smtp_timeout.tv_sec = 300;
+	ctx->smtp_timeout.tv_usec = 0;
 	ctx->smtp_delay = 0;
 	ctx->smtp_banner = "220 ESMTP Ready." CRLF;
 
@@ -365,9 +539,13 @@ config_smtp_worker (struct rspamd_worker *worker)
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_timeout")) != NULL) {
 		errno = 0;
-		ctx->smtp_timeout = strtoul (value, &err_str, 10);
+		timeout = strtoul (value, &err_str, 10);
 		if (errno != 0 || (err_str && *err_str != '\0')) {
 			msg_warn ("cannot parse timeout, invalid number: %s: %s", value, strerror (errno));
+		}
+		else {
+			ctx->smtp_timeout.tv_sec = timeout / 1000;
+			ctx->smtp_timeout.tv_usec = timeout - ctx->smtp_timeout.tv_sec * 1000;
 		}
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_delay")) != NULL) {

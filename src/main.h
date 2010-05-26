@@ -47,6 +47,7 @@ enum process_type {
 	TYPE_WORKER,
 	TYPE_CONTROLLER,
 	TYPE_LMTP,
+	TYPE_SMTP,
 	TYPE_FUZZY
 };
 

@@ -633,6 +633,10 @@ worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 		wrk->type = TYPE_LMTP;
 		wrk->has_socket = TRUE;
 	}
+	else if (g_ascii_strcasecmp (data, "smtp") == 0) {
+		wrk->type = TYPE_SMTP;
+		wrk->has_socket = TRUE;
+	}
 	else if (g_ascii_strcasecmp (data, "fuzzy") == 0) {
 		wrk->type = TYPE_FUZZY;
 		wrk->has_socket = FALSE;
@@ -1712,6 +1716,9 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 				break;
 			case TYPE_LMTP:
 				fprintf (f, "  <type>lmtp</type>" EOL);
+				break;
+			case TYPE_SMTP:
+				fprintf (f, "  <type>smtp</type>" EOL);
 				break;
 		}
 		escaped_str = g_markup_escape_text (wrk->bind_host, -1); 

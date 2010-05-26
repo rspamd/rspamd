@@ -496,6 +496,9 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 			case TYPE_LMTP:
 				cptype = "lmtp";
 				break;
+			case TYPE_SMTP:
+				cptype = "smtp";
+				break;
 			case TYPE_FUZZY:
 				cptype = "fuzzy";
 				break;

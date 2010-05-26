@@ -384,6 +384,11 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 	rspamd_buffer_t                *newbuf;
 
 	newbuf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
+	if (len == 0) {
+		/* Assume NULL terminated */
+		len = strlen ((char *)data);
+	}
+
 	if (!allocated) {
 		newbuf->data = fstralloc (d->pool, len);
 
