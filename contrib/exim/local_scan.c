@@ -561,8 +561,11 @@ int WaitForScanResult (uschar **resStr)
         	back = *tmp;
         	*tmp = '\0';
 		if(smb>0) {
-		    tok[0] = tok[1]= tok[2]= tok[3]= tok[4]= tok[5]= tok[6]= ' ';
-		    symbols = string_sprintf ("%s\n%s", symbols, tok+5);    
+		    tok += 7;
+		    while(*tok && isspace(*tok)) tok++;
+		    if(strlen(tok)>0) {
+			symbols = string_sprintf ("%s\n %s", symbols, tok);
+		    }
 		} else {
 		    tok += 7;
 		    while(*tok && isspace(*tok)) tok++;
@@ -604,20 +607,13 @@ int WaitForScanResult (uschar **resStr)
             header_del ((uschar *) "X-Spam-Sybmols");
             header_add (' ', "%s: %s\n", "X-Spam-Sybmols", symbols);
             while(*tmp!='\0') {
-        	if((*tmp == '\n') || (*tmp == '\r')) {
-        	    tmp++;
-        	    continue;
-        	}
-        	if ((*tmp == ' ') && (*(tmp+1)==' ')) {
-        	    tok[i++] = ',';
-        	    tmp += 2;
-        	    continue;
-        	}
-        	tok[i] = *tmp;
-        	i++;
+        	if(*tmp == '\r')
+			*tmp = ' ';
+        	if(*tmp == '\n')
+        		*tmp = ',';
         	tmp++;
             }
-	    tok[i] = '\0';
+	    *tmp = '\0';
             log_write(0, LOG_MAIN, "rspam-exim: symbols: %s", tok);
         }
 
