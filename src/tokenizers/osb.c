@@ -66,7 +66,7 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 		for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
 			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
 			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
-			new = memory_pool_alloc (pool, sizeof (token_node_t));
+			new = memory_pool_alloc0 (pool, sizeof (token_node_t));
 			new->h1 = h1;
 			new->h2 = h2;
 
