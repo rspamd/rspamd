@@ -244,15 +244,15 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	}
 
 	if (sel != NULL) {
-		sumbuf = memory_pool_alloc (task->task_pool, 32);
-		snprintf (sumbuf, 32, "%.2Lg", max);
-		cur = g_list_prepend (NULL, sumbuf);
 #ifdef WITH_LUA
         max = call_classifier_post_callbacks (ctx->cfg, task, max);
 #endif
 		if (st->normalizer != NULL) {
 			max = st->normalizer (task->cfg, max, st->normalizer_data);
 		}
+		sumbuf = memory_pool_alloc (task->task_pool, 32);
+		snprintf (sumbuf, 32, "%.2Lg", max);
+		cur = g_list_prepend (NULL, sumbuf);
 		insert_result (task, ctx->cfg->metric, sel->symbol, max, cur);
 	}
 }
