@@ -415,10 +415,10 @@ lua_consolidation_func (struct worker_task *task, const char *metric_name, const
 }
 
 double 
-lua_normalizer_func (struct config_file *cfg, double score, void *params)
+lua_normalizer_func (struct config_file *cfg, long double score, void *params)
 {
     GList                          *p = params;
-    double                          res = score;
+    long double                          res = score;
 	lua_State                      *L = cfg->lua_state;
 
     /* Call specified function and put input score on stack */

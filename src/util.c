@@ -1034,7 +1034,10 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
  *	%[0][width|m][u][x|X]i	  int/ngx_int_t
  *	%[0][width][u][x|X]D	  int32_t/uint32_t
  *	%[0][width][u][x|X]L	  int64_t/uint64_t
- *	%[0][width][.width]f	  float
+ *	%[0][width][.width]f	  double
+ *	%[0][width][.width]F	  long double
+ *	%[0][width][.width]g	  double
+ *	%[0][width][.width]G	  long double
  *	%P						pid_t
  *	%r						rlim_t
  *	%p						void *
@@ -1082,7 +1085,7 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 {
 	u_char             *p, zero, *last;
 	int                 d;
-	float               f, scale;
+	long double         f, scale;
 	size_t              len, slen;
 	int64_t				i64;
 	uint64_t			ui64;
@@ -1144,7 +1147,6 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					sign = 0;
 					fmt++;
 					continue;
-
 				case '.':
 					fmt++;
 
@@ -1258,7 +1260,43 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 
 
 			case 'f':
-				f = (float) va_arg (args, double);
+				f = (double) va_arg (args, double);
+				if (f < 0) {
+					*buf++ = '-';
+					f = -f;
+				}
+				
+				ui64 = (int64_t) f;
+
+				buf = rspamd_sprintf_num (buf, last, ui64, zero, 0, width);
+
+				if (frac_width) {
+
+					if (buf < last) {
+						*buf++ = '.';
+					}
+
+					scale = 1.0;
+
+					for (i = 0; i < frac_width; i++) {
+						scale *= 10.0;
+					}
+
+					/*
+					* (int64_t) cast is required for msvc6:
+					* it can not convert uint64_t to double
+					*/
+					ui64 = (uint64_t) ((f - (int64_t) ui64) * scale);
+
+					buf = rspamd_sprintf_num (buf, last, ui64, '0', 0, frac_width);
+				}
+
+				fmt++;
+
+				continue;
+
+			case 'F':
+				f = (long double) va_arg (args, long double);
 
 				if (f < 0) {
 					*buf++ = '-';
@@ -1282,14 +1320,40 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					}
 
 					/*
-					 * (int64_t) cast is required for msvc6:
-					 * it can not convert uint64_t to double
-					 */
+					* (int64_t) cast is required for msvc6:
+					* it can not convert uint64_t to double
+					*/
 					ui64 = (uint64_t) ((f - (int64_t) ui64) * scale);
 
 					buf = rspamd_sprintf_num (buf, last, ui64, '0', 0, frac_width);
 				}
 
+				fmt++;
+
+				continue;
+
+			case 'g':
+				f = (long double) va_arg (args, double);
+
+				if (f < 0) {
+					*buf++ = '-';
+					f = -f;
+				}
+				g_ascii_formatd (buf, last - buf, "%g", (double)f);
+				buf += strlen (buf);
+				fmt++;
+
+				continue;
+
+			case 'G':
+				f = (long double) va_arg (args, long double);
+
+				if (f < 0) {
+					*buf++ = '-';
+					f = -f;
+				}
+				g_ascii_formatd (buf, last - buf, "%g", (double)f);
+				buf += strlen (buf);
 				fmt++;
 
 				continue;

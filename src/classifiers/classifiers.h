@@ -17,7 +17,7 @@ struct classifier_ctx {
 
 struct classify_weight {
 	const char *name;
-	double weight;
+	long double weight;
 };
 
 /* Common classifier structure */

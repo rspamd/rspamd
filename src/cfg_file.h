@@ -161,7 +161,7 @@ struct statfile_binlog_params {
 	uint16_t master_port;
 };
 
-typedef double (*statfile_normalize_func)(struct config_file *cfg, double score, void *params);
+typedef double (*statfile_normalize_func)(struct config_file *cfg, long double score, void *params);
 
 /**
  * Statfile config definition

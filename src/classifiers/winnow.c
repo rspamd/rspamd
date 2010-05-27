@@ -51,7 +51,7 @@ struct winnow_callback_data {
 	struct classifier_ctx          *ctx;
 	stat_file_t                    *file;
 	stat_file_t                    *learn_file;
-	double                          sum;
+	long double                     sum;
 	double                          multiplier;
 	int                             count;
 	gboolean                        in_class;
@@ -71,12 +71,7 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 	/* Consider that not found blocks have value 1 */
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
 	if (fabs (v) > ALPHA) {
-        if (cd->sum + v > MAX_WEIGHT) {
-            cd->sum = MAX_WEIGHT;
-        }
-        else {
-		    cd->sum += v;
-        }
+		cd->sum += v;
 		cd->in_class++;
 	}
 
@@ -160,12 +155,7 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	}
 
 
-    if (cd->sum + node->value > MAX_WEIGHT) {
-        cd->sum = MAX_WEIGHT;
-    }
-    else {
-	    cd->sum += node->value;
-    }
+	cd->sum += node->value;
 
 	cd->count++;
 
@@ -188,7 +178,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 {
 	struct winnow_callback_data     data;
 	char                           *sumbuf, *value;
-	double                          res = 0., max = 0.;
+	long double                     res = 0., max = 0.;
 	GList                          *cur;
 	struct statfile                *st, *sel = NULL;
 	int                             nodes, minnodes;
@@ -258,7 +248,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 
 	if (sel != NULL) {
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
-		snprintf (sumbuf, 32, "%.2f", max);
+		snprintf (sumbuf, 32, "%.2Lg", max);
 		cur = g_list_prepend (NULL, sumbuf);
 #ifdef WITH_LUA
         max = call_classifier_post_callbacks (ctx->cfg, task, max);
@@ -271,7 +261,7 @@ GList *
 winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
 {
 	struct winnow_callback_data     data;
-	double                          res = 0.;
+	long double                     res = 0.;
 	GList                          *cur, *resl = NULL;
 	struct statfile                *st;
 	struct classify_weight         *w;
@@ -346,7 +336,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *fi
 	int                             nodes, minnodes, iterations = 0;
 	struct statfile                *st;
 	stat_file_t                    *sel;
-	double                          res = 0., max = 0.;
+	long double                     res = 0., max = 0.;
 	GList                          *cur;
 
 	g_assert (pool != NULL);
@@ -407,12 +397,16 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *fi
 		}
 	} while ((in_class ? sel != file : sel == file)  && iterations ++ < MAX_LEARN_ITERATIONS);
 	
+	if (iterations >= MAX_LEARN_ITERATIONS) {
+		msg_warn ("learning statfile %s  was not fully successfull: iterations count is limited to %d, final sum is %G", 
+				file->filename, MAX_LEARN_ITERATIONS, max);
+	}
+	else {
+		msg_info ("learned statfile %s successfully with %d iterations and sum %G", file->filename, iterations, max);
+	}
+
+
 	if (sum) {
-		if (data.count != 0) {
-			*sum = data.sum / data.count;
-		}
-		else {
-			*sum = 0;
-		}
+		*sum = max;
 	}
 }

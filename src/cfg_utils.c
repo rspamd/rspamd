@@ -719,25 +719,16 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 }
 
 static double
-internal_normalizer_func (struct config_file *cfg, double score, void *data)
+internal_normalizer_func (struct config_file *cfg, long double score, void *data)
 {
-    double max = *(double *)data;
+    long double max = *(double *)data;
 
     if (score < 0) {
         return score;
     }
-    else if (score > 0.001 && score < 1) {
-        return 1;
-    }
-    else if (score > 1 && score < max / 2.) {
-        return MIN(max, score * score);
-    }
-    else if (score < max) {
-        return score;
-    }
-    else if (score > max) {
-        return max;
-    }
+	else {
+		return max * tanhl (score / max);
+	}
 
     return score;
 }

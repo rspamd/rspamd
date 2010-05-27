@@ -849,7 +849,7 @@ controller_read_socket (f_str_t * in, void *arg)
 
 		while (cur) {
 			w = cur->data;
-			i += snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %.2f" CRLF, w->name, w->weight);
+			i += snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %.2Lg" CRLF, w->name, w->weight);
 			cur = g_list_next (cur);
 		}
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
