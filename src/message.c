@@ -665,7 +665,11 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		if (type == NULL) {
 			msg_warn ("type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
+#ifdef GMIME24
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, type);
+#else
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_mime_content_type_destroy, type);
+#endif
 		}
 		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
 		if (wrapper != NULL) {
@@ -788,7 +792,11 @@ process_message (struct worker_task *task)
 
 		task->rcpts = g_mime_message_get_all_recipients (message);
 		if (task->rcpts) {
+#ifdef GMIME24
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, task->rcpts);
+#else
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) internet_address_list_destroy, task->rcpts);
+#endif
 		}
 
 
@@ -892,7 +900,7 @@ header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const 
 }
 #else
 static void
-header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const char field)
+header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const char *field)
 {
 	GMimeHeaderIter                *iter;
 	const char                     *name;
@@ -942,7 +950,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 #ifdef GMIME24
 		GMimeHeaderList                *ls;
 
-		ls = GMIME_OBJECT (message)->headers;
+		ls = GMIME_OBJECT (part)->headers;
 		header_iterate (data->pool, ls, &l, data->field);
 #else
 		h = part->headers->headers;
@@ -1072,7 +1080,11 @@ local_message_get_sender (GMimeMessage * message)
 		return NULL;
 	}
 	res = internet_address_list_to_string (ia, FALSE);
+#ifndef	GMIME24
 	internet_address_list_destroy (ia);
+#else
+	g_object_unref (ia);
+#endif
 
 	return res;
 }
@@ -1093,7 +1105,11 @@ local_message_get_reply_to (GMimeMessage * message)
 		return NULL;
 	}
 	res = internet_address_list_to_string (ia, FALSE);
+#ifndef	GMIME24
 	internet_address_list_destroy (ia);
+#else
+	g_object_unref (ia);
+#endif
 
 	return res;
 }

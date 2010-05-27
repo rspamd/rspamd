@@ -989,7 +989,7 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 		ct = g_mime_object_get_content_type (part);
 		g_object_unref (part);
 
-		if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
+		if ((param_data = g_mime_content_type_get_parameter ((GMimeContentType *)ct, param_name)) == NULL) {
 			return FALSE;
 		}
 		if (*param_pattern == '/') {
@@ -1047,7 +1047,7 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 
 		debug_task ("checking %s param", param_name);
 
-		if ((param_data = g_mime_content_type_get_parameter (ct, param_name)) == NULL) {
+		if ((param_data = g_mime_content_type_get_parameter ((GMimeContentType *)ct, param_name)) == NULL) {
 			return FALSE;
 		}
 	}
@@ -1221,6 +1221,16 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 
 	/* Fill array */
 	cur = task->rcpts;
+#ifdef GMIME24
+	for (i = 0; i < num; i ++) {
+		addr = internet_address_list_get_address (cur, i);
+		ar[i].name = memory_pool_strdup (task->task_pool, internet_address_get_name (addr));
+		if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
+			*c = '\0';
+			ar[i].addr = c + 1;
+		}
+	}
+#else
 	i = 0;
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
@@ -1232,6 +1242,7 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 		cur = internet_address_list_next (cur);
 		i++;
 	}
+#endif
 
 	/* Cycle all elements in array */
 	for (i = 0; i < num; i++) {
@@ -1286,12 +1297,28 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 	gboolean                        res = TRUE;
 	struct addr_list                current = { NULL, NULL }, previous = {
 	NULL, NULL};
+#ifdef GMIME24
+	int                             num, i;
+#endif
 
 	/* Do not check to short address lists */
-	if (internet_address_list_length (ia) < MIN_RCPT_TO_COMPARE) {
+	if (internet_address_list_length ((InternetAddressList *)ia) < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
-
+#ifdef GMIME24
+	cur = ia;
+	for (i = 0; i < num; i ++) {
+		addr = internet_address_list_get_address (cur, i);
+		current.addr = (char *)internet_address_get_name (addr);
+		if (previous.addr != NULL) {
+			if (g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+				res = FALSE;
+				break;
+			}
+		}
+		previous.addr = current.addr;
+	}
+#else
 	cur = ia;
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
@@ -1305,6 +1332,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 		previous.addr = current.addr;
 		cur = internet_address_list_next (cur);
 	}
+#endif
 
 	return res;
 }
@@ -1531,7 +1559,11 @@ gboolean
 rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void *unused)
 {
 	GMimeObject                    *part;
+#ifndef GMIME24
 	GMimePartEncodingType           enc_req, part_enc;
+#else
+	GMimeContentEncoding            enc_req, part_enc;
+#endif
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
@@ -1540,10 +1572,11 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 	}
 
 	arg = get_function_arg (args->data, task, TRUE);
-	enc_req = g_mime_part_encoding_from_string (arg->data);
 #ifndef GMIME24
+	enc_req = g_mime_part_encoding_from_string (arg->data);
 	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {
 #else
+	enc_req = g_mime_content_encoding_from_string (arg->data);
 	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
 #endif
 		msg_warn ("bad encoding type: %s", (char *)arg->data);
@@ -1553,7 +1586,12 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		if (GMIME_IS_PART (part)) {
+#ifndef GMIME24
 			part_enc = g_mime_part_get_encoding (GMIME_PART (part));
+#else
+			part_enc = g_mime_part_get_content_encoding (GMIME_PART (part));
+#endif
+			
 
 			debug_task ("got encoding in part: %d and compare with %d", (int)part_enc, (int)enc_req);
 			g_object_unref (part);
