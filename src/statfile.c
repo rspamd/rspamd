@@ -365,7 +365,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	qsort (pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
 	memory_pool_unlock_mutex (pool->lock);
 
-	return new_file;
+	return statfile_pool_is_open (pool, filename);
 }
 
 int

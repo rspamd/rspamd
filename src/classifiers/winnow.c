@@ -232,9 +232,6 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 
 		if (data.count != 0) {
 			res = data.sum / data.count;
-            if (st->normalizer != NULL) {
-                res = st->normalizer (task->cfg, res, st->normalizer_data);
-            }
 		}
 		else {
 			res = 0;
@@ -253,6 +250,9 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 #ifdef WITH_LUA
         max = call_classifier_post_callbacks (ctx->cfg, task, max);
 #endif
+		if (st->normalizer != NULL) {
+			max = st->normalizer (task->cfg, max, st->normalizer_data);
+		}
 		insert_result (task, ctx->cfg->metric, sel->symbol, max, cur);
 	}
 }
