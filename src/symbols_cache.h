@@ -2,6 +2,7 @@
 #define RSPAMD_SYMBOLS_CACHE_H
 
 #include "config.h"
+#include "radix.h"
 
 #define MAX_SYMBOL 128
 
@@ -16,14 +17,42 @@ struct saved_cache_item {
 	double avg_time;
 };
 
+struct dynamic_map_item {
+	struct in_addr addr;
+	uint32_t mask;
+};
+
 struct cache_item {
+	/* Static item's data */
 	struct saved_cache_item *s;
+
+	/* For dynamic rules */
+	struct dynamic_map_item *networks;
+	uint32_t networks_number;
+	gboolean is_dynamic;
+	
+	/* Callback data */
 	symbol_func_t func;
 	gpointer user_data;
 };
 
+
 struct symbols_cache {
-	struct cache_item *items;
+	/* Normal cache items */
+	GList *static_items;
+
+	/* Items that have negative weights */
+	GList *negative_items;
+	
+	/* Radix map of dynamic rules with ip mappings */
+	radix_tree_t *dynamic_map;
+
+	/* Common dynamic rules */
+	GList *dynamic_items;
+
+	memory_pool_t *static_pool;
+	memory_pool_t *dynamic_pool;
+
 	guint cur_items;
 	guint used_items;
 	guint uses;
@@ -45,11 +74,27 @@ gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, c
 void register_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, gpointer user_data);
 
 /**
+ * Register function for dynamic symbols parsing
+ * @param name name of symbol
+ * @param func pointer to handler
+ * @param user_data pointer to user_data
+ */
+void register_dynamic_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, 
+						gpointer user_data, struct dynamic_map_item *networks, gsize network_count);
+
+/**
  * Call function for cached symbol using saved callback
  * @param task task object
  * @param cache symbols cache
  * @param saved_item pointer to currently saved item
  */
-gboolean call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, struct cache_item **saved_item);
+gboolean call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, gpointer *save);
+
+/**
+ * Remove all dynamic rules from cache
+ * @param cache symbols cache
+ */
+void remove_dynamic_rules (struct symbols_cache *cache);
+
 
 #endif

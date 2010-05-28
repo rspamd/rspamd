@@ -50,7 +50,7 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 	struct metric_result           *metric_res;
 	struct symbol                  *s;
 	struct cache_item              *item;
-	int                             i;
+	GList                          *cur;
 
 	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, metric_name);
 	if (metric == NULL) {
@@ -99,12 +99,25 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 
 	/* Process cache item */
 	if (metric->cache) {
-		for (i = 0; i < metric->cache->used_items; i++) {
-			item = &metric->cache->items[i];
+		cur = metric->cache->static_items;
+		while (cur)
+		{
+			item = cur->data;
 
-			if (flag > 0 && strcmp (item->s->symbol, symbol) == 0) {
+			if (strcmp (item->s->symbol, symbol) == 0) {
 				item->s->frequency++;
 			}
+			cur = g_list_next (cur);
+		}
+		cur = metric->cache->negative_items;
+		while (cur)
+		{
+			item = cur->data;
+
+			if (strcmp (item->s->symbol, symbol) == 0) {
+				item->s->frequency++;
+			}
+			cur = g_list_next (cur);
 		}
 	}
 }
@@ -272,7 +285,7 @@ static int
 continue_process_filters (struct worker_task *task)
 {
 	GList                          *cur = task->save.entry;
-	struct cache_item              *item = task->save.item;
+	gpointer                        item = task->save.item;
 
 	struct metric                  *metric = cur->data;
 
@@ -306,7 +319,7 @@ process_filters (struct worker_task *task)
 {
 	GList                          *cur;
 	struct metric                  *metric;
-	struct cache_item              *item = NULL;
+	gpointer                        item = NULL;
 
 	if (task->save.saved) {
 		task->save.saved = 0;

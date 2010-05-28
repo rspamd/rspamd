@@ -704,7 +704,7 @@ static void
 print_metrics_cache (struct config_file *cfg) 
 {
 	struct metric                  *metric;
-	GList                          *l;
+	GList                          *l, *cur;
 	struct cache_item              *item;
 	int                             i;
 
@@ -718,12 +718,24 @@ print_metrics_cache (struct config_file *cfg)
 			printf ("Cache for metric: %s\n", metric->name);
 			printf ("-----------------------------------------------------------------\n");
 			printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
-			for (i = 0; i < metric->cache->used_items; i++) {
-				item = &metric->cache->items[i];
+			i = 0;
+			cur = metric->cache->negative_items;
+			while (cur) {
+				item = cur->data;
 				printf ("-----------------------------------------------------------------\n");
 				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
-
+				cur = g_list_next (cur);
+				i ++;
 			}
+			cur = metric->cache->static_items;
+			while (cur) {
+				item = cur->data;
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+				cur = g_list_next (cur);
+				i ++;
+			}
+
 			printf ("-----------------------------------------------------------------\n");
 		}
 		l = g_list_next (l);
