@@ -645,7 +645,8 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	}
 	else if (GMIME_IS_MULTIPART (part)) {
 		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
-
+#ifndef GMIME24	
+		debug_task ("detected multipart part");
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
 		if (task->parser_recursion++ < RECURSION_LIMIT) {
 			g_mime_multipart_foreach ((GMimeMultipart *) part, mime_foreach_callback, task);
@@ -654,6 +655,8 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			msg_err ("endless recursion detected: %d", task->parser_recursion);
 			return;
 		}
+#endif
+		/* XXX: do nothing with multiparts in gmime 2.4 */
 	}
 	else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
@@ -672,7 +675,11 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 		}
 		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
+#ifdef GMIME24
+		if (wrapper != NULL && GMIME_IS_DATA_WRAPPER (wrapper)) {
+#else
 		if (wrapper != NULL) {
+#endif
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream), FALSE);
@@ -735,7 +742,7 @@ process_message (struct worker_task *task)
 
 	if (task->is_mime) {
 
-		debug_task ("construct mime parser from string length %ld", (long int)task->msg->len);
+		debug_task ("construct mime parser from string length %d", (int)task->msg->len);
 		/* create a new parser object to parse the stream */
 		parser = g_mime_parser_new_with_stream (stream);
 		g_object_unref (stream);
@@ -905,7 +912,13 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 	GMimeHeaderIter                *iter;
 	const char                     *name;
 
-	if (g_mime_header_list_get_iter (ls, iter)) {
+	if (ls == NULL) {
+		*ret = NULL;
+		return;
+	}
+
+	iter = g_mime_header_iter_new ();
+	if (g_mime_header_list_get_iter (ls, iter) && g_mime_header_iter_first (iter)) {
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
 			if (!g_strncasecmp (field, name, strlen (name))) {
@@ -921,6 +934,7 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 			}
 		}
 	}
+	g_mime_header_iter_free (iter);
 }
 #endif
 
@@ -943,14 +957,16 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 #endif
 {
 	struct multipart_cb_data       *data = user_data;
+#ifndef GMIME24
 	struct raw_header              *h;
+#endif
 	GList                          *l = NULL;
 
-	if (data->try_search && GMIME_IS_PART (part)) {
+	if (data->try_search && part != NULL && GMIME_IS_PART (part)) {
 #ifdef GMIME24
 		GMimeHeaderList                *ls;
 
-		ls = GMIME_OBJECT (part)->headers;
+		ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
 		header_iterate (data->pool, ls, &l, data->field);
 #else
 		h = part->headers->headers;
@@ -1013,7 +1029,9 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const ch
 					gret = cb.ret;
 				}
 			}
+#ifndef GMIME24
 			g_object_unref (part);
+#endif
 		}
 	}
 
@@ -1027,7 +1045,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const ch
 		/* Try to iterate with mime part headers */
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
-			ls = part->headers;
+			ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
 			header_iterate (pool, ls, &gret, field);
 			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
 				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb);
@@ -1035,7 +1053,9 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const ch
 					gret = cb.ret;
 				}
 			}
+#ifndef GMIME24
 			g_object_unref (part);
+#endif
 		}
 	}
 
@@ -1196,7 +1216,7 @@ local_message_get_recipients_##type (GMimeMessage *message, const char *unused)	
 	"To", NULL, local_message_get_recipients_to, NULL, NULL, local_message_add_recipients_from_string_to, FUNC_IA}, {
 	"Cc", NULL, local_message_get_recipients_cc, NULL, NULL, local_message_add_recipients_from_string_cc, FUNC_IA}, {
 	"Bcc", NULL, local_message_get_recipients_bcc, NULL, NULL, local_message_add_recipients_from_string_bcc, FUNC_IA}, {
-	"Date", g_mime_message_get_date_as_string, NULL, NULL, local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR},
+	"Date", (GetFunc)g_mime_message_get_date_as_string, NULL, NULL, local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR},
 #endif
 	{
 	"Subject", g_mime_message_get_subject, NULL, NULL, g_mime_message_set_subject, NULL, FUNC_CHARPTR}, {
@@ -1206,7 +1226,7 @@ local_message_get_recipients_##type (GMimeMessage *message, const char *unused)	
 	NULL, NULL, NULL, local_message_get_header, NULL, g_mime_message_add_header, FUNC_LIST}
 #else
 	{
-	NULL, NULL, NULL, local_message_get_header, NULL, g_mime_object_append_header, FUNC_LIST}
+	NULL, NULL, NULL, local_message_get_header, NULL, (SetListFunc)g_mime_object_append_header, FUNC_LIST}
 #endif
 };
 
@@ -1278,13 +1298,12 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const char *fi
 				}
 #else
 				i = internet_address_list_length (ia);
-				while (i > 0) {
+				while (--i >= 0) {
 					ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
 					if (pool != NULL) {
 						memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
 					}
 					gret = g_list_prepend (gret, ia_string);
-					--i;
 				}
 #endif
 				break;

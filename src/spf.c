@@ -121,6 +121,7 @@ parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 	bzero (ip_buf, sizeof (ip_buf));
 	bzero (mask_buf, sizeof (mask_buf));
 	pos = begin;
+	p = ip_buf;
 
 	while (*pos) {
 		switch (state) {

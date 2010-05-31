@@ -987,7 +987,9 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		ct = g_mime_object_get_content_type (part);
+#ifndef GMIME24
 		g_object_unref (part);
+#endif
 
 		if ((param_data = g_mime_content_type_get_parameter ((GMimeContentType *)ct, param_name)) == NULL) {
 			return FALSE;
@@ -1043,7 +1045,9 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		ct = g_mime_object_get_content_type (part);
+#ifndef GMIME24
 		g_object_unref (part);
+#endif
 
 		debug_task ("checking %s param", param_name);
 
@@ -1055,15 +1059,6 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 	return TRUE;
 }
 
-/* In gmime24 this function is opaque, so define it here to avoid errors when compiling with gmime24 */
-typedef struct {
-	char                           *type;
-	char                           *subtype;
-
-	GMimeParam                     *params;
-	GHashTable                     *param_hash;
-} localContentType;
-
 gboolean
 rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *unused)
 {
@@ -1071,7 +1066,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 	struct rspamd_regexp           *re;
 	struct expression_argument     *arg;
 	GMimeObject                    *part;
-	const localContentType         *ct;
+	GMimeContentType               *ct;
 	int                             r;
 
 	if (args == NULL) {
@@ -1083,10 +1078,12 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 	param_pattern = arg->data;
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
-		ct = (const localContentType *)g_mime_object_get_content_type (part);
+		ct = g_mime_object_get_content_type (part);
+#ifndef GMIME24
 		g_object_unref (part);
+#endif
 
-		if (ct == NULL) {
+		if (ct == NULL ) {
 			return FALSE;
 		}
 
@@ -1113,7 +1110,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 		}
 		else {
 			/* Just do strcasecmp */
-			if (g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
+			if (ct->subtype && g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
 				return TRUE;
 			}
 		}
@@ -1128,7 +1125,7 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 	char                           *param_pattern;
 	struct rspamd_regexp           *re;
 	GMimeObject                    *part;
-	const localContentType         *ct;
+	GMimeContentType               *ct;
 	struct expression_argument     *arg;
 	int                             r;
 
@@ -1142,8 +1139,10 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
-		ct = (const localContentType *)g_mime_object_get_content_type (part);
+		ct = g_mime_object_get_content_type (part);
+#ifndef GMIME24
 		g_object_unref (part);
+#endif
 
 		if (ct == NULL) {
 			return FALSE;
@@ -1172,7 +1171,7 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 		}
 		else {
 			/* Just do strcasecmp */
-			if (g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
+			if (ct->type && g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
 				return TRUE;
 			}
 		}
@@ -1312,7 +1311,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 		addr = internet_address_list_get_address ((InternetAddressList *)cur, i);
 		current.addr = (char *)internet_address_get_name (addr);
 		if (previous.addr != NULL) {
-			if (g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+			if (current.addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
 				res = FALSE;
 				break;
 			}
@@ -1325,7 +1324,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 		addr = internet_address_list_get_address (cur);
 		current.addr = internet_address_get_addr (addr);
 		if (previous.addr != NULL) {
-			if (g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+			if (current_addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
 				res = FALSE;
 				break;
 			}
@@ -1356,7 +1355,7 @@ rspamd_is_recipients_sorted (struct worker_task * task, GList * args, void *unus
 }
 
 static inline                   gboolean
-compare_subtype (struct worker_task *task, const localContentType * ct, char *subtype)
+compare_subtype (struct worker_task *task, GMimeContentType * ct, char *subtype)
 {
 	struct rspamd_regexp           *re;
 	int                             r;
@@ -1384,7 +1383,7 @@ compare_subtype (struct worker_task *task, const localContentType * ct, char *su
 	}
 	else {
 		/* Just do strcasecmp */
-		if (g_ascii_strcasecmp (ct->subtype, subtype) == 0) {
+		if (ct->subtype && g_ascii_strcasecmp (ct->subtype, subtype) == 0) {
 			return TRUE;
 		}
 	}
@@ -1416,13 +1415,13 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 	struct rspamd_regexp           *re;
 	struct mime_part               *part;
 	GList                          *cur;
-	const localContentType         *ct;
+	GMimeContentType               *ct;
 	int                             r;
 
 	cur = g_list_first (task->parts);
 	while (cur) {
 		part = cur->data;
-		ct = (localContentType *) part->type;
+		ct = part->type;
 		if (ct == NULL) {
 			cur = g_list_next (cur);
 			continue;
@@ -1440,7 +1439,7 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 				re_cache_add (param_type, re, task->cfg->cfg_pool);
 			}
 			if ((r = task_cache_check (task, re)) == -1) {
-				if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+				if (ct->type && g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
 					if (param_subtype) {
 						if (compare_subtype (task, ct, param_subtype)) {
 							if (compare_len (part, min_len, max_len)) {
@@ -1471,7 +1470,7 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 		}
 		else {
 			/* Just do strcasecmp */
-			if (g_ascii_strcasecmp (ct->type, param_type) == 0) {
+			if (ct->type && g_ascii_strcasecmp (ct->type, param_type) == 0) {
 				if (param_subtype) {
 					if (compare_subtype (task, ct, param_subtype)) {
 						if (compare_len (part, min_len, max_len)) {
@@ -1595,11 +1594,15 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 			
 
 			debug_task ("got encoding in part: %d and compare with %d", (int)part_enc, (int)enc_req);
+#ifndef GMIME24
 			g_object_unref (part);
+#endif
 
 			return part_enc == enc_req;
 		}
+#ifndef GMIME24
 		g_object_unref (part);
+#endif
 	}
 
 	return FALSE;
