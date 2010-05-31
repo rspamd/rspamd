@@ -418,7 +418,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 	};
 	struct stat_file_block          block = { 0, 0, 0 };
 	int                             fd;
-	unsigned int                    buflen, nblocks;
+	unsigned int                    buflen = 0, nblocks;
 	char                           *buf = NULL;
 
 	if (statfile_pool_is_open (pool, filename) != NULL) {

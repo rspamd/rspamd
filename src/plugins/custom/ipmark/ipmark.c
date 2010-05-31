@@ -175,7 +175,7 @@ read_radix_file (void)
 	FILE *f;
 	char buf[BUFSIZ];
 	struct in_addr ina;
-	int mask, value;
+	int mask = 0, value = 0;
 
 	f = fopen (filename, "r");
 	if (f != NULL) {
@@ -260,9 +260,9 @@ parse_line (const char *line, size_t len, char **output, void *user_data)
 	char *c = ip_buf, *err_str;
 	struct in_addr ina;
 	int state = 0, next_state = 0, dots = 0;
-	int16_t value;
+	int16_t value = 0;
 	uint32_t mask;
-	enum ipmark_command cmd;
+	enum ipmark_command cmd = COMMAND_ADD;
 
 	/* Parse input line */
 	p = line;

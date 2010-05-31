@@ -525,7 +525,7 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 {
 	struct timespec                 ts1, ts2;
 	uint64_t                        diff;
-	struct cache_item              *item;
+	struct cache_item              *item = NULL;
 	struct symbol_callback_data    *s = *save;
 
 	if (s == NULL) {

@@ -96,6 +96,8 @@
 
 #cmakedefine HAVE_FLOCK          1
 
+#cmakedefine HAVE_TANHL          1
+
 #cmakedefine HAVE_SA_SIGINFO     1
 
 #cmakedefine DEBUG_MODE          1

@@ -335,7 +335,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, stat_file_t *fi
 	char                           *value;
 	int                             nodes, minnodes, iterations = 0;
 	struct statfile                *st;
-	stat_file_t                    *sel;
+	stat_file_t                    *sel = NULL;
 	long double                     res = 0., max = 0.;
 	GList                          *cur;
 

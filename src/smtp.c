@@ -326,14 +326,13 @@ static void
 accept_socket (int fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	struct sockaddr_storage         ss;
-	struct sockaddr_in             *sin;
+	union sa_union                  su;
 	struct smtp_session            *session;
 
-	socklen_t                       addrlen = sizeof (ss);
+	socklen_t                       addrlen = sizeof (su.ss);
 	int                             nfd;
 
-	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -345,14 +344,13 @@ accept_socket (int fd, short what, void *arg)
 	session = g_malloc (sizeof (struct smtp_session));
 	session->pool = memory_pool_new (memory_pool_get_size ());
 
-	if (ss.ss_family == AF_UNIX) {
+	if (su.ss.ss_family == AF_UNIX) {
 		msg_info ("accepted connection from unix socket");
 		session->client_addr.s_addr = INADDR_NONE;
 	}
-	else if (ss.ss_family == AF_INET) {
-		sin = (struct sockaddr_in *)&ss;
-		msg_info ("accepted connection from %s port %d", inet_ntoa (sin->sin_addr), ntohs (sin->sin_port));
-		memcpy (&session->client_addr, &sin->sin_addr, sizeof (struct in_addr));
+	else if (su.ss.ss_family == AF_INET) {
+		msg_info ("accepted connection from %s port %d", inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
+		memcpy (&session->client_addr, &su.s4.sin_addr, sizeof (struct in_addr));
 	}
 
 	session->sock = nfd;
@@ -380,7 +378,7 @@ static void
 parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 {
 	int                             hostmax, banner_len = sizeof ("220 ") - 1;
-	char                           *p, *t, *hostbuf;
+	char                           *p, *t, *hostbuf = NULL;
 	gboolean                        has_crlf = FALSE;
 
 	p = (char *)line;

@@ -122,6 +122,14 @@ struct save_point {
 };
 
 
+/**
+ * Union that would be used for storing sockaddrs
+ */
+union sa_union {
+  struct sockaddr_storage ss;
+  struct sockaddr_in s4;
+  struct sockaddr_in6 s6;
+};
 
 /**
  * Control session object

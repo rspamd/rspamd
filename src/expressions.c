@@ -1306,9 +1306,10 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 		return FALSE;
 	}
 #ifdef GMIME24
+	num = internet_address_list_length ((InternetAddressList *)ia);
 	cur = ia;
 	for (i = 0; i < num; i ++) {
-		addr = internet_address_list_get_address (cur, i);
+		addr = internet_address_list_get_address ((InternetAddressList *)cur, i);
 		current.addr = (char *)internet_address_get_name (addr);
 		if (previous.addr != NULL) {
 			if (g_ascii_strcasecmp (current.addr, previous.addr) < 0) {

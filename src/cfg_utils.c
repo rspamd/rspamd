@@ -727,7 +727,15 @@ internal_normalizer_func (struct config_file *cfg, long double score, void *data
         return score;
     }
 	else {
+#ifdef HAVE_TANHL
 		return max * tanhl (score / max);
+#else
+		/* 
+		 * As some implementations of libm does not support tanhl, try to use
+		 * tanh
+		 */
+		return max * tanh ((double) (score / max));
+#endif
 	}
 
     return score;

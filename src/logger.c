@@ -118,7 +118,10 @@ direct_write_log_line (void *data, int count, gboolean is_iov)
 			}
 			else if (errno == EFAULT || errno == EINVAL || errno == EFBIG || errno == ENOSPC) {
 				/* Rare case */
-				(void)write (rspamd_log->fd, errmsg, r);
+				if (write (rspamd_log->fd, errmsg, r) == -1) {
+					/* Don't know what to do */
+					exit (EXIT_FAILURE);
+				}
 			}
 			else if (errno == EPIPE) {
 				/* We write to some pipe and it disappears, disable logging */

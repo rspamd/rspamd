@@ -744,11 +744,12 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 		lua_file = basename (tmp2);
 		if (lua_dir && lua_file) {
 			cur_dir = g_malloc (PATH_MAX);
-			getcwd (cur_dir, PATH_MAX);
-			if (chdir (lua_dir) != -1) {
+			if (getcwd (cur_dir, PATH_MAX) != NULL && chdir (lua_dir) != -1) {
 				if (luaL_dofile (L, lua_file) != 0) {
 					msg_err ("cannot load lua file %s: %s", val, lua_tostring (L, -1));
-					chdir (cur_dir);
+					if (chdir (cur_dir) == -1) {
+						msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+					}
 					g_free (cur_dir);
 					g_free (tmp1);
 					g_free (tmp2);
@@ -757,14 +758,18 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 			}
 			else {
 				msg_err ("cannot chdir to %s: %s", lua_dir, strerror (errno));;
-				chdir (cur_dir);
+				if (chdir (cur_dir) == -1) {
+					msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+				}
 				g_free (cur_dir);
 				g_free (tmp1);
 				g_free (tmp2);
 				return FALSE;
 			
 			}
-			chdir (cur_dir);
+			if (chdir (cur_dir) == -1) {
+				msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+			}
 			g_free (cur_dir);
 			g_free (tmp1);
 			g_free (tmp2);
@@ -814,9 +819,11 @@ handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 				cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
 			}
 			globfree (&globbuf);
+			g_free (pattern);
 		}
 		else {
 			msg_err ("glob failed: %s", strerror (errno));
+			g_free (pattern);
 			return FALSE;
 		}
 	}

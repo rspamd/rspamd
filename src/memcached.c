@@ -139,7 +139,9 @@ write_handler (int fd, short what, memcached_ctx_t * ctx)
 			iov[1].iov_len = ctx->param->bufsize - ctx->param->bufpos;
 			iov[2].iov_base = CRLF;
 			iov[2].iov_len = sizeof (CRLF) - 1;
-			writev (ctx->sock, iov, 3);
+			if (writev (ctx->sock, iov, 3) == -1) {
+				memc_log (ctx, __LINE__, "memc_write: writev failed: %s", strerror (errno));
+			}
 		}
 		event_del (&ctx->mem_ev);
 		event_set (&ctx->mem_ev, ctx->sock, EV_READ | EV_PERSIST | EV_TIMEOUT, socket_callback, (void *)ctx);

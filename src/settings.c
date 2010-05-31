@@ -344,7 +344,7 @@ check_whitelist(struct worker_task *task, struct rspamd_settings *s)
 gboolean
 check_metric_settings (struct worker_task * task, struct metric * metric, double *score, double *rscore)
 {
-	struct rspamd_settings         *us, *ds;
+	struct rspamd_settings         *us = NULL, *ds = NULL;
 	double                         *sc, *rs;
 
 	*rscore = DEFAULT_REJECT_SCORE;
@@ -393,7 +393,7 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 gboolean
 check_factor_settings (struct worker_task * task, const char *symbol, double *factor)
 {
-	struct rspamd_settings         *us, *ds;
+	struct rspamd_settings         *us = NULL, *ds = NULL;
 	double                         *fc;
 
 	if (check_setting (task, &us, &ds)) {
@@ -425,7 +425,7 @@ check_factor_settings (struct worker_task * task, const char *symbol, double *fa
 gboolean
 check_want_spam (struct worker_task * task)
 {
-	struct rspamd_settings         *us, *ds;
+	struct rspamd_settings         *us = NULL, *ds = NULL;
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
