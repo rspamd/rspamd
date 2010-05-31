@@ -1078,7 +1078,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 	param_pattern = arg->data;
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
-		ct = g_mime_object_get_content_type (part);
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
 #ifndef GMIME24
 		g_object_unref (part);
 #endif
@@ -1139,7 +1139,7 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
-		ct = g_mime_object_get_content_type (part);
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
 #ifndef GMIME24
 		g_object_unref (part);
 #endif
@@ -1324,7 +1324,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 		addr = internet_address_list_get_address (cur);
 		current.addr = internet_address_get_addr (addr);
 		if (previous.addr != NULL) {
-			if (current_addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+			if (current.addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
 				res = FALSE;
 				break;
 			}
