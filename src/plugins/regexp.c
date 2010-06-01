@@ -34,10 +34,12 @@
 #include "../message.h"
 #include "../modules.h"
 #include "../cfg_file.h"
+#include "../map.h"
 #include "../util.h"
 #include "../expressions.h"
 #include "../view.h"
 #include "../lua/lua_common.h"
+#include "../json/jansson.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 
@@ -61,6 +63,14 @@ struct regexp_ctx {
 	char                           *statfile_prefix;
 
 	memory_pool_t                  *regexp_pool;
+	memory_pool_t                  *dynamic_pool;
+};
+
+struct regexp_json_buf {
+	u_char                         *buf;
+	u_char                         *pos;
+	size_t                          buflen;
+	struct config_file             *cfg;
 };
 
 static struct regexp_ctx       *regexp_module_ctx = NULL;
@@ -72,29 +82,96 @@ static gboolean                 rspamd_check_smtp_data (struct worker_task *task
 static void                     process_regexp_item (struct worker_task *task, void *user_data);
 
 
-int
-regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
+static void 
+regexp_dynamic_insert_result (struct worker_task *task, void *user_data)
 {
-	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
-
-	regexp_module_ctx->filter = regexp_common_filter;
-	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
-	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
-
-	*ctx = (struct module_ctx *)regexp_module_ctx;
-	register_expression_function ("regexp_match_number", rspamd_regexp_match_number, NULL);
-	register_expression_function ("raw_header_exists", rspamd_raw_header_exists, NULL);
-	register_expression_function ("check_smtp_data", rspamd_check_smtp_data, NULL);
-
-	return 0;
+	char                           *symbol = user_data;
+		
+	insert_result (task, regexp_module_ctx->metric, symbol, 1, NULL);
 }
 
+static gboolean
+parse_regexp_ipmask (const char *begin, struct dynamic_map_item *addr)
+{
+	const char *pos;
+	char ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
+	int state = 0, dots = 0;
+	
+	bzero (ip_buf, sizeof (ip_buf));
+	bzero (mask_buf, sizeof (mask_buf));
+	pos = begin;
+	p = ip_buf;
+
+	while (*pos) {
+		switch (state) {
+			case 0:
+				state = 1;
+				p = ip_buf;
+				dots = 0;
+				break;
+			case 1:
+				/* Begin parse ip */
+				if (p - ip_buf >= sizeof (ip_buf) || dots > 3) {
+					return FALSE;
+				}
+				if (g_ascii_isdigit (*pos)) {
+					*p ++ = *pos ++;
+				}
+				else if (*pos == '.') {
+					*p ++ = *pos ++;
+					dots ++;
+				}
+				else if (*pos == '/') {
+					pos ++;
+					p = mask_buf;
+					state = 2;
+				}
+				else {
+					/* Invalid character */
+					return FALSE;
+				}
+				break;
+			case 2:
+				/* Parse mask */
+				if (p - mask_buf > 2) {
+					return FALSE;
+				}
+				if (g_ascii_isdigit (*pos)) {
+					*p ++ = *pos ++;
+				}
+				else {
+					return FALSE;
+				}
+				break;
+		}
+	}
+
+	if (!inet_aton (ip_buf, &addr->addr)) {
+		return FALSE;
+	}
+	if (state == 2) {
+		/* Also parse mask */
+		addr->mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
+		if (addr->mask > 32) {
+			msg_info ("bad ipmask value: '%s'", begin);
+			return FALSE;
+		}
+	}
+	else {
+		addr->mask = 32;
+	}
+
+	return TRUE;
+
+}
+
+/* Process regexp expression */
 static                          gboolean
-read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, char *symbol, char *line, struct config_file *cfg)
+read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, char *symbol, char *line, gboolean raw_mode)
 {
 	struct expression              *e, *cur;
 
-	e = parse_expression (regexp_module_ctx->regexp_pool, line);
+	e = parse_expression (pool, line);
 	if (e == NULL) {
 		msg_warn ("%s = \"%s\" is invalid regexp expression", symbol, line);
 		return FALSE;
@@ -103,7 +180,7 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 	cur = e;
 	while (cur) {
 		if (cur->type == EXPR_REGEXP) {
-			cur->content.operand = parse_regexp (pool, cur->content.operand, cfg->raw_mode);
+			cur->content.operand = parse_regexp (pool, cur->content.operand, raw_mode);
 			if (cur->content.operand == NULL) {
 				msg_warn ("cannot parse regexp, skip expression %s = \"%s\"", symbol, line);
 				return FALSE;
@@ -115,6 +192,197 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 
 	return TRUE;
 }
+
+
+/* Callbacks for reading json dynamic rules */
+u_char                         *
+json_regexp_read_cb (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+{
+	struct regexp_json_buf                *jb;
+	size_t                          free, off;
+
+	if (data->cur_data == NULL) {
+		jb = g_malloc (sizeof (struct regexp_json_buf));
+		jb->cfg = ((struct regexp_json_buf *)data->prev_data)->cfg;
+		jb->buf = NULL;
+		jb->pos = NULL;
+		data->cur_data = jb;
+	}
+	else {
+		jb = data->cur_data;
+	}
+
+	if (jb->buf == NULL) {
+		/* Allocate memory for buffer */
+		jb->buflen = len * 2;
+		jb->buf = g_malloc (jb->buflen);
+		jb->pos = jb->buf;
+	}
+
+	off = jb->pos - jb->buf;
+	free = jb->buflen - off;
+
+	if (free < len) {
+		jb->buflen = MAX (jb->buflen * 2, jb->buflen + len * 2);
+		jb->buf = g_realloc (jb->buf, jb->buflen);
+		jb->pos = jb->buf + off;
+	}
+
+	memcpy (jb->pos, chunk, len);
+	jb->pos += len;
+
+	/* Say not to copy any part of this buffer */
+	return NULL;
+}
+
+void
+json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
+{
+	struct regexp_json_buf         *jb;
+	int                             nelts, i, j;
+	json_t                         *js, *cur_elt, *cur_nm, *it_val;
+	json_error_t                    je;
+	char                           *cur_rule, *cur_symbol;
+	double                          score;
+	struct regexp_module_item      *cur_item;
+	GList                          *cur_networks = NULL;
+	struct dynamic_map_item        *cur_nitem;
+	memory_pool_t                  *new_pool;
+	struct metric                  *metric;
+
+	if (data->prev_data) {
+		jb = data->prev_data;
+		/* Clean prev data */
+		if (jb->buf) {
+			g_free (jb->buf);
+		}
+		g_free (jb);
+	}
+
+	/* Now parse json */
+	if (data->cur_data) {
+		jb = data->cur_data;
+	}
+	else {
+		msg_err ("no data read");
+		return;
+	}
+	if (jb->buf == NULL) {
+		msg_err ("no data read");
+		return;
+	}
+	/* NULL terminate current buf */
+	*jb->pos = '\0';
+
+	js = json_loads (jb->buf, &je);
+	if (!js) {
+		msg_err ("cannot load json data: parse error %s, on line %d", je.text, je.line);
+		return;
+	}
+
+	if (!json_is_array (js)) {
+		json_decref (js);
+		msg_err ("loaded json is not an array");
+		return;
+	}
+	
+	new_pool = memory_pool_new (memory_pool_get_size ());
+	metric = g_hash_table_lookup (jb->cfg->metrics, regexp_module_ctx->metric);
+	if (metric == NULL) {
+		msg_err ("cannot find metric definition %s", regexp_module_ctx->metric);
+		return;
+	}
+		
+	remove_dynamic_rules (metric->cache);
+	if (regexp_module_ctx->dynamic_pool != NULL) {
+		memory_pool_delete (regexp_module_ctx->dynamic_pool);
+	}
+	regexp_module_ctx->dynamic_pool = new_pool;
+
+	nelts = json_array_size (js);
+	for (i = 0; i < nelts; i++) {
+		cur_networks = NULL;
+		cur_rule = NULL;
+
+		cur_elt = json_array_get (js, i);
+		if (!cur_elt || !json_is_object (cur_elt)) {
+			msg_err ("loaded json is not an object");
+			continue;
+		}
+		/* Factor param */
+		cur_nm = json_object_get (cur_elt, "factor");
+		if (cur_nm == NULL || !json_is_number (cur_nm)) {
+			msg_err ("factor is not a number or not exists, but is required");
+			continue;
+		}
+		score = json_number_value (cur_nm); 
+		/* Symbol param */
+		cur_nm = json_object_get (cur_elt, "symbol");
+		if (cur_nm == NULL || !json_is_string (cur_nm)) {
+			msg_err ("symbol is not a string or not exists, but is required");
+			continue;
+		}
+		cur_symbol = memory_pool_strdup (new_pool, json_string_value (cur_nm)); 
+		/* Now check other settings */
+		/* Rule */
+		cur_nm = json_object_get (cur_elt, "rule");
+		if (cur_nm != NULL && json_is_string (cur_nm)) {
+			cur_rule = memory_pool_strdup (new_pool, json_string_value (cur_nm));
+		}
+		/* Networks array */
+		cur_nm = json_object_get (cur_elt, "networks");
+		if (cur_nm != NULL && json_is_array (cur_nm)) {
+			for (j = 0; j < json_array_size (cur_nm); j++) {
+				it_val = json_array_get (cur_nm, i);
+				if (it_val && json_is_string (it_val)) {
+					cur_nitem = memory_pool_alloc (new_pool, sizeof (struct dynamic_map_item));
+					if (parse_regexp_ipmask (json_string_value (it_val), cur_nitem)) {
+						cur_networks = g_list_prepend (cur_networks, cur_nitem);
+					}
+				}
+			}
+		}
+		if (cur_rule) {
+			/* Dynamic rule has rule option */
+			cur_item = memory_pool_alloc0 (new_pool, sizeof (struct regexp_module_item));
+			cur_item->symbol = cur_symbol;
+			if (read_regexp_expression (new_pool, cur_item, cur_symbol, cur_rule, jb->cfg->raw_mode)) {
+				register_dynamic_symbol (new_pool, &metric->cache, cur_symbol, score, process_regexp_item, cur_item, cur_networks);
+			}
+			else {
+				msg_warn ("cannot parse dynamic rule");
+			}
+		}
+		else {
+			/* Just rule that is allways true (for whitelisting for example) */
+			register_dynamic_symbol (new_pool, &metric->cache, cur_symbol, score, regexp_dynamic_insert_result, cur_symbol, cur_networks);
+		}
+		if (cur_networks) {
+			g_list_free (cur_networks);
+		}
+	}
+	json_decref (js);
+}
+
+/* Init function */
+int
+regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
+{
+	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
+
+	regexp_module_ctx->filter = regexp_common_filter;
+	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
+	regexp_module_ctx->dynamic_pool = NULL;
+	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
+
+	*ctx = (struct module_ctx *)regexp_module_ctx;
+	register_expression_function ("regexp_match_number", rspamd_regexp_match_number, NULL);
+	register_expression_function ("raw_header_exists", rspamd_raw_header_exists, NULL);
+	register_expression_function ("check_smtp_data", rspamd_check_smtp_data, NULL);
+
+	return 0;
+}
+
 
 /* 
  * Parse string in format:
@@ -157,6 +425,7 @@ regexp_module_config (struct config_file *cfg)
 	char                           *value;
 	int                             res = TRUE;
 	double                         *w;
+	struct regexp_json_buf         *jb, **pjb;
 
 	if ((value = get_module_opt (cfg, "regexp", "metric")) != NULL) {
 		regexp_module_ctx->metric = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
@@ -169,6 +438,16 @@ regexp_module_config (struct config_file *cfg)
 	}
 	else {
 		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
+	}
+	if ((value = get_module_opt (cfg, "regexp", "dynamic_rules")) != NULL) {
+		jb = g_malloc (sizeof (struct regexp_json_buf));
+		pjb = g_malloc (sizeof (struct regexp_json_buf *));
+		jb->buf = NULL;
+		jb->cfg = cfg;
+		*pjb = jb;
+		if (!add_map (value, json_regexp_read_cb, json_regexp_fin_cb, (void **)pjb)) {
+			msg_err ("cannot add map %s", value);
+		}
 	}
 
 	metric = g_hash_table_lookup (cfg->metrics, regexp_module_ctx->metric);
@@ -190,7 +469,7 @@ regexp_module_config (struct config_file *cfg)
 		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 		cur_item->symbol = cur->param;
 		if (cur->is_lua && cur->lua_type == LUA_VAR_STRING) {
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->actual_data, cfg)) {
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->actual_data, cfg->raw_mode)) {
 				res = FALSE;
 			}
 		}
@@ -198,7 +477,7 @@ regexp_module_config (struct config_file *cfg)
 			cur_item->lua_function = cur->actual_data;
 		}
 		else if (! cur->is_lua) {
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg)) {
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg->raw_mode)) {
 				res = FALSE;
 			}
 		}

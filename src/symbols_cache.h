@@ -51,7 +51,6 @@ struct symbols_cache {
 	GList *dynamic_items;
 
 	memory_pool_t *static_pool;
-	memory_pool_t *dynamic_pool;
 
 	guint cur_items;
 	guint used_items;
@@ -79,8 +78,9 @@ void register_symbol (struct symbols_cache **cache, const char *name, double wei
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_dynamic_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, 
-						gpointer user_data, struct dynamic_map_item *networks, gsize network_count);
+void register_dynamic_symbol (memory_pool_t *pool, struct symbols_cache **cache, const char *name, 
+						double weight, symbol_func_t func, 
+						gpointer user_data, GList *networks);
 
 /**
  * Call function for cached symbol using saved callback

@@ -278,15 +278,16 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 }
 
 void
-register_dynamic_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, 
-		gpointer user_data, struct dynamic_map_item *networks, gsize network_count)
+register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cache,
+		const char *name, double weight, symbol_func_t func, 
+		gpointer user_data, GList *networks)
 {
 	struct cache_item              *item = NULL;
 	struct symbols_cache           *pcache = *cache;
-	GList                         **target, *t;
-	gsize                           i;
+	GList                         **target, *t, *cur;
 	uintptr_t                       r;
 	uint32_t                        mask = 0xFFFFFFFF;
+	struct dynamic_map_item        *it;
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
@@ -294,11 +295,8 @@ register_dynamic_symbol (struct symbols_cache **cache, const char *name, double 
 		pcache->static_pool = memory_pool_new (memory_pool_get_size ());
 	}
 	
-	if (pcache->dynamic_pool == NULL) {
-		pcache->dynamic_pool = memory_pool_new (memory_pool_get_size ());
-	}
-	item = memory_pool_alloc0 (pcache->dynamic_pool, sizeof (struct cache_item));
-	item->s = memory_pool_alloc (pcache->dynamic_pool, sizeof (struct saved_cache_item));
+	item = memory_pool_alloc0 (dynamic_pool, sizeof (struct cache_item));
+	item->s = memory_pool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
 	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
@@ -309,39 +307,41 @@ register_dynamic_symbol (struct symbols_cache **cache, const char *name, double 
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	set_counter (item->s->symbol, 0);
 	
-	if (network_count == 0 || networks == NULL) {
+	if (networks == NULL) {
 		target = &pcache->dynamic_items;
 	}
 	else {
 		if (pcache->dynamic_map == NULL) {
 			pcache->dynamic_map = radix_tree_create ();
 		}
-		for (i = 0; i < network_count; i ++) {
-			mask = mask << (32 - networks[i].mask);
-			r = ntohl (networks[i].addr.s_addr & mask);
+		cur = networks;
+		while (cur) {
+			it = cur->data;
+			mask = mask << (32 - it->mask);
+			r = ntohl (it->addr.s_addr & mask);
 			if ((r = radix32tree_find (pcache->dynamic_map, r)) != RADIX_NO_VALUE) {
 				t = (GList *)((gpointer)r);
 				target = &t;
 			}
 			else {
 				t = g_list_prepend (NULL, item);
-				memory_pool_add_destructor (pcache->dynamic_pool, (pool_destruct_func)g_list_free, t);
-				r = radix32tree_insert (pcache->dynamic_map, ntohl (networks[i].addr.s_addr), mask, (uintptr_t)t);
+				memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
+				r = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 				if (r == -1) {
-					msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (networks[i].addr), mask);
+					msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
 				}
 				else if (r == 1) {
-					msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (networks[i].addr), mask);
+					msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
 				}
-				return;
 			}
+			cur = g_list_next (cur);
 		}
 	}
 	*target = g_list_prepend (*target, item);
 }
 
 void
-remove_dynamic_items (struct symbols_cache *cache)
+remove_dynamic_rules (struct symbols_cache *cache)
 {
 	if (cache->dynamic_items) {
 		g_list_free (cache->dynamic_items);
@@ -351,10 +351,6 @@ remove_dynamic_items (struct symbols_cache *cache)
 	if (cache->dynamic_map) {
 		radix_tree_free (cache->dynamic_map);
 	}
-
-	/* Do magic */
-	memory_pool_delete (cache->dynamic_pool);
-	cache->dynamic_pool = NULL;
 }
 
 static void
@@ -380,9 +376,6 @@ free_cache (gpointer arg)
 	}
 
 	memory_pool_delete (cache->static_pool);
-	if (cache->dynamic_pool) {
-		memory_pool_delete (cache->dynamic_pool);
-	}
 
 	g_free (cache);
 }
