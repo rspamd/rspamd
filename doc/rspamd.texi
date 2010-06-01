@@ -848,6 +848,40 @@ furhter in detailed modules description. Also note that for internal modules you
 should edit @emph{<filters>} parameter in main section: this parameter defines
 which internal modules would be turned on in this configuration.
 
+@section Views config.
+It is possible to make different rules for different
+networks/senders/recipients. For this purposes you can use rspamd views: maps of
+conditions (ip, sender, recipients) and actions, associated with them. For
+example you can turn rspamd off for specific conditions by using
+@emph{skip_check} action or check only specific rules. Views are defined inside
+@emph{<view>} xml section. Here is list of available tags inside section:
+@multitable @columnfractions .2 .8
+@headitem Tag @tab Mean
+@item @var{<skip_check>}
+@tab Boolean flag (yes or no) that specifies whether rspamd checks should be
+turned off for this ip
+@item @var{<symbols>}
+@tab Defines comma-separated list of symbols that should be checked for this
+view
+@item @var{<ip>}
+@tab Map argument that defines path to list of ip addresses (may be with CIDR
+masks) to which this view should be applied.
+@item @var{<client_ip>}
+@tab Map argument that defines path to list of ip addresses of rspamd clients 
+to which this view should be applied. Note that this is ip of rspamd client not
+ip of message's sender.
+@item @var{<from>}
+@tab Map argument that defines path to list of senders to which this view should
+be applied.
+@end multitable
+Here is an example view definition
+@example
+<view>
+ <skip_check>yes</skip_check>
+ <ip>file:///usr/local/etc/rspamd/whitelist</ip>
+</view>
+@end example
+
 @chapter Rspamd clients interaction.
 
 @section Introduction.
@@ -1098,12 +1132,12 @@ describing controller:
 In many cases it is more easy to use rspamc to access controller. Here is
 example of learning statfiles using rspamc CLI:
 @example
-% ./rspamc.pl -h localhost:11334 -P q1 -s WINNOW_HAM learn < /tmp/exim.eml
+% rspamc -h localhost:11334 -P q1 -s WINNOW_HAM learn < /tmp/exim.eml
 Results for host localhost:11334:
 
 Learn succeed. Sum weight: 1.51
 
-% ./rspamc.pl -h localhost:11334 -P q1 -s WINNOW_SPAM learn < /tmp/bad.eml
+% rspamc -h localhost:11334 -P q1 -s WINNOW_SPAM learn < /tmp/bad.eml
 Results for host localhost:11334:
 
 Learn succeed. Sum weight: 1.51
@@ -1126,7 +1160,7 @@ obtained via @url{http://www.cpan.org, cpan}.
 Rspamc accepts several command line options:
 
 @example
-% ./rspamc.pl --help
+% rspamc --help
 Usage: rspamc.pl [-h host] [-H hosts_list] [-P password] [-c conf_file] [-s statfile] [-d user@@domain] [command] [path]
 -h         host to connect (in format host:port) or unix socket path 
 -H         path to file that contains list of hosts
@@ -1604,6 +1638,11 @@ for more than 5 recipients.
 @item has_html_tag
 @tab tag_name
 @tab Returns true if tag 'tag_name' exists in message.
+
+@item check_smtp_data
+@tab item, regexp
+@tab Returns true if specified part of smtp dialog matches specified regexp. Can
+check HELO, FROM and RCPT items.
 
 @end multitable
 
