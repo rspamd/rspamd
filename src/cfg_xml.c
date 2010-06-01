@@ -1275,6 +1275,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 		case XML_READ_STATFILE:
 		case XML_READ_WORKER:
 		case XML_READ_LOGGING:
+		case XML_READ_VIEW:
 			g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			/* Save attributes */
 			ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
