@@ -169,6 +169,15 @@ void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer);
 void memory_pool_add_destructor (memory_pool_t *pool, pool_destruct_func func, void *data);
 
 /**
+ * Replace destructor callback to pool for specified pointer
+ * @param pool memory pool object
+ * @param func pointer to function-destructor
+ * @param old_data pointer to old data
+ * @param new_data pointer to data that would be passed to destructor
+ */
+void memory_pool_replace_destructor (memory_pool_t *pool, pool_destruct_func func, void *old_data, void *new_data);
+
+/**
  * Delete pool, free all its chunks and call destructors chain
  * @param pool memory pool object
  */

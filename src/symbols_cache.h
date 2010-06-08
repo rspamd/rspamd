@@ -20,6 +20,7 @@ struct saved_cache_item {
 struct dynamic_map_item {
 	struct in_addr addr;
 	uint32_t mask;
+	gboolean negative;
 };
 
 struct cache_item {
@@ -46,6 +47,7 @@ struct symbols_cache {
 	
 	/* Radix map of dynamic rules with ip mappings */
 	radix_tree_t *dynamic_map;
+	radix_tree_t *negative_dynamic_map;
 
 	/* Common dynamic rules */
 	GList *dynamic_items;

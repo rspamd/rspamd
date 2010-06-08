@@ -429,6 +429,23 @@ memory_pool_add_destructor (memory_pool_t * pool, pool_destruct_func func, void 
 }
 
 void
+memory_pool_replace_destructor (memory_pool_t * pool, pool_destruct_func func, void *old_data, void *new_data)
+{
+	struct _pool_destructors       *tmp;
+
+	tmp = pool->destructors;
+	while (tmp) {
+		if (tmp->func == func && tmp->data == old_data) {
+			tmp->func = func;
+			tmp->data = new_data;
+			break;
+		}
+		tmp = tmp->prev;
+	}
+
+}
+
+void
 memory_pool_delete (memory_pool_t * pool)
 {
 	struct _pool_chain             *cur = pool->first_pool, *tmp;

@@ -102,6 +102,14 @@ parse_regexp_ipmask (const char *begin, struct dynamic_map_item *addr)
 	pos = begin;
 	p = ip_buf;
 
+	if (*pos == '!') {
+		addr->negative = TRUE;
+		pos ++;
+	}
+	else {
+		addr->negative = FALSE;
+	}
+
 	while (*pos) {
 		switch (state) {
 			case 0:
@@ -244,6 +252,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	json_error_t                    je;
 	char                           *cur_rule, *cur_symbol;
 	double                          score;
+	gboolean                        enabled;
 	struct regexp_module_item      *cur_item;
 	GList                          *cur_networks = NULL;
 	struct dynamic_map_item        *cur_nitem;
@@ -303,6 +312,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	for (i = 0; i < nelts; i++) {
 		cur_networks = NULL;
 		cur_rule = NULL;
+		enabled = TRUE;
 
 		cur_elt = json_array_get (js, i);
 		if (!cur_elt || !json_is_object (cur_elt)) {
@@ -323,6 +333,14 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			continue;
 		}
 		cur_symbol = memory_pool_strdup (new_pool, json_string_value (cur_nm)); 
+		/* Enabled flag */
+		cur_nm = json_object_get (cur_elt, "enabled");
+		if (cur_nm != NULL && json_is_boolean (cur_nm)) {
+			if (json_is_false (cur_nm)) {
+				msg_info ("rule %s is disabled in json", cur_symbol);
+				continue;
+			}
+		}
 		/* Now check other settings */
 		/* Rule */
 		cur_nm = json_object_get (cur_elt, "rule");
@@ -460,10 +478,16 @@ regexp_module_config (struct config_file *cfg)
 	while (cur_opt) {
 		cur = cur_opt->data;
 		if (strcmp (cur->param, "metric") == 0 || strcmp (cur->param, "statfile_prefix") == 0) {
+			cur_opt = g_list_next (cur_opt);
 			continue;
 		}
 		else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
 			parse_autolearn_param (cur->param, cur->value, cfg);
+			cur_opt = g_list_next (cur_opt);
+			continue;
+		}
+		else if (g_ascii_strncasecmp (cur->param, "dynamic_rules", sizeof ("dynamic_rules") - 1) == 0) {
+			cur_opt = g_list_next (cur_opt);
 			continue;
 		}
 		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));

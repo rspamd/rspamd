@@ -284,7 +284,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 {
 	struct cache_item              *item = NULL;
 	struct symbols_cache           *pcache = *cache;
-	GList                         **target, *t, *cur;
+	GList                          *t, *cur;
 	uintptr_t                       r;
 	uint32_t                        mask = 0xFFFFFFFF;
 	struct dynamic_map_item        *it;
@@ -308,36 +308,70 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	set_counter (item->s->symbol, 0);
 	
 	if (networks == NULL) {
-		target = &pcache->dynamic_items;
+		pcache->dynamic_items = g_list_prepend (pcache->dynamic_items, item);
 	}
 	else {
 		if (pcache->dynamic_map == NULL) {
 			pcache->dynamic_map = radix_tree_create ();
+			pcache->negative_dynamic_map = radix_tree_create ();
 		}
 		cur = networks;
 		while (cur) {
 			it = cur->data;
 			mask = mask << (32 - it->mask);
 			r = ntohl (it->addr.s_addr & mask);
-			if ((r = radix32tree_find (pcache->dynamic_map, r)) != RADIX_NO_VALUE) {
-				t = (GList *)((gpointer)r);
-				target = &t;
+			if (it->negative) {
+				/* For negatve items insert into list and into negative cache map */
+				if ((r = radix32tree_find (pcache->negative_dynamic_map, r)) != RADIX_NO_VALUE) {
+					t = (GList *)((gpointer)r);
+					t = g_list_prepend (t, item);
+					/* Replace pointers in radix tree and in destructor function */
+					memory_pool_replace_destructor (dynamic_pool, (pool_destruct_func)g_list_free, (gpointer)r, t);
+					r = radix32tree_replace (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (r == -1) {
+						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+					}
+				}
+				else {
+					t = g_list_prepend (NULL, item);
+					memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
+					r = radix32tree_insert (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (r == -1) {
+						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+					}
+					else if (r == 1) {
+						msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
+					}
+				}
+				/* Insert into list */
+				pcache->dynamic_items = g_list_prepend (pcache->dynamic_items, item);
 			}
 			else {
-				t = g_list_prepend (NULL, item);
-				memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
-				r = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-				if (r == -1) {
-					msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+				if ((r = radix32tree_find (pcache->dynamic_map, r)) != RADIX_NO_VALUE) {
+					t = (GList *)((gpointer)r);
+					t = g_list_prepend (t, item);
+					/* Replace pointers in radix tree and in destructor function */
+					memory_pool_replace_destructor (dynamic_pool, (pool_destruct_func)g_list_free, (gpointer)r, t);
+					r = radix32tree_replace (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (r == -1) {
+						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+					}
 				}
-				else if (r == 1) {
-					msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
+				else {
+					t = g_list_prepend (NULL, item);
+					memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
+					r = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (r == -1) {
+						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+					}
+					else if (r == 1) {
+						msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
+					}
 				}
 			}
 			cur = g_list_next (cur);
 		}
 	}
-	*target = g_list_prepend (*target, item);
 }
 
 void
@@ -350,6 +384,9 @@ remove_dynamic_rules (struct symbols_cache *cache)
 
 	if (cache->dynamic_map) {
 		radix_tree_free (cache->dynamic_map);
+	}
+	if (cache->negative_dynamic_map) {
+		radix_tree_free (cache->negative_dynamic_map);
 	}
 }
 
@@ -373,6 +410,9 @@ free_cache (gpointer arg)
 	}
 	if (cache->dynamic_map) {
 		radix_tree_free (cache->dynamic_map);
+	}
+	if (cache->negative_dynamic_map) {
+		radix_tree_free (cache->negative_dynamic_map);
 	}
 
 	memory_pool_delete (cache->static_pool);
@@ -500,6 +540,27 @@ check_dynamic_item (struct worker_task *task, struct symbols_cache *cache)
 	}
 
 	return res;
+}
+
+static gboolean
+check_negative_dynamic_item (struct worker_task *task, struct symbols_cache *cache, struct cache_item *item)
+{
+	GList                          *res = NULL;
+	uintptr_t                       r;
+
+	if (cache->negative_dynamic_map != NULL && task->from_addr.s_addr != INADDR_NONE) {
+		if ((r = radix32tree_find (cache->negative_dynamic_map, ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
+			res = (GList *)((gpointer)r);
+			while (res) {
+				if (res->data == (gpointer)item) {
+					return TRUE;
+				}
+				res = g_list_next (res);
+			}
+		}
+	}
+
+	return FALSE;
 }
 
 struct symbol_callback_data {
@@ -636,6 +697,23 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 				}
 				else {
 					s->saved_item = s->list_pointer->data;
+					/* Skip items that are in negative map */
+					while (s->list_pointer != NULL && check_negative_dynamic_item (task, cache, s->saved_item)) {
+						s->list_pointer = g_list_next (s->list_pointer);
+						if (s->list_pointer != NULL) {
+							s->saved_item = s->list_pointer->data;
+						}
+					}
+					if (s->list_pointer == NULL) {
+						s->state = CACHE_STATE_STATIC;
+						s->list_pointer = g_list_first (cache->static_items);
+						if (s->list_pointer) {
+							s->saved_item = s->list_pointer->data;
+						}
+						else {
+							return FALSE;
+						}
+					}
 				}
 				item = s->saved_item;
 				break;

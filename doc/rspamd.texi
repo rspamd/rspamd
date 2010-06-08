@@ -1650,6 +1650,59 @@ These internal functions can be easily implemented in lua but I've decided to
 make them built-in as they are widely used in our rules. In fact this list may
 be extended in future.
 
+@subsection Dynamic rules.
+Rspamd regexp module can use dynamic rules that can be written in json syntax.
+Dynamic rules are loaded at runtime and can be modified while rspamd is working.
+Also it is possible to turn dynamic rules for specific networks only and add rules
+that does not contain any regexp (this can be usefull for dynamic lists for example).
+Dynamic rules can be obtained like any other dynamic map via file monitoring or via
+http. Here are examples of dynamic rules definitions:
+@example
+<module name="regexp">
+  <option name="dynamic_rules">file:///tmp/rules.json</option>
+</module>
+@end example
+@noindent
+or for http map:
+@example
+<module name="regexp">
+  <option name="dynamic_rules">http://somehost/rules.json</option>
+</module>
+@end example
+@noindent
+Rules are presented as json array (in brackets @emph{'[]'}). Each rule is json object.
+This object can have several properties (properties with @strong{*} are required):
+@multitable @columnfractions 0.3 0.7
+@headitem Property @tab Mean
+@item symbol(*)
+@tab Symbol for rule.
+@item factor(*)
+@tab Factor for rule.
+@item rule
+@tab Rule itself (regexp expression).
+@item enabled
+@tab Boolean flag that define whether this rule is enabled (rule is enabled if 
+this flag is not present by default).
+@item networks
+@tab Json array of networks (in CIDR format, also it is possible to add negation
+by prepending @emph{!} symbol before item.
+@end multitable
+Here is an example of dynamic rule:
+@example
+[
+	{
+		"rule": "/test/rP",
+		"symbol": "R_TMP_1",
+		"factor": 1.1,
+		"networks": ["!192.168.1.0/24", "172.16.0.0/16"],
+		"enabled": false
+	}
+]
+@end example
+Note that dynamic rules are constantly monitored for changes and are reloaded 
+completely when modification is detected. If you change dynamic rules they
+would be reloaded in a minute and would be applied for new messages.
+
 @subsection Conclusion.
 Rspamd regexp module is powerfull tool for matching different patterns in
 messages. You may use logical expressions of regexps and internal rspamd
