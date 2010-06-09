@@ -27,14 +27,19 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "smtp.h"
+#include "smtp_proto.h"
 #include "map.h"
 #include "evdns/evdns.h"
 
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
 
-/* SMTP error messages */
+/* Upstream timeouts */
+#define DEFAULT_UPSTREAM_ERROR_TIME 10
+#define DEFAULT_UPSTREAM_DEAD_TIME 300
+#define DEFAULT_UPSTREAM_MAXERRORS 10
 
+static gboolean smtp_write_socket (void *arg);
 
 static sig_atomic_t                    wanna_die = 0;
 
@@ -66,22 +71,6 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 	}
 }
 
-char *
-make_smtp_error (struct smtp_session *session, int error_code, const char *format, ...)
-{
-	va_list                         vp;
-	char                           *result = NULL, *p;
-	size_t                          len;
-	
-	va_start (vp, format);
-	len = g_printf_string_upper_bound (format, vp);
-	result = memory_pool_alloc (session->pool, len + sizeof ("65535 "));
-	p = result + snprintf (result, len, "%d ", error_code);
-	vsnprintf (p, len - (p - result), format, vp);
-	va_end (vp);
-
-	return result;
-}
 
 static void
 free_smtp_session (gpointer arg)
@@ -91,6 +80,9 @@ free_smtp_session (gpointer arg)
 	if (session) {
 		if (session->task) {
 			free_task (session->task, FALSE);
+		}
+		if (session->rcpt) {
+			g_list_free (session->rcpt);
 		}
 		if (session->dispatcher) {
 			rspamd_remove_dispatcher (session->dispatcher);
@@ -123,10 +115,138 @@ sigusr_handler (int fd, short what, void *arg)
 }
 
 static gboolean
+create_smtp_upstream_connection (struct smtp_session *session)
+{
+	struct smtp_upstream              *selected;
+	struct sockaddr_un                *un;
+
+	/* Try to select upstream */
+	selected = (struct smtp_upstream *)get_upstream_round_robin (session->ctx->upstreams, 
+			session->ctx->upstream_num, sizeof (struct smtp_upstream),
+			session->session_time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	if (selected == NULL) {
+		msg_err ("no upstreams suitable found");
+		return FALSE;
+	}
+
+	session->upstream = selected;
+
+	/* Now try to create socket */
+	if (selected->is_unix) {
+		un = alloca (sizeof (struct sockaddr_un));
+		session->upstream_sock = make_unix_socket (selected->name, un, FALSE);
+	}
+	else {
+		session->upstream_sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE);
+	}
+	if (session->upstream_sock == -1) {
+		msg_err ("cannot make a connection to %s", selected->name);
+		upstream_fail (&selected->up, session->session_time);
+		return FALSE;
+	}
+	/* Create a dispatcher for upstream connection */
+	session->upstream_dispatcher = rspamd_create_dispatcher (session->upstream_sock, BUFFER_LINE, 
+							smtp_upstream_read_socket, NULL, smtp_upstream_err_socket, 
+							&session->ctx->smtp_timeout, session);
+	session->state = SMTP_STATE_WAIT_UPSTREAM;
+	session->upstream_state = SMTP_STATE_GREETING;
+	register_async_event (session->s, (event_finalizer_t)smtp_upstream_finalize_connection, session, FALSE);
+	return TRUE;
+}
+
+static gboolean
 read_smtp_command (struct smtp_session *session, f_str_t *line)
 {
 	/* XXX: write dialog implementation */
+	struct smtp_command             *cmd;
+	
+	if (! parse_smtp_command (session, line, &cmd)) {
+		session->error = SMTP_ERROR_BAD_COMMAND;
+		return FALSE;
+	}
+	
+	switch (cmd->command) {
+		case SMTP_COMMAND_HELO:
+		case SMTP_COMMAND_EHLO:
+			if (session->state == SMTP_STATE_GREETING || session->state == SMTP_STATE_HELO) {
+				if (parse_smtp_helo (session, cmd)) {
+					session->state = SMTP_STATE_FROM;
+				}
+				return TRUE;
+			}
+			else {
+				goto improper_sequence;
+			}
+			break;
+		case SMTP_COMMAND_QUIT:
+			session->state = SMTP_STATE_END;
+			break;
+		case SMTP_COMMAND_NOOP:
+			break;
+		case SMTP_COMMAND_MAIL:
+			if ((session->state == SMTP_STATE_GREETING || session->state == SMTP_STATE_HELO && !session->ctx->helo_required) 
+					|| session->state == SMTP_STATE_FROM) {
+				if (parse_smtp_from (session, cmd)) {
+					session->state = SMTP_STATE_RCPT;
+				}
+				else {
+					return FALSE;
+				}
+			}
+			else {
+				goto improper_sequence;
+			}
+			break;
+		case SMTP_COMMAND_RCPT:
+			if (session->state == SMTP_STATE_RCPT) {
+				if (parse_smtp_rcpt (session, cmd)) {
+					/* Make upstream connection */
+					if (!create_smtp_upstream_connection (session)) {
+						session->error = SMTP_ERROR_UPSTREAM;
+						session->state = SMTP_STATE_CRITICAL_ERROR;
+						return FALSE;
+					}
+					session->state = SMTP_STATE_WAIT_UPSTREAM;
+					return TRUE;
+				}
+				else {
+					return FALSE;
+				}
+			}
+			else {
+				goto improper_sequence;
+			}
+			break;
+		case SMTP_COMMAND_RSET:
+			session->from = NULL;
+			if (session->rcpt) {
+				g_list_free (session->rcpt);
+			}
+			session->state = SMTP_STATE_GREETING; 
+			break;
+		case SMTP_COMMAND_DATA:
+			if (session->state == SMTP_STATE_RCPT) {
+				if (session->rcpt == NULL) {
+					session->error = SMTP_ERROR_RECIPIENTS;
+					return FALSE;
+				}
+				session->error = SMTP_ERROR_DATA_OK;
+			}
+			else {
+				goto improper_sequence;
+			}
+		case SMTP_COMMAND_VRFY:
+		case SMTP_COMMAND_EXPN:
+		case SMTP_COMMAND_HELP:
+			session->error = SMTP_ERROR_UNIMPLIMENTED;
+			return FALSE;
+	}
+	
+	session->error = SMTP_ERROR_OK;
+	return TRUE;
 
+improper_sequence:
+	session->error = SMTP_ERROR_SEQUENCE;
 	return FALSE;
 }
 
@@ -142,7 +262,7 @@ smtp_read_socket (f_str_t * in, void *arg)
 		case SMTP_STATE_RESOLVE_REVERSE:
 		case SMTP_STATE_RESOLVE_NORMAL:
 		case SMTP_STATE_DELAY:
-			session->error = make_smtp_error (session, 550, "%s Improper use of SMTP command pipelining");
+			session->error = make_smtp_error (session, 550, "%s Improper use of SMTP command pipelining", "5.5.0");
 			session->state = SMTP_STATE_ERROR;
 			break;
 		case SMTP_STATE_GREETING:
@@ -150,12 +270,23 @@ smtp_read_socket (f_str_t * in, void *arg)
 		case SMTP_STATE_FROM:
 		case SMTP_STATE_RCPT:
 		case SMTP_STATE_DATA:
-			return read_smtp_command (session, in);
+			read_smtp_command (session, in);
+			if (session->state != SMTP_STATE_WAIT_UPSTREAM) {
+				smtp_write_socket (session);
+			}
 			break;
 		default:
-			session->error = make_smtp_error (session, 550, "%s Internal error");
+			session->error = make_smtp_error (session, 550, "%s Internal error", "5.5.0");
 			session->state = SMTP_STATE_ERROR;
 			break;
+	}
+
+	if (session->state == SMTP_STATE_END) {
+		destroy_session (session->s);
+		return FALSE;
+	}
+	else if (session->state == SMTP_STATE_WAIT_UPSTREAM) {
+		rspamd_dispatcher_pause (session->dispatcher);
 	}
 
 	return TRUE;
@@ -169,10 +300,18 @@ smtp_write_socket (void *arg)
 {
 	struct smtp_session            *session = arg;
 
-	if (session->state == SMTP_STATE_WRITE_ERROR) {
-		rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+	if (session->state == SMTP_STATE_CRITICAL_ERROR) {
+		if (session->error != NULL) {
+			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+		}
 		destroy_session (session->s);
 		return FALSE;
+	}
+	else {
+		if (session->error != NULL) {
+			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+		}
+		return TRUE;
 	}
 	
 	return TRUE;
@@ -215,7 +354,7 @@ smtp_delay_handler (int fd, short what, void *arg)
 		write_smtp_greeting (session);
 	}
 	else {
-		session->state = SMTP_STATE_WRITE_ERROR;
+		session->state = SMTP_STATE_CRITICAL_ERROR;
 		smtp_write_socket (session);
 	}
 }
@@ -228,12 +367,20 @@ smtp_make_delay (struct smtp_session *session)
 {
 	struct event                  *tev;
 	struct timeval                *tv;
+	gint32                         jitter;
 
 	if (session->ctx->smtp_delay != 0 && session->state == SMTP_STATE_DELAY) {
 		tev = memory_pool_alloc (session->pool, sizeof (struct event));
 		tv = memory_pool_alloc (session->pool, sizeof (struct timeval));
-		tv->tv_sec = session->ctx->smtp_delay / 1000;
-		tv->tv_usec = session->ctx->smtp_delay - tv->tv_sec * 1000;
+		if (session->ctx->delay_jitter != 0) {
+			jitter = g_random_int_range (0, session->ctx->delay_jitter);
+			tv->tv_sec = (session->ctx->smtp_delay + jitter) / 1000;
+			tv->tv_usec = session->ctx->smtp_delay + jitter - tv->tv_sec * 1000;
+		}
+		else {
+			tv->tv_sec = session->ctx->smtp_delay / 1000;
+			tv->tv_usec = session->ctx->smtp_delay - tv->tv_sec * 1000;
+		}
 
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
@@ -341,7 +488,7 @@ accept_socket (int fd, short what, void *arg)
 		return;
 	}
 
-	session = g_malloc (sizeof (struct smtp_session));
+	session = g_malloc0 (sizeof (struct smtp_session));
 	session->pool = memory_pool_new (memory_pool_get_size ());
 
 	if (su.ss.ss_family == AF_UNIX) {
@@ -354,7 +501,9 @@ accept_socket (int fd, short what, void *arg)
 	}
 
 	session->sock = nfd;
+	session->worker = worker;
 	session->ctx = worker->ctx;
+	session->session_time = time (NULL);
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */
@@ -388,7 +537,7 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 			switch (*p) {
 				case 'n':
 					/* Assume %n as CRLF */
-					banner_len += sizeof (CRLF) - 1 + sizeof ("220 -") - 1 - 2;
+					banner_len += sizeof (CRLF) - 1 + sizeof ("220 -") - 1;
 					has_crlf = TRUE;
 					break;
 				case 'h':
@@ -396,7 +545,7 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 					hostbuf = alloca (hostmax);
 					gethostname (hostbuf, hostmax);
 					hostbuf[hostmax - 1] = '\0';
-					banner_len += strlen (hostbuf) - 2;
+					banner_len += strlen (hostbuf);
 					break;
 				case '%':
 					banner_len += 1;
@@ -407,12 +556,17 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 			}
 		}
 		else {
-			banner_len += 1;
+			banner_len ++;
 		}
 		p ++;
 	}
 	
-	banner_len += sizeof (CRLF);
+	if (has_crlf) {
+		banner_len += sizeof (CRLF "220 " CRLF);
+	}
+	else {
+		banner_len += sizeof (CRLF);
+	}
 
 	ctx->smtp_banner = memory_pool_alloc (ctx->pool, banner_len + 1);
 	t = ctx->smtp_banner;
@@ -433,12 +587,15 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 					/* Assume %n as CRLF */
 					*t++ = CR; *t++ = LF;
 					t = g_stpcpy (t, "220-");
+					p ++;
 					break;
 				case 'h':
 					t = g_stpcpy (t, hostbuf);
+					p ++;
 					break;
 				case '%':
 					*t++ = '%';
+					p ++;
 					break;
 				default:
 					/* Copy all %<char> to dest */
@@ -450,18 +607,23 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 			*t ++ = *p ++;
 		}
 	}
-	t = g_stpcpy (t, CRLF);
+	if (has_crlf) {
+		t = g_stpcpy (t, CRLF "220 " CRLF);
+	}
+	else {
+		t = g_stpcpy (t, CRLF);
+	}
 }
 
 static gboolean
 parse_upstreams_line (struct smtp_worker_ctx *ctx, const char *line)
 {
-	char                          **strv, *p, *t, *err_str;
+	char                          **strv, *p, *t, *tt, *err_str;
 	uint32_t                        num, i;
 	struct smtp_upstream           *cur;
 	char                            resolved_path[PATH_MAX];
 	
-	strv = g_strsplit (line, ",; ", 0);
+	strv = g_strsplit_set (line, ",; ", -1);
 	num = g_strv_length (strv);
 
 	if (num >= MAX_UPSTREAM) {
@@ -472,7 +634,7 @@ parse_upstreams_line (struct smtp_worker_ctx *ctx, const char *line)
 	for (i = 0; i < num; i ++) {
 		p = strv[i];
 		cur = &ctx->upstreams[ctx->upstream_num];
-		if ((t = strrchr (p, ':')) != NULL) {
+		if ((t = strrchr (p, ':')) != NULL && (tt = strchr (p, ':')) != t) {
 			/* Assume that after last `:' we have weigth */
 			*t = '\0';
 			t ++;
@@ -508,6 +670,50 @@ parse_upstreams_line (struct smtp_worker_ctx *ctx, const char *line)
 	return TRUE;
 }
 
+static void
+make_capabilities (struct smtp_worker_ctx *ctx, const char *line)
+{
+	char                          **strv, *p, *result, *hostbuf;
+	uint32_t                        num, i, len, hostmax;
+
+	strv = g_strsplit_set (line, ",;", -1);
+	num = g_strv_length (strv);
+	
+	hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
+	hostbuf = alloca (hostmax);
+	gethostname (hostbuf, hostmax);
+	hostbuf[hostmax - 1] = '\0';
+
+	len = sizeof ("250-") + strlen (hostbuf) + sizeof (CRLF) - 1;
+
+	for (i = 0; i < num; i ++) {
+		p = strv[i];
+		len += sizeof ("250-") + sizeof (CRLF) + strlen (p) - 2;
+	}
+
+	result = memory_pool_alloc (ctx->pool, len);
+	ctx->smtp_capabilities = result;
+	
+	p = result;
+	if (num == 0) {
+		p += snprintf (p, len - (p - result), "250 %s" CRLF, hostbuf);
+	}
+	else {
+		p += snprintf (p, len - (p - result), "250-%s" CRLF, hostbuf);
+		for (i = 0; i < num; i ++) {
+			if (i != num - 1) {
+				p += snprintf (p, len - (p - result), "250-%s" CRLF, strv[i]);
+			}
+			else {
+				p += snprintf (p, len - (p - result), "250 %s" CRLF, strv[i]);
+			}
+		}
+	}
+
+	g_strfreev (strv);
+}
+
+
 static gboolean
 config_smtp_worker (struct rspamd_worker *worker)
 {
@@ -530,9 +736,10 @@ config_smtp_worker (struct rspamd_worker *worker)
 		}
 	}
 	else {
+		msg_err ("no upstreams defined, don't know what to do");
 		return FALSE;
 	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "banner")) != NULL) {
+	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_banner")) != NULL) {
 		parse_smtp_banner (ctx, value);
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_timeout")) != NULL) {
@@ -547,12 +754,15 @@ config_smtp_worker (struct rspamd_worker *worker)
 		}
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_delay")) != NULL) {
-		errno = 0;
-		ctx->smtp_delay = strtoul (value, &err_str, 10);
-		if (errno != 0 || (err_str && *err_str != '\0')) {
-			msg_warn ("cannot parse delay, invalid number: %s: %s", value, strerror (errno));
-		}
+		ctx->smtp_delay = parse_seconds (value);
 	}
+	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_jitter")) != NULL) {
+		ctx->delay_jitter = parse_seconds (value);
+	}
+	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_capabilities")) != NULL) {
+		make_capabilities (ctx, value);
+	}
+
 	/* Set ctx */
 	worker->ctx = ctx;
 	
@@ -573,6 +783,12 @@ start_smtp_worker (struct rspamd_worker *worker)
 
 	worker->srv->pid = getpid ();
 
+	/* Set smtp options */
+	if ( !config_smtp_worker (worker)) {
+		msg_err ("cannot configure smtp worker, exiting");
+		exit (EXIT_SUCCESS);
+	}
+
 	event_init ();
 	evdns_init ();
 
@@ -589,9 +805,6 @@ start_smtp_worker (struct rspamd_worker *worker)
 
 	/* Maps events */
 	start_map_watch ();
-
-	/* Set smtp options */
-	config_smtp_worker (worker);
 
 	event_loop (0);
 	

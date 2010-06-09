@@ -419,6 +419,12 @@ rspamd_dispatcher_pause (rspamd_io_dispatcher_t * d)
 	event_del (d->ev);
 }
 
+void
+rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
+{
+	event_add (d->ev, d->tv);
+}
+
 /* 
  * vi:ts=4 
  */

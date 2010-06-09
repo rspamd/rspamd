@@ -23,11 +23,12 @@ struct smtp_worker_ctx {
 	memory_pool_t *pool;
 	char *smtp_banner;
 	uint32_t smtp_delay;
+	uint32_t delay_jitter;
 	struct timeval smtp_timeout;
 
 	gboolean use_xclient;
 	gboolean helo_required;
-	const char *smtp_capabilities;
+	char *smtp_capabilities;
 };
 
 enum rspamd_smtp_state {
@@ -38,10 +39,13 @@ enum rspamd_smtp_state {
 	SMTP_STATE_HELO,
 	SMTP_STATE_FROM,
 	SMTP_STATE_RCPT,
+	SMTP_STATE_BEFORE_DATA,
 	SMTP_STATE_DATA,
 	SMTP_STATE_EOD,
 	SMTP_STATE_END,
+	SMTP_STATE_WAIT_UPSTREAM,
 	SMTP_STATE_ERROR,
+	SMTP_STATE_CRITICAL_ERROR,
 	SMTP_STATE_WRITE_ERROR
 };
 
@@ -50,18 +54,28 @@ struct smtp_session {
 	memory_pool_t *pool;
 
 	enum rspamd_smtp_state state;
+	enum rspamd_smtp_state upstream_state;
+	struct rspamd_worker *worker;
 	struct worker_task *task;
 	struct in_addr client_addr;
 	char *hostname;
 	char *error;
 	int sock;
+	int upstream_sock;
+	time_t session_time;
+
+	gchar *helo;
+	GList *from;
+	GList *rcpt;
+	GList *cur_rcpt;
 	
 	struct rspamd_async_session *s;
 	rspamd_io_dispatcher_t *dispatcher;
+	rspamd_io_dispatcher_t *upstream_dispatcher;
 
 	struct smtp_upstream *upstream;
-	int upstream_sock;
 	gboolean resolved;
+	gboolean esmtp;
 };
 
 void start_smtp_worker (struct rspamd_worker *worker);

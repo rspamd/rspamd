@@ -93,6 +93,12 @@ gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 void rspamd_dispatcher_pause (rspamd_io_dispatcher_t *d);
 
 /**
+ * Restore IO events on dispatcher
+ * @param d pointer to dispatcher's object
+ */
+void rspamd_dispatcher_restore (rspamd_io_dispatcher_t *d);
+
+/**
  * Frees dispatcher object
  * @param dispatcher pointer to dispatcher's object
  */

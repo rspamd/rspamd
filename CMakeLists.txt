@@ -426,6 +426,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/settings.c
 				src/spf.c
 				src/smtp.c
+				src/smtp_proto.c
 				src/statfile.c
 				src/statfile_sync.c
 				src/symbols_cache.c
