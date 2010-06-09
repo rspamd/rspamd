@@ -384,9 +384,11 @@ remove_dynamic_rules (struct symbols_cache *cache)
 
 	if (cache->dynamic_map) {
 		radix_tree_free (cache->dynamic_map);
+		cache->dynamic_map = NULL;
 	}
 	if (cache->negative_dynamic_map) {
 		radix_tree_free (cache->negative_dynamic_map);
+		cache->negative_dynamic_map = NULL;
 	}
 }
 
