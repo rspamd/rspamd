@@ -29,6 +29,9 @@ struct smtp_worker_ctx {
 	gboolean use_xclient;
 	gboolean helo_required;
 	char *smtp_capabilities;
+	char *reject_message;
+	size_t max_size;
+	char *metric;
 };
 
 enum rspamd_smtp_state {
@@ -41,9 +44,10 @@ enum rspamd_smtp_state {
 	SMTP_STATE_RCPT,
 	SMTP_STATE_BEFORE_DATA,
 	SMTP_STATE_DATA,
-	SMTP_STATE_EOD,
+	SMTP_STATE_AFTER_DATA,
 	SMTP_STATE_END,
 	SMTP_STATE_WAIT_UPSTREAM,
+	SMTP_STATE_IN_SENDFILE,
 	SMTP_STATE_ERROR,
 	SMTP_STATE_CRITICAL_ERROR,
 	SMTP_STATE_WRITE_ERROR
@@ -51,6 +55,7 @@ enum rspamd_smtp_state {
 
 struct smtp_session {
 	struct smtp_worker_ctx *ctx;
+	struct config_file *cfg;
 	memory_pool_t *pool;
 
 	enum rspamd_smtp_state state;
@@ -62,6 +67,8 @@ struct smtp_session {
 	char *error;
 	int sock;
 	int upstream_sock;
+	int temp_fd;
+	size_t temp_size;
 	time_t session_time;
 
 	gchar *helo;
@@ -74,6 +81,10 @@ struct smtp_session {
 	rspamd_io_dispatcher_t *upstream_dispatcher;
 
 	struct smtp_upstream *upstream;
+
+	char data_end[5];
+	char data_idx;
+
 	gboolean resolved;
 	gboolean esmtp;
 };

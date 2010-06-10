@@ -163,7 +163,7 @@ parse_smtp_command (struct smtp_session *session, f_str_t *line, struct smtp_com
 				break;
 			case SMTP_PARSE_ARGUMENT:
 				if (ch == ' ' || ch == ':' || ch == CR || ch == LF || i == line->len - 1) {
-					if (i == line->len - 1) {
+					if (i == line->len - 1 && (ch != ' ' && ch != CR && ch != LF)) {
 						p ++;
 					}
 					arg->len = p - c;
@@ -329,14 +329,14 @@ parse_smtp_rcpt (struct smtp_session *session, struct smtp_command *cmd)
 
 /* Return -1 if there are some error, 1 if all is ok and 0 in case of incomplete reply */
 static int
-check_smtp_ustream_reply (f_str_t *in)
+check_smtp_ustream_reply (f_str_t *in, char success_code)
 {
 	char                           *p;
 
 	/* Check for 250 at the begin of line */
 	if (in->len >= sizeof ("220 ") - 1) {
 		p = in->begin;
-		if (p[0] == '2') {
+		if (p[0] == success_code) {
 			/* Last reply line */
 			if (p[3] == ' ') {
 				return 1;
@@ -353,7 +353,7 @@ check_smtp_ustream_reply (f_str_t *in)
 	return -1;
 }
 
-static size_t
+size_t
 smtp_upstream_write_list (GList *args, char *buf, size_t buflen)
 {
 	GList                          *cur = args;
@@ -374,22 +374,35 @@ smtp_upstream_write_list (GList *args, char *buf, size_t buflen)
 }
 
 gboolean 
+smtp_upstream_write_socket (void *arg)
+{
+	struct smtp_session            *session = arg;
+	
+	if (session->upstream_state == SMTP_STATE_IN_SENDFILE) {
+		session->upstream_state = SMTP_STATE_END;
+		return rspamd_dispatcher_write (session->upstream_dispatcher, DATA_END_TRAILER, sizeof (DATA_END_TRAILER) - 1, FALSE, TRUE);
+	}
+
+	return TRUE;
+}
+
+gboolean 
 smtp_upstream_read_socket (f_str_t * in, void *arg)
 {
 	struct smtp_session            *session = arg;
-	char                            outbuf[BUFSIZ];
+	char                            outbuf[BUFSIZ], *tmppattern;
 	int                             r;
 	
 	switch (session->upstream_state) {
 		case SMTP_STATE_GREETING:
-			r = check_smtp_ustream_reply (in);
+			r = check_smtp_ustream_reply (in, '2');
 			if (r == -1) {
-				session->error = memory_pool_alloc (session->pool, in->len + 3);
+				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
 				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 				destroy_session (session->s);
 				return FALSE;
@@ -417,14 +430,14 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			break;
 		case SMTP_STATE_HELO:
-			r = check_smtp_ustream_reply (in);
+			r = check_smtp_ustream_reply (in, '2');
 			if (r == -1) {
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
 				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 				destroy_session (session->s);
 				return FALSE;
@@ -443,14 +456,14 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			break;
 		case SMTP_STATE_FROM:
-			r = check_smtp_ustream_reply (in);
+			r = check_smtp_ustream_reply (in, '2');
 			if (r == -1) {
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
 				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 				destroy_session (session->s);
 				return FALSE;
@@ -463,14 +476,14 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			break;
 		case SMTP_STATE_RCPT:
-			r = check_smtp_ustream_reply (in);
+			r = check_smtp_ustream_reply (in, '2');
 			if (r == -1) {
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
 				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 				destroy_session (session->s);
 				return FALSE;
@@ -485,14 +498,20 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			break;
 		case SMTP_STATE_BEFORE_DATA:
-			r = check_smtp_ustream_reply (in);
+			r = check_smtp_ustream_reply (in, '2');
 			if (r == -1) {
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
 				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
-				session->rcpt = g_list_delete_link (session->rcpt, session->cur_rcpt);
+				if (session->cur_rcpt) {
+					session->rcpt = g_list_delete_link (session->rcpt, session->cur_rcpt);
+				}
+				else {
+					session->rcpt = g_list_delete_link (session->rcpt, session->rcpt);
+				}
+				session->state = SMTP_STATE_RCPT;
 				return TRUE;
 			}
 			else if (r == 1) {
@@ -500,6 +519,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 					r = snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
 					r += smtp_upstream_write_list (session->cur_rcpt, outbuf + r, sizeof (outbuf) - r);
 					session->cur_rcpt = g_list_next (session->cur_rcpt);
+					rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE);
 				}
 				else {
 					session->upstream_state = SMTP_STATE_DATA;
@@ -508,15 +528,68 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				/* Write to client */
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
 				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
 				if (session->state == SMTP_STATE_WAIT_UPSTREAM) {
 					rspamd_dispatcher_restore (session->dispatcher);
 					session->state = SMTP_STATE_RCPT;
 				}
-				return rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE);
 			}
 			break;
+		case SMTP_STATE_DATA:
+			r = check_smtp_ustream_reply (in, '3');
+			if (r == -1) {
+				session->error = memory_pool_alloc (session->pool, in->len + 1);
+				g_strlcpy (session->error, in->begin, in->len + 1);
+				/* XXX: assume upstream errors as critical errors */
+				session->state = SMTP_STATE_CRITICAL_ERROR;
+				rspamd_dispatcher_restore (session->dispatcher);
+				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				destroy_session (session->s);
+				return FALSE;
+			}
+			else if (r == 1) {
+				r = strlen (session->cfg->temp_dir) + sizeof ("/rspamd-XXXXXX.tmp");
+				tmppattern = alloca (r);
+				snprintf (tmppattern, r, "%s/rspamd-XXXXXX.tmp", session->cfg->temp_dir);
+				session->temp_fd = g_mkstemp_full (tmppattern, O_RDWR, S_IWUSR | S_IRUSR);
+				if (session->temp_fd == -1) {
+					session->error = SMTP_ERROR_FILE;
+					session->state = SMTP_STATE_CRITICAL_ERROR;
+					rspamd_dispatcher_restore (session->dispatcher);
+					rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+					destroy_session (session->s);
+					return FALSE;
+				}
+				session->state = SMTP_STATE_AFTER_DATA;
+				session->error = SMTP_ERROR_DATA_OK;
+				rspamd_dispatcher_restore (session->dispatcher);
+				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_pause (session->upstream_dispatcher);
+				rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_ANY, 0);
+				session->data_idx = 0;
+				memset (session->data_end, 0, sizeof (session->data_end));
+				return TRUE;
+			}
+			break;
+		case SMTP_STATE_END:
+			session->error = memory_pool_alloc (session->pool, in->len + 1);
+			g_strlcpy (session->error, in->begin, in->len + 1);
+			session->state = SMTP_STATE_END;
+			rspamd_dispatcher_restore (session->dispatcher);
+			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+			rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+			destroy_session (session->s);
+			return FALSE;
+		default:
+			msg_err ("got upstream reply at unexpected state: %d, reply: %V", session->upstream_state, in);
+			session->state = SMTP_STATE_CRITICAL_ERROR;
+			rspamd_dispatcher_restore (session->dispatcher);
+			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+			rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+			destroy_session (session->s);
+			return FALSE;
 	}
 
 	return TRUE;

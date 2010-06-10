@@ -11,8 +11,11 @@
 #define SMTP_ERROR_RECIPIENTS "554 No valid recipients" CRLF
 #define SMTP_ERROR_UNIMPLIMENTED "502 Command not implemented" CRLF
 #define SMTP_ERROR_UPSTREAM "421 Service not available, closing transmission channel" CRLF
+#define SMTP_ERROR_FILE "420 Service not available, filesystem error" CRLF
 #define SMTP_ERROR_OK "250 Requested mail action okay, completed" CRLF
 #define SMTP_ERROR_DATA_OK "354 Start mail input; end with <CRLF>.<CRLF>" CRLF
+
+#define DATA_END_TRAILER CRLF "." CRLF
 
 
 struct smtp_command {
@@ -40,7 +43,9 @@ gboolean parse_smtp_rcpt (struct smtp_session *session, struct smtp_command *cmd
 
 /* Upstream SMTP */
 gboolean smtp_upstream_read_socket (f_str_t * in, void *arg);
+gboolean smtp_upstream_write_socket (void *arg);
 void smtp_upstream_err_socket (GError *err, void *arg);
 void smtp_upstream_finalize_connection (gpointer data);
+size_t smtp_upstream_write_list (GList *args, char *buf, size_t buflen);
 
 #endif

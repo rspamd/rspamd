@@ -20,6 +20,7 @@ typedef void (*dispatcher_err_callback_t)(GError *err, void *user_data);
 enum io_policy {
 	BUFFER_LINE,													/**< call handler when we have line ready */
 	BUFFER_CHARACTER,												/**< call handler when we have some characters */
+	BUFFER_ANY														/**< call handler whenever we got data in buffer */
 };
 
 /**
@@ -45,6 +46,13 @@ typedef struct rspamd_io_dispatcher_s {
 	dispatcher_write_callback_t write_callback;						/**< write callback			*/
 	dispatcher_err_callback_t err_callback;							/**< error callback			*/
 	void *user_data;												/**< user's data for callbacks */
+	off_t offset;													/**< for sendfile use		*/
+	size_t file_size;
+	int sendfile_fd;
+	gboolean in_sendfile;											/**< whether buffer is in sendfile mode */
+#ifndef HAVE_SENDFILE
+	void *map;
+#endif
 } rspamd_io_dispatcher_t;
 
 /**
@@ -85,6 +93,14 @@ void rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
 gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 												  void *data,
 												  size_t len, gboolean delayed, gboolean allocated);
+
+/**
+ * Send specified descriptor to dispatcher
+ * @param d pointer to dispatcher's object
+ * @param fd descriptor of file
+ * @param len length of data
+ */
+gboolean rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, int fd, size_t len);
 
 /**
  * Pause IO events on dispatcher

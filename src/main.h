@@ -225,6 +225,8 @@ struct worker_task {
 	gboolean view_checked;
 	gboolean pass_all_filters;									/**< pass task throught every rule					*/
 	uint32_t parser_recursion;									/**< for avoiding recursion stack overflow			*/
+	gboolean (*fin_callback)(void *arg);						/**< calback for filters finalizing					*/
+	void *fin_arg;												/**< argument for fin callback						*/
 };
 
 /**

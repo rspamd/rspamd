@@ -121,6 +121,9 @@
 
 #cmakedefine BUILD_STATIC        1
 
+#cmakedefine HAVE_SENDFILE       1
+#cmakedefine HAVE_SYS_SENDFILE_H 1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
@@ -292,6 +295,10 @@
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #define HAVE_SETLOCALE 1
+#endif
+
+#ifdef HAVE_SYS_SENDFILE_H
+#include <sys/sendfile.h>
 #endif
 
 #ifdef WITH_GPERF_TOOLS

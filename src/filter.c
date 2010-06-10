@@ -310,7 +310,12 @@ continue_process_filters (struct worker_task *task)
 	/* Process all statfiles */
 	process_statfiles (task);
 	/* XXX: ugly direct call */
-	task->dispatcher->write_callback (task);
+	if (task->fin_callback) {
+		task->fin_callback (task->fin_arg);
+	}
+	else {
+		task->dispatcher->write_callback (task);
+	}
 	return 1;
 }
 
