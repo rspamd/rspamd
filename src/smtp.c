@@ -94,6 +94,9 @@ free_smtp_session (gpointer arg)
 		}
 		memory_pool_delete (session->pool);
 		close (session->sock);
+		if (session->temp_name != NULL) {
+			unlink (session->temp_name);
+		}
 		if (session->temp_fd != -1) {
 			close (session->temp_fd);
 		}
@@ -294,11 +297,11 @@ smtp_send_upstream_message (struct smtp_session *session)
 	rspamd_dispatcher_pause (session->dispatcher);
 	rspamd_dispatcher_restore (session->upstream_dispatcher);
 	
+	session->upstream_state = SMTP_STATE_IN_SENDFILE;
+	session->state = SMTP_STATE_WAIT_UPSTREAM;
 	if (! rspamd_dispatcher_sendfile (session->upstream_dispatcher, session->temp_fd, session->temp_size)) {
 		goto err;
 	}
-	session->upstream_state = SMTP_STATE_IN_SENDFILE;
-	session->state = SMTP_STATE_WAIT_UPSTREAM;
 	return TRUE;
 
 err:
@@ -413,7 +416,7 @@ smtp_read_socket (f_str_t * in, void *arg)
 					destroy_session (session->s);
 					return FALSE;
 				}
-				memcpy (session->data_end, p - sizeof (session->data_end) + 1, sizeof (session->data_end));
+				memcpy (session->data_end, p - sizeof (session->data_end), sizeof (session->data_end));
 				session->data_idx = 5;
 			}
 			else if (session->data_idx + in->len < sizeof (session->data_end)){
@@ -439,21 +442,19 @@ smtp_read_socket (f_str_t * in, void *arg)
 				session->data_idx = 5;
 			}
 			if (do_write) {
+				if (session->data_idx < in->len) {
+					if (in->len - session->data_idx != 0 && 
+							write (session->temp_fd, in->begin, in->len - session->data_idx) != in->len - session->data_idx) {
+						msg_err ("cannot write to temp file: %s", strerror (errno));
+						session->error = SMTP_ERROR_FILE;
+						session->state = SMTP_STATE_CRITICAL_ERROR;
+						rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+						destroy_session (session->s);
+						return FALSE;
+					}
+				}
 				if (memcmp (session->data_end, DATA_END_TRAILER, sizeof (session->data_end)) == 0) {
 					return process_smtp_data (session);
-				}
-				else {
-					if (session->data_idx < in->len) {
-						if (in->len - session->data_idx != 0 && 
-								write (session->temp_fd, in->begin, in->len - session->data_idx) != in->len - session->data_idx) {
-							msg_err ("cannot write to temp file: %s", strerror (errno));
-							session->error = SMTP_ERROR_FILE;
-							session->state = SMTP_STATE_CRITICAL_ERROR;
-							rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-							destroy_session (session->s);
-							return FALSE;
-						}
-					}
 				}
 			}
 			break;

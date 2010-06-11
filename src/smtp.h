@@ -65,6 +65,7 @@ struct smtp_session {
 	struct in_addr client_addr;
 	char *hostname;
 	char *error;
+	char *temp_name;
 	int sock;
 	int upstream_sock;
 	int temp_fd;

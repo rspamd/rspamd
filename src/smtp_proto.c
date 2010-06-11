@@ -390,7 +390,7 @@ gboolean
 smtp_upstream_read_socket (f_str_t * in, void *arg)
 {
 	struct smtp_session            *session = arg;
-	char                            outbuf[BUFSIZ], *tmppattern;
+	char                            outbuf[BUFSIZ];
 	int                             r;
 	
 	switch (session->upstream_state) {
@@ -551,9 +551,9 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			else if (r == 1) {
 				r = strlen (session->cfg->temp_dir) + sizeof ("/rspamd-XXXXXX.tmp");
-				tmppattern = alloca (r);
-				snprintf (tmppattern, r, "%s/rspamd-XXXXXX.tmp", session->cfg->temp_dir);
-				session->temp_fd = g_mkstemp_full (tmppattern, O_RDWR, S_IWUSR | S_IRUSR);
+				session->temp_name = memory_pool_alloc (session->pool, r);
+				snprintf (session->temp_name, r, "%s%crspamd-XXXXXX.tmp", session->cfg->temp_dir, G_DIR_SEPARATOR);
+				session->temp_fd = g_mkstemp_full (session->temp_name, O_RDWR, S_IWUSR | S_IRUSR);
 				if (session->temp_fd == -1) {
 					session->error = SMTP_ERROR_FILE;
 					session->state = SMTP_STATE_CRITICAL_ERROR;
