@@ -26,7 +26,6 @@
  * rspamd module that checks fuzzy checksums for messages
  *
  * Allowed options:
- * - metric (string): metric to insert symbol (default: 'default')
  * - symbol (string): symbol to insert (default: 'R_FUZZY')
  * - max_score (double): maximum score to that weights of hashes would be normalized (default: 0 - no normalization)
  *
@@ -74,7 +73,6 @@ struct fuzzy_mapping {
 
 struct fuzzy_ctx {
 	int                             (*filter) (struct worker_task * task);
-	char                           *metric;
 	char                           *symbol;
 	struct storage_server          *servers;
 	int                             servers_num;
@@ -260,15 +258,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 {
 	char                           *value;
 	int                             res = TRUE;
-	struct metric                  *metric;
-	double                         *w;
 
-	if ((value = get_module_opt (cfg, "fuzzy_check", "metric")) != NULL) {
-		fuzzy_module_ctx->metric = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
-	}
-	else {
-		fuzzy_module_ctx->metric = DEFAULT_METRIC;
-	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
 		fuzzy_module_ctx->symbol = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
 	}
@@ -306,31 +296,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 		parse_flags_string (value);
 	}
 
-	metric = g_hash_table_lookup (cfg->metrics, fuzzy_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", fuzzy_module_ctx->metric);
-		return FALSE;
-	}
-
-	/* Search in factors hash table */
-	w = g_hash_table_lookup (cfg->factors, fuzzy_module_ctx->symbol);
-
-	if (w == NULL) {
-		if (fabs (fuzzy_module_ctx->max_score) < 0.001) {
-			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, 1, fuzzy_symbol_callback, NULL);
-		}
-		else {
-			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);
-		}
-	}
-	else {
-		if (fabs (fuzzy_module_ctx->max_score) < 0.001) {
-			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, *w, fuzzy_symbol_callback, NULL);
-		}
-		else {
-			register_symbol (&metric->cache, fuzzy_module_ctx->symbol, *w * fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);
-		}
-	}
+	register_symbol (&cfg->cache, fuzzy_module_ctx->symbol, fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);
 
 	register_custom_controller_command ("fuzzy_add", fuzzy_add_handler, TRUE, TRUE);
 	register_custom_controller_command ("fuzzy_del", fuzzy_delete_handler, TRUE, TRUE);
@@ -418,7 +384,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 			}
 
 			snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
-			insert_result (session->task, fuzzy_module_ctx->metric, symbol, nval, g_list_prepend (NULL, 
+			insert_result (session->task, symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
 		}
 		goto ok;

@@ -26,7 +26,6 @@
  * rspamd module that checks spf records of incoming email
  *
  * Allowed options:
- * - metric (string): metric to insert symbol (default: 'default')
  * - symbol_allow (string): symbol to insert (default: 'R_SPF_ALLOW')
  * - symbol_fail (string): symbol to insert (default: 'R_SPF_FAIL')
  * - symbol_softfail (string): symbol to insert (default: 'R_SPF_SOFTFAIL')
@@ -49,7 +48,6 @@
 
 struct spf_ctx {
 	int                             (*filter) (struct worker_task * task);
-	char                           *metric;
 	char                           *symbol_fail;
 	char                           *symbol_softfail;
 	char                           *symbol_allow;
@@ -79,15 +77,7 @@ spf_module_config (struct config_file *cfg)
 {
 	char                           *value;
 	int                             res = TRUE;
-	struct metric                  *metric;
-	double                         *w;
 	
-	if ((value = get_module_opt (cfg, "spf", "metric")) != NULL) {
-		spf_module_ctx->metric = memory_pool_strdup (spf_module_ctx->spf_pool, value);
-	}
-	else {
-		spf_module_ctx->metric = DEFAULT_METRIC;
-	}
 	if ((value = get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
 		spf_module_ctx->symbol_fail = memory_pool_strdup (spf_module_ctx->spf_pool, value);
 	}
@@ -107,20 +97,7 @@ spf_module_config (struct config_file *cfg)
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
 
-	metric = g_hash_table_lookup (cfg->metrics, spf_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", spf_module_ctx->metric);
-		return FALSE;
-	}
-
-	/* Search in factors hash table */
-	w = g_hash_table_lookup (cfg->factors, spf_module_ctx->symbol_fail);
-	if (w == NULL) {
-		register_symbol (&metric->cache, spf_module_ctx->symbol_fail, 1, spf_symbol_callback, NULL);
-	}
-	else {
-		register_symbol (&metric->cache, spf_module_ctx->symbol_fail, *w, spf_symbol_callback, NULL);
-	}
+	register_symbol (&cfg->cache, spf_module_ctx->symbol_fail, 1, spf_symbol_callback, NULL);
 
 	return res;
 }
@@ -156,16 +133,16 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
                 if ((s & m) == (addr->addr & m)) {
                     switch (addr->mech) {
                         case SPF_FAIL:
-                            insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
+                            insert_result (task, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
 							task->messages = g_list_prepend (task->messages, "(SPF): spf fail");
                             break;
                         case SPF_SOFT_FAIL:
                         case SPF_NEUTRAL:
-                            insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
+                            insert_result (task, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
 							task->messages = g_list_prepend (task->messages, "(SPF): spf softfail");
                             break;
                         default:
-                            insert_result (task, spf_module_ctx->metric, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
+                            insert_result (task, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
 							task->messages = g_list_prepend (task->messages, "(SPF): spf allow");
                             break;
                     }

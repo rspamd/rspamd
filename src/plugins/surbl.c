@@ -26,7 +26,6 @@
  * rspamd module that implements SURBL url checking
  *
  * Allowed options:
- * - metric (string): metric to insert symbol (default: 'default')
  * - weight (integer): weight of symbol
  * Redirecotor options:
  * - redirector (string): address of http redirector utility in format "host:port"
@@ -116,8 +115,6 @@ surbl_module_config (struct config_file *cfg)
 	struct module_opt              *cur;
 	struct suffix_item             *new_suffix;
 	struct surbl_bit_item          *new_bit;
-	struct metric                  *metric;
-	double                         *w;
 
 	char                           *value, *cur_tok, *str;
 	uint32_t                        bit;
@@ -177,12 +174,6 @@ surbl_module_config (struct config_file *cfg)
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "metric")) != NULL) {
-		surbl_module_ctx->metric = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
-	}
-	else {
-		surbl_module_ctx->metric = DEFAULT_METRIC;
-	}
 	if ((value = get_module_opt (cfg, "surbl", "2tld")) != NULL) {
 		if (add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->tld2)) {
 			surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
@@ -192,12 +183,6 @@ surbl_module_config (struct config_file *cfg)
 		if (add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->whitelist)) {
 			surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
 		}
-	}
-
-	metric = g_hash_table_lookup (cfg->metrics, surbl_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", surbl_module_ctx->metric);
-		return FALSE;
 	}
 
 
@@ -213,14 +198,7 @@ surbl_module_config (struct config_file *cfg)
 				msg_debug ("add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 				*str = '_';
 				surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
-				/* Search in factors hash table */
-				w = g_hash_table_lookup (cfg->factors, new_suffix->symbol);
-				if (w == NULL) {
-					register_symbol (&metric->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
-				}
-				else {
-					register_symbol (&metric->cache, new_suffix->symbol, *w, surbl_test_url, new_suffix);
-				}
+				register_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 			}
 		}
 		if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
@@ -244,13 +222,7 @@ surbl_module_config (struct config_file *cfg)
 		new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SYMBOL);
 		msg_debug ("add default surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
-		w = g_hash_table_lookup (cfg->factors, new_suffix->symbol);
-		if (w == NULL) {
-			register_symbol (&metric->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
-		}
-		else {
-			register_symbol (&metric->cache, new_suffix->symbol, *w, surbl_test_url, new_suffix);
-		}
+		register_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 	}
 
 	return TRUE;
@@ -495,18 +467,18 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 				symbol = memory_pool_alloc (task->task_pool, len);
 				snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
 				*c = '%';
-				insert_result (task, surbl_module_ctx->metric, symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+				insert_result (task, symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 				found = 1;
 			}
 			cur = g_list_next (cur);
 		}
 
 		if (!found) {
-			insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+			insert_result (task, suffix->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 		}
 	}
 	else {
-		insert_result (task, surbl_module_ctx->metric, suffix->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+		insert_result (task, suffix->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 	}
 }
 

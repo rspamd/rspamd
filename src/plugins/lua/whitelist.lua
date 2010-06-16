@@ -1,6 +1,5 @@
 -- Module that add symbols to those hosts or from domains that are contained in whitelist
 
-local metric = 'default'
 local symbol_ip = nil
 local symbol_from = nil
 
@@ -14,7 +13,7 @@ function check_whitelist (task)
 		if ipn then
 			local key = r:get_key(ipn)
 			if key then
-				task:insert_result(metric, symbol_ip, 1)
+				task:insert_result( symbol_ip, 1)
 			end
 		end
 	end
@@ -26,7 +25,7 @@ function check_whitelist (task)
 			local _,_,domain = string.find(from, '@(.+)>?$')
 			local key = h:get_key(domain)
 			if key then
-				task:insert_result(metric, symbol_from, 1)
+				task:insert_result(symbol_from, 1)
 			end
 		end
 	end
@@ -58,16 +57,12 @@ if opts then
 			end
 		end
 
-		if opts['metric'] then
-			metric = opts['metric']
-		end
 
 		-- Register symbol's callback
-		local m = rspamd_config:get_metric(metric)
 		if symbol_ip then
-			m:register_symbol(symbol_ip, 1.0, 'check_whitelist')
+			rspamd_config:register_symbol(symbol_ip, 1.0, 'check_whitelist')
 		elseif symbol_from then
-			m:register_symbol(symbol_from, 1.0, 'check_whitelist')
+			rspamd_config:register_symbol(symbol_from, 1.0, 'check_whitelist')
 		end
 	end
 end

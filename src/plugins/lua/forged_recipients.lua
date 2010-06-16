@@ -1,7 +1,6 @@
 -- Plugin for comparing smtp dialog recipients and sender with recipients and sender
 -- in mime headers
 
-local metric = 'default'
 local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 
@@ -22,7 +21,7 @@ function check_forged_headers(task)
 		end
 		-- Check recipients count
 		if count < table.maxn(smtp_rcpt) then
-			task:insert_result(metric, symbol_rcpt, 1)
+			task:insert_result(symbol_rcpt, 1)
 		else
 			-- Find pair for each smtp recipient recipient in To or Cc headers
 			for _,sr in ipairs(smtp_rcpt) do
@@ -48,7 +47,7 @@ function check_forged_headers(task)
 				end
 
 				if not res then
-					task:insert_result(metric, symbol_rcpt, 1)
+					task:insert_result(symbol_rcpt, 1)
 					break
 				end
 			end
@@ -59,7 +58,7 @@ function check_forged_headers(task)
 	if smtp_form then
 		local mime_from = msg:get_header('From')
 		if not mime_from or not string.find(mime_from[0], smtp_from) then
-			task:insert_result(metric, symbol_sender, 1)
+			task:insert_result(symbol_sender, 1)
 		end
 	end
 end
@@ -74,11 +73,7 @@ if opts then
 		if opts['symbol_sender'] then
 			symbol_sender = opts['symbol_sender']
 		end
-		if opts['metric'] then
-			metric = opts['metric']
-		end
-		local m = rspamd_config:get_metric(metric)
-		m:register_symbol(symbol_rcpt, 1.0, 'check_forged_headers')
+		rspamd_config:register_symbol(symbol_rcpt, 1.0, 'check_forged_headers')
 	end
 end
 

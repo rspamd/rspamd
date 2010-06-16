@@ -1,6 +1,5 @@
 -- 0 or 1 received: = spam
 
-local metric = 'default'
 local symbol = 'ONCE_RECEIVED'
 -- Symbol for strict checks
 local symbol_strict = nil
@@ -10,7 +9,7 @@ local good_hosts = {}
 function check_quantity_received (task)
 	local recvh = task:get_received_headers()
 	if table.maxn(recvh) <= 1 then
-		task:insert_result(metric, symbol, 1)
+		task:insert_result(symbol, 1)
 		-- Strict checks
 		if symbol_strict then
 			local r = recvh[1]
@@ -19,7 +18,7 @@ function check_quantity_received (task)
             end
 			-- Unresolved host
 			if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
-				task:insert_result(metric, symbol_strict, 1)
+				task:insert_result(symbol_strict, 1)
                 return
 			end
 
@@ -36,7 +35,7 @@ function check_quantity_received (task)
 						end
 					end
 					if i then
-						task:insert_result(metric, symbol_strict, 1, h)
+						task:insert_result(symbol_strict, 1, h)
 						return
 					end
 				end
@@ -58,13 +57,10 @@ if opts then
 			    bad_hosts = v
 			elseif n == 'good_host' then
 			    good_hosts = v
-		    elseif n == 'metric' then
-			    metric = v
 		    end
 	    end
 
 		-- Register symbol's callback
-		local m = rspamd_config:get_metric(metric)
-		m:register_symbol(symbol, 1.0, 'check_quantity_received')
+		rspamd_config:register_symbol(symbol, 1.0, 'check_quantity_received')
 	end
 end

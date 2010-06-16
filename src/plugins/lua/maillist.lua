@@ -1,7 +1,5 @@
 -- Module for checking mail list headers
 
-
-local metric = 'default'
 local symbol = 'MAILLIST'
 
 -- EZMLM
@@ -157,11 +155,11 @@ end
 
 function check_maillist(task)
 	if check_ml_ezmlm(task) then
-		task:insert_result(metric, symbol, 1, 'ezmlm')
+		task:insert_result(symbol, 1, 'ezmlm')
 	elseif check_ml_mailman(task) then
-		task:insert_result(metric, symbol, 1, 'mailman')
+		task:insert_result(symbol, 1, 'mailman')
 	elseif check_ml_subscriberu(task) then
-		task:insert_result(metric, symbol, 1, 'subscribe.ru')
+		task:insert_result(symbol, 1, 'subscribe.ru')
 	end
 end
 
@@ -169,11 +167,7 @@ end
 local opts =  rspamd_config:get_all_opt('maillist')
 if opts then
 	if opts['symbol'] then
-		if opts['metric'] then
-			metric = opts['metric']
-		end
 		symbol = opts['symbol'] 
-		local m = rspamd_config:get_metric(metric)
-		m:register_symbol(symbol, 1.0, 'check_maillist')
+		rspamd_config:register_symbol(symbol, 1.0, 'check_maillist')
 	end
 end

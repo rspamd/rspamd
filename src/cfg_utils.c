@@ -40,35 +40,6 @@
 #define DEFAULT_RLIMIT_NOFILE 2048
 #define DEFAULT_RLIMIT_MAXCORE 0
 
-extern int                      yylineno;
-extern gchar                    *yytext;
-
-int
-add_memcached_server (struct config_file *cf, gchar *str)
-{
-	struct memcached_server        *mc;
-	uint16_t                        port;
-
-	if (str == NULL)
-		return 0;
-
-	if (cf->memcached_servers_num == MAX_MEMCACHED_SERVERS) {
-		yywarn ("yyparse: maximum number of memcached servers is reached %d", MAX_MEMCACHED_SERVERS);
-		return 0;
-	}
-
-	mc = &cf->memcached_servers[cf->memcached_servers_num];
-	/* cur_tok - server name, str - server port */
-	port = DEFAULT_MEMCACHED_PORT;
-
-	if (!parse_host_port (str, &mc->addr, &port)) {
-		return 0;
-	}
-
-	mc->port = port;
-	cf->memcached_servers_num++;
-	return 1;
-}
 
 gboolean
 parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port)
@@ -152,7 +123,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
 				if ((fd = open (str, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-					yyerror ("parse_bind_line: cannot open path %s for making socket, %s", str, strerror (errno));
+					msg_err ("cannot open path %s for making socket, %s", str, strerror (errno));
 					return 0;
 				}
 				else {
@@ -161,13 +132,13 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 				}
 			}
 			else {
-				yyerror ("parse_bind_line: cannot stat path %s for making socket, %s", str, strerror (errno));
+				msg_err ("cannot stat path %s for making socket, %s", str, strerror (errno));
 				return 0;
 			}
 		}
 		else {
 			if (unlink (str) == -1) {
-				yyerror ("parse_bind_line: cannot remove path %s for making socket, %s", str, strerror (errno));
+				msg_err ("cannot remove path %s for making socket, %s", str, strerror (errno));
 				return 0;
 			}
 		}
@@ -199,15 +170,14 @@ init_defaults (struct config_file *cfg)
 
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
-	cfg->grow_factor = 1;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->metrics = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->factors = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->c_modules = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->classifiers_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->metrics_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	init_settings (cfg);
 
 }
@@ -221,14 +191,13 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->variables);
 	g_hash_table_remove_all (cfg->metrics);
 	g_hash_table_unref (cfg->metrics);
-	g_hash_table_remove_all (cfg->factors);
-	g_hash_table_unref (cfg->factors);
 	g_hash_table_remove_all (cfg->c_modules);
 	g_hash_table_unref (cfg->c_modules);
 	g_hash_table_remove_all (cfg->composite_symbols);
 	g_hash_table_unref (cfg->composite_symbols);
 	g_hash_table_remove_all (cfg->cfg_params);
 	g_hash_table_unref (cfg->cfg_params);
+	g_hash_table_destroy (cfg->metrics_symbols);
 	g_hash_table_destroy (cfg->classifiers_symbols);
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
@@ -387,7 +356,7 @@ substitute_variable (struct config_file *cfg, gchar *name, gchar *str, guchar re
 	gboolean                        changed = FALSE;
 
 	if (str == NULL) {
-		yywarn ("substitute_variable: trying to substitute variable in NULL string");
+		msg_warn ("trying to substitute variable in NULL string");
 		return NULL;
 	}
 
@@ -405,7 +374,7 @@ substitute_variable (struct config_file *cfg, gchar *name, gchar *str, guchar re
 		*v_end = '\0';
 		var = g_hash_table_lookup (cfg->variables, v_begin);
 		if (var == NULL) {
-			yywarn ("substitute_variable: variable %s is not defined", v_begin);
+			msg_warn ("variable %s is not defined", v_begin);
 			*v_end = t;
 			p = v_end + 1;
 			continue;
@@ -587,23 +556,22 @@ post_load_config (struct config_file *cfg)
 		cfg->clock_res = 3;
 	}
 
-	if (g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC) == NULL) {
-		def_metric = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric));
+	if ((def_metric = g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
+		def_metric = check_metric_conf (cfg, NULL);
 		def_metric->name = DEFAULT_METRIC;
-		def_metric->func_name = "factors";
-		def_metric->func = factor_consolidation_func;
 		def_metric->required_score = DEFAULT_SCORE;
 		def_metric->reject_score = DEFAULT_REJECT_SCORE;
-		def_metric->classifier = get_classifier ("winnow");
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
 		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);
 	}
+
+	cfg->default_metric = def_metric;
 
 	/* Lua options */
 	(void)lua_post_load_config (cfg);
 }
 
-
+#if 0
 void
 parse_err (const gchar *fmt, ...)
 {
@@ -637,6 +605,7 @@ parse_warn (const gchar *fmt, ...)
 	va_end (aq);
 	g_warning ("%s", logbuf);
 }
+#endif
 
 void
 unescape_quotes (gchar *line)
@@ -692,6 +661,20 @@ check_classifier_cfg (struct config_file *cfg, struct classifier_config *c)
 	if (c->opts == NULL) {
 		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
+	}
+
+	return c;
+}
+
+struct metric *
+check_metric_conf (struct config_file *cfg, struct metric *c)
+{
+	if (c == NULL) {
+		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		c->action = METRIC_ACTION_REJECT;
+		c->grow_factor = 1.0;
+		c->symbols = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->symbols);
 	}
 
 	return c;

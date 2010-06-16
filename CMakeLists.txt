@@ -78,14 +78,6 @@ ELSE(NOT LUA_FOUND)
     INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
 ENDIF(NOT LUA_FOUND)
 
-# Lex and yacc
-FIND_PROGRAM(LEX_EXECUTABLE lex)
-FIND_PROGRAM(YACC_EXECUTABLE yacc)
-
-IF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
-	MESSAGE(FATAL_ERROR "Error: yacc and lex are required for build")
-ENDIF(NOT LEX_EXECUTABLE OR NOT YACC_EXECUTABLE)
-
 IF(ENABLE_STATIC MATCHES "ON")
 	pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.16)
 	pkg_check_modules(PCRE REQUIRED libpcre)
@@ -497,20 +489,8 @@ SET(UTILSDEPENDS src/mem_pool.c
 
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
-SET(YACC_SRC	src/cfg_file.y)
-SET(LEX_SRC		src/cfg_file.l)
-
-STRING(REPLACE "_file.y" "_yacc.c" YACC_OUTPUT ${YACC_SRC})
-STRING(REPLACE "_file.l" "_lex.c" LEX_OUTPUT ${LEX_SRC})
-
 ############################ TARGETS SECTION ###############################
 
-ADD_CUSTOM_COMMAND(OUTPUT ${LEX_OUTPUT}
-					COMMAND ${LEX_EXECUTABLE} -o${LEX_OUTPUT} ${LEX_SRC}
-					DEPENDS ${LEX_SRC})
-ADD_CUSTOM_COMMAND(OUTPUT ${YACC_OUTPUT}
-					COMMAND ${YACC_EXECUTABLE} -d -o ${YACC_OUTPUT} ${YACC_SRC}
-					DEPENDS ${YACC_SRC})
 ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
 					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
 					WORKING_DIRECTORY src)
@@ -535,8 +515,7 @@ CONFIGURE_FILE(rspamd.xml.sample conf/rspamd.xml.sample @ONLY)
 
 ######################### LINK SECTION ###############################
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} 
-					  ${CLASSIFIERSSRC} ${PLUGINSSRC} ${YACC_OUTPUT} 
-					  ${LEX_OUTPUT})
+					  ${CLASSIFIERSSRC} ${PLUGINSSRC})
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
 SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
@@ -548,7 +527,6 @@ IF(ENABLE_PERL MATCHES "ON")
 	IF(PERL_DYNALOADER)
 		TARGET_LINK_LIBRARIES(rspamd dynaloader)
 	ENDIF(PERL_DYNALOADER)
-	ADD_DEPENDENCIES(rspamd perlxs ${LEX_OUTPUT} ${YACC_OUTPUT})
 
 ENDIF(ENABLE_PERL MATCHES "ON")
 IF(PERL_EXECUTABLE)
@@ -668,31 +646,6 @@ INSTALL(FILES conf/2tld.inc RENAME 2tld.inc.orig DESTINATION ${ETC_PREFIX}/rspam
 IF(NOT EXISTS ${ETC_PREFIX}/rspamd/2tld.inc)
 INSTALL(FILES conf/2tld.inc DESTINATION ${ETC_PREFIX}/rspamd)
 ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/2tld.inc)
-
-INSTALL(FILES conf/drugs.inc RENAME drugs.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
-IF(NOT EXISTS ${ETC_PREFIX}/rspamd/drugs.inc)
-INSTALL(FILES conf/drugs.inc DESTINATION ${ETC_PREFIX}/rspamd)
-ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/drugs.inc)
-
-INSTALL(FILES conf/fraud.inc RENAME fraud.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
-IF(NOT EXISTS ${ETC_PREFIX}/rspamd/fraud.inc)
-INSTALL(FILES conf/fraud.inc DESTINATION ${ETC_PREFIX}/rspamd)
-ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/fraud.inc)
-
-INSTALL(FILES conf/html.inc RENAME html.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
-IF(NOT EXISTS ${ETC_PREFIX}/rspamd/html.inc)
-INSTALL(FILES conf/html.inc DESTINATION ${ETC_PREFIX}/rspamd)
-ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/html.inc)
-
-INSTALL(FILES conf/headers.inc RENAME headers.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
-IF(NOT EXISTS ${ETC_PREFIX}/rspamd/headers.inc)
-INSTALL(FILES conf/headers.inc DESTINATION ${ETC_PREFIX}/rspamd)
-ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/headers.inc)
-
-INSTALL(FILES conf/lotto.inc RENAME lotto.inc.orig DESTINATION ${ETC_PREFIX}/rspamd)
-IF(NOT EXISTS ${ETC_PREFIX}/rspamd/lotto.inc)
-INSTALL(FILES conf/lotto.inc DESTINATION ${ETC_PREFIX}/rspamd)
-ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/lotto.inc)
 
 INSTALL(FILES conf/rspamd.xml.sample DESTINATION ${ETC_PREFIX}/)
 

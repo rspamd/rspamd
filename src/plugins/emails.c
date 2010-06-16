@@ -26,7 +26,6 @@
  * rspamd module that extracts emails from messages and check them via blacklist
  * 
  * Allowed options:
- * - metric (string): metric to insert symbol (default: 'default')
  * - symbol (string): symbol to insert (default: 'R_BAD_EMAIL')
  * - blacklist (map string): map that contains list of bad emails
  */
@@ -48,7 +47,6 @@ static const char              *email_re_text =
 
 struct email_ctx {
 	int                             (*filter) (struct worker_task * task);
-	char                           *metric;
 	char                           *symbol;
 	GRegex                         *email_re;
 
@@ -89,15 +87,7 @@ emails_module_config (struct config_file *cfg)
 {
 	char                           *value;
 	int                             res = TRUE;
-	struct metric                  *metric;
-	double                         *w;
 
-	if ((value = get_module_opt (cfg, "emails", "metric")) != NULL) {
-		email_module_ctx->metric = memory_pool_strdup (email_module_ctx->email_pool, value);
-	}
-	else {
-		email_module_ctx->metric = DEFAULT_METRIC;
-	}
 	if ((value = get_module_opt (cfg, "emails", "symbol")) != NULL) {
 		email_module_ctx->symbol = memory_pool_strdup (email_module_ctx->email_pool, value);
 	}
@@ -110,20 +100,8 @@ emails_module_config (struct config_file *cfg)
 		}
 	}
 
-	metric = g_hash_table_lookup (cfg->metrics, email_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", email_module_ctx->metric);
-		return FALSE;
-	}
 
-	/* Search in factors hash table */
-	w = g_hash_table_lookup (cfg->factors, email_module_ctx->symbol);
-	if (w == NULL) {
-		register_symbol (&metric->cache, email_module_ctx->symbol, 1, emails_symbol_callback, NULL);
-	}
-	else {
-		register_symbol (&metric->cache, email_module_ctx->symbol, *w, emails_symbol_callback, NULL);
-	}
+	register_symbol (&cfg->cache, email_module_ctx->symbol, 1, emails_symbol_callback, NULL);
 
 	return res;
 }
@@ -233,7 +211,7 @@ emails_symbol_callback (struct worker_task *task, void *unused)
 
 			while (cur) {
 				if (g_hash_table_lookup (email_module_ctx->blacklist, cur->data) != NULL) {
-					insert_result (task, email_module_ctx->metric, email_module_ctx->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, (char *)cur->data)));
+					insert_result (task, email_module_ctx->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, (char *)cur->data)));
 
 				}
 				cur = g_list_next (cur);

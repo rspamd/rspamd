@@ -19,7 +19,6 @@ enum xml_read_state {
 	XML_READ_MODULES,
 	XML_READ_CLASSIFIER,
 	XML_READ_STATFILE,
-	XML_READ_FACTORS,
 	XML_READ_METRIC,
 	XML_READ_WORKER,
 	XML_READ_VIEW,
@@ -92,7 +91,7 @@ gboolean worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdat
 gboolean worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 gboolean worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 
-gboolean handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
+gboolean handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 
 gboolean handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 

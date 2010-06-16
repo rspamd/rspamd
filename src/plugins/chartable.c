@@ -26,7 +26,6 @@
  * rspamd module that make marks based on symbol chains
  *
  * Allowed options:
- * - metric (string): metric to insert symbol (default: 'default')
  * - symbol (string): symbol to insert (default: 'R_BAD_CHARSET')
  * - threshold (double): value that would be used as threshold in expression characters_changed / total_characters
  *   (e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), default: 0.1
@@ -45,7 +44,6 @@
 
 struct chartable_ctx {
 	int                             (*filter) (struct worker_task * task);
-	char                           *metric;
 	char                           *symbol;
 	double                          threshold;
 
@@ -76,21 +74,7 @@ chartable_module_config (struct config_file *cfg)
 {
 	char                           *value;
 	int                             res = TRUE;
-	struct metric                  *metric;
-	double                         *w;
 
-	if ((value = get_module_opt (cfg, "chartable", "metric")) != NULL) {
-		chartable_module_ctx->metric = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
-	}
-	else {
-		chartable_module_ctx->metric = DEFAULT_METRIC;
-	}
-	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {
-		chartable_module_ctx->symbol = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
-	}
-	else {
-		chartable_module_ctx->symbol = DEFAULT_SYMBOL;
-	}
 	if ((value = get_module_opt (cfg, "chartable", "threshold")) != NULL) {
 		errno = 0;
 		chartable_module_ctx->threshold = strtod (value, NULL);
@@ -103,20 +87,7 @@ chartable_module_config (struct config_file *cfg)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 
-	metric = g_hash_table_lookup (cfg->metrics, chartable_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", chartable_module_ctx->metric);
-		return FALSE;
-	}
-
-	/* Search in factors hash table */
-	w = g_hash_table_lookup (cfg->factors, chartable_module_ctx->symbol);
-	if (w == NULL) {
-		register_symbol (&metric->cache, chartable_module_ctx->symbol, 1, chartable_symbol_callback, NULL);
-	}
-	else {
-		register_symbol (&metric->cache, chartable_module_ctx->symbol, *w, chartable_symbol_callback, NULL);
-	}
+	register_symbol (&cfg->cache, chartable_module_ctx->symbol, 1, chartable_symbol_callback, NULL);
 
 	return res;
 }
@@ -203,7 +174,7 @@ chartable_symbol_callback (struct worker_task *task, void *unused)
 		while (cur) {
 			part = cur->data;
 			if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
-				insert_result (task, chartable_module_ctx->metric, chartable_module_ctx->symbol, 1, NULL);
+				insert_result (task, chartable_module_ctx->symbol, 1, NULL);
 			}
 			cur = g_list_next (cur);
 		}

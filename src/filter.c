@@ -43,21 +43,14 @@
 #   include "lua/lua_common.h"
 #endif
 
-void
-insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList * opts)
+static void
+insert_metric_result (struct worker_task *task, struct metric *metric, const char *symbol, double flag, GList * opts)
 {
-	struct metric                  *metric;
 	struct metric_result           *metric_res;
 	struct symbol                  *s;
-	struct cache_item              *item;
-	GList                          *cur;
+	gdouble                        *weight, w;
 
-	metric = g_hash_table_lookup (task->worker->srv->cfg->metrics, metric_name);
-	if (metric == NULL) {
-		return;
-	}
-
-	metric_res = g_hash_table_lookup (task->results, metric_name);
+	metric_res = g_hash_table_lookup (task->results, metric->name);
 
 	if (metric_res == NULL) {
 		/* Create new metric chain */
@@ -66,28 +59,48 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 		metric_res->checked = FALSE;
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_destroy, metric_res->symbols);
 		metric_res->metric = metric;
-		g_hash_table_insert (task->results, (gpointer) metric_name, metric_res);
+		metric_res->grow_factor = 0;
+		g_hash_table_insert (task->results, (gpointer) metric->name, metric_res);
 	}
+	
+	weight = g_hash_table_lookup (metric->symbols, symbol);
+	if (weight == NULL) {
+		w = 1.0 * flag;
+	}
+	else {
+		w = (*weight) * flag;
+	}
+	/* Handle grow factor */
+	if (metric_res->grow_factor && w > 0) {
+		w *= metric_res->grow_factor;
+		metric_res->grow_factor *= metric->grow_factor;
+	}
+	else if (w > 0) {
+		metric_res->grow_factor = metric->grow_factor;
+	}
+
+	/* Add metric score */
+	metric_res->score += w;
 
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts) {
 			/* Append new options */
 			s->options = g_list_concat (s->options, opts);
 			/* 
-			 * Note that there is no need to add new destructor of GList as elements of appended
-			 * GList are used directly, so just free initial GList
-			 */
+			* Note that there is no need to add new destructor of GList as elements of appended
+			* GList are used directly, so just free initial GList
+			*/
 		}
 		else if (opts) {
 			s->options = opts;
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
 		}
 
-		s->score = flag;
+		s->score = w;
 	}
 	else {
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
-		s->score = flag;
+		s->score = w;
 		s->options = opts;
 
 		if (opts) {
@@ -96,100 +109,55 @@ insert_result (struct worker_task *task, const char *metric_name, const char *sy
 
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
-
-	/* Process cache item */
-	if (metric->cache) {
-		cur = metric->cache->static_items;
-		while (cur)
-		{
-			item = cur->data;
-
-			if (strcmp (item->s->symbol, symbol) == 0) {
-				item->s->frequency++;
-			}
-			cur = g_list_next (cur);
-		}
-		cur = metric->cache->negative_items;
-		while (cur)
-		{
-			item = cur->data;
-
-			if (strcmp (item->s->symbol, symbol) == 0) {
-				item->s->frequency++;
-			}
-			cur = g_list_next (cur);
-		}
-	}
+	debug_task ("got %.2f score for metric %s, factor: %f", s->score, metric->name, w);
+	
 }
 
-/*
- * Default consolidation function based on factors in config file
- */
-struct consolidation_callback_data {
-	struct worker_task             *task;
-	double                          score;
-	int                             count;
-};
-
-static void
-consolidation_callback (gpointer key, gpointer value, gpointer arg)
+void
+insert_result (struct worker_task *task, const char *symbol, double flag, GList * opts)
 {
-	double                         *factor, fs, grow = 1;
-	struct symbol                  *s = (struct symbol *)value;
-	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
-    struct worker_task             *task = data->task;
-	
-	if (data->count > 0) {
-		grow = 1. + (data->task->cfg->grow_factor - 1.) * data->count;
-	}
+	struct metric                  *metric;
+	struct cache_item              *item;
+	GList                          *cur, *metric_list;
 
-	if (check_factor_settings (data->task, key, &fs)) {
-		if (s->score > 0) {
-			data->score += fs * s->score * grow;
-			data->count ++;
-		}
-		else {
-			data->score += fs * s->score;
+	metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
+	if (metric_list) {
+		cur = metric_list;
+		
+		while (cur) {
+			metric = cur->data;
+			insert_metric_result (task, metric, symbol, flag, opts);
+			cur = g_list_next (cur);
 		}
 	}
 	else {
-		factor = g_hash_table_lookup (data->task->worker->srv->cfg->factors, key);
-		if (factor == NULL) {
-			debug_task ("got %.2f score for metric %s, factor: 1", s->score, (char *)key);
-			data->score += s->score;
-		}
-		else {
-			if (s->score > 0) {
-				data->score += *factor * s->score * grow;
-				data->count ++;
-			}
-			else {
-				data->score += *factor * s->score;
-			}
-			debug_task ("got %.2f score for metric %s, factor: %.2f", s->score, (char *)key, *factor);
-		}
-	}
-}
-
-double
-factor_consolidation_func (struct worker_task *task, const char *metric_name, const char *unused)
-{
-	struct metric_result           *metric_res;
-	double                          res = 0.;
-	struct consolidation_callback_data data = { 
-		.task = task, 
-		.score = 0,
-		.count = 0
-	};
-
-	metric_res = g_hash_table_lookup (task->results, metric_name);
-	if (metric_res == NULL) {
-		return res;
+		/* Insert symbol to default metric */
+		insert_metric_result (task, task->cfg->default_metric, symbol, flag, opts);
 	}
 
-	g_hash_table_foreach (metric_res->symbols, consolidation_callback, &data);
+	/* Process cache item */
+	if (task->cfg->cache) {
+		cur = task->cfg->cache->static_items;
+		while (cur)
+		{
+			item = cur->data;
 
-	return data.score;
+			if (strcmp (item->s->symbol, symbol) == 0) {
+				item->s->frequency++;
+			}
+			cur = g_list_next (cur);
+		}
+		cur = task->cfg->cache->negative_items;
+		while (cur)
+		{
+			item = cur->data;
+
+			if (strcmp (item->s->symbol, symbol) == 0) {
+				item->s->frequency++;
+			}
+			cur = g_list_next (cur);
+		}
+	}
 }
 
 /* 
@@ -203,7 +171,7 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 
 	switch (filt_type) {
 	case C_FILTER:
-		c_module = g_hash_table_lookup (task->worker->srv->cfg->c_modules, name);
+		c_module = g_hash_table_lookup (task->cfg->c_modules, name);
 		if (c_module) {
 			res = 1;
 			c_module->filter (task);
@@ -227,41 +195,6 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 	debug_task ("filter name: %s, result: %d", name, (int)res);
 }
 
-static void
-metric_process_callback_common (gpointer key, gpointer value, void *data, gboolean is_forced)
-{
-	struct worker_task             *task = (struct worker_task *)data;
-	struct metric_result           *metric_res = (struct metric_result *)value;
-
-	if (metric_res->checked && !is_forced) {
-		/* Already checked */
-		return;
-	}
-
-	/* Set flag */
-	metric_res->checked = TRUE;
-
-	if (metric_res->metric->func != NULL) {
-		metric_res->score = metric_res->metric->func (task, metric_res->metric->name, metric_res->metric->func_name);
-	}
-	else {
-		metric_res->score = factor_consolidation_func (task, metric_res->metric->name, NULL);
-	}
-	debug_task ("got result %.2f from consolidation function for metric %s", metric_res->score, metric_res->metric->name);
-}
-
-static void
-metric_process_callback_normal (gpointer key, gpointer value, void *data)
-{
-	metric_process_callback_common (key, value, data, FALSE);
-}
-
-static void
-metric_process_callback_forced (gpointer key, gpointer value, void *data)
-{
-	metric_process_callback_common (key, value, data, TRUE);
-}
-
 /* Return true if metric has score that is more than spam score for it */
 static                          gboolean
 check_metric_is_spam (struct worker_task *task, struct metric *metric)
@@ -271,7 +204,6 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
-		metric_process_callback_forced (metric->name, res, task);
 		if (!check_metric_settings (task, metric, &ms, &rs)) {
 			ms = metric->required_score;
 		}
@@ -284,29 +216,30 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 static int
 continue_process_filters (struct worker_task *task)
 {
-	GList                          *cur = task->save.entry;
+	GList                          *cur;
 	gpointer                        item = task->save.item;
+	struct metric                  *metric;
 
-	struct metric                  *metric = cur->data;
-
-	while (cur) {
-		metric = cur->data;
-		while (call_symbol_callback (task, metric->cache, &item)) {
+	while (call_symbol_callback (task, task->cfg->cache, &item)) {
+		cur = task->cfg->metrics_list;
+		while (cur) {
+			metric = cur->data;
 			/* call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER); */
 			if (task->save.saved) {
 				task->save.entry = cur;
 				task->save.item = item;
 				return 0;
 			}
-			else if (check_metric_is_spam (task, metric)) {
-				if (!task->pass_all_filters) {
-					break;
-				}
+			else if (!task->pass_all_filters && 
+						metric->action == METRIC_ACTION_REJECT && 
+						check_metric_is_spam (task, metric)) {
+				goto end;
 			}
+			cur = g_list_next (cur);
 		}
-		cur = g_list_next (cur);
 	}
 
+end:
 	/* Process all statfiles */
 	process_statfiles (task);
 	/* XXX: ugly direct call */
@@ -346,27 +279,25 @@ process_filters (struct worker_task *task)
 	}
 
 	/* Process metrics symbols */
-	cur = task->worker->srv->cfg->metrics_list;
-	while (cur) {
-		metric = cur->data;
-		while (call_symbol_callback (task, metric->cache, &item)) {
-			/* call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER); */
+	while (call_symbol_callback (task, task->cfg->cache, &item)) {
+		/* Check reject actions */
+		cur = task->cfg->metrics_list;
+		while (cur) {
+			metric = cur->data;
 			if (task->save.saved) {
 				task->save.entry = cur;
 				task->save.item = item;
 				return 0;
 			}
-			else if (check_metric_is_spam (task, metric)) {
-				if (!task->pass_all_filters) {
-					break;
-				}
+			else if (!task->pass_all_filters && 
+						metric->action == METRIC_ACTION_REJECT && 
+						check_metric_is_spam (task, metric)) {
+				return 1;
 			}
+			cur = g_list_next (cur);
 		}
-		cur = g_list_next (cur);
 	}
 
-	/* Process all metrics */
-	g_hash_table_foreach (task->results, metric_process_callback_forced, task);
 	return 1;
 }
 
@@ -473,7 +404,6 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 	}
 	else {
 		/* Process score of metric */
-		metric_process_callback_normal ((void *)metric_name, metric_res, task);
 		if ((params->threshold_min != 0 && metric_res->score > params->threshold_min) || (params->threshold_max != 0 && metric_res->score < params->threshold_max)) {
 			/* Now check for specific symbols */
 			if (params->symbols) {
@@ -534,8 +464,6 @@ void
 make_composites (struct worker_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
-	/* Process all metrics */
-	g_hash_table_foreach (task->results, metric_process_callback_forced, task);
 }
 
 

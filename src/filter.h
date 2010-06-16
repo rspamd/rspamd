@@ -40,11 +40,17 @@ struct metric {
 	char *name;										/**< name of metric							*/
 	char *func_name;								/**< name of consolidation function			*/
 	metric_cons_func func;							/**< c consolidation function				*/
+	double grow_factor;								/**< grow factor for metric					*/
 	double required_score;							/**< required score for this metric			*/
 	double reject_score;							/**< reject score for this metric			*/
-	struct classifier *classifier;					/**< classifier that is used for metric		*/
-	struct symbols_cache *cache;					/**< symbols cache for metric 				*/ 
-	char *cache_filename;							/**< filename of cache file					*/
+	GHashTable *symbols;							/**< weights of symbols in metric			*/
+	enum {
+		METRIC_ACTION_REJECT = 0,
+		METRIC_ACTION_SOFT_REJECT,
+		METRIC_ACTION_REWRITE_SUBJECT,
+		METRIC_ACTION_ADD_HEADER,
+		METRIC_ACTION_GREYLIST
+	} action;										/**< action to do by this metric			*/
 };
 
 /**
@@ -55,6 +61,7 @@ struct metric_result {
 	double score;									/**< total score							*/
 	GHashTable *symbols;							/**< symbols of metric						*/
 	gboolean checked;								/**< whether metric result is consolidated  */
+	double grow_factor;								/**< current grow factor					*/
 };
 
 /**
@@ -78,7 +85,7 @@ void process_statfiles (struct worker_task *task);
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void insert_result (struct worker_task *task, const char *metric_name, const char *symbol, double flag, GList *opts);
+void insert_result (struct worker_task *task, const char *symbol, double flag, GList *opts);
 
 /**
  * Process all results and form composite metrics from existent metrics as it is defined in config

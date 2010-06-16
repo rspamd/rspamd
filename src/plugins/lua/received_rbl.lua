@@ -3,11 +3,9 @@
 -- .module 'received_rbl' {
 --      rbl = "insecure-bl.rambler.ru";
 --      rbl = "xbl.spamhaus.org";
---      metric = "default";
 --      symbol = "RECEIVED_RBL";
 -- };
 
-local metric = 'default'
 local symbol = 'RECEIVED_RBL'
 local rbls = {}
 
@@ -18,15 +16,15 @@ function dns_cb(task, to_resolve, results, err)
 		-- Find incoming rbl in rbls list
 		for _,rbl in ipairs(rbls) do
 			if rbl == in_rbl then
-				task:insert_result(metric, symbol, 1, rbl .. ': ' .. ip)
+				task:insert_result(symbol, 1, rbl .. ': ' .. ip)
 			else 
 				local s, _ = string.find(rbl, in_rbl)
 				if s then
 					s, _ = string.find(rbl, ':')
 					if s then
-						task:insert_result(metric, string.sub(rbl, s + 1, -1), 1, ip)
+						task:insert_result(string.sub(rbl, s + 1, -1), 1, ip)
 					else
-						task:insert_result(metric, symbol, 1, rbl .. ': ' .. ip)
+						task:insert_result(symbol, 1, rbl .. ': ' .. ip)
 					end
 				end
 			end
@@ -63,15 +61,11 @@ if opts then
     if opts['symbol'] then
         symbol = opts['symbol']
         
-        if opts['metric'] then
-            metric = opts['metric']
-        end
         if opts['rbl'] then
             rbls = opts['rbl']
         end
         -- Register symbol's callback
-        local m = rspamd_config:get_metric(metric)
-        m:register_symbol(symbol, 1.0, 'received_cb')
+        rspamd_config:register_symbol(symbol, 1.0, 'received_cb')
     end
     -- If no symbol defined, do not register this module
 end

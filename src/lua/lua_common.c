@@ -191,7 +191,6 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_rspamd (L);
 	(void)luaopen_logger (L);
 	(void)luaopen_config (L);
-	(void)luaopen_metric (L);
 	(void)luaopen_radix (L);
 	(void)luaopen_hash_table (L);
 	(void)luaopen_task (L);

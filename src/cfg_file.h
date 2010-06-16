@@ -10,6 +10,7 @@
 #include "mem_pool.h"
 #include "upstream.h"
 #include "memcached.h"
+#include "symbols_cache.h"
 
 #define DEFAULT_BIND_PORT 768
 #define DEFAULT_CONTROL_PORT 7608
@@ -278,33 +279,29 @@ struct config_file {
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
 	GList* metrics_list;	 						/**< linked list of metrics								*/
-	GHashTable* factors;							/**< hash of factors indexed by symbol name				*/
+	GHashTable* metrics_symbols;					/**< hash table of metrics indexed by symbol			*/
 	GHashTable* c_modules;							/**< hash of c modules indexed by module name			*/
 	GHashTable* composite_symbols;					/**< hash of composite symbols indexed by its name		*/
 	GList *classifiers;                             /**< list of all classifiers defined                    */
 	GList *statfiles;                               /**< list of all statfiles in config file order         */
 	GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
 	GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
-	int clock_res;									/**< resolution of clock used							*/
-	double grow_factor;								/**< grow factor for consolidation callback				*/
 	GList *views;									/**< views												*/
 	GHashTable* domain_settings;                    /**< settings per-domains                               */
 	GHashTable* user_settings;                      /**< settings per-user                                  */
 	gchar* domain_settings_str;						/**< string representation of settings					*/
 	gchar* user_settings_str;
+	int clock_res;									/**< resolution of clock used							*/
+
+	struct symbols_cache *cache;					/**< symbols cache object								*/ 
+	char *cache_filename;							/**< filename of cache file								*/
+	struct metric *default_metric;					/**< default metric										*/
 	
 	gchar* checksum;								/**< real checksum of config file						*/ 
 	gchar* dump_checksum;							/**< dump checksum of config file						*/ 
 	gpointer lua_state;								/**< pointer to lua state								*/
 };
 
-/**
- * Add memcached server to config
- * @param cf config file to use
- * @param str line that describes server's credits
- * @return 1 if line was successfully parsed and 0 in case of error
- */
-int add_memcached_server (struct config_file *cf, gchar *str);
 
 /**
  * Parse host:port line
@@ -397,14 +394,9 @@ void unescape_quotes (gchar *line);
 GList* parse_comma_list (memory_pool_t *pool, gchar *line);
 struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
 struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
+struct metric* check_metric_conf (struct config_file *cfg, struct metric *c);
 gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line);
 gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
-
-int yylex (void);
-int yyparse (void);
-void yyrestart (FILE *);
-void parse_err (const gchar *fmt, ...);
-void parse_warn (const gchar *fmt, ...);
 
 #endif /* ifdef CFG_FILE_H */
 /* 

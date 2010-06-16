@@ -54,7 +54,7 @@ rspamd_hash_t                  *counters;
 
 static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
 static gboolean                 load_rspamd_config (struct config_file *cfg, gboolean init_modules);
-static void                     init_metrics_cache (struct config_file *cfg);
+static void                     init_cfg_cache (struct config_file *cfg);
 
 sig_atomic_t                    do_restart;
 sig_atomic_t                    do_terminate;
@@ -65,18 +65,12 @@ sig_atomic_t                    got_alarm;
 GQueue                         *signals_info;
 #endif
 
-/* Yacc vars */
-extern int                      yynerrs;
-extern FILE                    *yyin;
-struct config_file             *yacc_cfg;
-
 static gboolean                 config_test;
 static gboolean                 no_fork;
 static gchar                   *cfg_name;
 static gchar                   *rspamd_user;
 static gchar                   *rspamd_group;
 static gchar                   *rspamd_pidfile;
-static gchar                   *convert_config;
 static gboolean                 dump_vars;
 static gboolean                 dump_cache;
 
@@ -97,7 +91,6 @@ static GOptionEntry entries[] =
   { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
   { "dump-vars", 'V', 0, G_OPTION_ARG_NONE, &dump_vars, "Print all rspamd variables and exit", NULL },
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
-  { "convert-config", 'X', 0, G_OPTION_ARG_STRING, &convert_config, "Convert old style of config to xml one", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -290,7 +283,7 @@ reread_config (struct rspamd_main *rspamd)
 				l = g_list_next (l);
 			}
 			init_lua_filters (rspamd->cfg);
-			init_metrics_cache (rspamd->cfg);
+			init_cfg_cache (rspamd->cfg);
 			msg_info ("config rereaded successfully");
 		}
 	}
@@ -597,6 +590,8 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	return TRUE;
 }
 
+#if 0
+/* XXX: remove this as it is unused now */
 static gboolean
 convert_old_config (struct rspamd_main *rspamd) 
 {
@@ -638,6 +633,7 @@ convert_old_config (struct rspamd_main *rspamd)
 	
 	return FALSE;
 }
+#endif
 
 static gboolean
 load_rspamd_config (struct config_file *cfg, gboolean init_modules)
@@ -684,61 +680,47 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 }
 
 static void
-init_metrics_cache (struct config_file *cfg) 
+init_cfg_cache (struct config_file *cfg) 
 {
-	struct metric                  *metric;
-	GList                          *l;
 
-	/* Init symbols cache for each metric */
-	l = g_list_first (cfg->metrics_list);
-	while (l) {
-		metric = l->data;
-		if (metric->cache && !init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
-			exit (EXIT_FAILURE);
-		}
-		l = g_list_next (l);
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg->cache_filename)) {
+		exit (EXIT_FAILURE);
 	}
 }
 
 static void
-print_metrics_cache (struct config_file *cfg) 
+print_symbols_cache (struct config_file *cfg) 
 {
-	struct metric                  *metric;
-	GList                          *l, *cur;
+	GList                          *cur;
 	struct cache_item              *item;
 	int                             i;
 
-	l = g_list_first (cfg->metrics_list);
-	while (l) {
-		metric = l->data;
-		if (!init_symbols_cache (cfg->cfg_pool, metric->cache, metric->cache_filename)) {
-			exit (EXIT_FAILURE);
-		}
-		if (metric->cache) {
-			printf ("Cache for metric: %s\n", metric->name);
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg->cache_filename)) {
+		exit (EXIT_FAILURE);
+	}
+	if (cfg->cache) {
+		printf ("Symbols cache\n");
+		printf ("-----------------------------------------------------------------\n");
+		printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
+		i = 0;
+		cur = cfg->cache->negative_items;
+		while (cur) {
+			item = cur->data;
 			printf ("-----------------------------------------------------------------\n");
-			printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
-			i = 0;
-			cur = metric->cache->negative_items;
-			while (cur) {
-				item = cur->data;
-				printf ("-----------------------------------------------------------------\n");
-				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
-				cur = g_list_next (cur);
-				i ++;
-			}
-			cur = metric->cache->static_items;
-			while (cur) {
-				item = cur->data;
-				printf ("-----------------------------------------------------------------\n");
-				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
-				cur = g_list_next (cur);
-				i ++;
-			}
+			printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+			cur = g_list_next (cur);
+			i ++;
+		}
+		cur = cfg->cache->static_items;
+		while (cur) {
+			item = cur->data;
+			printf ("-----------------------------------------------------------------\n");
+			printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+			cur = g_list_next (cur);
+			i ++;
+		}
 
-			printf ("-----------------------------------------------------------------\n");
-		}
-		l = g_list_next (l);
+		printf ("-----------------------------------------------------------------\n");
 	}
 }
 
@@ -816,12 +798,6 @@ main (int argc, char **argv, char **env)
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 	
-	if (convert_config != NULL) {
-		if (! convert_old_config (rspamd)) {
-			exit (EXIT_FAILURE);
-		}
-	}
-
 	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
@@ -847,7 +823,7 @@ main (int argc, char **argv, char **env)
 			dump_cfg_vars (rspamd->cfg);
 		}
 		if (dump_cache) {
-			print_metrics_cache (rspamd->cfg);
+			print_symbols_cache (rspamd->cfg);
 			exit (EXIT_SUCCESS);
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
@@ -905,8 +881,7 @@ main (int argc, char **argv, char **env)
 
 	init_lua_filters (rspamd->cfg);
 
-	/* Init symbols cache for each metric */
-	init_metrics_cache (rspamd->cfg);
+	init_cfg_cache (rspamd->cfg);
 
 	flush_log_buf ();
 

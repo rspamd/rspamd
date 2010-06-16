@@ -58,7 +58,6 @@ enum xml_config_section {
 	XML_SECTION_METRIC,
 	XML_SECTION_CLASSIFIER,
 	XML_SECTION_STATFILE,
-	XML_SECTION_FACTORS,
 	XML_SECTION_MODULE,
 	XML_SECTION_MODULES,
 	XML_SECTION_VIEW
@@ -144,6 +143,12 @@ static struct xml_parser_rule grammar[] = {
 				"domain_settings",
 				handle_domain_settings,
 				0,
+				NULL
+			},
+			{
+				"cache_file",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, cache_filename),
 				NULL
 			},
 			NULL_ATTR
@@ -233,6 +238,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"grow_factor",
+				xml_handle_double,
+				G_STRUCT_OFFSET (struct metric, grow_factor),
+				NULL
+			},
+			{
 				"required_score",
 				xml_handle_double,
 				G_STRUCT_OFFSET (struct metric, required_score),
@@ -245,9 +256,9 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
-				"cache_file",
-				xml_handle_string,
-				G_STRUCT_OFFSET (struct metric, cache_filename),
+				"symbol",
+				handle_metric_symbol,
+				0,
 				NULL
 			},
 			NULL_ATTR
@@ -317,23 +328,6 @@ static struct xml_parser_rule grammar[] = {
 			{
 				"binlog_master",
 				handle_statfile_binlog_master,
-				0,
-				NULL
-			},
-			NULL_ATTR
-		},
-		NULL_ATTR
-	},
-	{ XML_SECTION_FACTORS, {
-			{
-				"grow_factor",
-				xml_handle_double,
-				G_STRUCT_OFFSET (struct config_file, grow_factor),
-				NULL
-			},
-			{
-				"factor",
-				handle_factor,
 				0,
 				NULL
 			},
@@ -662,28 +656,39 @@ worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	return TRUE;
 }
 
-/* Factors section */
 gboolean 
-handle_factor (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	char                           *name, *err;
+	char                           *strval, *err;
 	double                         *value;
-
-	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
-		msg_err ("factor tag must have \"name\" attribute");
-		return FALSE;
-	}
+	GList                          *metric_list;
+	struct metric                  *metric = ctx->section_pointer;
 
 	value = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
-
-	errno = 0;
-	*value = strtod (data, &err);
-	if (errno != 0 || (err != NULL && *err != 0)) {
-		msg_err ("invalid number: %s, %s", data, strerror (errno));
-		return FALSE;
+	if ((strval = g_hash_table_lookup (attrs, "weight")) == NULL) {
+		msg_info ("symbol tag should have \"weight\" attribute, assume weight 1.0");
+		*value = 1.0;
+	}
+	else {
+		errno = 0;
+		*value = strtod (strval, &err);
+		if (errno != 0 || (err != NULL && *err != 0)) {
+			msg_err ("invalid number: %s, %s", strval, strerror (errno));
+			return FALSE;
+		}
 	}
 	
-	g_hash_table_insert (cfg->factors, name, value);
+	g_hash_table_insert (metric->symbols, data, value);
+
+	if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, data)) == NULL) {
+		metric_list = g_list_prepend (NULL, metric);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, metric_list);
+		g_hash_table_insert (cfg->metrics_symbols, data, metric_list);
+	}
+	else {
+		/* Slow but keep start element of list in safe */
+		metric_list = g_list_append (metric_list, metric);
+	}
 
 	return TRUE;
 }
@@ -1198,9 +1203,6 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 					ud->state = XML_ERROR;
 				}
 			}
-			else if (g_ascii_strcasecmp (element_name, "factors") == 0) {
-				ud->state = XML_READ_FACTORS;	
-			}
 			else if (g_ascii_strcasecmp (element_name, "modules") == 0) {
 				ud->state = XML_READ_MODULES;	
 			}
@@ -1208,16 +1210,9 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->state = XML_READ_LOGGING;	
 			}
 			else if (g_ascii_strcasecmp (element_name, "metric") == 0) {
-				if (extract_attr ("name", attribute_names, attribute_values, &res)) {
-					g_strlcpy (ud->section_name, res, sizeof (ud->section_name));
-					ud->state = XML_READ_METRIC;
-					/* Create object */
-					ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct metric));
-				}
-				else {
-					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'name' is required for tag 'metric'");
-					ud->state = XML_ERROR;
-				}
+				ud->state = XML_READ_METRIC;
+				/* Create object */
+				ud->section_pointer = check_metric_conf (ud->cfg, NULL);
 			}
 			else if (g_ascii_strcasecmp (element_name, "classifier") == 0) {
 				if (extract_attr ("type", attribute_names, attribute_values, &res)) {
@@ -1271,7 +1266,6 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 		case XML_READ_MODULE:
 		case XML_READ_METRIC:
 		case XML_READ_MODULES:
-		case XML_READ_FACTORS:
 		case XML_READ_STATFILE:
 		case XML_READ_WORKER:
 		case XML_READ_LOGGING:
@@ -1352,9 +1346,6 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 				ud->state = XML_READ_CLASSIFIER;
 			}
 			break;
-		case XML_READ_FACTORS:
-			CHECK_TAG ("factors", FALSE);
-			break;
 		case XML_READ_MODULES:
 			CHECK_TAG ("modules", FALSE);
 			break;
@@ -1366,9 +1357,6 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "metric attribute \"name\" is required but missing");
 					ud->state = XML_ERROR;
 					return;
-				}
-				if (m->classifier == NULL) {
-					m->classifier = get_classifier ("winnow");
 				}
 				g_hash_table_insert (ud->cfg->metrics, m->name, m);
 				ud->cfg->metrics_list = g_list_prepend (ud->cfg->metrics_list, m);
@@ -1451,12 +1439,6 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 				ud->state = XML_ERROR;
 			}
 			break;
-		case XML_READ_FACTORS:
-			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_FACTORS)) {
-				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
-				ud->state = XML_ERROR;
-			}
-			break;
 		case XML_READ_METRIC:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_METRIC)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
@@ -1510,8 +1492,6 @@ xml_state_to_string (struct rspamd_xml_userdata *ud)
 			return "read classifier section";
 		case XML_READ_STATFILE:
 			return "read statfile section";
-		case XML_READ_FACTORS:
-			return "read factors section";
 		case XML_READ_METRIC:
 			return "read metric section";
 		case XML_READ_WORKER:
@@ -1616,36 +1596,6 @@ xml_dump_variables (struct config_file *cfg, FILE *f)
 
 	/* Print footer comment */
 	fprintf (f, "<!-- End of variables section -->" EOL EOL);
-
-	return TRUE;
-}
-
-/* Dump factors section */
-static void
-xml_factors_callback (gpointer key, gpointer value, gpointer user_data)
-{
-	FILE *f = user_data;
-	char *escaped_key;
-
-	escaped_key = g_markup_escape_text (key, -1); 
-	fprintf (f,  " <factor name=\"%s\">%.2f</factor>" EOL, escaped_key, *(double *)value);
-	g_free (escaped_key);
-}
-
-static gboolean
-xml_dump_factors (struct config_file *cfg, FILE *f)
-{
-	/* Print header comment */
-	fprintf (f, "<!-- Factors section -->" EOL "<factors>" EOL );
-
-	/* Iterate through variables */
-	g_hash_table_foreach (cfg->factors, xml_factors_callback, (gpointer)f);
-
-	/* Grow factor */
-	fprintf (f, " <grow_factor>%.2f</grow_factor>" EOL, cfg->grow_factor);
-
-	/* Print footer comment */
-	fprintf (f, "</factors>" EOL "<!-- End of factors section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -2007,8 +1957,6 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	res = xml_dump_logging (cfg, f);
 	CHECK_RES;
 	res = xml_dump_variables (cfg, f);
-	CHECK_RES;
-	res = xml_dump_factors (cfg, f);
 	CHECK_RES;
 	res = xml_dump_composites (cfg, f);
 	CHECK_RES;

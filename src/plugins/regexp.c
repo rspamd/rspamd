@@ -59,7 +59,6 @@ struct autolearn_data {
 struct regexp_ctx {
 	int                             (*filter) (struct worker_task * task);
 	GHashTable                     *autolearn_symbols;
-	char                           *metric;
 	char                           *statfile_prefix;
 
 	memory_pool_t                  *regexp_pool;
@@ -87,7 +86,7 @@ regexp_dynamic_insert_result (struct worker_task *task, void *user_data)
 {
 	char                           *symbol = user_data;
 		
-	insert_result (task, regexp_module_ctx->metric, symbol, 1, NULL);
+	insert_result (task, symbol, 1, NULL);
 }
 
 static gboolean
@@ -257,7 +256,6 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	GList                          *cur_networks = NULL;
 	struct dynamic_map_item        *cur_nitem;
 	memory_pool_t                  *new_pool;
-	struct metric                  *metric;
 
 	if (data->prev_data) {
 		jb = data->prev_data;
@@ -296,13 +294,8 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	}
 	
 	new_pool = memory_pool_new (memory_pool_get_size ());
-	metric = g_hash_table_lookup (jb->cfg->metrics, regexp_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", regexp_module_ctx->metric);
-		return;
-	}
 		
-	remove_dynamic_rules (metric->cache);
+	remove_dynamic_rules (jb->cfg->cache);
 	if (regexp_module_ctx->dynamic_pool != NULL) {
 		memory_pool_delete (regexp_module_ctx->dynamic_pool);
 	}
@@ -365,7 +358,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			cur_item = memory_pool_alloc0 (new_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = cur_symbol;
 			if (read_regexp_expression (new_pool, cur_item, cur_symbol, cur_rule, jb->cfg->raw_mode)) {
-				register_dynamic_symbol (new_pool, &metric->cache, cur_symbol, score, process_regexp_item, cur_item, cur_networks);
+				register_dynamic_symbol (new_pool, &jb->cfg->cache, cur_symbol, score, process_regexp_item, cur_item, cur_networks);
 			}
 			else {
 				msg_warn ("cannot parse dynamic rule");
@@ -373,7 +366,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		}
 		else {
 			/* Just rule that is allways true (for whitelisting for example) */
-			register_dynamic_symbol (new_pool, &metric->cache, cur_symbol, score, regexp_dynamic_insert_result, cur_symbol, cur_networks);
+			register_dynamic_symbol (new_pool, &jb->cfg->cache, cur_symbol, score, regexp_dynamic_insert_result, cur_symbol, cur_networks);
 		}
 		if (cur_networks) {
 			g_list_free (cur_networks);
@@ -439,18 +432,10 @@ regexp_module_config (struct config_file *cfg)
 	GList                          *cur_opt = NULL;
 	struct module_opt              *cur;
 	struct regexp_module_item      *cur_item;
-	struct metric                  *metric;
 	char                           *value;
 	int                             res = TRUE;
-	double                         *w;
 	struct regexp_json_buf         *jb, **pjb;
 
-	if ((value = get_module_opt (cfg, "regexp", "metric")) != NULL) {
-		regexp_module_ctx->metric = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
-	}
-	else {
-		regexp_module_ctx->metric = DEFAULT_METRIC;
-	}
 	if ((value = get_module_opt (cfg, "regexp", "statfile_prefix")) != NULL) {
 		regexp_module_ctx->statfile_prefix = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
 	}
@@ -468,11 +453,6 @@ regexp_module_config (struct config_file *cfg)
 		}
 	}
 
-	metric = g_hash_table_lookup (cfg->metrics, regexp_module_ctx->metric);
-	if (metric == NULL) {
-		msg_err ("cannot find metric definition %s", regexp_module_ctx->metric);
-		return FALSE;
-	}
 
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
 	while (cur_opt) {
@@ -515,14 +495,7 @@ regexp_module_config (struct config_file *cfg)
 			break;
 		}
 		
-		/* Search in factors hash table */
-		w = g_hash_table_lookup (cfg->factors, cur->param);
-		if (w == NULL) {
-			register_symbol (&metric->cache, cur->param, 1, process_regexp_item, cur_item);
-		}
-		else {
-			register_symbol (&metric->cache, cur->param, *w, process_regexp_item, cur_item);
-		}
+		register_symbol (&cfg->cache, cur->param, 1, process_regexp_item, cur_item);
 
 		cur_opt = g_list_next (cur_opt);
 	}
@@ -947,13 +920,13 @@ process_regexp_item (struct worker_task *task, void *user_data)
 	if (item->lua_function) {
 		/* Just call function */
 		if (lua_call_expression_func (item->lua_function, task, NULL, &res) && res) {
-			insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+			insert_result (task, item->symbol, 1, NULL);
 		}
 	}
 	else {
 		/* Process expression */
 		if (process_regexp_expression (item->expr, item->symbol, task, NULL)) {
-			insert_result (task, regexp_module_ctx->metric, item->symbol, 1, NULL);
+			insert_result (task, item->symbol, 1, NULL);
 		}
 	}
 }

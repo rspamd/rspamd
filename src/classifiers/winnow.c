@@ -253,7 +253,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		snprintf (sumbuf, 32, "%.2Lg", max);
 		cur = g_list_prepend (NULL, sumbuf);
-		insert_result (task, ctx->cfg->metric, sel->symbol, max, cur);
+		insert_result (task, sel->symbol, max, cur);
 	}
 }
 

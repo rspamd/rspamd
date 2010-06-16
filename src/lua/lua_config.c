@@ -31,33 +31,25 @@
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
-LUA_FUNCTION_DEF (config, get_metric);
 LUA_FUNCTION_DEF (config, get_all_opt);
 LUA_FUNCTION_DEF (config, register_function);
 LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
 LUA_FUNCTION_DEF (config, get_classifier);
+LUA_FUNCTION_DEF (config, register_symbol);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
-	LUA_INTERFACE_DEF (config, get_metric),
 	LUA_INTERFACE_DEF (config, get_all_opt),
 	LUA_INTERFACE_DEF (config, register_function),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
+	LUA_INTERFACE_DEF (config, register_symbol),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
-/* Metric methods */
-LUA_FUNCTION_DEF (metric, register_symbol);
-
-static const struct luaL_reg    metriclib_m[] = {
-	LUA_INTERFACE_DEF (metric, register_symbol),
-	{"__tostring", lua_class_tostring},
-	{NULL, NULL}
-};
 
 /* Radix tree */
 LUA_FUNCTION_DEF (radix, get_key);
@@ -83,14 +75,6 @@ lua_check_config (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
 	return *((struct config_file **)ud);
-}
-
-static struct metric           *
-lua_check_metric (lua_State * L)
-{
-	void                           *ud = luaL_checkudata (L, 1, "rspamd{metric}");
-	luaL_argcheck (L, ud != NULL, 1, "'metric' expected");
-	return *((struct metric **)ud);
 }
 
 static radix_tree_t           *
@@ -215,29 +199,6 @@ lua_config_get_all_opt (lua_State * L)
 	return 1;
 }
 
-
-static int
-lua_config_get_metric (lua_State * L)
-{
-	struct config_file             *cfg = lua_check_config (L);
-	struct metric                  *metric, **pmetric;
-	const char                     *name;
-
-	if (cfg) {
-		name = luaL_checkstring (L, 2);
-		metric = g_hash_table_lookup (cfg->metrics, name);
-		if (metric) {
-			pmetric = lua_newuserdata (L, sizeof (struct metric *));
-			lua_setclass (L, "rspamd{metric}", -1);
-			*pmetric = metric;
-			return 1;
-		}
-	}
-
-	lua_pushnil (L);
-	return 1;
-
-}
 
 static int
 lua_config_get_classifier (lua_State * L)
@@ -413,14 +374,14 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 }
 
 static int
-lua_metric_register_symbol (lua_State * L)
+lua_config_register_symbol (lua_State * L)
 {
-	struct metric                  *metric = lua_check_metric (L);
+	struct config_file             *cfg = lua_check_config (L);
 	const char                     *name, *callback;
 	double                          weight;
 	struct lua_callback_data       *cd;
 
-	if (metric) {
+	if (cfg) {
 		name = g_strdup (luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		callback = luaL_checkstring (L, 4);
@@ -428,7 +389,7 @@ lua_metric_register_symbol (lua_State * L)
 			cd = g_malloc (sizeof (struct lua_callback_data));
 			cd->name = g_strdup (callback);
 			cd->L = L;
-			register_symbol (&metric->cache, name, weight, lua_metric_symbol_callback, cd);
+			register_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
 	}
 	return 1;
@@ -478,15 +439,6 @@ luaopen_config (lua_State * L)
 {
 	lua_newclass (L, "rspamd{config}", configlib_m);
 	luaL_openlib (L, "rspamd_config", null_reg, 0);
-
-	return 1;
-}
-
-int
-luaopen_metric (lua_State * L)
-{
-	lua_newclass (L, "rspamd{metric}", metriclib_m);
-	luaL_openlib (L, "rspamd_metric", null_reg, 0);
 
 	return 1;
 }
