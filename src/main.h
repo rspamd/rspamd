@@ -48,7 +48,8 @@ enum process_type {
 	TYPE_CONTROLLER,
 	TYPE_LMTP,
 	TYPE_SMTP,
-	TYPE_FUZZY
+	TYPE_FUZZY,
+	TYPE_GREYLIST
 };
 
 
@@ -246,6 +247,7 @@ struct c_module {
 
 void start_worker (struct rspamd_worker *worker);
 void start_controller (struct rspamd_worker *worker);
+void start_greylist_storage (struct rspamd_worker *worker);
 
 /**
  * Register custom controller function

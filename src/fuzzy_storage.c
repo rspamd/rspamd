@@ -237,7 +237,7 @@ sigterm_handler (int fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	static struct timeval           tv = {
 		.tv_sec = 0,
-		.tv_usec = 0,
+		.tv_usec = 0
 	};
 
 	mods = MOD_LIMIT + 1;

@@ -120,13 +120,12 @@ parse_command (struct worker_task *task, f_str_t * line)
 	struct custom_command          *cmd;
 	GList                          *cur;
 
+	task->proto_ver = RSPAMC_PROTO_1_1;
 	token = separate_command (line, ' ');
 	if (line == NULL || token == NULL) {
 		debug_task ("bad command: %s", token);
 		return -1;
 	}
-
-	task->proto_ver = RSPAMC_PROTO_1_1;
 
 	switch (token[0]) {
 	case 'c':

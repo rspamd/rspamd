@@ -361,6 +361,12 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 				msg_info ("starting fuzzy storage process %P", getpid ());
 				start_fuzzy_storage (cur);
 				break;
+			case TYPE_GREYLIST:
+				setproctitle ("greylist storage");
+				pidfile_close (rspamd->pfh);
+				msg_info ("starting greylist storage process %P", getpid ());
+				start_greylist_storage (cur);
+				break;
 			case TYPE_WORKER:
 			default:
 				setproctitle ("worker process");
@@ -529,7 +535,7 @@ spawn_workers (struct rspamd_main *rspamd)
 			cf->listen_sock = listen_sock;
 		}
 		
-		if (cf->type == TYPE_FUZZY) {
+		if (cf->type == TYPE_FUZZY || cf->type == TYPE_GREYLIST) {
 			if (cf->count > 1) {
 				msg_err ("cannot spawn more than 1 fuzzy storage worker, so spawn one");
 			}
@@ -555,6 +561,8 @@ get_process_type (enum process_type type)
 		return "worker";
 	case TYPE_FUZZY:
 		return "fuzzy";
+	case TYPE_GREYLIST:
+		return "greylist";
 	case TYPE_CONTROLLER:
 		return "controller";
 	case TYPE_LMTP:

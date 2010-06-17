@@ -405,6 +405,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/fstring.c
 				src/fuzzy.c
 				src/fuzzy_storage.c
+				src/greylist_storage.c
 				src/hash.c
 				src/html.c
 				src/lmtp.c

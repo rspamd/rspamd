@@ -505,6 +505,9 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 			case TYPE_FUZZY:
 				cptype = "fuzzy";
 				break;
+			case TYPE_GREYLIST:
+				cptype = "greylist";
+				break;
 		}
 		if (function == NULL) {
 			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P(%s): %s rspamd ", rspamd_log->pid, cptype, timebuf);

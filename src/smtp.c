@@ -954,7 +954,7 @@ static gboolean
 config_smtp_worker (struct rspamd_worker *worker)
 {
 	struct smtp_worker_ctx         *ctx;
-	char                           *value, *err_str;
+	char                           *value;
 	uint32_t                        timeout;
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
@@ -980,14 +980,9 @@ config_smtp_worker (struct rspamd_worker *worker)
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_timeout")) != NULL) {
 		errno = 0;
-		timeout = strtoul (value, &err_str, 10);
-		if (errno != 0 || (err_str && *err_str != '\0')) {
-			msg_warn ("cannot parse timeout, invalid number: %s: %s", value, strerror (errno));
-		}
-		else {
-			ctx->smtp_timeout.tv_sec = timeout / 1000;
-			ctx->smtp_timeout.tv_usec = timeout - ctx->smtp_timeout.tv_sec * 1000;
-		}
+		timeout = parse_seconds (value);
+		ctx->smtp_timeout.tv_sec = timeout / 1000;
+		ctx->smtp_timeout.tv_usec = timeout - ctx->smtp_timeout.tv_sec * 1000;
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_delay")) != NULL) {
 		ctx->smtp_delay = parse_seconds (value);
