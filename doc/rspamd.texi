@@ -365,7 +365,7 @@ sections:
 @item Classifiers section - section where you define your classify logic
 @item Modules section - a set of sections that describes module's rules (in fact
 these rules should be in lua code)
-@item Factors section - a section where you can set numeric values for symbols
+@item Metrics section - a section where you can set weights of symbols in metrics and metrics settings
 @item Logging section - a section that describes rspamd logging
 @item Views section - a section that defines rspamd views
 @end itemize
@@ -386,11 +386,6 @@ So common structure of rspamd.xml can be described this way:
   ...
  </classifier>
  ...
- <!-- Factors -->
- <factors>
-  <factor name="MIME_HTML_ONLY>1.1</factor>
-  ...
- </factors>
  <!-- Logging section -->
  <logging>
   <type>console</type>
@@ -552,13 +547,13 @@ testing.
 more information about ip lists look at config atoms section.
 @end multitable
 
-@section Factors configuration.
+@section Metrics configuration.
 
-Setting of rspamd factors is the main way to change rules' weights. Factors set
+Setting of rspamd metrics is the main way to change rules' weights. You can set
 up weights for all rules: for those that have static weights (for example simple
 regexp rules) and for those that have dynamic weights (for example statistic
-rules). In all cases the base weight of rule is multiplied by factor value. For
-static rules base weight is usually 1.0. So we have:
+rules). In all cases the base weight of rule is multiplied by metric's weight value. 
+For static rules base weight is usually 1.0. So we have:
 @itemize @bullet
 @item @math{w_{symbol} = w_{static} * factor} - for static rules
 @item @math{w_{symbol} = w_{dynamic} * factor} - for dynamic rules
@@ -571,17 +566,19 @@ Grow multiplier is used to increment weight of rules when message got many
 symbols (likely spammy). Note that only rules with positive weights would
 increase grow factor, those with negative weights would just be added. Also note
 that grow factor can be less than 1 but it is uncommon use (in this case we
-would have weight lowering when we have many symbols for this message). Factors
-can be set up with config section @emph{factors}:
+would have weight lowering when we have many symbols for this message). Metrics
+can be set up with config section(s) @emph{metric}:
 @example
-<factors>
- <factor name="MIME_HTML_ONLY">0.1</factor>
+<metric>
+ <name>test_metric</name>
+ <action>reject</action>
+ <symbol weight="0.1">MIME_HTML_ONLY</symbol>
  <grow_factor>1.1</grow_factor>
-</factors>
+</metric>
 @end example
 
-Note that you basically need to add factor when you add additional rules. The
-decision of weight of newly added rule basically depends on its importance. For
+Note that you basically need to add symbols to metric when you add additional rules.
+The decision of weight of newly added rule basically depends on its importance. For
 example you are absolutely sure that some rule would add a symbol on only spam
 messages, so you can increase weight of such rule so it would filter such spam.
 But if you increase weight of rules you should be more or less sure that it
@@ -592,7 +589,7 @@ rspamd.xml.sample. In most cases it is reasonable to change them for your mail
 system, for example increase weights of some rules or decrease for others. Also
 note that default grow factor is 1.0 that means that weights of rules do not
 depend on count of added symbols. For some situations it useful to set grow
-factor to value more than 1.0. Also by modifying factors it is possible to
+factor to value more than 1.0. Also by modifying weights it is possible to
 manage static multiplier for dynamic rules.
 
 @section Workers configuration.
@@ -769,16 +766,14 @@ Internal normalization of statfile weight works in this way:
 @item @math{R_{score} = max} when @math{W_{statfile} > max}
 @end itemize
 
-The final result weight would be: @math{weight = R_{score} * W_{factor}}.
+The final result weight would be: @math{weight = R_{score} * W_{weight}}.
 Here is sample classifier configuration with two statfiles that can be used for
 spam/ham classifying:
 
 @example
-<factors>
-   <factor name="WINNOW_HAM">-1.00</factor>
-   <factor name="WINNOW_SPAM">1.00</factor>
+   <symbol weight="-1.00">WINNOW_HAM</symbol>
+   <symbol weight="1.00">WINNOW_SPAM</symbol>
 ...
-</factors>
 
 <!-- Classifiers section -->
 <classifier type="winnow">
@@ -804,7 +799,7 @@ spam/ham classifying:
 In this sample we define classifier that contains two statfiles:
 @emph{WINNOW_SPAM} and @emph{WINNOW_HAM}. Each statfile has 100 megabytes size
 (so they would occupy 200Mb while classifying). Also each statfile has maximum
-weight of 3 so with such factors (-1 for WINNOW_HAM and 1 for WINNOW_SPAM) the
+weight of 3 so with such weights (-1 for WINNOW_HAM and 1 for WINNOW_SPAM) the
 result weight of symbols would be 0..3 for @emph{WINNOW_SPAM} and 0..-3 for
 @emph{WINNOW_HAM}.
 
@@ -834,14 +829,12 @@ attribute. So module configuration is done in @code{param = value} style:
   <option name="symbol">R_FUZZY</option>
   <option name="min_length">300</option>
   <option name="max_score">10</option>
-  <option name="metric">default</option>
 </module>
 @end example
 @noindent
 The common parameters are:
 @itemize @bullet
 @item symbol - symbol that this module should insert.
-@item metric - a metric in which this module shoul work.
 @end itemize
 But each module can have its own unique parameters. So it would be discussed
 furhter in detailed modules description. Also note that for internal modules you
