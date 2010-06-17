@@ -501,51 +501,57 @@ smtp_write_socket (void *arg)
 		return FALSE;
 	}
 	else if (session->state == SMTP_STATE_END) {
-		/* Check metric */
-		m = g_hash_table_lookup (session->cfg->metrics, session->ctx->metric);
-		metric_res = g_hash_table_lookup (session->task->results, session->ctx->metric);
-		if (m != NULL && metric_res != NULL) {
-			if (!check_metric_settings (session->task, m, &ms, &rs)) {
-				ms = m->required_score;
-				rs = m->reject_score;
-			}
-			if (metric_res->score >= ms) {
-				is_spam = TRUE;
-			}
-
-			r = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", session->task->message_id);
-			r += snprintf (logbuf + r, sizeof (logbuf) - r, "(%s: %s: [%.2f/%.2f/%.2f] [", 
-					(char *)m->name, is_spam ? "T" : "F", metric_res->score, ms, rs);
-			symbols = g_hash_table_get_keys (metric_res->symbols);
-			cur = symbols;
-			while (cur) {
-				if (g_list_next (cur) != NULL) {
-					r += snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (char *)cur->data);
+		if (session->task != NULL) {
+			/* Check metric */
+			m = g_hash_table_lookup (session->cfg->metrics, session->ctx->metric);
+			metric_res = g_hash_table_lookup (session->task->results, session->ctx->metric);
+			if (m != NULL && metric_res != NULL) {
+				if (!check_metric_settings (session->task, m, &ms, &rs)) {
+					ms = m->required_score;
+					rs = m->reject_score;
 				}
-				else {
-					r += snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (char *)cur->data);
+				if (metric_res->score >= ms) {
+					is_spam = TRUE;
 				}
-				cur = g_list_next (cur);
-			}
-			g_list_free (symbols);
-			r += snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %ld, time: %sms",
-				(long int)session->task->msg->len, calculate_check_time (&session->task->ts, session->cfg->clock_res));
-			msg_info ("%s", logbuf);
 
-			if (is_spam) {
-				rspamd_dispatcher_write (session->dispatcher, session->ctx->reject_message, 0, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
-				destroy_session (session->s);
-				return FALSE;
+				r = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", session->task->message_id);
+				r += snprintf (logbuf + r, sizeof (logbuf) - r, "(%s: %s: [%.2f/%.2f/%.2f] [", 
+						(char *)m->name, is_spam ? "T" : "F", metric_res->score, ms, rs);
+				symbols = g_hash_table_get_keys (metric_res->symbols);
+				cur = symbols;
+				while (cur) {
+					if (g_list_next (cur) != NULL) {
+						r += snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (char *)cur->data);
+					}
+					else {
+						r += snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (char *)cur->data);
+					}
+					cur = g_list_next (cur);
+				}
+				g_list_free (symbols);
+				r += snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %ld, time: %sms",
+					(long int)session->task->msg->len, calculate_check_time (&session->task->ts, session->cfg->clock_res));
+				msg_info ("%s", logbuf);
+
+				if (is_spam) {
+					rspamd_dispatcher_write (session->dispatcher, session->ctx->reject_message, 0, FALSE, TRUE);
+					rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+					destroy_session (session->s);
+					return FALSE;
+				}
+			}
+			return smtp_send_upstream_message (session);
+		}
+		else {
+			if (session->error != NULL) {
+				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
 			}
 		}
-		return smtp_send_upstream_message (session);
 	}
 	else {
 		if (session->error != NULL) {
 			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
 		}
-		return TRUE;
 	}
 	
 	return TRUE;
