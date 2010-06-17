@@ -464,7 +464,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				hours = uptime / 3600;
 				minutes = uptime / 60 - hours * 60;
 				uptime -= hours * 3600 + minutes * 60;
-				r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minite%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (int)uptime, uptime > 1 ? "s" : " ");
+				r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (int)uptime, uptime > 1 ? "s" : " ");
 			}
 			rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 		}
