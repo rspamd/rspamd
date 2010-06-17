@@ -597,12 +597,16 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		break;
 	case COMMAND_HELP:
 		r = snprintf (out_buf, sizeof (out_buf),
-			"Rspamd CLI commands (* - privilleged command):" CRLF
+			"Rspamd CLI commands (* - privileged command):" CRLF
 			"    help - this help message" CRLF
 			"(*) learn <statfile> <size> [-r recipient] [-m multiplier] [-f from] [-n] - learn message to specified statfile" CRLF
 			"    quit - quit CLI session" CRLF
+			"    password <password> - authenticate yourself for privileged commands" CRLF
 			"(*) reload - reload rspamd" CRLF
-			"(*) shutdown - shutdown rspamd" CRLF "    stat - show different rspamd stat" CRLF "    counters - show rspamd counters" CRLF "    uptime - rspamd uptime" CRLF);
+			"(*) shutdown - shutdown rspamd" CRLF 
+			"    stat - show different rspamd stat" CRLF 
+			"    counters - show rspamd counters" CRLF 
+			"    uptime - rspamd uptime" CRLF);
 		rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
 		break;
 	case COMMAND_COUNTERS:
