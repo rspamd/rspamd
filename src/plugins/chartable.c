@@ -75,6 +75,12 @@ chartable_module_config (struct config_file *cfg)
 	char                           *value;
 	int                             res = TRUE;
 
+	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {
+		chartable_module_ctx->symbol = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
+	}
+	else {
+		chartable_module_ctx->symbol = DEFAULT_SYMBOL;
+	} 
 	if ((value = get_module_opt (cfg, "chartable", "threshold")) != NULL) {
 		errno = 0;
 		chartable_module_ctx->threshold = strtod (value, NULL);

@@ -60,6 +60,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const cha
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_destroy, metric_res->symbols);
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
+		metric_res->score = 0;
 		g_hash_table_insert (task->results, (gpointer) metric->name, metric_res);
 	}
 	
