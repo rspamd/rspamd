@@ -313,31 +313,44 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 	c = d->in_buf->data->begin;
 	b = c;
 	r = 0;
-
+	
 	switch (d->policy) {
 	case BUFFER_LINE:
+		/** Variables:
+		* b - begin of line
+		* r - current position in buffer
+		* *len - length of remaining buffer
+		* c - pointer to current position (buffer->begin + r)
+		* res - result string 
+		*/
 		while (r < *len) {
 			if (*c == '\n') {
 				res.begin = b;
-				res.len = r;
-				if (r != 0 && *(c - 1) == '\r') {
-					res.len--;
+				res.len = c - b;
+				/* Strip EOL */
+				if (d->strip_eol) {
+					if (r != 0 && *(c - 1) == '\r') {
+						res.len--;
+					}
 				}
+				else {
+					/* Include EOL in reply */
+					res.len ++;
+				}
+				/* Set new begin of line */
+				b = c + 1;
+				/* Call callback for a line */
 				if (d->read_callback) {
 					if (!d->read_callback (&res, d->user_data)) {
 						return;
 					}
-					/* Move remaining string to begin of buffer (draining) */
-					/* Reinit pointers as buffer may be changed */
-					len = &d->in_buf->data->len;
-					pos = &d->in_buf->pos;
-					memmove (d->in_buf->data->begin, c + 1, *len - r - 1);
-					b = d->in_buf->data->begin;
-					c = b;
-					*len -= r + 1;
-					*pos = b + *len;
-					r = 0;
 					if (d->policy != saved_policy) {
+						/* Drain buffer as policy is changed */
+						len = &d->in_buf->data->len;
+						pos = &d->in_buf->pos;
+						memmove (d->in_buf->data->begin, b, c - b + 1);
+						*len = c - b + 1;
+						*pos = d->in_buf->data->begin + *len;
 						debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
 						read_buffers (fd, d, TRUE);
 						return;
@@ -347,6 +360,12 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			r++;
 			c++;
 		}
+		/* Now drain buffer */
+		len = &d->in_buf->data->len;
+		pos = &d->in_buf->pos;
+		memmove (d->in_buf->data->begin, b, c - b);
+		*len = c - b;
+		*pos = d->in_buf->data->begin + *len;
 		break;
 	case BUFFER_CHARACTER:
 		r = d->nchars;
@@ -462,6 +481,7 @@ rspamd_create_dispatcher (int fd, enum io_policy policy,
 	new->write_callback = write_cb;
 	new->err_callback = err_cb;
 	new->user_data = user_data;
+	new->strip_eol = TRUE;
 
 	new->ev = memory_pool_alloc0 (new->pool, sizeof (struct event));
 	new->fd = fd;
@@ -514,6 +534,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 				d->in_buf->data = tmp;
 				d->in_buf->pos = d->in_buf->data->begin + t;
 			}
+			d->strip_eol = TRUE;
 		}
 	}
 

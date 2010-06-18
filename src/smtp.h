@@ -83,9 +83,6 @@ struct smtp_session {
 
 	struct smtp_upstream *upstream;
 
-	char data_end[5];
-	char data_idx;
-
 	gboolean resolved;
 	gboolean esmtp;
 };

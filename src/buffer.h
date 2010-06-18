@@ -50,6 +50,7 @@ typedef struct rspamd_io_dispatcher_s {
 	size_t file_size;
 	int sendfile_fd;
 	gboolean in_sendfile;											/**< whether buffer is in sendfile mode */
+	gboolean strip_eol;												/**< strip or not line ends in BUFFER_LINE policy */
 #ifndef HAVE_SENDFILE
 	void *map;
 #endif

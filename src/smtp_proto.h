@@ -15,7 +15,7 @@
 #define SMTP_ERROR_OK "250 Requested mail action okay, completed" CRLF
 #define SMTP_ERROR_DATA_OK "354 Start mail input; end with <CRLF>.<CRLF>" CRLF
 
-#define DATA_END_TRAILER CRLF "." CRLF
+#define DATA_END_TRAILER "." CRLF
 
 
 struct smtp_command {

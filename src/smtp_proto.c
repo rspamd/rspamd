@@ -380,7 +380,7 @@ smtp_upstream_write_socket (void *arg)
 	
 	if (session->upstream_state == SMTP_STATE_IN_SENDFILE) {
 		session->upstream_state = SMTP_STATE_END;
-		return rspamd_dispatcher_write (session->upstream_dispatcher, DATA_END_TRAILER, sizeof (DATA_END_TRAILER) - 1, FALSE, TRUE);
+		return rspamd_dispatcher_write (session->upstream_dispatcher, CRLF DATA_END_TRAILER, sizeof (CRLF DATA_END_TRAILER) - 1, FALSE, TRUE);
 	}
 
 	return TRUE;
@@ -567,9 +567,8 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				rspamd_dispatcher_restore (session->dispatcher);
 				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
 				rspamd_dispatcher_pause (session->upstream_dispatcher);
-				rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_ANY, 0);
-				session->data_idx = 0;
-				memset (session->data_end, 0, sizeof (session->data_end));
+				rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, 0);
+				session->dispatcher->strip_eol = FALSE;
 				return TRUE;
 			}
 			break;

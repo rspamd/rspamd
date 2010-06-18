@@ -405,8 +405,6 @@ static                          gboolean
 smtp_read_socket (f_str_t * in, void *arg)
 {
 	struct smtp_session            *session = arg;
-	char                           *p;
-	gboolean                        do_write;
 
 	switch (session->state) {
 		case SMTP_STATE_RESOLVE_REVERSE:
@@ -429,58 +427,17 @@ smtp_read_socket (f_str_t * in, void *arg)
 			if (in->len == 0) {
 				return TRUE;
 			}
-			p = in->begin + in->len;
-			do_write = TRUE;
-			if (in->len > sizeof (session->data_end)) {
-				/* New data is more than trailer buffer */
-				if (session->data_idx != 0 && write (session->temp_fd, session->data_end, session->data_idx) != session->data_idx) {
-					msg_err ("cannot write to temp file: %s", strerror (errno));
-					session->error = SMTP_ERROR_FILE;
-					session->state = SMTP_STATE_CRITICAL_ERROR;
-					rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-					destroy_session (session->s);
-					return FALSE;
-				}
-				memcpy (session->data_end, p - sizeof (session->data_end), sizeof (session->data_end));
-				session->data_idx = 5;
+			if (in->len == 3 && memcmp (in->begin, DATA_END_TRAILER, in->len) == 0) {
+				return process_smtp_data (session);
 			}
-			else if (session->data_idx + in->len < sizeof (session->data_end)){
-				/* New data is less than trailer buffer plus index */
-				memcpy (session->data_end + session->data_idx, in->begin, in->len);
-				session->data_idx += in->len;
-				do_write = FALSE;
-			}
-			else {
-				/* Save remaining bytes */
-				if (session->data_idx != 0 && write (session->temp_fd, session->data_end, session->data_idx) != session->data_idx) {
-					msg_err ("cannot write to temp file: %s", strerror (errno));
-					session->error = SMTP_ERROR_FILE;
-					session->state = SMTP_STATE_CRITICAL_ERROR;
-					rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-					destroy_session (session->s);
-					return FALSE;
-				}
-				/* Move bytes */
-				session->data_idx = sizeof (session->data_end) - in->len;
-				memmove (session->data_end, session->data_end + (sizeof (session->data_end) - in->len) + 1, sizeof (session->data_end) - in->len);
-				memcpy (session->data_end + session->data_idx, in->begin, in->len);
-				session->data_idx = 5;
-			}
-			if (do_write) {
-				if (session->data_idx < in->len) {
-					if (in->len - session->data_idx != 0 && 
-							write (session->temp_fd, in->begin, in->len - session->data_idx) != in->len - session->data_idx) {
-						msg_err ("cannot write to temp file: %s", strerror (errno));
-						session->error = SMTP_ERROR_FILE;
-						session->state = SMTP_STATE_CRITICAL_ERROR;
-						rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-						destroy_session (session->s);
-						return FALSE;
-					}
-				}
-				if (memcmp (session->data_end, DATA_END_TRAILER, sizeof (session->data_end)) == 0) {
-					return process_smtp_data (session);
-				}
+
+			if (write (session->temp_fd, in->begin, in->len) != in->len) {
+				msg_err ("cannot write to temp file: %s", strerror (errno));
+				session->error = SMTP_ERROR_FILE;
+				session->state = SMTP_STATE_CRITICAL_ERROR;
+				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				destroy_session (session->s);
+				return FALSE;
 			}
 			break;
 		case SMTP_STATE_WAIT_UPSTREAM:
