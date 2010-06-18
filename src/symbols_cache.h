@@ -7,6 +7,7 @@
 #define MAX_SYMBOL 128
 
 struct worker_task;
+struct config_file;
 
 typedef void (*symbol_func_t)(struct worker_task *task, gpointer user_data);
 
@@ -59,12 +60,13 @@ struct symbols_cache {
 	guint uses;
 	gpointer map;
 	memory_pool_rwlock_t *lock;
+	struct config_file *cfg;
 };
 
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, const char *filename);
+gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, struct config_file *cfg, const char *filename);
 
 /**
  * Register function for symbols parsing

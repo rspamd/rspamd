@@ -248,7 +248,8 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 {
 	struct cache_item              *item = NULL;
 	struct symbols_cache           *pcache = *cache;
-	GList                          **target;
+	GList                         **target;
+	double                         *w;  
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
@@ -269,7 +270,14 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
-	item->s->weight = weight;
+
+	/* Handle weight using default metric */
+	if (pcache->cfg && pcache->cfg->default_metric && (w = g_hash_table_lookup (pcache->cfg->default_metric->symbols, name)) != NULL) {
+		item->s->weight = weight * (*w);
+	}
+	else {
+		item->s->weight = weight;
+	}
 	pcache->used_items++;
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	set_counter (item->s->symbol, 0);
@@ -286,6 +294,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	struct symbols_cache           *pcache = *cache;
 	GList                          *t, *cur;
 	uintptr_t                       r;
+	double                         *w;  
 	uint32_t                        mask = 0xFFFFFFFF;
 	struct dynamic_map_item        *it;
 
@@ -300,7 +309,13 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
-	item->s->weight = weight;
+	/* Handle weight using default metric */
+	if (pcache->cfg && pcache->cfg->default_metric && (w = g_hash_table_lookup (pcache->cfg->default_metric->symbols, name)) != NULL) {
+		item->s->weight = weight * (*w);
+	}
+	else {
+		item->s->weight = weight;
+	}
 	item->is_dynamic = TRUE;
 
 	pcache->used_items++;
@@ -423,7 +438,7 @@ free_cache (gpointer arg)
 }
 
 gboolean
-init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const char *filename)
+init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct config_file *cfg, const char *filename)
 {
 	struct stat                     st;
 	int                             fd;
@@ -438,6 +453,8 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, const cha
 
 	/* Init locking */
 	cache->lock = memory_pool_get_rwlock (pool);
+
+	cache->cfg = cfg;
 
 	/* Just in-memory cache */
 	if (filename == NULL) {

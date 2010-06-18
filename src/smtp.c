@@ -317,6 +317,7 @@ process_smtp_data (struct smtp_session *session)
 {
 	struct stat                     st;
 	int                             r;
+	GList                          *cur, *t;
 
 	if (fstat (session->temp_fd, &st) == -1) {
 		goto err;
@@ -342,6 +343,21 @@ process_smtp_data (struct smtp_session *session)
 			goto err;
 		}
 		session->task->helo = session->helo;
+		/* Save MAIL FROM */
+		cur = session->from;
+		if (cur && (cur = g_list_next (cur))) {
+			session->task->from = cur->data;
+		}
+		/* Save recipients */
+		t = session->rcpt;
+		while (t) {
+			cur = t->data;
+			if (cur && (cur = g_list_next (cur))) {
+				session->task->rcpt = g_list_prepend (session->task->rcpt, cur->data);
+			}
+			t = g_list_next (t);
+		}
+
 		memcpy (&session->task->from_addr, &session->client_addr, sizeof (struct in_addr));
 		session->task->cmd = CMD_CHECK;
 		r = process_filters (session->task);

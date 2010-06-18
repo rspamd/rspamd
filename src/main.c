@@ -691,7 +691,7 @@ static void
 init_cfg_cache (struct config_file *cfg) 
 {
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg->cache_filename)) {
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename)) {
 		exit (EXIT_FAILURE);
 	}
 }
@@ -703,7 +703,7 @@ print_symbols_cache (struct config_file *cfg)
 	struct cache_item              *item;
 	int                             i;
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg->cache_filename)) {
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename)) {
 		exit (EXIT_FAILURE);
 	}
 	if (cfg->cache) {
@@ -809,6 +809,11 @@ main (int argc, char **argv, char **env)
 	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
+	
+	/* Pre-init of cache */
+	rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
+	rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd->cfg->cache->cfg = rspamd->cfg;
 
 	if (rspamd->cfg->config_test || dump_vars || dump_cache) {
 		/* Init events to test modules */
