@@ -175,6 +175,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 	
 	if (! parse_smtp_command (session, line, &cmd)) {
 		session->error = SMTP_ERROR_BAD_COMMAND;
+		session->errors ++;
 		return FALSE;
 	}
 	
@@ -184,6 +185,9 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 			if (session->state == SMTP_STATE_GREETING || session->state == SMTP_STATE_HELO) {
 				if (parse_smtp_helo (session, cmd)) {
 					session->state = SMTP_STATE_FROM;
+				}
+				else {
+					session->errors ++;
 				}
 				return TRUE;
 			}
@@ -203,6 +207,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 					session->state = SMTP_STATE_RCPT;
 				}
 				else {
+					session->errors ++;
 					return FALSE;
 				}
 			}
@@ -235,6 +240,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 					return TRUE;
 				}
 				else {
+					session->errors ++;
 					return FALSE;
 				}
 			}
@@ -257,6 +263,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 			if (session->state == SMTP_STATE_RCPT) {
 				if (session->rcpt == NULL) {
 					session->error = SMTP_ERROR_RECIPIENTS;
+					session->errors ++;
 					return FALSE;
 				}
 				if (session->upstream == NULL) {
@@ -287,6 +294,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 	return TRUE;
 
 improper_sequence:
+	session->errors ++;
 	session->error = SMTP_ERROR_SEQUENCE;
 	return FALSE;
 }
@@ -420,6 +428,13 @@ smtp_read_socket (f_str_t * in, void *arg)
 		case SMTP_STATE_DATA:
 			read_smtp_command (session, in);
 			if (session->state != SMTP_STATE_WAIT_UPSTREAM) {
+				if (session->errors > session->ctx->max_errors) {
+					session->error = SMTP_ERROR_LIMIT;
+					session->state = SMTP_STATE_CRITICAL_ERROR;
+					rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+					destroy_session (session->s);
+					return FALSE;
+				}
 				smtp_write_socket (session);
 			}
 			break;
@@ -986,6 +1001,12 @@ config_smtp_worker (struct rspamd_worker *worker)
 	}
 	else {
 		ctx->metric = DEFAULT_METRIC;
+	}
+	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_max_errors")) != NULL) {
+		ctx->max_errors = strtoul (value, NULL, 10);
+	}
+	else {
+		ctx->max_errors = DEFAULT_MAX_ERRORS;
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_reject_message")) != NULL) {
 		ctx->reject_message = memory_pool_strdup (ctx->pool, value);

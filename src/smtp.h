@@ -15,6 +15,7 @@ struct smtp_upstream {
 }; 
 
 #define MAX_UPSTREAM 128
+#define DEFAULT_MAX_ERRORS 10
 
 struct smtp_worker_ctx {
 	struct smtp_upstream upstreams[MAX_UPSTREAM];
@@ -31,6 +32,7 @@ struct smtp_worker_ctx {
 	char *smtp_capabilities;
 	char *reject_message;
 	size_t max_size;
+	guint max_errors;
 	char *metric;
 };
 
@@ -76,6 +78,8 @@ struct smtp_session {
 	GList *from;
 	GList *rcpt;
 	GList *cur_rcpt;
+
+	guint errors;
 	
 	struct rspamd_async_session *s;
 	rspamd_io_dispatcher_t *dispatcher;

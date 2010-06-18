@@ -10,6 +10,7 @@
 #define SMTP_ERROR_SEQUENCE "503 Bad sequence of commands" CRLF
 #define SMTP_ERROR_RECIPIENTS "554 No valid recipients" CRLF
 #define SMTP_ERROR_UNIMPLIMENTED "502 Command not implemented" CRLF
+#define SMTP_ERROR_LIMIT "505 Too many errors. Aborting." CRLF
 #define SMTP_ERROR_UPSTREAM "421 Service not available, closing transmission channel" CRLF
 #define SMTP_ERROR_FILE "420 Service not available, filesystem error" CRLF
 #define SMTP_ERROR_OK "250 Requested mail action okay, completed" CRLF

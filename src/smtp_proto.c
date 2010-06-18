@@ -511,6 +511,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				else {
 					session->rcpt = g_list_delete_link (session->rcpt, session->rcpt);
 				}
+				session->errors ++;
 				session->state = SMTP_STATE_RCPT;
 				return TRUE;
 			}
