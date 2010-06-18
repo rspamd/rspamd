@@ -1035,7 +1035,7 @@ start_spf_parse (struct spf_record *rec, char *begin)
 		/* Skip one number of record, so no we are here spf2.0/ */
 		begin += sizeof (SPF_VER2_STR);
 		if (*begin != '/') {
-			msg_info ("sender id string has not valid skope");
+			msg_info ("sender id string has invalid scope");
 		}
 		else {
 			begin ++;
