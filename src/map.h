@@ -51,10 +51,14 @@ struct rspamd_map {
 gboolean add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
 void start_map_watch (void);
 
+typedef void                    (*insert_func) (gpointer st, gconstpointer key, gpointer value);
+
 /* Common callbacks */
 u_char* read_radix_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
 void fin_radix_list (memory_pool_t *pool, struct map_cb_data *data);
 u_char* read_host_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
 void fin_host_list (memory_pool_t *pool, struct map_cb_data *data);
+
+u_char * abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func);
 
 #endif

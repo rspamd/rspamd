@@ -15,6 +15,7 @@
 #define DEFAULT_SURBL_URL_EXPIRE 86400
 #define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
+#define MAX_LEVELS 10
 
 struct surbl_ctx {
 	int (*filter)(struct worker_task *task);
@@ -30,15 +31,11 @@ struct surbl_ctx {
 	char *metric;
 	const char *tld2_file;
 	const char *whitelist_file;
-	GHashTable *tld2;
+	GHashTable **exceptions;
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;
 	unsigned use_redirector;
 	memory_pool_t *surbl_pool;
-    GRegex *extract_hoster_regexp;
-	GRegex *extract_normal_regexp;
-	GRegex *extract_ip_regexp;
-	GRegex *extract_numeric_regexp;
 };
 
 struct suffix_item {

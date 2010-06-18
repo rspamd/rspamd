@@ -33,7 +33,7 @@
  * - redirector_read_timeout (seconds): timeout for reading data (default: 5s)
  * - redirector_hosts_map (map string): map that contains domains to check with redirector
  * Surbl options:
- * - 2tld (map string): map of domains that should be checked via surbl using 3 (e.g. somehost.domain.com)
+ * - exceptions (map string): map of domains that should be checked via surbl using 3 (e.g. somehost.domain.com)
  *   components of domain name instead of normal 2 (e.g. domain.com)
  * - whitelist (map string): map of domains that should be whitelisted for surbl checks
  * - max_urls (integer): maximum allowed number of urls in message to be checked
@@ -67,11 +67,63 @@ surbl_error_quark (void)
 	return g_quark_from_static_string ("surbl-error-quark");
 }
 
+static void
+exception_insert (gpointer st, gconstpointer key, gpointer value)
+{
+	GHashTable                    **t = st;
+	int                             level = 0;
+	const char                     *p = key;
+	f_str_t                        *val;
+	
+
+	while (*p) {
+		if (*p == '.') {
+			level ++;
+		}
+		p ++;
+	}
+	if (level >= MAX_LEVELS) {
+		msg_err ("invalid domain in exceptions list: %s, levels: %d", (char *)key, level);
+		return;
+	}
+	
+	val = g_malloc (sizeof (f_str_t));
+	val->begin = (char *)key;
+	val->len = strlen (key);
+	if (t[level] == NULL) {
+		t[level] = g_hash_table_new_full (fstr_strcase_hash, fstr_strcase_equal, g_free, NULL);
+	}
+	g_hash_table_insert (t[level], val, value);
+}
+
+static u_char *
+read_exceptions_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+{
+	if (data->cur_data == NULL) {
+		data->cur_data = memory_pool_alloc (pool, sizeof (GHashTable *) * MAX_LEVELS);
+	}
+	return abstract_parse_list (pool, chunk, len, data, (insert_func) exception_insert);
+}
+
+static void
+fin_exceptions_list (memory_pool_t * pool, struct map_cb_data *data)
+{
+	GHashTable                    **t;
+	int                             i;
+
+	if (data->prev_data) {
+		t = data->prev_data;
+		for (i = 0; i < MAX_LEVELS; i ++) {
+			if (t[i] != NULL) {
+				g_hash_table_destroy (t[i]);
+			}
+		}
+	}
+}
+
 int
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
-	GError                         *err = NULL;
-
 	surbl_module_ctx = g_malloc (sizeof (struct surbl_ctx));
 
 	surbl_module_ctx->filter = surbl_filter;
@@ -83,22 +135,16 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
 
-	surbl_module_ctx->tld2 = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	/* Zero exceptions hashes */
+	surbl_module_ctx->exceptions = memory_pool_alloc0 (surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
 	/* Register destructors */
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->tld2);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->whitelist);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
 
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->suffixes);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->bits);
-
-	/* Init matching regexps */
-	surbl_module_ctx->extract_hoster_regexp = g_regex_new ("([^.]+)\\.([^.]+)\\.([^.]+)$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
-	surbl_module_ctx->extract_normal_regexp = g_regex_new ("([^.]+)\\.([^.]+)$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
-	surbl_module_ctx->extract_ip_regexp = g_regex_new ("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
-	surbl_module_ctx->extract_numeric_regexp = g_regex_new ("(\\d{5,20})$", G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, &err);
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
@@ -174,8 +220,8 @@ surbl_module_config (struct config_file *cfg)
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "2tld")) != NULL) {
-		if (add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->tld2)) {
+	if ((value = get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
+		if (add_map (value, read_exceptions_list, fin_exceptions_list, (void **)&surbl_module_ctx->exceptions)) {
 			surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
 		}
 	}
@@ -240,13 +286,16 @@ surbl_module_reconfig (struct config_file *cfg)
 
 
 static char                    *
-format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_item *suffix, char **host_end, gboolean append_suffix, GError ** err)
+format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_item *suffix, gboolean append_suffix, GError ** err)
 {
-	GMatchInfo                     *info;
-	char                           *result = NULL;
-	int                             len, slen, r;
+	GHashTable                     *t;
+	char                           *result = NULL, *dots[MAX_LEVELS], num_buf[sizeof("18446744073709551616")], *p;
+	int                             len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
+	gboolean                        is_numeric = TRUE;
+	guint64                         ip_num;
+	f_str_t                         f;
 
-	if (suffix != NULL) {
+	if (G_LIKELY (suffix != NULL)) {
 		slen = strlen (suffix->suffix);
 	}
 	else if (!append_suffix) {
@@ -256,148 +305,112 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		g_assert_not_reached ();
 	}
 	len = hostname->len + slen + 2;
-
-	/* First try to match numeric expression */
-	if (g_ascii_isdigit (*hostname->begin)) {
-		if (g_regex_match_full (surbl_module_ctx->extract_ip_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
-			gchar                          *octet1, *octet2, *octet3, *octet4;
-			octet1 = g_match_info_fetch (info, 1);
-			octet2 = g_match_info_fetch (info, 2);
-			octet3 = g_match_info_fetch (info, 3);
-			octet4 = g_match_info_fetch (info, 4);
-			result = memory_pool_alloc (pool, len);
-			msg_debug ("got numeric host for check: %s.%s.%s.%s", octet1, octet2, octet3, octet4);
-			r = snprintf (result, len, "%s.%s.%s.%s", octet4, octet3, octet2, octet1);
-			if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
-				g_free (octet1);
-				g_free (octet2);
-				g_free (octet3);
-				g_free (octet4);
-				g_match_info_free (info);
-				msg_debug ("url %s is whitelisted", result);
-				g_set_error (err, SURBL_ERROR,	/* error domain */
-					WHITELIST_ERROR,	/* error code */
-					"URL is whitelisted: %s",	/* error message format string */
-					result);
-
-				return NULL;
-			}
-			if (append_suffix) {
-				r += snprintf (result + r, len - r, ".%s", suffix->suffix);
-			}
-			*host_end = result + r - slen - 1;
-			g_free (octet1);
-			g_free (octet2);
-			g_free (octet3);
-			g_free (octet4);
-			g_match_info_free (info);
-			return result;
+	
+	p = hostname->begin;
+	while (p - hostname->begin < hostname->len && dots_num < MAX_LEVELS) {
+		if (*p == '.') {
+			dots[dots_num] = p;
+			dots_num ++;
 		}
-		g_match_info_free (info);
-		if (g_regex_match_full (surbl_module_ctx->extract_numeric_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
-			gchar                          *ip = g_match_info_fetch (info, 1);
-			uint64_t                        ip_num;
-
-			errno = 0;
-			ip_num = strtoull (ip, NULL, 10);
-			if (errno != 0) {
-				g_match_info_free (info);
-				msg_info ("cannot convert ip to number '%s': %s", ip, strerror (errno));
-				g_set_error (err, SURBL_ERROR,	/* error domain */
-					CONVERSION_ERROR,	/* error code */
-					"URL cannot be decoded");
-				g_free (ip);
-
-				return NULL;
-			}
-
-			len = sizeof ("255.255.255.255") + slen;
-			result = memory_pool_alloc (pool, len);
-			/* Hack for bugged windows resolver */
-			ip_num &= 0xFFFFFFFF;
-			/* Get octets */
-			r = snprintf (result, len, "%u.%u.%u.%u",
-				(uint32_t) ip_num & 0x000000FF, (uint32_t) (ip_num & 0x0000FF00) >> 8, (uint32_t) (ip_num & 0x00FF0000) >> 16, (uint32_t) (ip_num & 0xFF000000) >> 24);
-			if (append_suffix) {
-				r += snprintf (result + r, len - r, ".%s", suffix->suffix);
-			}
-			*host_end = result + r - slen - 1;
-			g_free (ip);
-			g_match_info_free (info);
-			return result;
+		else if (! g_ascii_isdigit (*p)) {
+			is_numeric = FALSE;
 		}
-		g_match_info_free (info);
+		p ++;
 	}
-	/* Try to match normal domain */
-	if (g_regex_match_full (surbl_module_ctx->extract_normal_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
-		gchar                          *part1, *part2;
-		part1 = g_match_info_fetch (info, 1);
-		part2 = g_match_info_fetch (info, 2);
-		g_match_info_free (info);
+	
+	/* Check for numeric expressions */
+	if (is_numeric && dots_num == 3) {
+		/* This is ip address */
 		result = memory_pool_alloc (pool, len);
-		r = snprintf (result, len, "%s.%s", part1, part2);
-		if (g_hash_table_lookup (surbl_module_ctx->tld2, result) != NULL) {
-			/* Match additional part for hosters */
-			g_free (part1);
-			g_free (part2);
-			if (g_regex_match_full (surbl_module_ctx->extract_hoster_regexp, hostname->begin, hostname->len, 0, 0, &info, NULL) == TRUE) {
-				gchar                          *hpart1, *hpart2, *hpart3;
-				hpart1 = g_match_info_fetch (info, 1);
-				hpart2 = g_match_info_fetch (info, 2);
-				hpart3 = g_match_info_fetch (info, 3);
-				msg_debug ("got hoster 3-d level domain %s.%s.%s", hpart1, hpart2, hpart3);
-				r = snprintf (result, len, "%s.%s.%s", hpart1, hpart2, hpart3);
-				if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
-					g_free (hpart1);
-					g_free (hpart2);
-					g_free (hpart3);
-					g_match_info_free (info);
-					msg_debug ("url %s is whitelisted", result);
-					g_set_error (err, SURBL_ERROR,	/* error domain */
+		r = snprintf (result, len, "%*s.%*s.%*s.%*s", 
+				(int)(hostname->len - (dots[2] - hostname->begin + 1)),
+				dots[2] + 1,
+				(int)(dots[2] - (dots[1] - hostname->begin + 1)),
+				dots[1],
+				(int)(dots[1] - (dots[0] - hostname->begin + 1)),
+				dots[0],
+				(int)(dots[0] - (hostname->begin + 1)),
+				hostname->begin);
+	}
+	else if (is_numeric && dots_num == 0) {
+		/* This is number */
+		g_strlcpy (num_buf, hostname->begin, MIN (hostname->len + 1, sizeof (num_buf)));
+		errno = 0;
+		ip_num = strtoull (num_buf, NULL, 10);
+		if (errno != 0) {
+			msg_info ("cannot convert ip to number '%s': %s", num_buf, strerror (errno));
+			g_set_error (err, SURBL_ERROR,	/* error domain */
+				CONVERSION_ERROR,	/* error code */
+				"URL cannot be decoded");
+			return NULL;
+		}
+
+		len = sizeof ("255.255.255.255") + slen;
+		result = memory_pool_alloc (pool, len);
+		/* Hack for bugged windows resolver */
+		ip_num &= 0xFFFFFFFF;
+		/* Get octets */
+		r = snprintf (result, len, "%u.%u.%u.%u",
+			(uint32_t) ip_num & 0x000000FF, (uint32_t) (ip_num & 0x0000FF00) >> 8, (uint32_t) (ip_num & 0x00FF0000) >> 16, (uint32_t) (ip_num & 0xFF000000) >> 24);
+	}
+	else {
+		/* Not a numeric url */
+		result = memory_pool_alloc (pool, len);
+		/* Now we should try to check for exceptions */
+		for (i = MAX_LEVELS - 1; i >= 0; i --) {
+			t = surbl_module_ctx->exceptions[i];
+			if (t != NULL && dots_num >= i + 1) {
+				f.begin = dots[dots_num - i - 1] + 1;
+				f.len = hostname->len - (dots[dots_num - i - 1] - hostname->begin + 1);
+				if (g_hash_table_lookup (t, &f) != NULL) {
+					level = dots_num - i - 1;
+					break;
+				}
+			}
+		}
+		if (level != MAX_LEVELS) {
+			if (level == 0) {
+				r = snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
+			}
+			else {
+				r = snprintf (result, len, "%*s", 
+					(int)(hostname->len - (dots[level - 1] - hostname->begin + 1)),
+					dots[level - 1] + 1);
+			}
+		}
+		else if (dots_num >= 2) {
+			r = snprintf (result, len, "%*s",
+					(int)(hostname->len - (dots[dots_num - 2] - hostname->begin + 1)),
+					dots[dots_num - 2] + 1);
+			for (i = 0; i < dots_num; i ++) {
+				msg_info ("dot: %d, data: %*s", i, 
+					(int)(hostname->len - (dots[i] - hostname->begin + 1)),
+					dots[i] + 1);
+			
+			}
+		}
+		else {
+			r = snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
+		}
+	}
+
+	if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+		msg_debug ("url %s is whitelisted", result);
+		g_set_error (err, SURBL_ERROR,	/* error domain */
 						WHITELIST_ERROR,	/* error code */
 						"URL is whitelisted: %s",	/* error message format string */
 						result);
-					return NULL;
-				}
-				if (append_suffix) {
-					r += snprintf (result + r, len - r, ".%s", suffix->suffix);
-				}
-				*host_end = result + r - slen - 1;
-				g_free (hpart1);
-				g_free (hpart2);
-				g_free (hpart3);
-				g_match_info_free (info);
-				return result;
-			}
-			g_match_info_free (info);
-			*host_end = NULL;
-			return NULL;
-		}
-		else {
-			if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
-				g_free (part1);
-				g_free (part2);
-				msg_debug ("url %s is whitelisted", result);
-				g_set_error (err, SURBL_ERROR,	/* error domain */
-					WHITELIST_ERROR,	/* error code */
-					"URL is whitelisted: %s",	/* error message format string */
-					result);
-				return NULL;
-			}
-			if (append_suffix) {
-				r += snprintf (result + r, len - r, ".%s", suffix->suffix);
-			}
-			*host_end = result + r - slen - 1;
-			msg_debug ("got normal 2-d level domain %s.%s", part1, part2);
-		}
-		g_free (part1);
-		g_free (part2);
-		return result;
+		return NULL;
 	}
 
-	g_match_info_free (info);
-	*host_end = NULL;
-	return NULL;
+
+	if (append_suffix) {
+		r += snprintf (result + r, len - r, ".%s", suffix->suffix);
+	}
+
+	msg_debug ("request: %s, dots: %d, level: %d, orig: %*s", result, dots_num, level, (int)hostname->len, hostname->begin);
+
+	return result;
 }
 
 static void
@@ -407,22 +420,19 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree, st
 	f_str_t                         f;
 	GError                         *err = NULL;
 	struct dns_param               *param;
-	char                           *host_end;
 
 	f.begin = url->host;
 	f.len = url->hostlen;
 
 	if (check_view (task->cfg->views, suffix->symbol, task)) {
-		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, &host_end, TRUE, &err)) != NULL) {
+		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE, &err)) != NULL) {
 			if (g_tree_lookup (tree, surbl_req) == NULL) {
 				g_tree_insert (tree, surbl_req, surbl_req);
 				param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
 				param->url = url;
 				param->task = task;
 				param->suffix = suffix;
-				*host_end = '\0';
 				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
-				*host_end = '.';
 				debug_task ("send surbl dns request %s", surbl_req);
 				if (evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param) == 0) {
 					param->task->save.saved++;
@@ -741,7 +751,7 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	struct worker_task             *task = param->task;
 	struct uri                     *url = value;
 	f_str_t                         f;
-	char                           *urlstr, *host_end;
+	char                           *urlstr;
 	GError                         *err = NULL;
 
 	debug_task ("check url %s", struri (url));
@@ -750,7 +760,7 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	if (surbl_module_ctx->use_redirector) {
 		f.begin = url->host;
 		f.len = url->hostlen;
-		if ((urlstr = format_surbl_request (param->task->task_pool, &f, NULL, &host_end, FALSE, &err)) != NULL) {
+		if ((urlstr = format_surbl_request (param->task->task_pool, &f, NULL, FALSE, &err)) != NULL) {
 			if (g_hash_table_lookup (surbl_module_ctx->redirector_hosts, urlstr) != NULL) {
 				register_redirector_call (url, param->task, param->tree, param->suffix);
 				param->task->save.saved++;
@@ -819,7 +829,6 @@ urls_command_handler (struct worker_task *task)
 	GError                         *err = NULL;
 	GTree                          *url_tree;
 	f_str_t                         f;
-	char                           *host_end;
 
 	url_tree = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
 
@@ -849,7 +858,7 @@ urls_command_handler (struct worker_task *task)
 			g_tree_insert (url_tree, struri (url), url);
 			f.begin = url->host;
 			f.len = url->hostlen;
-			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, &host_end, FALSE, &err)) != NULL) {
+			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, FALSE, &err)) != NULL) {
 				if (g_list_next (cur) != NULL) {
 					r += snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (char *)urlstr, struri (url));
 				}

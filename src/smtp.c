@@ -1058,6 +1058,9 @@ start_smtp_worker (struct rspamd_worker *worker)
 	/* Maps events */
 	start_map_watch ();
 
+	/* Set umask */
+	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);
+
 	event_loop (0);
 	
 	close_log ();

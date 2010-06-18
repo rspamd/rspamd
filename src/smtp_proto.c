@@ -554,7 +554,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				r = strlen (session->cfg->temp_dir) + sizeof ("/rspamd-XXXXXX.tmp");
 				session->temp_name = memory_pool_alloc (session->pool, r);
 				snprintf (session->temp_name, r, "%s%crspamd-XXXXXX.tmp", session->cfg->temp_dir, G_DIR_SEPARATOR);
+#ifdef HAVE_MKSTEMP
+				/* Umask is set before */
+				session->temp_fd = mkstemp (session->temp_name);
+#else
 				session->temp_fd = g_mkstemp_full (session->temp_name, O_RDWR, S_IWUSR | S_IRUSR);
+#endif
 				if (session->temp_fd == -1) {
 					session->error = SMTP_ERROR_FILE;
 					session->state = SMTP_STATE_CRITICAL_ERROR;

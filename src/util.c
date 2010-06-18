@@ -855,6 +855,34 @@ rspamd_strcase_hash (gconstpointer key)
 	return h;
 }
 
+gboolean
+fstr_strcase_equal (gconstpointer v, gconstpointer v2)
+{
+	const f_str_t *f1 = v, *f2 = v2;
+	if (f1->len == f2->len && g_ascii_strncasecmp (f1->begin, f2->begin, f1->len) == 0) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+
+guint
+fstr_strcase_hash (gconstpointer key)
+{
+	const f_str_t                  *f = key;
+	const char                     *p;
+	guint                           h = 0;
+	
+	p = f->begin;
+	while (p - f->begin < f->len) {
+		h = (h << 5) - h + g_tolower (*p);
+		p++;
+	}
+
+	return h;
+}
+
 void
 gperf_profiler_init (struct config_file *cfg, const char *descr)
 {

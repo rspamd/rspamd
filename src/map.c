@@ -506,9 +506,7 @@ add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback
 	return TRUE;
 }
 
-typedef void                    (*insert_func) (gpointer st, gconstpointer key, gpointer value);
-
-static u_char                  *
+u_char                  *
 abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func)
 {
 	u_char                         *s, *p, *str, *start;

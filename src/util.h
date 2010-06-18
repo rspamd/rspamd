@@ -73,6 +73,8 @@ gboolean unlock_file (int fd, gboolean async);
 
 guint rspamd_strcase_hash (gconstpointer key);
 gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
+guint fstr_strcase_hash (gconstpointer key);
+gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
 
 void gperf_profiler_init (struct config_file *cfg, const char *descr);
 

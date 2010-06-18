@@ -122,6 +122,7 @@
 #cmakedefine BUILD_STATIC        1
 
 #cmakedefine HAVE_SENDFILE       1
+#cmakedefine HAVE_MKSTEMP        1
 #cmakedefine HAVE_SYS_SENDFILE_H 1
 
 #define RVERSION          "${RSPAMD_VERSION}"
