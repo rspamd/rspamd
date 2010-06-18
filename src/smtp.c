@@ -318,6 +318,8 @@ process_smtp_data (struct smtp_session *session)
 	struct stat                     st;
 	int                             r;
 	GList                          *cur, *t;
+	f_str_t                        *f;
+	char                           *s;
 
 	if (fstat (session->temp_fd, &st) == -1) {
 		goto err;
@@ -337,29 +339,36 @@ process_smtp_data (struct smtp_session *session)
 			goto err;
 		}
 		session->task->msg->len = st.st_size;
-		if (process_message (session->task) == -1) {
-			msg_err ("cannot process message");
-			munmap (session->task->msg->begin, st.st_size);
-			goto err;
-		}
 		session->task->helo = session->helo;
 		/* Save MAIL FROM */
 		cur = session->from;
-		if (cur && (cur = g_list_next (cur))) {
-			session->task->from = cur->data;
+		if (cur) {
+			f = cur->data;
+			s = memory_pool_alloc (session->pool, f->len + 1);
+			g_strlcpy (s, f->begin, f->len + 1);
+			session->task->from = s;
 		}
 		/* Save recipients */
 		t = session->rcpt;
 		while (t) {
 			cur = t->data;
-			if (cur && (cur = g_list_next (cur))) {
-				session->task->rcpt = g_list_prepend (session->task->rcpt, cur->data);
+			if (cur) {
+				f = cur->data;
+				s = memory_pool_alloc (session->pool, f->len + 1);
+				g_strlcpy (s, f->begin, f->len + 1);
+				session->task->rcpt = g_list_prepend (session->task->rcpt, s);
 			}
 			t = g_list_next (t);
 		}
 
 		memcpy (&session->task->from_addr, &session->client_addr, sizeof (struct in_addr));
 		session->task->cmd = CMD_CHECK;
+
+		if (process_message (session->task) == -1) {
+			msg_err ("cannot process message");
+			munmap (session->task->msg->begin, st.st_size);
+			goto err;
+		}
 		r = process_filters (session->task);
 		if (r == -1) {
 			munmap (session->task->msg->begin, st.st_size);
