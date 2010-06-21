@@ -337,8 +337,6 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					/* Include EOL in reply */
 					res.len ++;
 				}
-				/* Set new begin of line */
-				b = c + 1;
 				/* Call callback for a line */
 				if (d->read_callback) {
 					if (!d->read_callback (&res, d->user_data)) {
@@ -348,14 +346,22 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 						/* Drain buffer as policy is changed */
 						len = &d->in_buf->data->len;
 						pos = &d->in_buf->pos;
-						memmove (d->in_buf->data->begin, b, c - b + 1);
-						*len = c - b + 1;
-						*pos = d->in_buf->data->begin + *len;
+						if (c != *pos) {
+								memmove (d->in_buf->data->begin, c + 1, *len - r - 1);
+								*len = *len -r - 1;
+								*pos = d->in_buf->data->begin + *len;
+						}
+						else {
+							*len = 0;
+							*pos = d->in_buf->data->begin;
+						}
 						debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
 						read_buffers (fd, d, TRUE);
 						return;
 					}
 				}
+				/* Set new begin of line */
+				b = c + 1;
 			}
 			r++;
 			c++;

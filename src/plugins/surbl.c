@@ -382,12 +382,6 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 			r = snprintf (result, len, "%*s",
 					(int)(hostname->len - (dots[dots_num - 2] - hostname->begin + 1)),
 					dots[dots_num - 2] + 1);
-			for (i = 0; i < dots_num; i ++) {
-				msg_info ("dot: %d, data: %*s", i, 
-					(int)(hostname->len - (dots[i] - hostname->begin + 1)),
-					dots[i] + 1);
-			
-			}
 		}
 		else {
 			r = snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
