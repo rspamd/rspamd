@@ -65,6 +65,7 @@
 #cmakedefine HAVE_SYS_PARAM_H    1
 #cmakedefine HAVE_SYS_FILE_H     1
 #cmakedefine HAVE_SYS_RESOURCE_H 1
+#cmakedefine HAVE_SYS_TIMEDB_H   1
 
 #cmakedefine HAVE_PIDFILE        1
 
@@ -122,8 +123,11 @@
 #cmakedefine BUILD_STATIC        1
 
 #cmakedefine HAVE_SENDFILE       1
-#cmakedefine HAVE_MKSTEMP        1
 #cmakedefine HAVE_SYS_SENDFILE_H 1
+
+#cmakedefine HAVE_MKSTEMP        1
+
+#cmakedefine HAVE_CLOCK_GETTIME  1
 
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
@@ -217,6 +221,11 @@
 /* time */
 #ifdef HAVE_TIME_H
 #include <time.h>
+#endif
+
+/* timedb */
+#ifdef HAVE_SYS_TIMEDB_H
+#include <sys/timedb.h>
 #endif
 
 /* sysexits */

@@ -325,11 +325,11 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		r = snprintf (result, len, "%*s.%*s.%*s.%*s", 
 				(int)(hostname->len - (dots[2] - hostname->begin + 1)),
 				dots[2] + 1,
-				(int)(dots[2] - (dots[1] - hostname->begin + 1)),
+				(int)(dots[2] - dots[1] - 1),
 				dots[1],
-				(int)(dots[1] - (dots[0] - hostname->begin + 1)),
+				(int)(dots[1] - dots[0] - 1),
 				dots[0],
-				(int)(dots[0] - (hostname->begin + 1)),
+				(int)(dots[0] - hostname->begin),
 				hostname->begin);
 	}
 	else if (is_numeric && dots_num == 0) {

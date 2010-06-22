@@ -43,7 +43,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	GError                         *err;
 
 #ifdef HAVE_SENDFILE
-	#if defined(FREEBSD)
+	#if defined(FREEBSD) || defined(DARWIN)
 	off_t                           off = 0;
 	/* FreeBSD version */
 	if (sendfile (d->sendfile_fd, d->fd, d->offset, 0, 0, &off, 0) != 0) {
@@ -248,8 +248,8 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 	GError                         *err;
 	f_str_t                         res;
 	char                           *c, *b;
-	char                          **pos;
-	size_t                         *len;
+	char                           *end;
+	size_t                          len;
 	enum io_policy                  saved_policy;
 
 	if (d->wanna_die) {
@@ -268,8 +268,8 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		d->in_buf->pos = d->in_buf->data->begin;
 	}
 
-	pos = &d->in_buf->pos;
-	len = &d->in_buf->data->len;
+	end = d->in_buf->pos;
+	len = d->in_buf->data->len;
 
 	if (BUFREMAIN (d->in_buf) == 0) {
 		/* Buffer is full, try to call callback with overflow error */
@@ -281,7 +281,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 	}
 	else if (!skip_read) {
 		/* Try to read the whole buffer */
-		r = read (fd, *pos, BUFREMAIN (d->in_buf));
+		r = read (fd, end, BUFREMAIN (d->in_buf));
 		if (r == -1 && errno != EAGAIN) {
 			if (d->err_callback) {
 				err = g_error_new (G_DISPATCHER_ERROR, errno, "%s", strerror (errno));
@@ -302,8 +302,9 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			return;
 		}
 		else {
-			*pos += r;
-			*len += r;
+			/* Set current position in buffer */
+			d->in_buf->pos += r;
+			d->in_buf->data->len += r;
 		}
 		debug_ip (d->peer_addr, "read %z characters, policy is %s, watermark is: %z", r, 
 				d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", d->nchars);
@@ -311,6 +312,8 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 
 	saved_policy = d->policy;
 	c = d->in_buf->data->begin;
+	end = d->in_buf->pos;
+	len = d->in_buf->data->len;
 	b = c;
 	r = 0;
 	
@@ -323,7 +326,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		* c - pointer to current position (buffer->begin + r)
 		* res - result string 
 		*/
-		while (r < *len) {
+		while (r < len) {
 			if (*c == '\n') {
 				res.begin = b;
 				res.len = c - b;
@@ -344,19 +347,24 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					}
 					if (d->policy != saved_policy) {
 						/* Drain buffer as policy is changed */
-						len = &d->in_buf->data->len;
-						pos = &d->in_buf->pos;
-						if (c != *pos) {
-								memmove (d->in_buf->data->begin, c + 1, *len - r - 1);
-								*len = *len -r - 1;
-								*pos = d->in_buf->data->begin + *len;
+						/* Note that d->in_buffer is other pointer now, so we need to reinit all pointers */
+						/* First detect how much symbols do we have */
+						if (end == c) {
+							/* In fact we read the whole buffer and change input policy, so just set current pos to begin of buffer */
+							d->in_buf->pos = d->in_buf->data->begin;
+							d->in_buf->data->len = 0;
 						}
 						else {
-							*len = 0;
-							*pos = d->in_buf->data->begin;
+							/* Otherwise we need to move buffer */
+							/* Reinit pointers */
+							len = d->in_buf->data->len - r - 1;
+							end = d->in_buf->data->begin + r + 1;
+							memmove (d->in_buf->data->begin, end, len);
+							d->in_buf->data->len = len;
+							d->in_buf->pos = d->in_buf->data->begin + len;
+							/* Process remaining buffer */
+							read_buffers (fd, d, TRUE);
 						}
-						debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
-						read_buffers (fd, d, TRUE);
 						return;
 					}
 				}
@@ -366,16 +374,14 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			r++;
 			c++;
 		}
-		/* Now drain buffer */
-		len = &d->in_buf->data->len;
-		pos = &d->in_buf->pos;
+		/* Now drain remaining characters in buffer */
 		memmove (d->in_buf->data->begin, b, c - b);
-		*len = c - b;
-		*pos = d->in_buf->data->begin + *len;
+		d->in_buf->data->len = c - b;
+		d->in_buf->pos = d->in_buf->data->begin + (c - b);
 		break;
 	case BUFFER_CHARACTER:
 		r = d->nchars;
-		if (*len >= r) {
+		if (len >= r) {
 			res.begin = b;
 			res.len = r;
 			c = b + r;
@@ -384,14 +390,15 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					return;
 				}
 				/* Move remaining string to begin of buffer (draining) */
-				len = &d->in_buf->data->len;
-				pos = &d->in_buf->pos;
-				memmove (d->in_buf->data->begin, c, *len - r);
-				b = d->in_buf->data->begin;
-				c = b;
-				*len -= r;
-				*pos = b + *len;
-				if (d->policy != saved_policy) {
+				if (len > r) {
+					len -= r;
+					memmove (d->in_buf->data->begin, c, len);
+					d->in_buf->data->len = len;
+					d->in_buf->pos = d->in_buf->data->begin + len;
+					b = d->in_buf->data->begin;
+					c = b;
+				}
+				if (d->policy != saved_policy && len != r) {
 					debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
 					read_buffers (fd, d, TRUE);
 					return;
@@ -401,7 +408,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		break;
 	case BUFFER_ANY:
 		res.begin = d->in_buf->data->begin;
-		res.len = *len;
+		res.len = len;
 		if (d->read_callback) {
 			if (!d->read_callback (&res, d->user_data)) {
 				return;

@@ -1126,6 +1126,7 @@ static u16
 default_transaction_id_fn(void)
 {
 	u16 trans_id;
+#ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 	static int clkid = -1;
 	if (clkid == -1) {
@@ -1135,6 +1136,13 @@ default_transaction_id_fn(void)
 	}
 	clock_gettime(clkid, &ts);
 	trans_id = ts.tv_nsec & 0xffff;
+#elif defined(HAVE_SYS_TIMEDB_H)
+	struct timeb tb;
+	ftime(&tb);
+	trans_id = tb.millitm & 0xffff;
+#else
+# error Cannot find way to generate dns transaction id
+#endif
 
 	return trans_id;
 }

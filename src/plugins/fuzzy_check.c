@@ -506,9 +506,15 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 		}
 
 		/* Get upstream */
+#ifdef HAVE_CLOCK_GETTIME
 		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
 			sizeof (struct storage_server), task->ts.tv_sec,
 			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+#else
+		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
+			sizeof (struct storage_server), task->tv.tv_sec,
+			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+#endif
 		if (selected) {
 			if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 				msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
@@ -584,9 +590,15 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				continue;
 			}
 			/* Get upstream */
+#ifdef HAVE_CLOCK_GETTIME
 			selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
 				sizeof (struct storage_server), task->ts.tv_sec,
 				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+#else
+			selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
+				sizeof (struct storage_server), task->tv.tv_sec,
+				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+#endif
 			if (selected) {
 				/* Create UDP socket */
 				if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {

@@ -769,13 +769,19 @@ resolve_stat_filename (memory_pool_t * pool, char *pattern, char *rcpt, char *fr
 	return new;
 }
 
+#ifdef HAVE_CLOCK_GETTIME
 const char                     *
 calculate_check_time (struct timespec *begin, int resolution)
+#else
+const char                     *
+calculate_check_time (struct timeval *begin, int resolution)
+#endif
 {
-	struct timespec                 ts;
 	double                          diff;
 	static char                     res[sizeof ("100000.000")];
 	static char                     fmt[sizeof ("%.10f")];
+#ifdef HAVE_CLOCK_GETTIME
+	struct timespec                 ts;
 
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
@@ -787,6 +793,16 @@ calculate_check_time (struct timespec *begin, int resolution)
 
 	diff = (ts.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
 		(ts.tv_nsec - begin->tv_nsec) / 1000000.;	/* Nanoseconds */
+#else
+	struct timeval                  tv;
+
+	if (gettimeofday (&tv, NULL) == -1) {
+		msg_warn ("gettimeofday failed: %s", strerror (errno));
+	}
+	diff = (tv.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
+		(tv.tv_usec - begin->tv_usec) / 1000.;	/* Microseconds */
+#endif
+
 	sprintf (fmt, "%%.%df", resolution);
 	snprintf (res, sizeof (res), fmt, diff);
 

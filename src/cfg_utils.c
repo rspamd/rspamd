@@ -533,7 +533,9 @@ get_config_checksum (struct config_file *cfg)
 void
 post_load_config (struct config_file *cfg)
 {
+#ifdef HAVE_CLOCK_GETTIME
 	struct timespec                 ts;
+#endif
 	struct metric                  *def_metric;
 
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
@@ -541,13 +543,15 @@ post_load_config (struct config_file *cfg)
 	parse_filters_str (cfg, cfg->filters_str);
 	fill_cfg_params (cfg);
 
+#ifdef HAVE_CLOCK_GETTIME
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_getres (CLOCK_PROCESS_CPUTIME_ID, &ts);
-#elif defined(HAVE_CLOCK_VIRTUAL)
+# elif defined(HAVE_CLOCK_VIRTUAL)
 	clock_getres (CLOCK_VIRTUAL, &ts);
-#else
+# else
 	clock_getres (CLOCK_REALTIME, &ts);
-#endif
+# endif
+
 	cfg->clock_res = (int)log10 (1000000 / ts.tv_nsec);
 	if (cfg->clock_res < 0) {
 		cfg->clock_res = 0;
@@ -555,6 +559,10 @@ post_load_config (struct config_file *cfg)
 	if (cfg->clock_res > 3) {
 		cfg->clock_res = 3;
 	}
+#else 
+	/* For gettimeofday */
+	cfg->clock_res = 1;
+#endif
 
 	if ((def_metric = g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
 		def_metric = check_metric_conf (cfg, NULL);

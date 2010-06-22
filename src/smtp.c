@@ -201,7 +201,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 		case SMTP_COMMAND_NOOP:
 			break;
 		case SMTP_COMMAND_MAIL:
-			if ((session->state == SMTP_STATE_GREETING || session->state == SMTP_STATE_HELO && !session->ctx->helo_required) 
+			if (((session->state == SMTP_STATE_GREETING || session->state == SMTP_STATE_HELO) && !session->ctx->helo_required) 
 					|| session->state == SMTP_STATE_FROM) {
 				if (parse_smtp_from (session, cmd)) {
 					session->state = SMTP_STATE_RCPT;
@@ -526,8 +526,13 @@ smtp_write_socket (void *arg)
 					cur = g_list_next (cur);
 				}
 				g_list_free (symbols);
+#ifdef HAVE_CLOCK_GETTIME
 				r += snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %ld, time: %sms",
 					(long int)session->task->msg->len, calculate_check_time (&session->task->ts, session->cfg->clock_res));
+#else
+				r += snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %ld, time: %sms",
+					(long int)session->task->msg->len, calculate_check_time (&session->task->tv, session->cfg->clock_res));
+#endif
 				msg_info ("%s", logbuf);
 
 				if (is_spam) {

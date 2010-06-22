@@ -596,7 +596,11 @@ struct symbol_callback_data {
 gboolean
 call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, gpointer *save)
 {
+#ifdef HAVE_CLOCK_GETTIME
 	struct timespec                 ts1, ts2;
+#else
+	struct timeval                  tv1, tv2;
+#endif
 	uint64_t                        diff;
 	struct cache_item              *item = NULL;
 	struct symbol_callback_data    *s = *save;
@@ -753,24 +757,40 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 		return FALSE;
 	}
 	if (check_view (task->cfg->views, item->s->symbol, task)) {
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+#ifdef HAVE_CLOCK_GETTIME
+# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
-#elif defined(HAVE_CLOCK_VIRTUAL)
+# elif defined(HAVE_CLOCK_VIRTUAL)
 		clock_gettime (CLOCK_VIRTUAL, &ts1);
-#else
+# else
 		clock_gettime (CLOCK_REALTIME, &ts1);
+# endif
+#else
+		if (gettimeofday (&tv1, NULL) == -1) {
+			msg_warn ("gettimeofday failed: %s", strerror (errno));
+		}
 #endif
 		item->func (task, item->user_data);
 
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+#ifdef HAVE_CLOCK_GETTIME
+# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts2);
-#elif defined(HAVE_CLOCK_VIRTUAL)
+# elif defined(HAVE_CLOCK_VIRTUAL)
 		clock_gettime (CLOCK_VIRTUAL, &ts2);
-#else
+# else
 		clock_gettime (CLOCK_REALTIME, &ts2);
+# endif
+#else
+		if (gettimeofday (&tv2, NULL) == -1) {
+			msg_warn ("gettimeofday failed: %s", strerror (errno));
+		}
 #endif
 
+#ifdef HAVE_CLOCK_GETTIME
 		diff = (ts2.tv_sec - ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
+#else
+		diff = (tv2.tv_sec - tv1.tv_sec) * 1000000 + (tv2.tv_usec - tv1.tv_usec);
+#endif
 		item->s->avg_time = set_counter (item->s->symbol, diff);
 	}
 

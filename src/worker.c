@@ -412,12 +412,18 @@ construct_task (struct rspamd_worker *worker)
 	new_task->cfg = worker->srv->cfg;
 	new_task->from_addr.s_addr = INADDR_NONE;
 	new_task->view_checked = FALSE;
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+#ifdef HAVE_CLOCK_GETTIME
+# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
-#elif defined(HAVE_CLOCK_VIRTUAL)
+# elif defined(HAVE_CLOCK_VIRTUAL)
 	clock_gettime (CLOCK_VIRTUAL, &new_task->ts);
-#else
+# else
 	clock_gettime (CLOCK_REALTIME, &new_task->ts);
+# endif
+#else
+	if (gettimeofday (&new_task->tv, NULL) == -1) {
+		msg_warn ("gettimeofday failed: %s", strerror (errno));
+	}
 #endif
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;

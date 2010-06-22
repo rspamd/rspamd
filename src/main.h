@@ -221,7 +221,11 @@ struct worker_task {
 	char *last_error;											/**< last error										*/
 	int error_code;												/**< code of last error								*/
 	memory_pool_t *task_pool;									/**< memory pool for task							*/
+#ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;											/**< time of connection								*/
+#else
+	struct timeval tv;											/**< time of connection								*/
+#endif
 	struct rspamd_view *view;									/**< matching view									*/
 	gboolean view_checked;
 	gboolean pass_all_filters;									/**< pass task throught every rule					*/
