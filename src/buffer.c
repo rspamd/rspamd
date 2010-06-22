@@ -43,10 +43,15 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	GError                         *err;
 
 #ifdef HAVE_SENDFILE
-	#if defined(FREEBSD) || defined(DARWIN)
+# if defined(FREEBSD) || defined(DARWIN)
+	#if defined(FREEBSD)
 	off_t                           off = 0;
 	/* FreeBSD version */
-	if (sendfile (d->sendfile_fd, d->fd, d->offset, 0, 0, &off, 0) != 0) {
+	if (sendfile (d->sendfile_fd, d->fd, d->offset, 0, NULL, &off, 0) != 0) {
+	#elif defined(DARWIN)
+	/* Darwin version */
+	if (sendfile (d->sendfile_fd, d->fd, d->offset, &off, NULL, 0) != 0) {
+	#endif
 		if (errno != EAGAIN) {
 			if (d->err_callback) {
 				err = g_error_new (G_DISPATCHER_ERROR, errno, "%s", strerror (errno));
@@ -75,7 +80,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		event_add (d->ev, d->tv);
 		d->in_sendfile = FALSE;
 	}
-	#else
+# else
 	/* Linux version */
 	r = sendfile (d->fd, d->sendfile_fd, &d->offset, d->file_size);
 	if (r == -1) {
@@ -113,7 +118,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		event_add (d->ev, d->tv);
 		d->in_sendfile = FALSE;
 	}
-	#endif
+# endif
 #else
 	r = write (d->fd, d->map, d->file_size - d->offset);
 	if (r == -1) {
