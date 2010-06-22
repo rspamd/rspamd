@@ -762,7 +762,7 @@ main (int argc, char **argv, char **env)
 	do_reopen_log = 0;
 
 #ifndef HAVE_SETPROCTITLE
-	init_title (argc, argv, environ);
+	init_title (argc, argv, env);
 #endif
 
 	rspamd->stat = memory_pool_alloc_shared (rspamd->server_pool, sizeof (struct rspamd_stat));

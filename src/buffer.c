@@ -44,8 +44,8 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 
 #ifdef HAVE_SENDFILE
 # if defined(FREEBSD) || defined(DARWIN)
-	#if defined(FREEBSD)
 	off_t                           off = 0;
+	#if defined(FREEBSD)
 	/* FreeBSD version */
 	if (sendfile (d->sendfile_fd, d->fd, d->offset, 0, NULL, &off, 0) != 0) {
 	#elif defined(DARWIN)
