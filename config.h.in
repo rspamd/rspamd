@@ -224,8 +224,8 @@
 #endif
 
 /* timedb */
-#ifdef HAVE_SYS_TIMEDB_H
-#include <sys/timedb.h>
+#ifdef HAVE_SYS_TIMEB_H
+#include <sys/timeb.h>
 #endif
 
 /* sysexits */

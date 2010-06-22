@@ -1136,7 +1136,7 @@ default_transaction_id_fn(void)
 	}
 	clock_gettime(clkid, &ts);
 	trans_id = ts.tv_nsec & 0xffff;
-#elif defined(HAVE_SYS_TIMEDB_H)
+#elif defined(HAVE_SYS_TIMEB_H)
 	struct timeb tb;
 	ftime(&tb);
 	trans_id = tb.millitm & 0xffff;
