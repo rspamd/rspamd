@@ -42,8 +42,8 @@
 
 #define MIN_CACHE 17
 
-static uint64_t                 total_frequency;
-static uint32_t                 nsymbols;
+static uint64_t                 total_frequency = 0;
+static uint32_t                 nsymbols = 0;
 
 int
 cache_cmp (const void *p1, const void *p2)

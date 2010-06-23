@@ -54,6 +54,15 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 		SET(ETC_PREFIX /usr/local/etc)
 		SET(PREFIX /usr/local)
 	ENDIF(NOT ETC_PREFIX)
+    FIND_LIBRARY(LIBINTL_LIBRARY NAMES intl PATHS   /lib
+                                               /opt/lib
+                                               /usr/lib
+                                               /usr/local/lib
+                 DOC "Path where the libintl library can be found")
+    LIST(APPEND CMAKE_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
+ 
+ ENDIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES intl)
 
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -65,7 +74,12 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 		SET(ETC_PREFIX /usr/local/etc)
 		SET(PREFIX /usr/local)
 	ENDIF(NOT ETC_PREFIX)
-	LIST(APPEND CMAKE_REQUIRED_LIBRARIES intl)
+    FIND_LIBRARY(LIBINTL_LIBRARY NAMES intl PATHS   /lib
+                                               /opt/lib
+                                               /usr/lib
+                                               /usr/local/lib
+                 DOC "Path where the libintl library can be found")
+    LIST(APPEND CMAKE_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
 
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 

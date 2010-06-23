@@ -578,7 +578,12 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 	struct mime_text_part          *part;
 	GList                          *cur, *headerlist;
 	GRegex                         *regexp;
-	struct url_regexp_param         callback_param;
+	struct url_regexp_param         callback_param = {
+		.task = task,
+		.regexp = re->regexp,
+		.re = re,
+		.found = FALSE
+	};
 	int                             r;
 
 
