@@ -639,6 +639,29 @@ decode_entitles (char *s, guint * len)
 	}
 }
 
+/*
+ * Find the first occurrence of find in s, ignore case.
+ */
+static gchar *
+html_strcasestr (const gchar *s, const gchar *find)
+{
+	char c, sc;
+	size_t len;
+
+	if ((c = *find++) != 0) {
+		c = g_ascii_tolower (c);
+		len = strlen (find);
+		do {
+			do {
+				if ((sc = *s++) == 0)
+					return (NULL);
+			} while (g_ascii_tolower (sc) != c);
+		} while (g_ascii_strncasecmp (s, find, len) != 0);
+		s--;
+	}
+	return ((gchar *)s);
+}
+
 static void
 parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, char *tag_text)
 {
@@ -650,11 +673,11 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 
 	/* For A tags search for href= and for IMG tags search for src= */
 	if (id == Tag_A) {
-		c = strcasestr (tag_text, "href=");
+		c = html_strcasestr (tag_text, "href=");
 		len = sizeof ("href=") - 1;
 	}
 	else if (id == Tag_IMG) {
-		c = strcasestr (tag_text, "src=");
+		c = html_strcasestr (tag_text, "src=");
 		len = sizeof ("src=") - 1;
 	}
 

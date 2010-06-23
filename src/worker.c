@@ -37,7 +37,7 @@
 #include "message.h"
 #include "map.h"
 
-#include <evdns.h>
+#include "evdns/evdns.h"
 
 #ifndef WITHOUT_PERL
 #   include <EXTERN.h>			/* from the Perl distribution     */

@@ -5,8 +5,18 @@
 #include "cfg_file.h"
 #include "radix.h"
 
-/* Forwarded declaration */
-enum process_type;
+/** 
+ * Process type: main or worker
+ */
+enum process_type {
+	TYPE_MAIN,
+	TYPE_WORKER,
+	TYPE_CONTROLLER,
+	TYPE_LMTP,
+	TYPE_SMTP,
+	TYPE_FUZZY,
+	TYPE_GREYLIST
+};
 
 typedef void (*rspamd_log_func_t)(const gchar * log_domain, const gchar *function,
 								  GLogLevelFlags log_level, const gchar * message, 

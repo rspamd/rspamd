@@ -53,7 +53,7 @@ struct pidfh {
 #else
 	char    pf_path[1024 + 1];
 #endif
- 	__dev_t pf_dev;
+ 	dev_t pf_dev;
  	ino_t   pf_ino;
 };
 struct pidfh *pidfile_open(const char *path, mode_t mode, pid_t *pidptr);

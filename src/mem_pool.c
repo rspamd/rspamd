@@ -83,7 +83,7 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 	struct _pool_chain_shared      *chain;
 
 #if defined(HAVE_MMAP_ANON)
-	chain = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+	chain = (struct _pool_chain_shared *)mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
 	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
 	g_assert (chain->begin != MAP_FAILED);
@@ -94,7 +94,7 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 	if (fd == -1) {
 		return NULL;
 	}
-	chain = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	chain = (struct _pool_chain_shared *)mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
 	g_assert (chain->begin != MAP_FAILED);
@@ -127,14 +127,14 @@ memory_pool_new (memory_pool_ssize_t size)
 	/* Allocate statistic structure if it is not allocated before */
 	if (mem_pool_stat == NULL) {
 #if defined(HAVE_MMAP_ANON)
-		mem_pool_stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+		mem_pool_stat = (memory_pool_stat_t *)mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
 		g_assert (stat != MAP_FAILED);
 #elif defined(HAVE_MMAP_ZERO)
 		int                             fd;
 
 		fd = open ("/dev/zero", O_RDWR);
 		g_assert (fd != -1);
-		mem_pool_stat = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		mem_pool_stat = (memory_pool_stat_t *)mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 		g_assert (chain != MAP_FAILED);
 #else
 #   	error No mmap methods are defined
@@ -474,7 +474,7 @@ memory_pool_delete (memory_pool_t * pool)
 	while (cur_shared) {
 		tmp_shared = cur_shared;
 		cur_shared = cur_shared->next;
-		munmap (tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
+		munmap ((void *)tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
 		STAT_LOCK ();
 		mem_pool_stat->chunks_freed++;
 		STAT_UNLOCK ();

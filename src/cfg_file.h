@@ -49,7 +49,7 @@ enum rspamd_cred_type {
 	CRED_NORMAL,
 	CRED_CONTROL,
 	CRED_LMTP,
-	CRED_DELIVERY,
+	CRED_DELIVERY
 };
 
 /**
@@ -61,7 +61,7 @@ enum rspamd_regexp_type {
 	REGEXP_MIME,
 	REGEXP_MESSAGE,
 	REGEXP_URL,
-	REGEXP_RAW_HEADER,
+	REGEXP_RAW_HEADER
 };
 
 /**
@@ -70,7 +70,7 @@ enum rspamd_regexp_type {
 enum rspamd_log_type {
 	RSPAMD_LOG_CONSOLE,
 	RSPAMD_LOG_SYSLOG,
-	RSPAMD_LOG_FILE,
+	RSPAMD_LOG_FILE
 };
 
 /**
@@ -201,7 +201,7 @@ struct config_scalar {
         SCALAR_TYPE_INT,
         SCALAR_TYPE_UINT,
         SCALAR_TYPE_STR,
-        SCALAR_TYPE_SIZE,
+        SCALAR_TYPE_SIZE
     } type;											/**< type of data										*/
 };
 

@@ -240,8 +240,13 @@
 
 
 /* string */
-#ifdef HAVE_STDIO_H
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+
+/* strings */
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
 #endif
 
 /* fcntl */

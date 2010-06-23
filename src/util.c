@@ -112,6 +112,8 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 		goto out;
 	}
 
+	memset (&sin, 0, sizeof (sin));
+
 	/* Bind options */
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons (port);
@@ -418,6 +420,10 @@ setproctitle (const char *fmt, ...)
 int
 init_title (int argc, char *argv[], char *envp[])
 {
+#if defined(DARWIN) || defined(SOLARIS)
+	/* XXX: try to handle these OSes too */
+	return 0;
+#else
 	char                           *begin_of_buffer = 0, *end_of_buffer = 0;
 	int                             i;
 
@@ -478,6 +484,7 @@ init_title (int argc, char *argv[], char *envp[])
 	}
 	g_free (new_environ);
 	return 0;
+#endif
 }
 #endif
 
@@ -541,7 +548,7 @@ pidfile_open (const char *path, mode_t mode, pid_t * pidptr)
 		return NULL;
 
 	if (path == NULL)
-		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "/var/run/%s.pid", __progname);
+		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "/var/run/%s.pid", g_get_prgname ());
 	else
 		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "%s", path);
 	if (len >= (int)sizeof (pfh->pf_path)) {
@@ -626,7 +633,7 @@ pidfile_write (struct pidfh *pfh)
 		return -1;
 	}
 
-	snprintf (pidstr, sizeof (pidstr), "%u", getpid ());
+	snprintf (pidstr, sizeof (pidstr), "%lu", (long unsigned)getpid ());
 	if (pwrite (fd, pidstr, strlen (pidstr), 0) != (ssize_t) strlen (pidstr)) {
 		error = errno;
 		_pidfile_remove (pfh, 0);

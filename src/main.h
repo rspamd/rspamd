@@ -39,18 +39,6 @@
 #define CR '\r'
 #define LF '\n'
 
-/** 
- * Process type: main or worker
- */
-enum process_type {
-	TYPE_MAIN,
-	TYPE_WORKER,
-	TYPE_CONTROLLER,
-	TYPE_LMTP,
-	TYPE_SMTP,
-	TYPE_FUZZY,
-	TYPE_GREYLIST
-};
 
 
 /** 
