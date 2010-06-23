@@ -379,7 +379,7 @@ smtp_upstream_write_socket (void *arg)
 	struct smtp_session            *session = arg;
 	
 	if (session->upstream_state == SMTP_STATE_IN_SENDFILE) {
-		session->upstream_state = SMTP_STATE_END;
+		session->upstream_state = SMTP_STATE_AFTER_DATA;
 		return rspamd_dispatcher_write (session->upstream_dispatcher, CRLF DATA_END_TRAILER, sizeof (CRLF DATA_END_TRAILER) - 1, FALSE, TRUE);
 	}
 
@@ -579,15 +579,35 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				return TRUE;
 			}
 			break;
-		case SMTP_STATE_END:
+		case SMTP_STATE_AFTER_DATA:
 			session->error = memory_pool_alloc (session->pool, in->len + 1);
 			g_strlcpy (session->error, in->begin, in->len + 1);
-			session->state = SMTP_STATE_END;
+			session->state = SMTP_STATE_DATA;
 			rspamd_dispatcher_restore (session->dispatcher);
 			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
 			rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
-			destroy_session (session->s);
+			rspamd_dispatcher_write (session->upstream_dispatcher, "QUIT" CRLF, sizeof ("QUIT" CRLF) - 1, FALSE, TRUE);
+			session->upstream_state = SMTP_STATE_END;
+			return TRUE;
+			break;
+		case SMTP_STATE_END:
+			r = check_smtp_ustream_reply (in, '5');
+			if (r == -1) {
+				session->error = memory_pool_alloc (session->pool, in->len + 1);
+				g_strlcpy (session->error, in->begin, in->len + 1);
+				/* XXX: assume upstream errors as critical errors */
+				session->state = SMTP_STATE_CRITICAL_ERROR;
+				rspamd_dispatcher_restore (session->dispatcher);
+				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				destroy_session (session->s);
+				return FALSE;
+			}
+			else {
+				remove_normal_event (session->s,  (event_finalizer_t)smtp_upstream_finalize_connection, session);
+			}
 			return FALSE;
+			break;
 		default:
 			msg_err ("got upstream reply at unexpected state: %d, reply: %V", session->upstream_state, in);
 			session->state = SMTP_STATE_CRITICAL_ERROR;
