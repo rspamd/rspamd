@@ -308,6 +308,7 @@ smtp_send_upstream_message (struct smtp_session *session)
 	session->upstream_state = SMTP_STATE_IN_SENDFILE;
 	session->state = SMTP_STATE_WAIT_UPSTREAM;
 	if (! rspamd_dispatcher_sendfile (session->upstream_dispatcher, session->temp_fd, session->temp_size)) {
+		msg_err ("sendfile failed: %s", strerror (errno));
 		goto err;
 	}
 	return TRUE;
@@ -330,6 +331,7 @@ process_smtp_data (struct smtp_session *session)
 	char                           *s;
 
 	if (fstat (session->temp_fd, &st) == -1) {
+		msg_err ("fstat failed: %s", strerror (errno));
 		goto err;
 	}
 	/* Now mmap temp file if it is small enough */
@@ -344,6 +346,7 @@ process_smtp_data (struct smtp_session *session)
 #else
 		if ((session->task->msg->begin = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, session->temp_fd, 0)) == MAP_FAILED) {
 #endif
+			msg_err ("mmap failed: %s", strerror (errno));
 			goto err;
 		}
 		session->task->msg->len = st.st_size;
@@ -375,6 +378,7 @@ process_smtp_data (struct smtp_session *session)
 		if (process_message (session->task) == -1) {
 			msg_err ("cannot process message");
 			munmap (session->task->msg->begin, st.st_size);
+			msg_err ("process message failed: %s", strerror (errno));
 			goto err;
 		}
 		r = process_filters (session->task);
