@@ -196,7 +196,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 			}
 			break;
 		case SMTP_COMMAND_QUIT:
-			session->state = SMTP_STATE_END;
+			session->state = SMTP_STATE_QUIT;
 			break;
 		case SMTP_COMMAND_NOOP:
 			break;
@@ -445,7 +445,9 @@ smtp_read_socket (f_str_t * in, void *arg)
 					destroy_session (session->s);
 					return FALSE;
 				}
-				smtp_write_socket (session);
+				if (! smtp_write_socket (session)) {
+					return FALSE;
+				}
 			}
 			break;
 		case SMTP_STATE_AFTER_DATA:
@@ -476,7 +478,7 @@ smtp_read_socket (f_str_t * in, void *arg)
 			break;
 	}
 
-	if (session->state == SMTP_STATE_END) {
+	if (session->state == SMTP_STATE_QUIT) {
 		destroy_session (session->s);
 		return FALSE;
 	}
