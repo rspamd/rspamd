@@ -42,8 +42,8 @@ make_smtp_error (struct smtp_session *session, int error_code, const char *forma
 	va_start (vp, format);
 	len += sizeof ("65535 ") + sizeof (CRLF) - 1;
 	result = memory_pool_alloc (session->pool, len);
-	p = result + snprintf (result, len, "%d ", error_code);
-	p += vsnprintf (p, len - (p - result), format, vp);
+	p = result + rspamd_snprintf (result, len, "%d ", error_code);
+	p = rspamd_vsnprintf (p, len - (p - result), format, vp);
 	*p++ = CR; *p++ = LF; *p = '\0';
 	va_end (vp);
 
@@ -413,7 +413,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			else if (r == 1) {
 				if (session->ctx->use_xclient) {
-					r = snprintf (outbuf, sizeof (outbuf), "XCLIENT NAME=%s ADDR=%s" CRLF, 
+					r = rspamd_snprintf (outbuf, sizeof (outbuf), "XCLIENT NAME=%s ADDR=%s" CRLF, 
 							session->resolved ? session->hostname : "[UNDEFINED]",
 							inet_ntoa (session->client_addr));
 					session->upstream_state = SMTP_STATE_HELO;
@@ -422,7 +422,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				else {
 					session->upstream_state = SMTP_STATE_FROM;
 					if (session->helo) {
-						r = snprintf (outbuf, sizeof (outbuf), "%s %s" CRLF, 
+						r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s %s" CRLF, 
 							session->esmtp ? "EHLO" : "HELO",
 							session->helo);
 					}
@@ -453,7 +453,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			else if (r == 1) {
 				session->upstream_state = SMTP_STATE_FROM;
 				if (session->helo) {
-					r = snprintf (outbuf, sizeof (outbuf), "%s %s" CRLF, 
+					r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s %s" CRLF, 
 						session->esmtp ? "EHLO" : "HELO",
 						session->helo);
 				}
@@ -481,7 +481,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				return FALSE;
 			}
 			else if (r == 1) {
-				r = snprintf (outbuf, sizeof (outbuf), "MAIL FROM: ");
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), "MAIL FROM: ");
 				r += smtp_upstream_write_list (session->from, outbuf + r, sizeof (outbuf) - r);
 				session->upstream_state = SMTP_STATE_RCPT;
 				return rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE);
@@ -505,7 +505,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				return FALSE;
 			}
 			else if (r == 1) {
-				r = snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
 				session->cur_rcpt = g_list_first (session->rcpt);
 				r += smtp_upstream_write_list (session->cur_rcpt->data, outbuf + r, sizeof (outbuf) - r);
 				session->cur_rcpt = g_list_next (session->cur_rcpt);
@@ -537,7 +537,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			}
 			else if (r == 1) {
 				if (session->cur_rcpt != NULL) {
-					r = snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
+					r = rspamd_snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
 					r += smtp_upstream_write_list (session->cur_rcpt, outbuf + r, sizeof (outbuf) - r);
 					session->cur_rcpt = g_list_next (session->cur_rcpt);
 					if (! rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE)) {
@@ -583,7 +583,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			else if (r == 1) {
 				r = strlen (session->cfg->temp_dir) + sizeof ("/rspamd-XXXXXX");
 				session->temp_name = memory_pool_alloc (session->pool, r);
-				snprintf (session->temp_name, r, "%s%crspamd-XXXXXX", session->cfg->temp_dir, G_DIR_SEPARATOR);
+				rspamd_snprintf (session->temp_name, r, "%s%crspamd-XXXXXX", session->cfg->temp_dir, G_DIR_SEPARATOR);
 #ifdef HAVE_MKSTEMP
 				/* Umask is set before */
 				session->temp_fd = mkstemp (session->temp_name);

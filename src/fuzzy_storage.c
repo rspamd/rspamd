@@ -632,7 +632,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
 		if ((r = process_check_command (&session->cmd, &flag))) {
-			r = snprintf (buf, sizeof (buf), "OK %d %d" CRLF, r, flag);
+			r = rspamd_snprintf (buf, sizeof (buf), "OK %d %d" CRLF, r, flag);
 			if (sendto (session->fd, buf, r, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
 				msg_err ("error while writing reply: %s", strerror (errno));
 			}

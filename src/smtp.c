@@ -231,7 +231,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 						session->state = SMTP_STATE_WAIT_UPSTREAM;
 						session->upstream_state = SMTP_STATE_BEFORE_DATA;
 						rspamd_dispatcher_restore (session->upstream_dispatcher);
-						r = snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
+						r = rspamd_snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
 						r += smtp_upstream_write_list (session->rcpt->data, outbuf + r, sizeof (outbuf) - r);
 						session->cur_rcpt = NULL;
 						return rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE);
@@ -274,7 +274,7 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 				else {
 					session->upstream_state = SMTP_STATE_DATA;
 					rspamd_dispatcher_restore (session->upstream_dispatcher);
-					r = snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
+					r = rspamd_snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
 					session->state = SMTP_STATE_WAIT_UPSTREAM;
 					session->error = SMTP_ERROR_DATA_OK;
 					return rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE);
@@ -527,26 +527,26 @@ smtp_write_socket (void *arg)
 					is_spam = TRUE;
 				}
 
-				r = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", session->task->message_id);
-				r += snprintf (logbuf + r, sizeof (logbuf) - r, "(%s: %s: [%.2f/%.2f/%.2f] [", 
+				r = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", session->task->message_id);
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "(%s: %s: [%.2f/%.2f/%.2f] [", 
 						(char *)m->name, is_spam ? "T" : "F", metric_res->score, ms, rs);
 				symbols = g_hash_table_get_keys (metric_res->symbols);
 				cur = symbols;
 				while (cur) {
 					if (g_list_next (cur) != NULL) {
-						r += snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (char *)cur->data);
+						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (char *)cur->data);
 					}
 					else {
-						r += snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (char *)cur->data);
+						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (char *)cur->data);
 					}
 					cur = g_list_next (cur);
 				}
 				g_list_free (symbols);
 #ifdef HAVE_CLOCK_GETTIME
-				r += snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %ld, time: %sms",
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %sms",
 					(long int)session->task->msg->len, calculate_check_time (&session->task->ts, session->cfg->clock_res));
 #else
-				r += snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %ld, time: %sms",
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %sms",
 					(long int)session->task->msg->len, calculate_check_time (&session->task->tv, session->cfg->clock_res));
 #endif
 				msg_info ("%s", logbuf);
@@ -968,16 +968,16 @@ make_capabilities (struct smtp_worker_ctx *ctx, const char *line)
 	
 	p = result;
 	if (num == 0) {
-		p += snprintf (p, len - (p - result), "250 %s" CRLF, hostbuf);
+		p += rspamd_snprintf (p, len - (p - result), "250 %s" CRLF, hostbuf);
 	}
 	else {
-		p += snprintf (p, len - (p - result), "250-%s" CRLF, hostbuf);
+		p += rspamd_snprintf (p, len - (p - result), "250-%s" CRLF, hostbuf);
 		for (i = 0; i < num; i ++) {
 			if (i != num - 1) {
-				p += snprintf (p, len - (p - result), "250-%s" CRLF, strv[i]);
+				p += rspamd_snprintf (p, len - (p - result), "250-%s" CRLF, strv[i]);
 			}
 			else {
-				p += snprintf (p, len - (p - result), "250 %s" CRLF, strv[i]);
+				p += rspamd_snprintf (p, len - (p - result), "250 %s" CRLF, strv[i]);
 			}
 		}
 	}

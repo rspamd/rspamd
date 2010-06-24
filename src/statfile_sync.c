@@ -76,7 +76,7 @@ log_next_sync (const char *symbol, time_t delay)
     tmp = localtime(&t);
 
 	if (tmp) {
-		r = snprintf (outstr, sizeof (outstr), "statfile_sync: next sync of %s at ", symbol);
+		r = rspamd_snprintf (outstr, sizeof (outstr), "statfile_sync: next sync of %s at ", symbol);
 		if ((r = strftime(outstr + r, sizeof(outstr) - r, "%T", tmp)) != 0) {
 			msg_info (outstr);
 		}
@@ -175,7 +175,7 @@ sync_read (f_str_t * in, void *arg)
 			/* Skip greeting line and write sync command */
 			/* Write initial data */
 			statfile_get_revision (ctx->real_statfile, &rev, &ti);
-			rev = snprintf (buf, sizeof (buf), "sync %s %ld %ld" CRLF, ctx->st->symbol, (long int)rev, (long int)ti);
+			rev = rspamd_snprintf (buf, sizeof (buf), "sync %s %l %l" CRLF, ctx->st->symbol, (long int)rev, (long int)ti);
 			ctx->state = SYNC_STATE_READ_LINE;
 			return rspamd_dispatcher_write (ctx->dispatcher, buf, rev, FALSE, FALSE);	
 			break;

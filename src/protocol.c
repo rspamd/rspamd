@@ -429,10 +429,10 @@ write_hashes_to_log (struct worker_task *task, char *logbuf, int offset, int siz
 		text_part = cur->data;
 		if (text_part->fuzzy) {
 			if (cur->next != NULL) {
-				offset += snprintf (logbuf + offset, size - offset, " part: %Xd,", text_part->fuzzy->h);
+				offset += rspamd_snprintf (logbuf + offset, size - offset, " part: %Xd,", text_part->fuzzy->h);
 			}
 			else {
-				offset += snprintf (logbuf + offset, size - offset, " part: %Xd", text_part->fuzzy->h);
+				offset += rspamd_snprintf (logbuf + offset, size - offset, " part: %Xd", text_part->fuzzy->h);
 			}
 		}
 		cur = g_list_next (cur);
@@ -448,7 +448,7 @@ show_url_header (struct worker_task *task)
 	GList                          *cur;
 	f_str_t                         host;
 
-	r = snprintf (outbuf, sizeof (outbuf), "Urls: ");
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "Urls: ");
 	cur = task->urls;
 	while (cur) {
 		url = cur->data;
@@ -478,14 +478,14 @@ show_url_header (struct worker_task *task)
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
 			debug_task ("write url: %s", host.begin);
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
 			*(host.begin + host.len) = c;
 		}
 		else {
 			c = *(host.begin + host.len);
 			*(host.begin + host.len) = '\0';
 			debug_task ("write url: %s", host.begin);
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
 			*(host.begin + host.len) = c;
 		}
 		cur = g_list_next (cur);
@@ -508,14 +508,14 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	}
 
 	if (s->options) {
-		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
+		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
 		cur = s->options;
 		while (cur) {
 			if (g_list_next (cur)) {
-				r += snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (char *)cur->data);
 			}
 			else {
-				r += snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (char *)cur->data);
 			}
 			cur = g_list_next (cur);
 		}
@@ -526,9 +526,9 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 		}
 	}
 	else {
-		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
+		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
 	}
-	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (char *)key);
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (char *)key);
 
 	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 		cd->alive = FALSE;
@@ -547,10 +547,10 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 		cur = symbols;
 		while (cur) {
 			if (g_list_next (cur) != NULL) {
-				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
 			}
 			else {
-				r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, (char *)cur->data);
 			}
 			cur = g_list_next (cur);
 		}
@@ -595,26 +595,26 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			rs = m->reject_score;
 		}
 		if (task->proto == SPAMC_PROTO) {
-			r = snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF, ms);
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF, ms);
 		}
 		else {
 			if (strcmp (task->proto_ver, RSPAMC_PROTO_1_1) == 0) {
                 if (!task->is_skipped) {
-				    r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f / %.2f" CRLF, ms, rs);
+				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f / %.2f" CRLF, ms, rs);
                 }
                 else {
-				    r = snprintf (outbuf, sizeof (outbuf), "Metric: default; Skip; 0 / %.2f / %.2f" CRLF, ms, rs);
+				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: default; Skip; 0 / %.2f / %.2f" CRLF, ms, rs);
                 }
 			}
 			else {
-				r = snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF, ms);
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF, ms);
 			}
 		}
         if (!task->is_skipped) {
-		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: F: [0/%.2f/%.2f] [", "default", ms, rs);
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: F: [0/%.2f/%.2f] [", "default", ms, rs);
         }
         else {
-		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: S: [0/%.2f/%.2f] [", "default", ms, rs);
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: S: [0/%.2f/%.2f] [", "default", ms, rs);
         }
 	}
 	else {
@@ -632,30 +632,30 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			is_spam = 1;
 		}
 		if (task->proto == SPAMC_PROTO) {
-			r = snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True" : "False", metric_res->score, ms);
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True" : "False", metric_res->score, ms);
 		}
 		else {
 			if (strcmp (task->proto_ver, RSPAMC_PROTO_1_1) == 0) {
                 if (!task->is_skipped) {
-				    r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f / %.2f" CRLF, 
+				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f / %.2f" CRLF, 
 						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms, rs);
                 }
                 else {
-				    r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; Skip; %.2f / %.2f / %.2f" CRLF, 
+				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; Skip; %.2f / %.2f / %.2f" CRLF, 
 						(char *)metric_name, metric_res->score, ms, rs);
                 }
 			}
 			else {
-				r = snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, 
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, 
 						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
 			}
 		}
         if (!task->is_skipped) {
-		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
 				(char *)metric_name, is_spam ? "T" : "F", metric_res->score, ms, rs);
         }
         else {
-		    cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
 				(char *)metric_name, "S", metric_res->score, ms, rs);
         
         }
@@ -679,10 +679,10 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		}
 	}
 #ifdef HAVE_CLOCK_GETTIME
-	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %ld, time: %sms",
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %sms",
 		(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
 #else
-	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %ld, time: %sms",
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %sms",
 		(long int)task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
 #endif
 }
@@ -696,7 +696,7 @@ show_messages (struct worker_task *task)
 	
 	cur = task->messages;
 	while (cur) {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "Message: %s" CRLF, (char *)cur->data);
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Message: %s" CRLF, (char *)cur->data);
 		cur = g_list_next (cur);
 	}
 
@@ -711,7 +711,7 @@ write_check_reply (struct worker_task *task)
 	struct metric_result           *metric_res;
 	struct metric_callback_data     cd;
 
-	r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
 					task->proto_ver, "OK");
 	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
 		return FALSE;
@@ -719,7 +719,7 @@ write_check_reply (struct worker_task *task)
 
 	cd.task = task;
 	cd.log_buf = logbuf;
-	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
+	cd.log_offset = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
 	cd.log_size = sizeof (logbuf);
 	cd.alive = TRUE;
 
@@ -799,13 +799,13 @@ write_process_reply (struct worker_task *task)
 	struct metric_result           *metric_res;
 	struct metric_callback_data     cd;
 
-	r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, 
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF "Content-Length: %zd" CRLF CRLF, 
 			(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, 
 			task->proto_ver, "OK", task->msg->len);
 
 	cd.task = task;
 	cd.log_buf = logbuf;
-	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
+	cd.log_offset = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
 	cd.log_size = sizeof (logbuf);
 	cd.alive = TRUE;
 
@@ -888,12 +888,12 @@ write_reply (struct worker_task *task)
 	if (task->error_code != 0) {
 		/* Write error message and error code to reply */
 		if (task->proto == SPAMC_PROTO) {
-			r = snprintf (outbuf, sizeof (outbuf), "%s/%s %d %s" CRLF CRLF, 
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s %d %s" CRLF CRLF, 
 					SPAMD_REPLY_BANNER, task->proto_ver, task->error_code, SPAMD_ERROR);
 			debug_task ("writing error: %s", outbuf);
 		}
 		else {
-			r = snprintf (outbuf, sizeof (outbuf), "%s/%s %d %s" CRLF "%s: %s" CRLF CRLF, 
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s %d %s" CRLF "%s: %s" CRLF CRLF, 
 					RSPAMD_REPLY_BANNER, task->proto_ver, task->error_code, SPAMD_ERROR, ERROR_HEADER, task->last_error);
 			debug_task ("writing error: %s", outbuf);
 		}
@@ -914,12 +914,12 @@ write_reply (struct worker_task *task)
 			return write_process_reply (task);
 			break;
 		case CMD_SKIP:
-			r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF, 
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF, 
 					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, task->proto_ver, SPAMD_OK);
 			return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 			break;
 		case CMD_PING:
-			r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 PONG" CRLF, 
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s 0 PONG" CRLF, 
 					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, task->proto_ver);
 			return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 			break;

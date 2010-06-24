@@ -580,26 +580,26 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	struct metric_result           *metric_res = (struct metric_result *)metric_value;
 	double                          ms, rs;
 
-	snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
+	rspamd_snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
 	if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
 		ms = metric_res->metric->required_score;
 	}
 	if (metric_res->score >= ms) {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
 	}
 	else {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
 	}
 
 	symbols = g_hash_table_get_keys (metric_res->symbols);
 	cur = symbols;
 	while (cur) {
 		if (g_list_next (cur) != NULL) {
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
 		}
 		else {
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (char *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (char *)cur->data);
 		}
 		cur = g_list_next (cur);
 	}

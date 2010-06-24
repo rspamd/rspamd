@@ -160,7 +160,7 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 	int                             r;
 
 	if (cmd->privilleged && !session->authorized) {
-		r = snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return 0;
 		}
@@ -179,7 +179,7 @@ counter_write_callback (gpointer key, gpointer value, void *data)
 	char                            out_buf[128];
 	int                             r;
 
-	r = snprintf (out_buf, sizeof (out_buf), "%s: %llu" CRLF, name, (unsigned long long int)cd->value);
+	r = rspamd_snprintf (out_buf, sizeof (out_buf), "%s: %llu" CRLF, name, (unsigned long long int)cd->value);
 	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE)) {
 		msg_warn ("cannot write to socket");
 	}
@@ -226,7 +226,7 @@ write_whole_statfile (struct controller_session *session, char *symbol, struct c
 		}
 	}
 
-	i = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %uL" CRLF, rev, ti, pos);
+	i = rspamd_snprintf (out_buf, sizeof (out_buf), "%udL %udL %udL" CRLF, rev, ti, pos);
 	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, i, TRUE, FALSE)) {
 		return FALSE;
 	}
@@ -304,7 +304,7 @@ process_sync_command (struct controller_session *session, char **args)
 	}
 	
 	while (binlog_sync (binlog, rev, &time, &data)) {
-		r = snprintf (out_buf, sizeof (out_buf), "%lu %lu %lu" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "%ul %ul %ul" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE)) {
 			if (data != NULL) {
 				g_free (data);
@@ -348,25 +348,25 @@ process_stat_command (struct controller_session *session)
 	GList                          *cur_cl, *cur_st;
 
 	memory_pool_stat (&mem_st);
-	r = snprintf (out_buf, sizeof (out_buf), "Messages scanned: %u" CRLF, session->worker->srv->stat->messages_scanned);
+	r = rspamd_snprintf (out_buf, sizeof (out_buf), "Messages scanned: %ud" CRLF, session->worker->srv->stat->messages_scanned);
 	if (session->worker->srv->stat->messages_scanned > 0) {
-		r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %u, %.2f%%" CRLF, session->worker->srv->stat->messages_spam,
+		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %ud, %.2f%%" CRLF, session->worker->srv->stat->messages_spam,
 								(double)session->worker->srv->stat->messages_spam / (double)session->worker->srv->stat->messages_scanned * 100.);
-		r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %u, %.2f%%" CRLF, session->worker->srv->stat->messages_ham,
+		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %ud, %.2f%%" CRLF, session->worker->srv->stat->messages_ham,
 								(double)session->worker->srv->stat->messages_ham / (double)session->worker->srv->stat->messages_scanned * 100.);
 	}
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %u" CRLF, session->worker->srv->stat->messages_learned);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %u" CRLF, session->worker->srv->stat->connections_count);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %u" CRLF, session->worker->srv->stat->control_connections_count);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %ld" CRLF, (long int)mem_st.pools_allocated);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %ld" CRLF, (long int)mem_st.pools_freed);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %ld" CRLF, (long int)mem_st.bytes_allocated);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %ld" CRLF, (long int)mem_st.chunks_allocated);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %ld" CRLF, (long int)mem_st.shared_chunks_allocated);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %ld" CRLF, (long int)mem_st.chunks_freed);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %ld" CRLF, (long int)mem_st.oversized_chunks);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes stored: %u" CRLF, session->worker->srv->stat->fuzzy_hashes);
-	r += snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes expired: %u" CRLF, session->worker->srv->stat->fuzzy_hashes_expired);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %ud" CRLF, session->worker->srv->stat->messages_learned);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %ud" CRLF, session->worker->srv->stat->connections_count);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %ud" CRLF, session->worker->srv->stat->control_connections_count);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %l" CRLF, (long int)mem_st.pools_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %l" CRLF, (long int)mem_st.pools_freed);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %l" CRLF, (long int)mem_st.bytes_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %l" CRLF, (long int)mem_st.chunks_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %l" CRLF, (long int)mem_st.shared_chunks_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %l" CRLF, (long int)mem_st.chunks_freed);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %l" CRLF, (long int)mem_st.oversized_chunks);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes stored: %ud" CRLF, session->worker->srv->stat->fuzzy_hashes);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes expired: %ud" CRLF, session->worker->srv->stat->fuzzy_hashes_expired);
 	/* Now write statistics for each statfile */
 	cur_cl = g_list_first (session->cfg->classifiers);
 	while (cur_cl) {
@@ -383,8 +383,8 @@ process_stat_command (struct controller_session *session)
 				statfile_get_revision (statfile, &rev, &ti);
 				if (total != (uint64_t)-1 && used != (uint64_t)-1) {
 					numbuf = g_format_size_for_display (st->size);
-					r += snprintf (out_buf + r, sizeof (out_buf) - r, 
-							"Statfile: %s (version %lu); length: %s; free blocks: %lu; total blocks: %lu; free: %.2f%%" CRLF,
+					r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, 
+							"Statfile: %s (version %ul); length: %s; free blocks: %ul; total blocks: %ul; free: %.2f%%" CRLF,
 							st->symbol, (long unsigned)rev, numbuf, 
 							(long unsigned)(total - used), (long unsigned)total,
 							(double)((double)(total - used) / (double)total) * 100.);
@@ -414,14 +414,14 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		arg = *cmd_args;
 		if (!arg || *arg == '\0') {
 			msg_debug ("empty password passed");
-			r = snprintf (out_buf, sizeof (out_buf), "password command requires one argument" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command requires one argument" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
 			return TRUE;
 		}
 		if (password == NULL) {
-			r = snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access unallowed" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access unallowed" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -429,14 +429,14 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		}
 		if (strncmp (arg, password, strlen (arg)) == 0) {
 			session->authorized = 1;
-			r = snprintf (out_buf, sizeof (out_buf), "password accepted" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password accepted" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
 		}
 		else {
 			session->authorized = 0;
-			r = snprintf (out_buf, sizeof (out_buf), "password NOT accepted" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password NOT accepted" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -447,7 +447,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		break;
 	case COMMAND_RELOAD:
 		if (check_auth (cmd, session)) {
-			r = snprintf (out_buf, sizeof (out_buf), "reload request sent" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "reload request sent" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -461,7 +461,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		break;
 	case COMMAND_SHUTDOWN:
 		if (check_auth (cmd, session)) {
-			r = snprintf (out_buf, sizeof (out_buf), "shutdown request sent" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "shutdown request sent" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -476,18 +476,18 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 				days = uptime / 86400;
 				hours = uptime / 3600 - days * 24;
 				minutes = uptime / 60 - hours * 60 - days * 1440;
-				r = snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, days, days > 1 ? "s" : " ", hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, days, days > 1 ? "s" : " ", hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ");
 			}
 			/* If uptime is less than 1 minute print only seconds */
 			else if (uptime / 60 == 0) {
-				r = snprintf (out_buf, sizeof (out_buf), "%d second%s" CRLF, (int)uptime, (int)uptime > 1 ? "s" : " ");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d second%s" CRLF, (int)uptime, (int)uptime > 1 ? "s" : " ");
 			}
 			/* Else print the minutes and seconds. */
 			else {
 				hours = uptime / 3600;
 				minutes = uptime / 60 - hours * 60;
 				uptime -= hours * 3600 + minutes * 60;
-				r = snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (int)uptime, uptime > 1 ? "s" : " ");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (int)uptime, uptime > 1 ? "s" : " ");
 			}
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
@@ -499,7 +499,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			arg = *cmd_args;
 			if (!arg || *arg == '\0') {
 				msg_debug ("no statfile specified in learn command");
-				r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return FALSE;
 				}
@@ -508,7 +508,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			arg = *(cmd_args + 1);
 			if (arg == NULL || *arg == '\0') {
 				msg_debug ("no statfile size specified in learn command");
-				r = snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return FALSE;
 				}
@@ -517,7 +517,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			size = strtoul (arg, &err_str, 10);
 			if (err_str && *err_str != '\0') {
 				msg_debug ("message size is invalid: %s", arg);
-				r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return FALSE;
 				}
@@ -527,7 +527,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			session->learn_symbol = memory_pool_strdup (session->session_pool, *cmd_args);
 			cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
 			if (cl == NULL) {
-				r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return FALSE;
 				}
@@ -547,7 +547,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					case 'r':
 						arg = *(cmd_args + 1);
 						if (!arg || *arg == '\0') {
-							r = snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF);
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return FALSE;
 							}
@@ -557,7 +557,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					case 'f':
 						arg = *(cmd_args + 1);
 						if (!arg || *arg == '\0') {
-							r = snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF);
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return FALSE;
 							}
@@ -570,7 +570,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 					case 'm':
 						arg = *(cmd_args + 1);
 						if (!arg || *arg == '\0') {
-							r = snprintf (out_buf, sizeof (out_buf), "multiplier is not defined" CRLF);
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "multiplier is not defined" CRLF);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return FALSE;
 							}
@@ -578,7 +578,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 						session->learn_multiplier = strtod (arg, NULL);
 						break;
 					default:
-						r = snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF);
+						r = rspamd_snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF);
 						if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 							return FALSE;
 						}
@@ -595,7 +595,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		arg = *cmd_args;
 		if (!arg || *arg == '\0') {
 			msg_debug ("no statfile specified in weights command");
-			r = snprintf (out_buf, sizeof (out_buf), "weights command requires two arguments: statfile and message size" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "weights command requires two arguments: statfile and message size" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -604,7 +604,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		arg = *(cmd_args + 1);
 		if (arg == NULL || *arg == '\0') {
 			msg_debug ("no message size specified in weights command");
-			r = snprintf (out_buf, sizeof (out_buf), "weights command requires two arguments: statfile and message size" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "weights command requires two arguments: statfile and message size" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -613,7 +613,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		size = strtoul (arg, &err_str, 10);
 		if (err_str && *err_str != '\0') {
 			msg_debug ("message size is invalid: %s", arg);
-			r = snprintf (out_buf, sizeof (out_buf), "message size is invalid" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "message size is invalid" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -622,7 +622,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 
 		cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
 		if (cl == NULL) {
-			r = snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -636,7 +636,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		break;
 	case COMMAND_SYNC:
 		if (!process_sync_command (session, cmd_args)) {
-			r = snprintf (out_buf, sizeof (out_buf), "FAIL" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "FAIL" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -644,7 +644,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		}
 		break;
 	case COMMAND_HELP:
-		r = snprintf (out_buf, sizeof (out_buf),
+		r = rspamd_snprintf (out_buf, sizeof (out_buf),
 			"Rspamd CLI commands (* - privileged command):" CRLF
 			"    help - this help message" CRLF
 			"(*) learn <statfile> <size> [-r recipient] [-m multiplier] [-f from] [-n] - learn message to specified statfile" CRLF
@@ -722,7 +722,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			case 0:
 				if (!process_custom_command (cmd, &params[1], session)) {
 					msg_debug ("'%s'", cmd);
-					i = snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
+					i = rspamd_snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
 					if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 						return FALSE;
 					}
@@ -730,7 +730,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				break;
 			default:
 				msg_debug ("'%s'", cmd);
-				i = snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
 				}
@@ -760,7 +760,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			msg_warn ("processing of message failed");
 			free_task (task, FALSE);
 			session->state = STATE_REPLY;
-			r = snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -790,7 +790,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				c.len = part->content->len;
 			}
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
-				i = snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
@@ -803,7 +803,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		
 		/* Handle messages without text */
 		if (tokens == NULL) {
-			i = snprintf (out_buf, sizeof (out_buf), "learn fail, no tokens can be extracted (no text data)" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn fail, no tokens can be extracted (no text data)" CRLF);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
@@ -817,7 +817,7 @@ controller_read_socket (f_str_t * in, void *arg)
 						session->learn_symbol, &st, TRUE);
 		if (statfile == NULL) {
 			free_task (task, FALSE);
-			i = snprintf (out_buf, sizeof (out_buf), "learn failed" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed" CRLF);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -839,7 +839,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 		
 		free_task (task, FALSE);
-		i = snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
+		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
 		}
@@ -859,7 +859,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			msg_warn ("processing of message failed");
 			free_task (task, FALSE);
 			session->state = STATE_REPLY;
-			r = snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -877,7 +877,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			c.begin = part->content->data;
 			c.len = part->content->len;
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
-				i = snprintf (out_buf, sizeof (out_buf), "weights fail, tokenizer error" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights fail, tokenizer error" CRLF);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
@@ -890,7 +890,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		
 		/* Handle messages without text */
 		if (tokens == NULL) {
-			i = snprintf (out_buf, sizeof (out_buf), "weights fail, no tokens can be extracted (no text data)" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights fail, no tokens can be extracted (no text data)" CRLF);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
@@ -910,7 +910,7 @@ controller_read_socket (f_str_t * in, void *arg)
 
 		while (cur) {
 			w = cur->data;
-			i += snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %.2Lg" CRLF, w->name, w->weight);
+			i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %.2Lg" CRLF, w->name, w->weight);
 			cur = g_list_next (cur);
 		}
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
@@ -1053,7 +1053,7 @@ start_controller (struct rspamd_worker *worker)
 	hostbuf = alloca (hostmax);
 	gethostname (hostbuf, hostmax);
 	hostbuf[hostmax - 1] = '\0';
-	snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
+	rspamd_snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
 	/* Accept event */
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add (&worker->bind_ev, NULL);

@@ -322,7 +322,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	if (is_numeric && dots_num == 3) {
 		/* This is ip address */
 		result = memory_pool_alloc (pool, len);
-		r = snprintf (result, len, "%*s.%*s.%*s.%*s", 
+		r = rspamd_snprintf (result, len, "%*s.%*s.%*s.%*s", 
 				(int)(hostname->len - (dots[2] - hostname->begin + 1)),
 				dots[2] + 1,
 				(int)(dots[2] - dots[1] - 1),
@@ -350,7 +350,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		/* Hack for bugged windows resolver */
 		ip_num &= 0xFFFFFFFF;
 		/* Get octets */
-		r = snprintf (result, len, "%u.%u.%u.%u",
+		r = rspamd_snprintf (result, len, "%u.%u.%u.%u",
 			(uint32_t) ip_num & 0x000000FF, (uint32_t) (ip_num & 0x0000FF00) >> 8, (uint32_t) (ip_num & 0x00FF0000) >> 16, (uint32_t) (ip_num & 0xFF000000) >> 24);
 	}
 	else {
@@ -370,21 +370,21 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		}
 		if (level != MAX_LEVELS) {
 			if (level == 0) {
-				r = snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
+				r = rspamd_snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
 			}
 			else {
-				r = snprintf (result, len, "%*s", 
+				r = rspamd_snprintf (result, len, "%*s", 
 					(int)(hostname->len - (dots[level - 1] - hostname->begin + 1)),
 					dots[level - 1] + 1);
 			}
 		}
 		else if (dots_num >= 2) {
-			r = snprintf (result, len, "%*s",
+			r = rspamd_snprintf (result, len, "%*s",
 					(int)(hostname->len - (dots[dots_num - 2] - hostname->begin + 1)),
 					dots[dots_num - 2] + 1);
 		}
 		else {
-			r = snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
+			r = rspamd_snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
 		}
 	}
 
@@ -399,7 +399,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 
 
 	if (append_suffix) {
-		r += snprintf (result + r, len - r, ".%s", suffix->suffix);
+		r += rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
 	}
 
 	msg_debug ("request: %s, dots: %d, level: %d, orig: %*s", result, dots_num, level, (int)hostname->len, hostname->begin);
@@ -469,7 +469,7 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
 				*c = '\0';
 				symbol = memory_pool_alloc (task->task_pool, len);
-				snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
+				rspamd_snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
 				*c = '%';
 				insert_result (task, symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 				found = 1;
@@ -665,7 +665,7 @@ redirector_callback (int fd, short what, void *arg)
 			event_del (&param->ev);
 			event_set (&param->ev, param->sock, EV_READ | EV_PERSIST, redirector_callback, (void *)param);
 			event_add (&param->ev, timeout);
-			r = snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
+			r = rspamd_snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
 			if (write (param->sock, url_buf, r) == -1) {
 				msg_err ("write failed %s", strerror (errno));
 				remove_normal_event (param->task->s, free_redirector_session, param);
@@ -839,9 +839,9 @@ urls_command_handler (struct worker_task *task)
 
 	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (char));
 
-	r = snprintf (outbuf, buflen, "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
+	r = rspamd_snprintf (outbuf, buflen, "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 
-	r += snprintf (outbuf + r, buflen - r - 2, "URLs: ");
+	r += rspamd_snprintf (outbuf + r, buflen - r - 2, "URLs: ");
 
 	cur = g_list_first (task->urls);
 
@@ -854,10 +854,10 @@ urls_command_handler (struct worker_task *task)
 			f.len = url->hostlen;
 			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, FALSE, &err)) != NULL) {
 				if (g_list_next (cur) != NULL) {
-					r += snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (char *)urlstr, struri (url));
+					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (char *)urlstr, struri (url));
 				}
 				else {
-					r += snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">", (char *)urlstr, struri (url));
+					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">", (char *)urlstr, struri (url));
 				}
 			}
 		}

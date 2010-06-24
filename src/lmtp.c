@@ -301,7 +301,7 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	hostbuf = alloca (hostmax);
 	gethostname (hostbuf, hostmax);
 	hostbuf[hostmax - 1] = '\0';
-	snprintf (greetingbuf, sizeof (greetingbuf), "%d rspamd version %s LMTP on %s Ready\r\n", LMTP_OK, RVERSION, hostbuf);
+	rspamd_snprintf (greetingbuf, sizeof (greetingbuf), "%d rspamd version %s LMTP on %s Ready\r\n", LMTP_OK, RVERSION, hostbuf);
 
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;

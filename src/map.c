@@ -82,12 +82,12 @@ write_http_request (struct rspamd_map *map, struct http_map_data *data, int sock
 	char                            outbuf[BUFSIZ];
 	int                             r;
 
-	r = snprintf (outbuf, sizeof (outbuf), "GET %s%s HTTP/1.1" CRLF "Connection: close" CRLF "Host: %s" CRLF, (*data->path == '/') ? "" : "/", data->path, data->host);
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "GET %s%s HTTP/1.1" CRLF "Connection: close" CRLF "Host: %s" CRLF, (*data->path == '/') ? "" : "/", data->path, data->host);
 	if (data->last_checked != 0) {
-		r += snprintf (outbuf + r, sizeof (outbuf) - r, "If-Modified-Since: %s" CRLF, asctime (gmtime (&data->last_checked)));
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "If-Modified-Since: %s" CRLF, asctime (gmtime (&data->last_checked)));
 	}
 
-	r += snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
+	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
 
 	if (write (sock, outbuf, r) == -1) {
 		msg_err ("failed to write request: %d, %s", errno, strerror (errno));
@@ -239,7 +239,7 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 				return TRUE;
 			}
 			else {
-				msg_info ("invalid chunked reply: %*s", len, buf);
+				msg_info ("invalid chunked reply: %*s", (int)len, buf);
 				return FALSE;
 			}
 		}

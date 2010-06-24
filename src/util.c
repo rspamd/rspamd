@@ -1124,8 +1124,9 @@ rspamd_snprintf (u_char *buf, size_t max, const char *fmt, ...)
 	va_list   args;
 
 	va_start (args, fmt);
-	p = rspamd_vsnprintf (buf, max, fmt, args);
+	p = rspamd_vsnprintf (buf, max - 1, fmt, args);
 	va_end (args);
+	*p = '\0';
 
 	return p - buf;
 }
@@ -1208,7 +1209,12 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					break;
 
 				case '*':
-					slen = va_arg(args, size_t);
+					d = (int)va_arg (args, int);
+					if (G_UNLIKELY (d < 0)) {
+						msg_err ("crititcal error: size is less than 0");
+						g_assert (0);
+					}
+					slen = (size_t)d;
 					fmt++;
 					continue;
 

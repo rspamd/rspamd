@@ -22,24 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef _THREAD_SAFE
-#   include <pthread.h>
-#endif
-
-#include <sys/types.h>
-#include <time.h>
-#include <stdlib.h>
-#include <stdio.h>
-#ifdef HAVE_STDINT_H
-#   include <stdint.h>
-#endif
-#ifdef HAVE_INTTYPES_H
-#   include <inttypes.h>
-#endif
-#include <limits.h>
-#ifdef WITH_DEBUG
-#   include <syslog.h>
-#endif
+#include "config.h"
 #include "upstream.h"
 
 #ifdef WITH_DEBUG

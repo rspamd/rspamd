@@ -1687,9 +1687,9 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 		fprintf (f, "  <bind_socket>%s</bind_socket>" EOL, escaped_str);
 		g_free (escaped_str);
 
-		fprintf (f, "  <count>%u</count>" EOL, wrk->count);
-		fprintf (f, "  <maxfiles>%u</maxfiles>" EOL, wrk->rlimit_nofile);
-		fprintf (f, "  <maxcore>%u</maxcore>" EOL, wrk->rlimit_maxcore);
+		fprintf (f, "  <count>%ud</count>" EOL, wrk->count);
+		fprintf (f, "  <maxfiles>%ud</maxfiles>" EOL, wrk->rlimit_nofile);
+		fprintf (f, "  <maxcore>%ud</maxcore>" EOL, wrk->rlimit_maxcore);
 		
 		/* Now dump other attrs */
 		fprintf (f, "<!-- Other params -->" EOL);
@@ -1842,7 +1842,7 @@ xml_dump_logging (struct config_file *cfg, FILE *f)
 	/* Other options */
 	fprintf (f, " <log_urls>%s</log_urls>" EOL, cfg->log_urls ? "yes" : "no");
 	if (cfg->log_buf_size != 0) {
-		fprintf (f, " <log_buffer>%u</log_buffer>" EOL, (unsigned)cfg->log_buf_size);
+		fprintf (f, " <log_buffer>%ud</log_buffer>" EOL, (unsigned)cfg->log_buf_size);
 	}
 	if (cfg->debug_ip_map != NULL) {
 		escaped_value = g_markup_escape_text (cfg->debug_ip_map, -1);

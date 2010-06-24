@@ -172,7 +172,7 @@ close_log (void)
 	case RSPAMD_LOG_FILE:
 		if (rspamd_log->enabled) {
 			if (rspamd_log->repeats > REPEATS_MIN) {
-				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %u times", rspamd_log->repeats);
+				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %ud times", rspamd_log->repeats);
 				rspamd_log->repeats = 0;
 				if (rspamd_log->saved_message) {
 					file_log_function (NULL, rspamd_log->saved_function, rspamd_log->cfg->log_level, rspamd_log->saved_message, TRUE, NULL);
@@ -448,7 +448,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 				return;
 			}
 			else if (rspamd_log->repeats > REPEATS_MAX) {
-				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %u times", rspamd_log->repeats);
+				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %ud times", rspamd_log->repeats);
 				rspamd_log->repeats = 0;
 				/* It is safe to use temporary buffer here as it is not static */
 				if (rspamd_log->saved_message) {
@@ -463,7 +463,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 		else {
 			rspamd_log->last_line_cksum = cksum;
 			if (rspamd_log->repeats > REPEATS_MIN) {
-				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %u times", rspamd_log->repeats);
+				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %ud times", rspamd_log->repeats);
 				rspamd_log->repeats = 0;
 				if (rspamd_log->saved_message) {
 					file_log_function (log_domain, rspamd_log->saved_function, log_level, rspamd_log->saved_message, forced, arg);

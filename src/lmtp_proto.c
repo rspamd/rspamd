@@ -95,10 +95,10 @@ out_lmtp_reply (struct worker_task *task, int code, char *rcode, char *msg)
 	int                             r;
 
 	if (*rcode == '\0') {
-		r = snprintf (outbuf, OUTBUFSIZ, "%d %s\r\n", code, msg);
+		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "%d %s\r\n", code, msg);
 	}
 	else {
-		r = snprintf (outbuf, OUTBUFSIZ, "%d %s %s\r\n", code, rcode, msg);
+		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "%d %s %s\r\n", code, rcode, msg);
 	}
 	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 		return FALSE;
@@ -347,10 +347,10 @@ mta_read_socket (f_str_t * in, void *arg)
 		gethostname (hostbuf, hostmax);
 		hostbuf[hostmax - 1] = '\0';
 		if (cd->task->cfg->deliver_lmtp) {
-			r = snprintf (outbuf, sizeof (outbuf), "LHLO %s" CRLF, hostbuf);
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "LHLO %s" CRLF, hostbuf);
 		}
 		else {
-			r = snprintf (outbuf, sizeof (outbuf), "HELO %s" CRLF, hostbuf);
+			r = rspamd_snprintf (outbuf, sizeof (outbuf), "HELO %s" CRLF, hostbuf);
 		}
 		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			return FALSE;
@@ -363,7 +363,7 @@ mta_read_socket (f_str_t * in, void *arg)
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
-		r = snprintf (outbuf, sizeof (outbuf), "MAIL FROM: <%s>" CRLF, cd->task->from);
+		r = rspamd_snprintf (outbuf, sizeof (outbuf), "MAIL FROM: <%s>" CRLF, cd->task->from);
 		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			return FALSE;
 		}
@@ -378,7 +378,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		cur = g_list_first (cd->task->rcpt);
 		r = 0;
 		while (cur) {
-			r += snprintf (outbuf + r, sizeof (outbuf) - r, "RCPT TO: <%s>" CRLF, (char *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "RCPT TO: <%s>" CRLF, (char *)cur->data);
 			cur = g_list_next (cur);
 		}
 
@@ -393,7 +393,7 @@ mta_read_socket (f_str_t * in, void *arg)
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
-		r = snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
+		r = rspamd_snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
 		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			return FALSE;
 		}
@@ -411,7 +411,7 @@ mta_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		memory_pool_add_destructor (cd->task->task_pool, (pool_destruct_func) g_free, c);
-		r = snprintf (outbuf, sizeof (outbuf), CRLF "." CRLF);
+		r = rspamd_snprintf (outbuf, sizeof (outbuf), CRLF "." CRLF);
 		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			return FALSE;
 		}

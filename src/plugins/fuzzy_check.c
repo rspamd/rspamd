@@ -383,7 +383,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 				nval = fuzzy_normalize (value, map->weight);
 			}
 
-			snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
+			rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
 			insert_result (session->task, symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
 		}
@@ -445,14 +445,14 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 			goto err;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
-			r = snprintf (buf, sizeof (buf), "OK" CRLF);
+			r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
 			}
 			goto ok;
 		}
 		else {
-			r = snprintf (buf, sizeof (buf), "ERR" CRLF);
+			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
 			}
@@ -468,7 +468,7 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 
   err:
 	msg_err ("got error in IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
-	r = snprintf (buf, sizeof (buf), "Error" CRLF);
+	r = rspamd_snprintf (buf, sizeof (buf), "Error" CRLF);
 	if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 		return;
 	}
@@ -581,7 +581,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		msg_warn ("processing of message failed");
 		free_task (task, FALSE);
 		session->state = STATE_REPLY;
-		r = snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			msg_warn ("write error");
 		}
@@ -612,7 +612,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 					msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 					session->state = STATE_REPLY;
-					r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
 					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 						return;
 					}
@@ -643,7 +643,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			else {
 				/* Cannot write hash */
 				session->state = STATE_REPLY;
-				r = snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return;
 				}
@@ -657,7 +657,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	free_task (task, FALSE);
 	if (*saved == 0) {
 		session->state = STATE_REPLY;
-		r = snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return;
 		}
@@ -675,7 +675,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 	arg = args[0];
 	if (!arg || *arg == '\0') {
 		msg_info ("empty content length");
-		r = snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return;
 		}
@@ -685,7 +685,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 	errno = 0;
 	size = strtoul (arg, &err_str, 10);
 	if (errno != 0 || (err_str && *err_str != '\0')) {
-		r = snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return;
 		}
