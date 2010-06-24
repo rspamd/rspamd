@@ -813,7 +813,7 @@ surbl_filter (struct worker_task *task)
 	return 0;
 }
 
-static int
+static gboolean
 urls_command_handler (struct worker_task *task)
 {
 	GList                          *cur;
@@ -835,13 +835,13 @@ urls_command_handler (struct worker_task *task)
 		cur = g_list_next (cur);
 	}
 
-	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF "URLs: ");
+	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF "Urls: ");
 
 	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (char));
 
 	r = rspamd_snprintf (outbuf, buflen, "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 
-	r += rspamd_snprintf (outbuf + r, buflen - r - 2, "URLs: ");
+	r += rspamd_snprintf (outbuf + r, buflen - r - 2, "Urls: ");
 
 	cur = g_list_first (task->urls);
 
@@ -869,11 +869,12 @@ urls_command_handler (struct worker_task *task)
 
 	g_tree_destroy (url_tree);
 	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, TRUE)) {
-		return -1;
+		return FALSE;
 	}
 	msg_info ("msg ok, id: <%s>, %d urls extracted", task->message_id, num);
+	task->state = STATE_REPLY;
 
-	return 0;
+	return TRUE;
 }
 
 

@@ -932,36 +932,53 @@ sub _do_rspamc_command {
 
 	my $cur_metric;
 	my @lines = split (/^/, $in);
-	foreach my $line (@lines) {
-		if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+)!) {
-			$metrics{$1} = {
-				isspam => $2,
-				score => $3 + 0,
-				threshold => $4 + 0,
-				symbols => [],
-				urls => [],
-				messages => [],
-			};
-			$cur_metric = $1;
+	if (lc $self->{'command'} eq 'urls') {
+		$metrics{'default'} = {
+			isspam => 'false',
+			score => 0,
+			threshold => 0,
+			symbols => [],
+			urls => [],
+			messages => [],
+		};
+		foreach my $line (@lines) {
+			if ($line =~ /^Urls: (.+)$/) {
+				@{ $metrics{'default'}->{'urls'} } = split /,\s+/, $1;
+			}
 		}
-		elsif ($line =~ /^Symbol: (\S+);\s*(.+)${EOL}$/ && $cur_metric) {
-			# Line with parameters
-			my $symref = $metrics{$cur_metric}->{'symbols'};
-			push(@$symref, "$1($2)");
-		}
-		elsif ($line =~ /^Symbol: (\S+)/ && $cur_metric) {
-			my $symref = $metrics{$cur_metric}->{'symbols'};
-			push(@$symref, $1);
-		}
-		elsif ($line =~ /^Urls: (.+)$/ && $cur_metric) {
-			@{ $metrics{$cur_metric}->{'urls'} } = split /,\s+/, $1;
-		}
-		elsif ($line =~ /^Message: (.+)/ && $cur_metric) {
-			my $symref = $metrics{$cur_metric}->{'messages'};
-			push(@$symref, $1);
-		}
-		elsif ($line =~ /^${EOL}$/) {
-			last;
+	}
+	else {
+		foreach my $line (@lines) {
+			if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+)!) {
+				$metrics{$1} = {
+					isspam => $2,
+					score => $3 + 0,
+					threshold => $4 + 0,
+					symbols => [],
+					urls => [],
+					messages => [],
+				};
+				$cur_metric = $1;
+			}
+			elsif ($line =~ /^Symbol: (\S+);\s*(.+)${EOL}$/ && $cur_metric) {
+				# Line with parameters
+				my $symref = $metrics{$cur_metric}->{'symbols'};
+				push(@$symref, "$1($2)");
+			}
+			elsif ($line =~ /^Symbol: (\S+)/ && $cur_metric) {
+				my $symref = $metrics{$cur_metric}->{'symbols'};
+				push(@$symref, $1);
+			}
+			elsif ($line =~ /^Urls: (.+)$/ && $cur_metric) {
+				@{ $metrics{$cur_metric}->{'urls'} } = split /,\s+/, $1;
+			}
+			elsif ($line =~ /^Message: (.+)/ && $cur_metric) {
+				my $symref = $metrics{$cur_metric}->{'messages'};
+				push(@$symref, $1);
+			}
+			elsif ($line =~ /^${EOL}$/) {
+				last;
+			}
 		}
 	}
 
