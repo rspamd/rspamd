@@ -402,8 +402,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -437,8 +441,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -463,8 +471,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -483,8 +495,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -503,8 +519,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				if (session->cur_rcpt) {
 					session->rcpt = g_list_delete_link (session->rcpt, session->cur_rcpt);
 				}
@@ -520,7 +540,9 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 					r = snprintf (outbuf, sizeof (outbuf), "RCPT TO: ");
 					r += smtp_upstream_write_list (session->cur_rcpt, outbuf + r, sizeof (outbuf) - r);
 					session->cur_rcpt = g_list_next (session->cur_rcpt);
-					rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE);
+					if (! rspamd_dispatcher_write (session->upstream_dispatcher, outbuf, r, FALSE, FALSE)) {
+						goto err;
+					}
 				}
 				else {
 					session->upstream_state = SMTP_STATE_DATA;
@@ -529,8 +551,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				session->error = memory_pool_alloc (session->pool, in->len + 1);
 				g_strlcpy (session->error, in->begin, in->len + 1);
 				/* Write to client */
-				rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, in->len, FALSE, TRUE)) {
+					goto err;
+				} 
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				if (session->state == SMTP_STATE_WAIT_UPSTREAM) {
 					rspamd_dispatcher_restore (session->dispatcher);
 					session->state = SMTP_STATE_RCPT;
@@ -545,8 +571,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -565,14 +595,18 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 					session->error = SMTP_ERROR_FILE;
 					session->state = SMTP_STATE_CRITICAL_ERROR;
 					rspamd_dispatcher_restore (session->dispatcher);
-					rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+					if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+						goto err;
+					}
 					destroy_session (session->s);
 					return FALSE;
 				}
 				session->state = SMTP_STATE_AFTER_DATA;
 				session->error = SMTP_ERROR_DATA_OK;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+					goto err;
+				}
 				rspamd_dispatcher_pause (session->upstream_dispatcher);
 				rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, 0);
 				session->dispatcher->strip_eol = FALSE;
@@ -584,9 +618,15 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			g_strlcpy (session->error, in->begin, in->len + 1);
 			session->state = SMTP_STATE_DATA;
 			rspamd_dispatcher_restore (session->dispatcher);
-			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-			rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
-			rspamd_dispatcher_write (session->upstream_dispatcher, "QUIT" CRLF, sizeof ("QUIT" CRLF) - 1, FALSE, TRUE);
+			if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+				goto err;
+			}
+			if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+				goto err;
+			}
+			if (! rspamd_dispatcher_write (session->upstream_dispatcher, "QUIT" CRLF, sizeof ("QUIT" CRLF) - 1, FALSE, TRUE)) {
+				goto err;
+			}
 			session->upstream_state = SMTP_STATE_END;
 			return TRUE;
 			break;
@@ -598,8 +638,12 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 				/* XXX: assume upstream errors as critical errors */
 				session->state = SMTP_STATE_CRITICAL_ERROR;
 				rspamd_dispatcher_restore (session->dispatcher);
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-				rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+				if (!rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+					goto err;
+				}
+				if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+					goto err;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -612,13 +656,20 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 			msg_err ("got upstream reply at unexpected state: %d, reply: %V", session->upstream_state, in);
 			session->state = SMTP_STATE_CRITICAL_ERROR;
 			rspamd_dispatcher_restore (session->dispatcher);
-			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-			rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+			if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+				goto err;
+			}
+			if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+				goto err;
+			}
 			destroy_session (session->s);
 			return FALSE;
 	}
 
 	return TRUE;
+err:
+	msg_warn ("write error occured");
+	return FALSE;
 }
 
 void 
@@ -631,8 +682,12 @@ smtp_upstream_err_socket (GError *err, void *arg)
 	session->state = SMTP_STATE_CRITICAL_ERROR;
 	/* XXX: assume upstream errors as critical errors */
 	rspamd_dispatcher_restore (session->dispatcher);
-	rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
-	rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+	if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+		return;
+	}
+	if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+		return;
+	}
 	upstream_fail (&session->upstream->up, session->session_time);
 	destroy_session (session->s);
 }
@@ -643,7 +698,9 @@ smtp_upstream_finalize_connection (gpointer data)
 	struct smtp_session            *session = data;
 	
 	if (session->state != SMTP_STATE_CRITICAL_ERROR) {
-		rspamd_dispatcher_write (session->upstream_dispatcher, "QUIT" CRLF, 0, FALSE, TRUE);
+		if (! rspamd_dispatcher_write (session->upstream_dispatcher, "QUIT" CRLF, 0, FALSE, TRUE)) {
+			msg_warn ("cannot send correctly closing message to upstream");
+		}
 	}
 	rspamd_remove_dispatcher (session->upstream_dispatcher);
 	session->upstream_dispatcher = NULL;

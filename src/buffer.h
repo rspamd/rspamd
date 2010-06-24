@@ -93,7 +93,7 @@ void rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
  */
 gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 												  void *data,
-												  size_t len, gboolean delayed, gboolean allocated);
+												  size_t len, gboolean delayed, gboolean allocated) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Send specified descriptor to dispatcher
@@ -101,7 +101,7 @@ gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
  * @param fd descriptor of file
  * @param len length of data
  */
-gboolean rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, int fd, size_t len);
+gboolean rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, int fd, size_t len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Pause IO events on dispatcher

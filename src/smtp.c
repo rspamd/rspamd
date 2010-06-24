@@ -316,7 +316,9 @@ smtp_send_upstream_message (struct smtp_session *session)
 err:
 	session->error = SMTP_ERROR_FILE;
 	session->state = SMTP_STATE_CRITICAL_ERROR;
-	rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+	if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+		return FALSE;
+	}
 	destroy_session (session->s);
 	return FALSE;
 }
@@ -405,7 +407,9 @@ process_smtp_data (struct smtp_session *session)
 err:
 	session->error = SMTP_ERROR_FILE;
 	session->state = SMTP_STATE_CRITICAL_ERROR;
-	rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+	if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+		return FALSE;
+	}
 	destroy_session (session->s);
 	return FALSE;
 }
@@ -435,7 +439,9 @@ smtp_read_socket (f_str_t * in, void *arg)
 				if (session->errors > session->ctx->max_errors) {
 					session->error = SMTP_ERROR_LIMIT;
 					session->state = SMTP_STATE_CRITICAL_ERROR;
-					rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+					if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+						return FALSE;
+					}
 					destroy_session (session->s);
 					return FALSE;
 				}
@@ -454,7 +460,9 @@ smtp_read_socket (f_str_t * in, void *arg)
 				msg_err ("cannot write to temp file: %s", strerror (errno));
 				session->error = SMTP_ERROR_FILE;
 				session->state = SMTP_STATE_CRITICAL_ERROR;
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+					return FALSE;
+				}
 				destroy_session (session->s);
 				return FALSE;
 			}
@@ -496,7 +504,9 @@ smtp_write_socket (void *arg)
 
 	if (session->state == SMTP_STATE_CRITICAL_ERROR) {
 		if (session->error != NULL) {
-			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+			if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+				return FALSE;
+			}
 		}
 		destroy_session (session->s);
 		return FALSE;
@@ -540,8 +550,12 @@ smtp_write_socket (void *arg)
 				msg_info ("%s", logbuf);
 
 				if (is_spam) {
-					rspamd_dispatcher_write (session->dispatcher, session->ctx->reject_message, 0, FALSE, TRUE);
-					rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+					if (! rspamd_dispatcher_write (session->dispatcher, session->ctx->reject_message, 0, FALSE, TRUE)) {
+						return FALSE;
+					}
+					if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+						return FALSE;
+					}
 					destroy_session (session->s);
 					return FALSE;
 				}
@@ -550,13 +564,17 @@ smtp_write_socket (void *arg)
 		}
 		else {
 			if (session->error != NULL) {
-				rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+				if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+					return FALSE;
+				}
 			}
 		}
 	}
 	else {
 		if (session->error != NULL) {
-			rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE);
+			if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+				return FALSE;
+			}
 		}
 	}
 	
@@ -579,12 +597,16 @@ smtp_err_socket (GError * err, void *arg)
 /*
  * Write greeting to client
  */
-static void
+static gboolean
 write_smtp_greeting (struct smtp_session *session)
 {
 	if (session->ctx->smtp_banner) {
-		rspamd_dispatcher_write (session->dispatcher, session->ctx->smtp_banner, 0, FALSE, TRUE);
+		if (! rspamd_dispatcher_write (session->dispatcher, session->ctx->smtp_banner, 0, FALSE, TRUE)) {
+			return FALSE;
+		}
 	}
+
+	return TRUE;
 }
 
 /*
@@ -601,7 +623,7 @@ smtp_delay_handler (int fd, short what, void *arg)
 	}
 	else {
 		session->state = SMTP_STATE_CRITICAL_ERROR;
-		smtp_write_socket (session);
+		(void)smtp_write_socket (session);
 	}
 }
 

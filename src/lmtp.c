@@ -147,10 +147,7 @@ lmtp_read_socket (f_str_t * in, void *arg)
 		r = process_message (lmtp->task);
 		r = process_filters (lmtp->task);
 		if (r == -1) {
-			task->last_error = "Filter processing error";
-			task->error_code = LMTP_FAILURE;
-			task->state = WRITE_ERROR;
-			lmtp_write_socket (lmtp);
+			return FALSE;
 		}
 		else if (r == 0) {
 			task->state = WAIT_FILTER;
@@ -262,7 +259,9 @@ accept_socket (int fd, short what, void *arg)
 	/* Set up dispatcher */
 	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, lmtp_read_socket, lmtp_write_socket, lmtp_err_socket, &io_tv, (void *)lmtp);
 	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
-	rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE);
+	if (! rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
+		msg_warn ("cannot write greeting");
+	}
 }
 
 /*

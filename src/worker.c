@@ -158,7 +158,10 @@ fin_custom_filters (struct worker_task *task)
 		if (filt->after_connect) {
 			filt->after_connect (&output, &log, curd->data);
 			if (output != NULL) {
-				rspamd_dispatcher_write (task->dispatcher, output, strlen (output), FALSE, FALSE);
+				if (! rspamd_dispatcher_write (task->dispatcher, output, strlen (output), FALSE, FALSE)) {
+					g_free (output);
+					return;
+				}
 				g_free (output);
 			}
 			if (log != NULL) {
@@ -190,7 +193,10 @@ parse_line_custom (struct worker_task *task, f_str_t *in)
 				res = FALSE;
 			}
 			if (output != NULL) {
-				rspamd_dispatcher_write (task->dispatcher, output, strlen (output), FALSE, FALSE);
+				if (! rspamd_dispatcher_write (task->dispatcher, output, strlen (output), FALSE, FALSE)) {
+					g_free (output);
+					return FALSE;
+				}
 				g_free (output);
 			}
 			if (curd->next) {
@@ -349,7 +355,9 @@ write_socket (void *arg)
 
 	switch (task->state) {
 	case WRITE_REPLY:
-		write_reply (task);
+		if (! write_reply (task)) {
+			return FALSE;
+		}
 		if (is_custom) {
 			fin_custom_filters (task);
 		}
@@ -357,7 +365,9 @@ write_socket (void *arg)
 		return FALSE;
 		break;
 	case WRITE_ERROR:
-		write_reply (task);
+		if (! write_reply (task)) {
+			return FALSE;
+		}
 		if (is_custom) {
 			fin_custom_filters (task);
 		}

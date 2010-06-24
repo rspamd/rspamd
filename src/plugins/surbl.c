@@ -867,9 +867,11 @@ urls_command_handler (struct worker_task *task)
 	outbuf[r++] = '\r';
 	outbuf[r++] = '\n';
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, TRUE);
-	msg_info ("msg ok, id: <%s>, %d urls extracted", task->message_id, num);
 	g_tree_destroy (url_tree);
+	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, TRUE)) {
+		return -1;
+	}
+	msg_info ("msg ok, id: <%s>, %d urls extracted", task->message_id, num);
 
 	return 0;
 }

@@ -64,7 +64,7 @@ int read_rspamd_input_line (struct worker_task *task, f_str_t *line);
  * @param task task object
  * @return 0 if we wrote reply and -1 if there was some error
  */
-int write_reply (struct worker_task *task);
+gboolean write_reply (struct worker_task *task) G_GNUC_WARN_UNUSED_RESULT;
 
 
 /**

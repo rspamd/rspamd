@@ -88,7 +88,7 @@ extract_mail (memory_pool_t * pool, f_str_t * line)
 	return match;
 }
 
-static void
+static gboolean
 out_lmtp_reply (struct worker_task *task, int code, char *rcode, char *msg)
 {
 	char                            outbuf[OUTBUFSIZ];
@@ -100,7 +100,10 @@ out_lmtp_reply (struct worker_task *task, int code, char *rcode, char *msg)
 	else {
 		r = snprintf (outbuf, OUTBUFSIZ, "%d %s %s\r\n", code, rcode, msg);
 	}
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		return FALSE;
+	}
+	return TRUE;
 }
 
 int
@@ -115,7 +118,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search LHLO line */
 		if ((i = fstrstri (line, &lhlo_command)) == -1) {
 			msg_info ("LHLO expected but not found");
-			out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need LHLO here");
+			(void)out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need LHLO here");
 			return -1;
 		}
 		else {
@@ -130,7 +133,9 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			/* Strlcpy makes string null terminated by design */
 			g_strlcpy (lmtp->task->helo, c, line->len - i + 1);
 			lmtp->state = LMTP_READ_FROM;
-			out_lmtp_reply (lmtp->task, LMTP_OK, "", "Ok");
+			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "", "Ok")) {
+				return -1;
+			}
 			return 0;
 		}
 		break;
@@ -138,7 +143,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search MAIL FROM: line */
 		if ((i = fstrstri (line, &mail_command)) == -1) {
 			msg_info ("MAIL expected but not found");
-			out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need MAIL here");
+			(void)out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need MAIL here");
 			return -1;
 		}
 		else {
@@ -148,7 +153,9 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			fstr.len = line->len - i;
 			lmtp->task->from = extract_mail (lmtp->task->task_pool, &fstr);
 			lmtp->state = LMTP_READ_RCPT;
-			out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Sender ok");
+			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Sender ok")) {
+				return -1;
+			}
 			return 0;
 		}
 		break;
@@ -156,7 +163,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search RCPT_TO: line */
 		if ((i = fstrstri (line, &rcpt_command)) == -1) {
 			msg_info ("RCPT expected but not found");
-			out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Need RCPT here");
+			(void)out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Need RCPT here");
 			return -1;
 		}
 		else {
@@ -168,13 +175,15 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			if (*rcpt == '<' && *(rcpt + 1) == '>') {
 				/* Invalid or empty rcpt not allowed */
 				msg_info ("bad recipient");
-				out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Bad recipient");
+				(void)out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Bad recipient");
 				return -1;
 			}
 			/* Strlcpy makes string null terminated by design */
 			lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
 			lmtp->state = LMTP_READ_DATA;
-			out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Recipient ok");
+			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Recipient ok")) {
+				return -1;
+			}
 			return 0;
 		}
 		break;
@@ -182,7 +191,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search DATA line */
 		if ((i = fstrstri (line, &data_command)) == -1) {
 			msg_info ("DATA expected but not found");
-			out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need DATA here");
+			(void)out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need DATA here");
 			return -1;
 		}
 		else {
@@ -197,7 +206,9 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			g_strlcpy (rcpt, c, line->len - i + 1);
 			lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
 			lmtp->state = LMTP_READ_MESSAGE;
-			out_lmtp_reply (lmtp->task, LMTP_DATA, "", "Enter message, ending with \".\" on a line by itself");
+			if (! out_lmtp_reply (lmtp->task, LMTP_DATA, "", "Enter message, ending with \".\" on a line by itself")) {
+				return -1;
+			}
 			lmtp->task->msg = fstralloc (lmtp->task->task_pool, BUFSIZ);
 			return 0;
 		}
@@ -230,7 +241,9 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* We have some input after reading dot, close connection as we have no currently support of multiply 
 		 * messages per session
 		 */
-		out_lmtp_reply (lmtp->task, LMTP_QUIT, "", "Bye");
+		if (! out_lmtp_reply (lmtp->task, LMTP_QUIT, "", "Bye")) {
+			return -1;
+		}
 		return 0;
 		break;
 	}
@@ -288,10 +301,14 @@ close_mta_connection (struct mta_callback_data *cd, gboolean is_success)
 {
 	cd->task->state = CLOSING_CONNECTION;
 	if (is_success) {
-		out_lmtp_reply (cd->task, LMTP_OK, "", "Delivery completed");
+		if (! out_lmtp_reply (cd->task, LMTP_OK, "", "Delivery completed")) {
+			return;
+		}
 	}
 	else {
-		out_lmtp_reply (cd->task, LMTP_FAILURE, "", "Delivery failure");
+		if (! out_lmtp_reply (cd->task, LMTP_FAILURE, "", "Delivery failure")) {
+			return;
+		}
 	}
 	rspamd_remove_dispatcher (cd->dispatcher);
 }
@@ -335,7 +352,9 @@ mta_read_socket (f_str_t * in, void *arg)
 		else {
 			r = snprintf (outbuf, sizeof (outbuf), "HELO %s" CRLF, hostbuf);
 		}
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 		cd->state = LMTP_WANT_MAIL;
 		break;
 	case LMTP_WANT_MAIL:
@@ -345,7 +364,9 @@ mta_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		r = snprintf (outbuf, sizeof (outbuf), "MAIL FROM: <%s>" CRLF, cd->task->from);
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 		cd->state = LMTP_WANT_RCPT;
 		break;
 	case LMTP_WANT_RCPT:
@@ -361,7 +382,9 @@ mta_read_socket (f_str_t * in, void *arg)
 			cur = g_list_next (cur);
 		}
 
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 		cd->state = LMTP_WANT_DATA;
 		break;
 	case LMTP_WANT_DATA:
@@ -371,7 +394,9 @@ mta_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		r = snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 		cd->state = LMTP_WANT_DOT;
 		break;
 	case LMTP_WANT_DOT:
@@ -382,10 +407,14 @@ mta_read_socket (f_str_t * in, void *arg)
 		}
 		c = g_mime_object_to_string ((GMimeObject *) cd->task->message);
 		r = strlen (c);
-		rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE, TRUE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE, TRUE)) {
+			return FALSE;
+		}
 		memory_pool_add_destructor (cd->task->task_pool, (pool_destruct_func) g_free, c);
 		r = snprintf (outbuf, sizeof (outbuf), CRLF "." CRLF);
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 		cd->state = LMTP_WANT_CLOSING;
 	case LMTP_WANT_CLOSING:
 		if (!parse_mta_str (in, cd)) {
@@ -641,7 +670,9 @@ write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 
 	debug_task ("writing reply to client");
 	if (lmtp->task->error_code != 0) {
-		out_lmtp_reply (lmtp->task, lmtp->task->error_code, "", lmtp->task->last_error);
+		if (! out_lmtp_reply (lmtp->task, lmtp->task->error_code, "", lmtp->task->last_error)) {
+			return -1;
+		}
 	}
 	else {
 		/* Do delivery */
@@ -650,7 +681,9 @@ write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 			return -1;
 		}
 		else if (r == 0) {
-			out_lmtp_reply (lmtp->task, LMTP_OK, "", "Delivery completed");
+			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "", "Delivery completed")) {
+				return -1;
+			}
 		}
 		else {
 			return 1;

@@ -414,6 +414,7 @@ struct metric_callback_data {
 	char                           *log_buf;
 	int                             log_offset;
 	int                             log_size;
+	gboolean                        alive;
 };
 
 static void
@@ -438,7 +439,7 @@ write_hashes_to_log (struct worker_task *task, char *logbuf, int offset, int siz
 	}
 }
 
-static void
+static gboolean
 show_url_header (struct worker_task *task)
 {
 	int                             r = 0;
@@ -467,7 +468,9 @@ show_url_header (struct worker_task *task)
 			outbuf[r++] = '\r';
 			outbuf[r++] = '\n';
 			outbuf[r] = ' ';
-			rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
+			if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
+				return FALSE;
+			}
 			r = 0;
 		}
 		/* Write url host to buf */
@@ -487,7 +490,7 @@ show_url_header (struct worker_task *task)
 		}
 		cur = g_list_next (cur);
 	}
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
 static void
@@ -499,6 +502,10 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	char                            outbuf[OUTBUFSIZ];
 	struct symbol                  *s = (struct symbol *)value;
 	GList                          *cur;
+
+	if (! cd->alive) {
+		return;
+	}
 
 	if (s->options) {
 		r = snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
@@ -523,10 +530,12 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	}
 	cd->log_offset += snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (char *)key);
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		cd->alive = FALSE;
+	}
 }
 
-static void
+static gboolean
 show_metric_symbols (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
 	int                             r = 0;
@@ -546,7 +555,9 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 			cur = g_list_next (cur);
 		}
 		g_list_free (symbols);
-		rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 	}
 	else {
 		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, cd);
@@ -555,6 +566,8 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 			cd->log_buf[--cd->log_offset] = '\0';
 		}
 	}
+
+	return TRUE;
 }
 
 
@@ -570,7 +583,9 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	int                             is_spam = 0;
 	double                          ms = 0, rs = 0;
 
-
+	if (! cd->alive) {
+		return;
+	}
 	if (metric_name == NULL || metric_value == NULL) {
 		m = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
         default_required_score = m->required_score;
@@ -653,10 +668,14 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 #endif
 	}
 	else {
-		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			cd->alive = FALSE;
+		}
 
 		if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
-			show_metric_symbols (metric_res, cd);
+			if (! show_metric_symbols (metric_res, cd)) {
+				cd->alive = FALSE;
+			}
 		}
 	}
 #ifdef HAVE_CLOCK_GETTIME
@@ -668,7 +687,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 #endif
 }
 
-static void
+static gboolean
 show_messages (struct worker_task *task)
 {
 	int                             r = 0;
@@ -681,10 +700,10 @@ show_messages (struct worker_task *task)
 		cur = g_list_next (cur);
 	}
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
-static int
+static gboolean
 write_check_reply (struct worker_task *task)
 {
 	int                             r;
@@ -694,12 +713,15 @@ write_check_reply (struct worker_task *task)
 
 	r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
 					task->proto_ver, "OK");
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
+	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
+		return FALSE;
+	}
 
 	cd.task = task;
 	cd.log_buf = logbuf;
 	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
 	cd.log_size = sizeof (logbuf);
+	cd.alive = TRUE;
 
 	if (task->proto == SPAMC_PROTO) {
 		/* Ignore metrics, just write report for 'default' metric */
@@ -707,9 +729,15 @@ write_check_reply (struct worker_task *task)
 		if (metric_res == NULL) {
 			/* Implicit metric result */
 			show_metric_result (NULL, NULL, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 		else {
 			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 	}
 	else {
@@ -718,23 +746,38 @@ write_check_reply (struct worker_task *task)
 		if (metric_res == NULL) {
 			/* Implicit metric result */
 			show_metric_result (NULL, NULL, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 		else {
 			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		if (!cd.alive) {
+			return FALSE;
+		}
 		/* Messages */
-		show_messages (task);
+		if (! show_messages (task)) {
+			return FALSE;
+		}
 		/* URL stat */
-		show_url_header (task);
+		if (! show_url_header (task)) {
+			return FALSE;
+		}
 	}
 	
 	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
-	rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE);
+	if (! rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+		return FALSE;
+	}
 
 	task->worker->srv->stat->messages_scanned++;
 	if (default_score >= default_required_score) {
@@ -744,10 +787,10 @@ write_check_reply (struct worker_task *task)
 		task->worker->srv->stat->messages_ham ++;
 	}
 
-	return 0;
+	return TRUE;
 }
 
-static int
+static gboolean
 write_process_reply (struct worker_task *task)
 {
 	int                             r;
@@ -764,6 +807,7 @@ write_process_reply (struct worker_task *task)
 	cd.log_buf = logbuf;
 	cd.log_offset = snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
 	cd.log_size = sizeof (logbuf);
+	cd.alive = TRUE;
 
 	if (task->proto == SPAMC_PROTO) {
 		/* Ignore metrics, just write report for 'default' metric */
@@ -771,9 +815,15 @@ write_process_reply (struct worker_task *task)
 		if (metric_res == NULL) {
 			/* Implicit metric result */
 			show_metric_result (NULL, NULL, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 		else {
 			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 	}
 	else {
@@ -782,24 +832,40 @@ write_process_reply (struct worker_task *task)
 		if (metric_res == NULL) {
 			/* Implicit metric result */
 			show_metric_result (NULL, NULL, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 		else {
 			show_metric_result ((gpointer) "default", (gpointer) metric_res, (void *)&cd);
+			if (! cd.alive) {
+				return FALSE;
+			}
 		}
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		if (! cd.alive) {
+			return FALSE;
+		}
 		/* Messages */
-		show_messages (task);
+		if (! show_messages (task)) {
+			return FALSE;
+		}
 	}
 	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
 
 	outmsg = g_mime_object_to_string (GMIME_OBJECT (task->message));
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, outmsg);
 
-	rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE);
-	rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE, TRUE);
+	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
+		return FALSE;
+	}
+	if (! rspamd_dispatcher_write (task->dispatcher, outmsg, strlen (outmsg), FALSE, TRUE)) {
+		return FALSE;
+	}
 
 	task->worker->srv->stat->messages_scanned++;
 	if (default_score >= default_required_score) {
@@ -809,12 +875,10 @@ write_process_reply (struct worker_task *task)
 		task->worker->srv->stat->messages_ham ++;
 	}
 
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, outmsg);
-
-	return 0;
+	return TRUE;
 }
 
-int
+gboolean
 write_reply (struct worker_task *task)
 {
 	int                             r;
@@ -834,7 +898,9 @@ write_reply (struct worker_task *task)
 			debug_task ("writing error: %s", outbuf);
 		}
 		/* Write to bufferevent error message */
-		rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 	}
 	else {
 		switch (task->cmd) {
@@ -850,19 +916,19 @@ write_reply (struct worker_task *task)
 		case CMD_SKIP:
 			r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 %s" CRLF, 
 					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, task->proto_ver, SPAMD_OK);
-			rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+			return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 			break;
 		case CMD_PING:
 			r = snprintf (outbuf, sizeof (outbuf), "%s/%s 0 PONG" CRLF, 
 					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, task->proto_ver);
-			rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+			return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 			break;
 		case CMD_OTHER:
 			return task->custom_cmd->func (task);
 		}
 	}
 
-	return 0;
+	return FALSE;
 }
 
 void
