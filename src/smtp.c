@@ -92,7 +92,6 @@ free_smtp_session (gpointer arg)
 		if (session->dispatcher) {
 			rspamd_remove_dispatcher (session->dispatcher);
 		}
-		memory_pool_delete (session->pool);
 		close (session->sock);
 		if (session->temp_name != NULL) {
 			unlink (session->temp_name);
@@ -100,6 +99,7 @@ free_smtp_session (gpointer arg)
 		if (session->temp_fd != -1) {
 			close (session->temp_fd);
 		}
+		memory_pool_delete (session->pool);
 		g_free (session);
 	}
 }
