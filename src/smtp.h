@@ -88,6 +88,8 @@ struct smtp_session {
 
 	struct smtp_upstream *upstream;
 
+	struct event *delay_timer;
+
 	gboolean resolved;
 	gboolean esmtp;
 };

@@ -622,7 +622,8 @@ static void
 smtp_delay_handler (int fd, short what, void *arg)
 {
 	struct smtp_session            *session = arg;
-
+	
+	remove_normal_event (session->s, (event_finalizer_t)event_del, session->delay_timer);
 	if (session->state == SMTP_STATE_DELAY) {
 		session->state = SMTP_STATE_GREETING;
 		write_smtp_greeting (session);
@@ -659,6 +660,7 @@ smtp_make_delay (struct smtp_session *session)
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
 		register_async_event (session->s, (event_finalizer_t)event_del, tev, FALSE);
+		session->delay_timer = tev;
 	}
 	else if (session->state == SMTP_STATE_DELAY) {
 		session->state = SMTP_STATE_GREETING;
@@ -674,7 +676,8 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 {
 	struct smtp_session            *session = arg;
 	int                             i, res = 0;
-
+	
+	remove_forced_event (session->s, (event_finalizer_t)smtp_dns_cb);
 	switch (session->state) {
 		case SMTP_STATE_RESOLVE_REVERSE:
 			/* Parse reverse reply and start resolve of this ip */
