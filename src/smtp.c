@@ -695,6 +695,8 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 					session->hostname = memory_pool_strdup (session->pool, * ((const char**)addresses));
 					session->state = SMTP_STATE_RESOLVE_NORMAL;
 					evdns_resolve_ipv4 (session->hostname, DNS_QUERY_NO_SEARCH, smtp_dns_cb, (void *)session);
+					register_async_event (session->s, (event_finalizer_t)smtp_dns_cb, NULL, TRUE);
+					
 				}
 			}
 			break;
@@ -789,6 +791,10 @@ accept_socket (int fd, short what, void *arg)
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_free (session);
 		close (nfd);
+		return;
+	}
+	else {
+		register_async_event (session->s, (event_finalizer_t)smtp_dns_cb, NULL, TRUE);
 	}
 	
 	/* Set up dispatcher */
