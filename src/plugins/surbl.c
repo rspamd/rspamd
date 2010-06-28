@@ -277,9 +277,30 @@ surbl_module_config (struct config_file *cfg)
 int
 surbl_module_reconfig (struct config_file *cfg)
 {
+	/* Delete pool and objects */
 	memory_pool_delete (surbl_module_ctx->surbl_pool);
-	surbl_module_ctx->surbl_pool = memory_pool_new (1024);
+	/* Reinit module */
+	surbl_module_ctx->filter = surbl_filter;
+	surbl_module_ctx->use_redirector = 0;
+	surbl_module_ctx->suffixes = NULL;
+	surbl_module_ctx->bits = NULL;
+	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
 
+	surbl_module_ctx->tld2_file = NULL;
+	surbl_module_ctx->whitelist_file = NULL;
+
+	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	/* Zero exceptions hashes */
+	surbl_module_ctx->exceptions = memory_pool_alloc0 (surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+	/* Register destructors */
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->whitelist);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
+
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->suffixes);
+	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->bits);
+	
+	/* Perform configure */
 	return surbl_module_config (cfg);
 }
 

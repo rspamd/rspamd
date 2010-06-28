@@ -85,6 +85,9 @@ free_smtp_session (gpointer arg)
 	if (session) {
 		if (session->task) {
 			free_task (session->task, FALSE);
+			if (session->task->msg->begin) {
+				munmap (session->task->msg->begin, session->task->msg->len);
+			}
 		}
 		if (session->rcpt) {
 			g_list_free (session->rcpt);
@@ -92,7 +95,6 @@ free_smtp_session (gpointer arg)
 		if (session->dispatcher) {
 			rspamd_remove_dispatcher (session->dispatcher);
 		}
-		memory_pool_delete (session->pool);
 		close (session->sock);
 		if (session->temp_name != NULL) {
 			unlink (session->temp_name);
@@ -100,6 +102,7 @@ free_smtp_session (gpointer arg)
 		if (session->temp_fd != -1) {
 			close (session->temp_fd);
 		}
+		memory_pool_delete (session->pool);
 		g_free (session);
 	}
 }
@@ -400,6 +403,7 @@ process_smtp_data (struct smtp_session *session)
 		}
 	}
 	else {
+		session->task = NULL;
 		return smtp_send_upstream_message (session);
 	}
 
