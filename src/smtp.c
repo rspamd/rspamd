@@ -794,16 +794,14 @@ accept_socket (int fd, short what, void *arg)
 		return;
 	}
 	else {
+		/* Set up async session */
+		session->s = new_async_session (session->pool, free_smtp_session, session);
 		register_async_event (session->s, (event_finalizer_t)smtp_dns_cb, NULL, TRUE);
+		/* Set up dispatcher */
+		session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, 
+								smtp_read_socket, smtp_write_socket, smtp_err_socket, &session->ctx->smtp_timeout, session);
+		session->dispatcher->peer_addr = session->client_addr.s_addr;
 	}
-	
-	/* Set up dispatcher */
-	session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, 
-							smtp_read_socket, smtp_write_socket, smtp_err_socket, &session->ctx->smtp_timeout, session);
-	session->dispatcher->peer_addr = session->client_addr.s_addr;
-	/* Set up async session */
-	session->s = new_async_session (session->pool, free_smtp_session, session);
-
 }
 
 static void
