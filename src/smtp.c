@@ -658,6 +658,7 @@ smtp_make_delay (struct smtp_session *session)
 
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
+		register_async_event (session->s, (event_finalizer_t)event_del, tev, FALSE);
 	}
 	else if (session->state == SMTP_STATE_DELAY) {
 		session->state = SMTP_STATE_GREETING;
