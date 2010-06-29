@@ -17,6 +17,15 @@ struct smtp_upstream {
 #define MAX_UPSTREAM 128
 #define DEFAULT_MAX_ERRORS 10
 
+enum rspamd_smtp_stage {
+	SMTP_STAGE_CONNECT = 0,
+	SMTP_STAGE_HELO,
+	SMTP_STAGE_MAIL,
+	SMTP_STAGE_RCPT,
+	SMTP_STAGE_DATA,
+	SMTP_STAGE_MAX
+};
+
 struct smtp_worker_ctx {
 	struct smtp_upstream upstreams[MAX_UPSTREAM];
 	size_t upstream_num;
@@ -34,10 +43,11 @@ struct smtp_worker_ctx {
 	size_t max_size;
 	guint max_errors;
 	char *metric;
+	GList *smtp_filters[SMTP_STAGE_MAX];
 };
 
 enum rspamd_smtp_state {
-	SMTP_STATE_RESOLVE_REVERSE,
+	SMTP_STATE_RESOLVE_REVERSE = 0,
 	SMTP_STATE_RESOLVE_NORMAL,
 	SMTP_STATE_DELAY,
 	SMTP_STATE_GREETING,
@@ -94,6 +104,14 @@ struct smtp_session {
 	gboolean esmtp;
 };
 
+typedef gboolean (*smtp_filter_t)(struct smtp_session *session, gpointer filter_data);
+
+struct smtp_filter {
+	smtp_filter_t filter;
+	gpointer filter_data;
+};
+
 void start_smtp_worker (struct rspamd_worker *worker);
+void register_smtp_filter (struct smtp_worker_ctx *ctx, enum rspamd_smtp_stage stage, smtp_filter_t filter, gpointer filter_data);
 
 #endif

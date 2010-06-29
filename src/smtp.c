@@ -169,6 +169,25 @@ create_smtp_upstream_connection (struct smtp_session *session)
 }
 
 static gboolean
+call_stage_filters (struct smtp_session *session, enum rspamd_smtp_stage stage)
+{
+	gboolean                         res = TRUE;
+	GList                           *list = session->ctx->smtp_filters[stage];
+	struct smtp_filter              *filter;
+	
+	while (list) {
+		filter = list->data;
+		if (! filter->filter (session, filter->filter_data)) {
+			res = FALSE;
+			break;
+		}
+		list = g_list_next (list);
+	}
+
+	return res;
+}
+
+static gboolean
 read_smtp_command (struct smtp_session *session, f_str_t *line)
 {
 	/* XXX: write dialog implementation */
@@ -192,6 +211,9 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 				else {
 					session->errors ++;
 				}
+				if (! call_stage_filters (session, SMTP_STAGE_HELO)) {
+					return FALSE;
+				}
 				return TRUE;
 			}
 			else {
@@ -213,6 +235,9 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 					session->errors ++;
 					return FALSE;
 				}
+				if (! call_stage_filters (session, SMTP_STAGE_MAIL)) {
+					return FALSE;
+				}
 			}
 			else {
 				goto improper_sequence;
@@ -221,6 +246,9 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 		case SMTP_COMMAND_RCPT:
 			if (session->state == SMTP_STATE_RCPT) {
 				if (parse_smtp_rcpt (session, cmd)) {
+					if (! call_stage_filters (session, SMTP_STAGE_RCPT)) {
+						return FALSE;
+					}
 					/* Make upstream connection */
 					if (session->upstream == NULL) {
 						if (!create_smtp_upstream_connection (session)) {
@@ -267,6 +295,9 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 				if (session->rcpt == NULL) {
 					session->error = SMTP_ERROR_RECIPIENTS;
 					session->errors ++;
+					return FALSE;
+				}
+				if (! call_stage_filters (session, SMTP_STAGE_DATA)) {
 					return FALSE;
 				}
 				if (session->upstream == NULL) {
@@ -1013,6 +1044,7 @@ config_smtp_worker (struct rspamd_worker *worker)
 	ctx->smtp_timeout.tv_usec = 0;
 	ctx->smtp_delay = 0;
 	ctx->smtp_banner = "220 ESMTP Ready." CRLF;
+	bzero (ctx->smtp_filters, sizeof (GList *) * SMTP_STAGE_MAX);
 
 	if ((value = g_hash_table_lookup (worker->cf->params, "upstreams")) != NULL) {
 		if (!parse_upstreams_line (ctx, value)) {
@@ -1110,6 +1142,24 @@ start_smtp_worker (struct rspamd_worker *worker)
 	
 	close_log ();
 	exit (EXIT_SUCCESS);
+}
+
+void 
+register_smtp_filter (struct smtp_worker_ctx *ctx, enum rspamd_smtp_stage stage, smtp_filter_t filter, gpointer filter_data)
+{
+	struct smtp_filter             *new;
+
+	new = memory_pool_alloc (ctx->pool, sizeof (struct smtp_filter));
+
+	new->filter = filter;
+	new->filter_data = filter_data;
+
+	if (stage >= SMTP_STAGE_MAX) {
+		msg_err ("invalid smtp stage: %d", stage);
+	}
+	else {
+		ctx->smtp_filters[stage] = g_list_prepend (ctx->smtp_filters[stage], new);
+	}
 }
 
 /* 

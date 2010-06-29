@@ -448,6 +448,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/cfg_utils.c
 				src/cfg_xml.c
 				src/controller.c
+				src/dns.c
 				src/events.c
 				src/expressions.c
 				src/filter.c
