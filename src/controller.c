@@ -263,7 +263,7 @@ process_sync_command (struct controller_session *session, char **args)
 	}
 	rev = strtoull (arg, &err_str, 10);
 	if (err_str && *err_str != 0) {
-		msg_info ("bad arguments to sync commanc: %s", arg);
+		msg_info ("bad arguments to sync command: %s", arg);
 		return FALSE;
 	}
 	arg = *(args + 2);
@@ -273,7 +273,7 @@ process_sync_command (struct controller_session *session, char **args)
 	}
 	time = strtoull (arg, &err_str, 10);
 	if (err_str && *err_str != 0) {
-		msg_info ("bad arguments to sync commanc: %s", arg);
+		msg_info ("bad arguments to sync command: %s", arg);
 		return FALSE;
 	}
 
@@ -652,9 +652,11 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			"    password <password> - authenticate yourself for privileged commands" CRLF
 			"(*) reload - reload rspamd" CRLF
 			"(*) shutdown - shutdown rspamd" CRLF 
-			"    stat - show different rspamd stat" CRLF 
+			"    stat - show different rspamd stat" CRLF
+			"    sync - run synchronization of statfiles" CRLF
 			"    counters - show rspamd counters" CRLF 
-			"    uptime - rspamd uptime" CRLF);
+			"    uptime - rspamd uptime" CRLF
+			"    weights <statfile> <size> - weight of message in all statfiles");
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return FALSE;
 		}
@@ -790,7 +792,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				c.len = part->content->len;
 			}
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn fail, tokenizer error" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, tokenizer error" CRLF);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
@@ -803,7 +805,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		
 		/* Handle messages without text */
 		if (tokens == NULL) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn fail, no tokens can be extracted (no text data)" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, no tokens can be extracted (no text data)" CRLF);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
@@ -877,7 +879,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			c.begin = part->content->data;
 			c.len = part->content->len;
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights fail, tokenizer error" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
@@ -890,7 +892,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		
 		/* Handle messages without text */
 		if (tokens == NULL) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights fail, no tokens can be extracted (no text data)" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, no tokens can be extracted (no text data)" CRLF);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
