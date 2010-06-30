@@ -29,6 +29,7 @@
  * - symbol_allow (string): symbol to insert (default: 'R_SPF_ALLOW')
  * - symbol_fail (string): symbol to insert (default: 'R_SPF_FAIL')
  * - symbol_softfail (string): symbol to insert (default: 'R_SPF_SOFTFAIL')
+ * - whitelist (map): map of whitelisted networks
  */
 
 #include "../config.h"
@@ -53,6 +54,7 @@ struct spf_ctx {
 	char                           *symbol_allow;
 
 	memory_pool_t                  *spf_pool;
+	radix_tree_t                   *whitelist_ip;
 };
 
 static struct spf_ctx        *spf_module_ctx = NULL;
@@ -77,6 +79,8 @@ spf_module_config (struct config_file *cfg)
 {
 	char                           *value;
 	int                             res = TRUE;
+
+	spf_module_ctx->whitelist_ip = radix_tree_create ();
 	
 	if ((value = get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
 		spf_module_ctx->symbol_fail = memory_pool_strdup (spf_module_ctx->spf_pool, value);
@@ -96,6 +100,11 @@ spf_module_config (struct config_file *cfg)
 	else {
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
+	if ((value = get_module_opt (cfg, "spf", "whitelist")) != NULL) {
+		if (! add_map (value, read_radix_list, fin_radix_list, (void **)&spf_module_ctx->whitelist_ip)) {
+			msg_warn ("cannot load whitelist from %s", value);
+		}
+	}
 
 	register_symbol (&cfg->cache, spf_module_ctx->symbol_fail, 1, spf_symbol_callback, NULL);
 
@@ -106,6 +115,7 @@ int
 spf_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (spf_module_ctx->spf_pool);
+	radix_tree_free (spf_module_ctx->whitelist_ip);
 	spf_module_ctx->spf_pool = memory_pool_new (memory_pool_get_size ());
 
 	return spf_module_config (cfg);
@@ -165,8 +175,13 @@ static void
 spf_symbol_callback (struct worker_task *task, void *unused)
 {
 	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
-		if (!resolve_spf (task, spf_plugin_callback)) {
-			msg_info ("cannot make spf request for [%s]", task->message_id);
+		if (radix32tree_find (spf_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) != RADIX_NO_VALUE) {
+			if (!resolve_spf (task, spf_plugin_callback)) {
+				msg_info ("cannot make spf request for [%s]", task->message_id);
+			}
+		}
+		else {
+			msg_info ("ip %s is whitelisted for spf checks", inet_ntoa (task->from_addr));
 		}
 	}
 }
