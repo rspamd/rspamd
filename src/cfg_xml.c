@@ -518,43 +518,43 @@ handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 		}
 		cfg->log_type = RSPAMD_LOG_SYSLOG;
 		/* Rather ugly check */
-		if (g_ascii_strncasecmp (val, "LOG_AUTH", sizeof ("LOG_AUTH") - 1) == 0) {
+		if (g_ascii_strncasecmp (val, "LOG_AUTH", sizeof ("LOG_AUTH") - 1) == 0 || g_ascii_strncasecmp (val, "auth", sizeof ("auth") - 1) == 0 ) {
 			cfg->log_facility = LOG_AUTH;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_CRON", sizeof ("LOG_CRON") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_CRON", sizeof ("LOG_CRON") - 1) == 0 || g_ascii_strncasecmp (val, "cron", sizeof ("cron") - 1) == 0 ) {
 			cfg->log_facility = LOG_CRON;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_DAEMON", sizeof ("LOG_DAEMON") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_DAEMON", sizeof ("LOG_DAEMON") - 1) == 0 || g_ascii_strncasecmp (val, "daemon", sizeof ("daemon") - 1) == 0 ) {
 			cfg->log_facility = LOG_DAEMON;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_MAIL", sizeof ("LOG_MAIL") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_MAIL", sizeof ("LOG_MAIL") - 1) == 0 || g_ascii_strncasecmp (val, "mail", sizeof ("mail") - 1) == 0) {
 			cfg->log_facility = LOG_MAIL;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_USER", sizeof ("LOG_USER") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_USER", sizeof ("LOG_USER") - 1) == 0 || g_ascii_strncasecmp (val, "user", sizeof ("user") - 1) == 0 ) {
 			cfg->log_facility = LOG_USER;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL0", sizeof ("LOG_LOCAL0") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL0", sizeof ("LOG_LOCAL0") - 1) == 0 || g_ascii_strncasecmp (val, "local0", sizeof ("local0") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL0;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL1", sizeof ("LOG_LOCAL1") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL1", sizeof ("LOG_LOCAL1") - 1) == 0 || g_ascii_strncasecmp (val, "local1", sizeof ("local1") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL1;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL2", sizeof ("LOG_LOCAL2") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL2", sizeof ("LOG_LOCAL2") - 1) == 0 || g_ascii_strncasecmp (val, "local2", sizeof ("local2") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL2;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL3", sizeof ("LOG_LOCAL3") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL3", sizeof ("LOG_LOCAL3") - 1) == 0 || g_ascii_strncasecmp (val, "local3", sizeof ("local3") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL3;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL4", sizeof ("LOG_LOCAL4") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL4", sizeof ("LOG_LOCAL4") - 1) == 0 || g_ascii_strncasecmp (val, "local4", sizeof ("local4") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL4;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL5", sizeof ("LOG_LOCAL5") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL5", sizeof ("LOG_LOCAL5") - 1) == 0 || g_ascii_strncasecmp (val, "local5", sizeof ("local5") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL5;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL6", sizeof ("LOG_LOCAL6") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL6", sizeof ("LOG_LOCAL6") - 1) == 0 || g_ascii_strncasecmp (val, "local6", sizeof ("local6") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL6;
 		}
-		else if (g_ascii_strncasecmp (val, "LOG_LOCAL7", sizeof ("LOG_LOCAL7") - 1) == 0) {
+		else if (g_ascii_strncasecmp (val, "LOG_LOCAL7", sizeof ("LOG_LOCAL7") - 1) == 0 || g_ascii_strncasecmp (val, "local7", sizeof ("local7") - 1) == 0) {
 			cfg->log_facility = LOG_LOCAL7;
 		}
 		else {
