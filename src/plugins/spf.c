@@ -175,7 +175,7 @@ static void
 spf_symbol_callback (struct worker_task *task, void *unused)
 {
 	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
-		if (radix32tree_find (spf_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) != RADIX_NO_VALUE) {
+		if (radix32tree_find (spf_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) == RADIX_NO_VALUE) {
 			if (!resolve_spf (task, spf_plugin_callback)) {
 				msg_info ("cannot make spf request for [%s]", task->message_id);
 			}
