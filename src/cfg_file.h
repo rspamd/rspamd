@@ -300,6 +300,10 @@ struct config_file {
 	gchar* checksum;								/**< real checksum of config file						*/ 
 	gchar* dump_checksum;							/**< dump checksum of config file						*/ 
 	gpointer lua_state;								/**< pointer to lua state								*/
+
+	guint dns_timeout;								/**< timeout in milliseconds for waiting for dns reply	*/
+	guint dns_retransmits;							/**< maximum retransmits count							*/
+	GList *nameservers;								/**< list of nameservers or NULL to parse resolv.conf	*/
 };
 
 

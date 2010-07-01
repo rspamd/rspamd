@@ -682,7 +682,7 @@ redirector_callback (int fd, short what, void *arg)
 		if (what == EV_WRITE) {
 			timeout = memory_pool_alloc (param->task->task_pool, sizeof (struct timeval));
 			timeout->tv_sec = surbl_module_ctx->read_timeout / 1000;
-			timeout->tv_usec = surbl_module_ctx->read_timeout - timeout->tv_sec * 1000;
+			timeout->tv_usec = (surbl_module_ctx->read_timeout - timeout->tv_sec * 1000) * 1000;
 			event_del (&param->ev);
 			event_set (&param->ev, param->sock, EV_READ | EV_PERSIST, redirector_callback, (void *)param);
 			event_add (&param->ev, timeout);
@@ -753,7 +753,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	param->suffix = suffix;
 	timeout = memory_pool_alloc (task->task_pool, sizeof (struct timeval));
 	timeout->tv_sec = surbl_module_ctx->connect_timeout / 1000;
-	timeout->tv_usec = surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000;
+	timeout->tv_usec = (surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000) * 1000;
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
 	event_add (&param->ev, timeout);
 	register_async_event (task->s, free_redirector_session, param, FALSE);

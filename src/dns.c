@@ -279,20 +279,6 @@ struct dns_request_key {
 };
 
 
-struct rspamd_dns_resolver *
-dns_resolver_init (void)
-{
-	struct rspamd_dns_resolver *res;
-
-	res = g_malloc0 (sizeof (struct rspamd_dns_resolver));
-	
-	res->requests = g_hash_table_new (g_direct_hash, g_direct_equal);
-	res->permutor = g_malloc (sizeof (struct dns_k_permutor));
-	dns_k_permutor_init (res->permutor, 0, G_MAXUINT16);
-
-	return res;
-}
-
 /** Packet creating functions */
 static void
 allocate_packet (struct rspamd_dns_request *req, guint namelen)
@@ -633,4 +619,117 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	}
 
 	return TRUE;
+}
+
+#define RESOLV_CONF "/etc/resolv.conf"
+
+static gboolean
+parse_resolv_conf (struct rspamd_dns_resolver *resolver)
+{
+	FILE *r;
+	char buf[BUFSIZ], *p;
+	struct rspamd_dns_server *new;
+	struct in_addr addr;
+
+	r = fopen (RESOLV_CONF, "r");
+
+	if (r == NULL) {
+		msg_err ("cannot open %s: %s", RESOLV_CONF, strerror (errno));
+		return FALSE;
+	}
+	
+	while (! feof (r)) {
+		if (fgets (buf, sizeof (buf), r)) {
+			g_strstrip (buf);
+			if (g_ascii_strncasecmp (buf, "nameserver", sizeof ("nameserver") - 1) == 0) {
+				p = buf + sizeof ("nameserver");
+				while (*p && g_ascii_isspace (*p)) {
+					p ++;
+				}
+				if (! *p) {
+					msg_warn ("cannot parse empty nameserver line in resolv.conf");
+					continue;
+				}
+				else {
+					if (inet_aton (p, &addr) != 0) {
+						new = &resolver->servers[resolver->servers_num];
+						new->name = memory_pool_strdup (resolver->static_pool, p);
+						memcpy (&new->addr, &addr, sizeof (struct in_addr));
+						resolver->servers_num ++;
+					}
+					else {
+						msg_warn ("cannot parse ip address of nameserver: %s", p);
+						continue;
+					}
+				}
+			}
+		}
+	}
+
+	fclose (r);
+	return TRUE;
+}
+
+struct rspamd_dns_resolver *
+dns_resolver_init (struct config_file *cfg)
+{
+	GList *cur;
+	struct rspamd_dns_resolver *new;
+	char *begin, *p;
+	int priority;
+	struct rspamd_dns_server *serv;
+	
+	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
+	new->requests = g_hash_table_new (g_direct_hash, g_direct_equal);
+	new->permutor = memory_pool_alloc (cfg->cfg_pool, sizeof (struct dns_k_permutor));
+	dns_k_permutor_init (new->permutor, 0, G_MAXUINT16);
+	new->static_pool = cfg->cfg_pool;
+	new->request_timeout = cfg->dns_timeout;
+	new->max_retransmits = cfg->dns_retransmits;
+
+	if (cfg->nameservers == NULL) {
+		/* Parse resolv.conf */
+		if (! parse_resolv_conf (new) || new->servers_num == 0) {
+			msg_err ("cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
+			return NULL;
+		}
+	}
+	else {
+		cur = cfg->nameservers;
+		while (cur) {
+			begin = cur->data;
+			p = strchr (begin, ':');
+			if (p != NULL) {
+				*p = '\0';
+				p ++;
+				priority = strtoul (p, NULL, 10);
+			}
+			else {
+				priority = 0;
+			}
+			serv = &new->servers[new->servers_num];
+			if (inet_aton (begin, &serv->addr) != 0) {
+				serv->name = memory_pool_strdup (new->static_pool, begin);
+				serv->up.priority = priority;
+				new->servers_num ++;
+			}
+			else {
+				msg_warn ("cannot parse ip address of nameserver: %s", p);
+				cur = g_list_next (cur);
+				continue;
+			}
+
+			cur = g_list_next (cur);
+		}
+		if (new->servers_num == 0) {
+			msg_err ("no valid nameservers defined, try to parse resolv.conf");
+			if (! parse_resolv_conf (new) || new->servers_num == 0) {
+				msg_err ("cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
+				return NULL;
+			}
+		}
+
+	}
+
+	return new;
 }

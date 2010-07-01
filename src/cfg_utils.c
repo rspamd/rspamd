@@ -168,6 +168,9 @@ init_defaults (struct config_file *cfg)
 	cfg->memcached_maxerrors = DEFAULT_UPSTREAM_MAXERRORS;
 	cfg->memcached_protocol = TCP_TEXT;
 
+	cfg->dns_timeout = 1000;
+	cfg->dns_retransmits = 5;
+
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);

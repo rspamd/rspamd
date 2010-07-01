@@ -12,6 +12,7 @@
 #define DNS_D_MAXNAME	255	/* + 1 '\0' */
 
 struct rspamd_dns_reply;
+struct config_file;
 
 typedef void (*dns_callback_type) (struct rspamd_dns_reply *reply, gpointer arg);
 /**
@@ -45,6 +46,7 @@ struct rspamd_dns_resolver {
 	struct dns_k_permutor *permutor;	/**< permutor for randomizing request id	*/
 	guint request_timeout;
 	guint max_retransmits;
+	memory_pool_t *static_pool;			/**< permament pool (cfg_pool)				*/
 };
 
 struct dns_header;
@@ -198,7 +200,7 @@ struct dns_query {
 };
 
 /* Rspamd DNS API */
-struct rspamd_dns_resolver *dns_resolver_init (void);
+struct rspamd_dns_resolver *dns_resolver_init (struct config_file *cfg);
 gboolean make_dns_request (struct rspamd_dns_resolver *resolver, 
 		struct rspamd_async_session *session, memory_pool_t *pool, dns_callback_type cb, 
 		gpointer ud, enum rspamd_request_type type, ...);

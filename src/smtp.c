@@ -681,11 +681,11 @@ smtp_make_delay (struct smtp_session *session)
 		if (session->ctx->delay_jitter != 0) {
 			jitter = g_random_int_range (0, session->ctx->delay_jitter);
 			tv->tv_sec = (session->ctx->smtp_delay + jitter) / 1000;
-			tv->tv_usec = session->ctx->smtp_delay + jitter - tv->tv_sec * 1000;
+			tv->tv_usec = (session->ctx->smtp_delay + jitter - tv->tv_sec * 1000) * 1000;
 		}
 		else {
 			tv->tv_sec = session->ctx->smtp_delay / 1000;
-			tv->tv_usec = session->ctx->smtp_delay - tv->tv_sec * 1000;
+			tv->tv_usec = (session->ctx->smtp_delay - tv->tv_sec * 1000) * 1000;
 		}
 
 		evtimer_set (tev, smtp_delay_handler, session);
@@ -954,7 +954,7 @@ parse_upstreams_line (struct smtp_worker_ctx *ctx, const char *line)
 			*t = '\0';
 			t ++;
 			errno = 0;
-			cur->up.weight = strtoul (t, &err_str, 10);
+			cur->up.priority = strtoul (t, &err_str, 10);
 			if (errno != 0 || (err_str && *err_str != '\0')) {
 				msg_err ("cannot convert weight: %s, %s", t, strerror (errno));
 				g_strfreev (strv);
@@ -1062,7 +1062,7 @@ config_smtp_worker (struct rspamd_worker *worker)
 		errno = 0;
 		timeout = parse_seconds (value);
 		ctx->smtp_timeout.tv_sec = timeout / 1000;
-		ctx->smtp_timeout.tv_usec = timeout - ctx->smtp_timeout.tv_sec * 1000;
+		ctx->smtp_timeout.tv_usec = (timeout - ctx->smtp_timeout.tv_sec * 1000) * 1000;
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_delay")) != NULL) {
 		ctx->smtp_delay = parse_seconds (value);
