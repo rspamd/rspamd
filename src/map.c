@@ -386,8 +386,9 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 
 	rlen = 0;
 	while ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 1)) > 0) {
-		buf[r++] = '\0';
-		remain = map->read_callback (map->pool, buf, r - 1, &cbdata);
+		r += rlen;
+		buf[r] = '\0';
+		remain = map->read_callback (map->pool, buf, r, &cbdata);
 		if (remain != NULL) {
 			/* copy remaining buffer to start of buffer */
 			rlen = r - (remain - buf);
