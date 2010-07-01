@@ -1241,6 +1241,17 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				/* Create object */
 				ud->section_pointer = check_worker_conf (ud->cfg, NULL);
 			}
+			else if (g_ascii_strcasecmp (element_name, "lua") == 0) {
+				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
+				if (! handle_lua (ud->cfg, ud, ud->cur_attrs, NULL, NULL, ud->cfg, 0)) {
+					*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s'", ud->section_name);
+					ud->state = XML_ERROR;
+				}
+				else {
+					ud->state = XML_READ_VALUE;
+				}
+			}
 			else if (g_ascii_strcasecmp (element_name, "view") == 0) {
 				ud->state = XML_READ_VIEW;
 				/* Create object */
@@ -1411,8 +1422,13 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 	struct rspamd_xml_userdata *ud = user_data;
 	char *val;
 	struct config_file *cfg = ud->cfg;
-
-	if (*text == '\n') {
+	
+	/* Strip space symbols */
+	while (*text && g_ascii_isspace (*text)) {
+		text ++;
+	}
+	if (*text == '\0') {
+		/* Skip empty text */
 		return;
 	}
 
