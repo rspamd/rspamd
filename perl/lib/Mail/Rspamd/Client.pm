@@ -150,16 +150,17 @@ The return value is a hash reference containing results of each command for each
 sub process_item {
 	my $self = shift;
 	my $item = shift;
+	my $cb = shift;
 	
 	if (defined ($item)) {
 		if ($item =~ qr|^imap(s?):user:([^:]+):password:([^:]*):host:([^:]+):mbox:(.+)$|) {
-			return $self->_process_imap ($1, $2, $3, $4, $5);
+			return $self->_process_imap ($1, $2, $3, $4, $5, $cb);
 		}
 		elsif (-f $item) {
-			return $self->_process_file ($item);
+			return $self->_process_file ($item, $cb);
 		}
 		elsif (-d $item) {
-			return $self->_process_directory ($item);
+			return $self->_process_directory ($item, $cb);
 		}
 		else {
 			warn "urecognized argument: $item";
@@ -180,9 +181,11 @@ The return value is a hash reference containing results of each command for each
 =cut
 sub process_path {
 	my $self = shift;
+	my $cb = shift;
 	my %res;
+
 	foreach (@_) {
-		$res{$_} = $self->process_item($_);
+		$res{$_} = $self->process_item($_, $cb);
 	}
 
 	return \%res;
@@ -1167,6 +1170,8 @@ sub _do_control_command {
 sub _process_file {
 	my $self = shift;
 	my $file = shift;
+	my $cb = shift;
+	my $res;
 
 	open(FILE, "< $file") or return;
 	
@@ -1176,19 +1181,23 @@ sub _process_file {
 	}
 	
 	close FILE;
-	$self->do_all_cmd ($input);
+	$res = $self->do_all_cmd ($input);
+	if (defined ($cb) && $res) {
+		$cb->($file, $res);
+	}
 }
 
 sub _process_directory {
 	my $self = shift;
 	my $dir = shift;
+	my $cb = shift;
 
 	opendir (DIR, $dir) or return;
 
 	while (defined (my $file = readdir (DIR))) {
 		$file = "$dir/$file";
 		if (-f $file) {
-			$self->_process_file ($file);
+			$self->_process_file ($file, $cb);
 		}	
 	}
 	closedir (DIR);
@@ -1269,9 +1278,10 @@ sub _parse_imap_sequences {
 }
 
 sub _process_imap {
-	my ($self, $ssl, $user, $password, $host, $mbox) = @_;
+	my ($self, $ssl, $user, $password, $host, $mbox, $cb) = @_;
 	my $seq = 1;
 	my $sock;
+	my $res;
 
 	if (!$password) {
 		eval {
@@ -1329,6 +1339,9 @@ sub _process_imap {
 		syswrite $sock, "$seq FETCH $message body[]$EOL";
 		if (defined (my $input = $self->_parse_imap_body ($sock, $seq))) {
 			$self->do_all_cmd ($input);
+			if (defined ($cb) && $res) {
+				$cb->($seq, $res);
+			}
 		}
 		$seq ++;
 	} 

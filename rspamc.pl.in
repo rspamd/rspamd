@@ -10,6 +10,7 @@
 use Socket qw(:DEFAULT :crlf);
 use Term::Cap;
 use Mail::Rspamd::Client;
+use Data::Dumper;
 
 my %cfg = (
     'conf_file' => '@CMAKE_INSTALL_PREFIX@/etc/rspamd.conf',
@@ -186,6 +187,22 @@ sub print_rspamc_result {
 	}
 }
 
+sub print_item_result {
+	my ($file, $res) = @_;
+	$terminal->Tputs( 'md', 1, *STDOUT );
+	print "Results for item $file:\n\n";
+	$terminal->Tputs( 'me', 1, *STDOUT );
+
+	while (my ($host, $result) =  each (%{ $res })) {
+		if ($cfg{control}) {
+			print_control_result ($host, $result);
+		}
+		else {
+			print_rspamc_result ($host, $result);
+		}
+	}
+	
+}
 ############################# Main part ###########################################
 my %args;
 
@@ -330,17 +347,5 @@ if (!defined ($path[0]) || ! $cfg{'require_input'}) {
 	}
 }
 else {
-	my $res = $rspamd->process_path (@path);
-
-	while (my ($item, $result) =  each (%{ $res })) {
-		print "Results for item $item:\n";
-		while (my ($host, $r) =  each (%{ $result })) {
-			if ($cfg{control}) {
-				print_control_result ($host, $r);
-			}
-			else {
-				print_rspamc_result ($host, $r);
-			}
-		}
-	}
+	$rspamd->process_path (\&print_item_result, @path);
 }
