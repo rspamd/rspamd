@@ -548,7 +548,7 @@ process_text_part (struct worker_task *task, GByteArray * part_content, GMimeCon
 		text_part->html_urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
 		text_part->urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
 
-		text_part->content = strip_html_tags (task, task->task_pool, text_part, part_content, NULL);
+		text_part->content = strip_html_tags (task, task->task_pool, text_part, text_part->orig, NULL);
 
 		if (text_part->html_nodes == NULL) {
 			url_parse_text (task->task_pool, task, text_part, FALSE);

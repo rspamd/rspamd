@@ -135,7 +135,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 	else {
 		while (remain > 0) {
 			c = g_utf8_get_char_validated (p, remain);
-			if (c == (gunichar) - 2 || c == (gunichar) - 1) {
+			if (c == (gunichar) -2 || c == (gunichar) -1) {
 				/* Invalid characters detected, stop processing */
 				return FALSE;
 			}
@@ -147,12 +147,12 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 
 			if (remain > 0) {
 				t = g_utf8_get_char_validated (p, remain);
-				if (c == (gunichar) - 2 || c == (gunichar) - 1) {
+				if (t == (gunichar) -2 || t == (gunichar) -1) {
 					/* Invalid characters detected, stop processing */
 					return FALSE;
 				}
 				sct = g_unichar_get_script (t);
-				if (g_unichar_isalnum (c) && g_unichar_isalnum (t)) {
+				if (g_unichar_isalpha (c) && g_unichar_isalpha (t)) {
 					/* We have two unicode alphanumeric characters, so we can check its script */
 					if (sct != scc) {
 						mark++;
