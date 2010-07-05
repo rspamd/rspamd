@@ -28,6 +28,7 @@
 #include "util.h"
 #include "lmtp.h"
 #include "smtp.h"
+#include "map.h"
 #include "fuzzy_storage.h"
 #include "cfg_xml.h"
 
@@ -951,6 +952,7 @@ main (int argc, char **argv, char **env)
 
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd->workers, kill_old_workers, NULL);
+			remove_all_maps ();
 			reread_config (rspamd);
 			spawn_workers (rspamd);
 

@@ -50,6 +50,7 @@ struct rspamd_map {
 
 gboolean add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
 void start_map_watch (void);
+void remove_all_maps (void);
 
 typedef void                    (*insert_func) (gpointer st, gconstpointer key, gpointer value);
 

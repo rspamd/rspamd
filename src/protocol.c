@@ -439,6 +439,19 @@ write_hashes_to_log (struct worker_task *task, char *logbuf, int offset, int siz
 	}
 }
 
+static gint
+compare_url_func (gconstpointer a, gconstpointer b)
+{
+	const struct uri               *u1 = a, *u2 = b;
+
+	if (u1->hostlen != u2->hostlen) {
+		return u1->hostlen - u2->hostlen;
+	}
+	else {
+		return memcmp (u1->host, u2->host, u1->hostlen);
+	}
+}
+
 static gboolean
 show_url_header (struct worker_task *task)
 {
@@ -447,8 +460,10 @@ show_url_header (struct worker_task *task)
 	struct uri                     *url;
 	GList                          *cur;
 	f_str_t                         host;
+	GTree                          *url_tree;
 
 	r = rspamd_snprintf (outbuf, sizeof (outbuf), "Urls: ");
+	url_tree = g_tree_new (compare_url_func);
 	cur = task->urls;
 	while (cur) {
 		url = cur->data;
@@ -456,37 +471,40 @@ show_url_header (struct worker_task *task)
             /* Write this url to log as well */
             msg_info ("url found: <%s>, score: [%.2f / %.2f]", struri (url), default_score, default_required_score);
         }
-		host.begin = url->host;
-		host.len = url->hostlen;
-		/* Skip long hosts to avoid protocol coollisions */
-		if (host.len > OUTBUFSIZ) {
-			cur = g_list_next (cur);
-			continue;
-		}
-		/* Do header folding */
-		if (host.len + r >= OUTBUFSIZ - 3) {
-			outbuf[r++] = '\r';
-			outbuf[r++] = '\n';
-			outbuf[r] = ' ';
-			if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
-				return FALSE;
+		if (g_tree_lookup (url_tree, url) == NULL) {
+			g_tree_insert (url_tree, url, url);
+			host.begin = url->host;
+			host.len = url->hostlen;
+			/* Skip long hosts to avoid protocol coollisions */
+			if (host.len > OUTBUFSIZ) {
+				cur = g_list_next (cur);
+				continue;
 			}
-			r = 0;
-		}
-		/* Write url host to buf */
-		if (g_list_next (cur) != NULL) {
-			c = *(host.begin + host.len);
-			*(host.begin + host.len) = '\0';
-			debug_task ("write url: %s", host.begin);
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
-			*(host.begin + host.len) = c;
-		}
-		else {
-			c = *(host.begin + host.len);
-			*(host.begin + host.len) = '\0';
-			debug_task ("write url: %s", host.begin);
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
-			*(host.begin + host.len) = c;
+			/* Do header folding */
+			if (host.len + r >= OUTBUFSIZ - 3) {
+				outbuf[r++] = '\r';
+				outbuf[r++] = '\n';
+				outbuf[r] = ' ';
+				if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
+					return FALSE;
+				}
+				r = 0;
+			}
+			/* Write url host to buf */
+			if (g_list_next (cur) != NULL) {
+				c = *(host.begin + host.len);
+				*(host.begin + host.len) = '\0';
+				debug_task ("write url: %s", host.begin);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
+				*(host.begin + host.len) = c;
+			}
+			else {
+				c = *(host.begin + host.len);
+				*(host.begin + host.len) = '\0';
+				debug_task ("write url: %s", host.begin);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
+				*(host.begin + host.len) = c;
+			}
 		}
 		cur = g_list_next (cur);
 	}

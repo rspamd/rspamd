@@ -100,7 +100,7 @@ static u_char *
 read_exceptions_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = memory_pool_alloc (pool, sizeof (GHashTable *) * MAX_LEVELS);
+		data->cur_data = memory_pool_alloc0 (pool, sizeof (GHashTable *) * MAX_LEVELS);
 	}
 	return abstract_parse_list (pool, chunk, len, data, (insert_func) exception_insert);
 }
