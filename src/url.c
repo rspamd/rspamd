@@ -769,7 +769,7 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 	/* Possibly skip auth part */
 	host_end = prefix_end + strcspn (prefix_end, "@");
 
-	if (prefix_end + strcspn (prefix_end, "/") > host_end && *host_end) {	/* we have auth info here */
+	if (prefix_end + strcspn (prefix_end, "/?") > host_end && *host_end) {	/* we have auth info here */
 
 		/* Allow '@' in the password component */
 		while (strcspn (host_end + 1, "@") < strcspn (host_end + 1, "/?"))
