@@ -697,10 +697,10 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		}
 	}
 #ifdef HAVE_CLOCK_GETTIME
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %sms",
-		(long int)task->msg->len, calculate_check_time (&task->ts, task->cfg->clock_res));
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %s,",
+		(long int)task->msg->len, calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res));
 #else
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %sms",
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %s,",
 		(long int)task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
 #endif
 }

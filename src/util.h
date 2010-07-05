@@ -65,7 +65,7 @@ int pidfile_remove(struct pidfh *pfh);
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
 char* resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from);
 #ifdef HAVE_CLOCK_GETTIME
-const char* calculate_check_time (struct timespec *begin, int resolution);
+const char* calculate_check_time (struct timeval *tv, struct timespec *begin, int resolution);
 #else
 const char* calculate_check_time (struct timeval *begin, int resolution);
 #endif

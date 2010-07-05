@@ -371,7 +371,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		/* Hack for bugged windows resolver */
 		ip_num &= 0xFFFFFFFF;
 		/* Get octets */
-		r = rspamd_snprintf (result, len, "%u.%u.%u.%u",
+		r = rspamd_snprintf (result, len, "%ud.%ud.%ud.%ud",
 			(uint32_t) ip_num & 0x000000FF, (uint32_t) (ip_num & 0x0000FF00) >> 8, (uint32_t) (ip_num & 0x00FF0000) >> 16, (uint32_t) (ip_num & 0xFF000000) >> 24);
 	}
 	else {

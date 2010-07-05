@@ -778,18 +778,24 @@ resolve_stat_filename (memory_pool_t * pool, char *pattern, char *rcpt, char *fr
 
 #ifdef HAVE_CLOCK_GETTIME
 const char                     *
-calculate_check_time (struct timespec *begin, int resolution)
+calculate_check_time (struct timeval *tv, struct timespec *begin, int resolution)
 #else
 const char                     *
 calculate_check_time (struct timeval *begin, int resolution)
 #endif
 {
-	double                          diff;
-	static char                     res[sizeof ("100000.000")];
-	static char                     fmt[sizeof ("%.10f")];
+	double                          vdiff, diff;
+	static char                     res[64];
+	static char                     fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
+	struct timeval                  tv_now;
+	if (gettimeofday (&tv_now, NULL) == -1) {
+		msg_warn ("gettimeofday failed: %s", strerror (errno));
+	}
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec                 ts;
 
+	diff = (tv_now.tv_sec - tv->tv_sec) * 1000. +	/* Seconds */
+		(tv_now.tv_usec - tv->tv_usec) / 1000.;	/* Microseconds */
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
 #elif defined(HAVE_CLOCK_VIRTUAL)
@@ -798,20 +804,17 @@ calculate_check_time (struct timeval *begin, int resolution)
 	clock_gettime (CLOCK_REALTIME, &ts);
 #endif
 
-	diff = (ts.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
+	vdiff = (ts.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
 		(ts.tv_nsec - begin->tv_nsec) / 1000000.;	/* Nanoseconds */
 #else
-	struct timeval                  tv;
+	diff = (tv_now.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
+		(tv_now.tv_usec - begin->tv_usec) / 1000.;	/* Microseconds */
 
-	if (gettimeofday (&tv, NULL) == -1) {
-		msg_warn ("gettimeofday failed: %s", strerror (errno));
-	}
-	diff = (tv.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
-		(tv.tv_usec - begin->tv_usec) / 1000.;	/* Microseconds */
+	vdiff = diff;
 #endif
 
-	sprintf (fmt, "%%.%df", resolution);
-	snprintf (res, sizeof (res), fmt, diff);
+	sprintf (fmt, "%%.%dfms real, %%.%dfms virtual", resolution, resolution);
+	snprintf (res, sizeof (res), fmt, diff, vdiff);
 
 	return (const char *)res;
 }

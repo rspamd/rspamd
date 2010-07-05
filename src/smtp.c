@@ -578,10 +578,10 @@ smtp_write_socket (void *arg)
 				}
 				g_list_free (symbols);
 #ifdef HAVE_CLOCK_GETTIME
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %sms",
-					(long int)session->task->msg->len, calculate_check_time (&session->task->ts, session->cfg->clock_res));
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %s",
+					(long int)session->task->msg->len, calculate_check_time (&session->task->tv, &session->task->ts, session->cfg->clock_res));
 #else
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %sms",
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %s",
 					(long int)session->task->msg->len, calculate_check_time (&session->task->tv, session->cfg->clock_res));
 #endif
 				msg_info ("%s", logbuf);

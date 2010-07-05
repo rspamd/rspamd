@@ -254,7 +254,7 @@ get_protocol (unsigned char *name, int namelen)
 		pname = protocol_backends[protocol].name;
 		pnamelen = strlen (pname);
 		minlen = MIN (pnamelen, namelen);
-		compare = strncasecmp (pname, name, minlen);
+		compare = g_ascii_strncasecmp (pname, name, minlen);
 
 		if (compare == 0) {
 			if (pnamelen == namelen)
@@ -670,6 +670,14 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 
 	/* Assume http as default protocol */
 	if (!uri->protocollen || (uri->protocol = get_protocol (struri (uri), uri->protocollen)) == PROTOCOL_UNKNOWN) {
+		/* Make exception for numeric urls */
+		p = uri->string;
+		while (*p && (g_ascii_isalnum (*p) || *p == ':')) {
+			p ++;
+		}
+		if (*p == '\0') {
+			return URI_ERRNO_INVALID_PROTOCOL;
+		}
 		p = g_strconcat ("http://", uri->string, NULL);
 		uri->string = memory_pool_strdup (pool, p);
 		g_free (p);
@@ -912,11 +920,14 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 						if (new != NULL) {
 							g_strstrip (url_str);
 							rc = parse_uri (new, url_str, pool);
-							if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST) {
+							if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
 								if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
 									g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
 									task->urls = g_list_prepend (task->urls, new);
 								}
+							}
+							else {
+								msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
 							}
 						}
 					}

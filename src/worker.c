@@ -430,11 +430,10 @@ construct_task (struct rspamd_worker *worker)
 # else
 	clock_gettime (CLOCK_REALTIME, &new_task->ts);
 # endif
-#else
+#endif
 	if (gettimeofday (&new_task->tv, NULL) == -1) {
 		msg_warn ("gettimeofday failed: %s", strerror (errno));
 	}
-#endif
 	io_tv.tv_sec = WORKER_IO_TIMEOUT;
 	io_tv.tv_usec = 0;
 	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
