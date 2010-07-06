@@ -562,7 +562,13 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	struct url_regexp_param        *param = data;
 	struct uri                     *url = value;
 
+	if (G_UNLIKELY (param->re->is_test)) {
+		msg_info ("process test regexp /%s/ for url %s", struri (url));
+	}
 	if (g_regex_match (param->regexp, struri (url), 0, NULL) == TRUE) {
+		if (G_UNLIKELY (param->re->is_test)) {
+			msg_info ("process test regexp /%s/ for url %s returned TRUE", struri (url));
+		}
 		task_cache_add (param->task, param->re, 1);
 		param->found = TRUE;
 		return TRUE;
@@ -599,7 +605,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 	
 	if (additional != NULL) {
 		/* We have additional parameter defined, so ignore type of regexp expression and use it for parsing */
+		if (G_UNLIKELY (re->is_test)) {
+			msg_info ("process test regexp /%s/ with test %s", re->regexp_text, additional);
+		}
 		if (g_regex_match_full (re->regexp, additional, strlen (additional), 0, 0, NULL, NULL) == TRUE) {
+			if (G_UNLIKELY (re->is_test)) {
+				msg_info ("result of regexp /%s/ is true", re->regexp_text);
+			}
 			task_cache_add (task, re, 1);
 			return 1;
 		}
@@ -620,6 +632,9 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			return 0;
 		}
 		debug_task ("checking header regexp: %s = /%s/", re->header, re->regexp_text);
+		if (G_UNLIKELY (re->is_test)) {
+			msg_info ("process test regexp /%s/ for header %s", re->regexp_text, re->header);
+		}
 		headerlist = message_get_header (task->task_pool, task->message, re->header);
 		if (headerlist == NULL) {
 			task_cache_add (task, re, 0);
@@ -634,8 +649,14 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			}
 			cur = headerlist;
 			while (cur) {
-				debug_task ("found header \"%s\" with value \"%s\"", re->header, (char *)cur->data);
+				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const char *)cur->data);
+				if (G_UNLIKELY (re->is_test)) {
+					msg_info ("process test regexp /%s/ for header %s with value '%s'", re->regexp_text, re->header, (const char *)cur->data);
+				}
 				if (cur->data && g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+					if (G_UNLIKELY (re->is_test)) {
+						msg_info ("process test regexp /%s/ for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const char *)cur->data);
+					}
 					task_cache_add (task, re, 1);
 					return 1;
 				}
@@ -661,7 +682,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			else {
 				regexp = re->regexp;
 			}
+			if (G_UNLIKELY (re->is_test)) {
+				msg_info ("process test regexp /%s/ for mime part of length %d", re->regexp_text, (int)part->orig->len);
+			}
 			if (g_regex_match_full (regexp, part->orig->data, part->orig->len, 0, 0, NULL, NULL) == TRUE) {
+				if (G_UNLIKELY (re->is_test)) {
+					msg_info ("process test regexp /%s/ for mime part returned true", re->regexp_text);
+				}
 				task_cache_add (task, re, 1);
 				return 1;
 			}
@@ -671,7 +698,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		return 0;
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: /%s/", re->regexp_text);
+		if (G_UNLIKELY (re->is_test)) {
+			msg_info ("process test regexp /%s/ for message of length %d", re->regexp_text, (int)task->msg->len);
+		}
 		if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
+			if (G_UNLIKELY (re->is_test)) {
+				msg_info ("process test regexp /%s/ for message of length %d returned TRUE", re->regexp_text, (int)task->msg->len);
+			}
 			task_cache_add (task, re, 1);
 			return 1;
 		}
@@ -745,7 +778,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		t = *c;
 		*c = '\0';
 		debug_task ("found raw header \"%s\" with value \"%s\"", re->header, headerv);
+		if (G_UNLIKELY (re->is_test)) {
+			msg_info ("process test regexp /%s/ for header %s with value '%s'", re->regexp_text, re->header, headerv);
+		}
 		if (g_regex_match (re->raw_regexp, headerv, 0, NULL) == TRUE) {
+			if (G_UNLIKELY (re->is_test)) {
+				msg_info ("process test regexp /%s/ for header %s with value '%s' returned TRUE", re->regexp_text, re->header, headerv);
+			}
 			*c = t;
 			task_cache_add (task, re, 1);
 			return 1;

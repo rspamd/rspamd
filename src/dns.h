@@ -11,6 +11,8 @@
 #define DNS_D_MAXLABEL	63	/* + 1 '\0' */
 #define DNS_D_MAXNAME	255	/* + 1 '\0' */
 
+#define MAX_ADDRS 64
+
 struct rspamd_dns_reply;
 struct config_file;
 
@@ -23,6 +25,7 @@ struct rspamd_dns_server {
 	struct in_addr addr;				/**< address of DNS server					*/
 	char *name;							/**< name of DNS server						*/
 	int sock;							/**< persistent socket						*/
+	struct event ev;
 };
 
 #define DNS_K_TEA_KEY_SIZE	16
@@ -52,6 +55,13 @@ struct rspamd_dns_resolver {
 struct dns_header;
 struct dns_query;
 
+enum rspamd_request_type {
+	DNS_REQUEST_A = 0,
+	DNS_REQUEST_PTR,
+	DNS_REQUEST_MX,
+	DNS_REQUEST_TXT
+};
+
 struct rspamd_dns_request {
 	memory_pool_t *pool;				/**< pool associated with request			*/
 	struct rspamd_dns_resolver *resolver;
@@ -69,18 +79,15 @@ struct rspamd_dns_request {
 	off_t pos;
 	guint packet_len;
 	int sock;
+	enum rspamd_request_type type;
 };
 
-enum rspamd_request_type {
-	DNS_REQUEST_A = 0,
-	DNS_REQUEST_PTR,
-	DNS_REQUEST_MX,
-	DNS_REQUEST_TXT
-};
+
 
 union rspamd_reply_element {
 	struct {
-		struct in_addr addr;
+		struct in_addr addr[MAX_ADDRS];
+		guint16 addrcount;
 	} a;
 	struct {
 		char *name;

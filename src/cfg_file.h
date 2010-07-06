@@ -82,6 +82,7 @@ struct rspamd_regexp {
 	GRegex *regexp;									/**< glib regexp structure								*/
 	GRegex *raw_regexp;								/**< glib regexp structure for raw matching				*/
 	gchar *header;									/**< header name for header regexps						*/
+	gboolean is_test;								/**< true if this expression must be tested				*/
 };
 
 /**

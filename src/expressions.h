@@ -9,6 +9,7 @@
 #include "config.h"
 
 struct worker_task;
+struct rspamd_regexp;
 
 /**
  * Rspamd expression function

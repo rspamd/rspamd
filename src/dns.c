@@ -47,6 +47,8 @@
 #define DNS_RANDOM rand
 #endif
 
+#define UDP_PACKET_SIZE 512
+
 /*
  * P E R M U T A T I O N  G E N E R A T O R
  */
@@ -278,6 +280,40 @@ struct dns_request_key {
 	guint16 port;
 };
 
+/** Message compression */
+struct dns_name_table {
+	guint8 off;
+	guint8 *label;
+	guint8 len;
+};
+
+static gboolean
+try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 len, guint8 *label, GList *table)
+{
+	GList *cur;
+	struct dns_name_table *tbl;
+
+	cur = table;
+	while (cur) {
+		tbl = cur->data;
+		if (tbl->len == len) {
+			if (memcmp (label, tbl->label, len) == 0) {
+				*target = tbl->off | 0xC0;
+				return TRUE;
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	/* Insert label to list */
+	tbl = memory_pool_alloc (pool, sizeof (struct dns_name_table));
+	tbl->off = target - start;
+	tbl->label = label;
+	tbl->len = len;
+	table = g_list_prepend (table, tbl);
+
+	return FALSE;
+}
 
 /** Packet creating functions */
 static void
@@ -311,6 +347,7 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 {
 	guint8 *pos = req->packet + req->pos, *begin, *end;
 	guint remain = req->packet_len - req->pos - 5, label_len;
+	GList *table = NULL;
 
 	if (namelen == 0) {
 		namelen = strlen (name);
@@ -320,7 +357,6 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 	for (;;) {
 		end = strchr (begin, '.');
 		if (end) {
-			label_len = end - begin;
 			if (label_len > DNS_D_MAXLABEL) {
 				msg_err ("dns name component is longer than 63 bytes, should be stripped");
 				label_len = DNS_D_MAXLABEL;
@@ -329,11 +365,19 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 				label_len = remain - 1;
 				msg_err ("no buffer remain for constructing query, strip to %ud", label_len);
 			}
-			*pos++ = (guint8)label_len;
-			memcpy (pos, begin, label_len);
-			pos += label_len;
-			remain -= label_len + 1;
-			begin = end + 1;
+			/* First try to compress name */
+			if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, table)) {
+				label_len = end - begin;
+
+				*pos++ = (guint8)label_len;
+				memcpy (pos, begin, label_len);
+				pos += label_len;
+				remain -= label_len + 1;
+				begin = end + 1;
+			}
+			else {
+				pos ++;
+			}
 		}
 		else {
 			end = (guint8 *)name + namelen;
@@ -364,6 +408,9 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 	/* Termination label */
 	*(++pos) = '\0';
 	req->pos += pos - (req->packet + req->pos) + 1;
+	if (table != NULL) {
+		g_list_free (table);
+	}
 }
 
 static void
@@ -386,6 +433,7 @@ make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
 	*p++ = htons (DNS_C_IN);
 	*p = htons (DNS_T_PTR);
 	req->pos += sizeof (guint16) * 2;
+	req->type = DNS_REQUEST_PTR;
 }
 
 static void
@@ -400,6 +448,7 @@ make_a_req (struct rspamd_dns_request *req, const char *name)
 	*p++ = htons (DNS_C_IN);
 	*p = htons (DNS_T_A);
 	req->pos += sizeof (guint16) * 2;
+	req->type = DNS_REQUEST_A;
 }
 
 static void
@@ -414,7 +463,7 @@ make_txt_req (struct rspamd_dns_request *req, const char *name)
 	*p++ = htons (DNS_C_IN);
 	*p = htons (DNS_T_A);
 	req->pos += sizeof (guint16) * 2;
-	
+	req->type = DNS_REQUEST_TXT;
 }
 
 static void
@@ -429,7 +478,7 @@ make_mx_req (struct rspamd_dns_request *req, const char *name)
 	*p++ = htons (DNS_C_IN);
 	*p = htons (DNS_T_A);
 	req->pos += sizeof (guint16) * 2;
-	
+	req->type = DNS_REQUEST_MX;
 }
 
 static int
@@ -467,6 +516,193 @@ dns_fin_cb (gpointer arg)
 	struct rspamd_dns_request *req = arg;
 	
 	/* XXX: call callback if possible */
+}
+
+static guint8 *
+decompress_label (guint8 *begin, guint8 *len)
+{
+	guint8 offset;
+	offset = (*len) ^ 0xC0;
+
+	*len = *(begin + offset);
+	return begin + offset + 1;
+}
+
+static guint8 *
+dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
+{
+	guint8 *p, *c, *l1, *l2;
+	guint8 len1, len2;
+
+	/* QR format:
+	 * labels - len:octets
+	 * null label - 0
+	 * class - 2 octets
+	 * type - 2 octets
+	 */
+	
+	/* In p we would store current position in reply and in c - position in request */
+	p = in;
+	c = req->packet + sizeof (struct dns_header);
+
+	for (;;) {
+		/* Get current label */
+		len1 = *p;
+		len2 = *c;
+		if (p - in > len) {
+			msg_info ("invalid dns reply");
+			return NULL;
+		}
+		/* This may be compressed, so we need to decompress it */
+		if (len1 & 0xC0) {
+			l1 = decompress_label (in, &len1);
+			p ++;
+		}
+		else {
+			l1 = ++p;
+			p += len1;
+		}
+		if (len2 & 0xC0) {
+			l2 = decompress_label (req->packet, &len2);
+			c ++;
+		}
+		else {
+			l2 = ++c;
+			c += len2;
+		}
+		if (len1 != len2) {
+			return NULL;
+		}
+		if (len1 == 0) {
+			break;
+		}
+
+		if (memcmp (l1, l2, len1) != 0) {
+			return NULL;
+		}
+	}
+
+	/* p now points to the end of QR section */
+	/* Compare class and type */
+	if (memcmp (p, c, sizeof (guint16) * 2) == 0) {
+		return p + sizeof (guint16) * 2;
+	}
+	return NULL;
+}
+
+static gboolean
+dns_parse_rr (union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
+{
+	guint8 *p = *pos;
+	guint16 type, datalen;
+
+	/* Skip the whole name */
+	while (p - *pos < *remain) {
+		if (*p & 0xC0) {
+			p ++;
+		}
+		else if (*p == 0) {
+			p ++;
+			break;
+		}
+		else {
+			p += *p + 1;
+		}
+	}
+	if (p - *pos >= *remain - sizeof (guint16) * 5) {
+		msg_info ("stripped dns reply");
+		return FALSE;
+	}
+	type = *((guint16 *)p);
+	/* Skip ttl and class */
+	p += sizeof (guint16) * 2 + sizeof (guint32);
+	datalen = *((guint16 *)p);
+	p += sizeof (guint16);
+	*remain -= p - *pos;
+	/* Now p points to RR data */
+	switch (type) {
+	case DNS_T_A:
+		if ((datalen & 0x3) && *remain >= datalen) {
+			elt->a.addr[0].s_addr = *((guint32 *)p);
+			p += sizeof (guint32);
+		}
+		else {
+			msg_info ("corrupted A record");
+			return FALSE;
+		}
+		break;
+	}
+	*remain -= datalen;
+	*pos = p;
+}
+
+static struct rspamd_dns_reply *
+dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver)
+{
+	struct dns_header *header = (struct dns_header *)in;
+	struct rspamd_dns_request *req;
+	struct rspamd_dns_reply *rep;
+	union rspamd_reply_element *elt;
+	guint8 *pos;
+	int i;
+	
+	/* First check header fields */
+	if (header->qr == 0) {
+		msg_info ("got request while waiting for reply");
+		return NULL;
+	}
+
+	/* Now try to find corresponding request */
+	if ((req = g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER (header->qid))) == NULL) {
+		/* No such requests found */
+		return NULL;
+	}
+	/* 
+	 * Now we have request and query data is now at the end of header, so compare
+	 * request QR section and reply QR section
+	 */
+	if ((pos = dns_request_reply_cmp (req, in + sizeof (struct dns_header), r - sizeof (struct dns_header))) == NULL) {
+		return NULL;
+	}
+	/*
+	 * Now pos is in answer section, so we should extract data and form reply
+	 */
+	rep = memory_pool_alloc (req->pool, sizeof (struct rspamd_dns_reply));
+	rep->request = req;
+	rep->type = req->type;
+	rep->elements = NULL;
+
+	r -= pos - in;
+	/* Extract RR records */
+	for (i = 0; i < header->ancount; i ++) {
+		elt = memory_pool_alloc (req->pool, sizeof (union rspamd_reply_element));
+		if (! dns_parse_rr (elt, &pos, rep, &r)) {
+			msg_info ("incomplete reply");
+			break;
+		}
+	}
+	
+	return rep;
+}
+
+static void
+dns_read_cb (int fd, short what, void *arg)
+{
+	struct rspamd_dns_resolver *resolver = arg;
+	int i, r;
+	struct rspamd_dns_server *serv;
+	struct rspamd_dns_reply *rep;
+	guint8 in[UDP_PACKET_SIZE];
+
+	/* This function is called each time when we have data on one of server's sockets */
+	
+	/* First read packet from socket */
+	r = read (fd, in, sizeof (in));
+	if (r > 96) {
+		if ((rep = dns_parse_reply (in, r, resolver)) != NULL) {
+		
+		}
+	}
 }
 
 static void
@@ -676,7 +912,7 @@ dns_resolver_init (struct config_file *cfg)
 	GList *cur;
 	struct rspamd_dns_resolver *new;
 	char *begin, *p;
-	int priority;
+	int priority, i;
 	struct rspamd_dns_server *serv;
 	
 	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
@@ -729,6 +965,17 @@ dns_resolver_init (struct config_file *cfg)
 			}
 		}
 
+	}
+	/* Now init all servers */
+	for (i = 0; i < new->servers_num; i ++) {
+		serv = &new->servers[i];
+		serv->sock = make_udp_socket (&serv->addr, htons (53), FALSE, TRUE);
+		if (serv->sock == -1) {
+			msg_warn ("cannot create socket to server %s", serv->name);
+		}
+		else {
+			event_set (&serv->ev, serv->sock, EV_READ, dns_read_cb, new);
+		}
 	}
 
 	return new;

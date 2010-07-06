@@ -244,6 +244,7 @@ is_regexp_flag (char a)
 	case 'P':
 	case 'U':
 	case 'X':
+	case 'T':
 		return TRUE;
 	default:
 		return FALSE;
@@ -670,6 +671,10 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 				result->type = REGEXP_RAW_HEADER;
 			}
 			p++;
+			break;
+		case 'T':
+			result->is_test = TRUE;
+			p ++;
 			break;
 			/* Stop flags parsing */
 		default:
