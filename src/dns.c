@@ -49,6 +49,8 @@
 
 #define UDP_PACKET_SIZE 512
 
+#define DNS_COMPRESSION_BITS 0xC0
+
 /*
  * P E R M U T A T I O N  G E N E R A T O R
  */
@@ -292,13 +294,15 @@ try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 l
 {
 	GList *cur;
 	struct dns_name_table *tbl;
+	guint16 pointer;
 
 	cur = table;
 	while (cur) {
 		tbl = cur->data;
 		if (tbl->len == len) {
 			if (memcmp (label, tbl->label, len) == 0) {
-				*target = tbl->off | 0xC0;
+				pointer = htons ((guint16)tbl->off | 0xC0);
+				memcpy (target, &pointer, sizeof (pointer));
 				return TRUE;
 			}
 		}
@@ -337,7 +341,7 @@ make_dns_header (struct rspamd_dns_request *req)
 	memset (header, 0 , sizeof (struct dns_header));
 	header->qid = dns_k_permutor_step (req->resolver->permutor);
 	header->rd = 1;
-	header->qdcount = 1;
+	header->qdcount = htons (1);
 	req->pos += sizeof (struct dns_header);
 	req->id = header->qid;
 }
@@ -345,7 +349,7 @@ make_dns_header (struct rspamd_dns_request *req)
 static void
 format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen)
 {
-	guint8 *pos = req->packet + req->pos, *begin, *end;
+	guint8 *pos = req->packet + req->pos, *end, *dot, *begin;
 	guint remain = req->packet_len - req->pos - 5, label_len;
 	GList *table = NULL;
 
@@ -354,9 +358,11 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 	}
 	
 	begin = (guint8 *)name;
+	end = (guint8 *)name + namelen;
 	for (;;) {
-		end = strchr (begin, '.');
-		if (end) {
+		dot = strchr (begin, '.');
+		if (dot) {
+			label_len = dot - begin;
 			if (label_len > DNS_D_MAXLABEL) {
 				msg_err ("dns name component is longer than 63 bytes, should be stripped");
 				label_len = DNS_D_MAXLABEL;
@@ -367,20 +373,17 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 			}
 			/* First try to compress name */
 			if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, table)) {
-				label_len = end - begin;
-
 				*pos++ = (guint8)label_len;
 				memcpy (pos, begin, label_len);
 				pos += label_len;
-				remain -= label_len + 1;
-				begin = end + 1;
 			}
 			else {
-				pos ++;
+				pos += 2;
 			}
+			remain -= label_len + 1;
+			begin = dot + 1;
 		}
 		else {
-			end = (guint8 *)name + namelen;
 			label_len = end - begin;
 			if (label_len == 0) {
 				/* If name is ended with dot */
@@ -407,7 +410,7 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 	}
 	/* Termination label */
 	*(++pos) = '\0';
-	req->pos += pos - (req->packet + req->pos) + 1;
+	req->pos += pos - (req->packet + req->pos);
 	if (table != NULL) {
 		g_list_free (table);
 	}
@@ -429,9 +432,9 @@ make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
 	allocate_packet (req, r);
 	make_dns_header (req);
 	format_dns_name (req, ipbuf, r);
-	p = (guint16 *)req->packet + req->pos;
-	*p++ = htons (DNS_C_IN);
-	*p = htons (DNS_T_PTR);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_PTR);
+	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_PTR;
 }
@@ -444,9 +447,9 @@ make_a_req (struct rspamd_dns_request *req, const char *name)
 	allocate_packet (req, strlen (name));
 	make_dns_header (req);
 	format_dns_name (req, name, 0);
-	p = (guint16 *)req->packet + req->pos;
-	*p++ = htons (DNS_C_IN);
-	*p = htons (DNS_T_A);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_A);
+	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_A;
 }
@@ -459,9 +462,9 @@ make_txt_req (struct rspamd_dns_request *req, const char *name)
 	allocate_packet (req, strlen (name));
 	make_dns_header (req);
 	format_dns_name (req, name, 0);
-	p = (guint16 *)req->packet + req->pos;
-	*p++ = htons (DNS_C_IN);
-	*p = htons (DNS_T_A);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_TXT);
+	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_TXT;
 }
@@ -474,9 +477,9 @@ make_mx_req (struct rspamd_dns_request *req, const char *name)
 	allocate_packet (req, strlen (name));
 	make_dns_header (req);
 	format_dns_name (req, name, 0);
-	p = (guint16 *)req->packet + req->pos;
-	*p++ = htons (DNS_C_IN);
-	*p = htons (DNS_T_A);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_MX);
+	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_MX;
 }
@@ -515,24 +518,25 @@ dns_fin_cb (gpointer arg)
 {
 	struct rspamd_dns_request *req = arg;
 	
-	/* XXX: call callback if possible */
+	g_hash_table_remove (req->resolver->requests, GUINT_TO_POINTER (req->id));
 }
 
 static guint8 *
-decompress_label (guint8 *begin, guint8 *len)
+decompress_label (guint8 *begin, guint16 *len)
 {
-	guint8 offset;
-	offset = (*len) ^ 0xC0;
+	guint16 offset;
+	offset = ntohs ((*len) ^ DNS_COMPRESSION_BITS);
 
 	*len = *(begin + offset);
-	return begin + offset + 1;
+	return begin + offset;
 }
 
 static guint8 *
 dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 {
 	guint8 *p, *c, *l1, *l2;
-	guint8 len1, len2;
+	guint16 len1, len2;
+	gint decompressed = 0;
 
 	/* QR format:
 	 * labels - len:octets
@@ -554,17 +558,21 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 			return NULL;
 		}
 		/* This may be compressed, so we need to decompress it */
-		if (len1 & 0xC0) {
+		if (len1 & DNS_COMPRESSION_BITS) {
 			l1 = decompress_label (in, &len1);
-			p ++;
+			decompressed ++;
+			l1 ++;
+			p += 2;
 		}
 		else {
 			l1 = ++p;
 			p += len1;
 		}
-		if (len2 & 0xC0) {
+		if (len2 & DNS_COMPRESSION_BITS) {
 			l2 = decompress_label (req->packet, &len2);
-			c ++;
+			decompressed ++;
+			l2 ++;
+			c += 2;
 		}
 		else {
 			l2 = ++c;
@@ -580,6 +588,9 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 		if (memcmp (l1, l2, len1) != 0) {
 			return NULL;
 		}
+		if (decompressed == 2) {
+			break;
+		}
 	}
 
 	/* p now points to the end of QR section */
@@ -590,50 +601,175 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 	return NULL;
 }
 
+#define MAX_RECURSION_LEVEL 10
+
 static gboolean
-dns_parse_rr (union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
+dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_reply *rep, int *remain, gboolean make_name)
+{
+	guint16 namelen = 0;
+	guint8 *p = *pos, *begin = *pos, *l, *t;
+	guint16 llen;
+	gint offset = -1;
+	gint length = *remain;
+	gint ptrs = 0, labels = 0;
+
+	/* First go through labels and calculate name length */
+	while (p - begin < length) {
+		if (ptrs > MAX_RECURSION_LEVEL) {
+			msg_warn ("dns pointers are nested too much");
+			return FALSE;
+		}
+		llen = *p;
+		if (llen == 0) {
+			break;
+		}
+		else if (llen & DNS_COMPRESSION_BITS) {
+			ptrs ++;
+			memcpy (&llen, p, sizeof (guint16));
+			l = decompress_label (in, &llen);
+			if (offset < 0) {
+				offset = p - begin + 2;
+			}
+			if (l < in || l > begin + length) {
+				msg_warn  ("invalid pointer in DNS packet");
+				return FALSE;
+			}
+			begin = l;
+			p = l + *l + 1;
+			namelen += *p;
+			labels ++;
+		}
+		else {
+			namelen += *p;
+			p += *p + 1;
+			labels ++;
+		}
+	}
+
+	if (!make_name) {
+		goto end;
+	}
+	*target = memory_pool_alloc (rep->request->pool, namelen + labels + 1);
+	t = (guint8 *)*target;
+	p = *pos;
+	/* Now copy labels to name */
+	while (p - begin < length) {
+		llen = *p;
+		if (llen == 0) {
+			break;
+		}
+		else if (llen & DNS_COMPRESSION_BITS) {
+			memcpy (&llen, p, sizeof (guint16));
+			l = decompress_label (in, &llen);
+			begin = p;
+			p = l + *l + 1;
+			namelen += *p;
+		}
+		else {
+			memcpy (t, p + 1, *p);
+			t += *p;
+			*t ++ = '.';
+			p += *p + 1;
+		}
+	}
+	*t = '\0';
+end:
+	if (offset < 0) {
+		offset = p - begin;
+	}
+	*remain -= offset;
+	*pos += offset;
+
+	return TRUE;
+}
+
+#define GET16(x) do {if (*remain < sizeof (guint16)) {goto err;} memcpy (&(x), p, sizeof (guint16)); (x) = ntohs ((x)); p += sizeof (guint16); *remain -= sizeof (guint16); } while(0)
+#define GET32(x) do {if (*remain < sizeof (guint32)) {goto err;} memcpy (&(x), p, sizeof (guint32)); (x) = ntohl ((x)); p += sizeof (guint32); *remain -= sizeof (guint32); } while(0)
+
+static gboolean
+dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
 {
 	guint8 *p = *pos;
 	guint16 type, datalen;
+	guint16 addrcount;
 
 	/* Skip the whole name */
-	while (p - *pos < *remain) {
-		if (*p & 0xC0) {
-			p ++;
-		}
-		else if (*p == 0) {
-			p ++;
-			break;
-		}
-		else {
-			p += *p + 1;
-		}
+	if (! dns_parse_labels (in, NULL, &p, rep, remain, FALSE)) {
+		msg_info ("bad RR name");
+		return FALSE;
 	}
 	if (p - *pos >= *remain - sizeof (guint16) * 5) {
 		msg_info ("stripped dns reply");
 		return FALSE;
 	}
-	type = *((guint16 *)p);
+	GET16 (type);
 	/* Skip ttl and class */
-	p += sizeof (guint16) * 2 + sizeof (guint32);
-	datalen = *((guint16 *)p);
-	p += sizeof (guint16);
-	*remain -= p - *pos;
+	p += sizeof (guint16) + sizeof (guint32);
+	*remain -= sizeof (guint16) + sizeof (guint32);
+	GET16 (datalen);
 	/* Now p points to RR data */
 	switch (type) {
 	case DNS_T_A:
-		if ((datalen & 0x3) && *remain >= datalen) {
-			elt->a.addr[0].s_addr = *((guint32 *)p);
-			p += sizeof (guint32);
+		if (rep->request->type != DNS_REQUEST_A) {
+			p += datalen;
 		}
 		else {
-			msg_info ("corrupted A record");
-			return FALSE;
+			if (!(datalen & 0x3) && datalen <= *remain) {
+				addrcount = MIN (elt->a.addrcount + (datalen >> 2), MAX_ADDRS);
+				memcpy (&elt->a.addr[elt->a.addrcount], p, addrcount * sizeof (struct in_addr));
+				p += datalen;
+				elt->a.addrcount += addrcount;
+			}
+			else {
+				msg_info ("corrupted A record");
+				return FALSE;
+			}
 		}
 		break;
+	case DNS_T_PTR:
+		if (rep->request->type != DNS_REQUEST_PTR) {
+			p += datalen;
+		}
+		else {
+			if (! dns_parse_labels (in, &elt->ptr.name, &p, rep, remain, TRUE)) {
+				msg_info ("invalid labels in PTR record");
+				return FALSE;
+			}
+		}
+		break;
+	case DNS_T_MX:
+		if (rep->request->type != DNS_REQUEST_MX) {
+			p += datalen;
+		}
+		else {
+			GET16 (elt->mx.priority);
+			if (! dns_parse_labels (in, &elt->mx.name, &p, rep, remain, TRUE)) {
+				msg_info ("invalid labels in MX record");
+				return FALSE;
+			}
+		}
+		break;
+	case DNS_T_TXT:
+		if (rep->request->type != DNS_REQUEST_TXT) {
+			p += datalen;
+		}
+		else {
+			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
+			memcpy (elt->txt.data, p, datalen);
+			*(elt->txt.data + datalen) = '\0';
+		}
+		break;
+	default:
+		msg_info ("unexpected RR type: %d", type);
 	}
 	*remain -= datalen;
 	*pos = p;
+
+	return TRUE;
+
+err:
+	msg_info ("incomplete RR, only %d bytes remain, packet length %d", (int)*remain, (int)(*pos - in));
+	return FALSE;
 }
 
 static struct rspamd_dns_reply *
@@ -665,21 +801,27 @@ dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver)
 		return NULL;
 	}
 	/*
+	 * Remove delayed retransmits for this packet
+	 */
+	event_del (&req->timer_event);
+	/*
 	 * Now pos is in answer section, so we should extract data and form reply
 	 */
 	rep = memory_pool_alloc (req->pool, sizeof (struct rspamd_dns_reply));
 	rep->request = req;
 	rep->type = req->type;
 	rep->elements = NULL;
+	rep->code = ntohs (header->rcode);
 
 	r -= pos - in;
 	/* Extract RR records */
-	for (i = 0; i < header->ancount; i ++) {
+	for (i = 0; i < ntohs (header->ancount); i ++) {
 		elt = memory_pool_alloc (req->pool, sizeof (union rspamd_reply_element));
-		if (! dns_parse_rr (elt, &pos, rep, &r)) {
+		if (! dns_parse_rr (in, elt, &pos, rep, &r)) {
 			msg_info ("incomplete reply");
 			break;
 		}
+		rep->elements = g_list_prepend (rep->elements, elt);
 	}
 	
 	return rep;
@@ -689,8 +831,7 @@ static void
 dns_read_cb (int fd, short what, void *arg)
 {
 	struct rspamd_dns_resolver *resolver = arg;
-	int i, r;
-	struct rspamd_dns_server *serv;
+	int r;
 	struct rspamd_dns_reply *rep;
 	guint8 in[UDP_PACKET_SIZE];
 
@@ -700,23 +841,30 @@ dns_read_cb (int fd, short what, void *arg)
 	r = read (fd, in, sizeof (in));
 	if (r > 96) {
 		if ((rep = dns_parse_reply (in, r, resolver)) != NULL) {
-		
+			rep->request->func (rep, rep->request->arg);
+			upstream_ok (&rep->request->server->up, time (NULL));
+			return;
 		}
 	}
+
 }
 
 static void
 dns_timer_cb (int fd, short what, void *arg)
 {
 	struct rspamd_dns_request *req = arg;
-
+	struct rspamd_dns_reply *rep;
+	int r;
 	
 	/* Retransmit dns request */
 	req->retransmits ++;
 	if (req->retransmits >= req->resolver->max_retransmits) {
 		msg_err ("maximum number of retransmits expired");
 		event_del (&req->timer_event);
-		/* XXX: call user's callback here */
+		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
+		rep->request = req;
+		rep->code = DNS_RC_SERVFAIL;
+		req->func (rep, req->arg);
 		return;
 	}
 	/* Select other server */
@@ -725,7 +873,10 @@ dns_timer_cb (int fd, short what, void *arg)
 			time (NULL), DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 	if (req->server == NULL) {
 		event_del (&req->timer_event);
-		/* XXX: call user's callback here */
+		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
+		rep->request = req;
+		rep->code = DNS_RC_SERVFAIL;
+		req->func (rep, req->arg);
 		return;
 	}
 	
@@ -736,18 +887,31 @@ dns_timer_cb (int fd, short what, void *arg)
 
 	if (req->sock == -1) {
 		event_del (&req->timer_event);
-		/* XXX: call user's callback here */
+		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
+		rep->request = req;
+		rep->code = DNS_RC_SERVFAIL;
+		req->func (rep, req->arg);
 		return;
 	}
 	/* Add other retransmit event */
 
 	evtimer_add (&req->timer_event, &req->tv);
+	r = send_dns_request (req);
+	if (r == -1) {
+		event_del (&req->io_event);
+		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
+		rep->request = req;
+		rep->code = DNS_RC_SERVFAIL;
+		req->func (rep, req->arg);
+		upstream_fail (&req->server->up, time (NULL));
+	}
 }
 
 static void
 dns_retransmit_handler (int fd, short what, void *arg)
 {
 	struct rspamd_dns_request *req = arg;
+	struct rspamd_dns_reply *rep;
 	gint r;
 
 	if (what == EV_WRITE) {
@@ -756,13 +920,19 @@ dns_retransmit_handler (int fd, short what, void *arg)
 		if (req->retransmits >= req->resolver->max_retransmits) {
 			msg_err ("maximum number of retransmits expired");
 			event_del (&req->io_event);
-			/* XXX: call user's callback here */
+			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
+			rep->request = req;
+			rep->code = DNS_RC_SERVFAIL;
+			req->func (rep, req->arg);
 			return;
 		}
 		r = send_dns_request (req);
 		if (r == -1) {
 			event_del (&req->io_event);
-			/* XXX: call user's callback here */
+			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
+			rep->request = req;
+			rep->code = DNS_RC_SERVFAIL;
+			req->func (rep, req->arg);
 			upstream_fail (&req->server->up, time (NULL));
 		}
 		else if (r == 1) {
@@ -794,6 +964,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	req->resolver = resolver;
 	req->func = cb;
 	req->arg = ud;
+	req->type = type;
 	
 	va_start (args, type);
 	switch (type) {
@@ -969,12 +1140,13 @@ dns_resolver_init (struct config_file *cfg)
 	/* Now init all servers */
 	for (i = 0; i < new->servers_num; i ++) {
 		serv = &new->servers[i];
-		serv->sock = make_udp_socket (&serv->addr, htons (53), FALSE, TRUE);
+		serv->sock = make_udp_socket (&serv->addr, 53, FALSE, TRUE);
 		if (serv->sock == -1) {
 			msg_warn ("cannot create socket to server %s", serv->name);
 		}
 		else {
-			event_set (&serv->ev, serv->sock, EV_READ, dns_read_cb, new);
+			event_set (&serv->ev, serv->sock, EV_READ | EV_PERSIST, dns_read_cb, new);
+			event_add (&serv->ev, NULL);
 		}
 	}
 

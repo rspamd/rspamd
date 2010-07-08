@@ -1,25 +1,10 @@
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/wait.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <syslog.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-
 #include "../src/config.h"
 #include "../src/main.h"
 #include "../src/statfile.h"
 #include "tests.h"
 
 #define TEST_FILENAME "/tmp/rspamd_test.stat"
-#define HASHES_NUM 1024
+#define HASHES_NUM 256
 
 void 
 rspamd_statfile_test_func ()

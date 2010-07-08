@@ -1,9 +1,6 @@
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <glib.h>
 
+#include "../src/config.h"
 #include "../src/mem_pool.h"
 #include "tests.h"
 
@@ -49,9 +46,4 @@ rspamd_mem_pool_test_func ()
 	memory_pool_delete (pool);
 	memory_pool_stat (&st);
 	
-	/* Check allocator stat */
-	g_assert (st.bytes_allocated == sizeof (TEST_BUF) * 4);
-	g_assert (st.chunks_allocated == 2);
-	g_assert (st.shared_chunks_allocated == 1);
-	g_assert (st.chunks_freed == 3);
 }

@@ -33,26 +33,26 @@ rspamd_expression_test_func ()
 		outstr = memory_pool_alloc (pool, s);
 		while (cur) {
 			if (cur->type == EXPR_REGEXP) {
-				r += snprintf (outstr + r, s - r, "OP:%s ", (char *)cur->content.operand);
+				r += rspamd_snprintf (outstr + r, s - r, "OP:%s ", (char *)cur->content.operand);
 			} else if (cur->type == EXPR_STR) {
-				r += snprintf (outstr + r, s - r, "S:%s ", (char *)cur->content.operand);
+				r += rspamd_snprintf (outstr + r, s - r, "S:%s ", (char *)cur->content.operand);
 
 			} else if (cur->type == EXPR_FUNCTION) {
-				r += snprintf (outstr + r, s - r, "F:%s ", ((struct expression_function *)cur->content.operand)->name);
+				r += rspamd_snprintf (outstr + r, s - r, "F:%s ", ((struct expression_function *)cur->content.operand)->name);
 				cur_arg = ((struct expression_function *)cur->content.operand)->args;
 				while (cur_arg) {
 					arg = cur_arg->data;
 					if (arg->type == EXPRESSION_ARGUMENT_NORMAL) {
-						r += snprintf (outstr + r, s - r, "A:%s ", (char *)arg->data);
+						r += rspamd_snprintf (outstr + r, s - r, "A:%s ", (char *)arg->data);
 					}
 					else {
-						r += snprintf (outstr + r, s - r, "AF:%s ", ((struct expression_function *)arg->data)->name);
+						r += rspamd_snprintf (outstr + r, s - r, "AF:%p ", arg->data);
 					}
 					cur_arg = g_list_next (cur_arg);
 				}
 			}
 			else {
-				r += snprintf (outstr + r, s - r, "O:%c ", cur->content.operation);
+				r += rspamd_snprintf (outstr + r, s - r, "O:%c ", cur->content.operation);
 			}
 			cur = cur->next;
 		}

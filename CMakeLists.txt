@@ -509,7 +509,8 @@ SET(TESTSRC		test/rspamd_expression_test.c
 				test/rspamd_statfile_test.c
 				test/rspamd_fuzzy_test.c
 				test/rspamd_test_suite.c
-				test/rspamd_url_test.c)
+				test/rspamd_url_test.c
+				test/rspamd_dns_test.c)
 
 SET(TESTDEPENDS	src/mem_pool.c
 				src/hash.c
@@ -523,7 +524,10 @@ SET(TESTDEPENDS	src/mem_pool.c
 				src/message.c
 				src/html.c
 				src/expressions.c
-				src/statfile.c)
+				src/statfile.c
+				src/events.c
+				src/upstream.c
+				src/dns.c)
 
 SET(UTILSSRC	utils/url_extracter.c)
 SET(EXPRSRC	utils/expression_parser.c)
@@ -610,6 +614,7 @@ ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 ADD_EXECUTABLE(test/rspamd-test ${TESTDEPENDS} ${CONTRIBSRC} ${TESTSRC})
 SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES LINKER_LANGUAGE C)
+SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES COMPILE_FLAGS "-DRSPAMD_TEST")
 TARGET_LINK_LIBRARIES(test/rspamd-test event)
 TARGET_LINK_LIBRARIES(test/rspamd-test ${GLIB2_LIBRARIES})
 TARGET_LINK_LIBRARIES(test/rspamd-test ${CMAKE_REQUIRED_LIBRARIES})

@@ -66,7 +66,7 @@ void rspamd_conditional_debug (uint32_t addr, const char *function, const char *
 /* Typical functions */
 
 /* Logging in postfix style */
-#if (defined(RSPAMD_MAIN) || defined(RSPAMD_LIB))
+#if (defined(RSPAMD_MAIN) || defined(RSPAMD_LIB) || defined(RSPAMD_TEST))
 #define msg_err(args...)	rspamd_common_log_function(G_LOG_LEVEL_CRITICAL, __FUNCTION__, ##args)
 #define msg_warn(args...)	rspamd_common_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, ##args)
 #define msg_info(args...)	rspamd_common_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, ##args)

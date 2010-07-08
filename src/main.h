@@ -64,6 +64,7 @@ struct classifier;
 struct classifier_config;
 struct mime_part;
 struct rspamd_view;
+struct rspamd_dns_resolver;
 
 /** 
  * Server statistics
@@ -219,6 +220,8 @@ struct worker_task {
 	uint32_t parser_recursion;									/**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(void *arg);						/**< calback for filters finalizing					*/
 	void *fin_arg;												/**< argument for fin callback						*/
+
+	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 };
 
 /**

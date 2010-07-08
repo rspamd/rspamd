@@ -23,4 +23,7 @@ void rspamd_fuzzy_test_func ();
 /* Stat file */
 void rspamd_statfile_test_func ();
 
+/* DNS resolving */
+void rspamd_dns_test_func ();
+
 #endif

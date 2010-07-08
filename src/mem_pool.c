@@ -86,7 +86,6 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 	chain = (struct _pool_chain_shared *)mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
 	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
-	g_assert (chain->begin != MAP_FAILED);
 #elif defined(HAVE_MMAP_ZERO)
 	int                             fd;
 
@@ -97,13 +96,12 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 	chain = (struct _pool_chain_shared *)mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
-	g_assert (chain->begin != MAP_FAILED);
 #else
 #   	error No mmap methods are defined
 #endif
 	chain->len = size;
 	chain->pos = chain->begin;
-	chain->lock = 0;
+	chain->lock = NULL;
 	chain->next = NULL;
 	STAT_LOCK ();
 	mem_pool_stat->shared_chunks_allocated++;
@@ -387,7 +385,9 @@ memory_pool_lock_shared (memory_pool_t * pool, void *pointer)
 	if (chain == NULL) {
 		return;
 	}
-
+	if (chain->lock == NULL) {
+		chain->lock = memory_pool_get_mutex (pool);
+	}
 	memory_pool_lock_mutex (chain->lock);
 }
 
@@ -398,6 +398,10 @@ memory_pool_unlock_shared (memory_pool_t * pool, void *pointer)
 
 	chain = memory_pool_find_pool (pool, pointer);
 	if (chain == NULL) {
+		return;
+	}
+	if (chain->lock == NULL) {
+		chain->lock = memory_pool_get_mutex (pool);
 		return;
 	}
 

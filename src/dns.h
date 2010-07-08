@@ -118,6 +118,7 @@ enum dns_rcode {
 struct rspamd_dns_reply {
 	enum rspamd_request_type type;
 	struct rspamd_dns_request *request;
+	enum dns_rcode code;
 	GList *elements;
 };
 

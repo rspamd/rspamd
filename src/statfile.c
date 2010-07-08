@@ -130,7 +130,7 @@ statfile_pool_check (stat_file_t * file)
 	}
 
 	if (file->len < sizeof (struct stat_file)) {
-		msg_info ("file %s is too short to be stat file: %zd", file->filename, file->len);
+		msg_info ("file %s is too short to be stat file: %z", file->filename, file->len);
 		return -1;
 	}
 
@@ -304,14 +304,14 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	}
 
 	if (!forced && st.st_size > pool->max) {
-		msg_info ("cannot attach file to pool, too large: %zd", (size_t) st.st_size);
+		msg_info ("cannot attach file to pool, too large: %z", (size_t) st.st_size);
 		return NULL;
 	}
 
 	memory_pool_lock_mutex (pool->lock);
 	if (!forced && abs (st.st_size - size) > sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
-		msg_warn ("need to reindex statfile old size: %zd, new size: %zd", st.st_size, size);
+		msg_warn ("need to reindex statfile old size: %z, new size: %z", st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
 	}
 	memory_pool_unlock_mutex (pool->lock);
@@ -454,7 +454,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 	
 	/* Buffer for write 256 blocks at once */
 	if (nblocks > 256) {
-		buflen = MIN (nblocks / 256 * sizeof (block), sizeof (block) * 256);
+		buflen = sizeof (block) * 256;
 		buf = g_malloc0 (buflen);
 	}
 
