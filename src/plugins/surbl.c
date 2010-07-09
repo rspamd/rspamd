@@ -46,7 +46,7 @@
 #include "../message.h"
 #include "../view.h"
 #include "../map.h"
-#include "../evdns/evdns.h"
+#include "../dns.h"
 
 #include "surbl.h"
 
@@ -54,7 +54,7 @@ static struct surbl_ctx        *surbl_module_ctx = NULL;
 
 static int                      surbl_filter (struct worker_task *task);
 static void                     surbl_test_url (struct worker_task *task, void *user_data);
-static void                     dns_callback (int result, char type, int count, int ttl, void *addresses, void *data);
+static void                     dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
 static void                     process_dns_results (struct worker_task *task, struct suffix_item *suffix, char *url, uint32_t addr);
 static int                      urls_command_handler (struct worker_task *task);
 
@@ -449,9 +449,8 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree, st
 				param->suffix = suffix;
 				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 				debug_task ("send surbl dns request %s", surbl_req);
-				if (evdns_resolve_ipv4 (surbl_req, DNS_QUERY_NO_SEARCH, dns_callback, (void *)param) == 0) {
+				if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback, (void *)param, DNS_REQUEST_A, surbl_req)) {
 					param->task->save.saved++;
-					register_async_event (task->s, (event_finalizer_t) dns_callback, NULL, TRUE);
 				}
 			}
 			else {
@@ -508,16 +507,18 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, char 
 }
 
 static void
-dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
+dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
-	struct dns_param               *param = (struct dns_param *)data;
+	struct dns_param               *param = (struct dns_param *)arg;
 	struct worker_task             *task = param->task;
+	union rspamd_reply_element     *elt;
 
 	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
-	if (result == DNS_ERR_NONE && type == DNS_IPv4_A) {
+	if (reply->code == DNS_RC_NOERROR && reply->elements) {
 		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
-		process_dns_results (param->task, param->suffix, param->host_resolve, (uint32_t) (((in_addr_t *) addresses)[0]));
+		elt = reply->elements->data;
+		process_dns_results (param->task, param->suffix, param->host_resolve, (uint32_t)elt->a.addr[0].s_addr);
 	}
 	else {
 		debug_task ("<%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
@@ -529,8 +530,6 @@ dns_callback (int result, char type, int count, int ttl, void *addresses, void *
 		param->task->save.saved = 1;
 		process_filters (param->task);
 	}
-	remove_forced_event (param->task->s, (event_finalizer_t) dns_callback);
-
 }
 
 static void

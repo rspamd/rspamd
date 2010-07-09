@@ -33,7 +33,7 @@ test_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 				msg_debug ("got spf %s", elt->spf.data);
 				break;
 			case DNS_REQUEST_SRV:
-				msg_debug ("got srv pri:%d, weight:%d, port: %d, target: %s", elt->srv.weight,
+				msg_debug ("got srv pri: %d, weight: %d, port: %d, target: %s", elt->srv.weight,
 						elt->srv.priority, elt->srv.port, elt->srv.target);
 				break;
 			case DNS_REQUEST_MX:

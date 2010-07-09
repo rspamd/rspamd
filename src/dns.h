@@ -226,5 +226,6 @@ gboolean make_dns_request (struct rspamd_dns_resolver *resolver,
 		struct rspamd_async_session *session, memory_pool_t *pool, dns_callback_type cb, 
 		gpointer ud, enum rspamd_request_type type, ...);
 const char *dns_strerror (enum dns_rcode rcode);
+const char *dns_strtype (enum rspamd_request_type type);
 
 #endif

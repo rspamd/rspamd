@@ -409,8 +409,8 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 		}
 	}
 	/* Termination label */
-	*(++pos) = '\0';
-	req->pos += pos - (req->packet + req->pos);
+	*pos = '\0';
+	req->pos += pos - (req->packet + req->pos) + 1;
 	if (table != NULL) {
 		g_list_free (table);
 	}
@@ -601,6 +601,7 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 		}
 		/* This may be compressed, so we need to decompress it */
 		if (len1 & DNS_COMPRESSION_BITS) {
+			memcpy (&len1, p, sizeof (guint16));
 			l1 = decompress_label (in, &len1);
 			decompressed ++;
 			l1 ++;
@@ -611,6 +612,7 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 			p += len1;
 		}
 		if (len2 & DNS_COMPRESSION_BITS) {
+			memcpy (&len2, p, sizeof (guint16));
 			l2 = decompress_label (req->packet, &len2);
 			decompressed ++;
 			l2 ++;
@@ -796,8 +798,8 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			p += datalen;
 		}
 		else {
-			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
-			memcpy (elt->txt.data, p, datalen);
+			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen);
+			memcpy (elt->txt.data, p + 1, datalen - 1);
 			*(elt->txt.data + datalen) = '\0';
 		}
 		break;
@@ -806,8 +808,8 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			p += datalen;
 		}
 		else {
-			elt->spf.data = memory_pool_alloc (rep->request->pool, datalen + 1);
-			memcpy (elt->spf.data, p, datalen);
+			elt->spf.data = memory_pool_alloc (rep->request->pool, datalen);
+			memcpy (elt->spf.data, p + 1, datalen - 1);
 			*(elt->spf.data + datalen) = '\0';
 		}
 		break;
@@ -924,7 +926,7 @@ dns_timer_cb (int fd, short what, void *arg)
 	/* Retransmit dns request */
 	req->retransmits ++;
 	if (req->retransmits >= req->resolver->max_retransmits) {
-		msg_err ("maximum number of retransmits expired");
+		msg_err ("maximum number of retransmits expired for resolving %s of type %s", req->requested_name, dns_strtype (req->type));
 		event_del (&req->timer_event);
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
@@ -985,7 +987,7 @@ dns_retransmit_handler (int fd, short what, void *arg)
 		/* Retransmit dns request */
 		req->retransmits ++;
 		if (req->retransmits >= req->resolver->max_retransmits) {
-			msg_err ("maximum number of retransmits expired");
+			msg_err ("maximum number of retransmits expired for %s", req->requested_name);
 			event_del (&req->io_event);
 			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 			rep->request = req;
@@ -1257,4 +1259,19 @@ dns_strerror (enum dns_rcode rcode)
 		return numbuf;
 	}
 	return dns_rcodes[rcode];
+}
+
+static char dns_types[6][16] = {
+		[DNS_REQUEST_A] = "A request",
+		[DNS_REQUEST_PTR] = "PTR request",
+		[DNS_REQUEST_MX] = "MX request",
+		[DNS_REQUEST_TXT] = "TXT request",
+		[DNS_REQUEST_SRV] = "SRV request",
+		[DNS_REQUEST_SPF] = "SPF request"
+};
+
+const char *
+dns_strtype (enum rspamd_request_type type)
+{
+	return dns_types[type];
 }

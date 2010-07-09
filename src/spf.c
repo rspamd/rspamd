@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "evdns/evdns.h"
+#include "dns.h"
 #include "spf.h"
 #include "main.h"
 #include "message.h"
@@ -228,101 +228,103 @@ parse_spf_hostmask (struct worker_task *task, const char *begin, struct spf_addr
 }
 
 static void
-spf_record_dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
+spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
-	struct spf_dns_cb *cb = data;
+	struct spf_dns_cb *cb = arg;
 	char *begin;
-	struct evdns_mx *mx;
-	GList *tmp = NULL, *elt, *last;
+	union rspamd_reply_element *elt_data;
+	GList *tmp = NULL, *tmp1, *elt, *last;
+	struct worker_task *task;
 
-	if (result == DNS_ERR_NONE) {
-		if (addresses != NULL) {
+	task = cb->rec->task;
+
+	if (reply->code == DNS_RC_NOERROR) {
+		if (reply->elements != NULL) {
 			/* Add all logic for all DNS states here */
-			switch (cb->cur_action) {
+			elt = reply->elements;
+			while (elt) {
+				elt_data = elt->data;
+				switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
-					if (type == DNS_MX) {
-						mx = (struct evdns_mx *)addresses;
+					if (reply->type == DNS_REQUEST_MX) {
 						/* Now resolve A record for this MX */
-						if (evdns_resolve_ipv4 (mx->host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
-							return;
+						if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, elt_data->mx.name)) {
+							task->save.saved++;
 						}
 					}
-					else if (type == DNS_IPv4_A) {
+					else if (reply->type == DNS_REQUEST_A) {
 						/* XXX: process only one record */
-						cb->addr->addr = ntohl (*((uint32_t *)addresses));
+						cb->addr->addr = ntohl (elt_data->a.addr[0].s_addr);
 					}
 					break;
 				case SPF_RESOLVE_A:
-					if (type == DNS_IPv4_A) {
+					if (reply->type == DNS_REQUEST_A) {
 						/* XXX: process only one record */
-						cb->addr->addr = ntohl (*((uint32_t *)addresses));
+						cb->addr->addr = ntohl (elt_data->a.addr[0].s_addr);
 					}
 					break;
 				case SPF_RESOLVE_PTR:
 					break;
 				case SPF_RESOLVE_REDIRECT:
-					if (type == DNS_TXT) {
-						if (addresses != NULL) {
-							begin = *(char **)addresses;
+					if (reply->type == DNS_REQUEST_TXT) {
+						begin = elt_data->txt.data;
 
-							if (!cb->in_include && cb->rec->addrs) {
-								g_list_free (cb->rec->addrs);
-								cb->rec->addrs = NULL;
-							}
-							start_spf_parse (cb->rec, begin);
+						if (!cb->in_include && cb->rec->addrs) {
+							g_list_free (cb->rec->addrs);
+							cb->rec->addrs = NULL;
 						}
+						start_spf_parse (cb->rec, begin);
+
 					}
 					break;
 				case SPF_RESOLVE_INCLUDE:
-					if (type == DNS_TXT) {
-						if (addresses != NULL) {
-							begin = *(char **)addresses;
-							if (cb->rec->addrs) {
-								tmp = cb->rec->addrs;
-								cb->rec->addrs = NULL;
-							}
-							cb->rec->in_include = TRUE;
-							start_spf_parse (cb->rec, begin);
-							cb->rec->in_include = FALSE;
+					if (reply->type == DNS_REQUEST_TXT) {
+						begin = elt_data->txt.data;
+						if (cb->rec->addrs) {
+							tmp = cb->rec->addrs;
+							cb->rec->addrs = NULL;
+						}
+						cb->rec->in_include = TRUE;
+						start_spf_parse (cb->rec, begin);
+						cb->rec->in_include = FALSE;
 
-							if (tmp) {
-								elt = g_list_find (tmp, cb->addr);
-								if (elt) {
-									/* Insert new list in place of include element */
-									last = g_list_last (cb->rec->addrs);
+						if (tmp) {
+							tmp1 = g_list_find (tmp, cb->addr);
+							if (tmp1) {
+								/* Insert new list in place of include element */
+								last = g_list_last (cb->rec->addrs);
 
-									if (elt->prev == NULL && elt->next == NULL) {
-										g_list_free1 (elt);
+								if (tmp1->prev == NULL && tmp1->next == NULL) {
+									g_list_free1 (tmp1);
+								}
+								else {
+
+									if (tmp1->prev) {
+										tmp1->prev->next = cb->rec->addrs;
 									}
 									else {
-
-										if (elt->prev) {
-											elt->prev->next = cb->rec->addrs;
-										}
-										else {
-											/* Elt is the first element, so we need to shift temporary list */
-											tmp = elt->next;
-											tmp->prev = NULL;
-										}
-										if (elt->next) {
-											elt->next->prev = last;
-											if (last != NULL) {
-												last->next = elt->next;
-											}
-										}
-										
-										if (cb->rec->addrs != NULL) {
-											cb->rec->addrs->prev = elt->prev;
-										}
-
-										/* Shift temporary list */
-										while (tmp->prev) {
-											tmp = tmp->prev;
-										}
-
-										cb->rec->addrs = tmp;
-										g_list_free1 (elt);
+										/* Elt is the first element, so we need to shift temporary list */
+										tmp = tmp1->next;
+										tmp->prev = NULL;
 									}
+									if (tmp1->next) {
+										tmp1->next->prev = last;
+										if (last != NULL) {
+											last->next = tmp1->next;
+										}
+									}
+
+									if (cb->rec->addrs != NULL) {
+										cb->rec->addrs->prev = tmp1->prev;
+									}
+
+									/* Shift temporary list */
+									while (tmp->prev) {
+										tmp = tmp->prev;
+									}
+
+									cb->rec->addrs = tmp;
+									g_list_free1 (tmp1);
 								}
 							}
 						}
@@ -331,29 +333,31 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 				case SPF_RESOLVE_EXP:
 					break;
 				case SPF_RESOLVE_EXISTS:
-					if (type == DNS_IPv4_A) {
+					if (reply->type == DNS_REQUEST_A) {
 						/* If specified address resolves, we can accept connection from every IP */
 						cb->addr->addr = ntohl (INADDR_ANY);
 						cb->addr->mask = 0;
 					}
 					break;
+				}
+				elt = g_list_next (elt);
 			}
 		}
 	}
-	else if (result == DNS_ERR_NOTEXIST) {
+	else if (reply->code == DNS_RC_NXDOMAIN) {
 		switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
-					if (type == DNS_MX) {
+					if (reply->type == DNS_REQUEST_MX) {
 						msg_info ("cannot find MX record for %s", cb->rec->cur_domain);
 						cb->addr->addr = ntohl (INADDR_NONE);
 					}
-					else if (type == DNS_IPv4_A) {
+					else if (reply->type != DNS_REQUEST_MX) {
 						msg_info ("cannot resolve MX record for %s", cb->rec->cur_domain);
 						cb->addr->addr = ntohl (INADDR_NONE);
 					}
 					break;
 				case SPF_RESOLVE_A:
-					if (type == DNS_IPv4_A) {
+					if (reply->type == DNS_REQUEST_A) {
 						/* XXX: process only one record */
 						cb->addr->addr = ntohl (INADDR_NONE);
 					}
@@ -382,8 +386,6 @@ spf_record_dns_callback (int result, char type, int count, int ttl, void *addres
 			cb->rec->addrs = NULL;
 		}
 	}
-	remove_forced_event (cb->rec->task->s, (event_finalizer_t) spf_record_dns_callback);
-
 }
 
 static gboolean
@@ -411,10 +413,8 @@ parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_A;
 	cb->in_include = rec->in_include;
-
-	if (evdns_resolve_ipv4 (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
 		task->save.saved++;
-		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
 		
 		return TRUE;
 	}
@@ -459,10 +459,8 @@ parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *re
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_MX;
 	cb->in_include = rec->in_include;
-
-	if (evdns_resolve_mx (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_MX, host)) {
 		task->save.saved++;
-		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
 		
 		return TRUE;
 	}
@@ -516,13 +514,12 @@ parse_spf_include (struct worker_task *task, const char *begin, struct spf_recor
 	cb->cur_action = SPF_RESOLVE_INCLUDE;
 	cb->in_include = rec->in_include;
 	domain = memory_pool_strdup (task->task_pool, begin);
-
-	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
 		task->save.saved++;
-		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
 		
 		return TRUE;
 	}
+
 
 	return FALSE;
 }
@@ -556,10 +553,8 @@ parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_reco
 	cb->cur_action = SPF_RESOLVE_REDIRECT;
 	cb->in_include = rec->in_include;
 	domain = memory_pool_strdup (task->task_pool, begin);
-
-	if (evdns_resolve_txt (domain, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
 		task->save.saved++;
-		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
 		
 		return TRUE;
 	}
@@ -589,9 +584,8 @@ parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record
 	cb->in_include = rec->in_include;
 	host = memory_pool_strdup (task->task_pool, begin);
 
-	if (evdns_resolve_ipv4 (host, DNS_QUERY_NO_SEARCH, spf_record_dns_callback, (void *)cb) == 0) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
 		task->save.saved++;
-		register_async_event (task->s, (event_finalizer_t) spf_record_dns_callback, NULL, TRUE);
 		
 		return TRUE;
 	}
@@ -1062,15 +1056,18 @@ start_spf_parse (struct spf_record *rec, char *begin)
 }
 
 static void
-spf_dns_callback (int result, char type, int count, int ttl, void *addresses, void *data)
+spf_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
-	struct spf_record *rec = data;
-	char *begin;
+	struct spf_record *rec = arg;
+	union rspamd_reply_element *elt;
+	GList *cur;
 
-	if (result == DNS_ERR_NONE && type == DNS_TXT) {
-		if (addresses != NULL) {
-			begin = *(char **)addresses;
-			start_spf_parse (rec, begin);
+	if (reply->code == DNS_RC_NOERROR) {
+		cur = reply->elements;
+		while (cur) {
+			elt = cur->data;
+			start_spf_parse (rec, elt->txt.data);
+			cur = g_list_next (cur);
 		}
 	}
 
@@ -1078,8 +1075,6 @@ spf_dns_callback (int result, char type, int count, int ttl, void *addresses, vo
 	if (rec->task->save.saved == 0 && rec->callback) {
 		rec->callback (rec, rec->task);
 	}
-	remove_forced_event (rec->task->s, (event_finalizer_t) spf_dns_callback);
-
 }
 
 
@@ -1108,10 +1103,8 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 		}
 		rec->sender_domain = rec->cur_domain;
 
-		if (evdns_resolve_txt (rec->cur_domain, DNS_QUERY_NO_SEARCH, spf_dns_callback, (void *)rec) == 0) {
+		if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
 			task->save.saved++;
-			register_async_event (task->s, (event_finalizer_t) spf_dns_callback, NULL, TRUE);
-
 			return TRUE;
 		}
 	}
@@ -1138,10 +1131,8 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 				*domain = '\0';
 			}
 			rec->sender_domain = rec->cur_domain;
-			if (evdns_resolve_txt (rec->cur_domain, DNS_QUERY_NO_SEARCH, spf_dns_callback, (void *)rec) == 0) {
+			if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
 				task->save.saved++;
-				register_async_event (task->s, (event_finalizer_t) spf_dns_callback, NULL, TRUE);
-	
 				return TRUE;
 			}
 		}
