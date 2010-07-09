@@ -420,7 +420,7 @@ static void
 make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
 {
 	char ipbuf[sizeof("255.255.255.255.in-addr.arpa")];
-	guint32 a = addr.s_addr, r;
+	guint32 a = ntohl (addr.s_addr), r;
 	guint16 *p;
 
 	r = rspamd_snprintf (ipbuf, sizeof(ipbuf), "%d.%d.%d.%d.in-addr.arpa",
@@ -435,6 +435,7 @@ make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
 	p = (guint16 *)(req->packet + req->pos);
 	*p++ = htons (DNS_T_PTR);
 	*p = htons (DNS_C_IN);
+	req->requested_name = memory_pool_strdup (req->pool, ipbuf);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_PTR;
 }
@@ -452,6 +453,7 @@ make_a_req (struct rspamd_dns_request *req, const char *name)
 	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_A;
+	req->requested_name = name;
 }
 
 static void
@@ -467,6 +469,7 @@ make_txt_req (struct rspamd_dns_request *req, const char *name)
 	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_TXT;
+	req->requested_name = name;
 }
 
 static void
@@ -482,6 +485,45 @@ make_mx_req (struct rspamd_dns_request *req, const char *name)
 	*p = htons (DNS_C_IN);
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_MX;
+	req->requested_name = name;
+}
+
+static void
+make_srv_req (struct rspamd_dns_request *req, const char *service, const char *proto, const char *name)
+{
+	guint16 *p;
+	guint len;
+	gchar *target;
+
+	len = strlen (service) + strlen (proto) + strlen (name) + 5;
+
+	allocate_packet (req, len);
+	make_dns_header (req);
+	target = memory_pool_alloc (req->pool, len);
+	len = rspamd_snprintf (target, len, "_%s._%s.%s", service, proto, name);
+	format_dns_name (req, target, len);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_SRV);
+	*p = htons (DNS_C_IN);
+	req->pos += sizeof (guint16) * 2;
+	req->type = DNS_REQUEST_SRV;
+	req->requested_name = name;
+}
+
+static void
+make_spf_req (struct rspamd_dns_request *req, const char *name)
+{
+	guint16 *p;
+
+	allocate_packet (req, strlen (name));
+	make_dns_header (req);
+	format_dns_name (req, name, 0);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_SPF);
+	*p = htons (DNS_C_IN);
+	req->pos += sizeof (guint16) * 2;
+	req->type = DNS_REQUEST_SPF;
+	req->requested_name = name;
 }
 
 static int
@@ -759,6 +801,30 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			*(elt->txt.data + datalen) = '\0';
 		}
 		break;
+	case DNS_T_SPF:
+		if (rep->request->type != DNS_REQUEST_SPF) {
+			p += datalen;
+		}
+		else {
+			elt->spf.data = memory_pool_alloc (rep->request->pool, datalen + 1);
+			memcpy (elt->spf.data, p, datalen);
+			*(elt->spf.data + datalen) = '\0';
+		}
+		break;
+	case DNS_T_SRV:
+		if (rep->request->type != DNS_REQUEST_SRV) {
+			p += datalen;
+		}
+		else {
+			GET16 (elt->srv.priority);
+			GET16 (elt->srv.weight);
+			GET16 (elt->srv.port);
+			if (! dns_parse_labels (in, &elt->srv.target, &p, rep, remain, TRUE)) {
+				msg_info ("invalid labels in SRV record");
+				return FALSE;
+			}
+		}
+		break;
 	default:
 		msg_info ("unexpected RR type: %d", type);
 	}
@@ -811,7 +877,7 @@ dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver)
 	rep->request = req;
 	rep->type = req->type;
 	rep->elements = NULL;
-	rep->code = ntohs (header->rcode);
+	rep->code = header->rcode;
 
 	r -= pos - in;
 	/* Extract RR records */
@@ -839,14 +905,13 @@ dns_read_cb (int fd, short what, void *arg)
 	
 	/* First read packet from socket */
 	r = read (fd, in, sizeof (in));
-	if (r > 96) {
+	if (r > sizeof (struct dns_header) + sizeof (struct dns_query)) {
 		if ((rep = dns_parse_reply (in, r, resolver)) != NULL) {
 			rep->request->func (rep, rep->request->arg);
-			upstream_ok (&rep->request->server->up, time (NULL));
+			upstream_ok (&rep->request->server->up, rep->request->time);
 			return;
 		}
 	}
-
 }
 
 static void
@@ -865,6 +930,7 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
+		upstream_fail (&rep->request->server->up, rep->request->time);
 		return;
 	}
 	/* Select other server */
@@ -891,6 +957,7 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
+		upstream_fail (&rep->request->server->up, rep->request->time);
 		return;
 	}
 	/* Add other retransmit event */
@@ -903,7 +970,7 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
-		upstream_fail (&req->server->up, time (NULL));
+		upstream_fail (&rep->request->server->up, rep->request->time);
 	}
 }
 
@@ -924,6 +991,7 @@ dns_retransmit_handler (int fd, short what, void *arg)
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
 			req->func (rep, req->arg);
+			upstream_fail (&rep->request->server->up, rep->request->time);
 			return;
 		}
 		r = send_dns_request (req);
@@ -933,7 +1001,7 @@ dns_retransmit_handler (int fd, short what, void *arg)
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
 			req->func (rep, req->arg);
-			upstream_fail (&req->server->up, time (NULL));
+			upstream_fail (&rep->request->server->up, rep->request->time);
 		}
 		else if (r == 1) {
 			/* Add timer event */
@@ -955,7 +1023,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	va_list args;
 	struct rspamd_dns_request *req;
 	struct in_addr addr;
-	const char *name;
+	const char *name, *service, *proto;
 	gint r;
 
 	req = memory_pool_alloc (pool, sizeof (struct rspamd_dns_request));
@@ -984,6 +1052,16 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			name = va_arg (args, const char *);
 			make_txt_req (req, name);
 			break;
+		case DNS_REQUEST_SPF:
+			name = va_arg (args, const char *);
+			make_spf_req (req, name);
+			break;
+		case DNS_REQUEST_SRV:
+			service = va_arg (args, const char *);
+			proto = va_arg (args, const char *);
+			name = va_arg (args, const char *);
+			make_srv_req (req, service, proto, name);
+			break;
 	}
 	va_end (args);
 
@@ -1008,6 +1086,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	/* Fill timeout */
 	req->tv.tv_sec = resolver->request_timeout / 1000;
 	req->tv.tv_usec = (resolver->request_timeout - req->tv.tv_sec * 1000) * 1000;
+	req->time = time (NULL);
 	
 	/* Now send request to server */
 	r = send_dns_request (req);
@@ -1151,4 +1230,31 @@ dns_resolver_init (struct config_file *cfg)
 	}
 
 	return new;
+}
+
+static char dns_rcodes[16][16] = {
+	[DNS_RC_NOERROR]  = "NOERROR",
+	[DNS_RC_FORMERR]  = "FORMERR",
+	[DNS_RC_SERVFAIL] = "SERVFAIL",
+	[DNS_RC_NXDOMAIN] = "NXDOMAIN",
+	[DNS_RC_NOTIMP]   = "NOTIMP",
+	[DNS_RC_REFUSED]  = "REFUSED",
+	[DNS_RC_YXDOMAIN] = "YXDOMAIN",
+	[DNS_RC_YXRRSET]  = "YXRRSET",
+	[DNS_RC_NXRRSET]  = "NXRRSET",
+	[DNS_RC_NOTAUTH]  = "NOTAUTH",
+	[DNS_RC_NOTZONE]  = "NOTZONE",
+};
+
+const char *
+dns_strerror (enum dns_rcode rcode)
+{
+	rcode &= 0xf;
+	static char numbuf[16];
+
+	if ('\0' == dns_rcodes[rcode][0]) {
+		rspamd_snprintf (numbuf, sizeof (numbuf), "UNKNOWN: %d", (int)rcode);
+		return numbuf;
+	}
+	return dns_rcodes[rcode];
 }

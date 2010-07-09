@@ -11,7 +11,7 @@
 #define DNS_D_MAXLABEL	63	/* + 1 '\0' */
 #define DNS_D_MAXNAME	255	/* + 1 '\0' */
 
-#define MAX_ADDRS 64
+#define MAX_ADDRS 4
 
 struct rspamd_dns_reply;
 struct config_file;
@@ -59,7 +59,9 @@ enum rspamd_request_type {
 	DNS_REQUEST_A = 0,
 	DNS_REQUEST_PTR,
 	DNS_REQUEST_MX,
-	DNS_REQUEST_TXT
+	DNS_REQUEST_TXT,
+	DNS_REQUEST_SRV,
+	DNS_REQUEST_SPF
 };
 
 struct rspamd_dns_request {
@@ -76,10 +78,12 @@ struct rspamd_dns_request {
 	struct rspamd_async_session *session;
 	struct rspamd_dns_reply *reply;
 	guint8 *packet;
+	const char *requested_name;
 	off_t pos;
 	guint packet_len;
 	int sock;
 	enum rspamd_request_type type;
+	time_t time;
 };
 
 
@@ -90,15 +94,24 @@ union rspamd_reply_element {
 		guint16 addrcount;
 	} a;
 	struct {
-		char *name;
+		gchar *name;
 	} ptr;
 	struct {
-		char *name;
-		guint32 priority;
+		gchar *name;
+		guint16 priority;
 	} mx;
 	struct {
-		char *data;
+		gchar *data;
 	} txt;
+	struct {
+		gchar *data;
+	} spf;
+	struct {
+		guint16 priority;
+		guint16 weight;
+		guint16 port;
+		gchar *target;
+	} srv;
 };
 
 enum dns_rcode {
@@ -212,5 +225,6 @@ struct rspamd_dns_resolver *dns_resolver_init (struct config_file *cfg);
 gboolean make_dns_request (struct rspamd_dns_resolver *resolver, 
 		struct rspamd_async_session *session, memory_pool_t *pool, dns_callback_type cb, 
 		gpointer ud, enum rspamd_request_type type, ...);
+const char *dns_strerror (enum dns_rcode rcode);
 
 #endif
