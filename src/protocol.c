@@ -688,11 +688,13 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	else {
 		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			cd->alive = FALSE;
+			return;
 		}
 
 		if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
 			if (! show_metric_symbols (metric_res, cd)) {
 				cd->alive = FALSE;
+				return;
 			}
 		}
 	}

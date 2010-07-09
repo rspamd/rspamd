@@ -370,6 +370,7 @@ write_socket (void *arg)
 	switch (task->state) {
 	case WRITE_REPLY:
 		if (! write_reply (task)) {
+			destroy_session (task->s);
 			return FALSE;
 		}
 		if (ctx->is_custom) {
@@ -423,7 +424,9 @@ err_socket (GError * err, void *arg)
 	if (ctx->is_custom) {
 		fin_custom_filters (task);
 	}
-	destroy_session (task->s);
+	if (task->state != WRITE_REPLY) {
+		destroy_session (task->s);
+	}
 }
 
 struct worker_task             *
