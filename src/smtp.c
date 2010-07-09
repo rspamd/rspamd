@@ -31,7 +31,7 @@
 #include "map.h"
 #include "message.h"
 #include "settings.h"
-#include "evdns/evdns.h"
+#include "dns.h"
 
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
@@ -190,7 +190,6 @@ call_stage_filters (struct smtp_session *session, enum rspamd_smtp_stage stage)
 static gboolean
 read_smtp_command (struct smtp_session *session, f_str_t *line)
 {
-	/* XXX: write dialog implementation */
 	struct smtp_command             *cmd;
 	char                             outbuf[BUFSIZ];
 	int                              r;
@@ -703,19 +702,21 @@ smtp_make_delay (struct smtp_session *session)
  * Handle DNS replies
  */
 static void
-smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *arg)
+smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 {
 	struct smtp_session            *session = arg;
-	int                             i, res = 0;
+	int                             res = 0;
+	union rspamd_reply_element     *elt;
+	GList                          *cur;
 	
 	remove_forced_event (session->s, (event_finalizer_t)smtp_dns_cb);
 	switch (session->state) {
 		case SMTP_STATE_RESOLVE_REVERSE:
 			/* Parse reverse reply and start resolve of this ip */
-			if (result != DNS_ERR_NONE || type != DNS_PTR) {
-				debug_ip (session->client_addr.s_addr, "DNS error: %s", evdns_err_to_string (result));
+			if (reply->code != DNS_RC_NOERROR) {
+				debug_ip (session->client_addr.s_addr, "DNS error: %s", dns_strerror (reply->code));
 				
-				if (result == DNS_ERR_NOTEXIST) {
+				if (reply->code == DNS_RC_NXDOMAIN) {
 					session->hostname = memory_pool_strdup (session->pool, "unknown");
 				}
 				else {
@@ -725,19 +726,20 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 				smtp_make_delay (session);
 			}
 			else {
-				if (addresses) {
-					session->hostname = memory_pool_strdup (session->pool, * ((const char**)addresses));
+				if (reply->elements) {
+					elt = reply->elements->data;
+					session->hostname = memory_pool_strdup (session->pool, elt->ptr.name);
 					session->state = SMTP_STATE_RESOLVE_NORMAL;
-					evdns_resolve_ipv4 (session->hostname, DNS_QUERY_NO_SEARCH, smtp_dns_cb, (void *)session);
-					register_async_event (session->s, (event_finalizer_t)smtp_dns_cb, NULL, TRUE);
+					make_dns_request (session->resolver, session->s, session->pool, smtp_dns_cb, session, DNS_REQUEST_A, session->hostname);
 					
 				}
 			}
 			break;
 		case SMTP_STATE_RESOLVE_NORMAL:
-			if (result != DNS_ERR_NONE || type != DNS_IPv4_A) {
-				debug_ip (session->client_addr.s_addr, "DNS error: %s", evdns_err_to_string (result));
-				if (result == DNS_ERR_NOTEXIST) {
+			if (reply->code != DNS_RC_NOERROR) {
+				debug_ip (session->client_addr.s_addr, "DNS error: %s", dns_strerror (reply->code));
+
+				if (reply->code == DNS_RC_NXDOMAIN) {
 					session->hostname = memory_pool_strdup (session->pool, "unknown");
 				}
 				else {
@@ -748,12 +750,15 @@ smtp_dns_cb (int result, char type, int count, int ttl, void *addresses, void *a
 			}
 			else {
 				res = 0;
-				for (i = 0; i < count; i++) {
-					if (session->client_addr.s_addr == ((in_addr_t *)addresses)[i]) {
+				cur = reply->elements;
+				while (cur) {
+					elt = cur->data;
+					if (memcmp (&session->client_addr, &elt->a.addr[0], sizeof (struct in_addr)) == 0) {
 						res = 1;
 						session->resolved = TRUE;
 						break;
 					}
+					cur = g_list_next (cur);
 				}
 
 				if (res == 0) {
@@ -786,6 +791,7 @@ accept_socket (int fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	union sa_union                  su;
 	struct smtp_session            *session;
+	struct smtp_worker_ctx         *ctx;
 
 	socklen_t                       addrlen = sizeof (su.ss);
 	int                             nfd;
@@ -799,6 +805,7 @@ accept_socket (int fd, short what, void *arg)
 		return;
 	}
 
+	ctx = worker->ctx;
 	session = g_malloc0 (sizeof (struct smtp_session));
 	session->pool = memory_pool_new (memory_pool_get_size ());
 
@@ -814,24 +821,23 @@ accept_socket (int fd, short what, void *arg)
 	session->sock = nfd;
 	session->temp_fd = -1;
 	session->worker = worker;
-	session->ctx = worker->ctx;
+	session->ctx = ctx;
 	session->cfg = worker->srv->cfg;
 	session->session_time = time (NULL);
+	session->resolver = ctx->resolver;
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */
+	/* Set up async session */
+	session->s = new_async_session (session->pool, free_smtp_session, session);
 	session->state = SMTP_STATE_RESOLVE_REVERSE;
-	if (evdns_resolve_reverse (&session->client_addr, DNS_QUERY_NO_SEARCH, smtp_dns_cb, session) != 0) {
+	if (! make_dns_request (session->resolver, session->s, session->pool, smtp_dns_cb, session, DNS_REQUEST_A, session->client_addr)) {
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_free (session);
 		close (nfd);
 		return;
 	}
 	else {
-		/* Set up async session */
-		session->s = new_async_session (session->pool, free_smtp_session, session);
-		register_async_event (session->s, (event_finalizer_t)smtp_dns_cb, NULL, TRUE);
-		/* Set up dispatcher */
 		session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, 
 								smtp_read_socket, smtp_write_socket, smtp_err_socket, &session->ctx->smtp_timeout, session);
 		session->dispatcher->peer_addr = session->client_addr.s_addr;
@@ -1092,6 +1098,8 @@ config_smtp_worker (struct rspamd_worker *worker)
 		ctx->reject_message = DEFAULT_REJECT_MESSAGE;
 	}
 
+	ctx->resolver = dns_resolver_init (worker->srv->cfg);
+
 	/* Set ctx */
 	worker->ctx = ctx;
 	
@@ -1119,7 +1127,6 @@ start_smtp_worker (struct rspamd_worker *worker)
 	}
 
 	event_init ();
-	evdns_init ();
 
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);

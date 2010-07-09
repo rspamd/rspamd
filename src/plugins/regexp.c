@@ -39,7 +39,6 @@
 #include "../view.h"
 #include "../lua/lua_common.h"
 #include "../json/jansson.h"
-#include "../evdns/evdns.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 

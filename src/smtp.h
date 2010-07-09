@@ -14,6 +14,8 @@ struct smtp_upstream {
 	gboolean is_unix;
 }; 
 
+struct rspamd_dns_resolver;
+
 #define MAX_UPSTREAM 128
 #define DEFAULT_MAX_ERRORS 10
 
@@ -44,6 +46,7 @@ struct smtp_worker_ctx {
 	guint max_errors;
 	char *metric;
 	GList *smtp_filters[SMTP_STAGE_MAX];
+	struct rspamd_dns_resolver *resolver;
 };
 
 enum rspamd_smtp_state {
@@ -102,6 +105,7 @@ struct smtp_session {
 
 	gboolean resolved;
 	gboolean esmtp;
+	struct rspamd_dns_resolver *resolver;
 };
 
 typedef gboolean (*smtp_filter_t)(struct smtp_session *session, gpointer filter_data);

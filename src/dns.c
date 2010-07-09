@@ -560,6 +560,7 @@ dns_fin_cb (gpointer arg)
 {
 	struct rspamd_dns_request *req = arg;
 	
+	event_del (&req->timer_event);
 	g_hash_table_remove (req->resolver->requests, GUINT_TO_POINTER (req->id));
 }
 
@@ -735,7 +736,6 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 {
 	guint8 *p = *pos;
 	guint16 type, datalen;
-	guint16 addrcount;
 
 	/* Skip the whole name */
 	if (! dns_parse_labels (in, NULL, &p, rep, remain, FALSE)) {
@@ -759,10 +759,8 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		}
 		else {
 			if (!(datalen & 0x3) && datalen <= *remain) {
-				addrcount = MIN (elt->a.addrcount + (datalen >> 2), MAX_ADDRS);
-				memcpy (&elt->a.addr[elt->a.addrcount], p, addrcount * sizeof (struct in_addr));
+				memcpy (&elt->a.addr[0], p, sizeof (struct in_addr));
 				p += datalen;
-				elt->a.addrcount += addrcount;
 			}
 			else {
 				msg_info ("corrupted A record");
