@@ -1119,14 +1119,13 @@ start_smtp_worker (struct rspamd_worker *worker)
 	gperf_profiler_init (worker->srv->cfg, "worker");
 
 	worker->srv->pid = getpid ();
+	event_init ();
 
 	/* Set smtp options */
 	if ( !config_smtp_worker (worker)) {
 		msg_err ("cannot configure smtp worker, exiting");
 		exit (EXIT_SUCCESS);
 	}
-
-	event_init ();
 
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
