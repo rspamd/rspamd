@@ -373,6 +373,7 @@ process_smtp_data (struct smtp_session *session)
 	session->temp_size = st.st_size;
 	if (session->ctx->max_size == 0 || st.st_size < session->ctx->max_size) {
 		session->task = construct_task (session->worker);
+		session->task->resolver = session->resolver;
 		session->task->fin_callback = smtp_write_socket;
 		session->task->fin_arg = session;
 		session->task->msg = memory_pool_alloc (session->pool, sizeof (f_str_t));
