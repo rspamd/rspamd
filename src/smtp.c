@@ -831,7 +831,7 @@ accept_socket (int fd, short what, void *arg)
 	/* Set up async session */
 	session->s = new_async_session (session->pool, free_smtp_session, session);
 	session->state = SMTP_STATE_RESOLVE_REVERSE;
-	if (! make_dns_request (session->resolver, session->s, session->pool, smtp_dns_cb, session, DNS_REQUEST_A, session->client_addr)) {
+	if (! make_dns_request (session->resolver, session->s, session->pool, smtp_dns_cb, session, DNS_REQUEST_PTR, session->client_addr)) {
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_free (session);
 		close (nfd);
