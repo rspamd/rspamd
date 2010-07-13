@@ -565,11 +565,14 @@ dns_fin_cb (gpointer arg)
 }
 
 static guint8 *
-decompress_label (guint8 *begin, guint16 *len)
+decompress_label (guint8 *begin, guint16 *len, guint16 max)
 {
 	guint16 offset;
 	offset = ntohs ((*len) ^ DNS_COMPRESSION_BITS);
 
+	if (offset > max) {
+		return NULL;
+	}
 	*len = *(begin + offset);
 	return begin + offset;
 }
@@ -603,7 +606,11 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 		/* This may be compressed, so we need to decompress it */
 		if (len1 & DNS_COMPRESSION_BITS) {
 			memcpy (&len1, p, sizeof (guint16));
-			l1 = decompress_label (in, &len1);
+			l1 = decompress_label (in, &len1, len);
+			if (l1 == NULL) {
+				msg_info ("invalid DNS pointer");
+				return NULL;
+			}
 			decompressed ++;
 			l1 ++;
 			p += 2;
@@ -614,7 +621,11 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 		}
 		if (len2 & DNS_COMPRESSION_BITS) {
 			memcpy (&len2, p, sizeof (guint16));
-			l2 = decompress_label (req->packet, &len2);
+			l2 = decompress_label (req->packet, &len2, len);
+			if (l2 == NULL) {
+				msg_info ("invalid DNS pointer");
+				return NULL;
+			}
 			decompressed ++;
 			l2 ++;
 			c += 2;
@@ -671,7 +682,11 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 		else if (llen & DNS_COMPRESSION_BITS) {
 			ptrs ++;
 			memcpy (&llen, p, sizeof (guint16));
-			l = decompress_label (in, &llen);
+			l = decompress_label (in, &llen, length + (*pos - in));
+			if (l == NULL) {
+				msg_info ("invalid DNS pointer");
+				return FALSE;
+			}
 			if (offset < 0) {
 				offset = p - begin + 2;
 			}
@@ -705,7 +720,7 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 		}
 		else if (llen & DNS_COMPRESSION_BITS) {
 			memcpy (&llen, p, sizeof (guint16));
-			l = decompress_label (in, &llen);
+			l = decompress_label (in, &llen, length + (*pos - in));
 			begin = p;
 			p = l + *l + 1;
 			namelen += *p;

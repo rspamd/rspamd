@@ -267,6 +267,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 				/* Actually this copy memory, so using of inet_ntoa is valid */
 				lua_pushstring (cd->L, inet_ntoa (ina));
 				lua_rawseti (cd->L, -2, ++i);
+				cur = g_list_next (cur);
 			}
 			lua_pushnil (cd->L);
 		}
@@ -277,6 +278,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 				elt = cur->data;
 				lua_pushstring (cd->L, elt->ptr.name);
 				lua_rawseti (cd->L, -2, ++i);
+				cur = g_list_next (cur);
 			}
 			lua_pushnil (cd->L);
 
@@ -288,6 +290,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 				elt = cur->data;
 				lua_pushstring (cd->L, elt->txt.data);
 				lua_rawseti (cd->L, -2, ++i);
+				cur = g_list_next (cur);
 			}
 			lua_pushnil (cd->L);
 
