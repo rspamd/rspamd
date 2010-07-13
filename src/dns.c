@@ -957,9 +957,9 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
-		req->func (rep, req->arg);
 		upstream_fail (&rep->request->server->up, rep->request->time);
 		remove_normal_event (req->session, dns_fin_cb, req);
+		req->func (rep, req->arg);
 		return;
 	}
 	/* Select other server */
@@ -970,8 +970,8 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
-		req->func (rep, req->arg);
 		remove_normal_event (req->session, dns_fin_cb, req);
+		req->func (rep, req->arg);
 		return;
 	}
 	
@@ -984,9 +984,10 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
-		req->func (rep, req->arg);
 		upstream_fail (&rep->request->server->up, rep->request->time);
 		remove_normal_event (req->session, dns_fin_cb, req);
+		req->func (rep, req->arg);
+
 		return;
 	}
 	/* Add other retransmit event */
@@ -998,9 +999,10 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
-		req->func (rep, req->arg);
 		remove_normal_event (req->session, dns_fin_cb, req);
 		upstream_fail (&rep->request->server->up, rep->request->time);
+		req->func (rep, req->arg);
+
 	}
 }
 
@@ -1020,8 +1022,9 @@ dns_retransmit_handler (int fd, short what, void *arg)
 			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
-			req->func (rep, req->arg);
 			upstream_fail (&rep->request->server->up, rep->request->time);
+			req->func (rep, req->arg);
+
 			return;
 		}
 		r = send_dns_request (req);
@@ -1030,8 +1033,9 @@ dns_retransmit_handler (int fd, short what, void *arg)
 			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
-			req->func (rep, req->arg);
 			upstream_fail (&rep->request->server->up, rep->request->time);
+			req->func (rep, req->arg);
+
 		}
 		else if (r == 1) {
 			/* Add timer event */
