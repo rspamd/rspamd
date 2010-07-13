@@ -746,20 +746,21 @@ end:
 #define GET16(x) do {if (*remain < sizeof (guint16)) {goto err;} memcpy (&(x), p, sizeof (guint16)); (x) = ntohs ((x)); p += sizeof (guint16); *remain -= sizeof (guint16); } while(0)
 #define GET32(x) do {if (*remain < sizeof (guint32)) {goto err;} memcpy (&(x), p, sizeof (guint32)); (x) = ntohl ((x)); p += sizeof (guint32); *remain -= sizeof (guint32); } while(0)
 
-static gboolean
+static gint
 dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
 {
 	guint8 *p = *pos;
 	guint16 type, datalen;
+	gboolean parsed = FALSE;
 
 	/* Skip the whole name */
 	if (! dns_parse_labels (in, NULL, &p, rep, remain, FALSE)) {
 		msg_info ("bad RR name");
-		return FALSE;
+		return -1;
 	}
 	if (p - *pos >= *remain - sizeof (guint16) * 5) {
 		msg_info ("stripped dns reply");
-		return FALSE;
+		return -1;
 	}
 	GET16 (type);
 	/* Skip ttl and class */
@@ -776,10 +777,11 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			if (!(datalen & 0x3) && datalen <= *remain) {
 				memcpy (&elt->a.addr[0], p, sizeof (struct in_addr));
 				p += datalen;
+				parsed = TRUE;
 			}
 			else {
 				msg_info ("corrupted A record");
-				return FALSE;
+				return -1;
 			}
 		}
 		break;
@@ -790,8 +792,9 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		else {
 			if (! dns_parse_labels (in, &elt->ptr.name, &p, rep, remain, TRUE)) {
 				msg_info ("invalid labels in PTR record");
-				return FALSE;
+				return -1;
 			}
+			parsed = TRUE;
 		}
 		break;
 	case DNS_T_MX:
@@ -802,8 +805,9 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			GET16 (elt->mx.priority);
 			if (! dns_parse_labels (in, &elt->mx.name, &p, rep, remain, TRUE)) {
 				msg_info ("invalid labels in MX record");
-				return FALSE;
+				return -1;
 			}
+			parsed = TRUE;
 		}
 		break;
 	case DNS_T_TXT:
@@ -814,6 +818,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen);
 			memcpy (elt->txt.data, p + 1, datalen - 1);
 			*(elt->txt.data + datalen - 1) = '\0';
+			parsed = TRUE;
 		}
 		break;
 	case DNS_T_SPF:
@@ -824,6 +829,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			elt->spf.data = memory_pool_alloc (rep->request->pool, datalen);
 			memcpy (elt->spf.data, p + 1, datalen - 1);
 			*(elt->spf.data + datalen - 1) = '\0';
+			parsed = TRUE;
 		}
 		break;
 	case DNS_T_SRV:
@@ -836,21 +842,25 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			GET16 (elt->srv.port);
 			if (! dns_parse_labels (in, &elt->srv.target, &p, rep, remain, TRUE)) {
 				msg_info ("invalid labels in SRV record");
-				return FALSE;
+				return -1;
 			}
+			parsed = TRUE;
 		}
 		break;
 	default:
-		msg_info ("unexpected RR type: %d", type);
+		msg_debug ("unexpected RR type: %d", type);
 	}
 	*remain -= datalen;
 	*pos = p;
 
-	return TRUE;
+	if (parsed) {
+		return 1;
+	}
+	return 0;
 
 err:
 	msg_info ("incomplete RR, only %d bytes remain, packet length %d", (int)*remain, (int)(*pos - in));
-	return FALSE;
+	return -1;
 }
 
 static struct rspamd_dns_reply *
@@ -861,7 +871,7 @@ dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver, struct
 	struct rspamd_dns_reply *rep;
 	union rspamd_reply_element *elt;
 	guint8 *pos;
-	int i;
+	int i, t;
 	
 	/* First check header fields */
 	if (header->qr == 0) {
@@ -899,11 +909,14 @@ dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver, struct
 	/* Extract RR records */
 	for (i = 0; i < ntohs (header->ancount); i ++) {
 		elt = memory_pool_alloc (req->pool, sizeof (union rspamd_reply_element));
-		if (! dns_parse_rr (in, elt, &pos, rep, &r)) {
+		t = dns_parse_rr (in, elt, &pos, rep, &r);
+		if (t == -1) {
 			msg_info ("incomplete reply");
 			break;
 		}
-		rep->elements = g_list_prepend (rep->elements, elt);
+		else if (t == 1) {
+			rep->elements = g_list_prepend (rep->elements, elt);
+		}
 	}
 	
 	return rep;
