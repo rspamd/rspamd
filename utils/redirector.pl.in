@@ -85,8 +85,13 @@ sub write_log {
     
     if ($cfg{do_log}) {
         my $now_string = strftime "%F %T", localtime;
-        LOG->autoflush(1);
-        print LOG "[$now_string]: $remote_ip: $str\n";
+		if (!$cfg{debug}) {
+			LOG->autoflush(1);
+			print LOG "[$now_string]: $remote_ip: $str\n";
+		}
+		else {
+			print STDERR "[$now_string]: $remote_ip: $str\n";
+		}
     }
 }
 
@@ -418,10 +423,17 @@ sub process_input {
 
 ############################### Main code fragment ##################################
 
+
 # Try to eval config file
 if (-f $cfg{cfg_file}) {
     my $config = read_file ($cfg{cfg_file});
     eval $config;
+}
+
+while (my $arg = shift @ARGV) {
+	if ($arg eq '-debug' || $arg eq '-d') {
+		$cfg{debug} = 1;
+	}	
 }
 
 die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
@@ -437,8 +449,10 @@ if ($> == 0) {
     $) = $( = $gid;
 }
 
-die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
-close(PID);
+if (!$cfg{debug}) {
+	die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
+	close(PID);
+}
 
 # Reopen log on SIGUSR1
 $SIG{USR1} = sub { $do_reopen_log = 1; };
@@ -446,12 +460,19 @@ $SIG{INT} = sub { $poe_kernel->stop(); };
 $SIG{QUIT} = sub { $poe_kernel->stop(); };
 $SIG{PIPE} = 'IGNORE';
 
+if (!$cfg{debug}) {
+	$cfg{do_log} = 1 if open(LOG, ">> $cfg{logfile}");
+}
+else {
+	$cfg{do_log} = 1;
+}
 
-$cfg{do_log} = 1 if open(LOG, ">> $cfg{logfile}");
-
-Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
+if (!$cfg{debug}) {
+	Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
+}
 
 # Init memcached connection
+write_log ("", "Starting memcached connection");
 $memd = new Cache::Memcached::Fast({
         servers => $cfg{memcached_servers},
         connect_timeout => 0.2,
@@ -477,6 +498,7 @@ POE::Component::Client::HTTP->spawn(
     ), 
 );
 
+write_log ("", "Starting HTTP server");
 POE::Component::Server::TCP->new
   ( Alias => "",
     Port         => $cfg{port},
