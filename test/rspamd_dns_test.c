@@ -88,6 +88,8 @@ rspamd_dns_test_func ()
 	requests ++;
 	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_TXT, "rambler.ru"));
 	requests ++;
+	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_TXT, "google.com"));
+	requests ++;
 	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_SPF, "rambler.ru"));
 	requests ++;
 	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_SRV, "xmpp-server", "tcp", "jabber.org"));

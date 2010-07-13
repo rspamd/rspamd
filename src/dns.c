@@ -813,7 +813,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		else {
 			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen);
 			memcpy (elt->txt.data, p + 1, datalen - 1);
-			*(elt->txt.data + datalen) = '\0';
+			*(elt->txt.data + datalen - 1) = '\0';
 		}
 		break;
 	case DNS_T_SPF:
@@ -823,7 +823,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		else {
 			elt->spf.data = memory_pool_alloc (rep->request->pool, datalen);
 			memcpy (elt->spf.data, p + 1, datalen - 1);
-			*(elt->spf.data + datalen) = '\0';
+			*(elt->spf.data + datalen - 1) = '\0';
 		}
 		break;
 	case DNS_T_SRV:
@@ -854,7 +854,7 @@ err:
 }
 
 static struct rspamd_dns_reply *
-dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver)
+dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver, struct rspamd_dns_request **req_out)
 {
 	struct dns_header *header = (struct dns_header *)in;
 	struct rspamd_dns_request *req;
@@ -874,6 +874,7 @@ dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver)
 		/* No such requests found */
 		return NULL;
 	}
+	*req_out = req;
 	/* 
 	 * Now we have request and query data is now at the end of header, so compare
 	 * request QR section and reply QR section
@@ -912,6 +913,7 @@ static void
 dns_read_cb (int fd, short what, void *arg)
 {
 	struct rspamd_dns_resolver *resolver = arg;
+	struct rspamd_dns_request *req = NULL;
 	int r;
 	struct rspamd_dns_reply *rep;
 	guint8 in[UDP_PACKET_SIZE];
@@ -921,10 +923,9 @@ dns_read_cb (int fd, short what, void *arg)
 	/* First read packet from socket */
 	r = read (fd, in, sizeof (in));
 	if (r > sizeof (struct dns_header) + sizeof (struct dns_query)) {
-		if ((rep = dns_parse_reply (in, r, resolver)) != NULL) {
-			rep->request->func (rep, rep->request->arg);
+		if ((rep = dns_parse_reply (in, r, resolver, &req)) != NULL) {
 			upstream_ok (&rep->request->server->up, rep->request->time);
-			return;
+			rep->request->func (rep, rep->request->arg);
 		}
 	}
 }
@@ -940,12 +941,12 @@ dns_timer_cb (int fd, short what, void *arg)
 	req->retransmits ++;
 	if (req->retransmits >= req->resolver->max_retransmits) {
 		msg_err ("maximum number of retransmits expired for resolving %s of type %s", req->requested_name, dns_strtype (req->type));
-		event_del (&req->timer_event);
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
 		upstream_fail (&rep->request->server->up, rep->request->time);
+		remove_normal_event (req->session, dns_fin_cb, req);
 		return;
 	}
 	/* Select other server */
@@ -953,11 +954,11 @@ dns_timer_cb (int fd, short what, void *arg)
 			req->resolver->servers_num, sizeof (struct rspamd_dns_server),
 			time (NULL), DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 	if (req->server == NULL) {
-		event_del (&req->timer_event);
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
+		remove_normal_event (req->session, dns_fin_cb, req);
 		return;
 	}
 	
@@ -967,12 +968,12 @@ dns_timer_cb (int fd, short what, void *arg)
 	req->sock = req->server->sock;
 
 	if (req->sock == -1) {
-		event_del (&req->timer_event);
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
 		upstream_fail (&rep->request->server->up, rep->request->time);
+		remove_normal_event (req->session, dns_fin_cb, req);
 		return;
 	}
 	/* Add other retransmit event */
@@ -985,6 +986,7 @@ dns_timer_cb (int fd, short what, void *arg)
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		req->func (rep, req->arg);
+		remove_normal_event (req->session, dns_fin_cb, req);
 		upstream_fail (&rep->request->server->up, rep->request->time);
 	}
 }
@@ -1081,9 +1083,10 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	va_end (args);
 
 	req->retransmits = 0;
+	req->time = time (NULL);
 	req->server = (struct rspamd_dns_server *)get_upstream_round_robin (resolver->servers, 
 			resolver->servers_num, sizeof (struct rspamd_dns_server),
-			time (NULL), DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+			req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 	if (req->server == NULL) {
 		msg_err ("cannot find suitable server for request");
 		return FALSE;
@@ -1101,8 +1104,8 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	/* Fill timeout */
 	req->tv.tv_sec = resolver->request_timeout / 1000;
 	req->tv.tv_usec = (resolver->request_timeout - req->tv.tv_sec * 1000) * 1000;
-	req->time = time (NULL);
 	
+
 	/* Now send request to server */
 	r = send_dns_request (req);
 
