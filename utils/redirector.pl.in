@@ -439,7 +439,10 @@ while (my $arg = shift @ARGV) {
 die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
 
 # Do daemonization
-Proc::Daemon::Init if !$cfg{debug};
+if (!$cfg{debug}) {
+	Proc::Daemon::Init;
+	POE::Kernel->has_forked;
+}
 
 # Drop privilleges
 if ($> == 0) {
