@@ -382,6 +382,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"rcpt",
+				handle_view_rcpt,
+				0,
+				NULL
+			},
+			{
 				"symbols",
 				handle_view_symbols,
 				0,
@@ -913,19 +919,31 @@ handle_view_from (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 	struct rspamd_view          *view = ctx->section_pointer;
 
 	if (!add_view_from (view, data)) {
-		msg_err ("invalid from line in view definition: ip = '%s'", data);
+		msg_err ("invalid from line in view definition: from = '%s'", data);
 		return FALSE;
 	}
 	
 	return TRUE;
 }
 gboolean 
+handle_view_rcpt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct rspamd_view          *view = ctx->section_pointer;
+
+	if (!add_view_rcpt (view, data)) {
+		msg_err ("invalid from line in view definition: rcpt = '%s'", data);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+gboolean
 handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	struct rspamd_view          *view = ctx->section_pointer;
 
 	if (!add_view_symbols (view, data)) {
-		msg_err ("invalid symbols line in view definition: ip = '%s'", data);
+		msg_err ("invalid symbols line in view definition: symbols = '%s'", data);
 		return FALSE;
 	}
 	cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, data);

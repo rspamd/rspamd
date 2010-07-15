@@ -9,6 +9,9 @@ struct rspamd_view {
 	GList *from_re_list;
 	GHashTable *from_hash;
 
+	GList *rcpt_re_list;
+	GHashTable *rcpt_hash;
+
 	radix_tree_t *ip_tree;
 	radix_tree_t *client_ip_tree;
 
@@ -22,6 +25,7 @@ struct rspamd_view {
 struct rspamd_view* init_view (memory_pool_t *pool);
 
 gboolean add_view_from (struct rspamd_view *view, char *line);
+gboolean add_view_rcpt (struct rspamd_view *view, char *line);
 gboolean add_view_ip (struct rspamd_view *view, char *line);
 gboolean add_view_client_ip (struct rspamd_view *view, char *line);
 gboolean add_view_symbols (struct rspamd_view *view, char *line);

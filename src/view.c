@@ -65,6 +65,22 @@ add_view_from (struct rspamd_view * view, char *line)
 }
 
 gboolean
+add_view_rcpt (struct rspamd_view * view, char *line)
+{
+	struct rspamd_regexp           *re = NULL;
+
+	if (add_map (line, read_host_list, fin_host_list, (void **)&view->rcpt_hash)) {
+		return TRUE;
+	}
+	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
+		view->rcpt_re_list = g_list_prepend (view->rcpt_re_list, re);
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean
 add_view_symbols (struct rspamd_view * view, char *line)
 {
 	struct rspamd_regexp           *re = NULL;
@@ -190,6 +206,77 @@ find_view_by_from (GList * views, struct worker_task *task)
 	return NULL;
 }
 
+G_INLINE_FUNC gboolean
+check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
+{
+	GList                          *cur, *cur_re;
+	char                            rcpt_user[256], *p;
+	gint                            l;
+	struct rspamd_regexp           *re;
+
+	cur = task->rcpt;
+	while (cur) {
+		if ((p = strchr (cur->data, '@')) != NULL) {
+			l = MIN (sizeof (rcpt_user) - 1, p - (char *)cur->data);
+			memcpy (rcpt_user, cur->data, l);
+			rcpt_user[l] = '\0';
+			/* First try to lookup in hashtable */
+			if (g_hash_table_lookup (v->rcpt_hash, rcpt_user) != NULL) {
+				return TRUE;
+			}
+			/* Then try to match re */
+			cur_re = v->rcpt_re_list;
+
+			while (cur_re) {
+				re = cur_re->data;
+				if (g_regex_match (re->regexp, rcpt_user, 0, NULL) == TRUE) {
+					return TRUE;
+				}
+				cur_re = g_list_next (cur_re);
+			}
+		}
+		/* Now check the whole recipient */
+		if (g_hash_table_lookup (v->rcpt_hash, cur->data) != NULL) {
+			return TRUE;
+		}
+		/* Then try to match re */
+		cur_re = v->rcpt_re_list;
+
+		while (cur_re) {
+			re = cur_re->data;
+			if (g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+				return TRUE;
+			}
+			cur_re = g_list_next (cur_re);
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
+static struct rspamd_view             *
+find_view_by_rcpt (GList * views, struct worker_task *task)
+{
+	GList                          *cur;
+	struct rspamd_view             *v;
+
+	if (task->from == NULL) {
+		return NULL;
+	}
+
+	cur = views;
+	while (cur) {
+		v = cur->data;
+		if (check_view_rcpt (v, task)) {
+			return v;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return NULL;
+}
+
 static                          gboolean
 match_view_symbol (struct rspamd_view *v, const char *symbol)
 {
@@ -236,9 +323,11 @@ check_view (GList * views, const char *symbol, struct worker_task * task)
 	if ((selected = find_view_by_ip (views, task)) == NULL) {
 		if ((selected = find_view_by_client_ip (views, task)) == NULL) {
 			if ((selected = find_view_by_from (views, task)) == NULL) {
-				/* No matching view for this task */
-				task->view_checked = TRUE;
-				return TRUE;
+				if ((selected = find_view_by_rcpt (views, task)) == NULL) {
+					/* No matching view for this task */
+					task->view_checked = TRUE;
+					return TRUE;
+				}
 			}
 		}
 	}
