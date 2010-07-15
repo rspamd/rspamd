@@ -266,7 +266,7 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 	}
 	
 	item = memory_pool_alloc0 (pcache->static_pool, sizeof (struct cache_item));
-	item->s = memory_pool_alloc (pcache->static_pool, sizeof (struct saved_cache_item));
+	item->s = memory_pool_alloc0 (pcache->static_pool, sizeof (struct saved_cache_item));
 	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
