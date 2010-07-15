@@ -952,7 +952,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			return FALSE;
 		}
 		p2 = cur->data;
-		if (fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy) >= threshold) {
+		if (fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy) <= threshold) {
 			return TRUE;
 		}
 	}

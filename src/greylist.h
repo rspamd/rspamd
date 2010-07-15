@@ -43,5 +43,6 @@ struct rspamd_grey_reply {
 	} reply;
 };
 
+typedef void (*greylist_cb_t) (gboolean greylisted, struct worker_task *task, gpointer ud);
 
 #endif

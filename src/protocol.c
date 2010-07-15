@@ -508,6 +508,9 @@ show_url_header (struct worker_task *task)
 		}
 		cur = g_list_next (cur);
 	}
+	if (r == 0) {
+		return TRUE;
+	}
 	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
@@ -718,6 +721,10 @@ show_messages (struct worker_task *task)
 	while (cur) {
 		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Message: %s" CRLF, (char *)cur->data);
 		cur = g_list_next (cur);
+	}
+
+	if (r == 0) {
+		return TRUE;
 	}
 
 	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);

@@ -261,6 +261,12 @@ static struct xml_parser_rule grammar[] = {
 				0,
 				NULL
 			},
+			{
+				"action",
+				handle_metric_action,
+				0,
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
@@ -667,6 +673,27 @@ worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 }
 
 gboolean 
+handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct metric                  *metric = ctx->section_pointer;
+
+	if (g_ascii_strcasecmp (data, "reject") == 0) {
+		metric->action = METRIC_ACTION_REJECT;
+	}
+	else if (g_ascii_strcasecmp (data, "greylist") == 0) {
+		metric->action = METRIC_ACTION_GREYLIST;
+	}
+	else if (g_ascii_strcasecmp (data, "add_header") == 0) {
+		metric->action = METRIC_ACTION_ADD_HEADER;
+	}
+	else {
+		msg_err ("unknown action for metric: %s", data);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+gboolean
 handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
 	char                           *strval, *err;
