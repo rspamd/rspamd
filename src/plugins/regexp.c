@@ -1039,6 +1039,40 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 	return TRUE;
 }
 
+static gboolean
+match_smtp_data (struct worker_task *task, const char *re_text, const char *what)
+{
+	struct rspamd_regexp           *re;
+	int                             r;
+
+	if (*re_text == '/') {
+		/* This is a regexp */
+		if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
+			re = parse_regexp (task->cfg->cfg_pool, (char *)re_text, task->cfg->raw_mode);
+			if (re == NULL) {
+				msg_warn ("cannot compile regexp for function");
+				return FALSE;
+			}
+			re_cache_add ((char *)re_text, re, task->cfg->cfg_pool);
+		}
+		if ((r = task_cache_check (task, re)) == -1) {
+			if (g_regex_match (re->regexp, what, 0, NULL) == TRUE) {
+				task_cache_add (task, re, 1);
+				return TRUE;
+			}
+			task_cache_add (task, re, 0);
+		}
+		else {
+			return r == 1;
+		}
+	}
+	else if (g_ascii_strcasecmp (re_text, what) == 0) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static                          gboolean
 rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 {
@@ -1127,13 +1161,11 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 		arg = get_function_arg (cur->data, task, FALSE);
 		if (arg && arg->type == EXPRESSION_ARGUMENT_NORMAL) {
 			if (what != NULL) {
-				if (g_ascii_strcasecmp (cur->data, what) == 0) {
-					return TRUE;
-				}
+				return match_smtp_data (task, arg->data, what);
 			}
 			else {
 				while (rcpt_list) {
-					if (g_ascii_strcasecmp (cur->data, rcpt_list->data) == 0) {
+					if (match_smtp_data (task, arg->data, rcpt_list->data)) {
 						return TRUE;
 					}
 					rcpt_list = g_list_next (rcpt_list);
@@ -1142,13 +1174,13 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 		}
 		else {
 			if (what != NULL) {
-				if (process_regexp_expression (cur->data, "regexp_check_smtp_data", task, what)) {
+				if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, what)) {
 					return TRUE;
 				}
 			}
 			else {
 				while (rcpt_list) {
-					if (process_regexp_expression (cur->data, "regexp_check_smtp_data", task, rcpt_list->data)) {
+					if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, rcpt_list->data)) {
 						return TRUE;
 					}
 					rcpt_list = g_list_next (rcpt_list);
