@@ -591,18 +591,69 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 	return TRUE;
 }
 
+G_INLINE_FUNC const char *
+str_action_metric (enum rspamd_metric_action action)
+{
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		return "reject";
+	case METRIC_ACTION_SOFT_REJECT:
+		return "soft reject";
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		return "rewrite subject";
+	case METRIC_ACTION_ADD_HEADER:
+		return "add header";
+	case METRIC_ACTION_GREYLIST:
+		return "greylist";
+	case METRIC_ACTION_NOACTION:
+		return "no action";
+	}
+
+	return "unknown action";
+}
+
+G_INLINE_FUNC gint
+check_metric_action (double score, double required_score, struct metric *metric)
+{
+	GList                          *cur;
+	struct metric_action           *action, *selected_action = NULL;
+
+	if (score >= required_score) {
+		return metric->action;
+	}
+	else if (metric->actions == NULL) {
+		return METRIC_ACTION_NOACTION;
+	}
+	else {
+		cur = metric->actions;
+		while (cur) {
+			action = cur->data;
+			if (score >= action->score) {
+				selected_action = action;
+			}
+			cur = g_list_next (cur);
+		}
+		if (selected_action) {
+			return selected_action->action;
+		}
+		else {
+			return METRIC_ACTION_NOACTION;
+		}
+	}
+}
 
 static void
 show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
 {
 	struct metric_callback_data    *cd = (struct metric_callback_data *)user_data;
 	struct worker_task             *task = cd->task;
-	int                             r;
+	int                             r = 0;
 	char                            outbuf[OUTBUFSIZ];
 	struct metric_result           *metric_res = (struct metric_result *)metric_value;
 	struct metric                  *m;
 	int                             is_spam = 0;
 	double                          ms = 0, rs = 0;
+	enum rspamd_metric_action       action;
 
 	if (! cd->alive) {
 		return;
@@ -652,6 +703,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		if (metric_res->score >= ms) {
 			is_spam = 1;
 		}
+		action = check_metric_action (metric_res->score, ms, metric_res->metric);
 		if (task->proto == SPAMC_PROTO) {
 			r = rspamd_snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True" : "False", metric_res->score, ms);
 		}
@@ -670,14 +722,15 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, 
 						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
 			}
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Action: %s" CRLF, str_action_metric(action));
 		}
         if (!task->is_skipped) {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
-				(char *)metric_name, is_spam ? "T" : "F", metric_res->score, ms, rs);
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (%s): [%.2f/%.2f/%.2f] [",
+				(char *)metric_name, is_spam ? 'T' : 'F', str_action_metric (action), metric_res->score, ms, rs);
         }
         else {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %s: [%.2f/%.2f/%.2f] [", 
-				(char *)metric_name, "S", metric_res->score, ms, rs);
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (%s): [%.2f/%.2f/%.2f] [",
+				(char *)metric_name, 'S', metric_res->score, ms, rs);
         
         }
 	}

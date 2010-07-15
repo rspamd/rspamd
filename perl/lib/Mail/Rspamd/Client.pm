@@ -943,6 +943,7 @@ sub _do_rspamc_command {
 			symbols => [],
 			urls => [],
 			messages => [],
+			action => 'reject',
 		};
 		foreach my $line (@lines) {
 			if ($line =~ /^Urls: (.+)$/) {
@@ -978,6 +979,9 @@ sub _do_rspamc_command {
 			elsif ($line =~ /^Message: (.+)/ && $cur_metric) {
 				my $symref = $metrics{$cur_metric}->{'messages'};
 				push(@$symref, $1);
+			}
+			elsif ($line =~ /^Action: (.+)/ && $cur_metric) {
+				$metrics{$cur_metric}->{'action'} = $1;
 			}
 			elsif ($line =~ /^${EOL}$/) {
 				last;

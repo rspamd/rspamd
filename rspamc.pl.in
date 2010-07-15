@@ -178,9 +178,22 @@ sub print_rspamc_result {
 			print "Symbols: ";
 			$terminal->Tputs( 'me', 1, *STDOUT );
 			print join("; ", @{ $result->{symbols} }) . "\n";
-			print "Urls: " . join(", ", @{ $result->{urls} }) . "\n";
+
+			$terminal->Tputs( 'md', 1, *STDOUT );
+			print "Action: ";
+			$terminal->Tputs( 'me', 1, *STDOUT );
+			print "$result->{action}\n";
+
+			$terminal->Tputs( 'md', 1, *STDOUT );
+			print "Urls: ";
+			$terminal->Tputs( 'me', 1, *STDOUT );
+			print join(", ", @{ $result->{urls} }) . "\n";
+
 			foreach my $msg (@{ $result->{messages} }) {
-				print "Message: $msg\n";
+				$terminal->Tputs( 'md', 1, *STDOUT );
+				print "Message: ";
+				$terminal->Tputs( 'me', 1, *STDOUT );
+				print "$msg\n";
 			}
 			print "\n\n";
 		}

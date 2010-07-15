@@ -672,24 +672,61 @@ worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	return TRUE;
 }
 
-gboolean 
-handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+G_INLINE_FUNC gboolean
+check_action (const gchar *data, gint *result)
 {
-	struct metric                  *metric = ctx->section_pointer;
-
-	if (g_ascii_strcasecmp (data, "reject") == 0) {
-		metric->action = METRIC_ACTION_REJECT;
+	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
+		*result = METRIC_ACTION_REJECT;
 	}
-	else if (g_ascii_strcasecmp (data, "greylist") == 0) {
-		metric->action = METRIC_ACTION_GREYLIST;
+	else if (g_ascii_strncasecmp (data, "greylist", sizeof ("greylist") - 1) == 0) {
+		*result = METRIC_ACTION_GREYLIST;
 	}
-	else if (g_ascii_strcasecmp (data, "add_header") == 0) {
-		metric->action = METRIC_ACTION_ADD_HEADER;
+	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") - 1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite_subject", sizeof ("rewrite_subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
 	else {
 		msg_err ("unknown action for metric: %s", data);
 		return FALSE;
 	}
+	return TRUE;
+}
+
+gboolean
+handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	struct metric                  *metric = ctx->section_pointer;
+	gchar                          *p, *errstr;
+	gint                            res;
+	struct metric_action           *action;
+
+	/* First of all check whether we have data with weight (reject:50 for example) */
+	if ((p = strchr (data, ':')) == NULL) {
+		if (check_action (data, &res)) {
+			metric->action = res;
+			return TRUE;
+		}
+		return FALSE;
+	}
+	else {
+		if (!check_action (data, &res)) {
+			return FALSE;
+		}
+		else {
+			action = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric_action));
+			action->action = res;
+			errno = 0;
+			action->score = strtod (p + 1, &errstr);
+			if (errno != 0 || (errstr != NULL && *errstr != '\0')) {
+				msg_err ("invalid double value: %s", data);
+				return FALSE;
+			}
+			metric->actions = g_list_prepend (metric->actions, action);
+		}
+	}
+
 	return TRUE;
 }
 
