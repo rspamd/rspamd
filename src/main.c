@@ -74,6 +74,7 @@ static gchar                   *rspamd_group;
 static gchar                   *rspamd_pidfile;
 static gboolean                 dump_vars;
 static gboolean                 dump_cache;
+static gboolean                 is_debug;
 
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
@@ -92,6 +93,7 @@ static GOptionEntry entries[] =
   { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
   { "dump-vars", 'V', 0, G_OPTION_ARG_NONE, &dump_vars, "Print all rspamd variables and exit", NULL },
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
+  { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -271,6 +273,10 @@ reread_config (struct rspamd_main *rspamd)
 			close_log ();
 			g_free (rspamd->cfg);
 			rspamd->cfg = tmp_cfg;
+			/* Force debug log */
+			if (is_debug) {
+				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
+			}
 			config_logger (rspamd, FALSE);
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
@@ -780,7 +786,7 @@ main (int argc, char **argv, char **env)
 		rspamd->cfg->cfg_name = FIXED_CONFIG_FILE;
 	}
 
-	if (rspamd->cfg->config_test) {
+	if (rspamd->cfg->config_test || is_debug) {
 		rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
@@ -811,6 +817,10 @@ main (int argc, char **argv, char **env)
 		exit (EXIT_FAILURE);
 	}
 	
+	/* Force debug log */
+	if (is_debug) {
+		rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
+	}
 	/* Pre-init of cache */
 	rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
 	rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
