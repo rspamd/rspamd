@@ -1595,10 +1595,18 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 		if (GMIME_IS_PART (part)) {
 #ifndef GMIME24
 			part_enc = g_mime_part_get_encoding (GMIME_PART (part));
+			if (part_enc == GMIME_PART_ENCODING_DEFAULT) {
+				/* Assume 7bit as default transfer encoding */
+				part_enc = GMIME_PART_ENCODING_7BIT;
+			}
 #else
 			part_enc = g_mime_part_get_content_encoding (GMIME_PART (part));
+			if (part_enc == GMIME_CONTENT_ENCODING_DEFAULT) {
+				/* Assume 7bit as default transfer encoding */
+				part_enc = GMIME_CONTENT_ENCODING_7BIT;
+			}
 #endif
-			
+
 
 			debug_task ("got encoding in part: %d and compare with %d", (int)part_enc, (int)enc_req);
 #ifndef GMIME24
