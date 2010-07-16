@@ -924,7 +924,7 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 gboolean
 rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 {
-	int                             threshold;
+	int                             threshold, diff;
 	struct mime_text_part          *p1, *p2;
 	GList                          *cur;
 	struct expression_argument     *arg;
@@ -952,7 +952,9 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			return FALSE;
 		}
 		p2 = cur->data;
-		if (fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy) <= threshold) {
+		diff = fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
+		debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
+		if (diff <= threshold) {
 			return TRUE;
 		}
 	}
