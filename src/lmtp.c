@@ -47,6 +47,9 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
+	case SIGUSR1:
+		reopen_log ();
+		break;
 	case SIGINT:
 	case SIGTERM:
 		_exit (1);

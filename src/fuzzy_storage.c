@@ -96,6 +96,9 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
+	case SIGUSR1:
+		reopen_log ();
+		break;
 	case SIGINT:
 		/* Ignore SIGINT as we should got SIGTERM after it anyway */
 		return;

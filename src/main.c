@@ -116,7 +116,6 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 	switch (signo) {
 	case SIGHUP:
 		do_restart = 1;
-		do_reopen_log = 1;
 		break;
 	case SIGINT:
 	case SIGTERM:
@@ -124,6 +123,9 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 		break;
 	case SIGCHLD:
 		child_dead = 1;
+		break;
+	case SIGUSR1:
+		do_reopen_log = 1;
 		break;
 	case SIGUSR2:
 		/* Do nothing */
@@ -605,6 +607,16 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	return TRUE;
 }
 
+static void
+reopen_log_handler (gpointer key, gpointer value, gpointer unused)
+{
+	struct rspamd_worker          *w = value;
+
+	if (kill (w->pid, SIGUSR1) == -1) {
+		msg_err ("kill failed for pid %P: %s", w->pid, strerror (errno));
+	}
+}
+
 #if 0
 /* XXX: remove this as it is unused now */
 static gboolean
@@ -958,14 +970,17 @@ main (int argc, char **argv, char **env)
 		}
 		if (do_restart) {
 			do_restart = 0;
-			do_reopen_log = 1;
-
+			reopen_log ();
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd->workers, kill_old_workers, NULL);
 			remove_all_maps ();
 			reread_config (rspamd);
 			spawn_workers (rspamd);
-
+		}
+		if (do_reopen_log) {
+			do_reopen_log = 0;
+			reopen_log ();
+			g_hash_table_foreach (rspamd->workers, reopen_log_handler, NULL);
 		}
 		if (got_alarm) {
 			got_alarm = 0;

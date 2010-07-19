@@ -278,11 +278,13 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct co
 int
 reopen_log (void)
 {
-#ifdef RSPAMD_MAIN
-	do_reopen_log = 0;
-#endif
 	close_log ();
-	return open_log ();
+	if (open_log () == 0) {
+		msg_info ("log file reopened");
+		return 0;
+	}
+
+	return -1;
 }
 
 void
@@ -370,11 +372,7 @@ static void
 syslog_log_function (const gchar * log_domain, const gchar *function, GLogLevelFlags log_level, const gchar * message, gboolean forced, gpointer arg)
 {
 	struct config_file             *cfg = (struct config_file *)arg;
-#ifdef RSPAMD_MAIN
-	if (do_reopen_log) {
-		reopen_log ();
-	}
-#endif
+
 	if (! rspamd_log->enabled) {
 		return;
 	}
@@ -427,11 +425,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 	if (! rspamd_log->enabled) {
 		return;
 	}
-#ifdef RSPAMD_MAIN
-	if (do_reopen_log) {
-		reopen_log ();
-	}
-#endif
+
 
 	if (forced || log_level <= rspamd_log->cfg->log_level) {
 		/* Check repeats */

@@ -37,7 +37,13 @@ rspamd_checkconfig()
 	eval ${command} -t
 }
 
-extra_commands="reload configtest"
+reopenlog_cmd()
+{
+   export sig_reload="USR1"
+   run_rc_command reload
+}
+
+extra_commands="reload configtest reopenlog"
 sig_reload="HUP"
 
 command="$procname"

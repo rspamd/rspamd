@@ -49,7 +49,12 @@ struct _proto {
 	unsigned int                    need_ssl:1;
 };
 
-static const char              *text_url = "((https?|ftp)://)?" "(\\b(?<![.\\@A-Za-z0-9-])" "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\." "(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel" "|cc|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se" "|[a-z]{2}" "(?(1)|(?=/)))" "(?!\\w)" "|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"	/* ip in dotted view */
+static const char              *text_url = "((https?|ftp)://)?"
+	"(\\b(?<![.\\@A-Za-z0-9-])" "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
+	"(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel"
+	"|cc|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se"
+	"|[a-z]{2}" "(?(1)|(?=/)))" "(?!\\w)"
+	"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"	/* ip in dotted view */
 	"|\\d{5,20}(?(1)|(?=[/:]))"	/* ip in numeric view */
 	")" "(?::\\d{1,5})?"		/* port */
 	"(?!\\.\\w)"				/* host part ended, no more of this further on */

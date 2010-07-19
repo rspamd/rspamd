@@ -100,6 +100,9 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 	struct timeval                  tv;
 
 	switch (signo) {
+	case SIGUSR1:
+		reopen_log ();
+		break;
 	case SIGINT:
 	case SIGTERM:
 		if (!wanna_die) {
