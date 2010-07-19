@@ -485,7 +485,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 		now = time (NULL);
 		tms = localtime (&now);
 
-		strftime (timebuf, sizeof (timebuf), "%b %d %H:%M:%S", tms);
+		strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
 		switch (rspamd_log->process_type) {
 			case TYPE_MAIN:
 				cptype = "main";
@@ -510,10 +510,10 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 				break;
 		}
 		if (function == NULL) {
-			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P(%s): %s rspamd ", rspamd_log->pid, cptype, timebuf);
+			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%s #%P(%s) ", timebuf, rspamd_log->pid, cptype);
 		}
 		else {
-			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "#%P(%s): %s rspamd %s: ", rspamd_log->pid, cptype, timebuf, function);
+			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%s #%P(%s) %s: ", timebuf, rspamd_log->pid, cptype, function);
 		}
 		iov[0].iov_base = tmpbuf;
 		iov[0].iov_len = r;
