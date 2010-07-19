@@ -351,6 +351,10 @@ read_socket (f_str_t * in, void *arg)
 			return write_socket (task);
 		}
 		break;
+	case WRITE_REPLY:
+	case WRITE_ERROR:
+		return write_socket (task);
+		break;
 	default:
 		debug_task ("invalid state on reading stage");
 		break;

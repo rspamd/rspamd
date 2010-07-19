@@ -123,7 +123,7 @@ parse_command (struct worker_task *task, f_str_t * line)
 	task->proto_ver = RSPAMC_PROTO_1_1;
 	token = separate_command (line, ' ');
 	if (line == NULL || token == NULL) {
-		debug_task ("bad command: %s", token);
+		debug_task ("bad command");
 		return -1;
 	}
 
@@ -979,9 +979,7 @@ write_reply (struct worker_task *task)
 			debug_task ("writing error: %s", outbuf);
 		}
 		/* Write to bufferevent error message */
-		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
-			return FALSE;
-		}
+		return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 	}
 	else {
 		switch (task->cmd) {
