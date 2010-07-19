@@ -719,7 +719,7 @@ write_check_reply (struct worker_task *task)
 
 	cd.task = task;
 	cd.log_buf = logbuf;
-	cd.log_offset = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
+	cd.log_offset = rspamd_snprintf (logbuf, sizeof (logbuf), "id: <%s>, qid: <%s>, ", task->message_id, task->queue_id);
 	cd.log_size = sizeof (logbuf);
 	cd.alive = TRUE;
 
@@ -805,7 +805,7 @@ write_process_reply (struct worker_task *task)
 
 	cd.task = task;
 	cd.log_buf = logbuf;
-	cd.log_offset = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", task->message_id);
+	cd.log_offset = rspamd_snprintf (logbuf, sizeof (logbuf), "id: <%s>, qid: <%s>, ", task->message_id, task->queue_id);
 	cd.log_size = sizeof (logbuf);
 	cd.alive = TRUE;
 

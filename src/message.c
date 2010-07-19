@@ -767,7 +767,7 @@ process_message (struct worker_task *task)
 
 		debug_task ("found %d parts in message", task->parts_count);
 		if (task->queue_id == NULL) {
-			task->queue_id = (char *)g_mime_message_get_message_id (task->message);
+			task->queue_id = "undef";
 		}
 		task->message_id = g_mime_message_get_message_id (task->message);
 		if (task->message_id == NULL) {
