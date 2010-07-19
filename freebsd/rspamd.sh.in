@@ -19,6 +19,7 @@ procname="@CMAKE_INSTALL_PREFIX@/bin/rspamd"
 restart_precmd="rspamd_checkconfig"
 reload_precmd="rspamd_checkconfig"
 configtest_cmd="rspamd_checkconfig"
+reopenlog_cmd="reopenlog_cmd"
 
 load_rc_config $name
 
