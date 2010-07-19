@@ -371,6 +371,12 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 				label_len = remain - 1;
 				msg_err ("no buffer remain for constructing query, strip to %ud", label_len);
 			}
+			if (label_len == 0) {
+				/* Two dots in order, skip this */
+				msg_info ("name contains two or more dots in a row, replace it with one dot");
+				begin = dot + 1;
+				continue;
+			}
 			/* First try to compress name */
 			if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, table)) {
 				*pos++ = (guint8)label_len;
