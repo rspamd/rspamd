@@ -381,10 +381,6 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	cb->rec->task->save.saved--;
 	if (cb->rec->task->save.saved == 0 && cb->rec->callback) {
 		cb->rec->callback (cb->rec, cb->rec->task);
-		if (cb->rec->addrs) {
-			g_list_free (cb->rec->addrs);
-			cb->rec->addrs = NULL;
-		}
 	}
 }
 
