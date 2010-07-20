@@ -703,7 +703,7 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 			}
 			begin = l;
 			p = l + *l + 1;
-			namelen += *p;
+			namelen += *l;
 			labels ++;
 		}
 		else {
