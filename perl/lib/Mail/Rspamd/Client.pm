@@ -964,23 +964,23 @@ sub _do_rspamc_command {
 				};
 				$cur_metric = $1;
 			}
-			elsif ($line =~ /^Symbol: (\S+);\s*(.+)${EOL}$/ && $cur_metric) {
+			elsif ($line =~ /^Symbol: (\S+);\s*(.+)\s*${EOL}$/ && $cur_metric) {
 				# Line with parameters
 				my $symref = $metrics{$cur_metric}->{'symbols'};
 				push(@$symref, "$1($2)");
 			}
-			elsif ($line =~ /^Symbol: (\S+)/ && $cur_metric) {
+			elsif ($line =~ /^Symbol: (\S+)\s*/ && $cur_metric) {
 				my $symref = $metrics{$cur_metric}->{'symbols'};
 				push(@$symref, $1);
 			}
-			elsif ($line =~ /^Urls: (.+)$/ && $cur_metric) {
+			elsif ($line =~ /^Urls: (.+)\s*$/ && $cur_metric) {
 				@{ $metrics{$cur_metric}->{'urls'} } = split /,\s+/, $1;
 			}
-			elsif ($line =~ /^Message: (.+)/ && $cur_metric) {
+			elsif ($line =~ /^Message: (.+)\s*$/ && $cur_metric) {
 				my $symref = $metrics{$cur_metric}->{'messages'};
 				push(@$symref, $1);
 			}
-			elsif ($line =~ /^Action: (.+)/ && $cur_metric) {
+			elsif ($line =~ /^Action: (.+)\s*$/ && $cur_metric) {
 				$metrics{$cur_metric}->{'action'} = $1;
 			}
 			elsif ($line =~ /^${EOL}$/) {
