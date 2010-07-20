@@ -959,6 +959,10 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 				return TRUE;
 			}
 		}
+		else if ((p1->is_empty && !p2->is_empty) || (!p1->is_empty && p2->is_empty)) {
+			/* Empty and non empty parts are different */
+			return TRUE;
+		}
 	}
 	else {
 		debug_task ("message has too many text parts, so do not try to compare them with each other");
