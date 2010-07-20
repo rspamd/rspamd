@@ -50,7 +50,7 @@ if opts then
 		end
 		if symbol_from then
 			if opts['from_whitelist'] then
-				h = rspamd_config:add_host_map (opts['from_whitelist'])
+				h = rspamd_config:add_hash_map (opts['from_whitelist'])
 			else
 				-- No whitelist defined
 				symbol_from = nil

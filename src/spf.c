@@ -630,6 +630,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 {
 	char *p, *c, *new, *tmp;
 	int len = 0, slen = 0, state = 0;
+	gboolean need_expand = FALSE;
 
 	p = begin;
 	/* Calculate length */
@@ -706,6 +707,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 				/* Read modifier */
 				if (*p == '}') {
 					state = 0;
+					need_expand = TRUE;
 				}
 				else if (*p != 'r' && !g_ascii_isdigit (*p)) {
 					msg_info ("unknown or unsupported spf modifier %c in %s", *p, begin);
@@ -717,7 +719,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 		}
 	}
 
-	if (slen == len) {
+	if (!need_expand) {
 		/* No expansion needed */
 		return begin;
 	}
