@@ -694,6 +694,7 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 				return FALSE;
 			}
 			if (offset < 0) {
+				/* Set offset strictly */
 				offset = p - begin + 2;
 			}
 			if (l < in || l > begin + length) {
@@ -715,9 +716,10 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 	if (!make_name) {
 		goto end;
 	}
-	*target = memory_pool_alloc (rep->request->pool, namelen + labels + 1);
+	*target = memory_pool_alloc (rep->request->pool, namelen + labels + 3);
 	t = (guint8 *)*target;
 	p = *pos;
+	begin = *pos;
 	/* Now copy labels to name */
 	while (p - begin < length) {
 		llen = *p;
@@ -727,9 +729,11 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 		else if (llen & DNS_COMPRESSION_BITS) {
 			memcpy (&llen, p, sizeof (guint16));
 			l = decompress_label (in, &llen, length + (*pos - in));
-			begin = p;
+			begin = l;
 			p = l + *l + 1;
-			namelen += *p;
+			memcpy (t, l + 1, *l);
+			t += *l;
+			*t ++ = '.';
 		}
 		else {
 			memcpy (t, p + 1, *p);
@@ -756,7 +760,7 @@ static gint
 dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
 {
 	guint8 *p = *pos;
-	guint16 type, datalen;
+	guint16 type, datalen, txtlen, copied;
 	gboolean parsed = FALSE;
 
 	/* Skip the whole name */
@@ -821,9 +825,21 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			p += datalen;
 		}
 		else {
-			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen);
-			memcpy (elt->txt.data, p + 1, datalen - 1);
-			*(elt->txt.data + datalen - 1) = '\0';
+			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
+			/* Now we should compose data from parts */
+			copied = 0;
+			while (copied < datalen) {
+				txtlen = *p;
+				if (txtlen + copied < datalen) {
+					memcpy (elt->txt.data + copied, p + 1, txtlen);
+					copied += txtlen;
+					p += txtlen + 1;
+				}
+				else {
+					break;
+				}
+			}
+			*(elt->txt.data + copied) = '\0';
 			parsed = TRUE;
 		}
 		break;
@@ -832,9 +848,20 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			p += datalen;
 		}
 		else {
-			elt->spf.data = memory_pool_alloc (rep->request->pool, datalen);
-			memcpy (elt->spf.data, p + 1, datalen - 1);
-			*(elt->spf.data + datalen - 1) = '\0';
+			copied = 0;
+			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
+			while (copied < datalen) {
+				txtlen = *p;
+				if (txtlen + copied < datalen) {
+					memcpy (elt->txt.data + copied, p + 1, txtlen);
+					copied += txtlen;
+					p += txtlen + 1;
+				}
+				else {
+					break;
+				}
+			}
+			*(elt->spf.data + copied) = '\0';
 			parsed = TRUE;
 		}
 		break;
