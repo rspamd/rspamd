@@ -856,7 +856,7 @@ sub _do_rspamc_command {
 	my %metrics;
 	my ($in, $res);
 
-	my $msgsize = length($msg.$EOL);
+	my $msgsize = length($msg);
 
 	local $SIG{PIPE} = 'IGNORE';
 
@@ -882,7 +882,7 @@ sub _do_rspamc_command {
 	}
 	syswrite $remote, $EOL;
 
-	if (! $self->_write_message($remote, $msg, length($msg))) {
+	if (! $self->_write_message($remote, $msg, $msgsize)) {
 		my %r = (
 			error => 'error writing message to rspamd',
 			error_code => 502,
@@ -891,7 +891,7 @@ sub _do_rspamc_command {
 		return \%r;
 	}
 
-	syswrite $remote, $EOL;
+	#syswrite $remote, $EOL;
 	
 	unless ($self->_get_io_readiness($remote, 0)) {
 		close $remote;
