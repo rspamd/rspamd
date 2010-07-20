@@ -1087,7 +1087,7 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 	rec->task = task;
 	rec->callback = callback;
 
-	if (task->from && (domain = strchr (task->from, '@'))) {
+	if (task->from && (domain = strchr (task->from, '@')) != NULL && *domain == '@') {
 		rec->sender = task->from;
 
 		rec->local_part = memory_pool_strdup (task->task_pool, task->from);
