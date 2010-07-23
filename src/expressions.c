@@ -704,7 +704,8 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 		}
 	}
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
-	result->regexp_text = memory_pool_strdup (pool, begin);
+	*end = '/';
+	result->regexp_text = memory_pool_strdup (pool, line);
 	memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->regexp);
 
 	if (result->regexp == NULL || err != NULL) {
