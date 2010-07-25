@@ -1171,7 +1171,7 @@ xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx
 	dest = (GList **)G_STRUCT_MEMBER_P (dest_struct, offset);
 	*dest = NULL;
 
-	tokens = g_strsplit (data, ";,", 0);
+	tokens = g_strsplit_set (data, ";,", 0);
 	if (!tokens || !tokens[0]) {
 		return FALSE;
 	}

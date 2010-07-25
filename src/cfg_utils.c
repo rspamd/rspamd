@@ -48,7 +48,7 @@ parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port)
 	struct hostent                 *hent;
 	unsigned int                    port_parsed, saved_errno = errno;
 
-	tokens = g_strsplit (str, ":", 0);
+	tokens = g_strsplit_set (str, ":", 0);
 	if (!tokens || !tokens[0]) {
 		return FALSE;
 	}
@@ -437,7 +437,7 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 		return;
 	}
 
-	strvec = g_strsplit (str, ",", 0);
+	strvec = g_strsplit_set (str, ",", 0);
 	if (strvec == NULL) {
 		return;
 	}

@@ -710,7 +710,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	switch (session->state) {
 	case STATE_COMMAND:
 		s = fstrcstr (in, session->session_pool);
-		params = g_strsplit (s, " ", -1);
+		params = g_strsplit_set (s, " ", -1);
 
 		memory_pool_add_destructor (session->session_pool, (pool_destruct_func) g_strfreev, params);
 

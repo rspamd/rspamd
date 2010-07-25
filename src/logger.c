@@ -249,7 +249,7 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct co
 		rspamd_log->debug_ip = radix_tree_create ();
 		if (!add_map (cfg->debug_ip_map, read_radix_list, fin_radix_list, (void **)&rspamd_log->debug_ip)) {
 			/* Try to parse it as list */
-			strvec = g_strsplit (cfg->debug_ip_map, ",; ", 0);
+			strvec = g_strsplit_set (cfg->debug_ip_map, ",; ", 0);
 			num = g_strv_length (strvec);
 
 			for (i = 0; i < num; i++) {

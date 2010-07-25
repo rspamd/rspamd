@@ -122,12 +122,12 @@ parse_flags_string (char *str)
 	int                             num, i, t;
 	struct fuzzy_mapping           *map;
 	
-	strvec = g_strsplit (str, ", ;", 0);
+	strvec = g_strsplit_set (str, ", ;", 0);
 	num = g_strv_length (strvec);
 
 	for (i = 0; i < num; i ++) {
 		item = strvec[i];
-		map_str = g_strsplit (item, ":", 3);
+		map_str = g_strsplit_set (item, ":", 3);
 		t = g_strv_length (map_str);
 		if (t != 3 && t != 2) {
 			msg_err ("invalid fuzzy mapping: %s", item);
@@ -165,7 +165,7 @@ parse_servers_string (char *str)
 	struct hostent                 *hent;
 	struct in_addr                  addr;
 
-	strvec = g_strsplit (str, ",", 0);
+	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
 
 	fuzzy_module_ctx->servers = memory_pool_alloc0 (fuzzy_module_ctx->fuzzy_pool, sizeof (struct storage_server) * num);

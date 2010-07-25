@@ -79,7 +79,7 @@ void rspamd_log_nodebug ();
 #define msg_err(args...)	rspamd_common_log_function(G_LOG_LEVEL_CRITICAL, __FUNCTION__, ##args)
 #define msg_warn(args...)	rspamd_common_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, ##args)
 #define msg_info(args...)	rspamd_common_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, ##args)
-#define msg_debug(args...)	rspamd_common_log_function(G_LOG_LEVEL_DEBUG, __FUNCTION__, ##args)
+#define msg_debug(args...)	rspamd_conditional_debug(-1, __FUNCTION__, ##args)
 #define debug_task(args...) rspamd_conditional_debug(task->from_addr.s_addr, __FUNCTION__, ##args)
 #define debug_ip(ip, args...) rspamd_conditional_debug((ip), __FUNCTION__, ##args)
 #else
