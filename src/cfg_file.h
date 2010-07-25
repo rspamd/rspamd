@@ -252,6 +252,7 @@ struct config_file {
 	uint32_t log_buf_size;							/**< length of log buffer								*/
 	gchar *debug_ip_map;						    /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;								/**< whether we should log URLs                         */
+	GList *debug_symbols;							/**< symbols to debug									*/
 
 	gsize max_statfile_size;						/**< maximum size for statfile							*/
 
@@ -266,8 +267,8 @@ struct config_file {
 	gboolean delivery_enable;						/**< is delivery agent is enabled						*/
 	gchar *deliver_host;							/**< host for mail deliviring							*/
 	struct in_addr deliver_addr;					/**< its address										*/
-	uint16_t deliver_port;							/**< port for deliviring								*/
-	uint16_t deliver_family;						/**< socket family for delivirnig						*/
+	guint16 deliver_port;							/**< port for deliviring								*/
+	guint16 deliver_family;							/**< socket family for delivirnig						*/
 	gchar *deliver_agent_path;						/**< deliver to pipe instead of socket					*/
 	gboolean deliver_lmtp;							/**< use LMTP instead of SMTP							*/
 
@@ -302,8 +303,8 @@ struct config_file {
 	gchar* dump_checksum;							/**< dump checksum of config file						*/ 
 	gpointer lua_state;								/**< pointer to lua state								*/
 
-	guint dns_timeout;								/**< timeout in milliseconds for waiting for dns reply	*/
-	guint dns_retransmits;							/**< maximum retransmits count							*/
+	guint32 dns_timeout;							/**< timeout in milliseconds for waiting for dns reply	*/
+	guint32 dns_retransmits;						/**< maximum retransmits count							*/
 	GList *nameservers;								/**< list of nameservers or NULL to parse resolv.conf	*/
 };
 

@@ -151,6 +151,18 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, cache_filename),
 				NULL
 			},
+			{
+				"dns_timeout",
+				xml_handle_seconds,
+				G_STRUCT_OFFSET (struct config_file, dns_timeout),
+				NULL
+			},
+			{
+				"dns_retransmits",
+				xml_handle_uint32,
+				G_STRUCT_OFFSET (struct config_file, dns_retransmits),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_ATTR
@@ -184,6 +196,12 @@ static struct xml_parser_rule grammar[] = {
 				"debug_ip",
 				xml_handle_string,
 				G_STRUCT_OFFSET (struct config_file, debug_ip_map),
+				NULL
+			},
+			{
+				"debug_symbols",
+				xml_handle_string_list,
+				G_STRUCT_OFFSET (struct config_file, debug_symbols),
 				NULL
 			},
 			NULL_ATTR
@@ -1144,6 +1162,29 @@ xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 	return TRUE;
 }
 
+gboolean
+xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+{
+	GList                      **dest;
+	gchar                      **tokens, **cur;
+
+	dest = (GList **)G_STRUCT_MEMBER_P (dest_struct, offset);
+	*dest = NULL;
+
+	tokens = g_strsplit (data, ";,", 0);
+	if (!tokens || !tokens[0]) {
+		return FALSE;
+	}
+	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_strfreev, tokens);
+	cur = tokens;
+	while (*cur) {
+		*dest = g_list_prepend (*dest, *cur);
+		cur ++;
+	}
+
+	return TRUE;
+}
+
 
 gboolean 
 xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
@@ -1159,9 +1200,9 @@ xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 gboolean 
 xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	time_t                      *dest;
+	guint32                      *dest;
 
-	dest = (time_t *)G_STRUCT_MEMBER_P (dest_struct, offset);
+	dest = (guint32 *)G_STRUCT_MEMBER_P (dest_struct, offset);
 	*dest = parse_seconds (data);
 	
 	return TRUE;

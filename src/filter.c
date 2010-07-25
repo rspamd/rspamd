@@ -110,7 +110,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const cha
 
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
-	debug_task ("got %.2f score for metric %s, factor: %f", s->score, metric->name, w);
+	debug_task ("symbol %s, score %.2f, metric %s, factor: %f", symbol, s->score, metric->name, w);
 	
 }
 

@@ -525,9 +525,26 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 }
 
 static void
-process_text_part (struct worker_task *task, GByteArray * part_content, GMimeContentType * type, gboolean is_empty)
+process_text_part (struct worker_task *task, GByteArray *part_content, GMimeContentType *type,
+		GMimeObject *part, GMimeObject *parent, gboolean is_empty)
 {
 	struct mime_text_part          *text_part;
+	const char                     *cd;
+
+	/* Skip attachements */
+#ifndef GMIME24
+	cd = g_mime_part_get_content_disposition (GMIME_PART (part));
+	if (cd && g_ascii_strcasecmp (cd, "attachment") == 0) {
+		debug_task ("skip attachments for checking as text parts");
+		return;
+	}
+#else
+	cd = g_mime_object_get_disposition (GMIME_OBJECT (part));
+	if (cd && g_ascii_strcasecmp (cd, GMIME_DISPOSITION_ATTACHMENT) == 0) {
+		debug_task ("skip attachments for checking as text parts");
+		return;
+	}
+#endif
 
 	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
 		debug_task ("got urls from text/html part");
@@ -544,6 +561,7 @@ process_text_part (struct worker_task *task, GByteArray * part_content, GMimeCon
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
+		text_part->parent = parent;
 
 		text_part->html_urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
 		text_part->urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
@@ -572,6 +590,7 @@ process_text_part (struct worker_task *task, GByteArray * part_content, GMimeCon
 
 		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = FALSE;
+		text_part->parent = parent;
 		if (is_empty) {
 			text_part->is_empty = TRUE;
 			text_part->orig = NULL;
@@ -645,6 +664,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	}
 	else if (GMIME_IS_MULTIPART (part)) {
 		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
+		task->parser_parent_part = part;
 #ifndef GMIME24	
 		debug_task ("detected multipart part");
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
@@ -656,7 +676,6 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			return;
 		}
 #endif
-		/* XXX: do nothing with multiparts in gmime 2.4 */
 	}
 	else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
@@ -688,10 +707,11 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
+				mime_part->parent = task->parser_parent_part;
 				debug_task ("found part with content-type: %s/%s", type->type, type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
 				/* Skip empty parts */
-				process_text_part (task, part_content, type, (part_content->len <= 0));
+				process_text_part (task, part_content, type, part, task->parser_parent_part, (part_content->len <= 0));
 			}
 			else {
 				msg_warn ("write to stream failed: %d, %s", errno, strerror (errno));
@@ -762,6 +782,12 @@ process_message (struct worker_task *task)
 #ifdef GMIME24
 		g_mime_message_foreach (message, mime_foreach_callback, task);
 #else
+		/*
+		 * This is rather strange, but gmime 2.2 do NOT pass top-level part to foreach callback
+		 * so we need to set up parent part by hands
+		 */
+		task->parser_parent_part = g_mime_message_get_mime_part (message);
+		g_object_unref (task->parser_parent_part);
 		g_mime_message_foreach_part (message, mime_foreach_callback, task);
 #endif
 

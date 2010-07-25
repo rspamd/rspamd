@@ -209,6 +209,7 @@ void
 init_lua_filters (struct config_file *cfg)
 {
 	struct config_file            **pcfg;
+	gpointer                       *plogger;
 	GList                          *cur, *tmp;
 	struct script_module           *module;
     struct statfile                *st;
@@ -224,11 +225,17 @@ init_lua_filters (struct config_file *cfg)
 				continue;
 			}
 
-			/* Call module init function */
+			/* Initialize config structure */
 			pcfg = lua_newuserdata (L, sizeof (struct config_file *));
 			lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
 			lua_setglobal (L, "rspamd_config");
+			/* Initialize logger */
+			plogger = lua_newuserdata (L, sizeof (gpointer));
+			lua_setclass (L, "rspamd{logger}", -1);
+			*plogger = NULL;
+			lua_setglobal (L, "rspamd_log");
+
 			/* do the call (1 arguments, 1 result) */
 			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
 				msg_info ("init of %s failed: %s", module->path, lua_tostring (L, -1));

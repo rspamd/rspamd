@@ -582,6 +582,22 @@ check_negative_dynamic_item (struct worker_task *task, struct symbols_cache *cac
 	return FALSE;
 }
 
+static gboolean
+check_debug_symbol (struct config_file *cfg, const char *symbol)
+{
+	GList                         *cur;
+
+	cur = cfg->debug_symbols;
+	while (cur) {
+		if (strcmp (symbol, (const char *)cur->data) == 0) {
+			return TRUE;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
 struct symbol_callback_data {
 	enum {
 		CACHE_STATE_NEGATIVE,
@@ -770,7 +786,15 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 			msg_warn ("gettimeofday failed: %s", strerror (errno));
 		}
 #endif
-		item->func (task, item->user_data);
+		if (G_UNLIKELY (check_debug_symbol (task->cfg, item->s->symbol))) {
+			rspamd_log_debug ();
+			item->func (task, item->user_data);
+			rspamd_log_nodebug ();
+		}
+		else {
+			item->func (task, item->user_data);
+		}
+
 
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID

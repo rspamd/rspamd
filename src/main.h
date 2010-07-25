@@ -195,6 +195,7 @@ struct worker_task {
     struct rspamd_async_session* s;								/**< async session object							*/
 	int parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
+	GMimeObject *parser_parent_part;							/**< current parent part							*/
 	InternetAddressList *rcpts;									/**< list of all recipients 						*/
 	GList *parts;												/**< list of parsed parts							*/
 	GList *text_parts;											/**< list of text parts								*/

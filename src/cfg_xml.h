@@ -74,6 +74,7 @@ void rspamd_xml_error	(GMarkupParseContext		*context,
 /* Handlers */
 /* Basic xml parsing functions */
 gboolean xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
+gboolean xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);
 
 /* Numeric params */
 gboolean xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset);

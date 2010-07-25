@@ -48,6 +48,9 @@ typedef struct rspamd_logger_s {
 	int                      fd;
 	gboolean                 is_buffered;
 	gboolean                 enabled;
+	gboolean                 is_debug;
+	gboolean                 throttling;
+	time_t                   throttling_time;
 	enum rspamd_log_type     type;
 	pid_t                    pid;
 	enum process_type		 process_type;
@@ -118,15 +121,16 @@ direct_write_log_line (void *data, int count, gboolean is_iov)
 			}
 			else if (errno == EFAULT || errno == EINVAL || errno == EFBIG || errno == ENOSPC) {
 				/* Rare case */
-				if (write (rspamd_log->fd, errmsg, r) == -1) {
-					/* Don't know what to do */
-					exit (EXIT_FAILURE);
-				}
+				rspamd_log->throttling = TRUE;
+				rspamd_log->throttling_time = time (NULL);
 			}
 			else if (errno == EPIPE) {
 				/* We write to some pipe and it disappears, disable logging */
 				rspamd_log->enabled = FALSE;
 			}
+		}
+		else if (rspamd_log->throttling) {
+			rspamd_log->throttling = FALSE;
 		}
 	}
 }
@@ -421,6 +425,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 	uint32_t                        cksum;
 	size_t                          mlen;
 	const char                     *cptype = NULL;
+	gboolean                        got_time = FALSE;
 
 	if (! rspamd_log->enabled) {
 		return;
@@ -428,6 +433,18 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 
 
 	if (forced || log_level <= rspamd_log->cfg->log_level) {
+		/* Check throttling due to write errors */
+		if (rspamd_log->throttling) {
+			now = time (NULL);
+			if (rspamd_log->throttling_time != now) {
+				rspamd_log->throttling_time = now;
+				got_time = TRUE;
+			}
+			else {
+				/* Do not try to write to file too often while throtling */
+				return;
+			}
+		}
 		/* Check repeats */
 		mlen = strlen (message);
 		cksum = rspamd_log_calculate_cksum (message, mlen);
@@ -476,7 +493,10 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 			}
 		}
 
-		now = time (NULL);
+		if (! got_time) {
+			now = time (NULL);
+		}
+
 		tms = localtime (&now);
 
 		strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
@@ -527,7 +547,7 @@ rspamd_conditional_debug (uint32_t addr, const char *function, const char *fmt, 
 	va_list                         vp;
     u_char                         *end;
 
-	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG || 
+	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG || rspamd_log->is_debug ||
 			(rspamd_log->debug_ip != NULL && radix32tree_find (rspamd_log->debug_ip, ntohl (addr)) != RADIX_NO_VALUE)) {
 
 		va_start (vp, fmt);
@@ -544,4 +564,16 @@ rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level, con
 	if (rspamd_log->enabled) {
 		rspamd_log->log_func (log_domain, NULL, log_level, message, FALSE, rspamd_log->cfg);
 	}
+}
+
+void
+rspamd_log_debug ()
+{
+	rspamd_log->is_debug = TRUE;
+}
+
+void
+rspamd_log_nodebug ()
+{
+	rspamd_log->is_debug = FALSE;
 }

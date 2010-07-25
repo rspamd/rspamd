@@ -929,6 +929,9 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 	struct mime_text_part          *p1, *p2;
 	GList                          *cur;
 	struct expression_argument     *arg;
+	GMimeObject                    *parent;
+	const GMimeContentType         *ct;
+
 
 	if (args == NULL) {
 		debug_task ("no threshold is specified, assume it 100");
@@ -953,6 +956,19 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			return FALSE;
 		}
 		p2 = cur->data;
+		/* First of all check parent object */
+		if (p1->parent && p1->parent == p2->parent) {
+			parent = p1->parent;
+			ct = g_mime_object_get_content_type (parent);
+			if (ct == NULL || ! g_mime_content_type_is_type (ct, "multipart", "alternative")) {
+				debug_task ("two parts are not belong to multipart/alternative container, skip check");
+				return FALSE;
+			}
+		}
+		else {
+			debug_task ("message contains two parts but they are in different multi-parts");
+			return FALSE;
+		}
 		if (!p1->is_empty && !p2->is_empty) {
 			diff = fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);

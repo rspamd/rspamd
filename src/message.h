@@ -15,6 +15,7 @@ struct controller_session;
 struct mime_part {
 	GMimeContentType *type;
 	GByteArray *content;
+	GMimeObject *parent;
 };
 
 struct mime_text_part {
@@ -30,6 +31,7 @@ struct mime_text_part {
 	GTree *urls;
 	GTree *html_urls;
 	fuzzy_hash_t *fuzzy;
+	GMimeObject *parent;
 };
 
 struct received_header {

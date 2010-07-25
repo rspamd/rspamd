@@ -62,6 +62,15 @@ void rspamd_common_log_function (GLogLevelFlags log_level, const char *function,
  */
 void rspamd_conditional_debug (uint32_t addr, const char *function, const char *fmt, ...) ;
 
+/**
+ * Temporary turn on debug
+ */
+void rspamd_log_debug ();
+
+/**
+ * Turn off debug
+ */
+void rspamd_log_nodebug ();
 
 /* Typical functions */
 
