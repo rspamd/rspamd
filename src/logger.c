@@ -246,6 +246,9 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct co
 	/* Set up conditional logging */
 	if (cfg->debug_ip_map != NULL) {
 		/* Try to add it as map first of all */
+		if (rspamd_log->debug_ip) {
+			radix_tree_free (rspamd_log->debug_ip);
+		}
 		rspamd_log->debug_ip = radix_tree_create ();
 		if (!add_map (cfg->debug_ip_map, read_radix_list, fin_radix_list, (void **)&rspamd_log->debug_ip)) {
 			/* Try to parse it as list */
@@ -276,6 +279,10 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct co
 			}
 			g_strfreev (strvec);
 		}
+	}
+	else if (rspamd_log->debug_ip) {
+		radix_tree_free (rspamd_log->debug_ip);
+		rspamd_log->debug_ip = NULL;
 	}
 }
 
