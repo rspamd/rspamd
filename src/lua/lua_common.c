@@ -124,7 +124,7 @@ static int
 lua_logger_err (lua_State * L)
 {
 	const char                     *msg;
-	msg = luaL_checkstring (L, 1);
+	msg = luaL_checkstring (L, 2);
 	msg_err (msg);
 	return 1;
 }
@@ -133,7 +133,7 @@ static int
 lua_logger_warn (lua_State * L)
 {
 	const char                     *msg;
-	msg = luaL_checkstring (L, 1);
+	msg = luaL_checkstring (L, 2);
 	msg_warn (msg);
 	return 1;
 }
@@ -142,7 +142,7 @@ static int
 lua_logger_info (lua_State * L)
 {
 	const char                     *msg;
-	msg = luaL_checkstring (L, 1);
+	msg = luaL_checkstring (L, 2);
 	msg_info (msg);
 	return 1;
 }
@@ -151,7 +151,7 @@ static int
 lua_logger_debug (lua_State * L)
 {
 	const char                     *msg;
-	msg = luaL_checkstring (L, 1);
+	msg = luaL_checkstring (L, 2);
 	msg_debug (msg);
 	return 1;
 }
