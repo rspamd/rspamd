@@ -118,6 +118,37 @@ lua_set_table_index (lua_State * L, const char *index, const char *value)
 	lua_settable (L, -3);
 }
 
+static void
+lua_common_log (GLogLevelFlags level, lua_State *L, const char *msg)
+{
+	lua_Debug                      d;
+	char                           func_buf[128], *p;
+
+	if (lua_getstack (L, 1, &d) == 1) {
+		(void)lua_getinfo(L, "Sl", &d);
+		if ((p = strrchr (d.short_src, '/')) == NULL) {
+			p = d.short_src;
+		}
+		else {
+			p ++;
+		}
+		rspamd_snprintf (func_buf, sizeof (func_buf), "%s:%d", p, d.currentline);
+		if (level == G_LOG_LEVEL_DEBUG) {
+			rspamd_conditional_debug(-1, func_buf, msg);
+		}
+		else {
+			rspamd_common_log_function(level, func_buf, msg);
+		}
+	}
+	else {
+		if (level == G_LOG_LEVEL_DEBUG) {
+			rspamd_conditional_debug(-1, __FUNCTION__, msg);
+		}
+		else {
+			rspamd_common_log_function(level, __FUNCTION__, msg);
+		}
+	}
+}
 
 /*** Logger interface ***/
 static int
@@ -125,7 +156,7 @@ lua_logger_err (lua_State * L)
 {
 	const char                     *msg;
 	msg = luaL_checkstring (L, 2);
-	msg_err (msg);
+	lua_common_log (G_LOG_LEVEL_CRITICAL, L, msg);
 	return 1;
 }
 
@@ -134,7 +165,7 @@ lua_logger_warn (lua_State * L)
 {
 	const char                     *msg;
 	msg = luaL_checkstring (L, 2);
-	msg_warn (msg);
+	lua_common_log (G_LOG_LEVEL_WARNING, L, msg);
 	return 1;
 }
 
@@ -143,7 +174,7 @@ lua_logger_info (lua_State * L)
 {
 	const char                     *msg;
 	msg = luaL_checkstring (L, 2);
-	msg_info (msg);
+	lua_common_log (G_LOG_LEVEL_INFO, L, msg);
 	return 1;
 }
 
@@ -152,7 +183,7 @@ lua_logger_debug (lua_State * L)
 {
 	const char                     *msg;
 	msg = luaL_checkstring (L, 2);
-	msg_debug (msg);
+	lua_common_log (G_LOG_LEVEL_DEBUG, L, msg);
 	return 1;
 }
 
