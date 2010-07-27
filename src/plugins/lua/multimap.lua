@@ -62,7 +62,7 @@ function add_rule(params)
 		type = 'ip',
 		header = nil,
 		pattern = nil,
-		file = nil,
+		map = nil,
 		symbol = nil
 	}
 	for _,param in ipairs(params) do
@@ -84,8 +84,8 @@ function add_rule(params)
 			newrule['header'] = value
 		elseif name == 'pattern' then
 			newrule['pattern'] = value
-		elseif name == 'file' then
-			newrule['file'] = value
+		elseif name == 'map' then
+			newrule['map'] = value
 		elseif name == 'symbol' then
 			newrule['symbol'] = value
 		else	
@@ -94,14 +94,14 @@ function add_rule(params)
 		end
 
 	end
-	if not newrule['symbol'] or not newrule['file'] or not newrule['symbol'] then
+	if not newrule['symbol'] or not newrule['map'] or not newrule['symbol'] then
 		rspamd_logger:err('incomplete rule')
 		return 0
 	end
 	if newrule['type'] == 'ip' then
-		newrule['ips'] = rspamd_config:add_radix_map (newrule['file'])
+		newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
 	else
-		newrule['hash'] = rspamd_config:add_hash_map (newrule['file'])
+		newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
 	end
 	table.insert(rules, newrule)
 	return 1
@@ -109,8 +109,9 @@ end
 
 local opts =  rspamd_config:get_all_opt('multimap')
 if opts then
-	for opt,value in pairs(opts) do
-		if opt == 'rule' then
+	local strrules = opts['rule']
+	if strrules then
+		for _,value in ipairs(strrules) do
 			local params = split(value, ',')
 			if not add_rule (params) then
 				rspamd_logger:err('cannot add rule: "'..value..'"')
