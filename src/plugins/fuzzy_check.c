@@ -476,15 +476,54 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
 }
 
+G_INLINE_FUNC void
+register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
+{
+	struct fuzzy_client_session    *session;
+	struct storage_server          *selected;
+	int                             sock;
+
+	/* Get upstream */
+#ifdef HAVE_CLOCK_GETTIME
+	selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
+			sizeof (struct storage_server), task->ts.tv_sec,
+			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, h->hash_pipe, sizeof (h->hash_pipe));
+#else
+	selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
+			sizeof (struct storage_server), task->tv.tv_sec,
+			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, h->hash_pipe, sizeof (h->hash_pipe));
+#endif
+	if (selected) {
+		if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
+			msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
+		}
+		else {
+			/* Create session for a socket */
+			session = memory_pool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
+			event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback, session);
+			session->tv.tv_sec = IO_TIMEOUT;
+			session->tv.tv_usec = 0;
+			session->state = 0;
+			session->h = h;
+			session->task = task;
+			session->fd = sock;
+			session->server = selected;
+			event_add (&session->ev, &session->tv);
+			register_async_event (task->s, fuzzy_io_fin, session, FALSE);
+			task->save.saved++;
+		}
+	}
+}
+
 /* This callback is called when we check message via fuzzy hashes storage */
 static void
 fuzzy_symbol_callback (struct worker_task *task, void *unused)
 {
 	struct mime_text_part          *part;
-	struct fuzzy_client_session    *session;
-	struct storage_server          *selected;
+	struct mime_part               *mime_part;
 	GList                          *cur;
-	int                             sock;
+	fuzzy_hash_t                   *fake_fuzzy;
+
 
 	/* Check whitelist */
 	if (fuzzy_module_ctx->whitelist && task->from_addr.s_addr != 0) {
@@ -511,50 +550,91 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 			continue;
 		}
 
-		/* Get upstream */
-#ifdef HAVE_CLOCK_GETTIME
-		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
-			sizeof (struct storage_server), task->ts.tv_sec,
-			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
-#else
-		selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
-			sizeof (struct storage_server), task->tv.tv_sec,
-			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
-#endif
-		if (selected) {
-			if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
-				msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
-			}
-			else {
-				/* Create session for a socket */
-				session = memory_pool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
-				event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback, session);
-				session->tv.tv_sec = IO_TIMEOUT;
-				session->tv.tv_usec = 0;
-				session->state = 0;
-				session->h = part->fuzzy;
-				session->task = task;
-				session->fd = sock;
-				session->server = selected;
-				event_add (&session->ev, &session->tv);
-				register_async_event (task->s, fuzzy_io_fin, session, FALSE);
-				task->save.saved++;
-			}
+		register_fuzzy_call (task, part->fuzzy);
+
+		cur = g_list_next (cur);
+	}
+
+	cur = task->parts;
+	while (cur) {
+		mime_part = cur->data;
+		if (mime_part->content->len > 0 && mime_part->checksum != NULL) {
+			/* Construct fake fuzzy hash */
+			fake_fuzzy = memory_pool_alloc (task->task_pool, sizeof (fuzzy_hash_t));
+			fake_fuzzy->block_size = 0;
+			g_strlcpy (fake_fuzzy->hash_pipe, mime_part->checksum, sizeof (fake_fuzzy->hash_pipe));
+			register_fuzzy_call (task, fake_fuzzy);
 		}
 		cur = g_list_next (cur);
 	}
+}
+
+G_INLINE_FUNC gboolean
+register_fuzzy_controller_call (struct controller_session *session, struct worker_task *task, fuzzy_hash_t *h,
+		int cmd, int value, int flag, int *saved)
+{
+	struct fuzzy_learn_session     *s;
+	struct storage_server          *selected;
+	int                             sock, r;
+	char                            out_buf[BUFSIZ];
+
+	/* Get upstream */
+#ifdef HAVE_CLOCK_GETTIME
+	selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
+			sizeof (struct storage_server), task->ts.tv_sec,
+			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, h->hash_pipe, sizeof (h->hash_pipe));
+#else
+	selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
+			sizeof (struct storage_server), task->tv.tv_sec,
+			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, h->hash_pipe, sizeof (h->hash_pipe));
+#endif
+	if (selected) {
+		/* Create UDP socket */
+		if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
+			msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
+			session->state = STATE_REPLY;
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return FALSE;
+			}
+			free_task (task, FALSE);
+			return FALSE;
+		}
+		else {
+			/* Socket is made, create session */
+			s = memory_pool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
+			event_set (&s->ev, sock, EV_WRITE, fuzzy_learn_callback, s);
+			s->tv.tv_sec = IO_TIMEOUT;
+			s->tv.tv_usec = 0;
+			s->task = task;
+			s->h = memory_pool_alloc (session->session_pool, sizeof (fuzzy_hash_t));
+			memcpy (s->h, h, sizeof (fuzzy_hash_t));
+			s->session = session;
+			s->server = selected;
+			s->cmd = cmd;
+			s->value = value;
+			s->flag = flag;
+			s->saved = saved;
+			s->fd = sock;
+			event_add (&s->ev, &s->tv);
+			(*saved)++;
+			register_async_event (session->s, fuzzy_learn_fin, s, FALSE);
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 static void
 fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 {
 	struct worker_task             *task;
-	struct fuzzy_learn_session     *s;
 	struct mime_text_part          *part;
-	struct storage_server          *selected;
+	struct mime_part               *mime_part;
 	GList                          *cur;
-	int                             sock, r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
+	int                             r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
 	char                            out_buf[BUFSIZ];
+	fuzzy_hash_t                    fake_fuzzy;
 
 	/* Extract arguments */
 	if (session->other_data) {
@@ -597,50 +677,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				cur = g_list_next (cur);
 				continue;
 			}
-			/* Get upstream */
-#ifdef HAVE_CLOCK_GETTIME
-			selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
-				sizeof (struct storage_server), task->ts.tv_sec,
-				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
-#else
-			selected = (struct storage_server *)get_upstream_by_hash (fuzzy_module_ctx->servers, fuzzy_module_ctx->servers_num,
-				sizeof (struct storage_server), task->tv.tv_sec,
-				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
-#endif
-			if (selected) {
-				/* Create UDP socket */
-				if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
-					msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
-					session->state = STATE_REPLY;
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return;
-					}
-					free_task (task, FALSE);
-					return;
-				}
-				else {
-					/* Socket is made, create session */
-					s = memory_pool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
-					event_set (&s->ev, sock, EV_WRITE, fuzzy_learn_callback, s);
-					s->tv.tv_sec = IO_TIMEOUT;
-					s->tv.tv_usec = 0;
-					s->task = task;
-					s->h = memory_pool_alloc (session->session_pool, sizeof (fuzzy_hash_t));
-					memcpy (s->h, part->fuzzy, sizeof (fuzzy_hash_t));
-					s->session = session;
-					s->server = selected;
-					s->cmd = cmd;
-					s->value = value;
-					s->flag = flag;
-					s->saved = saved;
-					s->fd = sock;
-					event_add (&s->ev, &s->tv);
-					(*saved)++;
-					register_async_event (session->s, fuzzy_learn_fin, s, FALSE);
-				}
-			}
-			else {
+			if (! register_fuzzy_controller_call (session, task, part->fuzzy, cmd, value, flag, saved)) {
 				/* Cannot write hash */
 				session->state = STATE_REPLY;
 				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
@@ -649,6 +686,27 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				}
 				free_task (task, FALSE);
 				return;
+			}
+			cur = g_list_next (cur);
+		}
+		cur = task->parts;
+		while (cur) {
+			mime_part = cur->data;
+			if (mime_part->content->len > 0 && mime_part->checksum != NULL) {
+				/* Construct fake fuzzy hash */
+				fake_fuzzy.block_size = 0;
+				g_strlcpy (fake_fuzzy.hash_pipe, mime_part->checksum, sizeof (fake_fuzzy.hash_pipe));
+				if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
+					/* Cannot write hash */
+					session->state = STATE_REPLY;
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return;
+					}
+					free_task (task, FALSE);
+					return;
+				}
+				msg_info ("save hash of image: [%s]", mime_part->checksum);
 			}
 			cur = g_list_next (cur);
 		}
