@@ -268,7 +268,7 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			d->in_buf->data = fstralloc (d->pool, BUFSIZ);
 		}
 		else {
-			d->in_buf->data = fstralloc (d->pool, d->nchars);
+			d->in_buf->data = fstralloc (d->pool, d->nchars + 1);
 		}
 		d->in_buf->pos = d->in_buf->data->begin;
 	}
@@ -535,7 +535,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 		/* Resize input buffer if needed */
 		if (policy == BUFFER_CHARACTER && nchars != 0) {
 			if (d->in_buf && d->in_buf->data->size < nchars) {
-				tmp = fstralloc (d->pool, d->nchars);
+				tmp = fstralloc (d->pool, d->nchars + 1);
 				memcpy (tmp->begin, d->in_buf->data->begin, d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;
 				tmp->len = d->in_buf->data->len;
