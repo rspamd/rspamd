@@ -280,6 +280,10 @@ reread_config (struct rspamd_main *rspamd)
 				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 			}
 			config_logger (rspamd, FALSE);
+			/* Pre-init of cache */
+			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
+			rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
+			rspamd->cfg->cache->cfg = rspamd->cfg;
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
 
