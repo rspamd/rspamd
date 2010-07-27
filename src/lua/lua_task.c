@@ -471,7 +471,7 @@ lua_task_get_from_ip (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	
 	if (task) {
-		if (task->from_addr.s_addr != 0) {
+		if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 			lua_pushstring (L, inet_ntoa (task->from_addr));
 			return 1;
 		}
@@ -487,7 +487,7 @@ lua_task_get_from_ip_num (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	
 	if (task) {
-		if (task->from_addr.s_addr != 0) {
+		if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 			lua_pushinteger (L, ntohl (task->from_addr.s_addr));
 			return 1;
 		}
@@ -503,7 +503,7 @@ lua_task_get_client_ip_num (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	
 	if (task) {
-		if (task->client_addr.s_addr != 0) {
+		if (task->client_addr.s_addr != INADDR_NONE && task->client_addr.s_addr != INADDR_ANY) {
 			lua_pushinteger (L, ntohl (task->client_addr.s_addr));
 			return 1;
 		}
