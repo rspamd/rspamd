@@ -349,6 +349,7 @@ fuzzy_io_callback (int fd, short what, void *arg)
 		cmd.value = 0;
 		memcpy (cmd.hash, session->h->hash_pipe, sizeof (cmd.hash));
 		cmd.cmd = FUZZY_CHECK;
+		cmd.flag = 0;
 		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
 			goto err;
 		}
@@ -560,8 +561,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 		mime_part = cur->data;
 		if (mime_part->content->len > 0 && mime_part->checksum != NULL) {
 			/* Construct fake fuzzy hash */
-			fake_fuzzy = memory_pool_alloc (task->task_pool, sizeof (fuzzy_hash_t));
-			fake_fuzzy->block_size = 0;
+			fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
 			g_strlcpy (fake_fuzzy->hash_pipe, mime_part->checksum, sizeof (fake_fuzzy->hash_pipe));
 			register_fuzzy_call (task, fake_fuzzy);
 		}
@@ -695,6 +695,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			if (mime_part->content->len > 0 && mime_part->checksum != NULL) {
 				/* Construct fake fuzzy hash */
 				fake_fuzzy.block_size = 0;
+				bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
 				g_strlcpy (fake_fuzzy.hash_pipe, mime_part->checksum, sizeof (fake_fuzzy.hash_pipe));
 				if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
 					/* Cannot write hash */

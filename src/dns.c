@@ -762,7 +762,7 @@ end:
 static gint
 dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
 {
-	guint8 *p = *pos;
+	guint8 *p = *pos, parts;
 	guint16 type, datalen, txtlen, copied;
 	gboolean parsed = FALSE;
 
@@ -831,9 +831,11 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
 			/* Now we should compose data from parts */
 			copied = 0;
-			while (copied < datalen) {
+			parts = 0;
+			while (copied + parts < datalen) {
 				txtlen = *p;
-				if (txtlen + copied < datalen) {
+				if (txtlen + copied + parts <= datalen) {
+					parts ++;
 					memcpy (elt->txt.data + copied, p + 1, txtlen);
 					copied += txtlen;
 					p += txtlen + 1;
