@@ -705,6 +705,13 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 		}
 	}
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
+	if ((regexp_flags & G_REGEX_RAW) != 0) {
+		result->raw_regexp = result->regexp;
+	}
+	else {
+		result->raw_regexp = g_regex_new (begin, regexp_flags | G_REGEX_RAW, 0, &err);
+		memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->raw_regexp);
+	}
 	*end = '/';
 	result->regexp_text = memory_pool_strdup (pool, start);
 	memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->regexp);
@@ -714,14 +721,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 		msg_warn ("could not read regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
-	if ((regexp_flags & G_REGEX_RAW) != 0) {
-		result->raw_regexp = result->regexp;
-	}
-	else {
-		result->raw_regexp = g_regex_new (begin, regexp_flags | G_REGEX_RAW, 0, &err);
-		memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->raw_regexp);
-	}
-	*end = '/';
+
 
 	if (result->raw_regexp == NULL || err != NULL) {
 		msg_warn ("could not read raw regexp: %s while reading regexp %s", err->message, src);

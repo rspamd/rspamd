@@ -182,7 +182,7 @@ counter_write_callback (gpointer key, gpointer value, void *data)
 	char                            out_buf[128];
 	int                             r;
 
-	r = rspamd_snprintf (out_buf, sizeof (out_buf), "%s: %llu" CRLF, name, (unsigned long long int)cd->value);
+	r = rspamd_snprintf (out_buf, sizeof (out_buf), "%s: %ul" CRLF, name, (unsigned long int)cd->value);
 	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE)) {
 		msg_warn ("cannot write to socket");
 	}
@@ -229,7 +229,7 @@ write_whole_statfile (struct controller_session *session, char *symbol, struct c
 		}
 	}
 
-	i = rspamd_snprintf (out_buf, sizeof (out_buf), "%udL %udL %udL" CRLF, rev, ti, pos);
+	i = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %uL" CRLF, rev, ti, pos);
 	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, i, TRUE, FALSE)) {
 		return FALSE;
 	}

@@ -139,7 +139,7 @@ unmap_cache_file (gpointer arg)
 static                          gboolean
 mmap_cache_file (struct symbols_cache *cache, int fd, memory_pool_t *pool)
 {
-	void                           *map;
+	guint8                         *map;
 	int                             i;
 	GList                          *cur;
 	struct cache_item              *item;
@@ -158,14 +158,14 @@ mmap_cache_file (struct symbols_cache *cache, int fd, memory_pool_t *pool)
 	cur = g_list_first (cache->negative_items);
 	while (cur) {
 		item = cur->data;
-		item->s = ((struct saved_cache_item *)map) + i;
+		item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
 		cur = g_list_next (cur);
 		i ++;
 	}
 	cur = g_list_first (cache->static_items);
 	while (cur) {
 		item = cur->data;
-		item->s = ((struct saved_cache_item *)map) + i;
+		item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
 		cur = g_list_next (cur);
 		i ++;
 	}
@@ -201,7 +201,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd, me
 	cur = g_list_first (cache->negative_items);
 	while (cur) {
 		item = cur->data;
-		if (write (fd, &item->s, sizeof (struct saved_cache_item)) == -1) {
+		if (write (fd, item->s, sizeof (struct saved_cache_item)) == -1) {
 			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
 			close (fd);
 			g_checksum_free (cksum);
@@ -213,7 +213,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd, me
 	cur = g_list_first (cache->static_items);
 	while (cur) {
 		item = cur->data;
-		if (write (fd, &item->s, sizeof (struct saved_cache_item)) == -1) {
+		if (write (fd, item->s, sizeof (struct saved_cache_item)) == -1) {
 			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
 			close (fd);
 			g_checksum_free (cksum);
