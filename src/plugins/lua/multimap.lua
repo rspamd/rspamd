@@ -27,6 +27,19 @@ function split(str, delim, maxNb)
 	return result
 end
 
+function rbl_cb(task, to_resolve, results, err)
+	if results then
+		local _,_,o4,o3,o2,o1,in_rbl = string.find(to_resolve, '(%d+)%.(%d+)%.(%d+)%.(%d+)%.(.+)')
+		-- Get corresponding rule by rbl name
+		for _,rule in ipairs(rules) do
+			if rule['map'] == in_rbl then
+				task:insert_result(rule['symbol'], 1, rule['map'])
+				return
+			end
+		end
+	end
+end
+
 function check_multimap(task)
 	for _,rule in ipairs(rules) do
 		if rule['type'] == 'ip' then
@@ -53,7 +66,14 @@ function check_multimap(task)
 					end
 				end
 			end
-		end
+		elseif rule['type'] == 'dnsbl' then
+			local ip = task:get_from_ip()
+			if ip then
+				local _,_,o1,o2,o3,o4 = string.find(ip, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
+				local rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rule['map']
+				task:resolve_dns_a(rbl_str, 'rbl_cb')
+			end
+ 		end
 	end
 end
 
@@ -74,6 +94,8 @@ function add_rule(params)
 		if name == 'type' then
 			if value == 'ip' then
 				newrule['type'] = 'ip'
+			elseif value == 'dnsbl' then
+				newrule['type'] = 'dnsbl'
 			elseif value == 'header' then
 				newrule['type'] = 'header'
 			else
@@ -100,7 +122,7 @@ function add_rule(params)
 	end
 	if newrule['type'] == 'ip' then
 		newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
-	else
+	elseif newrule['type'] == 'header' then
 		newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
 	end
 	table.insert(rules, newrule)
