@@ -1898,6 +1898,41 @@ rbl = pbl.spamhaus.org:RECEIVED_PBL
 @end example
 @end itemize
 
+@section Multimap.
+
+Multimap is lua module that provides functionality to operate with different types
+of lists. Now it can works with maps of strings for extracting MIME headers and match
+them using lists. Also it is possible to create ip (or ipnetwork) maps for
+checking ip address from which we receive that mail. DNS black lists are also
+supported.
+Multimap module works with a set of rules. Each rule can be one of three types:
+@enumerate 1
+@item @emph{ip}: is used for lists of ip addresses
+@item @emph{header}: is used to match headers
+@item @emph{dnsbl}: is used for dns lists of ip addresses
+@end enumerate
+Basically each rule is a line separated by commas containing rule parameters.
+Each parameter has name and value, separated by equal sign. Here is list of
+parameters (mandatory parameters are marked with @strong{*}):
+@itemize @bullet
+@item @strong{*} @emph{type}: rule type
+@item @strong{*} @emph{map}: path to map (in uri format file:// or http://) or
+name of dns blacklist
+@item @strong{*} @emph{symbol}: symbol to insert
+@item @emph{header}: header to use for header rules
+@item @emph{pattern}: pattern that would be used to extract specific part of
+header
+@end itemize
+@noindent
+Here is an example of multimap rules:
+@example
+<module name="multimap">
+	<option name="rule">type = header, header = To, pattern = @(.+)>?$, map = file:///var/db/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST</option>
+	<option name="rule">type = ip, map = file:///var/db/rspamd/ip_test, symbol = R_IP_WHITELIST</option>
+	<option name="rule">type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL</option>
+</module>
+@end example
+
 @section Conclusion.
 
 Rspamd is shipped with some ammount of modules that provides basic functionality
