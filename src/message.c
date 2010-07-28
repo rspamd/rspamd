@@ -709,7 +709,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part->content = part_content;
 				mime_part->parent = task->parser_parent_part;
 				/* Extract checksums for some types */
-				if (g_ascii_strcasecmp (type->type, "image") == 0) {
+				if (g_ascii_strcasecmp (type->type, "image") == 0 && part_content->len > 0) {
 					mime_part->checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, part_content->data, part_content->len);
 					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, mime_part->checksum);
 				}

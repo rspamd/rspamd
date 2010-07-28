@@ -546,7 +546,7 @@ parse_expression (memory_pool_t * pool, char *line)
 struct rspamd_regexp           *
 parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 {
-	char                           *begin, *end, *p, *src;
+	char                           *begin, *end, *p, *src, *start;
 	struct rspamd_regexp           *result, *check;
 	int                             regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
 	GError                         *err = NULL;
@@ -561,6 +561,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 		msg_warn ("got empty regexp");
 		return NULL;
 	}
+	start = line;
 	/* First try to find header name */
 	begin = strchr (line, '/');
 	if (begin != NULL) {
@@ -705,7 +706,7 @@ parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
 	}
 	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
 	*end = '/';
-	result->regexp_text = memory_pool_strdup (pool, line);
+	result->regexp_text = memory_pool_strdup (pool, start);
 	memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->regexp);
 
 	if (result->regexp == NULL || err != NULL) {
