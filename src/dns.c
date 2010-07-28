@@ -669,7 +669,7 @@ static gboolean
 dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_reply *rep, int *remain, gboolean make_name)
 {
 	guint16 namelen = 0;
-	guint8 *p = *pos, *begin = *pos, *l, *t;
+	guint8 *p = *pos, *begin = *pos, *l, *t, *end = *pos + *remain;
 	guint16 llen;
 	gint offset = -1;
 	gint length = *remain;
@@ -688,7 +688,7 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 		else if (llen & DNS_COMPRESSION_BITS) {
 			ptrs ++;
 			memcpy (&llen, p, sizeof (guint16));
-			l = decompress_label (in, &llen, length + (*pos - in));
+			l = decompress_label (in, &llen, end - in);
 			if (l == NULL) {
 				msg_info ("invalid DNS pointer");
 				return FALSE;
@@ -702,6 +702,7 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 				return FALSE;
 			}
 			begin = l;
+			length = end - begin;
 			p = l + *l + 1;
 			namelen += *l;
 			labels ++;
@@ -720,6 +721,7 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 	t = (guint8 *)*target;
 	p = *pos;
 	begin = *pos;
+	length = *remain;
 	/* Now copy labels to name */
 	while (p - begin < length) {
 		llen = *p;
@@ -728,8 +730,9 @@ dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_rep
 		}
 		else if (llen & DNS_COMPRESSION_BITS) {
 			memcpy (&llen, p, sizeof (guint16));
-			l = decompress_label (in, &llen, length + (*pos - in));
+			l = decompress_label (in, &llen, end - in);
 			begin = l;
+			length = end - begin;
 			p = l + *l + 1;
 			memcpy (t, l + 1, *l);
 			t += *l;
