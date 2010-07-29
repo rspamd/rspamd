@@ -560,9 +560,9 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct url_regexp_param        *param = data;
 	struct uri                     *url = value;
+	GError                         *err = NULL;
 
-
-	if (g_regex_match (param->regexp, struri (url), 0, NULL) == TRUE) {
+	if (g_regex_match_full (param->regexp, struri (url), -1, 0, 0, NULL, &err) == TRUE) {
 		if (G_UNLIKELY (param->re->is_test)) {
 			msg_info ("process test regexp %s for url %s returned TRUE", struri (url));
 		}
@@ -572,6 +572,9 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	}
 	else if (G_UNLIKELY (param->re->is_test)) {
 		msg_info ("process test regexp %s for url %s returned FALSE", struri (url));
+	}
+	if (err != NULL) {
+		msg_info ("error occured while processing regexp \"%s\": %s", param->re->regexp_text, err->message);
 	}
 
 	return FALSE;
@@ -584,6 +587,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 	struct mime_text_part          *part;
 	GList                          *cur, *headerlist;
 	GRegex                         *regexp;
+	GError                         *err = NULL;
 	struct url_regexp_param         callback_param = {
 		.task = task,
 		.regexp = re->regexp,
@@ -652,7 +656,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			while (cur) {
 				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const char *)cur->data);
 
-				if (cur->data && g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+				if (cur->data && g_regex_match_full (re->regexp, cur->data, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const char *)cur->data);
 					}
@@ -661,6 +665,9 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 				}
 				else if (G_UNLIKELY (re->is_test)) {
 					msg_info ("process test regexp %s for header %s with value '%s' returned FALSE", re->regexp_text, re->header, (const char *)cur->data);
+				}
+				if (err != NULL) {
+					msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
 				}
 				cur = g_list_next (cur);
 			}
@@ -685,7 +692,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 				regexp = re->regexp;
 			}
 
-			if (g_regex_match_full (regexp, part->orig->data, part->orig->len, 0, 0, NULL, NULL) == TRUE) {
+			if (g_regex_match_full (regexp, part->orig->data, part->orig->len, 0, 0, NULL, &err) == TRUE) {
 				if (G_UNLIKELY (re->is_test)) {
 					msg_info ("process test regexp %s for mime part returned TRUE", re->regexp_text);
 				}
@@ -695,6 +702,9 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			else if (G_UNLIKELY (re->is_test)) {
 				msg_info ("process test regexp %s for mime part of length %d returned FALSE", re->regexp_text, (int)part->orig->len);
 			}
+			if (err != NULL) {
+				msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
+			}
 			cur = g_list_next (cur);
 		}
 		task_cache_add (task, re, 0);
@@ -702,7 +712,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
 
-		if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, NULL) == TRUE) {
+		if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, &err) == TRUE) {
 			if (G_UNLIKELY (re->is_test)) {
 				msg_info ("process test regexp %s for message of length %d returned TRUE", re->regexp_text, (int)task->msg->len);
 			}
@@ -711,6 +721,9 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		}
 		else if (G_UNLIKELY (re->is_test)) {
 			msg_info ("process test regexp %s for message of length %d returned FALSE", re->regexp_text, (int)task->msg->len);
+		}
+		if (err != NULL) {
+			msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
 		}
 		task_cache_add (task, re, 0);
 		return 0;
@@ -783,7 +796,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		*c = '\0';
 		debug_task ("found raw header \"%s\" with value \"%s\"", re->header, headerv);
 
-		if (g_regex_match (re->raw_regexp, headerv, 0, NULL) == TRUE) {
+		if (g_regex_match_full (re->raw_regexp, headerv, -1, 0, 0, NULL, &err) == TRUE) {
 			if (re->is_test) {
 				msg_info ("process test regexp %s for raw header %s with value '%s' returned TRUE", re->regexp_text, re->header, headerv);
 			}
@@ -793,6 +806,9 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		}
 		else if (re->is_test) {
 			msg_info ("process test regexp %s for raw header %s with value '%s' returned FALSE", re->regexp_text, re->header, headerv);
+		}
+		if (err != NULL) {
+			msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
 		}
 		*c = t;
 		task_cache_add (task, re, 0);
