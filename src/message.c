@@ -517,7 +517,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 
 	result_array = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
 	result_array->data = res_str;
-	result_array->len = write_bytes + 1;
+	result_array->len = write_bytes;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, res_str);
 	text_part->is_raw = FALSE;
 
