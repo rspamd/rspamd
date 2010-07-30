@@ -941,7 +941,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	}
 
 	if (session->state == STATE_REPLY || session->state == STATE_QUIT) {
-		(void)controller_write_socket (session);
+		return controller_write_socket (session);
 	}
 
 	return TRUE;
