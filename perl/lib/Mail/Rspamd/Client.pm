@@ -35,7 +35,7 @@ $VERSION = "1.02";
 
 my $EOL = "\015\012";
 my $BLANK = $EOL x 2;
-my $PROTOVERSION = 'RSPAMC/1.0';
+my $PROTOVERSION = 'RSPAMC/1.2';
 
 =head1 PUBLIC METHODS
 
@@ -953,14 +953,16 @@ sub _do_rspamc_command {
 	}
 	else {
 		foreach my $line (@lines) {
-			if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+)!) {
+			if ($line =~ m!Metric: (\S+); (\S+); (\S+) / (\S+) (/ (\S+))?!) {
 				$metrics{$1} = {
 					isspam => $2,
 					score => $3 + 0,
 					threshold => $4 + 0,
+					reject_score => $6,
 					symbols => [],
 					urls => [],
 					messages => [],
+					action => 'no action',
 				};
 				$cur_metric = $1;
 			}

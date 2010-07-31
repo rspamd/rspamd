@@ -288,6 +288,7 @@ if ($cmd =~ /(SYMBOLS|PROCESS|CHECK|URLS|EMAILS)/i) {
 elsif ($cmd =~ /(STAT|LEARN|SHUTDOWN|RELOAD|UPTIME|COUNTERS|FUZZY_ADD|FUZZY_DEL|WEIGHTS)/i) {
     $cfg{'command'} = $1;
     $cfg{'control'} = 1;
+	$cfg{'hosts'} = ['localhost:11334'];
 }
 else {
     die "unknown command $cmd";

@@ -771,7 +771,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		msg_info ("bad RR name");
 		return -1;
 	}
-	if (p - *pos >= *remain - sizeof (guint16) * 5) {
+	if (p - *pos >= *remain - sizeof (guint16) * 5 || *remain <= 0) {
 		msg_info ("stripped dns reply");
 		return -1;
 	}

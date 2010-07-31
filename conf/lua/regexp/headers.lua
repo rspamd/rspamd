@@ -77,7 +77,7 @@ reconf['TRACKER_ID'] = '/^[a-z0-9]{6,24}[-_a-z0-9]{2,36}[a-z0-9]{6,24}\\s*\\z/is
 -- Regexp that checks that from header is encoded with base64 (search in raw headers)
 local from_encoded_b64 = 'From=/\\=\\?\\S+\\?B\\?/iX'
 -- From contains only 7bit characters (parsed headers are used)
-local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/H'
+local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
 -- Final rule
 reconf['FROM_EXCESS_BASE64'] = string.format('%s & !%s', from_encoded_b64, from_needs_mime)
 
