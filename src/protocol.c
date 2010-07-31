@@ -519,7 +519,7 @@ show_url_header (struct worker_task *task)
 				c = *(host.begin + host.len);
 				*(host.begin + host.len) = '\0';
 				debug_task ("write url: %s", host.begin);
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, host.begin);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s", host.begin);
 				*(host.begin + host.len) = c;
 			}
 		}
@@ -528,6 +528,8 @@ show_url_header (struct worker_task *task)
 	if (r == 0) {
 		return TRUE;
 	}
+	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
+
 	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
@@ -883,8 +885,11 @@ write_check_reply (struct worker_task *task)
 	
 	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
-	if (! rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
-		return FALSE;
+	if (task->proto_ver >= 12) {
+		r = rspamd_snprintf (outbuf, sizeof (outbuf), "Message-ID: %s" CRLF CRLF, task->message_id);
+		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			return FALSE;
+		}
 	}
 
 	task->worker->srv->stat->messages_scanned++;
