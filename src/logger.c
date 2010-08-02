@@ -176,7 +176,7 @@ close_log (void)
 	case RSPAMD_LOG_FILE:
 		if (rspamd_log->enabled) {
 			if (rspamd_log->repeats > REPEATS_MIN) {
-				snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %ud times", rspamd_log->repeats);
+				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %ud times", rspamd_log->repeats);
 				rspamd_log->repeats = 0;
 				if (rspamd_log->saved_message) {
 					file_log_function (NULL, rspamd_log->saved_function, rspamd_log->cfg->log_level, rspamd_log->saved_message, TRUE, NULL);

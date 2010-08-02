@@ -315,7 +315,6 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	GQueue                         *stack;
 	GList                          *symbols = NULL, *s;
 	gsize                           cur, op1, op2;
-	struct symbol                  *res;
 
 	stack = g_queue_new ();
 
@@ -369,10 +368,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				s = g_list_next (s);
 			}
 			/* Add new symbol */
-			res = memory_pool_alloc (cd->task->task_pool, sizeof (struct symbol));
-			res->score = 1.;
-			res->options = NULL;
-			g_hash_table_insert (cd->metric_res->symbols, key, res);
+			insert_result (cd->task, key, 1.0, NULL);
 		}
 	}
 
