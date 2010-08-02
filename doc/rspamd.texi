@@ -803,6 +803,27 @@ weight of 3 so with such weights (-1 for WINNOW_HAM and 1 for WINNOW_SPAM) the
 result weight of symbols would be 0..3 for @emph{WINNOW_SPAM} and 0..-3 for
 @emph{WINNOW_HAM}.
 
+@section Composites config.
+
+Composite symbols are rules that allow combining of several other symbols by
+using logical expressions. For example you can add composite symbol COMP1 that
+would be added if SYMBOL1 and SYMBOL2 are presented after message checks. When
+composite symbol is added the symbols that are in that composite are removed. So
+if message has symbols SYMBOL1 and SYMBOL2 the composite symbol COMP1 would be
+inserted in place of these two symbols. Not that if composite symbol is not
+inserted the symbols that are inside it are not touched. So SYMBOL1 and SYMBOL2
+can be presented separately, but when COMP1 is added SYMBOL1 and SYMBOL2 would
+be removed. Composite symbols can be defined in main configuration section. Here
+is example of composite rules definition:
+
+@example
+<composite name="ONCE_RECEIVED_PBL">ONCE_RECEIVED &amp; RECEIVED_PBL</composite>
+<composite name="SPF_TRUSTED">R_SPF_TRUSTED &amp; R_SPF_ALLOW</composite>
+<composite name="TRUSTED_FROM">R_TRUSTED_FROM &amp; R_SPF_ALLOW</composite>
+@end example
+
+Note that you need to insert xml entity (@emph{&amp;}) instead of '&' symbol;
+
 @section Modules config.
 
 @subsection Lua modules loading.
