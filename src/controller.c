@@ -809,6 +809,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		/* Handle messages without text */
 		if (tokens == NULL) {
 			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, no tokens can be extracted (no text data)" CRLF);
+			msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
@@ -821,8 +822,9 @@ controller_read_socket (f_str_t * in, void *arg)
 		statfile = get_statfile_by_symbol (session->worker->srv->statfile_pool, session->learn_classifier,
 						session->learn_symbol, &st, TRUE);
 		if (statfile == NULL) {
+			msg_info ("learn failed for message <%s>, no statfile found: %s", task->message_id, session->learn_symbol);
 			free_task (task, FALSE);
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, invalid symbol" CRLF);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -842,7 +844,8 @@ controller_read_socket (f_str_t * in, void *arg)
 		if (st->normalizer != NULL) {
 			sum = st->normalizer (session->cfg, sum, st->normalizer_data);
 		}
-		
+		msg_info ("learn success for message <%s>, for statfile: %s, sum weight: %.2f",
+				task->message_id, session->learn_symbol, sum);
 		free_task (task, FALSE);
 		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {

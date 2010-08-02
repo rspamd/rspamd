@@ -383,7 +383,8 @@ fuzzy_io_callback (int fd, short what, void *arg)
 				symbol = map->symbol;
 				nval = fuzzy_normalize (value, map->weight);
 			}
-
+			msg_info ("<%s>, found fuzzy hash with weight: %.2f, in list: %d",
+					session->task->message_id, flag, nval);
 			rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
 			insert_result (session->task, symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
@@ -446,6 +447,7 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 			goto err;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
+			msg_info ("added fuzzy hash for message <%s>", session->task->message_id);
 			r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
@@ -453,6 +455,7 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 			goto ok;
 		}
 		else {
+			msg_info ("cannot add fuzzy hash for message <%s>", session->task->message_id);
 			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
@@ -529,7 +532,8 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 	/* Check whitelist */
 	if (fuzzy_module_ctx->whitelist && task->from_addr.s_addr != 0) {
 		if (radix32tree_find (fuzzy_module_ctx->whitelist, ntohl ((uint32_t) task->from_addr.s_addr)) != RADIX_NO_VALUE) {
-			msg_info ("address %s is whitelisted, skip fuzzy check", inet_ntoa (task->from_addr));
+			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
+					task->message_id, inet_ntoa (task->from_addr));
 			return;
 		}
 	}
@@ -546,7 +550,8 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 		/* Check length of hash */
 		if (fuzzy_module_ctx->min_hash_len != 0 && 
 				strlen (part->fuzzy->hash_pipe) * part->fuzzy->block_size < fuzzy_module_ctx->min_hash_len) {
-			msg_info ("part hash is shorter than %d symbols, skip fuzzy check", fuzzy_module_ctx->min_hash_len);
+			msg_info ("<%s>, part hash is shorter than %d symbols, skip fuzzy check",
+					task->message_id, fuzzy_module_ctx->min_hash_len);
 			cur = g_list_next (cur);
 			continue;
 		}
