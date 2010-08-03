@@ -27,6 +27,7 @@ my %cfg = (
 );
 
 my $terminal;
+my $is_tty = 1;
 
 $main::VERSION = '@RSPAMD_VERSION@';
 
@@ -146,9 +147,9 @@ sub parse_config {
 sub print_control_result {
 	my ($host, $res) = @_;
 
-	$terminal->Tputs( 'md', 1, *STDOUT );
+	$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 	print "Results for host $host:\n\n";
-	$terminal->Tputs( 'me', 1, *STDOUT );
+	$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 	if ($res->{error_code} == 0) {
 		print "$res->{error}\n";
 	}
@@ -160,39 +161,39 @@ sub print_control_result {
 sub print_rspamc_result {
 	my ($host, $res) = @_;
 
-	$terminal->Tputs( 'md', 1, *STDOUT );
+	$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 	print "Results for host $host:\n\n";
-	$terminal->Tputs( 'me', 1, *STDOUT );
+	$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 
 	if (defined($res->{error})) {
 		print "Error occured: $res->{error}\n\n";
 	}
 	else {
 		while (my ($metric, $result) = each (%{ $res })) {
-			$terminal->Tputs( 'md', 1, *STDOUT );
+			$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 			print "$metric: ";
-			$terminal->Tputs( 'me', 1, *STDOUT );
+			$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 			print "$result->{isspam}, [ $result->{score} / $result->{threshold} ]\n";
 
-			$terminal->Tputs( 'md', 1, *STDOUT );
+			$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 			print "Symbols: ";
-			$terminal->Tputs( 'me', 1, *STDOUT );
+			$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 			print join("; ", @{ $result->{symbols} }) . "\n";
 
-			$terminal->Tputs( 'md', 1, *STDOUT );
+			$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 			print "Action: ";
-			$terminal->Tputs( 'me', 1, *STDOUT );
+			$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 			print "$result->{action}\n";
 
-			$terminal->Tputs( 'md', 1, *STDOUT );
+			$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 			print "Urls: ";
-			$terminal->Tputs( 'me', 1, *STDOUT );
+			$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 			print join(", ", @{ $result->{urls} }) . "\n";
 
 			foreach my $msg (@{ $result->{messages} }) {
-				$terminal->Tputs( 'md', 1, *STDOUT );
+				$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 				print "Message: ";
-				$terminal->Tputs( 'me', 1, *STDOUT );
+				$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 				print "$msg\n";
 			}
 			print "\n\n";
@@ -202,9 +203,9 @@ sub print_rspamc_result {
 
 sub print_item_result {
 	my ($file, $res) = @_;
-	$terminal->Tputs( 'md', 1, *STDOUT );
+	$terminal->Tputs( 'md', 1, *STDOUT ) if $is_tty;
 	print "Results for item $file:\n\n";
-	$terminal->Tputs( 'me', 1, *STDOUT );
+	$terminal->Tputs( 'me', 1, *STDOUT ) if $is_tty;
 
 	while (my ($host, $result) =  each (%{ $res })) {
 		if ($cfg{control}) {
@@ -340,7 +341,12 @@ if (defined ($args{H})) {
 
 my $rspamd = Mail::Rspamd::Client->new(\%cfg);
 
-$terminal = Tgetent Term::Cap { TERM => undef, OSPEED => 9600 };
+if (-t STDOUT) { 
+	$terminal = Tgetent Term::Cap { TERM => undef, OSPEED => 9600 };
+}
+else {
+	$is_tty = 0;
+}
 
 if (!defined ($path[0]) || ! $cfg{'require_input'}) {
 	my $input;
