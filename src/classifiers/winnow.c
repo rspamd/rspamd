@@ -75,6 +75,9 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 		cd->sum += v;
 		cd->in_class++;
 	}
+	else {
+		cd->sum += 1.0;
+	}
 
 	cd->count++;
 
@@ -88,8 +91,7 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	struct winnow_callback_data    *cd = data;
 	double                          v, c;
 	
-	c = (cd->in_class) ? WINNOW_PROMOTION : WINNOW_DEMOTION;
-	c *= cd->multiplier;
+	c = (cd->in_class) ? WINNOW_PROMOTION * cd->multiplier : WINNOW_DEMOTION / cd->multiplier;
 
 	/* Consider that not found blocks have value 1 */
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
@@ -120,7 +122,7 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 				statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, 0.);
 				node->value = 0.;
 			}
-			else if (node->value > WINNOW_PROMOTION) {
+			else if (node->value > WINNOW_PROMOTION * cd->multiplier) {
 				/* Try to decrease its value */
 				/* XXX: it is more intelligent to add some adaptive filter here */
 				if (cd->file == cd->learn_file) {
@@ -133,11 +135,11 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 						 * statfiles, may be statistic error, so decrease it
 						 * slightly
 						 */
-						node->value *= WINNOW_DEMOTION * cd->multiplier;
+						node->value *= WINNOW_DEMOTION;
 					}
 				}
 				else {
-					node->value = sqrt (node->value);
+					node->value = WINNOW_DEMOTION / cd->multiplier;
 				}
 				statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, node->value);
 			} 
@@ -155,7 +157,7 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 		}
 		else if (cd->do_demote) {
 			/* Demote blocks in file */
-			node->value *= WINNOW_DEMOTION * cd->multiplier;
+			node->value *= WINNOW_DEMOTION / cd->multiplier;
 			statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, node->value);
 		}
 	}
