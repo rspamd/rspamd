@@ -97,7 +97,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const cha
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
 		}
 
-		s->score = w;
+		s->score += w;
 	}
 	else {
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));

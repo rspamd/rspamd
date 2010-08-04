@@ -277,8 +277,16 @@ free_task (struct worker_task *task, gboolean is_soft)
 	}
 }
 
-static void
-free_task_hard (void *ud)
+void
+free_task_hard (gpointer ud)
+{
+	struct worker_task             *task = ud;
+
+	free_task (task, FALSE);
+}
+
+void
+free_task_soft (gpointer ud)
 {
 	struct worker_task             *task = ud;
 

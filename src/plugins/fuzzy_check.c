@@ -718,7 +718,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		}
 	}
 
-	free_task (task, FALSE);
+	memory_pool_add_destructor (session->session_pool, (pool_destruct_func)free_task_soft, task);
+
 	if (*saved == 0) {
 		session->state = STATE_REPLY;
 		r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
