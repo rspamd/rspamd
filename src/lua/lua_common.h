@@ -31,7 +31,7 @@ int luaopen_textpart (lua_State *L);
 int luaopen_classifier (lua_State *L);
 int luaopen_statfile (lua_State * L);
 void init_lua (struct config_file *cfg);
-void init_lua_filters (struct config_file *cfg);
+gboolean init_lua_filters (struct config_file *cfg);
 
 /* Filters functions */
 int lua_call_filter (const char *function, struct worker_task *task);

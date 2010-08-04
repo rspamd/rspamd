@@ -858,7 +858,9 @@ main (int argc, char **argv, char **env)
 			}
 			l = g_list_next (l);
 		}
-		init_lua_filters (rspamd->cfg);
+		if (! init_lua_filters (rspamd->cfg)) {
+			res = FALSE;
+		}
 		if (dump_vars) {
 			dump_cfg_vars (rspamd->cfg);
 		}
@@ -919,7 +921,10 @@ main (int argc, char **argv, char **env)
 		l = g_list_next (l);
 	}
 
-	init_lua_filters (rspamd->cfg);
+	if (! init_lua_filters (rspamd->cfg)) {
+		msg_err ("error loading lua plugins");
+		exit (EXIT_FAILURE);
+	}
 
 	init_cfg_cache (rspamd->cfg);
 

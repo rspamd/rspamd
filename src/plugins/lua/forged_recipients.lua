@@ -76,5 +76,3 @@ if opts then
 		rspamd_config:register_symbol(symbol_rcpt, 1.0, 'check_forged_headers')
 	end
 end
-
-

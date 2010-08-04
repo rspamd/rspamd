@@ -236,7 +236,7 @@ init_lua (struct config_file *cfg)
 
 
 
-void
+gboolean
 init_lua_filters (struct config_file *cfg)
 {
 	struct config_file            **pcfg;
@@ -252,7 +252,7 @@ init_lua_filters (struct config_file *cfg)
 			if (luaL_loadfile (L, module->path) != 0) {
 				msg_info ("load of %s failed: %s", module->path, lua_tostring (L, -1));
 				cur = g_list_next (cur);
-				continue;
+				return FALSE;
 			}
 
 			/* Initialize config structure */
@@ -261,9 +261,17 @@ init_lua_filters (struct config_file *cfg)
 			*pcfg = cfg;
 			lua_setglobal (L, "rspamd_config");
 
-			/* do the call (1 arguments, 1 result) */
+			/* do the call (0 arguments, N result) */
 			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
 				msg_info ("init of %s failed: %s", module->path, lua_tostring (L, -1));
+				return FALSE;
+			}
+			if (lua_gettop (L) != 0) {
+				if (lua_tonumber (L, -1) == -1) {
+					msg_info ("%s returned -1 that indicates configuration error", module->path);
+					return FALSE;
+				}
+				lua_pop (L, lua_gettop (L));
 			}
 		}
 		cur = g_list_next (cur);
@@ -279,6 +287,7 @@ init_lua_filters (struct config_file *cfg)
                     /* Code must be loaded from data */
                     if (luaL_loadstring (L, tmp->data) != 0) {
                         msg_info ("cannot load normalizer code %s", tmp->data);
+                        return FALSE;
                     }
                 }
             }
@@ -287,6 +296,8 @@ init_lua_filters (struct config_file *cfg)
     }
 	/* Assign state */
 	cfg->lua_state = L;
+
+	return TRUE;
 }
 
 /* Callback functions */
