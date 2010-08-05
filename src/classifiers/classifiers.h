@@ -24,9 +24,10 @@ struct classify_weight {
 struct classifier {
 	char *name;
 	struct classifier_ctx* (*init_func)(memory_pool_t *pool, struct classifier_config *cf);
-	void (*classify_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
-	void (*learn_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, 
-							stat_file_t *file, GTree *input, gboolean in_class, double *sum, double multiplier);
+	gboolean (*classify_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
+	gboolean (*learn_func)(struct classifier_ctx* ctx, statfile_pool_t *pool,
+							const char *symbol, GTree *input, gboolean in_class,
+							double *sum, double multiplier, GError **err);
 	GList* (*weights_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 };
 
@@ -35,9 +36,9 @@ struct classifier* get_classifier (char *name);
 
 /* Winnow algorithm */
 struct classifier_ctx* winnow_init (memory_pool_t *pool, struct classifier_config *cf);
-void winnow_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
-void winnow_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, stat_file_t *file, GTree *input, 
-				gboolean in_class, double *sum, double multiplier);
+gboolean winnow_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
+gboolean winnow_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symbol, GTree *input,
+				gboolean in_class, double *sum, double multiplier, GError **err);
 GList *winnow_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 
 

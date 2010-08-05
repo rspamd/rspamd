@@ -704,6 +704,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	struct mime_text_part          *part;
 	GList                          *comp_list, *cur = NULL;
 	GTree                          *tokens = NULL;
+	GError                         *err = NULL;
 	f_str_t                         c;
 	double                          sum;
 
@@ -818,26 +819,33 @@ controller_read_socket (f_str_t * in, void *arg)
 			return TRUE;
 		}
 	
+
+		/* Init classifier */
+		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
 		/* Get or create statfile */
 		statfile = get_statfile_by_symbol (session->worker->srv->statfile_pool, session->learn_classifier,
-						session->learn_symbol, &st, TRUE);
-		if (statfile == NULL) {
-			msg_info ("learn failed for message <%s>, no statfile found: %s", task->message_id, session->learn_symbol);
+				session->learn_symbol, &st, TRUE);
+
+		if (statfile == NULL ||
+			! session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool,
+																session->learn_symbol, tokens, session->in_class, &sum,
+																session->learn_multiplier, &err)) {
+			if (err) {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF, err->message);
+				msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, err->message);
+				g_error_free (err);
+			}
+			else {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF);
+				msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
+			}
 			free_task (task, FALSE);
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, invalid symbol" CRLF);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
 			}
+			session->state = STATE_REPLY;
 			return TRUE;
 		}
-		
-		/* Init classifier */
-		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
-		
-		/* XXX: remove this awful legacy */
-		session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool, 
-																statfile, tokens, session->in_class, &sum,
-																session->learn_multiplier);
 		session->worker->srv->stat->messages_learned++;
 
 		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
