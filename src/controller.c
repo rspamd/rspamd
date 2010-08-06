@@ -926,11 +926,18 @@ controller_read_socket (f_str_t * in, void *arg)
 
 		while (cur) {
 			w = cur->data;
-			i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %.2Lg" CRLF, w->name, w->weight);
+			i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %G" CRLF, w->name, w->weight);
 			cur = g_list_next (cur);
 		}
-		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-			return FALSE;
+		if (i != 0) {
+			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+				return FALSE;
+			}
+		}
+		else {
+			if (!rspamd_dispatcher_write (session->dispatcher, "weights failed: classifier error", 0, FALSE, TRUE)) {
+				return FALSE;
+			}
 		}
 
 		free_task (task, FALSE);

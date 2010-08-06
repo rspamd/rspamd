@@ -58,6 +58,7 @@ struct winnow_callback_data {
 	stat_file_t                    *file;
 	stat_file_t                    *learn_file;
 	long double                     sum;
+	long double 					start;
 	double                          multiplier;
 	guint32                         count;
 	guint32                         new_blocks;
@@ -106,6 +107,7 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
 	if (fabs (v) < ALPHA) {
 		/* Block not found, insert new */
+		cd->start += 1;
 		if (cd->file == cd->learn_file) {
 			statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
 			node->value = c;
@@ -113,6 +115,7 @@ learn_callback (gpointer key, gpointer value, gpointer data)
 		}
 	}
 	else {
+		cd->start += v;
 		/* Here we just increase the extra value of block */
 		if (cd->fresh_run) {
 			node->extra = 0;
@@ -354,7 +357,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 	int                             nodes, minnodes, iterations = 0;
 	struct statfile                *st, *sel_st;
 	stat_file_t                    *sel = NULL, *to_learn;
-	long double                     res = 0., max = 0.;
+	long double                     res = 0., max = 0., start_value, end_value;
 	double                          learn_threshold = 0.0;
 	GList                          *cur, *to_demote = NULL;
 	gboolean                        force_learn = FALSE;
@@ -443,7 +446,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			max = 0;
 		}
 		/* If most of blocks are not presented in targeted statfile do forced learn */
-		if ((data.new_blocks > 1 && (double)data.new_blocks / (double)data.count > 0.5) || max < 1 + learn_threshold) {
+		if (max < 1 + learn_threshold) {
 			force_learn = TRUE;
 		}
 		/* Check other statfiles */
@@ -483,12 +486,13 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 		return FALSE;
 	}
 	/* If to_demote list is empty this message is already classified correctly */
-	if (max > ALPHA && to_demote == NULL && !force_learn) {
+	if (max > WINNOW_PROMOTION && to_demote == NULL && !force_learn) {
 		msg_info ("this message is already of class %s with threshold %.2f and weight %.2F",
 				sel_st->symbol, learn_threshold, max);
 		goto end;
 	}
 	data.learn_file = to_learn;
+	end_value = max;
 	do {
 		cur = ctx->cfg->statfiles;
 		data.fresh_run = TRUE;
@@ -497,6 +501,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			data.sum = 0;
 			data.count = 0;
 			data.new_blocks = 0;
+			data.start = 0;
 			if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
 				return FALSE;
 			}
@@ -506,6 +511,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			else {
 				data.do_demote = FALSE;
 			}
+
 			statfile_pool_lock_file (pool, data.file);
 			g_tree_foreach (input, learn_callback, &data);
 			statfile_pool_unlock_file (pool, data.file);
@@ -519,16 +525,19 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 				max = res;
 				sel = data.file;
 			}
+			if (data.file == to_learn) {
+				if (data.count > 0) {
+					start_value = data.start / data.count;
+				}
+				end_value = res;
+			}
 			cur = g_list_next (cur);
 			data.fresh_run = FALSE;
 		}
-		
-		if (data.multiplier > 1) {
-			data.multiplier *= data.multiplier;
-		}
-		else {
-			data.multiplier *= WINNOW_PROMOTION;
-		}
+
+		data.multiplier *= WINNOW_PROMOTION;
+		msg_info ("learn iteration %d for statfile %s: %G -> %G, multiplier: %.2f", iterations + 1, symbol,
+				start_value, end_value, data.multiplier);
 	} while ((in_class ? sel != to_learn : sel == to_learn)  && iterations ++ < MAX_LEARN_ITERATIONS);
 	
 	if (iterations >= MAX_LEARN_ITERATIONS) {
