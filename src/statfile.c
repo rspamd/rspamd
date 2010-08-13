@@ -361,8 +361,6 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	new_file->access_time = new_file->open_time;
 	new_file->lock = memory_pool_get_mutex (pool->pool);
 
-	/* Keep sorted */
-	qsort (pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
 	memory_pool_unlock_mutex (pool->lock);
 
 	return statfile_pool_is_open (pool, filename);
@@ -392,11 +390,6 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	pool->occupied -= file->len;
 	pool->opened--;
 
-	if (keep_sorted) {
-		memmove (pos, &pool->files[pool->opened], sizeof (stat_file_t));
-		/* Keep sorted */
-		qsort (pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
-	}
 	memory_pool_unlock_mutex (pool->lock);
 
 	return 0;
@@ -639,7 +632,7 @@ statfile_pool_is_open (statfile_pool_t * pool, char *filename)
 {
 	static stat_file_t              f, *ret;
 	g_strlcpy (f.filename, filename, sizeof (f.filename));
-	ret = bsearch (&f, pool->files, pool->opened, sizeof (stat_file_t), cmpstatfile);
+	ret = lfind (&f, pool->files, (size_t *)&pool->opened, sizeof (stat_file_t), cmpstatfile);
 	return ret;
 }
 

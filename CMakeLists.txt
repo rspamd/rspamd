@@ -334,6 +334,7 @@ CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
 CHECK_INCLUDE_FILES(syslog.h HAVE_SYSLOG_H)
 CHECK_INCLUDE_FILES(locale.h HAVE_LOCALE_H)
 CHECK_INCLUDE_FILES(libgen.h HAVE_LIBGEN_H)
+CHECK_INCLUDE_FILES(search.h HAVE_SEARCH_H)
 CHECK_INCLUDE_FILES(pwd.h HAVE_PWD_H)
 CHECK_INCLUDE_FILES(grp.h HAVE_GRP_H)
 CHECK_INCLUDE_FILES(glob.h HAVE_GLOB_H)
@@ -498,6 +499,7 @@ SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
 
 SET(CLASSIFIERSSRC src/classifiers/classifiers.c
+                src/classifiers/bayes.c
 				src/classifiers/winnow.c)
 
 SET(PLUGINSSRC	src/plugins/surbl.c

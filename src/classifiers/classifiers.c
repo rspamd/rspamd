@@ -36,6 +36,13 @@ struct classifier               classifiers[] = {
 			.classify_func = winnow_classify,
 			.learn_func = winnow_learn,
 			.weights_func = winnow_weights
+		},
+		{
+			.name = "bayes",
+			.init_func = bayes_init,
+			.classify_func = bayes_classify,
+			.learn_func = bayes_learn,
+			.weights_func = bayes_weights
 		}
 };
 

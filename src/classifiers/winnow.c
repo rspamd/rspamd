@@ -42,14 +42,14 @@
 
 #define MAX_WEIGHT G_MAXDOUBLE / 2.
 
-#define ALPHA 0.01
+
 
 #define MAX_LEARN_ITERATIONS 100
 
 G_INLINE_FUNC GQuark
 winnow_error_quark (void)
 {
-	return g_quark_from_static_string ("winnow-error-quark");
+	return g_quark_from_static_string ("winnow-error");
 }
 
 struct winnow_callback_data {
@@ -73,7 +73,7 @@ static const double max_common_weight = MAX_WEIGHT * WINNOW_DEMOTION;
 
 
 static                          gboolean
-classify_callback (gpointer key, gpointer value, gpointer data)
+winnow_classify_callback (gpointer key, gpointer value, gpointer data)
 {
 	token_node_t                   *node = key;
 	struct winnow_callback_data    *cd = data;
@@ -95,7 +95,7 @@ classify_callback (gpointer key, gpointer value, gpointer data)
 }
 
 static                          gboolean
-learn_callback (gpointer key, gpointer value, gpointer data)
+winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 {
 	token_node_t                   *node = key;
 	struct winnow_callback_data    *cd = data;
@@ -247,7 +247,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		}
 
 		if (data.file != NULL) {
-			g_tree_foreach (input, classify_callback, &data);
+			g_tree_foreach (input, winnow_classify_callback, &data);
 		}
 
 		if (data.count != 0) {
@@ -320,7 +320,7 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 		}
 
 		if (data.file != NULL) {
-			g_tree_foreach (input, classify_callback, &data);
+			g_tree_foreach (input, winnow_classify_callback, &data);
 		}
 
 		w = memory_pool_alloc0 (task->task_pool, sizeof (struct classify_weight));
@@ -407,7 +407,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 								st->path);
 						return FALSE;
 					}
-					if (statfile_pool_open (pool, st->path, st->size, FALSE)) {
+					if (statfile_pool_open (pool, st->path, st->size, FALSE) == NULL) {
 						g_set_error (err,
 								winnow_error_quark(),		/* error domain */
 								1,            				/* error code */
@@ -438,7 +438,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 		data.sum = 0;
 		data.count = 0;
 		data.new_blocks = 0;
-		g_tree_foreach (input, classify_callback, &data);
+		g_tree_foreach (input, winnow_classify_callback, &data);
 		if (data.count > 0) {
 			max = data.sum / (double)data.count;
 		}
@@ -462,7 +462,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 						st->path);
 				return FALSE;
 			}
-			g_tree_foreach (input, classify_callback, &data);
+			g_tree_foreach (input, winnow_classify_callback, &data);
 			if (data.count != 0) {
 				res = data.sum / data.count;
 			}
@@ -513,7 +513,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			}
 
 			statfile_pool_lock_file (pool, data.file);
-			g_tree_foreach (input, learn_callback, &data);
+			g_tree_foreach (input, winnow_learn_callback, &data);
 			statfile_pool_unlock_file (pool, data.file);
 			if (data.count != 0) {
 				res = data.sum / data.count;

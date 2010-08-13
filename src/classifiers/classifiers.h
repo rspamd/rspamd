@@ -6,6 +6,9 @@
 #include "../statfile.h"
 #include "../tokenizers/tokenizers.h"
 
+/* Consider this value as 0 */
+#define ALPHA 0.0001
+
 struct classifier_config;
 struct worker_task;
 
@@ -41,7 +44,12 @@ gboolean winnow_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const 
 				gboolean in_class, double *sum, double multiplier, GError **err);
 GList *winnow_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 
-
+/* Bayes algorithm */
+struct classifier_ctx* bayes_init (memory_pool_t *pool, struct classifier_config *cf);
+gboolean bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
+gboolean bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symbol, GTree *input,
+				gboolean in_class, double *sum, double multiplier, GError **err);
+GList *bayes_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 /* Array of all defined classifiers */
 extern struct classifier classifiers[];
 

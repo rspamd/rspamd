@@ -44,6 +44,8 @@
 
 #cmakedefine HAVE_LIBGEN_H       1
 
+#cmakedefine HAVE_SEARCH_H       1
+
 #cmakedefine HAVE_LOCALE_H       1
 
 #cmakedefine HAVE_GRP_H          1
@@ -305,6 +307,10 @@
 #ifdef HAVE_LIBGEN_H
 #include <libgen.h>
 #define HAVE_DIRNAME 1
+#endif
+
+#ifdef HAVE_SEARCH_H
+#include <search.h>
 #endif
 
 #ifdef HAVE_LOCALE_H
