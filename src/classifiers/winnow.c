@@ -267,9 +267,15 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 #ifdef WITH_LUA
         max = call_classifier_post_callbacks (ctx->cfg, task, max);
 #endif
-		if (st->normalizer != NULL) {
-			max = st->normalizer (task->cfg, max, st->normalizer_data);
-		}
+#ifdef HAVE_TANHL
+        max = tanhl (max);
+#else
+        /*
+         * As some implementations of libm does not support tanhl, try to use
+         * tanh
+         */
+        max = tanh ((double) score);
+#endif
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		rspamd_snprintf (sumbuf, 32, "%.2F", max);
 		cur = g_list_prepend (NULL, sumbuf);
@@ -557,7 +563,15 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 
 end:
 	if (sum) {
-		*sum = (double)max;
+#ifdef HAVE_TANHL
+        *sum = (double)tanhl (max);
+#else
+        /*
+         * As some implementations of libm does not support tanhl, try to use
+         * tanh
+         */
+        *sum = tanh ((double) score);
+#endif
 	}
 	return TRUE;
 }

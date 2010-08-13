@@ -849,9 +849,6 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->worker->srv->stat->messages_learned++;
 
 		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
-		if (st->normalizer != NULL) {
-			sum = st->normalizer (session->cfg, sum, st->normalizer_data);
-		}
 		msg_info ("learn success for message <%s>, for statfile: %s, sum weight: %.2f",
 				task->message_id, session->learn_symbol, sum);
 		free_task (task, FALSE);

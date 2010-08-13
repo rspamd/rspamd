@@ -1089,13 +1089,7 @@ handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx,
 gboolean 
 handle_statfile_normalizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
 {
-	struct statfile             *st = ctx->section_pointer;
-	
-	if (!parse_normalizer (cfg, st, data)) {
-		msg_err ("cannot parse normalizer string: %s", data);
-		return FALSE;
-	}
-	
+	msg_info ("normalizer option is now not available as rspamd always use internal normalizer for winnow (hyperbolic tanhent)");
 	return TRUE;
 }
 
