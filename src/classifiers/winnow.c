@@ -274,7 +274,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
          * As some implementations of libm does not support tanhl, try to use
          * tanh
          */
-        max = tanh ((double) score);
+        max = tanh ((double) max);
 #endif
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		rspamd_snprintf (sumbuf, 32, "%.2F", max);
@@ -570,7 +570,7 @@ end:
          * As some implementations of libm does not support tanhl, try to use
          * tanh
          */
-        *sum = tanh ((double) score);
+        *sum = tanh ((double) max);
 #endif
 	}
 	return TRUE;
