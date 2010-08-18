@@ -46,7 +46,7 @@
 /* This number is used as limit while comparing two fuzzy hashes, this value can vary from 0 to 100 */
 #define LEV_LIMIT 99
 /* This number is used as limit while we are making decision to write new hash file or not */
-#define MOD_LIMIT 10000
+#define DEFAULT_MOD_LIMIT 10000
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
 /* Resync value in seconds */
@@ -72,6 +72,7 @@ static bloom_filter_t          *bf;
 
 /* Number of cache modifications */
 static uint32_t                 mods = 0;
+static uint32_t                 max_mods = DEFAULT_MOD_LIMIT;
 /* Frequent score number */
 static uint32_t                 frequent_score = DEFAULT_FREQUENT_SCORE;
 /* For evtimer */
@@ -134,7 +135,7 @@ sync_cache (struct rspamd_worker *wrk)
 #endif
 
 	/* Check for modifications */
-	if (mods < MOD_LIMIT) {
+	if (mods < max_mods) {
 		return;
 	}
 
@@ -243,7 +244,7 @@ sigterm_handler (int fd, short what, void *arg)
 		.tv_usec = 0
 	};
 
-	mods = MOD_LIMIT + 1;
+	mods = max_mods + 1;
 	sync_cache (worker);
 	close (worker->cf->listen_sock);
 	(void)event_loopexit (&tv);
@@ -267,6 +268,8 @@ sigusr_handler (int fd, short what, void *arg)
 	do_reopen_log = 1;
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
+	mods = max_mods + 1;
+	sync_cache (worker);
 	return;
 }
 
@@ -491,6 +494,7 @@ update_hash (struct fuzzy_cmd *cmd)
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
+	mods ++;
 
 	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value) != NULL;
 }
@@ -523,7 +527,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	else {
 #endif
 
-	g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
+		g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
 #ifdef WITH_JUDY
 	}
 #endif
@@ -549,6 +553,10 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s)
 		if (pvalue) {
 			res = JudySLDel (&jtree, s->hash_pipe, PJE0);
 			g_free (*pvalue);
+			bloom_del (bf, s->hash_pipe);
+			msg_info ("fuzzy hash was successfully deleted");
+			server_stat->fuzzy_hashes --;
+			mods++;
 		}
 	}
 	else {
@@ -755,6 +763,9 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	/* Get params */
 	if ((value = g_hash_table_lookup (worker->cf->params, "frequent_score")) != NULL) {
 		frequent_score = strtol (value, NULL, 10);
+	}
+	if ((value = g_hash_table_lookup (worker->cf->params, "max_mods")) != NULL) {
+		max_mods = strtol (value, NULL, 10);
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "use_judy")) != NULL) {
 #ifdef WITH_JUDY
