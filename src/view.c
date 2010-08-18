@@ -40,6 +40,7 @@ init_view (memory_pool_t * pool)
 	new->pool = pool;
 	new->from_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->symbols_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->rcpt_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->ip_tree = radix_tree_create ();
 	new->client_ip_tree = radix_tree_create ();
 
