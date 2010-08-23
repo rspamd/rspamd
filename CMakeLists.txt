@@ -463,6 +463,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/greylist_storage.c
 				src/hash.c
 				src/html.c
+				src/images.c
 				src/lmtp.c
 				src/lmtp_proto.c
 				src/logger.c

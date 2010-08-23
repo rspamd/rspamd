@@ -29,6 +29,7 @@
 #include "cfg_file.h"
 #include "html.h"
 #include "modules.h"
+#include "images.h"
 
 #define RECURSION_LIMIT 30
 #define UTF8_CHARSET "UTF-8"
@@ -709,7 +710,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part->content = part_content;
 				mime_part->parent = task->parser_parent_part;
 				/* Extract checksums for some types */
-				if (g_ascii_strcasecmp (type->type, "image") == 0 && part_content->len > 0) {
+				if (g_mime_content_type_is_type (type, "image", "*") && part_content->len > 0) {
 					mime_part->checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, part_content->data, part_content->len);
 					memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, mime_part->checksum);
 				}
@@ -814,6 +815,10 @@ process_message (struct worker_task *task)
 		task->raw_headers = g_mime_message_get_headers (task->message);
 #endif
 
+#ifdef RSPAMD_MAIN
+		process_images (task);
+#endif
+
 		/* Parse received headers */
 		first = message_get_header (task->task_pool, message, "Received");
 		cur = first;
@@ -881,6 +886,7 @@ process_message (struct worker_task *task)
 		if (task->subject) {
 			g_mime_message_set_subject (task->message, task->subject);
 		}
+
 		/* Add recipients */
 #ifndef GMIME24
 		if (task->rcpt) {

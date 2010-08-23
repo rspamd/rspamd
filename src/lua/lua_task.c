@@ -27,6 +27,7 @@
 #include "../message.h"
 #include "../expressions.h"
 #include "../dns.h"
+#include "../images.h"
 
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
@@ -45,6 +46,7 @@ LUA_FUNCTION_DEF (task, get_from_ip);
 LUA_FUNCTION_DEF (task, get_from_ip_num);
 LUA_FUNCTION_DEF (task, get_client_ip_num);
 LUA_FUNCTION_DEF (task, get_helo);
+LUA_FUNCTION_DEF (task, get_images);
 
 static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
@@ -63,6 +65,7 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_from_ip_num),
 	LUA_INTERFACE_DEF (task, get_client_ip_num),
 	LUA_INTERFACE_DEF (task, get_helo),
+	LUA_INTERFACE_DEF (task, get_images),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -82,6 +85,19 @@ static const struct luaL_reg    textpartlib_m[] = {
 	{NULL, NULL}
 };
 
+/* Image methods */
+LUA_FUNCTION_DEF (image, get_width);
+LUA_FUNCTION_DEF (image, get_height);
+LUA_FUNCTION_DEF (image, get_type);
+
+static const struct luaL_reg    imagelib_m[] = {
+	LUA_INTERFACE_DEF (image, get_width),
+	LUA_INTERFACE_DEF (image, get_height),
+	LUA_INTERFACE_DEF (image, get_type),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
 /* Utility functions */
 static struct worker_task      *
 lua_check_task (lua_State * L)
@@ -97,6 +113,14 @@ lua_check_textpart (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{textpart}");
 	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
 	return *((struct mime_text_part **)ud);
+}
+
+static struct rspamd_image      *
+lua_check_image (lua_State * L)
+{
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{image}");
+	luaL_argcheck (L, ud != NULL, 1, "'image' expected");
+	return *((struct rspamd_image **)ud);
 }
 
 /*** Task interface	***/
@@ -529,6 +553,33 @@ lua_task_get_helo (lua_State *L)
 	return 1;
 }
 
+static int
+lua_task_get_images (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	int	                            i = 1;
+	GList                          *cur;
+	struct rspamd_image           **pimg;
+
+	if (task) {
+		cur = task->images;
+		if (cur != NULL) {
+			lua_newtable (L);
+			while (cur) {
+				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
+				lua_setclass (L, "rspamd{image}", -1);
+				*pimg = cur->data;
+				lua_rawseti (L, -2, i++);
+				cur = g_list_next (cur);
+			}
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
 
 /**** Textpart implementation *****/
 
@@ -591,6 +642,50 @@ lua_textpart_get_fuzzy (lua_State * L)
 	return 1;
 }
 
+/* Image functions */
+static int
+lua_image_get_width (lua_State *L)
+{
+	struct rspamd_image             *img = lua_check_image (L);
+
+	if (img != NULL) {
+		lua_pushnumber (L, img->width);
+	}
+	else {
+		lua_pushnumber (L, 0);
+	}
+	return 1;
+}
+
+static int
+lua_image_get_height (lua_State *L)
+{
+	struct rspamd_image             *img = lua_check_image (L);
+
+	if (img != NULL) {
+		lua_pushnumber (L, img->height);
+	}
+	else {
+		lua_pushnumber (L, 0);
+	}
+
+	return 1;
+}
+
+static int
+lua_image_get_type (lua_State *L)
+{
+	struct rspamd_image             *img = lua_check_image (L);
+
+	if (img != NULL) {
+		lua_pushstring (L, image_type_str (img->type));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
 
 /* Init part */
 int
@@ -607,6 +702,15 @@ luaopen_textpart (lua_State * L)
 {
 	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
 	luaL_openlib (L, "rspamd_textpart", null_reg, 0);
+
+	return 1;
+}
+
+int
+luaopen_image (lua_State * L)
+{
+	lua_newclass (L, "rspamd{image}", imagelib_m);
+	luaL_openlib (L, "rspamd_image", null_reg, 0);
 
 	return 1;
 }

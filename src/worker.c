@@ -257,6 +257,9 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->urls) {
 			g_list_free (task->urls);
 		}
+		if (task->images) {
+			g_list_free (task->images);
+		}
 		if (task->messages) {
 			g_list_free (task->messages);
 		}
