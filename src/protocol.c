@@ -620,7 +620,7 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 	return TRUE;
 }
 
-G_INLINE_FUNC const char *
+const char *
 str_action_metric (enum rspamd_metric_action action)
 {
 	switch (action) {
@@ -641,7 +641,7 @@ str_action_metric (enum rspamd_metric_action action)
 	return "unknown action";
 }
 
-G_INLINE_FUNC gint
+gint
 check_metric_action (double score, double required_score, struct metric *metric)
 {
 	GList                          *cur;

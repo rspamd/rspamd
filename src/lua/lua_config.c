@@ -37,6 +37,7 @@ LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
 LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
+LUA_FUNCTION_DEF (config, register_post_filter);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -46,6 +47,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
+	LUA_INTERFACE_DEF (config, register_post_filter),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -291,7 +293,49 @@ lua_config_register_function (lua_State *L)
 			register_expression_function (name, lua_config_function_callback, cd);
 		}
 	}
-	return 0;
+	return 1;
+}
+
+void
+lua_call_post_filters (struct worker_task *task)
+{
+	struct lua_callback_data       *cd;
+	struct worker_task            **ptask;
+	GList                          *cur;
+
+	cur = task->cfg->post_filters;
+	while (cur) {
+		cd = cur->data;
+		lua_getglobal (cd->L, cd->name);
+		ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+		lua_setclass (cd->L, "rspamd{task}", -1);
+		*ptask = task;
+
+		if (lua_pcall (cd->L, 1, 1, 0) != 0) {
+			msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+		}
+		cur = g_list_next (cur);
+	}
+}
+
+static int
+lua_config_register_post_filter (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const char                     *callback;
+	struct lua_callback_data       *cd;
+
+	if (cfg) {
+
+		callback = luaL_checkstring (L, 2);
+		if (callback) {
+			cd = g_malloc (sizeof (struct lua_callback_data));
+			cd->name = g_strdup (callback);
+			cd->L = L;
+			cfg->post_filters = g_list_prepend (cfg->post_filters, cd);
+		}
+	}
+	return 1;
 }
 
 static int

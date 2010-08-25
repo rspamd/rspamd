@@ -38,7 +38,7 @@
 #include "map.h"
 #include "dns.h"
 
-#include "evdns/evdns.h"
+#include "lua/lua_common.h"
 
 #ifndef WITHOUT_PERL
 #   include <EXTERN.h>			/* from the Perl distribution     */
@@ -359,6 +359,7 @@ read_socket (f_str_t * in, void *arg)
 		}
 		else {
 			process_statfiles (task);
+			lua_call_post_filters (task);
 			return write_socket (task);
 		}
 		break;
@@ -666,7 +667,6 @@ start_worker (struct rspamd_worker *worker)
 	worker->srv->pid = getpid ();
 
 	event_init ();
-	evdns_init ();
 
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);

@@ -26,8 +26,20 @@
 #include "lua_common.h"
 #include "../message.h"
 #include "../expressions.h"
+#include "../protocol.h"
+#include "../filter.h"
 #include "../dns.h"
+#include "../util.h"
 #include "../images.h"
+#include "../cfg_file.h"
+#include "../statfile.h"
+#include "../tokenizers/tokenizers.h"
+#include "../classifiers/classifiers.h"
+#include "../binlog.h"
+#include "../statfile_sync.h"
+
+extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
+		const char *symbol, struct statfile **st, gboolean try_create);
 
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
@@ -47,6 +59,10 @@ LUA_FUNCTION_DEF (task, get_from_ip_num);
 LUA_FUNCTION_DEF (task, get_client_ip_num);
 LUA_FUNCTION_DEF (task, get_helo);
 LUA_FUNCTION_DEF (task, get_images);
+LUA_FUNCTION_DEF (task, get_symbol);
+LUA_FUNCTION_DEF (task, get_metric_score);
+LUA_FUNCTION_DEF (task, get_metric_action);
+LUA_FUNCTION_DEF (task, learn_statfile);
 
 static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
@@ -66,6 +82,10 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_client_ip_num),
 	LUA_INTERFACE_DEF (task, get_helo),
 	LUA_INTERFACE_DEF (task, get_images),
+	LUA_INTERFACE_DEF (task, get_symbol),
+	LUA_INTERFACE_DEF (task, get_metric_score),
+	LUA_INTERFACE_DEF (task, get_metric_action),
+	LUA_INTERFACE_DEF (task, learn_statfile),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -580,6 +600,184 @@ lua_task_get_images (lua_State *L)
 	return 1;
 }
 
+G_INLINE_FUNC gboolean
+lua_push_symbol_result (lua_State *L, struct worker_task *task, struct metric *metric, const char *symbol)
+{
+	struct metric_result           *metric_res;
+	struct symbol                  *s;
+	int                             j;
+	GList                          *opt;
+
+	metric_res = g_hash_table_lookup (task->results, metric->name);
+	if (metric_res) {
+		if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
+			j = 0;
+			lua_newtable (L);
+			lua_pushstring (L, "metric");
+			lua_pushstring (L, metric->name);
+			lua_settable (L, -3);
+			lua_pushstring (L, "score");
+			lua_pushnumber (L, s->score);
+			lua_settable (L, -3);
+			if (s->options) {
+				opt = s->options;
+				lua_pushstring (L, "options");
+				lua_newtable (L);
+				while (opt) {
+					lua_pushstring (L, opt->data);
+					lua_rawseti (L, -2, j++);
+					opt = g_list_next (opt);
+				}
+				lua_settable (L, -3);
+			}
+
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+static int
+lua_task_get_symbol (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const char                     *symbol;
+	struct metric                  *metric;
+	GList                          *cur = NULL, *metric_list;
+	gboolean                        found = FALSE;
+	int                             i = 1;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
+		if (metric_list) {
+			lua_newtable (L);
+			cur = metric_list;
+		}
+		else {
+			metric = task->cfg->default_metric;
+		}
+
+		if (!cur && metric) {
+			if ((found = lua_push_symbol_result (L, task, metric, symbol))) {
+				lua_newtable (L);
+				lua_rawseti (L, -2, i++);
+			}
+		}
+		else {
+			while (cur) {
+				metric = cur->data;
+				if (lua_push_symbol_result (L, task, metric, symbol)) {
+					lua_rawseti (L, -2, i++);
+					found = TRUE;
+				}
+				cur = g_list_next (cur);
+			}
+		}
+	}
+
+	if (!found) {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
+static int
+lua_task_learn_statfile (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const char                     *symbol;
+	struct classifier_config       *cl;
+	GTree                          *tokens;
+	struct statfile                *st;
+	stat_file_t                    *statfile;
+	struct classifier_ctx          *ctx;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		cl = g_hash_table_lookup (task->cfg->classifiers_symbols, symbol);
+		if (cl == NULL) {
+			msg_warn ("classifier for symbol %s is not found", symbol);
+			lua_pushboolean (L, FALSE);
+			return 1;
+		}
+		ctx = cl->classifier->init_func (task->task_pool, cl);
+		if ((tokens = g_hash_table_lookup (task->tokens, cl->tokenizer)) == NULL) {
+			msg_warn ("no tokens found learn failed!");
+			lua_pushboolean (L, FALSE);
+			return 1;
+		}
+		statfile = get_statfile_by_symbol (task->worker->srv->statfile_pool, ctx->cfg,
+								symbol, &st, TRUE);
+
+		if (statfile == NULL) {
+			msg_warn ("opening statfile failed!");
+			lua_pushboolean (L, FALSE);
+			return 1;
+		}
+
+		cl->classifier->learn_func (ctx, task->worker->srv->statfile_pool, symbol, tokens, TRUE, NULL, 1., NULL);
+		maybe_write_binlog (ctx->cfg, st, statfile, tokens);
+		lua_pushboolean (L, TRUE);
+	}
+
+	return 1;
+}
+
+static int
+lua_task_get_metric_score (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const char                     *metric_name;
+	struct metric_result           *metric_res;
+
+	metric_name = luaL_checkstring (L, 2);
+
+	if (task && metric_name) {
+		if ((metric_res = g_hash_table_lookup (task->results, metric_name)) != NULL) {
+			lua_newtable (L);
+			lua_pushnumber (L, metric_res->score);
+			lua_rawseti (L, -2, 1);
+			lua_pushnumber (L, metric_res->metric->required_score);
+			lua_rawseti (L, -2, 2);
+			lua_pushnumber (L, metric_res->metric->reject_score);
+			lua_rawseti (L, -2, 3);
+		}
+		else {
+			lua_pushnil (L);
+		}
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+lua_task_get_metric_action (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const char                     *metric_name;
+	struct metric_result           *metric_res;
+	enum rspamd_metric_action       action;
+
+	metric_name = luaL_checkstring (L, 2);
+
+	if (task && metric_name) {
+		if ((metric_res = g_hash_table_lookup (task->results, metric_name)) != NULL) {
+			action = check_metric_action (metric_res->score, metric_res->metric->required_score, metric_res->metric);
+			lua_pushstring (L, str_action_metric (action));
+		}
+		else {
+			lua_pushnil (L);
+		}
+		return 1;
+	}
+
+	return 0;
+}
 
 /**** Textpart implementation *****/
 

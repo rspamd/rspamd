@@ -243,6 +243,9 @@ continue_process_filters (struct worker_task *task)
 end:
 	/* Process all statfiles */
 	process_statfiles (task);
+	/* Call post filters */
+	lua_call_post_filters (task);
+	task->state = WRITE_REPLY;
 	/* XXX: ugly direct call */
 	if (task->fin_callback) {
 		task->fin_callback (task->fin_arg);
@@ -293,6 +296,7 @@ process_filters (struct worker_task *task)
 			else if (!task->pass_all_filters && 
 						metric->action == METRIC_ACTION_REJECT && 
 						check_metric_is_spam (task, metric)) {
+				task->state = WRITE_REPLY;
 				return 1;
 			}
 			cur = g_list_next (cur);
@@ -463,17 +467,10 @@ make_composites (struct worker_task *task)
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
 
-
-struct statfile_callback_data {
-	GHashTable                     *tokens;
-	struct worker_task             *task;
-};
-
 static void
 classifiers_callback (gpointer value, void *arg)
 {
-	struct statfile_callback_data  *data = (struct statfile_callback_data *)arg;
-	struct worker_task             *task = data->task;
+	struct worker_task             *task = arg;
 	struct classifier_config       *cl = value;
 	struct classifier_ctx          *ctx;
 	struct mime_text_part          *text_part;
@@ -494,7 +491,7 @@ classifiers_callback (gpointer value, void *arg)
 	}
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 
-	if ((tokens = g_hash_table_lookup (data->tokens, cl->tokenizer)) == NULL) {
+	if ((tokens = g_hash_table_lookup (task->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
 			if (header) {
 				c.len = strlen (cur->data);
@@ -522,7 +519,7 @@ classifiers_callback (gpointer value, void *arg)
 			}
 			cur = g_list_next (cur);
 		}
-		g_hash_table_insert (data->tokens, cl->tokenizer, tokens);
+		g_hash_table_insert (task->tokens, cl->tokenizer, tokens);
 	}
 
 	if (tokens == NULL) {
@@ -549,20 +546,20 @@ classifiers_callback (gpointer value, void *arg)
 void
 process_statfiles (struct worker_task *task)
 {
-	struct statfile_callback_data   cd;
-	
+
 	if (task->is_skipped) {
 		return;
 	}
-	cd.task = task;
-	cd.tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
 
-	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cd);
-	g_hash_table_destroy (cd.tokens);
+	if (task->tokens == NULL) {
+		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, task->tokens);
+	}
+
+	g_list_foreach (task->cfg->classifiers, classifiers_callback, task);
 
 	/* Process results */
 	make_composites (task);
-	task->state = WRITE_REPLY;
 }
 
 static void

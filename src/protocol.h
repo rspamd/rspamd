@@ -27,6 +27,8 @@
 #define SPAMD_ERROR "EX_ERROR"
 
 struct worker_task;
+enum rspamd_metric_action;
+struct metric;
 
 enum rspamd_protocol {
 	SPAMC_PROTO,
@@ -74,5 +76,8 @@ gboolean write_reply (struct worker_task *task) G_GNUC_WARN_UNUSED_RESULT;
  * @param func callback function for writing reply
  */
 void register_protocol_command (const char *name, protocol_reply_func func);
+
+const char *str_action_metric (enum rspamd_metric_action action);
+gint check_metric_action (double score, double required_score, struct metric *metric);
 
 #endif

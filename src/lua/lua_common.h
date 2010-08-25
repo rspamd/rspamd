@@ -39,6 +39,7 @@ int lua_call_filter (const char *function, struct worker_task *task);
 int lua_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number);
 double lua_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name);
 gboolean lua_call_expression_func (const char *function, struct worker_task *task, GList *args, gboolean *res);
+void lua_call_post_filters (struct worker_task *task);
 void add_luabuf (const char *line);
 
 /* Classify functions */

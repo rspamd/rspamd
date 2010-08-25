@@ -205,6 +205,8 @@ struct worker_task {
 	GList *images;												/**< list of images									*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/
+	GHashTable *tokens;											/**< hash table of tokens indexed by tokenizer
+																 *    pointer 										*/
 	GList *messages;											/**< list of messages that would be reported		*/
 	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
 	struct config_file *cfg;									/**< pointer to config object						*/
