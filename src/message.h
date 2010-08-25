@@ -17,6 +17,7 @@ struct mime_part {
 	GByteArray *content;
 	GMimeObject *parent;
 	gchar *checksum;
+	const char *filename;
 };
 
 struct mime_text_part {

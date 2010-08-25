@@ -226,6 +226,7 @@ process_image (struct worker_task *task, struct mime_part *part)
 				image_type_str (img->type),
 				img->width, img->height,
 				task->message_id);
+		img->filename = part->filename;
 		task->images = g_list_prepend (task->images, img);
 	}
 }

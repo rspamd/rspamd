@@ -109,11 +109,15 @@ static const struct luaL_reg    textpartlib_m[] = {
 LUA_FUNCTION_DEF (image, get_width);
 LUA_FUNCTION_DEF (image, get_height);
 LUA_FUNCTION_DEF (image, get_type);
+LUA_FUNCTION_DEF (image, get_filename);
+LUA_FUNCTION_DEF (image, get_size);
 
 static const struct luaL_reg    imagelib_m[] = {
 	LUA_INTERFACE_DEF (image, get_width),
 	LUA_INTERFACE_DEF (image, get_height),
 	LUA_INTERFACE_DEF (image, get_type),
+	LUA_INTERFACE_DEF (image, get_filename),
+	LUA_INTERFACE_DEF (image, get_size),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -877,6 +881,36 @@ lua_image_get_type (lua_State *L)
 
 	if (img != NULL) {
 		lua_pushstring (L, image_type_str (img->type));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static int
+lua_image_get_size (lua_State *L)
+{
+	struct rspamd_image             *img = lua_check_image (L);
+
+	if (img != NULL) {
+		lua_pushinteger (L, img->data->len);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static int
+lua_image_get_filename (lua_State *L)
+{
+	struct rspamd_image             *img = lua_check_image (L);
+
+	if (img != NULL && img->filename != NULL) {
+		lua_pushstring (L, img->filename);
 	}
 	else {
 		lua_pushnil (L);

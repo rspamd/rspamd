@@ -17,6 +17,7 @@ struct rspamd_image {
 	GByteArray *data;
 	guint32 width;
 	guint32 height;
+	const char *filename;
 };
 
 void process_images (struct worker_task *task);

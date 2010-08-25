@@ -709,6 +709,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part->type = type;
 				mime_part->content = part_content;
 				mime_part->parent = task->parser_parent_part;
+				mime_part->filename = g_mime_part_get_filename (GMIME_PART (part));
 				/* Extract checksums for some types */
 				if (g_mime_content_type_is_type (type, "image", "*") && part_content->len > 0) {
 					mime_part->checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, part_content->data, part_content->len);
