@@ -1359,14 +1359,16 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 	cur = ia;
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
-		current.addr = internet_address_get_addr (addr);
-		if (previous.addr != NULL) {
-			if (current.addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
-				res = FALSE;
-				break;
+		if (internet_address_get_type (addr) == INTERNET_ADDRESS_NAME) {
+			current.addr = internet_address_get_addr (addr);
+			if (previous.addr != NULL) {
+				if (current.addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+					res = FALSE;
+					break;
+				}
 			}
+			previous.addr = current.addr;
 		}
-		previous.addr = current.addr;
 		cur = internet_address_list_next (cur);
 	}
 #endif
