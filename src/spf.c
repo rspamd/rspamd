@@ -667,7 +667,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 				break;
 			case 2:
 				/* Read macro name */
-				switch (*p) {
+				switch (g_ascii_tolower (*p)) {
 					case 'i':
 						len += sizeof ("255.255.255.255") - 1;
 						break;
@@ -768,7 +768,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
 				break;
 			case 2:
 				/* Read macro name */
-				switch (*p) {
+				switch (g_ascii_tolower (*p)) {
 					case 'i':
 						tmp = inet_ntoa (task->from_addr);
 						len = strlen (tmp);
@@ -875,15 +875,15 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 
 
 		/* Now check what we have */
-		switch (*begin) {
+		switch (g_ascii_tolower (*begin)) {
 			case 'a':
 				/* all or a */
-				if (strncmp (begin, SPF_ALL, sizeof (SPF_ALL) - 1) == 0) {
+				if (g_ascii_strncasecmp (begin, SPF_ALL, sizeof (SPF_ALL) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_ALL) - 1;
 					res = parse_spf_all (task, begin, rec, new);
 				}
-				else if (strncmp (begin, SPF_A, sizeof (SPF_A) - 1) == 0) {
+				else if (g_ascii_strncasecmp (begin, SPF_A, sizeof (SPF_A) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_A) - 1;
 					res = parse_spf_a (task, begin, rec, new);
@@ -894,17 +894,17 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				break;
 			case 'i':
 				/* include or ip4 */
-				if (strncmp (begin, SPF_IP4, sizeof (SPF_IP4) - 1) == 0) {
+				if (g_ascii_strncasecmp (begin, SPF_IP4, sizeof (SPF_IP4) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_IP4) - 1;
 					res = parse_spf_ip4 (task, begin, rec, new);
 				}
-				else if (strncmp (begin, SPF_INCLUDE, sizeof (SPF_INCLUDE) - 1) == 0) {
+				else if (g_ascii_strncasecmp (begin, SPF_INCLUDE, sizeof (SPF_INCLUDE) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_INCLUDE) - 1;
 					res = parse_spf_include (task, begin, rec, new);
 				}
-				else if (strncmp (begin, SPF_IP6, sizeof (SPF_IP4) - 1) == 0) {
+				else if (g_ascii_strncasecmp (begin, SPF_IP6, sizeof (SPF_IP4) - 1) == 0) {
 					begin += sizeof (SPF_IP6) - 1;
 					msg_info ("ignoring ip6 spf command as IPv6 is not supported: %s", begin);
 					new = NULL;
@@ -916,7 +916,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				break;
 			case 'm':
 				/* mx */
-				if (strncmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
+				if (g_ascii_strncasecmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_MX) - 1;
 					res = parse_spf_mx (task, begin, rec, new);
@@ -927,7 +927,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				break;
 			case 'p':
 				/* ptr */
-				if (strncmp (begin, SPF_PTR, sizeof (SPF_PTR) - 1) == 0) {
+				if (g_ascii_strncasecmp (begin, SPF_PTR, sizeof (SPF_PTR) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_PTR) - 1;
 					res = parse_spf_ptr (task, begin, rec, new);
@@ -938,11 +938,11 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				break;
 			case 'e':
 				/* exp or exists */
-				if (strncmp (begin, SPF_EXP, sizeof (SPF_EXP) - 1) == 0) {
+				if (g_ascii_strncasecmp (begin, SPF_EXP, sizeof (SPF_EXP) - 1) == 0) {
 					begin += sizeof (SPF_EXP) - 1;
 					res = parse_spf_exp (task, begin, rec, NULL);
 				}
-				else if (strncmp (begin, SPF_EXISTS, sizeof (SPF_EXISTS) - 1) == 0) {
+				else if (g_ascii_strncasecmp (begin, SPF_EXISTS, sizeof (SPF_EXISTS) - 1) == 0) {
 					NEW_ADDR (new);
 					begin += sizeof (SPF_EXISTS) - 1;
 					res = parse_spf_exists (task, begin, rec, new);
@@ -953,7 +953,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				break;
 			case 'r':
 				/* redirect */
-				if (strncmp (begin, SPF_REDIRECT, sizeof (SPF_REDIRECT) - 1) == 0) {
+				if (g_ascii_strncasecmp (begin, SPF_REDIRECT, sizeof (SPF_REDIRECT) - 1) == 0) {
 					begin += sizeof (SPF_REDIRECT) - 1;
 					res = parse_spf_redirect (task, begin, rec, NULL);
 				}
