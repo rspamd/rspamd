@@ -101,14 +101,9 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 		reopen_log ();
 		break;
 	case SIGINT:
-		/* Ignore SIGINT as we should got SIGTERM after it anyway */
-		return;
 	case SIGTERM:
-#ifdef WITH_PROFILER
-		exit (0);
-#else
-		_exit (1);
-#endif
+		/* Ignore SIGINT and SIGTERM as they are handled by libevent handler */
+		return;
 		break;
 	}
 }
@@ -279,6 +274,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	int                             r, fd, i, version = 0;
 	struct stat                     st;
 	char                           *filename, header[4];
+	gboolean                        touch_stat = TRUE;
 	struct rspamd_fuzzy_node       *node;
 	struct {
 		int32_t                         value;
@@ -287,6 +283,10 @@ read_hashes_file (struct rspamd_worker *wrk)
 	}								legacy_node;
 #ifdef WITH_JUDY
 	PPvoid_t                         pvalue;
+
+	if (server_stat->fuzzy_hashes != 0) {
+		touch_stat = FALSE;
+	}
 
 	if (use_judy) {
 		jtree = NULL;
@@ -370,7 +370,9 @@ read_hashes_file (struct rspamd_worker *wrk)
 		}
 #endif
 		bloom_add (bf, node->h.hash_pipe);
-		server_stat->fuzzy_hashes ++;
+		if (touch_stat) {
+			server_stat->fuzzy_hashes ++;
+		}
 	}
 
 #ifdef WITH_JUDY
@@ -775,6 +777,15 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 #endif
 	}
 
+	/* Listen event */
+	while ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
+		sleep (1);
+		if (++retries > MAX_RETRIES) {
+			msg_err ("cannot bind to socket, exiting");
+			exit (0);
+		}
+	}
+
 	/* Init bloom filter */
 	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);
 	/* Try to read hashes from file */
@@ -788,14 +799,7 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	tmv.tv_usec = 0;
 	evtimer_add (&tev, &tmv);
 
-	/* Accept event */
-	while ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
-		sleep (1);
-		if (++retries > MAX_RETRIES) {
-			msg_err ("cannot bind to socket, exiting");
-			exit (0);
-		}
-	}
+
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
 	event_add (&worker->bind_ev, NULL);
 

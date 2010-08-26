@@ -382,7 +382,9 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
 		if (nodes < minnodes) {
 			msg_info ("do not learn message as it has too few tokens: %d, while %d min", nodes, minnodes);
-			*sum = 0;
+			if (sum != NULL) {
+				*sum = 0;
+			}
 			g_set_error (err,
 	                   winnow_error_quark(),		/* error domain */
 	                   1,            				/* error code */
