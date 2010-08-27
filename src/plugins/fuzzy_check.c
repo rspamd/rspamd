@@ -48,6 +48,7 @@
 #include "../util.h"
 #include "../view.h"
 #include "../map.h"
+#include "../images.h"
 #include "../fuzzy_storage.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
@@ -71,6 +72,11 @@ struct fuzzy_mapping {
 	double weight;
 };
 
+struct fuzzy_mime_type {
+	char *type;
+	char *subtype;
+};
+
 struct fuzzy_ctx {
 	int                             (*filter) (struct worker_task * task);
 	char                           *symbol;
@@ -78,9 +84,13 @@ struct fuzzy_ctx {
 	int                             servers_num;
 	memory_pool_t                  *fuzzy_pool;
 	double                          max_score;
-	uint32_t                        min_hash_len;
+	gint32                          min_hash_len;
 	radix_tree_t                   *whitelist;
 	GHashTable                     *mappings;
+	GList                          *mime_types;
+	gint32                          min_bytes;
+	gint32                          min_height;
+	gint32                          min_width;
 };
 
 struct fuzzy_client_session {
@@ -155,6 +165,55 @@ parse_flags_string (char *str)
 	}
 
 	g_strfreev (strvec);
+}
+
+static GList *
+parse_mime_types (const char *str)
+{
+	char                          **strvec, *p;
+	int                             num, i;
+	struct fuzzy_mime_type         *type;
+	GList                          *res = NULL;
+
+	strvec = g_strsplit_set (str, ",", 0);
+	num = g_strv_length (strvec);
+	for (i = 0; i < num; i++) {
+		g_strstrip (strvec[i]);
+		if ((p = strchr (strvec[i], '/')) != NULL) {
+			*p = 0;
+			type = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mime_type));
+			type->type = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]);
+			type->subtype = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, p + 1);
+			res = g_list_prepend (res, type);
+		}
+		else {
+			msg_info ("bad content type: %s", strvec[i]);
+		}
+	}
+
+	if (res != NULL) {
+		memory_pool_add_destructor (fuzzy_module_ctx->fuzzy_pool, (pool_destruct_func)g_list_free, res);
+	}
+
+	return res;
+}
+
+static gboolean
+fuzzy_check_content_type (GMimeContentType *type)
+{
+	struct fuzzy_mime_type         *ft;
+	GList                          *cur;
+
+	cur = fuzzy_module_ctx->mime_types;
+	while (cur) {
+		ft = cur->data;
+		if (g_mime_content_type_is_type (type, ft->type, ft->subtype)) {
+			return TRUE;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
 }
 
 static void
@@ -240,7 +299,7 @@ fuzzy_normalize (int32_t in, double weight)
 int
 fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
-	fuzzy_module_ctx = g_malloc (sizeof (struct fuzzy_ctx));
+	fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
 
 	fuzzy_module_ctx->filter = fuzzy_mime_filter;
 	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
@@ -276,7 +335,28 @@ fuzzy_check_module_config (struct config_file *cfg)
 		fuzzy_module_ctx->min_hash_len = strtoul (value, NULL, 10);
 	}
 	else {
-		fuzzy_module_ctx->min_hash_len = 0.;
+		fuzzy_module_ctx->min_hash_len = 0;
+	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "min_bytes")) != NULL) {
+		fuzzy_module_ctx->min_bytes = strtoul (value, NULL, 10);
+	}
+	else {
+		fuzzy_module_ctx->min_bytes = 0;
+	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "min_height")) != NULL) {
+		fuzzy_module_ctx->min_height = strtoul (value, NULL, 10);
+	}
+	else {
+		fuzzy_module_ctx->min_height = 0;
+	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "min_width")) != NULL) {
+		fuzzy_module_ctx->min_width = strtoul (value, NULL, 10);
+	}
+	else {
+		fuzzy_module_ctx->min_width = 0;
+	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "mime_types")) != NULL) {
+		fuzzy_module_ctx->mime_types = parse_mime_types (value);
 	}
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "whitelist")) != NULL) {
@@ -525,6 +605,8 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 {
 	struct mime_text_part          *part;
 	struct mime_part               *mime_part;
+	struct rspamd_image            *image;
+	char                           *checksum;
 	GList                          *cur;
 	fuzzy_hash_t                   *fake_fuzzy;
 
@@ -560,15 +642,37 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 
 		cur = g_list_next (cur);
 	}
-
+	/* Process images */
+	cur = task->images;
+	while (cur) {
+		image = cur->data;
+		if (image->data->len > 0) {
+			if (fuzzy_module_ctx->min_height <= 0 || image->height >= fuzzy_module_ctx->min_height) {
+				if (fuzzy_module_ctx->min_width <= 0 || image->width >= fuzzy_module_ctx->min_width) {
+					checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, image->data->data, image->data->len);
+					/* Construct fake fuzzy hash */
+					fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
+					g_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
+					register_fuzzy_call (task, fake_fuzzy);
+					g_free (checksum);
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+	/* Process other parts */
 	cur = task->parts;
 	while (cur) {
 		mime_part = cur->data;
-		if (mime_part->content->len > 0 && mime_part->checksum != NULL) {
-			/* Construct fake fuzzy hash */
-			fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
-			g_strlcpy (fake_fuzzy->hash_pipe, mime_part->checksum, sizeof (fake_fuzzy->hash_pipe));
-			register_fuzzy_call (task, fake_fuzzy);
+		if (mime_part->content->len > 0 && fuzzy_check_content_type (mime_part->type)) {
+			if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->content->len >= fuzzy_module_ctx->min_bytes) {
+					checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, mime_part->content->data, mime_part->content->len);
+					/* Construct fake fuzzy hash */
+					fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
+					g_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
+					register_fuzzy_call (task, fake_fuzzy);
+					g_free (checksum);
+			}
 		}
 		cur = g_list_next (cur);
 	}
@@ -636,9 +740,10 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	struct worker_task             *task;
 	struct mime_text_part          *part;
 	struct mime_part               *mime_part;
+	struct rspamd_image            *image;
 	GList                          *cur;
 	int                             r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
-	char                            out_buf[BUFSIZ];
+	char                            out_buf[BUFSIZ], *checksum;
 	fuzzy_hash_t                    fake_fuzzy;
 
 	/* Extract arguments */
@@ -694,25 +799,64 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			}
 			cur = g_list_next (cur);
 		}
+		/* Process images */
+		cur = task->images;
+		while (cur) {
+			image = cur->data;
+			if (image->data->len > 0) {
+				if (fuzzy_module_ctx->min_height <= 0 || image->height >= fuzzy_module_ctx->min_height) {
+					if (fuzzy_module_ctx->min_width <= 0 || image->width >= fuzzy_module_ctx->min_width) {
+						checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, image->data->data, image->data->len);
+						/* Construct fake fuzzy hash */
+						fake_fuzzy.block_size = 0;
+						bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
+						g_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
+						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
+							/* Cannot write hash */
+							session->state = STATE_REPLY;
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+								return;
+							}
+							g_free (checksum);
+							free_task (task, FALSE);
+							return;
+						}
+
+						msg_info ("save hash of image: [%s]", checksum);
+						g_free (checksum);
+					}
+				}
+			}
+			cur = g_list_next (cur);
+		}
+		/* Process other parts */
 		cur = task->parts;
 		while (cur) {
 			mime_part = cur->data;
-			if (mime_part->content->len > 0 && mime_part->checksum != NULL) {
-				/* Construct fake fuzzy hash */
-				fake_fuzzy.block_size = 0;
-				bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
-				g_strlcpy (fake_fuzzy.hash_pipe, mime_part->checksum, sizeof (fake_fuzzy.hash_pipe));
-				if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
-					/* Cannot write hash */
-					session->state = STATE_REPLY;
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return;
-					}
-					free_task (task, FALSE);
-					return;
+			if (mime_part->content->len > 0 && fuzzy_check_content_type (mime_part->type)) {
+				if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->content->len >= fuzzy_module_ctx->min_bytes) {
+						checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, mime_part->content->data, mime_part->content->len);
+						/* Construct fake fuzzy hash */
+						fake_fuzzy.block_size = 0;
+						bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
+						g_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
+						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
+							/* Cannot write hash */
+							session->state = STATE_REPLY;
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+								return;
+							}
+							g_free (checksum);
+							free_task (task, FALSE);
+							return;
+						}
+						msg_info ("save hash of part of type: %s/%s: [%s]",
+								mime_part->type->type, mime_part->type->subtype,
+								checksum);
+						g_free (checksum);
 				}
-				msg_info ("save hash of image: [%s]", mime_part->checksum);
 			}
 			cur = g_list_next (cur);
 		}

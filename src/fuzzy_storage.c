@@ -548,13 +548,15 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s)
 	struct rspamd_fuzzy_node       *h;
 	gboolean                        res = FALSE;
 #ifdef WITH_JUDY
-	PPvoid_t                         pvalue;
+	PPvoid_t                        pvalue;
+	gpointer                        data;
 
 	if (use_judy) {
 		pvalue = JudySLGet (jtree, s->hash_pipe, PJE0);
 		if (pvalue) {
+			data = *pvalue;
 			res = JudySLDel (&jtree, s->hash_pipe, PJE0);
-			g_free (*pvalue);
+			g_free (data);
 			bloom_del (bf, s->hash_pipe);
 			msg_info ("fuzzy hash was successfully deleted");
 			server_stat->fuzzy_hashes --;
