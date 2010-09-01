@@ -586,7 +586,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, text_part->urls);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
-	else if (g_mime_content_type_is_type (type, "text", "plain")) {
+	else if (g_mime_content_type_is_type (type, "text", "*")) {
 		debug_task ("got urls from text/plain part");
 
 		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
