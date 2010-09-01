@@ -718,7 +718,9 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			else {
 				msg_warn ("write to stream failed: %d, %s", errno, strerror (errno));
 			}
+#ifndef GMIME24
 			g_object_unref (wrapper);
+#endif
 		}
 		else {
 			msg_warn ("cannot get wrapper for mime part, type of part: %s/%s", type->type, type->subtype);
