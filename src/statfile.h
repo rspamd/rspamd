@@ -96,7 +96,7 @@ typedef struct statfile_pool_s {
  * @param max_size maximum size
  * @return statfile pool object
  */
-statfile_pool_t* statfile_pool_new (size_t max_size);
+statfile_pool_t* statfile_pool_new (memory_pool_t *pool, size_t max_size);
 
 /**
  * Open statfile and attach it to pool

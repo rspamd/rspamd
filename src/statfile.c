@@ -205,15 +205,15 @@ statfile_pool_expire (statfile_pool_t * pool)
 }
 
 statfile_pool_t                *
-statfile_pool_new (size_t max_size)
+statfile_pool_new (memory_pool_t *pool, size_t max_size)
 {
 	statfile_pool_t                *new;
 
-	new = g_malloc (sizeof (statfile_pool_t));
+	new = memory_pool_alloc_shared (pool, sizeof (statfile_pool_t));
 	bzero (new, sizeof (statfile_pool_t));
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
-	new->files = memory_pool_alloc (new->pool, STATFILES_MAX * sizeof (stat_file_t));
+	new->files = memory_pool_alloc_shared (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = memory_pool_get_mutex (new->pool);
 
 	return new;
@@ -382,13 +382,17 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	}
 
 	if (file->map) {
+		msg_info ("syncing statfile %s", file->filename);
+		msync (file->map, file->len, MS_INVALIDATE | MS_SYNC);
 		munmap (file->map, file->len);
 	}
 	if (file->fd != -1) {
 		close (file->fd);
 	}
+	/* Move the remain statfiles */
+	memmove (pos, ((guint8 *)pos) + sizeof (stat_file_t),
+			(--pool->opened - (pos - pool->files)) * sizeof (stat_file_t));
 	pool->occupied -= file->len;
-	pool->opened--;
 
 	memory_pool_unlock_mutex (pool->lock);
 
@@ -496,7 +500,6 @@ statfile_pool_delete (statfile_pool_t * pool)
 		statfile_pool_close (pool, &pool->files[i], FALSE);
 	}
 	memory_pool_delete (pool->pool);
-	g_free (pool);
 }
 
 void

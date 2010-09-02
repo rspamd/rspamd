@@ -903,7 +903,7 @@ main (int argc, char **argv, char **env)
 	setproctitle ("main process");
 
 	/* Init statfile pool */
-	rspamd->statfile_pool = statfile_pool_new (rspamd->cfg->max_statfile_size);
+	rspamd->statfile_pool = statfile_pool_new (rspamd->server_pool, rspamd->cfg->max_statfile_size);
 
 	event_init ();
 	g_mime_init (0);
@@ -1001,6 +1001,8 @@ main (int argc, char **argv, char **env)
 	g_hash_table_foreach_remove (rspamd->workers, wait_for_workers, NULL);
 
 	msg_info ("terminating...");
+
+	statfile_pool_delete (rspamd->statfile_pool);
 
 	close_log ();
 

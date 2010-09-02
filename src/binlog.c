@@ -257,12 +257,13 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 				strerror (errno), log->metaindex->indexes[log->metaindex->last_index]);
 		return FALSE;
 	}
+	log->cur_idx->last_index ++;
 	if (write (log->fd, log->cur_idx, sizeof (struct rspamd_index_block)) == -1) {
 		unlock_file (log->fd, FALSE);
 		msg_info ("cannot write index to file: %s, error: %s", log->filename, strerror (errno));
 		return FALSE;
 	}
-	log->cur_idx->last_index ++;
+
 	unlock_file (log->fd, FALSE);
 	
 	return TRUE;
@@ -466,6 +467,8 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, 
 	/* Now fill reply structure */
 	(*rep)->len = idx->len;
 	/* Read result */
+	msg_info ("update from binlog '%s' from revision: %ul to revision %ul size is %ul",
+			log->filename, (long unsigned)from_rev, (long unsigned)log->cur_seq, (long unsigned)idx->len);
 	if (lseek (log->fd, idx->seek, SEEK_SET) == -1) {
 		msg_warn ("cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
 		res = FALSE;
@@ -535,6 +538,7 @@ maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_fil
 	}
 
 	if (binlog_insert (log, nodes)) {
+		msg_info ("set new revision of statfile %s: %ul", st->symbol, (long unsigned)log->cur_seq);
 		(void)statfile_set_revision (file, log->cur_seq, log->cur_time);
 		return TRUE;
 	}

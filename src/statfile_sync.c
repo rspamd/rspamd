@@ -170,6 +170,10 @@ sync_read (f_str_t * in, void *arg)
 	uint64_t                rev = 0;
 	time_t                  ti = 0;
 
+	if (in->len == 0) {
+		/* Skip empty lines */
+		return TRUE;
+	}
 	switch (ctx->state) {
 		case SYNC_STATE_GREETING:
 			/* Skip greeting line and write sync command */
@@ -182,7 +186,7 @@ sync_read (f_str_t * in, void *arg)
 		case SYNC_STATE_READ_LINE:
 			/* Try to parse line from server */
 			if (!parse_revision_line (ctx, in)) {
-				msg_info ("cannot parse line: %*s", in->len, in->begin);
+				msg_info ("cannot parse line of length %z: '%*s'", in->len, (int)in->len, in->begin);
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
@@ -198,7 +202,7 @@ sync_read (f_str_t * in, void *arg)
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
-				/* Immideately return from callback */ 
+				/* Immediately return from callback */
 				return FALSE;
 			}
 			break;
@@ -212,6 +216,7 @@ sync_read (f_str_t * in, void *arg)
 				return FALSE;
 			}
 			statfile_set_revision (ctx->real_statfile, ctx->new_rev, ctx->new_time);
+			msg_info ("set new revision: %ul, readed %ul bytes", (long unsigned)ctx->new_rev, (long unsigned)in->len);
 			/* Now try to read other revision or END line */
 			ctx->state = SYNC_STATE_READ_LINE;
 			rspamd_set_dispatcher_policy (ctx->dispatcher, BUFFER_LINE, 0);
@@ -277,26 +282,33 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st)
 {
 	struct rspamd_sync_ctx *ctx;
 	
-	ctx = memory_pool_alloc (pool->pool, sizeof (struct rspamd_sync_ctx));
-	ctx->st = st;
-	/* Add some jittering for synchronization */
-	ctx->interval.tv_sec = g_random_int_range (MAX_SYNC_TIME, MAX_SYNC_TIME * 2);
-	ctx->interval.tv_usec = 0;
-	/* Open statfile and attach it to pool */
-	if ((ctx->real_statfile = statfile_pool_is_open (pool, st->path)) == NULL) {
-		if ((ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-			msg_warn ("cannot open %s", st->path);
-			if (statfile_pool_create (pool, st->path, st->size) == -1) {
-				msg_err ("cannot create statfile %s", st->path);
-				return FALSE;
+	if (st->binlog->master_addr.s_addr != INADDR_NONE &&
+			st->binlog->master_addr.s_addr != INADDR_ANY) {
+		ctx = memory_pool_alloc (pool->pool, sizeof (struct rspamd_sync_ctx));
+		ctx->st = st;
+		/* Add some jittering for synchronization */
+		ctx->interval.tv_sec = g_random_int_range (MAX_SYNC_TIME, MAX_SYNC_TIME * 2);
+		ctx->interval.tv_usec = 0;
+		/* Open statfile and attach it to pool */
+		if ((ctx->real_statfile = statfile_pool_is_open (pool, st->path)) == NULL) {
+			if ((ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
+				msg_warn ("cannot open %s", st->path);
+				if (statfile_pool_create (pool, st->path, st->size) == -1) {
+					msg_err ("cannot create statfile %s", st->path);
+					return FALSE;
+				}
+				ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE);
 			}
-			ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE);
 		}
+		/* Now plan event for it's future executing */
+		evtimer_set (&ctx->tm_ev, sync_timer_callback, ctx);
+		evtimer_add (&ctx->tm_ev, &ctx->interval);
+		log_next_sync (st->symbol, ctx->interval.tv_sec);
 	}
-	/* Now plan event for it's future executing */
-	evtimer_set (&ctx->tm_ev, sync_timer_callback, ctx);
-	evtimer_add (&ctx->tm_ev, &ctx->interval);
-	log_next_sync (st->symbol, ctx->interval.tv_sec);
+	else {
+		msg_err ("cannot add statfile watch for statfile %s: no master defined", st->symbol);
+		return FALSE;
+	}
 
 	return TRUE;
 }

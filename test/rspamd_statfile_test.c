@@ -10,12 +10,14 @@ void
 rspamd_statfile_test_func ()
 {
 	statfile_pool_t *pool;
+	memory_pool_t *p;
 	stat_file_t *st;
 	uint32_t random_hashes[HASHES_NUM], i, v;
 	time_t now;
 	
+	p = memory_pool_new (memory_pool_get_size ());
 	umask (S_IWGRP | S_IWOTH);
-	pool = statfile_pool_new (10 * 1024 * 1024);
+	pool = statfile_pool_new (p, 10 * 1024 * 1024);
 
 	now = time (NULL);
 	/* Fill random array */

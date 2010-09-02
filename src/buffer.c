@@ -403,6 +403,10 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					b = d->in_buf->data->begin;
 					c = b;
 				}
+				else {
+					d->in_buf->data->len = 0;
+					d->in_buf->pos = d->in_buf->data->begin;
+				}
 				if (d->policy != saved_policy && len != r) {
 					debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
 					read_buffers (fd, d, TRUE);

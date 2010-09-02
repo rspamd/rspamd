@@ -87,6 +87,7 @@ static GCompletion             *comp;
 static time_t                   start_time;
 
 static char                     greetingbuf[1024];
+static sig_atomic_t             wanna_die = 0;
 extern rspamd_hash_t           *counters;
 
 static gboolean                 controller_write_socket (void *arg);
@@ -99,13 +100,23 @@ static void
 sig_handler (int signo, siginfo_t *info, void *unused)
 #endif
 {
+	struct timeval                  tv;
 	switch (signo) {
 	case SIGUSR1:
 		reopen_log ();
 		break;
 	case SIGINT:
 	case SIGTERM:
-		_exit (1);
+		if (!wanna_die) {
+			wanna_die = 1;
+			tv.tv_sec = 0;
+			tv.tv_usec = 0;
+			event_loopexit (&tv);
+
+#ifdef WITH_GPERF_TOOLS
+			ProfilerStop ();
+#endif
+		}
 		break;
 	}
 }
@@ -308,17 +319,19 @@ process_sync_command (struct controller_session *session, char **args)
 	
 	while (binlog_sync (binlog, rev, &time, &data)) {
 		r = rspamd_snprintf (out_buf, sizeof (out_buf), "%ul %ul %ul" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE)) {
+		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			if (data != NULL) {
 				g_free (data);
 			}
 			return FALSE;
 		}
-		if (!rspamd_dispatcher_write (session->dispatcher, data->data, data->len, TRUE, FALSE)) {
-			if (data != NULL) {
-				g_free (data);
+		if (data->data != NULL) {
+			if (!rspamd_dispatcher_write (session->dispatcher, data->data, data->len, TRUE, FALSE)) {
+				if (data != NULL) {
+					g_free (data);
+				}
+				return FALSE;
 			}
-			return FALSE;
 		}
 		rev ++;
 	}
@@ -641,6 +654,12 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 		if (!process_sync_command (session, cmd_args)) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "FAIL" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return FALSE;
+			}
+			return TRUE;
+		}
+		else {
+			if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
 				return FALSE;
 			}
 			return TRUE;
