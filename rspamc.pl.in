@@ -10,6 +10,7 @@
 use Socket qw(:DEFAULT :crlf);
 use Term::Cap;
 use Mail::Rspamd::Client;
+use Mail::Rspamd::Config;
 use Data::Dumper;
 
 my %cfg = (
@@ -101,47 +102,22 @@ sub load_hosts_file {
 # Load rspamd config params
 sub parse_config {
     my ($is_ctrl) = @_;
-	
-	if (! open CONF, "< $cfg{'conf_file'}") {
-		print STDERR "Config file $cfg{'conf_file'} cannot be opened\n";
-		return;
+
+	my $parser = Mail::Rspamd::Config->new();
+
+	$parser->load($cfg{'conf_file'});
+
+	if (defined ($parser->{workers})) {
+		foreach my $worker (@{ $parser->{workers} }) {
+			if ($is_ctrl && $worker->{'type'} eq 'controller') {
+				$cfg{'hosts'} = [ $worker->{'bind_socket'} ];
+				$cfg{'password'} = $worker->{options}->{password};
+			}
+			elsif (!$is_ctrl &&  $worker->{'type'} eq 'normal') {
+				$cfg{'hosts'} = [ $worker->{'bind_socket'} ];
+			}
+		}
 	}
-
-    my $ctrl = 0, $skip = 0;
-    while (<CONF>) {
-        if ($_ =~ /^.*type.*=.*controller.*$/i) {
-            $ctrl = 1;
-        }
-        if ($ctrl && $_ =~ /}/) {
-            $ctrl = 0;
-        }
-        if ($_ =~ /^.*type.*=.*(?:lmtp|delivery|fuzzy).*$/i) {
-            $skip = 1;
-        }
-        if ($skip && $_ =~ /}/) {
-            $skip = 0;
-        }
-        if (!$skip && ((!$is_ctrl && !$ctrl) || ($ctrl && $is_ctrl))
-                && $_ =~ /^\s*bind_socket\s*=\s*((([^:]+):(\d+))|(\/\S*))/i) {
-            if ($3 && $4) {
-				if ($3 eq '*') {
-					$cfg{'hosts'} = [ "127.0.0.1:$4" ];
-				}
-				else {
-					$cfg{'hosts'} = [ "$3:$4" ];
-				}
-            }
-            else {
-                $cfg{'hosts'} = [ "$5" ];
-            }
-        }
-        if ($ctrl && $is_ctrl && $_ =~ /^\s*password\s*=\s*"(\S+)"/) {
-            $cfg{'password'} = $1;
-        }
-    }
-
-    close CONF;
-
 }
 
 sub print_control_result {

@@ -26,7 +26,6 @@ use constant PARSER_STATE_MODULE => 3;
 use constant PARSER_STATE_CLASSIFIER => 4;
 use constant PARSER_STATE_STATFILE => 5;
 use constant PARSER_STATE_LOGGING => 6;
-use constant PARSER_STATE_FACTORS => 7;
 use constant PARSER_STATE_METRIC => 8;
 use constant PARSER_STATE_VIEW => 9;
 use constant PARSER_STATE_MODULES => 10;
@@ -53,13 +52,14 @@ sub new {
 		workers	=> [],
 		modules	=> {},
 		classifiers	=> {},
-		factors => {},
+		metrics => {},
 		options => {},
 		variables => {},
 		logging	=> {},
 		lua => [],
 		composites => {},
 		paths => [],
+		views => [],
 		parser_state => {
 			state => PARSER_STATE_START,
 			valid => 1,
@@ -163,10 +163,13 @@ sub _handle_start_element {
 				$self->{parser_state}->{state} = PARSER_STATE_WORKER;
 				$self->{parser_state}->{worker} = { options => {} };
 			}
+			elsif ($lce eq 'view') {
+				$self->{parser_state}->{state} = PARSER_STATE_VIEW;
+				$self->{parser_state}->{view} = {};
+			}
 			elsif ($lce eq 'metric') {
-				$self->parser_state->state = PARSER_STATE_METRIC;
-				$self->_get_attr('name', 'name', 1, @attrs);
-				$self->{parser_state}->{metric} = {};
+				$self->{parser_state}->{state} = PARSER_STATE_METRIC;
+				$self->{parser_state}->{metric} = { symbols => {} };
 			}
 			elsif ($lce eq 'module') {
 				$self->{parser_state}->{state} = PARSER_STATE_MODULE;
@@ -177,9 +180,6 @@ sub _handle_start_element {
 				$self->{parser_state}->{state} = PARSER_STATE_CLASSIFIER;
 				$self->_get_attr('type', 'type', 1, @attrs);
 				$self->{parser_state}->{classifier} = { statfiles => []};
-			}
-			elsif ($lce eq 'factors') {
-				$self->{parser_state}->{state} = PARSER_STATE_FACTORS;
 			}
 			elsif ($lce eq 'variable') {
 				$self->_get_attr('name', 'name', 1, @attrs);
@@ -208,10 +208,10 @@ sub _handle_start_element {
 				$self->{error} = 'Invalid tag <' . $lce . '> in module section';
 			}
 		}
-		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_METRIC) {
 			my $lce = lc $element;
-			if ($lce eq 'factor') {
-				$self->_get_attr('name', 'name', 1, @attrs);
+			if ($lce eq 'symbol') {
+				$self->_get_attr('weight', 'weight', 1, @attrs);
 			}
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_CLASSIFIER) {
@@ -272,9 +272,15 @@ sub _handle_end_element {
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_METRIC) {
 			if ($lce eq 'metric') {
-				$self->{metrics}->{ $self->{parser_state}->{name} } = $self->{parser_state}->{metric};
-				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
-				$self->{parser_state}->{metric} = undef;
+				if (exists ($self->{parser_state}->{metric}->{name})) {
+					$self->{metrics}->{ $self->{parser_state}->{metric}->{name} } = $self->{parser_state}->{metric};
+					$self->{parser_state}->{state} = PARSER_STATE_MAIN;
+					$self->{parser_state}->{metric} = undef;
+				}
+				else {
+					$self->{parser_state}->{valid} = 0;
+					$self->{error} = 'Metric must have <name> tag';
+				}
 			}
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_STATFILE) {
@@ -296,12 +302,14 @@ sub _handle_end_element {
 				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
 			}
 		}
-		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
-			if ($lce eq 'factors') {
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_VIEW) {
+			if ($lce eq 'view') {
+				push(@{$self->{views}}, $self->{parser_state}->{view});
 				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
+				$self->{parser_state}->{view} = undef;
 			}
 		}
-		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_MODULES) {
 			if ($lce eq 'modules') {
 				$self->{parser_state}->{state} = PARSER_STATE_MAIN;
 			}
@@ -351,7 +359,7 @@ sub _handle_text {
 			$self->{logging}->{ $self->{parser_state}->{element} } = $data;
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_WORKER) {
-			if ($self->{parser_state}->{element} eq 'param') {
+			if ($self->{parser_state}->{element} eq 'param' || $self->{parser_state}->{element} eq 'option') {
 				$self->{parser_state}->{worker}->{options}->{$self->{parser_state}->{name}} = $data;
 			}
 			else {
@@ -367,14 +375,19 @@ sub _handle_text {
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_MODULE) {
 			$self->{parser_state}->{module}->{ $self->{parser_state}->{option} } = $data;
 		}
-		elsif ($self->{parser_state}->{state} == PARSER_STATE_FACTORS) {
-			$self->{factors}->{ $self->{parser_state}->{name} } = $data;
+		elsif ($self->{parser_state}->{state} == PARSER_STATE_VIEW) {
+			$self->{parser_state}->{view}->{ $self->{parser_state}->{option} } = $data;
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_MODULES) {
 			push(@{$self->{paths}}, $data);
 		}
 		elsif ($self->{parser_state}->{state} == PARSER_STATE_METRIC) {
-			$self->{parser_state}->{metric}->{ $self->{parser_state}->{element} } = $data;
+			if ($self->{parser_state}->{element} eq 'symbol') {
+				$self->{parser_state}->{metric}->{symbols}->{ $data } = $self->{parser_state}->{weight};
+			}
+			else {
+				$self->{parser_state}->{metric}->{ $self->{parser_state}->{element} } = $data;
+			}
 		}
 	}
 }
@@ -473,11 +486,23 @@ sub _dump {
 	}
 	print XML "<!-- End of workers section -->\n\n";
 
-	print XML "<!-- Factors section -->\n<factors>\n";
-	while (my ($k, $v) = each (%{$self->{factors}})) {
-		print XML "  <factor name=\"". $self->_xml_escape($k) ."\">" . $self->_xml_escape($v) . "</factor>\n";
+	print XML "<!-- Metrics section -->\n";
+	while (my ($k, $v) = each (%{$self->{metrics}})) {
+		print XML "<metric name=\"". $self->_xml_escape($k) ."\">\n";
+		while (my ($kk, $vv) = each (%{ $v })) {
+			my $ek = $self->_xml_escape($kk);
+			if ($ek eq 'symbols') {
+				while (my ($sym, $weight) = each (%{ $vv })) {
+					print XML "  <symbol weight=\"". $self->_xml_escape($weight) ."\">" . $self->_xml_escape($sym) . "</symbol>\n";
+				}
+			}
+			else {
+				print XML "  <$ek>" . $self->_xml_escape($vv) . "</$ek>\n";
+			}
+		}
+		print XML "</metric>\n";
 	}
-	print XML "</factors>\n<!-- End of factors section -->\n\n";
+	print XML "<!-- End of metrics section -->\n\n";
 
 	print XML "<!-- Logging section -->\n<logging>\n";
 	while (my ($k, $v) = each (%{$self->{logging}})) {
@@ -548,3 +573,21 @@ sub _xml_escape {
   return $data;
 }
 
+=head2 _xml_unescape
+
+private _xml_unescape()
+
+Description:
+Unescapes characters in xml string
+
+=cut
+sub _xml_unescape {
+  my $data = $_[1];
+  if ($data =~ /\&amp|\&lt|\&gt|\&quot/) {
+    $data =~ s/\&amp;/\&/g;
+    $data =~ s/\&lt\;/\</g;
+    $data =~ s/\&gt\;/\>/g;
+    $data =~ s/\&quot\;/\"/g;
+  }
+  return $data;
+}
