@@ -808,9 +808,9 @@ License:        BSD
 Group:          Mail
 Source:         ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root
-BuildRequires:	cmake, gmime, perl
+#BuildRequires:	cmake, gmime, perl, libevent
 
-%define prefix /opt/${RPMNAME}-%{version}
+%define prefix /usr
 %define rpmprefix $RPM_BUILD_ROOT%{prefix}
 %define srcdirname %{name}-%{version}-Source
 
@@ -822,19 +822,18 @@ ${RPMNAME} : Fast and modular antispam system written in C
 
 %build
 cd ..
-rm -rf build_tree
-mkdir build_tree
-cd build_tree
-cmake -DCMAKE_INSTALL_PREFIX=%{rpmprefix} ../%{srcdirname}
+cd %{srcdirname}
+rm -f CMakeCache.txt
+cmake -DCMAKE_INSTALL_PREFIX=%{prefix} -DDESTDIR=%{rpmprefix} .
+make clean
 make
   
 %install 
-cd ../build_tree
 make install
+cd ..
 
 %clean
 rm -rf %{srcdirname}
-rm -rf build_tree
 
 %files
 %defattr(-,root,root,-)
