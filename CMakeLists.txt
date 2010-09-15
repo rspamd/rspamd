@@ -808,7 +808,7 @@ License:        BSD
 Group:          Mail
 Source:         ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root
-#BuildRequires:	cmake, gmime, perl, libevent
+#BuildRequires:	cmake, gmime-devel, glib2-devel, perl, libevent-devel, lua-devel
 
 %define prefix /usr
 %define rpmprefix $RPM_BUILD_ROOT%{prefix}
@@ -826,10 +826,11 @@ cd %{srcdirname}
 rm -f CMakeCache.txt
 cmake -DCMAKE_INSTALL_PREFIX=%{prefix} -DDESTDIR=%{rpmprefix} .
 make clean
-make
+make DESTDIR=%{rpmprefix} CMAKE_INSTALL_PREFIX=%{prefix}
+
   
 %install 
-make install
+make DESTDIR=%{rpmprefix} CMAKE_INSTALL_PREFIX=%{prefix} install
 cd ..
 
 %clean
