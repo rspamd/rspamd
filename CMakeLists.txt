@@ -10,7 +10,7 @@ SET(RSPAMD_VERSION_MINOR 3)
 SET(RSPAMD_VERSION_PATCH 2)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
-SET(RSPAMD_MASTER_SITE_URL "http://cebka.pp.ru/hg/rspamd")
+SET(RSPAMD_MASTER_SITE_URL "http://bitbucket.org/vstakhov/rspamd")
 SET(RSPAMD_USER "nobody")
 SET(RSPAMD_GROUP "nobody")
 
@@ -42,6 +42,10 @@ INCLUDE(FindPerl)
 SET(CMAKE_REQUIRED_LIBRARIES m)
 SET(CMAKE_REQUIRED_INCLUDES sys/mman.h stdlib.h stdio.h unistd.h time.h sched.h)
 
+IF(CMAKE_INSTALL_PREFIX)
+    SET(PREFIX ${CMAKE_INSTALL_PREFIX})
+ENDIF(CMAKE_INSTALL_PREFIX)
+
 # Platform specific routines
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_BSD_SOURCE -DFREEBSD")
@@ -52,8 +56,13 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 	IF(NOT ETC_PREFIX)
 		SET(ETC_PREFIX /usr/local/etc)
-		SET(PREFIX /usr/local)
 	ENDIF(NOT ETC_PREFIX)
+	IF(NOT MAN_PREFIX)
+		SET(MAN_PREFIX /usr/local/man)
+	ENDIF(NOT MAN_PREFIX)
+	IF(NOT PREFIX)
+		SET(PREFIX /usr/local)
+	ENDIF(NOT PREFIX)
     FIND_LIBRARY(LIBINTL_LIBRARY NAMES intl PATHS   /lib
                                                /opt/lib
                                                /usr/lib
@@ -69,8 +78,14 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 	IF(NOT ETC_PREFIX)
 		SET(ETC_PREFIX /usr/local/etc)
-		SET(PREFIX /usr/local)
 	ENDIF(NOT ETC_PREFIX)
+	IF(NOT MAN_PREFIX)
+		SET(MAN_PREFIX /usr/local/man)
+	ENDIF(NOT MAN_PREFIX)
+	IF(NOT PREFIX)
+		SET(PREFIX /usr/local)
+	ENDIF(NOT PREFIX)
+
     FIND_LIBRARY(LIBINTL_LIBRARY NAMES intl PATHS   /lib
                                                /opt/lib
                                                /usr/lib
@@ -85,8 +100,13 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE -DLINUX")
 	IF(NOT ETC_PREFIX)
 		SET(ETC_PREFIX /etc)
-		SET(PREFIX /usr)
 	ENDIF(NOT ETC_PREFIX)
+	IF(NOT PREFIX)
+		SET(PREFIX /usr)
+	ENDIF(NOT PREFIX)
+	IF(NOT MAN_PREFIX)
+		SET(MAN_PREFIX /usr/share/man)
+	ENDIF(NOT MAN_PREFIX)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)
 	MESSAGE(STATUS "Configuring for Linux")
@@ -96,8 +116,14 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE -DSOLARIS")
 	IF(NOT ETC_PREFIX)
 		SET(ETC_PREFIX /etc)
-		SET(PREFIX /opt/rspamd)
 	ENDIF(NOT ETC_PREFIX)
+	IF(NOT PREFIX)
+		SET(PREFIX /opt/rspamd)
+	ENDIF(NOT PREFIX)
+	IF(NOT MAN_PREFIX)
+		SET(MAN_PREFIX /usr/share/man)
+	ENDIF(NOT MAN_PREFIX)
+
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES resolv)
@@ -154,7 +180,7 @@ ENDIF(ENABLE_STATIC MATCHES "ON")
 pkg_check_modules(GMIME2 gmime-2.0)
 
 # Try to link with gmime24
-IF(NOT GMIME2_FOUND)
+IF(NOT GMIME2_FOUND OR USE_GMIME24)
 	pkg_check_modules(GMIME24 REQUIRED gmime-2.4)
 	SET(GMIME24 "yes")
 	# Gmime2
@@ -173,7 +199,7 @@ IF(NOT GMIME2_FOUND)
 	ENDIF(ENABLE_STATIC MATCHES "ON")
 	INCLUDE_DIRECTORIES(${GMIME24_INCLUDE_DIRS})
 	LINK_DIRECTORIES(${GMIME24_LIBRARY_DIRS})
-ELSE(NOT GMIME2_FOUND)
+ELSE(NOT GMIME2_FOUND OR USE_GMIME24)
 	# Gmime2
 	FOREACH(arg ${GMIME2_CFLAGS})
 		SET(GMIME_CFLAGS "${GMIME_CFLAGS} ${arg}")
@@ -190,7 +216,7 @@ ELSE(NOT GMIME2_FOUND)
 	ENDIF(ENABLE_STATIC MATCHES "ON")
 	INCLUDE_DIRECTORIES(${GMIME2_INCLUDE_DIRS})
 	LINK_DIRECTORIES(${GMIME2_LIBRARY_DIRS})
-ENDIF(NOT GMIME2_FOUND)
+ENDIF(NOT GMIME2_FOUND OR USE_GMIME24)
 
 # Make from ; separated list normal space separated list
 # Glib2
@@ -442,7 +468,9 @@ IF(DEBUG_MODE MATCHES "ON")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 ENDIF(DEBUG_MODE MATCHES "ON")
 
-SET(DESTDIR $ENV{DESTDIR})
+IF(NOT DESTDIR)
+    SET(DESTDIR $ENV{DESTDIR})
+ENDIF(NOT DESTDIR)
 
 ################################ SOURCES SECTION ###########################
 
@@ -560,7 +588,7 @@ ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
 IF(PERL_EXECUTABLE)
 	ADD_CUSTOM_COMMAND(OUTPUT perl/Makefile 
 						DEPENDS perl/Makefile.PL
-						COMMAND ${PERL_EXECUTABLE} ./Makefile.PL DESTDIR=${DESTDIR} PREFIX=${CMAKE_INSTALL_PREFIX} INSTALLMAN3DIR=${CMAKE_INSTALL_PREFIX}/man/man3
+						COMMAND ${PERL_EXECUTABLE} ./Makefile.PL DESTDIR=${DESTDIR} PREFIX=${PREFIX} INSTALLMAN3DIR=${MAN_PREFIX}/man3
 						WORKING_DIRECTORY perl)
 	CONFIGURE_FILE(perl/Makefile.PL.in perl/Makefile.PL)
 	ADD_CUSTOM_TARGET(perlmodule
@@ -696,7 +724,7 @@ FOREACH(LUA_PLUGIN ${LUA_PLUGINS})
 		INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/lua/${_rp})")
 	ENDIF(NOT IS_DIRECTORY ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/lua/${_rp})
 	IF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/${_rp}/${LUA_PLUGIN})
-		INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/lua/${_rp})
+		INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION ${ETC_PREFIX}/rspamd/plugins/lua/${_rp})
 	ENDIF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/${_rp}/${LUA_PLUGIN})
 ENDFOREACH(LUA_PLUGIN)
 
@@ -711,7 +739,7 @@ FOREACH(LUA_CONF ${LUA_CONFIGS})
 		INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp})")
 	ENDIF(NOT IS_DIRECTORY ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp})
 	IF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp}/${LUA_CONF})
-		INSTALL(FILES "conf/lua/${LUA_CONF}" DESTINATION ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp})
+		INSTALL(FILES "conf/lua/${LUA_CONF}" DESTINATION ${ETC_PREFIX}/rspamd/lua/${_rp})
 	ENDIF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp}/${LUA_CONF})
 ENDFOREACH(LUA_CONF)
 
@@ -744,3 +772,82 @@ SET(CPACK_PACKAGE_VERSION_MAJOR ${RSPAMD_VERSION_MAJOR})
 SET(CPACK_PACKAGE_VERSION_MINOR ${RSPAMD_VERSION_MINOR})
 SET(CPACK_PACKAGE_VERSION_PATCH ${RSPAMD_VERSION_PATCH})
 INCLUDE(CPack)
+
+IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    INCLUDE("linux/cmake/DpkgDeb.cmake")
+    INCLUDE("linux/cmake/UseRPMTools.cmake")
+ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+SET(RPMNAME "rspamd")
+SET(PACKAGE_NAME "rspamd")
+SET(PACKAGE_RELEASE "1")
+SET(PACKAGE_SECTION "mail")
+SET(PACKAGE_PRIORITY "optional")
+SET(PACKAGE_HOMEPAGE "http://bitbucket.org/vstakhov/rspamd")
+SET(PACKAGE_MAINTAINER_NAME "vstakhov")
+SET(PACKAGE_MAINTAINER_EMAIL "vsevolod@highsecure.ru")
+SET(PACKAGE_DESCRIPTION_SUMMARY "rspamd - fast and modular antispam system written in C")
+SET(PACKAGE_DESCRIPTION "Fast and modular antispam system written in C")
+IF(GMIME24)
+    SET(PACKAGE_DEPENDS "libevent1, libgmime-2.4-2, liblua5.1-0, libxml-parser-perl, libterm-readkey-perl, libglib2.0-0")
+ELSE(GMIME24)
+    SET(PACKAGE_DEPENDS "libevent1, libgmime-2.0-2, liblua5.1-0, libxml-parser-perl, libterm-readkey-perl, libglib2.0-0")
+ENDIF(GMIME24)
+
+SET(PACKAGE_VERSION "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
+
+
+IF(RPMTools_FOUND)
+    FILE(WRITE linux/rspamd.spec
+"# -*- rpm-spec -*-
+Summary:        ${RPMNAME}
+Name:           ${RPMNAME}
+Version:        ${PACKAGE_VERSION}
+Release:        ${PACKAGE_RELEASE}
+License:        BSD
+Group:          Mail
+Source:         ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildRequires:	cmake, gmime, perl
+
+%define prefix /opt/${RPMNAME}-%{version}
+%define rpmprefix $RPM_BUILD_ROOT%{prefix}
+%define srcdirname %{name}-%{version}-Source
+
+%description
+${RPMNAME} : Fast and modular antispam system written in C
+
+%prep
+%setup -q -n %{srcdirname}
+
+%build
+cd ..
+rm -rf build_tree
+mkdir build_tree
+cd build_tree
+cmake -DCMAKE_INSTALL_PREFIX=%{rpmprefix} ../%{srcdirname}
+make
+  
+%install 
+cd ../build_tree
+make install
+
+%clean
+rm -rf %{srcdirname}
+rm -rf build_tree
+
+%files
+%defattr(-,root,root,-)
+%dir %{prefix}
+%{prefix}/*
+
+%changelog
+* Wed Sep 15 2010 vstakhov <vsevolod@highsecure.ru>
+  Release 0.3.2
+")
+    RPMTools_ADD_RPM_TARGETS("rspamd" "linux/rspamd.spec")
+ENDIF(RPMTools_FOUND)
+
+IF(DPKG_FOUND STREQUAL "YES")
+    ADD_DEBIAN_PACKAGE("rspamd")    
+ENDIF(DPKG_FOUND STREQUAL "YES")
