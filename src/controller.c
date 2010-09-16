@@ -870,6 +870,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
 		msg_info ("learn success for message <%s>, for statfile: %s, sum weight: %.2f",
 				task->message_id, session->learn_symbol, sum);
+		statfile_pool_plan_invalidate (session->worker->srv->statfile_pool, DEFAULT_STATFILE_INVALIDATE_TIME, DEFAULT_STATFILE_INVALIDATE_JITTER);
 		free_task (task, FALSE);
 		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {

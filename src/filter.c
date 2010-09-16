@@ -444,6 +444,7 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 
 			classifier->learn_func (ctx, task->worker->srv->statfile_pool, st->symbol, tokens, TRUE, NULL, 1., NULL);
 			maybe_write_binlog (ctx->cfg, st, statfile, tokens);
+			statfile_pool_plan_invalidate (task->worker->srv->statfile_pool, DEFAULT_STATFILE_INVALIDATE_TIME, DEFAULT_STATFILE_INVALIDATE_JITTER);
 		}
 	}
 }

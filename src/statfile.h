@@ -18,6 +18,9 @@
 #define STATFILE_SECTION_URLS 3
 #define STATFILE_SECTION_REGEXP 4
 
+#define DEFAULT_STATFILE_INVALIDATE_TIME 30
+#define DEFAULT_STATFILE_INVALIDATE_JITTER 30
+
 /**
  * Common statfile header
  */
@@ -89,6 +92,8 @@ typedef struct statfile_pool_s {
 	size_t occupied;						/**< current size						*/
 	memory_pool_t *pool;					/**< memory pool object					*/
 	memory_pool_mutex_t *lock;				/**< mutex								*/
+	struct event  *invalidate_event;        /**< event for pool invalidation        */
+	struct timeval invalidate_tv;
 } statfile_pool_t;
 
 /**
@@ -241,5 +246,11 @@ uint64_t statfile_get_used_blocks (stat_file_t *file);
  * @return number of used blocks or (uint64_t)-1 in case of error
  */
 uint64_t statfile_get_total_blocks (stat_file_t *file);
+
+
+/**
+ * Plan statfile pool invalidation
+ */
+void statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jitter);
 
 #endif

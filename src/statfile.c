@@ -209,11 +209,10 @@ statfile_pool_new (memory_pool_t *pool, size_t max_size)
 {
 	statfile_pool_t                *new;
 
-	new = memory_pool_alloc_shared (pool, sizeof (statfile_pool_t));
-	bzero (new, sizeof (statfile_pool_t));
+	new = memory_pool_alloc0 (pool, sizeof (statfile_pool_t));
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	new->max = max_size;
-	new->files = memory_pool_alloc_shared (new->pool, STATFILES_MAX * sizeof (stat_file_t));
+	new->files = memory_pool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = memory_pool_get_mutex (new->pool);
 
 	return new;
@@ -812,4 +811,38 @@ statfile_get_total_blocks (stat_file_t *file)
 	}
 
 	return header->total_blocks;
+}
+
+static void
+statfile_pool_invalidate_callback (int fd, short what, void *ud)
+{
+	statfile_pool_t                *pool = ud;
+	stat_file_t                    *file;
+	int                             i;
+
+	msg_info ("invalidating %d statfiles", pool->opened);
+
+	for (i = 0; i < pool->opened; i ++) {
+		file = &pool->files[i];
+		msync (file->map, file->len, MS_ASYNC | MS_INVALIDATE);
+	}
+
+}
+
+
+void
+statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jitter)
+{
+
+	if (pool->invalidate_event == NULL || ! evtimer_pending (pool->invalidate_event, NULL)) {
+
+		if (pool->invalidate_event == NULL) {
+			pool->invalidate_event = memory_pool_alloc (pool->pool, sizeof (struct event));
+		}
+		pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
+		pool->invalidate_tv.tv_usec = 0;
+		evtimer_set (pool->invalidate_event, statfile_pool_invalidate_callback, pool);
+		evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
+		msg_info ("invalidate of statfile pool is planned in %d seconds", (int)pool->invalidate_tv.tv_sec);
+	}
 }

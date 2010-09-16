@@ -196,15 +196,16 @@ tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 	const char                     *value;
 
 	ls = GMIME_OBJECT (task->message)->headers;
+	iter = g_mime_header_iter_new ();
 
 	if (g_mime_header_list_get_iter (ls, iter)) {
 		while (g_mime_header_iter_is_valid (iter)) {
 			new = memory_pool_alloc (pool, sizeof (token_node_t));
 			name = g_mime_header_iter_get_name (iter);
 			value = g_mime_header_iter_get_value (iter);
-			headername.begin = name;
+			headername.begin = (u_char *)name;
 			headername.len = strlen (name);
-			headervalue.begin = value;
+			headervalue.begin = (u_char *)value;
 			headervalue.len = strlen (value);
 			new->h1 = fstrhash (&headername) * primes[0];
 			new->h2 = fstrhash (&headervalue) * primes[1];
@@ -216,6 +217,7 @@ tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 			}
 		}
 	}
+	g_mime_header_iter_free (iter);
 #endif
 	return TRUE;
 }
