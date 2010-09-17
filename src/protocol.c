@@ -283,7 +283,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 			if (task->content_length == 0) {
 				tmp = memory_pool_fstrdup (task->task_pool, line);
 				task->content_length = strtoul (tmp, &err, 10);
-				debug_task ("read Content-Length header, value: %lu", (unsigned long int)task->content_length);
+				debug_task ("read Content-Length header, value: %ul", (unsigned long int)task->content_length);
 			}
 		}
 		else {
