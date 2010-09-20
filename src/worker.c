@@ -360,6 +360,7 @@ read_socket (f_str_t * in, void *arg)
 		else {
 			process_statfiles (task);
 			lua_call_post_filters (task);
+			task->state = WRITE_REPLY;
 			return write_socket (task);
 		}
 		break;
