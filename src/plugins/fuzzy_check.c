@@ -118,6 +118,7 @@ struct fuzzy_learn_session {
 };
 
 static struct fuzzy_ctx        *fuzzy_module_ctx = NULL;
+static const gchar              hex_digits[] = "0123456789abcdef";
 
 static int                      fuzzy_mime_filter (struct worker_task *task);
 static void                     fuzzy_symbol_callback (struct worker_task *task, void *unused);
@@ -296,6 +297,27 @@ fuzzy_normalize (int32_t in, double weight)
 	return (double)in;
 }
 
+static const char *
+fuzzy_to_string (fuzzy_hash_t *h)
+{
+	static char strbuf [FUZZY_HASHLEN * 2 + 1];
+	int i;
+	guint8 byte;
+
+	for (i = 0; i < FUZZY_HASHLEN; i ++) {
+		byte = h->hash_pipe[i];
+		if (byte == '\0') {
+			break;
+		}
+		strbuf[i * 2] = hex_digits[byte >> 4];
+		strbuf[i * 2 + 1] = hex_digits[byte & 0xf];
+	}
+
+	strbuf[i * 2] = '\0';
+
+	return strbuf;
+}
+
 int
 fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
@@ -463,8 +485,8 @@ fuzzy_io_callback (int fd, short what, void *arg)
 				symbol = map->symbol;
 				nval = fuzzy_normalize (value, map->weight);
 			}
-			msg_info ("<%s>, found fuzzy hash with weight: %.2f, in list: %d",
-					session->task->message_id, flag, nval);
+			msg_info ("<%s>, found fuzzy hash '%s' with weight: %.2f, in list: %d",
+					session->task->message_id, fuzzy_to_string (session->h), flag, nval);
 			rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
 			insert_result (session->task, symbol, nval, g_list_prepend (NULL, 
 						memory_pool_strdup (session->task->task_pool, buf)));
@@ -527,7 +549,8 @@ fuzzy_learn_callback (int fd, short what, void *arg)
 			goto err;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
-			msg_info ("added fuzzy hash for message <%s>", session->task->message_id);
+			msg_info ("added fuzzy hash '%s' to list: %d for message <%s>",
+					fuzzy_to_string (session->h), session->flag, session->task->message_id);
 			r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
@@ -823,7 +846,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 							return;
 						}
 
-						msg_info ("save hash of image: [%s]", checksum);
+						msg_info ("save hash of image: [%s] to list: %d", checksum, flag);
 						g_free (checksum);
 					}
 				}
@@ -852,9 +875,9 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 							free_task (task, FALSE);
 							return;
 						}
-						msg_info ("save hash of part of type: %s/%s: [%s]",
+						msg_info ("save hash of part of type: %s/%s: [%s] to list %d",
 								mime_part->type->type, mime_part->type->subtype,
-								checksum);
+								checksum, flag);
 						g_free (checksum);
 				}
 			}

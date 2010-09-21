@@ -577,7 +577,10 @@ sub _create_connection {
 		do {
 			$server = $self->_select_server();
 			$tries ++;
-
+			
+			if ($server->{host} eq '*') {
+				$server->{host} = '127.0.0.1';	
+			}
 			$remote = IO::Socket::INET->new( Proto     => "tcp",
 						PeerAddr  => $server->{host},
 						PeerPort  => $server->{port},
@@ -610,6 +613,9 @@ sub _create_connection {
 		}
     }
     elsif ($hostdef =~ /^\s*(([^:]+):(\d+))\s*$/) {
+		if ($2 eq '*') {
+			$2 = '127.0.0.1';	
+		}
 		$remote = IO::Socket::INET->new( Proto     => "tcp",
 					PeerAddr  => $2,
 					PeerPort  => $3,
@@ -627,6 +633,9 @@ sub _create_connection {
 		}
     }
     elsif ($hostdef =~ /^\s*([^:]+)\s*$/) {
+		if ($1 eq '*') {
+			$1 = '127.0.0.1';	
+		}
 		$remote = IO::Socket::INET->new( Proto     => "tcp",
 					PeerAddr  => $1,
 					PeerPort  => $self->{control} ? 11334 : 11333,

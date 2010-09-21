@@ -509,6 +509,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/statfile.c
 				src/statfile_sync.c
 				src/symbols_cache.c
+				src/trie.c
 				src/upstream.c
 				src/url.c
 				src/util.c
@@ -550,6 +551,7 @@ SET(TESTSRC		test/rspamd_expression_test.c
 SET(TESTDEPENDS	src/mem_pool.c
 				src/hash.c
 				src/url.c
+				src/trie.c
 				src/util.c
 				src/radix.c
 				src/fuzzy.c
@@ -570,6 +572,7 @@ SET(EXPRSRC	utils/expression_parser.c)
 SET(UTILSDEPENDS src/mem_pool.c
 				src/hash.c
 				src/url.c
+				src/trie.c
 				src/fuzzy.c
 				src/expressions.c
 				src/message.c

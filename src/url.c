@@ -28,6 +28,7 @@
 #include "fstring.h"
 #include "main.h"
 #include "message.h"
+#include "trie.h"
 
 #define POST_CHAR 1
 #define POST_CHAR_S "\001"
@@ -49,24 +50,55 @@ struct _proto {
 	unsigned int                    need_ssl:1;
 };
 
-static const char              *text_url = "((https?|ftp)://)?"
-	"(\\b(?<![.\\@A-Za-z0-9-])" "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\."
-	"(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel"
-	"|cc|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se"
-	"|[a-z]{2}" "(?(1)|(?=/)))" "(?!\\w)"
-	"|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))"	/* ip in dotted view */
-	"|\\d{5,20}(?(1)|(?=[/:]))"	/* ip in numeric view */
-	")" "(?::\\d{1,5})?"		/* port */
-	"(?!\\.\\w)"				/* host part ended, no more of this further on */
-	"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?"	/* path (&query) */
-	"(?<![\\s>?!),.'\"\\]:])" "(?!@)" ")";
-static const char              *html_url = "(?: src|href)=\"?(" "((https?|ftp)://)?" "(\\b(?<![.\\@A-Za-z0-9-])" "(?: [A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)*\\." "(?i:com|net|org|biz|edu|gov|info|name|int|mil|aero|coop|jobs|mobi|museum|pro|travel" "|[rs]u|uk|ua|by|de|jp|fr|fi|no|no|ca|it|ro|cn|nl|at|nu|se" "|[a-z]{2}" "(?(1)|(?=/)))" "(?!\\w)" "|(?:\\d{1,3}\\.){3}\\d{1,3}(?(1)|(?=[/:]))" ")" "(?::\\d{1,5})?"	/* port */
-	"(?!\\.\\w)"				/* host part ended, no more of this further on */
-	"(?:[/?][;/?:@&=+\\$,[\\]\\-_.!~*'()A-Za-z0-9#%]*)?"	/* path (&query) */
-	"(?<![\\s>?!),.'\"\\]:])" "(?!@)" "))\"?";
+typedef struct url_match_s {
+	const gchar *m_begin;
+	gsize m_len;
+	const gchar *pattern;
+	const gchar *prefix;
+} url_match_t;
 
-static short                    url_initialized = 0;
-GRegex                         *text_re, *html_re;
+struct url_matcher {
+	const gchar *pattern;
+	const gchar *prefix;
+	gboolean (*start)(const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+	gboolean (*end)(const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+};
+
+static gboolean url_file_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+static gboolean url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+
+static gboolean url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+static gboolean url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+
+static gboolean url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+static gboolean url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+
+struct url_matcher matchers[] = {
+		{ "file://",		"",			url_file_start, 		url_file_end	},
+		{ "ftp://",			"", 		url_web_start,	 		url_web_end		},
+		{ "sftp://",		"", 		url_web_start,	 		url_web_end		},
+		{ "http://",		"", 		url_web_start,	 		url_web_end		},
+		{ "https://",		"", 		url_web_start,	 		url_web_end		},
+		{ "news://",		"", 		url_web_start,	 		url_web_end		},
+		{ "nntp://",		"", 		url_web_start,	 		url_web_end		},
+		{ "telnet://",		"", 		url_web_start,	 		url_web_end		},
+		{ "webcal://",		"", 		url_web_start,	 		url_web_end		},
+		{ "mailto://",		"", 		url_email_start,	 	url_email_end	},
+		{ "callto://",		"", 		url_web_start,	 		url_web_end		},
+		{ "h323:",			"", 		url_web_start,	 		url_web_end		},
+		{ "sip:",			"", 		url_web_start,	 		url_web_end		},
+		{ "www.",			"http://", 	url_web_start,	 		url_web_end		},
+		{ "ftp.",			"ftp://", 	url_web_start,	 		url_web_end		},
+		{ "@",				"mailto://",url_email_start,	 	url_email_end	}
+};
+
+struct url_match_scanner {
+	struct url_matcher *matchers;
+	gsize matchers_count;
+	rspamd_trie_t *patterns;
+};
+
+struct url_match_scanner *url_scanner = NULL;
 
 static const struct _proto      protocol_backends[] = {
 	{"file", 0, NULL, 1, 0, 0, 0},
@@ -78,40 +110,6 @@ static const struct _proto      protocol_backends[] = {
 	{NULL, 0, NULL, 0, 0, 1, 0},
 };
 
-/* 
-   Table of "reserved" and "unsafe" characters.  Those terms are
-   rfc1738-speak, as such largely obsoleted by rfc2396 and later
-   specs, but the general idea remains.
-
-   A reserved character is the one that you can't decode without
-   changing the meaning of the URL.  For example, you can't decode
-   "/foo/%2f/bar" into "/foo///bar" because the number and contents of
-   path components is different.  Non-reserved characters can be
-   changed, so "/foo/%78/bar" is safe to change to "/foo/x/bar".  The
-   unsafe characters are loosely based on rfc1738, plus "$" and ",",
-   as recommended by rfc2396, and minus "~", which is very frequently
-   used (and sometimes unrecognized as %7E by broken servers).
-
-   An unsafe character is the one that should be encoded when URLs are
-   placed in foreign environments.  E.g. space and newline are unsafe
-   in HTTP contexts because HTTP uses them as separator and line
-   terminator, so they must be encoded to %20 and %0A respectively.
-   "*" is unsafe in shell context, etc.
-
-   We determine whether a character is unsafe through static table
-   lookup.  This code assumes ASCII character set and 8-bit chars.  */
-
-enum {
-	/* rfc1738 reserved chars + "$" and ",".  */
-	urlchr_reserved = 1,
-
-	/* rfc1738 unsafe chars, plus non-printables.  */
-	urlchr_unsafe = 2
-};
-
-#define urlchr_test(c, mask) (urlchr_table[(unsigned char)(c)] & (mask))
-#define URL_RESERVED_CHAR(c) urlchr_test(c, urlchr_reserved)
-#define URL_UNSAFE_CHAR(c) urlchr_test(c, urlchr_unsafe)
 /* Convert an ASCII hex digit to the corresponding number between 0
    and 15.  H should be a hexadecimal digit that satisfies isxdigit;
    otherwise, the result is undefined.  */
@@ -123,43 +121,44 @@ enum {
 #define XNUM_TO_DIGIT(x) ("0123456789ABCDEF"[x] + 0)
 #define XNUM_TO_digit(x) ("0123456789abcdef"[x] + 0)
 
-/* Shorthands for the table: */
-#define R  urlchr_reserved
-#define U  urlchr_unsafe
-#define RU R|U
-
-static const unsigned char      urlchr_table[256] = {
-	U, U, U, U, U, U, U, U,		/* NUL SOH STX ETX  EOT ENQ ACK BEL */
-	U, U, U, U, U, U, U, U,		/* BS  HT  LF  VT   FF  CR  SO  SI  */
-	U, U, U, U, U, U, U, U,		/* DLE DC1 DC2 DC3  DC4 NAK SYN ETB */
-	U, U, U, U, U, U, U, U,		/* CAN EM  SUB ESC  FS  GS  RS  US  */
-	U, 0, U, RU, R, U, R, 0,	/* SP  !   "   #    $   %   &   '   */
-	0, 0, 0, R, R, 0, 0, R,		/* (   )   *   +    ,   -   .   /   */
-	0, 0, 0, 0, 0, 0, 0, 0,		/* 0   1   2   3    4   5   6   7   */
-	0, 0, RU, R, U, R, U, R,	/* 8   9   :   ;    <   =   >   ?   */
-	RU, 0, 0, 0, 0, 0, 0, 0,	/* @   A   B   C    D   E   F   G   */
-	0, 0, 0, 0, 0, 0, 0, 0,		/* H   I   J   K    L   M   N   O   */
-	0, 0, 0, 0, 0, 0, 0, 0,		/* P   Q   R   S    T   U   V   W   */
-	0, 0, 0, RU, U, RU, U, 0,	/* X   Y   Z   [    \   ]   ^   _   */
-	U, 0, 0, 0, 0, 0, 0, 0,		/* `   a   b   c    d   e   f   g   */
-	0, 0, 0, 0, 0, 0, 0, 0,		/* h   i   j   k    l   m   n   o   */
-	0, 0, 0, 0, 0, 0, 0, 0,		/* p   q   r   s    t   u   v   w   */
-	0, 0, 0, U, U, U, 0, U,		/* x   y   z   {    |   }   ~   DEL */
-
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
-	U, U, U, U, U, U, U, U, U, U, U, U, U, U, U, U,
+static guchar url_scanner_table[256] = {
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  9,  9,  1,  1,  9,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	 24,128,160,128,128,128,128,128,160,160,128,128,160,192,160,160,
+	 68, 68, 68, 68, 68, 68, 68, 68, 68, 68,160,160, 32,128, 32,128,
+	160, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+	 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66,160,160,160,128,128,
+	128, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+	 66, 66, 66, 66, 66, 66, 66, 66, 66, 66, 66,128,128,128,128,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+	  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1
 };
 
-#undef R
-#undef U
-#undef RU
+enum {
+	IS_CTRL		= (1 << 0),
+	IS_ALPHA        = (1 << 1),
+	IS_DIGIT        = (1 << 2),
+	IS_LWSP		= (1 << 3),
+	IS_SPACE	= (1 << 4),
+	IS_SPECIAL	= (1 << 5),
+	IS_DOMAIN       = (1 << 6),
+	IS_URLSAFE      = (1 << 7)
+};
+
+#define is_ctrl(x) ((url_scanner_table[(guchar)(x)] & IS_CTRL) != 0)
+#define is_lwsp(x) ((url_scanner_table[(guchar)(x)] & IS_LWSP) != 0)
+#define is_atom(x) ((url_scanner_table[(guchar)(x)] & (IS_SPECIAL|IS_SPACE|IS_CTRL)) == 0)
+#define is_alpha(x) ((url_scanner_table[(guchar)(x)] & IS_ALPHA) != 0)
+#define is_digit(x) ((url_scanner_table[(guchar)(x)] & IS_DIGIT) != 0)
+#define is_domain(x) ((url_scanner_table[(guchar)(x)] & IS_DOMAIN) != 0)
+#define is_urlsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_ALPHA|IS_DIGIT|IS_URLSAFE)) != 0)
+
 
 static const char              *
 url_strerror (enum uri_errno err)
@@ -216,21 +215,15 @@ check_uri_file (unsigned char *name)
 static int
 url_init (void)
 {
-	GError                         *err = NULL;
-	if (url_initialized == 0) {
-		text_re = g_regex_new (text_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
-		if (err != NULL) {
-			msg_info ("cannot init text url parsing regexp: %s", err->message);
-			g_error_free (err);
-			return -1;
+	int                             i;
+	if (url_scanner == NULL) {
+		url_scanner = g_malloc (sizeof (struct url_match_scanner));
+		url_scanner->matchers = matchers;
+		url_scanner->matchers_count = G_N_ELEMENTS (matchers);
+		url_scanner->patterns = rspamd_trie_create (TRUE);
+		for (i = 0; i < url_scanner->matchers_count; i ++) {
+			rspamd_trie_insert (url_scanner->patterns, matchers[i].pattern, i);
 		}
-		html_re = g_regex_new (html_url, G_REGEX_CASELESS | G_REGEX_MULTILINE | G_REGEX_OPTIMIZE | G_REGEX_EXTENDED, 0, &err);
-		if (err != NULL) {
-			msg_info ("cannot init html url parsing regexp: %s", err->message);
-			g_error_free (err);
-			return -1;
-		}
-		url_initialized = 1;
 	}
 
 	return 0;
@@ -398,15 +391,8 @@ url_strip (char *s)
 	*t = '\0';
 }
 
-/* The core of url_escape_* functions.  Escapes the characters that
-   match the provided mask in urlchr_table.
-
-   If ALLOW_PASSTHROUGH is non-zero, a string with no unsafe chars
-   will be returned unchanged.  If ALLOW_PASSTHROUGH is zero, a
-   freshly allocated string will be returned in all cases.  */
-
 static char                    *
-url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_pool_t * pool)
+url_escape_1 (const char *s, int allow_passthrough, memory_pool_t * pool)
 {
 	const char                     *p1;
 	char                           *p2, *newstr;
@@ -414,8 +400,9 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_p
 	int                             addition = 0;
 
 	for (p1 = s; *p1; p1++)
-		if (urlchr_test (*p1, mask))
+		if (!is_urlsafe (*p1)) {
 			addition += 2;		/* Two more characters (hex digits) */
+		}
 
 	if (!addition) {
 		if (allow_passthrough) {
@@ -433,7 +420,7 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_p
 	p2 = newstr;
 	while (*p1) {
 		/* Quote the characters that match the test mask. */
-		if (urlchr_test (*p1, mask)) {
+		if (!is_urlsafe (*p1)) {
 			unsigned char                   c = *p1++;
 			*p2++ = '%';
 			*p2++ = XNUM_TO_DIGIT (c >> 4);
@@ -453,7 +440,7 @@ url_escape_1 (const char *s, unsigned char mask, int allow_passthrough, memory_p
 char                           *
 url_escape (const char *s, memory_pool_t * pool)
 {
-	return url_escape_1 (s, urlchr_unsafe, 0, pool);
+	return url_escape_1 (s, 0, pool);
 }
 
 /* URL-escape the unsafe characters (see urlchr_table) in a given
@@ -462,7 +449,7 @@ url_escape (const char *s, memory_pool_t * pool)
 static char                    *
 url_escape_allow_passthrough (const char *s, memory_pool_t * pool)
 {
-	return url_escape_1 (s, urlchr_unsafe, 1, pool);
+	return url_escape_1 (s, 1, pool);
 }
 
 /* Decide whether the char at position P needs to be encoded.  (It is
@@ -481,7 +468,7 @@ char_needs_escaping (const char *p)
 			/* Garbled %.. sequence: encode `%'. */
 			return 1;
 	}
-	else if (URL_UNSAFE_CHAR (*p) && !URL_RESERVED_CHAR (*p))
+	else if (! is_urlsafe (*p))
 		return 1;
 	else
 		return 0;
@@ -574,7 +561,7 @@ unescape_single_char (char *str, char chr)
 static char                    *
 url_escape_dir (const char *dir, memory_pool_t * pool)
 {
-	char                           *newdir = url_escape_1 (dir, urlchr_unsafe | urlchr_reserved, 1, pool);
+	char                           *newdir = url_escape_1 (dir, 1, pool);
 	if (newdir == dir)
 		return (char *)dir;
 
@@ -893,14 +880,252 @@ parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
 	return URI_ERRNO_OK;
 }
 
+static const gchar url_braces[] = {
+	 '(', ')' ,
+	 '{', '}' ,
+	 '[', ']' ,
+	 '<', '>' ,
+	 '|', '|' ,
+	 '\'', '\''
+};
+
+static gboolean
+is_open_brace (gchar c)
+{
+	if (c == '(' ||
+		c == '{' ||
+		c == '[' ||
+		c == '<' ||
+		c == '|' ||
+		c == '\'') {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+url_file_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	match->m_begin = pos;
+	return TRUE;
+}
+static gboolean
+url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	const gchar                    *p;
+	gchar                           stop;
+	int                             i;
+
+	p = pos + strlen (match->pattern);
+	if (*p == '/') {
+		p ++;
+	}
+
+	for (i = 0; i < G_N_ELEMENTS (url_braces) / 2; i += 2) {
+		if (*p == url_braces[i]) {
+			stop = url_braces[i + 1];
+			break;
+		}
+	}
+
+	while (p < end && *p != stop && is_urlsafe (*p)) {
+		p ++;
+	}
+
+	if (p == begin) {
+		return FALSE;
+	}
+	match->m_len = p - match->m_begin;
+
+	return TRUE;
+
+}
+
+
+static gboolean
+url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	/* Check what we have found */
+	if (pos > begin && *pos == 'w' && *(pos + 1) == 'w' && *(pos + 2) == 'w') {
+		if (!is_open_brace (*(pos - 1)) && !g_ascii_isspace (*(pos - 1))) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+static gboolean
+url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	const gchar                    *p, *c;
+	gchar                           open_brace = '\0', close_brace = '\0';
+	int                             i, brace_stack;
+	gboolean                        passwd;
+	guint                           port;
+
+	p = pos + strlen (match->pattern);
+	for (i = 0; i < G_N_ELEMENTS (url_braces) / 2; i += 2) {
+		if (*p == url_braces[i]) {
+			close_brace = url_braces[i + 1];
+			open_brace = *p;
+			break;
+		}
+	}
+
+	/* find the end of the domain */
+	if (is_atom (*p)) {
+		/* might be a domain or user@domain */
+		c = p;
+		while (p < end) {
+			if (!is_atom (*p)) {
+				break;
+			}
+
+			p++;
+
+			while (p < end && is_atom (*p)) {
+				p++;
+			}
+
+			if ((p + 1) < end && *p == '.' && (is_atom (*(p + 1)) || *(p + 1) == '/')) {
+				p++;
+			}
+		}
+
+		if (*p != '@') {
+			p = c;
+		}
+		else {
+			p++;
+		}
+
+		goto domain;
+	}
+	else if (is_domain (*p)) {
+domain:
+		while (p < end) {
+			if (!is_domain (*p)) {
+				break;
+			}
+
+			p++;
+
+			while (p < end && is_domain (*p)) {
+				p++;
+			}
+
+			if ((p + 1) < end && *p == '.' && (is_domain (*(p + 1)) || *(p + 1) == '/')) {
+				p++;
+			}
+		}
+	}
+	else {
+		return FALSE;
+	}
+
+	if (p < end) {
+		switch (*p) {
+		case ':': /* we either have a port or a password */
+			p++;
+
+			if (is_digit (*p) || passwd) {
+				port = (*p++ - '0');
+
+				while (p < end && is_digit (*p) && port < 65536) {
+					port = (port * 10) + (*p++ - '0');
+				}
+
+				if (!passwd && (port >= 65536 || *p == '@')) {
+					if (p < end) {
+						/* this must be a password? */
+						goto passwd;
+					}
+
+					p--;
+				}
+			}
+			else {
+				passwd:
+				passwd = TRUE;
+				c = p;
+
+				while (p < end && is_atom (*p)) {
+					p++;
+				}
+
+				if ((p + 2) < end) {
+					if (*p == '@') {
+						p++;
+						if (is_domain (*p)) {
+							goto domain;
+						}
+					}
+
+					return FALSE;
+				}
+			}
+
+			if (p >= end || *p != '/') {
+				break;
+			}
+
+			/* we have a '/' so there could be a path - fall through */
+		case '/': /* we've detected a path component to our url */
+			p++;
+		case '?':
+			while (p < end && is_urlsafe (*p)) {
+				if (*p == open_brace) {
+					brace_stack++;
+				}
+				else if (*p == close_brace) {
+					brace_stack--;
+					if (brace_stack == -1) {
+						break;
+					}
+				}
+				p++;
+			}
+
+			break;
+		default:
+			break;
+		}
+	}
+
+	/* urls are extremely unlikely to end with any
+	 * punctuation, so strip any trailing
+	 * punctuation off. Also strip off any closing
+	 * double-quotes. */
+	while (p > pos && strchr (",.:;?!-|}])\"", p[-1])) {
+		p--;
+	}
+
+	match->m_len = (p - pos);
+
+	return TRUE;
+}
+
+
+static gboolean
+url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	return FALSE;
+}
+static gboolean
+url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	return FALSE;
+}
+
 void
 url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
-	GMatchInfo                     *info;
-	GError                         *err = NULL;
-	int                             rc;
+	struct url_matcher             *matcher;
+	int                             rc, idx;
 	char                           *url_str = NULL;
 	struct uri                     *new;
+	const guint8                   *p, *end, *pos;
+	url_match_t                     m;
 
 	if (!part->orig->data || part->orig->len == 0) {
 		msg_warn ("got empty text part");
@@ -909,27 +1134,33 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 
 	if (url_init () == 0) {
 		if (is_html) {
-			rc = g_regex_match_full (html_re, (const char *)part->orig->data, part->orig->len, 0, 0, &info, &err);
+			p = part->orig->data;
+			end = p + part->orig->len;
 		}
 		else {
-			rc = g_regex_match_full (text_re, (const char *)part->content->data, part->content->len, 0, 0, &info, &err);
-
+			p = part->content->data;
+			end = p + part->content->len;
 		}
-		if (rc) {
-			while (g_match_info_matches (info)) {
-				url_str = g_match_info_fetch (info, is_html ? 1 : 0);
-				debug_task ("extracted string with regexp: '%s', html is %s", url_str, is_html ? "on" : "off");
-				if (url_str != NULL) {
+		while (p < end) {
+			if ((pos = rspamd_trie_lookup (url_scanner->patterns, p, end - p, &idx)) == NULL) {
+				break;
+			}
+			else {
+				matcher = &matchers[idx];
+				m.pattern = matcher->pattern;
+				m.prefix = matcher->prefix;
+				if (matcher->start (p, pos, end, &m) && matcher->end (p, pos, end, &m)) {
+					url_str = memory_pool_alloc (task->task_pool, m.m_len + 1);
+					memcpy (url_str, m.m_begin, m.m_len);
+					url_str[m.m_len] = '\0';
 					if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
 						new = memory_pool_alloc (pool, sizeof (struct uri));
 						if (new != NULL) {
 							g_strstrip (url_str);
 							rc = parse_uri (new, url_str, pool);
 							if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
-								if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
-									g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
-									task->urls = g_list_prepend (task->urls, new);
-								}
+								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
+								task->urls = g_list_prepend (task->urls, new);
 							}
 							else {
 								msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
@@ -937,19 +1168,10 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 						}
 					}
 				}
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, url_str);
-				/* Get next match */
-				g_match_info_next (info, &err);
+				pos += strlen (matcher->pattern);
 			}
+			p = pos;
 		}
-		else if (err != NULL) {
-			debug_task ("error matching regexp: %s", err->message);
-			g_free (err);
-		}
-		else {
-			debug_task ("cannot find url pattern in given string");
-		}
-		g_match_info_free (info);
 	}
 }
 
