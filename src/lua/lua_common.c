@@ -224,6 +224,7 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_config (L);
 	(void)luaopen_radix (L);
 	(void)luaopen_hash_table (L);
+	(void)luaopen_trie (L);
 	(void)luaopen_task (L);
 	(void)luaopen_textpart (L);
 	(void)luaopen_image (L);

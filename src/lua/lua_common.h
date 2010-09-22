@@ -27,6 +27,7 @@ int luaopen_config (lua_State *L);
 int luaopen_metric (lua_State *L);
 int luaopen_radix (lua_State *L);
 int luaopen_hash_table (lua_State *L);
+int luaopen_trie (lua_State * L);
 int luaopen_textpart (lua_State *L);
 int luaopen_image (lua_State *L);
 int luaopen_classifier (lua_State *L);

@@ -962,7 +962,11 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		if (p1->parent && p1->parent == p2->parent) {
 			parent = p1->parent;
 			ct = g_mime_object_get_content_type (parent);
+#ifndef GMIME24
 			if (ct == NULL || ! g_mime_content_type_is_type (ct, "multipart", "alternative")) {
+#else
+			if (ct == NULL || ! g_mime_content_type_is_type ((GMimeContentType *)ct, "multipart", "alternative")) {
+#endif
 				debug_task ("two parts are not belong to multipart/alternative container, skip check");
 				return FALSE;
 			}
