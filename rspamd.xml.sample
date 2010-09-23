@@ -30,6 +30,9 @@
 <metric>
  <name>default</name>
  <required_score>10.0</required_score>
+ <action>reject</action>
+ <action>greylist:5</action>
+ <action>add_header:5</action>
  <symbol weight="8.00">R_SPAM_FROM_MTU</symbol>
  <symbol weight="10.00">R_WWW_EKONF_COM</symbol>
  <symbol weight="2.00">R_TINYURL</symbol>
