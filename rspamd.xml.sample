@@ -3,10 +3,10 @@
 <!-- Main section -->
 <tempdir>/tmp</tempdir>
 <pidfile>/var/run/rspamd.pid</pidfile>
-<filters>regexp,surbl,chartable,emails,fuzzy_check,spf</filters>
+<filters>regexp,surbl,chartable,fuzzy_check,spf</filters>
 <statfile_pool_size>262144000</statfile_pool_size>
 <raw_mode>yes</raw_mode>
-<lua src="@ETC_PREFIX@/rspamd/lua/rspamd.lua">fake</lua>
+<lua src="@ETC_PREFIX@/rspamd/lua/rspamd.lua" />
 <!-- End of main section -->
 
 <!-- Logging section -->
@@ -14,6 +14,14 @@
  <level>info</level>
  <log_urls>yes</log_urls>
  <type>console</type>
+<!-- Other types
+ <type filename="/var/log/rspamd/rspamd.log">file</type>
+ <type facility="local7">syslog</type>
+-->
+<!-- Selective debug
+ <debug_ip>127.0.0.1</debug_ip>
+ <debug_symbols>SYMBOL1,SYMBOL2</debug_symbols>
+-->
 </logging>
 <!-- End of logging section -->
 
@@ -87,8 +95,8 @@
  <symbol weight="2.00">RATWARE_MS_HASH</symbol>
  <symbol weight="5.00">HTML_TAG_BALANCE_HEAD</symbol>
  <symbol weight="1.00">STOX_REPLY_TYPE</symbol>
- <symbol weight="1.00">WINNOW_SPAM</symbol>
- <symbol weight="-1.00">WINNOW_HAM</symbol>
+ <symbol weight="3.00">BAYES_SPAM</symbol>
+ <symbol weight="-3.00">BAYES_HAM</symbol>
  <symbol weight="2.00">MIME_HEADER_CTYPE_ONLY</symbol>
  <symbol weight="8.00">R_FAKE_OUTLOOK</symbol>
 </metric>
@@ -119,7 +127,7 @@
 </worker>
 <worker>
   <type>normal</type>
-  <bind_socket>localhost:11333</bind_socket>
+  <bind_socket>*:11333</bind_socket>
   <count>1</count>
   <maxfiles>2048</maxfiles>
   <maxcore>0</maxcore>
@@ -134,8 +142,11 @@
   <option name="symbol">R_FUZZY</option>
   <option name="min_length">300</option>
   <option name="max_score">10</option>
+  <option name="mime_types">application/pdf</option>
   <option name="metric">default</option>
+  <option name="fuzzy_map">1:R_FUZZY1:10,2:R_FUZZY2:5,3:R_FUZZY3:-2.1</option>
 </module>
+
 
 <!-- forged_recipients -->
 <module name="forged_recipients">
@@ -174,12 +185,6 @@
   <option name="rbl">insecure-bl.rambler.ru</option>
 </module>
 
-<!-- emails -->
-<module name="emails">
-  <option name="symbol">R_BAD_EMAIL</option>
-  <option name="metric">default</option>
-</module>
-
 <!-- whitelist -->
 <module name="whitelist">
   <option name="ip_whitelist">http://cebka.pp.ru/stuff/grey_whitelist.conf</option>
@@ -202,9 +207,20 @@
   <option name="symbol">ONCE_RECEIVED</option>
 </module>
 
+<!-- multimap -->
+<module name="multimap">
+<!--
+	<option name="rule">type = header, header = To, pattern = @(.+)>?$, map = file://@ETC_PREFIX@/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST</option>
+	<option name="rule">type = ip, map = file://@ETC_PREFIX@/rspamd/ip_test, symbol = R_IP_WHITELIST</option>
+-->
+	<option name="rule">type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL</option>
+</module>
+
+
 <!-- End of modules section -->
 
 <!-- Classifiers section -->
+<!--
 <classifier type="winnow">
  <tokenizer>osb-text</tokenizer>
  <metric>default</metric>
@@ -213,15 +229,56 @@
   <symbol>WINNOW_HAM</symbol>
   <size>100M</size>
   <path>/var/run/rspamd/data.ham</path>
-  <normalizer>internal:3</normalizer>
  </statfile>
  <statfile>
   <symbol>WINNOW_SPAM</symbol>
   <size>100M</size>
   <path>/var/run/rspamd/data.spam</path>
-  <normalizer>internal:3</normalizer>
  </statfile>
 </classifier>
+-->
+<!-- Example of slave
+<classifier type="bayes">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <option name="min_tokens">10</option>
+ <option name="learn_threshold">0.2</option>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>/var/run/rspamd/bayes_slave.ham</path>
+  <binlog_master>localhost:11334</binlog_master>
+  <binlog>slave</binlog>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>/var/run/rspamd/bayes_slave.spam</path>
+  <binlog>slave</binlog>
+  <binlog_master>localhost:11334</binlog_master>
+ </statfile>
+</classifier>
+
+-->
+<classifier type="bayes">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <option name="min_tokens">10</option>
+ <option name="learn_threshold">0.2</option>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>/var/run/rspamd/bayes.ham</path>
+  <binlog>master</binlog>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>/var/run/rspamd/bayes.spam</path>
+  <binlog>master</binlog>
+ </statfile>
+</classifier>
+
 <!-- End of classifiers section -->
 
 <!-- Modules section -->
