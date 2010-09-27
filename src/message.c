@@ -1077,7 +1077,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const ch
 #else
 	GMimeHeaderList                *ls;
 
-	ls = GMIME_OBJECT (message)->headers;
+	ls = g_mime_object_get_header_list (GMIME_OBJECT (message));
 	header_iterate (pool, ls, &gret, field);
 	if (gret == NULL) {
 		/* Try to iterate with mime part headers */
