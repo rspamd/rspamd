@@ -105,9 +105,9 @@ static const struct _proto      protocol_backends[] = {
 	{"ftp", 21, NULL, 1, 1, 0, 0},
 	{"http", 80, NULL, 1, 1, 0, 0},
 	{"https", 443, NULL, 1, 1, 0, 1},
-
+	{"mailto", 25, NULL, 1, 1, 0, 0},
 	/* Keep these last! */
-	{NULL, 0, NULL, 0, 0, 1, 0},
+	{NULL, 0, NULL, 0, 0, 1, 0}
 };
 
 /* Convert an ASCII hex digit to the corresponding number between 0
@@ -952,6 +952,8 @@ url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 			return FALSE;
 		}
 	}
+	match->m_begin = pos;
+
 	return TRUE;
 }
 static gboolean
@@ -1109,12 +1111,37 @@ domain:
 static gboolean
 url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
 {
+	/* Check what we have found */
+	if (pos > begin && *pos == '@') {
+		if (is_atom (*(pos - 1)) && is_domain (*(pos + 1))) {
+			match->m_begin = pos + 1;
+			return TRUE;
+		}
+	}
+	else {
+		while (pos < end && is_atom (*pos)) {
+			if (*pos == '@') {
+				match->m_begin = pos + 1;
+				return TRUE;
+			}
+			pos ++;
+		}
+	}
 	return FALSE;
 }
+
 static gboolean
 url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
 {
-	return FALSE;
+	const gchar                    *p;
+
+	p = pos + strlen (match->pattern);
+
+	while (p < end && (is_domain (*p) || (*p == '.' && p + 1 < end && is_domain (*(p + 1))))) {
+		p ++;
+	}
+	match->m_len = p - match->m_begin;
+	return TRUE;
 }
 
 void
@@ -1149,7 +1176,7 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 				matcher = &matchers[idx];
 				m.pattern = matcher->pattern;
 				m.prefix = matcher->prefix;
-				if (matcher->start (p, pos, end, &m) && matcher->end (p, pos, end, &m)) {
+				if (matcher->start (p, end, pos, &m) && matcher->end (p, end, pos, &m)) {
 					url_str = memory_pool_alloc (task->task_pool, m.m_len + 1);
 					memcpy (url_str, m.m_begin, m.m_len);
 					url_str[m.m_len] = '\0';

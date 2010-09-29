@@ -307,7 +307,8 @@ surbl_module_reconfig (struct config_file *cfg)
 
 
 static char                    *
-format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_item *suffix, gboolean append_suffix, GError ** err)
+format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_item *suffix,
+		gboolean append_suffix, GError ** err, gboolean forced)
 {
 	GHashTable                     *t;
 	char                           *result = NULL, *dots[MAX_LEVELS], num_buf[sizeof("18446744073709551616")], *p;
@@ -409,7 +410,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		}
 	}
 
-	if (g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+	if (!forced && g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
 		msg_debug ("url %s is whitelisted", result);
 		g_set_error (err, SURBL_ERROR,	/* error domain */
 						WHITELIST_ERROR,	/* error code */
@@ -429,7 +430,8 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 }
 
 static void
-make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree, struct suffix_item *suffix)
+make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree,
+		struct suffix_item *suffix, gboolean forced)
 {
 	char                           *surbl_req;
 	f_str_t                         f;
@@ -440,7 +442,7 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree, st
 	f.len = url->hostlen;
 
 	if (check_view (task->cfg->views, suffix->symbol, task)) {
-		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE, &err)) != NULL) {
+		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE, &err, forced)) != NULL) {
 			if (g_tree_lookup (tree, surbl_req) == NULL) {
 				g_tree_insert (tree, surbl_req, surbl_req);
 				param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
@@ -590,7 +592,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 			param->task->save.saved = 1;
 			process_filters (param->task);
 		}
-		make_surbl_requests (param->url, param->task, param->tree, param->suffix);
+		make_surbl_requests (param->url, param->task, param->tree, param->suffix, FALSE);
 		break;
 	default:
 		return;
@@ -656,7 +658,7 @@ free_redirector_session (void *ud)
 	event_del (&param->ev);
 	close (param->sock);
 	param->task->save.saved--;
-	make_surbl_requests (param->url, param->task, param->tree, param->suffix);
+	make_surbl_requests (param->url, param->task, param->tree, param->suffix, FALSE);
 	if (param->task->save.saved == 0) {
 		/* Call other filters */
 		param->task->save.saved = 1;
@@ -739,7 +741,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	if (s == -1) {
 		msg_info ("<%s> cannot create tcp socket failed: %s", task->message_id, strerror (errno));
 		task->save.saved--;
-		make_surbl_requests (url, task, url_tree, suffix);
+		make_surbl_requests (url, task, url_tree, suffix, FALSE);
 		return;
 	}
 
@@ -756,6 +758,8 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
 	event_add (&param->ev, timeout);
 	register_async_event (task->s, free_redirector_session, param, FALSE);
+
+	msg_info ("<%s> registered redirector call for %s", task->message_id, struri (url));
 }
 
 static                          gboolean
@@ -774,14 +778,14 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	if (surbl_module_ctx->use_redirector) {
 		f.begin = url->host;
 		f.len = url->hostlen;
-		if ((urlstr = format_surbl_request (param->task->task_pool, &f, NULL, FALSE, &err)) != NULL) {
+		if ((urlstr = format_surbl_request (param->task->task_pool, &f, NULL, FALSE, &err, TRUE)) != NULL) {
 			if (g_hash_table_lookup (surbl_module_ctx->redirector_hosts, urlstr) != NULL) {
 				register_redirector_call (url, param->task, param->tree, param->suffix);
 				param->task->save.saved++;
 				return FALSE;
 			}
 		}
-		make_surbl_requests (url, param->task, param->tree, param->suffix);
+		make_surbl_requests (url, param->task, param->tree, param->suffix, TRUE);
 	}
 	else {
 		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
@@ -789,7 +793,7 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 			param->task->save.saved++;
 		}
 		else {
-			make_surbl_requests (url, param->task, param->tree, param->suffix);
+			make_surbl_requests (url, param->task, param->tree, param->suffix, FALSE);
 		}
 	}
 
@@ -872,7 +876,7 @@ urls_command_handler (struct worker_task *task)
 			g_tree_insert (url_tree, struri (url), url);
 			f.begin = url->host;
 			f.len = url->hostlen;
-			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, FALSE, &err)) != NULL) {
+			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, FALSE, &err, FALSE)) != NULL) {
 				if (g_list_next (cur) != NULL) {
 					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (char *)urlstr, struri (url));
 				}
