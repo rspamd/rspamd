@@ -421,6 +421,18 @@ sub process_input {
     $kernel->post( "cl", "request", "got_response", $new_request, [0, ""]);
 }
 
+sub sig_DIE {
+	my( $sig, $ex ) = @_[ ARG0, ARG1 ];
+	write_log ("", "$$: error in $ex->{event}: $ex->{error_str}");
+	$poe_kernel->sig_handled();
+
+	# Send the signal to session that sent the original event.
+	if( $ex->{source_session} ne $_[SESSION] ) {
+		$poe_kernel->signal( $ex->{source_session}, 'DIE', $sig, $ex );
+	}
+}
+
+
 ############################### Main code fragment ##################################
 
 
@@ -458,7 +470,8 @@ if (!$cfg{debug}) {
 }
 
 # Reopen log on SIGUSR1
-$SIG{USR1} = sub { $do_reopen_log = 1; };
+$poe_kernel->sig(DIE => 'sig_DIE');
+$SIG{USR1} = sub { $do_reopen_log = 1; $poe_kernel->sig_handled(); };
 $SIG{INT} = sub { $poe_kernel->stop(); };
 $SIG{QUIT} = sub { $poe_kernel->stop(); };
 $SIG{PIPE} = 'IGNORE';

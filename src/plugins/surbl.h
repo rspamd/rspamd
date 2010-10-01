@@ -6,6 +6,7 @@
 #include "../modules.h"
 #include "../cfg_file.h"
 #include "../memcached.h"
+#include "../trie.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
 #define DEFAULT_SURBL_WEIGHT 10
@@ -39,6 +40,8 @@ struct surbl_ctx {
 	GHashTable **exceptions;
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;
+	rspamd_trie_t *redirector_trie;
+	GPtrArray *redirector_ptrs;
 	unsigned use_redirector;
 	struct redirector_upstream *redirectors;
 	guint32 redirectors_number;
