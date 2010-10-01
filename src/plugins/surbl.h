@@ -17,10 +17,15 @@
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
 #define MAX_LEVELS 10
 
+struct redirector_upstream {
+	struct upstream up;
+	struct in_addr ina;
+	guint16 port;
+	gchar *name;
+};
+
 struct surbl_ctx {
 	int (*filter)(struct worker_task *task);
-	struct in_addr redirector_addr;
-	uint16_t redirector_port;
 	uint16_t weight;
 	unsigned int connect_timeout;
 	unsigned int read_timeout;
@@ -35,6 +40,8 @@ struct surbl_ctx {
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;
 	unsigned use_redirector;
+	struct redirector_upstream *redirectors;
+	guint32 redirectors_number;
 	memory_pool_t *surbl_pool;
 };
 
@@ -53,6 +60,7 @@ struct dns_param {
 struct redirector_param {
 	struct uri *url;
 	struct worker_task *task;
+	struct redirector_upstream *redirector;
 	enum {
 		STATE_CONNECT,
 		STATE_READ,

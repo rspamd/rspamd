@@ -2,5 +2,10 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     AUTHOR       => 'Vsevolod Stakhov <vsevolod@highsecure.ru>',
     VERSION_FROM => 'lib/Mail/Rspamd/Client.pm', # finds $VERSION
-);
-
+	PREREQ_PM => {
+	"IO::String"		=> 0,
+	"Term::ReadKey"		=> 0,
+	"XML::Parser"		=> 0,
+	"IO::Socket"		=> 0,	
+    },	
+ );
