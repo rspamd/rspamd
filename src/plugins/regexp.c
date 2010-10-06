@@ -91,8 +91,7 @@ static void                     process_regexp_item (struct worker_task *task, v
 static gint
 luaopen_regexp (lua_State * L)
 {
-	lua_newclass (L, "rspamd{regexp}", regexplib_m);
-	luaL_openlib (L, "rspamd_regexp", null_reg, 0);
+	luaL_openlib (L, "rspamd_regexp", regexplib_m, 0);
 
 	return 1;
 }
