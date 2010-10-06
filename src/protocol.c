@@ -92,7 +92,7 @@ static GList                   *custom_commands = NULL;
 /* For default metric, dirty hack, but much faster than hash lookup */
 static double default_score, default_required_score;
 
-G_INLINE_FUNC const char *
+G_INLINE_FUNC const gchar *
 rspamc_proto_str (guint ver)
 {
 	if (ver >= 12) {
@@ -106,11 +106,11 @@ rspamc_proto_str (guint ver)
 	}
 }
 
-static char                    *
-separate_command (f_str_t * in, char c)
+static gchar                    *
+separate_command (f_str_t * in, gchar c)
 {
-	int                             r = 0;
-	char                           *p = in->begin, *b;
+	gint                            r = 0;
+	gchar                           *p = in->begin, *b;
 	b = p;
 
 	while (r < in->len) {
@@ -127,10 +127,10 @@ separate_command (f_str_t * in, char c)
 	return NULL;
 }
 
-static int
+static gint
 parse_command (struct worker_task *task, f_str_t * line)
 {
-	char                           *token;
+	gchar                           *token;
 	struct custom_command          *cmd;
 	GList                          *cur;
 
@@ -240,10 +240,10 @@ parse_command (struct worker_task *task, f_str_t * line)
 	return 0;
 }
 
-static int
+static gint
 parse_header (struct worker_task *task, f_str_t * line)
 {
-	char                           *headern, *err, *tmp;
+	gchar                           *headern, *err, *tmp;
 
 	/* Check end of headers */
 	if (line->len == 0) {
@@ -283,7 +283,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 			if (task->content_length == 0) {
 				tmp = memory_pool_fstrdup (task->task_pool, line);
 				task->content_length = strtoul (tmp, &err, 10);
-				debug_task ("read Content-Length header, value: %ul", (unsigned long int)task->content_length);
+				debug_task ("read Content-Length header, value: %ul", (guint32)task->content_length);
 			}
 		}
 		else {
@@ -350,7 +350,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		else if (g_ascii_strncasecmp (headern, NRCPT_HEADER, sizeof (NRCPT_HEADER) - 1) == 0) {
 			tmp = memory_pool_fstrdup (task->task_pool, line);
 			task->nrcpt = strtoul (tmp, &err, 10);
-			debug_task ("read rcpt header, value: %d", (int)task->nrcpt);
+			debug_task ("read rcpt header, value: %d", (gint)task->nrcpt);
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
@@ -410,7 +410,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	return 0;
 }
 
-int
+gint
 read_rspamd_input_line (struct worker_task *task, f_str_t * line)
 {
 	switch (task->state) {
@@ -428,14 +428,14 @@ read_rspamd_input_line (struct worker_task *task, f_str_t * line)
 
 struct metric_callback_data {
 	struct worker_task             *task;
-	char                           *log_buf;
-	int                             log_offset;
-	int                             log_size;
+	gchar                           *log_buf;
+	gint                            log_offset;
+	gint                            log_size;
 	gboolean                        alive;
 };
 
 static void
-write_hashes_to_log (struct worker_task *task, char *logbuf, int offset, int size) 
+write_hashes_to_log (struct worker_task *task, gchar *logbuf, gint offset, gint size) 
 {
 	GList                          *cur;
 	struct mime_text_part          *text_part;
@@ -472,8 +472,8 @@ compare_url_func (gconstpointer a, gconstpointer b)
 static gboolean
 show_url_header (struct worker_task *task)
 {
-	int                             r = 0;
-	char                            outbuf[OUTBUFSIZ], c;
+	gint                            r = 0;
+	gchar                           outbuf[OUTBUFSIZ], c;
 	struct uri                     *url;
 	GList                          *cur;
 	f_str_t                         host;
@@ -538,8 +538,8 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 {
 	struct metric_callback_data    *cd = (struct metric_callback_data *)user_data;
 	struct worker_task             *task = cd->task;
-	int                             r = 0;
-	char                            outbuf[OUTBUFSIZ];
+	gint                            r = 0;
+	gchar                           outbuf[OUTBUFSIZ];
 	struct symbol                  *s = (struct symbol *)value;
 	GList                          *cur;
 
@@ -549,18 +549,18 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 
 	if (s->options) {
 		if (task->proto_ver >= 12) {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); ", (char *)key, s->score);
+			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); ", (gchar *)key, s->score);
 		}
 		else {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (char *)key);
+			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (gchar *)key);
 		}
 		cur = s->options;
 		while (cur) {
 			if (g_list_next (cur)) {
-				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (gchar *)cur->data);
 			}
 			else {
-				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (gchar *)cur->data);
 			}
 			cur = g_list_next (cur);
 		}
@@ -572,13 +572,13 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	}
 	else {
 		if (task->proto_ver >= 12) {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f)" CRLF, (char *)key, s->score);
+			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f)" CRLF, (gchar *)key, s->score);
 		}
 		else {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (char *)key);
+			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (gchar *)key);
 		}
 	}
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (char *)key);
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (gchar *)key);
 
 	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 		cd->alive = FALSE;
@@ -588,19 +588,19 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 static gboolean
 show_metric_symbols (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
-	int                             r = 0;
+	gint                            r = 0;
 	GList                          *symbols, *cur;
-	char                            outbuf[OUTBUFSIZ];
+	gchar                           outbuf[OUTBUFSIZ];
 
 	if (cd->task->proto == SPAMC_PROTO) {
 		symbols = g_hash_table_get_keys (metric_res->symbols);
 		cur = symbols;
 		while (cur) {
 			if (g_list_next (cur) != NULL) {
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (gchar *)cur->data);
 			}
 			else {
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, (char *)cur->data);
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s" CRLF, (gchar *)cur->data);
 			}
 			cur = g_list_next (cur);
 		}
@@ -620,7 +620,7 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 	return TRUE;
 }
 
-const char *
+const gchar *
 str_action_metric (enum rspamd_metric_action action)
 {
 	switch (action) {
@@ -676,11 +676,11 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 {
 	struct metric_callback_data    *cd = (struct metric_callback_data *)user_data;
 	struct worker_task             *task = cd->task;
-	int                             r = 0;
-	char                            outbuf[OUTBUFSIZ];
+	gint                            r = 0;
+	gchar                           outbuf[OUTBUFSIZ];
 	struct metric_result           *metric_res = (struct metric_result *)metric_value;
 	struct metric                  *m;
-	int                             is_spam = 0;
+	gint                            is_spam = 0;
 	double                          ms = 0, rs = 0;
 	enum rspamd_metric_action       action;
 
@@ -741,26 +741,26 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			if (task->proto_ver >= 11) {
                 if (!task->is_skipped) {
 				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f / %.2f" CRLF, 
-						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms, rs);
+						(gchar *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms, rs);
                 }
                 else {
 				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; Skip; %.2f / %.2f / %.2f" CRLF, 
-						(char *)metric_name, metric_res->score, ms, rs);
+						(gchar *)metric_name, metric_res->score, ms, rs);
                 }
 			}
 			else {
 				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, 
-						(char *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
+						(gchar *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
 			}
 			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Action: %s" CRLF, str_action_metric(action));
 		}
         if (!task->is_skipped) {
 		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (%s): [%.2f/%.2f/%.2f] [",
-				(char *)metric_name, is_spam ? 'T' : 'F', str_action_metric (action), metric_res->score, ms, rs);
+				(gchar *)metric_name, is_spam ? 'T' : 'F', str_action_metric (action), metric_res->score, ms, rs);
         }
         else {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (%s): [%.2f/%.2f/%.2f] [",
-				(char *)metric_name, 'S', metric_res->score, ms, rs);
+		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (default): [%.2f/%.2f/%.2f] [",
+				(gchar *)metric_name, 'S', metric_res->score, ms, rs);
         
         }
 	}
@@ -785,24 +785,24 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		}
 	}
 #ifdef HAVE_CLOCK_GETTIME
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %s,",
-		(long int)task->msg->len, calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res));
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
+		task->msg->len, calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res));
 #else
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %l, time: %s,",
-		(long int)task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
+		task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
 #endif
 }
 
 static gboolean
 show_messages (struct worker_task *task)
 {
-	int                             r = 0;
-	char                            outbuf[OUTBUFSIZ];
+	gint                            r = 0;
+	gchar                           outbuf[OUTBUFSIZ];
 	GList                          *cur;
 	
 	cur = task->messages;
 	while (cur) {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Message: %s" CRLF, (char *)cur->data);
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Message: %s" CRLF, (gchar *)cur->data);
 		cur = g_list_next (cur);
 	}
 
@@ -816,8 +816,8 @@ show_messages (struct worker_task *task)
 static gboolean
 write_check_reply (struct worker_task *task)
 {
-	int                             r;
-	char                            outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
+	gint                            r;
+	gchar                           outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
 	struct metric_result           *metric_res;
 	struct metric_callback_data     cd;
 
@@ -910,9 +910,9 @@ write_check_reply (struct worker_task *task)
 static gboolean
 write_process_reply (struct worker_task *task)
 {
-	int                             r;
-	char                           *outmsg;
-	char                            outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
+	gint                            r;
+	gchar                           *outmsg;
+	gchar                           outbuf[OUTBUFSIZ], logbuf[OUTBUFSIZ];
 	struct metric_result           *metric_res;
 	struct metric_callback_data     cd;
 
@@ -1002,8 +1002,8 @@ write_process_reply (struct worker_task *task)
 gboolean
 write_reply (struct worker_task *task)
 {
-	int                             r;
-	char                            outbuf[OUTBUFSIZ];
+	gint                            r;
+	gchar                           outbuf[OUTBUFSIZ];
 
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {
@@ -1051,7 +1051,7 @@ write_reply (struct worker_task *task)
 }
 
 void
-register_protocol_command (const char *name, protocol_reply_func func)
+register_protocol_command (const gchar *name, protocol_reply_func func)
 {
 	struct custom_command          *cmd;
 

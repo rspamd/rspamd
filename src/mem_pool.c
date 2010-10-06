@@ -53,7 +53,7 @@ pthread_mutex_t                 stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 static memory_pool_stat_t      *mem_pool_stat = NULL;
 
 static struct _pool_chain      *
-pool_chain_new (memory_pool_ssize_t size)
+pool_chain_new (gsize size)
 {
 	struct _pool_chain             *chain;
 
@@ -78,7 +78,7 @@ pool_chain_new (memory_pool_ssize_t size)
 }
 
 static struct _pool_chain_shared *
-pool_chain_new_shared (memory_pool_ssize_t size)
+pool_chain_new_shared (gsize size)
 {
 	struct _pool_chain_shared      *chain;
 
@@ -87,7 +87,7 @@ pool_chain_new_shared (memory_pool_ssize_t size)
 	g_assert (chain != MAP_FAILED);
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
 #elif defined(HAVE_MMAP_ZERO)
-	int                             fd;
+	gint                            fd;
 
 	fd = open ("/dev/zero", O_RDWR);
 	if (fd == -1) {
@@ -117,7 +117,7 @@ pool_chain_new_shared (memory_pool_ssize_t size)
  * @return new memory pool object
  */
 memory_pool_t                  *
-memory_pool_new (memory_pool_ssize_t size)
+memory_pool_new (gsize size)
 {
 	memory_pool_t                  *new;
 
@@ -128,7 +128,7 @@ memory_pool_new (memory_pool_ssize_t size)
 		mem_pool_stat = (memory_pool_stat_t *)mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
 		g_assert (stat != MAP_FAILED);
 #elif defined(HAVE_MMAP_ZERO)
-		int                             fd;
+		gint                            fd;
 
 		fd = open ("/dev/zero", O_RDWR);
 		g_assert (fd != -1);
@@ -155,7 +155,7 @@ memory_pool_new (memory_pool_ssize_t size)
 }
 
 void                           *
-memory_pool_alloc (memory_pool_t * pool, memory_pool_ssize_t size)
+memory_pool_alloc (memory_pool_t * pool, gsize size)
 {
 	u_char                         *tmp;
 	struct _pool_chain             *new, *cur;
@@ -199,7 +199,7 @@ memory_pool_alloc (memory_pool_t * pool, memory_pool_ssize_t size)
 }
 
 void                           *
-memory_pool_alloc0 (memory_pool_t * pool, memory_pool_ssize_t size)
+memory_pool_alloc0 (memory_pool_t * pool, gsize size)
 {
 	void                           *pointer = memory_pool_alloc (pool, size);
 	if (pointer) {
@@ -209,7 +209,7 @@ memory_pool_alloc0 (memory_pool_t * pool, memory_pool_ssize_t size)
 }
 
 void                           *
-memory_pool_alloc0_shared (memory_pool_t * pool, memory_pool_ssize_t size)
+memory_pool_alloc0_shared (memory_pool_t * pool, gsize size)
 {
 	void                           *pointer = memory_pool_alloc_shared (pool, size);
 	if (pointer) {
@@ -218,11 +218,11 @@ memory_pool_alloc0_shared (memory_pool_t * pool, memory_pool_ssize_t size)
 	return pointer;
 }
 
-char                           *
-memory_pool_strdup (memory_pool_t * pool, const char *src)
+gchar                           *
+memory_pool_strdup (memory_pool_t * pool, const gchar *src)
 {
-	memory_pool_ssize_t             len;
-	char                           *newstr;
+	gsize             len;
+	gchar                           *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -235,10 +235,10 @@ memory_pool_strdup (memory_pool_t * pool, const char *src)
 	return newstr;
 }
 
-char                           *
+gchar                           *
 memory_pool_fstrdup (memory_pool_t * pool, const struct f_str_s *src)
 {
-	char                           *newstr;
+	gchar                           *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -251,11 +251,11 @@ memory_pool_fstrdup (memory_pool_t * pool, const struct f_str_s *src)
 }
 
 
-char                           *
-memory_pool_strdup_shared (memory_pool_t * pool, const char *src)
+gchar                           *
+memory_pool_strdup_shared (memory_pool_t * pool, const gchar *src)
 {
-	memory_pool_ssize_t             len;
-	char                           *newstr;
+	gsize             len;
+	gchar                           *newstr;
 
 	if (src == NULL) {
 		return NULL;
@@ -270,7 +270,7 @@ memory_pool_strdup_shared (memory_pool_t * pool, const char *src)
 
 
 void                           *
-memory_pool_alloc_shared (memory_pool_t * pool, memory_pool_ssize_t size)
+memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 {
 	u_char                         *tmp;
 	struct _pool_chain_shared      *new, *cur;
@@ -330,7 +330,7 @@ memory_pool_find_pool (memory_pool_t * pool, void *pointer)
 	return NULL;
 }
 
-static inline int
+static inline gint
 __mutex_spin (memory_pool_mutex_t * mutex)
 {
 	/* check spin count */
@@ -506,7 +506,7 @@ memory_pool_stat (memory_pool_stat_t * st)
 
 /* By default allocate 8Kb chunks of memory */
 #define FIXED_POOL_SIZE 8192
-memory_pool_ssize_t
+gsize
 memory_pool_get_size ()
 {
 #ifdef HAVE_GETPAGESIZE

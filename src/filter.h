@@ -11,7 +11,7 @@
 
 struct worker_task;
 
-typedef double (*metric_cons_func)(struct worker_task *task, const char *metric_name, const char *func_name);
+typedef double (*metric_cons_func)(struct worker_task *task, const gchar *metric_name, const gchar *func_name);
 typedef void (*filter_func)(struct worker_task *task);
 
 enum filter_type { C_FILTER, PERL_FILTER };
@@ -20,7 +20,7 @@ enum filter_type { C_FILTER, PERL_FILTER };
  * Filter structure
  */
 struct filter {
-	char *func_name;								/**< function name							*/
+	gchar *func_name;								/**< function name							*/
 	enum filter_type type;							/**< filter type (c or perl)				*/
     module_t *module;
 };
@@ -51,8 +51,8 @@ struct metric_action {
  * Common definition of metric
  */
 struct metric {
-	char *name;										/**< name of metric									*/
-	char *func_name;								/**< name of consolidation function					*/
+	gchar *name;										/**< name of metric									*/
+	gchar *func_name;								/**< name of consolidation function					*/
 	metric_cons_func func;							/**< c consolidation function						*/
 	double grow_factor;								/**< grow factor for metric							*/
 	double required_score;							/**< required score for this metric					*/
@@ -78,7 +78,7 @@ struct metric_result {
  * @param task worker's task that present message from user
  * @return 0 - if there is non-finished tasks and 1 if processing is completed
  */
-int process_filters (struct worker_task *task);
+gint process_filters (struct worker_task *task);
 
 /**
  * Process message with statfiles
@@ -94,7 +94,7 @@ void process_statfiles (struct worker_task *task);
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void insert_result (struct worker_task *task, const char *symbol, double flag, GList *opts);
+void insert_result (struct worker_task *task, const gchar *symbol, double flag, GList *opts);
 
 /**
  * Process all results and form composite metrics from existent metrics as it is defined in config
@@ -109,6 +109,6 @@ void make_composites (struct worker_task *task);
  * @param metric_name name of metric
  * @return result metric weight
  */
-double factor_consolidation_func (struct worker_task *task, const char *metric_name, const char *unused);
+double factor_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *unused);
 
 #endif

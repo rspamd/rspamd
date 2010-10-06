@@ -24,13 +24,13 @@ struct rspamd_view {
 
 struct rspamd_view* init_view (memory_pool_t *pool);
 
-gboolean add_view_from (struct rspamd_view *view, char *line);
-gboolean add_view_rcpt (struct rspamd_view *view, char *line);
-gboolean add_view_ip (struct rspamd_view *view, char *line);
-gboolean add_view_client_ip (struct rspamd_view *view, char *line);
-gboolean add_view_symbols (struct rspamd_view *view, char *line);
+gboolean add_view_from (struct rspamd_view *view, gchar *line);
+gboolean add_view_rcpt (struct rspamd_view *view, gchar *line);
+gboolean add_view_ip (struct rspamd_view *view, gchar *line);
+gboolean add_view_client_ip (struct rspamd_view *view, gchar *line);
+gboolean add_view_symbols (struct rspamd_view *view, gchar *line);
 
-gboolean check_view (GList *views, const char *symbol, struct worker_task *task);
+gboolean check_view (GList *views, const gchar *symbol, struct worker_task *task);
 gboolean check_skip (GList *views, struct worker_task *task);
 
 #endif

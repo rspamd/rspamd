@@ -70,14 +70,14 @@ struct rspamd_dns_resolver;
  * Server statistics
  */
 struct rspamd_stat {
-	unsigned int messages_scanned;								/**< total number of messages scanned				*/
-	unsigned int messages_spam;									/**< messages treated as spam						*/
-	unsigned int messages_ham;									/**< messages treated as ham						*/
-	unsigned int connections_count;								/**< total connections count						*/
-	unsigned int control_connections_count;						/**< connections count to control interface			*/
-	unsigned int messages_learned;								/**< messages learned								*/
-	unsigned int fuzzy_hashes;									/**< number of fuzzy hashes stored					*/
-	unsigned int fuzzy_hashes_expired;							/**< number of fuzzy hashes expired					*/
+	guint messages_scanned;								/**< total number of messages scanned				*/
+	guint messages_spam;									/**< messages treated as spam						*/
+	guint messages_ham;									/**< messages treated as ham						*/
+	guint connections_count;								/**< total connections count						*/
+	guint control_connections_count;						/**< connections count to control interface			*/
+	guint messages_learned;								/**< messages learned								*/
+	guint fuzzy_hashes;									/**< number of fuzzy hashes stored					*/
+	guint fuzzy_hashes_expired;							/**< number of fuzzy hashes expired					*/
 };
 
 /**
@@ -89,7 +89,7 @@ struct rspamd_main {
 	/* Pid file structure */
 	struct pidfh *pfh;											/**< struct pidfh for pidfile						*/
 	enum process_type type;										/**< process type									*/
-	unsigned int ev_initialized;								/**< is event system is initialized					*/
+	guint ev_initialized;								/**< is event system is initialized					*/
 	struct rspamd_stat *stat;									/**< pointer to statistics							*/
 
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
@@ -98,8 +98,8 @@ struct rspamd_main {
 };
 
 struct counter_data {
-	uint64_t value;
-	int number;
+	guint64 value;
+	gint number;
 };
 
 /**
@@ -108,7 +108,7 @@ struct counter_data {
 struct save_point {
 	GList *entry;												/**< pointer to saved metric						*/
 	void *item;													/**< pointer to saved item 							*/
-	unsigned int saved;											/**< how much time we have delayed processing		*/
+	guint saved;											/**< how much time we have delayed processing		*/
 };
 
 
@@ -135,27 +135,27 @@ struct controller_session {
 		STATE_WAIT,
 		STATE_WEIGHTS
 	} state;													/**< current session state							*/
-	int sock;													/**< socket descriptor								*/
+	gint sock;													/**< socket descriptor								*/
 	/* Access to authorized commands */
-	int authorized;												/**< whether this session is authorized				*/
+	gint authorized;												/**< whether this session is authorized				*/
 	memory_pool_t *session_pool;								/**< memory pool for session 						*/
 	struct config_file *cfg;									/**< pointer to config file							*/
-	char *learn_rcpt;											/**< recipient for learning							*/
-	char *learn_from;											/**< from address for learning						*/
+	gchar *learn_rcpt;											/**< recipient for learning							*/
+	gchar *learn_from;											/**< from address for learning						*/
 	struct classifier_config *learn_classifier;
-	char *learn_symbol;											/**< symbol to train								*/
+	gchar *learn_symbol;											/**< symbol to train								*/
 	double learn_multiplier;									/**< multiplier for learning						*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
 	f_str_t *learn_buf;											/**< learn input									*/
 	GList *parts;												/**< extracted mime parts							*/
-	int in_class;												/**< positive or negative learn						*/
+	gint in_class;												/**< positive or negative learn						*/
 	void (*other_handler)(struct controller_session *session, 
 								f_str_t *in);					/**< other command handler to execute at the end of processing */
 	void *other_data;											/**< and its data 									*/
     struct rspamd_async_session* s;								/**< async session object							*/
 };
 
-typedef void (*controller_func_t)(char **args, struct controller_session *session);
+typedef void (*controller_func_t)(gchar **args, struct controller_session *session);
 
 /**
  * Worker task structure
@@ -176,30 +176,30 @@ struct worker_task {
 	guint proto_ver;											/**< protocol version								*/
 	enum rspamd_command cmd;									/**< command										*/
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	
-	int sock;													/**< socket descriptor								*/
+	gint sock;													/**< socket descriptor								*/
     gboolean is_mime;                                           /**< if this task is mime task                      */
     gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
-	char *helo;													/**< helo header value								*/
-	char *from;													/**< from header value								*/
-	char *queue_id;												/**< queue id if specified							*/
-	const char *message_id;										/**< message id										*/
+	gchar *helo;													/**< helo header value								*/
+	gchar *from;													/**< from header value								*/
+	gchar *queue_id;												/**< queue id if specified							*/
+	const gchar *message_id;										/**< message id										*/
 	GList *rcpt;												/**< recipients list								*/
-	unsigned int nrcpt;											/**< number of recipients							*/
+	guint nrcpt;											/**< number of recipients							*/
 	struct in_addr from_addr;									/**< client addr in numeric form					*/
 	struct in_addr client_addr;									/**< client addr in numeric form					*/
-	char *deliver_to;											/**< address to deliver								*/
-	char *user;													/**< user to deliver								*/
-	char *subject;												/**< subject (for non-mime)							*/
+	gchar *deliver_to;											/**< address to deliver								*/
+	gchar *user;													/**< user to deliver								*/
+	gchar *subject;												/**< subject (for non-mime)							*/
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
     struct rspamd_async_session* s;								/**< async session object							*/
-	int parts_count;											/**< mime parts count								*/
+	gint parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
 	GMimeObject *parser_parent_part;							/**< current parent part							*/
 	InternetAddressList *rcpts;									/**< list of all recipients 						*/
 	GList *parts;												/**< list of parsed parts							*/
 	GList *text_parts;											/**< list of text parts								*/
-	char *raw_headers;											/**< list of raw headers							*/
+	gchar *raw_headers;											/**< list of raw headers							*/
 	GList *received;											/**< list of received headers						*/
 	GList *urls;												/**< list of parsed urls							*/
 	GList *images;												/**< list of images									*/
@@ -211,8 +211,8 @@ struct worker_task {
 	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
 	struct config_file *cfg;									/**< pointer to config object						*/
 	struct save_point save;										/**< save point for delayed processing				*/
-	char *last_error;											/**< last error										*/
-	int error_code;												/**< code of last error								*/
+	gchar *last_error;											/**< last error										*/
+	gint error_code;												/**< code of last error								*/
 	memory_pool_t *task_pool;									/**< memory pool for task							*/
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;											/**< time of connection								*/
@@ -221,7 +221,7 @@ struct worker_task {
 	struct rspamd_view *view;									/**< matching view									*/
 	gboolean view_checked;
 	gboolean pass_all_filters;									/**< pass task throught every rule					*/
-	uint32_t parser_recursion;									/**< for avoiding recursion stack overflow			*/
+	guint32 parser_recursion;									/**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(void *arg);						/**< calback for filters finalizing					*/
 	void *fin_arg;												/**< argument for fin callback						*/
 
@@ -232,14 +232,14 @@ struct worker_task {
  * Common structure representing C module context
  */
 struct module_ctx {
-	int (*filter)(struct worker_task *task);					/**< pointer to headers process function			*/
+	gint (*filter)(struct worker_task *task);					/**< pointer to headers process function			*/
 };
 
 /**
  * Common structure for C module
  */
 struct c_module {
-	const char *name;											/**< name											*/
+	const gchar *name;											/**< name											*/
 	struct module_ctx *ctx;										/**< pointer to context								*/
 };
 
@@ -250,7 +250,7 @@ void start_greylist_storage (struct rspamd_worker *worker);
 /**
  * Register custom controller function
  */
-void register_custom_controller_command (const char *name, controller_func_t handler, gboolean privilleged, gboolean require_message);
+void register_custom_controller_command (const gchar *name, controller_func_t handler, gboolean privilleged, gboolean require_message);
 
 /**
  * Construct new task for worker

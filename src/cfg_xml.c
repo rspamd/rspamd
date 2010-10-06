@@ -64,9 +64,9 @@ enum xml_config_section {
 };
 
 struct xml_config_param {
-	const char *name;
+	const gchar *name;
 	element_handler_func handler;
-	int offset;
+	gint                            offset;
 	gpointer user_data;
 };
 
@@ -450,10 +450,10 @@ extract_attr (const gchar *attr, const gchar **attribute_names, const gchar **at
 	return FALSE;
 }
 
-static inline char*
+static inline gchar*
 xml_asciiz_string (memory_pool_t *pool, const gchar *text, gsize len)
 {
-	char	                       *val;
+	gchar                           *val;
 
 	val = memory_pool_alloc (pool, len + 1);
 	g_strlcpy (val, text, len + 1);
@@ -494,7 +494,7 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *v
 {
 	struct xml_parser_rule         *rule;
 	struct xml_config_param        *param;
-	int                             i;
+	gint                            i;
 	
 	/* First find required section */
 	for (i = 0; i < G_N_ELEMENTS (grammar); i ++) {
@@ -526,9 +526,9 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *v
 
 /* Logging section */
 gboolean 
-handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	char                           *val;
+	gchar                           *val;
 	if (g_ascii_strcasecmp (data, "file") == 0) {
 		/* Find filename attribute */
 		if ((val = g_hash_table_lookup (attrs, "filename")) == NULL) {
@@ -601,7 +601,7 @@ handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 }
 
 gboolean 
-handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	if (g_ascii_strcasecmp (data, "error") == 0) {
 		cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
@@ -625,10 +625,10 @@ handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 
 /* Worker section */
 gboolean 
-worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
-	char                           *name;
+	gchar                           *name;
 
 	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
 		msg_err ("worker param tag must have \"name\" attribute");
@@ -640,7 +640,7 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, G
 	return TRUE;
 }
 gboolean 
-worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
 
@@ -678,7 +678,7 @@ worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 }
 
 gboolean 
-worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
 
@@ -713,7 +713,7 @@ check_action (const gchar *data, gint *result)
 }
 
 gboolean
-handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct metric                  *metric = ctx->section_pointer;
 	gchar                          *p, *errstr;
@@ -749,9 +749,9 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 }
 
 gboolean
-handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	char                           *strval, *err;
+	gchar                           *strval, *err;
 	double                         *value;
 	GList                          *metric_list;
 	struct metric                  *metric = ctx->section_pointer;
@@ -787,9 +787,9 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 
 /* Modules section */
 gboolean 
-handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	char	                       *name, *val;
+	gchar                           *name, *val;
 	GList                          *cur_opt;
 	struct module_opt              *cur;
 	gboolean                        is_lua = FALSE;
@@ -818,7 +818,7 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 
 /* Handle lua tag */
 gboolean 
-handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gchar                        *val, *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State                    *L = cfg->lua_state;
@@ -888,14 +888,14 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 
 /* Modules section */
 gboolean 
-handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct stat st;
 	struct script_module *cur;
 	glob_t globbuf;
-	char *pattern;
+	gchar                           *pattern;
 	size_t len;
-	int i;
+	gint                            i;
 
 	if (stat (data, &st) == -1) {
 		msg_err ("cannot stat path %s, %s", data, strerror (errno));
@@ -937,7 +937,7 @@ handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 
 /* Variables and composites */
 gboolean 
-handle_variable (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_variable (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gchar                        *val;
 	
@@ -951,7 +951,7 @@ handle_variable (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 }
 
 gboolean 
-handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gchar                        *val;
 	struct expression            *expr;
@@ -972,7 +972,7 @@ handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 
 /* View section */
 gboolean 
-handle_view_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_view_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct rspamd_view          *view = ctx->section_pointer;
 
@@ -984,7 +984,7 @@ handle_view_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashT
 	return TRUE;
 }
 gboolean 
-handle_view_client_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_view_client_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct rspamd_view          *view = ctx->section_pointer;
 
@@ -996,7 +996,7 @@ handle_view_client_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx,
 	return TRUE;
 }
 gboolean 
-handle_view_from (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_view_from (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct rspamd_view          *view = ctx->section_pointer;
 
@@ -1008,7 +1008,7 @@ handle_view_from (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 	return TRUE;
 }
 gboolean 
-handle_view_rcpt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_view_rcpt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct rspamd_view          *view = ctx->section_pointer;
 
@@ -1020,7 +1020,7 @@ handle_view_rcpt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 	return TRUE;
 }
 gboolean
-handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct rspamd_view          *view = ctx->section_pointer;
 
@@ -1035,7 +1035,7 @@ handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, G
 
 /* Settings */
 gboolean 
-handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	if (!read_settings (data, cfg, cfg->user_settings)) {
 		msg_err ("cannot read settings %s", data);
@@ -1046,7 +1046,7 @@ handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 	return TRUE;
 }
 gboolean 
-handle_domain_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_domain_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	if (!read_settings (data, cfg, cfg->domain_settings)) {
 		msg_err ("cannot read settings %s", data);
@@ -1058,7 +1058,7 @@ handle_domain_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx
 
 /* Classifier */
 gboolean 
-handle_classifier_tokenizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_classifier_tokenizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct classifier_config     *ccf = ctx->section_pointer;
 	
@@ -1071,7 +1071,7 @@ handle_classifier_tokenizer (struct config_file *cfg, struct rspamd_xml_userdata
 }
 
 gboolean 
-handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct classifier_config     *ccf = ctx->section_pointer;
 	gchar                        *val;
@@ -1087,14 +1087,14 @@ handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx,
 
 /* Statfile */
 gboolean 
-handle_statfile_normalizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_statfile_normalizer (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	msg_info ("normalizer option is now not available as rspamd always use internal normalizer for winnow (hyperbolic tanhent)");
 	return TRUE;
 }
 
 gboolean 
-handle_statfile_binlog (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_statfile_binlog (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct statfile             *st = ctx->section_pointer;
 
@@ -1115,7 +1115,7 @@ handle_statfile_binlog (struct config_file *cfg, struct rspamd_xml_userdata *ctx
 }
 
 gboolean 
-handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct statfile             *st = ctx->section_pointer;
 
@@ -1128,7 +1128,7 @@ handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_xml_userda
 }
 
 gboolean 
-handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct statfile             *st = ctx->section_pointer;
 	if (st->binlog == NULL) {
@@ -1145,19 +1145,19 @@ handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userda
 
 /* Common handlers */
 gboolean 
-xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	/* Simply assign pointer to pointer */
 	gchar                       **dest;
 
-	dest = (char **)G_STRUCT_MEMBER_P (dest_struct, offset);
+	dest = (gchar **)G_STRUCT_MEMBER_P (dest_struct, offset);
 	*dest = memory_pool_strdup (cfg->cfg_pool, data);
 
 	return TRUE;
 }
 
 gboolean
-xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	GList                      **dest;
 	gchar                      **tokens, **cur;
@@ -1181,7 +1181,7 @@ xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx
 
 
 gboolean 
-xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gsize                      *dest;
 
@@ -1192,7 +1192,7 @@ xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 }
 
 gboolean 
-xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	guint32                      *dest;
 
@@ -1203,7 +1203,7 @@ xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 }
 
 gboolean 
-xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gboolean                    *dest;
 
@@ -1222,10 +1222,10 @@ xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 }
 
 gboolean 
-xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	double                      *dest;
-	char                        *err = NULL;
+	gchar                           *err = NULL;
 
 	dest = (double *)G_STRUCT_MEMBER_P (dest_struct, offset);
 	errno = 0;
@@ -1239,12 +1239,12 @@ xml_handle_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 }
 
 gboolean 
-xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	int                         *dest;
-	char                        *err = NULL;
+	gint                            *dest;
+	gchar                           *err = NULL;
 
-	dest = (int *)G_STRUCT_MEMBER_P (dest_struct, offset);
+	dest = (gint *)G_STRUCT_MEMBER_P (dest_struct, offset);
 	errno = 0;
 	*dest = strtol (data, &err, 10);
 	if (errno != 0 || (err != NULL && *err != 0)) {
@@ -1256,12 +1256,12 @@ xml_handle_int (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashT
 }
 
 gboolean 
-xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	uint32_t                    *dest;
-	char                        *err = NULL;
+	guint32                         *dest;
+	gchar                           *err = NULL;
 
-	dest = (uint32_t *)G_STRUCT_MEMBER_P (dest_struct, offset);
+	dest = (guint32 *)G_STRUCT_MEMBER_P (dest_struct, offset);
 	errno = 0;
 	*dest = strtoul (data, &err, 10);
 	if (errno != 0 || (err != NULL && *err != 0)) {
@@ -1273,12 +1273,12 @@ xml_handle_uint32 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 }
 
 gboolean 
-xml_handle_uint16 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, int offset)
+xml_handle_uint16 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	uint16_t                    *dest;
-	char                        *err = NULL;
+	guint16                    *dest;
+	gchar                           *err = NULL;
 
-	dest = (uint16_t *)G_STRUCT_MEMBER_P (dest_struct, offset);
+	dest = (guint16 *)G_STRUCT_MEMBER_P (dest_struct, offset);
 	errno = 0;
 	*dest = strtoul (data, &err, 10);
 	if (errno != 0 || (err != NULL && *err != 0)) {
@@ -1537,7 +1537,7 @@ void
 rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len, gpointer user_data, GError **error)
 {
 	struct rspamd_xml_userdata *ud = user_data;
-	char *val;
+	gchar                           *val;
 	struct config_file *cfg = ud->cfg;
 	
 	/* Strip space symbols */
@@ -1665,45 +1665,45 @@ rspamd_xml_error (GMarkupParseContext *context, GError *error, gpointer user_dat
 static gboolean
 xml_dump_main (struct config_file *cfg, FILE *f)
 {
-	char *escaped_str;
+	gchar                           *escaped_str;
 	
 	/* Print header comment */
-	fprintf (f, "<!-- Main section -->" EOL);
+	rspamd_fprintf (f, "<!-- Main section -->" EOL);
 
 	escaped_str = g_markup_escape_text (cfg->temp_dir, -1); 
-	fprintf (f, "<tempdir>%s</tempdir>" EOL, escaped_str);
+	rspamd_fprintf (f, "<tempdir>%s</tempdir>" EOL, escaped_str);
 	g_free (escaped_str);
 
 	escaped_str = g_markup_escape_text (cfg->pid_file, -1); 
-	fprintf (f, "<pidfile>%s</pidfile>" EOL, escaped_str);
+	rspamd_fprintf (f, "<pidfile>%s</pidfile>" EOL, escaped_str);
 	g_free (escaped_str);
 
 	escaped_str = g_markup_escape_text (cfg->filters_str, -1); 
-	fprintf (f, "<filters>%s</filters>" EOL, escaped_str);
+	rspamd_fprintf (f, "<filters>%s</filters>" EOL, escaped_str);
 	g_free (escaped_str);
 	
 	if (cfg->user_settings_str) {
 		escaped_str = g_markup_escape_text (cfg->user_settings_str, -1); 
-		fprintf (f, "<user_settings>%s</user_settings>" EOL, escaped_str);
+		rspamd_fprintf (f, "<user_settings>%s</user_settings>" EOL, escaped_str);
 		g_free (escaped_str);
 	}
 	if (cfg->domain_settings_str) {
 		escaped_str = g_markup_escape_text (cfg->domain_settings_str, -1); 
-		fprintf (f, "<domain_settings>%s</domain_settings>" EOL, escaped_str);
+		rspamd_fprintf (f, "<domain_settings>%s</domain_settings>" EOL, escaped_str);
 		g_free (escaped_str);
 	}
-	fprintf (f, "<statfile_pool_size>%llu</statfile_pool_size>" EOL, (long long unsigned)cfg->max_statfile_size);
+	rspamd_fprintf (f, "<statfile_pool_size>%z</statfile_pool_size>" EOL, cfg->max_statfile_size);
 
 	if (cfg->checksum)  {
 		escaped_str = g_markup_escape_text (cfg->checksum, -1); 
-		fprintf (f, "<checksum>%s</checksum>" EOL, escaped_str);
+		rspamd_fprintf (f, "<checksum>%s</checksum>" EOL, escaped_str);
 		g_free (escaped_str);
 	}
 
-	fprintf (f, "<raw_mode>%s</raw_mode>" EOL, cfg->raw_mode ? "yes" : "no");
+	rspamd_fprintf (f, "<raw_mode>%s</raw_mode>" EOL, cfg->raw_mode ? "yes" : "no");
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of main section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of main section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1713,11 +1713,11 @@ static void
 xml_variable_callback (gpointer key, gpointer value, gpointer user_data)
 {
 	FILE *f = user_data;
-	char *escaped_key, *escaped_value;
+	gchar                           *escaped_key, *escaped_value;
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  "<variable name=\"%s\">%s</variable>" EOL, escaped_key, escaped_value);
+	rspamd_fprintf (f,  "<variable name=\"%s\">%s</variable>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1726,13 +1726,13 @@ static gboolean
 xml_dump_variables (struct config_file *cfg, FILE *f)
 {
 	/* Print header comment */
-	fprintf (f, "<!-- Variables section -->" EOL);
+	rspamd_fprintf (f, "<!-- Variables section -->" EOL);
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->variables, xml_variable_callback, (gpointer)f);
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of variables section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of variables section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1743,13 +1743,13 @@ xml_composite_callback (gpointer key, gpointer value, gpointer user_data)
 {
 	FILE *f = user_data;
 	struct expression *expr;
-	char *escaped_key, *escaped_value;
+	gchar                           *escaped_key, *escaped_value;
 	
 	expr = value;
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (expr->orig, -1);
-	fprintf (f,  "<composite name=\"%s\">%s</composite>" EOL, escaped_key, escaped_value);
+	rspamd_fprintf (f,  "<composite name=\"%s\">%s</composite>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1758,13 +1758,13 @@ static gboolean
 xml_dump_composites (struct config_file *cfg, FILE *f)
 {
 	/* Print header comment */
-	fprintf (f, "<!-- Composites section -->" EOL);
+	rspamd_fprintf (f, "<!-- Composites section -->" EOL);
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->composite_symbols, xml_composite_callback, (gpointer)f);
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of composites section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of composites section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1774,11 +1774,11 @@ static void
 xml_worker_param_callback (gpointer key, gpointer value, gpointer user_data)
 {
 	FILE *f = user_data;
-	char *escaped_key, *escaped_value;
+	gchar                           *escaped_key, *escaped_value;
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  "    <param name=\"%s\">%s</param>" EOL, escaped_key, escaped_value);
+	rspamd_fprintf (f,  "    <param name=\"%s\">%s</param>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1788,53 +1788,53 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 {
 	GList *cur;
 	struct worker_conf *wrk;
-	char *escaped_str;
+	gchar                           *escaped_str;
 
 	/* Print header comment */
-	fprintf (f, "<!-- Workers section -->" EOL);
+	rspamd_fprintf (f, "<!-- Workers section -->" EOL);
 
 	/* Iterate through list */
 	cur = g_list_first (cfg->workers);
 	while (cur) {
 		wrk = cur->data;
 		
-		fprintf (f, "<worker>" EOL);
+		rspamd_fprintf (f, "<worker>" EOL);
 		switch (wrk->type) {
 			case TYPE_WORKER:
-				fprintf (f, "  <type>normal</type>" EOL);
+				rspamd_fprintf (f, "  <type>normal</type>" EOL);
 				break;
 			case TYPE_CONTROLLER:
-				fprintf (f, "  <type>controller</type>" EOL);
+				rspamd_fprintf (f, "  <type>controller</type>" EOL);
 				break;
 			case TYPE_FUZZY:
-				fprintf (f, "  <type>fuzzy</type>" EOL);
+				rspamd_fprintf (f, "  <type>fuzzy</type>" EOL);
 				break;
 			case TYPE_LMTP:
-				fprintf (f, "  <type>lmtp</type>" EOL);
+				rspamd_fprintf (f, "  <type>lmtp</type>" EOL);
 				break;
 			case TYPE_SMTP:
-				fprintf (f, "  <type>smtp</type>" EOL);
+				rspamd_fprintf (f, "  <type>smtp</type>" EOL);
 				break;
 		}
 		escaped_str = g_markup_escape_text (wrk->bind_host, -1); 
-		fprintf (f, "  <bind_socket>%s</bind_socket>" EOL, escaped_str);
+		rspamd_fprintf (f, "  <bind_socket>%s</bind_socket>" EOL, escaped_str);
 		g_free (escaped_str);
 
-		fprintf (f, "  <count>%ud</count>" EOL, wrk->count);
-		fprintf (f, "  <maxfiles>%ud</maxfiles>" EOL, wrk->rlimit_nofile);
-		fprintf (f, "  <maxcore>%ud</maxcore>" EOL, wrk->rlimit_maxcore);
+		rspamd_fprintf (f, "  <count>%ud</count>" EOL, wrk->count);
+		rspamd_fprintf (f, "  <maxfiles>%ud</maxfiles>" EOL, wrk->rlimit_nofile);
+		rspamd_fprintf (f, "  <maxcore>%ud</maxcore>" EOL, wrk->rlimit_maxcore);
 		
 		/* Now dump other attrs */
-		fprintf (f, "<!-- Other params -->" EOL);
+		rspamd_fprintf (f, "<!-- Other params -->" EOL);
 		g_hash_table_foreach (wrk->params, xml_worker_param_callback, f);
 
-		fprintf (f, "</worker>" EOL);
+		rspamd_fprintf (f, "</worker>" EOL);
 
 		cur = g_list_next (cur);
 	}
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of workers section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of workers section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1844,13 +1844,13 @@ static void
 xml_module_callback (gpointer key, gpointer value, gpointer user_data)
 {
 	FILE *f = user_data;
-	char *escaped_key, *escaped_value;
+	gchar                           *escaped_key, *escaped_value;
 	GList *cur;
 	struct module_opt *opt;
 	
 	escaped_key = g_markup_escape_text (key, -1); 
-	fprintf (f, "<!-- %s -->" EOL, escaped_key);
-	fprintf (f, "<module name=\"%s\">" EOL, escaped_key);
+	rspamd_fprintf (f, "<!-- %s -->" EOL, escaped_key);
+	rspamd_fprintf (f, "<module name=\"%s\">" EOL, escaped_key);
 	g_free (escaped_key);
 
 	cur = g_list_first (value);
@@ -1858,25 +1858,25 @@ xml_module_callback (gpointer key, gpointer value, gpointer user_data)
 		opt = cur->data;
 		escaped_key = g_markup_escape_text (opt->param, -1); 
 		escaped_value = g_markup_escape_text (opt->value, -1);
-		fprintf (f,  "  <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
+		rspamd_fprintf (f,  "  <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
 		g_free (escaped_key);
 		g_free (escaped_value);
 		cur = g_list_next (cur);
 	}
-	fprintf (f, "</module>" EOL EOL);
+	rspamd_fprintf (f, "</module>" EOL EOL);
 }
 
 static gboolean
 xml_dump_modules (struct config_file *cfg, FILE *f)
 {
 	/* Print header comment */
-	fprintf (f, "<!-- Modules section -->" EOL);
+	rspamd_fprintf (f, "<!-- Modules section -->" EOL);
 
 	/* Iterate through variables */
 	g_hash_table_foreach (cfg->modules_opts, xml_module_callback, (gpointer)f);
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of modules section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of modules section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -1886,11 +1886,11 @@ static void
 xml_classifier_callback (gpointer key, gpointer value, gpointer user_data)
 {
 	FILE *f = user_data;
-	char *escaped_key, *escaped_value;
+	gchar                           *escaped_key, *escaped_value;
 
 	escaped_key = g_markup_escape_text (key, -1); 
 	escaped_value = g_markup_escape_text (value, -1);
-	fprintf (f,  " <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
+	rspamd_fprintf (f,  " <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
 	g_free (escaped_key);
 	g_free (escaped_value);
 }
@@ -1903,46 +1903,46 @@ xml_dump_classifiers (struct config_file *cfg, FILE *f)
 	struct statfile *st;
 
 	/* Print header comment */
-	fprintf (f, "<!-- Classifiers section -->" EOL);
+	rspamd_fprintf (f, "<!-- Classifiers section -->" EOL);
 
 	/* Iterate through classifiers */
 	cur = g_list_first (cfg->classifiers);
 	while (cur) {
 		ccf = cur->data;
-		fprintf (f, "<classifier type=\"%s\">" EOL, ccf->classifier->name);
-		fprintf (f, " <tokenizer>%s</tokenizer>" EOL, ccf->tokenizer->name);
-		fprintf (f, " <metric>%s</metric>" EOL, ccf->metric);
+		rspamd_fprintf (f, "<classifier type=\"%s\">" EOL, ccf->classifier->name);
+		rspamd_fprintf (f, " <tokenizer>%s</tokenizer>" EOL, ccf->tokenizer->name);
+		rspamd_fprintf (f, " <metric>%s</metric>" EOL, ccf->metric);
 		g_hash_table_foreach (ccf->opts, xml_classifier_callback, f);
 		/* Statfiles */
 		cur_st = g_list_first (ccf->statfiles);
 		while (cur_st) {
 			st = cur_st->data;
-			fprintf (f, " <statfile>" EOL);
-			fprintf (f, "  <symbol>%s</symbol>" EOL "  <size>%lu</size>" EOL "  <path>%s</path>" EOL,
-						st->symbol, (long unsigned)st->size, st->path);
-			fprintf (f, "  <normalizer>%s</normalizer>" EOL, st->normalizer_str);
+			rspamd_fprintf (f, " <statfile>" EOL);
+			rspamd_fprintf (f, "  <symbol>%s</symbol>" EOL "  <size>%z</size>" EOL "  <path>%s</path>" EOL,
+						st->symbol, st->size, st->path);
+			rspamd_fprintf (f, "  <normalizer>%s</normalizer>" EOL, st->normalizer_str);
 			/* Binlog */
 			if (st->binlog) {
 				if (st->binlog->affinity == AFFINITY_MASTER) {
-					fprintf (f, "  <binlog>master</binlog>" EOL);
+					rspamd_fprintf (f, "  <binlog>master</binlog>" EOL);
 				}
 				else if (st->binlog->affinity == AFFINITY_SLAVE) {
-					fprintf (f, "  <binlog>slave</binlog>" EOL);
-					fprintf (f, "  <binlog_master>%s:%d</binlog_master>" EOL, 
-							inet_ntoa (st->binlog->master_addr), ntohs (st->binlog->master_port)); 
+					rspamd_fprintf (f, "  <binlog>slave</binlog>" EOL);
+					rspamd_fprintf (f, "  <binlog_master>%s:%d</binlog_master>" EOL, 
+							inet_ntoa (st->binlog->master_addr), (gint)ntohs (st->binlog->master_port)); 
 				}
-				fprintf (f, "  <binlog_rotate>%lu</binlog_rotate>" EOL, (long unsigned)st->binlog->rotate_time);
+				rspamd_fprintf (f, "  <binlog_rotate>%T</binlog_rotate>" EOL, st->binlog->rotate_time);
 			}
-			fprintf (f, " </statfile>" EOL);
+			rspamd_fprintf (f, " </statfile>" EOL);
 			cur_st = g_list_next (cur_st);
 		}
 
-		fprintf (f, "</classifier>" EOL);
+		rspamd_fprintf (f, "</classifier>" EOL);
 		cur = g_list_next (cur);
 	}
 
 	/* Print footer comment */
-	fprintf (f, "<!-- End of classifiers section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of classifiers section -->" EOL EOL);
 
 	return TRUE;
 
@@ -1955,42 +1955,42 @@ xml_dump_logging (struct config_file *cfg, FILE *f)
 	gchar *escaped_value;
 
 	/* Print header comment */
-	fprintf (f, "<!-- Logging section -->" EOL);
-	fprintf (f, "<logging>" EOL);
+	rspamd_fprintf (f, "<!-- Logging section -->" EOL);
+	rspamd_fprintf (f, "<logging>" EOL);
 	
 	/* Level */
 	if (cfg->log_level < G_LOG_LEVEL_WARNING) {
-		fprintf (f, " <level>error</level>" EOL);
+		rspamd_fprintf (f, " <level>error</level>" EOL);
 	}
 	else if (cfg->log_level < G_LOG_LEVEL_MESSAGE) {
-		fprintf (f, " <level>warning</level>" EOL);
+		rspamd_fprintf (f, " <level>warning</level>" EOL);
 	}
 	else if (cfg->log_level < G_LOG_LEVEL_DEBUG) {
-		fprintf (f, " <level>info</level>" EOL);
+		rspamd_fprintf (f, " <level>info</level>" EOL);
 	}
 	else {
-		fprintf (f, " <level>debug</level>" EOL);
+		rspamd_fprintf (f, " <level>debug</level>" EOL);
 	}
 	
 	/* Other options */
-	fprintf (f, " <log_urls>%s</log_urls>" EOL, cfg->log_urls ? "yes" : "no");
+	rspamd_fprintf (f, " <log_urls>%s</log_urls>" EOL, cfg->log_urls ? "yes" : "no");
 	if (cfg->log_buf_size != 0) {
-		fprintf (f, " <log_buffer>%ud</log_buffer>" EOL, (unsigned)cfg->log_buf_size);
+		rspamd_fprintf (f, " <log_buffer>%ud</log_buffer>" EOL, (guint)cfg->log_buf_size);
 	}
 	if (cfg->debug_ip_map != NULL) {
 		escaped_value = g_markup_escape_text (cfg->debug_ip_map, -1);
-		fprintf (f, " <debug_ip>%s</debug_ip>" EOL, escaped_value);
+		rspamd_fprintf (f, " <debug_ip>%s</debug_ip>" EOL, escaped_value);
 		g_free (escaped_value);
 	}
 	
 	/* Handle type */
 	if (cfg->log_type == RSPAMD_LOG_FILE) {
 		escaped_value = g_markup_escape_text (cfg->log_file, -1);
-		fprintf (f, " <type filename=\"%s\">file</type>" EOL, escaped_value);
+		rspamd_fprintf (f, " <type filename=\"%s\">file</type>" EOL, escaped_value);
 		g_free (escaped_value);
 	}
 	else if (cfg->log_type == RSPAMD_LOG_CONSOLE) {
-		fprintf (f, " <type>console</type>" EOL);
+		rspamd_fprintf (f, " <type>console</type>" EOL);
 	}
 	else if (cfg->log_type == RSPAMD_LOG_SYSLOG) {
 		escaped_value = NULL;
@@ -2035,11 +2035,11 @@ xml_dump_logging (struct config_file *cfg, FILE *f)
 				escaped_value = "LOG_LOCAL7";
 				break;
 		}
-		fprintf (f, " <type facility=\"%s\">syslog</type>" EOL, escaped_value);
+		rspamd_fprintf (f, " <type facility=\"%s\">syslog</type>" EOL, escaped_value);
 	}
-	fprintf (f, "</logging>" EOL);
+	rspamd_fprintf (f, "</logging>" EOL);
 	/* Print footer comment */
-	fprintf (f, "<!-- End of logging section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of logging section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -2053,21 +2053,21 @@ xml_dump_modules_paths (struct config_file *cfg, FILE *f)
 	struct script_module           *module;
 
 	/* Print header comment */
-	fprintf (f, "<!-- Modules section -->" EOL);
-	fprintf (f, "<modules>" EOL);
+	rspamd_fprintf (f, "<!-- Modules section -->" EOL);
+	rspamd_fprintf (f, "<modules>" EOL);
 
 	cur = cfg->script_modules;
 	while (cur) {
 		module = cur->data;
 		escaped_value = g_markup_escape_text (module->path, -1);
-		fprintf (f, " <path>%s</path>" EOL, escaped_value);
+		rspamd_fprintf (f, " <path>%s</path>" EOL, escaped_value);
 		g_free (escaped_value);
 		cur = g_list_next (cur);
 	}
 
-	fprintf (f, "</modules>" EOL);
+	rspamd_fprintf (f, "</modules>" EOL);
 	/* Print footer comment */
-	fprintf (f, "<!-- End of modules section -->" EOL EOL);
+	rspamd_fprintf (f, "<!-- End of modules section -->" EOL EOL);
 
 	return TRUE;
 }
@@ -2075,7 +2075,7 @@ xml_dump_modules_paths (struct config_file *cfg, FILE *f)
 
 #define CHECK_RES do { if (!res) { fclose (f); return FALSE; } } while (0)
 gboolean 
-xml_dump_config (struct config_file *cfg, const char *filename)
+xml_dump_config (struct config_file *cfg, const gchar *filename)
 {
 	FILE *f;
 	gboolean res = FALSE;
@@ -2087,7 +2087,7 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	}
 	
 	/* Header */
-	fprintf (f, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" EOL "<rspamd>" EOL);
+	rspamd_fprintf (f, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" EOL "<rspamd>" EOL);
 	/* Now dump all parts of config */
 	res = xml_dump_main (cfg, f);
 	CHECK_RES;
@@ -2106,7 +2106,7 @@ xml_dump_config (struct config_file *cfg, const char *filename)
 	res = xml_dump_modules_paths (cfg, f);
 	CHECK_RES;
 	/* Footer */
-	fprintf (f, "</rspamd>" EOL);
+	rspamd_fprintf (f, "</rspamd>" EOL);
 	fclose (f);
 
 	return TRUE;

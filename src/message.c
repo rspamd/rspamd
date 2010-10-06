@@ -35,11 +35,11 @@
 #define UTF8_CHARSET "UTF-8"
 
 GByteArray                     *
-strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, GByteArray * src, int *stateptr)
+strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
 {
 	uint8_t                        *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin = NULL, c, lc;
-	int                             br, i = 0, depth = 0, in_q = 0;
-	int                             state = 0;
+	gint                            br, i = 0, depth = 0, in_q = 0;
+	gint                            state = 0;
 	GByteArray                     *buf;
 	GNode                          *level_ptr = NULL;
 
@@ -248,9 +248,9 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 }
 
 static void
-parse_qmail_recv (memory_pool_t * pool, char *line, struct received_header *r)
+parse_qmail_recv (memory_pool_t * pool, gchar *line, struct received_header *r)
 {
-	char                           *s, *p, t;
+	gchar                           *s, *p, t;
 
 	/* We are intersted only with received from network headers */
 	if ((p = strstr (line, "from network")) == NULL) {
@@ -288,10 +288,10 @@ parse_qmail_recv (memory_pool_t * pool, char *line, struct received_header *r)
 }
 
 static void
-parse_recv_header (memory_pool_t * pool, char *line, struct received_header *r)
+parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 {
-	char                           *p, *s, t, **res = NULL;
-	int                             state = 0, next_state = 0;
+	gchar                           *p, *s, t, **res = NULL;
+	gint                            state = 0, next_state = 0;
 
 	g_strstrip (line);
 	p = line;
@@ -490,7 +490,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 {
 	GError                         *err = NULL;
 	gsize                           read_bytes, write_bytes;
-	const char                     *charset;
+	const gchar                     *charset;
 	gchar                          *res_str;
 	GByteArray                     *result_array;
 
@@ -530,7 +530,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		GMimeObject *part, GMimeObject *parent, gboolean is_empty)
 {
 	struct mime_text_part          *text_part;
-	const char                     *cd;
+	const gchar                     *cd;
 
 	/* Skip attachements */
 #ifndef GMIME24
@@ -740,7 +740,7 @@ destroy_message (void *pointer)
 	g_object_unref (msg);
 }
 
-int
+gint
 process_message (struct worker_task *task)
 {
 	GMimeMessage                   *message;
@@ -751,7 +751,7 @@ process_message (struct worker_task *task)
 	GMimePart                      *part;
 	GMimeDataWrapper               *wrapper;
 	struct received_header         *recv;
-	char                           *mid;
+	gchar                           *mid;
 
 	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->begin;
@@ -766,7 +766,7 @@ process_message (struct worker_task *task)
 
 	if (task->is_mime) {
 
-		debug_task ("construct mime parser from string length %d", (int)task->msg->len);
+		debug_task ("construct mime parser from string length %d", (gint)task->msg->len);
 		/* create a new parser object to parse the stream */
 		parser = g_mime_parser_new_with_stream (stream);
 		g_object_unref (stream);
@@ -887,7 +887,7 @@ process_message (struct worker_task *task)
 		if (task->rcpt) {
 			cur = task->rcpt;
 			while (cur) {
-				g_mime_message_add_recipient (task->message, GMIME_RECIPIENT_TYPE_TO, NULL, (char *)cur->data);
+				g_mime_message_add_recipient (task->message, GMIME_RECIPIENT_TYPE_TO, NULL, (gchar *)cur->data);
 				cur = g_list_next (cur);
 			}
 		}
@@ -899,8 +899,8 @@ process_message (struct worker_task *task)
 
 struct raw_header {
 	struct raw_header              *next;
-	char                           *name;
-	char                           *value;
+	gchar                           *name;
+	gchar                           *value;
 };
 
 typedef struct _GMimeHeader {
@@ -926,7 +926,7 @@ enum {
 
 #ifndef GMIME24
 static void
-header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const char *field)
+header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const gchar *field)
 {
 	while (h) {
 		if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
@@ -942,10 +942,10 @@ header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const 
 }
 #else
 static void
-header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const char *field)
+header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field)
 {
 	GMimeHeaderIter                *iter;
-	const char                     *name;
+	const gchar                     *name;
 
 	if (ls == NULL) {
 		*ret = NULL;
@@ -977,9 +977,9 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 struct multipart_cb_data {
 	GList                          *ret;
 	memory_pool_t                  *pool;
-	const char                     *field;
+	const gchar                     *field;
 	gboolean                        try_search;
-	int                             rec;
+	gint                            rec;
 };
 
 #define MAX_REC 10
@@ -1030,7 +1030,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 }
 
 static GList                   *
-local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const char *field)
+local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field)
 {
 	GList                          *gret = NULL;
 	GMimeObject                    *part;
@@ -1113,7 +1113,7 @@ void
 local_mime_message_set_date_from_string (GMimeMessage * message, const gchar * string)
 {
 	time_t                          date;
-	int                             offset = 0;
+	gint                            offset = 0;
 
 	date = g_mime_utils_header_decode_date (string, &offset);
 	g_mime_message_set_date (message, date, offset);
@@ -1122,11 +1122,11 @@ local_mime_message_set_date_from_string (GMimeMessage * message, const gchar * s
 /*
  * Replacements for standart gmime functions but converting adresses to IA
  */
-static const char              *
+static const gchar              *
 local_message_get_sender (GMimeMessage * message)
 {
-	char                           *res;
-	const char                     *from = g_mime_message_get_sender (message);
+	gchar                           *res;
+	const gchar                     *from = g_mime_message_get_sender (message);
 	InternetAddressList            *ia;
 
 #ifndef	GMIME24
@@ -1147,11 +1147,11 @@ local_message_get_sender (GMimeMessage * message)
 	return res;
 }
 
-static const char              *
+static const gchar              *
 local_message_get_reply_to (GMimeMessage * message)
 {
-	char                           *res;
-	const char                     *from = g_mime_message_get_reply_to (message);
+	gchar                           *res;
+	const gchar                     *from = g_mime_message_get_reply_to (message);
 	InternetAddressList            *ia;
 
 #ifndef	GMIME24
@@ -1190,7 +1190,7 @@ ADD_RECIPIENT_TEMPLATE (to, GMIME_RECIPIENT_TYPE_TO)
 	ADD_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
 #   define GET_RECIPIENT_TEMPLATE(type,def)														\
 static InternetAddressList*																		\
-local_message_get_recipients_##type (GMimeMessage *message, const char *unused)					\
+local_message_get_recipients_##type (GMimeMessage *message, const gchar *unused)					\
 {																								\
 	return g_mime_message_get_recipients (message, (def));										\
 }
@@ -1199,17 +1199,17 @@ local_message_get_recipients_##type (GMimeMessage *message, const char *unused)	
 	GET_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
 #endif
 /* different declarations for different types of set and get functions */
-  typedef const char             *(*GetFunc) (GMimeMessage * message);
-  typedef InternetAddressList    *(*GetRcptFunc) (GMimeMessage * message, const char *type);
-  typedef GList                  *(*GetListFunc) (memory_pool_t * pool, GMimeMessage * message, const char *type);
-  typedef void                    (*SetFunc) (GMimeMessage * message, const char *value);
-  typedef void                    (*SetListFunc) (GMimeMessage * message, const char *field, const char *value);
+  typedef const gchar             *(*GetFunc) (GMimeMessage * message);
+  typedef InternetAddressList    *(*GetRcptFunc) (GMimeMessage * message, const gchar *type);
+  typedef GList                  *(*GetListFunc) (memory_pool_t * pool, GMimeMessage * message, const gchar *type);
+  typedef void                    (*SetFunc) (GMimeMessage * message, const gchar *value);
+  typedef void                    (*SetListFunc) (GMimeMessage * message, const gchar *field, const gchar *value);
 
 /** different types of functions
 *
 * FUNC_CHARPTR
 *	- function with no arguments
-*	- get returns char*
+*	- get returns gchar*
 *
 * FUNC_IA (from Internet Address)
 *	- function with additional "field" argument from the fieldfunc table,
@@ -1231,7 +1231,7 @@ local_message_get_recipients_##type (GMimeMessage *message, const char *unused)	
 * functions.
 **/
   static struct {
-	  char                           *name;
+	  gchar                           *name;
 	  GetFunc                         func;
 	  GetRcptFunc                     rcptfunc;
 	  GetListFunc                     getlistfunc;
@@ -1272,7 +1272,7 @@ local_message_get_recipients_##type (GMimeMessage *message, const char *unused)	
 * message_set_header: set header of any type excluding special (Content- and MIME-Version:)
 **/
 void
-message_set_header (GMimeMessage * message, const char *field, const char *value)
+message_set_header (GMimeMessage * message, const gchar *field, const gchar *value)
 {
 	gint                            i;
 
@@ -1305,10 +1305,10 @@ message_set_header (GMimeMessage * message, const char *field, const char *value
 * You should free the GList list by yourself.
 **/
 GList                          *
-message_get_header (memory_pool_t * pool, GMimeMessage * message, const char *field)
+message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field)
 {
 	gint                            i;
-	char                           *ret = NULL, *ia_string;
+	gchar                           *ret = NULL, *ia_string;
 	GList                          *gret = NULL;
 	InternetAddressList            *ia_list = NULL, *ia;
 
@@ -1316,10 +1316,10 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const char *fi
 		if (!fieldfunc[i].name || !g_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
 			switch (fieldfunc[i].functype) {
 			case FUNC_CHARFREEPTR:
-				ret = (char *)(*(fieldfunc[i].func)) (message);
+				ret = (gchar *)(*(fieldfunc[i].func)) (message);
 				break;
 			case FUNC_CHARPTR:
-				ret = (char *)(*(fieldfunc[i].func)) (message);
+				ret = (gchar *)(*(fieldfunc[i].func)) (message);
 				break;
 			case FUNC_IA:
 				ia_list = (*(fieldfunc[i].rcptfunc)) (message, field);

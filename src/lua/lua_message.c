@@ -27,7 +27,7 @@
 #include "../message.h"
 
 #define LUA_GMIME_BRIDGE_GET(class, name, mime_class)									\
-static int																				\
+static gint																				\
 lua_##class##_##name(lua_State *L)														\
 {																						\
 	GMime##mime_class *obj = lua_check_##class(L);										\
@@ -41,10 +41,10 @@ lua_##class##_##name(lua_State *L)														\
 }
 
 #define LUA_GMIME_BRIDGE_SET(class, name, mime_class)									\
-static int																				\
+static gint																				\
 lua_##class##_##name(lua_State *L)														\
 {																						\
-	const char *str;																	\
+	const gchar *str;																	\
 	GMime##mime_class *obj = lua_check_##class(L);										\
 	if (obj != NULL) {																	\
 		str = luaL_checkstring (L, 2);													\
@@ -105,13 +105,13 @@ LUA_GMIME_BRIDGE_SET (message, set_sender, Message)
 LUA_GMIME_BRIDGE_GET (message, get_reply_to, Message)
 LUA_GMIME_BRIDGE_SET (message, set_reply_to, Message)
 
-static int
+static gint
 lua_message_get_header (lua_State * L)
 {
-	const char                     *headern;
+	const gchar                     *headern;
 	GMimeMessage                   *obj = lua_check_message (L);
 	GList                          *res = NULL, *cur;
-	int                             i = 1;
+	gint                            i = 1;
 
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
@@ -121,7 +121,7 @@ lua_message_get_header (lua_State * L)
 				cur = res;
 				lua_newtable (L);
 				while (cur) {
-					lua_pushstring (L, (const char *)cur->data);
+					lua_pushstring (L, (const gchar *)cur->data);
 					lua_rawseti (L, -2, i++);
 					g_free (cur->data);
 					cur = g_list_next (cur);
@@ -144,10 +144,10 @@ lua_message_get_header (lua_State * L)
 }
 
 
-static int
+static gint
 lua_message_set_header (lua_State * L)
 {
-	const char                     *headern, *headerv;
+	const gchar                     *headern, *headerv;
 	GMimeMessage                   *obj = lua_check_message (L);
 
 	if (obj != NULL) {
@@ -168,7 +168,7 @@ lua_message_set_header (lua_State * L)
 }
 
 
-int
+gint
 luaopen_message (lua_State * L)
 {
 	lua_newclass (L, "rspamd{message}", msglib_m);

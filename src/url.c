@@ -41,13 +41,13 @@
     (LOWEST_PORT <= (port) && (port) <= HIGHEST_PORT)
 
 struct _proto {
-	unsigned char                  *name;
-	int                             port;
+	guchar                          *name;
+	gint                            port;
 	uintptr_t                      *unused;
-	unsigned int                    need_slashes:1;
-	unsigned int                    need_slash_after_host:1;
-	unsigned int                    free_syntax:1;
-	unsigned int                    need_ssl:1;
+	guint                           need_slashes:1;
+	guint                           need_slash_after_host:1;
+	guint                           free_syntax:1;
+	guint                           need_ssl:1;
 };
 
 typedef struct url_match_s {
@@ -160,7 +160,7 @@ enum {
 #define is_urlsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_ALPHA|IS_DIGIT|IS_URLSAFE)) != 0)
 
 
-static const char              *
+static const gchar              *
 url_strerror (enum uri_errno err)
 {
 	switch (err) {
@@ -192,30 +192,30 @@ url_strerror (enum uri_errno err)
 	return NULL;
 }
 
-static inline int
-end_of_dir (unsigned char c)
+static inline gint
+end_of_dir (gchar c)
 {
 	return c == POST_CHAR || c == '#' || c == ';' || c == '?';
 }
 
-static inline int
-is_uri_dir_sep (struct uri *uri, unsigned char pos)
+static inline gint
+is_uri_dir_sep (struct uri *uri, gchar pos)
 {
 	return (pos == '/');
 }
 
-static int
-check_uri_file (unsigned char *name)
+static gint
+check_uri_file (gchar *name)
 {
-	static const unsigned char      chars[] = POST_CHAR_S "#?";
+	static const gchar      chars[] = POST_CHAR_S "#?";
 
 	return strcspn (name, chars);
 }
 
-static int
+static gint
 url_init (void)
 {
-	int                             i;
+	gint                            i;
 	if (url_scanner == NULL) {
 		url_scanner = g_malloc (sizeof (struct url_match_scanner));
 		url_scanner->matchers = matchers;
@@ -230,15 +230,15 @@ url_init (void)
 }
 
 enum protocol
-get_protocol (unsigned char *name, int namelen)
+get_protocol (gchar *name, gint namelen)
 {
 	/* These are really enum protocol values but can take on negative
 	 * values and since 0 <= -1 for enum values it's better to use clean
 	 * integer type. */
-	int                             start, end;
+	gint                            start, end;
 	enum protocol                   protocol;
-	unsigned char                  *pname;
-	int                             pnamelen, minlen, compare;
+	guchar                          *pname;
+	gint                            pnamelen, minlen, compare;
 
 	/* Almost dichotomic search is used here */
 	/* Starting at the HTTP entry which is the most common that will make
@@ -276,34 +276,34 @@ get_protocol (unsigned char *name, int namelen)
 }
 
 
-int
+gint
 get_protocol_port (enum protocol protocol)
 {
 	return protocol_backends[protocol].port;
 }
 
-int
+gint
 get_protocol_need_slashes (enum protocol protocol)
 {
 	return protocol_backends[protocol].need_slashes;
 }
 
-int
+gint
 get_protocol_need_slash_after_host (enum protocol protocol)
 {
 	return protocol_backends[protocol].need_slash_after_host;
 }
 
-int
+gint
 get_protocol_free_syntax (enum protocol protocol)
 {
 	return protocol_backends[protocol].free_syntax;
 }
 
-static int
-get_protocol_length (const unsigned char *url)
+static gint
+get_protocol_length (const gchar *url)
 {
-	unsigned char                  *end = (unsigned char *)url;
+	gchar                          *end = (gchar *)url;
 
 	/* Seek the end of the protocol name if any. */
 	/* RFC1738:
@@ -320,11 +320,11 @@ get_protocol_length (const unsigned char *url)
 /*
  * Calcualte new length of unescaped hostlen
  */
-static unsigned int
-url_calculate_escaped_hostlen (char *host, unsigned int hostlen)
+static guint
+url_calculate_escaped_hostlen (gchar *host, guint hostlen)
 {
-	unsigned int                    i, result = hostlen;
-	char                           *p = host, c;
+	guint                           i, result = hostlen;
+	gchar                           *p = host, c;
 
 	for (i = 0; i < hostlen; i++, p++) {
 		if (*p == '%' && g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2)) && i < hostlen - 2) {
@@ -348,10 +348,10 @@ url_calculate_escaped_hostlen (char *host, unsigned int hostlen)
    string intact, make a copy before calling this function.  */
 
 static void
-url_unescape (char *s)
+url_unescape (gchar *s)
 {
-	char                           *t = s;	/* t - tortoise */
-	char                           *h = s;	/* h - hare     */
+	gchar                           *t = s;	/* t - tortoise */
+	gchar                           *h = s;	/* h - hare     */
 
 	for (; *h; h++, t++) {
 		if (*h != '%') {
@@ -359,7 +359,7 @@ url_unescape (char *s)
 			*t = *h;
 		}
 		else {
-			char                            c;
+			gchar                           c;
 			/* Do nothing if '%' is not followed by two hex digits. */
 			if (!h[1] || !h[2] || !(g_ascii_isxdigit (h[1]) && g_ascii_isxdigit (h[2])))
 				goto copychar;
@@ -376,10 +376,10 @@ url_unescape (char *s)
 }
 
 static void
-url_strip (char *s)
+url_strip (gchar *s)
 {
-	char                           *t = s;	/* t - tortoise */
-	char                           *h = s;	/* h - hare     */
+	gchar                           *t = s;	/* t - tortoise */
+	gchar                           *h = s;	/* h - hare     */
 
 	while (*h) {
 		if (g_ascii_isgraph (*h)) {
@@ -391,13 +391,13 @@ url_strip (char *s)
 	*t = '\0';
 }
 
-static char                    *
-url_escape_1 (const char *s, int allow_passthrough, memory_pool_t * pool)
+static gchar                    *
+url_escape_1 (const gchar *s, gint allow_passthrough, memory_pool_t * pool)
 {
-	const char                     *p1;
-	char                           *p2, *newstr;
-	int                             newlen;
-	int                             addition = 0;
+	const gchar                     *p1;
+	gchar                           *p2, *newstr;
+	gint                            newlen;
+	gint                            addition = 0;
 
 	for (p1 = s; *p1; p1++)
 		if (!is_urlsafe (*p1)) {
@@ -406,7 +406,7 @@ url_escape_1 (const char *s, int allow_passthrough, memory_pool_t * pool)
 
 	if (!addition) {
 		if (allow_passthrough) {
-			return (char *)s;
+			return (gchar *)s;
 		}
 		else {
 			return memory_pool_strdup (pool, s);
@@ -414,14 +414,14 @@ url_escape_1 (const char *s, int allow_passthrough, memory_pool_t * pool)
 	}
 
 	newlen = (p1 - s) + addition;
-	newstr = (char *)memory_pool_alloc (pool, newlen + 1);
+	newstr = (gchar *)memory_pool_alloc (pool, newlen + 1);
 
 	p1 = s;
 	p2 = newstr;
 	while (*p1) {
 		/* Quote the characters that match the test mask. */
 		if (!is_urlsafe (*p1)) {
-			unsigned char                   c = *p1++;
+			guchar                          c = *p1++;
 			*p2++ = '%';
 			*p2++ = XNUM_TO_DIGIT (c >> 4);
 			*p2++ = XNUM_TO_DIGIT (c & 0xf);
@@ -437,8 +437,8 @@ url_escape_1 (const char *s, int allow_passthrough, memory_pool_t * pool)
 /* URL-escape the unsafe characters (see urlchr_table) in a given
    string, returning a freshly allocated string.  */
 
-char                           *
-url_escape (const char *s, memory_pool_t * pool)
+gchar                           *
+url_escape (const gchar *s, memory_pool_t * pool)
 {
 	return url_escape_1 (s, 0, pool);
 }
@@ -446,20 +446,20 @@ url_escape (const char *s, memory_pool_t * pool)
 /* URL-escape the unsafe characters (see urlchr_table) in a given
    string.  If no characters are unsafe, S is returned.  */
 
-static char                    *
-url_escape_allow_passthrough (const char *s, memory_pool_t * pool)
+static gchar                    *
+url_escape_allow_passthrough (const gchar *s, memory_pool_t * pool)
 {
 	return url_escape_1 (s, 1, pool);
 }
 
-/* Decide whether the char at position P needs to be encoded.  (It is
-   not enough to pass a single char *P because the function may need
+/* Decide whether the gchar at position P needs to be encoded.  (It is
+   not enough to pass a single gchar *P because the function may need
    to inspect the surrounding context.)
 
-   Return 1 if the char should be escaped as %XX, 0 otherwise.  */
+   Return 1 if the gchar should be escaped as %XX, 0 otherwise.  */
 
-static inline int
-char_needs_escaping (const char *p)
+static inline gint
+char_needs_escaping (const gchar *p)
 {
 	if (*p == '%') {
 		if (g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2)))
@@ -486,14 +486,14 @@ char_needs_escaping (const char *p)
    further transformations of the result yield the same output.
 */
 
-static char                    *
-reencode_escapes (char *s, memory_pool_t * pool)
+static gchar                    *
+reencode_escapes (gchar *s, memory_pool_t * pool)
 {
-	const char                     *p1;
-	char                           *newstr, *p2;
-	int                             oldlen, newlen;
+	const gchar                     *p1;
+	gchar                           *newstr, *p2;
+	gint                            oldlen, newlen;
 
-	int                             encode_count = 0;
+	gint                            encode_count = 0;
 
 	/* First pass: inspect the string to see if there's anything to do,
 	   and to calculate the new length.  */
@@ -518,7 +518,7 @@ reencode_escapes (char *s, memory_pool_t * pool)
 
 	while (*p1)
 		if (char_needs_escaping (p1)) {
-			unsigned char                   c = *p1++;
+			guchar                          c = *p1++;
 			*p2++ = '%';
 			*p2++ = XNUM_TO_DIGIT (c >> 4);
 			*p2++ = XNUM_TO_DIGIT (c & 0xf);
@@ -536,12 +536,12 @@ reencode_escapes (char *s, memory_pool_t * pool)
    count of unescaped chars.  */
 
 static void
-unescape_single_char (char *str, char chr)
+unescape_single_char (gchar *str, gchar chr)
 {
-	const char                      c1 = XNUM_TO_DIGIT (chr >> 4);
-	const char                      c2 = XNUM_TO_DIGIT (chr & 0xf);
-	char                           *h = str;	/* hare */
-	char                           *t = str;	/* tortoise */
+	const gchar                      c1 = XNUM_TO_DIGIT (chr >> 4);
+	const gchar                      c2 = XNUM_TO_DIGIT (chr & 0xf);
+	gchar                           *h = str;	/* hare */
+	gchar                           *t = str;	/* tortoise */
 
 	for (; *h; h++, t++) {
 		if (h[0] == '%' && h[1] == c1 && h[2] == c2) {
@@ -558,12 +558,12 @@ unescape_single_char (char *str, char chr)
 /* Escape unsafe and reserved characters, except for the slash
 	 characters.  */
 
-static char                    *
-url_escape_dir (const char *dir, memory_pool_t * pool)
+static gchar                    *
+url_escape_dir (const gchar *dir, memory_pool_t * pool)
 {
-	char                           *newdir = url_escape_1 (dir, 1, pool);
+	gchar                           *newdir = url_escape_1 (dir, 1, pool);
 	if (newdir == dir)
-		return (char *)dir;
+		return (gchar *)dir;
 
 	unescape_single_char (newdir, '/');
 	return newdir;
@@ -583,13 +583,13 @@ url_escape_dir (const char *dir, memory_pool_t * pool)
    function, run test_path_simplify to make sure you haven't broken a
    test case.  */
 
-static int
-path_simplify (char *path)
+static gint
+path_simplify (gchar *path)
 {
-	char                           *h = path;	/* hare */
-	char                           *t = path;	/* tortoise */
-	char                           *beg = path;	/* boundary for backing the tortoise */
-	char                           *end = path + strlen (path);
+	gchar                           *h = path;	/* hare */
+	gchar                           *t = path;	/* tortoise */
+	gchar                           *beg = path;	/* boundary for backing the tortoise */
+	gchar                           *end = path + strlen (path);
 
 	while (h < end) {
 		/* Hare should be at the beginning of a path element. */
@@ -643,12 +643,12 @@ path_simplify (char *path)
 }
 
 enum uri_errno
-parse_uri (struct uri *uri, unsigned char *uristring, memory_pool_t * pool)
+parse_uri (struct uri *uri, gchar *uristring, memory_pool_t * pool)
 {
-	unsigned char                  *prefix_end, *host_end, *p;
-	unsigned char                  *lbracket, *rbracket;
-	int                             datalen, n, addrlen;
-	unsigned char                  *frag_or_post, *user_end, *port_end;
+	guchar                          *prefix_end, *host_end, *p;
+	guchar                          *lbracket, *rbracket;
+	gint                            datalen, n, addrlen;
+	guchar                          *frag_or_post, *user_end, *port_end;
 
 	memset (uri, 0, sizeof (*uri));
 
@@ -915,7 +915,7 @@ url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_
 {
 	const gchar                    *p;
 	gchar                           stop;
-	int                             i;
+	gint                            i;
 
 	p = pos + strlen (match->pattern);
 	if (*p == '/') {
@@ -961,7 +961,7 @@ url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 {
 	const gchar                    *p, *c;
 	gchar                           open_brace = '\0', close_brace = '\0';
-	int                             i, brace_stack;
+	gint                            i, brace_stack;
 	gboolean                        passwd;
 	guint                           port;
 
@@ -1148,8 +1148,8 @@ void
 url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
 	struct url_matcher             *matcher;
-	int                             rc, idx;
-	char                           *url_str = NULL;
+	gint                            rc, idx;
+	gchar                           *url_str = NULL;
 	struct uri                     *new;
 	const guint8                   *p, *end, *pos;
 	url_match_t                     m;

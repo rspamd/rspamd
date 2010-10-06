@@ -11,14 +11,14 @@
 #define update_buf_size(x) (x)->free = (x)->buf->size - ((x)->pos - (x)->buf->begin); (x)->buf->len = (x)->pos - (x)->buf->begin
 
 typedef struct f_str_s {
-	char *begin;
+	gchar *begin;
 	size_t len;
 	size_t size;
 } f_str_t;
 
 typedef struct f_str_buf_s {
 	f_str_t *buf;
-	char *pos;
+	gchar *pos;
 	size_t free;
 } f_str_buf_t;
 
@@ -30,12 +30,12 @@ typedef struct f_tok_s {
 /*
  * Search first occurence of character in string
  */
-ssize_t fstrchr (f_str_t *src, char c);
+ssize_t fstrchr (f_str_t *src, gchar c);
 
 /*
  * Search last occurence of character in string
  */
-ssize_t fstrrchr (f_str_t *src, char c);
+ssize_t fstrrchr (f_str_t *src, gchar c);
 
 /*
  * Search for pattern in orig
@@ -51,7 +51,7 @@ ssize_t fstrstri (f_str_t *orig, f_str_t *pattern);
  * Split string by tokens
  * word contains parsed word
  */
-int fstrtok (f_str_t *text, const char *sep, f_tok_t *state);
+gint fstrtok (f_str_t *text, const gchar *sep, f_tok_t *state);
 
 /*
  * Copy one string into other
@@ -66,7 +66,7 @@ size_t fstrcat (f_str_t *dest, f_str_t *src);
 /*
  * Push one character to fstr
  */
-int fstrpush (f_str_t *dest, char c);
+gint fstrpush (f_str_t *dest, gchar c);
 
 /*
  * Allocate memory for f_str_t
@@ -91,12 +91,12 @@ f_str_t* fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen);
 /*
  * Return fast hash value for fixed string
  */
-uint32_t fstrhash (f_str_t *str);
+guint32 fstrhash (f_str_t *str);
 
 /*
  * Make copy of string to 0-terminated string
  */
-char* fstrcstr (f_str_t *str, memory_pool_t *pool);
+gchar* fstrcstr (f_str_t *str, memory_pool_t *pool);
 
 /*
  * Strip fstr string from space symbols

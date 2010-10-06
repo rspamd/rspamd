@@ -11,37 +11,37 @@
 #include <lualib.h>
 
 /* Interface definitions */
-#define LUA_FUNCTION_DEF(class, name) static int lua_##class##_##name(lua_State *L)
+#define LUA_FUNCTION_DEF(class, name) static gint lua_##class##_##name(lua_State *L)
 #define LUA_INTERFACE_DEF(class, name) { #name, lua_##class##_##name }
 
 extern const luaL_reg null_reg[];
 
 /* Common utility functions */
-void lua_newclass (lua_State *L, const char *classname, const struct luaL_reg *func);
-void lua_setclass (lua_State *L, const char *classname, int objidx);
-void lua_set_table_index (lua_State *L, const char *index, const char *value);
-int lua_class_tostring (lua_State *L);
-int luaopen_message (lua_State *L);
-int luaopen_task (lua_State *L);
-int luaopen_config (lua_State *L);
-int luaopen_metric (lua_State *L);
-int luaopen_radix (lua_State *L);
-int luaopen_hash_table (lua_State *L);
-int luaopen_trie (lua_State * L);
-int luaopen_textpart (lua_State *L);
-int luaopen_image (lua_State *L);
-int luaopen_classifier (lua_State *L);
-int luaopen_statfile (lua_State * L);
+void lua_newclass (lua_State *L, const gchar *classname, const struct luaL_reg *func);
+void lua_setclass (lua_State *L, const gchar *classname, gint objidx);
+void lua_set_table_index (lua_State *L, const gchar *index, const gchar *value);
+gint lua_class_tostring (lua_State *L);
+gint luaopen_message (lua_State *L);
+gint luaopen_task (lua_State *L);
+gint luaopen_config (lua_State *L);
+gint luaopen_metric (lua_State *L);
+gint luaopen_radix (lua_State *L);
+gint luaopen_hash_table (lua_State *L);
+gint luaopen_trie (lua_State * L);
+gint luaopen_textpart (lua_State *L);
+gint luaopen_image (lua_State *L);
+gint luaopen_classifier (lua_State *L);
+gint luaopen_statfile (lua_State * L);
 void init_lua (struct config_file *cfg);
 gboolean init_lua_filters (struct config_file *cfg);
 
 /* Filters functions */
-int lua_call_filter (const char *function, struct worker_task *task);
-int lua_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number);
-double lua_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name);
-gboolean lua_call_expression_func (const char *function, struct worker_task *task, GList *args, gboolean *res);
+gint lua_call_filter (const gchar *function, struct worker_task *task);
+gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number);
+double lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name);
+gboolean lua_call_expression_func (const gchar *function, struct worker_task *task, GList *args, gboolean *res);
 void lua_call_post_filters (struct worker_task *task);
-void add_luabuf (const char *line);
+void add_luabuf (const gchar *line);
 
 /* Classify functions */
 GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task);
@@ -51,7 +51,7 @@ double lua_normalizer_func (struct config_file *cfg, long double score, void *pa
 
 /* Config file functions */
 void lua_post_load_config (struct config_file *cfg);
-void lua_process_element (struct config_file *cfg, const char *name, struct module_opt *opt, int idx);
+void lua_process_element (struct config_file *cfg, const gchar *name, struct module_opt *opt, gint idx);
 gboolean lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, 
 							enum lua_var_type expected_type, gpointer *res);
 

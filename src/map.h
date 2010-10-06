@@ -11,27 +11,27 @@ enum fetch_proto {
 };
 
 struct map_cb_data {
-	int state;
+	gint state;
 	void *prev_data;
 	void *cur_data;
 };
 
 struct file_map_data {
-	const char *filename;
+	const gchar *filename;
 	struct stat st;
 };
 
 struct http_map_data {
 	struct in_addr addr;
-	uint16_t port;
-	char *path;
-	char *host;
+	guint16 port;
+	gchar *path;
+	gchar *host;
 	time_t last_checked;
 	gboolean chunked;
 	u_char read_buf[BUFSIZ];
-	uint32_t rlen;
-	uint32_t chunk;
-	uint32_t chunk_read;
+	guint32 rlen;
+	guint32 chunk;
+	guint32 chunk_read;
 };
 
 typedef u_char* (*map_cb_t)(memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
@@ -48,7 +48,7 @@ struct rspamd_map {
 	void *map_data;
 };
 
-gboolean add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
+gboolean add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
 void start_map_watch (void);
 void remove_all_maps (void);
 

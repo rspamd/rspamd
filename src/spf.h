@@ -26,25 +26,25 @@ typedef enum spf_action_e {
 } spf_action_t;
 
 struct spf_addr {
-	uint32_t addr;
-	uint32_t mask;
+	guint32 addr;
+	guint32 mask;
 	spf_mech_t mech;
-	char *spf_string;
+	gchar *spf_string;
 };
 
 struct spf_record {
-	char **elts;
+	gchar **elts;
 
-	char *cur_elt;
-	int elt_num;
-	int nested;
-	int dns_requests;
+	gchar *cur_elt;
+	gint elt_num;
+	gint nested;
+	gint dns_requests;
 
 	GList *addrs;
-	char *cur_domain;
-	char *sender;
-	char *sender_domain;
-	char *local_part;
+	gchar *cur_domain;
+	gchar *sender;
+	gchar *sender_domain;
+	gchar *local_part;
 	struct worker_task *task;
 	spf_cb_t callback;
 

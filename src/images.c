@@ -231,7 +231,7 @@ process_image (struct worker_task *task, struct mime_part *part)
 	}
 }
 
-const char *
+const gchar *
 image_type_str (enum known_image_types type)
 {
 	switch (type) {

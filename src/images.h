@@ -17,10 +17,10 @@ struct rspamd_image {
 	GByteArray *data;
 	guint32 width;
 	guint32 height;
-	const char *filename;
+	const gchar *filename;
 };
 
 void process_images (struct worker_task *task);
-const char *image_type_str (enum known_image_types type);
+const gchar *image_type_str (enum known_image_types type);
 
 #endif /* IMAGES_H_ */

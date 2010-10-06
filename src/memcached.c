@@ -65,20 +65,20 @@
 
 /* Header for udp protocol */
 struct memc_udp_header {
-	uint16_t                        req_id;
-	uint16_t                        seq_num;
-	uint16_t                        dg_sent;
-	uint16_t                        unused;
+	guint16                        req_id;
+	guint16                        seq_num;
+	guint16                        dg_sent;
+	guint16                        unused;
 };
 
-static void                     socket_callback (int fd, short what, void *arg);
-static int                      memc_parse_header (char *buf, size_t * len, char **end);
+static void                     socket_callback (gint fd, short what, void *arg);
+static gint                      memc_parse_header (gchar *buf, size_t * len, gchar **end);
 
 /*
  * Write to syslog if OPT_DEBUG is specified
  */
 static void
-memc_log (const memcached_ctx_t * ctx, int line, const char *fmt, ...)
+memc_log (const memcached_ctx_t * ctx, gint line, const gchar *fmt, ...)
 {
 	va_list                         args;
 	if (ctx->options & MEMC_OPT_DEBUG) {
@@ -93,10 +93,10 @@ memc_log (const memcached_ctx_t * ctx, int line, const char *fmt, ...)
  * Callback for write command
  */
 static void
-write_handler (int fd, short what, memcached_ctx_t * ctx)
+write_handler (gint fd, short what, memcached_ctx_t * ctx)
 {
-	char                            read_buf[READ_BUFSIZ];
-	int                             retries;
+	gchar                           read_buf[READ_BUFSIZ];
+	gint                            retries;
 	ssize_t                         r;
 	struct memc_udp_header          header;
 	struct iovec                    iov[4];
@@ -196,15 +196,15 @@ write_handler (int fd, short what, memcached_ctx_t * ctx)
  * Callback for read command
  */
 static void
-read_handler (int fd, short what, memcached_ctx_t * ctx)
+read_handler (gint fd, short what, memcached_ctx_t * ctx)
 {
-	char                            read_buf[READ_BUFSIZ];
-	char                           *p;
+	gchar                           read_buf[READ_BUFSIZ];
+	gchar                           *p;
 	ssize_t                         r;
 	size_t                          datalen;
 	struct memc_udp_header          header;
 	struct iovec                    iov[2];
-	int                             retries = 0, t;
+	gint                            retries = 0, t;
 
 	if (what == EV_WRITE) {
 		/* Send command to memcached */
@@ -330,10 +330,10 @@ read_handler (int fd, short what, memcached_ctx_t * ctx)
  * Callback for delete command
  */
 static void
-delete_handler (int fd, short what, memcached_ctx_t * ctx)
+delete_handler (gint fd, short what, memcached_ctx_t * ctx)
 {
-	char                            read_buf[READ_BUFSIZ];
-	int                             retries;
+	gchar                           read_buf[READ_BUFSIZ];
+	gint                            retries;
 	ssize_t                         r;
 	struct memc_udp_header          header;
 	struct iovec                    iov[2];
@@ -414,7 +414,7 @@ delete_handler (int fd, short what, memcached_ctx_t * ctx)
  * Callback for our socket events
  */
 static void
-socket_callback (int fd, short what, void *arg)
+socket_callback (gint fd, short what, void *arg)
 {
 	memcached_ctx_t                *ctx = (memcached_ctx_t *) arg;
 
@@ -461,11 +461,11 @@ common_memc_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 /*
  * Make socket for udp connection
  */
-static int
+static gint
 memc_make_udp_sock (memcached_ctx_t * ctx)
 {
 	struct sockaddr_in              sc;
-	int                             ofl;
+	gint                            ofl;
 
 	bzero (&sc, sizeof (struct sockaddr_in *));
 	sc.sin_family = AF_INET;
@@ -496,11 +496,11 @@ memc_make_udp_sock (memcached_ctx_t * ctx)
 /*
  * Make socket for tcp connection
  */
-static int
+static gint
 memc_make_tcp_sock (memcached_ctx_t * ctx)
 {
 	struct sockaddr_in              sc;
-	int                             ofl, r;
+	gint                            ofl, r;
 
 	bzero (&sc, sizeof (struct sockaddr_in *));
 	sc.sin_family = AF_INET;
@@ -535,11 +535,11 @@ memc_make_tcp_sock (memcached_ctx_t * ctx)
 /* 
  * Parse VALUE reply from server and set len argument to value returned by memcached 
  */
-static int
-memc_parse_header (char *buf, size_t * len, char **end)
+static gint
+memc_parse_header (gchar *buf, size_t * len, gchar **end)
 {
-	char                           *p, *c;
-	int                             i;
+	gchar                           *p, *c;
+	gint                            i;
 
 	/* VALUE <key> <flags> <bytes> [<cas unique>]\r\n */
 	c = strstr (buf, CRLF);
@@ -575,7 +575,7 @@ memc_parse_header (char *buf, size_t * len, char **end)
  * Common read command handler for memcached
  */
 memc_error_t
-memc_read (memcached_ctx_t * ctx, const char *cmd, memcached_param_t * param)
+memc_read (memcached_ctx_t * ctx, const gchar *cmd, memcached_param_t * param)
 {
 	ctx->cmd = cmd;
 	ctx->op = CMD_READ;
@@ -590,7 +590,7 @@ memc_read (memcached_ctx_t * ctx, const char *cmd, memcached_param_t * param)
  * Common write command handler for memcached
  */
 memc_error_t
-memc_write (memcached_ctx_t * ctx, const char *cmd, memcached_param_t * param, int expire)
+memc_write (memcached_ctx_t * ctx, const gchar *cmd, memcached_param_t * param, gint expire)
 {
 	ctx->cmd = cmd;
 	ctx->op = CMD_WRITE;
@@ -622,7 +622,7 @@ memc_delete (memcached_ctx_t * ctx, memcached_param_t * param)
  * writing is done to each memcached server
  */
 memc_error_t
-memc_write_mirror (memcached_ctx_t * ctx, size_t memcached_num, const char *cmd, memcached_param_t * param, int expire)
+memc_write_mirror (memcached_ctx_t * ctx, size_t memcached_num, const gchar *cmd, memcached_param_t * param, gint expire)
 {
 	memc_error_t                    r, result = OK;
 
@@ -645,7 +645,7 @@ memc_write_mirror (memcached_ctx_t * ctx, size_t memcached_num, const char *cmd,
  * reading is done from first active memcached server
  */
 memc_error_t
-memc_read_mirror (memcached_ctx_t * ctx, size_t memcached_num, const char *cmd, memcached_param_t * param)
+memc_read_mirror (memcached_ctx_t * ctx, size_t memcached_num, const gchar *cmd, memcached_param_t * param)
 {
 	memc_error_t                    r, result = OK;
 
@@ -676,7 +676,7 @@ memc_read_mirror (memcached_ctx_t * ctx, size_t memcached_num, const char *cmd, 
  * deleting is done for each active memcached server
  */
 memc_error_t
-memc_delete_mirror (memcached_ctx_t * ctx, size_t memcached_num, const char *cmd, memcached_param_t * param)
+memc_delete_mirror (memcached_ctx_t * ctx, size_t memcached_num, const gchar *cmd, memcached_param_t * param)
 {
 	memc_error_t                    r, result = OK;
 
@@ -700,7 +700,7 @@ memc_delete_mirror (memcached_ctx_t * ctx, size_t memcached_num, const char *cmd
 /* 
  * Initialize memcached context for specified protocol
  */
-int
+gint
 memc_init_ctx (memcached_ctx_t * ctx)
 {
 	if (ctx == NULL) {
@@ -733,10 +733,10 @@ memc_init_ctx (memcached_ctx_t * ctx)
 /*
  * Mirror init
  */
-int
+gint
 memc_init_ctx_mirror (memcached_ctx_t * ctx, size_t memcached_num)
 {
-	int                             r, result = -1;
+	gint                            r, result = -1;
 	while (memcached_num--) {
 		if (ctx[memcached_num].alive == 1) {
 			r = memc_init_ctx (&ctx[memcached_num]);
@@ -756,7 +756,7 @@ memc_init_ctx_mirror (memcached_ctx_t * ctx, size_t memcached_num)
 /*
  * Close context connection
  */
-int
+gint
 memc_close_ctx (memcached_ctx_t * ctx)
 {
 	if (ctx != NULL && ctx->sock != -1) {
@@ -770,10 +770,10 @@ memc_close_ctx (memcached_ctx_t * ctx)
 /* 
  * Mirror close
  */
-int
+gint
 memc_close_ctx_mirror (memcached_ctx_t * ctx, size_t memcached_num)
 {
-	int                             r = 0;
+	gint                            r = 0;
 	while (memcached_num--) {
 		if (ctx[memcached_num].alive == 1) {
 			r = memc_close_ctx (&ctx[memcached_num]);
@@ -788,10 +788,10 @@ memc_close_ctx_mirror (memcached_ctx_t * ctx, size_t memcached_num)
 }
 
 
-const char                     *
+const gchar                     *
 memc_strerror (memc_error_t err)
 {
-	const char                     *p;
+	const gchar                     *p;
 
 	switch (err) {
 	case OK:

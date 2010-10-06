@@ -56,10 +56,10 @@ struct greylist_ctx {
 
 #ifndef HAVE_SA_SIGINFO
 static void
-sig_handler (int signo)
+sig_handler (gint signo)
 #else
 static void
-sig_handler (int signo, siginfo_t *info, void *unused)
+sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
@@ -77,7 +77,7 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 }
 
 static void
-sigterm_handler (int fd, short what, void *arg)
+sigterm_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	static struct timeval           tv = {
@@ -93,7 +93,7 @@ sigterm_handler (int fd, short what, void *arg)
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr_handler (int fd, short what, void *arg)
+sigusr_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
@@ -112,7 +112,7 @@ sigusr_handler (int fd, short what, void *arg)
 
 struct greylist_session {
 	struct rspamd_worker *worker;
-	int fd;
+	gint                            fd;
 	socklen_t salen;
 	struct sockaddr_storage sa;
 	guint8 *pos;
@@ -160,7 +160,7 @@ greylist_process_delete_command (struct rspamd_grey_command *cmd, struct greylis
 {
 	struct rspamd_grey_reply          reply;
 #ifdef WITH_JUDY
-	int                               rc;
+	gint                            rc;
 	struct rspamd_grey_item         **pitem = NULL;
 
 	JHSG (pitem, ctx->jtree, cmd->data, CHECKSUM_SIZE);
@@ -256,7 +256,7 @@ process_greylist_command (struct greylist_session *session)
  * Accept new connection and construct task
  */
 static void
-accept_greylist_socket (int fd, short what, void *arg)
+accept_greylist_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	struct greylist_session         session;
@@ -288,7 +288,7 @@ static gboolean
 config_greylist_worker (struct rspamd_worker *worker)
 {
 	struct greylist_ctx            *ctx;
-	char                           *value;
+	gchar                           *value;
 
 	ctx = g_malloc0 (sizeof (struct greylist_ctx));
 #ifdef WITH_JUDY
@@ -319,7 +319,7 @@ start_greylist_storage (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
 	struct event                    sev;
-	int                             retries = 0;
+	gint                            retries = 0;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_GREYLIST;

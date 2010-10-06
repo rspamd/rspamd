@@ -50,7 +50,7 @@ init_view (memory_pool_t * pool)
 }
 
 gboolean
-add_view_from (struct rspamd_view * view, char *line)
+add_view_from (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
@@ -66,7 +66,7 @@ add_view_from (struct rspamd_view * view, char *line)
 }
 
 gboolean
-add_view_rcpt (struct rspamd_view * view, char *line)
+add_view_rcpt (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
@@ -82,7 +82,7 @@ add_view_rcpt (struct rspamd_view * view, char *line)
 }
 
 gboolean
-add_view_symbols (struct rspamd_view * view, char *line)
+add_view_symbols (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 	GList                          *symbols;
@@ -98,7 +98,7 @@ add_view_symbols (struct rspamd_view * view, char *line)
 		/* Try to parse symbols line as comma separated list */
 		symbols = parse_comma_list (view->pool, line);
 		while (symbols) {
-			g_hash_table_insert (view->symbols_hash, (char *)symbols->data, symbols->data);
+			g_hash_table_insert (view->symbols_hash, (gchar *)symbols->data, symbols->data);
 			/* Symbols list would be free at pool destruction */
 			symbols = g_list_next (symbols);
 		}
@@ -109,7 +109,7 @@ add_view_symbols (struct rspamd_view * view, char *line)
 }
 
 gboolean
-add_view_ip (struct rspamd_view * view, char *line)
+add_view_ip (struct rspamd_view * view, gchar *line)
 {
 	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
 		return TRUE;
@@ -119,7 +119,7 @@ add_view_ip (struct rspamd_view * view, char *line)
 }
 
 gboolean
-add_view_client_ip (struct rspamd_view * view, char *line)
+add_view_client_ip (struct rspamd_view * view, gchar *line)
 {
 	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
 		return TRUE;
@@ -211,14 +211,14 @@ G_INLINE_FUNC gboolean
 check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 {
 	GList                          *cur, *cur_re;
-	char                            rcpt_user[256], *p;
+	gchar                           rcpt_user[256], *p;
 	gint                            l;
 	struct rspamd_regexp           *re;
 
 	cur = task->rcpt;
 	while (cur) {
 		if ((p = strchr (cur->data, '@')) != NULL) {
-			l = MIN (sizeof (rcpt_user) - 1, p - (char *)cur->data);
+			l = MIN (sizeof (rcpt_user) - 1, p - (gchar *)cur->data);
 			memcpy (rcpt_user, cur->data, l);
 			rcpt_user[l] = '\0';
 			/* First try to lookup in hashtable */
@@ -279,7 +279,7 @@ find_view_by_rcpt (GList * views, struct worker_task *task)
 }
 
 static                          gboolean
-match_view_symbol (struct rspamd_view *v, const char *symbol)
+match_view_symbol (struct rspamd_view *v, const gchar *symbol)
 {
 	GList                          *cur;
 	struct rspamd_regexp           *re;
@@ -307,7 +307,7 @@ match_view_symbol (struct rspamd_view *v, const char *symbol)
 }
 
 gboolean
-check_view (GList * views, const char *symbol, struct worker_task * task)
+check_view (GList * views, const gchar *symbol, struct worker_task * task)
 {
 	struct rspamd_view             *selected = NULL;
 

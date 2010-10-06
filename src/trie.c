@@ -114,7 +114,7 @@ rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 		c = trie->icase ? g_ascii_tolower (*p) : *p;
 		m = check_match (q, c);
 		if (m == NULL) {
-			/* Insert char at specified level depth */
+			/* Insert gchar at specified level depth */
 			q = rspamd_trie_insert_char (trie, depth, q, c);
 		}
 		else {

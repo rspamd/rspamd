@@ -26,37 +26,37 @@ struct redirector_upstream {
 };
 
 struct surbl_ctx {
-	int (*filter)(struct worker_task *task);
-	uint16_t weight;
-	unsigned int connect_timeout;
-	unsigned int read_timeout;
-	unsigned int max_urls;
-	unsigned int url_expire;
+	gint (*filter)(struct worker_task *task);
+	guint16 weight;
+	guint connect_timeout;
+	guint read_timeout;
+	guint max_urls;
+	guint url_expire;
 	GList *suffixes;
 	GList *bits;
-	char *metric;
-	const char *tld2_file;
-	const char *whitelist_file;
+	gchar *metric;
+	const gchar *tld2_file;
+	const gchar *whitelist_file;
 	GHashTable **exceptions;
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;
 	rspamd_trie_t *redirector_trie;
 	GPtrArray *redirector_ptrs;
-	unsigned use_redirector;
+	guint use_redirector;
 	struct redirector_upstream *redirectors;
 	guint32 redirectors_number;
 	memory_pool_t *surbl_pool;
 };
 
 struct suffix_item {
-	const char *suffix;
-	const char *symbol;
+	const gchar *suffix;
+	const gchar *symbol;
 };
 
 struct dns_param {
 	struct uri *url;
 	struct worker_task *task;
-	char *host_resolve;
+	gchar *host_resolve;
 	struct suffix_item *suffix;
 };
 
@@ -69,7 +69,7 @@ struct redirector_param {
 		STATE_READ,
 	} state;
 	struct event ev;
-	int sock;
+	gint sock;
 	GTree *tree;
 	struct suffix_item *suffix;
 };
@@ -83,8 +83,8 @@ struct memcached_param {
 };
 
 struct surbl_bit_item {
-	uint32_t bit;
-	const char *symbol;
+	guint32 bit;
+	const gchar *symbol;
 };
 
 #endif

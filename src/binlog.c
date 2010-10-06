@@ -86,7 +86,7 @@ binlog_write_header (struct rspamd_binlog *log)
 static gboolean
 binlog_check_file (struct rspamd_binlog *log)
 {
-	static char valid_magic[] = VALID_MAGIC, valid_version[] = VALID_VERSION;
+	static gchar valid_magic[] = VALID_MAGIC, valid_version[] = VALID_VERSION;
 
 	if (read (log->fd, &log->header, sizeof (struct rspamd_binlog_header)) != sizeof (struct rspamd_binlog_header)) {
 		msg_warn ("cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
@@ -151,10 +151,10 @@ binlog_open_real (struct rspamd_binlog *log)
 
 
 struct rspamd_binlog* 
-binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rotate_jitter)
+binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter)
 {
 	struct rspamd_binlog *new;
-	int len = strlen (path);
+	gint                            len = strlen (path);
 	struct stat st;
 
 	new = memory_pool_alloc0 (pool, sizeof (struct rspamd_binlog));
@@ -248,7 +248,7 @@ write_binlog_tree (struct rspamd_binlog *log, GTree *nodes)
 	/* Write index */
 	idx = &log->cur_idx->indexes[log->cur_idx->last_index];
 	idx->seek = seek;
-	idx->time = (uint64_t)time (NULL);
+	idx->time = (guint64)time (NULL);
 	log->cur_time = idx->time;
 	idx->len = g_tree_nnodes (nodes) * sizeof (struct rspamd_binlog_element);
 	if (lseek (log->fd, log->metaindex->indexes[log->metaindex->last_index], SEEK_SET) == -1) {
@@ -311,7 +311,7 @@ create_new_metaindex_block (struct rspamd_binlog *log)
 static gboolean
 maybe_rotate_binlog (struct rspamd_binlog *log)
 {
-	uint64_t now = time (NULL);
+	guint64                         now = time (NULL);
 
 	if (log->rotate_time && ((now - log->header.create_time) > log->rotate_time + log->rotate_jitter)) {
 		return TRUE;
@@ -322,7 +322,7 @@ maybe_rotate_binlog (struct rspamd_binlog *log)
 static gboolean
 rotate_binlog (struct rspamd_binlog *log)
 {
-	char *backup_name;
+	gchar                           *backup_name;
 	struct stat st;
 
 	lock_file (log->fd, FALSE);
@@ -399,9 +399,9 @@ binlog_insert (struct rspamd_binlog *log, GTree *nodes)
 }
 
 gboolean 
-binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, GByteArray **rep)
+binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GByteArray **rep)
 {
-	uint32_t metaindex_num;
+	guint32                         metaindex_num;
 	struct rspamd_index_block *idxb;
 	struct rspamd_binlog_index *idx;
 	gboolean idx_mapped = FALSE, res = TRUE, is_first = FALSE;
@@ -467,8 +467,8 @@ binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, 
 	/* Now fill reply structure */
 	(*rep)->len = idx->len;
 	/* Read result */
-	msg_info ("update from binlog '%s' from revision: %ul to revision %ul size is %ul",
-			log->filename, (long unsigned)from_rev, (long unsigned)log->cur_seq, (long unsigned)idx->len);
+	msg_info ("update from binlog '%s' from revision: %uL to revision %uL size is %uL",
+			log->filename, from_rev, log->cur_seq, idx->len);
 	if (lseek (log->fd, idx->seek, SEEK_SET) == -1) {
 		msg_warn ("cannot seek file %s, error %d, %s", log->filename, errno, strerror (errno));
 		res = FALSE;
@@ -538,7 +538,7 @@ maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_fil
 	}
 
 	if (binlog_insert (log, nodes)) {
-		msg_info ("set new revision of statfile %s: %ul", st->symbol, (long unsigned)log->cur_seq);
+		msg_info ("set new revision of statfile %s: %uL", st->symbol, log->cur_seq);
 		(void)statfile_set_revision (file, log->cur_seq, log->cur_time);
 		return TRUE;
 	}

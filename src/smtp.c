@@ -51,10 +51,10 @@ static sig_atomic_t                    wanna_die = 0;
 
 #ifndef HAVE_SA_SIGINFO
 static void
-sig_handler (int signo)
+sig_handler (gint signo)
 #else
 static void
-sig_handler (int signo, siginfo_t *info, void *unused)
+sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	struct timeval                  tv;
@@ -114,7 +114,7 @@ free_smtp_session (gpointer arg)
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr_handler (int fd, short what, void *arg)
+sigusr_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
@@ -194,8 +194,8 @@ static gboolean
 read_smtp_command (struct smtp_session *session, f_str_t *line)
 {
 	struct smtp_command             *cmd;
-	char                             outbuf[BUFSIZ];
-	int                              r;
+	gchar                           outbuf[BUFSIZ];
+	gint                            r;
 	
 	if (! parse_smtp_command (session, line, &cmd)) {
 		session->error = SMTP_ERROR_BAD_COMMAND;
@@ -363,10 +363,10 @@ static gboolean
 process_smtp_data (struct smtp_session *session)
 {
 	struct stat                     st;
-	int                             r;
+	gint                            r;
 	GList                          *cur, *t;
 	f_str_t                        *f;
-	char                           *s;
+	gchar                           *s;
 
 	if (fstat (session->temp_fd, &st) == -1) {
 		msg_err ("fstat failed: %s", strerror (errno));
@@ -535,10 +535,10 @@ smtp_write_socket (void *arg)
 {
 	struct smtp_session            *session = arg;
 	double                          ms = 0, rs = 0;
-	int                             r;
+	gint                            r;
 	struct metric_result           *metric_res;
 	struct metric                  *m;
-	char                            logbuf[1024];
+	gchar                           logbuf[1024];
 	gboolean                        is_spam = FALSE;
 	GList                          *symbols, *cur;	
 
@@ -567,25 +567,25 @@ smtp_write_socket (void *arg)
 
 				r = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", session->task->message_id);
 				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "(%s: %s: [%.2f/%.2f/%.2f] [", 
-						(char *)m->name, is_spam ? "T" : "F", metric_res->score, ms, rs);
+						(gchar *)m->name, is_spam ? "T" : "F", metric_res->score, ms, rs);
 				symbols = g_hash_table_get_keys (metric_res->symbols);
 				cur = symbols;
 				while (cur) {
 					if (g_list_next (cur) != NULL) {
-						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (char *)cur->data);
+						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (gchar *)cur->data);
 					}
 					else {
-						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (char *)cur->data);
+						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (gchar *)cur->data);
 					}
 					cur = g_list_next (cur);
 				}
 				g_list_free (symbols);
 #ifdef HAVE_CLOCK_GETTIME
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %s",
-					(long int)session->task->msg->len, calculate_check_time (&session->task->tv, &session->task->ts, session->cfg->clock_res));
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %z, time: %s",
+					session->task->msg->len, calculate_check_time (&session->task->tv, &session->task->ts, session->cfg->clock_res));
 #else
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %l, time: %s",
-					(long int)session->task->msg->len, calculate_check_time (&session->task->tv, session->cfg->clock_res));
+				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %z, time: %s",
+					session->task->msg->len, calculate_check_time (&session->task->tv, session->cfg->clock_res));
 #endif
 				msg_info ("%s", logbuf);
 
@@ -653,7 +653,7 @@ write_smtp_greeting (struct smtp_session *session)
  * Return from a delay
  */
 static void
-smtp_delay_handler (int fd, short what, void *arg)
+smtp_delay_handler (gint fd, short what, void *arg)
 {
 	struct smtp_session            *session = arg;
 	
@@ -709,7 +709,7 @@ static void
 smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 {
 	struct smtp_session            *session = arg;
-	int                             res = 0;
+	gint                            res = 0;
 	union rspamd_reply_element     *elt;
 	GList                          *cur;
 	
@@ -790,7 +790,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
  * Accept new connection and construct task
  */
 static void
-accept_socket (int fd, short what, void *arg)
+accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	union sa_union                  su;
@@ -798,7 +798,7 @@ accept_socket (int fd, short what, void *arg)
 	struct smtp_worker_ctx         *ctx;
 
 	socklen_t                       addrlen = sizeof (su.ss);
-	int                             nfd;
+	gint                            nfd;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
@@ -849,13 +849,13 @@ accept_socket (int fd, short what, void *arg)
 }
 
 static void
-parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
+parse_smtp_banner (struct smtp_worker_ctx *ctx, const gchar *line)
 {
-	int                             hostmax, banner_len = sizeof ("220 ") - 1;
-	char                           *p, *t, *hostbuf = NULL;
+	gint                            hostmax, banner_len = sizeof ("220 ") - 1;
+	gchar                           *p, *t, *hostbuf = NULL;
 	gboolean                        has_crlf = FALSE;
 
-	p = (char *)line;
+	p = (gchar *)line;
 	while (*p) {
 		if (*p == '%') {
 			p ++;
@@ -895,7 +895,7 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 
 	ctx->smtp_banner = memory_pool_alloc (ctx->pool, banner_len + 1);
 	t = ctx->smtp_banner;
-	p = (char *)line;
+	p = (gchar *)line;
 
 	if (has_crlf) {
 		t = g_stpcpy (t, "220-");
@@ -923,7 +923,7 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 					p ++;
 					break;
 				default:
-					/* Copy all %<char> to dest */
+					/* Copy all %<gchar> to dest */
 					*t++ = *(p - 1); *t++ = *p;
 					break;
 			}
@@ -941,12 +941,12 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const char *line)
 }
 
 static gboolean
-parse_upstreams_line (struct smtp_worker_ctx *ctx, const char *line)
+parse_upstreams_line (struct smtp_worker_ctx *ctx, const gchar *line)
 {
-	char                          **strv, *p, *t, *tt, *err_str;
-	uint32_t                        num, i;
+	gchar                           **strv, *p, *t, *tt, *err_str;
+	guint32                         num, i;
 	struct smtp_upstream           *cur;
-	char                            resolved_path[PATH_MAX];
+	gchar                           resolved_path[PATH_MAX];
 	
 	strv = g_strsplit_set (line, ",; ", -1);
 	num = g_strv_length (strv);
@@ -996,10 +996,10 @@ parse_upstreams_line (struct smtp_worker_ctx *ctx, const char *line)
 }
 
 static void
-make_capabilities (struct smtp_worker_ctx *ctx, const char *line)
+make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 {
-	char                          **strv, *p, *result, *hostbuf;
-	uint32_t                        num, i, len, hostmax;
+	gchar                           **strv, *p, *result, *hostbuf;
+	guint32                         num, i, len, hostmax;
 
 	strv = g_strsplit_set (line, ",;", -1);
 	num = g_strv_length (strv);
@@ -1043,8 +1043,8 @@ static gboolean
 config_smtp_worker (struct rspamd_worker *worker)
 {
 	struct smtp_worker_ctx         *ctx;
-	char                           *value;
-	uint32_t                        timeout;
+	gchar                           *value;
+	guint32                         timeout;
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
 	ctx->pool = memory_pool_new (memory_pool_get_size ());

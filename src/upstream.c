@@ -49,7 +49,7 @@ pthread_rwlock_t                upstream_mtx = PTHREAD_RWLOCK_INITIALIZER;
  * Init: 0x0
  */
 
-static const uint32_t           crc32lookup[256] = {
+static const guint32           crc32lookup[256] = {
 	0x00000000U, 0x77073096U, 0xee0e612cU, 0x990951baU, 0x076dc419U, 0x706af48fU,
 	0xe963a535U, 0x9e6495a3U, 0x0edb8832U, 0x79dcb8a4U, 0xe0d5e91eU, 0x97d2d988U,
 	0x09b64c2bU, 0x7eb17cbdU, 0xe7b82d07U, 0x90bf1d91U, 0x1db71064U, 0x6ab020f2U,
@@ -161,7 +161,7 @@ upstream_ok (struct upstream *up, time_t now)
 void
 revive_all_upstreams (void *ups, size_t members, size_t msize)
 {
-	int                             i;
+	gint                            i;
 	struct upstream                *cur;
 	u_char                         *p;
 
@@ -182,10 +182,10 @@ revive_all_upstreams (void *ups, size_t members, size_t msize)
  * Scan all upstreams for errors and mark upstreams dead or alive depends on conditions,
  * return number of alive upstreams 
  */
-static int
+static gint
 rescan_upstreams (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	int                             i, alive;
+	gint                            i, alive;
 	struct upstream                *cur;
 	u_char                         *p;
 
@@ -212,9 +212,9 @@ rescan_upstreams (void *ups, size_t members, size_t msize, time_t now, time_t er
 
 /* Return alive upstream by its number */
 static struct upstream         *
-get_upstream_by_number (void *ups, size_t members, size_t msize, int selected)
+get_upstream_by_number (void *ups, size_t members, size_t msize, gint selected)
 {
-	int                             i;
+	gint                            i;
 	u_char                         *p, *c;
 	struct upstream                *cur;
 
@@ -252,11 +252,11 @@ get_upstream_by_number (void *ups, size_t members, size_t msize, int selected)
 /*
  * Get hash key for specified key (perl hash)
  */
-static                          uint32_t
-get_hash_for_key (uint32_t hash, char *key, size_t keylen)
+static                          guint32
+get_hash_for_key (guint32 hash, gchar *key, size_t keylen)
 {
-	uint32_t                        h, index;
-	const char                     *end = key + keylen;
+	guint32                         h, index;
+	const gchar                     *end = key + keylen;
 
 	h = ~hash;
 
@@ -275,7 +275,7 @@ get_hash_for_key (uint32_t hash, char *key, size_t keylen)
 struct upstream                *
 get_random_upstream (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	int                             alive, selected;
+	gint                            alive, selected;
 
 	alive = rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);
 	selected = rand () % alive;
@@ -287,11 +287,11 @@ get_random_upstream (void *ups, size_t members, size_t msize, time_t now, time_t
  * Return upstream by hash, that is calculated from active upstreams number
  */
 struct upstream                *
-get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, char *key, size_t keylen)
+get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, gchar *key, size_t keylen)
 {
-	int                             alive, tries = 0, r;
-	uint32_t                        h = 0, ht;
-	char                           *p, numbuf[4];
+	gint                            alive, tries = 0, r;
+	guint32                         h = 0, ht;
+	gchar                           *p, numbuf[4];
 	struct upstream                *cur;
 
 	alive = rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);
@@ -307,7 +307,7 @@ get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_
 	h %= members;
 
 	for (;;) {
-		p = (char *)ups + msize * h;
+		p = (gchar *)ups + msize * h;
 		cur = (struct upstream *)p;
 		if (!cur->dead) {
 			break;
@@ -339,7 +339,7 @@ get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_
 struct upstream                *
 get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	int                             alive, max_weight, i;
+	gint                            alive, max_weight, i;
 	struct upstream                *cur, *selected = NULL;
 	u_char                         *p;
 
@@ -388,7 +388,7 @@ get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, t
 struct upstream                *
 get_upstream_master_slave (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	int                             alive, max_weight, i;
+	gint                            alive, max_weight, i;
 	struct upstream                *cur, *selected = NULL;
 	u_char                         *p;
 
@@ -418,26 +418,26 @@ get_upstream_master_slave (void *ups, size_t members, size_t msize, time_t now, 
  * Ketama manipulation functions
  */
 
-static int
+static gint
 ketama_sort_cmp (const void *a1, const void *a2)
 {
-	return *((uint32_t *) a1) - *((uint32_t *) a2);
+	return *((guint32 *) a1) - *((guint32 *) a2);
 }
 
 /*
  * Add ketama points for specified upstream
  */
-int
-upstream_ketama_add (struct upstream *up, char *up_key, size_t keylen, size_t keypoints)
+gint
+upstream_ketama_add (struct upstream *up, gchar *up_key, size_t keylen, size_t keypoints)
 {
-	uint32_t                        h = 0;
-	char                            tmp[4];
-	int                             i;
+	guint32                         h = 0;
+	gchar                           tmp[4];
+	gint                            i;
 
 	/* Allocate ketama points array */
 	if (up->ketama_points == NULL) {
 		up->ketama_points_size = keypoints;
-		up->ketama_points = malloc (sizeof (uint32_t) * up->ketama_points_size);
+		up->ketama_points = malloc (sizeof (guint32) * up->ketama_points_size);
 		if (up->ketama_points == NULL) {
 			return -1;
 		}
@@ -451,11 +451,11 @@ upstream_ketama_add (struct upstream *up, char *up_key, size_t keylen, size_t ke
 		tmp[2] = (i >> 16) & 0xff;
 		tmp[3] = (i >> 24) & 0xff;
 
-		h = get_hash_for_key (h, tmp, sizeof (tmp) * sizeof (char));
+		h = get_hash_for_key (h, tmp, sizeof (tmp) * sizeof (gchar));
 		up->ketama_points[i] = h;
 	}
 	/* Keep points sorted */
-	qsort (up->ketama_points, keypoints, sizeof (uint32_t), ketama_sort_cmp);
+	qsort (up->ketama_points, keypoints, sizeof (guint32), ketama_sort_cmp);
 
 	return 0;
 }
@@ -464,11 +464,11 @@ upstream_ketama_add (struct upstream *up, char *up_key, size_t keylen, size_t ke
  * Return upstream by hash and find nearest ketama point in some server
  */
 struct upstream                *
-get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, char *key, size_t keylen)
+get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, gchar *key, size_t keylen)
 {
-	int                             alive, i;
-	uint32_t                        h = 0, step, middle, d, min_diff = UINT_MAX;
-	char                           *p;
+	gint                            alive, i;
+	guint32                         h = 0, step, middle, d, min_diff = UINT_MAX;
+	gchar                           *p;
 	struct upstream                *cur = NULL, *nearest = NULL;
 
 	alive = rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);

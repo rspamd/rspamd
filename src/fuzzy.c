@@ -33,17 +33,17 @@
 #define HASH_INIT      0x28021967
 
 struct roll_state {
-	uint32_t                        h[3];
-	char                            window[ROLL_WINDOW_SIZE];
-	int                             n;
+	guint32                         h[3];
+	gchar                           window[ROLL_WINDOW_SIZE];
+	gint                            n;
 };
 
 static struct roll_state        rs;
 
 
 /* Rolling hash function based on Adler-32 checksum */
-static                          uint32_t
-fuzzy_roll_hash (char c)
+static                          guint32
+fuzzy_roll_hash (gchar c)
 {
 	/* Check window position */
 	if (rs.n == ROLL_WINDOW_SIZE) {
@@ -67,8 +67,8 @@ fuzzy_roll_hash (char c)
 }
 
 /* A simple non-rolling hash, based on the FNV hash */
-static                          uint32_t
-fuzzy_fnv_hash (char c, uint32_t hval)
+static                          guint32
+fuzzy_fnv_hash (gchar c, guint32 hval)
 {
 	hval ^= c;
 	hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
@@ -76,8 +76,8 @@ fuzzy_fnv_hash (char c, uint32_t hval)
 }
 
 /* Calculate blocksize depending on length of input */
-static                          uint32_t
-fuzzy_blocksize (uint32_t len)
+static                          guint32
+fuzzy_blocksize (guint32 len)
 {
 
 	if (len < MIN_FUZZY_BLOCK_SIZE) {
@@ -88,7 +88,7 @@ fuzzy_blocksize (uint32_t len)
 
 /* Update hash with new symbol */
 void
-fuzzy_update (fuzzy_hash_t * h, char c)
+fuzzy_update (fuzzy_hash_t * h, gchar c)
 {
 	h->rh = fuzzy_roll_hash (c);
 	h->h = fuzzy_fnv_hash (c, h->h);
@@ -107,15 +107,15 @@ fuzzy_update (fuzzy_hash_t * h, char c)
  *
  * Replace cost is normally 1, and 2 with nonzero xcost.
  */
-uint32_t
-lev_distance (char *s1, int len1, char *s2, int len2)
+guint32
+lev_distance (gchar *s1, gint len1, gchar *s2, gint len2)
 {
-	int                             i;
-	int                            *row;	/* we only need to keep one row of costs */
-	int                            *end;
-	int                             half, nx;
-	char                           *sx, *char2p, char1;
-	int                            *p, D, x, offset, c3;
+	gint                            i;
+	gint                            *row;	/* we only need to keep one row of costs */
+	gint                            *end;
+	gint                            half, nx;
+	gchar                           *sx, *char2p, char1;
+	gint                            *p, D, x, offset, c3;
 
 	/* strip common prefix */
 	while (len1 > 0 && len2 > 0 && *s1 == *s2) {
@@ -159,7 +159,7 @@ lev_distance (char *s1, int len1, char *s2, int len2)
 	half = len1 >> 1;
 
 	/* initalize first row */
-	row = g_malloc (len2 * sizeof (int));
+	row = g_malloc (len2 * sizeof (gint));
 	end = row + len2 - 1;
 	for (i = 0; i < len2; i++) {
 		row[i] = i;
@@ -225,8 +225,8 @@ fuzzy_hash_t                   *
 fuzzy_init (f_str_t * in, memory_pool_t * pool)
 {
 	fuzzy_hash_t                   *new;
-	int                             i, repeats = 0;
-	char                           *c = in->begin, last = '\0';
+	gint                            i, repeats = 0;
+	gchar                           *c = in->begin, last = '\0';
 
 	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
@@ -261,10 +261,10 @@ fuzzy_init_byte_array (GByteArray * in, memory_pool_t * pool)
 }
 
 /* Compare score of difference between two hashes 0 - different hashes, 100 - identical hashes */
-int
+gint
 fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
 {
-	int                             res, l1, l2;
+	gint                            res, l1, l2;
 
 	/* If we have hashes of different size, input strings are too different */
 	if (h1->block_size != h2->block_size) {

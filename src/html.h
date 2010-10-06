@@ -195,20 +195,20 @@ typedef enum
 
 struct html_tag {
 	tag_id_t id;
-	const char *name;
-	int flags;
+	const gchar *name;
+	gint flags;
 };
 
 struct html_node {
 	struct html_tag *tag;
-	int flags;
+	gint flags;
 };
 
 /* Forwarded declaration */
 struct worker_task;
 
-gboolean add_html_node (struct worker_task *task, memory_pool_t *pool, struct mime_text_part *part, char *tag_text, GNode **cur_level);
-struct html_tag * get_tag_by_name (const char *name);
-void decode_entitles (char *s, guint *len);
+gboolean add_html_node (struct worker_task *task, memory_pool_t *pool, struct mime_text_part *part, gchar *tag_text, GNode **cur_level);
+struct html_tag * get_tag_by_name (const gchar *name);
+void decode_entitles (gchar *s, guint *len);
 
 #endif

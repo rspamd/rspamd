@@ -13,7 +13,7 @@ struct radix_node_s {
     radix_node_t *left;
     radix_node_t *parent;
     uintptr_t value;
-	uint32_t key;
+	guint32 key;
 };
 
 
@@ -23,7 +23,7 @@ typedef struct {
 	memory_pool_t *pool;
 } radix_tree_t;
 
-typedef gboolean (*radix_tree_traverse_func)(uint32_t key, uint32_t mask, uintptr_t value, void *user_data);
+typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask, uintptr_t value, void *user_data);
 
 /**
  * Create new radix tree
@@ -36,7 +36,7 @@ radix_tree_t *radix_tree_create ();
  *          0 if operation was successfull
  *          -1 if there was some error
  */
-int radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value);
+gint radix32tree_insert (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value);
 
 /**
  * Add value to radix tree or insert it if value does not exists
@@ -44,7 +44,7 @@ int radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr
  *          0 if value was inserted
  *          -1 if there was some error
  */
-uintptr_t radix32tree_add (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value);
+uintptr_t radix32tree_add (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value);
 
 /**
  * Replace value in radix tree or insert it if value does not exists
@@ -52,7 +52,7 @@ uintptr_t radix32tree_add (radix_tree_t *tree, uint32_t key, uint32_t mask, uint
  *          0 if value was inserted
  *          -1 if there was some error
  */
-int radix32tree_replace (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value);
+gint radix32tree_replace (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value);
 
 /**
  * Delete value from radix tree
@@ -60,14 +60,14 @@ int radix32tree_replace (radix_tree_t *tree, uint32_t key, uint32_t mask, uintpt
  *          0 if value was deleted
  *          -1 if there was some error
  */
-int radix32tree_delete (radix_tree_t *tree, uint32_t key, uint32_t mask);
+gint radix32tree_delete (radix_tree_t *tree, guint32 key, guint32 mask);
 
 /**
  * Find value in radix tree
  * returns: value if value was found
  *			RADIX_NO_VALUE if value was not found
  */
-uintptr_t radix32tree_find (radix_tree_t *tree, uint32_t key);
+uintptr_t radix32tree_find (radix_tree_t *tree, guint32 key);
 
 /**
  * Traverse via the whole tree calling specified callback

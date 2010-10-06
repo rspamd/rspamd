@@ -50,7 +50,7 @@ static const struct luaL_reg    loggerlib_m[] = {
 
 /* Util functions */
 void
-lua_newclass (lua_State * L, const char *classname, const struct luaL_reg *func)
+lua_newclass (lua_State * L, const gchar *classname, const struct luaL_reg *func)
 {
 	luaL_newmetatable (L, classname);	/* mt */
 	lua_pushstring (L, "__index");
@@ -64,10 +64,10 @@ lua_newclass (lua_State * L, const char *classname, const struct luaL_reg *func)
 	luaL_openlib (L, NULL, func, 0);
 }
 
-int
+gint
 lua_class_tostring (lua_State * L)
 {
-	char                            buf[32];
+	gchar                           buf[32];
 
 	if (!lua_getmetatable (L, 1)) {
 		goto error;
@@ -99,7 +99,7 @@ lua_class_tostring (lua_State * L)
 
 
 void
-lua_setclass (lua_State * L, const char *classname, int objidx)
+lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 {
 	luaL_getmetatable (L, classname);
 	if (objidx < 0) {
@@ -110,7 +110,7 @@ lua_setclass (lua_State * L, const char *classname, int objidx)
 
 /* assume that table is at the top */
 void
-lua_set_table_index (lua_State * L, const char *index, const char *value)
+lua_set_table_index (lua_State * L, const gchar *index, const gchar *value)
 {
 
 	lua_pushstring (L, index);
@@ -119,10 +119,10 @@ lua_set_table_index (lua_State * L, const char *index, const char *value)
 }
 
 static void
-lua_common_log (GLogLevelFlags level, lua_State *L, const char *msg)
+lua_common_log (GLogLevelFlags level, lua_State *L, const gchar *msg)
 {
 	lua_Debug                      d;
-	char                           func_buf[128], *p;
+	gchar                           func_buf[128], *p;
 
 	if (lua_getstack (L, 1, &d) == 1) {
 		(void)lua_getinfo(L, "Sl", &d);
@@ -151,37 +151,37 @@ lua_common_log (GLogLevelFlags level, lua_State *L, const char *msg)
 }
 
 /*** Logger interface ***/
-static int
+static gint
 lua_logger_err (lua_State * L)
 {
-	const char                     *msg;
+	const gchar                     *msg;
 	msg = luaL_checkstring (L, 2);
 	lua_common_log (G_LOG_LEVEL_CRITICAL, L, msg);
 	return 1;
 }
 
-static int
+static gint
 lua_logger_warn (lua_State * L)
 {
-	const char                     *msg;
+	const gchar                     *msg;
 	msg = luaL_checkstring (L, 2);
 	lua_common_log (G_LOG_LEVEL_WARNING, L, msg);
 	return 1;
 }
 
-static int
+static gint
 lua_logger_info (lua_State * L)
 {
-	const char                     *msg;
+	const gchar                     *msg;
 	msg = luaL_checkstring (L, 2);
 	lua_common_log (G_LOG_LEVEL_INFO, L, msg);
 	return 1;
 }
 
-static int
+static gint
 lua_logger_debug (lua_State * L)
 {
-	const char                     *msg;
+	const gchar                     *msg;
 	msg = luaL_checkstring (L, 2);
 	lua_common_log (G_LOG_LEVEL_DEBUG, L, msg);
 	return 1;
@@ -190,7 +190,7 @@ lua_logger_debug (lua_State * L)
 
 /*** Init functions ***/
 
-int
+gint
 luaopen_rspamd (lua_State * L)
 {
 	luaL_openlib (L, "rspamd", null_reg, 0);
@@ -202,7 +202,7 @@ luaopen_rspamd (lua_State * L)
 	return 1;
 }
 
-int
+gint
 luaopen_logger (lua_State * L)
 {
 
@@ -304,10 +304,10 @@ init_lua_filters (struct config_file *cfg)
 
 /* Callback functions */
 
-int
-lua_call_filter (const char *function, struct worker_task *task)
+gint
+lua_call_filter (const gchar *function, struct worker_task *task)
 {
-	int                             result;
+	gint                            result;
 	struct worker_task            **ptask;
 	lua_State                      *L = task->cfg->lua_state;
 
@@ -329,10 +329,10 @@ lua_call_filter (const char *function, struct worker_task *task)
 	return result;
 }
 
-int
-lua_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number)
+gint
+lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number)
 {
-	int                             result, i;
+	gint                            result, i;
 	lua_State                      *L = task->cfg->lua_state;
 
 	lua_getglobal (L, function);
@@ -355,13 +355,13 @@ lua_call_chain_filter (const char *function, struct worker_task *task, int *mark
 
 /* Call custom lua function in rspamd expression */
 gboolean 
-lua_call_expression_func (const char *function, struct worker_task *task, GList *args, gboolean *res)
+lua_call_expression_func (const gchar *function, struct worker_task *task, GList *args, gboolean *res)
 {
 	lua_State                      *L = task->cfg->lua_state;
 	struct worker_task            **ptask;
 	GList                          *cur;
 	struct expression_argument     *arg;
-	int                             nargs = 0;
+	gint                            nargs = 0;
 
 	lua_getglobal (L, function);
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
@@ -409,7 +409,7 @@ lua_call_expression_func (const char *function, struct worker_task *task, GList 
 struct consolidation_callback_data {
 	struct worker_task             *task;
 	double                          score;
-	const char                     *func;
+	const gchar                     *func;
 };
 
 static void
@@ -422,7 +422,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 
 	lua_getglobal (L, data->func);
 
-	lua_pushstring (L, (const char *)key);
+	lua_pushstring (L, (const gchar *)key);
 	lua_pushnumber (L, s->score);
 	if (lua_pcall (L, 2, 1, 0) != 0) {
 		msg_info ("call to %s failed", data->func);
@@ -438,7 +438,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 }
 
 double
-lua_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name)
+lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name)
 {
 	struct metric_result           *metric_res;
 	double                          res = 0.;

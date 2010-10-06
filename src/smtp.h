@@ -8,9 +8,9 @@
 struct smtp_upstream {
 	struct upstream up;
 	
-	const char *name;
+	const gchar *name;
 	struct in_addr addr;
-	uint16_t port;
+	guint16 port;
 	gboolean is_unix;
 }; 
 
@@ -33,18 +33,18 @@ struct smtp_worker_ctx {
 	size_t upstream_num;
 	
 	memory_pool_t *pool;
-	char *smtp_banner;
-	uint32_t smtp_delay;
-	uint32_t delay_jitter;
+	gchar *smtp_banner;
+	guint32 smtp_delay;
+	guint32 delay_jitter;
 	struct timeval smtp_timeout;
 
 	gboolean use_xclient;
 	gboolean helo_required;
-	char *smtp_capabilities;
-	char *reject_message;
+	gchar *smtp_capabilities;
+	gchar *reject_message;
 	size_t max_size;
 	guint max_errors;
-	char *metric;
+	gchar *metric;
 	GList *smtp_filters[SMTP_STAGE_MAX];
 	struct rspamd_dns_resolver *resolver;
 };
@@ -79,12 +79,12 @@ struct smtp_session {
 	struct rspamd_worker *worker;
 	struct worker_task *task;
 	struct in_addr client_addr;
-	char *hostname;
-	char *error;
-	char *temp_name;
-	int sock;
-	int upstream_sock;
-	int temp_fd;
+	gchar *hostname;
+	gchar *error;
+	gchar *temp_name;
+	gint sock;
+	gint upstream_sock;
+	gint temp_fd;
 	size_t temp_size;
 	time_t session_time;
 

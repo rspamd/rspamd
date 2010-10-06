@@ -121,18 +121,18 @@ lua_check_trie (lua_State * L)
 }
 
 /*** Config functions ***/
-static int
+static gint
 lua_config_get_module_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *mname, *optname, *val;
+	const gchar                     *mname, *optname, *val;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
 		optname = luaL_checkstring (L, 3);
 
 		if (mname && optname) {
-			val = get_module_opt (cfg, (char *)mname, (char *)optname);
+			val = get_module_opt (cfg, (gchar *)mname, (gchar *)optname);
 			if (val) {
 				lua_pushstring (L, val);
 				return 1;
@@ -143,7 +143,7 @@ lua_config_get_module_opt (lua_State * L)
 	return 1;
 }
 
-static int
+static gint
 opt_compare (gconstpointer a, gconstpointer b)
 {
 	const struct module_opt        *o1 = a,
@@ -152,14 +152,14 @@ opt_compare (gconstpointer a, gconstpointer b)
 	return g_ascii_strcasecmp (o1->param, o2->param);
 }
 
-static int
+static gint
 lua_config_get_all_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *mname;
+	const gchar                     *mname;
 	GList                          *cur_opt, *next_opt;
 	struct module_opt              *opt, *tmp;
-	int                             i;
+	gint                            i;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -227,12 +227,12 @@ lua_config_get_all_opt (lua_State * L)
 }
 
 
-static int
+static gint
 lua_config_get_classifier (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
 	struct classifier_config       *clc = NULL, **pclc = NULL;
-	const char                     *name;
+	const gchar                     *name;
 	GList                          *cur;
 
 	if (cfg) {
@@ -261,7 +261,7 @@ lua_config_get_classifier (lua_State * L)
 }
 
 struct lua_callback_data {
-	const char                     *name;
+	const gchar                     *name;
 	lua_State                      *L;
 };
 
@@ -270,7 +270,7 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 {
 	struct lua_callback_data       *cd = user_data;
 	struct worker_task            **ptask;
-	int                             i = 1;
+	gint                            i = 1;
 	struct expression_argument     *arg;
 	GList                          *cur;
 	gboolean                        res = FALSE;
@@ -283,7 +283,7 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 	cur = args;
 	while (cur) {
 		arg = get_function_arg (cur->data, task, TRUE);
-		lua_pushstring (cd->L, (const char *)arg->data);
+		lua_pushstring (cd->L, (const gchar *)arg->data);
 		cur = g_list_next (cur);
 		i ++;
 	}
@@ -300,11 +300,11 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 	return res;
 }
 
-static int
+static gint
 lua_config_register_function (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *name, *callback;
+	const gchar                     *name, *callback;
 	struct lua_callback_data       *cd;
 	
 	if (cfg) {
@@ -343,11 +343,11 @@ lua_call_post_filters (struct worker_task *task)
 	}
 }
 
-static int
+static gint
 lua_config_register_post_filter (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *callback;
+	const gchar                     *callback;
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
@@ -363,11 +363,11 @@ lua_config_register_post_filter (lua_State *L)
 	return 1;
 }
 
-static int
+static gint
 lua_config_add_radix_map (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *map_line;
+	const gchar                     *map_line;
 	radix_tree_t                   **r, ***ud;
 
 	if (cfg) {
@@ -393,11 +393,11 @@ lua_config_add_radix_map (lua_State *L)
 
 }
 
-static int
+static gint
 lua_config_add_hash_map (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *map_line;
+	const gchar                     *map_line;
 	GHashTable                    **r, ***ud;
 
 	if (cfg) {
@@ -442,11 +442,11 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 	}
 }
 
-static int
+static gint
 lua_config_register_symbol (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const char                     *name, *callback;
+	const gchar                     *name, *callback;
 	double                          weight;
 	struct lua_callback_data       *cd;
 
@@ -465,11 +465,11 @@ lua_config_register_symbol (lua_State * L)
 }
 
 /* Radix and hash table functions */
-static int
+static gint
 lua_radix_get_key (lua_State * L)
 {
 	radix_tree_t                  *radix = lua_check_radix (L);
-	uint32_t                       key;
+	guint32                         key;
 
 	if (radix) {
 		key = luaL_checkint (L, 2);
@@ -484,11 +484,11 @@ lua_radix_get_key (lua_State * L)
 	return 1;
 }
 
-static int
+static gint
 lua_hash_table_get_key (lua_State * L)
 {
 	GHashTable                    *tbl = lua_check_hash_table (L);
-	const char                    *key;
+	const gchar                    *key;
 
 	if (tbl) {
 		key = luaL_checkstring (L, 2);
@@ -504,7 +504,7 @@ lua_hash_table_get_key (lua_State * L)
 }
 
 /* Trie functions */
-static int
+static gint
 lua_trie_create (lua_State *L)
 {
 	rspamd_trie_t                 *trie, **ptrie;
@@ -523,7 +523,7 @@ lua_trie_create (lua_State *L)
 	return 1;
 }
 
-static int
+static gint
 lua_trie_add_pattern (lua_State *L)
 {
 	rspamd_trie_t                 *trie = lua_check_trie (L);
@@ -545,7 +545,7 @@ lua_trie_add_pattern (lua_State *L)
 	return 1;
 }
 
-static int
+static gint
 lua_trie_search_text (lua_State *L)
 {
 	rspamd_trie_t                 *trie = lua_check_trie (L);
@@ -573,7 +573,7 @@ lua_trie_search_text (lua_State *L)
 	return 1;
 }
 
-static int
+static gint
 lua_trie_search_task (lua_State *L)
 {
 	rspamd_trie_t                 *trie = lua_check_trie (L);
@@ -614,7 +614,7 @@ lua_trie_search_task (lua_State *L)
 }
 /* Init functions */
 
-int
+gint
 luaopen_config (lua_State * L)
 {
 	lua_newclass (L, "rspamd{config}", configlib_m);
@@ -623,7 +623,7 @@ luaopen_config (lua_State * L)
 	return 1;
 }
 
-int
+gint
 luaopen_radix (lua_State * L)
 {
 	lua_newclass (L, "rspamd{radix}", radixlib_m);
@@ -632,7 +632,7 @@ luaopen_radix (lua_State * L)
 	return 1;
 }
 
-int
+gint
 luaopen_hash_table (lua_State * L)
 {
 	lua_newclass (L, "rspamd{hash_table}", hashlib_m);
@@ -641,7 +641,7 @@ luaopen_hash_table (lua_State * L)
 	return 1;
 }
 
-int
+gint
 luaopen_trie (lua_State * L)
 {
 	lua_newclass (L, "rspamd{trie}", trielib_m);

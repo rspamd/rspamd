@@ -40,11 +40,11 @@ typedef enum memc_op {
 } memc_opt_t;
 
 typedef struct memcached_param_s {
-	char key[MAXKEYLEN];
+	gchar key[MAXKEYLEN];
 	u_char *buf;
 	size_t bufsize;
 	size_t bufpos;
-	int expire;
+	gint expire;
 } memcached_param_t;
 
 
@@ -52,11 +52,11 @@ typedef struct memcached_param_s {
 typedef struct memcached_ctx_s {
 	memc_proto_t protocol;
 	struct in_addr addr;
-	uint16_t port;
-	int sock;
+	guint16 port;
+	gint sock;
 	struct timeval timeout;
 	/* Counter that is used for memcached operations in network byte order */
-	uint16_t count;
+	guint16 count;
 	/* Flag that signalize that this memcached is alive */
 	short alive;
 	/* Options that can be specified for memcached connection */
@@ -64,7 +64,7 @@ typedef struct memcached_ctx_s {
 	/* Current operation */
 	memc_opt_t op;
 	/* Current command */
-	const char *cmd;
+	const gchar *cmd;
 	/* Current param */
 	memcached_param_t *param;
 	/* Callback for current operation */
@@ -84,8 +84,8 @@ typedef void (*memcached_callback_t) (memcached_ctx_t *ctx, memc_error_t error, 
  * 0 - success
  * -1 - error (error is stored in errno)
  */
-int memc_init_ctx (memcached_ctx_t *ctx);
-int memc_init_ctx_mirror (memcached_ctx_t *ctx, size_t memcached_num);
+gint memc_init_ctx (memcached_ctx_t *ctx);
+gint memc_init_ctx_mirror (memcached_ctx_t *ctx, size_t memcached_num);
 /*
  * Memcached function for getting, setting, adding values to memcached server
  * ctx - valid memcached context
@@ -124,19 +124,19 @@ int memc_init_ctx_mirror (memcached_ctx_t *ctx, size_t memcached_num);
 #define memc_prepend_mirror(ctx, num, param, expire) memc_write_mirror(ctx, num, "prepend", param, expire)
 
 
-memc_error_t memc_read (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param);
-memc_error_t memc_write (memcached_ctx_t *ctx, const char *cmd, memcached_param_t *param, int expire);
+memc_error_t memc_read (memcached_ctx_t *ctx, const gchar *cmd, memcached_param_t *param);
+memc_error_t memc_write (memcached_ctx_t *ctx, const gchar *cmd, memcached_param_t *param, gint expire);
 memc_error_t memc_delete (memcached_ctx_t *ctx, memcached_param_t *params);
 
-memc_error_t memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param, int expire);
-memc_error_t memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param);
-memc_error_t memc_delete_mirror (memcached_ctx_t *ctx, size_t memcached_num, const char *cmd, memcached_param_t *param);
+memc_error_t memc_write_mirror (memcached_ctx_t *ctx, size_t memcached_num, const gchar *cmd, memcached_param_t *param, gint expire);
+memc_error_t memc_read_mirror (memcached_ctx_t *ctx, size_t memcached_num, const gchar *cmd, memcached_param_t *param);
+memc_error_t memc_delete_mirror (memcached_ctx_t *ctx, size_t memcached_num, const gchar *cmd, memcached_param_t *param);
 
 /* Return symbolic name of memcached error*/
-const char * memc_strerror (memc_error_t err);
+const gchar * memc_strerror (memc_error_t err);
 
 /* Destroy socket from ctx */
-int memc_close_ctx (memcached_ctx_t *ctx);
-int memc_close_ctx_mirror (memcached_ctx_t *ctx, size_t memcached_num);
+gint memc_close_ctx (memcached_ctx_t *ctx);
+gint memc_close_ctx_mirror (memcached_ctx_t *ctx, size_t memcached_num);
 
 #endif

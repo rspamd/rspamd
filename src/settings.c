@@ -104,11 +104,11 @@ void
 json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
-	int                             nelts, i, n, a;
+	gint                            nelts, i, n, a;
 	json_t                         *js, *cur_elt, *cur_nm, *it_val;
 	json_error_t                    je;
 	struct rspamd_settings         *cur_settings;
-	char                           *cur_name;
+	gchar                           *cur_name;
 	void                           *json_it;
 	double                         *score;
 
@@ -246,7 +246,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 gboolean
-read_settings (const char *path, struct config_file *cfg, GHashTable * table)
+read_settings (const gchar *path, struct config_file *cfg, GHashTable * table)
 {
 	struct json_buf                *jb = g_malloc (sizeof (struct json_buf)), **pjb;
 
@@ -274,7 +274,7 @@ init_settings (struct config_file *cfg)
 static                          gboolean
 check_setting (struct worker_task *task, struct rspamd_settings **user_settings, struct rspamd_settings **domain_settings)
 {
-	char                           *field = NULL, *domain = NULL;
+	gchar                           *field = NULL, *domain = NULL;
 
 	if (task->deliver_to != NULL) {
 		/* First try to use deliver-to field */
@@ -321,7 +321,7 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 static				gboolean
 check_whitelist(struct worker_task *task, struct rspamd_settings *s)
 {
-	char *src_email = NULL, *src_domain = NULL;
+	gchar                           *src_email = NULL, *src_domain = NULL;
 
 	if (task->from != NULL) {
 		src_email = task->from;
@@ -391,7 +391,7 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 }
 
 gboolean
-check_factor_settings (struct worker_task * task, const char *symbol, double *factor)
+check_factor_settings (struct worker_task * task, const gchar *symbol, double *factor)
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
 	double                         *fc;

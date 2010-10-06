@@ -44,7 +44,7 @@
 #endif
 
 static void
-insert_metric_result (struct worker_task *task, struct metric *metric, const char *symbol, double flag, GList * opts)
+insert_metric_result (struct worker_task *task, struct metric *metric, const gchar *symbol, double flag, GList * opts)
 {
 	struct metric_result           *metric_res;
 	struct symbol                  *s;
@@ -115,7 +115,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const cha
 }
 
 void
-insert_result (struct worker_task *task, const char *symbol, double flag, GList * opts)
+insert_result (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
 {
 	struct metric                  *metric;
 	struct cache_item              *item;
@@ -165,10 +165,10 @@ insert_result (struct worker_task *task, const char *symbol, double flag, GList 
  * Call perl or C module function for specified part of message 
  */
 static void
-call_filter_by_name (struct worker_task *task, const char *name, enum filter_type filt_type)
+call_filter_by_name (struct worker_task *task, const gchar *name, enum filter_type filt_type)
 {
 	struct module_ctx              *c_module;
-	int                             res = 0;
+	gint                            res = 0;
 
 	switch (filt_type) {
 	case C_FILTER:
@@ -193,7 +193,7 @@ call_filter_by_name (struct worker_task *task, const char *name, enum filter_typ
 		break;
 	}
 
-	debug_task ("filter name: %s, result: %d", name, (int)res);
+	debug_task ("filter name: %s, result: %d", name, (gint)res);
 }
 
 /* Return true if metric has score that is more than spam score for it */
@@ -214,7 +214,7 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 	return FALSE;
 }
 
-static int
+static gint
 continue_process_filters (struct worker_task *task)
 {
 	GList                          *cur;
@@ -256,7 +256,7 @@ end:
 	return 1;
 }
 
-int
+gint
 process_filters (struct worker_task *task)
 {
 	GList                          *cur;
@@ -385,12 +385,12 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 static                          gboolean
 check_autolearn (struct statfile_autolearn_params *params, struct worker_task *task)
 {
-	char                           *metric_name = DEFAULT_METRIC;
+	gchar                           *metric_name = DEFAULT_METRIC;
 	struct metric_result           *metric_res;
 	GList                          *cur;
 
 	if (params->metric != NULL) {
-		metric_name = (char *)params->metric;
+		metric_name = (gchar *)params->metric;
 	}
 
 	/* First check threshold */
@@ -425,7 +425,7 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 }
 
 void
-process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens, struct classifier *classifier, char *filename, struct classifier_ctx *ctx)
+process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens, struct classifier *classifier, gchar *filename, struct classifier_ctx *ctx)
 {
 	stat_file_t                    *statfile;
 	struct statfile                *unused;
@@ -479,7 +479,7 @@ classifiers_callback (gpointer value, void *arg)
 	GTree                          *tokens = NULL;
 	GList                          *cur;
 	f_str_t                         c;
-	char                           *header = NULL;
+	gchar                           *header = NULL;
 	
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur = message_get_header (task->task_pool, task->message, header);
@@ -567,9 +567,9 @@ static void
 insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data)
 {
 	struct worker_task             *task = (struct worker_task *)data;
-	int                             r = 0;
+	gint                            r = 0;
 	/* Try to be rfc2822 compatible and avoid long headers with folding */
-	char                            header_name[128], outbuf[1000];
+	gchar                           header_name[128], outbuf[1000];
 	GList                          *symbols = NULL, *cur;
 	struct metric_result           *metric_res = (struct metric_result *)metric_value;
 	double                          ms, rs;
@@ -590,10 +590,10 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	cur = symbols;
 	while (cur) {
 		if (g_list_next (cur) != NULL) {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (char *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (gchar *)cur->data);
 		}
 		else {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (char *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (gchar *)cur->data);
 		}
 		cur = g_list_next (cur);
 	}

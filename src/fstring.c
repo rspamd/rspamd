@@ -28,7 +28,7 @@
  * Search first occurence of character in string
  */
 ssize_t
-fstrchr (f_str_t * src, char c)
+fstrchr (f_str_t * src, gchar c)
 {
 	register ssize_t                cur = 0;
 
@@ -46,7 +46,7 @@ fstrchr (f_str_t * src, char c)
  * Search last occurence of character in string
  */
 ssize_t
-fstrrchr (f_str_t * src, char c)
+fstrrchr (f_str_t * src, gchar c)
 {
 	register ssize_t                cur = src->len;
 
@@ -130,11 +130,11 @@ fstrstri (f_str_t * orig, f_str_t * pattern)
  * 			1 - word was extracted and there are more words
  * 			0 - last word extracted
  */
-int
-fstrtok (f_str_t * text, const char *sep, f_tok_t * state)
+gint
+fstrtok (f_str_t * text, const gchar *sep, f_tok_t * state)
 {
 	register size_t                 cur;
-	const char                     *csep = sep;
+	const gchar                     *csep = sep;
 
 	if (state->pos >= text->len) {
 		return -1;
@@ -191,7 +191,7 @@ size_t
 fstrcat (f_str_t * dest, f_str_t * src)
 {
 	register size_t                 cur = 0;
-	char                           *p = dest->begin + dest->len;
+	gchar                           *p = dest->begin + dest->len;
 
 	if (dest->size < src->len + dest->len) {
 		return 0;
@@ -212,10 +212,10 @@ fstrcat (f_str_t * dest, f_str_t * src)
 /*
  * Make copy of string to 0-terminated string
  */
-char                           *
+gchar                           *
 fstrcstr (f_str_t * str, memory_pool_t * pool)
 {
-	char                           *res;
+	gchar                           *res;
 	res = memory_pool_alloc (pool, str->len + 1);
 
 	memcpy (res, str->begin, str->len);
@@ -227,8 +227,8 @@ fstrcstr (f_str_t * str, memory_pool_t * pool)
 /*
  * Push one character to fstr
  */
-int
-fstrpush (f_str_t * dest, char c)
+gint
+fstrpush (f_str_t * dest, gchar c)
 {
 	if (dest->size < dest->len) {
 		/* Need to reallocate string */
@@ -300,13 +300,13 @@ fstrgrow (memory_pool_t * pool, f_str_t * orig, size_t newlen)
 /*
  * Return hash value for a string
  */
-uint32_t
+guint32
 fstrhash (f_str_t * str)
 {
 	size_t                          i;
-	uint32_t                        hval;
-	uint32_t                        tmp;
-	char                           *c = str->begin;
+	guint32                         hval;
+	guint32                         tmp;
+	gchar                           *c = str->begin;
 
 	if (str == NULL) {
 		return 0;
@@ -343,8 +343,8 @@ fstrhash (f_str_t * str)
 void
 fstrstrip (f_str_t * str)
 {
-	char                           *p = str->begin;
-	int                             r = 0;
+	gchar                           *p = str->begin;
+	gint                            r = 0;
 
 	while (r < str->len) {
 		if (g_ascii_isspace (*p)) {

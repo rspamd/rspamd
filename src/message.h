@@ -17,7 +17,7 @@ struct mime_part {
 	GByteArray *content;
 	GMimeObject *parent;
 	gchar *checksum;
-	const char *filename;
+	const gchar *filename;
 };
 
 struct mime_text_part {
@@ -37,12 +37,12 @@ struct mime_text_part {
 };
 
 struct received_header {
-	char *from_hostname;
-	char *from_ip;
-	char *real_hostname;
-	char *real_ip;
-	char *by_hostname;
-	int is_error;
+	gchar *from_hostname;
+	gchar *from_ip;
+	gchar *real_hostname;
+	gchar *real_ip;
+	gchar *by_hostname;
+	gint is_error;
 };
 
 /**
@@ -51,9 +51,9 @@ struct received_header {
  * @param task worker_task object
  * @return 0 if we have delayed filters to process and 1 if we have finished with processing
  */
-int process_message (struct worker_task *task);
+gint process_message (struct worker_task *task);
 
-void message_set_header (GMimeMessage *message, const char *field, const char *value);
-GList* message_get_header (memory_pool_t *pool, GMimeMessage *message, const char *field);
+void message_set_header (GMimeMessage *message, const gchar *field, const gchar *value);
+GList* message_get_header (memory_pool_t *pool, GMimeMessage *message, const gchar *field);
 
 #endif

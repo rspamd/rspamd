@@ -28,7 +28,7 @@ enum io_policy {
  */
 typedef struct rspamd_buffer_s {
 	f_str_t *data;													/**< buffer logic			*/
-	char *pos;														/**< current position		*/
+	gchar *pos;														/**< current position		*/
 } rspamd_buffer_t;
 
 typedef struct rspamd_io_dispatcher_s {
@@ -39,8 +39,8 @@ typedef struct rspamd_io_dispatcher_s {
 	memory_pool_t *pool;											/**< where to store data	*/
 	enum io_policy policy;											/**< IO policy				*/
 	size_t nchars;													/**< how many chars to read	*/
-	int fd;															/**< descriptor				*/
-	uint32_t peer_addr;												/**< address of peer for debugging */
+	gint fd;															/**< descriptor				*/
+	guint32 peer_addr;												/**< address of peer for debugging */
 	gboolean wanna_die;												/**< if dispatcher should be stopped */
 	dispatcher_read_callback_t read_callback;						/**< read callback			*/
 	dispatcher_write_callback_t write_callback;						/**< write callback			*/
@@ -48,7 +48,7 @@ typedef struct rspamd_io_dispatcher_s {
 	void *user_data;												/**< user's data for callbacks */
 	off_t offset;													/**< for sendfile use		*/
 	size_t file_size;
-	int sendfile_fd;
+	gint sendfile_fd;
 	gboolean in_sendfile;											/**< whether buffer is in sendfile mode */
 	gboolean strip_eol;												/**< strip or not line ends in BUFFER_LINE policy */
 #ifndef HAVE_SENDFILE
@@ -67,7 +67,7 @@ typedef struct rspamd_io_dispatcher_s {
  * @param user_data pointer to user's data
  * @return new dispatcher object or NULL in case of failure
  */
-rspamd_io_dispatcher_t* rspamd_create_dispatcher (int fd, 
+rspamd_io_dispatcher_t* rspamd_create_dispatcher (gint fd, 
 												  enum io_policy policy,
 												  dispatcher_read_callback_t read_cb,
 												  dispatcher_write_callback_t write_cb,
@@ -101,7 +101,7 @@ gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
  * @param fd descriptor of file
  * @param len length of data
  */
-gboolean rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, int fd, size_t len) G_GNUC_WARN_UNUSED_RESULT;
+gboolean rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, gint fd, size_t len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Pause IO events on dispatcher

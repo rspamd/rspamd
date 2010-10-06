@@ -62,7 +62,7 @@ void
 init_perl_filters (struct config_file *cfg)
 {
 	struct perl_module             *module;
-	char                           *init_func;
+	gchar                           *init_func;
 	size_t                          funclen;
 	SV                             *sv;
 
@@ -93,10 +93,10 @@ init_perl_filters (struct config_file *cfg)
 }
 
 
-int
-perl_call_header_filter (const char *function, struct worker_task *task)
+gint
+perl_call_header_filter (const gchar *function, struct worker_task *task)
 {
-	int                             result;
+	gint                            result;
 	SV                             *sv;
 
 	dTHXa (perl_interpreter);
@@ -125,10 +125,10 @@ perl_call_header_filter (const char *function, struct worker_task *task)
 	return result;
 }
 
-int
-perl_call_chain_filter (const char *function, struct worker_task *task, int *marks, unsigned int number)
+gint
+perl_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number)
 {
-	int                             result, i;
+	gint                            result, i;
 	AV                             *av;
 	SV                             *sv;
 
@@ -207,7 +207,7 @@ perl_call_memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *d
 struct consolidation_callback_data {
 	struct worker_task             *task;
 	double                          score;
-	const char                     *func;
+	const gchar                     *func;
 };
 
 static void
@@ -226,7 +226,7 @@ perl_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 
 	PUSHMARK (SP);
 
-	XPUSHs (sv_2mortal (newSVpv ((const char *)key, 0)));
+	XPUSHs (sv_2mortal (newSVpv ((const gchar *)key, 0)));
 	XPUSHs (sv_2mortal (newSVnv (s->score)));
 	PUTBACK;
 
@@ -240,7 +240,7 @@ perl_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 }
 
 double
-perl_consolidation_func (struct worker_task *task, const char *metric_name, const char *function_name)
+perl_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name)
 {
 	struct metric_result           *metric_res;
 	double                          res = 0.;

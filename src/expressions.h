@@ -15,7 +15,7 @@ struct rspamd_regexp;
  * Rspamd expression function
  */
 struct expression_function {
-	char *name;													/**< name of function								*/
+	gchar *name;													/**< name of function								*/
 	GList *args;												/**< its args										*/
 };
 
@@ -44,7 +44,7 @@ struct expression {
 	} type;														/**< expression type								*/
 	union {
 		void *operand;
-		char operation;
+		gchar operation;
 	} content;													/**< union for storing operand or operation code 	*/
 	const gchar *orig;											/**< original line									*/
 	struct expression *next;									/**< chain link										*/
@@ -58,7 +58,7 @@ typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args, vo
  * @param line incoming line
  * @return regexp structure or NULL in case of error
  */
-struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line, gboolean raw_mode);
+struct rspamd_regexp* parse_regexp (memory_pool_t *pool, gchar *line, gboolean raw_mode);
 
 /**
  * Parse composites line to composites structure (eg. "SYMBOL1&SYMBOL2|!SYMBOL3")
@@ -66,7 +66,7 @@ struct rspamd_regexp* parse_regexp (memory_pool_t *pool, char *line, gboolean ra
  * @param line incoming line
  * @return expression structure or NULL in case of error
  */
-struct expression* parse_expression (memory_pool_t *pool, char *line);
+struct expression* parse_expression (memory_pool_t *pool, gchar *line);
 
 /**
  * Call specified fucntion and return boolean result
@@ -81,21 +81,21 @@ gboolean call_expression_function (struct expression_function *func, struct work
  * @param name name of function
  * @param func pointer to function
  */
-void register_expression_function (const char *name, rspamd_internal_func_t func, void *user_data);
+void register_expression_function (const gchar *name, rspamd_internal_func_t func, void *user_data);
 
 /**
  * Add regexp to regexp cache
  * @param line symbolic representation
  * @param pointer regexp data
  */
-void re_cache_add (char *line, void *pointer, memory_pool_t *pool);
+void re_cache_add (gchar *line, void *pointer, memory_pool_t *pool);
 
 /**
  * Check regexp in cache
  * @param line symbolic representation
  * @return pointer to regexp data or NULL if regexp is not found
  */
-void * re_cache_check (const char *line, memory_pool_t *pool);
+void * re_cache_check (const gchar *line, memory_pool_t *pool);
 
 /**
  * Add regexp to regexp task cache
@@ -103,7 +103,7 @@ void * re_cache_check (const char *line, memory_pool_t *pool);
  * @param pointer regexp data
  * @param result numeric result of this regexp
  */
-void task_cache_add (struct worker_task *task, struct rspamd_regexp *re, int32_t result);
+void task_cache_add (struct worker_task *task, struct rspamd_regexp *re, gint32 result);
 
 /**
  * Check regexp in cache
@@ -111,7 +111,7 @@ void task_cache_add (struct worker_task *task, struct rspamd_regexp *re, int32_t
  * @param pointer regexp data
  * @return numeric result if value exists or -1 if not
  */
-int32_t task_cache_check (struct worker_task *task, struct rspamd_regexp *re);
+gint32 task_cache_check (struct worker_task *task, struct rspamd_regexp *re);
 
 /**
  * Parse and return a single function argument for a function (may recurse)

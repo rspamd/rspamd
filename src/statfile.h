@@ -28,11 +28,11 @@ struct stat_file_header {
 	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
 	u_char version[2];						/**< version of statfile				*/
 	u_char padding[3];						/**< padding							*/
-	uint64_t create_time;					/**< create time (time_t->uint64_t)		*/
-	uint64_t revision;						/**< revision number					*/
-	uint64_t rev_time;						/**< revision time						*/
-	uint64_t used_blocks;					/**< used blocks number					*/
-	uint64_t total_blocks;					/**< total number of blocks				*/
+	guint64 create_time;					/**< create time (time_t->guint64)		*/
+	guint64 revision;						/**< revision number					*/
+	guint64 rev_time;						/**< revision time						*/
+	guint64 used_blocks;					/**< used blocks number					*/
+	guint64 total_blocks;					/**< total number of blocks				*/
 	u_char unused[239];						/**< some bytes that can be used in future */
 };
 
@@ -40,16 +40,16 @@ struct stat_file_header {
  * Section header
  */
 struct stat_file_section {
-	uint64_t code;							/**< section's code						*/
-	uint64_t length;						/**< section's length in blocks			*/
+	guint64 code;							/**< section's code						*/
+	guint64 length;						/**< section's length in blocks			*/
 };
 
 /**
  * Block of data in statfile
  */
 struct stat_file_block {
-	uint32_t hash1;							/**< hash1 (also acts as index)			*/				
-	uint32_t hash2;							/**< hash2								*/
+	guint32 hash1;							/**< hash1 (also acts as index)			*/				
+	guint32 hash2;							/**< hash2								*/
 	double value; 							/**< double value 						*/
 };
 
@@ -67,11 +67,11 @@ struct stat_file {
  */
 typedef struct stat_file_s {
 #ifdef HAVE_PATH_MAX
-	char filename[PATH_MAX];				/**< name of file						*/
+	gchar filename[PATH_MAX];				/**< name of file						*/
 #else
-	char filename[MAXPATHLEN];				/**< name of file						*/
+	gchar filename[MAXPATHLEN];				/**< name of file						*/
 #endif
-	int fd;									/**< descriptor							*/
+	gint fd;									/**< descriptor							*/
 	void *map;								/**< mmaped area						*/
 	off_t seek_pos;							/**< current seek position				*/
 	struct stat_file_section cur_section;	/**< current section					*/
@@ -87,7 +87,7 @@ typedef struct stat_file_s {
 typedef struct statfile_pool_s {
 	stat_file_t *files;						/**< hash table of opened files indexed by name	*/
 	void **maps;							/**< shared hash table of mmaped areas indexed by name	*/
-	int opened;								/**< number of opened files				*/
+	gint opened;								/**< number of opened files				*/
 	size_t max;								/**< maximum size						*/
 	size_t occupied;						/**< current size						*/
 	memory_pool_t *pool;					/**< memory pool object					*/
@@ -109,7 +109,7 @@ statfile_pool_t* statfile_pool_new (memory_pool_t *pool, size_t max_size);
  * @param filename name of statfile to open
  * @return 0 if specified statfile is attached and -1 in case of error
  */
-stat_file_t* statfile_pool_open (statfile_pool_t *pool, char *filename, size_t len, gboolean forced);
+stat_file_t* statfile_pool_open (statfile_pool_t *pool, gchar *filename, size_t len, gboolean forced);
 
 /**
  * Create new statfile but DOES NOT attach it to pool, use @see statfile_pool_open for attaching
@@ -118,7 +118,7 @@ stat_file_t* statfile_pool_open (statfile_pool_t *pool, char *filename, size_t l
  * @param len length of new statfile
  * @return 0 if file was created and -1 in case of error
  */
-int statfile_pool_create (statfile_pool_t *pool, char *filename, size_t len);
+gint statfile_pool_create (statfile_pool_t *pool, gchar *filename, size_t len);
 
 /**
  * Close specified statfile
@@ -127,7 +127,7 @@ int statfile_pool_create (statfile_pool_t *pool, char *filename, size_t len);
  * @param remove_hash remove filename from opened files hash also
  * @return 0 if file was closed and -1 if statfile was not opened
  */
-int statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean keep_sorted);
+gint statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean keep_sorted);
 
 /**
  * Delete statfile pool and close all attached statfiles
@@ -158,7 +158,7 @@ void statfile_pool_unlock_file (statfile_pool_t *pool, stat_file_t *file);
  * @param now current time
  * @return block value or 0 if block is not found
  */
-double statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now);
+double statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, guint32 h1, guint32 h2, time_t now);
 
 /**
  * Set specified block in statfile
@@ -169,7 +169,7 @@ double statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, uint32
  * @param now current time
  * @param value value of block
  */
-void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, uint32_t h1, uint32_t h2, time_t now, double value);
+void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, guint32 h1, guint32 h2, time_t now, double value);
 
 /**
  * Check whether statfile is opened
@@ -177,7 +177,7 @@ void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, uint32_t
  * @param filename name of statfile
  * @return TRUE if specified statfile is opened and FALSE otherwise
  */
-stat_file_t* statfile_pool_is_open (statfile_pool_t *pool, char *filename);
+stat_file_t* statfile_pool_is_open (statfile_pool_t *pool, gchar *filename);
 
 /**
  * Returns current statfile section
@@ -185,7 +185,7 @@ stat_file_t* statfile_pool_is_open (statfile_pool_t *pool, char *filename);
  * @param filename name of statfile
  * @return code of section or 0 if file is not opened
  */
-uint32_t statfile_pool_get_section (statfile_pool_t *pool, stat_file_t *file);
+guint32 statfile_pool_get_section (statfile_pool_t *pool, stat_file_t *file);
 
 /**
  * Go to other section of statfile
@@ -195,7 +195,7 @@ uint32_t statfile_pool_get_section (statfile_pool_t *pool, stat_file_t *file);
  * @param from_begin search for section from begin of file if true
  * @return TRUE if section was set and FALSE otherwise
  */
-gboolean statfile_pool_set_section (statfile_pool_t *pool, stat_file_t *file, uint32_t code, gboolean from_begin);
+gboolean statfile_pool_set_section (statfile_pool_t *pool, stat_file_t *file, guint32 code, gboolean from_begin);
 
 /**
  * Add new section to statfile
@@ -205,7 +205,7 @@ gboolean statfile_pool_set_section (statfile_pool_t *pool, stat_file_t *file, ui
  * @param length length in blocks of new section
  * @return TRUE if section was successfully added and FALSE in case of error
  */
-gboolean statfile_pool_add_section (statfile_pool_t *pool, stat_file_t *file, uint32_t code, uint64_t length);
+gboolean statfile_pool_add_section (statfile_pool_t *pool, stat_file_t *file, guint32 code, guint64 length);
 
 
 /**
@@ -213,7 +213,7 @@ gboolean statfile_pool_add_section (statfile_pool_t *pool, stat_file_t *file, ui
  * @param name name of section
  * @return code of section or 0 if name of section is unknown
  */
-uint32_t statfile_get_section_by_name (const char *name);
+guint32 statfile_get_section_by_name (const gchar *name);
 
 /**
  * Set statfile revision and revision time
@@ -222,7 +222,7 @@ uint32_t statfile_get_section_by_name (const char *name);
  * @param time time of revision
  * @return TRUE if revision was set
  */
-gboolean statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time);
+gboolean statfile_set_revision (stat_file_t *file, guint64 rev, time_t time);
 
 /**
  * Set statfile revision and revision time
@@ -231,21 +231,21 @@ gboolean statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time);
  * @param time saved time of revision
  * @return TRUE if revision was saved in rev and time
  */
-gboolean statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time);
+gboolean statfile_get_revision (stat_file_t *file, guint64 *rev, time_t *time);
 
 /**
  * Get statfile used blocks
  * @param file file to get number of used blocks
- * @return number of used blocks or (uint64_t)-1 in case of error
+ * @return number of used blocks or (guint64)-1 in case of error
  */
-uint64_t statfile_get_used_blocks (stat_file_t *file);
+guint64 statfile_get_used_blocks (stat_file_t *file);
 
 /**
  * Get statfile total blocks
  * @param file file to get number of used blocks
- * @return number of used blocks or (uint64_t)-1 in case of error
+ * @return number of used blocks or (guint64)-1 in case of error
  */
-uint64_t statfile_get_total_blocks (stat_file_t *file);
+guint64 statfile_get_total_blocks (stat_file_t *file);
 
 
 /**

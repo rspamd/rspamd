@@ -29,11 +29,11 @@
 #include "smtp.h"
 #include "smtp_proto.h"
 
-char *
-make_smtp_error (struct smtp_session *session, int error_code, const char *format, ...)
+gchar                           *
+make_smtp_error (struct smtp_session *session, gint error_code, const gchar *format, ...)
 {
 	va_list                         vp;
-	char                           *result = NULL, *p;
+	gchar                           *result = NULL, *p;
 	size_t                          len;
 	
 	va_start (vp, format);
@@ -61,7 +61,7 @@ parse_smtp_command (struct smtp_session *session, f_str_t *line, struct smtp_com
 		SMTP_PARSE_DONE
 	}                              state;
 	gchar                         *p, *c, ch, cmd_buf[4];
-	int                            i;
+	gint                            i;
 	f_str_t                       *arg = NULL;
 	struct smtp_command           *pcmd;
 	
@@ -144,7 +144,7 @@ parse_smtp_command (struct smtp_session *session, f_str_t *line, struct smtp_com
 					}
 				}
 				else if ((ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z')) {
-					msg_info ("invalid letter code in SMTP command: %d", (int)ch);
+					msg_info ("invalid letter code in SMTP command: %d", (gint)ch);
 					return FALSE;
 				}
 				break;
@@ -201,8 +201,8 @@ end:
 static gboolean
 check_smtp_path (f_str_t *path)
 {
-	int                            i;
-	char                          *p;
+	gint                            i;
+	gchar                           *p;
 
 	p = path->begin;
 	if (*p != '<' || path->len < 2) {
@@ -328,10 +328,10 @@ parse_smtp_rcpt (struct smtp_session *session, struct smtp_command *cmd)
 }
 
 /* Return -1 if there are some error, 1 if all is ok and 0 in case of incomplete reply */
-static int
-check_smtp_ustream_reply (f_str_t *in, char success_code)
+static gint
+check_smtp_ustream_reply (f_str_t *in, gchar success_code)
 {
-	char                           *p;
+	gchar                           *p;
 
 	/* Check for 250 at the begin of line */
 	if (in->len >= sizeof ("220 ") - 1) {
@@ -354,7 +354,7 @@ check_smtp_ustream_reply (f_str_t *in, char success_code)
 }
 
 size_t
-smtp_upstream_write_list (GList *args, char *buf, size_t buflen)
+smtp_upstream_write_list (GList *args, gchar *buf, size_t buflen)
 {
 	GList                          *cur = args;
 	size_t                          r = 0;
@@ -390,8 +390,8 @@ gboolean
 smtp_upstream_read_socket (f_str_t * in, void *arg)
 {
 	struct smtp_session            *session = arg;
-	char                            outbuf[BUFSIZ];
-	int                             r;
+	gchar                           outbuf[BUFSIZ];
+	gint                            r;
 	
 	switch (session->upstream_state) {
 		case SMTP_STATE_GREETING:

@@ -48,10 +48,10 @@
 #define DEFAULT_SYMBOL_ALLOW "R_SPF_ALLOW"
 
 struct spf_ctx {
-	int                             (*filter) (struct worker_task * task);
-	char                           *symbol_fail;
-	char                           *symbol_softfail;
-	char                           *symbol_allow;
+	gint                            (*filter) (struct worker_task * task);
+	gchar                           *symbol_fail;
+	gchar                           *symbol_softfail;
+	gchar                           *symbol_allow;
 
 	memory_pool_t                  *spf_pool;
 	radix_tree_t                   *whitelist_ip;
@@ -61,7 +61,7 @@ static struct spf_ctx        *spf_module_ctx = NULL;
 
 static void                   spf_symbol_callback (struct worker_task *task, void *unused);
 
-int
+gint
 spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
@@ -74,11 +74,11 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 }
 
 
-int
+gint
 spf_module_config (struct config_file *cfg)
 {
-	char                           *value;
-	int                             res = TRUE;
+	gchar                           *value;
+	gint                            res = TRUE;
 
 	spf_module_ctx->whitelist_ip = radix_tree_create ();
 	
@@ -111,7 +111,7 @@ spf_module_config (struct config_file *cfg)
 	return res;
 }
 
-int
+gint
 spf_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (spf_module_ctx->spf_pool);
@@ -126,7 +126,7 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 {
 	GList *cur;
 	struct spf_addr *addr;
-	uint32_t s, m;
+	guint32                         s, m;
 
 	if (record) {
 		cur = g_list_first (record->addrs);

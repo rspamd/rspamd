@@ -34,11 +34,11 @@
 #define STATFILES_MAX 255
 static void statfile_pool_set_block_common (
 				statfile_pool_t * pool, stat_file_t * file, 
-				uint32_t h1, uint32_t h2, 
+				guint32                         h1, guint32 h2, 
 				time_t t, double value, 
 				gboolean from_now);
 
-static int
+static gint
 cmpstatfile (const void *a, const void *b)
 {
 	const stat_file_t              *s1 = a, *s2 = b;
@@ -51,13 +51,13 @@ struct stat_file_header_10 {
 	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
 	u_char version[2];						/**< version of statfile				*/
 	u_char padding[3];						/**< padding							*/
-	uint64_t create_time;					/**< create time (time_t->uint64_t)		*/
+	guint64                         create_time;					/**< create time (time_t->guint64)		*/
 };
 
 static gboolean
 convert_statfile_10 (stat_file_t * file)
 {
-	char *backup_name;
+	gchar                           *backup_name;
 	struct stat st;
 	struct stat_file_header         header = {
 		.magic = {'r', 's', 'd'},
@@ -117,12 +117,12 @@ convert_statfile_10 (stat_file_t * file)
 }
 
 /* Check whether specified file is statistic file and calculate its len in blocks */
-static int
+static gint
 statfile_pool_check (stat_file_t * file)
 {
 	struct stat_file               *f;
-	char                           *c;
-	static char                     valid_version[] = RSPAMD_STATFILE_VERSION;
+	gchar                           *c;
+	static gchar                     valid_version[] = RSPAMD_STATFILE_VERSION;
 
 
 	if (!file || !file->map) {
@@ -169,17 +169,17 @@ statfile_pool_check (stat_file_t * file)
 
 struct expiration_data {
 	statfile_pool_t                *pool;
-	uint64_t                        oldest;
-	char                           *filename;
+	guint64                         oldest;
+	gchar                           *filename;
 };
 
 
-static int
+static gint
 statfile_pool_expire (statfile_pool_t * pool)
 {
 	struct expiration_data          exp;
 	stat_file_t                    *file;
-	int                             i;
+	gint                            i;
 
 	if (pool->opened == 0) {
 		return -1;
@@ -191,7 +191,7 @@ statfile_pool_expire (statfile_pool_t * pool)
 
 	for (i = 0; i < pool->opened; i++) {
 		file = &pool->files[i];
-		if ((uint64_t) file->access_time < exp.oldest) {
+		if ((guint64) file->access_time < exp.oldest) {
 			exp.oldest = file->access_time;
 			exp.filename = file->filename;
 		}
@@ -219,10 +219,10 @@ statfile_pool_new (memory_pool_t *pool, size_t max_size)
 }
 
 static stat_file_t *
-statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, size_t size)
+statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size, size_t size)
 {
-	char                           *backup;
-	int                             fd;
+	gchar                           *backup;
+	gint                            fd;
 	stat_file_t                    *new;
 	u_char                         *map, *pos;
 	struct stat_file_block         *block;
@@ -283,7 +283,7 @@ statfile_pool_reindex (statfile_pool_t * pool, char *filename, size_t old_size, 
 }
 
 stat_file_t                    *
-statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolean forced)
+statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboolean forced)
 {
 	struct stat                     st;
 	stat_file_t                    *new_file;
@@ -365,7 +365,7 @@ statfile_pool_open (statfile_pool_t * pool, char *filename, size_t size, gboolea
 	return statfile_pool_is_open (pool, filename);
 }
 
-int
+gint
 statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_sorted)
 {
 	stat_file_t                    *pos;
@@ -398,8 +398,8 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	return 0;
 }
 
-int
-statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
+gint
+statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 {
 	struct stat_file_header         header = {
 		.magic = {'r', 's', 'd'},
@@ -413,9 +413,9 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 		.code = STATFILE_SECTION_COMMON,
 	};
 	struct stat_file_block          block = { 0, 0, 0 };
-	int                             fd;
-	unsigned int                    buflen = 0, nblocks;
-	char                           *buf = NULL;
+	gint                            fd;
+	guint                           buflen = 0, nblocks;
+	gchar                           *buf = NULL;
 
 	if (statfile_pool_is_open (pool, filename) != NULL) {
 		msg_info ("file %s is already opened", filename);
@@ -432,7 +432,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 		return -1;
 	}
 
-	header.create_time = (uint64_t) time (NULL);
+	header.create_time = (guint64) time (NULL);
 	if (write (fd, &header, sizeof (header)) == -1) {
 		msg_info ("cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
@@ -440,7 +440,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 		return -1;
 	}
 
-	section.length = (uint64_t) nblocks;
+	section.length = (guint64) nblocks;
 	if (write (fd, &section, sizeof (section)) == -1) {
 		msg_info ("cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
@@ -493,7 +493,7 @@ statfile_pool_create (statfile_pool_t * pool, char *filename, size_t size)
 void
 statfile_pool_delete (statfile_pool_t * pool)
 {
-	int                             i;
+	gint                            i;
 
 	for (i = 0; i < pool->opened; i++) {
 		statfile_pool_close (pool, &pool->files[i], FALSE);
@@ -516,11 +516,11 @@ statfile_pool_unlock_file (statfile_pool_t * pool, stat_file_t * file)
 }
 
 double
-statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now)
+statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t now)
 {
 	struct stat_file_block         *block;
 	struct stat_file_header        *header;
-	unsigned int                    i, blocknum;
+	guint                           i, blocknum;
 	u_char                         *c;
 
 
@@ -551,11 +551,11 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1
 
 #define RANDOM_EXPIRE G_MAXINT / CHAIN_LENGTH
 static void
-statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t t, double value, gboolean from_now)
+statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t t, double value, gboolean from_now)
 {
 	struct stat_file_block         *block, *to_expire = NULL;
 	struct stat_file_header        *header;
-	unsigned int                    i, blocknum;
+	guint                           i, blocknum;
 	u_char                         *c;
     double                          min = G_MAXDOUBLE;
 
@@ -624,13 +624,13 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, uint
 }
 
 void
-statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, uint32_t h1, uint32_t h2, time_t now, double value)
+statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t now, double value)
 {
 	statfile_pool_set_block_common (pool, file, h1, h2, now, value, TRUE);
 }
 
 stat_file_t                    *
-statfile_pool_is_open (statfile_pool_t * pool, char *filename)
+statfile_pool_is_open (statfile_pool_t * pool, gchar *filename)
 {
 	static stat_file_t              f, *ret;
 	g_strlcpy (f.filename, filename, sizeof (f.filename));
@@ -638,7 +638,7 @@ statfile_pool_is_open (statfile_pool_t * pool, char *filename)
 	return ret;
 }
 
-uint32_t
+guint32
 statfile_pool_get_section (statfile_pool_t * pool, stat_file_t * file)
 {
 
@@ -646,7 +646,7 @@ statfile_pool_get_section (statfile_pool_t * pool, stat_file_t * file)
 }
 
 gboolean
-statfile_pool_set_section (statfile_pool_t * pool, stat_file_t * file, uint32_t code, gboolean from_begin)
+statfile_pool_set_section (statfile_pool_t * pool, stat_file_t * file, guint32 code, gboolean from_begin)
 {
 	struct stat_file_section       *sec;
 	off_t                           cur_offset;
@@ -660,7 +660,7 @@ statfile_pool_set_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 		cur_offset = file->seek_pos - sizeof (struct stat_file_section);
 	}
 	while (cur_offset < file->len) {
-		sec = (struct stat_file_section *)((char *)file->map + cur_offset);
+		sec = (struct stat_file_section *)((gchar *)file->map + cur_offset);
 		if (sec->code == code) {
 			file->cur_section.code = code;
 			file->cur_section.length = sec->length;
@@ -674,7 +674,7 @@ statfile_pool_set_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 }
 
 gboolean
-statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t code, uint64_t length)
+statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, guint32 code, guint64 length)
 {
 	struct stat_file_section        sect;
 	struct stat_file_block          block = { 0, 0, 0 };
@@ -706,7 +706,7 @@ statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 	file->len += length;
 
 	if (file->len > pool->max) {
-		msg_info ("cannot attach file to pool, too large: %lu", (long int)file->len);
+		msg_info ("cannot attach file to pool, too large: %z", file->len);
 		return FALSE;
 	}
 
@@ -727,8 +727,8 @@ statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, uint32_t 
 
 }
 
-uint32_t
-statfile_get_section_by_name (const char *name)
+guint32
+statfile_get_section_by_name (const gchar *name)
 {
 	if (g_ascii_strcasecmp (name, "common") == 0) {
 		return STATFILE_SECTION_COMMON;
@@ -747,7 +747,7 @@ statfile_get_section_by_name (const char *name)
 }
 
 gboolean 
-statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time)
+statfile_set_revision (stat_file_t *file, guint64 rev, time_t time)
 {
 	struct stat_file_header        *header;
 
@@ -764,7 +764,7 @@ statfile_set_revision (stat_file_t *file, uint64_t rev, time_t time)
 }
 
 gboolean 
-statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time)
+statfile_get_revision (stat_file_t *file, guint64 *rev, time_t *time)
 {
 	struct stat_file_header        *header;
 
@@ -780,13 +780,13 @@ statfile_get_revision (stat_file_t *file, uint64_t *rev, time_t *time)
 	return TRUE;
 }
 
-uint64_t 
+guint64 
 statfile_get_used_blocks (stat_file_t *file)
 {
 	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
-		return (uint64_t)-1;
+		return (guint64)-1;
 	}
 	
 	header = (struct stat_file_header *)file->map;
@@ -794,13 +794,13 @@ statfile_get_used_blocks (stat_file_t *file)
 	return header->used_blocks;
 }
 
-uint64_t 
+guint64 
 statfile_get_total_blocks (stat_file_t *file)
 {
 	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
-		return (uint64_t)-1;
+		return (guint64)-1;
 	}
 	
 	header = (struct stat_file_header *)file->map;
@@ -814,11 +814,11 @@ statfile_get_total_blocks (stat_file_t *file)
 }
 
 static void
-statfile_pool_invalidate_callback (int fd, short what, void *ud)
+statfile_pool_invalidate_callback (gint fd, short what, void *ud)
 {
 	statfile_pool_t                *pool = ud;
 	stat_file_t                    *file;
-	int                             i;
+	gint                            i;
 
 	msg_info ("invalidating %d statfiles", pool->opened);
 
@@ -843,6 +843,6 @@ statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jit
 		pool->invalidate_tv.tv_usec = 0;
 		evtimer_set (pool->invalidate_event, statfile_pool_invalidate_callback, pool);
 		evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
-		msg_info ("invalidate of statfile pool is planned in %d seconds", (int)pool->invalidate_tv.tv_sec);
+		msg_info ("invalidate of statfile pool is planned in %d seconds", (gint)pool->invalidate_tv.tv_sec);
 	}
 }

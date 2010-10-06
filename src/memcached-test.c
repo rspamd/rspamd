@@ -42,36 +42,36 @@ memcached_param_t               cur_param;
 static void
 test_memc_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 {
-	int                             s;
-	int                             r;
-	int                            *num = ((int *)data);
+	gint                            s;
+	gint                            r;
+	gint                            *num = ((gint *)data);
 	printf ("result of memc command '%s' is '%s'\n", ctx->cmd, memc_strerror (error));
 	/* Connect */
 	if (*num == 0) {
-		printf ("Setting value to memcached: %s -> %s\n", cur_param.key, (char *)cur_param.buf);
+		printf ("Setting value to memcached: %s -> %s\n", cur_param.key, (gchar *)cur_param.buf);
 		s = 1;
 		r = memc_set (ctx, &cur_param, &s, 60);
 		(*num)++;
 	}
 	else if (*num == 1) {
-		printf ("Getting value from memcached: %s -> %s\n", cur_param.key, (char *)cur_param.buf);
+		printf ("Getting value from memcached: %s -> %s\n", cur_param.key, (gchar *)cur_param.buf);
 		s = 1;
 		r = memc_get (ctx, &cur_param, &s);
 		(*num)++;
 	}
 	else {
-		printf ("Got value from memcached: %s -> %s\n", cur_param.key, (char *)cur_param.buf);
+		printf ("Got value from memcached: %s -> %s\n", cur_param.key, (gchar *)cur_param.buf);
 		event_loopexit (NULL);
 	}
 }
 
 
-int
-main (int argc, char **argv)
+gint
+main (gint argc, gchar **argv)
 {
 	memcached_ctx_t                 mctx;
-	char                           *addr, buf[512];
-	int                             num = 0;
+	gchar                           *addr, buf[512];
+	gint                            num = 0;
 
 	event_init ();
 	strcpy (cur_param.key, "testkey");

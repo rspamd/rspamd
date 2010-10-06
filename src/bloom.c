@@ -50,77 +50,77 @@
 #define GETBIT(a, n) (a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)))
 
 /* Common hash functions */
-unsigned int
-bloom_sax_hash (const char *key)
+guint
+bloom_sax_hash (const gchar *key)
 {
-	unsigned int                    h = 0;
+	guint                           h = 0;
 
 	while (*key)
-		h ^= (h << 5) + (h >> 2) + (unsigned char)*key++;
+		h ^= (h << 5) + (h >> 2) + (gchar)*key++;
 
 	return h;
 }
 
-unsigned int
-bloom_sdbm_hash (const char *key)
+guint
+bloom_sdbm_hash (const gchar *key)
 {
-	unsigned int                    h = 0;
+	guint                           h = 0;
 
 	while (*key)
-		h = (unsigned char)*key++ + (h << 6) + (h << 16) - h;
+		h = (gchar)*key++ + (h << 6) + (h << 16) - h;
 
 	return h;
 }
 
-unsigned int
-bloom_fnv_hash (const char *key)
+guint
+bloom_fnv_hash (const gchar *key)
 {
-	unsigned int                    h = 0;
+	guint                           h = 0;
 
 	while (*key) {
-		h ^= (unsigned char)*key++;
+		h ^= (gchar)*key++;
 		h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
 	}
 
 	return h;
 }
 
-unsigned int
-bloom_rs_hash (const char *key)
+guint
+bloom_rs_hash (const gchar *key)
 {
-	unsigned int                    b = 378551;
-	unsigned int                    a = 63689;
-	unsigned int                    hash = 0;
+	guint                           b = 378551;
+	guint                           a = 63689;
+	guint                           hash = 0;
 
 	while (*key) {
-		hash = hash * a + (unsigned char)*key++;
+		hash = hash * a + (gchar)*key++;
 		a = a * b;
 	}
 
 	return hash;
 }
 
-unsigned int
-bloom_js_hash (const char *key)
+guint
+bloom_js_hash (const gchar *key)
 {
-	unsigned int                    hash = 1315423911;
+	guint                           hash = 1315423911;
 
 	while (*key) {
-		hash ^= ((hash << 5) + (unsigned char)*key++ + (hash >> 2));
+		hash ^= ((hash << 5) + (gchar)*key++ + (hash >> 2));
 	}
 
 	return hash;
 }
 
 
-unsigned int
-bloom_elf_hash (const char *key)
+guint
+bloom_elf_hash (const gchar *key)
 {
-	unsigned int                    hash = 0;
-	unsigned int                    x = 0;
+	guint                           hash = 0;
+	guint                           x = 0;
 
 	while (*key) {
-		hash = (hash << 4) + (unsigned char)*key++;
+		hash = (hash << 4) + (gchar)*key++;
 		if ((x = hash & 0xF0000000L) != 0) {
 			hash ^= (x >> 24);
 		}
@@ -131,28 +131,28 @@ bloom_elf_hash (const char *key)
 }
 
 
-unsigned int
-bloom_bkdr_hash (const char *key)
+guint
+bloom_bkdr_hash (const gchar *key)
 {
-	unsigned int                    seed = 131;	/* 31 131 1313 13131 131313 etc.. */
-	unsigned int                    hash = 0;
+	guint                           seed = 131;	/* 31 131 1313 13131 131313 etc.. */
+	guint                           hash = 0;
 
 	while (*key) {
-		hash = (hash * seed) + (unsigned char)*key++;
+		hash = (hash * seed) + (gchar)*key++;
 	}
 
 	return hash;
 }
 
 
-unsigned int
-bloom_ap_hash (const char *key)
+guint
+bloom_ap_hash (const gchar *key)
 {
-	unsigned int                    hash = 0xAAAAAAAA;
-	unsigned int                    i = 0;
+	guint                           hash = 0xAAAAAAAA;
+	guint                           i = 0;
 
 	while (*key) {
-		hash ^= ((i & 1) == 0) ? ((hash << 7) ^ ((unsigned char)*key) * (hash >> 3)) : (~((hash << 11) + (((unsigned char)*key) ^ (hash >> 5))));
+		hash ^= ((i & 1) == 0) ? ((hash << 7) ^ ((gchar)*key) * (hash >> 3)) : (~((hash << 11) + (((gchar)*key) ^ (hash >> 5))));
 		key++;
 	}
 
@@ -164,12 +164,12 @@ bloom_create (size_t size, size_t nfuncs, ...)
 {
 	bloom_filter_t                 *bloom;
 	va_list                         l;
-	int                             n;
+	gint                            n;
 
 	if (!(bloom = g_malloc (sizeof (bloom_filter_t)))) {
 		return NULL;
 	}
-	if (!(bloom->a = g_new0 (char,  (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
+	if (!(bloom->a = g_new0 (gchar,  (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
 		g_free (bloom);
 		return NULL;
 	}
@@ -200,7 +200,7 @@ bloom_destroy (bloom_filter_t * bloom)
 }
 
 gboolean
-bloom_add (bloom_filter_t * bloom, const char *s)
+bloom_add (bloom_filter_t * bloom, const gchar *s)
 {
 	size_t                          n;
 	u_char                          t;
@@ -213,7 +213,7 @@ bloom_add (bloom_filter_t * bloom, const char *s)
 }
 
 gboolean
-bloom_del (bloom_filter_t * bloom, const char *s)
+bloom_del (bloom_filter_t * bloom, const gchar *s)
 {
 	size_t                          n;
 	u_char                          t;
@@ -227,7 +227,7 @@ bloom_del (bloom_filter_t * bloom, const char *s)
 }
 
 gboolean
-bloom_check (bloom_filter_t * bloom, const char *s)
+bloom_check (bloom_filter_t * bloom, const gchar *s)
 {
 	size_t                          n;
 

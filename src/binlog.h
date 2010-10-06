@@ -11,41 +11,41 @@
 
 /* Assume 8 bytes words */
 struct rspamd_binlog_header {
-	char magic[3];
-	char version[2];
-	char padding[3];
-	uint64_t create_time;
+	gchar magic[3];
+	gchar version[2];
+	gchar padding[3];
+	guint64 create_time;
 };
 
 struct rspamd_binlog_index {
-	uint64_t time;
-	uint64_t seek;
-	uint32_t len;
+	guint64 time;
+	guint64 seek;
+	guint32 len;
 };
 
 struct rspamd_index_block {
 	struct rspamd_binlog_index indexes[BINLOG_IDX_LEN];
-	uint32_t last_index;
+	guint32 last_index;
 };
 
 struct rspamd_binlog_metaindex {
-	uint64_t indexes[METAINDEX_LEN];
-	uint64_t last_index;
+	guint64 indexes[METAINDEX_LEN];
+	guint64 last_index;
 };
 
 struct rspamd_binlog_element {
-	uint32_t h1;
-	uint32_t h2;
+	guint32 h1;
+	guint32 h2;
 	float value;
 } __attribute__((__packed__));
 
 struct rspamd_binlog {
-	char *filename;
+	gchar *filename;
 	time_t rotate_time;
-	int rotate_jitter;
-	uint64_t cur_seq;
-	uint64_t cur_time;
-	int fd;
+	gint rotate_jitter;
+	guint64 cur_seq;
+	guint64 cur_time;
+	gint fd;
 	memory_pool_t *pool;
 
 	struct rspamd_binlog_header header;
@@ -55,11 +55,11 @@ struct rspamd_binlog {
 
 struct classifier_config;
 
-struct rspamd_binlog* binlog_open (memory_pool_t *pool, const char *path, time_t rotate_time, int rotate_jitter);
+struct rspamd_binlog* binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter);
 struct rspamd_binlog* get_binlog_by_statfile (struct statfile *st);
 void binlog_close (struct rspamd_binlog *log);
 gboolean binlog_insert (struct rspamd_binlog *log, GTree *nodes);
-gboolean binlog_sync (struct rspamd_binlog *log, uint64_t from_rev, uint64_t *from_time, GByteArray **rep);
+gboolean binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GByteArray **rep);
 gboolean maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_file_t *file, GTree *nodes);
 
 #endif

@@ -33,17 +33,17 @@
 #include "modules.h"
 #include "message.h"
 
-static char                     greetingbuf[1024];
+static gchar                     greetingbuf[1024];
 static struct timeval           io_tv;
 
 static gboolean                 lmtp_write_socket (void *arg);
 
 #ifndef HAVE_SA_SIGINFO
 static void
-sig_handler (int signo)
+sig_handler (gint signo)
 #else
 static void
-sig_handler (int signo, siginfo_t *info, void *unused)
+sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
@@ -61,7 +61,7 @@ sig_handler (int signo, siginfo_t *info, void *unused)
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr_handler (int fd, short what, void *arg)
+sigusr_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
@@ -221,14 +221,14 @@ lmtp_err_socket (GError * err, void *arg)
  * Accept new connection and construct task
  */
 static void
-accept_socket (int fd, short what, void *arg)
+accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	union sa_union                  su;
 	struct worker_task             *new_task;
 	struct rspamd_lmtp_proto       *lmtp;
 	socklen_t                       addrlen = sizeof (su.ss);
-	int                             nfd;
+	gint                            nfd;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
@@ -274,9 +274,9 @@ void
 start_lmtp_worker (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
-	int                             i;
-	char                           *hostbuf;
-	long int                        hostmax;
+	gint                            i;
+	gchar                          *hostbuf;
+	gsize                           hostmax;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_LMTP;

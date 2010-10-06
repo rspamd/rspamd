@@ -59,11 +59,11 @@
 #define DNS_K_TEA_CYCLES	32
 #define DNS_K_TEA_MAGIC		0x9E3779B9U
 
-static void dns_retransmit_handler (int fd, short what, void *arg);
+static void dns_retransmit_handler (gint fd, short what, void *arg);
 
 
 static void 
-dns_k_tea_init(struct dns_k_tea *tea, uint32_t key[], unsigned cycles) 
+dns_k_tea_init(struct dns_k_tea *tea, guint32 key[], guint cycles) 
 {
 	memcpy(tea->key, key, sizeof tea->key);
 
@@ -72,7 +72,7 @@ dns_k_tea_init(struct dns_k_tea *tea, uint32_t key[], unsigned cycles)
 
 
 static void 
-dns_k_tea_encrypt (struct dns_k_tea *tea, uint32_t v[], uint32_t *w) 
+dns_k_tea_encrypt (struct dns_k_tea *tea, guint32 v[], guint32 *w) 
 {
 	guint32 y, z, sum, n;
 
@@ -113,10 +113,10 @@ dns_k_tea_encrypt (struct dns_k_tea *tea, uint32_t v[], uint32_t *w)
 
 
 
-static inline unsigned int
-dns_k_permutor_powof (unsigned int n) 
+static inline guint
+dns_k_permutor_powof (guint n) 
 {
-	unsigned int m, i = 0;
+	guint                           m, i = 0;
 
 	for (m = 1; m < n; m <<= 1, i++);
 
@@ -124,10 +124,10 @@ dns_k_permutor_powof (unsigned int n)
 } /* dns_k_permutor_powof() */
 
 static void 
-dns_k_permutor_init (struct dns_k_permutor *p, unsigned low, unsigned high) 
+dns_k_permutor_init (struct dns_k_permutor *p, guint low, guint high) 
 {
-	uint32_t key[DNS_K_TEA_KEY_SIZE / sizeof (uint32_t)];
-	unsigned width, i;
+	guint32                         key[DNS_K_TEA_KEY_SIZE / sizeof (guint32)];
+	guint width, i;
 
 	p->stepi	= 0;
 
@@ -150,10 +150,10 @@ dns_k_permutor_init (struct dns_k_permutor *p, unsigned low, unsigned high)
 } /* dns_k_permutor_init() */
 
 
-static unsigned 
-dns_k_permutor_F (struct dns_k_permutor *p, unsigned k, unsigned x) 
+static guint 
+dns_k_permutor_F (struct dns_k_permutor *p, guint k, guint x) 
 {
-	uint32_t in[DNS_K_TEA_BLOCK_SIZE / sizeof (uint32_t)], out[DNS_K_TEA_BLOCK_SIZE / sizeof (uint32_t)];
+	guint32                         in[DNS_K_TEA_BLOCK_SIZE / sizeof (guint32)], out[DNS_K_TEA_BLOCK_SIZE / sizeof (guint32)];
 
 	memset(in, '\0', sizeof in);
 
@@ -166,11 +166,11 @@ dns_k_permutor_F (struct dns_k_permutor *p, unsigned k, unsigned x)
 } /* dns_k_permutor_F() */
 
 
-static unsigned 
-dns_k_permutor_E (struct dns_k_permutor *p, unsigned n) 
+static guint 
+dns_k_permutor_E (struct dns_k_permutor *p, guint n) 
 {
-	unsigned l[2], r[2];
-	unsigned i;
+	guint l[2], r[2];
+	guint i;
 
 	i	= 0;
 	l[i]	= p->mask & (n >> p->shift);
@@ -187,11 +187,11 @@ dns_k_permutor_E (struct dns_k_permutor *p, unsigned n)
 } /* dns_k_permutor_E() */
 
 
-static unsigned 
-dns_k_permutor_D (struct dns_k_permutor *p, unsigned n) 
+static guint 
+dns_k_permutor_D (struct dns_k_permutor *p, guint n) 
 {
-	unsigned l[2], r[2];
-	unsigned i;
+	guint l[2], r[2];
+	guint i;
 
 	i		= p->rounds - 1;
 	l[i % 2]	= p->mask & (n >> p->shift);
@@ -208,10 +208,10 @@ dns_k_permutor_D (struct dns_k_permutor *p, unsigned n)
 } /* dns_k_permutor_D() */
 
 
-static unsigned 
+static guint 
 dns_k_permutor_step(struct dns_k_permutor *p) 
 {
-	unsigned n;
+	guint n;
 
 	do {
 		n	= dns_k_permutor_E(p, p->stepi++);
@@ -225,10 +225,10 @@ dns_k_permutor_step(struct dns_k_permutor *p)
  * Simple permutation box. Useful for shuffling rrsets from an iterator.
  * Uses AES s-box to provide good diffusion.
  */
-static unsigned short 
-dns_k_shuffle16 (unsigned short n, unsigned s) 
+static guint16 
+dns_k_shuffle16 (guint16 n, guint s) 
 {
-	static const unsigned char sbox[256] =
+	static const guint8 sbox[256] =
 	{ 0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
 	  0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
 	  0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
@@ -261,8 +261,8 @@ dns_k_shuffle16 (unsigned short n, unsigned s)
 	  0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
 	  0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68,
 	  0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
-	unsigned char a, b;
-	unsigned i;
+	guchar                          a, b;
+	guint                           i;
 
 	a = 0xff & (n >> 0);
 	b = 0xff & (n >> 8);
@@ -347,7 +347,7 @@ make_dns_header (struct rspamd_dns_request *req)
 }
 
 static void
-format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen)
+format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namelen)
 {
 	guint8 *pos = req->packet + req->pos, *end, *dot, *begin;
 	guint remain = req->packet_len - req->pos - 5, label_len;
@@ -425,15 +425,15 @@ format_dns_name (struct rspamd_dns_request *req, const char *name, guint namelen
 static void
 make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
 {
-	char ipbuf[sizeof("255.255.255.255.in-addr.arpa")];
+	gchar                           ipbuf[sizeof("255.255.255.255.in-addr.arpa")];
 	guint32 a = ntohl (addr.s_addr), r;
 	guint16 *p;
 
 	r = rspamd_snprintf (ipbuf, sizeof(ipbuf), "%d.%d.%d.%d.in-addr.arpa",
-			(int)(guint8)((a	) & 0xff),
-			(int)(guint8)((a>>8 ) & 0xff),
-			(int)(guint8)((a>>16) & 0xff),
-			(int)(guint8)((a>>24) & 0xff));
+			(gint)(guint8)((a	) & 0xff),
+			(gint)(guint8)((a>>8 ) & 0xff),
+			(gint)(guint8)((a>>16) & 0xff),
+			(gint)(guint8)((a>>24) & 0xff));
 	
 	allocate_packet (req, r);
 	make_dns_header (req);
@@ -447,7 +447,7 @@ make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
 }
 
 static void
-make_a_req (struct rspamd_dns_request *req, const char *name)
+make_a_req (struct rspamd_dns_request *req, const gchar *name)
 {
 	guint16 *p;
 
@@ -463,7 +463,7 @@ make_a_req (struct rspamd_dns_request *req, const char *name)
 }
 
 static void
-make_txt_req (struct rspamd_dns_request *req, const char *name)
+make_txt_req (struct rspamd_dns_request *req, const gchar *name)
 {
 	guint16 *p;
 
@@ -479,7 +479,7 @@ make_txt_req (struct rspamd_dns_request *req, const char *name)
 }
 
 static void
-make_mx_req (struct rspamd_dns_request *req, const char *name)
+make_mx_req (struct rspamd_dns_request *req, const gchar *name)
 {
 	guint16 *p;
 
@@ -495,7 +495,7 @@ make_mx_req (struct rspamd_dns_request *req, const char *name)
 }
 
 static void
-make_srv_req (struct rspamd_dns_request *req, const char *service, const char *proto, const char *name)
+make_srv_req (struct rspamd_dns_request *req, const gchar *service, const gchar *proto, const gchar *name)
 {
 	guint16 *p;
 	guint len;
@@ -517,7 +517,7 @@ make_srv_req (struct rspamd_dns_request *req, const char *service, const char *p
 }
 
 static void
-make_spf_req (struct rspamd_dns_request *req, const char *name)
+make_spf_req (struct rspamd_dns_request *req, const gchar *name)
 {
 	guint16 *p;
 
@@ -532,7 +532,7 @@ make_spf_req (struct rspamd_dns_request *req, const char *name)
 	req->requested_name = name;
 }
 
-static int
+static gint
 send_dns_request (struct rspamd_dns_request *req)
 {
 	gint r;
@@ -584,7 +584,7 @@ decompress_label (guint8 *begin, guint16 *len, guint16 max)
 }
 
 static guint8 *
-dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
+dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
 {
 	guint8 *p, *c, *l1, *l2;
 	guint16 len1, len2;
@@ -666,7 +666,7 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, int len)
 #define MAX_RECURSION_LEVEL 10
 
 static gboolean
-dns_parse_labels (guint8 *in, char **target, guint8 **pos, struct rspamd_dns_reply *rep, int *remain, gboolean make_name)
+dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_reply *rep, gint *remain, gboolean make_name)
 {
 	guint16 namelen = 0;
 	guint8 *p = *pos, *begin = *pos, *l, *t, *end = *pos + *remain;
@@ -760,7 +760,7 @@ end:
 #define GET32(x) do {if (*remain < sizeof (guint32)) {goto err;} memcpy (&(x), p, sizeof (guint32)); (x) = ntohl ((x)); p += sizeof (guint32); *remain -= sizeof (guint32); } while(0)
 
 static gint
-dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, int *remain)
+dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, gint *remain)
 {
 	guint8 *p = *pos, parts;
 	guint16 type, datalen, txtlen, copied;
@@ -897,19 +897,19 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	return 0;
 
 err:
-	msg_info ("incomplete RR, only %d bytes remain, packet length %d", (int)*remain, (int)(*pos - in));
+	msg_info ("incomplete RR, only %d bytes remain, packet length %d", (gint)*remain, (gint)(*pos - in));
 	return -1;
 }
 
 static struct rspamd_dns_reply *
-dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver, struct rspamd_dns_request **req_out)
+dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver, struct rspamd_dns_request **req_out)
 {
 	struct dns_header *header = (struct dns_header *)in;
 	struct rspamd_dns_request *req;
 	struct rspamd_dns_reply *rep;
 	union rspamd_reply_element *elt;
 	guint8 *pos;
-	int i, t;
+	gint                            i, t;
 	
 	/* First check header fields */
 	if (header->qr == 0) {
@@ -961,11 +961,11 @@ dns_parse_reply (guint8 *in, int r, struct rspamd_dns_resolver *resolver, struct
 }
 
 static void
-dns_read_cb (int fd, short what, void *arg)
+dns_read_cb (gint fd, short what, void *arg)
 {
 	struct rspamd_dns_resolver *resolver = arg;
 	struct rspamd_dns_request *req = NULL;
-	int r;
+	gint                            r;
 	struct rspamd_dns_reply *rep;
 	guint8 in[UDP_PACKET_SIZE];
 
@@ -982,11 +982,11 @@ dns_read_cb (int fd, short what, void *arg)
 }
 
 static void
-dns_timer_cb (int fd, short what, void *arg)
+dns_timer_cb (gint fd, short what, void *arg)
 {
 	struct rspamd_dns_request *req = arg;
 	struct rspamd_dns_reply *rep;
-	int r;
+	gint                            r;
 	
 	/* Retransmit dns request */
 	req->retransmits ++;
@@ -1045,7 +1045,7 @@ dns_timer_cb (int fd, short what, void *arg)
 }
 
 static void
-dns_retransmit_handler (int fd, short what, void *arg)
+dns_retransmit_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_dns_request *req = arg;
 	struct rspamd_dns_reply *rep;
@@ -1095,7 +1095,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	va_list args;
 	struct rspamd_dns_request *req;
 	struct in_addr addr;
-	const char *name, *service, *proto;
+	const gchar *name, *service, *proto;
 	gint r;
 
 	req = memory_pool_alloc (pool, sizeof (struct rspamd_dns_request));
@@ -1113,25 +1113,25 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			make_ptr_req (req, addr);
 			break;
 		case DNS_REQUEST_MX:
-			name = va_arg (args, const char *);
+			name = va_arg (args, const gchar *);
 			make_mx_req (req, name);
 			break;
 		case DNS_REQUEST_A:
-			name = va_arg (args, const char *);
+			name = va_arg (args, const gchar *);
 			make_a_req (req, name);
 			break;
 		case DNS_REQUEST_TXT:
-			name = va_arg (args, const char *);
+			name = va_arg (args, const gchar *);
 			make_txt_req (req, name);
 			break;
 		case DNS_REQUEST_SPF:
-			name = va_arg (args, const char *);
+			name = va_arg (args, const gchar *);
 			make_spf_req (req, name);
 			break;
 		case DNS_REQUEST_SRV:
-			service = va_arg (args, const char *);
-			proto = va_arg (args, const char *);
-			name = va_arg (args, const char *);
+			service = va_arg (args, const gchar *);
+			proto = va_arg (args, const gchar *);
+			name = va_arg (args, const gchar *);
 			make_srv_req (req, service, proto, name);
 			break;
 	}
@@ -1186,7 +1186,7 @@ static gboolean
 parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 {
 	FILE *r;
-	char buf[BUFSIZ], *p;
+	gchar                           buf[BUFSIZ], *p;
 	struct rspamd_dns_server *new;
 	struct in_addr addr;
 
@@ -1234,8 +1234,8 @@ dns_resolver_init (struct config_file *cfg)
 {
 	GList *cur;
 	struct rspamd_dns_resolver *new;
-	char *begin, *p;
-	int priority, i;
+	gchar                           *begin, *p;
+	gint                            priority, i;
 	struct rspamd_dns_server *serv;
 	
 	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
@@ -1305,7 +1305,7 @@ dns_resolver_init (struct config_file *cfg)
 	return new;
 }
 
-static char dns_rcodes[16][16] = {
+static gchar dns_rcodes[16][16] = {
 	[DNS_RC_NOERROR]  = "NOERROR",
 	[DNS_RC_FORMERR]  = "FORMERR",
 	[DNS_RC_SERVFAIL] = "SERVFAIL",
@@ -1319,20 +1319,20 @@ static char dns_rcodes[16][16] = {
 	[DNS_RC_NOTZONE]  = "NOTZONE",
 };
 
-const char *
+const gchar *
 dns_strerror (enum dns_rcode rcode)
 {
 	rcode &= 0xf;
-	static char numbuf[16];
+	static gchar numbuf[16];
 
 	if ('\0' == dns_rcodes[rcode][0]) {
-		rspamd_snprintf (numbuf, sizeof (numbuf), "UNKNOWN: %d", (int)rcode);
+		rspamd_snprintf (numbuf, sizeof (numbuf), "UNKNOWN: %d", (gint)rcode);
 		return numbuf;
 	}
 	return dns_rcodes[rcode];
 }
 
-static char dns_types[6][16] = {
+static gchar dns_types[6][16] = {
 		[DNS_REQUEST_A] = "A request",
 		[DNS_REQUEST_PTR] = "PTR request",
 		[DNS_REQUEST_MX] = "MX request",
@@ -1341,7 +1341,7 @@ static char dns_types[6][16] = {
 		[DNS_REQUEST_SPF] = "SPF request"
 };
 
-const char *
+const gchar *
 dns_strtype (enum rspamd_request_type type)
 {
 	return dns_types[type];

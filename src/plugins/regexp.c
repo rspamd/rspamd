@@ -43,37 +43,37 @@
 #define DEFAULT_STATFILE_PREFIX "./"
 
 struct regexp_module_item {
-	struct expression              *expr;
-	char                           *symbol;
-	long int                        avg_time;
+	struct expression               *expr;
+	gchar                           *symbol;
+	guint32                         avg_time;
 	gpointer                        lua_function;
 };
 
 struct autolearn_data {
-	char                           *statfile_name;
-	char                           *symbol;
+	gchar                           *statfile_name;
+	gchar                           *symbol;
 	float                           weight;
 };
 
 struct regexp_ctx {
-	int                             (*filter) (struct worker_task * task);
+	gint                            (*filter) (struct worker_task * task);
 	GHashTable                     *autolearn_symbols;
-	char                           *statfile_prefix;
+	gchar                           *statfile_prefix;
 
 	memory_pool_t                  *regexp_pool;
 	memory_pool_t                  *dynamic_pool;
 };
 
 struct regexp_json_buf {
-	u_char                         *buf;
-	u_char                         *pos;
+	guint8                         *buf;
+	guint8                         *pos;
 	size_t                          buflen;
 	struct config_file             *cfg;
 };
 
 static struct regexp_ctx       *regexp_module_ctx = NULL;
 
-static int                      regexp_common_filter (struct worker_task *task);
+static gint                      regexp_common_filter (struct worker_task *task);
 static gboolean                 rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused);
@@ -83,17 +83,17 @@ static void                     process_regexp_item (struct worker_task *task, v
 static void 
 regexp_dynamic_insert_result (struct worker_task *task, void *user_data)
 {
-	char                           *symbol = user_data;
+	gchar                           *symbol = user_data;
 		
 	insert_result (task, symbol, 1, NULL);
 }
 
 static gboolean
-parse_regexp_ipmask (const char *begin, struct dynamic_map_item *addr)
+parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
 {
-	const char *pos;
-	char ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
-	int state = 0, dots = 0;
+	const gchar *pos;
+	gchar                           ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
+	gint                            state = 0, dots = 0;
 	
 	bzero (ip_buf, sizeof (ip_buf));
 	bzero (mask_buf, sizeof (mask_buf));
@@ -173,7 +173,7 @@ parse_regexp_ipmask (const char *begin, struct dynamic_map_item *addr)
 
 /* Process regexp expression */
 static                          gboolean
-read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, char *symbol, char *line, gboolean raw_mode)
+read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, gchar *symbol, gchar *line, gboolean raw_mode)
 {
 	struct expression              *e, *cur;
 
@@ -201,8 +201,8 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 
 
 /* Callbacks for reading json dynamic rules */
-u_char                         *
-json_regexp_read_cb (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+guint8                         *
+json_regexp_read_cb (memory_pool_t * pool, guint8 * chunk, size_t len, struct map_cb_data *data)
 {
 	struct regexp_json_buf                *jb;
 	size_t                          free, off;
@@ -245,10 +245,10 @@ void
 json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 {
 	struct regexp_json_buf         *jb;
-	int                             nelts, i, j;
+	gint                            nelts, i, j;
 	json_t                         *js, *cur_elt, *cur_nm, *it_val;
 	json_error_t                    je;
-	char                           *cur_rule, *cur_symbol;
+	gchar                           *cur_rule, *cur_symbol;
 	double                          score;
 	gboolean                        enabled;
 	struct regexp_module_item      *cur_item;
@@ -375,7 +375,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 /* Init function */
-int
+gint
 regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
@@ -399,10 +399,10 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
  * SYMBOL:statfile:weight
  */
 void
-parse_autolearn_param (const char *param, const char *value, struct config_file *cfg)
+parse_autolearn_param (const gchar *param, const gchar *value, struct config_file *cfg)
 {
 	struct autolearn_data          *d;
-	char                           *p;
+	gchar                           *p;
 
 	p = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
 	d = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (struct autolearn_data));
@@ -425,14 +425,14 @@ parse_autolearn_param (const char *param, const char *value, struct config_file 
 	}
 }
 
-int
+gint
 regexp_module_config (struct config_file *cfg)
 {
 	GList                          *cur_opt = NULL;
 	struct module_opt              *cur;
 	struct regexp_module_item      *cur_item;
-	char                           *value;
-	int                             res = TRUE;
+	gchar                           *value;
+	gint                            res = TRUE;
 	struct regexp_json_buf         *jb, **pjb;
 
 	if ((value = get_module_opt (cfg, "regexp", "statfile_prefix")) != NULL) {
@@ -502,7 +502,7 @@ regexp_module_config (struct config_file *cfg)
 	return res;
 }
 
-int
+gint
 regexp_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (regexp_module_ctx->regexp_pool);
@@ -511,10 +511,10 @@ regexp_module_reconfig (struct config_file *cfg)
 	return regexp_module_config (cfg);
 }
 
-static const char              *
-find_raw_header_pos (const char *headers, const char *headerv)
+static const gchar              *
+find_raw_header_pos (const gchar *headers, const gchar *headerv)
 {
-	const char                     *p = headers;
+	const gchar                     *p = headers;
 	gsize                           headerlen = strlen (headerv);
 
 	if (headers == NULL) {
@@ -581,9 +581,9 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static                          gsize
-process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *additional)
+process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar *additional)
 {
-	char                           *headerv, *c, t;
+	gchar                           *headerv, *c, t;
 	struct mime_text_part          *part;
 	GList                          *cur, *headerlist;
 	GRegex                         *regexp;
@@ -594,7 +594,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 		.re = re,
 		.found = FALSE
 	};
-	int                             r;
+	gint                            r;
 
 
 	if (re == NULL) {
@@ -654,17 +654,17 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			}
 			cur = headerlist;
 			while (cur) {
-				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const char *)cur->data);
+				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
 
 				if (cur->data && g_regex_match_full (re->regexp, cur->data, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
-						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const char *)cur->data);
+						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const gchar *)cur->data);
 					}
 					task_cache_add (task, re, 1);
 					return 1;
 				}
 				else if (G_UNLIKELY (re->is_test)) {
-					msg_info ("process test regexp %s for header %s with value '%s' returned FALSE", re->regexp_text, re->header, (const char *)cur->data);
+					msg_info ("process test regexp %s for header %s with value '%s' returned FALSE", re->regexp_text, re->header, (const gchar *)cur->data);
 				}
 				if (err != NULL) {
 					msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
@@ -700,7 +700,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 				return 1;
 			}
 			else if (G_UNLIKELY (re->is_test)) {
-				msg_info ("process test regexp %s for mime part of length %d returned FALSE", re->regexp_text, (int)part->orig->len);
+				msg_info ("process test regexp %s for mime part of length %d returned FALSE", re->regexp_text, (gint)part->orig->len);
 			}
 			if (err != NULL) {
 				msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
@@ -714,13 +714,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 
 		if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, &err) == TRUE) {
 			if (G_UNLIKELY (re->is_test)) {
-				msg_info ("process test regexp %s for message of length %d returned TRUE", re->regexp_text, (int)task->msg->len);
+				msg_info ("process test regexp %s for message of length %d returned TRUE", re->regexp_text, (gint)task->msg->len);
 			}
 			task_cache_add (task, re, 1);
 			return 1;
 		}
 		else if (G_UNLIKELY (re->is_test)) {
-			msg_info ("process test regexp %s for message of length %d returned FALSE", re->regexp_text, (int)task->msg->len);
+			msg_info ("process test regexp %s for message of length %d returned FALSE", re->regexp_text, (gint)task->msg->len);
 		}
 		if (err != NULL) {
 			msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
@@ -766,7 +766,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const char *
 			task_cache_add (task, re, 0);
 			return 0;
 		}
-		if ((headerv = (char *)find_raw_header_pos (task->raw_headers, re->header)) == NULL) {
+		if ((headerv = (gchar *)find_raw_header_pos (task->raw_headers, re->header)) == NULL) {
 			/* No header was found */
 			task_cache_add (task, re, 0);
 			return 0;
@@ -826,7 +826,7 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 {
 	struct expression              *it = (*e)->next;
 	gboolean                        ret = FALSE, is_nearest = TRUE;
-	int                             skip_level = 0;
+	gint                            skip_level = 0;
 
 	/* Skip nearest logical operators from optimization */
 	if (!it || (it->type == EXPR_OPERATION && it->content.operation != '!')) {
@@ -878,7 +878,7 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 }
 
 static                          gboolean
-process_regexp_expression (struct expression *expr, char *symbol, struct worker_task *task, const char *additional)
+process_regexp_expression (struct expression *expr, gchar *symbol, struct worker_task *task, const gchar *additional)
 {
 	GQueue                         *stack;
 	gsize                           cur, op1, op2;
@@ -996,7 +996,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 	}
 }
 
-static int
+static gint
 regexp_common_filter (struct worker_task *task)
 {
 	/* XXX: remove this shit too */
@@ -1006,7 +1006,7 @@ regexp_common_filter (struct worker_task *task)
 static                          gboolean
 rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused)
 {
-	int                             param_count, res = 0;
+	gint                            param_count, res = 0;
 	struct expression_argument     *arg;
 	GList                          *cur;
 
@@ -1054,7 +1054,7 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
-	if (find_raw_header_pos (task->raw_headers, (char *)arg->data) == NULL) {
+	if (find_raw_header_pos (task->raw_headers, (gchar *)arg->data) == NULL) {
 		return FALSE;
 	}
 
@@ -1062,20 +1062,20 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 }
 
 static gboolean
-match_smtp_data (struct worker_task *task, const char *re_text, const char *what)
+match_smtp_data (struct worker_task *task, const gchar *re_text, const gchar *what)
 {
 	struct rspamd_regexp           *re;
-	int                             r;
+	gint                            r;
 
 	if (*re_text == '/') {
 		/* This is a regexp */
 		if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
-			re = parse_regexp (task->cfg->cfg_pool, (char *)re_text, task->cfg->raw_mode);
+			re = parse_regexp (task->cfg->cfg_pool, (gchar *)re_text, task->cfg->raw_mode);
 			if (re == NULL) {
 				msg_warn ("cannot compile regexp for function");
 				return FALSE;
 			}
-			re_cache_add ((char *)re_text, re, task->cfg->cfg_pool);
+			re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
 		}
 		if ((r = task_cache_check (task, re)) == -1) {
 			if (g_regex_match (re->regexp, what, 0, NULL) == TRUE) {
@@ -1100,7 +1100,7 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 	GList                          *cur, *rcpt_list = NULL;
-	char                           *type, *what = NULL;
+	gchar                           *type, *what = NULL;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");

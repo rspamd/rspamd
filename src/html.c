@@ -161,9 +161,9 @@ struct _entity;
 typedef struct _entity          entity;
 
 struct _entity {
-	char                           *name;
+	gchar                           *name;
 	uint                            code;
-	char                           *replacement;
+	gchar                           *replacement;
 };
 
 
@@ -375,7 +375,7 @@ static entity                   entities_defs[] = {
 	{"or", 8744, "|"},
 	{"cap", 8745, NULL},
 	{"cup", 8746, NULL},
-	{"int", 8747, NULL},
+	{"gint", 8747, NULL},
 	{"there4", 8756, NULL},
 	{"sim", 8764, NULL},
 	{"cong", 8773, NULL},
@@ -440,7 +440,7 @@ static entity                   entities_defs[] = {
 
 static entity                  *entities_defs_num = NULL;
 
-static int
+static gint
 tag_cmp (const void *m1, const void *m2)
 {
 	const struct html_tag          *p1 = m1;
@@ -449,7 +449,7 @@ tag_cmp (const void *m1, const void *m2)
 	return g_ascii_strcasecmp (p1->name, p2->name);
 }
 
-static int
+static gint
 entity_cmp (const void *m1, const void *m2)
 {
 	const entity                   *p1 = m1;
@@ -458,7 +458,7 @@ entity_cmp (const void *m1, const void *m2)
 	return g_ascii_strcasecmp (p1->name, p2->name);
 }
 
-static int
+static gint
 entity_cmp_num (const void *m1, const void *m2)
 {
 	const entity                   *p1 = m1;
@@ -468,13 +468,13 @@ entity_cmp_num (const void *m1, const void *m2)
 }
 
 static GNode                   *
-construct_html_node (memory_pool_t * pool, char *text)
+construct_html_node (memory_pool_t * pool, gchar *text)
 {
 	struct html_node               *html;
 	GNode                          *n = NULL;
 	struct html_tag                 key, *found;
-	char                            t;
-	int                             taglen = strlen (text);
+	gchar                           t;
+	gint                            taglen = strlen (text);
 
 	if (text == NULL || *text == '\0') {
 		return NULL;
@@ -551,7 +551,7 @@ check_balance (GNode * node, GNode ** cur_level)
 }
 
 struct html_tag                *
-get_tag_by_name (const char *name)
+get_tag_by_name (const gchar *name)
 {
 	struct html_tag                 key;
 
@@ -562,14 +562,14 @@ get_tag_by_name (const char *name)
 
 /* Decode HTML entitles in text */
 void
-decode_entitles (char *s, guint * len)
+decode_entitles (gchar *s, guint * len)
 {
 	guint                           l, rep_len;
-	char                           *t = s;	/* t - tortoise */
-	char                           *h = s;	/* h - hare     */
-	char                           *e = s;
-	char                           *end_ptr;
-	int                             state = 0, val, base;
+	gchar                           *t = s;	/* t - tortoise */
+	gchar                           *h = s;	/* h - hare     */
+	gchar                           *e = s;
+	gchar                           *end_ptr;
+	gint                            state = 0, val, base;
 	entity                         *found, key;
 
 	if (len == NULL || *len == 0) {
@@ -662,7 +662,7 @@ decode_entitles (char *s, guint * len)
 static gchar *
 html_strcasestr (const gchar *s, const gchar *find)
 {
-	char c, sc;
+	gchar                           c, sc;
 	size_t len;
 
 	if ((c = *find++) != 0) {
@@ -680,11 +680,11 @@ html_strcasestr (const gchar *s, const gchar *find)
 }
 
 static void
-parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, char *tag_text)
+parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, gchar *tag_text)
 {
-	char                           *c = NULL, *p;
-	int                             len, rc;
-	char                           *url_text;
+	gchar                           *c = NULL, *p;
+	gint                            len, rc;
+	gchar                           *url_text;
 	struct uri                     *url;
 	gboolean                        got_single_quote = FALSE, got_double_quote = FALSE;
 
@@ -770,7 +770,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 }
 
 gboolean
-add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, char *tag_text, GNode ** cur_level)
+add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, gchar *tag_text, GNode ** cur_level)
 {
 	GNode                          *new;
 	struct html_node               *data;

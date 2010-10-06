@@ -71,29 +71,29 @@ static gboolean                 use_judy = FALSE;
 static bloom_filter_t          *bf;
 
 /* Number of cache modifications */
-static uint32_t                 mods = 0;
-static uint32_t                 max_mods = DEFAULT_MOD_LIMIT;
+static guint32                 mods = 0;
+static guint32                 max_mods = DEFAULT_MOD_LIMIT;
 /* Frequent score number */
-static uint32_t                 frequent_score = DEFAULT_FREQUENT_SCORE;
+static guint32                 frequent_score = DEFAULT_FREQUENT_SCORE;
 /* For evtimer */
 static struct timeval           tmv;
 static struct event             tev;
 static struct rspamd_stat      *server_stat;
 
 struct rspamd_fuzzy_node {
-	int32_t                         value;
-	int32_t                         flag;
-	uint64_t                        time;
+	gint32                          value;
+	gint32                          flag;
+	guint64                         time;
 	fuzzy_hash_t                    h;
 };
 
 
 #ifndef HAVE_SA_SIGINFO
 static void
-sig_handler (int signo)
+sig_handler (gint signo)
 #else
 static void
-sig_handler (int signo, siginfo_t *info, void *unused)
+sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
@@ -119,14 +119,14 @@ compare_nodes (gconstpointer a, gconstpointer b, gpointer unused)
 static void
 sync_cache (struct rspamd_worker *wrk)
 {
-	int                             fd, i;
-	char                           *filename, *exp_str, header[4];
+	gint                            fd, i;
+	gchar                           *filename, *exp_str, header[4];
 	GList                          *cur, *tmp;
 	struct rspamd_fuzzy_node       *node;
-	uint64_t                        expire, now;
+	guint64                         expire, now;
 #ifdef WITH_JUDY
 	PPvoid_t                        pvalue;
-	char                            indexbuf[1024], tmpindex[1024];
+	gchar                           indexbuf[1024], tmpindex[1024];
 #endif
 
 	/* Check for modifications */
@@ -154,11 +154,11 @@ sync_cache (struct rspamd_worker *wrk)
 
 	(void)lock_file (fd, FALSE);
 
-	now = (uint64_t) time (NULL);
+	now = (guint64) time (NULL);
 	
 	/* Fill header */
 	memcpy (header, FUZZY_FILE_MAGIC, 3);
-	header[3] = (char)CURRENT_FUZZY_VERSION;
+	header[3] = (gchar)CURRENT_FUZZY_VERSION;
 	if (write (fd, header, sizeof (header)) == -1) {
 		msg_err ("cannot write file %s while writing header: %s", filename, strerror (errno));
 		goto end;
@@ -231,7 +231,7 @@ end:
 }
 
 static void
-sigterm_handler (int fd, short what, void *arg)
+sigterm_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	static struct timeval           tv = {
@@ -249,7 +249,7 @@ sigterm_handler (int fd, short what, void *arg)
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr_handler (int fd, short what, void *arg)
+sigusr_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
@@ -271,14 +271,14 @@ sigusr_handler (int fd, short what, void *arg)
 static                          gboolean
 read_hashes_file (struct rspamd_worker *wrk)
 {
-	int                             r, fd, i, version = 0;
+	gint                            r, fd, i, version = 0;
 	struct stat                     st;
-	char                           *filename, header[4];
+	gchar                           *filename, header[4];
 	gboolean                        touch_stat = TRUE;
 	struct rspamd_fuzzy_node       *node;
 	struct {
-		int32_t                         value;
-		uint64_t                        time;
+		gint32                          value;
+		guint64                         time;
 		fuzzy_hash_t                    h;
 	}								legacy_node;
 #ifdef WITH_JUDY
@@ -319,12 +319,12 @@ read_hashes_file (struct rspamd_worker *wrk)
 	if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
 		if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
 			/* We have version in last byte of header */
-			version = (int)header[3];
+			version = (gint)header[3];
 			if (version > CURRENT_FUZZY_VERSION) {
 				msg_err ("unsupported version of fuzzy hash file: %d", version);
 				return FALSE;
 			}
-			msg_info ("reading fuzzy hashes storage file of version %d of size %d", version, (int)(st.st_size - sizeof (header)) / sizeof (struct rspamd_fuzzy_node));
+			msg_info ("reading fuzzy hashes storage file of version %d of size %d", version, (gint)(st.st_size - sizeof (header)) / sizeof (struct rspamd_fuzzy_node));
 		}
 		else {
 			/* Old version */
@@ -402,11 +402,11 @@ read_hashes_file (struct rspamd_worker *wrk)
 }
 
 static inline struct rspamd_fuzzy_node *
-check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
+check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value)
 {
 	GList                          *cur;
 	struct rspamd_fuzzy_node       *h;
-	int                             prob = 0;
+	gint                            prob = 0;
 #ifdef WITH_JUDY
 	PPvoid_t                         pvalue;
 
@@ -465,8 +465,8 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, int update_value)
 	return NULL;
 }
 
-static                          int
-process_check_command (struct fuzzy_cmd *cmd, int *flag)
+static                          gint
+process_check_command (struct fuzzy_cmd *cmd, gint *flag)
 {
 	fuzzy_hash_t                    s;
 	struct rspamd_fuzzy_node       *h;
@@ -518,7 +518,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	h = g_malloc (sizeof (struct rspamd_fuzzy_node));
 	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
 	h->h.block_size = cmd->blocksize;
-	h->time = (uint64_t) time (NULL);
+	h->time = (guint64) time (NULL);
 	h->value = cmd->value;
 	h->flag = cmd->flag;
 #ifdef WITH_JUDY
@@ -641,8 +641,8 @@ else {																							\
 static void
 process_fuzzy_command (struct fuzzy_session *session)
 {
-	int r, flag = 0;
-	char buf[64];
+	gint                            r, flag = 0;
+	gchar                           buf[64];
 
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
@@ -679,15 +679,15 @@ process_fuzzy_command (struct fuzzy_session *session)
  * Accept new connection and construct task
  */
 static void
-accept_fuzzy_socket (int fd, short what, void *arg)
+accept_fuzzy_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	struct fuzzy_session            session;
 	ssize_t                         r;
 	struct {
 		u_char                      cmd;
-		uint32_t                    blocksize;
-		int32_t                     value;
+		guint32                         blocksize;
+		gint32                          value;
 		u_char                      hash[FUZZY_HASHLEN];
 	}								legacy_cmd;
 
@@ -725,7 +725,7 @@ accept_fuzzy_socket (int fd, short what, void *arg)
 }
 
 static void
-sync_callback (int fd, short what, void *arg)
+sync_callback (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Timer event */
@@ -746,8 +746,8 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
 	struct event                    sev;
-	int                             retries = 0;
-	char                           *value;
+	gint                            retries = 0;
+	gchar                           *value;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_FUZZY;

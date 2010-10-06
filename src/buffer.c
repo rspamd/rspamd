@@ -28,7 +28,7 @@
 
 #define G_DISPATCHER_ERROR dispatcher_error_quark()
 
-static void                     dispatcher_cb (int fd, short what, void *arg);
+static void                     dispatcher_cb (gint fd, short what, void *arg);
 
 static inline                   GQuark
 dispatcher_error_quark (void)
@@ -39,7 +39,7 @@ dispatcher_error_quark (void)
 static gboolean
 sendfile_callback (rspamd_io_dispatcher_t *d)
 {
-	ssize_t                         r;
+
 	GError                         *err;
 
 #ifdef HAVE_SENDFILE
@@ -81,6 +81,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		d->in_sendfile = FALSE;
 	}
 # else
+	ssize_t                         r;
 	/* Linux version */
 	r = sendfile (d->fd, d->sendfile_fd, &d->offset, d->file_size);
 	if (r == -1) {
@@ -120,6 +121,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	}
 # endif
 #else
+	ssize_t                         r;
 	r = write (d->fd, d->map, d->file_size - d->offset);
 	if (r == -1) {
 		if (errno != EAGAIN) {
@@ -164,7 +166,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 #define BUFREMAIN(x) (x)->data->size - ((x)->pos - (x)->data->begin)
 
 static                          gboolean
-write_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
+write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 {
 	GList                          *cur;
 	GError                         *err;
@@ -247,13 +249,13 @@ write_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 }
 
 static void
-read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
+read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 {
 	ssize_t                         r;
 	GError                         *err;
 	f_str_t                         res;
-	char                           *c, *b;
-	char                           *end;
+	gchar                           *c, *b;
+	gchar                           *end;
 	size_t                          len;
 	enum io_policy                  saved_policy;
 
@@ -437,12 +439,12 @@ read_buffers (int fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 #undef BUFREMAIN
 
 static void
-dispatcher_cb (int fd, short what, void *arg)
+dispatcher_cb (gint fd, short what, void *arg)
 {
 	rspamd_io_dispatcher_t         *d = (rspamd_io_dispatcher_t *) arg;
 	GError                         *err;
 
-	debug_ip (d->peer_addr, "in dispatcher callback, what: %d, fd: %d", (int)what, fd);
+	debug_ip (d->peer_addr, "in dispatcher callback, what: %d, fd: %d", (gint)what, fd);
 
 	switch (what) {
 	case EV_TIMEOUT:
@@ -476,7 +478,7 @@ dispatcher_cb (int fd, short what, void *arg)
 
 
 rspamd_io_dispatcher_t         *
-rspamd_create_dispatcher (int fd, enum io_policy policy,
+rspamd_create_dispatcher (gint fd, enum io_policy policy,
 	dispatcher_read_callback_t read_cb, dispatcher_write_callback_t write_cb, dispatcher_err_callback_t err_cb, struct timeval *tv, void *user_data)
 {
 	rspamd_io_dispatcher_t         *new;
@@ -531,7 +533,7 @@ void
 rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy, size_t nchars)
 {
 	f_str_t                        *tmp;
-	int                             t;
+	gint                            t;
 
 	if (d->policy != policy) {
 		d->policy = policy;
@@ -571,7 +573,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 	newbuf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
 	if (len == 0) {
 		/* Assume NULL terminated */
-		len = strlen ((char *)data);
+		len = strlen ((gchar *)data);
 	}
 
 	if (!allocated) {
@@ -600,7 +602,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 
 
 gboolean 
-rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, int fd, size_t len)
+rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, gint fd, size_t len)
 {
 	if (lseek (fd, 0, SEEK_SET) == -1) {
 		msg_warn ("lseek failed: %s", strerror (errno));

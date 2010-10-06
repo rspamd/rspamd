@@ -91,9 +91,9 @@ struct rspamd_regexp {
 struct memcached_server {
 	struct upstream up;								/**< common upstream base								*/
 	struct in_addr addr;							/**< address of server									*/
-	uint16_t port;									/**< port to connect									*/
+	guint16 port;									/**< port to connect									*/
 	short alive;									/**< is this server alive								*/
-	short int num;									/**< number of servers in case of mirror				*/
+	gint16 num;									/**< number of servers in case of mirror				*/
 };
 
 /**
@@ -129,8 +129,8 @@ struct module_opt {
  * Statfile section definition
  */
 struct statfile_section {
-	uint32_t code;									/**< section's code										*/
-	uint64_t size;									/**< size of section									*/
+	guint32 code;									/**< section's code										*/
+	guint64 size;									/**< size of section									*/
 	double weight;									/**< weight coefficient for section						*/
 };
 
@@ -160,7 +160,7 @@ struct statfile_binlog_params {
 	enum sync_affinity affinity;
 	time_t rotate_time;
 	struct in_addr master_addr;
-	uint16_t master_port;
+	guint16 master_port;
 };
 
 typedef double (*statfile_normalize_func)(struct config_file *cfg, long double score, void *params);
@@ -211,15 +211,15 @@ struct config_scalar {
  * Config params for rspamd worker
  */
 struct worker_conf {
-	int type;										/**< worker type										*/
+	gint type;										/**< worker type										*/
 	gchar *bind_host;								/**< bind line											*/
 	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
-	uint16_t bind_port;								/**< bind port in case of TCP socket					*/
-	uint16_t bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
-	uint16_t count;									/**< number of workers									*/
-	int listen_sock;								/**< listening socket desctiptor						*/
-	uint32_t rlimit_nofile;							/**< max files limit									*/
-	uint32_t rlimit_maxcore;						/**< maximum core file size								*/
+	guint16 bind_port;								/**< bind port in case of TCP socket					*/
+	guint16 bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
+	guint16 count;									/**< number of workers									*/
+	gint listen_sock;								/**< listening socket desctiptor						*/
+	guint32 rlimit_nofile;							/**< max files limit									*/
+	guint32 rlimit_maxcore;						/**< maximum core file size								*/
 	GHashTable *params;								/**< params for worker									*/
 	GQueue *active_workers;							/**< linked list of spawned workers						*/
 	gboolean has_socket;							/**< whether we should make listening socket in main process */
@@ -245,11 +245,11 @@ struct config_file {
 	gboolean convert_config;						/**< convert config to XML format						*/
 
 	enum rspamd_log_type log_type;					/**< log type											*/
-	int log_facility;								/**< log facility in case of syslog						*/
-	int log_level;									/**< log level trigger									*/
+	gint log_facility;								/**< log facility in case of syslog						*/
+	gint log_level;									/**< log level trigger									*/
 	gchar *log_file;								/**< path to logfile in case of file logging			*/
 	gboolean log_buffered;							/**< whether logging is buffered						*/
-	uint32_t log_buf_size;							/**< length of log buffer								*/
+	guint32 log_buf_size;							/**< length of log buffer								*/
 	gchar *debug_ip_map;						    /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;								/**< whether we should log URLs                         */
 	GList *debug_symbols;							/**< symbols to debug									*/
@@ -259,10 +259,10 @@ struct config_file {
 	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];	/**< memcached servers				*/
 	gsize memcached_servers_num;					/**< number of memcached servers						*/
 	memc_proto_t memcached_protocol;				/**< memcached protocol									*/
-	unsigned int memcached_error_time;				/**< memcached error time (see upstream documentation)	*/
-	unsigned int memcached_dead_time;				/**< memcached dead time								*/
-	unsigned int memcached_maxerrors;				/**< maximum number of errors							*/
-	unsigned int memcached_connect_timeout;			/**< connection timeout									*/
+	guint memcached_error_time;				/**< memcached error time (see upstream documentation)	*/
+	guint memcached_dead_time;				/**< memcached dead time								*/
+	guint memcached_maxerrors;				/**< maximum number of errors							*/
+	guint memcached_connect_timeout;			/**< connection timeout									*/
 
 	gboolean delivery_enable;						/**< is delivery agent is enabled						*/
 	gchar *deliver_host;							/**< host for mail deliviring							*/
@@ -294,10 +294,10 @@ struct config_file {
 	GHashTable* user_settings;                      /**< settings per-user                                  */
 	gchar* domain_settings_str;						/**< string representation of settings					*/
 	gchar* user_settings_str;
-	int clock_res;									/**< resolution of clock used							*/
+	gint clock_res;									/**< resolution of clock used							*/
 
 	struct symbols_cache *cache;					/**< symbols cache object								*/ 
-	char *cache_filename;							/**< filename of cache file								*/
+	gchar *cache_filename;							/**< filename of cache file								*/
 	struct metric *default_metric;					/**< default metric										*/
 	
 	gchar* checksum;								/**< real checksum of config file						*/ 
@@ -316,7 +316,7 @@ struct config_file {
  * @param port port
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port);
+gboolean parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port);
 
 /**
  * Parse bind credits
@@ -325,7 +325,7 @@ gboolean parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port)
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-int parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
+gint parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
 
 /**
  * Init default values
@@ -360,7 +360,7 @@ gsize parse_limit (const gchar *limit);
  * @param t string representation of seconds (eg. 1D)
  * @return numeric value of string
  */
-unsigned int parse_seconds (const gchar *t);
+guint parse_seconds (const gchar *t);
 
 /**
  * Parse flag

@@ -29,7 +29,7 @@ void rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, stru
 /**
  * Open log file or initialize other structures
  */
-int open_log (void);
+gint open_log (void);
 /**
  * Close log file or destroy other structures
  */
@@ -37,7 +37,7 @@ void close_log (void);
 /**
  * Close and open log again
  */
-int reopen_log (void);
+gint reopen_log (void);
 /**
  * Set log pid
  */
@@ -55,12 +55,12 @@ void rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level
 /**
  * Function with variable number of arguments support 
  */
-void rspamd_common_log_function (GLogLevelFlags log_level, const char *function, const char *fmt, ...);
+void rspamd_common_log_function (GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...);
 
 /**
  * Conditional debug function
  */
-void rspamd_conditional_debug (uint32_t addr, const char *function, const char *fmt, ...) ;
+void rspamd_conditional_debug (guint32 addr, const gchar *function, const gchar *fmt, ...) ;
 
 /**
  * Temporary turn on debug

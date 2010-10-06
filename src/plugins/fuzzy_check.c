@@ -61,27 +61,27 @@
 
 struct storage_server {
 	struct upstream                 up;
-	char                           *name;
+	gchar                           *name;
 	struct in_addr                  addr;
-	uint16_t                        port;
+	guint16                        port;
 };
 
 struct fuzzy_mapping {
-	uint32_t fuzzy_flag;
-	char *symbol;
+	guint32                         fuzzy_flag;
+	gchar                           *symbol;
 	double weight;
 };
 
 struct fuzzy_mime_type {
-	char *type;
-	char *subtype;
+	gchar                           *type;
+	gchar                           *subtype;
 };
 
 struct fuzzy_ctx {
-	int                             (*filter) (struct worker_task * task);
-	char                           *symbol;
+	gint                            (*filter) (struct worker_task * task);
+	gchar                           *symbol;
 	struct storage_server          *servers;
-	int                             servers_num;
+	gint                            servers_num;
 	memory_pool_t                  *fuzzy_pool;
 	double                          max_score;
 	gint32                          min_hash_len;
@@ -94,43 +94,43 @@ struct fuzzy_ctx {
 };
 
 struct fuzzy_client_session {
-	int                             state;
+	gint                            state;
 	fuzzy_hash_t                   *h;
 	struct event                    ev;
 	struct timeval                  tv;
 	struct worker_task             *task;
 	struct storage_server          *server;
-	int                             fd;
+	gint                            fd;
 };
 
 struct fuzzy_learn_session {
 	struct event                    ev;
 	fuzzy_hash_t                   *h;
-	int                             cmd;
-	int                             value;
-	int                             flag;
-	int                            *saved;
+	gint                            cmd;
+	gint                            value;
+	gint                            flag;
+	gint                            *saved;
 	struct timeval                  tv;
 	struct controller_session      *session;
 	struct storage_server          *server;
 	struct worker_task             *task;
-	int                             fd;
+	gint                            fd;
 };
 
 static struct fuzzy_ctx        *fuzzy_module_ctx = NULL;
 static const gchar              hex_digits[] = "0123456789abcdef";
 
-static int                      fuzzy_mime_filter (struct worker_task *task);
+static gint                      fuzzy_mime_filter (struct worker_task *task);
 static void                     fuzzy_symbol_callback (struct worker_task *task, void *unused);
-static void                     fuzzy_add_handler (char **args, struct controller_session *session);
-static void                     fuzzy_delete_handler (char **args, struct controller_session *session);
+static void                     fuzzy_add_handler (gchar **args, struct controller_session *session);
+static void                     fuzzy_delete_handler (gchar **args, struct controller_session *session);
 
 /* Flags string is in format <numeric_flag>:<SYMBOL>:weight[, <numeric_flag>:<SYMBOL>:weight...] */
 static void
-parse_flags_string (char *str)
+parse_flags_string (gchar *str)
 {
-	char                          **strvec, *item, *err_str, **map_str;
-	int                             num, i, t;
+	gchar                           **strvec, *item, *err_str, **map_str;
+	gint                            num, i, t;
 	struct fuzzy_mapping           *map;
 	
 	strvec = g_strsplit_set (str, ", ;", 0);
@@ -169,10 +169,10 @@ parse_flags_string (char *str)
 }
 
 static GList *
-parse_mime_types (const char *str)
+parse_mime_types (const gchar *str)
 {
-	char                          **strvec, *p;
-	int                             num, i;
+	gchar                           **strvec, *p;
+	gint                            num, i;
 	struct fuzzy_mime_type         *type;
 	GList                          *res = NULL;
 
@@ -218,10 +218,10 @@ fuzzy_check_content_type (GMimeContentType *type)
 }
 
 static void
-parse_servers_string (char *str)
+parse_servers_string (gchar *str)
 {
-	char                          **strvec, *p, portbuf[6], *name;
-	int                             num, i, j, port;
+	gchar                           **strvec, *p, portbuf[6], *name;
+	gint                            num, i, j, port;
 	struct hostent                 *hent;
 	struct in_addr                  addr;
 
@@ -277,7 +277,7 @@ parse_servers_string (char *str)
 }
 
 static double
-fuzzy_normalize (int32_t in, double weight)
+fuzzy_normalize (gint32 in, double weight)
 {
 	double ms = weight, ams = fabs (ms), ain = fabs (in);
 	
@@ -297,11 +297,11 @@ fuzzy_normalize (int32_t in, double weight)
 	return (double)in;
 }
 
-static const char *
+static const gchar *
 fuzzy_to_string (fuzzy_hash_t *h)
 {
-	static char strbuf [FUZZY_HASHLEN * 2 + 1];
-	int i;
+	static gchar strbuf [FUZZY_HASHLEN * 2 + 1];
+	gint                            i;
 	guint8 byte;
 
 	for (i = 0; i < FUZZY_HASHLEN; i ++) {
@@ -318,7 +318,7 @@ fuzzy_to_string (fuzzy_hash_t *h)
 	return strbuf;
 }
 
-int
+gint
 fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
@@ -334,11 +334,11 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
-int
+gint
 fuzzy_check_module_config (struct config_file *cfg)
 {
-	char                           *value;
-	int                             res = TRUE;
+	gchar                           *value;
+	gint                            res = TRUE;
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
 		fuzzy_module_ctx->symbol = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
@@ -406,7 +406,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 	return res;
 }
 
-int
+gint
 fuzzy_check_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (fuzzy_module_ctx->fuzzy_pool);
@@ -436,13 +436,13 @@ fuzzy_io_fin (void *ud)
 
 /* Call this whenever we got data from fuzzy storage */
 static void
-fuzzy_io_callback (int fd, short what, void *arg)
+fuzzy_io_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session    *session = arg;
 	struct fuzzy_cmd                cmd;
 	struct fuzzy_mapping           *map;
-	char                            buf[62], *err_str, *symbol;
-	int                             value = 0, flag = 0, r;
+	gchar                           buf[62], *err_str, *symbol;
+	gint                            value = 0, flag = 0, r;
 	double                          nval;
 
 	if (what == EV_WRITE) {
@@ -522,12 +522,12 @@ fuzzy_learn_fin (void *arg)
 }
 
 static void
-fuzzy_learn_callback (int fd, short what, void *arg)
+fuzzy_learn_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_learn_session     *session = arg;
 	struct fuzzy_cmd                cmd;
-	char                            buf[64];
-	int                             r;
+	gchar                           buf[64];
+	gint                            r;
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
@@ -588,7 +588,7 @@ register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
 {
 	struct fuzzy_client_session    *session;
 	struct storage_server          *selected;
-	int                             sock;
+	gint                            sock;
 
 	/* Get upstream */
 #ifdef HAVE_CLOCK_GETTIME
@@ -629,14 +629,14 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 	struct mime_text_part          *part;
 	struct mime_part               *mime_part;
 	struct rspamd_image            *image;
-	char                           *checksum;
+	gchar                           *checksum;
 	GList                          *cur;
 	fuzzy_hash_t                   *fake_fuzzy;
 
 
 	/* Check whitelist */
 	if (fuzzy_module_ctx->whitelist && task->from_addr.s_addr != 0) {
-		if (radix32tree_find (fuzzy_module_ctx->whitelist, ntohl ((uint32_t) task->from_addr.s_addr)) != RADIX_NO_VALUE) {
+		if (radix32tree_find (fuzzy_module_ctx->whitelist, ntohl ((guint32) task->from_addr.s_addr)) != RADIX_NO_VALUE) {
 			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
 					task->message_id, inet_ntoa (task->from_addr));
 			return;
@@ -703,12 +703,12 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 
 G_INLINE_FUNC gboolean
 register_fuzzy_controller_call (struct controller_session *session, struct worker_task *task, fuzzy_hash_t *h,
-		int cmd, int value, int flag, int *saved)
+		gint                            cmd, gint value, gint flag, gint *saved)
 {
 	struct fuzzy_learn_session     *s;
 	struct storage_server          *selected;
-	int                             sock, r;
-	char                            out_buf[BUFSIZ];
+	gint                            sock, r;
+	gchar                           out_buf[BUFSIZ];
 
 	/* Get upstream */
 #ifdef HAVE_CLOCK_GETTIME
@@ -765,8 +765,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	struct mime_part               *mime_part;
 	struct rspamd_image            *image;
 	GList                          *cur;
-	int                             r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
-	char                            out_buf[BUFSIZ], *checksum;
+	gint                            r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
+	gchar                           out_buf[BUFSIZ], *checksum;
 	fuzzy_hash_t                    fake_fuzzy;
 
 	/* Extract arguments */
@@ -788,7 +788,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	task->msg->len = in->len;
 	
 
-	saved = memory_pool_alloc0 (session->session_pool, sizeof (int));
+	saved = memory_pool_alloc0 (session->session_pool, sizeof (gint));
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");
@@ -897,11 +897,11 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 }
 
 static void
-fuzzy_controller_handler (char **args, struct controller_session *session, int cmd)
+fuzzy_controller_handler (gchar **args, struct controller_session *session, gint cmd)
 {
-	char                           *arg, out_buf[BUFSIZ], *err_str;
-	uint32_t                        size;
-	int                             r, value = 1, flag = 0, *sargs;
+	gchar                           *arg, out_buf[BUFSIZ], *err_str;
+	guint32                         size;
+	gint                            r, value = 1, flag = 0, *sargs;
 
 	/* Process size */
 	arg = args[0];
@@ -949,7 +949,7 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 	rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
 	session->other_handler = fuzzy_process_handler;
 	/* Prepare args */
-	sargs = memory_pool_alloc (session->session_pool, sizeof (int) * 3);
+	sargs = memory_pool_alloc (session->session_pool, sizeof (gint) * 3);
 	sargs[0] = cmd;
 	sargs[1] = value;
 	sargs[2] = flag;
@@ -957,18 +957,18 @@ fuzzy_controller_handler (char **args, struct controller_session *session, int c
 }
 
 static void
-fuzzy_add_handler (char **args, struct controller_session *session)
+fuzzy_add_handler (gchar **args, struct controller_session *session)
 {
 	fuzzy_controller_handler (args, session, FUZZY_WRITE);
 }
 
 static void
-fuzzy_delete_handler (char **args, struct controller_session *session)
+fuzzy_delete_handler (gchar **args, struct controller_session *session)
 {
 	fuzzy_controller_handler (args, session, FUZZY_DEL);
 }
 
-static int
+static gint
 fuzzy_mime_filter (struct worker_task *task)
 {
 	/* XXX: remove this */

@@ -12,16 +12,16 @@
 
 struct fuzzy_cmd {
 	u_char cmd;
-	uint32_t blocksize;
-	int32_t value;
-	int32_t flag;
+	guint32 blocksize;
+	gint32 value;
+	gint32 flag;
 	u_char hash[FUZZY_HASHLEN];
 };
 
 struct fuzzy_session {
 	struct rspamd_worker *worker;
 	struct fuzzy_cmd cmd;
-	int fd;
+	gint fd;
 	u_char *pos;
 	socklen_t salen;
 	struct sockaddr_storage sa;

@@ -12,15 +12,15 @@ struct config_file;
 typedef void (*symbol_func_t)(struct worker_task *task, gpointer user_data);
 
 struct saved_cache_item {
-	char symbol[MAX_SYMBOL];
+	gchar symbol[MAX_SYMBOL];
 	double weight;
-	uint32_t frequency;
+	guint32 frequency;
 	double avg_time;
 };
 
 struct dynamic_map_item {
 	struct in_addr addr;
-	uint32_t mask;
+	guint32 mask;
 	gboolean negative;
 };
 
@@ -30,7 +30,7 @@ struct cache_item {
 
 	/* For dynamic rules */
 	struct dynamic_map_item *networks;
-	uint32_t networks_number;
+	guint32 networks_number;
 	gboolean is_dynamic;
 	
 	/* Callback data */
@@ -66,7 +66,7 @@ struct symbols_cache {
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, struct config_file *cfg, const char *filename);
+gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, struct config_file *cfg, const gchar *filename);
 
 /**
  * Register function for symbols parsing
@@ -74,7 +74,7 @@ gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, s
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, gpointer user_data);
+void register_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data);
 
 /**
  * Register function for dynamic symbols parsing
@@ -82,7 +82,7 @@ void register_symbol (struct symbols_cache **cache, const char *name, double wei
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_dynamic_symbol (memory_pool_t *pool, struct symbols_cache **cache, const char *name, 
+void register_dynamic_symbol (memory_pool_t *pool, struct symbols_cache **cache, const gchar *name, 
 						double weight, symbol_func_t func, 
 						gpointer user_data, GList *networks);
 

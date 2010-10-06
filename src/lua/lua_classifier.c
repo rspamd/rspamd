@@ -48,7 +48,7 @@ static const struct luaL_reg    statfilelib_m[] = {
 
 struct classifier_callback_data {
 	lua_State *L;
-	const char *name;
+	const gchar *name;
 };
 
 static struct statfile* lua_check_statfile (lua_State * L);
@@ -73,7 +73,7 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 	struct classifier_config      **pccf;
 	struct worker_task            **ptask;
 	struct statfile                *st;
-	int                             i, len;
+	gint                            i, len;
 
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
@@ -153,12 +153,12 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 
 }
 
-static int
+static gint
 lua_classifier_register_pre_callback (lua_State *L)
 {
 	struct classifier_config       *ccf = lua_check_classifier (L);
 	struct classifier_callback_data *cd;
-	const char                     *name;
+	const gchar                     *name;
 
 	if (ccf) {
 		name = luaL_checkstring (L, 2);
@@ -174,12 +174,12 @@ lua_classifier_register_pre_callback (lua_State *L)
 
 }
 
-static int
+static gint
 lua_classifier_register_post_callback (lua_State *L)
 {
 	struct classifier_config       *ccf = lua_check_classifier (L);
 	struct classifier_callback_data *cd;
-	const char                     *name;
+	const gchar                     *name;
 
 	if (ccf) {
 		name = luaL_checkstring (L, 2);
@@ -195,7 +195,7 @@ lua_classifier_register_post_callback (lua_State *L)
 }
 
 /* Return table of statfiles indexed by theirs name */
-static int
+static gint
 lua_classifier_get_statfiles (lua_State *L)
 {
 	struct classifier_config       *ccf = lua_check_classifier (L);
@@ -237,7 +237,7 @@ lua_check_statfile (lua_State * L)
 
 /* Open functions */
 
-int
+gint
 luaopen_classifier (lua_State * L)
 {
 	lua_newclass (L, "rspamd{classifier}", classifierlib_m);
@@ -246,7 +246,7 @@ luaopen_classifier (lua_State * L)
 	return 1;
 }
 
-int
+gint
 luaopen_statfile (lua_State * L)
 {
 	lua_newclass (L, "rspamd{statfile}", statfilelib_m);

@@ -62,9 +62,9 @@ enum radix_insert_type {
 };
 
 static uintptr_t
-radix32tree_insert_common (radix_tree_t * tree, uint32_t key, uint32_t mask, uintptr_t value, enum radix_insert_type type)
+radix32tree_insert_common (radix_tree_t * tree, guint32 key, guint32 mask, uintptr_t value, enum radix_insert_type type)
 {
-	uint32_t                        bit;
+	guint32                         bit;
 	radix_node_t                   *node, *next;
 
 	bit = 0x80000000;
@@ -137,32 +137,32 @@ radix32tree_insert_common (radix_tree_t * tree, uint32_t key, uint32_t mask, uin
 	return 0;
 }
 
-int 
-radix32tree_insert (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value)
+gint 
+radix32tree_insert (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value)
 {
-	return (int)radix32tree_insert_common (tree, key, mask, value, RADIX_INSERT);
+	return (gint)radix32tree_insert_common (tree, key, mask, value, RADIX_INSERT);
 }
 
 uintptr_t 
-radix32tree_add (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value)
+radix32tree_add (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value)
 {
 	return radix32tree_insert_common (tree, key, mask, value, RADIX_ADD);
 }
 
-int 
-radix32tree_replace (radix_tree_t *tree, uint32_t key, uint32_t mask, uintptr_t value)
+gint 
+radix32tree_replace (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value)
 {
-	return (int)radix32tree_insert_common (tree, key, mask, value, RADIX_REPLACE);
+	return (gint)radix32tree_insert_common (tree, key, mask, value, RADIX_REPLACE);
 }
 
 /*
  * per recursion step:
- * ptr + ptr + ptr + int = 4 words
+ * ptr + ptr + ptr + gint = 4 words
  * result = 1 word
  * 5 words total in stack
  */
 static gboolean
-radix_recurse_nodes (radix_node_t *node, radix_tree_traverse_func func, void *user_data, int level)
+radix_recurse_nodes (radix_node_t *node, radix_tree_traverse_func func, void *user_data, gint level)
 {
 	if (node->left) {
 		if (radix_recurse_nodes (node->left, func, user_data, level + 1)) {
@@ -192,10 +192,10 @@ radix32tree_traverse (radix_tree_t *tree, radix_tree_traverse_func func, void *u
 }
 
 
-int
-radix32tree_delete (radix_tree_t * tree, uint32_t key, uint32_t mask)
+gint
+radix32tree_delete (radix_tree_t * tree, guint32 key, guint32 mask)
 {
-	uint32_t                        bit;
+	guint32                         bit;
 	radix_node_t                   *node;
 	radix_node_t                   *tmp;
 
@@ -257,9 +257,9 @@ radix32tree_delete (radix_tree_t * tree, uint32_t key, uint32_t mask)
 
 
 uintptr_t
-radix32tree_find (radix_tree_t * tree, uint32_t key)
+radix32tree_find (radix_tree_t * tree, guint32 key)
 {
-	uint32_t                        bit;
+	guint32                         bit;
 	uintptr_t                       value;
 	radix_node_t                   *node;
 
@@ -290,7 +290,7 @@ radix32tree_find (radix_tree_t * tree, uint32_t key)
 static void                    *
 radix_alloc (radix_tree_t * tree)
 {
-	char                           *p;
+	gchar                           *p;
 
 	p = memory_pool_alloc (tree->pool, sizeof (radix_node_t));
 

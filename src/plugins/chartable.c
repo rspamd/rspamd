@@ -43,8 +43,8 @@
 #define DEFAULT_THRESHOLD 0.1
 
 struct chartable_ctx {
-	int                             (*filter) (struct worker_task * task);
-	char                           *symbol;
+	gint                            (*filter) (struct worker_task * task);
+	gchar                           *symbol;
 	double                          threshold;
 
 	memory_pool_t                  *chartable_pool;
@@ -52,10 +52,10 @@ struct chartable_ctx {
 
 static struct chartable_ctx    *chartable_module_ctx = NULL;
 
-static int                      chartable_mime_filter (struct worker_task *task);
+static gint                      chartable_mime_filter (struct worker_task *task);
 static void                     chartable_symbol_callback (struct worker_task *task, void *unused);
 
-int
+gint
 chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
@@ -69,11 +69,11 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 }
 
 
-int
+gint
 chartable_module_config (struct config_file *cfg)
 {
-	char                           *value;
-	int                             res = TRUE;
+	gchar                           *value;
+	gint                            res = TRUE;
 
 	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {
 		chartable_module_ctx->symbol = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
@@ -98,7 +98,7 @@ chartable_module_config (struct config_file *cfg)
 	return res;
 }
 
-int
+gint
 chartable_module_reconfig (struct config_file *cfg)
 {
 	memory_pool_delete (chartable_module_ctx->chartable_pool);
@@ -110,11 +110,11 @@ chartable_module_reconfig (struct config_file *cfg)
 static                          gboolean
 check_part (struct mime_text_part *part, gboolean raw_mode)
 {
-	unsigned char                  *p, *p1;
+	guchar                          *p, *p1;
 	gunichar                        c, t;
 	GUnicodeScript                  scc, sct;
-	uint32_t                        mark = 0, total = 0;
-	uint32_t                        remain = part->content->len;
+	guint32                         mark = 0, total = 0;
+	guint32                         remain = part->content->len;
 
 	p = part->content->data;
 
@@ -188,7 +188,7 @@ chartable_symbol_callback (struct worker_task *task, void *unused)
 
 }
 
-static int
+static gint
 chartable_mime_filter (struct worker_task *task)
 {
 	/* XXX: remove it */

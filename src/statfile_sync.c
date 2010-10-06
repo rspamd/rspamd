@@ -54,22 +54,22 @@ struct rspamd_sync_ctx {
 
 	struct timeval interval;
 	struct timeval io_tv;
-	int sock;
+	gint                            sock;
 	enum rspamd_sync_state state;
 	gboolean is_busy;
 
-	uint64_t new_rev;
-	uint64_t new_time;
-	uint64_t new_len;
+	guint64                         new_rev;
+	guint64                         new_time;
+	guint64                         new_len;
 };
 
 static void
-log_next_sync (const char *symbol, time_t delay)
+log_next_sync (const gchar *symbol, time_t delay)
 {
-	char outstr[200];
+	gchar                           outstr[200];
     time_t t;
 	struct tm *tmp;
-	int r;
+	gint                            r;
 
 	t = time(NULL);
 	t += delay;
@@ -86,9 +86,9 @@ log_next_sync (const char *symbol, time_t delay)
 static                          gboolean
 parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 {
-	int i, state = 0;
-	char *p, *c, numbuf[sizeof("18446744073709551615")];
-	uint64_t *val;
+	gint                            i, state = 0;
+	gchar                           *p, *c, numbuf[sizeof("18446744073709551615")];
+	guint64                         *val;
 
 	/* First of all try to find END line */
 	if (in->len >= sizeof ("END") - 1 && memcmp (in->begin, "END", sizeof ("END") - 1) == 0) {
@@ -150,7 +150,7 @@ static                          gboolean
 read_blocks (struct rspamd_sync_ctx *ctx, f_str_t *in)
 {
 	struct rspamd_binlog_element *elt;
-	int                           i;
+	gint                            i;
 	
 	statfile_pool_lock_file (ctx->pool, ctx->real_statfile);
 	elt = (struct rspamd_binlog_element *)in->begin;
@@ -166,8 +166,8 @@ static                          gboolean
 sync_read (f_str_t * in, void *arg)
 {
 	struct rspamd_sync_ctx *ctx = arg;
-	char                    buf[256];
-	uint64_t                rev = 0;
+	gchar                           buf[256];
+	guint64                         rev = 0;
 	time_t                  ti = 0;
 
 	if (in->len == 0) {
@@ -179,14 +179,14 @@ sync_read (f_str_t * in, void *arg)
 			/* Skip greeting line and write sync command */
 			/* Write initial data */
 			statfile_get_revision (ctx->real_statfile, &rev, &ti);
-			rev = rspamd_snprintf (buf, sizeof (buf), "sync %s %l %l" CRLF, ctx->st->symbol, (long int)rev, (long int)ti);
+			rev = rspamd_snprintf (buf, sizeof (buf), "sync %s %uL %T" CRLF, ctx->st->symbol, rev, ti);
 			ctx->state = SYNC_STATE_READ_LINE;
 			return rspamd_dispatcher_write (ctx->dispatcher, buf, rev, FALSE, FALSE);	
 			break;
 		case SYNC_STATE_READ_LINE:
 			/* Try to parse line from server */
 			if (!parse_revision_line (ctx, in)) {
-				msg_info ("cannot parse line of length %z: '%*s'", in->len, (int)in->len, in->begin);
+				msg_info ("cannot parse line of length %z: '%*s'", in->len, (gint)in->len, in->begin);
 				close (ctx->sock);
 				rspamd_remove_dispatcher (ctx->dispatcher);
 				ctx->is_busy = FALSE;
@@ -216,7 +216,7 @@ sync_read (f_str_t * in, void *arg)
 				return FALSE;
 			}
 			statfile_set_revision (ctx->real_statfile, ctx->new_rev, ctx->new_time);
-			msg_info ("set new revision: %ul, readed %ul bytes", (long unsigned)ctx->new_rev, (long unsigned)in->len);
+			msg_info ("set new revision: %uL, readed %z bytes", ctx->new_rev, in->len);
 			/* Now try to read other revision or END line */
 			ctx->state = SYNC_STATE_READ_LINE;
 			rspamd_set_dispatcher_policy (ctx->dispatcher, BUFFER_LINE, 0);
@@ -244,7 +244,7 @@ sync_err (GError *err, void *arg)
 
 
 static void
-sync_timer_callback (int fd, short what, void *ud)
+sync_timer_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_sync_ctx *ctx = ud;
 	

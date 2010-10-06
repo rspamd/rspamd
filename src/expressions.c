@@ -54,7 +54,7 @@ gboolean                        rspamd_has_fake_html (struct worker_task *task, 
  * Sorted by name to use bsearch
  */
 static struct _fl {
-	const char                     *name;
+	const gchar                     *name;
 	rspamd_internal_func_t          func;
 	void                           *user_data;
 } rspamd_functions_list[] = {
@@ -77,11 +77,11 @@ static struct _fl {
 	"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},};
 
 static struct _fl              *list_ptr = &rspamd_functions_list[0];
-static uint32_t                 functions_number = sizeof (rspamd_functions_list) / sizeof (struct _fl);
+static guint32                 functions_number = sizeof (rspamd_functions_list) / sizeof (struct _fl);
 static gboolean                 list_allocated = FALSE;
 
 /* Bsearch routine */
-static int
+static gint
 fl_cmp (const void *s1, const void *s2)
 {
 	struct _fl                     *fl1 = (struct _fl *)s1;
@@ -91,7 +91,7 @@ fl_cmp (const void *s1, const void *s2)
 
 /* Cache for regular expressions that are used in functions */
 void                           *
-re_cache_check (const char *line, memory_pool_t *pool)
+re_cache_check (const gchar *line, memory_pool_t *pool)
 {
 	GHashTable              *re_cache;
 	
@@ -106,7 +106,7 @@ re_cache_check (const char *line, memory_pool_t *pool)
 }
 
 void
-re_cache_add (char *line, void *pointer, memory_pool_t *pool)
+re_cache_add (gchar *line, void *pointer, memory_pool_t *pool)
 {
 	GHashTable              *re_cache;
 	
@@ -122,7 +122,7 @@ re_cache_add (char *line, void *pointer, memory_pool_t *pool)
 
 /* Task cache functions */
 void
-task_cache_add (struct worker_task *task, struct rspamd_regexp *re, int32_t result)
+task_cache_add (struct worker_task *task, struct rspamd_regexp *re, gint32 result)
 {
 	if (result == 0) {
 		result = -1;
@@ -131,11 +131,11 @@ task_cache_add (struct worker_task *task, struct rspamd_regexp *re, int32_t resu
 	g_hash_table_insert (task->re_cache, re->regexp_text, GINT_TO_POINTER (result));
 }
 
-int32_t
+gint32
 task_cache_check (struct worker_task *task, struct rspamd_regexp *re)
 {
 	gpointer                        res;
-	int32_t                         r;
+	gint32                          r;
 
 	if ((res = g_hash_table_lookup (task->re_cache, re->regexp_text)) != NULL) {
 		r = GPOINTER_TO_INT (res);
@@ -151,7 +151,7 @@ task_cache_check (struct worker_task *task, struct rspamd_regexp *re)
  * Functions for parsing expressions
  */
 struct expression_stack {
-	char                            op;
+	gchar                           op;
 	struct expression_stack        *next;
 };
 
@@ -159,7 +159,7 @@ struct expression_stack {
  * Push operand or operator to stack  
  */
 static struct expression_stack *
-push_expression_stack (memory_pool_t * pool, struct expression_stack *head, char op)
+push_expression_stack (memory_pool_t * pool, struct expression_stack *head, gchar op)
 {
 	struct expression_stack        *new;
 	new = memory_pool_alloc (pool, sizeof (struct expression_stack));
@@ -171,11 +171,11 @@ push_expression_stack (memory_pool_t * pool, struct expression_stack *head, char
 /*
  * Delete symbol from stack, return pointer to operand or operator (casted to void* )
  */
-static char
+static gchar
 delete_expression_stack (struct expression_stack **head)
 {
 	struct expression_stack        *cur;
-	char                            res;
+	gchar                           res;
 
 	if (*head == NULL)
 		return 0;
@@ -190,8 +190,8 @@ delete_expression_stack (struct expression_stack **head)
 /*
  * Return operation priority
  */
-static int
-logic_priority (char a)
+static gint
+logic_priority (gchar a)
 {
 	switch (a) {
 	case '!':
@@ -211,7 +211,7 @@ logic_priority (char a)
  * Return TRUE if symbol is operation symbol
  */
 static                          gboolean
-is_operation_symbol (char a)
+is_operation_symbol (gchar a)
 {
 	switch (a) {
 	case '!':
@@ -229,7 +229,7 @@ is_operation_symbol (char a)
  * Return TRUE if symbol can be regexp flag
  */
 static                          gboolean
-is_regexp_flag (char a)
+is_regexp_flag (gchar a)
 {
 	switch (a) {
 	case 'i':
@@ -252,7 +252,7 @@ is_regexp_flag (char a)
 }
 
 static void
-insert_expression (memory_pool_t * pool, struct expression **head, int type, char op, void *operand, const char *orig)
+insert_expression (memory_pool_t * pool, struct expression **head, gint type, gchar op, void *operand, const gchar *orig)
 {
 	struct expression              *new, *cur;
 
@@ -280,10 +280,10 @@ insert_expression (memory_pool_t * pool, struct expression **head, int type, cha
 }
 
 static struct expression       *
-maybe_parse_expression (memory_pool_t * pool, char *line)
+maybe_parse_expression (memory_pool_t * pool, gchar *line)
 {
 	struct expression              *expr;
-	char                           *p = line;
+	gchar                           *p = line;
 
 	while (*p) {
 		if (is_operation_symbol (*p)) {
@@ -305,16 +305,16 @@ maybe_parse_expression (memory_pool_t * pool, char *line)
  * Memory is allocated from given pool
  */
 struct expression              *
-parse_expression (memory_pool_t * pool, char *line)
+parse_expression (memory_pool_t * pool, gchar *line)
 {
 	struct expression              *expr = NULL;
 	struct expression_stack        *stack = NULL;
 	struct expression_function     *func = NULL, *old;
 	struct expression              *arg;
 	GQueue                         *function_stack;
-	char                           *p, *c, *str, op, *copy;
+	gchar                           *p, *c, *str, op, *copy;
 	gboolean                        in_regexp = FALSE;
-	int                             brackets = 0;
+	gint                            brackets = 0;
 
 	enum {
 		SKIP_SPACES,
@@ -544,11 +544,11 @@ parse_expression (memory_pool_t * pool, char *line)
  * Rspamd regexp utility functions
  */
 struct rspamd_regexp           *
-parse_regexp (memory_pool_t * pool, char *line, gboolean raw_mode)
+parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 {
-	char                           *begin, *end, *p, *src, *start;
+	gchar                           *begin, *end, *p, *src, *start;
 	struct rspamd_regexp           *result, *check;
-	int                             regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
+	gint                            regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
 	GError                         *err = NULL;
 
 	src = line;
@@ -854,7 +854,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 }
 
 void
-register_expression_function (const char *name, rspamd_internal_func_t func, void *user_data)
+register_expression_function (const gchar *name, rspamd_internal_func_t func, void *user_data)
 {
 	static struct _fl              *new;
 
@@ -909,8 +909,8 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	debug_task ("try to get header %s", (char *)arg->data);
-	headerlist = message_get_header (task->task_pool, task->message, (char *)arg->data);
+	debug_task ("try to get header %s", (gchar *)arg->data);
+	headerlist = message_get_header (task->task_pool, task->message, (gchar *)arg->data);
 	if (headerlist) {
 		g_list_free (headerlist);
 		return TRUE;
@@ -927,7 +927,7 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 gboolean
 rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 {
-	int                             threshold, diff;
+	gint                            threshold, diff;
 	struct mime_text_part          *p1, *p2;
 	GList                          *cur;
 	struct expression_argument     *arg;
@@ -942,9 +942,9 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 	else {
 		errno = 0;
 		arg = get_function_arg (args->data, task, TRUE);
-		threshold = strtoul ((char *)arg->data, NULL, 10);
+		threshold = strtoul ((gchar *)arg->data, NULL, 10);
 		if (errno != 0) {
-			msg_info ("bad numeric value for threshold \"%s\", assume it 100", (char *)args->data);
+			msg_info ("bad numeric value for threshold \"%s\", assume it 100", (gchar *)args->data);
 			threshold = 100;
 		}
 	}
@@ -998,13 +998,13 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 gboolean
 rspamd_content_type_compare_param (struct worker_task * task, GList * args, void *unused)
 {
-	char                           *param_name, *param_pattern;
-	const char                     *param_data;
+	gchar                           *param_name, *param_pattern;
+	const gchar                     *param_data;
 	struct rspamd_regexp           *re;
 	struct expression_argument     *arg;
 	GMimeObject                    *part;
 	const GMimeContentType         *ct;
-	int                             r;
+	gint                            r;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1066,8 +1066,8 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 gboolean
 rspamd_content_type_has_param (struct worker_task * task, GList * args, void *unused)
 {
-	char                           *param_name;
-	const char                     *param_data;
+	gchar                           *param_name;
+	const gchar                     *param_data;
 	struct expression_argument     *arg;
 	GMimeObject                    *part;
 	const GMimeContentType         *ct;
@@ -1098,12 +1098,12 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 gboolean
 rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *unused)
 {
-	char                           *param_pattern;
+	gchar                           *param_pattern;
 	struct rspamd_regexp           *re;
 	struct expression_argument     *arg;
 	GMimeObject                    *part;
 	GMimeContentType               *ct;
-	int                             r;
+	gint                            r;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1158,12 +1158,12 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 gboolean
 rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unused)
 {
-	char                           *param_pattern;
+	gchar                           *param_pattern;
 	struct rspamd_regexp           *re;
 	GMimeObject                    *part;
 	GMimeContentType               *ct;
 	struct expression_argument     *arg;
-	int                             r;
+	gint                            r;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1217,8 +1217,8 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 }
 
 struct addr_list {
-	const char                     *name;
-	const char                     *addr;
+	const gchar                     *name;
+	const gchar                     *addr;
 };
 
 #define COMPARE_RCPT_LEN 3
@@ -1232,8 +1232,8 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 	InternetAddress                *addr;
 	double                          threshold;
 	struct addr_list               *ar;
-	char                           *c;
-	int                             num, i, j, hits = 0, total = 0;
+	gchar                           *c;
+	gint                            num, i, j, hits = 0, total = 0;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1242,9 +1242,9 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 
 	arg = get_function_arg (args->data, task, TRUE);
 	errno = 0;
-	threshold = strtod ((char *)arg->data, NULL);
+	threshold = strtod ((gchar *)arg->data, NULL);
 	if (errno != 0) {
-		msg_warn ("invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+		msg_warn ("invalid numeric value '%s': %s", (gchar *)arg->data, strerror (errno));
 		return FALSE;
 	}
 
@@ -1338,7 +1338,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 	struct addr_list                current = { NULL, NULL }, previous = {
 	NULL, NULL};
 #ifdef GMIME24
-	int                             num, i;
+	gint                            num, i;
 #endif
 
 	/* Do not check to short address lists */
@@ -1350,7 +1350,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 	cur = ia;
 	for (i = 0; i < num; i ++) {
 		addr = internet_address_list_get_address ((InternetAddressList *)cur, i);
-		current.addr = (char *)internet_address_get_name (addr);
+		current.addr = (gchar *)internet_address_get_name (addr);
 		if (previous.addr != NULL) {
 			if (current.addr && g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
 				res = FALSE;
@@ -1398,10 +1398,10 @@ rspamd_is_recipients_sorted (struct worker_task * task, GList * args, void *unus
 }
 
 static inline                   gboolean
-compare_subtype (struct worker_task *task, GMimeContentType * ct, char *subtype)
+compare_subtype (struct worker_task *task, GMimeContentType * ct, gchar *subtype)
 {
 	struct rspamd_regexp           *re;
-	int                             r;
+	gint                            r;
 
 	if (*subtype == '/') {
 		/* This is regexp, so compile and create g_regexp object */
@@ -1435,7 +1435,7 @@ compare_subtype (struct worker_task *task, GMimeContentType * ct, char *subtype)
 }
 
 static inline                   gboolean
-compare_len (struct mime_part *part, int min, int max)
+compare_len (struct mime_part *part, gint min, gint max)
 {
 	if (min == 0 && max == 0) {
 		return TRUE;
@@ -1453,13 +1453,13 @@ compare_len (struct mime_part *part, int min, int max)
 }
 
 gboolean
-common_has_content_part (struct worker_task * task, char *param_type, char *param_subtype, int min_len, int max_len)
+common_has_content_part (struct worker_task * task, gchar *param_type, gchar *param_subtype, gint min_len, gint max_len)
 {
 	struct rspamd_regexp           *re;
 	struct mime_part               *part;
 	GList                          *cur;
 	GMimeContentType               *ct;
-	int                             r;
+	gint                            r;
 
 	cur = g_list_first (task->parts);
 	while (cur) {
@@ -1537,7 +1537,7 @@ common_has_content_part (struct worker_task * task, char *param_type, char *para
 gboolean
 rspamd_has_content_part (struct worker_task * task, GList * args, void *unused)
 {
-	char                           *param_type = NULL, *param_subtype = NULL;
+	gchar                           *param_type = NULL, *param_subtype = NULL;
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
@@ -1559,8 +1559,8 @@ rspamd_has_content_part (struct worker_task * task, GList * args, void *unused)
 gboolean
 rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unused)
 {
-	char                           *param_type = NULL, *param_subtype = NULL;
-	int                             min = 0, max = 0;
+	gchar                           *param_type = NULL, *param_subtype = NULL;
+	gint                            min = 0, max = 0;
 	struct expression_argument     *arg;
 
 	if (args == NULL) {
@@ -1580,7 +1580,7 @@ rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unus
 			errno = 0;
 			min = strtoul (arg->data, NULL, 10);
 			if (errno != 0) {
-				msg_warn ("invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+				msg_warn ("invalid numeric value '%s': %s", (gchar *)arg->data, strerror (errno));
 				return FALSE;
 			}
 			args = args->next;
@@ -1588,7 +1588,7 @@ rspamd_has_content_part_len (struct worker_task * task, GList * args, void *unus
 				arg = get_function_arg (args->data, task, TRUE);
 				max = strtoul (arg->data, NULL, 10);
 				if (errno != 0) {
-					msg_warn ("invalid numeric value '%s': %s", (char *)arg->data, strerror (errno));
+					msg_warn ("invalid numeric value '%s': %s", (gchar *)arg->data, strerror (errno));
 					return FALSE;
 				}
 			}
@@ -1622,7 +1622,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 	enc_req = g_mime_content_encoding_from_string (arg->data);
 	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
 #endif
-		msg_warn ("bad encoding type: %s", (char *)arg->data);
+		msg_warn ("bad encoding type: %s", (gchar *)arg->data);
 		return FALSE;
 	}
 
@@ -1644,7 +1644,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 #endif
 
 
-			debug_task ("got encoding in part: %d and compare with %d", (int)part_enc, (int)enc_req);
+			debug_task ("got encoding in part: %d and compare with %d", (gint)part_enc, (gint)enc_req);
 #ifndef GMIME24
 			g_object_unref (part);
 #endif
@@ -1725,7 +1725,7 @@ rspamd_has_html_tag (struct worker_task * task, GList * args, void *unused)
 	arg = get_function_arg (args->data, task, TRUE);
 	tag = get_tag_by_name (arg->data);
 	if (tag == NULL) {
-		msg_warn ("unknown tag type passed as argument: %s", (char *)arg->data);
+		msg_warn ("unknown tag type passed as argument: %s", (gchar *)arg->data);
 		return FALSE;
 	}
 

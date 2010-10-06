@@ -58,18 +58,18 @@ static f_str_t                  data_dot = {
 	.len = sizeof (".\r\n") - 1
 };
 
-static const char              *mail_regexp = "[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+static const gchar              *mail_regexp = "[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
 static GRegex                  *mail_re = NULL;
 
 /*
  * Extract e-mail from read line 
  * return <> if no valid address detected
  */
-static char                    *
+static gchar                    *
 extract_mail (memory_pool_t * pool, f_str_t * line)
 {
 	GError                         *err = NULL;
-	char                           *match;
+	gchar                           *match;
 	GMatchInfo                     *info;
 
 	if (mail_re == NULL) {
@@ -89,10 +89,10 @@ extract_mail (memory_pool_t * pool, f_str_t * line)
 }
 
 static gboolean
-out_lmtp_reply (struct worker_task *task, int code, char *rcode, char *msg)
+out_lmtp_reply (struct worker_task *task, gint code, gchar *rcode, gchar *msg)
 {
-	char                            outbuf[OUTBUFSIZ];
-	int                             r;
+	gchar                           outbuf[OUTBUFSIZ];
+	gint                            r;
 
 	if (*rcode == '\0') {
 		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "%d %s\r\n", code, msg);
@@ -106,12 +106,12 @@ out_lmtp_reply (struct worker_task *task, int code, char *rcode, char *msg)
 	return TRUE;
 }
 
-int
+gint
 read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 {
-	char                           *c, *rcpt;
+	gchar                           *c, *rcpt;
 	f_str_t                         fstr;
-	unsigned int                    i = 0, l = 0, size;
+	guint                           i = 0, l = 0, size;
 
 	switch (lmtp->state) {
 	case LMTP_READ_LHLO:
@@ -267,7 +267,7 @@ struct mta_callback_data {
 static                          gboolean
 parse_mta_str (f_str_t * in, struct mta_callback_data *cd)
 {
-	int                             r;
+	gint                            r;
 	static f_str_t                  okres1 = {
 		.begin = "250 ",
 		.len = sizeof ("250 ") - 1,
@@ -320,8 +320,8 @@ static                          gboolean
 mta_read_socket (f_str_t * in, void *arg)
 {
 	struct mta_callback_data       *cd = (struct mta_callback_data *)arg;
-	char                            outbuf[1024], *hostbuf, *c;
-	int                             hostmax, r;
+	gchar                           outbuf[1024], *hostbuf, *c;
+	gint                            hostmax, r;
 	GList                          *cur;
 	static f_str_t                  contres1 = {
 		.begin = "250-",
@@ -378,7 +378,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		cur = g_list_first (cd->task->rcpt);
 		r = 0;
 		while (cur) {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "RCPT TO: <%s>" CRLF, (char *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "RCPT TO: <%s>" CRLF, (gchar *)cur->data);
 			cur = g_list_next (cur);
 		}
 
@@ -443,10 +443,10 @@ mta_err_socket (GError * err, void *arg)
 /*
  * Deliver mail via smtp or lmtp
  */
-static int
+static gint
 lmtp_deliver_mta (struct worker_task *task)
 {
-	int                             sock;
+	gint                            sock;
 	struct sockaddr_un             *un;
 	struct mta_callback_data       *cd;
 
@@ -468,10 +468,10 @@ lmtp_deliver_mta (struct worker_task *task)
 	return 0;
 }
 
-static char                    *
+static gchar                    *
 format_lda_args (struct worker_task *task)
 {
-	char                           *res, *c, *r;
+	gchar                           *res, *c, *r;
 	size_t                          len;
 	GList                          *rcpt;
 	gboolean                        got_args = FALSE;
@@ -497,7 +497,7 @@ format_lda_args (struct worker_task *task)
 				rcpt = g_list_first (task->rcpt);
 				len -= 2;
 				while (rcpt) {
-					len += strlen ((char *)rcpt->data) + 1;
+					len += strlen ((gchar *)rcpt->data) + 1;
 					rcpt = g_list_next (rcpt);
 				}
 				break;
@@ -528,7 +528,7 @@ format_lda_args (struct worker_task *task)
 				c += 2;
 				rcpt = g_list_first (task->rcpt);
 				while (rcpt) {
-					len = strlen ((char *)rcpt->data) + 1;
+					len = strlen ((gchar *)rcpt->data) + 1;
 					memcpy (r, rcpt->data, len);
 					r += len;
 					*r++ = ' ';
@@ -552,12 +552,12 @@ format_lda_args (struct worker_task *task)
 	return res;
 }
 
-static int
+static gint
 lmtp_deliver_lda (struct worker_task *task)
 {
-	char                           *args, **argv;
+	gchar                           *args, **argv;
 	GMimeStream                    *stream;
-	int                             rc, ecode, p[2], argc;
+	gint                            rc, ecode, p[2], argc;
 	pid_t                           cpid, pid;
 
 	if ((args = format_lda_args (task)) == NULL) {
@@ -649,7 +649,7 @@ lmtp_deliver_lda (struct worker_task *task)
 	return -1;
 }
 
-int
+gint
 lmtp_deliver_message (struct worker_task *task)
 {
 	if (task->cfg->deliver_agent_path != NULL) {
@@ -662,10 +662,10 @@ lmtp_deliver_message (struct worker_task *task)
 	}
 }
 
-int
+gint
 write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 {
-	int                             r;
+	gint                            r;
 	struct worker_task             *task = lmtp->task;
 
 	debug_task ("writing reply to client");

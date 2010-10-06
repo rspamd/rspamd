@@ -36,7 +36,7 @@ struct smtp_command {
 	GList *args;
 };
 
-char * make_smtp_error (struct smtp_session *session, int error_code, const char *format, ...);
+gchar * make_smtp_error (struct smtp_session *session, gint error_code, const gchar *format, ...);
 gboolean parse_smtp_command (struct smtp_session *session, f_str_t *line, struct smtp_command **cmd);
 gboolean parse_smtp_helo (struct smtp_session *session, struct smtp_command *cmd);
 gboolean parse_smtp_from (struct smtp_session *session, struct smtp_command *cmd);
@@ -47,6 +47,6 @@ gboolean smtp_upstream_read_socket (f_str_t * in, void *arg);
 gboolean smtp_upstream_write_socket (void *arg);
 void smtp_upstream_err_socket (GError *err, void *arg);
 void smtp_upstream_finalize_connection (gpointer data);
-size_t smtp_upstream_write_list (GList *args, char *buf, size_t buflen);
+size_t smtp_upstream_write_list (GList *args, gchar *buf, size_t buflen);
 
 #endif

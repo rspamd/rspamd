@@ -68,7 +68,7 @@ lua_process_module (lua_State *L, const gchar *param, struct config_file *cfg)
 {
 	GList                               *cur_opt;
 	struct module_opt                   *cur;
-	const char                          *name;
+	const gchar                          *name;
 	gboolean                             new_module = FALSE;
 
 	/* Get module opt structure */
@@ -95,10 +95,10 @@ lua_process_module (lua_State *L, const gchar *param, struct config_file *cfg)
 
 /* Process single element */
 void
-lua_process_element (struct config_file *cfg, const char *name, struct module_opt *opt, int idx) 
+lua_process_element (struct config_file *cfg, const gchar *name, struct module_opt *opt, gint idx) 
 {
 	lua_State                            *L = cfg->lua_state;
-	int                                   t;
+	gint                            t;
 	double                               *num;
 	gboolean                             *flag;
 	

@@ -85,11 +85,11 @@ do {														\
 } while (0)													\
 
 static gboolean parse_spf_record (struct worker_task *task, struct spf_record *rec);
-static void start_spf_parse (struct spf_record *rec, char *begin);
+static void start_spf_parse (struct spf_record *rec, gchar *begin);
 
 /* Determine spf mech */
 static spf_mech_t
-check_spf_mech (const char *elt, gboolean *need_shift)
+check_spf_mech (const gchar *elt, gboolean *need_shift)
 {
 	g_assert (elt != NULL);
 	
@@ -111,11 +111,11 @@ check_spf_mech (const char *elt, gboolean *need_shift)
 }
 
 static gboolean
-parse_spf_ipmask (const char *begin, struct spf_addr *addr)
+parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 {
-	const char *pos;
-	char ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
-	int state = 0, dots = 0;
+	const gchar *pos;
+	gchar                           ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
+	gint                            state = 0, dots = 0;
 	struct in_addr in;
 	
 	bzero (ip_buf, sizeof (ip_buf));
@@ -192,11 +192,11 @@ parse_spf_ipmask (const char *begin, struct spf_addr *addr)
 
 }
 
-static char *
-parse_spf_hostmask (struct worker_task *task, const char *begin, struct spf_addr *addr, struct spf_record *rec)
+static gchar *
+parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_addr *addr, struct spf_record *rec)
 {
-	char *host = NULL, *p,  mask_buf[3];
-	int hostlen;
+	gchar                           *host = NULL, *p,  mask_buf[3];
+	gint                            hostlen;
 
 	bzero (mask_buf, sizeof (mask_buf));
 	if (*begin == '\0' || *begin == '/') {
@@ -231,7 +231,7 @@ static void
 spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct spf_dns_cb *cb = arg;
-	char *begin;
+	gchar                           *begin;
 	union rspamd_reply_element *elt_data;
 	GList *tmp = NULL, *tmp1, *elt, *last;
 	struct worker_task *task;
@@ -385,10 +385,10 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 }
 
 static gboolean
-parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_a (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	char *host;
+	gchar                           *host;
 	
 	CHECK_REC (rec);
 	
@@ -420,7 +420,7 @@ parse_spf_a (struct worker_task *task, const char *begin, struct spf_record *rec
 }
 
 static gboolean
-parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ptr (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	CHECK_REC (rec);
 	
@@ -429,10 +429,10 @@ parse_spf_ptr (struct worker_task *task, const char *begin, struct spf_record *r
 }
 
 static gboolean
-parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_mx (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	char *host;
+	gchar                           *host;
 	
 	CHECK_REC (rec);
 	
@@ -465,7 +465,7 @@ parse_spf_mx (struct worker_task *task, const char *begin, struct spf_record *re
 }
 
 static gboolean
-parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_all (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	/* All is 0/0 */
 	if (rec->in_include) {
@@ -482,7 +482,7 @@ parse_spf_all (struct worker_task *task, const char *begin, struct spf_record *r
 }
 
 static gboolean
-parse_spf_ip4 (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ip4 (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip4:addr[/mask] */
 
@@ -491,10 +491,10 @@ parse_spf_ip4 (struct worker_task *task, const char *begin, struct spf_record *r
 }
 
 static gboolean
-parse_spf_include (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_include (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	char              *domain;
+	gchar                           *domain;
 
 	CHECK_REC (rec);
 
@@ -521,7 +521,7 @@ parse_spf_include (struct worker_task *task, const char *begin, struct spf_recor
 }
 
 static gboolean
-parse_spf_exp (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_exp (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	CHECK_REC (rec);
 
@@ -530,10 +530,10 @@ parse_spf_exp (struct worker_task *task, const char *begin, struct spf_record *r
 }
 
 static gboolean
-parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_redirect (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	char              *domain;
+	gchar                           *domain;
 
 	CHECK_REC (rec);
 
@@ -559,10 +559,10 @@ parse_spf_redirect (struct worker_task *task, const char *begin, struct spf_reco
 }
 
 static gboolean
-parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_exists (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	char              *host;
+	gchar                           *host;
 
 	CHECK_REC (rec);
 	
@@ -590,10 +590,10 @@ parse_spf_exists (struct worker_task *task, const char *begin, struct spf_record
 }
 
 static void
-reverse_spf_ip (char *ip, int len)
+reverse_spf_ip (gchar *ip, gint len)
 {
-	char ipbuf[sizeof("255.255.255.255") - 1], *p, *c;
-	int t = 0, l = len;
+	gchar                           ipbuf[sizeof("255.255.255.255") - 1], *p, *c;
+	gint                            t = 0, l = len;
 
 	if (len > sizeof (ipbuf)) {
 		msg_info ("cannot reverse string of length %d", len);
@@ -621,11 +621,11 @@ reverse_spf_ip (char *ip, int len)
 	memcpy (ip, ipbuf, len);
 }
 
-static char *
-expand_spf_macro (struct worker_task *task, struct spf_record *rec, char *begin)
+static gchar *
+expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin)
 {
-	char *p, *c, *new, *tmp;
-	int len = 0, slen = 0, state = 0;
+	gchar                           *p, *c, *new, *tmp;
+	gint                            len = 0, slen = 0, state = 0;
 	gboolean need_expand = FALSE;
 
 	p = begin;
@@ -856,7 +856,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 {
 	struct spf_addr *new = NULL;
 	gboolean need_shift, res = FALSE;
-	char *begin;
+	gchar                           *begin;
 	
 	rec->cur_elt = rec->elts[rec->elt_num];
 	if (rec->cur_elt == NULL) {
@@ -978,7 +978,7 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 #undef NEW_ADDR
 
 static void
-parse_spf_scopes (struct spf_record *rec, char **begin)
+parse_spf_scopes (struct spf_record *rec, gchar **begin)
 {
 	for (;;) {
 		if (g_ascii_strncasecmp (*begin, SPF_SCOPE_PRA, sizeof (SPF_SCOPE_PRA) - 1) == 0) {
@@ -1000,7 +1000,7 @@ parse_spf_scopes (struct spf_record *rec, char **begin)
 }
 
 static void
-start_spf_parse (struct spf_record *rec, char *begin)
+start_spf_parse (struct spf_record *rec, gchar *begin)
 {
 	/* Skip spaces */
 	while (g_ascii_isspace (*begin)) {
@@ -1080,7 +1080,7 @@ gboolean
 resolve_spf (struct worker_task *task, spf_cb_t callback)
 {
 	struct spf_record *rec;
-	char *domain;
+	gchar                           *domain;
 	GList *domains;
 
 	rec = memory_pool_alloc0 (task->task_pool, sizeof (struct spf_record));

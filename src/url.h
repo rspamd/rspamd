@@ -10,39 +10,39 @@ struct mime_text_part;
 
 struct uri {
 	/* The start of the uri (and thus start of the protocol string). */
-	unsigned char *string;
+	gchar *string;
 
 	/* The internal type of protocol. Can _never_ be PROTOCOL_UNKNOWN. */
-	int protocol; /* enum protocol */
+	gint protocol; /* enum protocol */
 
-	int ip_family;
+	gint ip_family;
 
-	unsigned char *user;
-	unsigned char *password;
-	unsigned char *host;
-	unsigned char *port;
+	gchar *user;
+	gchar *password;
+	gchar *host;
+	gchar *port;
 	/* @data can contain both the path and query uri fields.
 	 * It can never be NULL but can have zero length. */
-	unsigned char *data;
-	unsigned char *fragment;
+	gchar *data;
+	gchar *fragment;
 	/* @post can contain some special encoded form data, used internally
 	 * to make form data handling more efficient. The data is marked by
 	 * POST_CHAR in the uri string. */
-	unsigned char *post;
+	gchar *post;
 
 	/* @protocollen should only be usable if @protocol is either
 	 * PROTOCOL_USER or an uri string should be composed. */
-	unsigned int protocollen;
-	unsigned int userlen;
-	unsigned int passwordlen;
-	unsigned int hostlen;
-	unsigned int portlen;
-	unsigned int datalen;
-	unsigned int fragmentlen;
+	guint protocollen;
+	guint userlen;
+	guint passwordlen;
+	guint hostlen;
+	guint portlen;
+	guint datalen;
+	guint fragmentlen;
 
 	/* Flags */
-	unsigned int ipv6;	/* URI contains IPv6 host */
-	unsigned int form;	/* URI originated from form */
+	guint ipv6;	/* URI contains IPv6 host */
+	guint form;	/* URI originated from form */
 };
 
 enum uri_errno {
@@ -72,6 +72,6 @@ enum protocol {
 #define struri(uri) ((uri)->string)
 
 void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
-enum uri_errno parse_uri(struct uri *uri, unsigned char *uristring, memory_pool_t *pool);
+enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool);
 
 #endif

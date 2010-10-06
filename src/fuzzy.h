@@ -13,11 +13,11 @@
 #define FUZZY_HASHLEN 64
 
 typedef struct fuzzy_hash_s {
-	char hash_pipe[FUZZY_HASHLEN];			/**< result hash					*/
-	uint32_t block_size;					/**< current blocksize				*/
-	uint32_t rh;							/**< roll hash value				*/
-	uint32_t h;								/**< hash of block					*/
-	uint32_t hi;							/**< current index in hash pipe		*/
+	gchar hash_pipe[FUZZY_HASHLEN];			/**< result hash					*/
+	guint32 block_size;					/**< current blocksize				*/
+	guint32 rh;							/**< roll hash value				*/
+	guint32 h;								/**< hash of block					*/
+	guint32 hi;							/**< current index in hash pipe		*/
 } fuzzy_hash_t;
 
 /**
@@ -35,9 +35,9 @@ fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
  * @param h2 second hash
  * @return result in percents 0 - different hashes, 100 - identical hashes 
  */
-int fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2);
+gint fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2);
 
-uint32_t lev_distance (char *s1, int len1, char *s2, int len2);
+guint32 lev_distance (gchar *s1, gint len1, gchar *s2, gint len2);
 
 
 #endif

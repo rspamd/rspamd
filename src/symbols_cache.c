@@ -42,10 +42,10 @@
 
 #define MIN_CACHE 17
 
-static uint64_t                 total_frequency = 0;
-static uint32_t                 nsymbols = 0;
+static guint64                 total_frequency = 0;
+static guint32                 nsymbols = 0;
 
-int
+gint
 cache_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item        *i1 = p1, *i2 = p2;
@@ -53,7 +53,7 @@ cache_cmp (const void *p1, const void *p2)
 	return strcmp (i1->s->symbol, i2->s->symbol);
 }
 
-int
+gint
 cache_logic_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item        *i1 = p1, *i2 = p2;
@@ -67,7 +67,7 @@ cache_logic_cmp (const void *p1, const void *p2)
 	w1 = abs (i1->s->weight) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
 	w2 = abs (i2->s->weight) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
 
-	return (int)w2 - w1;
+	return (gint)w2 - w1;
 }
 
 static GChecksum               *
@@ -137,10 +137,10 @@ unmap_cache_file (gpointer arg)
 }
 
 static                          gboolean
-mmap_cache_file (struct symbols_cache *cache, int fd, memory_pool_t *pool)
+mmap_cache_file (struct symbols_cache *cache, gint fd, memory_pool_t *pool)
 {
 	guint8                         *map;
-	int                             i;
+	gint                            i;
 	GList                          *cur;
 	struct cache_item              *item;
 
@@ -177,7 +177,7 @@ mmap_cache_file (struct symbols_cache *cache, int fd, memory_pool_t *pool)
 
 /* Fd must be opened for writing, after creating file is mmapped */
 static                          gboolean
-create_cache_file (struct symbols_cache *cache, const char *filename, int fd, memory_pool_t *pool)
+create_cache_file (struct symbols_cache *cache, const gchar *filename, gint fd, memory_pool_t *pool)
 {
 	GChecksum                      *cksum;
 	u_char                         *digest;
@@ -244,7 +244,7 @@ create_cache_file (struct symbols_cache *cache, const char *filename, int fd, me
 }
 
 void
-register_symbol (struct symbols_cache **cache, const char *name, double weight, symbol_func_t func, gpointer user_data)
+register_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data)
 {
 	struct cache_item              *item = NULL;
 	struct symbols_cache           *pcache = *cache;
@@ -287,7 +287,7 @@ register_symbol (struct symbols_cache **cache, const char *name, double weight, 
 
 void
 register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cache,
-		const char *name, double weight, symbol_func_t func, 
+		const gchar *name, double weight, symbol_func_t func, 
 		gpointer user_data, GList *networks)
 {
 	struct cache_item              *item = NULL;
@@ -295,7 +295,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	GList                          *t, *cur;
 	uintptr_t                       r;
 	double                         *w;  
-	uint32_t                        mask = 0xFFFFFFFF;
+	guint32                         mask = 0xFFFFFFFF;
 	struct dynamic_map_item        *it;
 
 	if (*cache == NULL) {
@@ -438,10 +438,10 @@ free_cache (gpointer arg)
 }
 
 gboolean
-init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct config_file *cfg, const char *filename)
+init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct config_file *cfg, const gchar *filename)
 {
 	struct stat                     st;
-	int                             fd;
+	gint                            fd;
 	GChecksum                      *cksum;
 	u_char                         *mem_sum, *file_sum;
 	gsize                           cklen;
@@ -583,13 +583,13 @@ check_negative_dynamic_item (struct worker_task *task, struct symbols_cache *cac
 }
 
 static gboolean
-check_debug_symbol (struct config_file *cfg, const char *symbol)
+check_debug_symbol (struct config_file *cfg, const gchar *symbol)
 {
 	GList                         *cur;
 
 	cur = cfg->debug_symbols;
 	while (cur) {
-		if (strcmp (symbol, (const char *)cur->data) == 0) {
+		if (strcmp (symbol, (const gchar *)cur->data) == 0) {
 			return TRUE;
 		}
 		cur = g_list_next (cur);
@@ -617,7 +617,7 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 #else
 	struct timeval                  tv1, tv2;
 #endif
-	uint64_t                        diff;
+	guint64                         diff;
 	struct cache_item              *item = NULL;
 	struct symbol_callback_data    *s = *save;
 

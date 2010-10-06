@@ -41,11 +41,11 @@ typedef struct rspamd_logger_s {
 	rspamd_log_func_t        log_func;
 	struct config_file		*cfg;
 	struct {
-		uint32_t size;
-		uint32_t used;
+		guint32                         size;
+		guint32                         used;
 		u_char *buf;
 	}                        io_buf;
-	int                      fd;
+	gint                            fd;
 	gboolean                 is_buffered;
 	gboolean                 enabled;
 	gboolean                 is_debug;
@@ -55,15 +55,15 @@ typedef struct rspamd_logger_s {
 	pid_t                    pid;
 	enum process_type		 process_type;
 	radix_tree_t            *debug_ip;
-	uint32_t                 last_line_cksum;
-	uint32_t                 repeats;
+	guint32                         last_line_cksum;
+	guint32                         repeats;
 	gchar                   *saved_message;
 	gchar                   *saved_function;
 } rspamd_logger_t;
 
 rspamd_logger_t *rspamd_log = NULL;
 
-static const char lf_chr = '\n';
+static const gchar lf_chr = '\n';
 
 static void
 syslog_log_function (const gchar * log_domain, const gchar *function, 
@@ -74,16 +74,16 @@ file_log_function (const gchar * log_domain, const gchar *function,
 					GLogLevelFlags log_level, const gchar * message, 
 					gboolean forced, gpointer arg);
 
-static inline uint32_t
+static inline guint32
 rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 {
 	const gchar                    *bp = message;
 	const gchar                    *be = bp + mlen;
-	uint32_t                        hval = 0;
+	guint32                         hval = 0;
 
     while (bp < be) {
 		hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
-		hval ^= (uint32_t)*bp++;
+		hval ^= (guint32)*bp++;
     }
 
     /* return our new hash value */
@@ -92,12 +92,12 @@ rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 }
 
 static void
-direct_write_log_line (void *data, int count, gboolean is_iov)
+direct_write_log_line (void *data, gint count, gboolean is_iov)
 {
-	char                           errmsg[128];
+	gchar                           errmsg[128];
 	struct iovec                  *iov;
-	const char                    *line;
-	int                            r;
+	const gchar                    *line;
+	gint                            r;
 	
 	if (rspamd_log->enabled) {
 		if (is_iov) {
@@ -105,7 +105,7 @@ direct_write_log_line (void *data, int count, gboolean is_iov)
 			r = writev (rspamd_log->fd, iov, count);
 		}
 		else {
-			line = (const char *)data;
+			line = (const gchar *)data;
 			r = write (rspamd_log->fd, line, count);
 		}
 		if (r == -1) {
@@ -136,7 +136,7 @@ direct_write_log_line (void *data, int count, gboolean is_iov)
 }
 
 /* Logging utility functions */
-int
+gint
 open_log (void)
 {
 
@@ -163,7 +163,7 @@ open_log (void)
 void
 close_log (void)
 {
-	char            tmpbuf[256];
+	gchar                           tmpbuf[256];
 	flush_log_buf ();
 
 	switch (rspamd_log->type) {
@@ -204,10 +204,10 @@ close_log (void)
 void
 rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct config_file *cfg)
 {
-	char                          **strvec, *p, *err;
-	int                             num, i, k;
+	gchar                           **strvec, *p, *err;
+	gint                            num, i, k;
 	struct in_addr                  addr;
-	uint32_t                        mask = 0xFFFFFFFF;
+	guint32                         mask = 0xFFFFFFFF;
 
 	if (rspamd_log == NULL) {
 		rspamd_log = g_malloc (sizeof (rspamd_logger_t));
@@ -286,7 +286,7 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct co
 	}
 }
 
-int
+gint
 reopen_log (void)
 {
 	close_log ();
@@ -316,9 +316,9 @@ flush_log_buf (void)
 
 
 void
-rspamd_common_log_function (GLogLevelFlags log_level, const char *function, const char *fmt, ...)
+rspamd_common_log_function (GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...)
 {
-	static char                     logbuf[BUFSIZ];
+	static gchar                     logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 
@@ -334,9 +334,9 @@ rspamd_common_log_function (GLogLevelFlags log_level, const char *function, cons
 
 /* Fill buffer with message (limits must be checked BEFORE this call) */
 static void
-fill_buffer (const struct iovec *iov, int iovcnt)
+fill_buffer (const struct iovec *iov, gint iovcnt)
 {
-	int                            i;
+	gint                            i;
 
 	for (i = 0; i < iovcnt; i ++) {
 		memcpy (rspamd_log->io_buf.buf + rspamd_log->io_buf.used, iov[i].iov_base, iov[i].iov_len);
@@ -347,10 +347,10 @@ fill_buffer (const struct iovec *iov, int iovcnt)
 
 /* Write message to buffer or to file */
 static void
-file_log_helper (const struct iovec *iov, int iovcnt)
+file_log_helper (const struct iovec *iov, gint iovcnt)
 {
 	size_t                         len = 0;
-	int                            i;
+	gint                            i;
 
 	if (! rspamd_log->is_buffered) {
 		/* Write string directly */
@@ -424,14 +424,14 @@ syslog_log_function (const gchar * log_domain, const gchar *function, GLogLevelF
 static void
 file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFlags log_level, const gchar * message, gboolean forced, gpointer arg)
 {
-	char                            tmpbuf[256], timebuf[32];
+	gchar                           tmpbuf[256], timebuf[32];
 	time_t                          now;
 	struct tm                      *tms;
 	struct iovec                    iov[3];
-	int                             r;
-	uint32_t                        cksum;
+	gint                            r;
+	guint32                         cksum;
 	size_t                          mlen;
-	const char                     *cptype = NULL;
+	const gchar                     *cptype = NULL;
 	gboolean                        got_time = FALSE;
 
 	if (! rspamd_log->enabled) {
@@ -548,9 +548,9 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 }
 
 void
-rspamd_conditional_debug (uint32_t addr, const char *function, const char *fmt, ...) 
+rspamd_conditional_debug (guint32 addr, const gchar *function, const gchar *fmt, ...) 
 {
-	static char                     logbuf[BUFSIZ];
+	static gchar                     logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 

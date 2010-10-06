@@ -52,11 +52,11 @@
 
 static struct surbl_ctx        *surbl_module_ctx = NULL;
 
-static int                      surbl_filter (struct worker_task *task);
+static gint                      surbl_filter (struct worker_task *task);
 static void                     surbl_test_url (struct worker_task *task, void *user_data);
 static void                     dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
-static void                     process_dns_results (struct worker_task *task, struct suffix_item *suffix, char *url, uint32_t addr);
-static int                      urls_command_handler (struct worker_task *task);
+static void                     process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr);
+static gint                      urls_command_handler (struct worker_task *task);
 
 #define NO_REGEXP (gpointer)-1
 
@@ -73,8 +73,8 @@ static void
 exception_insert (gpointer st, gconstpointer key, gpointer value)
 {
 	GHashTable                    **t = st;
-	int                             level = 0;
-	const char                     *p = key;
+	gint                            level = 0;
+	const gchar                     *p = key;
 	f_str_t                        *val;
 	
 
@@ -85,12 +85,12 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 		p ++;
 	}
 	if (level >= MAX_LEVELS) {
-		msg_err ("invalid domain in exceptions list: %s, levels: %d", (char *)key, level);
+		msg_err ("invalid domain in exceptions list: %s, levels: %d", (gchar *)key, level);
 		return;
 	}
 	
 	val = g_malloc (sizeof (f_str_t));
-	val->begin = (char *)key;
+	val->begin = (gchar *)key;
 	val->len = strlen (key);
 	if (t[level] == NULL) {
 		t[level] = g_hash_table_new_full (fstr_strcase_hash, fstr_strcase_equal, g_free, NULL);
@@ -111,7 +111,7 @@ static void
 fin_exceptions_list (memory_pool_t * pool, struct map_cb_data *data)
 {
 	GHashTable                    **t;
-	int                             i;
+	gint                            i;
 
 	if (data->prev_data) {
 		t = data->prev_data;
@@ -127,7 +127,7 @@ static void
 redirector_insert (gpointer st, gconstpointer key, gpointer value)
 {
 	GHashTable                     *t = st;
-	const char                     *p = key, *begin = key;
+	const gchar                     *p = key, *begin = key;
 	gchar                          *new;
 	gsize                           len;
 	GRegex  			           *re = NO_REGEXP;
@@ -190,7 +190,7 @@ fin_redirectors_list (memory_pool_t * pool, struct map_cb_data *data)
 	}
 }
 
-int
+gint
 surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	surbl_module_ctx = g_malloc (sizeof (struct surbl_ctx));
@@ -228,7 +228,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
-int
+gint
 surbl_module_config (struct config_file *cfg)
 {
 	GList                          *cur_opt;
@@ -236,7 +236,7 @@ surbl_module_config (struct config_file *cfg)
 	struct suffix_item             *new_suffix;
 	struct surbl_bit_item          *new_bit;
 
-	char                           *value, *str, **strvec;
+	gchar                           *value, *str, **strvec;
 	guint32                         bit;
 	gint                            i, idx;
 
@@ -337,7 +337,7 @@ surbl_module_config (struct config_file *cfg)
 					new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
 					new_bit->bit = bit;
 					new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-					msg_debug ("add new bit suffix: %d with symbol: %s", (int)new_bit->bit, new_bit->symbol);
+					msg_debug ("add new bit suffix: %d with symbol: %s", (gint)new_bit->bit, new_bit->symbol);
 					surbl_module_ctx->bits = g_list_prepend (surbl_module_ctx->bits, new_bit);
 				}
 			}
@@ -357,7 +357,7 @@ surbl_module_config (struct config_file *cfg)
 	return TRUE;
 }
 
-int
+gint
 surbl_module_reconfig (struct config_file *cfg)
 {
 	/* Delete pool and objects */
@@ -394,13 +394,13 @@ surbl_module_reconfig (struct config_file *cfg)
 
 
 
-static char                    *
+static gchar                    *
 format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_item *suffix,
 		gboolean append_suffix, GError ** err, gboolean forced)
 {
 	GHashTable                     *t;
-	char                           *result = NULL, *dots[MAX_LEVELS], num_buf[sizeof("18446744073709551616")], *p;
-	int                             len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
+	gchar                           *result = NULL, *dots[MAX_LEVELS], num_buf[sizeof("18446744073709551616")], *p;
+	gint                            len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
 	gboolean                        is_numeric = TRUE;
 	guint64                         ip_num;
 	f_str_t                         f;
@@ -433,13 +433,13 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		/* This is ip address */
 		result = memory_pool_alloc (pool, len);
 		r = rspamd_snprintf (result, len, "%*s.%*s.%*s.%*s", 
-				(int)(hostname->len - (dots[2] - hostname->begin + 1)),
+				(gint)(hostname->len - (dots[2] - hostname->begin + 1)),
 				dots[2] + 1,
-				(int)(dots[2] - dots[1] - 1),
+				(gint)(dots[2] - dots[1] - 1),
 				dots[1] + 1,
-				(int)(dots[1] - dots[0] - 1),
+				(gint)(dots[1] - dots[0] - 1),
 				dots[0] + 1,
-				(int)(dots[0] - hostname->begin),
+				(gint)(dots[0] - hostname->begin),
 				hostname->begin);
 	}
 	else if (is_numeric && dots_num == 0) {
@@ -461,7 +461,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		ip_num &= 0xFFFFFFFF;
 		/* Get octets */
 		r = rspamd_snprintf (result, len, "%ud.%ud.%ud.%ud",
-			(uint32_t) ip_num & 0x000000FF, (uint32_t) (ip_num & 0x0000FF00) >> 8, (uint32_t) (ip_num & 0x00FF0000) >> 16, (uint32_t) (ip_num & 0xFF000000) >> 24);
+			(guint32) ip_num & 0x000000FF, (guint32) (ip_num & 0x0000FF00) >> 8, (guint32) (ip_num & 0x00FF0000) >> 16, (guint32) (ip_num & 0xFF000000) >> 24);
 	}
 	else {
 		/* Not a numeric url */
@@ -482,21 +482,21 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		}
 		if (level != MAX_LEVELS) {
 			if (level == 0) {
-				r = rspamd_snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
+				r = rspamd_snprintf (result, len, "%*s", (gint)hostname->len, hostname->begin);
 			}
 			else {
 				r = rspamd_snprintf (result, len, "%*s", 
-					(int)(hostname->len - (dots[level - 1] - hostname->begin + 1)),
+					(gint)(hostname->len - (dots[level - 1] - hostname->begin + 1)),
 					dots[level - 1] + 1);
 			}
 		}
 		else if (dots_num >= 2) {
 			r = rspamd_snprintf (result, len, "%*s",
-					(int)(hostname->len - (dots[dots_num - 2] - hostname->begin + 1)),
+					(gint)(hostname->len - (dots[dots_num - 2] - hostname->begin + 1)),
 					dots[dots_num - 2] + 1);
 		}
 		else {
-			r = rspamd_snprintf (result, len, "%*s", (int)hostname->len, hostname->begin);
+			r = rspamd_snprintf (result, len, "%*s", (gint)hostname->len, hostname->begin);
 		}
 	}
 
@@ -514,7 +514,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		r += rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
 	}
 
-	msg_debug ("request: %s, dots: %d, level: %d, orig: %*s", result, dots_num, level, (int)hostname->len, hostname->begin);
+	msg_debug ("request: %s, dots: %d, level: %d, orig: %*s", result, dots_num, level, (gint)hostname->len, hostname->begin);
 
 	return result;
 }
@@ -523,7 +523,7 @@ static void
 make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree,
 		struct suffix_item *suffix, gboolean forced)
 {
-	char                           *surbl_req;
+	gchar                           *surbl_req;
 	f_str_t                         f;
 	GError                         *err = NULL;
 	struct dns_param               *param;
@@ -564,20 +564,20 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree,
 }
 
 static void
-process_dns_results (struct worker_task *task, struct suffix_item *suffix, char *url, uint32_t addr)
+process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr)
 {
-	char                           *c, *symbol;
+	gchar                           *c, *symbol;
 	GList                          *cur;
 	struct surbl_bit_item          *bit;
-	int                             len, found = 0;
+	gint                            len, found = 0;
 
 	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
 		cur = g_list_first (surbl_module_ctx->bits);
 
 		while (cur) {
 			bit = (struct surbl_bit_item *)cur->data;
-			debug_task ("got result(%d) AND bit(%d): %d", (int)addr, (int)ntohl (bit->bit), (int)bit->bit & (int)ntohl (addr));
-			if (((int)bit->bit & (int)ntohl (addr)) != 0) {
+			debug_task ("got result(%d) AND bit(%d): %d", (gint)addr, (gint)ntohl (bit->bit), (gint)bit->bit & (gint)ntohl (addr));
+			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
 				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
 				*c = '\0';
 				symbol = memory_pool_alloc (task->task_pool, len);
@@ -610,7 +610,7 @@ dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	if (reply->code == DNS_RC_NOERROR && reply->elements) {
 		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
 		elt = reply->elements->data;
-		process_dns_results (param->task, param->suffix, param->host_resolve, (uint32_t)elt->a.addr[0].s_addr);
+		process_dns_results (param->task, param->suffix, param->host_resolve, (guint32)elt->a.addr[0].s_addr);
 	}
 	else {
 		debug_task ("<%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
@@ -628,7 +628,7 @@ static void
 memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 {
 	struct memcached_param         *param = (struct memcached_param *)data;
-	int                            *url_count;
+	gint                            *url_count;
 
 	switch (ctx->op) {
 	case CMD_CONNECT:
@@ -658,7 +658,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 			}
 		}
 		else {
-			url_count = (int *)param->ctx->param->buf;
+			url_count = (gint *)param->ctx->param->buf;
 			/* Do not check DNS for urls that have count more than max_urls */
 			if (*url_count > surbl_module_ctx->max_urls) {
 				msg_info ("url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
@@ -696,11 +696,11 @@ register_memcached_call (struct uri *url, struct worker_task *task, GTree * url_
 	struct memcached_server        *selected;
 	memcached_param_t              *cur_param;
 	gchar                          *sum_str;
-	int                            *url_count;
+	gint                            *url_count;
 
 	param = memory_pool_alloc (task->task_pool, sizeof (struct memcached_param));
 	cur_param = memory_pool_alloc0 (task->task_pool, sizeof (memcached_param_t));
-	url_count = memory_pool_alloc (task->task_pool, sizeof (int));
+	url_count = memory_pool_alloc (task->task_pool, sizeof (gint));
 
 	param->url = url;
 	param->task = task;
@@ -710,7 +710,7 @@ register_memcached_call (struct uri *url, struct worker_task *task, GTree * url_
 	param->ctx = memory_pool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
 
 	cur_param->buf = (u_char *) url_count;
-	cur_param->bufsize = sizeof (int);
+	cur_param->bufsize = sizeof (gint);
 
 	sum_str = g_compute_checksum_for_string (G_CHECKSUM_MD5, struri (url), -1);
 	g_strlcpy (cur_param->key, sum_str, sizeof (cur_param->key));
@@ -759,14 +759,14 @@ free_redirector_session (void *ud)
 }
 
 static void
-redirector_callback (int fd, short what, void *arg)
+redirector_callback (gint fd, short what, void *arg)
 {
 	struct redirector_param        *param = (struct redirector_param *)arg;
 	struct worker_task             *task = param->task;
-	char                            url_buf[1024];
-	int                             r;
+	gchar                           url_buf[1024];
+	gint                            r;
 	struct timeval                 *timeout;
-	char                           *p, *c;
+	gchar                           *p, *c;
 
 	switch (param->state) {
 	case STATE_CONNECT:
@@ -829,7 +829,7 @@ redirector_callback (int fd, short what, void *arg)
 static void
 register_redirector_call (struct uri *url, struct worker_task *task, GTree * url_tree, struct suffix_item *suffix)
 {
-	int                             s = -1;
+	gint                            s = -1;
 	struct redirector_param        *param;
 	struct timeval                 *timeout;
 	struct redirector_upstream     *selected;
@@ -876,7 +876,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	struct worker_task             *task = param->task;
 	struct uri                     *url = value;
 	f_str_t                         f;
-	char                           *red_domain;
+	gchar                           *red_domain;
 	GRegex                         *re;
 	guint                           idx;
 
@@ -945,7 +945,7 @@ surbl_test_url (struct worker_task *task, void *user_data)
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, url_tree);
 }
 
-static int
+static gint
 surbl_filter (struct worker_task *task)
 {
 	/* XXX: remove this shit */
@@ -956,8 +956,8 @@ static gboolean
 urls_command_handler (struct worker_task *task)
 {
 	GList                          *cur;
-	char                           *outbuf, *urlstr;
-	int                             r, num = 0, buflen;
+	gchar                           *outbuf, *urlstr;
+	gint                            r, num = 0, buflen;
 	struct uri                     *url;
 	GError                         *err = NULL;
 	GTree                          *url_tree;
@@ -976,7 +976,7 @@ urls_command_handler (struct worker_task *task)
 
 	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF "Urls: ");
 
-	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (char));
+	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (gchar));
 
 	r = rspamd_snprintf (outbuf, buflen, "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
 
@@ -993,10 +993,10 @@ urls_command_handler (struct worker_task *task)
 			f.len = url->hostlen;
 			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, FALSE, &err, FALSE)) != NULL) {
 				if (g_list_next (cur) != NULL) {
-					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (char *)urlstr, struri (url));
+					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (gchar *)urlstr, struri (url));
 				}
 				else {
-					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">", (char *)urlstr, struri (url));
+					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">", (gchar *)urlstr, struri (url));
 				}
 			}
 		}

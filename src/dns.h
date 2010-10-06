@@ -23,21 +23,21 @@ typedef void (*dns_callback_type) (struct rspamd_dns_reply *reply, gpointer arg)
 struct rspamd_dns_server {
 	struct upstream up;					/**< upstream structure						*/
 	struct in_addr addr;				/**< address of DNS server					*/
-	char *name;							/**< name of DNS server						*/
-	int sock;							/**< persistent socket						*/
+	gchar *name;							/**< name of DNS server						*/
+	gint sock;							/**< persistent socket						*/
 	struct event ev;
 };
 
 #define DNS_K_TEA_KEY_SIZE	16
 
 struct dns_k_tea {
-	uint32_t key[DNS_K_TEA_KEY_SIZE / sizeof (uint32_t)];
-	unsigned cycles;
+	guint32 key[DNS_K_TEA_KEY_SIZE / sizeof (guint32)];
+	guint cycles;
 }; /* struct dns_k_tea */
 
 struct dns_k_permutor {
-	unsigned stepi, length, limit;
-	unsigned shift, mask, rounds;
+	guint stepi, length, limit;
+	guint shift, mask, rounds;
 
 	struct dns_k_tea tea;
 };
@@ -78,10 +78,10 @@ struct rspamd_dns_request {
 	struct rspamd_async_session *session;
 	struct rspamd_dns_reply *reply;
 	guint8 *packet;
-	const char *requested_name;
+	const gchar *requested_name;
 	off_t pos;
 	guint packet_len;
-	int sock;
+	gint sock;
 	enum rspamd_request_type type;
 	time_t time;
 };
@@ -138,34 +138,34 @@ struct rspamd_dns_reply {
 /* Internal DNS structs */
 
 struct dns_header {
-		unsigned qid:16;
+		guint qid:16;
 
 #if __BYTE_ORDER == BIG_ENDIAN
-		unsigned qr:1;
-		unsigned opcode:4;
-		unsigned aa:1;
-		unsigned tc:1;
-		unsigned rd:1;
+		guint qr:1;
+		guint opcode:4;
+		guint aa:1;
+		guint tc:1;
+		guint rd:1;
 
-		unsigned ra:1;
-		unsigned unused:3;
-		unsigned rcode:4;
+		guint ra:1;
+		guint unused:3;
+		guint rcode:4;
 #else
-		unsigned rd:1;
-		unsigned tc:1;
-		unsigned aa:1;
-		unsigned opcode:4;
-		unsigned qr:1;
+		guint rd:1;
+		guint tc:1;
+		guint aa:1;
+		guint opcode:4;
+		guint qr:1;
 
-		unsigned rcode:4;
-		unsigned unused:3;
-		unsigned ra:1;
+		guint rcode:4;
+		guint unused:3;
+		guint ra:1;
 #endif
 
-		unsigned qdcount:16;
-		unsigned ancount:16;
-		unsigned nscount:16;
-		unsigned arcount:16;
+		guint qdcount:16;
+		guint ancount:16;
+		guint nscount:16;
+		guint arcount:16;
 };
 
 enum dns_section {
@@ -215,9 +215,9 @@ enum dns_class {
 }; /* enum dns_class */
 
 struct dns_query {
-	char *qname;
-	unsigned qtype:16;
-	unsigned qclass:16;
+	gchar *qname;
+	guint qtype:16;
+	guint qclass:16;
 };
 
 /* Rspamd DNS API */
@@ -225,7 +225,7 @@ struct rspamd_dns_resolver *dns_resolver_init (struct config_file *cfg);
 gboolean make_dns_request (struct rspamd_dns_resolver *resolver, 
 		struct rspamd_async_session *session, memory_pool_t *pool, dns_callback_type cb, 
 		gpointer ud, enum rspamd_request_type type, ...);
-const char *dns_strerror (enum dns_rcode rcode);
-const char *dns_strtype (enum rspamd_request_type type);
+const gchar *dns_strerror (enum dns_rcode rcode);
+const gchar *dns_strtype (enum rspamd_request_type type);
 
 #endif

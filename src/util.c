@@ -40,12 +40,12 @@
 extern rspamd_hash_t           *counters;
 #endif
 
-static u_char* rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero, unsigned int hexadecimal, unsigned int width);
+static gchar* rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero, guint hexadecimal, guint width);
 
-int
-make_socket_nonblocking (int fd)
+gint
+make_socket_nonblocking (gint fd)
 {
-	int                             ofl;
+	gint                            ofl;
 
 	ofl = fcntl (fd, F_GETFL, 0);
 
@@ -56,10 +56,10 @@ make_socket_nonblocking (int fd)
 	return 0;
 }
 
-int
-make_socket_blocking (int fd)
+gint
+make_socket_blocking (gint fd)
 {
-	int                             ofl;
+	gint                            ofl;
 
 	ofl = fcntl (fd, F_GETFL, 0);
 
@@ -70,10 +70,10 @@ make_socket_blocking (int fd)
 	return 0;
 }
 
-int
-poll_sync_socket (int fd, int timeout, short events)
+gint
+poll_sync_socket (gint fd, gint timeout, short events)
 {
-	int                             r;
+	gint                            r;
 	struct pollfd                   fds[1];
 
 	fds->fd = fd;
@@ -88,11 +88,11 @@ poll_sync_socket (int fd, int timeout, short events)
 	return r;
 }
 
-static int
-make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+static gint
+make_inet_socket (gint family, struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
 {
-	int                             fd, r, optlen, on = 1, s_error;
-	int                             serrno;
+	gint                            fd, r, optlen, on = 1, s_error;
+	gint                            serrno;
 	struct sockaddr_in              sin;
 
 	/* Create socket */
@@ -120,7 +120,7 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 	sin.sin_addr.s_addr = addr->s_addr;
 
 	if (is_server) {
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (int));
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
 		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
 	}
 	else {
@@ -167,23 +167,23 @@ make_inet_socket (int family, struct in_addr *addr, u_short port, gboolean is_se
 	return (-1);
 }
 
-int
+gint
 make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
 {
 	return make_inet_socket (SOCK_STREAM, addr, port, is_server, async);
 }
 
-int
+gint
 make_udp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
 {
 	return make_inet_socket (SOCK_DGRAM, addr, port, is_server, async);
 }
 
-int
-accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t * len)
+gint
+accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t * len)
 {
-	int                             nfd;
-	int                             serrno;
+	gint                            nfd;
+	gint                            serrno;
 
 	if ((nfd = accept (listen_sock, addr, len)) == -1) {
 		if (errno == EAGAIN) {
@@ -214,10 +214,10 @@ accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t * len)
 
 }
 
-int
-make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server)
+gint
+make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_server)
 {
-	int                             fd, s_error, r, optlen, serrno, on = 1;
+	gint                            fd, s_error, r, optlen, serrno, on = 1;
 
 	if (path == NULL)
 		return -1;
@@ -246,7 +246,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 		goto out;
 	}
 	if (is_server) {
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (int));
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
 		r = bind (fd, (struct sockaddr *)addr, SUN_LEN (addr));
 	}
 	else {
@@ -279,7 +279,7 @@ make_unix_socket (const char *path, struct sockaddr_un *addr, gboolean is_server
 	return (-1);
 }
 
-int
+gint
 write_pid (struct rspamd_main *main)
 {
 	pid_t                           pid;
@@ -300,7 +300,7 @@ write_pid (struct rspamd_main *main)
 
 #ifdef HAVE_SA_SIGINFO
 void
-init_signals (struct sigaction *signals, void (*sig_handler)(int, siginfo_t *, void *))
+init_signals (struct sigaction *signals, void (*sig_handler)(gint, siginfo_t *, void *))
 #else
 void
 init_signals (struct sigaction *signals, sighandler_t sig_handler)
@@ -348,19 +348,19 @@ static void
 pass_signal_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_worker           *cur = value;
-    int                             signo = GPOINTER_TO_INT (ud);
+    gint                            signo = GPOINTER_TO_INT (ud);
 
 	kill (cur->pid, signo);
 }
 
 void
-pass_signal_worker (GHashTable * workers, int signo)
+pass_signal_worker (GHashTable * workers, gint signo)
 {
     g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
 }
 
 void
-convert_to_lowercase (char *str, unsigned int size)
+convert_to_lowercase (gchar *str, guint size)
 {
 	while (size--) {
 		*str = g_ascii_tolower (*str);
@@ -370,12 +370,12 @@ convert_to_lowercase (char *str, unsigned int size)
 
 #ifndef HAVE_SETPROCTITLE
 
-static char                    *title_buffer = 0;
+static gchar                    *title_buffer = 0;
 static size_t                   title_buffer_size = 0;
-static char                    *title_progname, *title_progname_full;
+static gchar                    *title_progname, *title_progname_full;
 
-int
-setproctitle (const char *fmt, ...)
+gint
+setproctitle (const gchar *fmt, ...)
 {
 	if (!title_buffer || !title_buffer_size) {
 		errno = ENOMEM;
@@ -417,15 +417,15 @@ setproctitle (const char *fmt, ...)
   functions gets called without arguments.
 */
 
-int
-init_title (int argc, char *argv[], char *envp[])
+gint
+init_title (gint argc, gchar *argv[], gchar *envp[])
 {
 #if defined(DARWIN) || defined(SOLARIS)
 	/* XXX: try to handle these OSes too */
 	return 0;
 #else
-	char                           *begin_of_buffer = 0, *end_of_buffer = 0;
-	int                             i;
+	gchar                           *begin_of_buffer = 0, *end_of_buffer = 0;
+	gint                            i;
 
 	for (i = 0; i < argc; ++i) {
 		if (!begin_of_buffer)
@@ -444,7 +444,7 @@ init_title (int argc, char *argv[], char *envp[])
 	if (!end_of_buffer)
 		return 0;
 
-	char                          **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
+	gchar                           **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
 
 	if (!new_environ)
 		return 0;
@@ -461,7 +461,7 @@ init_title (int argc, char *argv[], char *envp[])
 		if (!title_progname_full)
 			goto cleanup_enomem;
 
-		char                           *p = strrchr (title_progname_full, '/');
+		gchar                           *p = strrchr (title_progname_full, '/');
 
 		if (p)
 			title_progname = p + 1;
@@ -489,10 +489,10 @@ init_title (int argc, char *argv[], char *envp[])
 #endif
 
 #ifndef HAVE_PIDFILE
-extern char                    *__progname;
-static int                      _pidfile_remove (struct pidfh *pfh, int freeit);
+extern gchar                    *__progname;
+static gint                      _pidfile_remove (struct pidfh *pfh, gint freeit);
 
-static int
+static gint
 pidfile_verify (struct pidfh *pfh)
 {
 	struct stat                     sb;
@@ -509,11 +509,11 @@ pidfile_verify (struct pidfh *pfh)
 	return 0;
 }
 
-static int
-pidfile_read (const char *path, pid_t * pidptr)
+static gint
+pidfile_read (const gchar *path, pid_t * pidptr)
 {
-	char                            buf[16], *endptr;
-	int                             error, fd, i;
+	gchar                           buf[16], *endptr;
+	gint                            error, fd, i;
 
 	fd = open (path, O_RDONLY);
 	if (fd == -1)
@@ -536,11 +536,11 @@ pidfile_read (const char *path, pid_t * pidptr)
 }
 
 struct pidfh                   *
-pidfile_open (const char *path, mode_t mode, pid_t * pidptr)
+pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 {
 	struct pidfh                   *pfh;
 	struct stat                     sb;
-	int                             error, fd, len, count;
+	gint                            error, fd, len, count;
 	struct timespec                 rqtp;
 
 	pfh = g_malloc (sizeof (*pfh));
@@ -551,7 +551,7 @@ pidfile_open (const char *path, mode_t mode, pid_t * pidptr)
 		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "/var/run/%s.pid", g_get_prgname ());
 	else
 		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "%s", path);
-	if (len >= (int)sizeof (pfh->pf_path)) {
+	if (len >= (gint)sizeof (pfh->pf_path)) {
 		g_free (pfh);
 		errno = ENAMETOOLONG;
 		return NULL;
@@ -604,11 +604,11 @@ pidfile_open (const char *path, mode_t mode, pid_t * pidptr)
 	return pfh;
 }
 
-int
+gint
 pidfile_write (struct pidfh *pfh)
 {
-	char                            pidstr[16];
-	int                             error, fd;
+	gchar                           pidstr[16];
+	gint                            error, fd;
 
 	/*
 	 * Check remembered descriptor, so we don't overwrite some other
@@ -633,7 +633,7 @@ pidfile_write (struct pidfh *pfh)
 		return -1;
 	}
 
-	snprintf (pidstr, sizeof (pidstr), "%lu", (long unsigned)getpid ());
+	rspamd_snprintf (pidstr, sizeof (pidstr), "%P", getpid ());
 	if (pwrite (fd, pidstr, strlen (pidstr), 0) != (ssize_t) strlen (pidstr)) {
 		error = errno;
 		_pidfile_remove (pfh, 0);
@@ -644,10 +644,10 @@ pidfile_write (struct pidfh *pfh)
 	return 0;
 }
 
-int
+gint
 pidfile_close (struct pidfh *pfh)
 {
-	int                             error;
+	gint                            error;
 
 	error = pidfile_verify (pfh);
 	if (error != 0) {
@@ -665,10 +665,10 @@ pidfile_close (struct pidfh *pfh)
 	return 0;
 }
 
-static int
-_pidfile_remove (struct pidfh *pfh, int freeit)
+static gint
+_pidfile_remove (struct pidfh *pfh, gint freeit)
 {
-	int                             error;
+	gint                            error;
 
 	error = pidfile_verify (pfh);
 	if (error != 0) {
@@ -697,7 +697,7 @@ _pidfile_remove (struct pidfh *pfh, int freeit)
 	return 0;
 }
 
-int
+gint
 pidfile_remove (struct pidfh *pfh)
 {
 
@@ -706,12 +706,12 @@ pidfile_remove (struct pidfh *pfh)
 #endif
 
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
-char                           *
-resolve_stat_filename (memory_pool_t * pool, char *pattern, char *rcpt, char *from)
+gchar                           *
+resolve_stat_filename (memory_pool_t * pool, gchar *pattern, gchar *rcpt, gchar *from)
 {
-	int                             need_to_format = 0, len = 0;
-	int                             rcptlen, fromlen;
-	char                           *c = pattern, *new, *s;
+	gint                            need_to_format = 0, len = 0;
+	gint                            rcptlen, fromlen;
+	gchar                           *c = pattern, *new, *s;
 
 	if (rcpt) {
 		rcptlen = strlen (rcpt);
@@ -777,16 +777,16 @@ resolve_stat_filename (memory_pool_t * pool, char *pattern, char *rcpt, char *fr
 }
 
 #ifdef HAVE_CLOCK_GETTIME
-const char                     *
-calculate_check_time (struct timeval *tv, struct timespec *begin, int resolution)
+const gchar                     *
+calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution)
 #else
-const char                     *
-calculate_check_time (struct timeval *begin, int resolution)
+const gchar                     *
+calculate_check_time (struct timeval *begin, gint resolution)
 #endif
 {
 	double                          vdiff, diff;
-	static char                     res[64];
-	static char                     fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
+	static gchar                     res[64];
+	static gchar                     fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
 	struct timeval                  tv_now;
 	if (gettimeofday (&tv_now, NULL) == -1) {
 		msg_warn ("gettimeofday failed: %s", strerror (errno));
@@ -816,16 +816,16 @@ calculate_check_time (struct timeval *begin, int resolution)
 	sprintf (fmt, "%%.%dfms real, %%.%dfms virtual", resolution, resolution);
 	snprintf (res, sizeof (res), fmt, diff, vdiff);
 
-	return (const char *)res;
+	return (const gchar *)res;
 }
 
 double
-set_counter (const char *name, long int value)
+set_counter (const gchar *name, guint32 value)
 {
 #ifdef RSPAMD_MAIN
 	struct counter_data            *cd;
 	double                          alpha;
-	char                           *key;
+	gchar                           *key;
 
 	cd = rspamd_hash_lookup (counters, (gpointer) name);
 
@@ -859,7 +859,7 @@ set_counter (const char *name, long int value)
 gboolean
 rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 {
-	if (g_ascii_strcasecmp ((const char *)v, (const char *)v2) == 0) {
+	if (g_ascii_strcasecmp ((const gchar *)v, (const gchar *)v2) == 0) {
 		return TRUE;
 	}
 
@@ -870,7 +870,7 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 guint
 rspamd_strcase_hash (gconstpointer key)
 {
-	const char                     *p = key;
+	const gchar                     *p = key;
 	guint                           h = 0;
 
 	while (*p != '\0') {
@@ -897,7 +897,7 @@ guint
 fstr_strcase_hash (gconstpointer key)
 {
 	const f_str_t                  *f = key;
-	const char                     *p;
+	const gchar                     *p;
 	guint                           h = 0;
 	
 	p = f->begin;
@@ -910,10 +910,10 @@ fstr_strcase_hash (gconstpointer key)
 }
 
 void
-gperf_profiler_init (struct config_file *cfg, const char *descr)
+gperf_profiler_init (struct config_file *cfg, const gchar *descr)
 {
 #if defined(WITH_GPERF_TOOLS) && defined(RSPAMD_MAIN)
-	char                            prof_path[PATH_MAX];
+	gchar                           prof_path[PATH_MAX];
 
 	if (getenv ("CPUPROFILE")) {
 
@@ -925,7 +925,7 @@ gperf_profiler_init (struct config_file *cfg, const char *descr)
 		cfg->profile_path = g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
 	}
 
-	snprintf (prof_path, sizeof (prof_path), "%s-%s.%d", cfg->profile_path, descr, (int)getpid ());
+	snprintf (prof_path, sizeof (prof_path), "%s-%s.%d", cfg->profile_path, descr, (gint)getpid ());
 	if (ProfilerStart (prof_path)) {
 		/* start ITIMER_PROF timer */
 		ProfilerRegisterThread ();
@@ -940,9 +940,9 @@ gperf_profiler_init (struct config_file *cfg, const char *descr)
 #ifdef HAVE_FLOCK
 /* Flock version */
 gboolean 
-lock_file (int fd, gboolean async)
+lock_file (gint fd, gboolean async)
 {
-    int flags;
+    gint                            flags;
 
     if (async) {
         flags = LOCK_EX | LOCK_NB;
@@ -963,9 +963,9 @@ lock_file (int fd, gboolean async)
 }
 
 gboolean 
-unlock_file (int fd, gboolean async)
+unlock_file (gint fd, gboolean async)
 {
-    int flags;
+    gint                            flags;
 
     if (async) {
         flags = LOCK_UN | LOCK_NB;
@@ -988,7 +988,7 @@ unlock_file (int fd, gboolean async)
 #else /* HAVE_FLOCK */
 /* Fctnl version */
 gboolean 
-lock_file (int fd, gboolean async)
+lock_file (gint fd, gboolean async)
 {
     struct flock fl = {
         .l_type = F_WRLCK,
@@ -1009,7 +1009,7 @@ lock_file (int fd, gboolean async)
 }
 
 gboolean 
-unlock_file (int fd, gboolean async)
+unlock_file (gint fd, gboolean async)
 {
     struct flock fl = {
         .l_type = F_UNLCK,
@@ -1034,7 +1034,7 @@ unlock_file (int fd, gboolean async)
 #ifdef RSPAMD_MAIN
 stat_file_t *
 get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf, 
-        const char *symbol, struct statfile **st, gboolean try_create)
+        const gchar *symbol, struct statfile **st, gboolean try_create)
 {
     stat_file_t *res = NULL;
     GList *cur;
@@ -1078,38 +1078,28 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
 }
 #endif /* RSPAMD_MAIN */
 
-/*
- * supported formats:
- *	%[0][width][x][X]O		off_t
- *	%[0][width]T			  time_t
- *	%[0][width][u][x|X]z	  ssize_t/size_t
- *	%[0][width][u][x|X]d	  int/u_int
- *	%[0][width][u][x|X]l	  long
- *	%[0][width|m][u][x|X]i	  int/ngx_int_t
- *	%[0][width][u][x|X]D	  int32_t/uint32_t
- *	%[0][width][u][x|X]L	  int64_t/uint64_t
- *	%[0][width][.width]f	  double
- *	%[0][width][.width]F	  long double
- *	%[0][width][.width]g	  double
- *	%[0][width][.width]G	  long double
- *	%P						pid_t
- *	%r						rlim_t
- *	%p						void *
- *	%V						f_str_t *
- *	%s						null-terminated string
- *	%*s					   length and string
- *	%Z						'\0'
- *	%N						'\n'
- *	%c						char
- *	%%						%
- *
- */
 
-
-int
-rspamd_sprintf (u_char *buf, const char *fmt, ...)
+gint
+rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 {
-	u_char   *p;
+	gchar   *p;
+	va_list   args;
+    gchar buf[BUFSIZ];
+    gint r;
+
+	va_start (args, fmt);
+	p = rspamd_vsnprintf (buf, sizeof (buf), fmt, args);
+	va_end (args);
+
+    r = fprintf (f, "%s", buf);
+
+    return r;
+}
+
+gint
+rspamd_sprintf (gchar *buf, const gchar *fmt, ...)
+{
+	gchar   *p;
 	va_list   args;
 
 	va_start (args, fmt);
@@ -1120,10 +1110,10 @@ rspamd_sprintf (u_char *buf, const char *fmt, ...)
 }
 
 
-int
-rspamd_snprintf (u_char *buf, size_t max, const char *fmt, ...)
+gint
+rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...)
 {
-	u_char   *p;
+	gchar   *p;
 	va_list   args;
 
 	va_start (args, fmt);
@@ -1135,16 +1125,16 @@ rspamd_snprintf (u_char *buf, size_t max, const char *fmt, ...)
 }
 
 
-u_char *
-rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
+gchar *
+rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args)
 {
-	u_char             *p, zero, *last;
-	int                 d;
+	gchar             *p, zero, *last;
+	gint                            d;
 	long double         f, scale;
 	size_t              len, slen;
-	int64_t				i64;
-	uint64_t			ui64;
-	unsigned int	    width, sign, hex, max_width, frac_width, i;
+	gint64                          i64;
+	guint64                         ui64;
+	guint                           width, sign, hex, max_width, frac_width, i;
 	f_str_t			   *v;
 
 	if (max == 0) {
@@ -1165,7 +1155,7 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 			i64 = 0;
 			ui64 = 0;
 
-			zero = (u_char) ((*++fmt == '0') ? '0' : ' ');
+			zero = (gchar) ((*++fmt == '0') ? '0' : ' ');
 			width = 0;
 			sign = 1;
 			hex = 0;
@@ -1212,7 +1202,7 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					break;
 
 				case '*':
-					d = (int)va_arg (args, int);
+					d = (gint)va_arg (args, gint);
 					if (G_UNLIKELY (d < 0)) {
 						msg_err ("crititcal error: size is less than 0");
 						g_assert (0);
@@ -1237,13 +1227,13 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 				len = v->len;
 				len = (buf + len < last) ? len : (size_t) (last - buf);
 
-				buf = ((u_char *)memcpy (buf, v->begin, len)) + len;
+				buf = ((gchar *)memcpy (buf, v->begin, len)) + len;
 				fmt++;
 
 				continue;
 
 			case 's':
-				p = va_arg(args, u_char *);
+				p = va_arg(args, gchar *);
 				if (p == NULL) {
 					p = "(NULL)";
 				}
@@ -1256,7 +1246,7 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 				} else {
 					len = (buf + slen < last) ? slen : (size_t) (last - buf);
 
-					buf = ((u_char *)memcpy (buf, p, len)) + len;
+					buf = ((gchar *)memcpy (buf, p, len)) + len;
 				}
 
 				fmt++;
@@ -1264,57 +1254,57 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 				continue;
 
 			case 'O':
-				i64 = (int64_t) va_arg (args, off_t);
+				i64 = (gint64) va_arg (args, off_t);
 				sign = 1;
 				break;
 
 			case 'P':
-				i64 = (int64_t) va_arg (args, pid_t);
+				i64 = (gint64) va_arg (args, pid_t);
 				sign = 1;
 				break;
 
 			case 'T':
-				i64 = (int64_t) va_arg (args, time_t);
+				i64 = (gint64) va_arg (args, time_t);
 				sign = 1;
 				break;
 
 			case 'z':
 				if (sign) {
-					i64 = (int64_t) va_arg (args, ssize_t);
+					i64 = (gint64) va_arg (args, ssize_t);
 				} else {
-					ui64 = (uint64_t) va_arg (args, size_t);
+					ui64 = (guint64) va_arg (args, size_t);
 				}
 				break;
 
 			case 'd':
 				if (sign) {
-					i64 = (int64_t) va_arg (args, int);
+					i64 = (gint64) va_arg (args, gint);
 				} else {
-					ui64 = (uint64_t) va_arg (args, unsigned int);
+					ui64 = (guint64) va_arg (args, guint);
 				}
 				break;
 
 			case 'l':
 				if (sign) {
-					i64 = (int64_t) va_arg(args, long);
+					i64 = (gint64) va_arg(args, long);
 				} else {
-					ui64 = (uint64_t) va_arg(args, unsigned long);
+					ui64 = (guint64) va_arg(args, guint32);
 				}
 				break;
 
 			case 'D':
 				if (sign) {
-					i64 = (int64_t) va_arg(args, int32_t);
+					i64 = (gint64) va_arg(args, gint32);
 				} else {
-					ui64 = (uint64_t) va_arg(args, uint32_t);
+					ui64 = (guint64) va_arg(args, guint32);
 				}
 				break;
 
 			case 'L':
 				if (sign) {
-					i64 = va_arg (args, int64_t);
+					i64 = va_arg (args, gint64);
 				} else {
-					ui64 = va_arg (args, uint64_t);
+					ui64 = va_arg (args, guint64);
 				}
 				break;
 
@@ -1326,7 +1316,7 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					f = -f;
 				}
 				
-				ui64 = (int64_t) f;
+				ui64 = (gint64) f;
 
 				buf = rspamd_sprintf_num (buf, last, ui64, zero, 0, width);
 
@@ -1343,10 +1333,10 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					}
 
 					/*
-					* (int64_t) cast is required for msvc6:
-					* it can not convert uint64_t to double
+					* (gint64) cast is required for msvc6:
+					* it can not convert guint64 to double
 					*/
-					ui64 = (uint64_t) ((f - (int64_t) ui64) * scale);
+					ui64 = (guint64) ((f - (gint64) ui64) * scale);
 
 					buf = rspamd_sprintf_num (buf, last, ui64, '0', 0, frac_width);
 				}
@@ -1363,7 +1353,7 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					f = -f;
 				}
 
-				ui64 = (int64_t) f;
+				ui64 = (gint64) f;
 
 				buf = rspamd_sprintf_num (buf, last, ui64, zero, 0, width);
 
@@ -1380,10 +1370,10 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 					}
 
 					/*
-					* (int64_t) cast is required for msvc6:
-					* it can not convert uint64_t to double
+					* (gint64) cast is required for msvc6:
+					* it can not convert guint64 to double
 					*/
-					ui64 = (uint64_t) ((f - (int64_t) ui64) * scale);
+					ui64 = (guint64) ((f - (gint64) ui64) * scale);
 
 					buf = rspamd_sprintf_num (buf, last, ui64, '0', 0, frac_width);
 				}
@@ -1427,8 +1417,8 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 				break;
 
 			case 'c':
-				d = va_arg (args, int);
-				*buf++ = (u_char) (d & 0xff);
+				d = va_arg (args, gint);
+				*buf++ = (gchar) (d & 0xff);
 				fmt++;
 
 				continue;
@@ -1460,10 +1450,10 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 			if (sign) {
 				if (i64 < 0) {
 					*buf++ = '-';
-					ui64 = (uint64_t) -i64;
+					ui64 = (guint64) -i64;
 
 				} else {
-					ui64 = (uint64_t) i64;
+					ui64 = (guint64) i64;
 				}
 			}
 
@@ -1480,15 +1470,15 @@ rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args)
 }
 
 
-static u_char *
-rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero,
-	unsigned int hexadecimal, unsigned int width)
+static gchar *
+rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
+	guint                           hexadecimal, guint width)
 {
-	u_char		   *p, temp[sizeof ("18446744073709551615")];
+	gchar		   *p, temp[sizeof ("18446744073709551615")];
 	size_t		    len;
-	uint32_t		ui32;
-	static u_char   hex[] = "0123456789abcdef";
-	static u_char   HEX[] = "0123456789ABCDEF";
+	guint32                         ui32;
+	static gchar   hex[] = "0123456789abcdef";
+	static gchar   HEX[] = "0123456789ABCDEF";
 
 	p = temp + sizeof(temp);
 
@@ -1506,20 +1496,20 @@ rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero,
 			 *
 			 * For 32-bit numbers and some divisors gcc and icc use
 			 * a inlined multiplication and shifts.  For example,
-			 * unsigned "i32 / 10" is compiled to
+			 * guint "i32 / 10" is compiled to
 			 *
 			 *	 (i32 * 0xCCCCCCCD) >> 35
 			 */
 
-			ui32 = (uint32_t) ui64;
+			ui32 = (guint32) ui64;
 
 			do {
-				*--p = (u_char) (ui32 % 10 + '0');
+				*--p = (gchar) (ui32 % 10 + '0');
 			} while (ui32 /= 10);
 
 		} else {
 			do {
-				*--p = (u_char) (ui64 % 10 + '0');
+				*--p = (gchar) (ui64 % 10 + '0');
 			} while (ui64 /= 10);
 		}
 
@@ -1527,8 +1517,8 @@ rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero,
 
 		do {
 
-			/* the "(uint32_t)" cast disables the BCC's warning */
-			*--p = hex[(uint32_t) (ui64 & 0xf)];
+			/* the "(guint32)" cast disables the BCC's warning */
+			*--p = hex[(guint32) (ui64 & 0xf)];
 
 		} while (ui64 >>= 4);
 
@@ -1536,8 +1526,8 @@ rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero,
 
 		do {
 
-			/* the "(uint32_t)" cast disables the BCC's warning */
-			*--p = HEX[(uint32_t) (ui64 & 0xf)];
+			/* the "(guint32)" cast disables the BCC's warning */
+			*--p = HEX[(guint32) (ui64 & 0xf)];
 
 		} while (ui64 >>= 4);
 	}
@@ -1558,7 +1548,7 @@ rspamd_sprintf_num (u_char *buf, u_char *last, uint64_t ui64, u_char zero,
 		len = last - buf;
 	}
 
-	return ((u_char *)memcpy (buf, p, len)) + len;
+	return ((gchar *)memcpy (buf, p, len)) + len;
 }
 
 

@@ -42,11 +42,11 @@
 
 
 gboolean
-parse_host_port (const gchar *str, struct in_addr *ina, uint16_t *port)
+parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port)
 {
 	gchar                           **tokens, *err_str;
 	struct hostent                 *hent;
-	unsigned int                    port_parsed, saved_errno = errno;
+	guint                           port_parsed, saved_errno = errno;
 
 	tokens = g_strsplit_set (str, ":", 0);
 	if (!tokens || !tokens[0]) {
@@ -98,11 +98,11 @@ err:
 	return FALSE;
 }
 
-int
+gint
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 {
 	gchar                          **host;
-	int16_t                        *family, *port;
+	gint16                        *family, *port;
 	struct in_addr                 *addr;
 
 	if (str == NULL)
@@ -118,7 +118,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 #ifdef HAVE_DIRNAME
 		/* Try to check path of bind credit */
 		struct stat                     st;
-		int                             fd;
+		gint                            fd;
 		gchar                           *copy = memory_pool_strdup (cfg->cfg_pool, str);
 		if (stat (copy, &st) == -1) {
 			if (errno == ENOENT) {
@@ -215,7 +215,7 @@ get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 {
 	GList                          *cur_opt;
 	struct module_opt              *cur;
-	static char                     numbuf[64];
+	static gchar                     numbuf[64];
 
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
 	if (cur_opt == NULL) {
@@ -241,7 +241,7 @@ get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 						snprintf (numbuf, sizeof (numbuf), "%s", *(gboolean *)cur->actual_data ? "yes" : "no");
 						return numbuf;
 					case LUA_VAR_STRING:
-						return (char *)cur->actual_data;
+						return (gchar *)cur->actual_data;
 					case LUA_VAR_FUNCTION:
 						msg_info ("option %s is dynamic, so it cannot be aqquired statically", opt_name);
 						return NULL;
@@ -286,10 +286,10 @@ parse_limit (const gchar *limit)
 	return result;
 }
 
-unsigned int
+guint
 parse_seconds (const gchar *t)
 {
-	unsigned int                    result = 0;
+	guint                           result = 0;
 	gchar                           *err_str;
 
 	if (!t || *t == '\0')
@@ -431,7 +431,7 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 {
 	gchar                         **strvec, **p;
 	struct filter                  *cur;
-	int                             i;
+	gint                            i;
 
 	if (str == NULL) {
 		return;
@@ -502,7 +502,7 @@ fill_cfg_params (struct config_file *cfg)
 gboolean
 get_config_checksum (struct config_file *cfg) 
 {
-	int                             fd;
+	gint                            fd;
 	void                           *map;
 	struct stat                     st;
 
@@ -555,7 +555,7 @@ post_load_config (struct config_file *cfg)
 	clock_getres (CLOCK_REALTIME, &ts);
 # endif
 
-	cfg->clock_res = (int)log10 (1000000 / ts.tv_nsec);
+	cfg->clock_res = (gint)log10 (1000000 / ts.tv_nsec);
 	if (cfg->clock_res < 0) {
 		cfg->clock_res = 0;
 	}
@@ -588,7 +588,7 @@ parse_err (const gchar *fmt, ...)
 {
 	va_list                         aq;
 	gchar                            logbuf[BUFSIZ], readbuf[32];
-	int                             r;
+	gint                            r;
 
 	va_start (aq, fmt);
 	g_strlcpy (readbuf, yytext, sizeof (readbuf));
@@ -605,7 +605,7 @@ parse_warn (const gchar *fmt, ...)
 {
 	va_list                         aq;
 	gchar                            logbuf[BUFSIZ], readbuf[32];
-	int                             r;
+	gint                            r;
 
 	va_start (aq, fmt);
 	g_strlcpy (readbuf, yytext, sizeof (readbuf));
@@ -763,7 +763,7 @@ parse_lua_normalizer (struct config_file *cfg, struct statfile *st, const gchar 
 {
     gchar *code_begin;
     GList *params = NULL;
-    int len;
+    gint                            len;
 
     code_begin = strchr (line, ':');
     
@@ -826,7 +826,7 @@ gboolean
 read_xml_config (struct config_file *cfg, const gchar *filename)
 {
 	struct stat st;
-	int fd;
+	gint                            fd;
 	gchar *data;
 	gboolean res;
 	GMarkupParseContext *ctx;

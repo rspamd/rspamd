@@ -34,15 +34,15 @@
 static memory_pool_t           *map_pool = NULL;
 
 static GList                   *maps = NULL;
-static char                    *hash_fill = "1";
+static gchar                    *hash_fill = "1";
 
 /* Http reply */
 struct http_reply {
-	int                             code;
+	gint                            code;
 	GHashTable                     *headers;
-	char                           *cur_header;
+	gchar                           *cur_header;
 
-	int                             parser_state;
+	gint                            parser_state;
 };
 
 struct http_callback_data {
@@ -53,8 +53,8 @@ struct http_callback_data {
 	struct http_reply              *reply;
 	struct map_cb_data              cbdata;
 
-	int                             state;
-	int                             fd;
+	gint                            state;
+	gint                            fd;
 };
 
 /* Value in seconds after whitch we would try to do stat on list file */
@@ -63,10 +63,10 @@ struct http_callback_data {
 #define HTTP_CONNECT_TIMEOUT 2
 #define HTTP_READ_TIMEOUT 10
 
-static int
+static gint
 connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_async)
 {
-	int                             sock;
+	gint                            sock;
 
 	if ((sock = make_tcp_socket (&data->addr, data->port, FALSE, is_async)) == -1) {
 		msg_info ("cannot connect to http server %s: %d, %s", data->host, errno, strerror (errno));
@@ -77,10 +77,10 @@ connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_as
 }
 
 static void
-write_http_request (struct rspamd_map *map, struct http_map_data *data, int sock)
+write_http_request (struct rspamd_map *map, struct http_map_data *data, gint sock)
 {
-	char                            outbuf[BUFSIZ];
-	int                             r;
+	gchar                           outbuf[BUFSIZ];
+	gint                            r;
 
 	r = rspamd_snprintf (outbuf, sizeof (outbuf), "GET %s%s HTTP/1.1" CRLF "Connection: close" CRLF "Host: %s" CRLF, (*data->path == '/') ? "" : "/", data->path, data->host);
 	if (data->last_checked != 0) {
@@ -111,7 +111,7 @@ parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
 			}
 			else {
 				/* Try to parse HTTP reply code */
-				reply->code = strtoul (++p, (char **)&err_str, 10);
+				reply->code = strtoul (++p, (gchar **)&err_str, 10);
 				if (*err_str != ' ') {
 					msg_info ("error while reading HTTP status code: %s", p);
 					return NULL;
@@ -182,11 +182,11 @@ parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
 	return s;
 }
 
-static int
+static gint
 read_chunk_header (u_char * buf, size_t len, struct http_map_data *data)
 {
 	u_char                          chunkbuf[32], *p, *c;
-	int                             skip = 0;
+	gint                            skip = 0;
 
 	p = chunkbuf;
 	c = buf;
@@ -214,7 +214,7 @@ static                          gboolean
 read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http_map_data *data, struct map_cb_data *cbdata)
 {
 	u_char                         *p = buf, *remain;
-	uint32_t                        skip = 0;
+	guint32                         skip = 0;
 
 	if (data->chunk == 0) {
 		/* Read first chunk data */
@@ -239,7 +239,7 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 				return TRUE;
 			}
 			else {
-				msg_info ("invalid chunked reply: %*s", (int)len, buf);
+				msg_info ("invalid chunked reply: %*s", (gint)len, buf);
 				return FALSE;
 			}
 		}
@@ -270,11 +270,11 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 }
 
 static                          gboolean
-read_http_common (struct rspamd_map *map, struct http_map_data *data, struct http_reply *reply, struct map_cb_data *cbdata, int fd)
+read_http_common (struct rspamd_map *map, struct http_map_data *data, struct http_reply *reply, struct map_cb_data *cbdata, gint fd)
 {
 	u_char                         *remain, *pos;
 	ssize_t                         r;
-	char                           *te;
+	gchar                           *te;
 	
 	if ((r = read (fd, data->read_buf + data->rlen, sizeof (data->read_buf) - data->rlen)) > 0) {
 		r += data->rlen;
@@ -327,7 +327,7 @@ static void
 read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 {
 	struct map_cb_data              cbdata;
-	int                             fd;
+	gint                            fd;
 	struct http_reply              *repl;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
@@ -368,7 +368,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	struct map_cb_data              cbdata;
 	u_char                          buf[BUFSIZ], *remain;
 	ssize_t                         r;
-	int                             fd, rlen;
+	gint                            fd, rlen;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
 		msg_err ("bad callback for reading map file");
@@ -403,15 +403,15 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 }
 
 gboolean
-add_map (const char *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
+add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
 {
 	struct rspamd_map              *new_map;
 	enum fetch_proto                proto;
-	const char                     *def, *p, *hostend;
+	const gchar                     *def, *p, *hostend;
 	struct file_map_data           *fdata;
 	struct http_map_data           *hdata;
-	char                            portbuf[6];
-	int                             i, s, fd;
+	gchar                           portbuf[6];
+	gint                            i, s, fd;
 	struct hostent                 *hent;
 
 	/* First of all detect protocol line */
@@ -581,13 +581,13 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 {
 	radix_tree_t                   *tree = st;
 
-	uint32_t                        mask = 0xFFFFFFFF;
-	uint32_t                        ip;
-	char                           *token, *ipnet, *err_str, **strv, **cur;
+	guint32                         mask = 0xFFFFFFFF;
+	guint32                         ip;
+	gchar                           *token, *ipnet, *err_str, **strv, **cur;
 	struct in_addr                  ina;
-	int                             k;
+	gint                            k;
 
-	strv = g_strsplit_set ((char *)key, " ,;", 0);
+	strv = g_strsplit_set ((gchar *)key, " ,;", 0);
 	cur = strv;
 	while (*cur) {
 		if (**cur == '\0') {
@@ -616,7 +616,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 			return;
 		}
 
-		ip = ntohl ((uint32_t) ina.s_addr);
+		ip = ntohl ((guint32) ina.s_addr);
 		k = radix32tree_insert (tree, ip, mask, 1);
 		if (k == -1) {
 			msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
@@ -665,7 +665,7 @@ fin_radix_list (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 static void
-file_callback (int fd, short what, void *ud)
+file_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_map              *map = ud;
 	struct file_map_data           *data = map->map_data;
@@ -701,7 +701,7 @@ free_http_cbdata (struct http_callback_data *cbd)
 }
 
 static void
-http_async_callback (int fd, short what, void *ud)
+http_async_callback (gint fd, short what, void *ud)
 {
 	struct http_callback_data      *cbd = ud;
 
@@ -768,11 +768,11 @@ http_async_callback (int fd, short what, void *ud)
 
 
 static void
-http_callback (int fd, short what, void *ud)
+http_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_map              *map = ud;
 	struct http_map_data           *data = map->map_data;
-	int                             sock;
+	gint                            sock;
 	struct http_callback_data      *cbd;
 
 	/* Plan event again with jitter */

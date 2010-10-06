@@ -100,10 +100,10 @@ static GOptionEntry entries[] =
 
 #ifndef HAVE_SA_SIGINFO
 static void
-sig_handler (int signo)
+sig_handler (gint signo)
 #else
 static void
-sig_handler (int signo, siginfo_t *info, void *unused)
+sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 #ifdef HAVE_SA_SIGINFO
@@ -138,8 +138,8 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 
 #ifdef HAVE_SA_SIGINFO
 
-static const char *
-chldsigcode (int code) {
+static const gchar *
+chldsigcode (gint code) {
 	switch (code) {
 #ifdef CLD_EXITED
 		case CLD_EXITED:
@@ -168,8 +168,8 @@ print_signals_info ()
 					inf->si_pid, chldsigcode (inf->si_code));
 		}
 		else {
-			msg_info ("got signal: '%s'; received from pid: %P; uid: %l",
-					g_strsignal (inf->si_signo), inf->si_pid, (long int)inf->si_uid);
+			msg_info ("got signal: '%s'; received from pid: %P; uid: %ul",
+					g_strsignal (inf->si_signo), inf->si_pid, (gulong)inf->si_uid);
 		}
 		g_free (inf);
 	}
@@ -178,7 +178,7 @@ print_signals_info ()
 
 
 static void
-read_cmd_line (int argc, char **argv, struct config_file *cfg)
+read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
 {
 	GError                         *error = NULL;
 	GOptionContext                 *context;
@@ -217,7 +217,7 @@ drop_priv (struct config_file *cfg)
 				exit (-errno);
 			}
 			if (setgid (grp->gr_gid) == -1) {
-				msg_err ("cannot setgid to %d (%s), aborting", (int)grp->gr_gid, strerror (errno));
+				msg_err ("cannot setgid to %d (%s), aborting", (gint)grp->gr_gid, strerror (errno));
 				exit (-errno);
 			}
 			if (initgroups (cfg->rspamd_user, grp->gr_gid) == -1) {
@@ -226,7 +226,7 @@ drop_priv (struct config_file *cfg)
 			}
 		}
 		if (setuid (pwd->pw_uid) == -1) {
-			msg_err ("cannot setuid to %d (%s), aborting", (int)pwd->pw_uid, strerror (errno));
+			msg_err ("cannot setuid to %d (%s), aborting", (gint)pwd->pw_uid, strerror (errno));
 			exit (-errno);
 		}
 	}
@@ -251,7 +251,7 @@ static void
 reread_config (struct rspamd_main *rspamd)
 {
 	struct config_file             *tmp_cfg;
-	char                           *cfg_file;
+	gchar                           *cfg_file;
 	GList                          *l;
 	struct filter                  *filt;
 
@@ -432,7 +432,7 @@ dump_module_variables (gpointer key, gpointer value, gpointer data)
 static void
 dump_all_variables (gpointer key, gpointer value, gpointer data)
 {
-	printf ("$%s = \"%s\"\n", (char *)key, (char *)value);
+	printf ("$%s = \"%s\"\n", (gchar *)key, (gchar *)value);
 }
 
 
@@ -442,10 +442,10 @@ dump_cfg_vars (struct config_file *cfg)
 	g_hash_table_foreach (cfg->variables, dump_all_variables, NULL);
 }
 
-static int
-create_listen_socket (struct in_addr *addr, int port, int family, char *path)
+static gint
+create_listen_socket (struct in_addr *addr, gint port, gint family, gchar *path)
 {
-	int                             listen_sock = -1;
+	gint                            listen_sock = -1;
 	struct sockaddr_un             *un_addr;
 	/* Create listen socket */
 	if (family == AF_INET) {
@@ -486,21 +486,21 @@ fork_delayed (struct rspamd_main *rspamd)
 }
 
 static inline uintptr_t
-make_listen_key (struct in_addr *addr, int port, int family, char *path)
+make_listen_key (struct in_addr *addr, gint port, gint family, gchar *path)
 {
 	uintptr_t                       res = 0;
-	char                           *key;
+	gchar                           *key;
 
 	if (family == AF_INET) {
 		/* Make fnv hash from bytes of addr and port */
-		key = (char *)&addr->s_addr;
-		while (key - (char *)&addr->s_addr < sizeof (addr->s_addr)) {
-			res ^= (char)*key++;
+		key = (gchar *)&addr->s_addr;
+		while (key - (gchar *)&addr->s_addr < sizeof (addr->s_addr)) {
+			res ^= (gchar)*key++;
 			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
 		}
-		key = (char *)&port;
-		while (key - (char *)&port < sizeof (addr->s_addr)) {
-			res ^= (char)*key++;
+		key = (gchar *)&port;
+		while (key - (gchar *)&port < sizeof (addr->s_addr)) {
+			res ^= (gchar)*key++;
 			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
 		}
 	}
@@ -508,7 +508,7 @@ make_listen_key (struct in_addr *addr, int port, int family, char *path)
 		/* Make fnv hash from bytes of path */
 		key = path;
 		while (*key) {
-			res ^= (char)*key++;
+			res ^= (gchar)*key++;
 			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
 		}
 	}
@@ -521,7 +521,7 @@ spawn_workers (struct rspamd_main *rspamd)
 {
 	GList                          *cur;
 	struct worker_conf             *cf;
-	int                             i, listen_sock;
+	gint                            i, listen_sock;
 	gpointer                        p;
 
 	cur = rspamd->cfg->workers;
@@ -564,7 +564,7 @@ spawn_workers (struct rspamd_main *rspamd)
 	}
 }
 
-static const char              *
+static const gchar              *
 get_process_type (enum process_type type)
 {
 	switch (type) {
@@ -600,7 +600,7 @@ static gboolean
 wait_for_workers (gpointer key, gpointer value, gpointer unused)
 {
 	struct rspamd_worker          *w = value;
-	int                            res = 0;
+	gint                            res = 0;
 
 	waitpid (w->pid, &res, 0);
 
@@ -724,7 +724,7 @@ print_symbols_cache (struct config_file *cfg)
 {
 	GList                          *cur;
 	struct cache_item              *item;
-	int                             i;
+	gint                            i;
 
 	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename)) {
 		exit (EXIT_FAILURE);
@@ -755,11 +755,11 @@ print_symbols_cache (struct config_file *cfg)
 	}
 }
 
-int
-main (int argc, char **argv, char **env)
+gint
+main (gint argc, gchar **argv, gchar **env)
 {
 	struct rspamd_main             *rspamd;
-	int                             res = 0;
+	gint                            res = 0;
 	struct sigaction                signals;
 	struct rspamd_worker           *cur;
 	struct rlimit                   rlim;

@@ -13,82 +13,108 @@ struct statfile;
 struct classifier_config;
 
 /* Create socket and bind or connect it to specified address and port */
-int make_tcp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
+gint make_tcp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
 /* Create socket and bind or connect it to specified address and port */
-int make_udp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
+gint make_udp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
 /* Accept from socket */
-int accept_from_socket (int listen_sock, struct sockaddr *addr, socklen_t *len);
+gint accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t *len);
 /* Create and bind or connect unix socket */
-int make_unix_socket (const char *, struct sockaddr_un *, gboolean is_server);
+gint make_unix_socket (const gchar *, struct sockaddr_un *, gboolean is_server);
 /* Write pid to file */
-int write_pid (struct rspamd_main *);
+gint write_pid (struct rspamd_main *);
 /* Make specified socket non-blocking */
-int make_socket_nonblocking (int);
-int make_socket_blocking (int);
+gint make_socket_nonblocking (gint);
+gint make_socket_blocking (gint);
 /* Poll sync socket for specified events */
-int poll_sync_socket (int fd, int timeout, short events);
+gint poll_sync_socket (gint fd, gint timeout, short events);
 /* Init signals */
 #ifdef HAVE_SA_SIGINFO
-void init_signals (struct sigaction *sa, void (*sig_handler)(int, siginfo_t *, void *));
+void init_signals (struct sigaction *sa, void (*sig_handler)(gint, siginfo_t *, void *));
 #else
 void init_signals (struct sigaction *sa, sighandler_t);
 #endif
 /* Send specified signal to each worker */
-void pass_signal_worker (GHashTable *, int );
+void pass_signal_worker (GHashTable *, gint );
 /* Convert string to lowercase */
-void convert_to_lowercase (char *str, unsigned int size);
+void convert_to_lowercase (gchar *str, guint size);
 
 #ifndef HAVE_SETPROCTITLE
-int init_title(int argc, char *argv[], char *envp[]);
-int setproctitle(const char *fmt, ...);
+gint init_title(gint argc, gchar *argv[], gchar *envp[]);
+gint setproctitle(const gchar *fmt, ...);
 #endif
 
 #ifndef HAVE_PIDFILE
 struct pidfh {
-	int pf_fd;
+	gint pf_fd;
 #ifdef HAVE_PATH_MAX
-	char    pf_path[PATH_MAX + 1];
+	gchar    pf_path[PATH_MAX + 1];
 #elif defined(HAVE_MAXPATHLEN)
-	char    pf_path[MAXPATHLEN + 1];
+	gchar    pf_path[MAXPATHLEN + 1];
 #else
-	char    pf_path[1024 + 1];
+	gchar    pf_path[1024 + 1];
 #endif
  	dev_t pf_dev;
  	ino_t   pf_ino;
 };
-struct pidfh *pidfile_open(const char *path, mode_t mode, pid_t *pidptr);
-int pidfile_write(struct pidfh *pfh);
-int pidfile_close(struct pidfh *pfh);
-int pidfile_remove(struct pidfh *pfh);
+struct pidfh *pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr);
+gint pidfile_write(struct pidfh *pfh);
+gint pidfile_close(struct pidfh *pfh);
+gint pidfile_remove(struct pidfh *pfh);
 #endif
 
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
-char* resolve_stat_filename (memory_pool_t *pool, char *pattern, char *rcpt, char *from);
+gchar* resolve_stat_filename (memory_pool_t *pool, gchar *pattern, gchar *rcpt, gchar *from);
 #ifdef HAVE_CLOCK_GETTIME
-const char* calculate_check_time (struct timeval *tv, struct timespec *begin, int resolution);
+const gchar* calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution);
 #else
-const char* calculate_check_time (struct timeval *begin, int resolution);
+const gchar* calculate_check_time (struct timeval *begin, gint resolution);
 #endif
 
-double set_counter (const char *name, long int value);
+double set_counter (const gchar *name, guint32 value);
 
-gboolean lock_file (int fd, gboolean async);
-gboolean unlock_file (int fd, gboolean async);
+gboolean lock_file (gint fd, gboolean async);
+gboolean unlock_file (gint fd, gboolean async);
 
 guint rspamd_strcase_hash (gconstpointer key);
 gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
 guint fstr_strcase_hash (gconstpointer key);
 gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
 
-void gperf_profiler_init (struct config_file *cfg, const char *descr);
+void gperf_profiler_init (struct config_file *cfg, const gchar *descr);
 
 #ifdef RSPAMD_MAIN
 stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf, 
-		const char *symbol, struct statfile **st, gboolean try_create);
+		const gchar *symbol, struct statfile **st, gboolean try_create);
 #endif
 
-int rspamd_sprintf (u_char *buf, const char *fmt, ...);
-int rspamd_snprintf (u_char *buf, size_t max, const char *fmt, ...);
-u_char *rspamd_vsnprintf (u_char *buf, size_t max, const char *fmt, va_list args);
+/*
+ * supported formats:
+ *	%[0][width][x][X]O		    off_t
+ *	%[0][width]T			    time_t
+ *	%[0][width][u][x|X]z	    ssize_t/size_t
+ *	%[0][width][u][x|X]d	    gint/guint
+ *	%[0][width][u][x|X]l	    long
+ *	%[0][width][u][x|X]D	    gint32/guint32
+ *	%[0][width][u][x|X]L	    gint64/guint64
+ *	%[0][width][.width]f	    double
+ *	%[0][width][.width]F	    long double
+ *	%[0][width][.width]g	    double
+ *	%[0][width][.width]G	    long double
+ *	%P						    pid_t
+ *	%r				            rlim_t
+ *	%p						    void *
+ *	%V						    f_str_t *
+ *	%s						    null-terminated string
+ *	%*s					        length and string
+ *	%Z						    '\0'
+ *	%N						    '\n'
+ *	%c						    gchar
+ *	%%						    %
+ *
+ */
+gint rspamd_sprintf (gchar *buf, const gchar *fmt, ...);
+gint rspamd_fprintf (FILE *f, const gchar *fmt, ...);
+gint rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...);
+gchar *rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args);
 
 #endif

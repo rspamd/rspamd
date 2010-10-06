@@ -55,13 +55,13 @@ enum command_type {
 };
 
 struct controller_command {
-	char                           *command;
+	gchar                           *command;
 	gboolean                        privilleged;
 	enum command_type               type;
 };
 
 struct custom_controller_command {
-	const char                     *command;
+	const gchar                     *command;
 	gboolean                        privilleged;
 	gboolean                        require_message;
 	controller_func_t               handler;
@@ -86,7 +86,7 @@ static GList                   *custom_commands = NULL;
 static GCompletion             *comp;
 static time_t                   start_time;
 
-static char                     greetingbuf[1024];
+static gchar                     greetingbuf[1024];
 static sig_atomic_t             wanna_die = 0;
 extern rspamd_hash_t           *counters;
 
@@ -94,10 +94,10 @@ static gboolean                 controller_write_socket (void *arg);
 
 #ifndef HAVE_SA_SIGINFO
 static void
-sig_handler (int signo)
+sig_handler (gint signo)
 #else
 static void
-sig_handler (int signo, siginfo_t *info, void *unused)
+sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	struct timeval                  tv;
@@ -122,7 +122,7 @@ sig_handler (int signo, siginfo_t *info, void *unused)
 }
 
 static void
-sigusr_handler (int fd, short what, void *arg)
+sigusr_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
@@ -167,11 +167,11 @@ free_session (void *ud)
 	g_free (session);
 }
 
-static int
+static gint
 check_auth (struct controller_command *cmd, struct controller_session *session)
 {
-	char                            out_buf[128];
-	int                             r;
+	gchar                           out_buf[128];
+	gint                            r;
 
 	if (cmd->privilleged && !session->authorized) {
 		r = rspamd_snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
@@ -189,25 +189,25 @@ counter_write_callback (gpointer key, gpointer value, void *data)
 {
 	struct controller_session      *session = data;
 	struct counter_data            *cd = value;
-	char                           *name = key;
-	char                            out_buf[128];
-	int                             r;
+	gchar                           *name = key;
+	gchar                           out_buf[128];
+	gint                            r;
 
-	r = rspamd_snprintf (out_buf, sizeof (out_buf), "%s: %ul" CRLF, name, (unsigned long int)cd->value);
+	r = rspamd_snprintf (out_buf, sizeof (out_buf), "%s: %uD" CRLF, name, (guint32)cd->value);
 	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE)) {
 		msg_warn ("cannot write to socket");
 	}
 }
 
 static gboolean
-write_whole_statfile (struct controller_session *session, char *symbol, struct classifier_config *ccf)
+write_whole_statfile (struct controller_session *session, gchar *symbol, struct classifier_config *ccf)
 {
 	stat_file_t                    *statfile;
 	struct statfile                *st;
-	char                            out_buf[BUFSIZ];
-	int                             i;
-	uint64_t                        rev, ti, len, pos;
-	char                           *out;
+	gchar                           out_buf[BUFSIZ];
+	gint                            i;
+	guint64                         rev, ti, len, pos;
+	gchar                           *out;
 	struct rspamd_binlog_element    log_elt;
 	struct stat_file_block         *stat_elt;
 
@@ -253,11 +253,11 @@ write_whole_statfile (struct controller_session *session, char *symbol, struct c
 }
 
 static gboolean
-process_sync_command (struct controller_session *session, char **args)
+process_sync_command (struct controller_session *session, gchar **args)
 {
-	char                            out_buf[BUFSIZ], *arg, *err_str, *symbol;
-	int                             r;
-	uint64_t                        rev, time;
+	gchar                           out_buf[BUFSIZ], *arg, *err_str, *symbol;
+	gint                            r;
+	guint64                         rev, time;
 	struct statfile                *st;
 	struct classifier_config       *ccf;
 	GList                          *cur;
@@ -318,7 +318,7 @@ process_sync_command (struct controller_session *session, char **args)
 	}
 	
 	while (binlog_sync (binlog, rev, &time, &data)) {
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "%ul %ul %ul" CRLF, (long unsigned)rev, (long unsigned)time, (long unsigned)data->len);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %z" CRLF, rev, time, data->len);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			if (data != NULL) {
 				g_free (data);
@@ -353,9 +353,9 @@ process_sync_command (struct controller_session *session, char **args)
 static gboolean
 process_stat_command (struct controller_session *session)
 {
-	char                            out_buf[BUFSIZ], *numbuf;
-	int                             r;
-	uint64_t                        used, total, rev;
+	gchar                           out_buf[BUFSIZ], *numbuf;
+	gint                            r;
+	guint64                         used, total, rev;
 	time_t                          ti;
 	memory_pool_stat_t              mem_st;
 	struct classifier_config       *ccf;
@@ -374,13 +374,13 @@ process_stat_command (struct controller_session *session)
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %ud" CRLF, session->worker->srv->stat->messages_learned);
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %ud" CRLF, session->worker->srv->stat->connections_count);
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %ud" CRLF, session->worker->srv->stat->control_connections_count);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %l" CRLF, (long int)mem_st.pools_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %l" CRLF, (long int)mem_st.pools_freed);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %l" CRLF, (long int)mem_st.bytes_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %l" CRLF, (long int)mem_st.chunks_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %l" CRLF, (long int)mem_st.shared_chunks_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %l" CRLF, (long int)mem_st.chunks_freed);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %l" CRLF, (long int)mem_st.oversized_chunks);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %z" CRLF, mem_st.pools_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %z" CRLF, mem_st.pools_freed);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %z" CRLF, mem_st.bytes_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %z" CRLF, mem_st.chunks_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %z" CRLF, mem_st.shared_chunks_allocated);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %z" CRLF, mem_st.chunks_freed);
+	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %z" CRLF, mem_st.oversized_chunks);
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes stored: %ud" CRLF, session->worker->srv->stat->fuzzy_hashes);
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes expired: %ud" CRLF, session->worker->srv->stat->fuzzy_hashes_expired);
 	/* Now write statistics for each statfile */
@@ -397,12 +397,12 @@ process_stat_command (struct controller_session *session)
 				used = statfile_get_used_blocks (statfile);
 				total = statfile_get_total_blocks (statfile);
 				statfile_get_revision (statfile, &rev, &ti);
-				if (total != (uint64_t)-1 && used != (uint64_t)-1) {
+				if (total != (guint64)-1 && used != (guint64)-1) {
 					numbuf = g_format_size_for_display (st->size);
 					r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, 
-							"Statfile: %s (version %ul); length: %s; free blocks: %ul; total blocks: %ul; free: %.2f%%" CRLF,
-							st->symbol, (long unsigned)rev, numbuf, 
-							(long unsigned)(total - used), (long unsigned)total,
+							"Statfile: %s (version %uL); length: %s; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
+							st->symbol, rev, numbuf, 
+							(total - used), total,
 							(double)((double)(total - used) / (double)total) * 100.);
 					g_free (numbuf);
 				}
@@ -416,14 +416,14 @@ process_stat_command (struct controller_session *session)
 }
 
 static gboolean
-process_command (struct controller_command *cmd, char **cmd_args, struct controller_session *session)
+process_command (struct controller_command *cmd, gchar **cmd_args, struct controller_session *session)
 {
-	char                            out_buf[BUFSIZ], *arg, *err_str;
-	int                             r = 0, days, hours, minutes;
+	gchar                           out_buf[BUFSIZ], *arg, *err_str;
+	gint                            r = 0, days, hours, minutes;
 	time_t                          uptime;
-	unsigned long                   size = 0;
+	guint32                   size = 0;
 	struct classifier_config       *cl;
-	char                           *password = g_hash_table_lookup (session->worker->cf->params, "password");
+	gchar                           *password = g_hash_table_lookup (session->worker->cf->params, "password");
 
 	switch (cmd->type) {
 	case COMMAND_PASSWORD:
@@ -496,14 +496,14 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 			}
 			/* If uptime is less than 1 minute print only seconds */
 			else if (uptime / 60 == 0) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d second%s" CRLF, (int)uptime, (int)uptime > 1 ? "s" : " ");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d second%s" CRLF, (gint)uptime, (gint)uptime > 1 ? "s" : " ");
 			}
 			/* Else print the minutes and seconds. */
 			else {
 				hours = uptime / 3600;
 				minutes = uptime / 60 - hours * 60;
 				uptime -= hours * 3600 + minutes * 60;
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (int)uptime, uptime > 1 ? "s" : " ");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (gint)uptime, uptime > 1 ? "s" : " ");
 			}
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
@@ -691,7 +691,7 @@ process_command (struct controller_command *cmd, char **cmd_args, struct control
 }
 
 static                          gboolean
-process_custom_command (char *line, char **cmd_args, struct controller_session *session)
+process_custom_command (gchar *line, gchar **cmd_args, struct controller_session *session)
 {
 	GList                          *cur;
 	struct custom_controller_command *cmd;
@@ -717,8 +717,8 @@ controller_read_socket (f_str_t * in, void *arg)
 	struct classifier_ctx          *cls_ctx;
 	stat_file_t                    *statfile;
 	struct statfile                *st;
-	int                             len, i, r;
-	char                           *s, **params, *cmd, out_buf[128];
+	gint                            len, i, r;
+	gchar                           *s, **params, *cmd, out_buf[128];
 	struct worker_task             *task;
 	struct mime_text_part          *part;
 	GList                          *comp_list, *cur = NULL;
@@ -1013,14 +1013,14 @@ controller_err_socket (GError * err, void *arg)
 }
 
 static void
-accept_socket (int fd, short what, void *arg)
+accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	struct sockaddr_storage         ss;
 	struct controller_session      *new_session;
 	struct timeval                 *io_tv;
 	socklen_t                       addrlen = sizeof (ss);
-	int                             nfd;
+	gint                            nfd;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
@@ -1057,10 +1057,10 @@ void
 start_controller (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
-	int                             i;
+	gint                            i;
 	GList                          *comp_list = NULL;
-	char                           *hostbuf;
-	long int                        hostmax;
+	gchar                          *hostbuf;
+	gsize                           hostmax;
 
 	worker->srv->pid = getpid ();
 	event_init ();
@@ -1106,7 +1106,7 @@ start_controller (struct rspamd_worker *worker)
 }
 
 void
-register_custom_controller_command (const char *name, controller_func_t handler, gboolean privilleged, gboolean require_message)
+register_custom_controller_command (const gchar *name, controller_func_t handler, gboolean privilleged, gboolean require_message)
 {
 	struct custom_controller_command *cmd;
 
