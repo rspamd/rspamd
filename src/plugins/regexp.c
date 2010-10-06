@@ -71,14 +71,31 @@ struct regexp_json_buf {
 	struct config_file             *cfg;
 };
 
+/* Lua regexp module for checking rspamd regexps */
+LUA_FUNCTION_DEF (regexp, match);
+
+static const struct luaL_reg    regexplib_m[] = {
+	LUA_INTERFACE_DEF (regexp, match),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
 static struct regexp_ctx       *regexp_module_ctx = NULL;
 
-static gint                      regexp_common_filter (struct worker_task *task);
+static gint                     regexp_common_filter (struct worker_task *task);
 static gboolean                 rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused);
 static void                     process_regexp_item (struct worker_task *task, void *user_data);
 
+static gint
+luaopen_regexp (lua_State * L)
+{
+	lua_newclass (L, "rspamd{regexp}", regexplib_m);
+	luaL_openlib (L, "rspamd_regexp", null_reg, 0);
+
+	return 1;
+}
 
 static void 
 regexp_dynamic_insert_result (struct worker_task *task, void *user_data)
@@ -390,6 +407,8 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_expression_function ("raw_header_exists", rspamd_raw_header_exists, NULL);
 	register_expression_function ("check_smtp_data", rspamd_check_smtp_data, NULL);
 
+	(void)luaopen_regexp (cfg->lua_state);
+
 	return 0;
 }
 
@@ -498,6 +517,7 @@ regexp_module_config (struct config_file *cfg)
 
 		cur_opt = g_list_next (cur_opt);
 	}
+
 
 	return res;
 }
@@ -1212,4 +1232,34 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 	}
 
 	return FALSE;
+}
+
+/* Lua part */
+static gint
+lua_regexp_match (lua_State *L)
+{
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{task}");
+	struct worker_task             *task;
+	const gchar                    *re_text;
+	struct rspamd_regexp           *re;
+	gint                            r;
+
+	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
+	task = *((struct worker_task **)ud);
+	re_text = luaL_checkstring (L, 2);
+
+
+	/* This is a regexp */
+	if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
+		re = parse_regexp (task->cfg->cfg_pool, (gchar *)re_text, task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
+		}
+		re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
+	}
+	r = process_regexp (re, task, NULL);
+	lua_pushboolean (L, r == 1);
+
+	return 1;
 }
