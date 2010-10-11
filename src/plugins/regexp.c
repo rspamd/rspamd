@@ -1213,7 +1213,7 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 				}
 			}
 		}
-		else {
+		else if (arg != NULL) {
 			if (what != NULL) {
 				if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, what)) {
 					return TRUE;

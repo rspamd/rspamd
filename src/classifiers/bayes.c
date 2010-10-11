@@ -282,6 +282,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 				1,            				/* error code */
 				"cannot find statfile for symbol: %s",
 				symbol);
+		return FALSE;
 	}
 	if ((to_learn = statfile_pool_is_open (pool, sel_st->path)) == NULL) {
 		if ((to_learn = statfile_pool_open (pool, sel_st->path, sel_st->size, FALSE)) == NULL) {

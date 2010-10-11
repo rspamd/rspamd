@@ -790,7 +790,6 @@ gboolean
 handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gchar                           *name, *val;
-	GList                          *cur_opt;
 	struct module_opt              *cur;
 	gboolean                        is_lua = FALSE;
 	
@@ -805,7 +804,7 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHa
 			is_lua = TRUE;
 		}
 	}
-	cur_opt = ctx->section_pointer;
+
 	/* Insert option */
 	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
 	cur->param = name;

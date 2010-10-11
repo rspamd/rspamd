@@ -290,13 +290,13 @@ struct dns_name_table {
 };
 
 static gboolean
-try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 len, guint8 *label, GList *table)
+try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 len, guint8 *label, GList **table)
 {
 	GList *cur;
 	struct dns_name_table *tbl;
 	guint16 pointer;
 
-	cur = table;
+	cur = *table;
 	while (cur) {
 		tbl = cur->data;
 		if (tbl->len == len) {
@@ -314,7 +314,7 @@ try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 l
 	tbl->off = target - start;
 	tbl->label = label;
 	tbl->len = len;
-	table = g_list_prepend (table, tbl);
+	*table = g_list_prepend (*table, tbl);
 
 	return FALSE;
 }
@@ -378,7 +378,7 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 				continue;
 			}
 			/* First try to compress name */
-			if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, table)) {
+			if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, &table)) {
 				*pos++ = (guint8)label_len;
 				memcpy (pos, begin, label_len);
 				pos += label_len;
@@ -406,7 +406,6 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 			*pos++ = (guint8)label_len;
 			memcpy (pos, begin, label_len);
 			pos += label_len;
-			remain -= label_len + 1;
 			break;
 		}
 		if (remain == 0) {

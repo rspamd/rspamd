@@ -309,7 +309,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 {
 	struct expression              *expr = NULL;
 	struct expression_stack        *stack = NULL;
-	struct expression_function     *func = NULL, *old;
+	struct expression_function     *func = NULL;
 	struct expression              *arg;
 	GQueue                         *function_stack;
 	gchar                           *p, *c, *str, op, *copy;
@@ -490,7 +490,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 			if (!in_regexp) {
 				/* Append argument to list */
 				if (*p == ',' || (*p == ')' && brackets == 0)) {
-					arg = memory_pool_alloc (pool, sizeof (struct expression));
+					arg = NULL;
 					str = memory_pool_alloc (pool, p - c + 1);
 					g_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
@@ -500,7 +500,6 @@ parse_expression (memory_pool_t * pool, gchar *line)
 					/* Pop function */
 					if (*p == ')') {
 						/* Last function in chain, goto skipping spaces state */
-						old = func;
 						func = g_queue_pop_tail (function_stack);
 						if (g_queue_get_length (function_stack) == 0) {
 							state = SKIP_SPACES;
@@ -551,6 +550,11 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 	gint                            regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
 	GError                         *err = NULL;
 
+	if (line == NULL) {
+		msg_err ("cannot parse NULL line");
+		return NULL;
+	}
+
 	src = line;
 	result = memory_pool_alloc0 (pool, sizeof (struct rspamd_regexp));
 	/* Skip whitespaces */
@@ -577,10 +581,8 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 		}
 	}
 	else {
-		*begin = '\0';
 		result->header = memory_pool_strdup (pool, line);
 		result->type = REGEXP_HEADER;
-		*begin = '=';
 		line = begin;
 	}
 	/* Find begin of regexp */
@@ -1086,8 +1088,8 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 #endif
 
 		debug_task ("checking %s param", param_name);
-
-		if ((param_data = g_mime_content_type_get_parameter ((GMimeContentType *)ct, param_name)) == NULL) {
+		param_data = g_mime_content_type_get_parameter ((GMimeContentType *)ct, param_name);
+		if (param_data == NULL) {
 			return FALSE;
 		}
 	}

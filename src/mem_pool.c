@@ -25,6 +25,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "fstring.h"
+#include "logger.h"
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L
@@ -57,15 +58,20 @@ pool_chain_new (gsize size)
 {
 	struct _pool_chain             *chain;
 
-	g_assert (size > 0);
+	g_return_val_if_fail (size > 0, NULL);
 
 	chain = g_slice_alloc (sizeof (struct _pool_chain));
 
-	g_assert (chain != NULL);
+	if (chain == NULL) {
+		msg_err ("cannot allocate %z bytes, aborting", sizeof (struct _pool_chain));
+		abort ();
+	}
 
 	chain->begin = g_slice_alloc (size);
-
-	g_assert (chain->begin != NULL);
+	if (chain->begin == NULL) {
+		msg_err ("cannot allocate %z bytes, aborting", size);
+		abort ();
+	}
 
 	chain->len = size;
 	chain->pos = chain->begin;
@@ -81,10 +87,15 @@ static struct _pool_chain_shared *
 pool_chain_new_shared (gsize size)
 {
 	struct _pool_chain_shared      *chain;
+	gpointer                        map;
 
 #if defined(HAVE_MMAP_ANON)
-	chain = (struct _pool_chain_shared *)mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
-	g_assert (chain != MAP_FAILED);
+	map = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+	if (map == MAP_FAILED) {
+		msg_err ("cannot allocate %z bytes, aborting", size + sizeof (struct _pool_chain));
+		abort ();
+	}
+	chain = (struct _pool_chain_shared *)map;
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
 #elif defined(HAVE_MMAP_ZERO)
 	gint                            fd;
@@ -93,8 +104,12 @@ pool_chain_new_shared (gsize size)
 	if (fd == -1) {
 		return NULL;
 	}
-	chain = (struct _pool_chain_shared *)mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	g_assert (chain != MAP_FAILED);
+	map = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	if (map == MAP_FAILED) {
+		msg_err ("cannot allocate %z bytes, aborting", size + sizeof (struct _pool_chain));
+		abort ();
+	}
+	chain = (struct _pool_chain_shared *)map;
 	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
 #else
 #   	error No mmap methods are defined
@@ -120,27 +135,39 @@ memory_pool_t                  *
 memory_pool_new (gsize size)
 {
 	memory_pool_t                  *new;
+	gpointer                        map;
 
-	g_assert (size > 0);
+	g_return_val_if_fail (size > 0, NULL);
 	/* Allocate statistic structure if it is not allocated before */
 	if (mem_pool_stat == NULL) {
 #if defined(HAVE_MMAP_ANON)
-		mem_pool_stat = (memory_pool_stat_t *)mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
-		g_assert (stat != MAP_FAILED);
+		map = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+		if (map == MAP_FAILED) {
+			msg_err ("cannot allocate %z bytes, aborting", sizeof (memory_pool_stat_t));
+			abort ();
+		}
+		mem_pool_stat = (memory_pool_stat_t *)map;
 #elif defined(HAVE_MMAP_ZERO)
 		gint                            fd;
 
 		fd = open ("/dev/zero", O_RDWR);
 		g_assert (fd != -1);
-		mem_pool_stat = (memory_pool_stat_t *)mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-		g_assert (chain != MAP_FAILED);
+		map = mmap (NULL, sizeof (memory_pool_stat_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		if (map == MAP_FAILED) {
+			msg_err ("cannot allocate %z bytes, aborting", sizeof (memory_pool_stat_t));
+			abort ();
+		}
+		mem_pool_stat = (memory_pool_stat_t *)map;
 #else
 #   	error No mmap methods are defined
 #endif
 	}
 
 	new = g_slice_alloc (sizeof (memory_pool_t));
-	g_assert (new != NULL);
+	if (new == NULL) {
+		msg_err ("cannot allocate %z bytes, aborting", sizeof (memory_pool_t));
+		abort ();
+	}
 
 	new->cur_pool = pool_chain_new (size);
 	new->shared_pool = NULL;
@@ -276,7 +303,8 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 	struct _pool_chain_shared      *new, *cur;
 
 	if (pool) {
-		g_assert (size > 0);
+		g_return_val_if_fail (size > 0, NULL);
+
 		cur = pool->shared_pool;
 		if (!cur) {
 			cur = pool_chain_new_shared (pool->first_pool->len);

@@ -718,7 +718,8 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 		case SMTP_STATE_RESOLVE_REVERSE:
 			/* Parse reverse reply and start resolve of this ip */
 			if (reply->code != DNS_RC_NOERROR) {
-				debug_ip (session->client_addr.s_addr, "DNS error: %s", dns_strerror (reply->code));
+				rspamd_conditional_debug(session->client_addr.s_addr, __FUNCTION__,
+						"DNS error: %s", dns_strerror (reply->code));
 				
 				if (reply->code == DNS_RC_NXDOMAIN) {
 					session->hostname = memory_pool_strdup (session->pool, "unknown");
@@ -741,7 +742,8 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 			break;
 		case SMTP_STATE_RESOLVE_NORMAL:
 			if (reply->code != DNS_RC_NOERROR) {
-				debug_ip (session->client_addr.s_addr, "DNS error: %s", dns_strerror (reply->code));
+				rspamd_conditional_debug(session->client_addr.s_addr, __FUNCTION__,
+										"DNS error: %s", dns_strerror (reply->code));
 
 				if (reply->code == DNS_RC_NXDOMAIN) {
 					session->hostname = memory_pool_strdup (session->pool, "unknown");

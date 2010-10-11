@@ -4,6 +4,7 @@
 #include "config.h"
 #include "cfg_file.h"
 #include "radix.h"
+#include "util.h"
 
 /** 
  * Process type: main or worker
@@ -76,18 +77,18 @@ void rspamd_log_nodebug ();
 
 /* Logging in postfix style */
 #if (defined(RSPAMD_MAIN) || defined(RSPAMD_LIB) || defined(RSPAMD_TEST))
-#define msg_err(args...)	rspamd_common_log_function(G_LOG_LEVEL_CRITICAL, __FUNCTION__, ##args)
-#define msg_warn(args...)	rspamd_common_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, ##args)
-#define msg_info(args...)	rspamd_common_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, ##args)
-#define msg_debug(args...)	rspamd_conditional_debug(-1, __FUNCTION__, ##args)
-#define debug_task(args...) rspamd_conditional_debug(task->from_addr.s_addr, __FUNCTION__, ##args)
-#define debug_ip(ip, args...) rspamd_conditional_debug((ip), __FUNCTION__, ##args)
+#define msg_err(...)	rspamd_common_log_function(G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
+#define msg_warn(...)	rspamd_common_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
+#define msg_info(...)	rspamd_common_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
+#define msg_debug(...)	rspamd_conditional_debug(-1, __FUNCTION__, __VA_ARGS__)
+#define debug_task(...) rspamd_conditional_debug(task->from_addr.s_addr, __FUNCTION__, __VA_ARGS__)
+
 #else
-#define msg_err(args...)	fprintf(stderr, ##args)
-#define msg_warn(args...)	fprintf(stderr, ##args)
-#define msg_info(args...)	fprintf(stderr, ##args)
-#define msg_debug(args...)	fprintf(stderr, ##args)
-#define debug_task(args...) fprintf(stderr, ##args)
+#define msg_err(...)	rspamd_fprintf(stderr, __VA_ARGS__)
+#define msg_warn(...)	rspamd_fprintf(stderr, __VA_ARGS__)
+#define msg_info(...)	rspamd_fprintf(stderr, __VA_ARGS__)
+#define msg_debug(...)	rspamd_fprintf(stderr, __VA_ARGS__)
+#define debug_task(...) rspamd_fprintf(stderr, __VA_ARGS__)
 #endif
 
 #endif

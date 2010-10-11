@@ -511,7 +511,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 
 
 	if (append_suffix) {
-		r += rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+		rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
 	}
 
 	msg_debug ("request: %s, dots: %d, level: %d, orig: %*s", result, dots_num, level, (gint)hostname->len, hostname->begin);
@@ -797,7 +797,16 @@ redirector_callback (gint fd, short what, void *arg)
 		break;
 	case STATE_READ:
 		if (what == EV_READ) {
-			r = read (param->sock, url_buf, sizeof (url_buf));
+			r = read (param->sock, url_buf, sizeof (url_buf) - 1);
+			if (r <= 0) {
+				msg_err ("read failed: %s from %s", strerror (errno), param->redirector->name);
+				remove_normal_event (param->task->s, free_redirector_session, param);
+				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+				return;
+			}
+
+			url_buf[r - 1] = '\0';
+
 			if ((p = strstr (url_buf, "Uri: ")) != NULL) {
 				p += sizeof ("Uri: ") - 1;
 				c = p;

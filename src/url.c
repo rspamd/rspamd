@@ -961,8 +961,8 @@ url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 {
 	const gchar                    *p, *c;
 	gchar                           open_brace = '\0', close_brace = '\0';
-	gint                            i, brace_stack;
-	gboolean                        passwd;
+	gint                            i, brace_stack = 0;
+	gboolean                        passwd = FALSE;
 	guint                           port;
 
 	p = pos + strlen (match->pattern);

@@ -361,9 +361,9 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 	};
 	char                           *value;
 	int                             nodes, minnodes, iterations = 0;
-	struct statfile                *st, *sel_st;
+	struct statfile                *st, *sel_st = NULL;
 	stat_file_t                    *sel = NULL, *to_learn;
-	long double                     res = 0., max = 0., start_value, end_value;
+	long double                     res = 0., max = 0., start_value = 0., end_value = 0.;
 	double                          learn_threshold = 0.0;
 	GList                          *cur, *to_demote = NULL;
 	gboolean                        force_learn = FALSE;
@@ -432,6 +432,17 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			}
 			cur = g_list_next (cur);
 		}
+
+		if (sel_st == NULL) {
+			g_set_error (err,
+					winnow_error_quark(),		/* error domain */
+					1,            				/* error code */
+					"cannot find statfile for symbol %s",
+					symbol);
+			msg_err ("cannot find statfile for symbol %s", symbol);
+			return FALSE;
+		}
+
 		to_learn = statfile_pool_is_open (pool, sel_st->path);
 		if (to_learn == NULL) {
 			g_set_error (err,

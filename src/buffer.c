@@ -27,6 +27,7 @@
 #include "main.h"
 
 #define G_DISPATCHER_ERROR dispatcher_error_quark()
+#define debug_ip(...) rspamd_conditional_debug(d->peer_addr, __FUNCTION__, __VA_ARGS__)
 
 static void                     dispatcher_cb (gint fd, short what, void *arg);
 
@@ -60,7 +61,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			}
 		}
 		else {
-			debug_ip (d->peer_addr, "partially write data, retry");
+			debug_ip("partially write data, retry");
 			/* Wait for other event */
 			d->offset += off;
 			event_del (d->ev);
@@ -71,7 +72,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	else {
 		if (d->write_callback) {
 			if (!d->write_callback (d->user_data)) {
-				debug_ip (d->peer_addr, "callback set wanna_die flag, terminating");
+				debug_ip("callback set wanna_die flag, terminating");
 				return FALSE;
 			}
 		}
@@ -93,7 +94,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			}
 		}
 		else {
-			debug_ip (d->peer_addr, "partially write data, retry");
+			debug_ip("partially write data, retry");
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
@@ -101,7 +102,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		}
 	}
 	else if (r + d->offset < d->file_size) {
-		debug_ip (d->peer_addr, "partially write data, retry");
+		debug_ip("partially write data, retry");
 		/* Wait for other event */
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
@@ -110,7 +111,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	else {
 		if (d->write_callback) {
 			if (!d->write_callback (d->user_data)) {
-				debug_ip (d->peer_addr, "callback set wanna_die flag, terminating");
+				debug_ip("callback set wanna_die flag, terminating");
 				return FALSE;
 			}
 		}
@@ -132,7 +133,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			}
 		}
 		else {
-			debug_ip (d->peer_addr, "partially write data, retry");
+			debug_ip("partially write data, retry");
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
@@ -141,7 +142,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	}
 	else if (r + d->offset < d->file_size) {
 		d->offset += r;
-		debug_ip (d->peer_addr, "partially write data, retry");
+		debug_ip("partially write data, retry");
 		/* Wait for other event */
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
@@ -150,7 +151,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 	else {
 		if (d->write_callback) {
 			if (!d->write_callback (d->user_data)) {
-				debug_ip (d->peer_addr, "callback set wanna_die flag, terminating");
+				debug_ip("callback set wanna_die flag, terminating");
 				return FALSE;
 			}
 		}
@@ -197,7 +198,7 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			buf->pos += r;
 			if (BUFREMAIN (buf) != 0) {
 				/* Continue with this buffer */
-				debug_ip (d->peer_addr, "wrote %z bytes of %z", r, buf->data->len);
+				debug_ip("wrote %z bytes of %z", r, buf->data->len);
 				continue;
 			}
 		}
@@ -210,7 +211,7 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			}
 		}
 		else if (r == -1 && errno == EAGAIN) {
-			debug_ip (d->peer_addr, "partially write data, retry");
+			debug_ip("partially write data, retry");
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, fd, EV_WRITE, dispatcher_cb, (void *)d);
@@ -225,11 +226,11 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 		g_list_free (d->out_buffers);
 		d->out_buffers = NULL;
 
-		debug_ip (d->peer_addr, "all buffers were written successfully");
+		debug_ip("all buffers were written successfully");
 
 		if (is_delayed && d->write_callback) {
 			if (!d->write_callback (d->user_data)) {
-				debug_ip (d->peer_addr, "callback set wanna_die flag, terminating");
+				debug_ip("callback set wanna_die flag, terminating");
 				return FALSE;
 			}
 		}
@@ -305,7 +306,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			}
 		}
 		else if (r == -1 && errno == EAGAIN) {
-			debug_ip (d->peer_addr, "partially read data, retry");
+			debug_ip("partially read data, retry");
 			return;
 		}
 		else {
@@ -313,7 +314,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			d->in_buf->pos += r;
 			d->in_buf->data->len += r;
 		}
-		debug_ip (d->peer_addr, "read %z characters, policy is %s, watermark is: %z", r, 
+		debug_ip("read %z characters, policy is %s, watermark is: %z", r,
 				d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", d->nchars);
 	}
 
@@ -403,14 +404,13 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					d->in_buf->data->len = len;
 					d->in_buf->pos = d->in_buf->data->begin + len;
 					b = d->in_buf->data->begin;
-					c = b;
 				}
 				else {
 					d->in_buf->data->len = 0;
 					d->in_buf->pos = d->in_buf->data->begin;
 				}
 				if (d->policy != saved_policy && len != r) {
-					debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
+					debug_ip("policy changed during callback, restart buffer's processing");
 					read_buffers (fd, d, TRUE);
 					return;
 				}
@@ -425,7 +425,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 				return;
 			}
 			if (d->policy != saved_policy) {
-				debug_ip (d->peer_addr, "policy changed during callback, restart buffer's processing");
+				debug_ip("policy changed during callback, restart buffer's processing");
 				read_buffers (fd, d, TRUE);
 				return;
 			}
@@ -444,7 +444,7 @@ dispatcher_cb (gint fd, short what, void *arg)
 	rspamd_io_dispatcher_t         *d = (rspamd_io_dispatcher_t *) arg;
 	GError                         *err;
 
-	debug_ip (d->peer_addr, "in dispatcher callback, what: %d, fd: %d", (gint)what, fd);
+	debug_ip("in dispatcher callback, what: %d, fd: %d", (gint)what, fd);
 
 	switch (what) {
 	case EV_TIMEOUT:
@@ -562,7 +562,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 		}
 	}
 
-	debug_ip (d->peer_addr, "new input length watermark is %uz", d->nchars);
+	debug_ip("new input length watermark is %uz", d->nchars);
 }
 
 gboolean
@@ -594,7 +594,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 	d->out_buffers = g_list_prepend (d->out_buffers, newbuf);
 
 	if (!delayed) {
-		debug_ip (d->peer_addr, "plan write event");
+		debug_ip("plan write event");
 		return write_buffers (d->fd, d, FALSE);
 	}
 	return TRUE;
@@ -639,6 +639,8 @@ rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
 {
 	event_add (d->ev, d->tv);
 }
+
+#undef debug_ip
 
 /* 
  * vi:ts=4 

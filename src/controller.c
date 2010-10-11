@@ -258,7 +258,7 @@ process_sync_command (struct controller_session *session, gchar **args)
 	gchar                           out_buf[BUFSIZ], *arg, *err_str, *symbol;
 	gint                            r;
 	guint64                         rev, time;
-	struct statfile                *st;
+	struct statfile                *st = NULL;
 	struct classifier_config       *ccf;
 	GList                          *cur;
 	struct rspamd_binlog           *binlog;
@@ -591,7 +591,9 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 								return FALSE;
 							}
 						}
-						session->learn_multiplier = strtod (arg, NULL);
+						else {
+							session->learn_multiplier = strtod (arg, NULL);
+						}
 						break;
 					default:
 						r = rspamd_snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF);

@@ -7,6 +7,7 @@
 #define RSPAMD_PROTOCOL_H
 
 #include "config.h"
+#include "filter.h"
 
 #define RSPAMD_FILTER_ERROR 1
 #define RSPAMD_NETWORK_ERROR 2
@@ -27,7 +28,6 @@
 #define SPAMD_ERROR "EX_ERROR"
 
 struct worker_task;
-enum rspamd_metric_action;
 struct metric;
 
 enum rspamd_protocol {

@@ -25,11 +25,6 @@
 #include "config.h"
 #include "upstream.h"
 
-#ifdef WITH_DEBUG
-#   define msg_debug(args...) syslog(LOG_DEBUG, ##args)
-#else
-#   define msg_debug(args...) do {} while(0)
-#endif
 
 #ifdef _THREAD_SAFE
 pthread_rwlock_t                upstream_mtx = PTHREAD_RWLOCK_INITIALIZER;
@@ -510,7 +505,6 @@ get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now
 
 #undef U_LOCK
 #undef U_UNLOCK
-#undef msg_debug
 /* 
  * vi:ts=4 
  */

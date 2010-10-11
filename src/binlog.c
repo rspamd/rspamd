@@ -361,7 +361,7 @@ binlog_insert (struct rspamd_binlog *log, GTree *nodes)
 	off_t seek;
 
 	if (!log || !log->metaindex || !log->cur_idx || !nodes) {
-		msg_info ("improperly opened binlog: %s", log->filename);
+		msg_info ("improperly opened binlog: %s", log != NULL ? log->filename : "unknown");
 		return FALSE;
 	}
 
@@ -380,7 +380,7 @@ binlog_insert (struct rspamd_binlog *log, GTree *nodes)
 	/* Check metaindex free space */
 	if (log->metaindex->last_index < METAINDEX_LEN) {
 		/* Create new index block */
-		if ((seek = lseek (log->fd, 0, SEEK_END)) == -1) {
+		if ((seek = lseek (log->fd, 0, SEEK_END)) == (off_t)-1) {
 			msg_info ("cannot seek in file: %s, error: %s", log->filename, strerror (errno));
 			return FALSE;
 		}
@@ -407,7 +407,7 @@ binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GB
 	gboolean idx_mapped = FALSE, res = TRUE, is_first = FALSE;
 
 	if (!log || !log->metaindex || !log->cur_idx) {
-		msg_info ("improperly opened binlog: %s", log->filename);
+		msg_info ("improperly opened binlog: %s", log != NULL ? log->filename : "unknown");
 		return FALSE;
 	}
 
