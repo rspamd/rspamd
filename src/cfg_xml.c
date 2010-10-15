@@ -690,7 +690,7 @@ worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	return TRUE;
 }
 
-G_INLINE_FUNC gboolean
+static inline gboolean
 check_action (const gchar *data, gint *result)
 {
 	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {

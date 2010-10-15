@@ -92,7 +92,7 @@ static GList                   *custom_commands = NULL;
 /* For default metric, dirty hack, but much faster than hash lookup */
 static double default_score, default_required_score;
 
-G_INLINE_FUNC const gchar *
+static inline const gchar *
 rspamc_proto_str (guint ver)
 {
 	if (ver >= 12) {

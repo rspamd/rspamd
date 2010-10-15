@@ -604,7 +604,7 @@ lua_task_get_images (lua_State *L)
 	return 1;
 }
 
-G_INLINE_FUNC gboolean
+static inline gboolean
 lua_push_symbol_result (lua_State *L, struct worker_task *task, struct metric *metric, const gchar *symbol)
 {
 	struct metric_result           *metric_res;

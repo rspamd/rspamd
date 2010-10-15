@@ -85,7 +85,7 @@ rspamd_trie_insert_char (rspamd_trie_t *trie, gint depth, struct rspamd_trie_sta
 	return q;
 }
 
-G_INLINE_FUNC struct rspamd_trie_match *
+static inline struct rspamd_trie_match *
 check_match (struct rspamd_trie_state *s, gchar c)
 {
 	struct rspamd_trie_match         *m = s->match;

@@ -207,7 +207,7 @@ find_view_by_from (GList * views, struct worker_task *task)
 	return NULL;
 }
 
-G_INLINE_FUNC gboolean
+static inline gboolean
 check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 {
 	GList                          *cur, *cur_re;

@@ -46,7 +46,7 @@
 
 #define MAX_LEARN_ITERATIONS 100
 
-G_INLINE_FUNC GQuark
+static inline GQuark
 winnow_error_quark (void)
 {
 	return g_quark_from_static_string ("winnow-error");

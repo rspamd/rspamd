@@ -36,7 +36,7 @@
 
 #define LOCAL_PROB_DENOM 16.0
 
-G_INLINE_FUNC GQuark
+static inline GQuark
 bayes_error_quark (void)
 {
 	return g_quark_from_static_string ("bayes-error");

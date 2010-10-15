@@ -583,7 +583,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
 }
 
-G_INLINE_FUNC void
+static inline void
 register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
 {
 	struct fuzzy_client_session    *session;
@@ -701,7 +701,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 	}
 }
 
-G_INLINE_FUNC gboolean
+static inline gboolean
 register_fuzzy_controller_call (struct controller_session *session, struct worker_task *task, fuzzy_hash_t *h,
 		gint                            cmd, gint value, gint flag, gint *saved)
 {
