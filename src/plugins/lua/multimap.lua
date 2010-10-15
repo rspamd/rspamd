@@ -133,10 +133,17 @@ local opts =  rspamd_config:get_all_opt('multimap')
 if opts then
 	local strrules = opts['rule']
 	if strrules then
-		for _,value in ipairs(strrules) do
-			local params = split(value, ',')
+		if type(strrules) == 'array' then 
+			for _,value in ipairs(strrules) do
+				local params = split(value, ',')
+				if not add_rule (params) then
+					rspamd_logger:err('cannot add rule: "'..value..'"')
+				end
+			end
+		elseif type(strrules) == 'string' then
+			local params = split(strrules, ',')
 			if not add_rule (params) then
-				rspamd_logger:err('cannot add rule: "'..value..'"')
+				rspamd_logger:err('cannot add rule: "'..strrules..'"')
 			end
 		end
 	end
