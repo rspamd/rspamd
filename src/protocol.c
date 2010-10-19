@@ -488,7 +488,7 @@ show_url_header (struct worker_task *task)
             /* Write this url to log as well */
             msg_info ("url found: <%s>, score: [%.2f / %.2f]", struri (url), default_score, default_required_score);
         }
-		if (g_tree_lookup (url_tree, url) == NULL) {
+		if (g_tree_lookup (url_tree, url) == NULL && url->hostlen > 0) {
 			g_tree_insert (url_tree, url, url);
 			host.begin = url->host;
 			host.len = url->hostlen;

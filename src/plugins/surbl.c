@@ -891,6 +891,9 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 
 	debug_task ("check url %s", struri (url));
 
+	if (url->hostlen <= 0) {
+		return FALSE;
+	}
 
 	if (surbl_module_ctx->use_redirector) {
 		f.begin = url->host;
