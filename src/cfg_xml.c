@@ -690,28 +690,6 @@ worker_handle_bind (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	return TRUE;
 }
 
-static inline gboolean
-check_action (const gchar *data, gint *result)
-{
-	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
-		*result = METRIC_ACTION_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "greylist", sizeof ("greylist") - 1) == 0) {
-		*result = METRIC_ACTION_GREYLIST;
-	}
-	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") - 1) == 0) {
-		*result = METRIC_ACTION_ADD_HEADER;
-	}
-	else if (g_ascii_strncasecmp (data, "rewrite_subject", sizeof ("rewrite_subject") - 1) == 0) {
-		*result = METRIC_ACTION_REWRITE_SUBJECT;
-	}
-	else {
-		msg_err ("unknown action for metric: %s", data);
-		return FALSE;
-	}
-	return TRUE;
-}
-
 gboolean
 handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
@@ -722,14 +700,14 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 
 	/* First of all check whether we have data with weight (reject:50 for example) */
 	if ((p = strchr (data, ':')) == NULL) {
-		if (check_action (data, &res)) {
+		if (check_action_str (data, &res)) {
 			metric->action = res;
 			return TRUE;
 		}
 		return FALSE;
 	}
 	else {
-		if (!check_action (data, &res)) {
+		if (!check_action_str (data, &res)) {
 			return FALSE;
 		}
 		else {

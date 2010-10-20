@@ -111,4 +111,8 @@ void make_composites (struct worker_task *task);
  */
 double factor_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *unused);
 
+gboolean check_action_str (const gchar *data, gint *result);
+const gchar *str_action_metric (enum rspamd_metric_action action);
+gint check_metric_action (double score, double required_score, struct metric *metric);
+
 #endif

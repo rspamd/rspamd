@@ -77,7 +77,4 @@ gboolean write_reply (struct worker_task *task) G_GNUC_WARN_UNUSED_RESULT;
  */
 void register_protocol_command (const gchar *name, protocol_reply_func func);
 
-const gchar *str_action_metric (enum rspamd_metric_action action);
-gint check_metric_action (double score, double required_score, struct metric *metric);
-
 #endif

@@ -612,6 +612,80 @@ insert_headers (struct worker_task *task)
 	g_hash_table_foreach (task->results, insert_metric_header, task);
 }
 
+gboolean
+check_action_str (const gchar *data, gint *result)
+{
+	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
+		*result = METRIC_ACTION_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "greylist", sizeof ("greylist") - 1) == 0) {
+		*result = METRIC_ACTION_GREYLIST;
+	}
+	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") - 1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite_subject", sizeof ("rewrite_subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+	}
+	else {
+		msg_err ("unknown action for metric: %s", data);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+const gchar *
+str_action_metric (enum rspamd_metric_action action)
+{
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		return "reject";
+	case METRIC_ACTION_SOFT_REJECT:
+		return "soft reject";
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		return "rewrite subject";
+	case METRIC_ACTION_ADD_HEADER:
+		return "add header";
+	case METRIC_ACTION_GREYLIST:
+		return "greylist";
+	case METRIC_ACTION_NOACTION:
+		return "no action";
+	}
+
+	return "unknown action";
+}
+
+gint
+check_metric_action (double score, double required_score, struct metric *metric)
+{
+	GList                          *cur;
+	struct metric_action           *action, *selected_action = NULL;
+
+	if (score >= required_score) {
+		return metric->action;
+	}
+	else if (metric->actions == NULL) {
+		return METRIC_ACTION_NOACTION;
+	}
+	else {
+		cur = metric->actions;
+		while (cur) {
+			action = cur->data;
+			if (score >= action->score) {
+				selected_action = action;
+			}
+			cur = g_list_next (cur);
+		}
+		if (selected_action) {
+			return selected_action->action;
+		}
+		else {
+			return METRIC_ACTION_NOACTION;
+		}
+	}
+}
+
+
 /* 
  * vi:ts=4 
  */

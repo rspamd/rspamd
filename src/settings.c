@@ -27,6 +27,7 @@
 #include "map.h"
 #include "main.h"
 #include "settings.h"
+#include "filter.h"
 #include "json/jansson.h"
 
 struct json_buf {
@@ -35,6 +36,19 @@ struct json_buf {
 	u_char                         *pos;
 	size_t                          buflen;
 };
+
+static void
+settings_actions_free (gpointer data)
+{
+	GList                          *cur = data;
+
+	while (cur) {
+		g_free (cur->data);
+		cur = g_list_next (cur);
+	}
+
+	g_list_free ((GList *)data);
+}
 
 static void
 settings_free (gpointer data)
@@ -104,10 +118,12 @@ void
 json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
-	gint                            nelts, i, n, a;
-	json_t                         *js, *cur_elt, *cur_nm, *it_val;
+	gint                            nelts, i, n, j;
+	json_t                         *js, *cur_elt, *cur_nm, *it_val, *act_it, *act_value;
 	json_error_t                    je;
+	struct metric_action           *new_act;
 	struct rspamd_settings         *cur_settings;
+	GList                          *cur_act;
 	gchar                           *cur_name;
 	void                           *json_it;
 	double                         *score;
@@ -156,6 +172,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		cur_settings = g_malloc (sizeof (struct rspamd_settings));
 		cur_settings->metric_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->reject_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		cur_settings->metric_actions = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, settings_actions_free);
 		cur_settings->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->whitelist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->statfile_alias = NULL;
@@ -201,7 +218,29 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 				if (it_val && json_is_number (it_val)) {
 					score = g_malloc (sizeof (double));
 					*score = json_number_value (it_val);
-					g_hash_table_insert (cur_settings->metric_scores, g_strdup (json_object_iter_key (json_it)), score);
+					g_hash_table_insert (cur_settings->metric_scores,
+							g_strdup (json_object_iter_key (json_it)), score);
+				}
+				else if (it_val && json_is_object (it_val)) {
+					/* Assume this as actions hash */
+					cur_act = NULL;
+					act_it = json_object_iter (it_val);
+					while (act_it) {
+						act_value = json_object_iter_value (act_it);
+						if (it_val && json_is_number (act_value)) {
+							if (check_action_str (json_object_iter_key (act_it), &j)) {
+								new_act = g_malloc (sizeof (struct metric_action));
+								new_act->action = j;
+								new_act->score = json_number_value (act_value);
+								cur_act = g_list_prepend (cur_act, new_act);
+							}
+						}
+						act_it = json_object_iter_next (it_val, act_it);
+					}
+					if (cur_act != NULL) {
+						g_hash_table_insert (cur_settings->metric_actions,
+								g_strdup (json_object_iter_key (json_it)), cur_act);
+					}
 				}
 				json_it = json_object_iter_next (cur_nm, json_it);
 			}
@@ -225,10 +264,11 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		cur_nm = json_object_get (cur_elt, "whitelist");
 		if (cur_nm != NULL && json_is_array (cur_nm)) {
 			n = json_array_size(cur_nm);
-			for(a = 0; a < n; a++) {
-				it_val = json_array_get(cur_nm, a);
+			for(j = 0; j < n; j++) {
+				it_val = json_array_get(cur_nm, j);
 				if (it_val && json_is_string (it_val)) {
-					g_hash_table_insert (cur_settings->whitelist, g_strdup (json_string_value (it_val)), g_strdup (json_string_value (it_val)));
+					g_hash_table_insert (cur_settings->whitelist,
+							g_strdup (json_string_value (it_val)), g_strdup (json_string_value (it_val)));
 				}
 		    
 			}
@@ -385,6 +425,47 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 				return TRUE;
 			}
 		}
+	}
+
+	return FALSE;
+}
+
+gboolean
+check_metric_action_settings (struct worker_task *task, struct metric *metric, double score, enum rspamd_metric_action *result)
+{
+	struct rspamd_settings         *us = NULL, *ds = NULL;
+	struct metric_action           *act;
+	GList                          *cur;
+	enum rspamd_metric_action       res = METRIC_ACTION_NOACTION;
+
+	if (check_setting (task, &us, &ds)) {
+		if (us != NULL) {
+			if ((cur = g_hash_table_lookup (us->metric_actions, metric->name)) != NULL) {
+				while (cur) {
+					act = cur->data;
+					if (score >= act->score) {
+						res = act->action;
+					}
+					cur = g_list_next (cur);
+				}
+			}
+		}
+		else if (ds != NULL) {
+			if ((cur = g_hash_table_lookup (ds->metric_actions, metric->name)) != NULL) {
+				while (cur) {
+					act = cur->data;
+					if (score >= act->score) {
+						res = act->action;
+					}
+					cur = g_list_next (cur);
+				}
+			}
+		}
+	}
+
+	if (res != METRIC_ACTION_NOACTION && result != NULL) {
+		*result = res;
+		return TRUE;
 	}
 
 	return FALSE;

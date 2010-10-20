@@ -620,57 +620,6 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 	return TRUE;
 }
 
-const gchar *
-str_action_metric (enum rspamd_metric_action action)
-{
-	switch (action) {
-	case METRIC_ACTION_REJECT:
-		return "reject";
-	case METRIC_ACTION_SOFT_REJECT:
-		return "soft reject";
-	case METRIC_ACTION_REWRITE_SUBJECT:
-		return "rewrite subject";
-	case METRIC_ACTION_ADD_HEADER:
-		return "add header";
-	case METRIC_ACTION_GREYLIST:
-		return "greylist";
-	case METRIC_ACTION_NOACTION:
-		return "no action";
-	}
-
-	return "unknown action";
-}
-
-gint
-check_metric_action (double score, double required_score, struct metric *metric)
-{
-	GList                          *cur;
-	struct metric_action           *action, *selected_action = NULL;
-
-	if (score >= required_score) {
-		return metric->action;
-	}
-	else if (metric->actions == NULL) {
-		return METRIC_ACTION_NOACTION;
-	}
-	else {
-		cur = metric->actions;
-		while (cur) {
-			action = cur->data;
-			if (score >= action->score) {
-				selected_action = action;
-			}
-			cur = g_list_next (cur);
-		}
-		if (selected_action) {
-			return selected_action->action;
-		}
-		else {
-			return METRIC_ACTION_NOACTION;
-		}
-	}
-}
-
 static void
 show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data)
 {
@@ -682,7 +631,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	struct metric                  *m;
 	gint                            is_spam = 0;
 	double                          ms = 0, rs = 0;
-	enum rspamd_metric_action       action;
+	enum rspamd_metric_action       action = METRIC_ACTION_NOACTION;
 
 	if (! cd->alive) {
 		return;
@@ -730,10 +679,14 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			ms = metric_res->metric->required_score;
 			rs = metric_res->metric->reject_score;
 		}
+		if (! check_metric_action_settings (task, metric_res->metric, metric_res->score, &action)) {
+			action = check_metric_action (metric_res->score, ms, metric_res->metric);
+		}
+
 		if (metric_res->score >= ms) {
 			is_spam = 1;
 		}
-		action = check_metric_action (metric_res->score, ms, metric_res->metric);
+
 		if (task->proto == SPAMC_PROTO) {
 			r = rspamd_snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True" : "False", metric_res->score, ms);
 		}
