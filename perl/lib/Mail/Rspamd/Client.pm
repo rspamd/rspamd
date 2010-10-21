@@ -76,6 +76,9 @@ sub new {
 	if ($args->{rcpt}) {
 		$self->{rcpt} = $args->{rcpt};
 	}
+	if ($args->{deliver_to}) {
+		$self->{deliver_to} = $args->{deliver_to};
+	}
 	if ($args->{timeout}) {
 		$self->{timeout} = $args->{timeout};
 	}
@@ -879,11 +882,12 @@ sub _do_rspamc_command {
 		return \%r;
 	}
 	syswrite $remote, "Content-length: $msgsize$EOL";
-	syswrite $remote, "User: $self->{username}$EOL" if ($self->{username});
-	syswrite $remote, "From: $self->{from}$EOL" if ($self->{from});
-	syswrite $remote, "IP: $self->{ip}$EOL" if ($self->{ip});
-	syswrite $remote, "Subject: $self->{subject}$EOL" if ($self->{subject});
-	syswrite $remote, "Pass: all$EOL" if ($self->{pass_all});
+	syswrite $remote, "User: $self->{username}$EOL" if (exists($self->{username}));
+	syswrite $remote, "From: $self->{from}$EOL" if (exists($self->{from}));
+	syswrite $remote, "IP: $self->{ip}$EOL" if (exists($self->{ip}));
+	syswrite $remote, "Deliver-To: $self->{deliver_to}$EOL" if (exists($self->{deliver_to}));
+	syswrite $remote, "Subject: $self->{subject}$EOL" if (exists($self->{subject}));
+	syswrite $remote, "Pass: all$EOL" if (exists($self->{pass_all}) && $self->{pass_all});
 	if (ref $self->{rcpt} eq "ARRAY") {
 		foreach ($self->{rcpt}) {
 			syswrite $remote, "Rcpt: $_ $EOL";
