@@ -28,6 +28,7 @@
 #include "util.h"
 #include "smtp.h"
 #include "smtp_proto.h"
+#include "smtp_utils.h"
 
 gchar                           *
 make_smtp_error (struct smtp_session *session, gint error_code, const gchar *format, ...)

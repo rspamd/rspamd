@@ -28,6 +28,7 @@
 #include "util.h"
 #include "smtp.h"
 #include "smtp_proto.h"
+#include "smtp_utils.h"
 #include "map.h"
 #include "message.h"
 #include "settings.h"
@@ -40,7 +41,6 @@
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
 #define DEFAULT_UPSTREAM_DEAD_TIME 300
 #define DEFAULT_UPSTREAM_MAXERRORS 10
-
 
 #define DEFAULT_REJECT_MESSAGE "450 4.5.0 Spam message rejected"
 
@@ -79,37 +79,6 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 	}
 }
 
-
-static void
-free_smtp_session (gpointer arg)
-{
-	struct smtp_session            *session = arg;
-	
-	if (session) {
-		if (session->task) {
-			free_task (session->task, FALSE);
-			if (session->task->msg->begin) {
-				munmap (session->task->msg->begin, session->task->msg->len);
-			}
-		}
-		if (session->rcpt) {
-			g_list_free (session->rcpt);
-		}
-		if (session->dispatcher) {
-			rspamd_remove_dispatcher (session->dispatcher);
-		}
-		close (session->sock);
-		if (session->temp_name != NULL) {
-			unlink (session->temp_name);
-		}
-		if (session->temp_fd != -1) {
-			close (session->temp_fd);
-		}
-		memory_pool_delete (session->pool);
-		g_free (session);
-	}
-}
-
 /*
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
@@ -129,46 +98,6 @@ sigusr_handler (gint fd, short what, void *arg)
 		event_loopexit (&tv);
 	}
 	return;
-}
-
-static gboolean
-create_smtp_upstream_connection (struct smtp_session *session)
-{
-	struct smtp_upstream              *selected;
-	struct sockaddr_un                *un;
-
-	/* Try to select upstream */
-	selected = (struct smtp_upstream *)get_upstream_round_robin (session->ctx->upstreams, 
-			session->ctx->upstream_num, sizeof (struct smtp_upstream),
-			session->session_time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
-	if (selected == NULL) {
-		msg_err ("no upstreams suitable found");
-		return FALSE;
-	}
-
-	session->upstream = selected;
-
-	/* Now try to create socket */
-	if (selected->is_unix) {
-		un = alloca (sizeof (struct sockaddr_un));
-		session->upstream_sock = make_unix_socket (selected->name, un, FALSE);
-	}
-	else {
-		session->upstream_sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE);
-	}
-	if (session->upstream_sock == -1) {
-		msg_err ("cannot make a connection to %s", selected->name);
-		upstream_fail (&selected->up, session->session_time);
-		return FALSE;
-	}
-	/* Create a dispatcher for upstream connection */
-	session->upstream_dispatcher = rspamd_create_dispatcher (session->upstream_sock, BUFFER_LINE, 
-							smtp_upstream_read_socket, smtp_upstream_write_socket, smtp_upstream_err_socket, 
-							&session->ctx->smtp_timeout, session);
-	session->state = SMTP_STATE_WAIT_UPSTREAM;
-	session->upstream_state = SMTP_STATE_GREETING;
-	register_async_event (session->s, (event_finalizer_t)smtp_upstream_finalize_connection, session, FALSE);
-	return TRUE;
 }
 
 static gboolean
@@ -332,30 +261,6 @@ read_smtp_command (struct smtp_session *session, f_str_t *line)
 improper_sequence:
 	session->errors ++;
 	session->error = SMTP_ERROR_SEQUENCE;
-	return FALSE;
-}
-
-static gboolean
-smtp_send_upstream_message (struct smtp_session *session)
-{
-	rspamd_dispatcher_pause (session->dispatcher);
-	rspamd_dispatcher_restore (session->upstream_dispatcher);
-	
-	session->upstream_state = SMTP_STATE_IN_SENDFILE;
-	session->state = SMTP_STATE_WAIT_UPSTREAM;
-	if (! rspamd_dispatcher_sendfile (session->upstream_dispatcher, session->temp_fd, session->temp_size)) {
-		msg_err ("sendfile failed: %s", strerror (errno));
-		goto err;
-	}
-	return TRUE;
-
-err:
-	session->error = SMTP_ERROR_FILE;
-	session->state = SMTP_STATE_CRITICAL_ERROR;
-	if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
-		return FALSE;
-	}
-	destroy_session (session->s);
 	return FALSE;
 }
 
@@ -534,13 +439,6 @@ static                          gboolean
 smtp_write_socket (void *arg)
 {
 	struct smtp_session            *session = arg;
-	double                          ms = 0, rs = 0;
-	gint                            r;
-	struct metric_result           *metric_res;
-	struct metric                  *m;
-	gchar                           logbuf[1024];
-	gboolean                        is_spam = FALSE;
-	GList                          *symbols, *cur;	
 
 	if (session->state == SMTP_STATE_CRITICAL_ERROR) {
 		if (session->error != NULL) {
@@ -553,54 +451,7 @@ smtp_write_socket (void *arg)
 	}
 	else if (session->state == SMTP_STATE_END) {
 		if (session->task != NULL) {
-			/* Check metric */
-			m = g_hash_table_lookup (session->cfg->metrics, session->ctx->metric);
-			metric_res = g_hash_table_lookup (session->task->results, session->ctx->metric);
-			if (m != NULL && metric_res != NULL) {
-				if (!check_metric_settings (session->task, m, &ms, &rs)) {
-					ms = m->required_score;
-					rs = m->reject_score;
-				}
-				if (metric_res->score >= ms) {
-					is_spam = TRUE;
-				}
-
-				r = rspamd_snprintf (logbuf, sizeof (logbuf), "msg ok, id: <%s>, ", session->task->message_id);
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "(%s: %s: [%.2f/%.2f/%.2f] [", 
-						(gchar *)m->name, is_spam ? "T" : "F", metric_res->score, ms, rs);
-				symbols = g_hash_table_get_keys (metric_res->symbols);
-				cur = symbols;
-				while (cur) {
-					if (g_list_next (cur) != NULL) {
-						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s,", (gchar *)cur->data);
-					}
-					else {
-						r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "%s", (gchar *)cur->data);
-					}
-					cur = g_list_next (cur);
-				}
-				g_list_free (symbols);
-#ifdef HAVE_CLOCK_GETTIME
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %z, time: %s",
-					session->task->msg->len, calculate_check_time (&session->task->tv, &session->task->ts, session->cfg->clock_res));
-#else
-				r += rspamd_snprintf (logbuf + r, sizeof (logbuf) - r, "]), len: %z, time: %s",
-					session->task->msg->len, calculate_check_time (&session->task->tv, session->cfg->clock_res));
-#endif
-				msg_info ("%s", logbuf);
-
-				if (is_spam) {
-					if (! rspamd_dispatcher_write (session->dispatcher, session->ctx->reject_message, 0, FALSE, TRUE)) {
-						return FALSE;
-					}
-					if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
-						return FALSE;
-					}
-					destroy_session (session->s);
-					return FALSE;
-				}
-			}
-			return smtp_send_upstream_message (session);
+			return write_smtp_reply (session);
 		}
 		else {
 			if (session->error != NULL) {
