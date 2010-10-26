@@ -186,10 +186,35 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 }
 
 gboolean
+make_smtp_tempfile (struct smtp_session *session)
+{
+	gsize                            r;
+
+	r = strlen (session->cfg->temp_dir) + sizeof ("/rspamd-XXXXXX");
+	session->temp_name = memory_pool_alloc (session->pool, r);
+	rspamd_snprintf (session->temp_name, r, "%s%crspamd-XXXXXX", session->cfg->temp_dir, G_DIR_SEPARATOR);
+#ifdef HAVE_MKSTEMP
+	/* Umask is set before */
+	session->temp_fd = mkstemp (session->temp_name);
+#else
+	session->temp_fd = g_mkstemp_full (session->temp_name, O_RDWR, S_IWUSR | S_IRUSR);
+#endif
+	if (session->temp_fd == -1) {
+		msg_err ("mkstemp error: %s", strerror (errno));
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
 write_smtp_reply (struct smtp_session *session)
 {
 	gchar                           logbuf[1024];
 	struct smtp_metric_callback_data cd;
+	GMimeStream                    *stream;
+	int                             old_fd;
 
 	/* Check metrics */
 	cd.session = session;
@@ -218,6 +243,53 @@ write_smtp_reply (struct smtp_session *session)
 		destroy_session (session->s);
 		return FALSE;
 	}
+	else if (cd.action <= METRIC_ACTION_ADD_HEADER || cd.action <= METRIC_ACTION_REWRITE_SUBJECT) {
+		old_fd = session->temp_fd;
+		if (! make_smtp_tempfile (session)) {
+			session->error = SMTP_ERROR_FILE;
+			session->state = SMTP_STATE_CRITICAL_ERROR;
+			rspamd_dispatcher_restore (session->dispatcher);
+			if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+				goto err;
+			}
+			destroy_session (session->s);
+			return FALSE;
+		}
+		if (cd.action <= METRIC_ACTION_ADD_HEADER) {
+#ifndef GMIME24
+			g_mime_message_add_header (session->task->message, "X-Spam", "true");
+#else
+			g_mime_object_append_header (GMIME_OBJECT (session->task->message), "X-Spam", "true");
+#endif
+		}
+		else if (cd.action <= METRIC_ACTION_REWRITE_SUBJECT) {
+			/* XXX: add this action */
+		}
+		stream = g_mime_stream_fs_new (session->temp_fd);
+		g_mime_stream_fs_set_owner (GMIME_STREAM_FS (stream), FALSE);
+		close (old_fd);
+
+		if (g_mime_object_write_to_stream (GMIME_OBJECT (session->task->message), stream) == -1) {
+			msg_err ("cannot write MIME object to stream: %s", strerror (errno));
+			session->error = SMTP_ERROR_FILE;
+			session->state = SMTP_STATE_CRITICAL_ERROR;
+			rspamd_dispatcher_restore (session->dispatcher);
+			if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+				goto err;
+			}
+			destroy_session (session->s);
+			return FALSE;
+		}
+		g_object_unref (stream);
+	}
 	/* XXX: Add other actions */
 	return smtp_send_upstream_message (session);
+err:
+	session->error = SMTP_ERROR_FILE;
+	session->state = SMTP_STATE_CRITICAL_ERROR;
+	if (! rspamd_dispatcher_write (session->dispatcher, session->error, 0, FALSE, TRUE)) {
+		return FALSE;
+	}
+	destroy_session (session->s);
+	return FALSE;
 }

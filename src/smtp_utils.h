@@ -23,6 +23,10 @@ gboolean smtp_send_upstream_message (struct smtp_session *session);
  */
 gboolean create_smtp_upstream_connection (struct smtp_session *session);
 
+/**
+ * Create temporary file for smtp session
+ */
+gboolean make_smtp_tempfile (struct smtp_session *session);
 
 /**
  * Write reply to upstream

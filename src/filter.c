@@ -628,7 +628,6 @@ check_action_str (const gchar *data, gint *result)
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
 	else {
-		msg_err ("unknown action for metric: %s", data);
 		return FALSE;
 	}
 	return TRUE;

@@ -642,6 +642,7 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 			break;
 		case 'r':
 			regexp_flags |= G_REGEX_RAW;
+			result->is_raw = TRUE;
 			p++;
 			break;
 			/* Type flags */

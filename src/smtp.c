@@ -342,6 +342,7 @@ process_smtp_data (struct smtp_session *session)
 		}
 	}
 	else {
+		msg_info ("not scan message as it is %z bytes and maximum is %z", st.st_size, session->ctx->max_size);
 		session->task = NULL;
 		return smtp_send_upstream_message (session);
 	}

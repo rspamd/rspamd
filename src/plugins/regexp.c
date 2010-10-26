@@ -613,6 +613,8 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		.re = re,
 		.found = FALSE
 	};
+	guint8                         *ct;
+	gsize                           clen;
 	gint                            r;
 
 
@@ -710,8 +712,15 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			else {
 				regexp = re->regexp;
 			}
-
-			if (g_regex_match_full (regexp, part->orig->data, part->orig->len, 0, 0, NULL, &err) == TRUE) {
+			if (re->is_raw) {
+				ct = part->orig->data;
+				clen = part->orig->len;
+			}
+			else {
+				ct = part->content->data;
+				clen = part->content->len;
+			}
+			if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL, &err) == TRUE) {
 				if (G_UNLIKELY (re->is_test)) {
 					msg_info ("process test regexp %s for mime part returned TRUE", re->regexp_text);
 				}
