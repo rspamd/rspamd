@@ -28,6 +28,8 @@
 #define DEFAULT_METRIC "default"
 /* 60 seconds for worker's IO */
 #define WORKER_IO_TIMEOUT 60
+/* Spam subject */
+#define SPAM_SUBJECT "*** SPAM *** "
 
 #ifdef CRLF
 #undef CRLF

@@ -152,10 +152,16 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 
 	task = cd->session->task;
 
+	if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
+		ms = metric_res->metric->required_score;
+		rs = metric_res->metric->reject_score;
+	}
 	if (! check_metric_action_settings (task, metric_res->metric, metric_res->score, &action)) {
 		action = check_metric_action (metric_res->score, ms, metric_res->metric);
 	}
-
+	if (metric_res->score >= ms) {
+		is_spam = 1;
+	}
 	if (action < cd->action) {
 		cd->action = action;
 		cd->res = metric_res;
@@ -211,10 +217,11 @@ make_smtp_tempfile (struct smtp_session *session)
 gboolean
 write_smtp_reply (struct smtp_session *session)
 {
-	gchar                           logbuf[1024];
+	gchar                           logbuf[1024], *new_subject;
+	const gchar                    *old_subject;
 	struct smtp_metric_callback_data cd;
 	GMimeStream                    *stream;
-	int                             old_fd;
+	gint                            old_fd, sublen;
 
 	/* Check metrics */
 	cd.session = session;
@@ -255,15 +262,26 @@ write_smtp_reply (struct smtp_session *session)
 			destroy_session (session->s);
 			return FALSE;
 		}
-		if (cd.action <= METRIC_ACTION_ADD_HEADER) {
+
+		if (cd.action <= METRIC_ACTION_REWRITE_SUBJECT) {
+			/* XXX: add this action */
+			old_subject = g_mime_message_get_subject (session->task->message);
+			if (old_subject != NULL) {
+				sublen = strlen (old_subject) + sizeof (SPAM_SUBJECT);
+				new_subject = memory_pool_alloc (session->pool, sublen);
+				rspamd_snprintf (new_subject, sublen, "%s%s", SPAM_SUBJECT, old_subject);
+			}
+			else {
+				new_subject = SPAM_SUBJECT;
+			}
+			g_mime_message_set_subject (session->task->message, new_subject);
+		}
+		else if (cd.action <= METRIC_ACTION_ADD_HEADER) {
 #ifndef GMIME24
 			g_mime_message_add_header (session->task->message, "X-Spam", "true");
 #else
 			g_mime_object_append_header (GMIME_OBJECT (session->task->message), "X-Spam", "true");
 #endif
-		}
-		else if (cd.action <= METRIC_ACTION_REWRITE_SUBJECT) {
-			/* XXX: add this action */
 		}
 		stream = g_mime_stream_fs_new (session->temp_fd);
 		g_mime_stream_fs_set_owner (GMIME_STREAM_FS (stream), FALSE);
