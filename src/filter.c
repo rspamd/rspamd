@@ -659,6 +659,7 @@ check_metric_action (double score, double required_score, struct metric *metric)
 {
 	GList                          *cur;
 	struct metric_action           *action, *selected_action = NULL;
+	double                          max_score = 0;
 
 	if (score >= required_score) {
 		return metric->action;
@@ -670,8 +671,9 @@ check_metric_action (double score, double required_score, struct metric *metric)
 		cur = metric->actions;
 		while (cur) {
 			action = cur->data;
-			if (score >= action->score) {
+			if (score >= action->score && action->score > max_score) {
 				selected_action = action;
+				max_score = action->score;
 			}
 			cur = g_list_next (cur);
 		}
