@@ -1551,6 +1551,13 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	return ((gchar *)memcpy (buf, p, len)) + len;
 }
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MICRO_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
+void
+g_ptr_array_unref (GPtrArray *array)
+{
+	g_ptr_array_free (array, TRUE);
+}
+#endif
 
 /*
  * vi:ts=4

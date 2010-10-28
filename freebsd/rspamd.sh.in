@@ -25,8 +25,8 @@ load_rc_config $name
 
 : ${rspamd_enable="NO"}
 : ${rspamd_pidfile="/var/run/rspamd/rspamd.pid"}
-: ${rspamd_user="@RSPAMD_USER@"}
-: ${rspamd_group="@RSPAMD_GROUP@"}
+: ${rspamd_run_user="@RSPAMD_USER@"}
+: ${rspamd_run_group="@RSPAMD_GROUP@"}
 
 pidfile="$rspamd_pidfile"
 
@@ -47,6 +47,6 @@ extra_commands="reload configtest reopenlog"
 sig_reload="HUP"
 
 command="$procname"
-command_args="-u ${rspamd_user} -g ${rspamd_group} -c @CMAKE_INSTALL_PREFIX@/etc/rspamd.xml"
+command_args="-u ${rspamd_run_user} -g ${rspamd_run_group} -c @CMAKE_INSTALL_PREFIX@/etc/rspamd.xml"
 
 run_rc_command "$1"
