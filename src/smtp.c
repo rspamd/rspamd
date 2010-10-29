@@ -937,6 +937,9 @@ config_smtp_worker (struct rspamd_worker *worker)
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_capabilities")) != NULL) {
 		make_capabilities (ctx, value);
 	}
+	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_use_xclient")) != NULL) {
+		ctx->use_xclient = parse_flag (value);
+	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_metric")) != NULL) {
 		ctx->metric = memory_pool_strdup (ctx->pool, value);
 	}
