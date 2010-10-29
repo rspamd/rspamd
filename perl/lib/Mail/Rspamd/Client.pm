@@ -616,11 +616,12 @@ sub _create_connection {
 		}
     }
     elsif ($hostdef =~ /^\s*(([^:]+):(\d+))\s*$/) {
+		my $peer_addr = $2;
 		if ($2 eq '*') {
-			$2 = '127.0.0.1';	
+			$peer_addr = '127.0.0.1';	
 		}
 		$remote = IO::Socket::INET->new( Proto     => "tcp",
-					PeerAddr  => $2,
+					PeerAddr  => $peer_addr,
 					PeerPort  => $3,
 					Blocking  => 0,
 				);
@@ -636,11 +637,12 @@ sub _create_connection {
 		}
     }
     elsif ($hostdef =~ /^\s*([^:]+)\s*$/) {
+		my $peer_addr = $1;
 		if ($1 eq '*') {
-			$1 = '127.0.0.1';	
+			$peer_addr = '127.0.0.1';	
 		}
 		$remote = IO::Socket::INET->new( Proto     => "tcp",
-					PeerAddr  => $1,
+					PeerAddr  => $peer_addr,
 					PeerPort  => $self->{control} ? 11334 : 11333,
 					Blocking  => 0,
 				);
