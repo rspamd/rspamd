@@ -744,7 +744,7 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 			p += *p + 1;
 		}
 	}
-	*t = '\0';
+	*(t - 1) = '\0';
 end:
 	if (offset < 0) {
 		offset = p - begin;
