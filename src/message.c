@@ -111,9 +111,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 			case 1:			/* HTML/XML */
 				lc = '>';
 				in_q = state = 0;
-				*p = '\0';
-				add_html_node (task, pool, part, tbegin, &level_ptr);
-				*p = '>';
+				add_html_node (task, pool, part, tbegin, p - tbegin - 1, &level_ptr);
 				break;
 
 			case 2:			/* PHP */

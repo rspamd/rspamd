@@ -41,8 +41,9 @@ struct uri {
 	guint fragmentlen;
 
 	/* Flags */
-	guint ipv6;	/* URI contains IPv6 host */
-	guint form;	/* URI originated from form */
+	gboolean ipv6;	/* URI contains IPv6 host */
+	gboolean form;	/* URI originated from form */
+	gboolean is_phished; /* URI maybe phishing */
 };
 
 enum uri_errno {
@@ -73,5 +74,7 @@ enum protocol {
 
 void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
 enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool);
+gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gchar **url_str);
+const gchar* url_strerror (enum uri_errno err);
 
 #endif

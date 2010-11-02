@@ -160,7 +160,7 @@ enum {
 #define is_urlsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_ALPHA|IS_DIGIT|IS_URLSAFE)) != 0)
 
 
-static const gchar              *
+const gchar              *
 url_strerror (enum uri_errno err)
 {
 	switch (err) {
@@ -1147,12 +1147,11 @@ url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match
 void
 url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
-	struct url_matcher             *matcher;
-	gint                            rc, idx;
+	gint                            rc, off = 0;
 	gchar                           *url_str = NULL;
 	struct uri                     *new;
-	const guint8                   *p, *end, *pos;
-	url_match_t                     m;
+	const guint8                   *p, *end;
+
 
 	if (!part->orig->data || part->orig->len == 0) {
 		msg_warn ("got empty text part");
@@ -1169,37 +1168,61 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 			end = p + part->content->len;
 		}
 		while (p < end) {
-			if ((pos = rspamd_trie_lookup (url_scanner->patterns, p, end - p, &idx)) == NULL) {
-				break;
-			}
-			else {
-				matcher = &matchers[idx];
-				m.pattern = matcher->pattern;
-				m.prefix = matcher->prefix;
-				if (matcher->start (p, end, pos, &m) && matcher->end (p, end, pos, &m)) {
-					url_str = memory_pool_alloc (task->task_pool, m.m_len + 1);
-					memcpy (url_str, m.m_begin, m.m_len);
-					url_str[m.m_len] = '\0';
-					if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
-						new = memory_pool_alloc (pool, sizeof (struct uri));
-						if (new != NULL) {
-							g_strstrip (url_str);
-							rc = parse_uri (new, url_str, pool);
-							if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
-								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
-								task->urls = g_list_prepend (task->urls, new);
-							}
-							else {
-								msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
-							}
+			if (url_try_text (pool, p, end - p, &off, &url_str)) {
+				if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
+					new = memory_pool_alloc0 (pool, sizeof (struct uri));
+					if (new != NULL) {
+						g_strstrip (url_str);
+						rc = parse_uri (new, url_str, pool);
+						if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
+							g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
+							task->urls = g_list_prepend (task->urls, new);
+						}
+						else {
+							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
 						}
 					}
 				}
-				pos += strlen (matcher->pattern);
 			}
-			p = pos;
+			else {
+				break;
+			}
+			p += off;
 		}
 	}
+}
+
+gboolean
+url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gchar **url_str)
+{
+	const gchar                    *end, *pos;
+	gint                            idx;
+	struct url_matcher             *matcher;
+	url_match_t                     m;
+
+	end = begin + len;
+	if (url_init () == 0) {
+		if ((pos = rspamd_trie_lookup (url_scanner->patterns, begin, len, &idx)) == NULL) {
+			return FALSE;
+		}
+		else {
+			matcher = &matchers[idx];
+			m.pattern = matcher->pattern;
+			m.prefix = matcher->prefix;
+			if (matcher->start (begin, end, pos, &m) && matcher->end (begin, end, pos, &m)) {
+				*url_str = memory_pool_alloc (pool, m.m_len + 1);
+				memcpy (*url_str, m.m_begin, m.m_len);
+				(*url_str)[m.m_len] = '\0';
+
+			}
+			if (res) {
+				*res = strlen (matcher->pattern);
+			}
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 /*

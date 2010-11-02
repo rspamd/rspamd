@@ -122,6 +122,23 @@ static const struct luaL_reg    imagelib_m[] = {
 	{NULL, NULL}
 };
 
+/* URL methods */
+LUA_FUNCTION_DEF (url, get_host);
+LUA_FUNCTION_DEF (url, get_user);
+LUA_FUNCTION_DEF (url, get_path);
+LUA_FUNCTION_DEF (url, get_text);
+LUA_FUNCTION_DEF (url, is_phished);
+
+static const struct luaL_reg    urllib_m[] = {
+	LUA_INTERFACE_DEF (url, get_host),
+	LUA_INTERFACE_DEF (url, get_user),
+	LUA_INTERFACE_DEF (url, get_path),
+	LUA_INTERFACE_DEF (url, get_text),
+	LUA_INTERFACE_DEF (url, is_phished),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
 /* Utility functions */
 static struct worker_task      *
 lua_check_task (lua_State * L)
@@ -147,8 +164,16 @@ lua_check_image (lua_State * L)
 	return *((struct rspamd_image **)ud);
 }
 
+static struct uri      *
+lua_check_url (lua_State * L)
+{
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{url}");
+	luaL_argcheck (L, ud != NULL, 1, "'url' expected");
+	return *((struct uri **)ud);
+}
+
 /*** Task interface	***/
-static gint
+static int
 lua_task_get_message (lua_State * L)
 {
 	GMimeMessage                  **pmsg;
@@ -193,19 +218,24 @@ lua_task_get_urls (lua_State * L)
 	gint                            i = 1;
 	struct worker_task             *task = lua_check_task (L);
 	GList                          *cur;
-	struct uri                     *url;
+	struct uri                    **purl;
 
-	if (task != NULL) {
-		lua_newtable (L);
-		cur = g_list_first (task->urls);
-		while (cur) {
-			url = cur->data;
-			lua_pushstring (L, struri (url));
-			lua_rawseti (L, -2, i++);
-			cur = g_list_next (cur);
+	if (task) {
+		cur = task->urls;
+		if (cur != NULL) {
+			lua_newtable (L);
+			while (cur) {
+				purl = lua_newuserdata (L, sizeof (struct uri *));
+				lua_setclass (L, "rspamd{url}", -1);
+				*purl = cur->data;
+				lua_rawseti (L, -2, i++);
+				cur = g_list_next (cur);
+			}
+			return 1;
 		}
 	}
 
+	lua_pushnil (L);
 	return 1;
 }
 
@@ -919,6 +949,81 @@ lua_image_get_filename (lua_State *L)
 	return 1;
 }
 
+/* URL part */
+static gint
+lua_url_get_host (lua_State *L)
+{
+	struct uri                      *url = lua_check_url (L);
+
+	if (url != NULL) {
+		lua_pushlstring (L, url->host, url->hostlen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
+static gint
+lua_url_get_user (lua_State *L)
+{
+	struct uri                      *url = lua_check_url (L);
+
+	if (url != NULL) {
+		lua_pushlstring (L, url->user, url->userlen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_url_get_path (lua_State *L)
+{
+	struct uri                      *url = lua_check_url (L);
+
+	if (url != NULL) {
+		lua_pushlstring (L, url->data, url->datalen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_url_get_text (lua_State *L)
+{
+	struct uri                      *url = lua_check_url (L);
+
+	if (url != NULL) {
+		lua_pushstring (L, struri (url));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_url_is_phished (lua_State *L)
+{
+	struct uri                      *url = lua_check_url (L);
+
+	if (url != NULL) {
+		lua_pushboolean (L, url->is_phished);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
 /* Init part */
 gint
 luaopen_task (lua_State * L)
@@ -943,6 +1048,15 @@ luaopen_image (lua_State * L)
 {
 	lua_newclass (L, "rspamd{image}", imagelib_m);
 	luaL_openlib (L, "rspamd_image", null_reg, 0);
+
+	return 1;
+}
+
+gint
+luaopen_url (lua_State * L)
+{
+	lua_newclass (L, "rspamd{url}", urllib_m);
+	luaL_openlib (L, "rspamd_url", null_reg, 0);
 
 	return 1;
 }

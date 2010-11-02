@@ -468,13 +468,12 @@ entity_cmp_num (const void *m1, const void *m2)
 }
 
 static GNode                   *
-construct_html_node (memory_pool_t * pool, gchar *text)
+construct_html_node (memory_pool_t * pool, gchar *text, gsize tag_len)
 {
 	struct html_node               *html;
 	GNode                          *n = NULL;
 	struct html_tag                 key, *found;
 	gchar                           t;
-	gint                            taglen = strlen (text);
 
 	if (text == NULL || *text == '\0') {
 		return NULL;
@@ -483,7 +482,7 @@ construct_html_node (memory_pool_t * pool, gchar *text)
 	html = memory_pool_alloc0 (pool, sizeof (struct html_node));
 
 	/* Check whether this tag is fully closed */
-	if (*(text + taglen - 1) == '/') {
+	if (*(text + tag_len - 1) == '/') {
 		html->flags |= FL_CLOSED;
 	}
 
@@ -660,41 +659,69 @@ decode_entitles (gchar *s, guint * len)
  * Find the first occurrence of find in s, ignore case.
  */
 static gchar *
-html_strcasestr (const gchar *s, const gchar *find)
+html_strncasestr (const gchar *s, const gchar *find, gsize len)
 {
 	gchar                           c, sc;
-	size_t len;
+	size_t mlen;
 
 	if ((c = *find++) != 0) {
 		c = g_ascii_tolower (c);
-		len = strlen (find);
+		mlen = strlen (find);
 		do {
 			do {
-				if ((sc = *s++) == 0)
+				if ((sc = *s++) == 0 || len -- == 0)
 					return (NULL);
 			} while (g_ascii_tolower (sc) != c);
-		} while (g_ascii_strncasecmp (s, find, len) != 0);
+		} while (g_ascii_strncasecmp (s, find, mlen) != 0);
 		s--;
 	}
 	return ((gchar *)s);
 }
 
 static void
-parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, gchar *tag_text)
+check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text)
 {
-	gchar                           *c = NULL, *p;
+	struct uri                     *new;
+	gchar                          *url_str;
+	gsize                           len;
+	gint                            off, rc;
+
+	len = strcspn (url_text, "<>");
+
+	if (url_try_text (task->task_pool, url_text, len, &off, &url_str)) {
+		new = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
+		if (new != NULL) {
+			g_strstrip (url_str);
+			rc = parse_uri (new, url_str, task->task_pool);
+			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
+				if (g_ascii_strncasecmp (href_url->host, new->host,
+						MAX (href_url->hostlen, new->hostlen)) != 0) {
+					href_url->is_phished = TRUE;
+				}
+			}
+			else {
+				msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
+			}
+		}
+	}
+
+}
+
+static void
+parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, gchar *tag_text, gsize tag_len)
+{
+	gchar                           *c = NULL, *p, *url_text;
 	gint                            len, rc;
-	gchar                           *url_text;
 	struct uri                     *url;
 	gboolean                        got_single_quote = FALSE, got_double_quote = FALSE;
 
 	/* For A tags search for href= and for IMG tags search for src= */
 	if (id == Tag_A) {
-		c = html_strcasestr (tag_text, "href=");
+		c = html_strncasestr (tag_text, "href=", tag_len);
 		len = sizeof ("href=") - 1;
 	}
 	else if (id == Tag_IMG) {
-		c = html_strcasestr (tag_text, "src=");
+		c = html_strncasestr (tag_text, "src=", tag_len);
 		len = sizeof ("src=") - 1;
 	}
 
@@ -707,7 +734,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		}
 		len = 0;
 		p = c;
-		while (*p) {
+		while (*p && p - tag_text < tag_len) {
 			if (got_double_quote) {
 				if (*p == '"') {
 					break;
@@ -753,7 +780,9 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		g_strlcpy (url_text, c, len + 1);
 		decode_entitles (url_text, NULL);
 
-		if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0) {
+		if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0 &&
+				g_ascii_strncasecmp (url_text, "www", sizeof ("www") - 1) != 0 &&
+				g_ascii_strncasecmp (url_text, "ftp://", sizeof ("ftp://") - 1) != 0) {
 			return;
 		}
 
@@ -761,6 +790,12 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		rc = parse_uri (url, url_text, task->task_pool);
 
 		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST && url->hostlen != 0) {
+			/*
+			 * Check for phishing
+			 */
+			if ((p = strchr (c, '>')) != NULL ) {
+				check_phishing (task, url, p + 1);
+			}
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);
 				task->urls = g_list_prepend (task->urls, url);
@@ -770,7 +805,8 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 }
 
 gboolean
-add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, gchar *tag_text, GNode ** cur_level)
+add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part,
+		gchar *tag_text, gsize tag_len, GNode ** cur_level)
 {
 	GNode                          *new;
 	struct html_node               *data;
@@ -795,17 +831,17 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 		part->html_nodes = new;
 		memory_pool_add_destructor (pool, (pool_destruct_func) g_node_destroy, part->html_nodes);
 		/* Call once again with root node */
-		return add_html_node (task, pool, part, tag_text, cur_level);
+		return add_html_node (task, pool, part, tag_text, tag_len, cur_level);
 	}
 	else {
-		new = construct_html_node (pool, tag_text);
+		new = construct_html_node (pool, tag_text, tag_len);
 		if (new == NULL) {
 			debug_task ("cannot construct HTML node for text '%s'", tag_text);
 			return -1;
 		}
 		data = new->data;
 		if (data->tag && (data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
-			parse_tag_url (task, part, data->tag->id, tag_text);
+			parse_tag_url (task, part, data->tag->id, tag_text, tag_len);
 		}
 		if (data->flags & FL_CLOSING) {
 			if (!*cur_level) {

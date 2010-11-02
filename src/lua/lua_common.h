@@ -30,6 +30,7 @@ gint luaopen_hash_table (lua_State *L);
 gint luaopen_trie (lua_State * L);
 gint luaopen_textpart (lua_State *L);
 gint luaopen_image (lua_State *L);
+gint luaopen_url (lua_State *L);
 gint luaopen_classifier (lua_State *L);
 gint luaopen_statfile (lua_State * L);
 void init_lua (struct config_file *cfg);
