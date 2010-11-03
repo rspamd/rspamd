@@ -688,7 +688,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 
 	len = strcspn (url_text, "<>");
 
-	if (url_try_text (task->task_pool, url_text, len, &off, &url_str)) {
+	if (url_try_text (task->task_pool, url_text, len, &off, &url_str) && url_str != NULL) {
 		new = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
 		if (new != NULL) {
 			g_strstrip (url_str);

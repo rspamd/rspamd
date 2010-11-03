@@ -1169,7 +1169,8 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 		}
 		while (p < end) {
 			if (url_try_text (pool, p, end - p, &off, &url_str)) {
-				if (g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
+				if (url_str != NULL &&
+						g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
 					new = memory_pool_alloc0 (pool, sizeof (struct uri));
 					if (new != NULL) {
 						g_strstrip (url_str);
@@ -1214,6 +1215,9 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gch
 				memcpy (*url_str, m.m_begin, m.m_len);
 				(*url_str)[m.m_len] = '\0';
 
+			}
+			else {
+				*url_str = NULL;
 			}
 			if (res) {
 				*res = strlen (matcher->pattern);

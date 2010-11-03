@@ -87,7 +87,7 @@ stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_co
 		const gchar *symbol, struct statfile **st, gboolean try_create);
 #endif
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MICRO_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
 void g_ptr_array_unref (GPtrArray *array);
 #endif
 /*
