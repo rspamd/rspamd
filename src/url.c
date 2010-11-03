@@ -1220,7 +1220,7 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gch
 				*url_str = NULL;
 			}
 			if (res) {
-				*res = strlen (matcher->pattern);
+				*res = (pos - begin) + strlen (matcher->pattern);
 			}
 			return TRUE;
 		}
