@@ -30,6 +30,8 @@ struct uri {
 	 * POST_CHAR in the uri string. */
 	gchar *post;
 
+	struct uri *phished_url;
+
 	/* @protocollen should only be usable if @protocol is either
 	 * PROTOCOL_USER or an uri string should be composed. */
 	guint protocollen;

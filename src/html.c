@@ -697,6 +697,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 				if (g_ascii_strncasecmp (href_url->host, new->host,
 						MAX (href_url->hostlen, new->hostlen)) != 0) {
 					href_url->is_phished = TRUE;
+					href_url->phished_url = new;
 				}
 			}
 			else {

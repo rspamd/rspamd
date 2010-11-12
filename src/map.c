@@ -424,7 +424,7 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 		def = map_line + sizeof ("file://") - 1;
 	}
 	else {
-		msg_debug ("invalid map fetching protocol: %s", map_line);
+		msg_warn ("invalid map fetching protocol: %s", map_line);
 		return FALSE;
 	}
 	/* Constant pool */

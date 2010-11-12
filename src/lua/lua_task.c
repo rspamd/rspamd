@@ -128,6 +128,7 @@ LUA_FUNCTION_DEF (url, get_user);
 LUA_FUNCTION_DEF (url, get_path);
 LUA_FUNCTION_DEF (url, get_text);
 LUA_FUNCTION_DEF (url, is_phished);
+LUA_FUNCTION_DEF (url, get_phished);
 
 static const struct luaL_reg    urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_host),
@@ -135,6 +136,7 @@ static const struct luaL_reg    urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_path),
 	LUA_INTERFACE_DEF (url, get_text),
 	LUA_INTERFACE_DEF (url, is_phished),
+	LUA_INTERFACE_DEF (url, get_phished),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1021,6 +1023,25 @@ lua_url_is_phished (lua_State *L)
 		lua_pushnil (L);
 	}
 
+	return 1;
+}
+
+static gint
+lua_url_get_phished (lua_State *L)
+{
+	struct uri                    **purl, *url = lua_check_url (L);
+
+	if (url) {
+		if (url->is_phished && url->phished_url != NULL) {
+			purl = lua_newuserdata (L, sizeof (struct uri *));
+			lua_setclass (L, "rspamd{url}", -1);
+			*purl = url->phished_url;
+
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
 	return 1;
 }
 
