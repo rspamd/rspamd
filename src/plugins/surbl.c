@@ -900,7 +900,8 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		f.len = url->hostlen;
 		/* Search in trie */
 		if (surbl_module_ctx->redirector_trie &&
-				rspamd_trie_lookup (surbl_module_ctx->redirector_trie, url->host, url->hostlen, &idx)) {
+				rspamd_trie_lookup (surbl_module_ctx->redirector_trie, url->host, url->hostlen, &idx) &&
+				idx < surbl_module_ctx->redirector_ptrs->len) {
 			/* Get corresponding prefix */
 			red_domain = g_ptr_array_index (surbl_module_ctx->redirector_ptrs, idx);
 			/* Try to find corresponding regexp */
