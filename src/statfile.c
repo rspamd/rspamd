@@ -342,7 +342,7 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 
 	}
 
-	g_strlcpy (new_file->filename, filename, sizeof (new_file->filename));
+	rspamd_strlcpy (new_file->filename, filename, sizeof (new_file->filename));
 	new_file->len = st.st_size;
 	/* Aqquire lock for this operation */
 	lock_file (new_file->fd, FALSE);
@@ -633,7 +633,7 @@ stat_file_t                    *
 statfile_pool_is_open (statfile_pool_t * pool, gchar *filename)
 {
 	static stat_file_t              f, *ret;
-	g_strlcpy (f.filename, filename, sizeof (f.filename));
+	rspamd_strlcpy (f.filename, filename, sizeof (f.filename));
 	ret = lfind (&f, pool->files, (size_t *)&pool->opened, sizeof (stat_file_t), cmpstatfile);
 	return ret;
 }

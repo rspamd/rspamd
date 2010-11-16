@@ -444,7 +444,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	}
 	else if (is_numeric && dots_num == 0) {
 		/* This is number */
-		g_strlcpy (num_buf, hostname->begin, MIN (hostname->len + 1, sizeof (num_buf)));
+		rspamd_strlcpy (num_buf, hostname->begin, MIN (hostname->len + 1, sizeof (num_buf)));
 		errno = 0;
 		ip_num = strtoull (num_buf, NULL, 10);
 		if (errno != 0) {
@@ -713,7 +713,7 @@ register_memcached_call (struct uri *url, struct worker_task *task, GTree * url_
 	cur_param->bufsize = sizeof (gint);
 
 	sum_str = g_compute_checksum_for_string (G_CHECKSUM_MD5, struri (url), -1);
-	g_strlcpy (cur_param->key, sum_str, sizeof (cur_param->key));
+	rspamd_strlcpy (cur_param->key, sum_str, sizeof (cur_param->key));
 	g_free (sum_str);
 
 	selected = (struct memcached_server *)get_upstream_by_hash ((void *)task->cfg->memcached_servers,

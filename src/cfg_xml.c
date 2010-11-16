@@ -456,7 +456,7 @@ xml_asciiz_string (memory_pool_t *pool, const gchar *text, gsize len)
 	gchar                           *val;
 
 	val = memory_pool_alloc (pool, len + 1);
-	g_strlcpy (val, text, len + 1);
+	rspamd_strlcpy (val, text, len + 1);
 
 	return val;
 }
@@ -1336,7 +1336,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->section_pointer = check_worker_conf (ud->cfg, NULL);
 			}
 			else if (g_ascii_strcasecmp (element_name, "lua") == 0) {
-				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 				if (! handle_lua (ud->cfg, ud, ud->cur_attrs, NULL, NULL, ud->cfg, 0)) {
 					*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s'", ud->section_name);
@@ -1353,7 +1353,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			}
 			else {
 				/* Extract other tags */
-				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 				ud->state = XML_READ_VALUE;
 			}
@@ -1367,7 +1367,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct statfile));
 			}
 			else {
-				g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 				/* Save attributes */
 				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 			}
@@ -1379,7 +1379,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 		case XML_READ_WORKER:
 		case XML_READ_LOGGING:
 		case XML_READ_VIEW:
-			g_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+			rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			/* Save attributes */
 			ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 			break;

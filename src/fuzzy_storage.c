@@ -172,10 +172,10 @@ sync_cache (struct rspamd_worker *wrk)
 			node = *((struct rspamd_fuzzy_node **)pvalue);
 			if (now - node->time > expire) {
 				/* Remove expired item */
-				g_strlcpy (tmpindex, indexbuf, sizeof (tmpindex));
+				rspamd_strlcpy (tmpindex, indexbuf, sizeof (tmpindex));
 				pvalue = JudySLNext (jtree, tmpindex, PJE0);
 				JudySLDel (&jtree, indexbuf, PJE0);
-				g_strlcpy (indexbuf, tmpindex, sizeof (indexbuf));
+				rspamd_strlcpy (indexbuf, tmpindex, sizeof (indexbuf));
 				bloom_del (bf, node->h.hash_pipe);
 				server_stat->fuzzy_hashes_expired ++;
 				server_stat->fuzzy_hashes --;

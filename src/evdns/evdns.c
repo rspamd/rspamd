@@ -2474,7 +2474,7 @@ request_new(struct evdns_base *base, int type, const char *name, int flags,
 	if (base->global_randomize_case) {
 		unsigned i;
 		char randbits[(sizeof(namebuf)+7)/8];
-		g_strlcpy(namebuf, name, sizeof(namebuf));
+		rspamd_strlcpy(namebuf, name, sizeof(namebuf));
 		rand_bytes_function(randbits, (name_len+7)/8);
 		for (i = 0; i < name_len; ++i) {
 			if (g_ascii_isalpha(namebuf[i])) {

@@ -419,7 +419,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 						p++;
 					}
 					str = memory_pool_alloc (pool, p - c + 2);
-					g_strlcpy (str, c - 1, (p - c + 2));
+					rspamd_strlcpy (str, c - 1, (p - c + 2));
 					g_strstrip (str);
 					msg_debug ("found regexp: %s", str);
 					if (strlen (str) > 0) {
@@ -445,7 +445,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				func = memory_pool_alloc (pool, sizeof (struct expression_function));
 				func->name = memory_pool_alloc (pool, p - c + 1);
 				func->args = NULL;
-				g_strlcpy (func->name, c, (p - c + 1));
+				rspamd_strlcpy (func->name, c, (p - c + 1));
 				g_strstrip (func->name);
 				state = READ_FUNCTION_ARGUMENT;
 				g_queue_push_tail (function_stack, func);
@@ -456,7 +456,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				/* In fact it is not function, but symbol */
 				if (c != p) {
 					str = memory_pool_alloc (pool, p - c + 1);
-					g_strlcpy (str, c, (p - c + 1));
+					rspamd_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					if (strlen (str) > 0) {
 						insert_expression (pool, &expr, EXPR_STR, 0, str, copy);
@@ -469,7 +469,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				p++;
 				if (c != p) {
 					str = memory_pool_alloc (pool, p - c + 1);
-					g_strlcpy (str, c, (p - c + 1));
+					rspamd_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					if (strlen (str) > 0) {
 						insert_expression (pool, &expr, EXPR_STR, 0, str, copy);
@@ -492,7 +492,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				if (*p == ',' || (*p == ')' && brackets == 0)) {
 					arg = NULL;
 					str = memory_pool_alloc (pool, p - c + 1);
-					g_strlcpy (str, c, (p - c + 1));
+					rspamd_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					/* Recursive call */
 					arg = maybe_parse_expression (pool, str);

@@ -248,7 +248,7 @@ parse_servers_string (gchar *str)
 			port = DEFAULT_PORT;
 		}
 		name = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, p - strvec[i]);
-		g_strlcpy (name, strvec[i], p - strvec[i]);
+		rspamd_strlcpy (name, strvec[i], p - strvec[i]);
 		if (!inet_aton (name, &addr)) {
 			/* Resolve using dns */
 			hent = gethostbyname (name);
@@ -675,7 +675,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 					checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, image->data->data, image->data->len);
 					/* Construct fake fuzzy hash */
 					fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
-					g_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
+					rspamd_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
 					register_fuzzy_call (task, fake_fuzzy);
 					g_free (checksum);
 				}
@@ -692,7 +692,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 					checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, mime_part->content->data, mime_part->content->len);
 					/* Construct fake fuzzy hash */
 					fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
-					g_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
+					rspamd_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
 					register_fuzzy_call (task, fake_fuzzy);
 					g_free (checksum);
 			}
@@ -833,7 +833,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 						/* Construct fake fuzzy hash */
 						fake_fuzzy.block_size = 0;
 						bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
-						g_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
+						rspamd_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
 						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
 							/* Cannot write hash */
 							session->state = STATE_REPLY;
@@ -863,7 +863,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 						/* Construct fake fuzzy hash */
 						fake_fuzzy.block_size = 0;
 						bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
-						g_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
+						rspamd_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
 						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
 							/* Cannot write hash */
 							session->state = STATE_REPLY;

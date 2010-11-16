@@ -300,7 +300,7 @@ process_smtp_data (struct smtp_session *session)
 		if (cur) {
 			f = cur->data;
 			s = memory_pool_alloc (session->pool, f->len + 1);
-			g_strlcpy (s, f->begin, f->len + 1);
+			rspamd_strlcpy (s, f->begin, f->len + 1);
 			session->task->from = s;
 		}
 		/* Save recipients */
@@ -310,7 +310,7 @@ process_smtp_data (struct smtp_session *session)
 			if (cur) {
 				f = cur->data;
 				s = memory_pool_alloc (session->pool, f->len + 1);
-				g_strlcpy (s, f->begin, f->len + 1);
+				rspamd_strlcpy (s, f->begin, f->len + 1);
 				session->task->rcpt = g_list_prepend (session->task->rcpt, s);
 			}
 			t = g_list_next (t);

@@ -74,7 +74,7 @@ rspamd_memcached_test_func ()
 	ctx->timeout.tv_usec = 0;
 	ctx->sock = -1;
 	ctx->options = MEMC_OPT_DEBUG;
-	g_strlcpy (param->key, buf, sizeof (param->key));
+	rspamd_strlcpy (param->key, buf, sizeof (param->key));
 	param->buf = buf;
 	param->bufsize = strlen (buf);
 	ctx->param = param;

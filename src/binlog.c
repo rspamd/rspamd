@@ -167,8 +167,8 @@ binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint ro
 	}
 	
 	new->filename = memory_pool_alloc (pool, len + sizeof (BINLOG_SUFFIX));
-	g_strlcpy (new->filename, path, len + 1);
-	g_strlcpy (new->filename + len, BINLOG_SUFFIX, sizeof (BINLOG_SUFFIX));
+	rspamd_strlcpy (new->filename, path, len + 1);
+	rspamd_strlcpy (new->filename + len, BINLOG_SUFFIX, sizeof (BINLOG_SUFFIX));
 
 	if (stat (new->filename, &st) == -1) {
 		/* Check errno to check whether we should create this file */

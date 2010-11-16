@@ -591,7 +591,7 @@ parse_err (const gchar *fmt, ...)
 	gint                            r;
 
 	va_start (aq, fmt);
-	g_strlcpy (readbuf, yytext, sizeof (readbuf));
+	rspamd_strlcpy (readbuf, yytext, sizeof (readbuf));
 
 	r = snprintf (logbuf, sizeof (logbuf), "config file parse error! line: %d, text: %s, reason: ", yylineno, readbuf);
 	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
@@ -608,7 +608,7 @@ parse_warn (const gchar *fmt, ...)
 	gint                            r;
 
 	va_start (aq, fmt);
-	g_strlcpy (readbuf, yytext, sizeof (readbuf));
+	rspamd_strlcpy (readbuf, yytext, sizeof (readbuf));
 
 	r = snprintf (logbuf, sizeof (logbuf), "config file parse warning! line: %d, text: %s, reason: ", yylineno, readbuf);
 	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
@@ -647,7 +647,7 @@ parse_comma_list (memory_pool_t * pool, gchar *line)
 	while (*p) {
 		if (*p == ',' && *c != *p) {
 			str = memory_pool_alloc (pool, p - c + 1);
-			g_strlcpy (str, c, p - c + 1);
+			rspamd_strlcpy (str, c, p - c + 1);
 			res = g_list_prepend (res, str);
 			/* Skip spaces */
 			while (g_ascii_isspace (*(++p)));
@@ -774,7 +774,7 @@ parse_lua_normalizer (struct config_file *cfg, struct statfile *st, const gchar 
         /* Put function name */
         len = code_begin - line;
         code_begin = memory_pool_alloc (cfg->cfg_pool, len + 1);
-        g_strlcpy (code_begin, line, len + 1);
+        rspamd_strlcpy (code_begin, line, len + 1);
         params = g_list_prepend (params, code_begin);
     }
     memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, params);

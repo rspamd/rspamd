@@ -206,7 +206,7 @@ parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_add
 	p = strchr (begin, '/');
 	if (p != NULL) {
 		/* Extract mask */
-		g_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
+		rspamd_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
 		addr->mask = mask_buf[0] * 10 + mask_buf[1];
 		if (addr->mask > 32) {
 			return FALSE;
@@ -214,7 +214,7 @@ parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_add
 		if (host == NULL) {
 			hostlen = p - begin;
 			host = memory_pool_alloc (task->task_pool, hostlen);
-			g_strlcpy (host, begin, hostlen);
+			rspamd_strlcpy (host, begin, hostlen);
 		}
 	}
 	else {

@@ -108,6 +108,7 @@ void g_ptr_array_unref (GPtrArray *array);
  *	%p						    void *
  *	%V						    f_str_t *
  *	%s						    null-terminated string
+ *	%S						    ascii null-terminated string
  *	%*s					        length and string
  *	%Z						    '\0'
  *	%N						    '\n'
@@ -119,5 +120,27 @@ gint rspamd_sprintf (gchar *buf, const gchar *fmt, ...);
 gint rspamd_fprintf (FILE *f, const gchar *fmt, ...);
 gint rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...);
 gchar *rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args);
+
+/*
+ * Copy src to dest limited to len, in compare with standart strlcpy(3) rspamd strlcpy does not
+ * traverse the whole string and it is possible to use it for non NULL terminated strings. This is
+ * more like memccpy(dst, src, size, '\0')
+ *
+ * @param dst destination string
+ * @param src source string
+ * @param siz length of destination buffer
+ * @return bytes copied
+ */
+gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
+
+/*
+ * Escape rspamd string to write it to log file or other 7 bit prefferable places
+ *
+ * @param dst destination string
+ * @param src source string
+ * @param len length of destination buffer
+ * @return pointer to end of buffer
+ */
+gchar * rspamd_escape_string (gchar *dst, const gchar *src, gsize len);
 
 #endif

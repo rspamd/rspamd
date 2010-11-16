@@ -224,7 +224,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_serve
 
 	addr->sun_family = AF_UNIX;
 
-	g_strlcpy (addr->sun_path, path, sizeof (addr->sun_path));
+	rspamd_strlcpy (addr->sun_path, path, sizeof (addr->sun_path));
 #ifdef FREEBSD
 	addr->sun_len = SUN_LEN (addr);
 #endif
@@ -1124,17 +1124,57 @@ rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...)
 	return p - buf;
 }
 
+gchar *
+rspamd_escape_string (gchar *dst, const gchar *src, gsize len)
+{
+	gchar              *buf = dst, *last = dst + len;
+	guint8              c;
+	const gchar        *p = src;
+
+	while (*p && buf < last) {
+		c = *p++;
+		if (G_UNLIKELY ((c & 0x80))) {
+			c &= 0x7F;
+			if (last - buf >= 3) {
+				*buf++ = 'M';
+				*buf++ = '-';
+			}
+		}
+
+		if (G_UNLIKELY ( g_ascii_iscntrl (c))) {
+			if (c == '\n') {
+				*buf++ = ' ';
+			}
+			else if (c == '\t') {
+				*buf++ = '\t';
+			}
+			else {
+				*buf++ = '^';
+				if (buf != last) {
+					*buf++ = c ^ 0100;
+				}
+			}
+		}
+		else {
+			*buf++ = c;
+		}
+	}
+
+	*buf = '\0';
+
+	return buf;
+}
 
 gchar *
 rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args)
 {
-	gchar             *p, zero, *last;
-	gint                            d;
+	gchar              *p, zero, *last;
+	gint                d;
 	long double         f, scale;
 	size_t              len, slen;
-	gint64                          i64;
-	guint64                         ui64;
-	guint                           width, sign, hex, max_width, frac_width, i;
+	gint64              i64;
+	guint64             ui64;
+	guint               width, sign, hex, max_width, frac_width, i;
 	f_str_t			   *v;
 
 	if (max == 0) {
@@ -1247,6 +1287,25 @@ rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args)
 					len = (buf + slen < last) ? slen : (size_t) (last - buf);
 
 					buf = ((gchar *)memcpy (buf, p, len)) + len;
+				}
+
+				fmt++;
+
+				continue;
+
+			case 'S':
+				p = va_arg(args, gchar *);
+				if (p == NULL) {
+					p = "(NULL)";
+				}
+
+				if (slen == (size_t) -1) {
+					buf = rspamd_escape_string (buf, p, last - buf);
+
+				} else {
+					len = (buf + slen < last) ? slen : (size_t) (last - buf);
+
+					buf = rspamd_escape_string (buf, p, len);
 				}
 
 				fmt++;
@@ -1558,6 +1617,29 @@ g_ptr_array_unref (GPtrArray *array)
 	g_ptr_array_free (array, TRUE);
 }
 #endif
+
+gsize
+rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
+{
+	gchar *d = dst;
+	const gchar *s = src;
+	gsize n = siz;
+
+	/* Copy as many bytes as will fit */
+	if (n != 0) {
+		while (--n != 0) {
+			if ((*d++ = *s++) == '\0') {
+				break;
+			}
+		}
+	}
+
+	if (n == 0 && siz != 0) {
+		*d = '\0';
+	}
+
+	return (s - src - 1);    /* count does not include NUL */
+}
 
 /*
  * vi:ts=4

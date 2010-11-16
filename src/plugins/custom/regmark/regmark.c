@@ -141,7 +141,7 @@ parse_line (const char *line, size_t len, char **output, void *user_data)
 	while (p - line <= len) {
 		if (g_ascii_isspace (*p) || p - line == len) {
 			name = g_malloc (p - line + 1);
-			g_strlcpy (name, line, p - line + 1);
+			rspamd_strlcpy (name, line, p - line + 1);
 			if (metaphone (name, 0, &metaname)) {
 				/* Skip spaces */
 				while (p - line <= len && g_ascii_isspace (*p)) {

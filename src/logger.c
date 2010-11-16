@@ -318,7 +318,7 @@ flush_log_buf (void)
 void
 rspamd_common_log_function (GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...)
 {
-	static gchar                     logbuf[BUFSIZ];
+	static gchar                    logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 
@@ -326,8 +326,9 @@ rspamd_common_log_function (GLogLevelFlags log_level, const gchar *function, con
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
+		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
 		va_end (vp);
-		rspamd_log->log_func (NULL, function, log_level, logbuf, FALSE, rspamd_log->cfg);
+		rspamd_log->log_func (NULL, function, log_level, escaped_logbuf, FALSE, rspamd_log->cfg);
 	}
 }
 
@@ -550,7 +551,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 void
 rspamd_conditional_debug (guint32 addr, const gchar *function, const gchar *fmt, ...) 
 {
-	static gchar                     logbuf[BUFSIZ];
+	static gchar                     logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 
@@ -560,16 +561,20 @@ rspamd_conditional_debug (guint32 addr, const gchar *function, const gchar *fmt,
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
+		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
 		va_end (vp);
-		rspamd_log->log_func (NULL, function, G_LOG_LEVEL_DEBUG, logbuf, TRUE, rspamd_log->cfg);
+		rspamd_log->log_func (NULL, function, G_LOG_LEVEL_DEBUG, escaped_logbuf, TRUE, rspamd_log->cfg);
 	}
 } 
 
 void
 rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg)
 {
+	gchar                         escaped_logbuf[BUFSIZ];
+
 	if (rspamd_log->enabled) {
-		rspamd_log->log_func (log_domain, NULL, log_level, message, FALSE, rspamd_log->cfg);
+		(void)rspamd_escape_string (escaped_logbuf, message, sizeof (escaped_logbuf));
+		rspamd_log->log_func (log_domain, NULL, log_level, escaped_logbuf, FALSE, rspamd_log->cfg);
 	}
 }
 

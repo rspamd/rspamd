@@ -778,7 +778,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		}
 
 		url_text = memory_pool_alloc (task->task_pool, len + 1);
-		g_strlcpy (url_text, c, len + 1);
+		rspamd_strlcpy (url_text, c, len + 1);
 		decode_entitles (url_text, NULL);
 
 		if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0 &&

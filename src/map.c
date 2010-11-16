@@ -134,7 +134,7 @@ parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
 		case 2:
 			if (*p == ':') {
 				reply->cur_header = g_malloc (p - s + 1);
-				g_strlcpy (reply->cur_header, s, p - s + 1);
+				rspamd_strlcpy (reply->cur_header, s, p - s + 1);
 				reply->parser_state = 3;
 			}
 			else if (*p == '\r' && *(p + 1) == '\n') {
@@ -158,7 +158,7 @@ parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
 			if (*p == '\r') {
 				if (reply->cur_header != NULL) {
 					tmp = g_malloc (p - s + 1);
-					g_strlcpy (tmp, s, p - s + 1);
+					rspamd_strlcpy (tmp, s, p - s + 1);
 					g_hash_table_insert (reply->headers, reply->cur_header, tmp);
 					reply->cur_header = NULL;
 				}
@@ -476,7 +476,7 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 			hostend = p;
 		}
 		hdata->host = memory_pool_alloc (map_pool, hostend - def + 1);
-		g_strlcpy (hdata->host, def, hostend - def + 1);
+		rspamd_strlcpy (hdata->host, def, hostend - def + 1);
 		hdata->path = memory_pool_strdup (map_pool, p);
 		hdata->rlen = 0;
 		/* Now try to resolve */

@@ -267,7 +267,7 @@ register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
 	
 	item = memory_pool_alloc0 (pcache->static_pool, sizeof (struct cache_item));
 	item->s = memory_pool_alloc0 (pcache->static_pool, sizeof (struct saved_cache_item));
-	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
+	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
 
@@ -306,7 +306,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	
 	item = memory_pool_alloc0 (dynamic_pool, sizeof (struct cache_item));
 	item->s = memory_pool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
-	g_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
+	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
 	/* Handle weight using default metric */

@@ -114,7 +114,7 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 					/* One more character */
 					p ++;
 				}
-				g_strlcpy (numbuf, c, MIN (p - c + 1, sizeof (numbuf)));
+				rspamd_strlcpy (numbuf, c, MIN (p - c + 1, sizeof (numbuf)));
 				errno = 0;
 				*val = strtoull (numbuf, NULL, 10);
 				if (errno != 0) {

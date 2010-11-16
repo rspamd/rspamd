@@ -82,7 +82,7 @@ add_string_common (prefix_tree_t *tree, const char *input, int skip_levels, gboo
 				else {
 					/* Create new tree */
 					prefix = g_malloc (cur_level * sizeof (char) + 1);
-					g_strlcpy (prefix, orig, cur_level + 1);
+					rspamd_strlcpy (prefix, orig, cur_level + 1);
 					cur->leafs[num].data = g_tree_new_full (compare_prefixes, NULL, g_free, NULL);
 					g_tree_insert (cur->leafs[num].data, prefix, GUINT_TO_POINTER (1));
 					return 1;
@@ -90,7 +90,7 @@ add_string_common (prefix_tree_t *tree, const char *input, int skip_levels, gboo
 			}
 			else {
 				/* Got some node, so check it */
-				g_strlcpy (tmp, orig, MIN (sizeof (tmp), cur_level + 1));
+				rspamd_strlcpy (tmp, orig, MIN (sizeof (tmp), cur_level + 1));
 				if ((res = (uintptr_t)g_tree_lookup (cur->leafs[num].data, tmp)) != 0) {
 					if (! read_only) {
 						g_tree_insert (cur->leafs[num].data, g_strdup (tmp), GUINT_TO_POINTER (res + 1));

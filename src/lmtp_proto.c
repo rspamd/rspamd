@@ -131,7 +131,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			}
 			lmtp->task->helo = memory_pool_alloc (lmtp->task->task_pool, line->len - i + 1);
 			/* Strlcpy makes string null terminated by design */
-			g_strlcpy (lmtp->task->helo, c, line->len - i + 1);
+			rspamd_strlcpy (lmtp->task->helo, c, line->len - i + 1);
 			lmtp->state = LMTP_READ_FROM;
 			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "", "Ok")) {
 				return -1;
@@ -203,7 +203,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			}
 			rcpt = memory_pool_alloc (lmtp->task->task_pool, line->len - i + 1);
 			/* Strlcpy makes string null terminated by design */
-			g_strlcpy (rcpt, c, line->len - i + 1);
+			rspamd_strlcpy (rcpt, c, line->len - i + 1);
 			lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
 			lmtp->state = LMTP_READ_MESSAGE;
 			if (! out_lmtp_reply (lmtp->task, LMTP_DATA, "", "Enter message, ending with \".\" on a line by itself")) {
