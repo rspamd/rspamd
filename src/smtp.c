@@ -44,6 +44,9 @@
 
 #define DEFAULT_REJECT_MESSAGE "450 4.5.0 Spam message rejected"
 
+#define XCLIENT_HOST_UNAVAILABLE "[UNAVAILABLE]"
+#define XCLIENT_HOST_TEMPFAIL "[TEMPUNAVAIL]"
+
 static gboolean smtp_write_socket (void *arg);
 
 static sig_atomic_t                    wanna_die = 0;
@@ -574,10 +577,10 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 						"DNS error: %s", dns_strerror (reply->code));
 				
 				if (reply->code == DNS_RC_NXDOMAIN) {
-					session->hostname = memory_pool_strdup (session->pool, "unknown");
+					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				else {
-					session->hostname = memory_pool_strdup (session->pool, "tempfail");
+					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_TEMPFAIL);
 				}
 				session->state = SMTP_STATE_DELAY;
 				smtp_make_delay (session);
@@ -598,10 +601,10 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 										"DNS error: %s", dns_strerror (reply->code));
 
 				if (reply->code == DNS_RC_NXDOMAIN) {
-					session->hostname = memory_pool_strdup (session->pool, "unknown");
+					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				else {
-					session->hostname = memory_pool_strdup (session->pool, "tempfail");
+					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_TEMPFAIL);
 				}
 				session->state = SMTP_STATE_DELAY;
 				smtp_make_delay (session);
@@ -621,7 +624,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 
 				if (res == 0) {
 					msg_info ("cannot find address for hostname: %s, ip: %s", session->hostname, inet_ntoa (session->client_addr));
-					session->hostname = memory_pool_strdup (session->pool, "unknown");
+					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				session->state = SMTP_STATE_DELAY;
 				smtp_make_delay (session);
