@@ -102,10 +102,10 @@ struct url_match_scanner *url_scanner = NULL;
 
 static const struct _proto      protocol_backends[] = {
 	{"file", 0, NULL, 1, 0, 0, 0},
-	{"ftp", 21, NULL, 1, 1, 0, 0},
-	{"http", 80, NULL, 1, 1, 0, 0},
-	{"https", 443, NULL, 1, 1, 0, 1},
-	{"mailto", 25, NULL, 1, 1, 0, 0},
+	{"ftp", 21, NULL, 1, 0, 0, 0},
+	{"http", 80, NULL, 1, 0, 0, 0},
+	{"https", 443, NULL, 1, 0, 0, 1},
+	{"mailto", 25, NULL, 1, 0, 0, 0},
 	/* Keep these last! */
 	{NULL, 0, NULL, 0, 0, 1, 0}
 };
