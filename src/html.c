@@ -783,7 +783,8 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 
 		if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0 &&
 				g_ascii_strncasecmp (url_text, "www", sizeof ("www") - 1) != 0 &&
-				g_ascii_strncasecmp (url_text, "ftp://", sizeof ("ftp://") - 1) != 0) {
+				g_ascii_strncasecmp (url_text, "ftp://", sizeof ("ftp://") - 1) != 0 &&
+				g_ascii_strncasecmp (url_text, "mailto:", sizeof ("mailto:") - 1) != 0) {
 			return;
 		}
 
