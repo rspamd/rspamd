@@ -9,6 +9,7 @@ SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 3)
 SET(RSPAMD_VERSION_PATCH 3)
 
+
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "http://bitbucket.org/vstakhov/rspamd")
 SET(RSPAMD_USER "nobody")
@@ -483,6 +484,28 @@ ENDIF(DEBUG_MODE MATCHES "ON")
 IF(NOT DESTDIR)
     SET(DESTDIR $ENV{DESTDIR})
 ENDIF(NOT DESTDIR)
+
+# Try to detect tip version from hg
+SET(ID "unknown")
+FIND_PROGRAM(HG "hg")
+
+IF(HG)
+    EXECUTE_PROCESS(COMMAND ${HG} "id" OUTPUT_VARIABLE HG_ID)   
+    IF(HG_ID)
+        STRING(REGEX MATCH ^[0-9a-z]+ ID "${HG_ID}")
+    ENDIF(HG_ID)
+ELSE(HG)
+# Now check .hg_archival.txt
+    FIND_FILE(HG_ARCH ".hg_archival.txt" "${CMAKE_CURRENT_SOURCE_DIR}")   
+    IF(HG_ARCH)
+        FILE(READ ${HG_ARCH} HG_ID)
+        IF(HG_ID)
+            STRING(REGEX MATCH "node: [0-9a-z]+" _tmp "${HG_ID}")
+            STRING(SUBSTRING "${_tmp}" 6 12 ID)
+        ENDIF(HG_ID)
+    ENDIF(HG_ARCH)
+ENDIF(HG)
+ 
 
 ################################ SOURCES SECTION ###########################
 

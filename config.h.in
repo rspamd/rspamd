@@ -132,6 +132,7 @@
 #cmakedefine HAVE_CLOCK_GETTIME  1
 
 #define RVERSION          "${RSPAMD_VERSION}"
+#define RID               "${ID}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
 #define MODULES_NUM        ${RSPAMD_MODULES_NUM}

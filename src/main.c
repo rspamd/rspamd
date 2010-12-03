@@ -184,7 +184,7 @@ read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
 	GOptionContext                 *context;
 
 	context = g_option_context_new ("- run rspamd daemon");
-	g_option_context_set_summary (context, "Summary:\n  Rspamd daemon version " RVERSION);
+	g_option_context_set_summary (context, "Summary:\n  Rspamd daemon version " RVERSION "\n  Release id: " RID);
 	g_option_context_add_main_entries (context, entries, NULL);
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
@@ -879,7 +879,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	config_logger (rspamd, TRUE);
 
-	msg_info ("rspamd " RVERSION " is starting");
+	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name);
 
 	if (!rspamd->cfg->no_fork && daemon (0, 0) == -1) {
