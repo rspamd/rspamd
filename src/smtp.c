@@ -25,6 +25,7 @@
 #include "config.h"
 #include "main.h"
 #include "cfg_file.h"
+#include "cfg_xml.h"
 #include "util.h"
 #include "smtp.h"
 #include "smtp_proto.h"
@@ -895,25 +896,59 @@ make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 	g_strfreev (strv);
 }
 
-
-static gboolean
-config_smtp_worker (struct rspamd_worker *worker)
+gpointer
+init_smtp_worker (void)
 {
 	struct smtp_worker_ctx         *ctx;
-	gchar                           *value;
-	guint32                         timeout;
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
 	ctx->pool = memory_pool_new (memory_pool_get_size ());
 	
 	/* Set default values */
-	ctx->smtp_timeout.tv_sec = 300;
-	ctx->smtp_timeout.tv_usec = 0;
+	ctx->smtp_timeout_raw = 300000;
 	ctx->smtp_delay = 0;
 	ctx->smtp_banner = "220 ESMTP Ready." CRLF;
 	bzero (ctx->smtp_filters, sizeof (GList *) * SMTP_STAGE_MAX);
+	ctx->max_errors = DEFAULT_MAX_ERRORS;
+	ctx->reject_message = DEFAULT_REJECT_MESSAGE;
 
-	if ((value = g_hash_table_lookup (worker->cf->params, "upstreams")) != NULL) {
+	register_worker_opt (TYPE_SMTP, "upstreams", xml_handle_string, ctx,
+				G_STRUCT_OFFSET (struct smtp_worker_ctx, upstreams_str));
+	register_worker_opt (TYPE_SMTP, "banner", xml_handle_string, ctx,
+					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_banner_str));
+	register_worker_opt (TYPE_SMTP, "timeout", xml_handle_seconds, ctx,
+					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_timeout_raw));
+	register_worker_opt (TYPE_SMTP, "delay", xml_handle_seconds, ctx,
+					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_delay));
+	register_worker_opt (TYPE_SMTP, "jitter", xml_handle_seconds, ctx,
+						G_STRUCT_OFFSET (struct smtp_worker_ctx, delay_jitter));
+	register_worker_opt (TYPE_SMTP, "capabilities", xml_handle_string, ctx,
+					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_capabilities_str));
+	register_worker_opt (TYPE_SMTP, "xclient", xml_handle_boolean, ctx,
+					G_STRUCT_OFFSET (struct smtp_worker_ctx, use_xclient));
+	register_worker_opt (TYPE_SMTP, "reject_message", xml_handle_string, ctx,
+						G_STRUCT_OFFSET (struct smtp_worker_ctx, reject_message));
+	register_worker_opt (TYPE_SMTP, "max_errors", xml_handle_uint32, ctx,
+						G_STRUCT_OFFSET (struct smtp_worker_ctx, max_errors));
+	register_worker_opt (TYPE_SMTP, "max_size", xml_handle_size, ctx,
+						G_STRUCT_OFFSET (struct smtp_worker_ctx, max_size));
+
+	return ctx;
+}
+
+/* Make post-init configuration */
+static gboolean
+config_smtp_worker (struct rspamd_worker *worker)
+{
+	struct smtp_worker_ctx         *ctx = worker->ctx;
+	gchar                          *value;
+
+	/* Init timeval */
+	ctx->smtp_timeout.tv_sec = ctx->smtp_timeout_raw / 1000;
+	ctx->smtp_timeout.tv_usec = (ctx->smtp_timeout_raw - ctx->smtp_timeout.tv_sec * 1000) * 1000;
+
+	/* Init upstreams */
+	if ((value = ctx->upstreams_str) != NULL) {
 		if (!parse_upstreams_line (ctx, value)) {
 			return FALSE;
 		}
@@ -922,53 +957,19 @@ config_smtp_worker (struct rspamd_worker *worker)
 		msg_err ("no upstreams defined, don't know what to do");
 		return FALSE;
 	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_banner")) != NULL) {
+	/* Create smtp banner */
+	if ((ctx->smtp_banner_str) != NULL) {
 		parse_smtp_banner (ctx, value);
 	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_timeout")) != NULL) {
-		errno = 0;
-		timeout = parse_seconds (value);
-		ctx->smtp_timeout.tv_sec = timeout / 1000;
-		ctx->smtp_timeout.tv_usec = (timeout - ctx->smtp_timeout.tv_sec * 1000) * 1000;
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_delay")) != NULL) {
-		ctx->smtp_delay = parse_seconds (value);
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_jitter")) != NULL) {
-		ctx->delay_jitter = parse_seconds (value);
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_capabilities")) != NULL) {
+
+	/* Parse capabilities */
+	if ((value = ctx->smtp_capabilities_str) != NULL) {
 		make_capabilities (ctx, value);
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_use_xclient")) != NULL) {
-		ctx->use_xclient = parse_flag (value);
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_metric")) != NULL) {
-		ctx->metric = memory_pool_strdup (ctx->pool, value);
-	}
-	else {
-		ctx->metric = DEFAULT_METRIC;
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_max_errors")) != NULL) {
-		ctx->max_errors = strtoul (value, NULL, 10);
-	}
-	else {
-		ctx->max_errors = DEFAULT_MAX_ERRORS;
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "smtp_reject_message")) != NULL) {
-		ctx->reject_message = memory_pool_strdup (ctx->pool, value);
-	}
-	else {
-		ctx->reject_message = DEFAULT_REJECT_MESSAGE;
 	}
 
 	ctx->resolver = dns_resolver_init (worker->srv->cfg);
-
-	/* Set ctx */
-	worker->ctx = ctx;
 	
 	return TRUE;
-	
 }
 
 

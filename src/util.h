@@ -12,6 +12,21 @@ struct workq;
 struct statfile;
 struct classifier_config;
 
+/**
+ * Process type: main or worker
+ */
+enum process_type {
+	TYPE_UNKNOWN=-1,
+	TYPE_MAIN,
+	TYPE_WORKER,
+	TYPE_CONTROLLER,
+	TYPE_LMTP,
+	TYPE_SMTP,
+	TYPE_FUZZY,
+	TYPE_GREYLIST,
+	TYPE_MAX=255
+};
+
 /* Create socket and bind or connect it to specified address and port */
 gint make_tcp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
 /* Create socket and bind or connect it to specified address and port */
@@ -142,5 +157,20 @@ gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
  * @return pointer to end of buffer
  */
 gchar * rspamd_escape_string (gchar *dst, const gchar *src, gsize len);
+
+/*
+ * Convert process type to its name
+ *
+ * @param type numeric type
+ * @return string representation of type
+ */
+const gchar * process_to_str (enum process_type type);
+/*
+ * Convert string to process type
+ *
+ * @param type numeric type
+ * @return string representation of type
+ */
+enum process_type str_to_process (const gchar *str);
 
 #endif

@@ -339,6 +339,7 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		cur->type = cf->type;
 		cur->pid = fork ();
 		cur->cf = g_malloc (sizeof (struct worker_conf));
+		cur->ctx = rspamd->workers_ctx[cf->type];
 		memcpy (cur->cf, cf, sizeof (struct worker_conf));
 		cur->pending = FALSE;
 		switch (cur->pid) {
@@ -564,29 +565,6 @@ spawn_workers (struct rspamd_main *rspamd)
 	}
 }
 
-static const gchar              *
-get_process_type (enum process_type type)
-{
-	switch (type) {
-	case TYPE_MAIN:
-		return "main";
-	case TYPE_WORKER:
-		return "worker";
-	case TYPE_FUZZY:
-		return "fuzzy";
-	case TYPE_GREYLIST:
-		return "greylist";
-	case TYPE_CONTROLLER:
-		return "controller";
-	case TYPE_LMTP:
-		return "lmtp";
-	case TYPE_SMTP:
-		return "smtp";
-	}
-
-	return NULL;
-}
-
 static void
 kill_old_workers (gpointer key, gpointer value, gpointer unused)
 {
@@ -604,7 +582,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	waitpid (w->pid, &res, 0);
 
-	msg_debug ("%s process %P terminated", get_process_type (w->type), w->pid);
+	msg_debug ("%s process %P terminated", process_to_str (w->type), w->pid);
 	g_free (w->cf);
 	g_free (w);
 
@@ -755,6 +733,15 @@ print_symbols_cache (struct config_file *cfg)
 	}
 }
 
+static void
+init_workers_ctx (struct rspamd_main *main)
+{
+	main->workers_ctx[TYPE_WORKER] = init_worker ();
+	main->workers_ctx[TYPE_CONTROLLER] = init_controller ();
+	main->workers_ctx[TYPE_FUZZY] = init_fuzzy_storage ();
+	main->workers_ctx[TYPE_SMTP] = init_smtp_worker ();
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -829,6 +816,9 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 	
+	/* Init contextes */
+	init_workers_ctx (rspamd);
+
 	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
@@ -958,14 +948,14 @@ main (gint argc, gchar **argv, gchar **env)
 
 				if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 					/* Normal worker termination, do not fork one more */
-					msg_info ("%s process %P terminated normally", get_process_type (cur->type), cur->pid);
+					msg_info ("%s process %P terminated normally", process_to_str (cur->type), cur->pid);
 				}
 				else {
 					if (WIFSIGNALED (res)) {
-						msg_warn ("%s process %P terminated abnormally by signal: %d", get_process_type (cur->type), cur->pid, WTERMSIG (res));
+						msg_warn ("%s process %P terminated abnormally by signal: %d", process_to_str (cur->type), cur->pid, WTERMSIG (res));
 					}
 					else {
-						msg_warn ("%s process %P terminated abnormally", get_process_type (cur->type), cur->pid);
+						msg_warn ("%s process %P terminated abnormally", process_to_str (cur->type), cur->pid);
 					}
 					/* Fork another worker in replace of dead one */
 					delay_fork (cur->cf);

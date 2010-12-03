@@ -31,19 +31,23 @@ enum rspamd_smtp_stage {
 struct smtp_worker_ctx {
 	struct smtp_upstream upstreams[MAX_UPSTREAM];
 	size_t upstream_num;
+	gchar *upstreams_str;
 	
 	memory_pool_t *pool;
 	gchar *smtp_banner;
+	gchar *smtp_banner_str;
 	guint32 smtp_delay;
 	guint32 delay_jitter;
+	guint32 smtp_timeout_raw;
 	struct timeval smtp_timeout;
 
 	gboolean use_xclient;
 	gboolean helo_required;
 	gchar *smtp_capabilities;
+	gchar *smtp_capabilities_str;
 	gchar *reject_message;
-	size_t max_size;
-	guint max_errors;
+	gsize max_size;
+	guint32 max_errors;
 	gchar *metric;
 	GList *smtp_filters[SMTP_STAGE_MAX];
 	struct rspamd_dns_resolver *resolver;
@@ -115,6 +119,7 @@ struct smtp_filter {
 	gpointer filter_data;
 };
 
+gpointer init_smtp_worker (void);
 void start_smtp_worker (struct rspamd_worker *worker);
 void register_smtp_filter (struct smtp_worker_ctx *ctx, enum rspamd_smtp_stage stage, smtp_filter_t filter, gpointer filter_data);
 

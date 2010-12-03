@@ -51,6 +51,13 @@
 	NULL			\
 }					\
 
+#define NULL_DEF_ATTR 	\
+{					\
+	NULL,			\
+	0,				\
+	NULL			\
+}					\
+
 enum xml_config_section {
 	XML_SECTION_MAIN,
     XML_SECTION_LOGGING, 
@@ -64,16 +71,22 @@ enum xml_config_section {
 };
 
 struct xml_config_param {
-	const gchar *name;
-	element_handler_func handler;
-	gint                            offset;
-	gpointer user_data;
+	const gchar 		   *name;
+	element_handler_func 	handler;
+	gint 					offset;
+	gpointer 				user_data;
+};
+
+struct xml_default_config_param {
+	element_default_handler_func 	handler;
+	gint 					offset;
+	gpointer 				user_data;
 };
 
 struct xml_parser_rule {
 	enum xml_config_section section;
 	struct xml_config_param params[MAX_PARAM];
-	struct xml_config_param default_param;
+	struct xml_default_config_param default_param;
 };
 
 /* Here we describes our basic grammar */
@@ -165,7 +178,7 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		NULL_DEF_ATTR
 	},
 	{ XML_SECTION_LOGGING, {
 			{
@@ -206,7 +219,7 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		NULL_DEF_ATTR
 	},
 	{ XML_SECTION_WORKER, {
 			{
@@ -242,7 +255,6 @@ static struct xml_parser_rule grammar[] = {
 			NULL_ATTR
 		},
 		{
-			NULL,
 			worker_handle_param,
 			0,
 			NULL
@@ -287,7 +299,7 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		NULL_DEF_ATTR
 	},
 	{ XML_SECTION_CLASSIFIER, {
 			{
@@ -302,15 +314,13 @@ static struct xml_parser_rule grammar[] = {
 				0,
 				NULL
 			},
-			{
-				"option",
-				handle_classifier_opt,
-				0,
-				NULL
-			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		{
+			handle_classifier_opt,
+			0,
+			NULL
+		}
 	},
 	{ XML_SECTION_STATFILE, {
 			{
@@ -357,13 +367,12 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		NULL_DEF_ATTR
 	},
 	{ XML_SECTION_MODULE, {
 			NULL_ATTR
 		},
 		{
-			NULL,
 			handle_module_opt,
 			0,
 			NULL
@@ -378,7 +387,7 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		NULL_DEF_ATTR
 	},
 	{ XML_SECTION_VIEW, {
 			{
@@ -419,9 +428,13 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_ATTR
+		NULL_DEF_ATTR
 	},
 };
+
+static GHashTable *module_options = NULL,
+				  *worker_options = NULL,
+				  *classifier_options = NULL;
 
 GQuark
 xml_error_quark (void)
@@ -510,9 +523,8 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *v
 				param ++;
 			}
 			if (rule->default_param.handler != NULL) {
-				param = &rule->default_param;
 				/* Call default handler */
-				return param->handler (ctx->cfg, ctx, ctx->cur_attrs, value, param->user_data, dest_struct, param->offset);
+				return rule->default_param.handler (ctx->cfg, ctx, name, ctx->cur_attrs, value, param->user_data, dest_struct, param->offset);
 			}
 		}
 	}
@@ -625,17 +637,32 @@ handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 
 /* Worker section */
 gboolean 
-worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
-	gchar                           *name;
+	const gchar                    *name;
+	struct xml_config_param        *cparam;
+	GHashTable                     *worker_config;
 
-	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
-		msg_err ("worker param tag must have \"name\" attribute");
-		return FALSE;
+	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0)  {
+		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+			msg_err ("worker param tag must have \"name\" attribute");
+			return FALSE;
+		}
+	}
+	else {
+		name = tag;
 	}
 
-	g_hash_table_insert (wrk->params, name, memory_pool_strdup (cfg->cfg_pool, data));
+	if (!worker_options ||
+			(worker_config = g_hash_table_lookup (worker_options, &wrk->type)) == NULL ||
+			(cparam = g_hash_table_lookup (worker_config, name)) == NULL) {
+		msg_warn ("unregistered worker attribute '%s' for worker %s", name, process_to_str (wrk->type));
+		g_hash_table_insert (wrk->params, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
+	}
+	else {
+		return cparam->handler (cfg, ctx, attrs, data, NULL, cparam->user_data, cparam->offset);
+	}
 
 	return TRUE;
 }
@@ -765,27 +792,36 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 
 /* Modules section */
 gboolean 
-handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	gchar                           *name, *val;
+	gchar                          *val;
 	struct module_opt              *cur;
 	gboolean                        is_lua = FALSE;
-	
-	if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
-		msg_err ("param tag must have \"name\" attribute");
-		return FALSE;
+	const gchar                    *name;
+
+	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
+		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+			msg_err ("worker param tag must have \"name\" attribute");
+			return FALSE;
+		}
 	}
-	
+	else {
+		name = tag;
+	}
+
 	/* Check for lua */
 	if ((val = g_hash_table_lookup (attrs, "lua")) != NULL) {
 		if (g_ascii_strcasecmp (val, "yes") == 0) {
 			is_lua = TRUE;
 		}
 	}
+	/* XXX: in fact we cannot check for lua modules and need to do it in post-config procedure
+	 * so just insert any options provided and try to handle them in further process
+	 */
 
 	/* Insert option */
 	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
-	cur->param = name;
+	cur->param = (char *)name;
 	cur->value = data;
 	cur->is_lua = is_lua;
 	ctx->section_pointer = g_list_prepend (ctx->section_pointer, cur);
@@ -1048,17 +1084,33 @@ handle_classifier_tokenizer (struct config_file *cfg, struct rspamd_xml_userdata
 }
 
 gboolean 
-handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	struct classifier_config     *ccf = ctx->section_pointer;
-	gchar                        *val;
-	
-	if ((val = g_hash_table_lookup (attrs, "name")) == NULL) {
-		msg_err ("'name' attribute is required for tag 'option'");
-		return FALSE;
+	struct classifier_config       *ccf = ctx->section_pointer;
+	const gchar                    *name;
+	struct xml_config_param        *cparam;
+	GHashTable                     *classifier_config;
+
+	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
+		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+			msg_err ("worker param tag must have \"name\" attribute");
+			return FALSE;
+		}
+	}
+	else {
+		name = tag;
 	}
 
-	g_hash_table_insert (ccf->opts, val, memory_pool_strdup (cfg->cfg_pool, data));
+	if (!classifier_options ||
+			(classifier_config = g_hash_table_lookup (classifier_options, ccf->classifier->name)) == NULL ||
+			(cparam = g_hash_table_lookup (classifier_config, name)) == NULL) {
+		msg_warn ("unregistered classifier attribute '%s' for classifier %s", name, ccf->classifier->name);
+		g_hash_table_insert (ccf->opts, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
+	}
+	else {
+		return cparam->handler (cfg, ctx, attrs, data, NULL, cparam->user_data, cparam->offset);
+	}
+
 	return TRUE;
 }
 
@@ -1631,6 +1683,118 @@ rspamd_xml_error (GMarkupParseContext *context, GError *error, gpointer user_dat
 	struct rspamd_xml_userdata *ud = user_data;
 	
 	msg_err ("xml parser error: %s, at state \"%s\"", error->message, xml_state_to_string (ud));
+}
+
+/* Register handlers for specific parts of config */
+/* Register new module option */
+void
+register_module_opt (const gchar *mname, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset)
+{
+	struct xml_config_param          *param;
+	GHashTable                       *module;
+
+	if (module_options == NULL) {
+		module_options = g_hash_table_new (g_str_hash, g_str_equal);
+	}
+	if ((module = g_hash_table_lookup (module_options, mname)) == NULL) {
+		module = g_hash_table_new (g_str_hash, g_str_equal);
+		g_hash_table_insert (module_options, (char *)mname, module);
+	}
+	if ((param = g_hash_table_lookup (module, optname)) == NULL) {
+		/* Register new param */
+		param = g_malloc (sizeof (struct xml_config_param));
+		param->handler = func;
+		param->user_data = dest_struct;
+		param->offset = offset;
+		param->name = optname;
+		g_hash_table_insert (module, (char *)optname, param);
+	}
+	else {
+		/* Param already exists replace it */
+		msg_warn ("replace old handler for param '%s'", optname);
+		g_free (param);
+		param = g_malloc (sizeof (struct xml_config_param));
+		param->handler = func;
+		param->user_data = dest_struct;
+		param->offset = offset;
+		param->name = optname;
+		g_hash_table_insert (module, (char *)optname, param);
+	}
+}
+
+/* Register new worker's options */
+void
+register_worker_opt (gint wtype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset)
+{
+	struct xml_config_param          *param;
+	GHashTable                       *worker;
+	gint                             *new_key;
+
+	if (worker_options == NULL) {
+		worker_options = g_hash_table_new (g_int_hash, g_int_equal);
+	}
+	if ((worker = g_hash_table_lookup (worker_options, &wtype)) == NULL) {
+		worker = g_hash_table_new (g_str_hash, g_str_equal);
+		new_key = g_malloc (sizeof (gint));
+		*new_key = wtype;
+		g_hash_table_insert (worker_options, new_key, worker);
+	}
+	if ((param = g_hash_table_lookup (worker, optname)) == NULL) {
+		/* Register new param */
+		param = g_malloc (sizeof (struct xml_config_param));
+		param->handler = func;
+		param->user_data = dest_struct;
+		param->offset = offset;
+		param->name = optname;
+		g_hash_table_insert (worker, (char *)optname, param);
+	}
+	else {
+		/* Param already exists replace it */
+		msg_warn ("replace old handler for param '%s'", optname);
+		g_free (param);
+		param = g_malloc (sizeof (struct xml_config_param));
+		param->handler = func;
+		param->user_data = dest_struct;
+		param->offset = offset;
+		param->name = optname;
+		g_hash_table_insert (worker, (char *)optname, param);
+	}
+}
+
+/* Register new classifier option */
+void
+register_classifier_opt (const gchar *ctype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset)
+{
+	struct xml_config_param          *param;
+	GHashTable                       *classifier;
+
+	if (classifier_options == NULL) {
+		classifier_options = g_hash_table_new (g_str_hash, g_str_equal);
+	}
+	if ((classifier = g_hash_table_lookup (classifier_options, ctype)) == NULL) {
+		classifier = g_hash_table_new (g_str_hash, g_str_equal);
+		g_hash_table_insert (classifier_options, (char *)ctype, classifier);
+	}
+	if ((param = g_hash_table_lookup (classifier, optname)) == NULL) {
+		/* Register new param */
+		param = g_malloc (sizeof (struct xml_config_param));
+		param->handler = func;
+		param->user_data = dest_struct;
+		param->offset = offset;
+		param->name = optname;
+		g_hash_table_insert (classifier, (char *)optname, param);
+	}
+	else {
+		/* Param already exists replace it */
+		msg_warn ("replace old handler for param '%s'", optname);
+		g_free (param);
+		param = g_malloc (sizeof (struct xml_config_param));
+		param->handler = func;
+		param->user_data = dest_struct;
+		param->offset = offset;
+		param->name = optname;
+		g_hash_table_insert (classifier, (char *)optname, param);
+	}
 }
 
 

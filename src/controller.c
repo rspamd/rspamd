@@ -29,6 +29,7 @@
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"
+#include "cfg_xml.h"
 #include "modules.h"
 #include "tokenizers/tokenizers.h"
 #include "classifiers/classifiers.h"
@@ -65,6 +66,11 @@ struct custom_controller_command {
 	gboolean                        privilleged;
 	gboolean                        require_message;
 	controller_func_t               handler;
+};
+
+struct rspamd_controller_ctx {
+	char 						   *password;
+	guint32							timeout;
 };
 
 static struct controller_command commands[] = {
@@ -421,9 +427,9 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 	gchar                           out_buf[BUFSIZ], *arg, *err_str;
 	gint                            r = 0, days, hours, minutes;
 	time_t                          uptime;
-	guint32                   size = 0;
+	guint32                   		size = 0;
 	struct classifier_config       *cl;
-	gchar                           *password = g_hash_table_lookup (session->worker->cf->params, "password");
+	struct rspamd_controller_ctx   *ctx = session->worker->ctx;
 
 	switch (cmd->type) {
 	case COMMAND_PASSWORD:
@@ -436,14 +442,14 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			}
 			return TRUE;
 		}
-		if (password == NULL) {
+		if (ctx->password == NULL) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access unallowed" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
 			return TRUE;
 		}
-		if (strncmp (arg, password, strlen (arg)) == 0) {
+		if (strncmp (arg, ctx->password, strlen (arg)) == 0) {
 			session->authorized = 1;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password accepted" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
@@ -1023,6 +1029,9 @@ accept_socket (gint fd, short what, void *arg)
 	struct timeval                 *io_tv;
 	socklen_t                       addrlen = sizeof (ss);
 	gint                            nfd;
+	struct rspamd_controller_ctx   *ctx;
+
+	ctx = worker->ctx;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
@@ -1044,8 +1053,8 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Set up dispatcher */
 	io_tv = memory_pool_alloc (new_session->session_pool, sizeof (struct timeval));
-	io_tv->tv_sec = CONTROLLER_IO_TIMEOUT;
-	io_tv->tv_usec = 0;
+	io_tv->tv_sec = ctx->timeout / 1000;
+	io_tv->tv_usec = ctx->timeout - io_tv->tv_sec * 1000;
 
 	new_session->s = new_async_session (new_session->session_pool, free_session, new_session);
 
@@ -1053,6 +1062,21 @@ accept_socket (gint fd, short what, void *arg)
 	if (! rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
 		msg_warn ("cannot write greeting");
 	}
+}
+
+gpointer
+init_controller (void)
+{
+	struct rspamd_controller_ctx       *ctx;
+
+	ctx = g_malloc0 (sizeof (struct rspamd_controller_ctx));
+
+	ctx->timeout = CONTROLLER_IO_TIMEOUT * 1000;
+
+	register_worker_opt (TYPE_CONTROLLER, "password", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, password));
+	register_worker_opt (TYPE_CONTROLLER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, timeout));
+
+	return ctx;
 }
 
 void

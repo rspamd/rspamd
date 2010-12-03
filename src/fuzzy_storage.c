@@ -32,6 +32,7 @@
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"
+#include "cfg_xml.h"
 #include "url.h"
 #include "modules.h"
 #include "message.h"
@@ -66,19 +67,23 @@ static GQueue                  *hashes[BUCKETS];
 static GQueue                  *frequent;
 #ifdef WITH_JUDY
 static gpointer                 jtree;
-static gboolean                 use_judy = FALSE;
 #endif
 static bloom_filter_t          *bf;
 
 /* Number of cache modifications */
 static guint32                 mods = 0;
-static guint32                 max_mods = DEFAULT_MOD_LIMIT;
-/* Frequent score number */
-static guint32                 frequent_score = DEFAULT_FREQUENT_SCORE;
 /* For evtimer */
 static struct timeval           tmv;
 static struct event             tev;
 static struct rspamd_stat      *server_stat;
+
+struct rspamd_fuzzy_storage_ctx {
+	gboolean                        use_judy;
+	char                           *hashfile;
+	guint32                         expire;
+	guint32                         frequent_score;
+	guint32                         max_mods;
+};
 
 struct rspamd_fuzzy_node {
 	gint32                          value;
@@ -120,32 +125,27 @@ static void
 sync_cache (struct rspamd_worker *wrk)
 {
 	gint                            fd, i;
-	gchar                           *filename, *exp_str, header[4];
+	gchar                           *filename, header[4];
 	GList                          *cur, *tmp;
 	struct rspamd_fuzzy_node       *node;
 	guint64                         expire, now;
+	struct rspamd_fuzzy_storage_ctx *ctx = wrk->ctx;
 #ifdef WITH_JUDY
 	PPvoid_t                        pvalue;
 	gchar                           indexbuf[1024], tmpindex[1024];
 #endif
 
 	/* Check for modifications */
-	if (mods < max_mods) {
+	if (mods < ctx->max_mods) {
 		return;
 	}
 
 	msg_info ("syncing fuzzy hash storage");
-	filename = g_hash_table_lookup (wrk->cf->params, "hashfile");
+	filename = ctx->hashfile;
 	if (filename == NULL) {
 		return;
 	}
-	exp_str = g_hash_table_lookup (wrk->cf->params, "expire");
-	if (exp_str != NULL) {
-		expire = parse_seconds (exp_str) / 1000;
-	}
-	else {
-		expire = DEFAULT_EXPIRE;
-	}
+	expire = ctx->expire;
 	
 	if ((fd = open (filename, O_WRONLY | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH)) == -1) {
 		msg_err ("cannot create hash file %s: %s", filename, strerror (errno));
@@ -165,7 +165,7 @@ sync_cache (struct rspamd_worker *wrk)
 	}
 
 #ifdef WITH_JUDY
-	if (use_judy) {
+	if (ctx->use_judy) {
 		indexbuf[0] = '\0';
 		pvalue = JudySLFirst (jtree, indexbuf, PJE0);
 		while (pvalue) {
@@ -234,12 +234,14 @@ static void
 sigterm_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
+	struct rspamd_fuzzy_storage_ctx *ctx;
 	static struct timeval           tv = {
 		.tv_sec = 0,
 		.tv_usec = 0
 	};
 
-	mods = max_mods + 1;
+	ctx = worker->ctx;
+	mods = ctx->max_mods + 1;
 	sync_cache (worker);
 	close (worker->cf->listen_sock);
 	(void)event_loopexit (&tv);
@@ -254,7 +256,9 @@ sigusr_handler (gint fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
 	struct timeval                  tv;
+	struct rspamd_fuzzy_storage_ctx *ctx;
 
+	ctx = worker->ctx;
 	tv.tv_sec = SOFT_SHUTDOWN_TIME;
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev);
@@ -263,7 +267,7 @@ sigusr_handler (gint fd, short what, void *arg)
 	do_reopen_log = 1;
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
-	mods = max_mods + 1;
+	mods = ctx->max_mods + 1;
 	sync_cache (worker);
 	return;
 }
@@ -276,6 +280,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	gchar                           *filename, header[4];
 	gboolean                        touch_stat = TRUE;
 	struct rspamd_fuzzy_node       *node;
+	struct rspamd_fuzzy_storage_ctx *ctx = wrk->ctx;
 	struct {
 		gint32                          value;
 		guint64                         time;
@@ -288,7 +293,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 		touch_stat = FALSE;
 	}
 
-	if (use_judy) {
+	if (ctx->use_judy) {
 		jtree = NULL;
 	}
 	else {
@@ -301,7 +306,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	}
 #endif
 
-	filename = g_hash_table_lookup (wrk->cf->params, "hashfile");
+	filename = ctx->hashfile;
 	if (filename == NULL) {
 		return FALSE;
 	}
@@ -354,13 +359,13 @@ read_hashes_file (struct rspamd_worker *wrk)
 			}
 		}
 #ifdef WITH_JUDY
-		if (use_judy) {
+		if (ctx->use_judy) {
 			pvalue = JudySLIns (&jtree, node->h.hash_pipe, PJE0);
 			*pvalue = node;
 		}
 		else {
 #endif
-		if (node->value > frequent_score) {
+		if (node->value > ctx->frequent_score) {
 			g_queue_push_head (frequent, node);
 		}
 		else {
@@ -376,7 +381,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	}
 
 #ifdef WITH_JUDY
-	if (!use_judy) {
+	if (!ctx->use_judy) {
 #endif
 	/* Sort everything */
 	g_queue_sort (frequent, compare_nodes, NULL);
@@ -402,7 +407,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 }
 
 static inline struct rspamd_fuzzy_node *
-check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value)
+check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	GList                          *cur;
 	struct rspamd_fuzzy_node       *h;
@@ -410,7 +415,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value)
 #ifdef WITH_JUDY
 	PPvoid_t                         pvalue;
 
-	if (use_judy) {
+	if (ctx->use_judy) {
 		pvalue = JudySLGet (jtree, s->hash_pipe, PJE0);
 		if (pvalue != NULL) {
 			h = *((struct rspamd_fuzzy_node **)pvalue);
@@ -449,7 +454,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value)
 				h->value += update_value;
 				msg_info ("new hash weight: %d", h->value);
 			}
-			if (h->value > frequent_score) {
+			if (h->value > ctx->frequent_score) {
 				g_queue_unlink (hash, cur);
 				g_queue_push_head_link (frequent, cur);
 				msg_info ("moved hash to frequent list");
@@ -466,10 +471,11 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value)
 }
 
 static                          gint
-process_check_command (struct fuzzy_cmd *cmd, gint *flag)
+process_check_command (struct fuzzy_cmd *cmd, gint *flag, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	fuzzy_hash_t                    s;
 	struct rspamd_fuzzy_node       *h;
+
 
 	if (!bloom_check (bf, cmd->hash)) {
 		return 0;
@@ -478,7 +484,7 @@ process_check_command (struct fuzzy_cmd *cmd, gint *flag)
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 
-	h = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0);
+	h = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0, ctx);
 
 	if (h == NULL) {
 		return 0;
@@ -490,7 +496,7 @@ process_check_command (struct fuzzy_cmd *cmd, gint *flag)
 }
 
 static                          gboolean
-update_hash (struct fuzzy_cmd *cmd)
+update_hash (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	fuzzy_hash_t                    s;
 
@@ -498,11 +504,11 @@ update_hash (struct fuzzy_cmd *cmd)
 	s.block_size = cmd->blocksize;
 	mods ++;
 
-	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value) != NULL;
+	return check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value, ctx) != NULL;
 }
 
 static                          gboolean
-process_write_command (struct fuzzy_cmd *cmd)
+process_write_command (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	struct rspamd_fuzzy_node       *h;
 #ifdef WITH_JUDY
@@ -510,7 +516,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 #endif
 
 	if (bloom_check (bf, cmd->hash)) {
-		if (update_hash (cmd)) {
+		if (update_hash (cmd, ctx)) {
 			return TRUE;
 		}
 	}
@@ -522,7 +528,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 	h->value = cmd->value;
 	h->flag = cmd->flag;
 #ifdef WITH_JUDY
-	if (use_judy) {
+	if (ctx->use_judy) {
 		pvalue = JudySLIns (&jtree, h->h.hash_pipe, PJE0);
 		*pvalue = h;
 	}
@@ -542,7 +548,7 @@ process_write_command (struct fuzzy_cmd *cmd)
 }
 
 static gboolean
-delete_hash (GQueue *hash, fuzzy_hash_t *s)
+delete_hash (GQueue *hash, fuzzy_hash_t *s, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	GList                          *cur, *tmp;
 	struct rspamd_fuzzy_node       *h;
@@ -551,7 +557,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s)
 	PPvoid_t                        pvalue;
 	gpointer                        data;
 
-	if (use_judy) {
+	if (ctx->use_judy) {
 		pvalue = JudySLGet (jtree, s->hash_pipe, PJE0);
 		if (pvalue) {
 			data = *pvalue;
@@ -593,7 +599,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s)
 }
 
 static                          gboolean
-process_delete_command (struct fuzzy_cmd *cmd)
+process_delete_command (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	fuzzy_hash_t                    s;
 	gboolean                        res = FALSE;
@@ -605,17 +611,17 @@ process_delete_command (struct fuzzy_cmd *cmd)
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 #ifdef WITH_JUDY
-	if (use_judy) {
-		return delete_hash (NULL, &s);
+	if (ctx->use_judy) {
+		return delete_hash (NULL, &s, ctx);
 	}
 	else {
 #endif
-	res = delete_hash (frequent, &s);
+	res = delete_hash (frequent, &s, ctx);
 	if (!res) {
-		res = delete_hash (hashes[cmd->blocksize % BUCKETS], &s);
+		res = delete_hash (hashes[cmd->blocksize % BUCKETS], &s, ctx);
 	}
 	else {
-		(void)delete_hash (hashes[cmd->blocksize % BUCKETS], &s);
+		(void)delete_hash (hashes[cmd->blocksize % BUCKETS], &s, ctx);
 	}
 #ifdef WITH_JUDY
 	}
@@ -626,7 +632,7 @@ process_delete_command (struct fuzzy_cmd *cmd)
 
 #define CMD_PROCESS(x)																			\
 do {																							\
-if (process_##x##_command (&session->cmd)) {													\
+if (process_##x##_command (&session->cmd, session->worker->ctx)) {													\
 	if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {							\
 		msg_err ("error while writing reply: %s", strerror (errno));		\
 	}																							\
@@ -646,7 +652,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
-		r = process_check_command (&session->cmd, &flag);
+		r = process_check_command (&session->cmd, &flag, session->worker->ctx);
 		if (r != 0) {
 			r = rspamd_snprintf (buf, sizeof (buf), "OK %d %d" CRLF, r, flag);
 			if (sendto (session->fd, buf, r, 0, (struct sockaddr *)&session->sa, session->salen) == -1) {
@@ -687,8 +693,8 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	ssize_t                         r;
 	struct {
 		u_char                      cmd;
-		guint32                         blocksize;
-		gint32                          value;
+		guint32                     blocksize;
+		gint32                      value;
 		u_char                      hash[FUZZY_HASHLEN];
 	}								legacy_cmd;
 
@@ -739,6 +745,28 @@ sync_callback (gint fd, short what, void *arg)
 	sync_cache (worker);
 }
 
+gpointer
+init_fuzzy_storage (void)
+{
+	struct rspamd_fuzzy_storage_ctx       *ctx;
+
+	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
+
+	ctx->max_mods = DEFAULT_MOD_LIMIT;
+	ctx->frequent_score = DEFAULT_FREQUENT_SCORE;
+
+	register_worker_opt (TYPE_FUZZY, "hashfile", xml_handle_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile));
+	register_worker_opt (TYPE_FUZZY, "max_mods", xml_handle_uint32, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, max_mods));
+	register_worker_opt (TYPE_FUZZY, "frequent_score", xml_handle_uint32, ctx,
+				G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, frequent_score));
+	register_worker_opt (TYPE_FUZZY, "use_judy", xml_handle_boolean, ctx,
+				G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, use_judy));
+
+	return ctx;
+}
+
 /*
  * Start worker process
  */
@@ -748,7 +776,6 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	struct sigaction                signals;
 	struct event                    sev;
 	gint                            retries = 0;
-	gchar                           *value;
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_FUZZY;
@@ -765,20 +792,6 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	signal_add (&worker->sig_ev, NULL);
 	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
 	signal_add (&sev, NULL);
-	/* Get params */
-	if ((value = g_hash_table_lookup (worker->cf->params, "frequent_score")) != NULL) {
-		frequent_score = strtol (value, NULL, 10);
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "max_mods")) != NULL) {
-		max_mods = strtol (value, NULL, 10);
-	}
-	if ((value = g_hash_table_lookup (worker->cf->params, "use_judy")) != NULL) {
-#ifdef WITH_JUDY
-		use_judy = TRUE;
-#else
-		msg_err ("cannot use judy storage as judy support is not compiled in");
-#endif
-	}
 
 	/* Listen event */
 	while ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
@@ -802,12 +815,10 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	tmv.tv_usec = 0;
 	evtimer_add (&tev, &tmv);
 
-
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
 	event_add (&worker->bind_ev, NULL);
 
 	gperf_profiler_init (worker->srv->cfg, "fuzzy");
-
 
 	event_loop (0);
 	exit (EXIT_SUCCESS);

@@ -542,29 +542,8 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 		tms = localtime (&now);
 
 		strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
-		switch (rspamd_log->process_type) {
-			case TYPE_MAIN:
-				cptype = "main";
-				break;
-			case TYPE_WORKER:
-				cptype = "worker";
-				break;
-			case TYPE_CONTROLLER:
-				cptype = "controller";
-				break;
-			case TYPE_LMTP:
-				cptype = "lmtp";
-				break;
-			case TYPE_SMTP:
-				cptype = "smtp";
-				break;
-			case TYPE_FUZZY:
-				cptype = "fuzzy";
-				break;
-			case TYPE_GREYLIST:
-				cptype = "greylist";
-				break;
-		}
+		cptype = process_to_str (rspamd_log->process_type);
+
 		if (function == NULL) {
 			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%s #%P(%s) ", timebuf, rspamd_log->pid, cptype);
 		}

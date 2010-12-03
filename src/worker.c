@@ -32,6 +32,7 @@
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"
+#include "cfg_xml.h"
 #include "url.h"
 #include "modules.h"
 #include "message.h"
@@ -261,54 +262,54 @@ parse_line_custom (struct worker_task *task, f_str_t * in)
 void
 free_task (struct worker_task *task, gboolean is_soft)
 {
-  GList                          *part;
-  struct mime_part               *p;
+	GList                          *part;
+	struct mime_part               *p;
 
-  if (task)
-    {
-      debug_task ("free pointer %p", task);
-      while ((part = g_list_first (task->parts)))
+	if (task)
 	{
-	  task->parts = g_list_remove_link (task->parts, part);
-	  p = (struct mime_part *) part->data;
-	  g_byte_array_free (p->content, TRUE);
-	  g_list_free_1 (part);
+		debug_task ("free pointer %p", task);
+		while ((part = g_list_first (task->parts)))
+		{
+			task->parts = g_list_remove_link (task->parts, part);
+			p = (struct mime_part *) part->data;
+			g_byte_array_free (p->content, TRUE);
+			g_list_free_1 (part);
+		}
+		if (task->text_parts)
+		{
+			g_list_free (task->text_parts);
+		}
+		if (task->urls)
+		{
+			g_list_free (task->urls);
+		}
+		if (task->images)
+		{
+			g_list_free (task->images);
+		}
+		if (task->messages)
+		{
+			g_list_free (task->messages);
+		}
+		memory_pool_delete (task->task_pool);
+		if (task->dispatcher)
+		{
+			if (is_soft)
+			{
+				/* Plan dispatcher shutdown */
+				task->dispatcher->wanna_die = 1;
+			}
+			else
+			{
+				rspamd_remove_dispatcher (task->dispatcher);
+			}
+		}
+		if (task->sock != -1)
+		{
+			close (task->sock);
+		}
+		g_free (task);
 	}
-      if (task->text_parts)
-	{
-	  g_list_free (task->text_parts);
-	}
-      if (task->urls)
-	{
-	  g_list_free (task->urls);
-	}
-      if (task->images)
-	{
-	  g_list_free (task->images);
-	}
-      if (task->messages)
-	{
-	  g_list_free (task->messages);
-	}
-      memory_pool_delete (task->task_pool);
-      if (task->dispatcher)
-	{
-	  if (is_soft)
-	    {
-	      /* Plan dispatcher shutdown */
-	      task->dispatcher->wanna_die = 1;
-	    }
-	  else
-	    {
-	      rspamd_remove_dispatcher (task->dispatcher);
-	    }
-	}
-      if (task->sock != -1)
-	{
-	  close (task->sock);
-	}
-      g_free (task);
-    }
 }
 
 void
@@ -733,6 +734,18 @@ unload_custom_filters (struct rspamd_worker_ctx *ctx)
 
 #endif
 
+gpointer
+init_worker (void)
+{
+	struct rspamd_worker_ctx       *ctx;
+
+	ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
+
+	register_worker_opt (TYPE_WORKER, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
+
+	return ctx;
+}
+
 /*
  * Start worker process
  */
@@ -740,9 +753,8 @@ void
 start_worker (struct rspamd_worker *worker)
 {
   struct sigaction                signals;
-  gchar                          *is_mime_str;
   gchar                          *is_custom_str;
-  struct rspamd_worker_ctx       *ctx;
+  struct rspamd_worker_ctx       *ctx = worker->ctx;
 
 #ifdef WITH_PROFILER
   extern void                     _start (void), etext (void);
@@ -767,9 +779,6 @@ start_worker (struct rspamd_worker *worker)
 	     accept_socket, (void *) worker);
   event_add (&worker->bind_ev, NULL);
 
-  /* Fill ctx */
-  ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
-  worker->ctx = ctx;
 
 #ifndef BUILD_STATIC
   /* Check if this worker is not usual rspamd worker, but uses custom filters from specified path */
@@ -786,18 +795,6 @@ start_worker (struct rspamd_worker *worker)
 #endif
       /* Maps events */
       start_map_watch ();
-      /* Check whether we are mime worker */
-      is_mime_str = g_hash_table_lookup (worker->cf->params, "mime");
-      if (is_mime_str != NULL
-	  && (g_ascii_strcasecmp (is_mime_str, "no") == 0
-	      || g_ascii_strcasecmp (is_mime_str, "false") == 0))
-	{
-	  ctx->is_mime = FALSE;
-	}
-      else
-	{
-	  ctx->is_mime = TRUE;
-	}
 #ifndef BUILD_STATIC
     }
 #endif

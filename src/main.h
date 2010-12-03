@@ -41,8 +41,6 @@
 #define CR '\r'
 #define LF '\n'
 
-
-
 /** 
  * Worker process structure 
  */
@@ -91,8 +89,10 @@ struct rspamd_main {
 	/* Pid file structure */
 	struct pidfh *pfh;											/**< struct pidfh for pidfile						*/
 	enum process_type type;										/**< process type									*/
-	guint ev_initialized;								/**< is event system is initialized					*/
+	guint ev_initialized;										/**< is event system is initialized					*/
 	struct rspamd_stat *stat;									/**< pointer to statistics							*/
+
+	gpointer workers_ctx[TYPE_MAX];								/** Array of workers' contexts						*/
 
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
@@ -245,8 +245,12 @@ struct c_module {
 	struct module_ctx *ctx;										/**< pointer to context								*/
 };
 
+/* Workers' initialization and start functions */
+gpointer init_worker (void);
 void start_worker (struct rspamd_worker *worker);
+gpointer init_controller (void);
 void start_controller (struct rspamd_worker *worker);
+gpointer init_greylist (void);
 void start_greylist_storage (struct rspamd_worker *worker);
 
 /**
