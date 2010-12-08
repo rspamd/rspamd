@@ -301,10 +301,10 @@ config_greylist_worker (struct rspamd_worker *worker)
 	ctx->expire_time = DEFAULT_EXPIRE_TIME;
 
 	if ((value = g_hash_table_lookup (worker->cf->params, "greylist_time")) != NULL) {
-		ctx->greylist_time = parse_seconds (value) / 1000;
+		ctx->greylist_time = parse_time (value, TIME_SECONDS) / 1000;
 	}
 	if ((value = g_hash_table_lookup (worker->cf->params, "expire_time")) != NULL) {
-		ctx->expire_time = parse_seconds (value) / 1000;
+		ctx->expire_time = parse_time (value, TIME_SECONDS) / 1000;
 	}
 	worker->ctx = ctx;
 

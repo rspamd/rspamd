@@ -28,6 +28,16 @@ enum xml_read_state {
 	XML_END
 };
 
+enum module_opt_type {
+	MODULE_OPT_TYPE_STRING = 0,
+	MODULE_OPT_TYPE_INT,
+	MODULE_OPT_TYPE_UINT,
+	MODULE_OPT_TYPE_TIME,
+	MODULE_OPT_TYPE_MAP,
+	MODULE_OPT_TYPE_SIZE,
+	MODULE_OPT_TYPE_ANY
+};
+
 struct rspamd_xml_userdata {
 	enum xml_read_state state;
 	struct config_file *cfg;
@@ -137,7 +147,7 @@ gboolean handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_x
 gboolean handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset);
 
 /* Register new module option */
-void register_module_opt (const gchar *mname, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset);
+void register_module_opt (const gchar *mname, const gchar *optname, enum module_opt_type type);
 
 /* Register new worker's options */
 void register_worker_opt (gint wtype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset);

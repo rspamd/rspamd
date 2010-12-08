@@ -224,6 +224,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
 	register_protocol_command ("urls", urls_command_handler);
+	/* Register module options */
 
 	return 0;
 }
@@ -280,13 +281,13 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_connect_timeout")) != NULL) {
-		surbl_module_ctx->connect_timeout = parse_seconds (value);
+		surbl_module_ctx->connect_timeout = parse_time (value, TIME_SECONDS);
 	}
 	else {
 		surbl_module_ctx->connect_timeout = DEFAULT_REDIRECTOR_CONNECT_TIMEOUT;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_read_timeout")) != NULL) {
-		surbl_module_ctx->read_timeout = parse_seconds (value);
+		surbl_module_ctx->read_timeout = parse_time (value, TIME_SECONDS);
 	}
 	else {
 		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;

@@ -35,6 +35,7 @@
 #include "tokenizers/tokenizers.h"
 #include "lua/lua_common.h"
 #include "view.h"
+#include "map.h"
 #include "expressions.h"
 #include "settings.h"
 
@@ -815,7 +816,8 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 			is_lua = TRUE;
 		}
 	}
-	/* XXX: in fact we cannot check for lua modules and need to do it in post-config procedure
+	/*
+	 * XXX: in fact we cannot check for lua modules and need to do it in post-config procedure
 	 * so just insert any options provided and try to handle them in further process
 	 */
 
@@ -1151,7 +1153,7 @@ handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_xml_userda
 	if (st->binlog == NULL) {
 		st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 	}
-	st->binlog->rotate_time = parse_seconds (data);
+	st->binlog->rotate_time = parse_time (data, TIME_SECONDS);
 	
 	return TRUE;
 }
@@ -1226,7 +1228,7 @@ xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	guint32                      *dest;
 
 	dest = (guint32 *)G_STRUCT_MEMBER_P (dest_struct, offset);
-	*dest = parse_seconds (data);
+	*dest = parse_time (data, TIME_SECONDS);
 	
 	return TRUE;
 }
@@ -1686,9 +1688,79 @@ rspamd_xml_error (GMarkupParseContext *context, GError *error, gpointer user_dat
 }
 
 /* Register handlers for specific parts of config */
+
+/* Checker for module options */
+static gboolean
+check_module_option (struct config_file *cfg, const gchar *mname, const gchar *optname, const gchar *data)
+{
+	struct xml_config_param          *param;
+	enum module_opt_type              type;
+	GHashTable                       *module;
+	gchar                            *err_str;
+
+	if (module_options == NULL) {
+		msg_warn ("no module options registered while checking option %s for module %s", mname, optname);
+		return FALSE;
+	}
+	if ((module = g_hash_table_lookup (module_options, mname)) == NULL) {
+		msg_warn ("module %s has not registered any options while checking for option %s", mname, optname);
+		return FALSE;
+	}
+
+	if ((param = g_hash_table_lookup (module, optname)) == NULL) {
+		msg_warn ("module %s has not registered option %s", mname, optname);
+		return FALSE;
+	}
+
+	type = param->offset;
+
+	/* Now handle option of each type */
+	switch (type) {
+	case MODULE_OPT_TYPE_STRING:
+	case MODULE_OPT_TYPE_ANY:
+		/* Allways OK */
+		return TRUE;
+	case MODULE_OPT_TYPE_INT:
+		(void)strtol (data, &err_str, 10);
+		if (*err_str != '\0') {
+			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
+			return FALSE;
+		}
+		break;
+	case MODULE_OPT_TYPE_UINT:
+		(void)strtoul (data, &err_str, 10);
+		if (*err_str != '\0') {
+			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
+			return FALSE;
+		}
+		break;
+	case MODULE_OPT_TYPE_TIME:
+		(void)parse_time (data, TIME_SECONDS);
+		if (errno != 0) {
+			msg_warn ("non-numeric data for option: '%s' for module: '%s': %s", optname, mname, strerror (errno));
+			return FALSE;
+		}
+		break;
+	case MODULE_OPT_TYPE_SIZE:
+		(void)parse_limit (data);
+		if (errno != 0) {
+			msg_warn ("non-numeric data for option: '%s' for module: '%s': %s", optname, mname, strerror (errno));
+			return FALSE;
+		}
+		break;
+	case MODULE_OPT_TYPE_MAP:
+		if (!check_map_proto (data, NULL, NULL)) {
+			return FALSE;
+		}
+		break;
+	}
+
+	return TRUE;
+}
+
 /* Register new module option */
 void
-register_module_opt (const gchar *mname, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset)
+register_module_opt (const gchar *mname, const gchar *optname, enum module_opt_type type)
 {
 	struct xml_config_param          *param;
 	GHashTable                       *module;
@@ -1703,9 +1775,8 @@ register_module_opt (const gchar *mname, const gchar *optname, element_handler_f
 	if ((param = g_hash_table_lookup (module, optname)) == NULL) {
 		/* Register new param */
 		param = g_malloc (sizeof (struct xml_config_param));
-		param->handler = func;
-		param->user_data = dest_struct;
-		param->offset = offset;
+		param->handler = NULL;
+		param->offset = type;
 		param->name = optname;
 		g_hash_table_insert (module, (char *)optname, param);
 	}
@@ -1714,9 +1785,8 @@ register_module_opt (const gchar *mname, const gchar *optname, element_handler_f
 		msg_warn ("replace old handler for param '%s'", optname);
 		g_free (param);
 		param = g_malloc (sizeof (struct xml_config_param));
-		param->handler = func;
-		param->user_data = dest_struct;
-		param->offset = offset;
+		param->handler = NULL;
+		param->offset = type;
 		param->name = optname;
 		g_hash_table_insert (module, (char *)optname, param);
 	}

@@ -70,6 +70,10 @@ struct rspamd_map {
 };
 
 /**
+ * Check map protocol
+ */
+gboolean check_map_proto (const gchar *map_line, gint *res, const gchar **pos);
+/**
  * Add map from line
  */
 gboolean add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);

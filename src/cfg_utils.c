@@ -266,6 +266,7 @@ parse_limit (const gchar *limit)
 	if (!limit || *limit == '\0')
 		return 0;
 
+	errno = 0;
 	result = strtoul (limit, &err_str, 10);
 
 	if (*err_str != '\0') {
@@ -281,45 +282,124 @@ parse_limit (const gchar *limit)
 		else if (*err_str == 'g' || *err_str == 'G') {
 			result *= 1073741824L;
 		}
+		else {
+			msg_warn ("invalid limit value '%s' at position '%s'", limit, err_str);
+			result = 0;
+		}
 	}
 
 	return result;
 }
 
 guint
-parse_seconds (const gchar *t)
+parse_time (const gchar *t, enum time_type default_type)
 {
-	guint                           result = 0;
+	union {
+		guint                       i;
+		double                      d;
+	}                               result;
+	gboolean                        use_double = FALSE;
 	gchar                           *err_str;
 
 	if (!t || *t == '\0')
 		return 0;
 
-	result = strtoul (t, &err_str, 10);
+	errno = 0;
+	result.i = strtoul (t, &err_str, 10);
 
 	if (*err_str != '\0') {
+		if (*err_str == '.') {
+			/* Try to handle decimal point */
+			errno = 0;
+			result.d = strtod (t, &err_str);
+			use_double = TRUE;
+		}
 		/* Seconds */
 		if (*err_str == 's' || *err_str == 'S') {
-			result *= 1000;
+			if (use_double) {
+				result.d *= 1000.;
+			}
+			else {
+				result.i *= 1000;
+			}
 		}
 		/* Minutes */
 		else if (*err_str == 'm' || *err_str == 'M') {
 			/* Handle ms correctly */
-			if (*(err_str + 1) == 's' || *(err_str + 1) == 'S') {
-				result *= 60 * 1000;
+			if (*(err_str + 1) != 's' && *(err_str + 1) != 'S') {
+				if (use_double) {
+					result.d *= 60. * 1000.;
+				}
+				else {
+					result.i *= 60 * 1000;
+				}
 			}
 		}
 		/* Hours */
 		else if (*err_str == 'h' || *err_str == 'H') {
-			result *= 60 * 60 * 1000;
+			if (use_double) {
+				result.d *= 60. * 60. * 1000.;
+			}
+			else {
+				result.i *= 60 * 60 * 1000;
+			}
 		}
 		/* Days */
 		else if (*err_str == 'd' || *err_str == 'D') {
-			result *= 24 * 60 * 60 * 1000;
+			if (use_double) {
+				result.d *= 24. * 60. * 60. * 1000.;
+			}
+			else {
+				result.i *= 24 * 60 * 60 * 1000;
+			}
+		}
+		else {
+			msg_warn ("invalid time value '%s' at position '%s'", t, err_str);
+			if (use_double) {
+				result.d = 0.;
+			}
+			else {
+				result.i = 0;
+			}
 		}
 	}
-
-	return result;
+	else {
+		/* Switch to default time multiplier */
+		switch (default_type) {
+		case TIME_HOURS:
+			if (use_double) {
+				result.d *= 60. * 60. * 1000.;
+			}
+			else {
+				result.i *= 60 * 60 * 1000;
+			}
+			break;
+		case TIME_MINUTES:
+			if (use_double) {
+				result.d *= 60. * 1000.;
+			}
+			else {
+				result.i *= 60 * 1000;
+			}
+			break;
+		case TIME_SECONDS:
+			if (use_double) {
+				result.d *= 1000.;
+			}
+			else {
+				result.i *= 1000;
+			}
+			break;
+		case TIME_MILLISECONDS:
+			break;
+		}
+	}
+	if (use_double) {
+		return rint (result.d);
+	}
+	else {
+		return result.i;
+	}
 }
 
 gchar

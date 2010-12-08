@@ -43,6 +43,15 @@ struct classifier;
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
 /**
+ * Type of time configuration parameter
+ */
+enum time_type {
+	TIME_SECONDS = 0,
+	TIME_MILLISECONDS,
+	TIME_MINUTES,
+	TIME_HOURS
+};
+/**
  * Types of rspamd bind lines
  */
 enum rspamd_cred_type {
@@ -357,11 +366,12 @@ gchar* get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_n
 gsize parse_limit (const gchar *limit);
 
 /**
- * Parse seconds
+ * Parse time
  * @param t string representation of seconds (eg. 1D)
- * @return numeric value of string
+ * @param default_type dimension of time if no suffix is specified
+ * @return value of time in milliseconds
  */
-guint parse_seconds (const gchar *t);
+guint parse_time (const gchar *t, enum time_type default_type);
 
 /**
  * Parse flag

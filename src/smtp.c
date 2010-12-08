@@ -958,7 +958,7 @@ config_smtp_worker (struct rspamd_worker *worker)
 		return FALSE;
 	}
 	/* Create smtp banner */
-	if ((ctx->smtp_banner_str) != NULL) {
+	if ((value = ctx->smtp_banner_str) != NULL) {
 		parse_smtp_banner (ctx, value);
 	}
 

@@ -431,6 +431,29 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 }
 
 gboolean
+check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
+{
+	if (g_ascii_strncasecmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
+		if (res && pos) {
+			*res = PROTO_HTTP;
+			*pos = map_line + sizeof ("http://") - 1;
+		}
+	}
+	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
+		if (res && pos) {
+			*res = PROTO_FILE;
+			*pos = map_line + sizeof ("file://") - 1;
+		}
+	}
+	else {
+		msg_warn ("invalid map fetching protocol: %s", map_line);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
 add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
 {
 	struct rspamd_map              *new_map;
@@ -443,16 +466,7 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 	struct hostent                 *hent;
 
 	/* First of all detect protocol line */
-	if (strncmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
-		proto = PROTO_HTTP;
-		def = map_line + sizeof ("http://") - 1;
-	}
-	else if (strncmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
-		proto = PROTO_FILE;
-		def = map_line + sizeof ("file://") - 1;
-	}
-	else {
-		msg_warn ("invalid map fetching protocol: %s", map_line);
+	if (!check_map_proto (map_line, (int *)&proto, &def)) {
 		return FALSE;
 	}
 	/* Constant pool */
