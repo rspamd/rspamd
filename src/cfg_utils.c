@@ -901,12 +901,12 @@ static GMarkupParser xml_parser = {
 gboolean
 read_xml_config (struct config_file *cfg, const gchar *filename)
 {
-	struct stat st;
+	struct stat                     st;
 	gint                            fd;
-	gchar *data;
-	gboolean res;
-	GMarkupParseContext *ctx;
-	GError *err = NULL;
+	gchar                          *data;
+	gboolean                        res;
+	GMarkupParseContext            *ctx;
+	GError                         *err = NULL;
 
 	struct rspamd_xml_userdata ud;
 
@@ -936,6 +936,44 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 
 	munmap (data, st.st_size);
 
+	return res;
+}
+
+static void
+modules_config_callback (gpointer key, gpointer value, gpointer ud)
+{
+	extern GHashTable              *module_options;
+	GHashTable                     *cur_module;
+	GList                          *cur;
+	struct module_opt              *opt;
+	const gchar                    *mname = key;
+	gboolean                       *res = ud;
+
+	if ((cur_module = g_hash_table_lookup (module_options, mname)) == NULL) {
+		msg_warn ("module %s has not registered any options but is presented in configuration", mname);
+		*res = FALSE;
+		return;
+	}
+
+	cur = value;
+	while (cur) {
+		opt = cur->data;
+
+		if (!opt->is_lua && !check_module_option (mname, opt->param, opt->value)) {
+			*res = FALSE;
+			return;
+		}
+
+		cur = g_list_next (cur);
+	}
+}
+
+gboolean
+check_modules_config (struct config_file *cfg)
+{
+	gboolean                        res = TRUE;
+
+	g_hash_table_foreach (cfg->modules_opts, modules_config_callback, &res);
 	return res;
 }
 

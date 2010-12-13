@@ -275,6 +275,17 @@ sub process_client {
             }
         }
     }
+	elsif ($http_response->code != 200) {
+		_log (LOG_INFO, "HTTP response was %d, for request to %s", $http_response->code, $http_request->uri);
+		my $new_response = HTTP::Response->new($http_response->code);
+
+		# Avoid sending the response if the client has gone away.
+		$heap->{client}->put($new_response) if defined $heap->{client};
+
+		# Shut down the client's connection when the response is sent.
+		$kernel->yield("shutdown");
+		return;
+	}
     my $response_type = $http_response->content_type();
     if ( $response_type =~ /^text/i ) {
         my $content = $http_response->decoded_content();

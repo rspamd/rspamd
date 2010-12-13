@@ -157,6 +157,7 @@ bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
 	ctx->pool = pool;
 	ctx->cfg = cfg;
 
+
 	return ctx;
 }
 

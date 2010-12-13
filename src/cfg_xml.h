@@ -32,6 +32,7 @@ enum module_opt_type {
 	MODULE_OPT_TYPE_STRING = 0,
 	MODULE_OPT_TYPE_INT,
 	MODULE_OPT_TYPE_UINT,
+	MODULE_OPT_TYPE_DOUBLE,
 	MODULE_OPT_TYPE_TIME,
 	MODULE_OPT_TYPE_MAP,
 	MODULE_OPT_TYPE_SIZE,
@@ -153,7 +154,10 @@ void register_module_opt (const gchar *mname, const gchar *optname, enum module_
 void register_worker_opt (gint wtype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset);
 
 /* Register new classifier option */
-void register_classifier_opt (const gchar *ctype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset);
+void register_classifier_opt (const gchar *ctype, const gchar *optname);
+
+/* Check validity of module option */
+gboolean check_module_option (const gchar *mname, const gchar *optname, const gchar *data);
 
 /* Dumper functions */
 gboolean xml_dump_config (struct config_file *cfg, const gchar *filename);

@@ -39,6 +39,7 @@
 #include "../view.h"
 #include "../lua/lua_common.h"
 #include "../json/jansson.h"
+#include "../cfg_xml.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 
@@ -407,6 +408,8 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_expression_function ("check_smtp_data", rspamd_check_smtp_data, NULL);
 
 	(void)luaopen_regexp (cfg->lua_state);
+	register_module_opt ("regexp", "dynamic_rules", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("regexp", "/^\\S+$/", MODULE_OPT_TYPE_STRING);
 
 	return 0;
 }

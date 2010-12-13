@@ -47,6 +47,7 @@
 #include "../view.h"
 #include "../map.h"
 #include "../dns.h"
+#include "../cfg_xml.h"
 
 #include "surbl.h"
 
@@ -225,6 +226,16 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	register_protocol_command ("urls", urls_command_handler);
 	/* Register module options */
+	register_module_opt ("surbl", "redirector", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "url_expire", MODULE_OPT_TYPE_TIME);
+	register_module_opt ("surbl", "redirector_connect_timeout", MODULE_OPT_TYPE_TIME);
+	register_module_opt ("surbl", "redirector_read_timeout", MODULE_OPT_TYPE_TIME);
+	register_module_opt ("surbl", "max_urls", MODULE_OPT_TYPE_UINT);
+	register_module_opt ("surbl", "redirector_hosts_map", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "exceptions", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "whitelist", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "/^suffix_.*$/", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "/^bit_.*$/", MODULE_OPT_TYPE_STRING);
 
 	return 0;
 }
@@ -275,7 +286,7 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->weight = DEFAULT_SURBL_WEIGHT;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "url_expire")) != NULL) {
-		surbl_module_ctx->url_expire = atoi (value);
+		surbl_module_ctx->url_expire = parse_time (value, TIME_SECONDS) / 1000;
 	}
 	else {
 		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
@@ -907,7 +918,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 			red_domain = g_ptr_array_index (surbl_module_ctx->redirector_ptrs, idx);
 			/* Try to find corresponding regexp */
 			re = g_hash_table_lookup (surbl_module_ctx->redirector_hosts, red_domain);
-			if (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL)) {
+			if (re != NULL && (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL))) {
 				/* If no regexp found or founded regexp matches url string register redirector's call */
 				register_redirector_call (url, param->task, param->tree, param->suffix);
 				param->task->save.saved++;

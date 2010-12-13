@@ -433,9 +433,9 @@ static struct xml_parser_rule grammar[] = {
 	},
 };
 
-static GHashTable *module_options = NULL,
-				  *worker_options = NULL,
-				  *classifier_options = NULL;
+GHashTable *module_options = NULL,
+		   *worker_options = NULL,
+		   *classifier_options = NULL;
 
 GQuark
 xml_error_quark (void)
@@ -1107,10 +1107,10 @@ handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx,
 			(classifier_config = g_hash_table_lookup (classifier_options, ccf->classifier->name)) == NULL ||
 			(cparam = g_hash_table_lookup (classifier_config, name)) == NULL) {
 		msg_warn ("unregistered classifier attribute '%s' for classifier %s", name, ccf->classifier->name);
-		g_hash_table_insert (ccf->opts, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
+		return FALSE;
 	}
 	else {
-		return cparam->handler (cfg, ctx, attrs, data, NULL, cparam->user_data, cparam->offset);
+		g_hash_table_insert (ccf->opts, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
 	}
 
 	return TRUE;
@@ -1690,13 +1690,51 @@ rspamd_xml_error (GMarkupParseContext *context, GError *error, gpointer user_dat
 /* Register handlers for specific parts of config */
 
 /* Checker for module options */
-static gboolean
-check_module_option (struct config_file *cfg, const gchar *mname, const gchar *optname, const gchar *data)
+struct option_callback_data {
+	const gchar *optname;
+	gboolean res;
+	struct xml_config_param *param;
+};
+
+static void
+module_option_callback (gpointer key, gpointer value, gpointer ud)
+{
+	const gchar                      *optname = key;
+	static gchar                      rebuf[512];
+	struct option_callback_data      *cd = ud;
+	GRegex                           *re;
+	GError                           *err = NULL;
+	gsize                             relen;
+
+	if (*optname == '/') {
+		relen = strcspn (optname + 1, "/");
+		if (relen > sizeof (rebuf)) {
+			relen = sizeof (rebuf);
+		}
+		rspamd_strlcpy (rebuf, optname + 1, relen);
+		/* This is a regexp so compile and check it */
+		re = g_regex_new (rebuf, G_REGEX_CASELESS, 0, &err);
+		if (err != NULL) {
+			msg_err ("failed to compile regexp for option '%s', error was: %s, regexp was: %s", cd->optname, err->message, rebuf);
+			return;
+		}
+		if (g_regex_match (re, cd->optname, 0, NULL)) {
+			cd->res = TRUE;
+			cd->param = value;
+		}
+	}
+
+	return;
+}
+
+gboolean
+check_module_option (const gchar *mname, const gchar *optname, const gchar *data)
 {
 	struct xml_config_param          *param;
 	enum module_opt_type              type;
 	GHashTable                       *module;
 	gchar                            *err_str;
+	struct option_callback_data       cd;
 
 	if (module_options == NULL) {
 		msg_warn ("no module options registered while checking option %s for module %s", mname, optname);
@@ -1708,8 +1746,15 @@ check_module_option (struct config_file *cfg, const gchar *mname, const gchar *o
 	}
 
 	if ((param = g_hash_table_lookup (module, optname)) == NULL) {
-		msg_warn ("module %s has not registered option %s", mname, optname);
-		return FALSE;
+		/* Try to handle regexp options */
+		cd.optname = optname;
+		cd.res = FALSE;
+		g_hash_table_foreach (module, module_option_callback, &cd);
+		if (!cd.res) {
+			msg_warn ("module %s has not registered option %s", mname, optname);
+			return FALSE;
+		}
+		param = cd.param;
 	}
 
 	type = param->offset;
@@ -1729,6 +1774,13 @@ check_module_option (struct config_file *cfg, const gchar *mname, const gchar *o
 		break;
 	case MODULE_OPT_TYPE_UINT:
 		(void)strtoul (data, &err_str, 10);
+		if (*err_str != '\0') {
+			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
+			return FALSE;
+		}
+		break;
+	case MODULE_OPT_TYPE_DOUBLE:
+		(void)strtod (data, &err_str);
 		if (*err_str != '\0') {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
 			return FALSE;
@@ -1833,7 +1885,7 @@ register_worker_opt (gint wtype, const gchar *optname, element_handler_func func
 
 /* Register new classifier option */
 void
-register_classifier_opt (const gchar *ctype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset)
+register_classifier_opt (const gchar *ctype, const gchar *optname)
 {
 	struct xml_config_param          *param;
 	GHashTable                       *classifier;
@@ -1848,9 +1900,9 @@ register_classifier_opt (const gchar *ctype, const gchar *optname, element_handl
 	if ((param = g_hash_table_lookup (classifier, optname)) == NULL) {
 		/* Register new param */
 		param = g_malloc (sizeof (struct xml_config_param));
-		param->handler = func;
-		param->user_data = dest_struct;
-		param->offset = offset;
+		param->handler = NULL;
+		param->user_data = NULL;
+		param->offset = 0;
 		param->name = optname;
 		g_hash_table_insert (classifier, (char *)optname, param);
 	}
@@ -1859,9 +1911,9 @@ register_classifier_opt (const gchar *ctype, const gchar *optname, element_handl
 		msg_warn ("replace old handler for param '%s'", optname);
 		g_free (param);
 		param = g_malloc (sizeof (struct xml_config_param));
-		param->handler = func;
-		param->user_data = dest_struct;
-		param->offset = offset;
+		param->handler = NULL;
+		param->user_data = NULL;
+		param->offset = 0;
 		param->name = optname;
 		g_hash_table_insert (classifier, (char *)optname, param);
 	}

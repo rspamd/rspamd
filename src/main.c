@@ -819,6 +819,11 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init contextes */
 	init_workers_ctx (rspamd);
 
+	/* Init classifiers options */
+	register_classifier_opt ("bayes", "min_tokens");
+	register_classifier_opt ("winnow", "min_tokens");
+	register_classifier_opt ("winnow", "learn_threshold");
+
 	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
@@ -836,6 +841,9 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
+		if (!check_modules_config (rspamd->cfg)) {
+			res = FALSE;
+		}
 		/* Perform modules configuring */
 		l = g_list_first (rspamd->cfg->filters);
 
@@ -871,6 +879,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name);
+	(void)check_modules_config (rspamd->cfg);
 
 	if (!rspamd->cfg->no_fork && daemon (0, 0) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");
