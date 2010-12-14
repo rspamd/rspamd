@@ -27,8 +27,11 @@ function phishing_cb (task)
 	end
 end
 
+-- Registration
+rspamd_config:register_module_option('phishing', 'symbol', 'string')
+rspamd_config:register_module_option('phishing', 'domains', 'map')
 
-local opts =  rspamd_config:get_all_opt('phishing')
+local opts = rspamd_config:get_all_opt('phishing')
 if opts then
     if opts['symbol'] then
         symbol = opts['symbol']

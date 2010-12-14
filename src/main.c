@@ -841,6 +841,9 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
+		if (! init_lua_filters (rspamd->cfg)) {
+			res = FALSE;
+		}
 		if (!check_modules_config (rspamd->cfg)) {
 			res = FALSE;
 		}
@@ -855,9 +858,6 @@ main (gint argc, gchar **argv, gchar **env)
 				}
 			}
 			l = g_list_next (l);
-		}
-		if (! init_lua_filters (rspamd->cfg)) {
-			res = FALSE;
 		}
 		if (dump_vars) {
 			dump_cfg_vars (rspamd->cfg);
@@ -879,13 +879,14 @@ main (gint argc, gchar **argv, gchar **env)
 
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name);
-	(void)check_modules_config (rspamd->cfg);
 
+	/* Daemonize */
 	if (!rspamd->cfg->no_fork && daemon (0, 0) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");
 		exit (-errno);
 	}
 
+	/* Write info */
 	rspamd->pid = getpid ();
 	rspamd->type = TYPE_MAIN;
 
@@ -907,6 +908,15 @@ main (gint argc, gchar **argv, gchar **env)
 	event_init ();
 	g_mime_init (0);
 
+	/* Init lua filters */
+	if (! init_lua_filters (rspamd->cfg)) {
+		msg_err ("error loading lua plugins");
+		exit (EXIT_FAILURE);
+	}
+
+	/* Check configuration for modules */
+	(void)check_modules_config (rspamd->cfg);
+
 	/* Perform modules configuring */
 	l = g_list_first (rspamd->cfg->filters);
 
@@ -920,15 +930,13 @@ main (gint argc, gchar **argv, gchar **env)
 		l = g_list_next (l);
 	}
 
-	if (! init_lua_filters (rspamd->cfg)) {
-		msg_err ("error loading lua plugins");
-		exit (EXIT_FAILURE);
-	}
-
+	/* Init config cache */
 	init_cfg_cache (rspamd->cfg);
 
+	/* Flush log */
 	flush_log_buf ();
 
+	/* Spawn workers */
 	rspamd->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 	spawn_workers (rspamd);
 

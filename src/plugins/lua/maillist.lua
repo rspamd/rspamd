@@ -162,7 +162,8 @@ function check_maillist(task)
 		task:insert_result(symbol, 1, 'subscribe.ru')
 	end
 end
-
+-- Registration
+rspamd_config:register_module_option('maillist', 'symbol', 'string')
 -- Configuration
 local opts =  rspamd_config:get_all_opt('maillist')
 if opts then

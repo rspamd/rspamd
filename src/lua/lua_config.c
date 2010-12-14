@@ -30,6 +30,7 @@
 #include "../radix.h"
 #include "../trie.h"
 #include "../classifiers/classifiers.h"
+#include "../cfg_xml.h"
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
@@ -40,6 +41,7 @@ LUA_FUNCTION_DEF (config, add_hash_map);
 LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
 LUA_FUNCTION_DEF (config, register_post_filter);
+LUA_FUNCTION_DEF (config, register_module_option);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -49,6 +51,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
+	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -319,6 +322,56 @@ lua_config_register_function (lua_State *L)
 		}
 	}
 	return 1;
+}
+
+static gint
+lua_config_register_module_option (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const gchar                    *mname, *optname, *stype;
+	enum module_opt_type            type;
+
+	if (cfg) {
+		mname = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		optname = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 3));
+		stype = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
+		if (mname && optname) {
+			if (stype == NULL) {
+				stype = "string";
+			}
+			if (g_ascii_strcasecmp (stype, "string") == 0) {
+				type = MODULE_OPT_TYPE_STRING;
+			}
+			else if (g_ascii_strcasecmp (stype, "int") == 0) {
+				type = MODULE_OPT_TYPE_INT;
+			}
+			else if (g_ascii_strcasecmp (stype, "uint") == 0) {
+				type = MODULE_OPT_TYPE_UINT;
+			}
+			else if (g_ascii_strcasecmp (stype, "time") == 0) {
+				type = MODULE_OPT_TYPE_TIME;
+			}
+			else if (g_ascii_strcasecmp (stype, "size") == 0) {
+				type = MODULE_OPT_TYPE_SIZE;
+			}
+			else if (g_ascii_strcasecmp (stype, "map") == 0) {
+				type = MODULE_OPT_TYPE_MAP;
+			}
+			else if (g_ascii_strcasecmp (stype, "double") == 0) {
+				type = MODULE_OPT_TYPE_DOUBLE;
+			}
+			else {
+				msg_err ("unknown type '%s' for option: %s, for module: %s", stype, optname, mname);
+				luaL_error (L, "unknown type '%s' for option: %s, for module: %s", stype, optname, mname);
+				return 0;
+			}
+			register_module_opt (mname, optname, type);
+			return 1;
+		}
+		luaL_error (L, "bad arguments for register module option, must be: register_module_option(modulename, optionname, optiontype)");
+	}
+
+	return 0;
 }
 
 void

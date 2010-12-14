@@ -63,6 +63,10 @@ function check_forged_headers(task)
 	end
 end
 
+-- Registration
+rspamd_config:register_module_option('forged_recipients', 'symbol_rcpt', 'string')
+rspamd_config:register_module_option('forged_recipients', 'symbol_sender', 'string')
+
 -- Configuration
 local opts =  rspamd_config:get_all_opt('forged_recipients')
 if opts then

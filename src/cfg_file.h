@@ -263,6 +263,7 @@ struct config_file {
 	gchar *debug_ip_map;						    /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;								/**< whether we should log URLs                         */
 	GList *debug_symbols;							/**< symbols to debug									*/
+	gboolean log_color; 							/**< output colors for console output 					*/
 
 	gsize max_statfile_size;						/**< maximum size for statfile							*/
 

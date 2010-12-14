@@ -218,6 +218,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, debug_symbols),
 				NULL
 			},
+			{
+				"log_color",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, log_color),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR

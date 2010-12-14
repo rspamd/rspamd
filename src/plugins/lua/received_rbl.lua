@@ -55,6 +55,10 @@ function received_cb (task)
     end
 end
 
+-- Registration
+rspamd_config:register_module_option('received_rbl', 'symbol', 'string')
+rspamd_config:register_module_option('received_rbl', 'rbl', 'string')
+
 -- Configuration
 local opts =  rspamd_config:get_all_opt('received_rbl')
 if opts then

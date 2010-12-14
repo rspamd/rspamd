@@ -129,6 +129,9 @@ function add_rule(params)
 	return 1
 end
 
+-- Registration
+rspamd_config:register_module_option('multimap', 'rule', 'string')
+
 local opts =  rspamd_config:get_all_opt('multimap')
 if opts then
 	local strrules = opts['rule']

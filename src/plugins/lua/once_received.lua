@@ -44,6 +44,12 @@ function check_quantity_received (task)
 	end
 end
 
+-- Registration
+rspamd_config:register_module_option('once_received', 'symbol', 'string')
+rspamd_config:register_module_option('once_received', 'symbol_strict', 'string')
+rspamd_config:register_module_option('once_received', 'bad_host', 'string')
+rspamd_config:register_module_option('once_received', 'good_host', 'string')
+
 -- Configuration
 local opts =  rspamd_config:get_all_opt('once_received')
 if opts then

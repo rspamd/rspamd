@@ -460,7 +460,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 	gchar                           tmpbuf[256], timebuf[32];
 	time_t                          now;
 	struct tm                      *tms;
-	struct iovec                    iov[3];
+	struct iovec                    iov[4];
 	gint                            r;
 	guint32                         cksum;
 	size_t                          mlen;
@@ -544,11 +544,28 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 		strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
 		cptype = process_to_str (rspamd_log->process_type);
 
-		if (function == NULL) {
-			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%s #%P(%s) ", timebuf, rspamd_log->pid, cptype);
+		if (rspamd_log->cfg->log_color) {
+			if (log_level >= G_LOG_LEVEL_INFO) {
+				/* White */
+				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[1;37m");
+			}
+			else if (log_level >= G_LOG_LEVEL_WARNING) {
+				/* Magenta */
+				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[2;32m");
+			}
+			else if (log_level >= G_LOG_LEVEL_CRITICAL) {
+				/* Red */
+				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[1;31m");
+			}
 		}
 		else {
-			r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%s #%P(%s) %s: ", timebuf, rspamd_log->pid, cptype, function);
+			r = 0;
+		}
+		if (function == NULL) {
+			r += rspamd_snprintf (tmpbuf + r, sizeof (tmpbuf) - r, "%s #%P(%s) ", timebuf, rspamd_log->pid, cptype);
+		}
+		else {
+			r += rspamd_snprintf (tmpbuf + r, sizeof (tmpbuf) -r, "%s #%P(%s) %s: ", timebuf, rspamd_log->pid, cptype, function);
 		}
 		/* Construct IOV for log line */
 		iov[0].iov_base = tmpbuf;
@@ -557,9 +574,17 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 		iov[1].iov_len = mlen;
 		iov[2].iov_base = (void *)&lf_chr;
 		iov[2].iov_len = 1;
+		if (rspamd_log->cfg->log_color) {
+			iov[3].iov_base = "\033[0m";
+			iov[3].iov_len = sizeof ("\033[0m") - 1;
+			/* Call helper (for buffering) */
+			file_log_helper (iov, 4);
+		}
+		else {
+			/* Call helper (for buffering) */
+			file_log_helper (iov, 3);
+		}
 		
-		/* Call helper (for buffering) */
-		file_log_helper (iov, 3);
 	}
 }
 
