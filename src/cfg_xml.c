@@ -449,6 +449,42 @@ xml_error_quark (void)
 	return g_quark_from_static_string ("xml-error-quark");
 }
 
+static inline const gchar *
+xml_state_to_string (struct rspamd_xml_userdata *ud)
+{
+	switch (ud->state) {
+		case XML_READ_START:
+			return "read start tag";
+		case XML_READ_PARAM:
+			return "read param";
+		case XML_READ_MODULE:
+			return "read module section";
+		case XML_READ_MODULES:
+			return "read modules section";
+		case XML_READ_CLASSIFIER:
+			return "read classifier section";
+		case XML_READ_STATFILE:
+			return "read statfile section";
+		case XML_READ_METRIC:
+			return "read metric section";
+		case XML_READ_WORKER:
+			return "read worker section";
+		case XML_READ_VIEW:
+			return "read view section";
+		case XML_READ_LOGGING:
+			return "read logging section";
+		case XML_READ_VALUE:
+			return "read value";
+		case XML_SKIP_ELEMENTS:
+			return "skip if block";
+		case XML_ERROR:
+			return "error occured";
+		case XML_END:
+			return "read final tag";
+	}
+	/* Unreached */
+	return "unknown state";
+}
 
 static inline gboolean
 extract_attr (const gchar *attr, const gchar **attribute_names, const gchar **attribute_values, gchar **res) 
@@ -1333,8 +1369,23 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 {
 	struct rspamd_xml_userdata *ud = user_data;
 	struct classifier_config   *ccf;
-	gchar                      *res;
+	gchar                      *res, *condition;
 
+	if (g_ascii_strcasecmp (element_name, "if") == 0) {
+		/* Push current state to queue */
+		g_queue_push_head (ud->if_stack, GSIZE_TO_POINTER ((gsize)ud->state));
+		/* Now get attributes */
+		ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
+		if ((condition = g_hash_table_lookup (ud->cur_attrs, "condition")) == NULL) {
+			msg_err ("unknown condition attribute for if tag");
+			*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'condition' is required for tag 'if'");
+			ud->state = XML_ERROR;
+		}
+		if (! lua_check_condition (ud->cfg, condition)) {
+			ud->state = XML_SKIP_ELEMENTS;
+		}
+		return;
+	}
 	switch (ud->state) {
 		case XML_READ_START:
 			if (g_ascii_strcasecmp (element_name, "rspamd") != 0) {
@@ -1432,6 +1483,9 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 			}
 			break;
+		case XML_SKIP_ELEMENTS:
+			/* Do nothing */
+			return;
 		case XML_READ_MODULE:
 		case XML_READ_METRIC:
 		case XML_READ_MODULES:
@@ -1444,7 +1498,10 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
 			break;
 		default:
-			*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is unexpected in this state", element_name);
+			if (*error == NULL) {
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is unexpected in this state %s",
+					element_name, xml_state_to_string (ud));
+			}
 			break;
 	}
 }
@@ -1471,8 +1528,25 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 	struct metric              *m;
 	struct classifier_config   *ccf;
 	struct statfile            *st;
-	gboolean res;
+	gboolean                    res;
+	gpointer                    tptr;
 	
+	if (g_ascii_strcasecmp (element_name, "if") == 0) {
+		tptr = g_queue_pop_head (ud->if_stack);
+
+		if (tptr == NULL) {
+			*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched", element_name);
+			ud->state = XML_ERROR;
+		}
+		/* Restore state */
+		if (ud->state == XML_SKIP_ELEMENTS) {
+			ud->state = GPOINTER_TO_SIZE (tptr);
+		}
+		/* Skip processing */
+
+		return;
+	}
+
 	switch (ud->state) {
 		case XML_READ_MODULE:
 			CHECK_TAG ("module", FALSE);
@@ -1562,6 +1636,8 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 				ud->state = XML_ERROR;
 			}
 			break;
+		case XML_SKIP_ELEMENTS:
+			return;
 		default:
 			ud->state = XML_ERROR;
 			break;
@@ -1643,46 +1719,14 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 				ud->state = XML_ERROR;
 			}
 			break;
+		case XML_SKIP_ELEMENTS:
+			/* Do nothing */
+			return;
 		default:
 			ud->state = XML_ERROR;
 			break;
 	}
 
-}
-
-static inline const gchar *
-xml_state_to_string (struct rspamd_xml_userdata *ud)
-{
-	switch (ud->state) {
-		case XML_READ_START:
-			return "read start tag";
-		case XML_READ_PARAM:
-			return "read param";
-		case XML_READ_MODULE:
-			return "read module section";
-		case XML_READ_MODULES:
-			return "read modules section";
-		case XML_READ_CLASSIFIER:
-			return "read classifier section";
-		case XML_READ_STATFILE:
-			return "read statfile section";
-		case XML_READ_METRIC:
-			return "read metric section";
-		case XML_READ_WORKER:
-			return "read worker section";
-		case XML_READ_VIEW:
-			return "read view section";
-		case XML_READ_LOGGING:
-			return "read logging section";
-		case XML_READ_VALUE:
-			return "read value";
-		case XML_ERROR:
-			return "error occured";
-		case XML_END:
-			return "read final tag";
-	}
-	/* Unreached */
-	return "unknown state";
 }
 
 void 

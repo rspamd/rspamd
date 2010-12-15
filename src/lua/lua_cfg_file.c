@@ -23,6 +23,9 @@
  */
 
 #include "lua_common.h"
+#ifdef HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>
+#endif
 
 /* 
  * This is implementation of lua routines to handle config file params 
@@ -294,4 +297,67 @@ lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, enum l
 	/* Option not found */
 	*res = NULL;
 	return FALSE;
+}
+
+#define FAKE_RES_VAR "rspamd_res"
+gboolean
+lua_check_condition (struct config_file *cfg, const gchar *condition)
+{
+	lua_State                            *L = cfg->lua_state;
+	gchar                                *hostbuf, *condbuf;
+	gsize                                 hostlen;
+	gboolean                              res;
+#ifdef HAVE_SYS_UTSNAME_H
+	struct utsname                        uts;
+#endif
+
+	/* Set some globals for condition */
+	/* XXX: think what other variables can be useful */
+	hostlen = sysconf (_SC_HOST_NAME_MAX) + 1;
+	hostbuf = alloca (hostlen);
+	gethostname (hostbuf, hostlen);
+	hostbuf[hostlen - 1] = '\0';
+
+	/* Hostname */
+	lua_pushstring (L, hostbuf);
+	lua_setglobal (L, "hostname");
+	/* Config file name */
+	lua_pushstring (L, cfg->cfg_name);
+	lua_setglobal (L, "cfg_name");
+	/* Check for uname */
+#ifdef HAVE_SYS_UTSNAME_H
+	uname (&uts);
+	lua_pushstring (L, uts.sysname);
+	lua_setglobal (L, "osname");
+	lua_pushstring (L, uts.release);
+	lua_setglobal (L, "osrelease");
+#else
+	lua_pushstring (L, "unknown");
+	lua_setglobal (L, "osname");
+	lua_pushstring (L, "");
+	lua_setglobal (L, "osrelease");
+#endif
+	/* Make fake string */
+	hostlen = sizeof (FAKE_RES_VAR "=") + strlen (condition);
+	condbuf = g_malloc (hostlen);
+	rspamd_strlcpy (condbuf, FAKE_RES_VAR "=", sizeof (FAKE_RES_VAR "="));
+	g_strlcat (condbuf, condition, hostlen);
+	/* Evaluate condition */
+	if (luaL_dostring (L, condbuf) != 0) {
+		msg_err ("eval of '%s' failed: '%s'", condition, lua_tostring (L, -1));
+		g_free (condbuf);
+		return FALSE;
+	}
+	/* Get global variable res to get result */
+	lua_getglobal (L, FAKE_RES_VAR);
+	if (! lua_isboolean (L, -1)) {
+		msg_err ("bad string evaluated: %s, type: %s", condbuf, lua_typename (L, lua_type (L, -1)));
+		g_free (condbuf);
+			return FALSE;
+	}
+
+	res = lua_toboolean (L, -1);
+	g_free (condbuf);
+
+	return res;
 }

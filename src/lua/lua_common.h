@@ -55,6 +55,7 @@ void lua_post_load_config (struct config_file *cfg);
 void lua_process_element (struct config_file *cfg, const gchar *name, struct module_opt *opt, gint idx);
 gboolean lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, 
 							enum lua_var_type expected_type, gpointer *res);
+gboolean lua_check_condition (struct config_file *cfg, const gchar *condition);
 
 
 #endif /* WITH_LUA */

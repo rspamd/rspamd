@@ -24,6 +24,7 @@ enum xml_read_state {
 	XML_READ_VIEW,
 	XML_READ_LOGGING,
 	XML_READ_VALUE,
+	XML_SKIP_ELEMENTS,
 	XML_ERROR,
 	XML_END
 };
@@ -39,13 +40,17 @@ enum module_opt_type {
 	MODULE_OPT_TYPE_ANY
 };
 
+/**
+ * Structure that is used for semantic resolution of configuration
+ */
 struct rspamd_xml_userdata {
-	enum xml_read_state state;
-	struct config_file *cfg;
-	gchar section_name[MAX_NAME];
-	gpointer section_pointer;
-	gpointer parent_pointer;
-	GHashTable *cur_attrs;
+	enum xml_read_state state;				/*< state of parser							*/
+	struct config_file *cfg;				/*< configuration object 					*/
+	gchar section_name[MAX_NAME];			/*< current section							*/
+	gpointer section_pointer;				/*< pointer to object related with section	*/
+	gpointer parent_pointer;				/*< parent's section object					*/
+	GHashTable *cur_attrs;					/*< attributes of current tag				*/
+	GQueue *if_stack;						/*< stack of if elements					*/
 };
 
 /* Text is NULL terminated here */
