@@ -741,6 +741,7 @@ init_worker (void)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
 
+	ctx->is_mime = TRUE;
 	register_worker_opt (TYPE_WORKER, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
 
 	return ctx;

@@ -15,7 +15,7 @@ SET(RSPAMD_MASTER_SITE_URL "http://bitbucket.org/vstakhov/rspamd")
 SET(RSPAMD_USER "nobody")
 SET(RSPAMD_GROUP "nobody")
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6.3 FATAL_ERROR)
 
 OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
