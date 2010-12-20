@@ -136,7 +136,7 @@ local opts =  rspamd_config:get_all_opt('multimap')
 if opts then
 	local strrules = opts['rule']
 	if strrules then
-		if type(strrules) == 'array' then 
+		if type(strrules) == 'table' then 
 			for _,value in ipairs(strrules) do
 				local params = split(value, ',')
 				if not add_rule (params) then
