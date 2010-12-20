@@ -59,6 +59,7 @@ if opts then
 	    for n,v in pairs(opts) do
 			if n == 'symbol_strict' then
 				symbol_strict = v
+				rspamd_config:register_virtual_symbol(symbol_strict, 1.0)
 			elseif n == 'bad_host' then
 			    bad_hosts = v
 			elseif n == 'good_host' then

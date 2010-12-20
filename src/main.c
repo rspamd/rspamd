@@ -31,6 +31,7 @@
 #include "map.h"
 #include "fuzzy_storage.h"
 #include "cfg_xml.h"
+#include "symbols_cache.h"
 
 #ifndef WITHOUT_PERL
 
@@ -715,16 +716,20 @@ print_symbols_cache (struct config_file *cfg)
 		cur = cfg->cache->negative_items;
 		while (cur) {
 			item = cur->data;
-			printf ("-----------------------------------------------------------------\n");
-			printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+			if (!item->is_callback) {
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+			}
 			cur = g_list_next (cur);
 			i ++;
 		}
 		cur = cfg->cache->static_items;
 		while (cur) {
 			item = cur->data;
-			printf ("-----------------------------------------------------------------\n");
-			printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+			if (!item->is_callback) {
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
+			}
 			cur = g_list_next (cur);
 			i ++;
 		}
@@ -859,6 +864,12 @@ main (gint argc, gchar **argv, gchar **env)
 			}
 			l = g_list_next (l);
 		}
+		/* Insert classifiers symbols */
+		(void)insert_classifier_symbols (rspamd->cfg);
+
+		if (! validate_cache (rspamd->cfg->cache, rspamd->cfg, TRUE)) {
+			res = FALSE;
+		}
 		if (dump_vars) {
 			dump_cfg_vars (rspamd->cfg);
 		}
@@ -917,6 +928,9 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Check configuration for modules */
 	(void)check_modules_config (rspamd->cfg);
 
+	/* Insert classifiers symbols */
+	(void)insert_classifier_symbols (rspamd->cfg);
+
 	/* Perform modules configuring */
 	l = g_list_first (rspamd->cfg->filters);
 
@@ -932,6 +946,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Init config cache */
 	init_cfg_cache (rspamd->cfg);
+
+	/* Validate cache */
+	(void)validate_cache (rspamd->cfg->cache, rspamd->cfg, FALSE);
 
 	/* Flush log */
 	flush_log_buf ();

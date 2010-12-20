@@ -40,6 +40,8 @@ LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
 LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
+LUA_FUNCTION_DEF (config, register_virtual_symbol);
+LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
 
@@ -51,6 +53,8 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
+	LUA_INTERFACE_DEF (config, register_virtual_symbol),
+	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	{"__tostring", lua_class_tostring},
@@ -504,7 +508,7 @@ lua_config_register_symbol (lua_State * L)
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		name = g_strdup (luaL_checkstring (L, 2));
+		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		callback = luaL_checkstring (L, 4);
 		if (name) {
@@ -512,6 +516,45 @@ lua_config_register_symbol (lua_State * L)
 			cd->name = g_strdup (callback);
 			cd->L = L;
 			register_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
+		}
+	}
+	return 1;
+}
+
+static gint
+lua_config_register_virtual_symbol (lua_State * L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const gchar                     *name;
+	double                          weight;
+
+	if (cfg) {
+		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+		if (name) {
+			register_virtual_symbol (&cfg->cache, name, weight);
+		}
+	}
+	return 1;
+}
+
+static gint
+lua_config_register_callback_symbol (lua_State * L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const gchar                     *name, *callback;
+	double                          weight;
+	struct lua_callback_data       *cd;
+
+	if (cfg) {
+		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+		callback = luaL_checkstring (L, 4);
+		if (name) {
+			cd = g_malloc (sizeof (struct lua_callback_data));
+			cd->name = g_strdup (callback);
+			cd->L = L;
+			register_callback_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
 	}
 	return 1;

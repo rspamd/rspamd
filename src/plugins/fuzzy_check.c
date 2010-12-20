@@ -128,7 +128,7 @@ static void                     fuzzy_delete_handler (gchar **args, struct contr
 
 /* Flags string is in format <numeric_flag>:<SYMBOL>:weight[, <numeric_flag>:<SYMBOL>:weight...] */
 static void
-parse_flags_string (gchar *str)
+parse_flags_string (struct config_file *cfg, gchar *str)
 {
 	gchar                           **strvec, *item, *err_str, **map_str;
 	gint                            num, i, t;
@@ -152,6 +152,7 @@ parse_flags_string (gchar *str)
 			map->fuzzy_flag = strtol (map_str[0], &err_str, 10);
 			if (errno != 0 || (err_str && *err_str != '\0')) {
 				msg_info ("cannot parse flag %s: %s", map_str[0], strerror (errno));
+				continue;
 			}
 			else if (t == 2) {
 				/* Weight is skipped in definition */
@@ -159,9 +160,11 @@ parse_flags_string (gchar *str)
 			}
 			else {
 				map->weight = strtol (map_str[2], &err_str, 10);
-				/* Add flag to hash table */
-				g_hash_table_insert (fuzzy_module_ctx->mappings, GINT_TO_POINTER(map->fuzzy_flag), map);
+
 			}
+			/* Add flag to hash table */
+			g_hash_table_insert (fuzzy_module_ctx->mappings, GINT_TO_POINTER(map->fuzzy_flag), map);
+			register_virtual_symbol (&cfg->cache, map->symbol, map->weight);
 		}
 		g_strfreev (map_str);
 	}
@@ -407,7 +410,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 		parse_servers_string (value);
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "fuzzy_map")) != NULL) {
-		parse_flags_string (value);
+		parse_flags_string (cfg, value);
 	}
 
 	register_symbol (&cfg->cache, fuzzy_module_ctx->symbol, fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);

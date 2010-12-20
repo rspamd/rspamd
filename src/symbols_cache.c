@@ -243,8 +243,15 @@ create_cache_file (struct symbols_cache *cache, const gchar *filename, gint fd, 
 	return mmap_cache_file (cache, fd, pool);
 }
 
-void
-register_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data)
+enum rspamd_symbol_type {
+	SYMBOL_TYPE_NORMAL,
+	SYMBOL_TYPE_VIRTUAL,
+	SYMBOL_TYPE_CALLBACK
+};
+
+static void
+register_symbol_common (struct symbols_cache **cache, const gchar *name, double weight,
+		symbol_func_t func, gpointer user_data, enum rspamd_symbol_type type)
 {
 	struct cache_item              *item = NULL;
 	struct symbols_cache           *pcache = *cache;
@@ -271,6 +278,17 @@ register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
 	item->func = func;
 	item->user_data = user_data;
 
+	switch (type) {
+	case SYMBOL_TYPE_NORMAL:
+		break;
+	case SYMBOL_TYPE_VIRTUAL:
+		item->is_virtual = TRUE;
+		break;
+	case SYMBOL_TYPE_CALLBACK:
+		item->is_callback = TRUE;
+		break;
+	}
+
 	/* Handle weight using default metric */
 	if (pcache->cfg && pcache->cfg->default_metric && (w = g_hash_table_lookup (pcache->cfg->default_metric->symbols, name)) != NULL) {
 		item->s->weight = weight * (*w);
@@ -283,6 +301,26 @@ register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
 	set_counter (item->s->symbol, 0);
 
 	*target = g_list_prepend (*target, item);
+}
+
+void
+register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
+		symbol_func_t func, gpointer user_data)
+{
+	register_symbol_common (cache, name, weight, func, user_data, SYMBOL_TYPE_NORMAL);
+}
+
+void
+register_virtual_symbol (struct symbols_cache **cache, const gchar *name, double weight)
+{
+	register_symbol_common (cache, name, weight, NULL, NULL, SYMBOL_TYPE_VIRTUAL);
+}
+
+void
+register_callback_symbol (struct symbols_cache **cache, const gchar *name, double weight,
+		symbol_func_t func, gpointer user_data)
+{
+	register_symbol_common (cache, name, weight, func, user_data, SYMBOL_TYPE_CALLBACK);
 }
 
 void
@@ -501,6 +539,17 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 	g_checksum_get_digest (cksum, mem_sum, &cklen);
 	/* Now try to read file sum */
 	if (lseek (fd, -(cklen), SEEK_END) == -1) {
+		if (errno == EINVAL) {
+			/* Try to create file */
+			msg_info ("recreate cache file");
+			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+				msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+				return FALSE;
+			}
+			else {
+				return create_cache_file (cache, filename, fd, pool);
+			}
+		}
 		close (fd);
 		g_free (mem_sum);
 		g_checksum_free (cksum);
@@ -596,6 +645,89 @@ check_debug_symbol (struct config_file *cfg, const gchar *symbol)
 	}
 
 	return FALSE;
+}
+
+
+gboolean
+validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean strict)
+{
+	struct cache_item              *item;
+	GList                          *cur, *p, *metric_symbols;
+	gboolean                        res;
+
+	if (cache == NULL) {
+		msg_err ("empty cache is invalid");
+		return FALSE;
+	}
+
+	/* Check each symbol in a cache and find its weight definition */
+	cur = cache->negative_items;
+	while (cur) {
+		item = cur->data;
+		if (!item->is_callback) {
+			if (g_hash_table_lookup (cfg->metrics_symbols, item->s->symbol) == NULL) {
+				if (strict) {
+					msg_warn ("no weight registered for symbol %s", item->s->symbol);
+					return FALSE;
+				}
+				else {
+					msg_info ("no weight registered for symbol %s", item->s->symbol);
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+	cur = cache->static_items;
+	while (cur) {
+		item = cur->data;
+		if (!item->is_callback) {
+			if (g_hash_table_lookup (cfg->metrics_symbols, item->s->symbol) == NULL) {
+				if (strict) {
+					msg_warn ("no weight registered for symbol %s", item->s->symbol);
+					return FALSE;
+				}
+				else {
+					msg_info ("no weight registered for symbol %s", item->s->symbol);
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+	/* Now check each metric item and find corresponding symbol in a cache */
+	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
+	cur = metric_symbols;
+	while (cur) {
+		res = FALSE;
+		p = cache->negative_items;
+		while (p) {
+			item = p->data;
+			if (strcmp (item->s->symbol, cur->data) == 0) {
+				res = TRUE;
+				break;
+			}
+			p = g_list_next (p);
+		}
+		if (!res) {
+			p = cache->static_items;
+			while (p) {
+				item = p->data;
+				if (strcmp (item->s->symbol, cur->data) == 0) {
+					res = TRUE;
+					break;
+				}
+				p = g_list_next (p);
+			}
+		}
+		if (!res) {
+			msg_warn ("symbol '%s' is registered in metric but not found in cache", cur->data);
+			if (strict) {
+				return FALSE;
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	return TRUE;
 }
 
 struct symbol_callback_data {
@@ -772,7 +904,7 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 	if (!item) {
 		return FALSE;
 	}
-	if (check_view (task->cfg->views, item->s->symbol, task)) {
+	if (!item->is_virtual && check_view (task->cfg->views, item->s->symbol, task)) {
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);

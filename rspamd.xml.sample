@@ -33,12 +33,8 @@
  <action>reject</action>
  <action>greylist:5</action>
  <action>add_header:5</action>
- <symbol weight="8.00">R_SPAM_FROM_MTU</symbol>
- <symbol weight="10.00">R_WWW_EKONF_COM</symbol>
- <symbol weight="2.00">R_TINYURL</symbol>
  <symbol weight="2.00">MISSING_SUBJECT</symbol>
  <symbol weight="2.10">FORGED_OUTLOOK_TAGS</symbol>
- <symbol weight="8.00">R_FAKE_THEBAT</symbol>
  <symbol weight="5.00">FORGED_SENDER</symbol>
  <symbol weight="2.00">DRUGS_MANYKINDS</symbol>
  <symbol weight="3.30">ADVANCE_FEE_2</symbol>
@@ -54,27 +50,27 @@
  <symbol weight="2.00">RCVD_DOUBLE_IP_SPAM</symbol>
  <symbol weight="5.50">OB_SURBL_MULTI</symbol>
  <symbol weight="5.00">FORGED_OUTLOOK_HTML</symbol>
- <symbol weight="2.00">HTML_MIME_NO_HTML_TAG</symbol>
- <symbol weight="10.50">R_BAD_EMAIL</symbol>
- <symbol weight="10.00">R_SPAM_FROM_LIBERO</symbol>
  <symbol weight="-2.00">WHITELIST_IP</symbol>
  <symbol weight="5.00">R_UNDISC_RCPT</symbol>
  <symbol weight="2.00">DRUGS_ANXIETY</symbol>
+ <symbol weight="2.00">DRUGS_MUSCLE</symbol>
  <symbol weight="2.00">DRUGS_ANXIETY_EREC</symbol>
  <symbol weight="5.50">PH_SURBL_MULTI</symbol>
  <symbol weight="9.00">R_WHITE_ON_WHITE</symbol>
- <symbol weight="1.00">FAKE_HTML</symbol>
- <symbol weight="10.00">R_SPAM_FROM_VERSATEL</symbol>
  <symbol weight="3.00">HTML_SHORT_LINK_IMG_2</symbol>
  <symbol weight="3.00">FORGED_MUA_OUTLOOK</symbol>
- <symbol weight="4.00">R_FREE_HOSTING</symbol>
  <symbol weight="2.00">DRUGS_ERECTILE</symbol>
- <symbol weight="3.00">R_FREE_HOSTING_NAROD</symbol>
- <symbol weight="10.00">R_SPAM_FROM_ONO</symbol>
  <symbol weight="2.00">FM_FAKE_HELO_VERIZON</symbol>
  <symbol weight="2.00">REPTO_QUOTE_YAHOO</symbol>
  <symbol weight="5.00">MISSING_MIMEOLE</symbol>
- <symbol weight="0.50">RAMBLER_URIBL</symbol>
+ <symbol weight="9.50">RAMBLER_URIBL</symbol>
+ <symbol weight="2.00">MISSING_TO</symbol>
+ <symbol weight="0.33">FROM_EXCESS_BASE64</symbol> 
+ <symbol weight="-5.00">FROM_WORLDBANK</symbol>
+ <symbol weight="-5.00">FROM_CBR</symbol>
+ <symbol weight="-5.00">FROM_CSHOP</symbol>
+ <symbol weight="-5.00">FROM_MIRHOSTING</symbol>
+ <symbol weight="-5.00">FROM_PASSIFLORA</symbol> 
  <symbol weight="10.00">R_SPAM_FROM_VALUEHOST</symbol>
  <symbol weight="5.00">R_MIXED_CHARSET</symbol>
  <symbol weight="3.50">SORTED_RECIPS</symbol>
@@ -83,25 +79,41 @@
  <symbol weight="3.00">R_TO_SEEMS_AUTO</symbol>
  <symbol weight="1.00">SUBJECT_NEEDS_ENCODING</symbol>
  <symbol weight="3.84">TRACKER_ID</symbol>
- <symbol weight="7.00">KAM_LOTTO1</symbol>
+ <symbol weight="8.00">R_LOTTO</symbol>
  <symbol weight="3.00">R_NO_SPACE_IN_FROM</symbol>
  <symbol weight="8.00">R_SAJDING</symbol>
  <symbol weight="6.00">R_BAD_CTE_7BIT</symbol>
  <symbol weight="5.50">WS_SURBL_MULTI</symbol>
- <symbol weight="10.00">R_POCHTA_RU</symbol>
  <symbol weight="10.00">R_FLASH_REDIR_IMGSHACK</symbol>
  <symbol weight="5.00">INVALID_MSGID</symbol>
- <symbol weight="8.00">R_FORGED_MPOP_WEBMAIL</symbol>
  <symbol weight="3.00">MISSING_MID</symbol>
  <symbol weight="2.00">DRUGS_DIET</symbol>
  <symbol weight="3.00">FORGED_RECIPIENTS</symbol>
  <symbol weight="2.00">RATWARE_MS_HASH</symbol>
- <symbol weight="5.00">HTML_TAG_BALANCE_HEAD</symbol>
  <symbol weight="1.00">STOX_REPLY_TYPE</symbol>
  <symbol weight="3.00">BAYES_SPAM</symbol>
  <symbol weight="-3.00">BAYES_HAM</symbol>
+ <symbol weight="1.00">R_FUZZY</symbol>
+ <symbol weight="1.00">R_FUZZY1</symbol>
+ <symbol weight="1.00">R_FUZZY2</symbol>
+ <symbol weight="1.00">R_FUZZY3</symbol>
+	
+ <symbol weight="3.00">R_SPF_FAIL</symbol>
+ <symbol weight="1.00">R_SPF_SOFTFAIL</symbol>
+ <symbol weight="-3.00">R_SPF_ALLOW</symbol>
+ 
+ <symbol weight="-2.00">MAILLIST</symbol>
+
+ <symbol weight="3.00">R_IP_PBL</symbol>
+
+
+ <symbol weight="1.00">ONCE_RECEIVED</symbol>
+ <symbol weight="4.00">ONCE_RECEIVED_STRICT</symbol>
+
+ <symbol weight="1.00">RECEIVED_RBL</symbol>
+ 
+ <symbol weight="3.00">R_PARTS_DIFFER</symbol>
  <symbol weight="2.00">MIME_HEADER_CTYPE_ONLY</symbol>
- <symbol weight="8.00">R_FAKE_OUTLOOK</symbol>
 </metric>
 <!-- End of factors section -->
 
@@ -116,8 +128,8 @@
   <maxfiles>2048</maxfiles>
   <maxcore>0</maxcore>
 <!-- Other params -->
-    <param name="hashfile">/tmp/fuzzy.db</param>
-    <param name="use_judy">yes</param>
+    <hashfile>/tmp/fuzzy.db</hashfile>
+    <use_judy>yes</use_judy>
 </worker>
 <worker>
   <type>controller</type>
@@ -126,7 +138,7 @@
   <maxfiles>2048</maxfiles>
   <maxcore>0</maxcore>
 <!-- Other params -->
-    <param name="password">q1</param>
+    <password>q1</password>
 </worker>
 <worker>
   <type>normal</type>
@@ -141,82 +153,79 @@
 <!-- Modules section -->
 <!-- fuzzy_check -->
 <module name="fuzzy_check">
-  <option name="servers">localhost:11335</option>
-  <option name="symbol">R_FUZZY</option>
-  <option name="min_length">300</option>
-  <option name="max_score">10</option>
-  <option name="mime_types">application/pdf</option>
-  <option name="metric">default</option>
-  <option name="fuzzy_map">1:R_FUZZY1:10,2:R_FUZZY2:5,3:R_FUZZY3:-2.1</option>
+  <servers>localhost:11335</servers>
+  <symbol>R_FUZZY</symbol>
+  <min_bytes>300</min_bytes>
+  <max_score>10</max_score>
+  <mime_types>application/pdf</mime_types>
+  <fuzzy_map>1:R_FUZZY1:10,2:R_FUZZY2:5,3:R_FUZZY3:-2.1</fuzzy_map>
 </module>
 
 
 <!-- forged_recipients -->
 <module name="forged_recipients">
-  <option name="symbol_sender">FORGED_SENDER</option>
-  <option name="symbol_rcpt">FORGED_RECIPIENTS</option>
+  <symbol_sender>FORGED_SENDER</symbol_sender>
+  <symbol_rcpt>FORGED_RECIPIENTS</symbol_rcpt>
 </module>
 
 <!-- maillist -->
 <module name="maillist">
-  <option name="symbol">MAILLIST</option>
+  <symbol>MAILLIST</symbol>
 </module>
 
 <!-- surbl -->
 <module name="surbl">
-  <option name="whitelist">file://@ETC_PREFIX@/rspamd/surbl-whitelist.inc</option>
-  <option name="2tld">file://@ETC_PREFIX@/rspamd/2tld.inc</option>
-  <option name="metric">default</option>
-  <option name="bit_64">JP</option>
-  <option name="bit_32">AB</option>
-  <option name="bit_16">OB</option>
-  <option name="bit_8">PH</option>
-  <option name="bit_4">WS</option>
-  <option name="bit_2">SC</option>
-  <option name="suffix_RAMBLER_URIBL">uribl.rambler.ru</option>
+  <whitelist>file://@ETC_PREFIX@/rspamd/surbl-whitelist.inc</whitelist>
+  <exceptions>file://@ETC_PREFIX@/rspamd/2tld.inc</exceptions>
+  <bit_64>JP</bit_64>
+  <bit_32>AB</bit_32>
+  <bit_16>OB</bit_16>
+  <bit_8>PH</bit_8>
+  <bit_4>WS</bit_4>
+  <bit_2>SC</bit_2>
+  <suffix_RAMBLER_URIBL>uribl.rambler.ru</suffix_RAMBLER_URIBL>
   <option name="suffix_%b_SURBL_MULTI">multi.surbl.org</option>
-  <option name="redirector_read_timeout">10s</option>
-  <option name="redirector_connect_timeout">1s</option>
-  <option name="redirector">localhost:8080</option>
+  <redirector_read_timeout>10s</redirector_read_timeout>
+  <redirector_connect_timeout>1s</redirector_connect_timeout>
+  <redirector>localhost:8080</redirector>
 </module>
 
 <!-- received_rbl -->
 <module name="received_rbl">
-  <option name="symbol">RECEIVED_RBL</option>
-  <option name="rbl">pbl.spamhaus.org</option>
-  <option name="rbl">xbl.spamhaus.org</option>
-  <option name="rbl">insecure-bl.rambler.ru</option>
+  <symbol>RECEIVED_RBL</symbol>
+  <rbl>pbl.spamhaus.org</rbl>
+  <rbl>xbl.spamhaus.org</rbl>
+  <rbl>insecure-bl.rambler.ru</rbl>
 </module>
 
 <!-- whitelist -->
 <module name="whitelist">
-  <option name="ip_whitelist">http://cebka.pp.ru/stuff/grey_whitelist.conf</option>
-  <option name="symbol_ip">WHITELIST_IP</option>
+  <ip_whitelist>http://cebka.pp.ru/stuff/grey_whitelist.conf</ip_whitelist>
+  <symbol_ip>WHITELIST_IP</symbol_ip>
 </module>
 
 <!-- chartable -->
 <module name="chartable">
-  <option name="threshold">0.1</option>
-  <option name="symbol">R_MIXED_CHARSET</option>
-  <option name="metric">default</option>
+  <threshold>0.1</threshold>
+  <symbol>R_MIXED_CHARSET</symbol>
 </module>
 
 <!-- once_received -->
 <module name="once_received">
-  <option name="good_host">mail</option>
-  <option name="bad_host">static</option>
-  <option name="bad_host">dynamic</option>
-  <option name="symbol_strict">ONCE_RECEIVED_STRICT</option>
-  <option name="symbol">ONCE_RECEIVED</option>
+  <good_host>mail</good_host>
+  <bad_host>static</bad_host>
+  <bad_host>dynamic</bad_host>
+  <symbol_strict>ONCE_RECEIVED_STRICT</symbol_strict>
+  <symbol>ONCE_RECEIVED</symbol>
 </module>
 
 <!-- multimap -->
 <module name="multimap">
 <!--
-	<option name="rule">type = header, header = To, pattern = @(.+)>?$, map = file://@ETC_PREFIX@/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST</option>
-	<option name="rule">type = ip, map = file://@ETC_PREFIX@/rspamd/ip_test, symbol = R_IP_WHITELIST</option>
+	<rule>type = header, header = To, pattern = @(.+)>?$, map = file://@ETC_PREFIX@/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST</rule>
+	<rule>type = ip, map = file://@ETC_PREFIX@/rspamd/ip_test, symbol = R_IP_WHITELIST</rule>
 -->
-	<option name="rule">type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL</option>
+	<rule>type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL</rule>
 </module>
 
 
@@ -227,7 +236,7 @@
 <classifier type="winnow">
  <tokenizer>osb-text</tokenizer>
  <metric>default</metric>
- <option name="min_tokens">20</option>
+ <min_tokens>20</min_tokens>
  <statfile>
   <symbol>WINNOW_HAM</symbol>
   <size>100M</size>
@@ -244,8 +253,8 @@
 <classifier type="bayes">
  <tokenizer>osb-text</tokenizer>
  <metric>default</metric>
- <option name="min_tokens">10</option>
- <option name="learn_threshold">0.2</option>
+ <min_tokens>10</min_tokens>
+ <learn_threshold>0.2</learn_threshold>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
@@ -266,8 +275,7 @@
 <classifier type="bayes">
  <tokenizer>osb-text</tokenizer>
  <metric>default</metric>
- <option name="min_tokens">10</option>
- <option name="learn_threshold">0.2</option>
+ <min_tokens>10</min_tokens>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>

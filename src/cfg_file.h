@@ -417,6 +417,7 @@ struct metric* check_metric_conf (struct config_file *cfg, struct metric *c);
 gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line);
 gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
 gboolean check_modules_config (struct config_file *cfg);
+void insert_classifier_symbols (struct config_file *cfg);
 
 #endif /* ifdef CFG_FILE_H */
 /* 

@@ -147,7 +147,6 @@ reconf['MIME_HEADER_CTYPE_ONLY'] = string.format('!(%s) & !(%s) & (%s) & !(%s) &
 local msgid_dollars_ok = 'Message-Id=/[0-9a-f]{4,}\\$[0-9a-f]{4,}\\$[0-9a-f]{4,}\\@\\S+/Hr'
 local mimeole_ms = 'X-MimeOLE=/^Produced By Microsoft MimeOLE/H'
 local rcvd_with_exchange = 'Received=/with Microsoft Exchange Server/H'
-reconf['R_MUA_EXCHANGE'] = 'X-MimeOLE=/Microsoft Exchange/H'
 reconf['RATWARE_MS_HASH'] = string.format('(%s) & !(%s) & !(%s)', msgid_dollars_ok, mimeole_ms, rcvd_with_exchange)
 
 -- Reply-type in content-type

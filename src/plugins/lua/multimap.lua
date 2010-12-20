@@ -89,7 +89,7 @@ function add_rule(params)
 		local _,_,name,value = string.find(param, '(%w+)%s*=%s*(.+)')
 		if not name or not value then
 			rspamd_logger:err('invalid rule: '..param)
-			return 0
+			return nil
 		end
 		if name == 'type' then
 			if value == 'ip' then
@@ -100,7 +100,7 @@ function add_rule(params)
 				newrule['type'] = 'header'
 			else
 				rspamd_logger:err('invalid rule type: '.. value)
-				return 0
+				return nil
 			end
 		elseif name == 'header' then
 			newrule['header'] = value
@@ -112,13 +112,13 @@ function add_rule(params)
 			newrule['symbol'] = value
 		else	
 			rspamd_logger:err('invalid rule option: '.. name)
-			return 0
+			return nil
 		end
 
 	end
 	if not newrule['symbol'] or not newrule['map'] or not newrule['symbol'] then
 		rspamd_logger:err('incomplete rule')
-		return 0
+		return nil
 	end
 	if newrule['type'] == 'ip' then
 		newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
@@ -126,7 +126,7 @@ function add_rule(params)
 		newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
 	end
 	table.insert(rules, newrule)
-	return 1
+	return newrule
 end
 
 -- Registration
@@ -139,14 +139,20 @@ if opts then
 		if type(strrules) == 'table' then 
 			for _,value in ipairs(strrules) do
 				local params = split(value, ',')
-				if not add_rule (params) then
+				local rule = add_rule (params)
+				if not rule then
 					rspamd_logger:err('cannot add rule: "'..value..'"')
+				else
+					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
 				end
 			end
 		elseif type(strrules) == 'string' then
 			local params = split(strrules, ',')
-			if not add_rule (params) then
+			local rule = add_rule (params)
+			if not rule then
 				rspamd_logger:err('cannot add rule: "'..strrules..'"')
+			else
+				rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
 			end
 		end
 	end
@@ -154,5 +160,5 @@ end
 
 if table.maxn(rules) > 0 then
 	-- add fake symbol to check all maps inside a single callback
-	rspamd_config:register_symbol('MULTIMAP', 1.0, 'check_multimap')
+	rspamd_config:register_callback_symbol('MULTIMAP', 1.0, 'check_multimap')
 end

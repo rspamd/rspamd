@@ -586,7 +586,7 @@ handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 	gchar                           *val;
 	if (g_ascii_strcasecmp (data, "file") == 0) {
 		/* Find filename attribute */
-		if ((val = g_hash_table_lookup (attrs, "filename")) == NULL) {
+		if (attrs == NULL || (val = g_hash_table_lookup (attrs, "filename")) == NULL) {
 			msg_err ("cannot log to file that is not specified");
 			return FALSE;
 		}
@@ -597,7 +597,7 @@ handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 		cfg->log_type = RSPAMD_LOG_CONSOLE;
 	}
 	else if (g_ascii_strcasecmp (data, "syslog") == 0) {
-		if ((val = g_hash_table_lookup (attrs, "facility")) == NULL) {
+		if (attrs == NULL || (val = g_hash_table_lookup (attrs, "facility")) == NULL) {
 			msg_err ("cannot log to syslog when facility is not specified");
 			return FALSE;
 		}
@@ -688,13 +688,13 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, c
 	GHashTable                     *worker_config;
 
 	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0)  {
-		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+		if (attrs == NULL || (name = g_hash_table_lookup (attrs, "name")) == NULL) {
 			msg_err ("worker param tag must have \"name\" attribute");
 			return FALSE;
 		}
 	}
 	else {
-		name = tag;
+		name = memory_pool_strdup (cfg->cfg_pool, tag);
 	}
 
 	if (!worker_options ||
@@ -805,7 +805,7 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 	struct metric                  *metric = ctx->section_pointer;
 
 	value = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
-	if ((strval = g_hash_table_lookup (attrs, "weight")) == NULL) {
+	if (attrs == NULL || (strval = g_hash_table_lookup (attrs, "weight")) == NULL) {
 		msg_info ("symbol tag should have \"weight\" attribute, assume weight 1.0");
 		*value = 1.0;
 	}
@@ -849,11 +849,11 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 		}
 	}
 	else {
-		name = tag;
+		name = memory_pool_strdup (cfg->cfg_pool, tag);
 	}
 
 	/* Check for lua */
-	if ((val = g_hash_table_lookup (attrs, "lua")) != NULL) {
+	if (attrs != NULL && (val = g_hash_table_lookup (attrs, "lua")) != NULL) {
 		if (g_ascii_strcasecmp (val, "yes") == 0) {
 			is_lua = TRUE;
 		}
@@ -890,7 +890,7 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 		/* Now config table can be used for configuring rspamd */
 	}
 	/* First check "src" attribute */
-	if ((val = g_hash_table_lookup (attrs, "src")) != NULL) {
+	if (attrs != NULL && (val = g_hash_table_lookup (attrs, "src")) != NULL) {
 		/* Chdir */
 		tmp1 = g_strdup (val);
 		tmp2 = g_strdup (val);
@@ -998,7 +998,7 @@ handle_variable (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 {
 	gchar                        *val;
 	
-	if ((val = g_hash_table_lookup (attrs, "name")) == NULL) {
+	if (attrs == NULL || (val = g_hash_table_lookup (attrs, "name")) == NULL) {
 		msg_err ("'name' attribute is required for tag 'variable'");
 		return FALSE;
 	}
@@ -1013,7 +1013,7 @@ handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 	gchar                        *val;
 	struct expression            *expr;
 	
-	if ((val = g_hash_table_lookup (attrs, "name")) == NULL) {
+	if (attrs == NULL || (val = g_hash_table_lookup (attrs, "name")) == NULL) {
 		msg_err ("'name' attribute is required for tag 'composite'");
 		return FALSE;
 	}
@@ -1136,13 +1136,13 @@ handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx,
 	GHashTable                     *classifier_config;
 
 	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
-		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+		if (attrs == NULL || (name = g_hash_table_lookup (attrs, "name")) == NULL) {
 			msg_err ("worker param tag must have \"name\" attribute");
 			return FALSE;
 		}
 	}
 	else {
-		name = tag;
+		name = memory_pool_strdup (cfg->cfg_pool, tag);
 	}
 
 	if (!classifier_options ||
@@ -1376,7 +1376,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 		g_queue_push_head (ud->if_stack, GSIZE_TO_POINTER ((gsize)ud->state));
 		/* Now get attributes */
 		ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
-		if ((condition = g_hash_table_lookup (ud->cur_attrs, "condition")) == NULL) {
+		if (ud->cur_attrs == NULL || (condition = g_hash_table_lookup (ud->cur_attrs, "condition")) == NULL) {
 			msg_err ("unknown condition attribute for if tag");
 			*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'condition' is required for tag 'if'");
 			ud->state = XML_ERROR;

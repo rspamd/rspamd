@@ -112,6 +112,8 @@ spf_module_config (struct config_file *cfg)
 	}
 
 	register_symbol (&cfg->cache, spf_module_ctx->symbol_fail, 1, spf_symbol_callback, NULL);
+	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_softfail, 1);
+	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_allow, 1);
 
 	return res;
 }

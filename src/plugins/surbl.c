@@ -240,6 +240,42 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
+/*
+ * Register virtual symbols for suffixes with bit wildcard
+ */
+static void
+register_bit_symbols (struct config_file *cfg)
+{
+	gchar                          *c, *symbol;
+	GList                          *symit, *cur;
+	struct surbl_bit_item          *bit;
+	struct suffix_item             *suffix;
+	gint                            len;
+
+	symit = surbl_module_ctx->suffixes;
+
+	while (symit) {
+		suffix = symit->data;
+		if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
+			cur = g_list_first (surbl_module_ctx->bits);
+			while (cur) {
+				bit = (struct surbl_bit_item *)cur->data;
+				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
+				*c = '\0';
+				symbol = memory_pool_alloc (cfg->cfg_pool, len);
+				rspamd_snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
+				*c = '%';
+				register_virtual_symbol (&cfg->cache, symbol, 1);
+				cur = g_list_next (cur);
+			}
+		}
+		else {
+			register_virtual_symbol (&cfg->cache, suffix->symbol, 1);
+		}
+		symit = g_list_next (symit);
+	}
+}
+
 gint
 surbl_module_config (struct config_file *cfg)
 {
@@ -339,7 +375,7 @@ surbl_module_config (struct config_file *cfg)
 				msg_debug ("add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 				*str = '_';
 				surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
-				register_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
+				register_callback_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 			}
 		}
 		if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
@@ -365,6 +401,8 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 		register_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 	}
+
+	register_bit_symbols (cfg);
 
 	return TRUE;
 }

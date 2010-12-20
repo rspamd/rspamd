@@ -36,6 +36,10 @@ struct cache_item {
 	/* Callback data */
 	symbol_func_t func;
 	gpointer user_data;
+
+	/* Flags of virtual symbols */
+	gboolean is_virtual;
+	gboolean is_callback;
 };
 
 
@@ -77,6 +81,20 @@ gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, s
 void register_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data);
 
 /**
+ * Register virtual symbol
+ * @param name name of symbol
+ */
+void register_virtual_symbol (struct symbols_cache **cache, const gchar *name, double weight);
+
+/**
+ * Register callback function for symbols parsing
+ * @param name name of symbol
+ * @param func pointer to handler
+ * @param user_data pointer to user_data
+ */
+void register_callback_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data);
+
+/**
  * Register function for dynamic symbols parsing
  * @param name name of symbol
  * @param func pointer to handler
@@ -99,6 +117,14 @@ gboolean call_symbol_callback (struct worker_task *task, struct symbols_cache *c
  * @param cache symbols cache
  */
 void remove_dynamic_rules (struct symbols_cache *cache);
+
+/**
+ * Validate cache items agains theirs weights defined in metrics
+ * @param cache symbols cache
+ * @param cfg configuration
+ * @param strict do strict checks - symbols MUST be described in metrics
+ */
+gboolean validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean strict);
 
 
 #endif

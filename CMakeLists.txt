@@ -573,7 +573,6 @@ SET(CLASSIFIERSSRC src/classifiers/classifiers.c
 SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/regexp.c
 				src/plugins/chartable.c
-				src/plugins/emails.c
 				src/plugins/fuzzy_check.c
 				src/plugins/spf.c)
 

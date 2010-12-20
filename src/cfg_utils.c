@@ -983,6 +983,20 @@ check_modules_config (struct config_file *cfg)
 	return res;
 }
 
+static void
+symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
+{
+	struct config_file             *cfg = ud;
+
+	register_virtual_symbol (&cfg->cache, key, 1.0);
+}
+
+void
+insert_classifier_symbols (struct config_file *cfg)
+{
+	g_hash_table_foreach (cfg->classifiers_symbols, symbols_classifiers_callback, cfg);
+}
+
 /*
  * vi:ts=4
  */
