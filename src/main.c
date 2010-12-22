@@ -829,6 +829,12 @@ main (gint argc, gchar **argv, gchar **env)
 	register_classifier_opt ("winnow", "min_tokens");
 	register_classifier_opt ("winnow", "learn_threshold");
 
+	/* Pre-init of cache */
+	rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
+	rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd->cfg->cache->cfg = rspamd->cfg;
+
+	/* Load config */
 	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
@@ -837,10 +843,6 @@ main (gint argc, gchar **argv, gchar **env)
 	if (is_debug) {
 		rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
-	/* Pre-init of cache */
-	rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
-	rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
-	rspamd->cfg->cache->cfg = rspamd->cfg;
 
 	if (rspamd->cfg->config_test || dump_vars || dump_cache) {
 		/* Init events to test modules */
