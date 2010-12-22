@@ -1023,6 +1023,7 @@ handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 		return FALSE;
 	}
 	g_hash_table_insert (cfg->composite_symbols, val, expr);
+	register_virtual_symbol (&cfg->cache, val, 1);
 
 	return TRUE;
 }
