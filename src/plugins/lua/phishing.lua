@@ -28,8 +28,12 @@ function phishing_cb (task)
 end
 
 -- Registration
-rspamd_config:register_module_option('phishing', 'symbol', 'string')
-rspamd_config:register_module_option('phishing', 'domains', 'map')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('phishing', 'symbol', 'string')
+		rspamd_config:register_module_option('phishing', 'domains', 'map')
+	end
+end
 
 local opts = rspamd_config:get_all_opt('phishing')
 if opts then

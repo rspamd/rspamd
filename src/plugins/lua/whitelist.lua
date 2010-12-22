@@ -33,10 +33,14 @@ function check_whitelist (task)
 end
 
 -- Registration
-rspamd_config:register_module_option('whitelist', 'symbol_ip', 'string')
-rspamd_config:register_module_option('whitelist', 'symbol_from', 'string')
-rspamd_config:register_module_option('whitelist', 'ip_whitelist', 'map')
-rspamd_config:register_module_option('whitelist', 'from_whitelist', 'map')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('whitelist', 'symbol_ip', 'string')
+		rspamd_config:register_module_option('whitelist', 'symbol_from', 'string')
+		rspamd_config:register_module_option('whitelist', 'ip_whitelist', 'map')
+		rspamd_config:register_module_option('whitelist', 'from_whitelist', 'map')
+	end
+end
 
 -- Configuration
 local opts =  rspamd_config:get_all_opt('whitelist')

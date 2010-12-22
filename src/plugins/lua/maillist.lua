@@ -163,7 +163,11 @@ function check_maillist(task)
 	end
 end
 -- Registration
-rspamd_config:register_module_option('maillist', 'symbol', 'string')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('maillist', 'symbol', 'string')
+	end
+end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('maillist')
 if opts then

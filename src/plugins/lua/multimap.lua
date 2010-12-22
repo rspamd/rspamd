@@ -130,7 +130,11 @@ function add_rule(params)
 end
 
 -- Registration
-rspamd_config:register_module_option('multimap', 'rule', 'string')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('multimap', 'rule', 'string')
+	end
+end
 
 local opts =  rspamd_config:get_all_opt('multimap')
 if opts then
@@ -143,7 +147,9 @@ if opts then
 				if not rule then
 					rspamd_logger:err('cannot add rule: "'..value..'"')
 				else
-					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
+					if type(rspamd_config.get_api_version) ~= 'nil' then
+						rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
+					end
 				end
 			end
 		elseif type(strrules) == 'string' then
@@ -152,7 +158,9 @@ if opts then
 			if not rule then
 				rspamd_logger:err('cannot add rule: "'..strrules..'"')
 			else
-				rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
+				if type(rspamd_config.get_api_version) ~= 'nil' then
+					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
+				end
 			end
 		end
 	end
@@ -160,5 +168,9 @@ end
 
 if table.maxn(rules) > 0 then
 	-- add fake symbol to check all maps inside a single callback
-	rspamd_config:register_callback_symbol('MULTIMAP', 1.0, 'check_multimap')
+	if type(rspamd_config.get_api_version) ~= 'nil' then
+		rspamd_config:register_callback_symbol('MULTIMAP', 1.0, 'check_multimap')
+	else
+		rspamd_config:register_symbol('MULTIMAP', 1.0, 'check_multimap')
+	end
 end

@@ -56,8 +56,12 @@ function received_cb (task)
 end
 
 -- Registration
-rspamd_config:register_module_option('received_rbl', 'symbol', 'string')
-rspamd_config:register_module_option('received_rbl', 'rbl', 'string')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('received_rbl', 'symbol', 'string')
+		rspamd_config:register_module_option('received_rbl', 'rbl', 'string')
+	end
+end
 
 -- Configuration
 local opts =  rspamd_config:get_all_opt('received_rbl')
@@ -71,7 +75,9 @@ if opts then
         for _,rbl in ipairs(rbls) do
         	local s, _ = string.find(rbl, ':')
 			if s then
-				rspamd_config:register_virtual_symbol(string.sub(rbl, s + 1, -1), 1)
+				if type(rspamd_config.get_api_version) ~= 'nil' then
+					rspamd_config:register_virtual_symbol(string.sub(rbl, s + 1, -1), 1)
+				end
 			end
 		end
         -- Register symbol's callback

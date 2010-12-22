@@ -44,6 +44,7 @@ LUA_FUNCTION_DEF (config, register_virtual_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
+LUA_FUNCTION_DEF (config, get_api_version);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -57,6 +58,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_post_filter),
+	LUA_INTERFACE_DEF (config, get_api_version),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -128,6 +130,13 @@ lua_check_trie (lua_State * L)
 }
 
 /*** Config functions ***/
+static gint
+lua_config_get_api_version (lua_State *L)
+{
+	lua_pushinteger (L, RSPAMD_LUA_API_VERSION);
+	return 1;
+}
+
 static gint
 lua_config_get_module_opt (lua_State * L)
 {

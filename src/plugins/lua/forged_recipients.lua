@@ -64,8 +64,12 @@ function check_forged_headers(task)
 end
 
 -- Registration
-rspamd_config:register_module_option('forged_recipients', 'symbol_rcpt', 'string')
-rspamd_config:register_module_option('forged_recipients', 'symbol_sender', 'string')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('forged_recipients', 'symbol_rcpt', 'string')
+		rspamd_config:register_module_option('forged_recipients', 'symbol_sender', 'string')
+	end
+end
 
 -- Configuration
 local opts =  rspamd_config:get_all_opt('forged_recipients')
@@ -73,13 +77,21 @@ if opts then
 	if opts['symbol_rcpt'] or opts['symbol_sender'] then
 		if opts['symbol_rcpt'] then
 			symbol_rcpt = opts['symbol_rcpt']
-			rspamd_config:register_virtual_symbol(symbol_rcpt, 1.0, 'check_forged_headers')
+			if type(rspamd_config.get_api_version) ~= 'nil' then
+				rspamd_config:register_virtual_symbol(symbol_rcpt, 1.0, 'check_forged_headers')
+			end
 		end
 		if opts['symbol_sender'] then
 			symbol_sender = opts['symbol_sender']
-			rspamd_config:register_virtual_symbol(symbol_sender, 1.0)
+			if type(rspamd_config.get_api_version) ~= 'nil' then
+				rspamd_config:register_virtual_symbol(symbol_sender, 1.0)
+			end
 		end
-		rspamd_config:register_callback_symbol('FORGED_RECIPIENTS', 1.0, 'check_forged_headers')
+		if type(rspamd_config.get_api_version) ~= 'nil' then
+			rspamd_config:register_callback_symbol('FORGED_RECIPIENTS', 1.0, 'check_forged_headers')
+		else
+			rspamd_config:register_symbol('FORGED_RECIPIENTS', 1.0, 'check_forged_headers')
+		end
 		
 	end
 end

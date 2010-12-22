@@ -45,10 +45,14 @@ function check_quantity_received (task)
 end
 
 -- Registration
-rspamd_config:register_module_option('once_received', 'symbol', 'string')
-rspamd_config:register_module_option('once_received', 'symbol_strict', 'string')
-rspamd_config:register_module_option('once_received', 'bad_host', 'string')
-rspamd_config:register_module_option('once_received', 'good_host', 'string')
+if type(rspamd_config.get_api_version) ~= 'nil' then
+	if rspamd_config:get_api_version() >= 1 then
+		rspamd_config:register_module_option('once_received', 'symbol', 'string')
+		rspamd_config:register_module_option('once_received', 'symbol_strict', 'string')
+		rspamd_config:register_module_option('once_received', 'bad_host', 'string')
+		rspamd_config:register_module_option('once_received', 'good_host', 'string')
+	end
+end
 
 -- Configuration
 local opts =  rspamd_config:get_all_opt('once_received')
@@ -59,7 +63,9 @@ if opts then
 	    for n,v in pairs(opts) do
 			if n == 'symbol_strict' then
 				symbol_strict = v
-				rspamd_config:register_virtual_symbol(symbol_strict, 1.0)
+				if type(rspamd_config.get_api_version) ~= 'nil' then
+					rspamd_config:register_virtual_symbol(symbol_strict, 1.0)
+				end
 			elseif n == 'bad_host' then
 			    bad_hosts = v
 			elseif n == 'good_host' then

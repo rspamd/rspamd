@@ -16,6 +16,8 @@
 
 extern const luaL_reg null_reg[];
 
+#define RSPAMD_LUA_API_VERSION 1
+
 /* Common utility functions */
 void lua_newclass (lua_State *L, const gchar *classname, const struct luaL_reg *func);
 void lua_setclass (lua_State *L, const gchar *classname, gint objidx);
