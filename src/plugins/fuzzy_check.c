@@ -341,6 +341,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("fuzzy_check", "fuzzy_map", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("fuzzy_check", "whitelist", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("fuzzy_check", "mime_types", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("fuzzy_check", "min_length", MODULE_OPT_TYPE_UINT);
 	register_module_opt ("fuzzy_check", "min_bytes", MODULE_OPT_TYPE_UINT);
 	register_module_opt ("fuzzy_check", "min_height", MODULE_OPT_TYPE_UINT);
 	register_module_opt ("fuzzy_check", "min_width", MODULE_OPT_TYPE_UINT);
