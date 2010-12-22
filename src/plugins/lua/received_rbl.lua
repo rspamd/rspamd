@@ -71,7 +71,7 @@ if opts then
         for _,rbl in ipairs(rbls) do
         	local s, _ = string.find(rbl, ':')
 			if s then
-				rspamd_config:register_virtual_symbol((string.sub(rbl, s + 1, -1), 1)
+				rspamd_config:register_virtual_symbol(string.sub(rbl, s + 1, -1), 1)
 			end
 		end
         -- Register symbol's callback
