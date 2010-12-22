@@ -68,6 +68,12 @@ if opts then
         if opts['rbl'] then
             rbls = opts['rbl']
         end
+        for _,rbl in ipairs(rbls)
+        	local s, _ = string.find(rbl, ':')
+			if s then
+				rspamd_config:register_virtual_symbol((string.sub(rbl, s + 1, -1), 1)
+			end
+		end
         -- Register symbol's callback
         rspamd_config:register_symbol(symbol, 1.0, 'received_cb')
     end
