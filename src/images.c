@@ -222,7 +222,7 @@ process_image (struct worker_task *task, struct mime_part *part)
 	}
 
 	if (img != NULL) {
-		msg_info ("detected %s image of size %ud x %ud in message <%s>",
+		debug_task ("detected %s image of size %ud x %ud in message <%s>",
 				image_type_str (img->type),
 				img->width, img->height,
 				task->message_id);
