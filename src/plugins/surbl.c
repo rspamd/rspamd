@@ -937,9 +937,10 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	struct worker_task             *task = param->task;
 	struct uri                     *url = value;
 	f_str_t                         f;
-	gchar                           *red_domain;
+	gchar                          *red_domain;
+	const gchar                    *pos;
 	GRegex                         *re;
-	guint                           idx;
+	guint                           idx, len;
 
 	debug_task ("check url %s", struri (url));
 
@@ -952,17 +953,24 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		f.len = url->hostlen;
 		/* Search in trie */
 		if (surbl_module_ctx->redirector_trie &&
-				rspamd_trie_lookup (surbl_module_ctx->redirector_trie, url->host, url->hostlen, &idx) &&
+				(pos = rspamd_trie_lookup (surbl_module_ctx->redirector_trie, url->host, url->hostlen, &idx)) != NULL &&
 				idx < surbl_module_ctx->redirector_ptrs->len) {
 			/* Get corresponding prefix */
 			red_domain = g_ptr_array_index (surbl_module_ctx->redirector_ptrs, idx);
-			/* Try to find corresponding regexp */
-			re = g_hash_table_lookup (surbl_module_ctx->redirector_hosts, red_domain);
-			if (re != NULL && (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL))) {
-				/* If no regexp found or founded regexp matches url string register redirector's call */
-				register_redirector_call (url, param->task, param->tree, param->suffix, red_domain);
-				param->task->save.saved++;
-				return FALSE;
+			if (red_domain != NULL) {
+				len = strlen (red_domain);
+				/* First check that we have found domain at the end of host */
+				if (pos + len == url->host + url->hostlen &&
+					(pos == url->host || *(pos - 1) == '.')) {
+					/* Try to find corresponding regexp */
+					re = g_hash_table_lookup (surbl_module_ctx->redirector_hosts, red_domain);
+					if (re != NULL && (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL))) {
+						/* If no regexp found or founded regexp matches url string register redirector's call */
+						register_redirector_call (url, param->task, param->tree, param->suffix, red_domain);
+						param->task->save.saved++;
+						return FALSE;
+					}
+				}
 			}
 		}
 		make_surbl_requests (url, param->task, param->tree, param->suffix, FALSE);
