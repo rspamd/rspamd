@@ -963,7 +963,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 				return FALSE;
 			}
 		}
-		make_surbl_requests (url, param->task, param->tree, param->suffix, TRUE);
+		make_surbl_requests (url, param->task, param->tree, param->suffix, FALSE);
 	}
 	else {
 		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
