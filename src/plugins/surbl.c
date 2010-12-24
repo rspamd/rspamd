@@ -886,7 +886,8 @@ redirector_callback (gint fd, short what, void *arg)
 
 
 static void
-register_redirector_call (struct uri *url, struct worker_task *task, GTree * url_tree, struct suffix_item *suffix)
+register_redirector_call (struct uri *url, struct worker_task *task, GTree * url_tree,
+		struct suffix_item *suffix, const gchar *rule)
 {
 	gint                            s = -1;
 	struct redirector_param        *param;
@@ -925,7 +926,8 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	event_add (&param->ev, timeout);
 	register_async_event (task->s, free_redirector_session, param, FALSE);
 
-	msg_info ("<%s> registered redirector call for %s to %s", task->message_id, struri (url), selected->name);
+	msg_info ("<%s> registered redirector call for %s to %s, according to rule: %s",
+			task->message_id, struri (url), selected->name, rule);
 }
 
 static                          gboolean
@@ -958,7 +960,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 			re = g_hash_table_lookup (surbl_module_ctx->redirector_hosts, red_domain);
 			if (re != NULL && (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL))) {
 				/* If no regexp found or founded regexp matches url string register redirector's call */
-				register_redirector_call (url, param->task, param->tree, param->suffix);
+				register_redirector_call (url, param->task, param->tree, param->suffix, red_domain);
 				param->task->save.saved++;
 				return FALSE;
 			}

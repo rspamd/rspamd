@@ -446,7 +446,8 @@ err_socket (GError * err, void *arg)
 	struct rspamd_worker_ctx       *ctx;
 
 	ctx = task->worker->ctx;
-	msg_info ("abnormally closing connection, error: %s", err->message);
+
+	msg_info ("abnormally closing connection from: %s, error: %s", inet_ntoa (task->client_addr), err->message);
 	/* Free buffers */
 	if (ctx->is_custom) {
 		fin_custom_filters (task);
