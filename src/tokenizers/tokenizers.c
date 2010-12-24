@@ -222,6 +222,44 @@ tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 	return TRUE;
 }
 
+void
+tokenize_subject (struct worker_task *task, GTree ** tree)
+{
+	f_str_t                         subject, subject_name;
+	const gchar                    *sub;
+	token_node_t                   *new = NULL;
+
+	if (*tree == NULL) {
+		*tree = g_tree_new (token_node_compare_func);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, *tree);
+	}
+
+	subject_name.begin = "Subject:";
+	subject_name.len = sizeof ("Subject:") - 1;
+
+	/* Try to use pre-defined subject */
+	if (task->subject != NULL) {
+		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
+		subject.begin = task->subject;
+		subject.len = strlen (task->subject);
+		new->h1 = fstrhash (&subject_name) * primes[0];
+		new->h2 = fstrhash (&subject) * primes[1];
+		if (g_tree_lookup (*tree, new) == NULL) {
+			g_tree_insert (*tree, new, new);
+		}
+	}
+	if ((sub = g_mime_message_get_subject (task->message)) != NULL) {
+		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
+		subject.begin = (gchar *)sub;
+		subject.len = strlen (sub);
+		new->h1 = fstrhash (&subject_name) * primes[0];
+		new->h2 = fstrhash (&subject) * primes[1];
+		if (g_tree_lookup (*tree, new) == NULL) {
+			g_tree_insert (*tree, new, new);
+		}
+	}
+}
+
 /*
  * vi:ts=4
  */

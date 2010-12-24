@@ -319,6 +319,8 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	GQueue                         *stack;
 	GList                          *symbols = NULL, *s;
 	gsize                           cur, op1, op2;
+	gchar                           logbuf[256];
+	gint                            r;
 
 	stack = g_queue_new ();
 
@@ -367,8 +369,15 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 		if (op1) {
 			/* Remove all symbols that are in composite symbol */
 			s = g_list_first (symbols);
+			r = rspamd_snprintf (logbuf, sizeof (logbuf), "<%s>, insert symbol %s instead of symbols: ", cd->task->message_id, key);
 			while (s) {
 				g_hash_table_remove (cd->metric_res->symbols, s->data);
+				if (s->next) {
+					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s, ", s->data);
+				}
+				else {
+					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s", s->data);
+				}
 				s = g_list_next (s);
 			}
 			/* Add new symbol */
@@ -432,6 +441,8 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 
 	if (check_autolearn (st->autolearn, task)) {
 		if (tokens) {
+			/* Take care of subject */
+			tokenize_subject (task, &tokens);
 			msg_info ("message with id <%s> autolearned statfile '%s'", task->message_id, filename);
 			
 			/* Get or create statfile */
@@ -527,6 +538,8 @@ classifiers_callback (gpointer value, void *arg)
 		return;
 	}
 
+	/* Take care of subject */
+	tokenize_subject (task, &tokens);
 	cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task);
 
 	/* Autolearning */

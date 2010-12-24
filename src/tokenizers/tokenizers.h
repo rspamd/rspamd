@@ -40,6 +40,8 @@ int osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t
 int tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **cur);
 /* Common tokenizer for headers */
 int tokenize_headers (memory_pool_t *pool, struct worker_task *task, GTree **cur);
+/* Make tokens for a subject */
+void tokenize_subject (struct worker_task *task, GTree ** tree);
 
 /* Array of all defined tokenizers */
 extern struct tokenizer tokenizers[];

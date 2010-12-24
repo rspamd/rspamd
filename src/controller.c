@@ -845,7 +845,9 @@ controller_read_socket (f_str_t * in, void *arg)
 			session->state = STATE_REPLY;
 			return TRUE;
 		}
-	
+
+		/* Take care of subject */
+		tokenize_subject (task, &tokens);
 
 		/* Init classifier */
 		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
