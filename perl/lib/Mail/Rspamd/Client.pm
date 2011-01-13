@@ -239,6 +239,49 @@ sub do_all_cmd {
 	return \%res;
 }
 
+=head2 do_cmd
+
+public instance (\%) do_cmd (String $msg)
+
+Description:
+This method makes a call to a single rspamd server from a cluster
+(in $self->{command}).
+
+The return value is a hash reference containing results of each command for each server from cluster
+
+=cut
+
+sub do_cmd {
+	my ($self, $input) = @_;
+
+	my %res;
+	
+	if (!$self->{'hosts'} || scalar (@{ $self->{'hosts'} }) == 0) {
+		$res{'error'} = 'Hosts list is empty';
+		$res{'error_code'} = 404;
+	}
+	else {
+		$self->_clear_errors();
+
+		my $remote = $self->_create_connection();
+
+		if (! $remote) {
+			$res->{error_code} = 404;
+			$res->{error} = "Cannot connect to " . $remote;
+		}
+		else {
+			if ($self->{'control'}) {
+				$res = $self->_do_control_command ($remote, $input);
+			}
+			else {
+				$res = $self->_do_rspamc_command ($remote, $input);
+			}
+		}
+	}
+
+	return \%res;
+}
+
 
 =head2 check
 
@@ -274,7 +317,7 @@ sub check {
 	$self->{command} = 'CHECK';
 	$self->{control} = 0;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 =head2 symbols
@@ -310,7 +353,7 @@ sub symbols {
 	$self->{command} = 'SYMBOLS';
 	$self->{control} = 0;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 =head2 process
@@ -345,28 +388,7 @@ sub process {
 	$self->{command} = 'PROCESS';
 	$self->{control} = 0;
 
-	return $self->do_all_cmd ($msg);
-}
-
-=head2 emails
-
-public instance (\%) emails (String $msg)
-
-Description:
-This method makes a call to the spamd server
-
-The return value is a hash reference containing metrics indexed by name. Each metric
-is hash that contains data:
-
-emails - list of all emails in message
-=cut
-sub emails {
-	my ($self, $msg) = @_;
-	
-	$self->{command} = 'EMAILS';
-	$self->{control} = 0;
-
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 =head2 urls
@@ -387,7 +409,7 @@ sub urls {
 	$self->{command} = 'URLS';
 	$self->{control} = 0;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 
@@ -406,7 +428,7 @@ sub learn {
 	$self->{command} = 'learn';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 =head2 weights
@@ -423,7 +445,7 @@ sub weights {
 	$self->{command} = 'weights';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 =head2 fuzzy_add
@@ -440,7 +462,7 @@ sub fuzzy_add {
 	$self->{command} = 'fuzzy_add';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 =head2 fuzzy_del
 
@@ -456,7 +478,7 @@ sub fuzzy_del {
 	$self->{command} = 'fuzzy_del';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd ($msg);
+	return $self->do_cmd ($msg);
 }
 
 =head2 stat
@@ -473,7 +495,7 @@ sub stat {
 	$self->{command} = 'stat';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd (undef);
+	return $self->do_cmd (undef);
 }
 =head2 uptime
 
@@ -489,7 +511,7 @@ sub uptime {
 	$self->{command} = 'uptime';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd (undef);
+	return $self->do_cmd (undef);
 }
 =head2 counters
 
@@ -505,7 +527,7 @@ sub counters {
 	$self->{command} = 'counters';
 	$self->{control} = 1;
 
-	return $self->do_all_cmd (undef);
+	return $self->do_cmd (undef);
 }
 
 =head2 ping
