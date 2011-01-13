@@ -254,11 +254,11 @@ The return value is a hash reference containing results of each command for each
 sub do_cmd {
 	my ($self, $input) = @_;
 
-	my %res;
+	my $res;
 	
 	if (!$self->{'hosts'} || scalar (@{ $self->{'hosts'} }) == 0) {
-		$res{'error'} = 'Hosts list is empty';
-		$res{'error_code'} = 404;
+		$res->{'error'} = 'Hosts list is empty';
+		$res->{'error_code'} = 404;
 	}
 	else {
 		$self->_clear_errors();
@@ -279,7 +279,7 @@ sub do_cmd {
 		}
 	}
 
-	return \%res;
+	return $res;
 }
 
 
@@ -578,61 +578,29 @@ sub ping {
 
 =head1 PRIVATE METHODS
 
-=head2 _create_connection
-
-private instance (IO::Socket) _create_connection ()
+=head2 _connect_host
+private instance (IO::Socket) _create_host ($def)
 
 Description:
 This method sets up a proper IO::Socket connection based on the arguments
 used when greating the client object.
 
 On failure, it sets an internal error code and returns undef.
-
 =cut
 
-sub _create_connection {
+sub _connect_host {
 	my ($self, $hostdef) = @_;
 
 	my $remote;
-	my $tries = 0;
-
-	if (!defined ($hostdef)) {
-		my $server;
-
-		do {
-			$server = $self->_select_server();
-			$tries ++;
-			
-			if ($server->{host} eq '*') {
-				$server->{host} = '127.0.0.1';	
-			}
-			$remote = IO::Socket::INET->new( Proto     => "tcp",
-						PeerAddr  => $server->{host},
-						PeerPort  => $server->{port},
-						Blocking  => 0,
-					);
-			# Get write readiness
-			if (defined ($remote)) {
-				if ($self->_get_io_readiness($remote, 1) != 0) {
-					return $remote;
-				}
-				else {
-					close ($remote);
-				}
-			}
-		} while ($tries < 5);
-
-		return undef unless $server;
-	}
-
+	
     if ($hostdef =~ /^\//) {
         if (! socket ($remote, PF_UNIX, SOCK_STREAM, 0)) {
-			print "Cannot create unix socket\n";
+			carp "Cannot create unix socket\n";
 			return undef;
 		}
         my $sun = sockaddr_un($hostdef);
         if (!connect ($remote, $sun)) {
-			print "Cannot connect to socket $hostdef\n";
+			carp "Cannot connect to socket $hostdef\n";
 			close $remote;
 			return undef;
 		}
@@ -680,12 +648,46 @@ sub _create_connection {
 		}
     }
 
-
 	unless ($remote) {
 		$self->{error} = "Failed to create connection to spamd daemon: $!\n";
 		return undef;
 	}
 	$remote;
+
+}
+
+=head2 _create_connection
+private instance (IO::Socket) _create_connection ()
+
+Description:
+This method sets up a proper IO::Socket connection based on the arguments
+used when greating the client object.
+
+On failure, it sets an internal error code and returns undef.
+
+=cut
+
+sub _create_connection {
+	my ($self, $hostdef) = @_;
+
+	my $tries = 0;
+
+	if (!defined ($hostdef)) {
+		my $server;
+
+		do {
+			$server = $self->_select_server();
+			$tries ++;
+
+			my $remote = $self->_connect_host ($server);
+			
+			return $remote if $remote;
+		} while ($tries < 5);
+
+		return undef;
+	}
+	
+	return  $self->_connect_host ($hostdef);
 }
 
 =head2 _auth
@@ -768,15 +770,8 @@ sub _select_server {
 	}
 	
 	my $selected = $self->{alive_hosts}[int(rand($alive_num))];
-	if ($selected =~ /^(\S+):(\d+)$/) {
-		my $server = {
-			host => $1,
-			port => $2,
-		};
-		return $server;
-	}
 
-	undef;
+	$selected;
 }
 
 
