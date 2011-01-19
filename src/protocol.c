@@ -445,6 +445,7 @@ struct metric_callback_data {
 	gchar                           *symbols_buf;
 	gint                            symbols_size;
 	gboolean                        alive;
+	gboolean                        report;
 };
 
 static void
@@ -559,43 +560,43 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	if (! cd->alive) {
 		return;
 	}
-
-	if (s->options) {
-		if (task->proto_ver >= 12) {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); ", (gchar *)key, s->score);
-		}
-		else {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (gchar *)key);
-		}
-		cur = s->options;
-		while (cur) {
-			if (g_list_next (cur)) {
-				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (gchar *)cur->data);
+	if (cd->task->cmd == CMD_SYMBOLS) {
+		if (s->options) {
+			if (task->proto_ver >= 12) {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); ", (gchar *)key, s->score);
 			}
 			else {
-				r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (gchar *)cur->data);
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s; ", (gchar *)key);
 			}
-			cur = g_list_next (cur);
-		}
-		/* End line with CRLF strictly */
-		if (r >= OUTBUFSIZ - 1) {
-			outbuf[OUTBUFSIZ - 2] = '\r';
-			outbuf[OUTBUFSIZ - 1] = '\n';
-		}
-	}
-	else {
-		if (task->proto_ver >= 12) {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f)" CRLF, (gchar *)key, s->score);
+			cur = s->options;
+			while (cur) {
+				if (g_list_next (cur)) {
+					r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s,", (gchar *)cur->data);
+				}
+				else {
+					r += rspamd_snprintf (outbuf + r, OUTBUFSIZ - r, "%s" CRLF, (gchar *)cur->data);
+				}
+				cur = g_list_next (cur);
+			}
+			/* End line with CRLF strictly */
+			if (r >= OUTBUFSIZ - 1) {
+				outbuf[OUTBUFSIZ - 2] = '\r';
+				outbuf[OUTBUFSIZ - 1] = '\n';
+			}
 		}
 		else {
-			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (gchar *)key);
+			if (task->proto_ver >= 12) {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f)" CRLF, (gchar *)key, s->score);
+			}
+			else {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s" CRLF, (gchar *)key);
+			}
+		}
+		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+			cd->alive = FALSE;
 		}
 	}
 	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "%s,", (gchar *)key);
-
-	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
-		cd->alive = FALSE;
-	}
 }
 
 static gboolean
@@ -609,12 +610,16 @@ show_metric_symbols (struct metric_result *metric_res, struct metric_callback_da
 		cur = symbols;
 		while (cur) {
 			if (g_list_next (cur) != NULL) {
-				r += rspamd_snprintf (cd->symbols_buf + r, cd->symbols_size - r, "%s,", (gchar *)cur->data);
+				if (cd->task->cmd == CMD_SYMBOLS) {
+					r += rspamd_snprintf (cd->symbols_buf + r, cd->symbols_size - r, "%s,", (gchar *)cur->data);
+				}
 				cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 						"%s,", (gchar *)cur->data);
 			}
 			else {
-				r += rspamd_snprintf (cd->symbols_buf + r, cd->symbols_size - r, "%s" CRLF, (gchar *)cur->data);
+				if (cd->task->cmd == CMD_SYMBOLS) {
+					r += rspamd_snprintf (cd->symbols_buf + r, cd->symbols_size - r, "%s" CRLF, (gchar *)cur->data);
+				}
 				cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 						"%s", (gchar *)cur->data);
 			}
@@ -745,7 +750,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			return;
 		}
 
-		if (task->cmd == CMD_SYMBOLS && metric_value != NULL) {
+		if (metric_value != NULL) {
 			if (! show_metric_symbols (metric_res, cd)) {
 				cd->alive = FALSE;
 				return;
@@ -804,6 +809,7 @@ write_check_reply (struct worker_task *task)
 				"user: %s, ", task->user);
 	}
 	cd.alive = TRUE;
+	cd.report = FALSE;
 
 	if (task->proto == SPAMC_PROTO) {
 		/* Ignore metrics, just write report for 'default' metric */
@@ -875,6 +881,11 @@ write_check_reply (struct worker_task *task)
 	}
 
 	if (task->cmd == CMD_REPORT || task->cmd == CMD_REPORT_IFSPAM) {
+		cd.report = TRUE;
+		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		if (!cd.alive) {
+			return FALSE;
+		}
 		if (default_score >= default_required_score) {
 			r = rspamd_snprintf (outbuf, sizeof (outbuf), CONTENT_LENGTH_HEADER ": %d" CRLF CRLF
 					"This message is likely spam" CRLF, sizeof ("This message is likely spam" CRLF) - 1);
