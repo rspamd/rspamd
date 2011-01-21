@@ -180,6 +180,7 @@ find_view_by_from (GList * views, struct worker_task *task)
 	GList                          *cur, *cur_re;
 	struct rspamd_view             *v;
 	struct rspamd_regexp           *re;
+	gchar                          *from_domain;
 
 	if (task->from == NULL) {
 		return NULL;
@@ -188,7 +189,14 @@ find_view_by_from (GList * views, struct worker_task *task)
 	cur = views;
 	while (cur) {
 		v = cur->data;
-		/* First try to lookup in hashtable */
+		/* First try to lookup in hashtable domain name */
+		if ((from_domain = strchr (task->from, '@')) != NULL) {
+			from_domain ++;
+			if (g_hash_table_lookup (v->from_hash, from_domain) != NULL) {
+				msg_info ("found view for client from %s", task->from);
+				return v;
+			}
+		}
 		if (g_hash_table_lookup (v->from_hash, task->from) != NULL) {
 			msg_info ("found view for client from %s", task->from);
 			return v;
