@@ -45,8 +45,8 @@
 #define SPF_EXP "exp"
 
 /** SPF limits for avoiding abuse **/
-#define SPF_MAX_NESTING 5
-#define SPF_MAX_DNS_REQUESTS 10
+#define SPF_MAX_NESTING 10
+#define SPF_MAX_DNS_REQUESTS 30
 
 /**
  * State machine for SPF record:

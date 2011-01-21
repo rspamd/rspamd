@@ -165,6 +165,7 @@ find_view_by_client_ip (GList * views, struct worker_task *task)
 	while (cur) {
 		v = cur->data;
 		if (radix32tree_find (v->client_ip_tree, ntohl (task->client_addr.s_addr)) != RADIX_NO_VALUE) {
+			msg_info ("found view for client ip %s", inet_ntoa (task->client_addr));
 			return v;
 		}
 		cur = g_list_next (cur);
@@ -189,6 +190,7 @@ find_view_by_from (GList * views, struct worker_task *task)
 		v = cur->data;
 		/* First try to lookup in hashtable */
 		if (g_hash_table_lookup (v->from_hash, task->from) != NULL) {
+			msg_info ("found view for client from %s", task->from);
 			return v;
 		}
 		/* Then try to match re */
@@ -197,6 +199,7 @@ find_view_by_from (GList * views, struct worker_task *task)
 		while (cur_re) {
 			re = cur_re->data;
 			if (g_regex_match (re->regexp, task->from, 0, NULL) == TRUE) {
+				msg_info ("found view for client from %s", task->from);
 				return v;
 			}
 			cur_re = g_list_next (cur_re);
@@ -223,6 +226,7 @@ check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 			rcpt_user[l] = '\0';
 			/* First try to lookup in hashtable */
 			if (g_hash_table_lookup (v->rcpt_hash, rcpt_user) != NULL) {
+				msg_info ("found view for client rcpt %s", rcpt_user);
 				return TRUE;
 			}
 			/* Then try to match re */
@@ -231,6 +235,7 @@ check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 			while (cur_re) {
 				re = cur_re->data;
 				if (g_regex_match (re->regexp, rcpt_user, 0, NULL) == TRUE) {
+					msg_info ("found view for client rcpt %s", rcpt_user);
 					return TRUE;
 				}
 				cur_re = g_list_next (cur_re);
@@ -238,6 +243,7 @@ check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 		}
 		/* Now check the whole recipient */
 		if (g_hash_table_lookup (v->rcpt_hash, cur->data) != NULL) {
+			msg_info ("found view for client rcpt %s", rcpt_user);
 			return TRUE;
 		}
 		/* Then try to match re */
@@ -246,6 +252,7 @@ check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 		while (cur_re) {
 			re = cur_re->data;
 			if (g_regex_match (re->regexp, cur->data, 0, NULL) == TRUE) {
+				msg_info ("found view for client rcpt %s", rcpt_user);
 				return TRUE;
 			}
 			cur_re = g_list_next (cur_re);
