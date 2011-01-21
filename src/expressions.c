@@ -1406,6 +1406,9 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 		return FALSE;
 	}
 
+	if (!task->rcpts) {
+		return FALSE;
+	}
 	num = internet_address_list_length (task->rcpts);
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
