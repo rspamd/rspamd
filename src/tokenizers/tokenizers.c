@@ -47,6 +47,35 @@ const int                       primes[] = {
 	797, 3277,
 };
 
+const gchar t_delimiters[255] = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 1, 1, 1, 1, 1, 0,
+		1, 1, 1, 1, 1, 0, 1, 1, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+		1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 1, 1, 1, 1, 1, 1, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 1, 1, 1, 1, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0
+};
+
 struct tokenizer               *
 get_tokenizer (char *name)
 {
@@ -78,7 +107,7 @@ f_str_t                        *
 get_next_word (f_str_t * buf, f_str_t * token)
 {
 	size_t                          remain;
-	unsigned char                  *pos;
+	guchar                         *pos;
 
 	if (buf == NULL) {
 		return NULL;
@@ -95,13 +124,13 @@ get_next_word (f_str_t * buf, f_str_t * token)
 		return NULL;
 	}
 	pos = token->begin;
-	/* Skip non graph symbols */
-	while (remain > 0 && (!g_ascii_isgraph (*pos) && *pos < 127)) {
+	/* Skip non delimiters symbols */
+	while (remain > 0 && t_delimiters[*pos]) {
 		token->begin++;
 		pos++;
 		remain--;
 	}
-	while (remain > 0 && (g_ascii_isgraph (*pos) || *pos > 127)) {
+	while (remain > 0 && !t_delimiters[*pos]) {
 		token->len++;
 		pos++;
 		remain--;

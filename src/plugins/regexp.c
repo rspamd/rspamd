@@ -725,13 +725,15 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			}
 			if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL, &err) == TRUE) {
 				if (G_UNLIKELY (re->is_test)) {
-					msg_info ("process test regexp %s for mime part returned TRUE", re->regexp_text);
+					msg_info ("process test regexp %s for mime part of length %d returned TRUE", re->regexp_text,
+							(gint)clen);
 				}
 				task_cache_add (task, re, 1);
 				return 1;
 			}
 			else if (G_UNLIKELY (re->is_test)) {
-				msg_info ("process test regexp %s for mime part of length %d returned FALSE", re->regexp_text, (gint)part->orig->len);
+				msg_info ("process test regexp %s for mime part of length %d returned FALSE", re->regexp_text,
+						(gint)clen);
 			}
 			if (err != NULL) {
 				msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);

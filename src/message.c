@@ -42,6 +42,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 	gint                            state = 0;
 	GByteArray                     *buf;
 	GNode                          *level_ptr = NULL;
+	gboolean                        erase = FALSE;
 
 	if (stateptr)
 		state = *stateptr;
@@ -80,7 +81,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 					br++;
 				}
 			}
-			else if (state == 0) {
+			else if (state == 0 && !erase) {
 				*(rp++) = c;
 			}
 			break;
@@ -92,7 +93,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 					br--;
 				}
 			}
-			else if (state == 0) {
+			else if (state == 0 && !erase) {
 				*(rp++) = c;
 			}
 			break;
@@ -111,7 +112,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 			case 1:			/* HTML/XML */
 				lc = '>';
 				in_q = state = 0;
-				add_html_node (task, pool, part, tbegin, p - tbegin - 1, &level_ptr);
+				erase = !add_html_node (task, pool, part, tbegin, p - tbegin - 1, &level_ptr);
 				break;
 
 			case 2:			/* PHP */
@@ -134,7 +135,9 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 				break;
 
 			default:
-				*(rp++) = c;
+				if (!erase) {
+					*(rp++) = c;
+				}
 				break;
 			}
 			break;
@@ -149,7 +152,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 					lc = c;
 				}
 			}
-			else if (state == 0) {
+			else if (state == 0 && !erase) {
 				*(rp++) = c;
 			}
 			if (state && p != src->data && *(p - 1) != '\\' && (!in_q || *p == in_q)) {
@@ -169,7 +172,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 				lc = c;
 			}
 			else {
-				if (state == 0) {
+				if (state == 0 && !erase) {
 					*(rp++) = c;
 				}
 			}
@@ -218,7 +221,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 			/* fall-through */
 		default:
 		  reg_char:
-			if (state == 0) {
+			if (state == 0 && !erase) {
 				*(rp++) = c;
 			}
 			break;

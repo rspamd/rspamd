@@ -839,12 +839,13 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 		new = construct_html_node (pool, tag_text, tag_len);
 		if (new == NULL) {
 			debug_task ("cannot construct HTML node for text '%s'", tag_text);
-			return -1;
+			return FALSE;
 		}
 		data = new->data;
 		if (data->tag && (data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
 			parse_tag_url (task, part, data->tag->id, tag_text, tag_len);
 		}
+
 		if (data->flags & FL_CLOSING) {
 			if (!*cur_level) {
 				debug_task ("bad parent node");
@@ -857,9 +858,14 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 			}
 		}
 		else {
+
 			g_node_append (*cur_level, new);
 			if ((data->flags & FL_CLOSED) == 0) {
 				*cur_level = new;
+			}
+			/* Skip some tags */
+			if (data->tag->id == Tag_STYLE || data->tag->id == Tag_SCRIPT || data->tag->id == Tag_OBJECT) {
+				return FALSE;
 			}
 		}
 	}

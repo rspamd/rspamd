@@ -13,7 +13,7 @@
 #define FUZZY_HASHLEN 64
 
 typedef struct fuzzy_hash_s {
-	gchar hash_pipe[FUZZY_HASHLEN];			/**< result hash					*/
+	gchar hash_pipe[FUZZY_HASHLEN];		/**< result hash					*/
 	guint32 block_size;					/**< current blocksize				*/
 	guint32 rh;							/**< roll hash value				*/
 	guint32 h;								/**< hash of block					*/

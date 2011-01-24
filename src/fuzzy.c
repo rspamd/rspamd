@@ -32,6 +32,8 @@
 #define MIN_FUZZY_BLOCK_SIZE 3
 #define HASH_INIT      0x28021967
 
+static const char *b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
 struct roll_state {
 	guint32                         h[3];
 	gchar                           window[ROLL_WINDOW_SIZE];
@@ -86,6 +88,7 @@ fuzzy_blocksize (guint32 len)
 	return g_spaced_primes_closest (len / FUZZY_HASHLEN);
 }
 
+
 /* Update hash with new symbol */
 void
 fuzzy_update (fuzzy_hash_t * h, gchar c)
@@ -94,7 +97,7 @@ fuzzy_update (fuzzy_hash_t * h, gchar c)
 	h->h = fuzzy_fnv_hash (c, h->h);
 
 	if (h->rh % h->block_size == (h->block_size - 1)) {
-		h->hash_pipe[h->hi] = h->h;
+		h->hash_pipe[h->hi] = b64[h->h % 64];
 		if (h->hi < FUZZY_HASHLEN - 2) {
 			h->h = HASH_INIT;
 			h->hi++;
@@ -226,11 +229,27 @@ fuzzy_init (f_str_t * in, memory_pool_t * pool)
 {
 	fuzzy_hash_t                   *new;
 	gint                            i, repeats = 0;
-	gchar                           *c = in->begin, last = '\0';
+	gchar                          *c = in->begin, last = '\0';
+	gsize                           real_len = 0;
 
 	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
-	new->block_size = fuzzy_blocksize (in->len);
+	for (i = 0; i < in->len; i++) {
+		if (*c == last) {
+			repeats++;
+		}
+		else {
+			repeats = 0;
+		}
+		if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c) && repeats < 3) {
+			real_len ++;
+		}
+		last = *c;
+		c++;
+	}
+
+	new->block_size = fuzzy_blocksize (real_len);
+	c = in->begin;
 
 	for (i = 0; i < in->len; i++) {
 		if (*c == last) {
@@ -244,6 +263,11 @@ fuzzy_init (f_str_t * in, memory_pool_t * pool)
 		}
 		last = *c;
 		c++;
+	}
+
+	/* Check whether we have more bytes in a rolling window */
+	if (new->rh != 0) {
+		new->hash_pipe[new->hi] = b64[new->h % 64];
 	}
 
 	return new;
