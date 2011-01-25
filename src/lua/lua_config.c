@@ -89,11 +89,14 @@ LUA_FUNCTION_DEF (trie, search_text);
 LUA_FUNCTION_DEF (trie, search_task);
 
 static const struct luaL_reg    trielib_m[] = {
-	LUA_INTERFACE_DEF (trie, create),
 	LUA_INTERFACE_DEF (trie, add_pattern),
 	LUA_INTERFACE_DEF (trie, search_text),
 	LUA_INTERFACE_DEF (trie, search_task),
 	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+static const struct luaL_reg    trielib_f[] = {
+	LUA_INTERFACE_DEF (trie, create),
 	{NULL, NULL}
 };
 
@@ -125,8 +128,9 @@ static rspamd_trie_t          *
 lua_check_trie (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{trie}");
+
 	luaL_argcheck (L, ud != NULL, 1, "'trie' expected");
-	return **((rspamd_trie_t ***)ud);
+	return *((rspamd_trie_t **)ud);
 }
 
 /*** Config functions ***/
@@ -749,8 +753,17 @@ luaopen_hash_table (lua_State * L)
 gint
 luaopen_trie (lua_State * L)
 {
-	lua_newclass (L, "rspamd{trie}", trielib_m);
-	luaL_openlib (L, "rspamd_trie", null_reg, 0);
+	luaL_newmetatable (L, "rspamd{trie}");
+	lua_pushstring (L, "__index");
+	lua_pushvalue (L, -2);
+	lua_settable (L, -3);
+
+	lua_pushstring (L, "class");
+	lua_pushstring (L, "rspamd{trie}");
+	lua_rawset (L, -3);
+
+	luaL_openlib (L, NULL, trielib_m, 0);
+	luaL_openlib(L, "rspamd_trie", trielib_f, 0);
 
 	return 1;
 }
