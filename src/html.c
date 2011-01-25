@@ -864,7 +864,9 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 				*cur_level = new;
 			}
 			/* Skip some tags */
-			if (data->tag->id == Tag_STYLE || data->tag->id == Tag_SCRIPT || data->tag->id == Tag_OBJECT) {
+			if (data->tag && (data->tag->id == Tag_STYLE ||
+							  data->tag->id == Tag_SCRIPT ||
+							  data->tag->id == Tag_OBJECT)) {
 				return FALSE;
 			}
 		}
