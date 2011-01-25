@@ -91,7 +91,7 @@ LUA_FUNCTION_DEF (trie, search_task);
 static const struct luaL_reg    trielib_m[] = {
 	LUA_INTERFACE_DEF (trie, create),
 	LUA_INTERFACE_DEF (trie, add_pattern),
-	LUA_INTERFACE_DEF (trie, search_task),
+	LUA_INTERFACE_DEF (trie, search_text),
 	LUA_INTERFACE_DEF (trie, search_task),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}

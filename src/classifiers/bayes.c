@@ -178,7 +178,10 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
-		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
+		nodes = g_tree_nnodes (input);
+		if (nodes > FEATURE_WINDOW_SIZE) {
+			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
+		}
 		if (nodes < minnodes) {
 			return FALSE;
 		}
@@ -250,7 +253,10 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
-		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
+		nodes = g_tree_nnodes (input);
+		if (nodes > FEATURE_WINDOW_SIZE) {
+			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
+		}
 		if (nodes < minnodes) {
 			msg_info ("do not learn message as it has too few tokens: %d, while %d min", nodes, minnodes);
 			*sum = 0;
@@ -332,7 +338,10 @@ bayes_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, 
 
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
-		nodes = g_tree_nnodes (input) / FEATURE_WINDOW_SIZE;
+		nodes = g_tree_nnodes (input);
+		if (nodes > FEATURE_WINDOW_SIZE) {
+			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
+		}
 		if (nodes < minnodes) {
 			return NULL;
 		}
