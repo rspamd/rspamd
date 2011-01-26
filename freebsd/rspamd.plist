@@ -1,0 +1,29 @@
+etc/rspamd/plugins/lua/maillist.lua
+etc/rspamd/plugins/lua/trie.lua
+etc/rspamd/plugins/lua/received_rbl.lua
+etc/rspamd/plugins/lua/multimap.lua
+etc/rspamd/plugins/lua/phishing.lua
+etc/rspamd/plugins/lua/once_received.lua
+etc/rspamd/plugins/lua/whitelist.lua
+etc/rspamd/plugins/lua/forged_recipients.lua
+etc/rspamd/2tld.inc.orig
+etc/rspamd/lua/rspamd.lua
+etc/rspamd/lua/regexp/lotto.lua
+etc/rspamd/lua/regexp/headers.lua
+etc/rspamd/lua/regexp/drugs.lua
+etc/rspamd/lua/regexp/fraud.lua
+@unexec if cmp -s %D/etc/rspamd.xml.sample %D/etc/rspamd.xml; then rm -f %D/etc/rspamd.xml; fi
+etc/rspamd.xml.sample
+bin/rspamc
+bin/rspamd
+lib/librspamd_ipmark.so
+lib/librspamd_regmark.so
+@dirrm etc/rspamd/plugins/lua
+@dirrm etc/rspamd/plugins
+@dirrm etc/rspamd/lua/regexp
+@dirrm etc/rspamd/lua
+@dirrm etc/rspamd
+
+@unexec rmdir %D/etc/rspamd 2>/dev/null || true
+@unexec rmdir /var/run/rspamd 2>/dev/null || true
+@unexec %D/etc/rc.d/rspamd.sh forcestop 2>/dev/null || true
