@@ -1,5 +1,5 @@
 # Librspamd
-SET(LIBRSPAMDSRC			  librspamdclient.c ../src/util.c ../src/upstream.c)
+SET(LIBRSPAMDSRC			  librspamdclient.c ../src/util.c ../src/upstream.c ../src/mem_pool.c)
 
 ADD_LIBRARY(rspamdclient SHARED ${LIBRSPAMDSRC})
 ADD_LIBRARY(rspamdclient_static STATIC ${LIBRSPAMDSRC})

@@ -92,7 +92,7 @@ symbol_free_func (gpointer arg)
 }
 
 static struct rspamd_connection *
-rspamd_connect_random_server (guint16 port, GError **err)
+rspamd_connect_random_server (gboolean is_control, GError **err)
 {
 	struct rspamd_server            *selected = NULL;
 	struct rspamd_connection        *new;
@@ -122,7 +122,9 @@ rspamd_connect_random_server (guint16 port, GError **err)
 	new->server = selected;
 	new->connection_time = now;
 	/* Create socket */
-	new->socket = make_tcp_socket (&selected->addr, port, FALSE, TRUE);
+	new->socket = make_tcp_socket (&selected->addr,
+								is_control ? selected->controller_port : selected->client_port,
+									FALSE, TRUE);
 	if (new->socket == -1) {
 		goto err;
 	}
@@ -159,13 +161,27 @@ rspamd_create_metric (const gchar *begin, guint len)
 	return new;
 }
 
+static struct rspamd_result *
+rspamd_create_result (struct rspamd_connection *c)
+{
+	struct rspamd_result           *new;
+
+	new = g_malloc (sizeof (struct rspamd_result));
+	new->conn = c;
+	new->headers = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+	new->metrics = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, metric_free_func);
+	new->is_ok = FALSE;
+
+	return new;
+}
+
 /*
  * Parse line like RSPAMD/{version} {code} {message}
  */
 static gboolean
-parse_rspamd_first_line (struct rspamd_connection *c, guint len, GError **err)
+parse_rspamd_first_line (struct rspamd_connection *conn, guint len, GError **err)
 {
-	gchar                           *b = c->in_buf->str + sizeof("RSPAMD/") - 1, *p;
+	gchar                           *b = conn->in_buf->str + sizeof("RSPAMD/") - 1, *p, *c;
 	guint                            remain = len - sizeof("RSPAMD/") + 1, state = 0, next_state;
 
 	p = b;
@@ -187,6 +203,9 @@ parse_rspamd_first_line (struct rspamd_connection *c, guint len, GError **err)
 			if (g_ascii_isspace (*p)) {
 				state = 99;
 				next_state = 2;
+				if (*c == '0') {
+					conn->result->is_ok = TRUE;
+				}
 			}
 			else if (!g_ascii_isdigit (*p)) {
 				goto err;
@@ -207,6 +226,7 @@ parse_rspamd_first_line (struct rspamd_connection *c, guint len, GError **err)
 			/* Skip spaces */
 			if (!g_ascii_isspace (*p)) {
 				state = next_state;
+				c = p;
 			}
 			else {
 				p ++;
@@ -219,12 +239,13 @@ parse_rspamd_first_line (struct rspamd_connection *c, guint len, GError **err)
 		goto err;
 	}
 
+	return TRUE;
 err:
 	if (*err == NULL) {
 		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid protocol line: %*s at pos: %d",
-				len, b, (int)(p - b));
+				remain, b, (int)(p - b));
 	}
-	upstream_fail (&c->server->up, c->connection_time);
+	upstream_fail (&conn->server->up, conn->connection_time);
 	return FALSE;
 }
 
@@ -255,7 +276,7 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 				}
 				else {
 					/* Create new metric */
-					new = rspamd_create_metric (c, p - c - 1);
+					new = rspamd_create_metric (c, p - c);
 					if (g_hash_table_lookup (conn->result->metrics, new->name) != NULL) {
 						/* Duplicate metric */
 						metric_free_func (new);
@@ -272,13 +293,13 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 		case 1:
 			/* Read boolean result */
 			if (*p == ';') {
-				if (p - c > sizeof("Skip")) {
+				if (p - c >= sizeof("Skip")) {
 					if (memcmp (c, "Skip", p - c - 1) == 0) {
 						new->is_skipped = TRUE;
 					}
-					state = 99;
-					next_state = 2;
 				}
+				state = 99;
+				next_state = 2;
 			}
 			p ++;
 			break;
@@ -297,18 +318,18 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 			break;
 		case 3:
 			/* Read / */
-			if (*p != '/') {
-				goto err;
-			}
-			else if (g_ascii_isspace (*p)) {
+			if (g_ascii_isspace (*p)) {
 				state = 99;
 				next_state = 4;
+			}
+			else if (*p != '/') {
+				goto err;
 			}
 			p ++;
 			break;
 		case 4:
 			/* Read required score */
-			if (g_ascii_isspace (*p)) {
+			if (g_ascii_isspace (*p) || p - b == remain - 1) {
 				new->required_score = strtod (c, &err_str);
 				if (*err_str != *p) {
 					/* Invalid score */
@@ -321,12 +342,12 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 			break;
 		case 5:
 			/* Read / if it exists */
-			if (*p != '/') {
-				goto err;
-			}
-			else if (g_ascii_isspace (*p)) {
+			if (g_ascii_isspace (*p)) {
 				state = 99;
 				next_state = 6;
+			}
+			else if (*p != '/') {
+				goto err;
 			}
 			p ++;
 			break;
@@ -358,11 +379,12 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 	if (state != 99) {
 		goto err;
 	}
+	return TRUE;
 
 err:
 	if (*err == NULL) {
-		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid metric line: %*s at pos: %d",
-			len, b, (int)(p - b));
+		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid metric line: %*s at pos: %d, state: %d",
+			remain, b, (int)(p - b), state);
 	}
 	upstream_fail (&conn->server->up, conn->connection_time);
 	return FALSE;
@@ -395,9 +417,9 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 				}
 				else {
 					/* Create new symbol */
-					sym = g_malloc (p - c);
-					sym[p - c - 1] = '\0';
-					memcpy (sym, c, p - c - 1);
+					sym = g_malloc (p - c + 1);
+					sym[p - c] = '\0';
+					memcpy (sym, c, p - c);
 
 					if (g_hash_table_lookup (conn->cur_metric->symbols, sym) != NULL) {
 						/* Duplicate symbol */
@@ -405,6 +427,7 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 						goto err;
 					}
 					new = g_malloc0 (sizeof (struct rspamd_symbol));
+					new->name = sym;
 					g_hash_table_insert (conn->cur_metric->symbols, sym, new);
 					state = 99;
 					if (*p == '(') {
@@ -467,11 +490,12 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 	if (state != 99) {
 		goto err;
 	}
+	return TRUE;
 
 	err:
 	if (*err == NULL) {
 		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid symbol line: %*s at pos: %d",
-				len, b, (int)(p - b));
+				remain, b, (int)(p - b));
 	}
 	upstream_fail (&conn->server->up, conn->connection_time);
 	return FALSE;
@@ -494,18 +518,23 @@ parse_rspamd_action_line (struct rspamd_connection *conn, guint len, GError **er
 			/* Read action */
 			if (g_ascii_isspace (*p)) {
 				state = 99;
-				next_state = 0;
+				next_state = 1;
 			}
-			else if (p - b == remain - 1) {
+			else {
+				state = 1;
+			}
+			break;
+		case 1:
+			if (p - b == remain - 1) {
 				if (p - c <= 1) {
 					/* Empty action name */
 					goto err;
 				}
 				else {
 					/* Create new action */
-					sym = g_malloc (p - c + 1);
-					sym[p - c] = '\0';
-					memcpy (sym, c, p - c);
+					sym = g_malloc (p - c + 2);
+					sym[p - c + 1] = '\0';
+					memcpy (sym, c, p - c + 1);
 
 					conn->cur_metric->action = sym;
 					state = 99;
@@ -529,11 +558,12 @@ parse_rspamd_action_line (struct rspamd_connection *conn, guint len, GError **er
 	if (state != 99) {
 		goto err;
 	}
+	return TRUE;
 
 	err:
 	if (*err == NULL) {
 		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid action line: %*s at pos: %d",
-				len, b, (int)(p - b));
+				remain, b, (int)(p - b));
 	}
 	upstream_fail (&conn->server->up, conn->connection_time);
 	return FALSE;
@@ -561,9 +591,9 @@ parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **er
 				}
 				else {
 					/* Create header name */
-					hname = g_malloc (p - c);
-					hname[p - c - 1] = '\0';
-					memcpy (hname, c, p - c - 1);
+					hname = g_malloc (p - c + 1);
+					hname[p - c] = '\0';
+					memcpy (hname, c, p - c);
 					next_state = 1;
 					state = 99;
 				}
@@ -603,11 +633,12 @@ parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **er
 	if (state != 99) {
 		goto err;
 	}
+	return TRUE;
 
 	err:
 	if (*err == NULL) {
 		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid header line: %*s at pos: %d",
-				len, b, (int)(p - b));
+				remain, b, (int)(p - b));
 	}
 	if (hname) {
 		g_free (hname);
@@ -682,6 +713,7 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 					}
 					/* Move remaining buffer to the begin of string */
 					c->in_buf = g_string_erase (c->in_buf, 0, len);
+					len = 0;
 				}
 				else {
 					return FALSE;
@@ -706,12 +738,13 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 	/* Read new data to a string */
 	if ((r = read (c->socket,
 			c->in_buf->str + c->in_buf->len,
-			c->in_buf->allocated_len - c->in_buf->len)) < 0) {
+			c->in_buf->allocated_len - c->in_buf->len)) > 0) {
 		/* Try to parse remaining data */
-		return parse_rspamd_reply_line (c, c->in_buf->len, err);
+		c->in_buf->len += r;
+		return read_rspamd_reply_line (c, err);
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 /*
@@ -721,6 +754,7 @@ static gboolean
 rspamd_sendfile (gint sock, gint fd, GError **err)
 {
 
+	/* Make socket blocking for further operations */
 	make_socket_blocking (sock);
 #ifdef HAVE_SENDFILE
 # if defined(FREEBSD) || defined(DARWIN)
@@ -767,6 +801,38 @@ err:
 			strerror (errno));
 	}
 	return FALSE;
+}
+
+static gboolean
+rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
+		gsize clen, GHashTable *headers, GError **err)
+{
+	static gchar                    outbuf[16384];
+	GHashTableIter                  it;
+	gpointer                        key, value;
+	gint                            r;
+
+	/* Write command */
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s RSPAMC/1.2\r\n", command);
+	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Content-Length: %uz\r\n", clen);
+	/* Iterate through headers */
+	if (headers != NULL) {
+		g_hash_table_iter_init (&it, headers);
+		while (g_hash_table_iter_next (&it, &key, &value)) {
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s: %s\r\n", key, value);
+		}
+	}
+	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "\r\n");
+
+	if ((r = write (c->socket, outbuf, r)) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Write error: %s",
+				strerror (errno));
+		}
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static void
@@ -856,8 +922,44 @@ rspamd_set_timeout (guint connect_timeout, guint read_timeout)
 struct rspamd_result *
 rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GError **err)
 {
+	struct rspamd_connection             *c;
+	struct rspamd_result                 *res = NULL;
+
 	g_assert (client != NULL);
 
+	/* Connect to server */
+	c = rspamd_connect_random_server (FALSE, err);
+
+	if (c == NULL) {
+		return NULL;
+	}
+
+	/* Set socket blocking for writing */
+	make_socket_blocking (c->socket);
+	/* Send command */
+	if (!rspamd_send_normal_command (c, "SYMBOLS", length, headers, err)) {
+		return NULL;
+	}
+
+	/* Send message */
+	if (write (c->socket, message, length) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Write error: %s",
+					strerror (errno));
+		}
+		return NULL;
+	}
+
+	/* Create result structure */
+	res = rspamd_create_result (c);
+	c->result = res;
+	/* Restore non-blocking mode for reading operations */
+	make_socket_nonblocking (c->socket);
+
+	/* Read result cycle */
+	while (read_rspamd_reply_line (c, err));
+
+	return res;
 }
 
 /*
@@ -866,8 +968,19 @@ rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GE
 struct rspamd_result *
 rspamd_scan_file (const guchar *filename, GHashTable *headers, GError **err)
 {
+	gint                                 fd;
 	g_assert (client != NULL);
 
+	/* Open file */
+	if ((fd = open (filename, O_RDONLY | O_CLOEXEC)) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
+					filename, strerror (errno));
+		}
+		return NULL;
+	}
+
+	return rspamd_scan_fd (fd, headers, err);
 }
 
 /*
@@ -876,8 +989,49 @@ rspamd_scan_file (const guchar *filename, GHashTable *headers, GError **err)
 struct rspamd_result *
 rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
 {
+	struct rspamd_connection             *c;
+	struct rspamd_result                 *res = NULL;
+	struct stat                           st;
+
 	g_assert (client != NULL);
 
+	/* Connect to server */
+	c = rspamd_connect_random_server (FALSE, err);
+
+	if (c == NULL) {
+		return NULL;
+	}
+
+	/* Get length */
+	if (fstat (fd, &st) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Stat error: %s",
+					strerror (errno));
+		}
+		return NULL;
+	}
+	/* Set socket blocking for writing */
+	make_socket_blocking (c->socket);
+	/* Send command */
+	if (!rspamd_send_normal_command (c, "SYMBOLS", (gsize)st.st_size, headers, err)) {
+		return NULL;
+	}
+
+	/* Send message */
+	if (!rspamd_sendfile (c->socket, fd, err)) {
+		return NULL;
+	}
+
+	/* Create result structure */
+	res = rspamd_create_result (c);
+	c->result = res;
+	/* Restore non-blocking mode for reading operations */
+	make_socket_nonblocking (c->socket);
+
+	/* Read result cycle */
+	while (read_rspamd_reply_line (c, err));
+
+	return res;
 }
 
 /*
