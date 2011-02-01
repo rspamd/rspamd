@@ -836,7 +836,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		
 		/* Handle messages without text */
 		if (tokens == NULL) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, no tokens can be extracted (no text data)" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, no tokens can be extracted (no text data)" CRLF END);
 			msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
@@ -860,12 +860,12 @@ controller_read_socket (f_str_t * in, void *arg)
 																session->learn_symbol, tokens, session->in_class, &sum,
 																session->learn_multiplier, &err)) {
 			if (err) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF, err->message);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
 				msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, err->message);
 				g_error_free (err);
 			}
 			else {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
 				msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
 			}
 			free_task (task, FALSE);
@@ -882,7 +882,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				task->message_id, session->learn_symbol, sum);
 		statfile_pool_plan_invalidate (session->worker->srv->statfile_pool, DEFAULT_STATFILE_INVALIDATE_TIME, DEFAULT_STATFILE_INVALIDATE_JITTER);
 		free_task (task, FALSE);
-		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF, sum);
+		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF END, sum);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
 		}
@@ -902,7 +902,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			msg_warn ("processing of message failed");
 			free_task (task, FALSE);
 			session->state = STATE_REPLY;
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF END);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -920,7 +920,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			c.begin = part->content->data;
 			c.len = part->content->len;
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF);
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF END);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 					return FALSE;
@@ -933,7 +933,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		
 		/* Handle messages without text */
 		if (tokens == NULL) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, no tokens can be extracted (no text data)" CRLF);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, no tokens can be extracted (no text data)" CRLF END);
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
@@ -956,13 +956,14 @@ controller_read_socket (f_str_t * in, void *arg)
 			i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %G" CRLF, w->name, w->weight);
 			cur = g_list_next (cur);
 		}
+		i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, END);
 		if (i != 0) {
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
 			}
 		}
 		else {
-			if (!rspamd_dispatcher_write (session->dispatcher, "weights failed: classifier error", 0, FALSE, TRUE)) {
+			if (!rspamd_dispatcher_write (session->dispatcher, "weights failed: classifier error" CRLF END, 0, FALSE, TRUE)) {
 				return FALSE;
 			}
 		}

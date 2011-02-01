@@ -69,17 +69,37 @@ struct rspamd_result * rspamd_scan_fd (int fd, GHashTable *headers, GError **err
 /*
  * Learn message from memory
  */
-gboolean rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, GError **err);
+gboolean rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, const gchar *password, GError **err);
 
 /*
  * Learn message from file
  */
-gboolean rspamd_learn_file (const guchar *filename, const gchar *symbol, GError **err);
+gboolean rspamd_learn_file (const guchar *filename, const gchar *symbol, const gchar *password, GError **err);
 
 /*
  * Learn message from fd
  */
-gboolean rspamd_learn_fd (int fd, const gchar *symbol, GError **err);
+gboolean rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **err);
+
+/*
+ * Learn message fuzzy from memory
+ */
+gboolean rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password, gint weight, gint flag, gboolean delete, GError **err);
+
+/*
+ * Learn message fuzzy from file
+ */
+gboolean rspamd_fuzzy_file (const guchar *filename, const gchar *password, gint weight, gint flag, gboolean delete, GError **err);
+
+/*
+ * Learn message fuzzy from fd
+ */
+gboolean rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean delete, GError **err);
+
+/*
+ * Get statistic from server
+ */
+GString *rspamd_get_stat (GError **err);
 
 /*
  * Free results

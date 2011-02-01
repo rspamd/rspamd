@@ -761,10 +761,10 @@ rspamd_sendfile (gint sock, gint fd, GError **err)
 	off_t                           off = 0;
 #  if defined(FREEBSD)
 	/* FreeBSD version */
-	if (sendfile (sock, fd, 0, 0, NULL, &off, 0) != 0) {
+	if (sendfile (fd, sock, 0, 0, NULL, &off, 0) != 0) {
 #  elif defined(DARWIN)
 	/* Darwin version */
-	if (sendfile (sock, fd, 0, &off, NULL, 0) != 0) {
+	if (sendfile (fd, sock, 0, &off, NULL, 0) != 0) {
 #  endif
 		goto err;
 	}
@@ -775,7 +775,7 @@ rspamd_sendfile (gint sock, gint fd, GError **err)
 
 	fstat (fd, &st);
 	/* Linux version */
-	r = sendfile (fd, sock, &off, st.st_size);
+	r = sendfile (sock, fd, &off, st.st_size);
 	if (r == -1) {
 		goto err;
 	}
@@ -843,6 +843,147 @@ rspamd_free_connection (struct rspamd_connection *c)
 	g_string_free (c->in_buf, TRUE);
 
 	g_free (c);
+}
+
+/*
+ * Send a single command to controller and get reply
+ */
+static GString *
+rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, gsize len, gint fd, GError **err)
+{
+	GString                        *res = NULL;
+	static gchar                    tmpbuf[BUFSIZ];
+	gint                            r = 0;
+	static const gchar              end_marker[] = "END\r\n";
+
+	/* Set blocking for writing */
+	make_socket_blocking (c->socket);
+	if (write (c->socket, line, len) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Write error: %s",
+					strerror (errno));
+		}
+		return NULL;
+	}
+	if (fd != -1) {
+		if (!rspamd_sendfile (c->socket, fd, err)) {
+			return NULL;
+		}
+	}
+	/* Now set non-blocking mode and read buffer till END\r\n marker */
+	make_socket_nonblocking (c->socket);
+	/* Poll socket */
+	do {
+		if (poll_sync_socket (c->socket, client->read_timeout, POLL_IN) == -1) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+						c->server->name, strerror (errno));
+			}
+			upstream_fail (&c->server->up, c->connection_time);
+			return NULL;
+		}
+		if ((r = read (c->socket, tmpbuf, sizeof (tmpbuf))) > 0) {
+			/* Check the end of the buffer for END marker */
+			if (r >= sizeof (end_marker) - 1 &&
+					memcmp (tmpbuf + r - sizeof (end_marker) + 1, end_marker, sizeof (end_marker) - 1) == 0) {
+				r -= sizeof (end_marker) - 1;
+				/* Copy the rest to the result string */
+				if (res == NULL) {
+					res = g_string_new_len (tmpbuf, r);
+					return res;
+				}
+				else {
+					/* Append data to string */
+					if (r > 0) {
+						res = g_string_append_len (res, tmpbuf, r);
+					}
+					return res;
+				}
+			}
+			else {
+				/* Store data inside res */
+				if (res == NULL) {
+					res = g_string_new_len (tmpbuf, r);
+				}
+				else {
+					/* Append data to string */
+					res = g_string_append_len (res, tmpbuf, r);
+				}
+			}
+		}
+	} while (r > 0);
+
+	/* Incomplete reply, so store error */
+	if (*err == NULL) {
+		*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+				c->server->name, strerror (errno));
+	}
+	upstream_fail (&c->server->up, c->connection_time);
+	return NULL;
+}
+
+/*
+ * Authenticate on the controller
+ */
+static gboolean
+rspamd_controller_auth (struct rspamd_connection *c, const gchar *password, GError **err)
+{
+	gchar                           outbuf[BUFSIZ];
+	static const gchar              success_str[] = "password accepted";
+	gint                            r;
+	GString                        *in;
+
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "password %s\r\n", password);
+	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
+
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	if (in->len >= sizeof (success_str) - 1 &&
+		memcmp (in->str, success_str, sizeof (success_str) - 1) == 0) {
+		g_string_free (in, TRUE);
+		return TRUE;
+	}
+
+	g_string_free (in, TRUE);
+	return FALSE;
+}
+
+/*
+ * Read greeting from the controller
+ */
+static gboolean
+rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
+{
+	gchar                           inbuf[BUFSIZ];
+	gint                            r;
+	static const gchar              greeting_str[] = "Rspamd";
+
+	if (poll_sync_socket (c->socket, client->read_timeout, POLL_IN) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+					c->server->name, strerror (errno));
+		}
+		upstream_fail (&c->server->up, c->connection_time);
+		return FALSE;
+	}
+	if ((r = read (c->socket, inbuf, sizeof (inbuf))) > 0) {
+		if (r >= sizeof (greeting_str) - 1 &&
+				memcmp (inbuf, greeting_str, sizeof (greeting_str) - 1) == 0) {
+			return TRUE;
+		}
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+					c->server->name, strerror (errno));
+		}
+		upstream_fail (&c->server->up, c->connection_time);
+		return FALSE;
+	}
+
+	return FALSE;
 }
 
 /** Public API **/
@@ -959,6 +1100,7 @@ rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GE
 	/* Read result cycle */
 	while (read_rspamd_reply_line (c, err));
 
+	upstream_ok (&c->server->up, c->connection_time);
 	return res;
 }
 
@@ -1031,6 +1173,7 @@ rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
 	/* Read result cycle */
 	while (read_rspamd_reply_line (c, err));
 
+	upstream_ok (&c->server->up, c->connection_time);
 	return res;
 }
 
@@ -1038,30 +1181,324 @@ rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
  * Learn message from memory
  */
 gboolean
-rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, GError **err)
+rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, const gchar *password, GError **err)
 {
+	struct rspamd_connection             *c;
+	GString                              *in;
+	gchar                                *outbuf;
+	guint                                 r;
+	static const gchar                    ok_str[] = "learn ok";
+
 	g_assert (client != NULL);
 
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	/* Read greeting */
+	if (! rspamd_read_controller_greeting(c, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
+		}
+		return FALSE;
+	}
+	/* Perform auth */
+	if (! rspamd_controller_auth (c, password, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+		}
+		return FALSE;
+	}
+
+	r = length + sizeof ("learn %s %uz\r\n") + strlen (symbol) + sizeof ("4294967296");
+	outbuf = g_malloc (r);
+	r = rspamd_snprintf (outbuf, r, "learn %s %uz\r\n%s", symbol, length, message);
+	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
+	g_free (outbuf);
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	/* Search for string learn ok */
+	if (in->len > sizeof (ok_str) - 1 && memcmp (in->str, ok_str, sizeof (ok_str) - 1) == 0) {
+		upstream_ok (&c->server->up, c->connection_time);
+		return TRUE;
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Bad reply: %s", in->str);
+		}
+	}
+	return FALSE;
 }
 
 /*
  * Learn message from file
  */
 gboolean
-rspamd_learn_file (const guchar *filename, const gchar *symbol, GError **err)
+rspamd_learn_file (const guchar *filename, const gchar *symbol, const gchar *password, GError **err)
 {
+	gint                                 fd;
 	g_assert (client != NULL);
 
+	/* Open file */
+	if ((fd = open (filename, O_RDONLY | O_CLOEXEC)) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
+					filename, strerror (errno));
+		}
+		return FALSE;
+	}
+
+	return rspamd_learn_fd (fd, symbol, password, err);
 }
 
 /*
  * Learn message from fd
  */
 gboolean
-rspamd_learn_fd (int fd, const gchar *symbol, GError **err)
+rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **err)
 {
+	struct rspamd_connection             *c;
+	GString                              *in;
+	gchar                                *outbuf;
+	guint                                 r;
+	struct stat                           st;
+	static const gchar                    ok_str[] = "learn ok";
+
 	g_assert (client != NULL);
 
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	/* Read greeting */
+	if (! rspamd_read_controller_greeting(c, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
+		}
+		return FALSE;
+	}
+	/* Perform auth */
+	if (! rspamd_controller_auth (c, password, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+		}
+		return FALSE;
+	}
+
+	/* Get length */
+	if (fstat (fd, &st) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Stat error: %s",
+					strerror (errno));
+		}
+		return FALSE;
+	}
+	r = sizeof ("learn %s %uz\r\n") + strlen (symbol) + sizeof ("4294967296");
+	outbuf = g_malloc (r);
+	r = rspamd_snprintf (outbuf, r, "learn %s %uz\r\n", symbol, st.st_size);
+	in = rspamd_send_controller_command (c, outbuf, r, fd, err);
+	g_free (outbuf);
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	/* Search for string learn ok */
+	if (in->len > sizeof (ok_str) - 1 && memcmp (in->str, ok_str, sizeof (ok_str) - 1) == 0) {
+		upstream_ok (&c->server->up, c->connection_time);
+		return TRUE;
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Bad reply: %s", in->str);
+		}
+	}
+
+	return FALSE;
+}
+
+/*
+ * Learn message fuzzy from memory
+ */
+gboolean
+rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
+{
+	struct rspamd_connection             *c;
+	GString                              *in;
+	gchar                                *outbuf;
+	guint                                 r;
+	static const gchar                    ok_str[] = "OK";
+
+	g_assert (client != NULL);
+
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	/* Read greeting */
+	if (! rspamd_read_controller_greeting(c, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
+		}
+		return FALSE;
+	}
+	/* Perform auth */
+	if (! rspamd_controller_auth (c, password, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+		}
+		return FALSE;
+	}
+
+	r = length + sizeof ("fuzzy_add %uz %d %d\r\n") + sizeof ("4294967296") * 3;
+	outbuf = g_malloc (r);
+	if (delete) {
+		r = rspamd_snprintf (outbuf, r, "fuzzy_del %uz %d %d\r\n%s", length, weight, flag, message);
+	}
+	else {
+		r = rspamd_snprintf (outbuf, r, "fuzzy_add %uz %d %d\r\n%s", length, weight, flag, message);
+	}
+	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
+	g_free (outbuf);
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	/* Search for string "OK" */
+	if (in->len > sizeof (ok_str) - 1 && memcmp (in->str, ok_str, sizeof (ok_str) - 1) == 0) {
+		upstream_ok (&c->server->up, c->connection_time);
+		return TRUE;
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Bad reply: %s", in->str);
+		}
+	}
+	return FALSE;
+}
+
+/*
+ * Learn message fuzzy from file
+ */
+gboolean
+rspamd_fuzzy_file (const guchar *filename, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
+{
+	gint                                 fd;
+	g_assert (client != NULL);
+
+	/* Open file */
+	if ((fd = open (filename, O_RDONLY | O_CLOEXEC)) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
+					filename, strerror (errno));
+		}
+		return FALSE;
+	}
+
+	return rspamd_fuzzy_fd (fd, password, weight, flag, delete, err);
+}
+
+/*
+ * Learn message fuzzy from fd
+ */
+gboolean
+rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
+{
+	struct rspamd_connection             *c;
+	GString                              *in;
+	gchar                                *outbuf;
+	guint                                 r;
+	struct stat                           st;
+	static const gchar                    ok_str[] = "OK";
+
+	g_assert (client != NULL);
+
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	/* Read greeting */
+	if (! rspamd_read_controller_greeting(c, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
+		}
+		return FALSE;
+	}
+	/* Perform auth */
+	if (! rspamd_controller_auth (c, password, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+		}
+		return FALSE;
+	}
+	/* Get length */
+	if (fstat (fd, &st) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Stat error: %s",
+					strerror (errno));
+		}
+		return FALSE;
+	}
+	r = sizeof ("fuzzy_add %uz %d %d\r\n") + sizeof ("4294967296") * 3;
+	outbuf = g_malloc (r);
+	if (delete) {
+		r = rspamd_snprintf (outbuf, r, "fuzzy_del %uz %d %d\r\n", st.st_size, weight, flag);
+	}
+	else {
+		r = rspamd_snprintf (outbuf, r, "fuzzy_add %uz %d %d\r\n", st.st_size, weight, flag);
+	}
+	in = rspamd_send_controller_command (c, outbuf, r, fd, err);
+
+	g_free (outbuf);
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	/* Search for string "OK" */
+	if (in->len > sizeof (ok_str) - 1 && memcmp (in->str, ok_str, sizeof (ok_str) - 1) == 0) {
+		upstream_ok (&c->server->up, c->connection_time);
+		return TRUE;
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Bad reply: %s", in->str);
+		}
+	}
+	return FALSE;
+}
+
+GString *
+rspamd_get_stat (GError **err)
+{
+	struct rspamd_connection             *c;
+	GString                              *res;
+	static const gchar                    outcmd[] = "stat\r\n";
+
+	g_assert (client != NULL);
+
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return NULL;
+	}
+
+	res = rspamd_send_controller_command (c, outcmd, strlen (outcmd), -1, err);
+
+	return res;
 }
 
 /*
@@ -1071,7 +1508,11 @@ void
 rspamd_free_result (struct rspamd_result *result)
 {
 	g_assert (client != NULL);
+	g_assert (result != NULL);
 
+	g_hash_table_destroy (result->headers);
+	g_hash_table_destroy (result->metrics);
+	rspamd_free_connection (result->conn);
 }
 
 /*
@@ -1081,4 +1522,7 @@ void
 rspamd_client_close (void)
 {
 	g_assert (client != NULL);
+
+	g_free (client);
+	client = NULL;
 }

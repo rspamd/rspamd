@@ -567,7 +567,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		else if (buf[0] == 'O' && buf[1] == 'K') {
 			msg_info ("added fuzzy hash '%s' to list: %d for message <%s>",
 					fuzzy_to_string (session->h), session->flag, session->task->message_id);
-			r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF);
+			r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF "END" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
 			}
@@ -575,7 +575,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		}
 		else {
 			msg_info ("cannot add fuzzy hash for message <%s>", session->task->message_id);
-			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF);
+			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF "END" CRLF);
 			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
 			}
@@ -591,7 +591,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 
   err:
 	msg_err ("got error in IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
-	r = rspamd_snprintf (buf, sizeof (buf), "Error" CRLF);
+	r = rspamd_snprintf (buf, sizeof (buf), "Error" CRLF "END" CRLF);
 	if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 		return;
 	}
@@ -741,7 +741,7 @@ register_fuzzy_controller_call (struct controller_session *session, struct worke
 		if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 			msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 			session->state = STATE_REPLY;
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF "END" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -810,7 +810,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		msg_warn ("processing of message failed");
 		free_task (task, FALSE);
 		session->state = STATE_REPLY;
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF "END" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			msg_warn ("write error");
 		}
@@ -829,7 +829,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			if (! register_fuzzy_controller_call (session, task, part->fuzzy, cmd, value, flag, saved)) {
 				/* Cannot write hash */
 				session->state = STATE_REPLY;
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return;
 				}
@@ -853,7 +853,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
 							/* Cannot write hash */
 							session->state = STATE_REPLY;
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return;
 							}
@@ -883,7 +883,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
 							/* Cannot write hash */
 							session->state = STATE_REPLY;
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF);
+							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return;
 							}
@@ -905,7 +905,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 
 	if (*saved == 0) {
 		session->state = STATE_REPLY;
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF "END" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return;
 		}
@@ -923,7 +923,7 @@ fuzzy_controller_handler (gchar **args, struct controller_session *session, gint
 	arg = args[0];
 	if (!arg || *arg == '\0') {
 		msg_info ("empty content length");
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF);
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF "END" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return;
 		}
