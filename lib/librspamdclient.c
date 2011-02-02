@@ -1114,7 +1114,7 @@ rspamd_scan_file (const guchar *filename, GHashTable *headers, GError **err)
 	g_assert (client != NULL);
 
 	/* Open file */
-	if ((fd = open (filename, O_RDONLY | O_CLOEXEC)) == -1) {
+	if ((fd = open (filename, O_RDONLY)) == -1) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
 					filename, strerror (errno));
@@ -1245,7 +1245,7 @@ rspamd_learn_file (const guchar *filename, const gchar *symbol, const gchar *pas
 	g_assert (client != NULL);
 
 	/* Open file */
-	if ((fd = open (filename, O_RDONLY | O_CLOEXEC)) == -1) {
+	if ((fd = open (filename, O_RDONLY)) == -1) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
 					filename, strerror (errno));
@@ -1397,7 +1397,7 @@ rspamd_fuzzy_file (const guchar *filename, const gchar *password, gint weight, g
 	g_assert (client != NULL);
 
 	/* Open file */
-	if ((fd = open (filename, O_RDONLY | O_CLOEXEC)) == -1) {
+	if ((fd = open (filename, O_RDONLY)) == -1) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
 					filename, strerror (errno));
