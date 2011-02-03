@@ -72,7 +72,6 @@ metric_free_func (gpointer arg)
 	struct rspamd_metric            *m = arg;
 
 	g_hash_table_destroy (m->symbols);
-	g_free (m->name);
 	g_free (m);
 }
 
@@ -87,7 +86,6 @@ symbol_free_func (gpointer arg)
 		cur = g_list_next (cur);
 	}
 	g_list_free (s->options);
-	g_free (s->name);
 	g_free (s);
 }
 
