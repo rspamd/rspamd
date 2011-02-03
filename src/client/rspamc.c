@@ -317,6 +317,7 @@ scan_rspamd_file (const gchar *file)
 	g_hash_table_destroy (opts);
 	if (err != NULL) {
 		fprintf (stderr, "cannot scan message: %s\n", err->message);
+		return;
 	}
 	print_rspamd_result (res);
 	if (res) {
