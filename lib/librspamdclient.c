@@ -606,9 +606,9 @@ parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **er
 				}
 				else {
 					/* Create header value */
-					hvalue = g_malloc (p - c + 1);
-					hvalue[p - c] = '\0';
-					memcpy (hvalue, c, p - c);
+					hvalue = g_malloc (p - c + 2);
+					hvalue[p - c + 1] = '\0';
+					memcpy (hvalue, c, p - c + 1);
 					g_hash_table_replace (conn->result->headers, hname, hvalue);
 					state = 99;
 				}

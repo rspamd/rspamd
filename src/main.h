@@ -204,6 +204,7 @@ struct worker_task {
 	gchar *raw_headers;											/**< list of raw headers							*/
 	GList *received;											/**< list of received headers						*/
 	GList *urls;												/**< list of parsed urls							*/
+	GList *emails;												/**< list of parsed emails							*/
 	GList *images;												/**< list of images									*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/

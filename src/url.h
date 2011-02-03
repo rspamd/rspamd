@@ -60,7 +60,7 @@ enum uri_errno {
 	URI_ERRNO_NO_HOST_SLASH,	/* Slash after host missing */
 	URI_ERRNO_IPV6_SECURITY,	/* IPv6 security bug detected */
 	URI_ERRNO_INVALID_PORT,		/* Port number is bad */
-	URI_ERRNO_INVALID_PORT_RANGE,	/* Port number is not within 0-65535 */
+	URI_ERRNO_INVALID_PORT_RANGE	/* Port number is not within 0-65535 */
 };
 
 enum protocol {
@@ -68,8 +68,8 @@ enum protocol {
 	PROTOCOL_FTP,
 	PROTOCOL_HTTP,
 	PROTOCOL_HTTPS,
-
-	PROTOCOL_UNKNOWN,
+	PROTOCOL_MAILTO,
+	PROTOCOL_UNKNOWN
 };
 
 #define struri(uri) ((uri)->string)

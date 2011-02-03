@@ -112,6 +112,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"check_attachements",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, check_text_attachements),
+				NULL
+			},
+			{
 				"tempdir",
 				xml_handle_string,
 				G_STRUCT_OFFSET (struct config_file, temp_dir),

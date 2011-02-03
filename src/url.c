@@ -41,7 +41,7 @@
     (LOWEST_PORT <= (port) && (port) <= HIGHEST_PORT)
 
 struct _proto {
-	guchar                          *name;
+	guchar                         *name;
 	gint                            port;
 	uintptr_t                      *unused;
 	guint                           need_slashes:1;
@@ -55,6 +55,7 @@ typedef struct url_match_s {
 	gsize m_len;
 	const gchar *pattern;
 	const gchar *prefix;
+	gboolean add_prefix;
 } url_match_t;
 
 struct url_matcher {
@@ -1111,20 +1112,24 @@ domain:
 static gboolean
 url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
 {
+	const gchar                    *p;
 	/* Check what we have found */
 	if (pos > begin && *pos == '@') {
-		if (is_atom (*(pos - 1)) && is_domain (*(pos + 1))) {
-			match->m_begin = pos + 1;
+		/* Try to extract it with username */
+		p = pos - 1;
+		while (p > begin && is_atom (*p)) {
+			p --;
+		}
+		if (!is_atom (*p)) {
+			match->m_begin = p + 1;
 			return TRUE;
 		}
 	}
 	else {
-		while (pos < end && is_atom (*pos)) {
-			if (*pos == '@') {
-				match->m_begin = pos + 1;
-				return TRUE;
-			}
-			pos ++;
+		p = pos + strlen (match->pattern);
+		if (is_atom (*p)) {
+			match->m_begin = p;
+			return TRUE;
 		}
 	}
 	return FALSE;
@@ -1141,6 +1146,7 @@ url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match
 		p ++;
 	}
 	match->m_len = p - match->m_begin;
+	match->add_prefix = TRUE;
 	return TRUE;
 }
 
@@ -1148,7 +1154,7 @@ void
 url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
 	gint                            rc, off = 0;
-	gchar                           *url_str = NULL;
+	gchar                          *url_str = NULL;
 	struct uri                     *new;
 	const guint8                   *p, *end;
 
@@ -1176,8 +1182,13 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 						g_strstrip (url_str);
 						rc = parse_uri (new, url_str, pool);
 						if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
-							g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
-							task->urls = g_list_prepend (task->urls, new);
+							if (new->protocol == PROTOCOL_MAILTO) {
+								task->emails = g_list_prepend (task->emails, new);
+							}
+							else {
+								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
+								task->urls = g_list_prepend (task->urls, new);
+							}
 						}
 						else {
 							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
@@ -1197,7 +1208,7 @@ gboolean
 url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gchar **url_str)
 {
 	const gchar                    *end, *pos;
-	gint                            idx;
+	gint                            idx, l;
 	struct url_matcher             *matcher;
 	url_match_t                     m;
 
@@ -1210,10 +1221,18 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gch
 			matcher = &matchers[idx];
 			m.pattern = matcher->pattern;
 			m.prefix = matcher->prefix;
+			m.add_prefix = FALSE;
 			if (matcher->start (begin, end, pos, &m) && matcher->end (begin, end, pos, &m)) {
-				*url_str = memory_pool_alloc (pool, m.m_len + 1);
-				memcpy (*url_str, m.m_begin, m.m_len);
-				(*url_str)[m.m_len] = '\0';
+				if (m.add_prefix) {
+					l = m.m_len + 1 + strlen (m.prefix);
+					*url_str = memory_pool_alloc (pool, l);
+					rspamd_snprintf (*url_str, l, "%s%*s", m.prefix, m.m_len, m.m_begin);
+				}
+				else {
+					*url_str = memory_pool_alloc (pool, m.m_len + 1);
+					memcpy (*url_str, m.m_begin, m.m_len);
+					(*url_str)[m.m_len] = '\0';
+				}
 
 			}
 			else {

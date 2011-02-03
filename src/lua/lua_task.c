@@ -45,6 +45,7 @@ extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classi
 LUA_FUNCTION_DEF (task, get_message);
 LUA_FUNCTION_DEF (task, insert_result);
 LUA_FUNCTION_DEF (task, get_urls);
+LUA_FUNCTION_DEF (task, get_emails);
 LUA_FUNCTION_DEF (task, get_text_parts);
 LUA_FUNCTION_DEF (task, get_raw_headers);
 LUA_FUNCTION_DEF (task, get_received_headers);
@@ -68,6 +69,7 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, get_urls),
+	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
 	LUA_INTERFACE_DEF (task, get_raw_headers),
 	LUA_INTERFACE_DEF (task, get_received_headers),
@@ -242,6 +244,33 @@ lua_task_get_urls (lua_State * L)
 }
 
 static gint
+lua_task_get_emails (lua_State * L)
+{
+	gint                            i = 1;
+	struct worker_task             *task = lua_check_task (L);
+	GList                          *cur;
+	struct uri                    **purl;
+
+	if (task) {
+		cur = task->emails;
+		if (cur != NULL) {
+			lua_newtable (L);
+			while (cur) {
+				purl = lua_newuserdata (L, sizeof (struct uri *));
+				lua_setclass (L, "rspamd{url}", -1);
+				*purl = cur->data;
+				lua_rawseti (L, -2, i++);
+				cur = g_list_next (cur);
+			}
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static gint
 lua_task_get_text_parts (lua_State * L)
 {
 	gint                            i = 1;
@@ -315,8 +344,14 @@ lua_task_get_received_headers (lua_State * L)
 struct lua_dns_callback_data {
 	lua_State                      *L;
 	struct worker_task             *task;
-	const gchar                     *callback;
-	const gchar                     *to_resolve;
+	const gchar                    *callback;
+	const gchar                    *to_resolve;
+	gint                            cbtype;
+	union {
+		gpointer                    string;
+		gboolean                    boolean;
+		gdouble                     number;
+	}                               cbdata;
 };
 
 static void
@@ -385,7 +420,22 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 		lua_pushstring (cd->L, dns_strerror (reply->code));
 	}
 
-	if (lua_pcall (cd->L, 4, 0, 0) != 0) {
+	switch (cd->cbtype) {
+	case LUA_TBOOLEAN:
+		lua_pushboolean (cd->L, cd->cbdata.boolean);
+		break;
+	case LUA_TNUMBER:
+		lua_pushnumber (cd->L, cd->cbdata.number);
+		break;
+	case LUA_TSTRING:
+		lua_pushstring (cd->L, cd->cbdata.string);
+		break;
+	default:
+		lua_pushnil (cd->L);
+		break;
+	}
+
+	if (lua_pcall (cd->L, 5, 0, 0) != 0) {
 		msg_info ("call to %s failed: %s", cd->callback, lua_tostring (cd->L, -1));
 	}
 
@@ -409,6 +459,25 @@ lua_task_resolve_dns_a (lua_State * L)
 		cd->L = L;
 		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
 		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		cd->cbtype = lua_type (L, 4);
+		if (cd->cbtype != LUA_TNONE && cd->cbtype != LUA_TNIL) {
+			switch (cd->cbtype) {
+			case LUA_TBOOLEAN:
+				cd->cbdata.boolean = lua_toboolean (L, 4);
+				break;
+			case LUA_TNUMBER:
+				cd->cbdata.number = lua_tonumber (L, 4);
+				break;
+			case LUA_TSTRING:
+				cd->cbdata.string = memory_pool_strdup (task->task_pool, lua_tostring (L, 4));
+				break;
+			default:
+				msg_warn ("cannot handle type %s as callback data", lua_typename (L, cd->cbtype));
+				cd->cbtype = LUA_TNONE;
+				break;
+			}
+		}
+
 		if (!cd->to_resolve || !cd->callback) {
 			msg_info ("invalid parameters passed to function");
 			return 0;
@@ -432,6 +501,24 @@ lua_task_resolve_dns_txt (lua_State * L)
 		cd->L = L;
 		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
 		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		cd->cbtype = lua_type (L, 4);
+		if (cd->cbtype != LUA_TNONE && cd->cbtype != LUA_TNIL) {
+			switch (cd->cbtype) {
+			case LUA_TBOOLEAN:
+				cd->cbdata.boolean = lua_toboolean (L, 4);
+				break;
+			case LUA_TNUMBER:
+				cd->cbdata.number = lua_tonumber (L, 4);
+				break;
+			case LUA_TSTRING:
+				cd->cbdata.string = memory_pool_strdup (task->task_pool, lua_tostring (L, 4));
+				break;
+			default:
+				msg_warn ("cannot handle type %s as callback data", lua_typename (L, cd->cbtype));
+				cd->cbtype = LUA_TNONE;
+				break;
+			}
+		}
 		if (!cd->to_resolve || !cd->callback) {
 			msg_info ("invalid parameters passed to function");
 			return 0;
@@ -456,6 +543,24 @@ lua_task_resolve_dns_ptr (lua_State * L)
 		cd->L = L;
 		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
 		cd->callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		cd->cbtype = lua_type (L, 4);
+		if (cd->cbtype != LUA_TNONE && cd->cbtype != LUA_TNIL) {
+			switch (cd->cbtype) {
+			case LUA_TBOOLEAN:
+				cd->cbdata.boolean = lua_toboolean (L, 4);
+				break;
+			case LUA_TNUMBER:
+				cd->cbdata.number = lua_tonumber (L, 4);
+				break;
+			case LUA_TSTRING:
+				cd->cbdata.string = memory_pool_strdup (task->task_pool, lua_tostring (L, 4));
+				break;
+			default:
+				msg_warn ("cannot handle type %s as callback data", lua_typename (L, cd->cbtype));
+				cd->cbtype = LUA_TNONE;
+				break;
+			}
+		}
 		ina = memory_pool_alloc (task->task_pool, sizeof (struct in_addr));
 		if (!cd->to_resolve || !cd->callback || !inet_aton (cd->to_resolve, ina)) {
 			msg_info ("invalid parameters passed to function");

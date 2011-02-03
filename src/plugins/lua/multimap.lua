@@ -27,7 +27,7 @@ function split(str, delim, maxNb)
 	return result
 end
 
-function rbl_cb(task, to_resolve, results, err)
+function multimap_rbl_cb(task, to_resolve, results, err)
 	if results then
 		local _,_,o4,o3,o2,o1,in_rbl = string.find(to_resolve, '(%d+)%.(%d+)%.(%d+)%.(%d+)%.(.+)')
 		-- Get corresponding rule by rbl name
@@ -71,13 +71,13 @@ function check_multimap(task)
 			if ip then
 				local _,_,o1,o2,o3,o4 = string.find(ip, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
 				local rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rule['map']
-				task:resolve_dns_a(rbl_str, 'rbl_cb')
+				task:resolve_dns_a(rbl_str, 'multimap_rbl_cb')
 			end
  		end
 	end
 end
 
-function add_rule(params)
+local function add_multimap_rule(params)
 	local newrule = {
 		type = 'ip',
 		header = nil,
@@ -143,7 +143,7 @@ if opts then
 		if type(strrules) == 'table' then 
 			for _,value in ipairs(strrules) do
 				local params = split(value, ',')
-				local rule = add_rule (params)
+				local rule = add_multimap_rule (params)
 				if not rule then
 					rspamd_logger:err('cannot add rule: "'..value..'"')
 				else
@@ -154,7 +154,7 @@ if opts then
 			end
 		elseif type(strrules) == 'string' then
 			local params = split(strrules, ',')
-			local rule = add_rule (params)
+			local rule = add_multimap_rule (params)
 			if not rule then
 				rspamd_logger:err('cannot add rule: "'..strrules..'"')
 			else

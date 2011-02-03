@@ -50,7 +50,6 @@ local function add_trie(params)
 		local patterns = split(params[2], ',')
 		local trie = {}
 		trie['trie'] = rspamd_trie:create(true)
-		print (type(trie['trie']))
 		for num,pattern in ipairs(patterns) do
 			trie['trie']:add_pattern(pattern, num)
 		end
@@ -64,7 +63,6 @@ end
 
 function check_trie(task)
 	for _,trie in ipairs(tries) do
-		print (type(trie['trie']))
 		if trie['trie']:search_task(task) then
 			task:insert_result(trie['symbol'], 1)
 		end

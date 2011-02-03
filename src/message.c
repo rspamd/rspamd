@@ -536,13 +536,13 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 	/* Skip attachements */
 #ifndef GMIME24
 	cd = g_mime_part_get_content_disposition (GMIME_PART (part));
-	if (cd && g_ascii_strcasecmp (cd, "attachment") == 0) {
+	if (cd && g_ascii_strcasecmp (cd, "attachment") == 0 && !task->cfg->check_text_attachements) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
 #else
 	cd = g_mime_object_get_disposition (GMIME_OBJECT (part));
-	if (cd && g_ascii_strcasecmp (cd, GMIME_DISPOSITION_ATTACHMENT) == 0) {
+	if (cd && g_ascii_strcasecmp (cd, GMIME_DISPOSITION_ATTACHMENT) == 0 && !task->cfg->check_text_attachements) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
