@@ -545,6 +545,7 @@ main (gint argc, gchar **argv, gchar **env)
 				break;
 			case RSPAMC_COMMAND_STAT:
 				rspamd_do_stat ();
+				break;
 			default:
 				fprintf (stderr, "invalid arguments\n");
 				exit (EXIT_FAILURE);
