@@ -754,6 +754,7 @@ init_fuzzy_storage (void)
 
 	ctx->max_mods = DEFAULT_MOD_LIMIT;
 	ctx->frequent_score = DEFAULT_FREQUENT_SCORE;
+	ctx->expire = DEFAULT_EXPIRE;
 
 	register_worker_opt (TYPE_FUZZY, "hashfile", xml_handle_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile));
@@ -761,6 +762,8 @@ init_fuzzy_storage (void)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, max_mods));
 	register_worker_opt (TYPE_FUZZY, "frequent_score", xml_handle_uint32, ctx,
 				G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, frequent_score));
+	register_worker_opt (TYPE_FUZZY, "expire", xml_handle_seconds, ctx,
+					G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, expire));
 	register_worker_opt (TYPE_FUZZY, "use_judy", xml_handle_boolean, ctx,
 				G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, use_judy));
 
