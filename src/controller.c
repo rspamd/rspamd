@@ -1007,6 +1007,7 @@ controller_write_socket (void *arg)
 		session->state = STATE_COMMAND;
 		rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, BUFSIZ);
 	}
+	rspamd_dispatcher_restore (session->dispatcher);
 	return TRUE;
 }
 
@@ -1037,7 +1038,6 @@ accept_socket (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
-		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 
