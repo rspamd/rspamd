@@ -15,7 +15,7 @@ SET(RSPAMD_MASTER_SITE_URL "http://bitbucket.org/vstakhov/rspamd")
 SET(RSPAMD_USER "nobody")
 SET(RSPAMD_GROUP "nobody")
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6.3 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
 
 OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
@@ -513,7 +513,6 @@ IF(NOT DESTDIR)
 ENDIF(NOT DESTDIR)
 
 # Try to detect tip version from hg
-UNSET(ID CACHE)
 SET(ID "unknown")
 FIND_PROGRAM(HG "hg")
 
@@ -808,9 +807,9 @@ FOREACH(LUA_CONF ${LUA_CONFIGS})
 	IF(NOT IS_DIRECTORY ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp})
 		INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp})")
 	ENDIF(NOT IS_DIRECTORY ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp})
-	IF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp}/${LUA_CONF})
+	IF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${LUA_CONF})
 		INSTALL(FILES "conf/lua/${LUA_CONF}" DESTINATION etc/rspamd/lua/${_rp})
-	ENDIF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${_rp}/${LUA_CONF})
+	ENDIF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${LUA_CONF})
 ENDFOREACH(LUA_CONF)
 
 # Perl lib
