@@ -17,6 +17,10 @@
 
 struct f_str_s;
 
+#define MEM_ALIGNMENT   sizeof(unsigned long)    /* platform word */
+#define align_ptr(p, a)                                                   \
+    (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+
 /** 
  * Destructor type definition 
  */
@@ -262,6 +266,6 @@ gpointer memory_pool_get_variable (memory_pool_t *pool, const gchar *name);
  * Macro that return free space in pool page
  * @param x pool page struct
  */
-#define memory_pool_free(x) ((x)->len - ((x)->pos - (x)->begin))
+#define memory_pool_free(x) ((x)->len - (align_ptr((x)->pos, MEM_ALIGNMENT) - (x)->begin))
 
 #endif

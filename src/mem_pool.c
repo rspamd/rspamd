@@ -74,7 +74,7 @@ pool_chain_new (gsize size)
 	}
 
 	chain->len = size;
-	chain->pos = chain->begin;
+	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
 	chain->next = NULL;
 	STAT_LOCK ();
 	mem_pool_stat->chunks_allocated++;
@@ -116,6 +116,7 @@ pool_chain_new_shared (gsize size)
 #endif
 	chain->len = size;
 	chain->pos = chain->begin;
+	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
 	chain->lock = NULL;
 	chain->next = NULL;
 	STAT_LOCK ();
@@ -215,8 +216,8 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 			STAT_UNLOCK ();
 			return new->begin;
 		}
-		tmp = cur->pos;
-		cur->pos += size;
+		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
+		cur->pos = tmp + size;
 		STAT_LOCK ();
 		mem_pool_stat->bytes_allocated += size;
 		STAT_UNLOCK ();
@@ -332,8 +333,8 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 			STAT_UNLOCK ();
 			return new->begin;
 		}
-		tmp = cur->pos;
-		cur->pos += size;
+		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
+		cur->pos = tmp + size;
 		STAT_LOCK ();
 		mem_pool_stat->bytes_allocated += size;
 		STAT_UNLOCK ();
