@@ -594,7 +594,7 @@ ADD_SUBDIRECTORY(src/client)
 
 ADD_SUBDIRECTORY(src/json)
 # ADD_SUBDIRECTORY(src/evdns)
-ADD_SUBDIRECTORY(src/plugins/custom)
+# ADD_SUBDIRECTORY(src/plugins/custom)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
@@ -811,6 +811,10 @@ FOREACH(LUA_CONF ${LUA_CONFIGS})
 		INSTALL(FILES "conf/lua/${LUA_CONF}" DESTINATION etc/rspamd/lua/${_rp})
 	ENDIF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/lua/${LUA_CONF})
 ENDFOREACH(LUA_CONF)
+
+# Manual pages
+INSTALL(FILES "doc/rspamd.8" DESTINATION man/man8)
+INSTALL(FILES "doc/rspamc.1" DESTINATION man/man1)
 
 # Perl lib
 IF(ENABLE_PERL MATCHES "ON")

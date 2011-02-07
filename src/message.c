@@ -112,7 +112,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 			case 1:			/* HTML/XML */
 				lc = '>';
 				in_q = state = 0;
-				erase = !add_html_node (task, pool, part, tbegin, p - tbegin - 1, &level_ptr);
+				erase = !add_html_node (task, pool, part, tbegin, p - tbegin, &level_ptr);
 				break;
 
 			case 2:			/* PHP */

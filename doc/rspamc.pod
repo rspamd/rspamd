@@ -1,0 +1,96 @@
+=head1 RSPAMC
+
+rspamc - a simple client for rspamd spam filtering system
+
+=head1 SYNOPSIS
+
+rspamc [B<-h> I<host[:port]>] [B<-p>]
+[B<-i> I<ip>] [B<-s> I<statfile>] [B<-w> I<weight>]
+[B<-P> I<password>] [B<-f> I<flag>] [command] [file [file ...]] 
+
+rspamc [B<--help>]
+
+=head1 DESCRIPTION
+
+B<Rspamc> is a simple client for checking messages using rspamd or for learning rspamd by messages.
+B<Rspamc> has several mandatory options for learning: I<password> and I<statfile>.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h> I<host[:port]>, B<--connect> I<host[:port]>
+
+Specify host and port for connecting to rspamd server. Default host is I<localhost> and
+default port is I<11333> for checking messages and I<11334> for learning and statistic. 
+
+=item B<-p>, B<--pass-all>
+
+Pass all filters when checking messages. Ignored in case of learning.
+
+=item B<-P> I<password>, B<--password> I<password>
+
+Specify controller's password. Mandatory option for learning.
+
+=item B<-s> I<statfile>, B<--statfile> I<statfile>
+
+Specify statfile's symbol to learn message. Mandatory option for learning.
+
+=item B<-i> I<ip>, B<--ip> I<ip>
+
+Add IP header when scanning message. Useful for checking messages and emulating that client comes from 
+specific IP address.
+
+=item B<-w> I<weight>, B<--weight> I<weight>
+
+Weight of message for fuzzy operations.
+
+=item B<-f> I<flag>, B<--flag> I<flag>
+
+Weight of message for fuzzy operations.
+
+
+=back
+
+=head1 RETURN VALUE
+
+On exit B<rspamc> returns 0 if operation was successfull and error code otherwise.
+
+=head1 EXAMPLES
+
+Check stdin:
+
+	rspamc < some_file
+
+Check files:
+	
+	rspamc symbols file1 file2 file3
+	
+Learn files:
+
+	rspamc -P pass -s BAYES_SPAM file1 file2 file3
+
+Add fuzzy hash to set 2:
+	
+	rspamc -P pass -f 2 -w 10 fuzzy_add file1 file2
+	
+Delete fuzzy hash from other server:
+
+	rspamc -P pass -h hostname:11334 -f 2 fuzzy_del file1 file2
+	
+Get statistics:
+	
+	rspamc stat
+
+=head1 AUTHOR
+
+Vsevolod Stakhov <vsevolod@highsecure.ru>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2011 by Vsevolod Stakhov <vsevolod@highsecure.ru>.
+
+This program is free software; you may redistribute it and/or modify it
+under the terms of BSD license.
+
+=cut

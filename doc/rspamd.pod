@@ -1,0 +1,79 @@
+=head1 RSPAMD
+
+rspamd - main daemon for rspamd spam filtering system
+
+=head1 SYNOPSIS
+
+rspamd [B<-c> I<config_file>] [B<-f>]
+[B<-u> I<user>] [B<-g> I<group>] [B<-p> I<pidfile>]
+[B<-t>] [B<-d>] 
+
+rspamd [B<--help>]
+
+rspamd [B<-t>]
+
+rspamd [B<-C>]
+
+=head1 DESCRIPTION
+
+B<Rspamd> filtering system is designed to be fast, modular and easily extendable system. 
+B<Rspamd> core is written in C language using event driven paradigma. 
+Plugins for B<rspamd> can be written in lua.
+B<Rspamd> is designed to process connections completely asynchronous and do not block anywhere in code.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-c> I<config_file>, B<--config> I<config_file>
+
+Specify the path where rspamd config is placed. Default is rspamd.xml.
+
+=item B<-u> I<user>, B<--user> I<user>
+
+Specify user rspamd run as. It is possible only when rspamd is launched by super-user as it
+calls setuid(2) after spawning workers.
+
+=item B<-g> I<group>, B<--group> I<group>
+
+Specify group rspamd run as.
+
+=item B<-p> I<pidfile>, B<--pidfile> I<pidfile>
+
+Path to pid file where rspamd pid would be stored. Directory containing pidfile must be 
+writeable by B<rspamd>.
+
+=item B<-f>, B<--no-fork>
+
+Do not daemonize after launch. Usable for debugging purposes.
+
+=item B<-t>, B<--config-test>
+
+Just perform test of configuration. Return zero exit code when configuration is OK.
+
+=item B<-C>, B<--counters>
+
+Show counters for all symbols. Usable when symbols cache is saved.
+
+=item B<-d>, B<--debug>
+
+Turn on debugging mode in logging. 
+
+=back
+
+=head1 RETURN VALUE
+
+On exit B<rspamd> returns 0 if operation was successfull and error code otherwise.
+
+=head1 AUTHOR
+
+Vsevolod Stakhov <vsevolod@highsecure.ru>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2011 by Vsevolod Stakhov <vsevolod@highsecure.ru>.
+
+This program is free software; you may redistribute it and/or modify it
+under the terms of BSD license.
+
+=cut
