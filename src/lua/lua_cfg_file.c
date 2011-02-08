@@ -125,7 +125,7 @@ lua_process_element (struct config_file *cfg, const gchar *name, struct module_o
 			opt->lua_type = LUA_VAR_STRING;
 			break;
 		case LUA_TFUNCTION:
-			opt->actual_data = memory_pool_strdup (cfg->cfg_pool, lua_tostring (L, idx));
+			opt->actual_data = memory_pool_strdup (cfg->cfg_pool, name);
 			opt->lua_type = LUA_VAR_FUNCTION;
 			break;
 		case LUA_TNIL:
@@ -230,11 +230,16 @@ lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, enum l
 				/* First check function in config table */
 				lua_getglobal (L, "config");
 				if (lua_istable (L, -1)) {
-					lua_pushstring (L, opt->actual_data);
+					lua_pushstring (L, mname);
 					lua_gettable (L, -2);
 					if (lua_isnil (L, -1)) {
 						/* Try to get global variable */
 						lua_getglobal (L, opt->actual_data);
+					}
+					else {
+						/* Call local function in table */
+						lua_pushstring (L, opt->actual_data);
+						lua_gettable (L, -2);
 					}
 				}
 				else {
