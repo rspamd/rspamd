@@ -691,7 +691,8 @@ lua_trie_search_task (lua_State *L)
 	GList                         *cur;
 	const gchar                   *pos, *end;
 	gint                           id, i = 1;
-	void                           *ud;
+	void                          *ud;
+	gboolean                       found = FALSE;
 
 	if (trie) {
 		ud = luaL_checkudata (L, 2, "rspamd{task}");
@@ -710,15 +711,22 @@ lua_trie_search_task (lua_State *L)
 						lua_pushinteger (L, id);
 						lua_settable (L, -3);
 						i ++;
+						found = TRUE;
+						break;
 					}
 				}
 				cur = g_list_next (cur);
+			}
+			if (!found) {
+				lua_pushnil (L);
 			}
 			return 1;
 		}
 	}
 
-	lua_pushnil (L);
+	if (!found) {
+		lua_pushnil (L);
+	}
 	return 1;
 }
 /* Init functions */
