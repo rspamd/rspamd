@@ -42,7 +42,7 @@ gboolean init_lua_filters (struct config_file *cfg);
 gint lua_call_filter (const gchar *function, struct worker_task *task);
 gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number);
 double lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name);
-gboolean lua_call_expression_func (const gchar *function, struct worker_task *task, GList *args, gboolean *res);
+gboolean lua_call_expression_func (const gchar *module, const gchar *symbol, struct worker_task *task, GList *args, gboolean *res);
 void lua_call_post_filters (struct worker_task *task);
 void add_luabuf (const gchar *line);
 

@@ -1017,7 +1017,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 	
 	if (item->lua_function) {
 		/* Just call function */
-		if (lua_call_expression_func (item->lua_function, task, NULL, &res) && res) {
+		if (lua_call_expression_func ("regexp", item->lua_function, task, NULL, &res) && res) {
 			insert_result (task, item->symbol, 1, NULL);
 		}
 	}

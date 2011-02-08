@@ -750,7 +750,7 @@ call_expression_function (struct expression_function * func, struct worker_task 
 	if (selected == NULL) {
 		/* Try to check lua function */
 #ifdef RSPAMD_MAIN
-		if (! lua_call_expression_func (func->name, task, func->args, &res)) {
+		if (! lua_call_expression_func (NULL, func->name, task, func->args, &res)) {
 			msg_warn ("call to undefined function %s", key.name);
 			return FALSE;
 		}

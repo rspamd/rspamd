@@ -356,15 +356,40 @@ lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *ma
 
 /* Call custom lua function in rspamd expression */
 gboolean 
-lua_call_expression_func (const gchar *function, struct worker_task *task, GList *args, gboolean *res)
+lua_call_expression_func (const gchar *module, const gchar *function,
+		struct worker_task *task, GList *args, gboolean *res)
 {
 	lua_State                      *L = task->cfg->lua_state;
 	struct worker_task            **ptask;
 	GList                          *cur;
 	struct expression_argument     *arg;
-	gint                            nargs = 0;
+	int                             nargs = 0;
 
-	lua_getglobal (L, function);
+	/* Call specified function and expect result of given expected_type */
+	/* First check function in config table */
+	lua_getglobal (L, "config");
+	if (module != NULL && lua_istable (L, -1)) {
+		lua_pushstring (L, module);
+		lua_gettable (L, -2);
+		if (lua_isnil (L, -1)) {
+			/* Try to get global variable */
+			lua_getglobal (L, function);
+		}
+		else {
+			/* Call local function in table */
+			lua_pushstring (L, function);
+			lua_gettable (L, -2);
+		}
+	}
+	else {
+		/* Try to get global variable */
+		lua_getglobal (L, function);
+	}
+	if (lua_isnil (L, -1)) {
+		msg_err ("function with name %s is not defined", function);
+		return FALSE;
+	}
+	/* Now we got function in top of stack */
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
 	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
@@ -403,6 +428,7 @@ lua_call_expression_func (const gchar *function, struct worker_task *task, GList
 	
 	return TRUE;
 }
+
 
 /*
  * LUA custom consolidation function
