@@ -363,7 +363,7 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	struct worker_task            **ptask;
 	GList                          *cur;
 	struct expression_argument     *arg;
-	int                             nargs = 0;
+	int                             nargs = 1;
 
 	/* Call specified function and expect result of given expected_type */
 	/* First check function in config table */
@@ -416,7 +416,7 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	}
 
 	if (lua_pcall (L, nargs, 1, 0) != 0) {
-		msg_info ("call to %s failed", function);
+		msg_info ("call to %s failed: %s", function, lua_tostring (L, -1));
 		return FALSE;
 	}
 
