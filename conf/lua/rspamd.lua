@@ -20,9 +20,23 @@ local r_bgcolor = '/BGCOLOR=/iP'
 local r_font_color = '/font color=[\\"\']?\\#FFFFFF[\\"\']?/iP'
 reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_color)
 reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
-local r_rcvd_from_valuehost = 'Received=/\\sb0\\.valuehost\\.ru/H'
-local r_cyr_phone = '/8 \\(\\xD799\\)/P'
-reconf['R_SPAM_FROM_VALUEHOST'] = string.format('(%s) & (%s)', r_rcvd_from_valuehost, r_cyr_phone)
 
 -- Different text parts
-reconf['R_PARTS_DIFFER'] = 'compare_parts_distance(70)';
+reconf['R_PARTS_DIFFER'] = 'compare_parts_distance(85)';
+
+reconf['R_EMPTY_IMAGE'] = function (task)
+	parts = task:get_text_parts()
+	if parts then
+		for _,part in ipairs(parts) do
+			if part:is_empty() then
+				images = task:get_images()
+				if images then
+					return true
+				end
+				return false
+			end
+		end
+	end
+	return false
+end
+

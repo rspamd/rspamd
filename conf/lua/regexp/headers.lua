@@ -164,11 +164,6 @@ local from_yahoo_com = 'From=/\\@yahoo\\.com\\b/iH'
 reconf['FORGED_MSGID_YAHOO'] = string.format('(%s) & !(%s)', at_yahoo_msgid, from_yahoo_com)
 local r_from_yahoo_groups = 'From=/rambler.ru\\@returns\\.groups\\.yahoo\\.com\\b/iH'
 local r_from_yahoo_groups_ro = 'From=/ro.ru\\@returns\\.groups\\.yahoo\\.com\\b/iH'
-reconf['FROM_CBR'] = 'From=/\\@cbr\\.ru\\b/iH'
-reconf['FROM_CSHOP'] = 'From=/\\@cshop\\.ru\\b/iH'
-reconf['FROM_MIRHOSTING'] = 'From=/\\@mirhosting\\.com\\b/iH'
-reconf['FROM_PASSIFLORA'] = 'From=/\\@passiflora\\.ru\\b/iH'
-reconf['FROM_WORLDBANK'] = 'From=/\\@worldbank\\.org\\b/iH'
 
 -- Forged The Bat! MUA headers
 local thebat_mua_v1 = 'X-Mailer=/^The Bat! \\(v1\\./H'
