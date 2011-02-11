@@ -550,6 +550,61 @@ show_url_header (struct worker_task *task)
 	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 }
 
+static gboolean
+show_email_header (struct worker_task *task)
+{
+	gint                            r = 0;
+	gchar                           outbuf[OUTBUFSIZ];
+	struct uri                     *url;
+	GList                          *cur;
+	gsize                           len;
+	GTree                          *url_tree;
+
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "Emails: ");
+	url_tree = g_tree_new (compare_url_func);
+	cur = task->emails;
+	while (cur) {
+		url = cur->data;
+		if (g_tree_lookup (url_tree, url) == NULL && url->hostlen > 0) {
+			g_tree_insert (url_tree, url, url);
+			len = url->hostlen + url->userlen + 1;
+			/* Skip long hosts to avoid protocol coollisions */
+			if (len > OUTBUFSIZ) {
+				cur = g_list_next (cur);
+				continue;
+			}
+			/* Do header folding */
+			if (len + r >= OUTBUFSIZ - 3) {
+				outbuf[r++] = '\r';
+				outbuf[r++] = '\n';
+				outbuf[r] = ' ';
+				if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
+					return FALSE;
+				}
+				r = 0;
+			}
+			/* Write url host to buf */
+			if (g_list_next (cur) != NULL) {
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%*s@%*s, ",
+						url->userlen, url->user,
+						url->hostlen, url->host);
+			}
+			else {
+				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%*s@%*s",
+										url->userlen, url->user,
+										url->hostlen, url->host);
+			}
+		}
+		cur = g_list_next (cur);
+	}
+	if (r == 0) {
+		return TRUE;
+	}
+	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
+
+	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+}
+
 static void
 metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 {
@@ -851,6 +906,10 @@ write_check_reply (struct worker_task *task)
 		}
 		/* URL stat */
 		if (! show_url_header (task)) {
+			return FALSE;
+		}
+		/* Emails stat */
+		if (! show_email_header (task)) {
 			return FALSE;
 		}
 	}

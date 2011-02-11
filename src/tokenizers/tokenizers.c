@@ -264,7 +264,7 @@ tokenize_subject (struct worker_task *task, GTree ** tree)
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, *tree);
 	}
 
-	osb_tokenizer = get_tokenizer ("osb");
+	osb_tokenizer = get_tokenizer ("osb-text");
 
 	/* Try to use pre-defined subject */
 	if (task->subject != NULL) {
