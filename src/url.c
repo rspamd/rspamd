@@ -1124,6 +1124,10 @@ url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_mat
 			match->m_begin = p + 1;
 			return TRUE;
 		}
+		else if (p == begin) {
+			match->m_begin = p;
+			return TRUE;
+		}
 	}
 	else {
 		p = pos + strlen (match->pattern);
