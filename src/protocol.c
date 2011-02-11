@@ -486,6 +486,32 @@ compare_url_func (gconstpointer a, gconstpointer b)
 	}
 }
 
+static gint
+compare_email_func (gconstpointer a, gconstpointer b)
+{
+	const struct uri               *u1 = a, *u2 = b;
+	gint                            r;
+
+	if (u1->hostlen != u2->hostlen) {
+		return u1->hostlen - u2->hostlen;
+	}
+	else {
+		if ((r = memcmp (u1->host, u2->host, u1->hostlen)) == 0){
+			if (u1->userlen != u2->userlen) {
+				return u1->userlen - u2->userlen;
+			}
+			else {
+				return memcmp (u1->user, u2->user, u1->userlen);
+			}
+		}
+		else {
+			return r;
+		}
+	}
+
+	return 0;
+}
+
 static gboolean
 show_url_header (struct worker_task *task)
 {
@@ -561,7 +587,7 @@ show_email_header (struct worker_task *task)
 	GTree                          *url_tree;
 
 	r = rspamd_snprintf (outbuf, sizeof (outbuf), "Emails: ");
-	url_tree = g_tree_new (compare_url_func);
+	url_tree = g_tree_new (compare_email_func);
 	cur = task->emails;
 	while (cur) {
 		url = cur->data;
