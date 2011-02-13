@@ -723,49 +723,63 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	}
 	if (metric_name == NULL || metric_value == NULL) {
 		m = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
-        default_required_score = m->required_score;
-        default_score = 0;
+		default_required_score = m->required_score;
+		default_score = 0;
 		if (!check_metric_settings (task, m, &ms, &rs)) {
 			ms = m->required_score;
 			rs = m->reject_score;
 		}
 		if (task->proto == SPAMC_PROTO) {
-			r = rspamd_snprintf (outbuf, sizeof (outbuf), "Spam: False ; 0 / %.2f" CRLF, ms);
+			r = rspamd_snprintf (outbuf, sizeof(outbuf),
+					"Spam: False ; 0 / %.2f" CRLF, ms);
 		}
 		else {
 			if (task->proto_ver >= 11) {
-                if (!task->is_skipped) {
-				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f / %.2f" CRLF, ms, rs);
-                }
-                else {
-				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: default; Skip; 0 / %.2f / %.2f" CRLF, ms, rs);
-                }
+				if (!task->is_skipped) {
+					r = rspamd_snprintf (outbuf, sizeof(outbuf),
+							"Metric: default; False; 0 / %.2f / %.2f" CRLF, ms,
+							rs);
+				}
+				else {
+					r = rspamd_snprintf (outbuf, sizeof(outbuf),
+							"Metric: default; Skip; 0 / %.2f / %.2f" CRLF, ms,
+							rs);
+				}
 			}
 			else {
-				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: default; False; 0 / %.2f" CRLF, ms);
+				r = rspamd_snprintf (outbuf, sizeof(outbuf),
+						"Metric: default; False; 0 / %.2f" CRLF, ms);
 			}
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Action: %s" CRLF, str_action_metric (METRIC_ACTION_NOACTION));
+			r += rspamd_snprintf (outbuf + r, sizeof(outbuf) - r,
+					"Action: %s" CRLF, str_action_metric (
+							METRIC_ACTION_NOACTION));
 		}
-        if (!task->is_skipped) {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: F (no action): [0/%.2f/%.2f] [", "default", ms, rs);
-        }
-        else {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: S: [0/%.2f/%.2f] [", "default", ms, rs);
-        }
+		if (!task->is_skipped) {
+			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
+					cd->log_size - cd->log_offset,
+					"(%s: F (no action): [0/%.2f/%.2f] [", "default", ms, rs);
+		}
+		else {
+			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
+					cd->log_size - cd->log_offset, "(%s: S: [0/%.2f/%.2f] [",
+					"default", ms, rs);
+		}
 	}
 	else {
-        /* XXX: dirty hack */
-        if (strcmp (metric_res->metric->name, DEFAULT_METRIC) == 0) {
-            default_required_score = metric_res->metric->required_score;
-            default_score = metric_res->score;
-        }
+		/* XXX: dirty hack */
+		if (strcmp (metric_res->metric->name, DEFAULT_METRIC) == 0) {
+			default_required_score = metric_res->metric->required_score;
+			default_score = metric_res->score;
+		}
 
 		if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
 			ms = metric_res->metric->required_score;
 			rs = metric_res->metric->reject_score;
 		}
-		if (! check_metric_action_settings (task, metric_res->metric, metric_res->score, &action)) {
-			action = check_metric_action (metric_res->score, ms, metric_res->metric);
+		if (!check_metric_action_settings (task, metric_res->metric,
+				metric_res->score, &action)) {
+			action = check_metric_action (metric_res->score, ms,
+					metric_res->metric);
 		}
 
 		if (metric_res->score >= ms) {
@@ -774,62 +788,79 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 
 		if (task->proto == SPAMC_PROTO) {
 			if (task->cmd != CMD_REPORT_IFSPAM || is_spam) {
-				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True" : "False", metric_res->score, ms);
+				r = rspamd_snprintf (outbuf, sizeof(outbuf),
+						"Spam: %s ; %.2f / %.2f" CRLF, (is_spam) ? "True"
+								: "False", metric_res->score, ms);
 			}
 		}
 		else {
 			if (task->proto_ver >= 11) {
-                if (!task->is_skipped) {
-				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f / %.2f" CRLF, 
-						(gchar *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms, rs);
-                }
-                else {
-				    r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; Skip; %.2f / %.2f / %.2f" CRLF, 
-						(gchar *)metric_name, metric_res->score, ms, rs);
-                }
+				if (!task->is_skipped) {
+					r = rspamd_snprintf (outbuf, sizeof(outbuf),
+							"Metric: %s; %s; %.2f / %.2f / %.2f" CRLF,
+							(gchar *) metric_name,
+							(is_spam) ? "True" : "False", metric_res->score,
+							ms, rs);
+				}
+				else {
+					r = rspamd_snprintf (outbuf, sizeof(outbuf),
+							"Metric: %s; Skip; %.2f / %.2f / %.2f" CRLF,
+							(gchar *) metric_name, metric_res->score, ms, rs);
+				}
 			}
 			else {
-				r = rspamd_snprintf (outbuf, sizeof (outbuf), "Metric: %s; %s; %.2f / %.2f" CRLF, 
-						(gchar *)metric_name, (is_spam) ? "True" : "False", metric_res->score, ms);
+				r = rspamd_snprintf (outbuf, sizeof(outbuf),
+						"Metric: %s; %s; %.2f / %.2f" CRLF,
+						(gchar *) metric_name, (is_spam) ? "True" : "False",
+						metric_res->score, ms);
 			}
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Action: %s" CRLF, str_action_metric(action));
+			r += rspamd_snprintf (outbuf + r, sizeof(outbuf) - r,
+					"Action: %s" CRLF, str_action_metric (action));
 		}
-        if (!task->is_skipped) {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (%s): [%.2f/%.2f/%.2f] [",
-				(gchar *)metric_name, is_spam ? 'T' : 'F', str_action_metric (action), metric_res->score, ms, rs);
-        }
-        else {
-		    cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "(%s: %c (default): [%.2f/%.2f/%.2f] [",
-				(gchar *)metric_name, 'S', metric_res->score, ms, rs);
-        
-        }
+		if (!task->is_skipped) {
+			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
+					cd->log_size - cd->log_offset,
+					"(%s: %c (%s): [%.2f/%.2f/%.2f] [", (gchar *) metric_name,
+					is_spam ? 'T' : 'F', str_action_metric (action),
+					metric_res->score, ms, rs);
+		}
+		else {
+			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
+					cd->log_size - cd->log_offset,
+					"(%s: %c (default): [%.2f/%.2f/%.2f] [",
+					(gchar *) metric_name, 'S', metric_res->score, ms, rs);
+
+		}
 	}
 	if (task->cmd == CMD_PROCESS) {
 #ifndef GMIME24
 		g_mime_message_add_header (task->message, "X-Spam-Status", outbuf);
 #else
-		g_mime_object_append_header (GMIME_OBJECT (task->message), "X-Spam-Status", outbuf);
+		g_mime_object_append_header (GMIME_OBJECT (task->message),
+				"X-Spam-Status", outbuf);
 #endif
 	}
 	else {
-		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		if (!rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			cd->alive = FALSE;
 			return;
 		}
 
 		if (metric_value != NULL) {
-			if (! show_metric_symbols (metric_res, cd)) {
+			if (!show_metric_symbols (metric_res, cd)) {
 				cd->alive = FALSE;
 				return;
 			}
 		}
 	}
 #ifdef HAVE_CLOCK_GETTIME
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
-		task->msg->len, calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res));
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
+			cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
+			task->msg->len, calculate_check_time (&task->tv, &task->ts,
+					task->cfg->clock_res));
 #else
 	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
-		task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
+			task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
 #endif
 }
 

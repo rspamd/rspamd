@@ -779,6 +779,11 @@ IF(NOT EXISTS ${ETC_PREFIX}/rspamd/2tld.inc)
 	INSTALL(FILES conf/2tld.inc DESTINATION etc/rspamd)
 ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/2tld.inc)
 
+INSTALL(FILES conf/surbl-whitelist.inc RENAME surbl-whitelist.inc DESTINATION etc/rspamd)
+IF(NOT EXISTS ${ETC_PREFIX}/rspamd/surbl-whitelist.inc)
+	INSTALL(FILES conf/surbl-whitelist.inc DESTINATION etc/rspamd)
+ENDIF(NOT EXISTS ${ETC_PREFIX}/rspamd/surbl-whitelist.inc)
+
 INSTALL(FILES conf/rspamd.xml.sample DESTINATION etc/)
 
 # Lua plugins

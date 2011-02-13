@@ -86,7 +86,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts && opts != s->options) {
 			/* Append new options */
-			s->options = g_list_concat (s->options, opts);
+			s->options = g_list_concat (s->options, g_list_copy(opts));
 			/* 
 			* Note that there is no need to add new destructor of GList as elements of appended
 			* GList are used directly, so just free initial GList

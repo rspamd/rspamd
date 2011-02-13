@@ -258,16 +258,17 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 	struct rspamd_metric            *new;
 
 	p = b;
-	c = b;
+
+	while (g_ascii_isspace (*p)) {
+		p ++;
+	}
+	c = p;
+
 	while (p - b < remain) {
 		switch (state) {
 		case 0:
 			/* Read metric's name */
-			if (g_ascii_isspace (*p)) {
-				state = 99;
-				next_state = 0;
-			}
-			else if (*p == ';') {
+			if (*p == ';') {
 				if (p - c <= 1) {
 					/* Empty metric name */
 					goto err;
