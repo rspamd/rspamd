@@ -96,6 +96,64 @@ lua_process_module (lua_State *L, const gchar *param, struct config_file *cfg)
 	}
 }
 
+/* Process a single item in 'metrics' table */
+static void
+lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
+{
+	GList                               *metric_list;
+	gchar                               *symbol;
+	struct metric                       *metric;
+	gdouble                             *score;
+
+	/* Get module opt structure */
+	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
+		metric = check_metric_conf (cfg, metric);
+		metric->name = memory_pool_strdup (cfg->cfg_pool, name);
+	}
+
+	/* Now iterate throught module table */
+	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+		/* key - -2, value - -1 */
+		symbol = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
+		if (symbol != NULL) {
+			if (lua_istable (L, -1)) {
+				/* We got a table, so extract individual attributes */
+				lua_pushstring (L, "weight");
+				lua_gettable (L, -1);
+				if (lua_isnumber (L, -1)) {
+					score = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+					*score = lua_tonumber (L, -1);
+				}
+				else {
+					msg_warn ("cannot get weight of symbol: %s", symbol);
+					continue;
+				}
+			}
+			else if (lua_isnumber (L, -1)) {
+				/* Just got weight */
+				score = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+				*score = lua_tonumber (L, -1);
+			}
+			else {
+				msg_warn ("cannot get weight of symbol: %s", symbol);
+				continue;
+			}
+			/* Insert symbol */
+			g_hash_table_insert (metric->symbols, symbol, score);
+
+			if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, symbol)) == NULL) {
+				metric_list = g_list_prepend (NULL, metric);
+				memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, metric_list);
+				g_hash_table_insert (cfg->metrics_symbols, symbol, metric_list);
+			}
+			else {
+				/* Slow but keep start element of list in safe */
+				metric_list = g_list_append (metric_list, metric);
+			}
+		}
+	}
+}
+
 /* Process single element */
 void
 lua_process_element (struct config_file *cfg, const gchar *name, struct module_opt *opt, gint idx) 
@@ -191,6 +249,21 @@ lua_post_load_config (struct config_file *cfg)
 			name = luaL_checkstring (L, -2);
 			if (name != NULL && lua_istable (L, -1)) {
 				lua_process_module (L, name, cfg);
+			}
+		}
+	}
+
+	/* First check all module options that may be overriden in 'config' global */
+	lua_getglobal (L, "metrics");
+
+	if (lua_istable (L, -1)) {
+		/* Iterate */
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			/* 'key' is at index -2 and 'value' is at index -1 */
+			/* Key must be a string and value must be a table */
+			name = luaL_checkstring (L, -2);
+			if (name != NULL && lua_istable (L, -1)) {
+				lua_process_metric (L, name, cfg);
 			}
 		}
 	}

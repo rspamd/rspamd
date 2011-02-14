@@ -893,8 +893,13 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 		/* Assign global table to set up attributes */
 		lua_newtable (L);
 		lua_setglobal (L, "config");
-		/* Now config table can be used for configuring rspamd */
 	}
+	lua_getglobal (L, "metrics");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "metrics");
+	}
+	/* Now config tables can be used for configuring rspamd */
 	/* First check "src" attribute */
 	if (attrs != NULL && (val = g_hash_table_lookup (attrs, "src")) != NULL) {
 		/* Chdir */
