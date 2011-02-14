@@ -175,6 +175,12 @@
  <!-- rambler.ru uribl -->
  <symbol weight="9.50">RAMBLER_URIBL</symbol>
 
+ <!-- rambler.ru emailbl -->
+ <symbol weight="9.50">RAMBLER_EMAILBL</symbol>
+
+ <!-- Phished mail -->
+ <symbol weight="5.0">PHISHING</symbol>
+
 </metric>
 <!-- End of factors section -->
 
@@ -287,6 +293,27 @@
 	<rule>type = ip, map = file://@ETC_PREFIX@/rspamd/ip_test, symbol = R_IP_WHITELIST</rule>
 -->
 	<rule>type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL</rule>
+</module>
+
+<!-- phishing -->
+<module name="phishing">
+   <symbol>PHISHING</symbol>
+   <!-- <domains>file://path/to/domains</domains> -->
+</module>
+
+<!-- Trie module -->
+<!-- 
+<module name="trie">
+  <option name="rule">TRIE1:bad pattern</option>
+</module>
+-->
+
+<!-- Emails blacklist -->
+<module name="emails">
+  <option name="rule">symbol = RAMBLER_EMAILBL, dnsbl = emailbl.rambler.ru, domain_only = false</option>
+  <!--
+  <option name="rule">symbol = R_BAD_EMAIL1, map = file:///tmp/emails.list, domain_only = true</option>
+  -->
 </module>
 
 
