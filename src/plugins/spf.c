@@ -136,7 +136,7 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 	guint32                         s, m;
 
 	if (record) {
-		cur = g_list_first (record->addrs);
+		cur = g_list_last (record->addrs);
 		s = ntohl (task->from_addr.s_addr);
 		while (cur) {
 			addr = cur->data;
@@ -146,6 +146,14 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
                 }
                 else {
                     m = G_MAXUINT32 << (32 - addr->mask);
+                }
+                if (addr->addr == 0 && cur->prev != NULL) {
+                	/*
+                	 * In fact default record should be the last element in a record
+                	 * so ignore such other records
+                	 */
+                	cur = g_list_previous (cur);
+                	continue;
                 }
                 if ((s & m) == (addr->addr & m)) {
                     switch (addr->mech) {
@@ -167,7 +175,7 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
                     break;
                 }
             }
-			cur = g_list_next (cur);
+			cur = g_list_previous (cur);
 		}
 		if (record->addrs != NULL) {
 			/* Free addresses that we already proceed */
