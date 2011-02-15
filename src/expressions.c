@@ -106,7 +106,7 @@ re_cache_check (const gchar *line, memory_pool_t *pool)
 }
 
 void
-re_cache_add (gchar *line, void *pointer, memory_pool_t *pool)
+re_cache_add (const gchar *line, void *pointer, memory_pool_t *pool)
 {
 	GHashTable              *re_cache;
 	
@@ -117,7 +117,20 @@ re_cache_add (gchar *line, void *pointer, memory_pool_t *pool)
 		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
 	}
 
-	g_hash_table_insert (re_cache, line, pointer);
+	g_hash_table_insert (re_cache, (gpointer)line, pointer);
+}
+
+void
+re_cache_del (const gchar *line, memory_pool_t *pool)
+{
+	GHashTable              *re_cache;
+
+	re_cache = memory_pool_get_variable (pool, "re_cache");
+
+	if (re_cache != NULL) {
+		g_hash_table_remove (re_cache, line);
+	}
+
 }
 
 /* Task cache functions */

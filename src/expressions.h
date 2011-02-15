@@ -88,14 +88,20 @@ void register_expression_function (const gchar *name, rspamd_internal_func_t fun
  * @param line symbolic representation
  * @param pointer regexp data
  */
-void re_cache_add (gchar *line, void *pointer, memory_pool_t *pool);
+void re_cache_add (const gchar *line, void *pointer, memory_pool_t *pool);
 
 /**
  * Check regexp in cache
  * @param line symbolic representation
  * @return pointer to regexp data or NULL if regexp is not found
  */
-void * re_cache_check (const gchar *line, memory_pool_t *pool);
+void * re_cache_check (const const gchar *line, memory_pool_t *pool);
+
+/**
+ * Remove regexp from regexp cache
+ * @param line symbolic representation
+ */
+void re_cache_del (const gchar *line, memory_pool_t *pool);
 
 /**
  * Add regexp to regexp task cache
