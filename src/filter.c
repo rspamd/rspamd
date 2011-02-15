@@ -493,7 +493,7 @@ classifiers_callback (gpointer value, void *arg)
 	gchar                           *header = NULL;
 	
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
-		cur = message_get_header (task->task_pool, task->message, header);
+		cur = message_get_header (task->task_pool, task->message, header, FALSE);
 		if (cur) {
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 		}

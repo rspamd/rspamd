@@ -1152,7 +1152,7 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 		}
 	}
 	else {
-		domains = message_get_header (task->task_pool, task->message, "From");
+		domains = message_get_header (task->task_pool, task->message, "From", FALSE);
 
 		if (domains != NULL) {
 			rec->cur_domain = memory_pool_strdup (task->task_pool, domains->data);

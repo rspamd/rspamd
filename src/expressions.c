@@ -245,6 +245,7 @@ is_regexp_flag (gchar a)
 	case 'U':
 	case 'X':
 	case 'T':
+	case 'S':
 		return TRUE;
 	default:
 		return FALSE;
@@ -680,6 +681,10 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 			result->is_test = TRUE;
 			p ++;
 			break;
+		case 'S':
+			result->is_strong = TRUE;
+			p ++;
+			break;
 			/* Stop flags parsing */
 		default:
 			p = NULL;
@@ -913,7 +918,7 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 	}
 
 	debug_task ("try to get header %s", (gchar *)arg->data);
-	headerlist = message_get_header (task->task_pool, task->message, (gchar *)arg->data);
+	headerlist = message_get_header (task->task_pool, task->message, (gchar *)arg->data, FALSE);
 	if (headerlist) {
 		g_list_free (headerlist);
 		return TRUE;

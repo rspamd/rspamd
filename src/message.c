@@ -816,7 +816,7 @@ process_message (struct worker_task *task)
 #endif
 
 		/* Parse received headers */
-		first = message_get_header (task->task_pool, message, "Received");
+		first = message_get_header (task->task_pool, message, "Received", FALSE);
 		cur = first;
 		while (cur) {
 			recv = memory_pool_alloc0 (task->task_pool, sizeof (struct received_header));
@@ -927,15 +927,27 @@ enum {
 
 #ifndef GMIME24
 static void
-header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const gchar *field)
+header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const gchar *field, gboolean strong)
 {
 	while (h) {
-		if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
-			if (pool != NULL) {
-				*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
+		if (G_LIKELY (!strong)) {
+			if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
+				if (pool != NULL) {
+					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
+				}
+				else {
+					*ret = g_list_prepend (*ret, g_strdup (h->value));
+				}
 			}
-			else {
-				*ret = g_list_prepend (*ret, g_strdup (h->value));
+		}
+		else {
+			if (h->value && !strncmp (field, h->name, strlen (field))) {
+				if (pool != NULL) {
+					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
+				}
+				else {
+					*ret = g_list_prepend (*ret, g_strdup (h->value));
+				}
 			}
 		}
 		h = h->next;
@@ -943,7 +955,7 @@ header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const 
 }
 #else
 static void
-header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field)
+header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field, gboolean strong)
 {
 	GMimeHeaderIter                *iter;
 	const gchar                     *name;
@@ -957,12 +969,24 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 	if (g_mime_header_list_get_iter (ls, iter) && g_mime_header_iter_first (iter)) {
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
-			if (!g_strncasecmp (field, name, strlen (name))) {
-				if (pool != NULL) {
-					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+			if (G_LIKELY (!strong)) {
+				if (!g_strncasecmp (field, name, strlen (name))) {
+					if (pool != NULL) {
+						*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+					}
+					else {
+						*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
+					}
 				}
-				else {
-					*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
+			}
+			else {
+				if (!strncmp (field, name, strlen (name))) {
+					if (pool != NULL) {
+						*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+					}
+					else {
+						*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
+					}
 				}
 			}
 			if (!g_mime_header_iter_next (iter)) {
@@ -980,6 +1004,7 @@ struct multipart_cb_data {
 	memory_pool_t                  *pool;
 	const gchar                     *field;
 	gboolean                        try_search;
+	gboolean                        strong;
 	gint                            rec;
 };
 
@@ -1003,10 +1028,10 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 		GMimeHeaderList                *ls;
 
 		ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
-		header_iterate (data->pool, ls, &l, data->field);
+		header_iterate (data->pool, ls, &l, data->field, data->strong);
 #else
 		h = part->headers->headers;
-		header_iterate (data->pool, h, &l, data->field);
+		header_iterate (data->pool, h, &l, data->field, data->strong);
 #endif
 		if (l == NULL) {
 			/* Header not found, abandon search results */
@@ -1031,7 +1056,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 }
 
 static GList                   *
-local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field)
+local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
 {
 	GList                          *gret = NULL;
 	GMimeObject                    *part;
@@ -1042,6 +1067,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 	};
 	cb.pool = pool;
 	cb.field = field;
+	cb.strong = strong;
 
 #ifndef GMIME24
 	struct raw_header              *h;
@@ -1052,7 +1078,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 
 	msg_debug ("iterate over headers to find header %s", field);
 	h = GMIME_OBJECT (message)->headers->headers;
-	header_iterate (pool, h, &gret, field);
+	header_iterate (pool, h, &gret, field, strong);
 
 	if (gret == NULL) {
 		/* Try to iterate with mime part headers */
@@ -1060,7 +1086,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
 			h = part->headers->headers;
-			header_iterate (pool, h, &gret, field);
+			header_iterate (pool, h, &gret, field, strong);
 			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
 				msg_debug ("iterate over headers of each multipart's subparts %s", field);
 				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb);
@@ -1079,13 +1105,13 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 	GMimeHeaderList                *ls;
 
 	ls = g_mime_object_get_header_list (GMIME_OBJECT (message));
-	header_iterate (pool, ls, &gret, field);
+	header_iterate (pool, ls, &gret, field, strong);
 	if (gret == NULL) {
 		/* Try to iterate with mime part headers */
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
 			ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
-			header_iterate (pool, ls, &gret, field);
+			header_iterate (pool, ls, &gret, field, strong);
 			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
 				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb);
 				if (cb.ret != NULL) {
@@ -1202,7 +1228,7 @@ local_message_get_recipients_##type (GMimeMessage *message, const gchar *unused)
 /* different declarations for different types of set and get functions */
   typedef const gchar             *(*GetFunc) (GMimeMessage * message);
   typedef InternetAddressList    *(*GetRcptFunc) (GMimeMessage * message, const gchar *type);
-  typedef GList                  *(*GetListFunc) (memory_pool_t * pool, GMimeMessage * message, const gchar *type);
+  typedef GList                  *(*GetListFunc) (memory_pool_t * pool, GMimeMessage * message, const gchar *type, gboolean strong);
   typedef void                    (*SetFunc) (GMimeMessage * message, const gchar *value);
   typedef void                    (*SetListFunc) (GMimeMessage * message, const gchar *field, const gchar *value);
 
@@ -1306,7 +1332,7 @@ message_set_header (GMimeMessage * message, const gchar *field, const gchar *val
 * You should free the GList list by yourself.
 **/
 GList                          *
-message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field)
+message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
 {
 	gint                            i;
 	gchar                           *ret = NULL, *ia_string;
@@ -1347,7 +1373,7 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 #endif
 				break;
 			case FUNC_LIST:
-				gret = (*(fieldfunc[i].getlistfunc)) (pool, message, field);
+				gret = (*(fieldfunc[i].getlistfunc)) (pool, message, field, strong);
 				break;
 			}
 			break;

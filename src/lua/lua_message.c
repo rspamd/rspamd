@@ -66,6 +66,7 @@ LUA_FUNCTION_DEF (message, set_sender);
 LUA_FUNCTION_DEF (message, get_reply_to);
 LUA_FUNCTION_DEF (message, set_reply_to);
 LUA_FUNCTION_DEF (message, get_header);
+LUA_FUNCTION_DEF (message, get_header_strong);
 LUA_FUNCTION_DEF (message, set_header);
 
 static const struct luaL_reg    msglib_m[] = {
@@ -78,6 +79,7 @@ static const struct luaL_reg    msglib_m[] = {
 	LUA_INTERFACE_DEF (message, get_reply_to),
 	LUA_INTERFACE_DEF (message, set_reply_to),
 	LUA_INTERFACE_DEF (message, get_header),
+	LUA_INTERFACE_DEF (message, get_header_strong),
 	LUA_INTERFACE_DEF (message, set_header),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -106,7 +108,7 @@ LUA_GMIME_BRIDGE_GET (message, get_reply_to, Message)
 LUA_GMIME_BRIDGE_SET (message, set_reply_to, Message)
 
 static gint
-lua_message_get_header (lua_State * L)
+lua_message_get_header_common (lua_State * L, gboolean strong)
 {
 	const gchar                     *headern;
 	GMimeMessage                   *obj = lua_check_message (L);
@@ -116,7 +118,7 @@ lua_message_get_header (lua_State * L)
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
 		if (headern) {
-			res = message_get_header (NULL, obj, headern);
+			res = message_get_header (NULL, obj, headern, strong);
 			if (res) {
 				cur = res;
 				lua_newtable (L);
@@ -143,6 +145,17 @@ lua_message_get_header (lua_State * L)
 	return 1;
 }
 
+static gint
+lua_message_get_header (lua_State * L)
+{
+	return lua_message_get_header_common (L, FALSE);
+}
+
+static gint
+lua_message_get_header_strong (lua_State * L)
+{
+	return lua_message_get_header_common (L, TRUE);
+}
 
 static gint
 lua_message_set_header (lua_State * L)

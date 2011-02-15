@@ -54,6 +54,6 @@ struct received_header {
 gint process_message (struct worker_task *task);
 
 void message_set_header (GMimeMessage *message, const gchar *field, const gchar *value);
-GList* message_get_header (memory_pool_t *pool, GMimeMessage *message, const gchar *field);
+GList* message_get_header (memory_pool_t *pool, GMimeMessage *message, const gchar *field, gboolean strong);
 
 #endif

@@ -800,7 +800,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		if ((s = g_hash_table_lookup (session->learn_classifier->opts, "header")) != NULL) {
-			cur = message_get_header (task->task_pool, task->message, s);
+			cur = message_get_header (task->task_pool, task->message, s, FALSE);
 			if (cur) {
 				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 			}

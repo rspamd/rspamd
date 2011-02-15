@@ -661,7 +661,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		}
 		debug_task ("checking header regexp: %s = %s", re->header, re->regexp_text);
 
-		headerlist = message_get_header (task->task_pool, task->message, re->header);
+		headerlist = message_get_header (task->task_pool, task->message, re->header, re->is_strong);
 		if (headerlist == NULL) {
 			if (G_UNLIKELY (re->is_test)) {
 				msg_info ("process test regexp %s for header %s returned FALSE: no header found", re->regexp_text, re->header);

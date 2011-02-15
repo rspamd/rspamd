@@ -93,6 +93,7 @@ struct rspamd_regexp {
 	gchar *header;									/**< header name for header regexps						*/
 	gboolean is_test;								/**< true if this expression must be tested				*/
 	gboolean is_raw;								/**< true if this regexp is done by raw matching		*/
+	gboolean is_strong;								/**< true if headers search must be case sensitive		*/
 };
 
 /**
