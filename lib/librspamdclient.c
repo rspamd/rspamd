@@ -55,6 +55,7 @@ struct rspamd_connection {
 	struct rspamd_result *result;
 	GString *in_buf;
 	struct rspamd_metric *cur_metric;
+	gint version;
 };
 
 static struct rspamd_client *client = NULL;
@@ -181,8 +182,10 @@ parse_rspamd_first_line (struct rspamd_connection *conn, guint len, GError **err
 {
 	gchar                           *b = conn->in_buf->str + sizeof("RSPAMD/") - 1, *p, *c;
 	guint                            remain = len - sizeof("RSPAMD/") + 1, state = 0, next_state;
+	gdouble                          dver;
 
 	p = b;
+	c = p;
 	while (p - b < remain) {
 		switch (state) {
 		case 0:
@@ -190,6 +193,8 @@ parse_rspamd_first_line (struct rspamd_connection *conn, guint len, GError **err
 			if (g_ascii_isspace (*p)) {
 				state = 99;
 				next_state = 1;
+				dver = strtod (c, NULL);
+				conn->version = floor (dver * 10 + 0.5);
 			}
 			else if (!g_ascii_isdigit (*p) && *p != '.') {
 				goto err;
@@ -330,7 +335,7 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 			/* Read required score */
 			if (g_ascii_isspace (*p) || p - b == remain - 1) {
 				new->required_score = strtod (c, &err_str);
-				if (*err_str != *p) {
+				if (*err_str != *p && *err_str != *(p + 1)) {
 					/* Invalid score */
 					goto err;
 				}
@@ -400,25 +405,36 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 	struct rspamd_symbol            *new;
 
 	p = b;
-	c = b;
+	while (g_ascii_isspace (*p)) {
+		p ++;
+	}
+	c = p;
 	while (p - b < remain) {
 		switch (state) {
 		case 0:
 			/* Read symbol's name */
-			if (g_ascii_isspace (*p)) {
-				state = 99;
-				next_state = 0;
-			}
-			else if (*p == ';' || *p == '(') {
+			if (p - b == remain - 1 || *p == ';' || *p == '(') {
 				if (p - c <= 1) {
 					/* Empty symbol name */
 					goto err;
 				}
 				else {
+					if (p - b == remain - 1) {
+						l = p - c + 1;
+					}
+					else {
+						if (*p == '(') {
+							next_state = 1;
+						}
+						else if (*p == ';' ) {
+							next_state = 2;
+						}
+						l = p - c;
+					}
 					/* Create new symbol */
-					sym = g_malloc (p - c + 1);
-					sym[p - c] = '\0';
-					memcpy (sym, c, p - c);
+					sym = g_malloc (l + 1);
+					sym[l] = '\0';
+					memcpy (sym, c, l);
 
 					if (g_hash_table_lookup (conn->cur_metric->symbols, sym) != NULL) {
 						/* Duplicate symbol */
@@ -429,13 +445,6 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 					new->name = sym;
 					g_hash_table_insert (conn->cur_metric->symbols, sym, new);
 					state = 99;
-					if (*p == '(') {
-						next_state = 1;
-						new->weight = 0;
-					}
-					else {
-						next_state = 2;
-					}
 				}
 			}
 			p ++;
@@ -452,11 +461,37 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 					p ++;
 				}
 				state = 99;
-				next_state = 2;
+				if (conn->version >= 13) {
+					next_state = 2;
+				}
+				else {
+					next_state = 3;
+				}
 			}
 			p ++;
 			break;
 		case 2:
+			/* Read description */
+			if (*p == ';' || p - b == remain - 1) {
+				if (*p == ';') {
+					l = p - c;
+				}
+				else {
+					l = p - c + 1;
+				}
+
+				if (l > 0) {
+					sym = g_malloc (l + 1);
+					sym[l] = '\0';
+					memcpy (sym, c, l);
+					new->description = sym;
+				}
+				state = 99;
+				next_state = 3;
+			}
+			p ++;
+			break;
+		case 3:
 			/* Read option */
 			if (*p == ',' || p - b == remain - 1) {
 				/* Insert option into linked list */
@@ -493,8 +528,8 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 
 	err:
 	if (*err == NULL) {
-		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid symbol line: %*s at pos: %d",
-				remain, b, (int)(p - b));
+		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid symbol line: %*s at pos: %d, at state: %d",
+				remain, b, (int)(p - b), state);
 	}
 	upstream_fail (&conn->server->up, conn->connection_time);
 	return FALSE;
@@ -812,7 +847,7 @@ rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
 	gint                            r;
 
 	/* Write command */
-	r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s RSPAMC/1.2\r\n", command);
+	r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s RSPAMC/1.3\r\n", command);
 	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Content-Length: %uz\r\n", clen);
 	/* Iterate through headers */
 	if (headers != NULL) {

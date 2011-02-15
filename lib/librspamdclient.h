@@ -8,6 +8,7 @@
  */
 struct rspamd_symbol {
 	gchar *name;		    /**< name */
+	gchar *description;		/**< description */
 	double weight;			/**< weight */
 	GList *options;			/**< List of options (as const gchar *) */
 };

@@ -196,6 +196,7 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 					first = FALSE;
 				}
 				PRINT_FUNC ("%s(%.2f)", s->name, s->weight);
+
 				if (s->options) {
 					PRINT_FUNC ("(");
 					cur = g_list_first (s->options);
@@ -209,7 +210,9 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 						cur = g_list_next (cur);
 					}
 				}
-
+				if (s->description) {
+					PRINT_FUNC (" - \"%s\"", s->description);
+				}
 			}
 		}
 		PRINT_FUNC ("\n");

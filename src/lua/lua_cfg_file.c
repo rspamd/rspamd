@@ -119,7 +119,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 			if (lua_istable (L, -1)) {
 				/* We got a table, so extract individual attributes */
 				lua_pushstring (L, "weight");
-				lua_gettable (L, -1);
+				lua_gettable (L, -2);
 				if (lua_isnumber (L, -1)) {
 					score = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
 					*score = lua_tonumber (L, -1);
@@ -128,6 +128,14 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 					msg_warn ("cannot get weight of symbol: %s", symbol);
 					continue;
 				}
+				lua_pop (L, 1);
+				lua_pushstring (L, "description");
+				lua_gettable (L, -2);
+				if (lua_isstring (L, -1)) {
+					g_hash_table_insert (metric->descriptions,
+							symbol, memory_pool_strdup (cfg->cfg_pool, lua_tostring (L, -1)));
+				}
+				lua_pop (L, 1);
 			}
 			else if (lua_isnumber (L, -1)) {
 				/* Just got weight */

@@ -805,7 +805,7 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 gboolean
 handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	gchar                           *strval, *err;
+	gchar                          *strval, *err, *desc;
 	double                         *value;
 	GList                          *metric_list;
 	struct metric                  *metric = ctx->section_pointer;
@@ -824,6 +824,13 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 		}
 	}
 	
+	if (attrs != NULL) {
+		desc = g_hash_table_lookup (attrs, "description");
+		if (desc) {
+			g_hash_table_insert (metric->descriptions, data, memory_pool_strdup (cfg->cfg_pool, desc));
+		}
+	}
+
 	g_hash_table_insert (metric->symbols, data, value);
 
 	if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, data)) == NULL) {

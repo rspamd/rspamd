@@ -17,6 +17,7 @@
 #define RSPAMC_PROTO_1_0 "1.0"
 #define RSPAMC_PROTO_1_1 "1.1"
 #define RSPAMC_PROTO_1_2 "1.2"
+#define RSPAMC_PROTO_1_3 "1.3"
 
 /*
  * Reply messages

@@ -236,6 +236,9 @@ parse_command (struct worker_task *task, f_str_t * line)
 			else if (strncmp (token, RSPAMC_PROTO_1_2, sizeof (RSPAMC_PROTO_1_2) - 1) == 0) {
 				task->proto_ver = 12;
 			}
+			else if (strncmp (token, RSPAMC_PROTO_1_3, sizeof (RSPAMC_PROTO_1_3) - 1) == 0) {
+				task->proto_ver = 13;
+			}
 		}
 	}
 	else if (g_ascii_strncasecmp (line->begin, SPAMC_GREETING, sizeof (SPAMC_GREETING) - 1) == 0) {
@@ -449,6 +452,7 @@ struct metric_callback_data {
 	gint                            symbols_size;
 	gint                            symbols_offset;
 	gboolean                        alive;
+	struct metric                  *cur_metric;
 };
 
 static void
@@ -637,7 +641,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 	struct metric_callback_data    *cd = (struct metric_callback_data *)user_data;
 	struct worker_task             *task = cd->task;
 	gint                            r = 0;
-	gchar                           outbuf[OUTBUFSIZ];
+	gchar                           outbuf[OUTBUFSIZ], *description;
 	struct symbol                  *s = (struct symbol *)value;
 	GList                          *cur;
 
@@ -648,8 +652,17 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 		cd->symbols_offset = rspamd_snprintf (cd->symbols_buf + cd->symbols_offset,
 				cd->symbols_size - cd->symbols_offset, "%s," CRLF, (gchar *)key);
 	}
+	description = g_hash_table_lookup (cd->cur_metric->descriptions, key);
 	if (s->options) {
-		if (task->proto_ver >= 12) {
+		if (task->proto_ver >= 13) {
+			if (description != NULL) {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); %s;", (gchar *)key, s->score, description);
+			}
+			else {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f);;", (gchar *)key, s->score);
+			}
+		}
+		else if (task->proto_ver >= 12) {
 			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); ", (gchar *)key, s->score);
 		}
 		else {
@@ -672,7 +685,15 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 		}
 	}
 	else {
-		if (task->proto_ver >= 12) {
+		if (task->proto_ver >= 13) {
+			if (description != NULL) {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f); %s" CRLF, (gchar *)key, s->score, description);
+			}
+			else {
+				r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f);" CRLF, (gchar *)key, s->score);
+			}
+		}
+		else if (task->proto_ver >= 12) {
 			r = rspamd_snprintf (outbuf, OUTBUFSIZ, "Symbol: %s(%.2f)" CRLF, (gchar *)key, s->score);
 		}
 		else {
@@ -693,6 +714,7 @@ metric_symbols_callback (gpointer key, gpointer value, void *user_data)
 static gboolean
 show_metric_symbols (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
+	cd->cur_metric = metric_res->metric;
 	g_hash_table_foreach (metric_res->symbols, metric_symbols_callback, cd);
 	/* Remove last , from log buf */
 	if (cd->log_buf[cd->log_offset - 1] == ',') {

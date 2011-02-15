@@ -765,7 +765,9 @@ check_metric_conf (struct config_file *cfg, struct metric *c)
 		c->action = METRIC_ACTION_REJECT;
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (g_str_hash, g_str_equal);
+		c->descriptions = g_hash_table_new (g_str_hash, g_str_equal);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->symbols);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->descriptions);
 	}
 
 	return c;
