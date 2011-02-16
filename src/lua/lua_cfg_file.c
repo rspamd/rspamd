@@ -23,6 +23,8 @@
  */
 
 #include "lua_common.h"
+#include "../expressions.h"
+#include "../symbols_cache.h"
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
@@ -101,9 +103,10 @@ static void
 lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 {
 	GList                               *metric_list;
-	gchar                               *symbol;
+	gchar                               *symbol, *old_desc;
+	const gchar                         *desc;
 	struct metric                       *metric;
-	gdouble                             *score;
+	gdouble                             *score, *old_score;
 
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
@@ -132,8 +135,17 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 				lua_pushstring (L, "description");
 				lua_gettable (L, -2);
 				if (lua_isstring (L, -1)) {
-					g_hash_table_insert (metric->descriptions,
-							symbol, memory_pool_strdup (cfg->cfg_pool, lua_tostring (L, -1)));
+					desc = lua_tostring (L, -1);
+					old_desc = g_hash_table_lookup (metric->descriptions, symbol);
+					if (old_desc) {
+						msg_info ("replacing description for symbol %s", symbol);
+						g_hash_table_replace (metric->descriptions,
+							symbol, memory_pool_strdup (cfg->cfg_pool, desc));
+					}
+					else {
+						g_hash_table_insert (metric->descriptions,
+							symbol, memory_pool_strdup (cfg->cfg_pool, desc));
+					}
 				}
 				lua_pop (L, 1);
 			}
@@ -147,7 +159,13 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 				continue;
 			}
 			/* Insert symbol */
-			g_hash_table_insert (metric->symbols, symbol, score);
+			if ((old_score = g_hash_table_lookup (metric->symbols, symbol)) != NULL) {
+				msg_info ("replacing weight for symbol %s: %.2f -> %.2f", symbol, *old_score, *score);
+				g_hash_table_replace (metric->symbols, symbol, score);
+			}
+			else {
+				g_hash_table_insert (metric->symbols, symbol, score);
+			}
 
 			if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, symbol)) == NULL) {
 				metric_list = g_list_prepend (NULL, metric);
@@ -244,7 +262,9 @@ void
 lua_post_load_config (struct config_file *cfg)
 {
 	lua_State                            *L = cfg->lua_state;
-	const gchar                          *name;
+	const gchar                          *name, *val;
+	gchar                                *sym;
+	struct expression                    *expr, *old_expr;
 
 	/* First check all module options that may be overriden in 'config' global */
 	lua_getglobal (L, "config");
@@ -261,7 +281,7 @@ lua_post_load_config (struct config_file *cfg)
 		}
 	}
 
-	/* First check all module options that may be overriden in 'config' global */
+	/* Check metrics settings */
 	lua_getglobal (L, "metrics");
 
 	if (lua_istable (L, -1)) {
@@ -272,6 +292,35 @@ lua_post_load_config (struct config_file *cfg)
 			name = luaL_checkstring (L, -2);
 			if (name != NULL && lua_istable (L, -1)) {
 				lua_process_metric (L, name, cfg);
+			}
+		}
+	}
+
+	/* Check composites */
+	lua_getglobal (L, "composites");
+
+	if (lua_istable (L, -1)) {
+		/* Iterate */
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+			/* 'key' is at index -2 and 'value' is at index -1 */
+			/* Key must be a string and value must be a table */
+			name = luaL_checkstring (L, -2);
+			if (name != NULL && lua_isstring (L, -1)) {
+				val = lua_tostring (L, -1);
+				sym = memory_pool_strdup(cfg->cfg_pool, name);
+				if ((expr = parse_expression (cfg->cfg_pool, sym)) == NULL) {
+					msg_err ("cannot parse composite expression: %s", sym);
+					continue;
+				}
+				/* Now check hash table for this composite */
+				if ((old_expr = g_hash_table_lookup (cfg->composite_symbols, name)) != NULL) {
+					msg_info ("replacing composite symbol %s", name);
+					g_hash_table_replace (cfg->composite_symbols, sym, expr);
+				}
+				else {
+					g_hash_table_insert (cfg->composite_symbols, sym, expr);
+					register_virtual_symbol (&cfg->cache, sym, 1);
+				}
 			}
 		}
 	}
