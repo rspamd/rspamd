@@ -31,7 +31,15 @@ function check_forged_headers(task)
 				end
 				if mime_rcpt then
 					for _,mr in ipairs(mime_rcpt) do
-						if string.find(mr, sr) then
+						local i = string.find(mr, '<', 1, true)
+						if i then
+						    local j = string.find(mr, '>', i, true)
+						    if j then
+							mr = string.sub(mr, i+1, j-1)
+						    end
+						end
+
+						if string.lower(mr) == string.lower(sr) then
 							res = true
 							break
 						end
@@ -39,7 +47,14 @@ function check_forged_headers(task)
 				end
 				if mime_cc then
 					for _,mr in ipairs(mime_cc) do
-						if string.find(mr, sr) then
+						local i = string.find(mr, '<', 1, true)
+						if i then
+						    local j = string.find(mr, '>', i, true)
+						    if j then
+							mr = string.sub(mr, i+1, j-1)
+						    end
+						end
+						if string.lower(mr) == string.lower(sr) then
 							res = true
 							break
 						end
@@ -57,7 +72,14 @@ function check_forged_headers(task)
 	local smtp_from = task:get_from()
 	if smtp_form then
 		local mime_from = msg:get_header('From')
-		if not mime_from or not string.find(mime_from[0], smtp_from) then
+		local i = string.find(mime_from[0], '<', 1, true)
+		if i then
+		    local j = string.find(mime_from[0], '>', i, true)
+		    if j then
+			mime_from[0] = string.sub(mime_from[0], i+1, j-1)
+		    end
+		end
+		if not mime_from or not (string.lower(mime_from[0]) == string.lower(smtp_from)) then
 			task:insert_result(symbol_sender, 1)
 		end
 	end

@@ -40,3 +40,17 @@ reconf['R_EMPTY_IMAGE'] = function (task)
 	return false
 end
 
+
+local function file_exists(filename)
+	local file = io.open(filename)
+	if file then
+		io.close(file)
+		return true
+	else
+		return false
+	end
+end
+
+if file_exists('rspamd.local.lua') then
+	dofile('rspamd.local.lua')
+end
