@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "librspamdclient.h"
+#include "../../lib/librspamdclient.h"
 
 #define PRINT_FUNC printf
 
