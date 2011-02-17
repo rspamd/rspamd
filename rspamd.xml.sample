@@ -94,7 +94,7 @@
  <!-- Subject seems to be spam --> 
  <symbol weight="8.00">R_SAJDING</symbol>
  <!-- Detects bad content-transfer-encoding for text parts -->
- <symbol weight="6.00">R_BAD_CTE_7BIT</symbol>
+ <symbol weight="3.00">R_BAD_CTE_7BIT</symbol>
  <!-- Flash redirect on imageshack.us -->
  <symbol weight="10.00">R_FLASH_REDIR_IMGSHACK</symbol>
  <!-- Message id is incorrect -->
