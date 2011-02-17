@@ -88,7 +88,7 @@ local function add_emails_rule(params)
 	for _,param in ipairs(params) do
 		local _,_,name,value = string.find(param, '([a-zA-Z_0-9]+)%s*=%s*(.+)')
 		if not name or not value then
-			rspamd_logger:err('invalid rule: '..param)
+			rspamd_logger.err('invalid rule: '..param)
 			return nil
 		end
 		if name == 'dnsbl' then
@@ -104,13 +104,13 @@ local function add_emails_rule(params)
 				newrule['domain_only'] = true
 			end
 		else	
-			rspamd_logger:err('invalid rule option: '.. name)
+			rspamd_logger.err('invalid rule option: '.. name)
 			return nil
 		end
 
 	end
 	if not newrule['symbol'] or (not newrule['map'] and not newrule['dnsbl']) then
-		rspamd_logger:err('incomplete rule')
+		rspamd_logger.err('incomplete rule')
 		return nil
 	end
 	table.insert(rules, newrule)
@@ -123,7 +123,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 	if rspamd_config:get_api_version() >= 2 then
 		rspamd_config:register_module_option('emails', 'rule', 'string')
 	else
-		rspamd_logger:err('Invalid rspamd version for this plugin')
+		rspamd_logger.err('Invalid rspamd version for this plugin')
 	end
 end
 
@@ -136,7 +136,7 @@ if opts then
 				local params = split(value, ',')
 				local rule = add_emails_rule (params)
 				if not rule then
-					rspamd_logger:err('cannot add rule: "'..value..'"')
+					rspamd_logger.err('cannot add rule: "'..value..'"')
 				else
 					if type(rspamd_config.get_api_version) ~= 'nil' then
 						rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
@@ -147,7 +147,7 @@ if opts then
 			local params = split(strrules, ',')
 			local rule = add_emails_rule (params)
 			if not rule then
-				rspamd_logger:err('cannot add rule: "'..strrules..'"')
+				rspamd_logger.err('cannot add rule: "'..strrules..'"')
 			else
 				if type(rspamd_config.get_api_version) ~= 'nil' then
 					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)

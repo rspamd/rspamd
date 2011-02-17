@@ -155,7 +155,7 @@ static gint
 lua_logger_err (lua_State * L)
 {
 	const gchar                     *msg;
-	msg = luaL_checkstring (L, 2);
+	msg = luaL_checkstring (L, 1);
 	lua_common_log (G_LOG_LEVEL_CRITICAL, L, msg);
 	return 1;
 }
@@ -164,7 +164,7 @@ static gint
 lua_logger_warn (lua_State * L)
 {
 	const gchar                     *msg;
-	msg = luaL_checkstring (L, 2);
+	msg = luaL_checkstring (L, 1);
 	lua_common_log (G_LOG_LEVEL_WARNING, L, msg);
 	return 1;
 }
@@ -173,7 +173,7 @@ static gint
 lua_logger_info (lua_State * L)
 {
 	const gchar                     *msg;
-	msg = luaL_checkstring (L, 2);
+	msg = luaL_checkstring (L, 1);
 	lua_common_log (G_LOG_LEVEL_INFO, L, msg);
 	return 1;
 }
@@ -182,7 +182,7 @@ static gint
 lua_logger_debug (lua_State * L)
 {
 	const gchar                     *msg;
-	msg = luaL_checkstring (L, 2);
+	msg = luaL_checkstring (L, 1);
 	lua_common_log (G_LOG_LEVEL_DEBUG, L, msg);
 	return 1;
 }
