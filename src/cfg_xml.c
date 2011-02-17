@@ -840,7 +840,9 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 	}
 	else {
 		/* Slow but keep start element of list in safe */
-		metric_list = g_list_append (metric_list, metric);
+		if (!g_list_find (metric_list, metric)) {
+			metric_list = g_list_append (metric_list, metric);
+		}
 	}
 
 	return TRUE;

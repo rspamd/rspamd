@@ -174,7 +174,9 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 			}
 			else {
 				/* Slow but keep start element of list in safe */
-				metric_list = g_list_append (metric_list, metric);
+				if (!g_list_find (metric_list, metric)) {
+					metric_list = g_list_append (metric_list, metric);
+				}
 			}
 		}
 	}
