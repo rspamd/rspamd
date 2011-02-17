@@ -324,6 +324,13 @@ lua_task_get_received_headers (lua_State * L)
 		cur = g_list_first (task->received);
 		while (cur) {
 			rh = cur->data;
+			if (rh->is_error || (
+					rh->from_ip == NULL &&
+					rh->real_ip == NULL &&
+					rh->real_hostname == NULL)) {
+				cur = g_list_next (cur);
+				continue;
+			}
 			lua_newtable (L);
 			lua_set_table_index (L, "from_hostname", rh->from_hostname);
 			lua_set_table_index (L, "from_ip", rh->from_ip);
