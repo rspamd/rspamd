@@ -1146,7 +1146,7 @@ url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match
 
 	p = pos + strlen (match->pattern);
 
-	while (p < end && (is_domain (*p) || (*p == '.' && p + 1 < end && is_domain (*(p + 1))))) {
+	while (p < end && (is_domain (*p) || *p == '_' || (*p == '.' && p + 1 < end && is_domain (*(p + 1))))) {
 		p ++;
 	}
 	match->m_len = p - match->m_begin;
