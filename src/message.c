@@ -309,6 +309,9 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 					next_state = 1;
 				}
 			}
+			else if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) == 'y') {
+				state = 3;
+			}
 			else {
 				/* This can be qmail header, parse it separately */
 				parse_qmail_recv (pool, line, r);

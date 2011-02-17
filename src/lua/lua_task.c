@@ -324,10 +324,11 @@ lua_task_get_received_headers (lua_State * L)
 		cur = g_list_first (task->received);
 		while (cur) {
 			rh = cur->data;
-			if (rh->is_error || (
+			if (rh->is_error || G_UNLIKELY(
 					rh->from_ip == NULL &&
 					rh->real_ip == NULL &&
-					rh->real_hostname == NULL)) {
+					rh->real_hostname == NULL &&
+					rh->by_hostname == NULL)) {
 				cur = g_list_next (cur);
 				continue;
 			}
