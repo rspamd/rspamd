@@ -98,9 +98,11 @@ local iplanet_messaging_server = 'Received=/iPlanet Messaging Server/H'
 local hotmail_baydav_msgid = 'Message-Id=/^BAY\\d+-DAV\\d+[A-Z0-9]{25}\\@phx\\.gbl$/mH'
 -- Sympatico message id
 local sympatico_msgid = 'Message-Id=/^BAYC\\d+-PASMTP\\d+[A-Z0-9]{25}\\@CEZ\\.ICE$/mH'
+-- Mailman message id
+local mailman_msgid = 'Message-ID=/^<mailman\\.\\d+\\.\\d+\\.\\d+\\..+\\@\\S+>$/XS'
 -- Message id seems to be forged
-local unusable_msgid = string.format('(%s | %s | %s | %s | %s)', 
-					lyris_ezml_remailer, wacky_sendmail_version, iplanet_messaging_server, hotmail_baydav_msgid, sympatico_msgid)
+local unusable_msgid = string.format('(%s | %s | %s | %s | %s | %s)', 
+					lyris_ezml_remailer, wacky_sendmail_version, iplanet_messaging_server, hotmail_baydav_msgid, sympatico_msgid, mailman_msgid)
 -- Outlook express data seems to be forged
 local forged_oe = string.format('(%s & !%s & !%s & !%s)', oe_mua, oe_msgid_1, oe_msgid_2, unusable_msgid)
 -- Outlook specific headers

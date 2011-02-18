@@ -66,7 +66,9 @@
  <!-- Short html part with a link to an image -->
  <symbol weight="3.00" description="Short html part with a link to an image">HTML_SHORT_LINK_IMG_2</symbol>
  <!-- Forged outlook MUA -->
- <symbol weight="3.00" description="Forged outlook MUA ">FORGED_MUA_OUTLOOK</symbol>
+ <symbol weight="3.00" description="Forged outlook MUA">FORGED_MUA_OUTLOOK</symbol>
+ <!-- Forged outlook MUA, but from maillist -->
+ <symbol weight="0.00" description="Forged outlook MUA, but from maillist">FORGED_MUA_OUTLOOK_MAILLIST</symbol>
  <!-- Fake helo for verizon provider -->
  <symbol weight="2.00" description="Fake helo for verizon provider">FM_FAKE_HELO_VERIZON</symbol>
  <!--Quoted reply-to from yahoo (seems to be forged) --> 
@@ -103,6 +105,8 @@
  <symbol weight="3.00" description="Message id is missing ">MISSING_MID</symbol>
  <!-- Recipients are not the same as RCPT TO: mail command -->
  <symbol weight="3.00" description="Recipients are not the same as RCPT TO: mail command">FORGED_RECIPIENTS</symbol>
+ <!-- Recipients are not the same as RCPT TO: mail command, but from maillist -->
+ <symbol weight="0.00" description="Recipients are not the same as RCPT TO: mail command, but from maillist">FORGED_RECIPIENTS_MAILLIST</symbol>
  <!-- Forged Exchange messages -->
  <symbol weight="2.00" description="Forged Exchange messages ">RATWARE_MS_HASH</symbol>
  <!-- Reply-type in content-type -->
@@ -181,15 +185,12 @@
  <!-- Phished mail -->
  <symbol weight="5.0" description="Phished mail">PHISHING</symbol>
 
- <!-- Recipients are not the same as RCPT TO: mail command, but from maillist -->
- <symbol weight="-0.1" description="Recipients are not the same as RCPT TO: mail command, but from maillist">FORGED_RECIPIENTS_MAILLIST</symbol>
-
-
 </metric>
 <!-- End of metrics section -->
 
 <!-- Composites section -->
-<composite name="FORGED_RECIPIENTS_MAILLIST">FORGED_RECIPIENTS &amp; MAILLIST</composite>
+<composite name="FORGED_RECIPIENTS_MAILLIST">FORGED_RECIPIENTS &amp; ~MAILLIST</composite>
+<composite name="FORGED_MUA_OUTLOOK_MAILLIST">FORGED_MUA_OUTLOOK &amp; ~MAILLIST</composite>
 <!-- End of composites section -->
 
 <!-- Workers section -->
