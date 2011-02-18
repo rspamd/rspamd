@@ -107,6 +107,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
 		s->score = w;
 		s->options = opts;
+		s->name = symbol;
 		metric_res->score += w;
 
 		if (opts) {
@@ -328,6 +329,7 @@ process_filters (struct worker_task *task)
 struct composites_data {
 	struct worker_task             *task;
 	struct metric_result           *metric_res;
+	GList                          *symbols_to_remove;
 };
 
 static void
@@ -392,8 +394,10 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			r = rspamd_snprintf (logbuf, sizeof (logbuf), "<%s>, insert symbol %s instead of symbols: ", cd->task->message_id, key);
 			while (s) {
 				ms = g_hash_table_lookup (cd->metric_res->symbols, s->data);
-				g_hash_table_remove (cd->metric_res->symbols, s->data);
-				cd->metric_res->score -= ms->score;
+				if (ms != NULL && g_list_find (cd->symbols_to_remove, ms) == NULL) {
+					cd->symbols_to_remove = g_list_prepend (cd->symbols_to_remove, ms);
+				}
+
 				if (s->next) {
 					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s, ", s->data);
 				}
@@ -489,11 +493,28 @@ composites_metric_callback (gpointer key, gpointer value, void *data)
 	struct worker_task             *task = (struct worker_task *)data;
 	struct composites_data         *cd = memory_pool_alloc (task->task_pool, sizeof (struct composites_data));
 	struct metric_result           *metric_res = (struct metric_result *)value;
+	struct symbol                  *ms;
+	GList                          *cur;
 
 	cd->task = task;
 	cd->metric_res = (struct metric_result *)metric_res;
+	cd->symbols_to_remove = NULL;
 
+	/* Process hash table */
 	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
+
+	/* Remove symbols that are in composites */
+	cur = cd->symbols_to_remove;
+	while (cur) {
+		ms = cur->data;
+		g_hash_table_remove (cd->metric_res->symbols, ms->name);
+		cd->metric_res->score -= ms->score;
+		cur = g_list_next (cur);
+	}
+	/* Free list */
+	if (cd->symbols_to_remove) {
+		g_list_free (cd->symbols_to_remove);
+	}
 }
 
 void

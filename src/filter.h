@@ -31,6 +31,7 @@ struct filter {
 struct symbol {
 	double score;									/**< symbol's score							*/
 	GList *options;									/**< list of symbol's options				*/
+	const gchar *name;
 };
 
 enum rspamd_metric_action {
