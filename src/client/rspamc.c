@@ -38,6 +38,7 @@ static gint                     weight = 1;
 static gint                     flag;
 static gboolean                 pass_all;
 static gboolean                 tty = FALSE;
+static gboolean                 verbose = FALSE;
 
 static GOptionEntry entries[] =
 {
@@ -47,6 +48,7 @@ static GOptionEntry entries[] =
 		{ "weight", 'w', 0, G_OPTION_ARG_INT, &weight, "Weight for fuzzy operations", NULL },
 		{ "flag", 'f', 0, G_OPTION_ARG_INT, &flag, "Flag for fuzzy operations", NULL },
 		{ "pass", 'p', 0, G_OPTION_ARG_NONE, &pass_all, "Pass all filters", NULL },
+		{ "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "More verbose output", NULL },
 		{ "ip", 'i', 0, G_OPTION_ARG_STRING, &ip, "Emulate that message was received from specified ip address", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
@@ -159,16 +161,16 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 	gboolean                         first;
 
 	if (metric->is_skipped) {
-		PRINT_FUNC ("%s: Skipped\n", key);
+		PRINT_FUNC ("\n%s: Skipped\n", key);
 	}
 	else {
 		if (tty) {
-			PRINT_FUNC ("\033[1m%s:\033[0m %s [ %.2f / %.2f ]\n", key,
+			PRINT_FUNC ("\n\033[1m%s:\033[0m %s [ %.2f / %.2f ]\n", key,
 						metric->score > metric->required_score ? "True" : "False",
 						metric->score, metric->required_score);
 		}
 		else {
-			PRINT_FUNC ("%s: %s [ %.2f / %.2f ]\n", key,
+			PRINT_FUNC ("\n%s: %s [ %.2f / %.2f ]\n", key,
 						metric->score > metric->required_score ? "True" : "False",
 						metric->score, metric->required_score);
 		}
@@ -182,36 +184,62 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 			if (metric->action) {
 				PRINT_FUNC ("Action: %s\n", metric->action);
 			}
-			PRINT_FUNC ("Symbols: ");
+			else {
+				PRINT_FUNC ("Symbols: ");
+			}
 		}
 		if (metric->symbols) {
 			first = TRUE;
 			g_hash_table_iter_init (&it, metric->symbols);
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				s = v;
-				if (! first) {
-					PRINT_FUNC (", ");
-				}
-				else {
-					first = FALSE;
-				}
-				PRINT_FUNC ("%s(%.2f)", s->name, s->weight);
-
-				if (s->options) {
-					PRINT_FUNC ("(");
-					cur = g_list_first (s->options);
-					while (cur) {
-						if (cur->next) {
-							PRINT_FUNC ("%s,", cur->data);
+				if (verbose) {
+					if (tty) {
+						PRINT_FUNC ("\n\033[1mSymbol\033[0m - %s(%.2f)", s->name, s->weight);
+					}
+					else {
+						PRINT_FUNC ("\nSymbol - %s(%.2f)", s->name, s->weight);
+					}
+					if (s->options) {
+						PRINT_FUNC (": ");
+						cur = g_list_first (s->options);
+						while (cur) {
+							if (cur->next) {
+								PRINT_FUNC ("%s,", cur->data);
+							}
+							else {
+								PRINT_FUNC ("%s", cur->data);
+							}
+							cur = g_list_next (cur);
 						}
-						else {
-							PRINT_FUNC ("%s)", cur->data);
-						}
-						cur = g_list_next (cur);
+					}
+					if (s->description) {
+						PRINT_FUNC (" - \"%s\"", s->description);
 					}
 				}
-				if (s->description) {
-					PRINT_FUNC (" - \"%s\"", s->description);
+				else {
+					if (! first) {
+						PRINT_FUNC (", ");
+					}
+					else {
+						first = FALSE;
+					}
+					PRINT_FUNC ("%s(%.2f)", s->name, s->weight);
+
+					if (s->options) {
+						PRINT_FUNC ("(");
+						cur = g_list_first (s->options);
+						while (cur) {
+							if (cur->next) {
+								PRINT_FUNC ("%s,", cur->data);
+							}
+							else {
+								PRINT_FUNC ("%s)", cur->data);
+							}
+							cur = g_list_next (cur);
+						}
+					}
+
 				}
 			}
 		}
@@ -230,7 +258,7 @@ print_rspamd_result (struct rspamd_result *res)
 	if (tty) {
 		printf ("\033[1m");
 	}
-	PRINT_FUNC ("Results for host: %s\n\n", connect_str);
+	PRINT_FUNC ("Results for host: %s\n", connect_str);
 	if (tty) {
 		printf ("\033[0m");
 	}
