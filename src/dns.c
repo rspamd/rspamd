@@ -755,8 +755,8 @@ end:
 	return TRUE;
 }
 
-#define GET16(x) do {if (*remain < sizeof (guint16)) {goto err;} memcpy (&(x), p, sizeof (guint16)); (x) = ntohs ((x)); p += sizeof (guint16); *remain -= sizeof (guint16); } while(0)
-#define GET32(x) do {if (*remain < sizeof (guint32)) {goto err;} memcpy (&(x), p, sizeof (guint32)); (x) = ntohl ((x)); p += sizeof (guint32); *remain -= sizeof (guint32); } while(0)
+#define GET16(x) do {(x) = ((*p) << 8) + *(p + 1); p += sizeof (guint16); *remain -= sizeof (guint16); } while(0)
+#define GET32(x) do {(x) = ((*p) << 24) + ((*(p + 1)) << 16) + ((*(p + 2)) << 8) + *(p + 3); p += sizeof (guint32); *remain -= sizeof (guint32); } while(0)
 
 static gint
 dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, gint *remain)
