@@ -44,7 +44,8 @@
 #endif
 
 static void
-insert_metric_result (struct worker_task *task, struct metric *metric, const gchar *symbol, double flag, GList * opts)
+insert_metric_result (struct worker_task *task, struct metric *metric, const gchar *symbol,
+		double flag, GList * opts, gboolean single)
 {
 	struct metric_result           *metric_res;
 	struct symbol                  *s;
@@ -81,28 +82,32 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	}
 
 	/* Add metric score */
-	metric_res->score += w;
+
 
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
-		if (s->options && opts && opts != s->options) {
-			/* Append new options */
-			s->options = g_list_concat (s->options, g_list_copy(opts));
-			/* 
-			* Note that there is no need to add new destructor of GList as elements of appended
-			* GList are used directly, so just free initial GList
-			*/
-		}
-		else if (opts) {
-			s->options = opts;
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
-		}
+		if (!single) {
+			if (s->options && opts && opts != s->options) {
+				/* Append new options */
+				s->options = g_list_concat (s->options, g_list_copy(opts));
+				/*
+				 * Note that there is no need to add new destructor of GList as elements of appended
+				 * GList are used directly, so just free initial GList
+				 */
+			}
+			else if (opts) {
+				s->options = opts;
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
+			}
 
-		s->score += w;
+			s->score += w;
+			metric_res->score += w;
+		}
 	}
 	else {
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
 		s->score = w;
 		s->options = opts;
+		metric_res->score += w;
 
 		if (opts) {
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
@@ -114,8 +119,8 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	
 }
 
-void
-insert_result (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
+static void
+insert_result_common (struct worker_task *task, const gchar *symbol, double flag, GList * opts, gboolean single)
 {
 	struct metric                  *metric;
 	struct cache_item              *item;
@@ -127,13 +132,13 @@ insert_result (struct worker_task *task, const gchar *symbol, double flag, GList
 		
 		while (cur) {
 			metric = cur->data;
-			insert_metric_result (task, metric, symbol, flag, opts);
+			insert_metric_result (task, metric, symbol, flag, opts, single);
 			cur = g_list_next (cur);
 		}
 	}
 	else {
 		/* Insert symbol to default metric */
-		insert_metric_result (task, task->cfg->default_metric, symbol, flag, opts);
+		insert_metric_result (task, task->cfg->default_metric, symbol, flag, opts, single);
 	}
 
 	/* Process cache item */
@@ -159,6 +164,20 @@ insert_result (struct worker_task *task, const gchar *symbol, double flag, GList
 			cur = g_list_next (cur);
 		}
 	}
+}
+
+/* Insert result that may be increased on next insertions */
+void
+insert_result (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
+{
+	insert_result_common (task, symbol, flag, opts, FALSE);
+}
+
+/* Insert result as a single option */
+void
+insert_result_single (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
+{
+	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
 /* 
@@ -321,6 +340,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	gsize                           cur, op1, op2;
 	gchar                           logbuf[256];
 	gint                            r;
+	struct symbol                  *ms;
 
 	stack = g_queue_new ();
 
@@ -332,7 +352,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			}
 			else {
 				cur = 1;
-				symbols = g_list_append (symbols, expr->content.operand);
+				symbols = g_list_prepend (symbols, expr->content.operand);
 			}
 			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
 		}
@@ -371,7 +391,9 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			s = g_list_first (symbols);
 			r = rspamd_snprintf (logbuf, sizeof (logbuf), "<%s>, insert symbol %s instead of symbols: ", cd->task->message_id, key);
 			while (s) {
+				ms = g_hash_table_lookup (cd->metric_res->symbols, s->data);
 				g_hash_table_remove (cd->metric_res->symbols, s->data);
+				cd->metric_res->score -= ms->score;
 				if (s->next) {
 					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s, ", s->data);
 				}
@@ -381,7 +403,8 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				s = g_list_next (s);
 			}
 			/* Add new symbol */
-			insert_result (cd->task, key, 1.0, NULL);
+			insert_result_single (cd->task, key, 1.0, NULL);
+			msg_info (logbuf);
 		}
 	}
 

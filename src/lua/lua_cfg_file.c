@@ -310,8 +310,8 @@ lua_post_load_config (struct config_file *cfg)
 			if (name != NULL && lua_isstring (L, -1)) {
 				val = lua_tostring (L, -1);
 				sym = memory_pool_strdup(cfg->cfg_pool, name);
-				if ((expr = parse_expression (cfg->cfg_pool, sym)) == NULL) {
-					msg_err ("cannot parse composite expression: %s", sym);
+				if ((expr = parse_expression (cfg->cfg_pool, memory_pool_strdup(cfg->cfg_pool, val))) == NULL) {
+					msg_err ("cannot parse composite expression: %s", val);
 					continue;
 				}
 				/* Now check hash table for this composite */

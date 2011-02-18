@@ -87,6 +87,7 @@ static gint                     regexp_common_filter (struct worker_task *task);
 static gboolean                 rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused);
 static gboolean                 rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused);
+static gboolean                 rspamd_regexp_occurs_number (struct worker_task *task, GList * args, void *unused);
 static void                     process_regexp_item (struct worker_task *task, void *user_data);
 
 static gint
@@ -105,6 +106,39 @@ regexp_dynamic_insert_result (struct worker_task *task, void *user_data)
 	insert_result (task, symbol, 1, NULL);
 }
 
+/*
+ * Utility functions for matching exact number of regexps
+ */
+typedef gboolean (*int_compare_func) (gint a, gint b);
+static gboolean
+op_equal (gint a, gint b)
+{
+	return a == b;
+}
+static gboolean
+op_more (gint a, gint b)
+{
+	return a > b;
+}
+static gboolean
+op_less (gint a, gint b)
+{
+	return a < b;
+}
+static gboolean
+op_more_equal (gint a, gint b)
+{
+	return a >= b;
+}
+static gboolean
+op_less_equal (gint a, gint b)
+{
+	return a <= b;
+}
+
+/*
+ * Process ip and mask of dynamic regexp
+ */
 static gboolean
 parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
 {
@@ -404,6 +438,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 	register_expression_function ("regexp_match_number", rspamd_regexp_match_number, NULL);
+	register_expression_function ("regexp_occurs_number", rspamd_regexp_occurs_number, NULL);
 	register_expression_function ("raw_header_exists", rspamd_raw_header_exists, NULL);
 	register_expression_function ("check_smtp_data", rspamd_check_smtp_data, NULL);
 
@@ -603,12 +638,14 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static                          gsize
-process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar *additional)
+process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar *additional,
+		gint limit, int_compare_func f)
 {
-	gchar                           *headerv, *c, t;
+	gchar                          *headerv, *c, t;
 	struct mime_text_part          *part;
 	GList                          *cur, *headerlist;
 	GRegex                         *regexp;
+	GMatchInfo                     *info;
 	GError                         *err = NULL;
 	struct url_regexp_param         callback_param = {
 		.task = task,
@@ -618,7 +655,8 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 	};
 	guint8                         *ct;
 	gsize                           clen;
-	gint                            r;
+	gint                            r, passed = 0, start, end, old;
+	gboolean                        matched;
 
 
 	if (re == NULL) {
@@ -654,6 +692,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		msg_warn ("bad error detected: %s has invalid regexp type", re->regexp_text);
 		return 0;
 	case REGEXP_HEADER:
+		/* Check header's name */
 		if (re->header == NULL) {
 			msg_info ("header regexp without header name: '%s'", re->regexp_text);
 			task_cache_add (task, re, 0);
@@ -661,8 +700,10 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		}
 		debug_task ("checking header regexp: %s = %s", re->header, re->regexp_text);
 
+		/* Get list of specified headers */
 		headerlist = message_get_header (task->task_pool, task->message, re->header, re->is_strong);
 		if (headerlist == NULL) {
+			/* Header is not found */
 			if (G_UNLIKELY (re->is_test)) {
 				msg_info ("process test regexp %s for header %s returned FALSE: no header found", re->regexp_text, re->header);
 			}
@@ -671,21 +712,33 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		}
 		else {
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, headerlist);
+			/* Check whether we have regexp for it */
 			if (re->regexp == NULL) {
 				debug_task ("regexp contains only header and it is found %s", re->header);
 				task_cache_add (task, re, 1);
 				return 1;
 			}
+			/* Iterate throught headers */
 			cur = headerlist;
 			while (cur) {
 				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
 
+				/* Try to match regexp */
 				if (cur->data && g_regex_match_full (re->regexp, cur->data, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const gchar *)cur->data);
 					}
-					task_cache_add (task, re, 1);
-					return 1;
+					if (f != NULL && limit > 1) {
+						/* If we have limit count, increase passed count and compare with limit */
+						if (f (++passed, limit)) {
+							task_cache_add (task, re, 1);
+							return 1;
+						}
+					}
+					else {
+						task_cache_add (task, re, 1);
+						return 1;
+					}
 				}
 				else if (G_UNLIKELY (re->is_test)) {
 					msg_info ("process test regexp %s for header %s with value '%s' returned FALSE", re->regexp_text, re->header, (const gchar *)cur->data);
@@ -701,6 +754,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		break;
 	case REGEXP_MIME:
 		debug_task ("checking mime regexp: %s", re->regexp_text);
+		/* Iterate throught text parts */
 		cur = g_list_first (task->text_parts);
 		while (cur) {
 			part = (struct mime_text_part *)cur->data;
@@ -709,12 +763,14 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				cur = g_list_next (cur);
 				continue;
 			}
+			/* Check raw flags */
 			if (part->is_raw) {
 				regexp = re->raw_regexp;
 			}
 			else {
 				regexp = re->regexp;
 			}
+			/* Select data for regexp */
 			if (re->is_raw) {
 				ct = part->orig->data;
 				clen = part->orig->len;
@@ -723,15 +779,44 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				ct = part->content->data;
 				clen = part->content->len;
 			}
-			if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL, &err) == TRUE) {
-				if (G_UNLIKELY (re->is_test)) {
-					msg_info ("process test regexp %s for mime part of length %d returned TRUE", re->regexp_text,
-							(gint)clen);
+			/* If we have limit, apply regexp so much times as we can */
+			if (f != NULL && limit > 1) {
+				end = 0;
+				while ((matched = g_regex_match_full (regexp, ct + end + 1, clen - end - 1, 0, 0, &info, &err)) == TRUE) {
+					if (G_UNLIKELY (re->is_test)) {
+						msg_info ("process test regexp %s for mime part of length %d returned TRUE",
+								re->regexp_text,
+								(gint)clen,
+								end);
+					}
+					if (f (++passed, limit)) {
+						task_cache_add (task, re, 1);
+						return 1;
+					}
+					else {
+						/* Match not found, skip further cycles */
+						old = end;
+						if (!g_match_info_fetch_pos (info, 0, &start, &end) || end <= 0) {
+							break;
+						}
+						end += old;
+					}
+					g_match_info_free (info);
 				}
-				task_cache_add (task, re, 1);
-				return 1;
+				g_match_info_free (info);
 			}
-			else if (G_UNLIKELY (re->is_test)) {
+			else {
+				if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL, &err) == TRUE) {
+					if (G_UNLIKELY (re->is_test)) {
+						msg_info ("process test regexp %s for mime part of length %d returned TRUE", re->regexp_text,
+								(gint)clen);
+					}
+					task_cache_add (task, re, 1);
+					return 1;
+				}
+
+			}
+			if (!matched && G_UNLIKELY (re->is_test)) {
 				msg_info ("process test regexp %s for mime part of length %d returned FALSE", re->regexp_text,
 						(gint)clen);
 			}
@@ -744,16 +829,48 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		return 0;
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
+		regexp = re->raw_regexp;
+		ct = task->msg->begin;
+		clen = task->msg->len;
 
-		if (g_regex_match_full (re->raw_regexp, task->msg->begin, task->msg->len, 0, 0, NULL, &err) == TRUE) {
-			if (G_UNLIKELY (re->is_test)) {
-				msg_info ("process test regexp %s for message of length %d returned TRUE", re->regexp_text, (gint)task->msg->len);
+		/* If we have limit, apply regexp so much times as we can */
+		if (f != NULL && limit > 1) {
+			end = 0;
+			while ((matched = g_regex_match_full (regexp, ct + end + 1, clen - end - 1, 0, 0, &info, &err)) == TRUE) {
+				if (G_UNLIKELY (re->is_test)) {
+					msg_info ("process test regexp %s for mime part of length %d returned TRUE", re->regexp_text,
+							(gint)clen);
+				}
+				if (f (++passed, limit)) {
+					task_cache_add (task, re, 1);
+					return 1;
+				}
+				else {
+					/* Match not found, skip further cycles */
+					old = end;
+					if (!g_match_info_fetch_pos (info, 0, &start, &end) || end <= 0) {
+						break;
+					}
+					old += end;
+				}
+				g_match_info_free (info);
 			}
-			task_cache_add (task, re, 1);
-			return 1;
+			g_match_info_free (info);
 		}
-		else if (G_UNLIKELY (re->is_test)) {
-			msg_info ("process test regexp %s for message of length %d returned FALSE", re->regexp_text, (gint)task->msg->len);
+		else {
+			if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL, &err) == TRUE) {
+				if (G_UNLIKELY (re->is_test)) {
+					msg_info ("process test regexp %s for message part of length %d returned TRUE", re->regexp_text,
+							(gint)clen);
+				}
+				task_cache_add (task, re, 1);
+				return 1;
+			}
+
+		}
+		if (!matched && G_UNLIKELY (re->is_test)) {
+			msg_info ("process test regexp %s for message part of length %d returned FALSE", re->regexp_text,
+					(gint)clen);
 		}
 		if (err != NULL) {
 			msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
@@ -762,6 +879,10 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		return 0;
 	case REGEXP_URL:
 		debug_task ("checking url regexp: %s", re->regexp_text);
+		if (f != NULL && limit > 1) {
+			/*XXX: add support of it */
+			msg_warn ("numbered matches are not supported for url regexp");
+		}
 		cur = g_list_first (task->text_parts);
 		while (cur) {
 			part = (struct mime_text_part *)cur->data;
@@ -794,6 +915,10 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		return 0;
 	case REGEXP_RAW_HEADER:
 		debug_task ("checking for raw header: %s with regexp: %s", re->header, re->regexp_text);
+		if (f != NULL && limit > 1) {
+			/*XXX: add support of it */
+			msg_warn ("numbered matches are not supported for url regexp");
+		}
 		if (task->raw_headers == NULL) {
 			debug_task ("cannot check for raw header in message, no headers found");
 			task_cache_add (task, re, 0);
@@ -924,7 +1049,7 @@ process_regexp_expression (struct expression *expr, gchar *symbol, struct worker
 	while (it) {
 		if (it->type == EXPR_REGEXP_PARSED) {
 			/* Find corresponding symbol */
-			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task, additional);
+			cur = process_regexp ((struct rspamd_regexp *)it->content.operand, task, additional, 0, NULL);
 			debug_task ("regexp %s found", cur ? "is" : "is not");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
@@ -1073,6 +1198,73 @@ rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused
 	return res >= param_count;
 }
 
+static                          gboolean
+rspamd_regexp_occurs_number (struct worker_task *task, GList * args, void *unused)
+{
+	gint                            limit;
+	struct expression_argument     *arg;
+	struct rspamd_regexp           *re;
+	gchar                          *param, *err_str, op;
+	int_compare_func                f = NULL;
+
+	if (args == NULL || args->next == NULL) {
+		msg_warn ("wrong number of parameters to function, must be 2");
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+	if ((re = re_cache_check (arg->data, task->cfg->cfg_pool)) == NULL) {
+		re = parse_regexp (task->cfg->cfg_pool, arg->data, task->cfg->raw_mode);
+		if (!re) {
+			msg_err ("cannot parse given regexp: %s", (gchar *)arg->data);
+			return FALSE;
+		}
+	}
+
+	arg = get_function_arg (args->next->data, task, TRUE);
+	param = arg->data;
+	op = *param;
+	if (g_ascii_isdigit (op)) {
+		op = '=';
+	}
+	else {
+		param ++;
+	}
+	switch (op) {
+	case '>':
+		if (*param == '=') {
+			f = op_more_equal;
+			param ++;
+		}
+		else {
+			f = op_more;
+		}
+		break;
+	case '<':
+		if (*param == '=') {
+			f = op_less_equal;
+			param ++;
+		}
+		else {
+			f = op_less;
+		}
+		break;
+	case '=':
+		f = op_equal;
+		break;
+	default:
+		msg_err ("wrong operation character: %c, assumed '=', '>', '<', '>=', '<=' or empty op", op);
+		return FALSE;
+	}
+
+	limit = strtoul (param, &err_str, 10);
+	if (*err_str != 0) {
+		msg_err ("wrong numeric: %s at position: %s", param, err_str);
+		return FALSE;
+	}
+
+	return process_regexp (re, task, NULL, limit, f);
+}
 static                          gboolean
 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 {
@@ -1271,7 +1463,7 @@ lua_regexp_match (lua_State *L)
 		}
 		re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
 	}
-	r = process_regexp (re, task, NULL);
+	r = process_regexp (re, task, NULL, 0, NULL);
 	lua_pushboolean (L, r == 1);
 
 	return 1;

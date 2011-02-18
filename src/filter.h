@@ -98,6 +98,16 @@ void process_statfiles (struct worker_task *task);
 void insert_result (struct worker_task *task, const gchar *symbol, double flag, GList *opts);
 
 /**
+ * Insert a single result to task
+ * @param task worker's task that present message from user
+ * @param metric_name metric's name to which we need to insert result
+ * @param symbol symbol to insert
+ * @param flag numeric weight for symbol
+ * @param opts list of symbol's options
+ */
+void insert_result_single (struct worker_task *task, const gchar *symbol, double flag, GList *opts);
+
+/**
  * Process all results and form composite metrics from existent metrics as it is defined in config
  * @param task worker's task that present message from user
  */
