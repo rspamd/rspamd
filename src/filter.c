@@ -329,8 +329,21 @@ process_filters (struct worker_task *task)
 struct composites_data {
 	struct worker_task             *task;
 	struct metric_result           *metric_res;
-	GList                          *symbols_to_remove;
+	GTree                          *symbols_to_remove;
 };
+
+struct symbol_remove_data {
+	struct symbol                  *ms;
+	gboolean                        remove_weight;
+};
+
+static gint
+remove_compare_data (gconstpointer a, gconstpointer b)
+{
+	const gchar                    *ca = a, *cb = b;
+
+	return strcmp (ca, cb);
+}
 
 static void
 composites_foreach_callback (gpointer key, gpointer value, void *data)
@@ -340,16 +353,21 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	GQueue                         *stack;
 	GList                          *symbols = NULL, *s;
 	gsize                           cur, op1, op2;
-	gchar                           logbuf[256];
+	gchar                           logbuf[256], *sym;
 	gint                            r;
 	struct symbol                  *ms;
+	struct symbol_remove_data      *rd;
 
 	stack = g_queue_new ();
 
 	while (expr) {
 		if (expr->type == EXPR_STR) {
 			/* Find corresponding symbol */
-			if (g_hash_table_lookup (cd->metric_res->symbols, expr->content.operand) == NULL) {
+			sym = expr->content.operand;
+			if (*sym == '~') {
+				sym ++;
+			}
+			if (g_hash_table_lookup (cd->metric_res->symbols, sym) == NULL) {
 				cur = 0;
 			}
 			else {
@@ -393,9 +411,21 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			s = g_list_first (symbols);
 			r = rspamd_snprintf (logbuf, sizeof (logbuf), "<%s>, insert symbol %s instead of symbols: ", cd->task->message_id, key);
 			while (s) {
-				ms = g_hash_table_lookup (cd->metric_res->symbols, s->data);
-				if (ms != NULL && g_list_find (cd->symbols_to_remove, ms) == NULL) {
-					cd->symbols_to_remove = g_list_prepend (cd->symbols_to_remove, ms);
+				sym = s->data;
+				if (*sym == '~') {
+					ms = g_hash_table_lookup (cd->metric_res->symbols, sym + 1);
+				}
+				else {
+					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+				}
+
+				if (ms != NULL) {
+					rd = memory_pool_alloc (cd->task->task_pool, sizeof (struct symbol_remove_data));
+					rd->ms = ms;
+					rd->remove_weight = *sym != '~';
+					if (!g_tree_lookup (cd->symbols_to_remove, rd)) {
+						g_tree_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
+					}
 				}
 
 				if (s->next) {
@@ -421,7 +451,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 static                          gboolean
 check_autolearn (struct statfile_autolearn_params *params, struct worker_task *task)
 {
-	gchar                           *metric_name = DEFAULT_METRIC;
+	gchar                          *metric_name = DEFAULT_METRIC;
 	struct metric_result           *metric_res;
 	GList                          *cur;
 
@@ -487,34 +517,38 @@ process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens
 	}
 }
 
+static gboolean
+composites_remove_symbols (gpointer key, gpointer value, gpointer data)
+{
+	struct composites_data         *cd = data;
+	struct symbol_remove_data      *rd = value;
+
+	g_hash_table_remove (cd->metric_res->symbols, key);
+	if (rd->remove_weight) {
+		cd->metric_res->score -= rd->ms->score;
+	}
+
+	return FALSE;
+}
+
 static void
-composites_metric_callback (gpointer key, gpointer value, void *data)
+composites_metric_callback (gpointer key, gpointer value, gpointer data)
 {
 	struct worker_task             *task = (struct worker_task *)data;
 	struct composites_data         *cd = memory_pool_alloc (task->task_pool, sizeof (struct composites_data));
 	struct metric_result           *metric_res = (struct metric_result *)value;
-	struct symbol                  *ms;
-	GList                          *cur;
 
 	cd->task = task;
 	cd->metric_res = (struct metric_result *)metric_res;
-	cd->symbols_to_remove = NULL;
+	cd->symbols_to_remove = g_tree_new (remove_compare_data);
 
 	/* Process hash table */
 	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
 
 	/* Remove symbols that are in composites */
-	cur = cd->symbols_to_remove;
-	while (cur) {
-		ms = cur->data;
-		g_hash_table_remove (cd->metric_res->symbols, ms->name);
-		cd->metric_res->score -= ms->score;
-		cur = g_list_next (cur);
-	}
+	g_tree_foreach (cd->symbols_to_remove, composites_remove_symbols, cd);
 	/* Free list */
-	if (cd->symbols_to_remove) {
-		g_list_free (cd->symbols_to_remove);
-	}
+	g_tree_destroy (cd->symbols_to_remove);
 }
 
 void
