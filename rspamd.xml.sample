@@ -2,7 +2,7 @@
 <rspamd>
 <!-- Main section -->
 <tempdir>/tmp</tempdir>
-<pidfile>/var/run/rspamd.pid</pidfile>
+<pidfile>/var/run/rspamd/rspamd.pid</pidfile>
 <filters>regexp,surbl,chartable,fuzzy_check,spf</filters>
 <statfile_pool_size>262144000</statfile_pool_size>
 <raw_mode>yes</raw_mode>
@@ -69,10 +69,34 @@
  <symbol weight="3.00" description="Forged outlook MUA">FORGED_MUA_OUTLOOK</symbol>
  <!-- Forged outlook MUA, but from maillist -->
  <symbol weight="0.00" description="Forged outlook MUA, but from maillist">FORGED_MUA_OUTLOOK_MAILLIST</symbol>
+
+ <!-- Suspicious boundary in header Content-Type -->
+ <symbol weight="5.00" description="Suspicious boundary in header Content-Type">SUSPICIOUS_BOUNDARY</symbol>
+ <!-- Suspicious boundary in header Content-Type -->
+ <symbol weight="4.00" description="Suspicious boundary in header Content-Type">SUSPICIOUS_BOUNDARY2</symbol>
+ <!-- Suspicious boundary in header Content-Type -->
+ <symbol weight="3.00" description="Suspicious boundary in header Content-Type">SUSPICIOUS_BOUNDARY3</symbol>
+ <!-- Suspicious boundary in header Content-Type -->
+ <symbol weight="4.00" description="Suspicious boundary in header Content-Type">SUSPICIOUS_BOUNDARY4</symbol>
+
  <!-- Message pretends to be send from The Bat! but has forged Message-ID -->
  <symbol weight="4.00" description="Message pretends to be send from The Bat! but has forged Message-ID">FORGED_MUA_THEBAT_MSGID</symbol>
  <!-- Message pretends to be send from The Bat! but has forged Message-ID -->
  <symbol weight="3.00" description="Message pretends to be send from The Bat! but has forged Message-ID">FORGED_MUA_THEBAT_MSGID_UNKNOWN</symbol>
+
+ <!-- Message pretends to be send from Mozilla Mail but has forged Message-ID -->
+ <symbol weight="3.50" description="Message pretends to be send from Mozilla Mail but has forged Message-ID">FORGED_MUA_MOZILLA_MAIL_MSGID</symbol>
+ <!-- Message pretends to be send from Mozilla Mail but has forged Message-ID -->
+ <symbol weight="2.50" description="Message pretends to be send from Mozilla Mail but has forged Message-ID">FORGED_MUA_MOZILLA_MAIL_MSGID_UNKNOWN</symbol>
+ <!-- Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID -->
+ <symbol weight="3.50" description="Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID">FORGED_MUA_THUNDERBIRD_MSGID</symbol>
+ <!-- Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID -->
+ <symbol weight="2.50" description="Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID">FORGED_MUA_THUNDERBIRD_MSGID_UNKNOWN</symbol>
+ <!-- Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID -->
+ <symbol weight="3.50" description="Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID">FORGED_MUA_SEAMONKEY_MSGID</symbol>
+ <!-- Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID -->
+ <symbol weight="2.50" description="Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID">FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN</symbol>
+
  <!-- Fake helo for verizon provider -->
  <symbol weight="2.00" description="Fake helo for verizon provider">FM_FAKE_HELO_VERIZON</symbol>
  <!--Quoted reply-to from yahoo (seems to be forged) --> 
@@ -112,7 +136,7 @@
  <!-- Spam string at the end of message to make statistics faults 0-->
  <symbol weight="3.84" description="Spam string at the end of message to make statistics faults 0">TRACKER_ID</symbol>
  <!-- No space in from header -->
- <symbol weight="3.00" description="No space in from header">R_NO_SPACE_IN_FROM</symbol>
+ <symbol weight="1.00" description="No space in from header">R_NO_SPACE_IN_FROM</symbol>
  <!-- Subject seems to be spam --> 
  <symbol weight="8.00" description="Subject seems to be spam">R_SAJDING</symbol>
  <!-- Detects bad content-transfer-encoding for text parts -->

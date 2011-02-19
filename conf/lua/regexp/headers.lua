@@ -30,7 +30,7 @@ local r_body_8bit = '/[^\\x01-\\x7f]/Pr'
 reconf['R_BAD_CTE_7BIT'] = string.format('(%s) & (%s) & (%s)', r_ctype_text, r_cte_7bit, r_body_8bit)
 
 -- Detects missing To header
-reconf['MISSING_TO']= '!header_exists(To)';
+reconf['MISSING_TO']= '!raw_header_exists(To)';
 
 -- Detects undisclosed recipients
 local undisc_rcpt = 'To=/^<?undisclosed[- ]recipient/Hi'
@@ -179,6 +179,17 @@ reconf['FORGED_OUTLOOK_TAGS'] = string.format('!%s & %s & %s & !(%s & %s & %s & 
 					yahoo_bulk, any_outlook_mua, mime_html, tag_exists_html, tag_exists_head,
 					tag_exists_meta, tag_exists_body)
 
+-- Forged OE/MSO boundary
+reconf['SUSPICIOUS_BOUNDARY']	= 'Content-Type=/^\\s*multipart.+boundary="----=_NextPart_000_[A-Z\\d]{4}_(00EBFFA4|0102FFA4|32C6FFA4|3302FFA4)\\.[A-Z\\d]{8}"[\\r\\n]*$/siX'
+-- Forged OE/MSO boundary
+reconf['SUSPICIOUS_BOUNDARY2']	= 'Content-Type=/^\\s*multipart.+boundary="----=_NextPart_000_[A-Z\\d]{4}_(01C6527E)\\.[A-Z\\d]{8}"[\\r\\n]*$/siX'
+-- Forged OE/MSO boundary
+reconf['SUSPICIOUS_BOUNDARY3']	= 'Content-Type=/^\\s*multipart.+boundary="-----000-00\\d\\d-01C[\\dA-F]{5}-[\\dA-F]{8}"[\\r\\n]*$/siX'
+-- Forged OE/MSO boundary
+local suspicious_boundary_01C4	= 'Content-Type=/^\\s*multipart.+boundary="----=_NextPart_000_[A-Z\\d]{4}_01C4[\\dA-F]{4}\\.[A-Z\\d]{8}"[\\r\\n]*$/siX'
+local suspicious_boundary_01C4_date	= 'Date=/^\\s*\\w\\w\\w,\\s+\\d+\\s+\\w\\w\\w 20(0[56789]|1\\d)/'
+reconf['SUSPICIOUS_BOUNDARY4']	= string.format('(%s) & (%s)', suspicious_boundary_01C4, suspicious_boundary_01C4_date)
+
 -- Detect forged The Bat! headers
 -- The Bat! X-Mailer header
 local thebat_mua_any = 'X-Mailer=/^\\s*The Bat!/H'
@@ -190,6 +201,27 @@ local thebat_msgid = 'Message-ID=/^\\d+\\.(19[789]\\d|20\\d\\d)(0\\d|1[012])([01
 reconf['FORGED_MUA_THEBAT_MSGID'] = string.format('(%s) & !(%s) & (%s) & !(%s)', thebat_mua_any, thebat_msgid, thebat_msgid_common, unusable_msgid)
 -- Summary rule for forged The Bat! Message-ID header with unknown template
 reconf['FORGED_MUA_THEBAT_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', thebat_mua_any, thebat_msgid, thebat_msgid_common, unusable_msgid)
+
+
+-- Detect forged Mozilla Mail/Thunderbird/Seamonkey headers
+-- Mozilla based X-Mailer
+local user_agent_mozilla5	= 'User-Agent=/^\\s*Mozilla\\/5\\.0/'
+local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*Thunderbird\\/)/'
+local user_agent_seamonkey	= 'User-Agent=/^\\s*Mozilla\\/5\\.0\\s.+\\sSeaMonkey\\/\\d+\\.\\d+/'
+local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird, user_agent_seamonkey)
+-- Mozilla based common Message-ID template
+local mozilla_msgid_common	= 'Message-ID=/^\\s*<[\\dA-F]{8}\\.\\d{1,7}\\@([^>\\.]+\\.)+[^>\\.]+>$/X'
+local mozilla_msgid		= 'Message-ID=/^\\s*<(3[3-9A-F]|4[\\dA-F])[\\dA-F]{6}\\.(\\d0){0,3}\\d\\@([^>\\.]+\\.)+[^>\\.]+>$/XS'
+-- Summary rule for forged Mozilla Mail Message-ID header
+reconf['FORGED_MUA_MOZILLA_MAIL_MSGID'] = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid, unusable_msgid)
+reconf['FORGED_MUA_MOZILLA_MAIL_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid, unusable_msgid)
+-- Summary rule for forged Thunderbird Message-ID header
+reconf['FORGED_MUA_THUNDERBIRD_MSGID'] = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_thunderbird, mozilla_msgid_common, mozilla_msgid, unusable_msgid)
+reconf['FORGED_MUA_THUNDERBIRD_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_thunderbird, mozilla_msgid_common, mozilla_msgid, unusable_msgid)
+-- Summary rule for forged Seamonkey Message-ID header
+reconf['FORGED_MUA_SEAMONKEY_MSGID'] = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid, unusable_msgid)
+reconf['FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid, unusable_msgid)
+
 
 -- Message id validity
 local sane_msgid = 'Message-Id=/^[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\@[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\s*$/mH'
