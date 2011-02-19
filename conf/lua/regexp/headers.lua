@@ -73,13 +73,62 @@ reconf['SORTED_RECIPS'] = 'is_recipients_sorted()'
 -- Spam string at the end of message to make statistics faults
 reconf['TRACKER_ID'] = '/^[a-z0-9]{6,24}[-_a-z0-9]{2,36}[a-z0-9]{6,24}\\s*\\z/isPr'
 
+
 -- From that contains encoded characters while base 64 is not needed as all symbols are 7bit
--- Regexp that checks that from header is encoded with base64 (search in raw headers)
+-- Regexp that checks that From header is encoded with base64 (search in raw headers)
 local from_encoded_b64 = 'From=/\\=\\?\\S+\\?B\\?/iX'
 -- From contains only 7bit characters (parsed headers are used)
 local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
 -- Final rule
 reconf['FROM_EXCESS_BASE64'] = string.format('%s & !%s', from_encoded_b64, from_needs_mime)
+
+-- From that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
+-- Regexp that checks that From header is encoded with quoted-printable (search in raw headers)
+local from_encoded_qp = 'From=/\\=\\?\\S+\\?Q\\?/iX'
+-- Final rule
+reconf['FROM_EXCESS_QP'] = string.format('%s & !%s', from_encoded_qp, from_needs_mime)
+
+-- To that contains encoded characters while base 64 is not needed as all symbols are 7bit
+-- Regexp that checks that To header is encoded with base64 (search in raw headers)
+local to_encoded_b64 = 'To=/\\=\\?\\S+\\?B\\?/iX'
+-- To contains only 7bit characters (parsed headers are used)
+local to_needs_mime = 'To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
+-- Final rule
+reconf['TO_EXCESS_BASE64'] = string.format('%s & !%s', to_encoded_b64, to_needs_mime)
+
+-- To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
+-- Regexp that checks that To header is encoded with quoted-printable (search in raw headers)
+local to_encoded_qp = 'To=/\\=\\?\\S+\\?Q\\?/iX'
+-- Final rule
+reconf['TO_EXCESS_QP'] = string.format('%s & !%s', to_encoded_qp, to_needs_mime)
+
+-- Reply-To that contains encoded characters while base 64 is not needed as all symbols are 7bit
+-- Regexp that checks that Reply-To header is encoded with base64 (search in raw headers)
+local replyto_encoded_b64 = 'Reply-To=/\\=\\?\\S+\\?B\\?/iX'
+-- Reply-To contains only 7bit characters (parsed headers are used)
+local replyto_needs_mime = 'Reply-To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
+-- Final rule
+reconf['REPLYTO_EXCESS_BASE64'] = string.format('%s & !%s', replyto_encoded_b64, replyto_needs_mime)
+
+-- Reply-To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
+-- Regexp that checks that Reply-To header is encoded with quoted-printable (search in raw headers)
+local replyto_encoded_qp = 'Reply-To=/\\=\\?\\S+\\?Q\\?/iX'
+-- Final rule
+reconf['REPLYTO_EXCESS_QP'] = string.format('%s & !%s', replyto_encoded_qp, replyto_needs_mime)
+
+-- Cc that contains encoded characters while base 64 is not needed as all symbols are 7bit
+-- Regexp that checks that Cc header is encoded with base64 (search in raw headers)
+local cc_encoded_b64 = 'Cc=/\\=\\?\\S+\\?B\\?/iX'
+-- Co contains only 7bit characters (parsed headers are used)
+local cc_needs_mime = 'Cc=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
+-- Final rule
+reconf['CC_EXCESS_BASE64'] = string.format('%s & !%s', cc_encoded_b64, cc_needs_mime)
+
+-- Cc that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
+-- Regexp that checks that Cc header is encoded with quoted-printable (search in raw headers)
+local cc_encoded_qp = 'Cc=/\\=\\?\\S+\\?Q\\?/iX'
+-- Final rule
+reconf['CC_EXCESS_QP'] = string.format('%s & !%s', cc_encoded_qp, cc_needs_mime)
 
 
 -- Detect forged outlook headers
@@ -129,6 +178,18 @@ local tag_exists_body = 'has_html_tag(body)'
 reconf['FORGED_OUTLOOK_TAGS'] = string.format('!%s & %s & %s & !(%s & %s & %s & %s)',
 					yahoo_bulk, any_outlook_mua, mime_html, tag_exists_html, tag_exists_head,
 					tag_exists_meta, tag_exists_body)
+
+-- Detect forged The Bat! headers
+-- The Bat! X-Mailer header
+local thebat_mua_any = 'X-Mailer=/^\\s*The Bat!/H'
+-- The Bat! common Message-ID template
+local thebat_msgid_common = 'Message-ID=/^\\d+\\.\\d+\\@\\S+$/mH'
+-- Correct The Bat! Message-ID template
+local thebat_msgid = 'Message-ID=/^\\d+\\.(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)([0-5]\\d)\\@\\S+/mH'
+-- Summary rule for forged The Bat! Message-ID header
+reconf['FORGED_MUA_THEBAT_MSGID'] = string.format('(%s) & !(%s) & (%s) & !(%s)', thebat_mua_any, thebat_msgid, thebat_msgid_common, unusable_msgid)
+-- Summary rule for forged The Bat! Message-ID header with unknown template
+reconf['FORGED_MUA_THEBAT_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', thebat_mua_any, thebat_msgid, thebat_msgid_common, unusable_msgid)
 
 -- Message id validity
 local sane_msgid = 'Message-Id=/^[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\@[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\s*$/mH'

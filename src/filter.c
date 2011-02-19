@@ -335,6 +335,7 @@ struct composites_data {
 struct symbol_remove_data {
 	struct symbol                  *ms;
 	gboolean                        remove_weight;
+	gboolean                        remove_symbol;
 };
 
 static gint
@@ -364,7 +365,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 		if (expr->type == EXPR_STR) {
 			/* Find corresponding symbol */
 			sym = expr->content.operand;
-			if (*sym == '~') {
+			if (*sym == '~' || *sym == '-') {
 				sym ++;
 			}
 			if (g_hash_table_lookup (cd->metric_res->symbols, sym) == NULL) {
@@ -412,7 +413,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			r = rspamd_snprintf (logbuf, sizeof (logbuf), "<%s>, insert symbol %s instead of symbols: ", cd->task->message_id, key);
 			while (s) {
 				sym = s->data;
-				if (*sym == '~') {
+				if (*sym == '~' || *sym == '-') {
 					ms = g_hash_table_lookup (cd->metric_res->symbols, sym + 1);
 				}
 				else {
@@ -422,7 +423,18 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				if (ms != NULL) {
 					rd = memory_pool_alloc (cd->task->task_pool, sizeof (struct symbol_remove_data));
 					rd->ms = ms;
-					rd->remove_weight = *sym != '~';
+					if (G_UNLIKELY (*sym == '~')) {
+						rd->remove_weight = FALSE;
+						rd->remove_symbol = TRUE;
+					}
+					else if (G_UNLIKELY (*sym == '-')) {
+						rd->remove_symbol = FALSE;
+						rd->remove_weight = FALSE;
+					}
+					else {
+						rd->remove_symbol = TRUE;
+						rd->remove_weight = TRUE;
+					}
 					if (!g_tree_lookup (cd->symbols_to_remove, rd)) {
 						g_tree_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
 					}
@@ -523,7 +535,9 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	struct composites_data         *cd = data;
 	struct symbol_remove_data      *rd = value;
 
-	g_hash_table_remove (cd->metric_res->symbols, key);
+	if (rd->remove_symbol) {
+		g_hash_table_remove (cd->metric_res->symbols, key);
+	}
 	if (rd->remove_weight) {
 		cd->metric_res->score -= rd->ms->score;
 	}

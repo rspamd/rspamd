@@ -161,16 +161,16 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 	gboolean                         first;
 
 	if (metric->is_skipped) {
-		PRINT_FUNC ("\n%s: Skipped\n", key);
+		PRINT_FUNC ("\n%s: Skipped\n", (const gchar *)key);
 	}
 	else {
 		if (tty) {
-			PRINT_FUNC ("\n\033[1m%s:\033[0m %s [ %.2f / %.2f ]\n", key,
+			PRINT_FUNC ("\n\033[1m%s:\033[0m %s [ %.2f / %.2f ]\n", (const gchar *)key,
 						metric->score > metric->required_score ? "True" : "False",
 						metric->score, metric->required_score);
 		}
 		else {
-			PRINT_FUNC ("\n%s: %s [ %.2f / %.2f ]\n", key,
+			PRINT_FUNC ("\n%s: %s [ %.2f / %.2f ]\n", (const gchar *)key,
 						metric->score > metric->required_score ? "True" : "False",
 						metric->score, metric->required_score);
 		}
@@ -205,10 +205,10 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 						cur = g_list_first (s->options);
 						while (cur) {
 							if (cur->next) {
-								PRINT_FUNC ("%s,", cur->data);
+								PRINT_FUNC ("%s,", (const gchar *)cur->data);
 							}
 							else {
-								PRINT_FUNC ("%s", cur->data);
+								PRINT_FUNC ("%s", (const gchar *)cur->data);
 							}
 							cur = g_list_next (cur);
 						}
@@ -231,10 +231,10 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 						cur = g_list_first (s->options);
 						while (cur) {
 							if (cur->next) {
-								PRINT_FUNC ("%s,", cur->data);
+								PRINT_FUNC ("%s,", (const gchar *)cur->data);
 							}
 							else {
-								PRINT_FUNC ("%s)", cur->data);
+								PRINT_FUNC ("%s)", (const gchar *)cur->data);
 							}
 							cur = g_list_next (cur);
 						}
@@ -268,10 +268,10 @@ print_rspamd_result (struct rspamd_result *res)
 	PRINT_FUNC ("\n");
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		if (tty) {
-			PRINT_FUNC ("\033[1m%s:\033[0m %s\n", k, v);
+			PRINT_FUNC ("\033[1m%s:\033[0m %s\n", (const gchar *)k, (const gchar *)v);
 		}
 		else {
-			PRINT_FUNC ("%s: %s\n", k, v);
+			PRINT_FUNC ("%s: %s\n", (const gchar *)k, (const gchar *)v);
 		}
 	}
 	PRINT_FUNC ("\n");

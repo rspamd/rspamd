@@ -874,6 +874,10 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			p += datalen;
 		}
 		else {
+			if (p - *pos > *remain - sizeof (guint16) * 3) {
+				msg_info ("stripped dns reply while reading SRV record");
+				return -1;
+			}
 			GET16 (elt->srv.priority);
 			GET16 (elt->srv.weight);
 			GET16 (elt->srv.port);
@@ -894,10 +898,6 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		return 1;
 	}
 	return 0;
-
-err:
-	msg_info ("incomplete RR, only %d bytes remain, packet length %d", (gint)*remain, (gint)(*pos - in));
-	return -1;
 }
 
 static struct rspamd_dns_reply *

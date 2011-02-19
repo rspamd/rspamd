@@ -69,6 +69,10 @@
  <symbol weight="3.00" description="Forged outlook MUA">FORGED_MUA_OUTLOOK</symbol>
  <!-- Forged outlook MUA, but from maillist -->
  <symbol weight="0.00" description="Forged outlook MUA, but from maillist">FORGED_MUA_OUTLOOK_MAILLIST</symbol>
+ <!-- Message pretends to be send from The Bat! but has forged Message-ID -->
+ <symbol weight="4.00" description="Message pretends to be send from The Bat! but has forged Message-ID">FORGED_MUA_THEBAT_MSGID</symbol>
+ <!-- Message pretends to be send from The Bat! but has forged Message-ID -->
+ <symbol weight="3.00" description="Message pretends to be send from The Bat! but has forged Message-ID">FORGED_MUA_THEBAT_MSGID_UNKNOWN</symbol>
  <!-- Fake helo for verizon provider -->
  <symbol weight="2.00" description="Fake helo for verizon provider">FM_FAKE_HELO_VERIZON</symbol>
  <!--Quoted reply-to from yahoo (seems to be forged) --> 
@@ -77,8 +81,24 @@
  <symbol weight="5.00" description="Mime-OLE is needed but absent (e.g. fake Outlook or fake Exchange)">MISSING_MIMEOLE</symbol>
  <!-- To header is missing -->
  <symbol weight="2.00" description="To header is missing">MISSING_TO</symbol>
+
  <!-- From that contains encoded characters while base 64 is not needed as all symbols are 7bit -->
- <symbol weight="2.0" description="From that contains encoded characters while base 64 is not needed as all symbols are 7bit">FROM_EXCESS_BASE64</symbol>
+ <symbol weight="1.5" description="From that contains encoded characters while base 64 is not needed as all symbols are 7bit">FROM_EXCESS_BASE64</symbol>
+ <!-- From that contains encoded characters while quoted-printable is not needed as all symbols are 7bit -->
+ <symbol weight="1.2" description="From that contains encoded characters while quoted-printable is not needed as all symbols are 7bit">FROM_EXCESS_QP</symbol>
+ <!-- To that contains encoded characters while base 64 is not needed as all symbols are 7bit -->
+ <symbol weight="1.5" description="To that contains encoded characters while base 64 is not needed as all symbols are 7bit">TO_EXCESS_BASE64</symbol>
+ <!-- To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit -->
+ <symbol weight="1.2" description="To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit">TO_EXCESS_QP</symbol>
+ <!-- Reply-To that contains encoded characters while base 64 is not needed as all symbols are 7bit -->
+ <symbol weight="1.5" description="Reply-To that contains encoded characters while base 64 is not needed as all symbols are 7bit">REPLYTO_EXCESS_BASE64</symbol>
+ <!-- Reply-To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit -->
+ <symbol weight="1.2" description="Reply-To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit">REPLYTO_EXCESS_QP</symbol>
+ <!-- Cc that contains encoded characters while base 64 is not needed as all symbols are 7bit -->
+ <symbol weight="1.5" description="Cc that contains encoded characters while base 64 is not needed as all symbols are 7bit">CC_EXCESS_BASE64</symbol>
+ <!-- Cc that contains encoded characters while quoted-printable is not needed as all symbols are 7bit -->
+ <symbol weight="1.2" description="Cc that contains encoded characters while quoted-printable is not needed as all symbols are 7bit">CC_EXCESS_QP</symbol>
+
  <!-- Mixed characters in a message -->
  <symbol weight="5.00" description="Mixed characters in a message">R_MIXED_CHARSET</symbol>
  <!-- Recipients list seems to be sorted -->
