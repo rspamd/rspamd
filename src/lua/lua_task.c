@@ -48,6 +48,8 @@ LUA_FUNCTION_DEF (task, get_urls);
 LUA_FUNCTION_DEF (task, get_emails);
 LUA_FUNCTION_DEF (task, get_text_parts);
 LUA_FUNCTION_DEF (task, get_raw_headers);
+LUA_FUNCTION_DEF (task, get_raw_header);
+LUA_FUNCTION_DEF (task, get_raw_header_strong);
 LUA_FUNCTION_DEF (task, get_received_headers);
 LUA_FUNCTION_DEF (task, resolve_dns_a);
 LUA_FUNCTION_DEF (task, resolve_dns_ptr);
@@ -72,6 +74,8 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
 	LUA_INTERFACE_DEF (task, get_raw_headers),
+	LUA_INTERFACE_DEF (task, get_raw_header),
+	LUA_INTERFACE_DEF (task, get_raw_header_strong),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, resolve_dns_a),
 	LUA_INTERFACE_DEF (task, resolve_dns_ptr),
@@ -309,6 +313,73 @@ lua_task_get_raw_headers (lua_State * L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_task_get_raw_header_common (lua_State * L, gboolean strong)
+{
+	struct worker_task             *task = lua_check_task (L);
+	GList                          *cur;
+	struct raw_header  			   *rh;
+	gint                            i = 1;
+	const gchar                    *name;
+
+	if (task) {
+		name = luaL_checkstring (L, 2);
+		if (name == NULL) {
+			lua_pushnil (L);
+			return 1;
+		}
+		lua_newtable (L);
+		cur = g_list_first (task->raw_headers_list);
+		while (cur) {
+			rh = cur->data;
+			if (rh->name == NULL) {
+				cur = g_list_next (cur);
+				continue;
+			}
+			/* Check case sensivity */
+			if (strong) {
+				if (strcmp (rh->name, name) != 0) {
+					cur = g_list_next (cur);
+					continue;
+				}
+			}
+			else {
+				if (g_ascii_strcasecmp (rh->name, name) != 0) {
+					cur = g_list_next (cur);
+					continue;
+				}
+			}
+			/* Create new associated table for a header */
+			lua_newtable (L);
+			lua_set_table_index (L, "name", rh->name);
+			lua_set_table_index (L, "value", rh->value);
+			lua_pushstring (L, "tab_separated");
+			lua_pushboolean (L, rh->tab_separated);
+			lua_settable (L, -3);
+			lua_rawseti (L, -2, i++);
+			/* Process next element */
+			cur = g_list_next (cur);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_raw_header (lua_State * L)
+{
+	return lua_task_get_raw_header_common (L, FALSE);
+}
+
+static gint
+lua_task_get_raw_header_strong (lua_State * L)
+{
+	return lua_task_get_raw_header_common (L, TRUE);
 }
 
 static gint
@@ -1194,3 +1265,4 @@ luaopen_url (lua_State * L)
 
 	return 1;
 }
+

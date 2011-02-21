@@ -114,7 +114,12 @@ lua_set_table_index (lua_State * L, const gchar *index, const gchar *value)
 {
 
 	lua_pushstring (L, index);
-	lua_pushstring (L, value);
+	if (value) {
+		lua_pushstring (L, value);
+	}
+	else {
+		lua_pushnil (L);
+	}
 	lua_settable (L, -3);
 }
 

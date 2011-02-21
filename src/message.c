@@ -463,6 +463,169 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 	return;
 }
 
+/* Convert raw headers to a list of struct raw_header * */
+static void
+process_raw_headers (struct worker_task *task)
+{
+	struct raw_header              *new;
+	gchar                          *p, *c, *tmp, *tp;
+	gint                            state = 0, l, next_state, err_state, t_state;
+	gboolean                        valid_folding = FALSE;
+
+	p = task->raw_headers;
+	c = p;
+	while (*p) {
+		/* FSM for processing headers */
+		switch (state) {
+		case 0:
+			/* Begin processing headers */
+			if (!g_ascii_isalpha (*p)) {
+				/* We have some garbadge at the beginning of headers, skip this line */
+				state = 100;
+				next_state = 0;
+			}
+			else {
+				state = 1;
+				c = p;
+			}
+			break;
+		case 1:
+			/* We got something like header's name */
+			if (*p == ':') {
+				new = memory_pool_alloc0 (task->task_pool, sizeof (struct raw_header));
+				l = p - c;
+				tmp = memory_pool_alloc (task->task_pool, l + 1);
+				rspamd_strlcpy (tmp, c, l + 1);
+				new->name = tmp;
+				p ++;
+				state = 2;
+			}
+			else if (g_ascii_isspace (*p)) {
+				/* Not header but some garbadge */
+				state = 100;
+				next_state = 0;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case 2:
+			/* We got header's name, so skip any \t or spaces */
+			if (*p == '\t') {
+				new->tab_separated = TRUE;
+			}
+			else if (*p == ' '){
+				p ++;
+			}
+			else if (*p == '\n' || *p == '\r') {
+				/* Process folding */
+				state = 99;
+				next_state = 3;
+				err_state = 5;
+				c = p;
+			}
+			else {
+				/* Process value */
+				c = p;
+				state = 3;
+			}
+			break;
+		case 3:
+			if (*p == '\r' || *p == '\n') {
+				/* Hold folding */
+				state = 99;
+				next_state = 3;
+				err_state = 4;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case 4:
+			/* Copy header's value */
+			l = p - c;
+			tmp = memory_pool_alloc (task->task_pool, l);
+			tp = tmp;
+			t_state = 0;
+			while (l --) {
+				if (t_state == 0) {
+					/* Before folding */
+					if (*c == '\n' || *c == '\r') {
+						t_state = 1;
+					}
+					else {
+						*tp ++ = *c ++;
+					}
+				}
+				else if (t_state == 1) {
+					/* Inside folding */
+					if (g_ascii_isspace (*c)) {
+						c++;
+					}
+					else {
+						t_state = 0;
+						*tp ++ = *c ++;
+					}
+				}
+			}
+			*tp = '\0';
+			new->value = tmp;
+			task->raw_headers_list = g_list_prepend (task->raw_headers_list, new);
+			debug_task ("add raw header %s: %s", new->name, new->value);
+			state = 0;
+			break;
+		case 5:
+			/* Header has only name, no value */
+			task->raw_headers_list = g_list_prepend (task->raw_headers_list, new);
+			state = 0;
+			debug_task ("add raw header %s: %s", new->name, new->value);
+			break;
+		case 99:
+			/* Folding state */
+			if (*p == '\r' || *p == '\n') {
+				p ++;
+				valid_folding = FALSE;
+			}
+			else if (*p == '\t' || *p == ' ') {
+				/* Valid folding */
+				p ++;
+				valid_folding = TRUE;
+			}
+			else {
+				if (valid_folding) {
+					debug_task ("go to state: %d->%d", state, next_state);
+					state = next_state;
+				}
+				else {
+					/* Fall back */
+					debug_task ("go to state: %d->%d", state, err_state);
+					state = err_state;
+				}
+			}
+			break;
+		case 100:
+			/* Fail state, skip line */
+			if (*p == '\r') {
+				if (*(p + 1) == '\n') {
+					p ++;
+				}
+				p ++;
+				state = next_state;
+			}
+			else if (*p == '\n') {
+				if (*(p + 1) == '\r') {
+					p ++;
+				}
+				state = next_state;
+			}
+			else {
+				p ++;
+			}
+			break;
+		}
+	}
+}
+
 static void
 free_byte_array_callback (void *pointer)
 {
@@ -833,6 +996,8 @@ process_message (struct worker_task *task)
 
 		if (task->raw_headers) {
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers);
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, task->raw_headers_list);
+			process_raw_headers (task);
 		}
 
 		task->rcpts = g_mime_message_get_all_recipients (message);
@@ -901,7 +1066,7 @@ process_message (struct worker_task *task)
 	return 0;
 }
 
-struct raw_header {
+struct gmime_raw_header {
 	struct raw_header              *next;
 	gchar                           *name;
 	gchar                           *value;
@@ -930,7 +1095,7 @@ enum {
 
 #ifndef GMIME24
 static void
-header_iterate (memory_pool_t * pool, struct raw_header *h, GList ** ret, const gchar *field, gboolean strong)
+header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, const gchar *field, gboolean strong)
 {
 	while (h) {
 		if (G_LIKELY (!strong)) {
@@ -1022,7 +1187,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 {
 	struct multipart_cb_data       *data = user_data;
 #ifndef GMIME24
-	struct raw_header              *h;
+	struct gmime_raw_header              *h;
 #endif
 	GList                          *l = NULL;
 
@@ -1392,6 +1557,35 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 	}
 	if (fieldfunc[i].functype == FUNC_CHARFREEPTR && ret) {
 		g_free (ret);
+	}
+
+	return gret;
+}
+
+GList*
+message_get_raw_header (struct worker_task *task, const gchar *field, gboolean strong)
+{
+	GList                               *cur, *gret = NULL;
+	struct raw_header                   *rh;
+
+	cur = task->raw_headers_list;
+	while (cur) {
+		rh = cur->data;
+		if (strong) {
+			if (strcmp (rh->name, field) == 0) {
+				gret = g_list_prepend (gret, rh);
+			}
+		}
+		else {
+			if (g_ascii_strcasecmp (rh->name, field) == 0) {
+				gret = g_list_prepend (gret, rh);
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	if (gret != NULL) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, gret);
 	}
 
 	return gret;

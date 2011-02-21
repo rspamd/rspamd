@@ -568,43 +568,6 @@ regexp_module_reconfig (struct config_file *cfg)
 	return regexp_module_config (cfg);
 }
 
-static const gchar              *
-find_raw_header_pos (const gchar *headers, const gchar *headerv)
-{
-	const gchar                     *p = headers;
-	gsize                           headerlen = strlen (headerv);
-
-	if (headers == NULL) {
-		return NULL;
-	}
-
-	while (*p) {
-		/* Try to find headers only at the begin of line */
-		if (*p == '\r' || *p == '\n') {
-			if (*(p + 1) == '\n' && *p == '\r') {
-				p++;
-			}
-			if (g_ascii_isspace (*(++p))) {
-				/* Folding */
-				continue;
-			}
-			if (g_ascii_strncasecmp (p, headerv, headerlen) == 0) {
-				/* Find semicolon */
-				p += headerlen;
-				if (*p == ':') {
-					while (*p && g_ascii_isspace (*(++p)));
-					return p;
-				}
-			}
-		}
-		if (*p != '\0') {
-			p++;
-		}
-	}
-
-	return NULL;
-}
-
 struct url_regexp_param {
 	struct worker_task             *task;
 	GRegex                         *regexp;
@@ -641,8 +604,11 @@ static                          gsize
 process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar *additional,
 		gint limit, int_compare_func f)
 {
-	gchar                          *headerv, *c, t;
-	struct mime_text_part          *part;
+	guint8                         *ct;
+	gsize                           clen;
+	gint                            r, passed = 0, start, end, old;
+	gboolean                        matched;
+
 	GList                          *cur, *headerlist;
 	GRegex                         *regexp;
 	GMatchInfo                     *info;
@@ -653,11 +619,8 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		.re = re,
 		.found = FALSE
 	};
-	guint8                         *ct;
-	gsize                           clen;
-	gint                            r, passed = 0, start, end, old;
-	gboolean                        matched;
-
+	struct mime_text_part          *part;
+	struct raw_header              *rh;
 
 	if (re == NULL) {
 		msg_info ("invalid regexp passed");
@@ -711,7 +674,6 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			return 0;
 		}
 		else {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, headerlist);
 			/* Check whether we have regexp for it */
 			if (re->regexp == NULL) {
 				debug_task ("regexp contains only header and it is found %s", re->header);
@@ -915,62 +877,65 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		return 0;
 	case REGEXP_RAW_HEADER:
 		debug_task ("checking for raw header: %s with regexp: %s", re->header, re->regexp_text);
-		if (f != NULL && limit > 1) {
-			/*XXX: add support of it */
-			msg_warn ("numbered matches are not supported for url regexp");
-		}
-		if (task->raw_headers == NULL) {
-			debug_task ("cannot check for raw header in message, no headers found");
+		/* Check header's name */
+		if (re->header == NULL) {
+			msg_info ("header regexp without header name: '%s'", re->regexp_text);
 			task_cache_add (task, re, 0);
 			return 0;
 		}
-		if ((headerv = (gchar *)find_raw_header_pos (task->raw_headers, re->header)) == NULL) {
-			/* No header was found */
-			task_cache_add (task, re, 0);
-			return 0;
-		}
-		/* Now the main problem is to find position of end of raw header */
-		c = headerv;
-		while (*c) {
-			/* We need to handle all types of line end */
-			if ((*c == '\r' && *(c + 1) == '\n')) {
-				c++;
-				/* Check for folding */
-				if (!g_ascii_isspace (*(c + 1))) {
-					c++;
-					break;
-				}
-			}
-			else if (*c == '\r' || *c == '\n') {
-				if (!g_ascii_isspace (*(c + 1))) {
-					c++;
-					break;
-				}
-			}
-			c++;
-		}
-		/* Temporary null terminate this part of string */
-		t = *c;
-		*c = '\0';
-		debug_task ("found raw header \"%s\" with value \"%s\"", re->header, headerv);
+		debug_task ("checking header regexp: %s = %s", re->header, re->regexp_text);
 
-		if (g_regex_match_full (re->raw_regexp, headerv, -1, 0, 0, NULL, &err) == TRUE) {
-			if (re->is_test) {
-				msg_info ("process test regexp %s for raw header %s with value '%s' returned TRUE", re->regexp_text, re->header, headerv);
+		/* Get list of specified headers */
+		headerlist = message_get_raw_header (task, re->header, re->is_strong);
+		if (headerlist == NULL) {
+			/* Header is not found */
+			if (G_UNLIKELY (re->is_test)) {
+				msg_info ("process test regexp %s for header %s returned FALSE: no header found", re->regexp_text, re->header);
 			}
-			*c = t;
-			task_cache_add (task, re, 1);
-			return 1;
+			task_cache_add (task, re, 0);
+			return 0;
 		}
-		else if (re->is_test) {
-			msg_info ("process test regexp %s for raw header %s with value '%s' returned FALSE", re->regexp_text, re->header, headerv);
+		else {
+			/* Check whether we have regexp for it */
+			if (re->regexp == NULL) {
+				debug_task ("regexp contains only header and it is found %s", re->header);
+				task_cache_add (task, re, 1);
+				return 1;
+			}
+			/* Iterate throught headers */
+			cur = headerlist;
+			while (cur) {
+				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
+				rh = cur->data;
+				/* Try to match regexp */
+				if (g_regex_match_full (re->regexp, rh->value, -1, 0, 0, NULL, &err) == TRUE) {
+					if (G_UNLIKELY (re->is_test)) {
+						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const gchar *)cur->data);
+					}
+					if (f != NULL && limit > 1) {
+						/* If we have limit count, increase passed count and compare with limit */
+						if (f (++passed, limit)) {
+							task_cache_add (task, re, 1);
+							return 1;
+						}
+					}
+					else {
+						task_cache_add (task, re, 1);
+						return 1;
+					}
+				}
+				else if (G_UNLIKELY (re->is_test)) {
+					msg_info ("process test regexp %s for header %s with value '%s' returned FALSE", re->regexp_text, re->header, (const gchar *)cur->data);
+				}
+				if (err != NULL) {
+					msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
+				}
+				cur = g_list_next (cur);
+			}
+			task_cache_add (task, re, 0);
+			return 0;
 		}
-		if (err != NULL) {
-			msg_info ("error occured while processing regexp \"%s\": %s", re->regexp_text, err->message);
-		}
-		*c = t;
-		task_cache_add (task, re, 0);
-		return 0;
+		break;
 	default:
 		msg_warn ("bad error detected: %p is not a valid regexp object", re);
 	}
@@ -1302,6 +1267,8 @@ static                          gboolean
 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
+	GList                          *cur;
+	struct raw_header              *rh;
 
 	if (args == NULL || task == NULL) {
 		return FALSE;
@@ -1312,11 +1279,17 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
-	if (find_raw_header_pos (task->raw_headers, (gchar *)arg->data) == NULL) {
-		return FALSE;
+
+	cur = task->raw_headers_list;
+	while (cur) {
+		rh = cur->data;
+		if (g_ascii_strcasecmp (rh->name, arg->data) == 0) {
+			return TRUE;
+		}
+		cur = g_list_next (cur);
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 static gboolean

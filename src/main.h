@@ -206,6 +206,7 @@ struct worker_task {
 	GList *urls;												/**< list of parsed urls							*/
 	GList *emails;												/**< list of parsed emails							*/
 	GList *images;												/**< list of images									*/
+	GList *raw_headers_list;									/**< list of raw headers							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 																 *    metric's name									*/
 	GHashTable *tokens;											/**< hash table of tokens indexed by tokenizer

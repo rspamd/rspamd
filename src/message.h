@@ -45,6 +45,12 @@ struct received_header {
 	gint is_error;
 };
 
+struct raw_header {
+	gchar *name;
+	gchar *value;
+	gboolean tab_separated;
+};
+
 /**
  * Process message with all filters/statfiles, extract mime parts, urls and 
  * call metrics consolidation functions
@@ -55,5 +61,6 @@ gint process_message (struct worker_task *task);
 
 void message_set_header (GMimeMessage *message, const gchar *field, const gchar *value);
 GList* message_get_header (memory_pool_t *pool, GMimeMessage *message, const gchar *field, gboolean strong);
+GList* message_get_raw_header (struct worker_task *task, const gchar *field, gboolean strong);
 
 #endif
