@@ -84,6 +84,16 @@
  <!-- Message pretends to be send from The Bat! but has forged Message-ID -->
  <symbol weight="3.00" description="Message pretends to be send from The Bat! but has forged Message-ID">FORGED_MUA_THEBAT_MSGID_UNKNOWN</symbol>
 
+ <!-- Message pretends to be send from KMail but has forged Message-ID -->
+ <symbol weight="3.00" description="Message pretends to be send from KMail but has forged Message-ID">FORGED_MUA_KMIL_MSGID</symbol>
+ <!-- Message pretends to be send from KMail but has forged Message-ID -->
+ <symbol weight="2.50" description="Message pretends to be send from KMail but has forged Message-ID">FORGED_MUA_KMAIL_MSGID_UNKNOWN</symbol>
+
+ <!-- Message pretends to be send from Opera Mail but has forged Message-ID -->
+ <symbol weight="4.00" description="Message pretends to be send from Opera Mail but has forged Message-ID">FORGED_MUA_OPERA_MSGID</symbol>
+ <!-- Message pretends to be send from suspicious Opera Mail/10.x (Windows) but has forged Message-ID, apparently from KMail -->
+ <symbol weight="4.00" description="Message pretends to be send from suspicious Opera Mail/10.x (Windows) but has forged Message-ID, apparently from KMail">SUSPICIOUS_OPERA_10W_MSGID</symbol>
+
  <!-- Message pretends to be send from Mozilla Mail but has forged Message-ID -->
  <symbol weight="3.50" description="Message pretends to be send from Mozilla Mail but has forged Message-ID">FORGED_MUA_MOZILLA_MAIL_MSGID</symbol>
  <!-- Message pretends to be send from Mozilla Mail but has forged Message-ID -->
@@ -233,8 +243,8 @@
 <!-- End of metrics section -->
 
 <!-- Composites section -->
-<composite name="FORGED_RECIPIENTS_MAILLIST">FORGED_RECIPIENTS &amp; ~MAILLIST</composite>
-<composite name="FORGED_MUA_OUTLOOK_MAILLIST">FORGED_MUA_OUTLOOK &amp; ~MAILLIST</composite>
+<composite name="FORGED_RECIPIENTS_MAILLIST">FORGED_RECIPIENTS &amp; -MAILLIST</composite>
+<composite name="FORGED_MUA_OUTLOOK_MAILLIST">FORGED_MUA_OUTLOOK &amp; -MAILLIST</composite>
 <!-- End of composites section -->
 
 <!-- Workers section -->

@@ -203,6 +203,46 @@ reconf['FORGED_MUA_THEBAT_MSGID'] = string.format('(%s) & !(%s) & (%s) & !(%s)',
 reconf['FORGED_MUA_THEBAT_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', thebat_mua_any, thebat_msgid, thebat_msgid_common, unusable_msgid)
 
 
+-- Detect forged KMail headers
+-- KMail User-Agent header
+local kmail_mua = 'User-Agent=/^\\s*KMail\\/1\\.\\d+\\.\\d+/H'
+-- KMail common Message-ID template
+local kmail_msgid_common = 'Message-Id=/^\\s*\\d+\\.\\d+\\.\\S+\\@\\S+$/mH'
+-- local kmail_msgid = function (task)
+-- rspamd_logger.info("test kmail_msgid")
+-- 	local msg = task:get_message()
+-- 	local regexp_text = '<(\\S+)>\\|<(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)\\.\\d+\\.\\1>$'
+-- 	local re = regexp.get_cached(regexp_text)
+-- 	if not re then re = regexp.create(regexp_text, '') end
+-- 	local header_msgid = msg:get_header('Message-Id')
+-- 	for _,header_from in ipairs(msg:get_header('From')) do
+-- 	    	if re:match(header_from.."|"..header_msgid) then
+-- 			return true
+-- 		end
+-- 	end
+-- 	return false
+-- end
+local kmail_msgid = 'Message-Id=/^(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)\\.\\d+\\.\\S+\\@\\S+$/mH'
+-- Summary rule for forged KMail Message-ID header
+reconf['FORGED_MUA_KMAIL_MSGID'] = string.format('(%s) & (%s) & !(%s) & !(%s)', kmail_mua, kmail_msgid_common, kmail_msgid, unusable_msgid)
+-- Summary rule for forged KMail Message-ID header with unknown template
+reconf['FORGED_MUA_KMAIL_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s)', kmail_mua, kmail_msgid_common, unusable_msgid)
+
+-- Detect forged Opera Mail headers
+-- Opera Mail User-Agent header
+local opera1x_mua = 'User-Agent=/^\\s*Opera Mail\\/1[01]\\.\\d+ /H'
+-- Opera Mail Message-ID template
+local opera1x_msgid = 'Message-ID=/^op\\.[a-z\\d]{14}\\@\\S+$/mHS'
+-- Suspicious Opera Mail User-Agent header
+local suspicious_opera10w_mua = 'User-Agent=/^\\s*Opera Mail\\/10\\.\\d+ \\(Windows\\)$/H'
+-- Suspicious Opera Mail Message-ID, apparently from KMail
+local suspicious_opera10w_msgid = 'Message-Id=/^2009\\d{8}\\.\\d+\\.\\S+\\@\\S+$/mHS'
+-- Summary rule for forged Opera Mail User-Agent header and Message-ID header from KMail
+reconf['SUSPICIOUS_OPERA_10W_MSGID'] = string.format('(%s) & (%s)', suspicious_opera10w_mua, suspicious_opera10w_msgid)
+-- Summary rule for forged Opera Mail Message-ID header
+reconf['FORGED_MUA_OPERA_MSGID'] = string.format('(%s) & !(%s) & !(%s) & !(%s)', opera1x_mua, opera1x_msgid, reconf['SUSPICIOUS_OPERA_10W_MSGID'], unusable_msgid)
+
+
 -- Detect forged Mozilla Mail/Thunderbird/Seamonkey headers
 -- Mozilla based X-Mailer
 local user_agent_mozilla5	= 'User-Agent=/^\\s*Mozilla\\/5\\.0/'
