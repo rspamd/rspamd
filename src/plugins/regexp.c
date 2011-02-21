@@ -979,6 +979,28 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 	return 0;
 }
 
+static gboolean
+maybe_call_lua_function (const gchar *name, struct worker_task *task)
+{
+	lua_State                      *L = task->cfg->lua_state;
+	struct worker_task            **ptask;
+
+	lua_getglobal (L, name);
+	if (lua_isfunction (L, -1)) {
+		ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+		lua_setclass (L, "rspamd{task}", -1);
+		*ptask = task;
+		/* Call function */
+		if (lua_pcall (L, 1, 1, 0) != 0) {
+			msg_info ("call to %s failed: %s", (gchar *)name, lua_tostring (L, -1));
+			return FALSE;
+		}
+		return lua_toboolean (L, -1);
+	}
+
+	return FALSE;
+}
+
 static                          gboolean
 optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 {
@@ -1061,6 +1083,17 @@ process_regexp_expression (struct expression *expr, gchar *symbol, struct worker
 		else if (it->type == EXPR_FUNCTION) {
 			cur = (gsize) call_expression_function ((struct expression_function *)it->content.operand, task);
 			debug_task ("function %s returned %s", ((struct expression_function *)it->content.operand)->name, cur ? "true" : "false");
+			if (try_optimize) {
+				try_optimize = optimize_regexp_expression (&it, stack, cur);
+			}
+			else {
+				g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
+			}
+		}
+		else if (it->type == EXPR_STR) {
+			/* This may be lua function, try to call it */
+			cur = maybe_call_lua_function ((const gchar*)it->content.operand, task);
+			debug_task ("function %s returned %s", (const gchar *)it->content.operand, cur ? "true" : "false");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
 			}
