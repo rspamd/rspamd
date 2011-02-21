@@ -1,5 +1,5 @@
 --- src/spam.c.orig	2011-01-20 19:29:51.179597017 +0300
-+++ src/spam.c	2011-01-20 19:40:42.818516872 +0300
++++ src/spam.c	2011-02-21 21:17:15.051230555 +0300
 @@ -21,6 +21,9 @@
  int spam_ok = 0;
  int spam_rc = 0;
@@ -25,12 +25,12 @@
 +  
 +  r = 0;
 +  r += push_line(request_v, request_p++, "REPORT SPAMC/1.2\r\n");
-+  r += push_line(request_v, request_p++, "Content-length: " OFF_T_FMT "\r\n", mbox_size);
++  r += push_line(request_v, request_p++, "Content-length: %lu\r\n", mbox_size);
 +  r += push_line(request_v, request_p++, "Queue-Id: %s\r\n", message_id);
-+  r += push_line(request_v, request_p++, "From: %s\r\n", sender_address);
++  r += push_line(request_v, request_p++, "From: <%s>\r\n", sender_address);
 +  r += push_line(request_v, request_p++, "Recipient-Number: %d\r\n", recipients_count);
 +  for (i = 0; i < recipients_count; i ++)
-+    r += push_line(request_v, request_p++, "Rcpt: %s\r\n", recipients_list[i].address);
++    r += push_line(request_v, request_p++, "Rcpt: <%s>\r\n", recipients_list[i].address);
 +  if ((helo = expand_string(US"$sender_helo_name")) != NULL && *helo != '\0')
 +    r += push_line(request_v, request_p++, "Helo: %s\r\n", helo);
 +  if (sender_host_address != NULL)
@@ -43,6 +43,15 @@
      (void)close(spamd_sock);
      log_write(0, LOG_MAIN|LOG_PANIC,
           "spam acl condition: spamd send failed: %s", strerror(errno));
+@@ -329,7 +344,7 @@
+   (void)close(spamd_sock);
+ 
+   /* dig in the spamd output and put the report in a multiline header, if requested */
+-  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
++  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\n\r\nSpam: %*s ; %lf / %lf\r\nContent-length: %*u\r\n\r\n%n",
+              spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
+ 
+     /* try to fall back to pre-2.50 spamd output */
 @@ -420,4 +435,31 @@
    };
  }
