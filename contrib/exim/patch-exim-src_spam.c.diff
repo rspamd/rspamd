@@ -1,0 +1,77 @@
+--- src/spam.c.orig	2011-01-20 19:29:51.179597017 +0300
++++ src/spam.c	2011-01-20 19:40:42.818516872 +0300
+@@ -21,6 +21,9 @@
+ int spam_ok = 0;
+ int spam_rc = 0;
+ 
++/* push formatted line into vector */
++static int push_line(struct iovec *iov, int i, const char *fmt, ...);
++
+ int spam(uschar **listptr) {
+   int sep = 0;
+   uschar *list = *listptr;
+@@ -211,14 +214,26 @@
+   }
+ 
+   /* now we are connected to spamd on spamd_sock */
+-  (void)string_format(spamd_buffer,
+-           sizeof(spamd_buffer),
+-           "REPORT SPAMC/1.2\r\nUser: %s\r\nContent-length: %ld\r\n\r\n",
+-           user_name,
+-           mbox_size);
++  int r, request_p = 0;
++  const char *helo;
++  struct iovec request_v[64];
++  
++  r = 0;
++  r += push_line(request_v, request_p++, "REPORT SPAMC/1.2\r\n");
++  r += push_line(request_v, request_p++, "Content-length: " OFF_T_FMT "\r\n", mbox_size);
++  r += push_line(request_v, request_p++, "Queue-Id: %s\r\n", message_id);
++  r += push_line(request_v, request_p++, "From: %s\r\n", sender_address);
++  r += push_line(request_v, request_p++, "Recipient-Number: %d\r\n", recipients_count);
++  for (i = 0; i < recipients_count; i ++)
++    r += push_line(request_v, request_p++, "Rcpt: %s\r\n", recipients_list[i].address);
++  if ((helo = expand_string(US"$sender_helo_name")) != NULL && *helo != '\0')
++    r += push_line(request_v, request_p++, "Helo: %s\r\n", helo);
++  if (sender_host_address != NULL)
++    r += push_line(request_v, request_p++, "IP: %s\r\n", sender_host_address);
++  r += push_line(request_v, request_p++, "\r\n");
+ 
+   /* send our request */
+-  if (send(spamd_sock, spamd_buffer, Ustrlen(spamd_buffer), 0) < 0) {
++  if (writev(spamd_sock, request_v, request_p) < 0) {
+     (void)close(spamd_sock);
+     log_write(0, LOG_MAIN|LOG_PANIC,
+          "spam acl condition: spamd send failed: %s", strerror(errno));
+@@ -420,4 +435,31 @@
+   };
+ }
+ 
++static int
++push_line(struct iovec *iov, const int i, const char *fmt, ...)
++{
++  va_list ap;
++  size_t len;
++  char buf[512];
++
++  if (i >= 64) {
++    log_write(0, LOG_MAIN, "rspam: %s: index out of bounds", __FUNCTION__);
++    return (-1);
++  }
++
++  va_start(ap, fmt);
++  len = vsnprintf(buf, sizeof(buf), fmt, ap);
++  va_end(ap);
++
++  iov[i].iov_base = string_copy(US buf);
++  iov[i].iov_len = len;
++
++  if (len >= sizeof(buf)) {
++    log_write(0, LOG_MAIN, "rspam: %s: error, string was longer than %d", __FUNCTION__, sizeof(buf));
++    return (-1);
++  }
++
++  return 0;
++}
++
+ #endif
