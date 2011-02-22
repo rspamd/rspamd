@@ -513,6 +513,7 @@ process_raw_headers (struct worker_task *task)
 			/* We got header's name, so skip any \t or spaces */
 			if (*p == '\t') {
 				new->tab_separated = TRUE;
+				p ++;
 			}
 			else if (*p == ' '){
 				p ++;

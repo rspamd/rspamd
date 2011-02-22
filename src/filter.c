@@ -171,7 +171,7 @@ insert_result_common (struct worker_task *task, const gchar *symbol, double flag
 void
 insert_result (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
 {
-	insert_result_common (task, symbol, flag, opts, FALSE);
+	insert_result_common (task, symbol, flag, opts, task->cfg->one_shot_mode);
 }
 
 /* Insert result as a single option */

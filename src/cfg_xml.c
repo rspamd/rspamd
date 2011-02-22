@@ -61,6 +61,7 @@
 
 enum xml_config_section {
 	XML_SECTION_MAIN,
+	XML_SECTION_OPTIONS,
     XML_SECTION_LOGGING, 
 	XML_SECTION_WORKER,
 	XML_SECTION_METRIC,
@@ -181,6 +182,83 @@ static struct xml_parser_rule grammar[] = {
 				"dns_retransmits",
 				xml_handle_uint32,
 				G_STRUCT_OFFSET (struct config_file, dns_retransmits),
+				NULL
+			},
+			NULL_ATTR
+		},
+		NULL_DEF_ATTR
+	},
+	{ XML_SECTION_OPTIONS, {
+			{
+				"statfile_pool_size",
+				xml_handle_size,
+				G_STRUCT_OFFSET (struct config_file, max_statfile_size),
+				NULL
+			},
+			{
+				"user_settings",
+				handle_user_settings,
+				0,
+				NULL
+			},
+			{
+				"domain_settings",
+				handle_domain_settings,
+				0,
+				NULL
+			},
+			{
+				"cache_file",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, cache_filename),
+				NULL
+			},
+			{
+				"dns_timeout",
+				xml_handle_seconds,
+				G_STRUCT_OFFSET (struct config_file, dns_timeout),
+				NULL
+			},
+			{
+				"dns_retransmits",
+				xml_handle_uint32,
+				G_STRUCT_OFFSET (struct config_file, dns_retransmits),
+				NULL
+			},
+			{
+				"raw_mode",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, raw_mode),
+				NULL
+			},
+			{
+				"one_shot",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, one_shot_mode),
+				NULL
+			},
+			{
+				"check_attachements",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, check_text_attachements),
+				NULL
+			},
+			{
+				"tempdir",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, temp_dir),
+				NULL
+			},
+			{
+				"pidfile",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, pid_file),
+				NULL
+			},
+			{
+				"filters",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, filters_str),
 				NULL
 			},
 			NULL_ATTR
@@ -465,6 +543,8 @@ xml_state_to_string (struct rspamd_xml_userdata *ud)
 			return "read param";
 		case XML_READ_MODULE:
 			return "read module section";
+		case XML_READ_OPTIONS:
+			return "read options section";
 		case XML_READ_MODULES:
 			return "read modules section";
 		case XML_READ_CLASSIFIER:
@@ -1441,6 +1521,9 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			else if (g_ascii_strcasecmp (element_name, "modules") == 0) {
 				ud->state = XML_READ_MODULES;	
 			}
+			else if (g_ascii_strcasecmp (element_name, "options") == 0) {
+				ud->state = XML_READ_OPTIONS;
+			}
 			else if (g_ascii_strcasecmp (element_name, "logging") == 0) {
 				ud->state = XML_READ_LOGGING;	
 			}
@@ -1519,6 +1602,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 		case XML_READ_WORKER:
 		case XML_READ_LOGGING:
 		case XML_READ_VIEW:
+		case XML_READ_OPTIONS:
 			rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			/* Save attributes */
 			ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
@@ -1618,6 +1702,9 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		case XML_READ_MODULES:
 			CHECK_TAG ("modules", FALSE);
 			break;
+		case XML_READ_OPTIONS:
+			CHECK_TAG ("options", FALSE);
+			break;
 		case XML_READ_METRIC:
 			CHECK_TAG ("metric", FALSE);
 			if (res) {
@@ -1699,6 +1786,12 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 			break;
 		case XML_READ_MODULES:
 			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_MODULES)) {
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
+				ud->state = XML_ERROR;
+			}
+			break;
+		case XML_READ_OPTIONS:
+			if (!call_param_handler (ud, ud->section_name, val, cfg, XML_SECTION_OPTIONS)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}

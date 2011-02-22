@@ -253,6 +253,7 @@ struct config_file {
 	gboolean no_fork;								/**< if 1 do not call daemon()							*/
 	gboolean config_test;							/**< if TRUE do only config file test					*/
 	gboolean raw_mode;								/**< work in raw mode instead of utf one				*/
+	gboolean one_shot_mode;							/**< rules add only one symbol							*/
 	gboolean check_text_attachements;				/**< check text attachements as text					*/
 	gboolean convert_config;						/**< convert config to XML format						*/
 

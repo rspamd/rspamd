@@ -1,13 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <rspamd>
-<!-- Main section -->
-<tempdir>/tmp</tempdir>
-<pidfile>/var/run/rspamd/rspamd.pid</pidfile>
-<filters>regexp,surbl,chartable,fuzzy_check,spf</filters>
-<statfile_pool_size>262144000</statfile_pool_size>
-<raw_mode>yes</raw_mode>
+<!-- Global section -->
 <lua src="@ETC_PREFIX@/rspamd/lua/rspamd.lua" />
-<!-- End of main section -->
+
+<!-- Options -->
+<options>
+  <!-- Temporary directory -->
+  <tempdir>/tmp</tempdir>
+  <!-- Path to pid file -->
+  <pidfile>/var/run/rspamd/rspamd.pid</pidfile>
+  <!-- Turned on C filters -->
+  <filters>regexp,surbl,chartable,fuzzy_check,spf</filters>
+  <!-- Maximum size of statistics mapped in memory -->
+  <statfile_pool_size>250M</statfile_pool_size>
+  <!-- Raw mode is non-utf mode. In utf mode all messages are converted to utf8 (if possible) -->
+  <raw_mode>yes</raw_mode>
+  <!-- Check text attachements as ordinary text parts -->
+  <check_attachements>no</check_attachements>
+  <!-- If a rule has been met several times do not add additional score -->
+  <one_shot>no</one_shot>
+  <!-- DNS requests global timeout -->
+  <dns_timeout>1s</dns_timeout>
+  <!-- DNS retransmits count -->
+  <dns_retransmits>5</dns_retransmits>
+  <!-- File for saving settings of symbols cache -->
+  <cache_file>/var/run/rspamd/symbols.cache</cache_file>
+</options>
+<!-- End of options section -->
 
 <!-- Logging section -->
 <logging>
