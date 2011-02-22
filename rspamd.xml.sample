@@ -85,7 +85,7 @@
  <symbol weight="3.00" description="Message pretends to be send from The Bat! but has forged Message-ID">FORGED_MUA_THEBAT_MSGID_UNKNOWN</symbol>
 
  <!-- Message pretends to be send from KMail but has forged Message-ID -->
- <symbol weight="3.00" description="Message pretends to be send from KMail but has forged Message-ID">FORGED_MUA_KMIL_MSGID</symbol>
+ <symbol weight="3.00" description="Message pretends to be send from KMail but has forged Message-ID">FORGED_MUA_KMAIL_MSGID</symbol>
  <!-- Message pretends to be send from KMail but has forged Message-ID -->
  <symbol weight="2.50" description="Message pretends to be send from KMail but has forged Message-ID">FORGED_MUA_KMAIL_MSGID_UNKNOWN</symbol>
 
