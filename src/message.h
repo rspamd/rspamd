@@ -49,6 +49,8 @@ struct raw_header {
 	gchar *name;
 	gchar *value;
 	gboolean tab_separated;
+	gboolean empty_separator;
+	gchar *separator;
 };
 
 /**

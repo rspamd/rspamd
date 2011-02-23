@@ -499,6 +499,7 @@ process_raw_headers (struct worker_task *task)
 				new->name = tmp;
 				p ++;
 				state = 2;
+				c = p;
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* Not header but some garbadge */
@@ -513,20 +514,34 @@ process_raw_headers (struct worker_task *task)
 			/* We got header's name, so skip any \t or spaces */
 			if (*p == '\t') {
 				new->tab_separated = TRUE;
+				new->empty_separator = FALSE;
 				p ++;
 			}
 			else if (*p == ' '){
+				new->empty_separator = FALSE;
 				p ++;
 			}
 			else if (*p == '\n' || *p == '\r') {
 				/* Process folding */
 				state = 99;
+				l = p - c - 1;
+				if (l > 0) {
+					tmp = memory_pool_alloc (task->task_pool, l + 1);
+					rspamd_strlcpy (tmp, c, l + 1);
+					new->separator = tmp;
+				}
 				next_state = 3;
 				err_state = 5;
 				c = p;
 			}
 			else {
 				/* Process value */
+				l = p - c - 1;
+				if (l > 0) {
+					tmp = memory_pool_alloc (task->task_pool, l + 1);
+					rspamd_strlcpy (tmp, c, l + 1);
+					new->separator = tmp;
+				}
 				c = p;
 				state = 3;
 			}

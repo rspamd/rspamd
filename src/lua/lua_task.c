@@ -358,6 +358,10 @@ lua_task_get_raw_header_common (lua_State * L, gboolean strong)
 			lua_pushstring (L, "tab_separated");
 			lua_pushboolean (L, rh->tab_separated);
 			lua_settable (L, -3);
+			lua_pushstring (L, "empty_separator");
+			lua_pushboolean (L, rh->empty_separator);
+			lua_settable (L, -3);
+			lua_set_table_index (L, "separator", rh->separator);
 			lua_rawseti (L, -2, i++);
 			/* Process next element */
 			cur = g_list_next (cur);
