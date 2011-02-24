@@ -1137,7 +1137,7 @@ header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, 
 				}
 			}
 		}
-		h = h->next;
+		h = (struct gmime_raw_header *)h->next;
 	}
 }
 #else
@@ -1217,7 +1217,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 		ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
 		header_iterate (data->pool, ls, &l, data->field, data->strong);
 #else
-		h = part->headers->headers;
+		h = (struct gmime_raw_header *)part->headers->headers;
 		header_iterate (data->pool, h, &l, data->field, data->strong);
 #endif
 		if (l == NULL) {
@@ -1257,7 +1257,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 	cb.strong = strong;
 
 #ifndef GMIME24
-	struct raw_header              *h;
+	struct gmime_raw_header       *h;
 
 	if (field == NULL) {
 		return NULL;

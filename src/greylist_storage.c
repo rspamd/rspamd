@@ -150,6 +150,7 @@ greylist_process_add_command (struct rspamd_grey_command *cmd, struct greylist_c
 #else
 	g_tree_insert (ctx->tree, item->data, item);
 	reply.reply = GREY_OK;
+	(void)pitem;
 #endif
 
 	return reply.reply;
@@ -203,6 +204,7 @@ greylist_process_check_command (struct rspamd_grey_command *cmd, struct greylist
 	}
 #else
 	item = g_tree_lookup (ctx->tree, cmd->data);
+	(void)pitem;
 #endif
 	if (item) {
 		if (now - item->age > ctx->expire_time) {
