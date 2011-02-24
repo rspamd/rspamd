@@ -497,6 +497,7 @@ process_raw_headers (struct worker_task *task)
 				tmp = memory_pool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
 				new->name = tmp;
+				new->empty_separator = TRUE;
 				p ++;
 				state = 2;
 				c = p;
@@ -517,14 +518,14 @@ process_raw_headers (struct worker_task *task)
 				new->empty_separator = FALSE;
 				p ++;
 			}
-			else if (*p == ' '){
+			else if (*p == ' ') {
 				new->empty_separator = FALSE;
 				p ++;
 			}
 			else if (*p == '\n' || *p == '\r') {
 				/* Process folding */
 				state = 99;
-				l = p - c - 1;
+				l = p - c;
 				if (l > 0) {
 					tmp = memory_pool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
@@ -536,7 +537,7 @@ process_raw_headers (struct worker_task *task)
 			}
 			else {
 				/* Process value */
-				l = p - c - 1;
+				l = p - c;
 				if (l > 0) {
 					tmp = memory_pool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
@@ -560,7 +561,7 @@ process_raw_headers (struct worker_task *task)
 		case 4:
 			/* Copy header's value */
 			l = p - c;
-			tmp = memory_pool_alloc (task->task_pool, l);
+			tmp = memory_pool_alloc (task->task_pool, l + 1);
 			tp = tmp;
 			t_state = 0;
 			while (l --) {
@@ -568,6 +569,7 @@ process_raw_headers (struct worker_task *task)
 					/* Before folding */
 					if (*c == '\n' || *c == '\r') {
 						t_state = 1;
+						c ++;
 					}
 					else {
 						*tp ++ = *c ++;
