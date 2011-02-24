@@ -1264,7 +1264,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 	}
 
 	msg_debug ("iterate over headers to find header %s", field);
-	h = GMIME_OBJECT (message)->headers->headers;
+	h = (struct gmime_raw_header *) (GMIME_OBJECT (message)->headers->headers);
 	header_iterate (pool, h, &gret, field, strong);
 
 	if (gret == NULL) {
@@ -1272,7 +1272,7 @@ local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gc
 		msg_debug ("iterate over headers of mime part to find header %s", field);
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
-			h = part->headers->headers;
+			h = (struct gmime_raw_header *)part->headers->headers;
 			header_iterate (pool, h, &gret, field, strong);
 			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
 				msg_debug ("iterate over headers of each multipart's subparts %s", field);
