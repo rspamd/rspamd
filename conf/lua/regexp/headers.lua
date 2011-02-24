@@ -379,8 +379,30 @@ reconf['HEADER_DATE_EMPTY_DELIMITER'] = string.format('(%s)', 'check_header_deli
 -- Definitions of received headers regexp
 reconf['RCVD_ILLEGAL_CHARS'] = 'Received=/[\\x80-\\xff]/X'
 
+local MAIL_RU_Return_Path	= 'Return-path=/^\\s*<.+\\@mail\\.ru>$/iX'
+local MAIL_RU_X_Envelope_From	= 'X-Envelope-From=/^\\s*<.+\\@mail\\.ru>$/iX'
+local MAIL_RU_From		= 'From=/\\@mail\\.ru>?$/iX'
+local MAIL_RU_Received		= 'Received=/from mail\\.ru \\(/mH'
+
 reconf['FAKE_RECEIVED_mail_ru'] = string.format('(%s) & !(((%s) | (%s)) & (%s))', MAIL_RU_Received, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, MAIL_RU_From)
 
+local GMAIL_COM_Return_Path	= 'Return-path=/^\\s*<.+\\@gmail\\.com>$/iX'
+local GMAIL_COM_X_Envelope_From	= 'X-Envelope-From=/^\\s*<.+\\@gmail\\.com>$/iX'
+local GMAIL_COM_From		= 'From=/\\@gmail\\.com>?$/iX'
+
+local UKR_NET_Return_Path	= 'Return-path=/^\\s*<.+\\@ukr\\.net>$/iX'
+local UKR_NET_X_Envelope_From	= 'X-Envelope-From=/^\\s*<.+\\@ukr\\.net>$/iX'
+local UKR_NET_From		= 'From=/\\@ukr\\.net>?$/iX'
+
+local RECEIVED_smtp_yandex_ru_1	= 'Received=/from \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] \\((port=\\d+ )?helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_2	= 'Received=/from \\[UNAVAILABLE\\] \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]:\\d+ helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_3	= 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]:\\d+ helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_4	= 'Received=/from \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] \\(account \\S+ HELO smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_5	= 'Received=/from smtp\\.yandex\\.ru \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]\\)/iX'
+local RECEIVED_smtp_yandex_ru_6	= 'Received=/from smtp\\.yandex\\.ru \\(\\S+ \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]\\)/iX'
+local RECEIVED_smtp_yandex_ru_7	= 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.ru\\) \\(\\S+\\@\\d+\\.\\d+\\.\\d+\\.\\d+\\)/iX'
+local RECEIVED_smtp_yandex_ru_8	= 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.ru\\) \\(\\d+\\.\\d+\\.\\d+\\.\\d+\\)/iX'
+local RECEIVED_smtp_yandex_ru_9	= 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] helo=smtp\\.yandex\\.ru\\)/iX'
 
 reconf['FAKE_RECEIVED_smtp_yandex_ru'] = string.format('(((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s)))) & (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)', MAIL_RU_From, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, GMAIL_COM_From, GMAIL_COM_Return_Path, GMAIL_COM_X_Envelope_From, UKR_NET_From, UKR_NET_Return_Path, UKR_NET_X_Envelope_From, RECEIVED_smtp_yandex_ru_1, RECEIVED_smtp_yandex_ru_2, RECEIVED_smtp_yandex_ru_3, RECEIVED_smtp_yandex_ru_4, RECEIVED_smtp_yandex_ru_5, RECEIVED_smtp_yandex_ru_6, RECEIVED_smtp_yandex_ru_7, RECEIVED_smtp_yandex_ru_8, RECEIVED_smtp_yandex_ru_9)
 
