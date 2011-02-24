@@ -32,6 +32,7 @@ end
 
 function emails_dns_cb(task, to_resolve, results, err, symbol)
 	if results then
+		rspamd_logger.info('found host for: ' .. to_resolve .. ', insert symbol: ' .. symbol) 
 		task:insert_result(symbol, 1)
 	end
 end
@@ -48,12 +49,16 @@ function check_email_rule(task, rule, addr)
 		task:resolve_dns_a(to_resolve, 'emails_dns_cb', rule['symbol'])
 	elseif rule['map'] then
 		if rule['domain_only'] then
-			if rule['map']:get_key(addr:get_host()) then
+			local key = addr:get_host()
+			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
+				rspamd_logger.info('email: ' .. key .. ' is found in list: ' .. rule['symbol'])
 			end
 		else
-			if rule['map']:get_key(string.format('%s@%s', addr:get_user(), addr:get_host())) then
+			local key = string.format('%s@%s', addr:get_user(), addr:get_host())
+			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
+				rspamd_logger.info('email: ' .. key .. ' is found in list: ' .. rule['symbol'])
 			end
 		end
 	end
