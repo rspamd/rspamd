@@ -1019,7 +1019,7 @@ controller_err_socket (GError * err, void *arg)
 	if (err->code != EOF) {
 		msg_info ("abnormally closing control connection, error: %s", err->message);
 	}
-
+	g_error_free (err);
 	/* Free buffers */
 	destroy_session (session->s);
 }

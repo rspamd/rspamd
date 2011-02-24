@@ -267,6 +267,9 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->messages) {
 			g_list_free (task->messages);
 		}
+		if (task->received) {
+			g_list_free (task->received);
+		}
 		memory_pool_delete (task->task_pool);
 		if (task->dispatcher) {
 			if (is_soft) {
@@ -449,6 +452,7 @@ err_socket (GError * err, void *arg)
 	if (ctx->is_custom) {
 		fin_custom_filters (task);
 	}
+	g_error_free (err);
 	if (task->state != WRITE_REPLY) {
 		destroy_session (task->s);
 	}

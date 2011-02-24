@@ -955,6 +955,9 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver, struc
 			rep->elements = g_list_prepend (rep->elements, elt);
 		}
 	}
+	if (rep->elements) {
+		memory_pool_add_destructor (req->pool, (pool_destruct_func)g_list_free, rep->elements);
+	}
 	
 	return rep;
 }

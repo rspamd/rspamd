@@ -1015,8 +1015,8 @@ process_message (struct worker_task *task)
 
 		if (task->raw_headers) {
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers);
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, task->raw_headers_list);
 			process_raw_headers (task);
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, task->raw_headers_list);
 		}
 
 		task->rcpts = g_mime_message_get_all_recipients (message);

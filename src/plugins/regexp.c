@@ -674,6 +674,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			return 0;
 		}
 		else {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, headerlist);
 			/* Check whether we have regexp for it */
 			if (re->regexp == NULL) {
 				debug_task ("regexp contains only header and it is found %s", re->header);
@@ -684,7 +685,6 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			cur = headerlist;
 			while (cur) {
 				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
-
 				/* Try to match regexp */
 				if (cur->data && g_regex_match_full (re->regexp, cur->data, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
