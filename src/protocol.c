@@ -29,8 +29,8 @@
 #include "settings.h"
 #include "message.h"
 
-/* Max line size as it is defined in rfc2822 */
-#define OUTBUFSIZ 1000
+/* Max line size */
+#define OUTBUFSIZ BUFSIZ
 /*
  * Just check if the passed message is spam or not and reply as
  * described below
@@ -477,162 +477,106 @@ write_hashes_to_log (struct worker_task *task, gchar *logbuf, gint offset, gint 
 	}
 }
 
-static gint
-compare_url_func (gconstpointer a, gconstpointer b)
-{
-	const struct uri               *u1 = a, *u2 = b;
 
-	if (u1->hostlen != u2->hostlen) {
-		return u1->hostlen - u2->hostlen;
+/* Structure for writing tree data */
+struct tree_cb_data {
+	gchar                          *buf;
+	gsize                           len;
+	gsize                           off;
+};
+
+/*
+ * Callback for writing urls
+ */
+static gboolean
+urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
+{
+	struct tree_cb_data             *cb = ud;
+	struct uri                      *url = value;
+	gsize                            len;
+
+	len = url->hostlen + url->userlen + 1;
+	if (cb->off + len >= cb->len) {
+		msg_info ("cannot write urls header completely, stripped reply at: %z", cb->off);
+		return TRUE;
 	}
 	else {
-		return memcmp (u1->host, u2->host, u1->hostlen);
+		cb->off += rspamd_snprintf (cb->buf + cb->off, cb->len - cb->off, " %*s,",
+								url->hostlen, url->host);
 	}
-}
-
-static gint
-compare_email_func (gconstpointer a, gconstpointer b)
-{
-	const struct uri               *u1 = a, *u2 = b;
-	gint                            r;
-
-	if (u1->hostlen != u2->hostlen) {
-		return u1->hostlen - u2->hostlen;
-	}
-	else {
-		if ((r = memcmp (u1->host, u2->host, u1->hostlen)) == 0){
-			if (u1->userlen != u2->userlen) {
-				return u1->userlen - u2->userlen;
-			}
-			else {
-				return memcmp (u1->user, u2->user, u1->userlen);
-			}
-		}
-		else {
-			return r;
-		}
-	}
-
-	return 0;
+	return FALSE;
 }
 
 static gboolean
 show_url_header (struct worker_task *task)
 {
 	gint                            r = 0;
-	gchar                           outbuf[OUTBUFSIZ], c;
-	struct uri                     *url;
-	GList                          *cur;
-	f_str_t                         host;
-	GTree                          *url_tree;
+	gchar                           outbuf[OUTBUFSIZ];
+	struct tree_cb_data             cb;
 
 	r = rspamd_snprintf (outbuf, sizeof (outbuf), "Urls: ");
-	url_tree = g_tree_new (compare_url_func);
-	cur = task->urls;
-	while (cur) {
-		url = cur->data;
-        if (task->cfg->log_urls) {
-            /* Write this url to log as well */
-            msg_info ("url found: <%s>, score: [%.2f / %.2f]", struri (url), default_score, default_required_score);
-        }
-		if (g_tree_lookup (url_tree, url) == NULL && url->hostlen > 0) {
-			g_tree_insert (url_tree, url, url);
-			host.begin = url->host;
-			host.len = url->hostlen;
-			/* Skip long hosts to avoid protocol coollisions */
-			if (host.len > OUTBUFSIZ) {
-				cur = g_list_next (cur);
-				continue;
-			}
-			/* Do header folding */
-			if (host.len + r >= OUTBUFSIZ - 3) {
-				outbuf[r++] = '\r';
-				outbuf[r++] = '\n';
-				outbuf[r] = ' ';
-				if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
-					return FALSE;
-				}
-				r = 0;
-			}
-			/* Write url host to buf */
-			if (g_list_next (cur) != NULL) {
-				c = *(host.begin + host.len);
-				*(host.begin + host.len) = '\0';
-				debug_task ("write url: %s", host.begin);
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s, ", host.begin);
-				*(host.begin + host.len) = c;
-			}
-			else {
-				c = *(host.begin + host.len);
-				*(host.begin + host.len) = '\0';
-				debug_task ("write url: %s", host.begin);
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s", host.begin);
-				*(host.begin + host.len) = c;
-			}
-		}
-		cur = g_list_next (cur);
-	}
-	if (r == 0) {
-		return TRUE;
-	}
-	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
 
-	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+	cb.buf = outbuf;
+	cb.len = sizeof (outbuf);
+	cb.off = r;
+
+	g_tree_foreach (task->urls, urls_protocol_cb, &cb);
+	/* Strip last ',' */
+	if (cb.buf[cb.off - 1] == ',') {
+		cb.buf[--cb.off] = '\0';
+	}
+	cb.off += rspamd_snprintf (cb.buf + cb.off, cb.len - cb.off, CRLF);
+
+	return rspamd_dispatcher_write (task->dispatcher, outbuf, cb.off, FALSE, FALSE);
 }
 
+/*
+ * Callback for writing emails
+ */
+static gboolean
+emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
+{
+	struct tree_cb_data             *cb = ud;
+	struct uri                      *url = value;
+	gsize                            len;
+
+	len = url->hostlen + url->userlen + 1;
+	if (cb->off + len >= cb->len) {
+		msg_info ("cannot write emails header completely, stripped reply at: %z", cb->off);
+		return TRUE;
+	}
+	else {
+		cb->off += rspamd_snprintf (cb->buf + cb->off, cb->len - cb->off, " %*s@%*s,",
+								url->userlen, url->user,
+								url->hostlen, url->host);
+	}
+	return FALSE;
+}
+
+/*
+ * Show header for emails found in a message
+ */
 static gboolean
 show_email_header (struct worker_task *task)
 {
 	gint                            r = 0;
 	gchar                           outbuf[OUTBUFSIZ];
-	struct uri                     *url;
-	GList                          *cur;
-	gsize                           len;
-	GTree                          *url_tree;
+	struct tree_cb_data             cb;
 
 	r = rspamd_snprintf (outbuf, sizeof (outbuf), "Emails: ");
-	url_tree = g_tree_new (compare_email_func);
-	cur = task->emails;
-	while (cur) {
-		url = cur->data;
-		if (g_tree_lookup (url_tree, url) == NULL && url->hostlen > 0) {
-			g_tree_insert (url_tree, url, url);
-			len = url->hostlen + url->userlen + 1;
-			/* Skip long hosts to avoid protocol coollisions */
-			if (len > OUTBUFSIZ) {
-				cur = g_list_next (cur);
-				continue;
-			}
-			/* Do header folding */
-			if (len + r >= OUTBUFSIZ - 3) {
-				outbuf[r++] = '\r';
-				outbuf[r++] = '\n';
-				outbuf[r] = ' ';
-				if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, TRUE, FALSE)) {
-					return FALSE;
-				}
-				r = 0;
-			}
-			/* Write url host to buf */
-			if (g_list_next (cur) != NULL) {
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%*s@%*s, ",
-						url->userlen, url->user,
-						url->hostlen, url->host);
-			}
-			else {
-				r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%*s@%*s",
-										url->userlen, url->user,
-										url->hostlen, url->host);
-			}
-		}
-		cur = g_list_next (cur);
-	}
-	if (r == 0) {
-		return TRUE;
-	}
-	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
 
-	return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+	cb.buf = outbuf;
+	cb.len = sizeof (outbuf);
+	cb.off = r;
+
+	g_tree_foreach (task->emails, emails_protocol_cb, &cb);
+	/* Strip last ',' */
+	if (cb.buf[cb.off - 1] == ',') {
+		cb.buf[--cb.off] = '\0';
+	}
+	cb.off += rspamd_snprintf (cb.buf + cb.off, cb.len - cb.off, CRLF);
+
+	return rspamd_dispatcher_write (task->dispatcher, outbuf, cb.off, FALSE, FALSE);
 }
 
 static void

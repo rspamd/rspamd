@@ -261,12 +261,6 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->text_parts) {
 			g_list_free (task->text_parts);
 		}
-		if (task->urls) {
-			g_list_free (task->urls);
-		}
-		if (task->emails) {
-			g_list_free (task->emails);
-		}
 		if (task->images) {
 			g_list_free (task->images);
 		}
@@ -460,6 +454,52 @@ err_socket (GError * err, void *arg)
 	}
 }
 
+/* Compare two emails for building emails tree */
+static gint
+compare_email_func (gconstpointer a, gconstpointer b)
+{
+	const struct uri               *u1 = a, *u2 = b;
+	gint                            r;
+
+	if (u1->hostlen != u2->hostlen) {
+		return u1->hostlen - u2->hostlen;
+	}
+	else {
+		if ((r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen)) == 0){
+			if (u1->userlen != u2->userlen) {
+				return u1->userlen - u2->userlen;
+			}
+			else {
+				return g_ascii_strncasecmp (u1->user, u2->user, u1->userlen);
+			}
+		}
+		else {
+			return r;
+		}
+	}
+
+	return 0;
+}
+
+static gint
+compare_url_func (gconstpointer a, gconstpointer b)
+{
+	const struct uri               *u1 = a, *u2 = b;
+	int                             r;
+
+	if (u1->hostlen != u2->hostlen) {
+		return u1->hostlen - u2->hostlen;
+	}
+	else {
+		r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen);
+	}
+
+	return r;
+}
+
+/*
+ * Create new task
+ */
 struct worker_task             *
 construct_task (struct rspamd_worker *worker)
 {
@@ -499,6 +539,14 @@ construct_task (struct rspamd_worker *worker)
 	memory_pool_add_destructor (new_task->task_pool,
 			(pool_destruct_func) g_hash_table_destroy,
 			new_task->re_cache);
+	new_task->emails = g_tree_new (compare_email_func);
+	memory_pool_add_destructor (new_task->task_pool,
+				(pool_destruct_func) g_tree_destroy,
+				new_task->emails);
+	new_task->urls = g_tree_new (compare_url_func);
+	memory_pool_add_destructor (new_task->task_pool,
+					(pool_destruct_func) g_tree_destroy,
+					new_task->urls);
 	new_task->s =
 			new_async_session (new_task->task_pool, free_task_hard, new_task);
 	new_task->sock = -1;

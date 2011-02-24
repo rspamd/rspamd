@@ -1185,13 +1185,18 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 					if (new != NULL) {
 						g_strstrip (url_str);
 						rc = parse_uri (new, url_str, pool);
-						if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
+						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) &&
+								new->hostlen > 0) {
 							if (new->protocol == PROTOCOL_MAILTO) {
-								task->emails = g_list_prepend (task->emails, new);
+								if (!g_tree_lookup (task->emails, new)) {
+									g_tree_insert (task->emails, new, new);
+								}
 							}
 							else {
 								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
-								task->urls = g_list_prepend (task->urls, new);
+								if (!g_tree_lookup (task->urls, new)) {
+									g_tree_insert (task->urls, new, new);
+								}
 							}
 						}
 						else {

@@ -115,9 +115,6 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 		else {
 			rspamd_remove_dispatcher (lmtp->task->dispatcher);
 		}
-		if (lmtp->task->urls) {
-			g_list_free (lmtp->task->urls);
-		}
 		close (lmtp->task->sock);
 		g_free (lmtp->task);
 		g_free (lmtp);

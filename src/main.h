@@ -203,8 +203,8 @@ struct worker_task {
 	GList *text_parts;											/**< list of text parts								*/
 	gchar *raw_headers;											/**< list of raw headers							*/
 	GList *received;											/**< list of received headers						*/
-	GList *urls;												/**< list of parsed urls							*/
-	GList *emails;												/**< list of parsed emails							*/
+	GTree *urls;												/**< list of parsed urls							*/
+	GTree *emails;												/**< list of parsed emails							*/
 	GList *images;												/**< list of images									*/
 	GList *raw_headers_list;									/**< list of raw headers							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 

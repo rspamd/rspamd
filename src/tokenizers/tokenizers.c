@@ -143,38 +143,6 @@ get_next_word (f_str_t * buf, f_str_t * token)
 	return token;
 }
 
-int
-tokenize_urls (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
-{
-	token_node_t                   *new = NULL;
-	f_str_t                         url_domain;
-	struct uri                     *url;
-	GList                          *cur;
-	uint32_t                        h;
-
-	if (*tree == NULL) {
-		*tree = g_tree_new (token_node_compare_func);
-		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
-	}
-
-	cur = task->urls;
-	while (cur) {
-		url = cur->data;
-		url_domain.begin = url->host;
-		url_domain.len = url->hostlen;
-		new = memory_pool_alloc (pool, sizeof (token_node_t));
-		h = fstrhash (&url_domain);
-		new->h1 = h * primes[0];
-		new->h2 = h * primes[1];
-		if (g_tree_lookup (*tree, new) == NULL) {
-			g_tree_insert (*tree, new, new);
-		}
-		cur = g_list_next (cur);
-	}
-
-	return TRUE;
-}
-
 /* Struct to access gmime headers */
 struct raw_header {
 	struct raw_header              *next;

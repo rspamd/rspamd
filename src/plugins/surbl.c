@@ -53,11 +53,10 @@
 
 static struct surbl_ctx        *surbl_module_ctx = NULL;
 
-static gint                      surbl_filter (struct worker_task *task);
+static gint                     surbl_filter (struct worker_task *task);
 static void                     surbl_test_url (struct worker_task *task, void *user_data);
 static void                     dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
 static void                     process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr);
-static gint                      urls_command_handler (struct worker_task *task);
 
 #define NO_REGEXP (gpointer)-1
 
@@ -224,7 +223,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
-	register_protocol_command ("urls", urls_command_handler);
 	/* Register module options */
 	register_module_opt ("surbl", "redirector", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("surbl", "url_expire", MODULE_OPT_TYPE_TIME);
@@ -570,7 +568,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 }
 
 static void
-make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree,
+make_surbl_requests (struct uri *url, struct worker_task *task,
 		struct suffix_item *suffix, gboolean forced)
 {
 	gchar                           *surbl_req;
@@ -583,20 +581,14 @@ make_surbl_requests (struct uri *url, struct worker_task *task, GTree * tree,
 
 	if (check_view (task->cfg->views, suffix->symbol, task)) {
 		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE, &err, forced)) != NULL) {
-			if (g_tree_lookup (tree, surbl_req) == NULL) {
-				g_tree_insert (tree, surbl_req, surbl_req);
-				param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
-				param->url = url;
-				param->task = task;
-				param->suffix = suffix;
-				param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
-				debug_task ("send surbl dns request %s", surbl_req);
-				if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback, (void *)param, DNS_REQUEST_A, surbl_req)) {
-					param->task->save.saved++;
-				}
-			}
-			else {
-				debug_task ("request %s is already sent", surbl_req);
+			param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
+			param->url = url;
+			param->task = task;
+			param->suffix = suffix;
+			param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
+			debug_task ("send surbl dns request %s", surbl_req);
+			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback, (void *)param, DNS_REQUEST_A, surbl_req)) {
+				param->task->save.saved++;
 			}
 		}
 		else if (err != NULL && err->code != WHITELIST_ERROR) {
@@ -732,7 +724,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 			param->task->save.saved = 1;
 			process_filters (param->task);
 		}
-		make_surbl_requests (param->url, param->task, param->tree, param->suffix, FALSE);
+		make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 		break;
 	default:
 		return;
@@ -740,7 +732,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 }
 
 static void
-register_memcached_call (struct uri *url, struct worker_task *task, GTree * url_tree, struct suffix_item *suffix)
+register_memcached_call (struct uri *url, struct worker_task *task, struct suffix_item *suffix)
 {
 	struct memcached_param         *param;
 	struct memcached_server        *selected;
@@ -754,7 +746,6 @@ register_memcached_call (struct uri *url, struct worker_task *task, GTree * url_
 
 	param->url = url;
 	param->task = task;
-	param->tree = url_tree;
 	param->suffix = suffix;
 
 	param->ctx = memory_pool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
@@ -799,7 +790,7 @@ free_redirector_session (void *ud)
 	event_del (&param->ev);
 	close (param->sock);
 	param->task->save.saved--;
-	make_surbl_requests (param->url, param->task, param->tree, param->suffix, FALSE);
+	make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 	if (param->task->save.saved == 0) {
 		/* Call other filters */
 		param->task->save.saved = 1;
@@ -886,7 +877,7 @@ redirector_callback (gint fd, short what, void *arg)
 
 
 static void
-register_redirector_call (struct uri *url, struct worker_task *task, GTree * url_tree,
+register_redirector_call (struct uri *url, struct worker_task *task,
 		struct suffix_item *suffix, const gchar *rule)
 {
 	gint                            s = -1;
@@ -907,7 +898,7 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	if (s == -1) {
 		msg_info ("<%s> cannot create tcp socket failed: %s", task->message_id, strerror (errno));
 		task->save.saved--;
-		make_surbl_requests (url, task, url_tree, suffix, FALSE);
+		make_surbl_requests (url, task, suffix, FALSE);
 		return;
 	}
 
@@ -916,7 +907,6 @@ register_redirector_call (struct uri *url, struct worker_task *task, GTree * url
 	param->task = task;
 	param->state = STATE_CONNECT;
 	param->sock = s;
-	param->tree = url_tree;
 	param->suffix = suffix;
 	param->redirector = selected;
 	timeout = memory_pool_alloc (task->task_pool, sizeof (struct timeval));
@@ -966,22 +956,22 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 					re = g_hash_table_lookup (surbl_module_ctx->redirector_hosts, red_domain);
 					if (re != NULL && (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL))) {
 						/* If no regexp found or founded regexp matches url string register redirector's call */
-						register_redirector_call (url, param->task, param->tree, param->suffix, red_domain);
+						register_redirector_call (url, param->task, param->suffix, red_domain);
 						param->task->save.saved++;
 						return FALSE;
 					}
 				}
 			}
 		}
-		make_surbl_requests (url, param->task, param->tree, param->suffix, FALSE);
+		make_surbl_requests (url, param->task, param->suffix, FALSE);
 	}
 	else {
 		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
-			register_memcached_call (url, param->task, param->tree, param->suffix);
+			register_memcached_call (url, param->task, param->suffix);
 			param->task->save.saved++;
 		}
 		else {
-			make_surbl_requests (url, param->task, param->tree, param->suffix, FALSE);
+			make_surbl_requests (url, param->task, param->suffix, FALSE);
 		}
 	}
 
@@ -991,31 +981,12 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 static void
 surbl_test_url (struct worker_task *task, void *user_data)
 {
-	GTree                          *url_tree;
-	GList                          *cur;
-	struct mime_text_part          *part;
 	struct redirector_param         param;
 	struct suffix_item             *suffix = user_data;
 
-	url_tree = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
-
-	param.tree = url_tree;
 	param.task = task;
 	param.suffix = suffix;
-	cur = task->text_parts;
-	while (cur) {
-		part = cur->data;
-		if (part->urls) {
-			g_tree_foreach (part->urls, surbl_tree_url_callback, &param);
-		}
-		if (part->html_urls) {
-			g_tree_foreach (part->html_urls, surbl_tree_url_callback, &param);
-		}
-
-		cur = g_list_next (cur);
-	}
-
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, url_tree);
+	g_tree_foreach (task->urls, surbl_tree_url_callback, &param);
 }
 
 static gint
@@ -1024,71 +995,6 @@ surbl_filter (struct worker_task *task)
 	/* XXX: remove this shit */
 	return 0;
 }
-
-static gboolean
-urls_command_handler (struct worker_task *task)
-{
-	GList                          *cur;
-	gchar                           *outbuf, *urlstr;
-	gint                            r, num = 0, buflen;
-	struct uri                     *url;
-	GError                         *err = NULL;
-	GTree                          *url_tree;
-	f_str_t                         f;
-
-	url_tree = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
-
-	/* First calculate buffer length */
-	cur = g_list_first (task->urls);
-	buflen = 0;
-	while (cur) {
-		url = cur->data;
-		buflen += strlen (struri (url)) + url->hostlen + sizeof (" <\"\">, ") - 1;
-		cur = g_list_next (cur);
-	}
-
-	buflen += sizeof (RSPAMD_REPLY_BANNER " 0 OK" CRLF CRLF "Urls: ");
-
-	outbuf = memory_pool_alloc (task->task_pool, buflen * sizeof (gchar));
-
-	r = rspamd_snprintf (outbuf, buflen, "%s 0 %s" CRLF, (task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, "OK");
-
-	r += rspamd_snprintf (outbuf + r, buflen - r - 2, "Urls: ");
-
-	cur = g_list_first (task->urls);
-
-	while (cur) {
-		num++;
-		url = cur->data;
-		if (g_tree_lookup (url_tree, struri (url)) == NULL) {
-			g_tree_insert (url_tree, struri (url), url);
-			f.begin = url->host;
-			f.len = url->hostlen;
-			if ((urlstr = format_surbl_request (task->task_pool, &f, NULL, FALSE, &err, FALSE)) != NULL) {
-				if (g_list_next (cur) != NULL) {
-					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">, ", (gchar *)urlstr, struri (url));
-				}
-				else {
-					r += rspamd_snprintf (outbuf + r, buflen - r - 2, "%s <\"%s\">", (gchar *)urlstr, struri (url));
-				}
-			}
-		}
-		cur = g_list_next (cur);
-	}
-
-	outbuf[r++] = '\r';
-	outbuf[r++] = '\n';
-
-	g_tree_destroy (url_tree);
-	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, TRUE)) {
-		return FALSE;
-	}
-	msg_info ("msg ok, id: <%s>, %d urls extracted", task->message_id, num);
-	task->state = STATE_REPLY;
-
-	return TRUE;
-}
-
 
 /*
  * vi:ts=4 

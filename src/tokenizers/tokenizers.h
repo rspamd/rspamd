@@ -36,8 +36,6 @@ struct tokenizer* get_tokenizer (char *name);
 f_str_t *get_next_word (f_str_t *buf, f_str_t *token);
 /* OSB tokenize function */
 int osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input, GTree **cur);
-/* Common tokenizer for urls */
-int tokenize_urls (memory_pool_t *pool, struct worker_task *task, GTree **cur);
 /* Common tokenizer for headers */
 int tokenize_headers (memory_pool_t *pool, struct worker_task *task, GTree **cur);
 /* Make tokens for a subject */

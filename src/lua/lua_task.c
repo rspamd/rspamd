@@ -220,27 +220,37 @@ lua_task_insert_result (lua_State * L)
 	return 1;
 }
 
+struct lua_tree_cb_data {
+	lua_State                     *L;
+	int                            i;
+};
+
+static gboolean
+lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
+{
+	struct uri                    **purl;
+	struct lua_tree_cb_data         *cb = ud;
+
+	purl = lua_newuserdata (cb->L, sizeof (struct uri *));
+	lua_setclass (cb->L, "rspamd{url}", -1);
+	*purl = value;
+	lua_rawseti (cb->L, -2, cb->i++);
+
+	return FALSE;
+}
+
 static gint
 lua_task_get_urls (lua_State * L)
 {
-	gint                            i = 1;
 	struct worker_task             *task = lua_check_task (L);
-	GList                          *cur;
-	struct uri                    **purl;
+	struct lua_tree_cb_data         cb;
 
 	if (task) {
-		cur = task->urls;
-		if (cur != NULL) {
-			lua_newtable (L);
-			while (cur) {
-				purl = lua_newuserdata (L, sizeof (struct uri *));
-				lua_setclass (L, "rspamd{url}", -1);
-				*purl = cur->data;
-				lua_rawseti (L, -2, i++);
-				cur = g_list_next (cur);
-			}
-			return 1;
-		}
+		lua_newtable (L);
+		cb.i = 1;
+		cb.L = L;
+		g_tree_foreach (task->urls, lua_tree_url_callback, &cb);
+		return 1;
 	}
 
 	lua_pushnil (L);
@@ -250,24 +260,15 @@ lua_task_get_urls (lua_State * L)
 static gint
 lua_task_get_emails (lua_State * L)
 {
-	gint                            i = 1;
 	struct worker_task             *task = lua_check_task (L);
-	GList                          *cur;
-	struct uri                    **purl;
+	struct lua_tree_cb_data         cb;
 
 	if (task) {
-		cur = task->emails;
-		if (cur != NULL) {
-			lua_newtable (L);
-			while (cur) {
-				purl = lua_newuserdata (L, sizeof (struct uri *));
-				lua_setclass (L, "rspamd{url}", -1);
-				*purl = cur->data;
-				lua_rawseti (L, -2, i++);
-				cur = g_list_next (cur);
-			}
-			return 1;
-		}
+		lua_newtable (L);
+		cb.i = 1;
+		cb.L = L;
+		g_tree_foreach (task->emails, lua_tree_url_callback, &cb);
+		return 1;
 	}
 
 	lua_pushnil (L);

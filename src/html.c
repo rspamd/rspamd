@@ -800,7 +800,9 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			}
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);
-				task->urls = g_list_prepend (task->urls, url);
+			}
+			if (g_tree_lookup (task->urls, url)) {
+				g_tree_insert (task->urls, url, url);
 			}
 		}
 	}
