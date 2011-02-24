@@ -114,15 +114,15 @@
  <symbol weight="4.00" description="Message pretends to be send from suspicious Opera Mail/10.x (Windows) but has forged Message-ID, apparently from KMail">SUSPICIOUS_OPERA_10W_MSGID</symbol>
 
  <!-- Message pretends to be send from Mozilla Mail but has forged Message-ID -->
- <symbol weight="3.50" description="Message pretends to be send from Mozilla Mail but has forged Message-ID">FORGED_MUA_MOZILLA_MAIL_MSGID</symbol>
+ <symbol weight="4.00" description="Message pretends to be send from Mozilla Mail but has forged Message-ID">FORGED_MUA_MOZILLA_MAIL_MSGID</symbol>
  <!-- Message pretends to be send from Mozilla Mail but has forged Message-ID -->
  <symbol weight="2.50" description="Message pretends to be send from Mozilla Mail but has forged Message-ID">FORGED_MUA_MOZILLA_MAIL_MSGID_UNKNOWN</symbol>
  <!-- Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID -->
- <symbol weight="3.50" description="Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID">FORGED_MUA_THUNDERBIRD_MSGID</symbol>
+ <symbol weight="4.00" description="Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID">FORGED_MUA_THUNDERBIRD_MSGID</symbol>
  <!-- Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID -->
  <symbol weight="2.50" description="Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID">FORGED_MUA_THUNDERBIRD_MSGID_UNKNOWN</symbol>
  <!-- Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID -->
- <symbol weight="3.50" description="Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID">FORGED_MUA_SEAMONKEY_MSGID</symbol>
+ <symbol weight="4.00" description="Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID">FORGED_MUA_SEAMONKEY_MSGID</symbol>
  <!-- Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID -->
  <symbol weight="2.50" description="Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID">FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN</symbol>
 
@@ -258,6 +258,32 @@
  <!-- Phished mail -->
  <symbol weight="5.0" description="Phished mail">PHISHING</symbol>
 
+ <!-- Tabs as delimiters between header names and header values -->
+ <symbol weight="1.0" description="Header From begins with tab">HEADER_FROM_DELIMITER_TAB</symbol>
+ <symbol weight="1.0" description="Header To begins with tab">HEADER_TO_DELIMITER_TAB</symbol>
+ <symbol weight="1.0" description="Header Cc begins with tab">HEADER_CC_DELIMITER_TAB</symbol>
+ <symbol weight="1.0" description="Header Reply-To begins with tab">HEADER_REPLYTO_DELIMITER_TAB</symbol>
+ <symbol weight="1.0" description="Header Date begins with tab">HEADER_DATE_DELIMITER_TAB</symbol>
+
+ <!-- Empty delimiters between header names and header values -->
+ <symbol weight="1.0" description="Header From has no delimiter between header name and header value">HEADER_FROM_EMPTY_DELIMITER</symbol>
+ <symbol weight="1.0" description="Header To has no delimiter between header name and header value">HEADER_TO_EMPTY_DELIMITER</symbol>
+ <symbol weight="1.0" description="Header Cc has no delimiter between header name and header value">HEADER_CC_EMPTY_DELIMITER</symbol>
+ <symbol weight="1.0" description="Header Reply-To has no delimiter between header name and header value">HEADER_REPLYTO_EMPTY_DELIMITER</symbol>
+ <symbol weight="1.0" description="Header Date has no delimiter between header name and header value">HEADER_DATE_EMPTY_DELIMITER</symbol>
+
+ <!-- Received headers -->
+ <symbol weight="4.0" description="Header Received has raw illegal character">RCVD_ILLEGAL_CHARS</symbol>
+ <symbol weight="4.0" description="Fake helo mail.ru in header Received from non mail.ru sender address">FAKE_RECEIVED_mail_ru</symbol>
+ <symbol weight="4.0" description="Fake smtp.yandex.ru Received">FAKE_RECEIVED_smtp_yandex_ru</symbol>
+ <symbol weight="3.6" description="Forged generic Received">FORGED_GENERIC_RECEIVED</symbol>
+ <symbol weight="3.6" description="Forged generic Received">FORGED_GENERIC_RECEIVED2</symbol>
+ <symbol weight="3.6" description="Forged generic Received">FORGED_GENERIC_RECEIVED3</symbol>
+ <symbol weight="3.6" description="Forged generic Received">FORGED_GENERIC_RECEIVED4</symbol>
+ <symbol weight="4.6" description="Forged generic Received">FORGED_GENERIC_RECEIVED5</symbol>
+ <symbol weight="3.0" description="Invalid Postfix Received">INVALID_POSTFIX_RECEIVED</symbol>
+ <symbol weight="5.0" description="Invalid Exim Received">INVALID_EXIM_RECEIVED</symbol>
+ <symbol weight="3.0" description="Invalid Exim Received">INVALID_EXIM_RECEIVED2</symbol>
 </metric>
 <!-- End of metrics section -->
 

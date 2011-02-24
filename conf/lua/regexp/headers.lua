@@ -345,3 +345,95 @@ local has_mimeole = 'header_exists(X-MimeOLE)'
 local has_squirrelmail_in_mailer = 'X-Mailer=/SquirrelMail\\b/H'
 reconf['MISSING_MIMEOLE'] = string.format('(%s) & !(%s) & !(%s) & !(%s) & !(%s)', has_msmail_pri, has_mimeole, has_squirrelmail_in_mailer, xm_mso12, xm_cgpmapi)
 
+-- Header delimiters
+local yandex_from = 'From=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
+local yandex_x_envelope_from = 'X-Envelope-From=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
+local yandex_return_path = 'Return-Path=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
+local yandex_received = 'Received=/^\\s*from \\S+\\.(yandex\\.ru|yandex\\.net)/mH'
+local yandex = string.format('(%s) & ((%s) | (%s) | (%s))', yandex_received, yandex_from, yandex_x_envelope_from, yandex_return_path)
+-- Tabs as delimiters between header names and header values
+function check_header_delimiter_tab(task, header_name)
+	for _,rh in ipairs(task:get_raw_header(header_name)) do
+		if rh['tab_separated'] then return true end
+	end
+	return false
+end
+reconf['HEADER_FROM_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(From)', yandex)
+reconf['HEADER_TO_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(To)', yandex)
+reconf['HEADER_CC_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Cc)', yandex)
+reconf['HEADER_REPLYTO_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Reply-To)', yandex)
+reconf['HEADER_DATE_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Date)', yandex)
+-- Empty delimiters between header names and header values
+function check_header_delimiter_empty(task, header_name)
+	for _,rh in ipairs(task:get_raw_header(header_name)) do
+		if rh['empty_separator'] then return true end
+	end
+	return false
+end
+reconf['HEADER_FROM_EMPTY_DELIMITER'] = string.format('(%s)', 'check_header_delimiter_empty(From)')
+reconf['HEADER_TO_EMPTY_DELIMITER'] = string.format('(%s)', 'check_header_delimiter_empty(To)')
+reconf['HEADER_CC_EMPTY_DELIMITER'] = string.format('(%s)', 'check_header_delimiter_empty(Cc)')
+reconf['HEADER_REPLYTO_EMPTY_DELIMITER'] = string.format('(%s)', 'check_header_delimiter_empty(Reply-To)')
+reconf['HEADER_DATE_EMPTY_DELIMITER'] = string.format('(%s)', 'check_header_delimiter_empty(Date)')
+
+-- Definitions of received headers regexp
+reconf['RCVD_ILLEGAL_CHARS'] = 'Received=/[\\x80-\\xff]/X'
+
+reconf['FAKE_RECEIVED_mail_ru'] = string.format('(%s) & !(((%s) | (%s)) & (%s))', MAIL_RU_Received, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, MAIL_RU_From)
+
+
+reconf['FAKE_RECEIVED_smtp_yandex_ru'] = string.format('(((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s)))) & (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)', MAIL_RU_From, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, GMAIL_COM_From, GMAIL_COM_Return_Path, GMAIL_COM_X_Envelope_From, UKR_NET_From, UKR_NET_Return_Path, UKR_NET_X_Envelope_From, RECEIVED_smtp_yandex_ru_1, RECEIVED_smtp_yandex_ru_2, RECEIVED_smtp_yandex_ru_3, RECEIVED_smtp_yandex_ru_4, RECEIVED_smtp_yandex_ru_5, RECEIVED_smtp_yandex_ru_6, RECEIVED_smtp_yandex_ru_7, RECEIVED_smtp_yandex_ru_8, RECEIVED_smtp_yandex_ru_9)
+
+reconf['FORGED_GENERIC_RECEIVED'] =	'Received=/^\\s*(.+\\n)*from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by (([\\w\\d-]+\\.)+[a-zA-Z]{2,6}|\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}); \\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0/X'
+
+reconf['FORGED_GENERIC_RECEIVED2'] =	'Received=/^\\s*(.+\\n)*from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by ([\\w\\d-]+\\.)+[a-z]{2,6} id [\\w\\d]{12}; \\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0/X'
+
+reconf['FORGED_GENERIC_RECEIVED3'] =	'Received=/^\\s*(.+\\n)*by \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3} with SMTP id [a-zA-Z]{14}\\.\\d{13};[\\r\\n\\s]*\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0 \\(GMT\\)/X'
+
+reconf['FORGED_GENERIC_RECEIVED4'] =	'Received=/^\\s*(.+\\n)*from localhost by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0[\\s\\r\\n]*$/X'
+
+reconf['FORGED_GENERIC_RECEIVED5'] = function (task)
+	local regexp_text = 'Received:\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*Received:\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0\\n'
+	local re = regexp.get_cached(regexp_text)
+	if not re then re = regexp.create(regexp_text, 'i') end
+	local res = re:match(task:get_raw_headers())
+	if res then
+                return true
+        else
+                return false
+        end
+end
+
+reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X'
+
+reconf['INVALID_EXIM_RECEIVED'] = function (task)
+	local headers_to = task:get_message():get_header('To')
+	if headers_to then
+		local raw_headers = task:get_raw_headers()
+		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\(\\S*?[\\?\\@\\(\\)\\s\\.\\+\\*\'\'\\/\\\\,]\\S*\\)[\\s\\r\\n]+id \\S*?[\\)\\(<>\\/\\\\,\\-:=]'
+		local re = regexp.get_cached(regexp_text)
+		if not re then re = regexp.create(regexp_text, 's') end
+		for _,header_to in ipairs(headers_to) do
+			if re:match(header_to.."|"..raw_headers) then
+        		        return true
+        		end
+		end
+	end
+	return false
+end
+
+reconf['INVALID_EXIM_RECEIVED2'] = function (task)
+	local headers_to = task:get_message():get_header('To')
+	if headers_to then
+		local raw_headers = task:get_raw_headers()
+		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\([A-Z]{9,12} [A-Z]{5,6}\\)[\\s\\r\\n]+id [a-zA-Z\\d]{6}-[a-zA-Z\\d]{6}-[a-zA-Z\\d]{2}[\\s\\r\\n]+'
+		local re = regexp.get_cached(regexp_text)
+		if not re then re = regexp.create(regexp_text, 's') end
+		for _,header_to in ipairs(headers_to) do
+			if re:match(header_to.."|"..raw_headers) then
+        		        return true
+        		end
+		end
+	end
+	return false
+end
