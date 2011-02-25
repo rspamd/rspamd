@@ -57,6 +57,8 @@ static gint                     surbl_filter (struct worker_task *task);
 static void                     surbl_test_url (struct worker_task *task, void *user_data);
 static void                     dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
 static void                     process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr);
+static gint                     urls_command_handler (struct worker_task *task);
+
 
 #define NO_REGEXP (gpointer)-1
 
@@ -223,6 +225,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
+	register_protocol_command ("urls", urls_command_handler);
 	/* Register module options */
 	register_module_opt ("surbl", "redirector", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("surbl", "url_expire", MODULE_OPT_TYPE_TIME);
@@ -994,6 +997,89 @@ surbl_filter (struct worker_task *task)
 {
 	/* XXX: remove this shit */
 	return 0;
+}
+
+/*
+ * Handlers of URLS command
+ */
+struct urls_tree_cb_data {
+	gchar                          *buf;
+	gsize                           len;
+	gsize                           off;
+	struct worker_task             *task;
+};
+
+static gboolean
+calculate_buflen_cb (gpointer key, gpointer value, gpointer cbdata)
+{
+	struct urls_tree_cb_data       *cb = cbdata;
+	struct uri                     *url = value;
+
+	cb->len += strlen (struri (url)) + url->hostlen + sizeof (" <\"\">, ") - 1;
+
+	return FALSE;
+}
+
+static gboolean
+write_urls_buffer (gpointer key, gpointer value, gpointer cbdata)
+{
+	struct urls_tree_cb_data       *cb = cbdata;
+	struct uri                     *url = value;
+	f_str_t                         f;
+	gchar                          *urlstr;
+	gsize                           len;
+
+	f.begin = url->host;
+	f.len = url->hostlen;
+	if ((urlstr = format_surbl_request (cb->task->task_pool, &f, NULL, FALSE, NULL, FALSE)) != NULL) {
+		len = strlen (urlstr);
+		if (cb->off + len >= cb->len) {
+			msg_info ("cannot write urls header completely, stripped reply at: %z", cb->off);
+			return TRUE;
+		}
+		else {
+			cb->off += rspamd_snprintf (cb->buf + cb->off, cb->len - cb->off, " %s <\"%s\">,",
+					urlstr, struri (url));
+		}
+	}
+
+	return FALSE;
+}
+
+
+static gboolean
+urls_command_handler (struct worker_task *task)
+{
+	struct urls_tree_cb_data        cb;
+
+	/* First calculate buffer length */
+	cb.len = sizeof (RSPAMD_REPLY_BANNER "/1.0 0 " SPAMD_OK CRLF "Urls: " CRLF);
+	cb.off = 0;
+	g_tree_foreach (task->urls, calculate_buflen_cb, &cb);
+
+	cb.buf = memory_pool_alloc (task->task_pool, cb.len * sizeof (gchar));
+	cb.off += rspamd_snprintf (cb.buf + cb.off, cb.len - cb.off, "%s/%s 0 %s" CRLF "Urls:",
+				(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
+				"1.3", SPAMD_OK);
+	cb.task = task;
+
+	/* Write urls to buffer */
+	g_tree_foreach (task->urls, write_urls_buffer, &cb);
+
+	/* Strip last ',' */
+	if (cb.buf[cb.off - 1] == ',') {
+		cb.buf[--cb.off] = '\0';
+	}
+	/* Write result */
+	if (! rspamd_dispatcher_write (task->dispatcher, cb.buf, cb.off, FALSE, TRUE)) {
+		return FALSE;
+	}
+	if (!rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
+		return FALSE;
+	}
+	task->state = STATE_REPLY;
+
+	return TRUE;
 }
 
 /*
