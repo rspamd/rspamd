@@ -265,11 +265,13 @@ parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_add
 static void
 spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
-	struct spf_dns_cb *cb = arg;
+	struct spf_dns_cb               *cb = arg;
 	gchar                           *begin;
-	union rspamd_reply_element *elt_data;
-	GList *tmp = NULL, *tmp1, *elt, *last;
-	struct worker_task *task;
+	union rspamd_reply_element      *elt_data;
+	GList                           *tmp = NULL, *tmp1,
+			                        *elt, *last;
+	struct worker_task              *task;
+	struct spf_addr                 *new_addr;
 
 	task = cb->rec->task;
 
@@ -288,8 +290,23 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 						}
 					}
 					else if (reply->type == DNS_REQUEST_A) {
-						/* XXX: process only one record */
-						cb->addr->addr = ntohl (elt_data->a.addr[0].s_addr);
+						if (cb->addr->addr == 0) {
+							cb->addr->addr = ntohl (elt_data->a.addr[0].s_addr);
+						}
+						else {
+							/* Insert one more address */
+							tmp = g_list_find (cb->rec->addrs, cb->addr);
+							if (tmp) {
+								new_addr = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
+								memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
+								new_addr->addr = ntohl (elt_data->a.addr[0].s_addr);
+								cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
+							}
+							else {
+								msg_info ("wrong address list");
+							}
+						}
+
 					}
 					break;
 				case SPF_RESOLVE_A:
@@ -496,6 +513,7 @@ parse_spf_mx (struct worker_task *task, const gchar *begin, struct spf_record *r
 	cb = memory_pool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
+	addr->addr = 0;
 	cb->cur_action = SPF_RESOLVE_MX;
 	cb->in_include = rec->in_include;
 	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_MX, host)) {

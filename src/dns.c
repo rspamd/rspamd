@@ -572,8 +572,8 @@ dns_fin_cb (gpointer arg)
 static guint8 *
 decompress_label (guint8 *begin, guint16 *len, guint16 max)
 {
-	guint16 offset;
-	offset = ntohs ((*len) ^ DNS_COMPRESSION_BITS);
+	guint16 offset = DNS_COMPRESSION_BITS;
+	offset = (*len) ^ (offset << 8);
 
 	if (offset > max) {
 		return NULL;
@@ -610,7 +610,7 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
 		}
 		/* This may be compressed, so we need to decompress it */
 		if (len1 & DNS_COMPRESSION_BITS) {
-			memcpy (&len1, p, sizeof (guint16));
+			len1 = ((*p) << 8) + *(p + 1);
 			l1 = decompress_label (in, &len1, len);
 			if (l1 == NULL) {
 				msg_info ("invalid DNS pointer");
@@ -625,7 +625,7 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
 			p += len1;
 		}
 		if (len2 & DNS_COMPRESSION_BITS) {
-			memcpy (&len2, p, sizeof (guint16));
+			len2 = ((*p) << 8) + *(p + 1);
 			l2 = decompress_label (req->packet, &len2, len);
 			if (l2 == NULL) {
 				msg_info ("invalid DNS pointer");
@@ -686,7 +686,7 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 		}
 		else if (llen & DNS_COMPRESSION_BITS) {
 			ptrs ++;
-			memcpy (&llen, p, sizeof (guint16));
+			llen = ((*p) << 8) + *(p + 1);
 			l = decompress_label (in, &llen, end - in);
 			if (l == NULL) {
 				msg_info ("invalid DNS pointer");
@@ -728,7 +728,7 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 			break;
 		}
 		else if (llen & DNS_COMPRESSION_BITS) {
-			memcpy (&llen, p, sizeof (guint16));
+			llen = ((*p) << 8) + *(p + 1);
 			l = decompress_label (in, &llen, end - in);
 			begin = l;
 			length = end - begin;
@@ -747,7 +747,7 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 	*(t - 1) = '\0';
 end:
 	if (offset < 0) {
-		offset = p - begin;
+		offset = p - begin + 1;
 	}
 	*remain -= offset;
 	*pos += offset;
@@ -815,6 +815,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		}
 		else {
 			GET16 (elt->mx.priority);
+			datalen -= sizeof (guint16);
 			if (! dns_parse_labels (in, &elt->mx.name, &p, rep, remain, TRUE)) {
 				msg_info ("invalid labels in MX record");
 				return -1;
