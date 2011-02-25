@@ -1199,7 +1199,7 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 								}
 							}
 						}
-						else {
+						else if (rc != URI_ERRNO_OK) {
 							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
 						}
 					}
