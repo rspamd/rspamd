@@ -679,14 +679,22 @@ html_strncasestr (const gchar *s, const gchar *find, gsize len)
 }
 
 static void
-check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text)
+check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text, gsize remain)
 {
 	struct uri                     *new;
 	gchar                          *url_str;
-	gsize                           len;
+	const gchar                    *p;
+	gsize                           len = 0;
 	gint                            off, rc;
 
-	len = strcspn (url_text, "<>");
+	p = url_text;
+	while (len < remain) {
+		if (*p == '<' || *p == '>') {
+			break;
+		}
+		len ++;
+		p ++;
+	}
 
 	if (url_try_text (task->task_pool, url_text, len, &off, &url_str) && url_str != NULL) {
 		new = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
@@ -796,7 +804,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			 * Check for phishing
 			 */
 			if ((p = strchr (c, '>')) != NULL ) {
-				check_phishing (task, url, p + 1);
+				check_phishing (task, url, p + 1, tag_len - (p - tag_text));
 			}
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);

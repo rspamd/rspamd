@@ -930,7 +930,7 @@ url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_
 		}
 	}
 
-	while (p < end && *p != stop && is_urlsafe (*p)) {
+	while (p < end - 1 && *p != stop && is_urlsafe (*p)) {
 		p ++;
 	}
 
@@ -979,14 +979,14 @@ url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 	if (is_atom (*p)) {
 		/* might be a domain or user@domain */
 		c = p;
-		while (p < end) {
+		while (p < end - 1) {
 			if (!is_atom (*p)) {
 				break;
 			}
 
 			p++;
 
-			while (p < end && is_atom (*p)) {
+			while (p < end - 1 && is_atom (*p)) {
 				p++;
 			}
 
@@ -1006,18 +1006,18 @@ url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 	}
 	else if (is_domain (*p)) {
 domain:
-		while (p < end) {
+		while (p < end - 1) {
 			if (!is_domain (*p)) {
 				break;
 			}
 
 			p++;
 
-			while (p < end && is_domain (*p)) {
+			while (p < end - 1 && is_domain (*p)) {
 				p++;
 			}
 
-			if ((p + 1) < end && *p == '.' && (is_domain (*(p + 1)) || *(p + 1) == '/')) {
+			if ((p + 1) < end - 1 && *p == '.' && (is_domain (*(p + 1)) || *(p + 1) == '/')) {
 				p++;
 			}
 		}
@@ -1034,7 +1034,7 @@ domain:
 			if (is_digit (*p) || passwd) {
 				port = (*p++ - '0');
 
-				while (p < end && is_digit (*p) && port < 65536) {
+				while (p < end - 1 && is_digit (*p) && port < 65536) {
 					port = (port * 10) + (*p++ - '0');
 				}
 
@@ -1052,7 +1052,7 @@ domain:
 				passwd = TRUE;
 				c = p;
 
-				while (p < end && is_atom (*p)) {
+				while (p < end - 1 && is_atom (*p)) {
 					p++;
 				}
 
@@ -1076,7 +1076,7 @@ domain:
 		case '/': /* we've detected a path component to our url */
 			p++;
 		case '?':
-			while (p < end && is_urlsafe (*p)) {
+			while (p < end - 1 && is_urlsafe (*p)) {
 				if (*p == open_brace) {
 					brace_stack++;
 				}

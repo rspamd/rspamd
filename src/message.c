@@ -837,7 +837,9 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			msg_err ("endless recursion detected: %d", task->parser_recursion);
 			return;
 		}
+#ifndef GMIME24
 		g_object_unref (message);
+#endif
 	}
 	else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
 		/* message/partial */

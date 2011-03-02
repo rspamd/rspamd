@@ -145,6 +145,19 @@ dump_spf_record (GList *addrs)
 	msg_info ("spf record: %s", logbuf);
 }
 
+/*
+ * Destructor for spf record
+ */
+static void
+spf_record_destructor (gpointer r)
+{
+	struct spf_record              *rec = r;
+
+	if (rec->addrs) {
+		g_list_free (rec->addrs);
+	}
+}
+
 static gboolean
 parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 {
@@ -292,6 +305,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					else if (reply->type == DNS_REQUEST_A) {
 						if (cb->addr->addr == 0) {
 							cb->addr->addr = ntohl (elt_data->a.addr[0].s_addr);
+							cb->addr->mask = 32;
 						}
 						else {
 							/* Insert one more address */
@@ -313,6 +327,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					if (reply->type == DNS_REQUEST_A) {
 						/* XXX: process only one record */
 						cb->addr->addr = ntohl (elt_data->a.addr[0].s_addr);
+						cb->addr->mask = 32;
 					}
 					break;
 				case SPF_RESOLVE_PTR:
@@ -344,49 +359,31 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 						start_spf_parse (cb->rec, begin);
 						cb->rec->in_include = FALSE;
 
-						if (tmp) {
+						if (tmp && cb->rec->addrs) {
 							tmp1 = g_list_find (tmp, cb->addr);
 							if (tmp1) {
 								/* Insert new list in place of include element */
+								cb->rec->addrs->prev = tmp1->prev;
 								last = g_list_last (cb->rec->addrs);
-
-								if (tmp1->prev == NULL && tmp1->next == NULL) {
-									g_list_free1 (tmp1);
+								last->next = tmp1;
+								tmp1->prev = last;
+								/* If tmp1 is at the beginning of the list, shift list */
+								if (tmp == tmp1) {
+									tmp = cb->rec->addrs;
 								}
 								else {
-
-									if (tmp1->prev) {
-										tmp1->prev->next = cb->rec->addrs;
-									}
-									else {
-										/* Elt is the first element, so we need to shift temporary list */
-										tmp = tmp1->next;
-										tmp->prev = NULL;
-									}
-									if (tmp1->next) {
-										tmp1->next->prev = last;
-										if (last != NULL) {
-											last->next = tmp1->next;
-										}
-									}
-
-									if (cb->rec->addrs != NULL) {
-										cb->rec->addrs->prev = tmp1->prev;
-									}
-
-									/* Shift temporary list */
-									while (tmp->prev) {
-										tmp = tmp->prev;
-									}
-
-									cb->rec->addrs = tmp;
-									g_list_free1 (tmp1);
-#ifdef SPF_DEBUG
-									msg_info ("after include");
-									dump_spf_record (cb->rec->addrs);
-#endif
+									tmp1->prev->next = cb->rec->addrs;
 								}
+								/* Remove self element */
+								tmp = g_list_delete_link (tmp, tmp1);
+#ifdef SPF_DEBUG
+								msg_info ("after include");
+								dump_spf_record (cb->rec->addrs);
+#endif
 							}
+						}
+						if (tmp) {
+							cb->rec->addrs = tmp;
 						}
 					}
 					break;
@@ -410,16 +407,19 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					if (reply->type == DNS_REQUEST_MX) {
 						msg_info ("cannot find MX record for %s", cb->rec->cur_domain);
 						cb->addr->addr = ntohl (INADDR_NONE);
+						cb->addr->mask = 32;
 					}
 					else if (reply->type != DNS_REQUEST_MX) {
 						msg_info ("cannot resolve MX record for %s", cb->rec->cur_domain);
 						cb->addr->addr = ntohl (INADDR_NONE);
+						cb->addr->mask = 32;
 					}
 					break;
 				case SPF_RESOLVE_A:
 					if (reply->type == DNS_REQUEST_A) {
 						/* XXX: process only one record */
 						cb->addr->addr = ntohl (INADDR_NONE);
+						cb->addr->mask = 32;
 					}
 					break;
 				case SPF_RESOLVE_PTR:
@@ -434,6 +434,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_EXISTS:
 					cb->addr->addr = ntohl (INADDR_NONE);
+					cb->addr->mask = 32;
 					break;
 		}
 	}
@@ -909,6 +910,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 	(x) = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));		\
 	(x)->mech = check_spf_mech (rec->cur_elt, &need_shift);						\
 	(x)->spf_string = memory_pool_strdup (task->task_pool, begin);				\
+	(x)->addr = 0;																\
+	(x)->mask = 32;																\
 } while (0);
 
 /* Read current element and try to parse record */
@@ -1149,7 +1152,10 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 	rec = memory_pool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;
 	rec->callback = callback;
+	/* Add destructor */
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)spf_record_destructor, rec);
 
+	/* Extract from data */
 	if (task->from && (domain = strchr (task->from, '@')) != NULL && *domain == '@') {
 		rec->sender = task->from;
 
@@ -1170,6 +1176,7 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 		}
 	}
 	else {
+		/* Extract from header */
 		domains = message_get_header (task->task_pool, task->message, "From", FALSE);
 
 		if (domains != NULL) {

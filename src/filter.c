@@ -84,34 +84,36 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	/* Add metric score */
 
 
-	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
-		if (!single) {
-			if (s->options && opts && opts != s->options) {
-				/* Append new options */
-				s->options = g_list_concat (s->options, g_list_copy(opts));
-				/*
-				 * Note that there is no need to add new destructor of GList as elements of appended
-				 * GList are used directly, so just free initial GList
-				 */
-			}
-			else if (opts) {
-				s->options = opts;
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
-			}
-
-			s->score += w;
-			metric_res->score += w;
+	if (!single && (s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
+		if (s->options && opts && opts != s->options) {
+			/* Append new options */
+			s->options = g_list_concat (s->options, g_list_copy(opts));
+			/*
+			 * Note that there is no need to add new destructor of GList as elements of appended
+			 * GList are used directly, so just free initial GList
+			 */
 		}
+		else if (opts) {
+			s->options = g_list_copy (opts);
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
+		}
+
+		s->score += w;
+		metric_res->score += w;
 	}
 	else {
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
 		s->score = w;
-		s->options = opts;
+
 		s->name = symbol;
 		metric_res->score += w;
 
 		if (opts) {
+			s->options = g_list_copy (opts);
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
+		}
+		else {
+			s->options = NULL;
 		}
 
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
@@ -164,6 +166,11 @@ insert_result_common (struct worker_task *task, const gchar *symbol, double flag
 			}
 			cur = g_list_next (cur);
 		}
+	}
+
+	if (opts != NULL) {
+		/* XXX: it is not wise to destroy them here */
+		g_list_free (opts);
 	}
 }
 

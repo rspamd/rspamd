@@ -607,7 +607,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 	guint8                         *ct;
 	gsize                           clen;
 	gint                            r, passed = 0, start, end, old;
-	gboolean                        matched;
+	gboolean                        matched = FALSE;
 
 	GList                          *cur, *headerlist;
 	GRegex                         *regexp;

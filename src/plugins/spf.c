@@ -177,11 +177,6 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
             }
 			cur = g_list_previous (cur);
 		}
-		if (record->addrs != NULL) {
-			/* Free addresses that we already proceed */
-			g_list_free (record->addrs);
-			record->addrs = NULL;
-		}
 	}
 
 	if (task->save.saved == 0) {
