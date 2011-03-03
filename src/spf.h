@@ -26,8 +26,14 @@ typedef enum spf_action_e {
 } spf_action_t;
 
 struct spf_addr {
-	guint32 addr;
-	guint32 mask;
+	union {
+		struct {
+			guint32 addr;
+			guint32 mask;
+		} normal;
+		GList *list;
+	} data;
+	gboolean is_list;
 	spf_mech_t mech;
 	gchar *spf_string;
 };

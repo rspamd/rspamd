@@ -128,55 +128,75 @@ spf_module_reconfig (struct config_file *cfg)
 	return spf_module_config (cfg);
 }
 
+static gboolean
+spf_check_element (struct spf_addr *addr, struct worker_task *task)
+{
+	guint32                         s, m;
+
+	if (addr->data.normal.mask == 0) {
+		m = 0;
+	}
+	else {
+		m = G_MAXUINT32 << (32 - addr->data.normal.mask);
+	}
+	s = ntohl (task->from_addr.s_addr);
+
+	if ((s & m) == (addr->data.normal.addr & m)) {
+		switch (addr->mech) {
+		case SPF_FAIL:
+			insert_result (task, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
+			task->messages = g_list_prepend (task->messages, "(SPF): spf fail");
+			break;
+		case SPF_SOFT_FAIL:
+		case SPF_NEUTRAL:
+			insert_result (task, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
+			task->messages = g_list_prepend (task->messages, "(SPF): spf softfail");
+			break;
+		default:
+			insert_result (task, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
+			task->messages = g_list_prepend (task->messages, "(SPF): spf allow");
+			break;
+		}
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+spf_check_list (GList *list, struct worker_task *task)
+{
+	GList                           *cur;
+	struct spf_addr                 *addr;
+
+	cur = list;
+
+	while (cur) {
+		addr = cur->data;
+		if (addr->is_list) {
+			/* Recursive call */
+			addr->data.list = g_list_reverse (addr->data.list);
+			if (spf_check_list (addr->data.list, task)) {
+				return TRUE;
+			}
+		}
+		else {
+			if (spf_check_element (addr, task)) {
+				return TRUE;
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
 static void 
 spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 {
-	GList *cur;
-	struct spf_addr *addr;
-	guint32                         s, m;
-
 	if (record) {
-		cur = g_list_last (record->addrs);
-		s = ntohl (task->from_addr.s_addr);
-		while (cur) {
-			addr = cur->data;
-            if (addr != NULL) {
-                if (addr->mask == 0) {
-                    m = 0;
-                }
-                else {
-                    m = G_MAXUINT32 << (32 - addr->mask);
-                }
-                if (addr->addr == 0 && cur->prev != NULL) {
-                	/*
-                	 * In fact default record should be the last element in a record
-                	 * so ignore such other records
-                	 */
-                	cur = g_list_previous (cur);
-                	continue;
-                }
-                if ((s & m) == (addr->addr & m)) {
-                    switch (addr->mech) {
-                        case SPF_FAIL:
-                            insert_result (task, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
-							task->messages = g_list_prepend (task->messages, "(SPF): spf fail");
-                            break;
-                        case SPF_SOFT_FAIL:
-                        case SPF_NEUTRAL:
-                            insert_result (task, spf_module_ctx->symbol_softfail, 1, g_list_prepend (NULL, addr->spf_string));
-							task->messages = g_list_prepend (task->messages, "(SPF): spf softfail");
-                            break;
-                        default:
-                            insert_result (task, spf_module_ctx->symbol_allow, 1, g_list_prepend (NULL, addr->spf_string));
-							task->messages = g_list_prepend (task->messages, "(SPF): spf allow");
-                            break;
-                    }
-                    /* Stop parsing */
-                    break;
-                }
-            }
-			cur = g_list_previous (cur);
-		}
+		record->addrs = g_list_reverse (record->addrs);
+		spf_check_list (record->addrs, task);
 	}
 
 	if (task->save.saved == 0) {
