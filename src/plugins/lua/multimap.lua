@@ -73,6 +73,94 @@ function check_multimap(task)
 				local rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rule['map']
 				task:resolve_dns_a(rbl_str, 'multimap_rbl_cb')
 			end
+		elseif rule['type'] == 'rcpt' then
+			-- First try to get rcpt field
+			local rcpts = task:get_recipients()
+			if rcpts then
+				for _,r in ipairs(rcpts) do
+					if r['addr'] then
+						if rule['pattern'] then
+							-- extract a part from header
+							local _,_,ext = string.find(r['addr'], rule['pattern'])
+							if ext then
+								if rule['hash']:get_key(ext) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							end
+						else
+							if rule['hash']:get_key(r['addr']) then
+								task:insert_result(rule['symbol'], 1)
+							end
+						end
+					end	
+				end
+			else
+				-- Get from headers
+				local rcpts = task:get_recipients_headers()
+				if rcpts then
+					for _,r in ipairs(rcpts) do
+						if r['addr'] then
+							if rule['pattern'] then
+								-- extract a part from header
+								local _,_,ext = string.find(r['addr'], rule['pattern'])
+								if ext then
+									if rule['hash']:get_key(ext) then
+										task:insert_result(rule['symbol'], 1)
+									end
+								end
+							else
+								if rule['hash']:get_key(r['addr']) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							end
+						end	
+					end
+				end
+			end
+		elseif rule['type'] == 'from' then
+			-- First try to get from field
+			local from = task:get_from()
+			if from then
+				for _,r in ipairs(from) do
+					if r['addr'] then
+						if rule['pattern'] then
+							-- extract a part from header
+							local _,_,ext = string.find(r['addr'], rule['pattern'])
+							if ext then
+								if rule['hash']:get_key(ext) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							end
+						else
+							if rule['hash']:get_key(r['addr']) then
+								task:insert_result(rule['symbol'], 1)
+							end
+						end
+					end	
+				end
+			else
+				-- Get from headers
+				local from = task:get_from_headers()
+				if from then
+					for _,r in ipairs(from) do
+						if r['addr'] then
+							if rule['pattern'] then
+								-- extract a part from header
+								local _,_,ext = string.find(r['addr'], rule['pattern'])
+								if ext then
+									if rule['hash']:get_key(ext) then
+										task:insert_result(rule['symbol'], 1)
+									end
+								end
+							else
+								if rule['hash']:get_key(r['addr']) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							end
+						end	
+					end
+				end
+			end
  		end
 	end
 end
@@ -98,6 +186,10 @@ local function add_multimap_rule(params)
 				newrule['type'] = 'dnsbl'
 			elseif value == 'header' then
 				newrule['type'] = 'header'
+			elseif value == 'rcpt' then
+				newrule['type'] = 'rcpt'
+			elseif value == 'from' then
+				newrule['type'] = 'from'
 			else
 				rspamd_logger:err('invalid rule type: '.. value)
 				return nil
@@ -116,13 +208,13 @@ local function add_multimap_rule(params)
 		end
 
 	end
-	if not newrule['symbol'] or not newrule['map'] or not newrule['symbol'] then
+	if not newrule['symbol'] or not newrule['map'] then
 		rspamd_logger:err('incomplete rule')
 		return nil
 	end
 	if newrule['type'] == 'ip' then
 		newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
-	elseif newrule['type'] == 'header' then
+	elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
 		newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
 	end
 	table.insert(rules, newrule)

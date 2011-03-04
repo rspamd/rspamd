@@ -10,57 +10,21 @@ function check_forged_headers(task)
 	local res = false
 	
 	if smtp_rcpt then
-		local mime_rcpt = msg:get_header('To')
-		local mime_cc = msg:get_header('Cc')
-		local count = 0
-		if mime_rcpt then
-			count = table.maxn(mime_rcpt)
-		end
-		if mime_cc then
-			count = count + table.maxn(mime_cc)
-		end
-		-- Check recipients count
+		local mime_rcpt = task:get_recipients_headers()
+		local count = table.maxn(mime_rcpt)
 		if count < table.maxn(smtp_rcpt) then
 			task:insert_result(symbol_rcpt, 1)
 		else
 			-- Find pair for each smtp recipient recipient in To or Cc headers
 			for _,sr in ipairs(smtp_rcpt) do
-				if sr:sub(1,1) == '<' then
-					-- Trim brackets
-					sr = string.sub(sr, 2, -2)
-				end
 				if mime_rcpt then
 					for _,mr in ipairs(mime_rcpt) do
-						local i = string.find(mr, '<', 1, true)
-						if i then
-						    local j = string.find(mr, '>', i, true)
-						    if j then
-							mr = string.sub(mr, i+1, j-1)
-						    end
-						end
-
-						if string.lower(mr) == string.lower(sr) then
+						if string.lower(mr['addr']) == string.lower(sr['addr']) then
 							res = true
 							break
 						end
 					end
 				end
-				if mime_cc then
-					for _,mr in ipairs(mime_cc) do
-						local i = string.find(mr, '<', 1, true)
-						if i then
-						    local j = string.find(mr, '>', i, true)
-						    if j then
-							mr = string.sub(mr, i+1, j-1)
-						    end
-						end
-						if string.lower(mr) == string.lower(sr) then
-							res = true
-							break
-						end
-					end
-				end
-
 				if not res then
 					task:insert_result(symbol_rcpt, 1)
 					break
@@ -71,15 +35,8 @@ function check_forged_headers(task)
 	-- Check sender
 	local smtp_from = task:get_from()
 	if smtp_form then
-		local mime_from = msg:get_header('From')
-		local i = string.find(mime_from[0], '<', 1, true)
-		if i then
-		    local j = string.find(mime_from[0], '>', i, true)
-		    if j then
-			mime_from[0] = string.sub(mime_from[0], i+1, j-1)
-		    end
-		end
-		if not mime_from or not (string.lower(mime_from[0]) == string.lower(smtp_from)) then
+		local mime_from = task:get_from_headers()
+		if not mime_from or not (string.lower(mime_from[1]['addr']) == string.lower(smtp_from[1]['addr'])) then
 			task:insert_result(symbol_sender, 1)
 		end
 	end

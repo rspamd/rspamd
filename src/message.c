@@ -1113,7 +1113,9 @@ enum {
 	HEADER_UNKNOWN
 };
 
-
+/*
+ * Iterate throught all headers and make a list
+ */
 #ifndef GMIME24
 static void
 header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, const gchar *field, gboolean strong)
@@ -1146,6 +1148,7 @@ header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, 
 static void
 header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field, gboolean strong)
 {
+	/* Use iterator in case of gmime 2.4 */
 	GMimeHeaderIter                *iter;
 	const gchar                     *name;
 
@@ -1156,6 +1159,7 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 
 	iter = g_mime_header_iter_new ();
 	if (g_mime_header_list_get_iter (ls, iter) && g_mime_header_iter_first (iter)) {
+		/* Iterate throught headers */
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
 			if (G_LIKELY (!strong)) {
