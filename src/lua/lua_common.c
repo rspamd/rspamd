@@ -238,6 +238,7 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_classifier (L);
 	(void)luaopen_statfile (L);
 	(void)luaopen_glib_regexp (L);
+	(void)luaopen_cdb (L);
 	cfg->lua_state = L;
 	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
 

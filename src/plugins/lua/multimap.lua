@@ -43,9 +43,16 @@ end
 function check_multimap(task)
 	for _,rule in ipairs(rules) do
 		if rule['type'] == 'ip' then
-			local ip = task:get_from_ip_num()
-			if rule['ips']:get_key(ip) then
-				task:insert_result(rule['symbol'], 1)
+			if rule['cdb'] then
+				local ip = task:get_from_ip()
+				if rule['hash']:lookup(ip) then
+					task:insert_result(rule['symbol'], 1)
+				end
+			else
+				local ip = task:get_from_ip_num()
+				if rule['ips']:get_key(ip) then
+					task:insert_result(rule['symbol'], 1)
+				end
 			end
 		elseif rule['type'] == 'header' then
 			local headers = task:get_message():get_header(rule['header'])
@@ -55,13 +62,25 @@ function check_multimap(task)
 						-- extract a part from header
 						local _,_,ext = string.find(hv, rule['pattern'])
 						if ext then
-							if rule['hash']:get_key(ext) then
-								task:insert_result(rule['symbol'], 1)
+							if rule['cdb'] then
+								if rule['hash']:lookup(ext) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							else
+								if rule['hash']:get_key(ext) then
+									task:insert_result(rule['symbol'], 1)
+								end
 							end
 						end
 					else
-						if rule['hash']:get_key(hv) then
-							task:insert_result(rule['symbol'], 1)
+						if rule['cdb'] then
+							if rule['hash']:lookup(hv) then
+								task:insert_result(rule['symbol'], 1)
+							end
+						else
+							if rule['hash']:get_key(hv) then
+								task:insert_result(rule['symbol'], 1)
+							end
 						end
 					end
 				end
@@ -83,13 +102,25 @@ function check_multimap(task)
 							-- extract a part from header
 							local _,_,ext = string.find(r['addr'], rule['pattern'])
 							if ext then
-								if rule['hash']:get_key(ext) then
-									task:insert_result(rule['symbol'], 1)
+								if rule['cdb'] then
+									if rule['hash']:lookup(hv) then
+										task:insert_result(rule['symbol'], 1)
+									end
+								else
+									if rule['hash']:get_key(hv) then
+										task:insert_result(rule['symbol'], 1)
+									end
 								end
 							end
 						else
-							if rule['hash']:get_key(r['addr']) then
-								task:insert_result(rule['symbol'], 1)
+							if rule['cdb'] then
+								if rule['hash']:lookup(r['addr']) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							else
+								if rule['hash']:get_key(r['addr']) then
+									task:insert_result(rule['symbol'], 1)
+								end
 							end
 						end
 					end	
@@ -104,13 +135,25 @@ function check_multimap(task)
 								-- extract a part from header
 								local _,_,ext = string.find(r['addr'], rule['pattern'])
 								if ext then
-									if rule['hash']:get_key(ext) then
-										task:insert_result(rule['symbol'], 1)
+									if rule['cdb'] then
+										if rule['hash']:lookup(ext) then
+											task:insert_result(rule['symbol'], 1)
+										end
+									else
+										if rule['hash']:get_key(ext) then
+											task:insert_result(rule['symbol'], 1)
+										end
 									end
 								end
 							else
-								if rule['hash']:get_key(r['addr']) then
-									task:insert_result(rule['symbol'], 1)
+								if rule['cdb'] then
+									if rule['hash']:lookup(r['addr']) then
+										task:insert_result(rule['symbol'], 1)
+									end
+								else
+									if rule['hash']:get_key(r['addr']) then
+										task:insert_result(rule['symbol'], 1)
+									end
 								end
 							end
 						end	
@@ -127,13 +170,25 @@ function check_multimap(task)
 							-- extract a part from header
 							local _,_,ext = string.find(r['addr'], rule['pattern'])
 							if ext then
-								if rule['hash']:get_key(ext) then
-									task:insert_result(rule['symbol'], 1)
+								if rule['cdb'] then
+									if rule['hash']:lookup(ext) then
+										task:insert_result(rule['symbol'], 1)
+									end
+								else
+									if rule['hash']:get_key(ext) then
+										task:insert_result(rule['symbol'], 1)
+									end
 								end
 							end
 						else
-							if rule['hash']:get_key(r['addr']) then
-								task:insert_result(rule['symbol'], 1)
+							if rule['cdb'] then
+								if rule['hash']:lookup(r['addr']) then
+									task:insert_result(rule['symbol'], 1)
+								end
+							else
+								if rule['hash']:get_key(r['addr']) then
+									task:insert_result(rule['symbol'], 1)
+								end
 							end
 						end
 					end	
@@ -148,13 +203,25 @@ function check_multimap(task)
 								-- extract a part from header
 								local _,_,ext = string.find(r['addr'], rule['pattern'])
 								if ext then
-									if rule['hash']:get_key(ext) then
-										task:insert_result(rule['symbol'], 1)
+									if rule['cdb'] then
+										if rule['hash']:lookup(ext) then
+											task:insert_result(rule['symbol'], 1)
+										end
+									else
+										if rule['hash']:get_key(ext) then
+											task:insert_result(rule['symbol'], 1)
+										end
 									end
 								end
 							else
-								if rule['hash']:get_key(r['addr']) then
-									task:insert_result(rule['symbol'], 1)
+								if rule['cdb'] then
+									if rule['hash']:lookup(r['addr']) then
+										task:insert_result(rule['symbol'], 1)
+									end
+								else
+									if rule['hash']:get_key(r['addr']) then
+										task:insert_result(rule['symbol'], 1)
+									end
 								end
 							end
 						end	
@@ -176,7 +243,7 @@ local function add_multimap_rule(params)
 	for _,param in ipairs(params) do
 		local _,_,name,value = string.find(param, '(%w+)%s*=%s*(.+)')
 		if not name or not value then
-			rspamd_logger:err('invalid rule: '..param)
+			rspamd_logger.err('invalid rule: '..param)
 			return nil
 		end
 		if name == 'type' then
@@ -191,7 +258,7 @@ local function add_multimap_rule(params)
 			elseif value == 'from' then
 				newrule['type'] = 'from'
 			else
-				rspamd_logger:err('invalid rule type: '.. value)
+				rspamd_logger.err('invalid rule type: '.. value)
 				return nil
 			end
 		elseif name == 'header' then
@@ -202,32 +269,51 @@ local function add_multimap_rule(params)
 			newrule['map'] = value
 		elseif name == 'symbol' then
 			newrule['symbol'] = value
-		else	
-			rspamd_logger:err('invalid rule option: '.. name)
+		else
+			rspamd_logger.err('invalid rule option: '.. name)
 			return nil
 		end
 
 	end
 	if not newrule['symbol'] or not newrule['map'] then
-		rspamd_logger:err('incomplete rule')
+		rspamd_logger.err('incomplete rule')
 		return nil
 	end
-	if newrule['type'] == 'ip' then
-		newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
-		if newrule['ips'] then
-			table.insert(rules, newrule)
-		else
-			rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
-		end
-	elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
-		newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
+	-- Check cdb flag
+	if string.find(newrule['map'], '^cdb://.*$') then
+		local test = cdb.create(newrule['map'])
+		newrule['hash'] = cdb.create(newrule['map'])
 		if newrule['hash'] then
 			table.insert(rules, newrule)
 		else
 			rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 		end
+		newrule['cdb'] = true
 	else
-		table.insert(rules, newrule)
+		if newrule['type'] == 'ip' then
+			newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
+			if newrule['ips'] then
+				table.insert(rules, newrule)
+			else
+				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+			end
+		elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
+			newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
+			if newrule['hash'] then
+				table.insert(rules, newrule)
+			else
+				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+			end
+		elseif newrule['type'] == 'cdb' then
+			newrule['hash'] = rspamd_cdb.create(newrule['map'])
+			if newrule['hash'] then
+				table.insert(rules, newrule)
+			else
+				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+			end
+		else
+			table.insert(rules, newrule)
+		end
 	end
 	return newrule
 end
@@ -248,7 +334,7 @@ if opts then
 				local params = split(value, ',')
 				local rule = add_multimap_rule (params)
 				if not rule then
-					rspamd_logger:err('cannot add rule: "'..value..'"')
+					rspamd_logger.err('cannot add rule: "'..value..'"')
 				else
 					if type(rspamd_config.get_api_version) ~= 'nil' then
 						rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
@@ -259,7 +345,7 @@ if opts then
 			local params = split(strrules, ',')
 			local rule = add_multimap_rule (params)
 			if not rule then
-				rspamd_logger:err('cannot add rule: "'..strrules..'"')
+				rspamd_logger.err('cannot add rule: "'..strrules..'"')
 			else
 				if type(rspamd_config.get_api_version) ~= 'nil' then
 					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)

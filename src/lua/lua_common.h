@@ -16,7 +16,7 @@
 
 extern const luaL_reg null_reg[];
 
-#define RSPAMD_LUA_API_VERSION 2
+#define RSPAMD_LUA_API_VERSION 3
 
 /* Common utility functions */
 void lua_newclass (lua_State *L, const gchar *classname, const struct luaL_reg *func);
@@ -36,6 +36,7 @@ gint luaopen_url (lua_State *L);
 gint luaopen_classifier (lua_State *L);
 gint luaopen_statfile (lua_State * L);
 gint luaopen_glib_regexp (lua_State *L);
+gint luaopen_cdb (lua_State *L);
 void init_lua (struct config_file *cfg);
 gboolean init_lua_filters (struct config_file *cfg);
 
