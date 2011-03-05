@@ -37,7 +37,7 @@
 GByteArray                     *
 strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
 {
-	uint8_t                        *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin = NULL, c, lc;
+	uint8_t                        *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin = NULL, *end, c, lc;
 	gint                            br, i = 0, depth = 0, in_q = 0;
 	gint                            state = 0;
 	GByteArray                     *buf;
@@ -54,6 +54,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 	lc = '\0';
 	p = src->data;
 	rp = buf->data;
+	end = src->data + src->len;
 	br = 0;
 
 	while (i < src->len) {
@@ -112,7 +113,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 			case 1:			/* HTML/XML */
 				lc = '>';
 				in_q = state = 0;
-				erase = !add_html_node (task, pool, part, tbegin, p - tbegin, &level_ptr);
+				erase = !add_html_node (task, pool, part, tbegin, p - tbegin, end - tbegin, &level_ptr);
 				break;
 
 			case 2:			/* PHP */

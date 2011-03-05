@@ -214,10 +214,21 @@ local function add_multimap_rule(params)
 	end
 	if newrule['type'] == 'ip' then
 		newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
+		if newrule['ips'] then
+			table.insert(rules, newrule)
+		else
+			rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+		end
 	elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
 		newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
+		if newrule['hash'] then
+			table.insert(rules, newrule)
+		else
+			rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+		end
+	else
+		table.insert(rules, newrule)
 	end
-	table.insert(rules, newrule)
 	return newrule
 end
 

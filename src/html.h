@@ -208,7 +208,7 @@ struct html_node {
 struct worker_task;
 
 gboolean add_html_node (struct worker_task *task, memory_pool_t *pool,
-		struct mime_text_part *part, gchar *tag_text, gsize tag_len, GNode **cur_level);
+		struct mime_text_part *part, gchar *tag_text, gsize tag_len, gsize remain, GNode **cur_level);
 struct html_tag * get_tag_by_name (const gchar *name);
 void decode_entitles (gchar *s, guint *len);
 

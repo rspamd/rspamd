@@ -688,7 +688,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 	gint                            off, rc;
 
 	p = url_text;
-	while (len < remain) {
+	while (len < remain - 1) {
 		if (*p == '<' || *p == '>') {
 			break;
 		}
@@ -717,7 +717,8 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 }
 
 static void
-parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id, gchar *tag_text, gsize tag_len)
+parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id,
+		gchar *tag_text, gsize tag_len, gsize remain)
 {
 	gchar                           *c = NULL, *p, *url_text;
 	gint                            len, rc;
@@ -804,7 +805,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			 * Check for phishing
 			 */
 			if ((p = strchr (c, '>')) != NULL ) {
-				check_phishing (task, url, p + 1, tag_len - (p - tag_text));
+				check_phishing (task, url, p + 1, remain - (p - tag_text));
 			}
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);
@@ -818,7 +819,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 
 gboolean
 add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part,
-		gchar *tag_text, gsize tag_len, GNode ** cur_level)
+		gchar *tag_text, gsize tag_len, gsize remain, GNode ** cur_level)
 {
 	GNode                          *new;
 	struct html_node               *data;
@@ -843,7 +844,7 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 		part->html_nodes = new;
 		memory_pool_add_destructor (pool, (pool_destruct_func) g_node_destroy, part->html_nodes);
 		/* Call once again with root node */
-		return add_html_node (task, pool, part, tag_text, tag_len, cur_level);
+		return add_html_node (task, pool, part, tag_text, tag_len, remain, cur_level);
 	}
 	else {
 		new = construct_html_node (pool, tag_text, tag_len);
@@ -853,7 +854,7 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 		}
 		data = new->data;
 		if (data->tag && (data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
-			parse_tag_url (task, part, data->tag->id, tag_text, tag_len);
+			parse_tag_url (task, part, data->tag->id, tag_text, tag_len, remain);
 		}
 
 		if (data->flags & FL_CLOSING) {
