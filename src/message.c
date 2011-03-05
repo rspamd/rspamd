@@ -570,6 +570,7 @@ process_raw_headers (struct worker_task *task)
 					if (*c == '\n' || *c == '\r') {
 						t_state = 1;
 						c ++;
+						*tp ++ = ' ';
 					}
 					else {
 						*tp ++ = *c ++;

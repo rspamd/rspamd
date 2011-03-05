@@ -720,7 +720,6 @@ lua_push_internet_address (lua_State *L, InternetAddressList *addrs)
 		lua_newtable (L);
 		lua_set_table_index (L, "name", internet_address_get_name (ia));
 		lua_set_table_index (L, "addr", internet_address_get_addr (ia));
-		msg_info ("name: %s, addr: %s", internet_address_get_name (ia), internet_address_get_addr (ia));
 		lua_rawseti (L, -2, idx++);
 		cur = internet_address_list_next (cur);
 	}
