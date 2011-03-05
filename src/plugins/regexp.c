@@ -908,7 +908,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
 				rh = cur->data;
 				/* Try to match regexp */
-				if (g_regex_match_full (re->regexp, rh->value, -1, 0, 0, NULL, &err) == TRUE) {
+				if (rh->value && g_regex_match_full (re->regexp, rh->value, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const gchar *)cur->data);
 					}

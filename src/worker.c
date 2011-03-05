@@ -465,12 +465,12 @@ compare_email_func (gconstpointer a, gconstpointer b)
 	const struct uri               *u1 = a, *u2 = b;
 	gint                            r;
 
-	if (u1->hostlen != u2->hostlen) {
+	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
 		return u1->hostlen - u2->hostlen;
 	}
 	else {
 		if ((r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen)) == 0){
-			if (u1->userlen != u2->userlen) {
+			if (u1->userlen != u2->userlen || u1->userlen == 0) {
 				return u1->userlen - u2->userlen;
 			}
 			else {
@@ -491,7 +491,7 @@ compare_url_func (gconstpointer a, gconstpointer b)
 	const struct uri               *u1 = a, *u2 = b;
 	int                             r;
 
-	if (u1->hostlen != u2->hostlen) {
+	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
 		return u1->hostlen - u2->hostlen;
 	}
 	else {
