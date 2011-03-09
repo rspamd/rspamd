@@ -56,7 +56,9 @@ cdb_init(struct cdb *cdbp, int fd)
 	cdbp->cdb_fd = fd;
 	cdbp->cdb_fsize = fsize;
 	cdbp->cdb_mem = mem;
-
+	cdbp->mtime = st.st_mtime;
+	cdbp->check_timer_ev = NULL;
+	cdbp->check_timer_tv = NULL;
 
 	cdbp->cdb_vpos = cdbp->cdb_vlen = 0;
 	cdbp->cdb_kpos = cdbp->cdb_klen = 0;
@@ -82,6 +84,12 @@ cdb_free(struct cdb *cdbp)
 		cdbp->cdb_mem = NULL;
 	}
 	cdbp->cdb_fsize = 0;
+
+	if (cdbp->check_timer_ev) {
+		evtimer_del (cdbp->check_timer_ev);
+		g_free (cdbp->check_timer_ev);
+		g_free (cdbp->check_timer_tv);
+	}
 }
 
 const void *
@@ -102,4 +110,46 @@ cdb_read(const struct cdb *cdbp, void *buf, unsigned len, unsigned pos)
 		return -1;
 	memcpy (buf, data, len);
 	return 0;
+}
+
+static void
+cdb_timer_callback (int fd, short what, gpointer ud)
+{
+	struct cdb *cdbp = ud;
+	gint nfd;
+	struct stat st;
+
+	/* Check cdb file for modifications */
+	if (stat (cdbp->filename, &st) != -1) {
+		if (st.st_mtime > cdbp->mtime) {
+			if ((nfd = open (cdbp->filename, O_RDONLY)) != -1) {
+				if (cdbp->cdb_mem) {
+#ifdef _WIN32
+					UnmapViewOfFile((void*) cdbp->cdb_mem);
+#else
+					munmap ((void*) cdbp->cdb_mem, cdbp->cdb_fsize);
+#endif /* _WIN32 */
+					cdbp->cdb_mem = NULL;
+				}
+				(void)close (cdbp->cdb_fd);
+				cdbp->cdb_fsize = 0;
+				(void)cdb_init (cdbp, fd);
+			}
+		}
+	}
+
+	evtimer_add (cdbp->check_timer_ev, cdbp->check_timer_tv);
+}
+
+void
+cdb_add_timer(struct cdb *cdbp, unsigned seconds)
+{
+	cdbp->check_timer_ev = g_malloc (sizeof (struct event));
+	cdbp->check_timer_tv = g_malloc (sizeof (struct timeval));
+
+	cdbp->check_timer_tv->tv_sec = seconds;
+	cdbp->check_timer_tv->tv_usec = 0;
+
+	evtimer_set (cdbp->check_timer_ev, cdb_timer_callback, cdbp);
+	evtimer_add (cdbp->check_timer_ev, cdbp->check_timer_tv);
 }

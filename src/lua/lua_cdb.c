@@ -24,6 +24,8 @@
 #include "lua_common.h"
 #include "../cdb/cdb.h"
 
+#define CDB_REFRESH_TIME 60
+
 LUA_FUNCTION_DEF (cdb, create);
 LUA_FUNCTION_DEF (cdb, lookup);
 LUA_FUNCTION_DEF (cdb, get_name);
@@ -102,6 +104,14 @@ lua_cdb_lookup (lua_State *L)
 	gsize                           vlen;
 	goffset                         vpos;
 
+	/*
+	 * XXX: this code is placed here because event_loop is called inside workers, so start
+	 * monitoring on first check, not on creation
+	 */
+	if (cdb->check_timer_ev == NULL) {
+		cdb_add_timer (cdb, CDB_REFRESH_TIME);
+	}
+
 	what = luaL_checkstring (L, 2);
 	if (cdb_find (cdb, what, strlen (what)) > 0) {
 		/* Extract and push value to lua as string */
@@ -126,6 +136,7 @@ lua_cdb_destroy (lua_State *L)
 
 	if (cdb) {
 		cdb_free (cdb);
+		(void)close (cdb->cdb_fd);
 		g_free (cdb->filename);
 		g_free (cdb);
 	}
@@ -146,7 +157,7 @@ luaopen_cdb (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_openlib (L, NULL, cdblib_m, 0);
-	luaL_openlib(L, "cdb", cdblib_f, 0);
+	luaL_openlib (L, "cdb", cdblib_f, 0);
 
 	return 1;
 }
