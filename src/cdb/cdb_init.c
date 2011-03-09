@@ -57,8 +57,6 @@ cdb_init(struct cdb *cdbp, int fd)
 	cdbp->cdb_fsize = fsize;
 	cdbp->cdb_mem = mem;
 	cdbp->mtime = st.st_mtime;
-	cdbp->check_timer_ev = NULL;
-	cdbp->check_timer_tv = NULL;
 
 	cdbp->cdb_vpos = cdbp->cdb_vlen = 0;
 	cdbp->cdb_kpos = cdbp->cdb_klen = 0;

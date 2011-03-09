@@ -72,6 +72,8 @@ lua_cdb_create (lua_State *L)
 	else {
 		cdb = g_malloc (sizeof (struct cdb));
 		cdb->filename = g_strdup (filename);
+		cdb->check_timer_ev = NULL;
+		cdb->check_timer_tv = NULL;
 		if (cdb_init (cdb, fd) == -1) {
 			msg_warn ("cannot open cdb: %s, %s", filename, strerror (errno));
 			lua_pushnil (L);
