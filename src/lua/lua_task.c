@@ -731,9 +731,9 @@ lua_push_internet_address (lua_State *L, InternetAddressList *addrs)
 	InternetAddressMailbox        *iamb;
 
 	lua_newtable (L);
-	len = internet_address_list_length (list);
+	len = internet_address_list_length (addrs);
 	for (i = 0; i < len; i ++) {
-		ia = internet_address_list_get_address (list, i);
+		ia = internet_address_list_get_address (addrs, i);
 		if (ia) {
 			lua_newtable (L);
 			iamb = INTERNET_ADDRESS_MAILBOX (ia);

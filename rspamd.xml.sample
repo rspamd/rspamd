@@ -230,8 +230,6 @@
  <symbol weight="1.00" description="SPF verification soft-failed">R_SPF_SOFTFAIL</symbol>
  <symbol weight="-3.00" description="SPF verification alowed">R_SPF_ALLOW</symbol>
 
- <!-- Whitelisted client's IP --> 
- <symbol weight="-2.00" description="Whitelisted client's IP">WHITELIST_IP</symbol>
  <!-- Message seems to be from maillist -->
  <symbol weight="-2.00" description="Message seems to be from maillist">MAILLIST</symbol>
 
@@ -371,10 +369,12 @@
 </module>
 
 <!-- whitelist -->
+<!-- Example of using HTTP maps for whitelisting
 <module name="whitelist">
   <ip_whitelist>http://cebka.pp.ru/stuff/grey_whitelist.conf</ip_whitelist>
   <symbol_ip>WHITELIST_IP</symbol_ip>
 </module>
+-->
 
 <!-- chartable -->
 <module name="chartable">

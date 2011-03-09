@@ -588,6 +588,10 @@ process_raw_headers (struct worker_task *task)
 					}
 				}
 			}
+			/* Strip last space that can be added by \r\n parsing */
+			if (*(tp - 1) == ' ') {
+				tp --;
+			}
 			*tp = '\0';
 			new->value = tmp;
 			task->raw_headers_list = g_list_prepend (task->raw_headers_list, new);
