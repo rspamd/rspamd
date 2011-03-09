@@ -133,7 +133,7 @@ cdb_timer_callback (int fd, short what, gpointer ud)
 				}
 				(void)close (cdbp->cdb_fd);
 				cdbp->cdb_fsize = 0;
-				(void)cdb_init (cdbp, fd);
+				(void)cdb_init (cdbp, nfd);
 			}
 		}
 	}

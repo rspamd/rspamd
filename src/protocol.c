@@ -703,18 +703,18 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			if (task->proto_ver >= 11) {
 				if (!task->is_skipped) {
 					r = rspamd_snprintf (outbuf, sizeof(outbuf),
-							"Metric: default; False; 0 / %.2f / %.2f" CRLF, ms,
+							"Metric: default; False; 0.00 / %.2f / %.2f" CRLF, ms,
 							rs);
 				}
 				else {
 					r = rspamd_snprintf (outbuf, sizeof(outbuf),
-							"Metric: default; Skip; 0 / %.2f / %.2f" CRLF, ms,
+							"Metric: default; Skip; 0.00 / %.2f / %.2f" CRLF, ms,
 							rs);
 				}
 			}
 			else {
 				r = rspamd_snprintf (outbuf, sizeof(outbuf),
-						"Metric: default; False; 0 / %.2f" CRLF, ms);
+						"Metric: default; False; 0.00 / %.2f" CRLF, ms);
 			}
 			r += rspamd_snprintf (outbuf + r, sizeof(outbuf) - r,
 					"Action: %s" CRLF, str_action_metric (
@@ -723,11 +723,11 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		if (!task->is_skipped) {
 			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 					cd->log_size - cd->log_offset,
-					"(%s: F (no action): [0/%.2f/%.2f] [", "default", ms, rs);
+					"(%s: F (no action): [0.00/%.2f/%.2f] [", "default", ms, rs);
 		}
 		else {
 			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
-					cd->log_size - cd->log_offset, "(%s: S: [0/%.2f/%.2f] [",
+					cd->log_size - cd->log_offset, "(%s: S: [0.00/%.2f/%.2f] [",
 					"default", ms, rs);
 		}
 	}
