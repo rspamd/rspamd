@@ -217,9 +217,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->whitelist);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
 
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->suffixes);
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->bits);
-
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) rspamd_trie_free, surbl_module_ctx->redirector_trie);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
 
@@ -404,6 +401,15 @@ surbl_module_config (struct config_file *cfg)
 	}
 
 	register_bit_symbols (cfg);
+
+	if (surbl_module_ctx->suffixes != NULL) {
+		memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
+				surbl_module_ctx->suffixes);
+	}
+	if (surbl_module_ctx->bits != NULL) {
+		memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
+				surbl_module_ctx->bits);
+	}
 
 	return TRUE;
 }
