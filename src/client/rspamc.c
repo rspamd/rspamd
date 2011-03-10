@@ -36,6 +36,7 @@ static gchar                   *statfile;
 static gchar                   *ip;
 static gint                     weight = 1;
 static gint                     flag;
+static gint                     timeout = 5;
 static gboolean                 pass_all;
 static gboolean                 tty = FALSE;
 static gboolean                 verbose = FALSE;
@@ -50,6 +51,7 @@ static GOptionEntry entries[] =
 		{ "pass", 'p', 0, G_OPTION_ARG_NONE, &pass_all, "Pass all filters", NULL },
 		{ "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "More verbose output", NULL },
 		{ "ip", 'i', 0, G_OPTION_ARG_STRING, &ip, "Emulate that message was received from specified ip address", NULL },
+		{ "timeout", 't', 0, G_OPTION_ARG_INT, &timeout, "Timeout for waiting for a reply", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -551,6 +553,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_client_init ();
 
 	read_cmd_line (&argc, &argv);
+	rspamd_set_timeout (1000, timeout * 1000);
 	tty = isatty (STDOUT_FILENO);
 	/* Now read other args from argc and argv */
 	if (argc == 1) {

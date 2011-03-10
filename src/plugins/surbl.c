@@ -825,8 +825,9 @@ redirector_callback (gint fd, short what, void *arg)
 			r = rspamd_snprintf (url_buf, sizeof (url_buf), "GET %s HTTP/1.0\r\n\r\n", struri (param->url));
 			if (write (param->sock, url_buf, r) == -1) {
 				msg_err ("write failed %s to %s", strerror (errno), param->redirector->name);
-				remove_normal_event (param->task->s, free_redirector_session, param);
 				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+				remove_normal_event (param->task->s, free_redirector_session, param);
+
 				return;
 			}
 			param->state = STATE_READ;
@@ -834,8 +835,9 @@ redirector_callback (gint fd, short what, void *arg)
 		else {
 			msg_info ("<%s> connection to redirector %s timed out while waiting for write",
 					param->task->message_id, param->redirector->name);
-			remove_normal_event (param->task->s, free_redirector_session, param);
 			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+			remove_normal_event (param->task->s, free_redirector_session, param);
+
 			return;
 		}
 		break;
@@ -844,8 +846,9 @@ redirector_callback (gint fd, short what, void *arg)
 			r = read (param->sock, url_buf, sizeof (url_buf) - 1);
 			if (r <= 0) {
 				msg_err ("read failed: %s from %s", strerror (errno), param->redirector->name);
-				remove_normal_event (param->task->s, free_redirector_session, param);
 				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+				remove_normal_event (param->task->s, free_redirector_session, param);
+
 				return;
 			}
 
@@ -865,14 +868,14 @@ redirector_callback (gint fd, short what, void *arg)
 					parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
 				}
 			}
-			remove_normal_event (param->task->s, free_redirector_session, param);
 			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);
+			remove_normal_event (param->task->s, free_redirector_session, param);
 		}
 		else {
 			msg_info ("<%s> reading redirector %s timed out, while waiting for read",
 					param->redirector->name, param->task->message_id);
-			remove_normal_event (param->task->s, free_redirector_session, param);
 			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+			remove_normal_event (param->task->s, free_redirector_session, param);
 		}
 		break;
 	}

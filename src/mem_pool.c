@@ -438,7 +438,8 @@ memory_pool_unlock_shared (memory_pool_t * pool, void *pointer)
 }
 
 void
-memory_pool_add_destructor (memory_pool_t * pool, pool_destruct_func func, void *data)
+memory_pool_add_destructor_full (memory_pool_t * pool, pool_destruct_func func, void *data,
+		const gchar *function, const gchar *line)
 {
 	struct _pool_destructors       *cur, *tmp;
 
@@ -449,6 +450,8 @@ memory_pool_add_destructor (memory_pool_t * pool, pool_destruct_func func, void 
 		while (tmp) {
 			if (tmp->func == func && tmp->data == data) {
 				/* Do not add identical destructors, they must be unique */
+				msg_warn ("duplicate desctrutors detected: already have destructor from %s:%s and is trying to add from %s:%s",
+						tmp->function, tmp->loc, function, line);
 				return;
 			}
 			tmp = tmp->prev;
@@ -456,6 +459,8 @@ memory_pool_add_destructor (memory_pool_t * pool, pool_destruct_func func, void 
 
 		cur->func = func;
 		cur->data = data;
+		cur->function = function;
+		cur->loc = line;
 		cur->prev = pool->destructors;
 		pool->destructors = cur;
 	}

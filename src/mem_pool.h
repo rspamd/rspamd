@@ -62,6 +62,8 @@ struct _pool_chain_shared {
 struct _pool_destructors {
 	pool_destruct_func func;				/**< pointer to destructor					*/
 	void *data;								/**< data to free							*/
+	const gchar *function;					/**< function from which this destructor was added */
+	const gchar *loc;						/**< line number                            */
 	struct _pool_destructors *prev;			/**< chain link								*/
 };
 
@@ -165,7 +167,11 @@ void memory_pool_unlock_shared (memory_pool_t *pool, void *pointer);
  * @param func pointer to function-destructor
  * @param data pointer to data that would be passed to destructor
  */
-void memory_pool_add_destructor (memory_pool_t *pool, pool_destruct_func func, void *data);
+void memory_pool_add_destructor_full (memory_pool_t *pool, pool_destruct_func func, void *data,
+		const gchar *function, const gchar *line);
+
+/* Macros for common usage */
+#define memory_pool_add_destructor(pool, func, data) memory_pool_add_destructor_full(pool, func, data, G_STRFUNC, G_STRLOC)
 
 /**
  * Replace destructor callback to pool for specified pointer
