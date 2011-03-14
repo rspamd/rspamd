@@ -442,12 +442,6 @@ fuzzy_io_fin (void *ud)
 
 	event_del (&session->ev);
 	close (session->fd);
-	session->task->save.saved--;
-	if (session->task->save.saved == 0) {
-		/* Call other filters */
-		session->task->save.saved = 1;
-		process_filters (session->task);
-	}
 }
 
 /* Call this whenever we got data from fuzzy storage */
@@ -521,6 +515,12 @@ fuzzy_io_callback (gint fd, short what, void *arg)
   ok:
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
 
+	session->task->save.saved--;
+	if (session->task->save.saved == 0) {
+		/* Call other filters */
+		session->task->save.saved = 1;
+		process_filters (session->task);
+	}
 }
 
 static void
@@ -530,11 +530,6 @@ fuzzy_learn_fin (void *arg)
 
 	event_del (&session->ev);
 	close (session->fd);
-	(*session->saved)--;
-	if (*session->saved == 0) {
-		session->session->state = STATE_REPLY;
-		session->session->dispatcher->write_callback (session->session);
-	}
 }
 
 static void
@@ -597,6 +592,12 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
   ok:
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
+
+	(*session->saved)--;
+	if (*session->saved == 0) {
+		session->session->state = STATE_REPLY;
+		session->session->dispatcher->write_callback (session->session);
+	}
 }
 
 static inline void
