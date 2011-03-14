@@ -825,6 +825,7 @@ redirector_callback (gint fd, short what, void *arg)
 				msg_err ("write failed %s to %s", strerror (errno), param->redirector->name);
 				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
 				remove_normal_event (param->task->s, free_redirector_session, param);
+
 				param->task->save.saved--;
 				make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 				if (param->task->save.saved == 0) {
@@ -841,6 +842,7 @@ redirector_callback (gint fd, short what, void *arg)
 					param->task->message_id, param->redirector->name);
 			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
 			remove_normal_event (param->task->s, free_redirector_session, param);
+
 			param->task->save.saved--;
 			make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 			if (param->task->save.saved == 0) {
@@ -884,6 +886,9 @@ redirector_callback (gint fd, short what, void *arg)
 					parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
 				}
 			}
+			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);
+			remove_normal_event (param->task->s, free_redirector_session, param);
+
 			param->task->save.saved--;
 			make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 			if (param->task->save.saved == 0) {
@@ -891,13 +896,14 @@ redirector_callback (gint fd, short what, void *arg)
 				param->task->save.saved = 1;
 				process_filters (param->task);
 			}
-			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);
-			remove_normal_event (param->task->s, free_redirector_session, param);
+
 		}
 		else {
 			msg_info ("<%s> reading redirector %s timed out, while waiting for read",
 					param->redirector->name, param->task->message_id);
 			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+			remove_normal_event (param->task->s, free_redirector_session, param);
+
 			param->task->save.saved--;
 			make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 			if (param->task->save.saved == 0) {
@@ -905,7 +911,6 @@ redirector_callback (gint fd, short what, void *arg)
 				param->task->save.saved = 1;
 				process_filters (param->task);
 			}
-			remove_normal_event (param->task->s, free_redirector_session, param);
 		}
 		break;
 	}
