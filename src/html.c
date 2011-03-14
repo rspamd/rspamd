@@ -683,12 +683,12 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 {
 	struct uri                     *new;
 	gchar                          *url_str;
-	const gchar                    *p;
+	const gchar                    *p, *c;
 	gsize                           len = 0;
 	gint                            off, rc;
 
 	p = url_text;
-	while (len < remain) {
+	while (len < remain - 1) {
 		if (*p == '<' || *p == '>') {
 			break;
 		}
@@ -704,8 +704,39 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
 				if (g_ascii_strncasecmp (href_url->host, new->host,
 						MAX (href_url->hostlen, new->hostlen)) != 0) {
-					href_url->is_phished = TRUE;
-					href_url->phished_url = new;
+					/* Special check for urls beginning with 'www' */
+					if (new->hostlen > 4 && href_url->hostlen > 4) {
+						p = new->host;
+						c = NULL;
+						if ((p[0] == 'w' || p[0] == 'W') &&
+							(p[1] == 'w' || p[1] == 'W') &&
+							(p[2] == 'w' || p[2] == 'W') &&
+							(p[3] == '.')) {
+							p += 4;
+							c = href_url->host;
+							len = MAX (href_url->hostlen, new->hostlen - 4);
+						}
+						else {
+							p = href_url->host;
+							if ((p[0] == 'w' || p[0] == 'W') &&
+								(p[1] == 'w' || p[1] == 'W') &&
+								(p[2] == 'w' || p[2] == 'W') &&
+								(p[3] == '.')) {
+								p += 4;
+								c = new->host;
+								len = MAX (href_url->hostlen - 4, new->hostlen);
+							}
+						}
+						/* Compare parts and check for phished hostname */
+						if (c != NULL && g_ascii_strncasecmp (p, c, len) != 0) {
+							href_url->is_phished = TRUE;
+							href_url->phished_url = new;
+						}
+					}
+					else {
+						href_url->is_phished = TRUE;
+						href_url->phished_url = new;
+					}
 				}
 			}
 			else {
@@ -805,7 +836,8 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			 * Check for phishing
 			 */
 			if ((p = strchr (c, '>')) != NULL ) {
-				check_phishing (task, url, p + 1, remain - (p - tag_text));
+				p ++;
+				check_phishing (task, url, p, remain - (p - tag_text));
 			}
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);
