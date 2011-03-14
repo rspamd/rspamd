@@ -25,6 +25,7 @@ OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           
 OPTION(ENABLE_PROFILING    "Enable profiling [default: OFF]"                    OFF)
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
+OPTION(ENABLE_LUAJIT       "Link with libluajit [default: OFF]"                 OFF)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -185,6 +186,27 @@ ENDIF(ENABLE_PERL MATCHES "ON")
 
 
 INCLUDE(FindLua51)
+# Check for luajit
+IF(ENABLE_LUAJIT MATCHES "ON")
+    FIND_LIBRARY(LUAJIT_LIBRARY NAMES luajit51 luajit5.1 luajit-5.1 luajit
+                  HINTS
+                  $ENV{LUA_DIR}
+                  PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
+                )
+     IF(NOT LUAJIT_LIBRARY)
+         MESSAGE(FATAL_ERROR "Luajit not found but enabled in configuration")
+     ENDIF(NOT LUAJIT_LIBRARY)
+ENDIF(ENABLE_LUAJIT MATCHES "ON")
+
 IF(NOT LUA_FOUND)
     # Automatic check failed, check passed variable
     IF(LUA_INCLUDE_DIR)
@@ -698,7 +720,11 @@ IF(ENABLE_PERL MATCHES "ON")
 ENDIF(ENABLE_PERL MATCHES "ON")
 
 TARGET_LINK_LIBRARIES(rspamd rspamd_lua)
-TARGET_LINK_LIBRARIES(rspamd "${LUA_LIBRARY}")
+IF(ENABLE_LUAJIT MATCHES "ON")
+    TARGET_LINK_LIBRARIES(rspamd "${LUAJIT_LIBRARY}")
+ELSE(ENABLE_LUAJIT MATCHES "ON")
+    TARGET_LINK_LIBRARIES(rspamd "${LUA_LIBRARY}")
+ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
 IF(LIBJUDY_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd Judy)
