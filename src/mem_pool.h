@@ -39,8 +39,8 @@ typedef struct memory_pool_mutex_s {
  * Pool page structure
  */
 struct _pool_chain {
-	u_char *begin;					/**< begin of pool chain block 				*/
-	u_char *pos;					/**< current start of free space in block 	*/
+	guint8 *begin;					/**< begin of pool chain block 				*/
+	guint8 *pos;					/**< current start of free space in block 	*/
 	gsize len;		/**< length of block 						*/
 	struct _pool_chain *next;		/**< chain link 							*/
 };
@@ -49,11 +49,11 @@ struct _pool_chain {
  * Shared pool page
  */
 struct _pool_chain_shared {
-	u_char *begin;
-	u_char *pos;
+	guint8 *begin;
+	guint8 *pos;
 	gsize len;
-	memory_pool_mutex_t *lock;
 	struct _pool_chain_shared *next;
+	memory_pool_mutex_t *lock;
 };
 
 /**
@@ -267,11 +267,5 @@ void memory_pool_set_variable (memory_pool_t *pool, const gchar *name, gpointer 
  */
 gpointer memory_pool_get_variable (memory_pool_t *pool, const gchar *name);
 
-
-/**
- * Macro that return free space in pool page
- * @param x pool page struct
- */
-#define memory_pool_free(x) ((x)->len - (align_ptr((x)->pos, MEM_ALIGNMENT) - (x)->begin))
 
 #endif

@@ -53,6 +53,19 @@ pthread_mutex_t                 stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 /* Internal statistic */
 static memory_pool_stat_t      *mem_pool_stat = NULL;
 
+/**
+ * Function that return free space in pool page
+ * @param x pool page struct
+ */
+static gsize
+pool_chain_free (struct _pool_chain *chain)
+{
+	guint8                         *p;
+
+	p = align_ptr (chain->pos, MEM_ALIGNMENT);
+	return chain->len - (p - chain->begin);
+}
+
 static struct _pool_chain      *
 pool_chain_new (gsize size)
 {
@@ -96,7 +109,7 @@ pool_chain_new_shared (gsize size)
 		abort ();
 	}
 	chain = (struct _pool_chain_shared *)map;
-	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
+	chain->begin = ((guint8 *) chain) + sizeof (struct _pool_chain_shared);
 #elif defined(HAVE_MMAP_ZERO)
 	gint                            fd;
 
@@ -110,7 +123,7 @@ pool_chain_new_shared (gsize size)
 		abort ();
 	}
 	chain = (struct _pool_chain_shared *)map;
-	chain->begin = ((u_char *) chain) + sizeof (struct _pool_chain_shared);
+	chain->begin = ((guint8 *) chain) + sizeof (struct _pool_chain_shared);
 #else
 #   	error No mmap methods are defined
 #endif
@@ -185,7 +198,7 @@ memory_pool_new (gsize size)
 void                           *
 memory_pool_alloc (memory_pool_t * pool, gsize size)
 {
-	u_char                         *tmp;
+	guint8                         *tmp;
 	struct _pool_chain             *new, *cur;
 
 	if (pool) {
@@ -195,10 +208,10 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 		cur = pool->cur_pool;
 #endif
 		/* Find free space in pool chain */
-		while (memory_pool_free (cur) < size && cur->next) {
+		while (pool_chain_free (cur) < size && cur->next) {
 			cur = cur->next;
 		}
-		if (cur->next == NULL && memory_pool_free (cur) < size) {
+		if (cur->next == NULL) {
 			/* Allocate new pool */
 			if (cur->len >= size) {
 				new = pool_chain_new (cur->len);
@@ -300,7 +313,7 @@ memory_pool_strdup_shared (memory_pool_t * pool, const gchar *src)
 void                           *
 memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 {
-	u_char                         *tmp;
+	guint8                         *tmp;
 	struct _pool_chain_shared      *new, *cur;
 
 	if (pool) {
@@ -313,10 +326,10 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 		}
 
 		/* Find free space in pool chain */
-		while (memory_pool_free (cur) < size && cur->next) {
+		while (pool_chain_free ((struct _pool_chain *)cur) < size && cur->next) {
 			cur = cur->next;
 		}
-		if (cur->next == NULL && memory_pool_free (cur) < size) {
+		if (cur->next == NULL) {
 			/* Allocate new pool */
 			if (cur->len >= size) {
 				new = pool_chain_new_shared (cur->len);
@@ -350,7 +363,7 @@ memory_pool_find_pool (memory_pool_t * pool, void *pointer)
 	struct _pool_chain_shared      *cur = pool->shared_pool;
 
 	while (cur) {
-		if ((u_char *) pointer >= cur->begin && (u_char *) pointer <= (cur->begin + cur->len)) {
+		if ((guint8 *) pointer >= cur->begin && (guint8 *) pointer <= (cur->begin + cur->len)) {
 			return cur;
 		}
 		cur = cur->next;
@@ -382,7 +395,9 @@ __mutex_spin (memory_pool_mutex_t * mutex)
 	__asm                           __volatile ("pause");
 #elif defined(HAVE_SCHED_YIELD)
 	(void)sched_yield ();
-#elif defined(HAVE_NANOSLEEP)
+#endif
+
+#if defined(HAVE_NANOSLEEP)
 	struct timespec                 ts;
 	ts.tv_sec = 0;
 	ts.tv_nsec = MUTEX_SLEEP_TIME;
@@ -441,7 +456,7 @@ void
 memory_pool_add_destructor_full (memory_pool_t * pool, pool_destruct_func func, void *data,
 		const gchar *function, const gchar *line)
 {
-	struct _pool_destructors       *cur, *tmp;
+	struct _pool_destructors       *cur;
 
 	cur = memory_pool_alloc (pool, sizeof (struct _pool_destructors));
 	if (cur) {
