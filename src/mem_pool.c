@@ -205,7 +205,7 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 			}
 			else {
 				mem_pool_stat->oversized_chunks++;
-				new = pool_chain_new (size + cur->len);
+				new = pool_chain_new (size + pool->first_pool->len);
 			}
 			/* Attach new pool to chain */
 			cur->next = new;
@@ -231,7 +231,7 @@ memory_pool_alloc0 (memory_pool_t * pool, gsize size)
 {
 	void                           *pointer = memory_pool_alloc (pool, size);
 	if (pointer) {
-		bzero (pointer, size);
+		memset (pointer, 0, size);
 	}
 	return pointer;
 }
@@ -241,7 +241,7 @@ memory_pool_alloc0_shared (memory_pool_t * pool, gsize size)
 {
 	void                           *pointer = memory_pool_alloc_shared (pool, size);
 	if (pointer) {
-		bzero (pointer, size);
+		memset (pointer, 0, size);
 	}
 	return pointer;
 }
@@ -445,18 +445,6 @@ memory_pool_add_destructor_full (memory_pool_t * pool, pool_destruct_func func, 
 
 	cur = memory_pool_alloc (pool, sizeof (struct _pool_destructors));
 	if (cur) {
-		/* Check whether we have identical destructor in pool */
-		tmp = pool->destructors;
-		while (tmp) {
-			if (tmp->func == func && tmp->data == data) {
-				/* Do not add identical destructors, they must be unique */
-				msg_warn ("duplicate desctrutors detected: already have destructor from %s:%s and is trying to add from %s:%s",
-						tmp->function, tmp->loc, function, line);
-				return;
-			}
-			tmp = tmp->prev;
-		}
-
 		cur->func = func;
 		cur->data = data;
 		cur->function = function;

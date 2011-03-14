@@ -466,7 +466,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			cur = reply->elements;
 			while (cur) {
 				elt = cur->data;
-				memcpy (&ina, elt->a.addr, sizeof (in_addr_t));
+				memcpy (&ina, &elt->a.addr[0], sizeof (struct in_addr));
 				/* Actually this copy memory, so using of inet_ntoa is valid */
 				lua_pushstring (cd->L, inet_ntoa (ina));
 				lua_rawseti (cd->L, -2, ++i);
@@ -474,7 +474,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			}
 			lua_pushnil (cd->L);
 		}
-		else if (reply->type == DNS_REQUEST_A) {
+		else if (reply->type == DNS_REQUEST_PTR) {
 			lua_newtable (cd->L);
 			cur = reply->elements;
 			while (cur) {
@@ -811,16 +811,9 @@ static gint
 lua_task_get_recipients_headers (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
-	InternetAddressList            *addrs;
 
 	if (task) {
-		addrs = g_mime_message_get_all_recipients(task->message);
-		lua_push_internet_address (L, addrs);
-#ifndef	GMIME24
-		internet_address_list_destroy (addrs);
-#else
-		g_object_unref (addrs);
-#endif
+		lua_push_internet_address (L, task->rcpts);
 		return 1;
 	}
 
