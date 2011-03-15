@@ -19,7 +19,7 @@
 #
 # -- OPTIONAL Variables 
 # Architecture: ${DEBIAN_ARCHITECTURE}, by default i386 for intel on debian like
-# Depends: ${PACKAGE_DEPENDS}
+# Depends: ${CPACK_DEBIAN_PACKAGE_DEPENDS}
 # Section: ${PACKAGE_SECTION}
 # Priority: ${PACKAGE_PRIORITY}
 # Essential: ${PACKAGE_ESSENTIAL}
@@ -88,12 +88,12 @@ MACRO(ADD_DEBIAN_PACKAGE DEBNAME)
         ARGS      -E echo "Architecture: ${DEBIAN_ARCHITECTURE}" >> ${CONTROL_FILE}
       )   
 
-      IF ( DEFINED PACKAGE_DEPENDS )
+      IF ( DEFINED CPACK_DEBIAN_PACKAGE_DEPENDS )
         ADD_CUSTOM_COMMAND( OUTPUT ${CONTROL_FILE}
           COMMAND   ${CMAKE_COMMAND} -E echo
-           "Depends: ${PACKAGE_DEPENDS}" >> ${CONTROL_FILE}
+           "Depends: ${CPACK_DEBIAN_PACKAGE_DEPENDS}" >> ${CONTROL_FILE}
           APPEND )   
-      ENDIF ( DEFINED PACKAGE_DEPENDS )
+      ENDIF ( DEFINED CPACK_DEBIAN_PACKAGE_DEPENDS )
 
       IF ( DEFINED PACKAGE_SECTION )
         ADD_CUSTOM_COMMAND( OUTPUT ${CONTROL_FILE}
@@ -208,13 +208,13 @@ MACRO(ADD_DEBIAN_PACKAGE DEBNAME)
 
   # Calling "make install DESTDIR=${DEBIAN_DIR}"
   ADD_CUSTOM_TARGET(deb_destdir_install
-    COMMAND ${CMAKE_MAKE_PROGRAM} install CMAKE_INSTALL_PREFIX=/usr DESTDIR=${DEBIAN_DIR}
+    COMMAND ${CMAKE_MAKE_PROGRAM} install CMAKE_INSTALL_PREFIX=/ DESTDIR=${DEBIAN_DIR}
     DEPENDS ${CMAKE_BINARY_DIR}/cmake_install.cmake	  
     COMMENT "Installing with DESTDIR = ${DEBIAN_DIR}"
   )
   ADD_DEPENDENCIES(deb_destdir_install deb_destdir_preinstall)
   ADD_CUSTOM_TARGET(deb_destdir_preinstall
-    COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=/usr -DDESTDIR=${DEBIAN_DIR} .
+    COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=/ -DDESTDIR=${DEBIAN_DIR} .
     DEPENDS ${CMAKE_BINARY_DIR}/cmake_install.cmake	  
     COMMENT "Configuring with DESTDIR = ${DEBIAN_DIR}"
   )
