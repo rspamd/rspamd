@@ -847,7 +847,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 # CPack section
-SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libevent1, libgmime-2.0-2a")
+SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libevent-1.4-2, libgmime-2.0-2a")
 SET(CPACK_PACKAGE_CONTACT "vsevolod@highsecure.ru")
 SET(CPACK_PACKAGE_NAME rspamd)
 SET(CPACK_SOURCE_IGNORE_FILES "\\\\.swp$" "/\\\\.hg/")
