@@ -824,7 +824,7 @@ statfile_pool_invalidate_callback (gint fd, short what, void *ud)
 
 	for (i = 0; i < pool->opened; i ++) {
 		file = &pool->files[i];
-		msync (file->map, file->len, MS_ASYNC | MS_INVALIDATE);
+		msync (file->map, file->len, MS_ASYNC);
 	}
 
 }
