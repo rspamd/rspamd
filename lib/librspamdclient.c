@@ -1535,6 +1535,27 @@ rspamd_get_stat (GError **err)
 	return res;
 }
 
+GString *
+rspamd_get_uptime (GError **err)
+{
+	struct rspamd_connection             *c;
+	GString                              *res;
+	static const gchar                    outcmd[] = "uptime\r\n";
+
+	g_assert (client != NULL);
+
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return NULL;
+	}
+
+	res = rspamd_send_controller_command (c, outcmd, strlen (outcmd), -1, err);
+
+	return res;
+}
+
 /*
  * Free results
  */

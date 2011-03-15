@@ -61,7 +61,8 @@ enum rspamc_command {
 	RSPAMC_COMMAND_LEARN,
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
-	RSPAMC_COMMAND_STAT
+	RSPAMC_COMMAND_STAT,
+	RSPAMC_COMMAND_UPTIME
 };
 
 /*
@@ -110,6 +111,9 @@ check_rspamc_command (const gchar *cmd)
 	}
 	else if (g_ascii_strcasecmp (cmd, "STAT") == 0) {
 		return RSPAMC_COMMAND_STAT;
+	}
+	else if (g_ascii_strcasecmp (cmd, "UPTIME") == 0) {
+		return RSPAMC_COMMAND_UPTIME;
 	}
 
 	return RSPAMC_COMMAND_UNKNOWN;
@@ -526,10 +530,40 @@ rspamd_do_stat ()
 	res = rspamd_get_stat (&err);
 	if (res == NULL) {
 		if (err != NULL) {
-			fprintf (stderr, "cannot learn message: %s\n", err->message);
+			fprintf (stderr, "cannot stat: %s\n", err->message);
 		}
 		else {
-			fprintf (stderr, "cannot learn message\n");
+			fprintf (stderr, "cannot stat\n");
+		}
+		exit (EXIT_FAILURE);
+	}
+	if (tty) {
+		printf ("\033[1m");
+	}
+	PRINT_FUNC ("Results for host: %s\n\n", connect_str);
+	if (tty) {
+		printf ("\033[0m");
+	}
+	res = g_string_append_c (res, '\0');
+	printf ("%s\n", res->str);
+}
+
+static void
+rspamd_do_uptime ()
+{
+	GError                          *err = NULL;
+	GString                         *res;
+
+	/* Add server */
+	add_rspamd_server (TRUE);
+
+	res = rspamd_get_uptime (&err);
+	if (res == NULL) {
+		if (err != NULL) {
+			fprintf (stderr, "cannot uptime: %s\n", err->message);
+		}
+		else {
+			fprintf (stderr, "cannot uptime\n");
 		}
 		exit (EXIT_FAILURE);
 	}
@@ -579,6 +613,9 @@ main (gint argc, gchar **argv, gchar **env)
 				break;
 			case RSPAMC_COMMAND_STAT:
 				rspamd_do_stat ();
+				break;
+			case RSPAMC_COMMAND_UPTIME:
+				rspamd_do_uptime ();
 				break;
 			default:
 				fprintf (stderr, "invalid arguments\n");

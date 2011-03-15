@@ -4,9 +4,9 @@ rspamc - a simple client for rspamd spam filtering system
 
 =head1 SYNOPSIS
 
-rspamc [B<-h> I<host[:port]>] [B<-p>]
+rspamc [B<-h> I<host[:port]>] [B<-p>] [B<-v>]
 [B<-i> I<ip>] [B<-s> I<statfile>] [B<-w> I<weight>]
-[B<-P> I<password>] [B<-f> I<flag>] [command] [file [file ...]] 
+[B<-P> I<password>] [B<-f> I<flag>] [B<-t> I<timeout>] [command] [file [file ...]] 
 
 rspamc [B<--help>]
 
@@ -28,6 +28,10 @@ default port is I<11333> for checking messages and I<11334> for learning and sta
 
 Pass all filters when checking messages. Ignored in case of learning.
 
+=item B<-v>, B<--verbose>
+
+Be more verbose while displaying results. For example show descriptions of symbols.
+
 =item B<-P> I<password>, B<--password> I<password>
 
 Specify controller's password. Mandatory option for learning.
@@ -47,8 +51,11 @@ Weight of message for fuzzy operations.
 
 =item B<-f> I<flag>, B<--flag> I<flag>
 
-Weight of message for fuzzy operations.
+Flag of list for fuzzy operations.
 
+=item B<-t> I<timeout>, B<--timeout> I<timeout>
+
+Timeout in seconds for all operations. Default value is 5 seconds.
 
 =back
 
@@ -81,6 +88,10 @@ Delete fuzzy hash from other server:
 Get statistics:
 	
 	rspamc stat
+
+Get uptime:
+	
+	rspamc uptime
 
 =head1 AUTHOR
 

@@ -103,6 +103,11 @@ gboolean rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag,
 GString *rspamd_get_stat (GError **err);
 
 /*
+ * Get uptime from server
+ */
+GString *rspamd_get_uptime (GError **err);
+
+/*
  * Free results
  */
 void rspamd_free_result (struct rspamd_result *result);

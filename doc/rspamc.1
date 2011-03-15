@@ -124,7 +124,7 @@
 .\" ========================================================================
 .\"
 .IX Title "rspamc 1"
-.TH rspamc 1 "2011-02-25" "rspamd-0.3.7_1" "Rspamd documentation"
+.TH rspamc 1 "2011-03-15" "rspamd-0.3.8" "Rspamd documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
@@ -134,9 +134,9 @@
 rspamc \- a simple client for rspamd spam filtering system
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-rspamc [\fB\-h\fR \fIhost[:port]\fR] [\fB\-p\fR]
+rspamc [\fB\-h\fR \fIhost[:port]\fR] [\fB\-p\fR] [\fB\-v\fR]
 [\fB\-i\fR \fIip\fR] [\fB\-s\fR \fIstatfile\fR] [\fB\-w\fR \fIweight\fR]
-[\fB\-P\fR \fIpassword\fR] [\fB\-f\fR \fIflag\fR] [command] [file [file ...]]
+[\fB\-P\fR \fIpassword\fR] [\fB\-f\fR \fIflag\fR] [\fB\-t\fR \fItimeout\fR] [command] [file [file ...]]
 .PP
 rspamc [\fB\-\-help\fR]
 .SH "DESCRIPTION"
@@ -152,6 +152,9 @@ default port is \fI11333\fR for checking messages and \fI11334\fR for learning a
 .IP "\fB\-p\fR, \fB\-\-pass\-all\fR" 4
 .IX Item "-p, --pass-all"
 Pass all filters when checking messages. Ignored in case of learning.
+.IP "\fB\-v\fR, \fB\-\-verbose\fR" 4
+.IX Item "-v, --verbose"
+Be more verbose while displaying results. For example show descriptions of symbols.
 .IP "\fB\-P\fR \fIpassword\fR, \fB\-\-password\fR \fIpassword\fR" 4
 .IX Item "-P password, --password password"
 Specify controller's password. Mandatory option for learning.
@@ -167,7 +170,10 @@ specific \s-1IP\s0 address.
 Weight of message for fuzzy operations.
 .IP "\fB\-f\fR \fIflag\fR, \fB\-\-flag\fR \fIflag\fR" 4
 .IX Item "-f flag, --flag flag"
-Weight of message for fuzzy operations.
+Flag of list for fuzzy operations.
+.IP "\fB\-t\fR \fItimeout\fR, \fB\-\-timeout\fR \fItimeout\fR" 4
+.IX Item "-t timeout, --timeout timeout"
+Timeout in seconds for all operations. Default value is 5 seconds.
 .SH "RETURN VALUE"
 .IX Header "RETURN VALUE"
 On exit \fBrspamc\fR returns 0 if operation was successfull and error code otherwise.
@@ -207,6 +213,12 @@ Get statistics:
 .PP
 .Vb 1
 \&        rspamc stat
+.Ve
+.PP
+Get uptime:
+.PP
+.Vb 1
+\&        rspamc uptime
 .Ve
 .SH "AUTHOR"
 .IX Header "AUTHOR"
