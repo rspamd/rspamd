@@ -208,13 +208,13 @@ MACRO(ADD_DEBIAN_PACKAGE DEBNAME)
 
   # Calling "make install DESTDIR=${DEBIAN_DIR}"
   ADD_CUSTOM_TARGET(deb_destdir_install
-    COMMAND ${CMAKE_MAKE_PROGRAM} install CMAKE_INSTALL_PREFIX=/usr DESTDIR=${DEBIAN_DIR}
+    COMMAND ${CMAKE_MAKE_PROGRAM} install CMAKE_INSTALL_PREFIX=/ DESTDIR=${DEBIAN_DIR}
     DEPENDS ${CMAKE_BINARY_DIR}/cmake_install.cmake	  
     COMMENT "Installing with DESTDIR = ${DEBIAN_DIR}"
   )
   ADD_DEPENDENCIES(deb_destdir_install deb_destdir_preinstall)
   ADD_CUSTOM_TARGET(deb_destdir_preinstall
-    COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=/usr -DDESTDIR=${DEBIAN_DIR} .
+    COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=/ -DDESTDIR=${DEBIAN_DIR} .
     DEPENDS ${CMAKE_BINARY_DIR}/cmake_install.cmake	  
     COMMENT "Configuring with DESTDIR = ${DEBIAN_DIR}"
   )
