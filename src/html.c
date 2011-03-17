@@ -688,7 +688,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 	gint                            off, rc;
 
 	p = url_text;
-	while (len < remain - 1) {
+	while (len < remain) {
 		if (*p == '<' || *p == '>') {
 			break;
 		}
