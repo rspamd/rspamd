@@ -700,11 +700,35 @@ lua_task_call_rspamd_function (lua_State * L)
 
 
 
+static gboolean
+lua_push_internet_address (lua_State *L, InternetAddress *ia)
+{
+#ifndef GMIME24
+	if (internet_address_get_type (ia) == INTERNET_ADDRESS_NAME) {
+		lua_newtable (L);
+		lua_set_table_index (L, "name", internet_address_get_name (ia));
+		lua_set_table_index (L, "addr", internet_address_get_addr (ia));
+		return TRUE;
+	}
+	return FALSE;
+#else
+	InternetAddressMailbox        *iamb;
+	if (ia) {
+		lua_newtable (L);
+		iamb = INTERNET_ADDRESS_MAILBOX (ia);
+		lua_set_table_index (L, "name", internet_address_get_name (ia));
+		lua_set_table_index (L, "addr", internet_address_mailbox_get_addr (iamb));
+		return TRUE;
+	}
+	return FALSE;
+#endif
+}
+
 /*
  * Push internet addresses to lua as a table
  */
 static void
-lua_push_internet_address (lua_State *L, InternetAddressList *addrs)
+lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs)
 {
 	InternetAddress                *ia;
 	gint                            idx = 1;
@@ -717,10 +741,7 @@ lua_push_internet_address (lua_State *L, InternetAddressList *addrs)
 	cur = addrs;
 	while (cur) {
 		ia = internet_address_list_get_address (cur);
-		if (internet_address_get_type (ia) == INTERNET_ADDRESS_NAME) {
-			lua_newtable (L);
-			lua_set_table_index (L, "name", internet_address_get_name (ia));
-			lua_set_table_index (L, "addr", internet_address_get_addr (ia));
+		if (lua_push_internet_address (L, ia)) {
 			lua_rawseti (L, -2, idx++);
 		}
 		cur = internet_address_list_next (cur);
@@ -728,17 +749,12 @@ lua_push_internet_address (lua_State *L, InternetAddressList *addrs)
 #else
 	/* Gmime 2.4 version */
 	gsize                          len, i;
-	InternetAddressMailbox        *iamb;
 
 	lua_newtable (L);
 	len = internet_address_list_length (addrs);
 	for (i = 0; i < len; i ++) {
 		ia = internet_address_list_get_address (addrs, i);
-		if (ia) {
-			lua_newtable (L);
-			iamb = INTERNET_ADDRESS_MAILBOX (ia);
-			lua_set_table_index (L, "name", internet_address_get_name (ia));
-			lua_set_table_index (L, "addr", internet_address_mailbox_get_addr (iamb));
+		if (lua_push_internet_address (L, ia)) {
 			lua_rawseti (L, -2, idx++);
 		}
 	}
@@ -751,20 +767,25 @@ lua_task_get_recipients (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	GList                          *cur;
 	InternetAddressList            *addrs;
+	gint                            idx = 1;
 
 	if (task) {
 		cur = task->rcpt;
 		if (cur != NULL) {
+			lua_newtable (L);
 			while (cur) {
 #ifndef GMIME24
 				addrs = internet_address_parse_string (cur->data);
-#else
-				addrs = internet_address_list_parse_string (cur->data);
-#endif
-				lua_push_internet_address (L, addrs);
-#ifndef	GMIME24
+				if (lua_push_internet_address (L, internet_address_list_get_address (addrs))) {
+					lua_rawseti (L, -2, idx++);
+				}
 				internet_address_list_destroy (addrs);
 #else
+
+				addrs = internet_address_list_parse_string (cur->data);
+				if (lua_push_internet_address (L, internet_address_list_get_address (addrs, 0))) {
+					lua_rawseti (L, -2, idx++);
+				}
 				g_object_unref (addrs);
 #endif
 				cur = g_list_next (cur);
@@ -790,7 +811,7 @@ lua_task_get_from (lua_State *L)
 #else
 			addrs = internet_address_list_parse_string (task->from);
 #endif
-			lua_push_internet_address (L, addrs);
+			lua_push_internet_address_list (L, addrs);
 #ifndef	GMIME24
 			internet_address_list_destroy (addrs);
 #else
@@ -813,7 +834,7 @@ lua_task_get_recipients_headers (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 
 	if (task) {
-		lua_push_internet_address (L, task->rcpts);
+		lua_push_internet_address_list (L, task->rcpts);
 		return 1;
 	}
 
@@ -833,7 +854,7 @@ lua_task_get_from_headers (lua_State *L)
 #else
 		addrs = internet_address_list_parse_string (g_mime_message_get_sender (task->message));
 #endif
-		lua_push_internet_address (L, addrs);
+		lua_push_internet_address_list (L, addrs);
 #ifndef	GMIME24
 		internet_address_list_destroy (addrs);
 #else
