@@ -225,6 +225,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_protocol_command ("urls", urls_command_handler);
 	/* Register module options */
 	register_module_opt ("surbl", "redirector", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "redirector_symbol", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("surbl", "url_expire", MODULE_OPT_TYPE_TIME);
 	register_module_opt ("surbl", "redirector_connect_timeout", MODULE_OPT_TYPE_TIME);
 	register_module_opt ("surbl", "redirector_read_timeout", MODULE_OPT_TYPE_TIME);
@@ -312,6 +313,13 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->redirectors_number = idx;
 		surbl_module_ctx->use_redirector = (surbl_module_ctx->redirectors_number != 0);
 		g_strfreev (strvec);
+	}
+	if ((value = get_module_opt (cfg, "surbl", "redirector_symbol")) != NULL) {
+		surbl_module_ctx->redirector_symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, value);
+		register_virtual_symbol (&cfg->cache, surbl_module_ctx->redirector_symbol, 1.0);
+	}
+	else {
+		surbl_module_ctx->redirector_symbol = NULL;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "weight")) != NULL) {
 		surbl_module_ctx->weight = atoi (value);
@@ -998,6 +1006,9 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 					re = g_hash_table_lookup (surbl_module_ctx->redirector_hosts, red_domain);
 					if (re != NULL && (re == NO_REGEXP || g_regex_match (re, url->string, 0, NULL))) {
 						/* If no regexp found or founded regexp matches url string register redirector's call */
+						if (surbl_module_ctx->redirector_symbol != NULL) {
+							insert_result (param->task, surbl_module_ctx->redirector_symbol, 1, g_list_prepend (NULL, red_domain));
+						}
 						register_redirector_call (url, param->task, param->suffix, red_domain);
 						param->task->save.saved++;
 						return FALSE;
