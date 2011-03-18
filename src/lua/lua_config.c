@@ -42,6 +42,7 @@ LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
 LUA_FUNCTION_DEF (config, register_virtual_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol);
+LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
 LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
 LUA_FUNCTION_DEF (config, get_api_version);
@@ -56,6 +57,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_symbol),
 	LUA_INTERFACE_DEF (config, register_virtual_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
+	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	LUA_INTERFACE_DEF (config, get_api_version),
@@ -572,6 +574,32 @@ lua_config_register_callback_symbol (lua_State * L)
 	}
 	return 1;
 }
+
+static gint
+lua_config_register_callback_symbol_priority (lua_State * L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const gchar                     *name, *callback;
+	double                          weight;
+	gint                            priority;
+	struct lua_callback_data       *cd;
+
+	if (cfg) {
+		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+		priority = luaL_checknumber (L, 4);
+		callback = luaL_checkstring (L, 5);
+
+		if (name) {
+			cd = g_malloc (sizeof (struct lua_callback_data));
+			cd->name = g_strdup (callback);
+			cd->L = L;
+			register_callback_symbol_priority (&cfg->cache, name, weight, priority, lua_metric_symbol_callback, cd);
+		}
+	}
+	return 1;
+}
+
 
 /* Radix and hash table functions */
 static gint

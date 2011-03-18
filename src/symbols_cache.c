@@ -60,12 +60,19 @@ cache_logic_cmp (const void *p1, const void *p2)
 	double                          w1, w2;
 	double                          f1 = 0, f2 = 0;
 
-	if (total_frequency > 0) {
-		f1 = ((double)i1->s->frequency * nsymbols) / (double)total_frequency;
-		f2 = ((double)i2->s->frequency * nsymbols) / (double)total_frequency;
+	if (i1->priority == 0 && i2->priority == 0) {
+		if (total_frequency > 0) {
+			f1 = ((double)i1->s->frequency * nsymbols) / (double)total_frequency;
+			f2 = ((double)i2->s->frequency * nsymbols) / (double)total_frequency;
+		}
+		w1 = abs (i1->s->weight) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
+		w2 = abs (i2->s->weight) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
 	}
-	w1 = abs (i1->s->weight) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
-	w2 = abs (i2->s->weight) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
+	else {
+		/* Strict sorting */
+		w1 = abs (i1->priority);
+		w2 = abs (i2->priority);
+	}
 
 	return (gint)w2 - w1;
 }
@@ -250,7 +257,7 @@ enum rspamd_symbol_type {
 };
 
 static void
-register_symbol_common (struct symbols_cache **cache, const gchar *name, double weight,
+register_symbol_common (struct symbols_cache **cache, const gchar *name, double weight, gint priority,
 		symbol_func_t func, gpointer user_data, enum rspamd_symbol_type type)
 {
 	struct cache_item              *item = NULL;
@@ -269,6 +276,7 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
+	item->priority = priority;
 
 	switch (type) {
 	case SYMBOL_TYPE_NORMAL:
@@ -289,11 +297,23 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 		item->s->weight = weight;
 	}
 
-	if (item->s->weight > 0) {
-		target = &(*cache)->static_items;
+	/* If we have undefined priority determine list according to weight */
+	if (priority == 0) {
+		if (item->s->weight > 0) {
+			target = &(*cache)->static_items;
+		}
+		else {
+			target = &(*cache)->negative_items;
+		}
 	}
 	else {
-		target = &(*cache)->negative_items;
+		/* Items with more priority are called before items with less priority */
+		if (priority < 0) {
+			target = &(*cache)->negative_items;
+		}
+		else {
+			target = &(*cache)->static_items;
+		}
 	}
 
 	pcache->used_items++;
@@ -307,20 +327,27 @@ void
 register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
 		symbol_func_t func, gpointer user_data)
 {
-	register_symbol_common (cache, name, weight, func, user_data, SYMBOL_TYPE_NORMAL);
+	register_symbol_common (cache, name, weight, 0, func, user_data, SYMBOL_TYPE_NORMAL);
 }
 
 void
 register_virtual_symbol (struct symbols_cache **cache, const gchar *name, double weight)
 {
-	register_symbol_common (cache, name, weight, NULL, NULL, SYMBOL_TYPE_VIRTUAL);
+	register_symbol_common (cache, name, weight, 0, NULL, NULL, SYMBOL_TYPE_VIRTUAL);
 }
 
 void
 register_callback_symbol (struct symbols_cache **cache, const gchar *name, double weight,
 		symbol_func_t func, gpointer user_data)
 {
-	register_symbol_common (cache, name, weight, func, user_data, SYMBOL_TYPE_CALLBACK);
+	register_symbol_common (cache, name, weight, 0, func, user_data, SYMBOL_TYPE_CALLBACK);
+}
+
+void
+register_callback_symbol_priority (struct symbols_cache **cache, const gchar *name, double weight, gint priority,
+		symbol_func_t func, gpointer user_data)
+{
+	register_symbol_common (cache, name, weight, priority, func, user_data, SYMBOL_TYPE_CALLBACK);
 }
 
 void
@@ -355,6 +382,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 		item->s->weight = weight;
 	}
 	item->is_dynamic = TRUE;
+	item->priority = 0;
 
 	pcache->used_items++;
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);

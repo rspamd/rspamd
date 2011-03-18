@@ -974,6 +974,7 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 {
 	gchar                        *val, *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State                    *L = cfg->lua_state;
+	struct config_file           **pcfg;
 
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
@@ -992,6 +993,13 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 	if (lua_isnil (L, -1)) {
 		lua_newtable (L);
 		lua_setglobal (L, "composites");
+	}
+	lua_getglobal (L, "rspamd_config");
+	if (lua_isnil (L, -1)) {
+		pcfg = lua_newuserdata (L, sizeof (struct config_file *));
+		lua_setclass (L, "rspamd{config}", -1);
+		*pcfg = cfg;
+		lua_setglobal (L, "rspamd_config");
 	}
 	/* Now config tables can be used for configuring rspamd */
 	/* First check "src" attribute */

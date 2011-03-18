@@ -40,6 +40,9 @@ struct cache_item {
 	/* Flags of virtual symbols */
 	gboolean is_virtual;
 	gboolean is_callback;
+
+	/* Priority */
+	gint priority;
 };
 
 
@@ -80,6 +83,7 @@ gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, s
  */
 void register_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data);
 
+
 /**
  * Register virtual symbol
  * @param name name of symbol
@@ -93,6 +97,14 @@ void register_virtual_symbol (struct symbols_cache **cache, const gchar *name, d
  * @param user_data pointer to user_data
  */
 void register_callback_symbol (struct symbols_cache **cache, const gchar *name, double weight, symbol_func_t func, gpointer user_data);
+
+/**
+ * Register function for symbols parsing with strict priority
+ * @param name name of symbol
+ * @param func pointer to handler
+ * @param user_data pointer to user_data
+ */
+void register_callback_symbol_priority (struct symbols_cache **cache, const gchar *name, double weight, gint priority, symbol_func_t func, gpointer user_data);
 
 /**
  * Register function for dynamic symbols parsing

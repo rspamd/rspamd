@@ -285,6 +285,7 @@ local function add_multimap_rule(params)
 		newrule['hash'] = cdb.create(newrule['map'])
 		if newrule['hash'] then
 			table.insert(rules, newrule)
+			return newrule
 		else
 			rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 		end
@@ -294,6 +295,7 @@ local function add_multimap_rule(params)
 			newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
 			if newrule['ips'] then
 				table.insert(rules, newrule)
+				return newrule
 			else
 				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 			end
@@ -301,6 +303,7 @@ local function add_multimap_rule(params)
 			newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
 			if newrule['hash'] then
 				table.insert(rules, newrule)
+				return newrule
 			else
 				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 			end
@@ -308,14 +311,16 @@ local function add_multimap_rule(params)
 			newrule['hash'] = rspamd_cdb.create(newrule['map'])
 			if newrule['hash'] then
 				table.insert(rules, newrule)
+				return newrule
 			else
 				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 			end
 		else
 			table.insert(rules, newrule)
+			return newrule
 		end
 	end
-	return newrule
+	return nil
 end
 
 -- Registration
@@ -358,7 +363,11 @@ end
 if table.maxn(rules) > 0 then
 	-- add fake symbol to check all maps inside a single callback
 	if type(rspamd_config.get_api_version) ~= 'nil' then
-		rspamd_config:register_callback_symbol('MULTIMAP', 1.0, 'check_multimap')
+		if rspamd_config.get_api_version() >= 4 then
+			rspamd_config:register_callback_symbol_priority('MULTIMAP', 1.0, -1, 'check_multimap')
+		else
+			rspamd_config:register_callback_symbol('MULTIMAP', 1.0, 'check_multimap')
+		end
 	else
 		rspamd_config:register_symbol('MULTIMAP', 1.0, 'check_multimap')
 	end

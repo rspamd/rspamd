@@ -797,9 +797,7 @@ FOREACH(LUA_PLUGIN ${LUA_PLUGINS})
 	IF(NOT IS_DIRECTORY ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/lua/${_rp})
 		INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/lua/${_rp})")
 	ENDIF(NOT IS_DIRECTORY ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/lua/${_rp})
-	IF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/${_rp}/${LUA_PLUGIN})
-		INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION etc/rspamd/plugins/lua/${_rp})
-	ENDIF(NOT EXISTS ${DESTDIR}/${ETC_PREFIX}/rspamd/plugins/${_rp}/${LUA_PLUGIN})
+	INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION etc/rspamd/plugins/lua/${_rp})
 ENDFOREACH(LUA_PLUGIN)
 
 # Lua config
