@@ -103,11 +103,11 @@ function check_multimap(task)
 							local _,_,ext = string.find(r['addr'], rule['pattern'])
 							if ext then
 								if rule['cdb'] then
-									if rule['hash']:lookup(hv) then
+									if rule['hash']:lookup(ext) then
 										task:insert_result(rule['symbol'], 1)
 									end
 								else
-									if rule['hash']:get_key(hv) then
+									if rule['hash']:get_key(ext) then
 										task:insert_result(rule['symbol'], 1)
 									end
 								end

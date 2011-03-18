@@ -263,14 +263,6 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 		*cache = pcache;
 		pcache->static_pool = memory_pool_new (memory_pool_get_size ());
 	}
-
-	
-	if (weight > 0) {
-		target = &(*cache)->static_items;
-	}
-	else {
-		target = &(*cache)->negative_items;
-	}
 	
 	item = memory_pool_alloc0 (pcache->static_pool, sizeof (struct cache_item));
 	item->s = memory_pool_alloc0 (pcache->static_pool, sizeof (struct saved_cache_item));
@@ -296,6 +288,14 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 	else {
 		item->s->weight = weight;
 	}
+
+	if (item->s->weight > 0) {
+		target = &(*cache)->static_items;
+	}
+	else {
+		target = &(*cache)->negative_items;
+	}
+
 	pcache->used_items++;
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	set_counter (item->s->symbol, 0);
