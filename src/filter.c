@@ -84,7 +84,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	/* Add metric score */
 
 
-	if (!single && (s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
+	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts && opts != s->options) {
 			/* Append new options */
 			s->options = g_list_concat (s->options, g_list_copy(opts));
@@ -97,9 +97,10 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 			s->options = g_list_copy (opts);
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
 		}
-
-		s->score += w;
-		metric_res->score += w;
+		if (!single) {
+			s->score += w;
+			metric_res->score += w;
+		}
 	}
 	else {
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
