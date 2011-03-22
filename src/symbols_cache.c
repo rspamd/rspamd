@@ -504,7 +504,8 @@ free_cache (gpointer arg)
 }
 
 gboolean
-init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct config_file *cfg, const gchar *filename)
+init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct config_file *cfg,
+		const gchar *filename, gboolean ignore_checksum)
 {
 	struct stat                     st;
 	gint                            fd;
@@ -553,23 +554,55 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 		}
 	}
 
-	/* Calculate checksum */
-	cksum = get_mem_cksum (cache);
-	if (cksum == NULL) {
-		msg_err ("cannot calculate checksum for symbols");
-		close (fd);
-		return FALSE;
-	}
+	if (!ignore_checksum) {
+		/* Calculate checksum */
+		cksum = get_mem_cksum (cache);
+		if (cksum == NULL) {
+			msg_err ("cannot calculate checksum for symbols");
+			close (fd);
+			return FALSE;
+		}
 
-	cklen = g_checksum_type_get_length (G_CHECKSUM_SHA1);
-	mem_sum = g_malloc (cklen);
+		cklen = g_checksum_type_get_length (G_CHECKSUM_SHA1);
+		mem_sum = g_malloc (cklen);
 
-	g_checksum_get_digest (cksum, mem_sum, &cklen);
-	/* Now try to read file sum */
-	if (lseek (fd, -(cklen), SEEK_END) == -1) {
-		if (errno == EINVAL) {
-			/* Try to create file */
-			msg_info ("recreate cache file");
+		g_checksum_get_digest (cksum, mem_sum, &cklen);
+		/* Now try to read file sum */
+		if (lseek (fd, -(cklen), SEEK_END) == -1) {
+			if (errno == EINVAL) {
+				/* Try to create file */
+				msg_info ("recreate cache file");
+				if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+					msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+					return FALSE;
+				}
+				else {
+					return create_cache_file (cache, filename, fd, pool);
+				}
+			}
+			close (fd);
+			g_free (mem_sum);
+			g_checksum_free (cksum);
+			msg_err ("cannot seek to read checksum, %d, %s", errno, strerror (errno));
+			return FALSE;
+		}
+		file_sum = g_malloc (cklen);
+		if (read (fd, file_sum, cklen) == -1) {
+			close (fd);
+			g_free (mem_sum);
+			g_free (file_sum);
+			g_checksum_free (cksum);
+			msg_err ("cannot read checksum, %d, %s", errno, strerror (errno));
+			return FALSE;
+		}
+
+		if (memcmp (file_sum, mem_sum, cklen) != 0) {
+			close (fd);
+			g_free (mem_sum);
+			g_free (file_sum);
+			g_checksum_free (cksum);
+			msg_info ("checksum mismatch, recreating file");
+			/* Reopen with rw permissions */
 			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 				msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 				return FALSE;
@@ -578,41 +611,11 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 				return create_cache_file (cache, filename, fd, pool);
 			}
 		}
-		close (fd);
-		g_free (mem_sum);
-		g_checksum_free (cksum);
-		msg_err ("cannot seek to read checksum, %d, %s", errno, strerror (errno));
-		return FALSE;
-	}
-	file_sum = g_malloc (cklen);
-	if (read (fd, file_sum, cklen) == -1) {
-		close (fd);
+
 		g_free (mem_sum);
 		g_free (file_sum);
 		g_checksum_free (cksum);
-		msg_err ("cannot read checksum, %d, %s", errno, strerror (errno));
-		return FALSE;
 	}
-
-	if (memcmp (file_sum, mem_sum, cklen) != 0) {
-		close (fd);
-		g_free (mem_sum);
-		g_free (file_sum);
-		g_checksum_free (cksum);
-		msg_info ("checksum mismatch, recreating file");
-		/* Reopen with rw permissions */
-		if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-			msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
-			return FALSE;
-		}
-		else {
-			return create_cache_file (cache, filename, fd, pool);
-		}
-	}
-
-	g_free (mem_sum);
-	g_free (file_sum);
-	g_checksum_free (cksum);
 	/* MMap cache file and copy saved_cache structures */
 	res = mmap_cache_file (cache, fd, pool);
 	memory_pool_add_destructor (pool, (pool_destruct_func)free_cache, cache);

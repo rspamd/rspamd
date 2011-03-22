@@ -693,7 +693,7 @@ static void
 init_cfg_cache (struct config_file *cfg) 
 {
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename)) {
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename, FALSE)) {
 		exit (EXIT_FAILURE);
 	}
 }
@@ -705,7 +705,7 @@ print_symbols_cache (struct config_file *cfg)
 	struct cache_item              *item;
 	gint                            i;
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename)) {
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 	if (cfg->cache) {
@@ -869,7 +869,7 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Insert classifiers symbols */
 		(void)insert_classifier_symbols (rspamd->cfg);
 
-		if (! validate_cache (rspamd->cfg->cache, rspamd->cfg, TRUE)) {
+		if (! validate_cache (rspamd->cfg->cache, rspamd->cfg, FALSE)) {
 			res = FALSE;
 		}
 		if (dump_vars) {
