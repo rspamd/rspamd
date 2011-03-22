@@ -70,7 +70,11 @@ if opts then
         symbol = opts['symbol']
         
         if opts['rbl'] then
-            rbls = opts['rbl']
+			if type(opts['rbl']) == 'table' then
+				rbls = opts['rbl']
+			else
+				rbls[1] = opts['rbl']
+			end
         end
         for _,rbl in ipairs(rbls) do
         	local s, _ = string.find(rbl, ':')
