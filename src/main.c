@@ -51,6 +51,9 @@
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
+/* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
+#define HARD_TERMINATION_TIME 10
+
 
 rspamd_hash_t                  *counters;
 
@@ -407,10 +410,29 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 }
 
 static void
+set_alarm (guint seconds)
+{
+#ifdef HAVE_SETITIMER
+	static struct itimerval         itv;
+
+	itv.it_interval.tv_sec = 0;
+	itv.it_interval.tv_usec = 0;
+	itv.it_value.tv_sec = seconds;
+	itv.it_value.tv_usec = 0;
+
+	if (setitimer (ITIMER_REAL, &itv, NULL) == -1) {
+		msg_err ("set alarm failed: %s", strerror (errno));
+	}
+#else
+	(void)alarm (seconds);
+#endif
+}
+
+static void
 delay_fork (struct worker_conf *cf)
 {
 	workers_pending = g_list_prepend (workers_pending, cf);
-	(void)alarm (SOFT_FORK_TIME);
+	set_alarm (SOFT_FORK_TIME);
 }
 
 
@@ -581,9 +603,22 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_worker          *w = value;
 	gint                            res = 0;
 
-	waitpid (w->pid, &res, 0);
+	if (got_alarm) {
+		got_alarm = 0;
+		/* Set alarm for hard termination */
+		set_alarm (HARD_TERMINATION_TIME);
+	}
 
-	msg_debug ("%s process %P terminated", process_to_str (w->type), w->pid);
+	if (waitpid (w->pid, &res, 0) == -1) {
+		if (errno == EINTR) {
+			msg_info ("terminate worker %P with SIGKILL", w->pid);
+			kill (w->pid, SIGKILL);
+			got_alarm = 1;
+		}
+	}
+
+	msg_info ("%s process %P terminated %s", process_to_str (w->type), w->pid,
+			got_alarm ? "hardly" : "softly");
 	g_free (w->cf);
 	g_free (w);
 
@@ -1023,6 +1058,17 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 	}
 
+	/* Restore some signals */
+	sigemptyset (&signals.sa_mask);
+	sigaddset (&signals.sa_mask, SIGALRM);
+	sigaddset (&signals.sa_mask, SIGINT);
+	sigaddset (&signals.sa_mask, SIGTERM);
+	sigaction (SIGALRM, &signals, NULL);
+	sigaction (SIGTERM, &signals, NULL);
+	sigaction (SIGINT, &signals, NULL);
+	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
+	/* Set alarm for hard termination */
+	set_alarm (HARD_TERMINATION_TIME);
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd->workers, wait_for_workers, NULL);
 
