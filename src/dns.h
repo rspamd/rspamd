@@ -49,7 +49,12 @@ struct rspamd_dns_resolver {
 	struct dns_k_permutor *permutor;	/**< permutor for randomizing request id	*/
 	guint request_timeout;
 	guint max_retransmits;
+	guint max_errors;
 	memory_pool_t *static_pool;			/**< permament pool (cfg_pool)				*/
+	gboolean throttling;				/**< dns servers are busy					*/
+	guint errors;						/**< resolver errors						*/
+	struct timeval throttling_time;		/**< throttling time						*/
+	struct event throttling_event;		/**< throttling event						*/
 };
 
 struct dns_header;

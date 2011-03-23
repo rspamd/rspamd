@@ -184,6 +184,18 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, dns_retransmits),
 				NULL
 			},
+			{
+				"dns_throttling_errors",
+				xml_handle_uint32,
+				G_STRUCT_OFFSET (struct config_file, dns_throttling_errors),
+				NULL
+			},
+			{
+				"dns_throttling_time",
+				xml_handle_seconds,
+				G_STRUCT_OFFSET (struct config_file, dns_throttling_time),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR

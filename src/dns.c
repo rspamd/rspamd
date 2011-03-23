@@ -546,7 +546,7 @@ send_dns_request (struct rspamd_dns_request *req)
 		} 
 		else {
 			msg_err ("send failed: %s for server %s", strerror (errno), req->server->name);
-			upstream_fail (&req->server->up, time (NULL));
+			upstream_fail (&req->server->up, req->time);
 			return -1;
 		}
 	}
@@ -964,6 +964,28 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver, struc
 }
 
 static void
+dns_throttling_cb (gint fd, short what, void *arg)
+{
+	struct rspamd_dns_resolver *resolver = arg;
+
+	resolver->throttling = FALSE;
+	resolver->errors = 0;
+	msg_info ("stop DNS throttling after %d seconds", (int)resolver->throttling_time.tv_sec);
+}
+
+static void
+dns_check_throttling (struct rspamd_dns_resolver *resolver)
+{
+	if (resolver->errors > resolver->max_errors) {
+		msg_info ("starting DNS throttling after %ud errors", resolver->errors);
+		/* Init throttling timeout */
+		resolver->throttling = TRUE;
+		evtimer_set (&resolver->throttling_event, dns_throttling_cb, resolver);
+		event_add (&resolver->throttling_event, &resolver->throttling_time);
+	}
+}
+
+static void
 dns_read_cb (gint fd, short what, void *arg)
 {
 	struct rspamd_dns_resolver *resolver = arg;
@@ -978,6 +1000,10 @@ dns_read_cb (gint fd, short what, void *arg)
 	r = read (fd, in, sizeof (in));
 	if (r > sizeof (struct dns_header) + sizeof (struct dns_query)) {
 		if ((rep = dns_parse_reply (in, r, resolver, &req)) != NULL) {
+			/* Decrease errors count */
+			if (rep->request->resolver->errors > 0) {
+				rep->request->resolver->errors --;
+			}
 			upstream_ok (&rep->request->server->up, rep->request->time);
 			rep->request->func (rep, rep->request->arg);
 		}
@@ -1001,12 +1027,14 @@ dns_timer_cb (gint fd, short what, void *arg)
 		upstream_fail (&rep->request->server->up, rep->request->time);
 		remove_normal_event (req->session, dns_fin_cb, req);
 		req->func (rep, req->arg);
+		dns_check_throttling (req->resolver);
+		req->resolver->errors ++;
 		return;
 	}
 	/* Select other server */
 	req->server = (struct rspamd_dns_server *)get_upstream_round_robin (req->resolver->servers, 
 			req->resolver->servers_num, sizeof (struct rspamd_dns_server),
-			time (NULL), DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+			req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 	if (req->server == NULL) {
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
@@ -1065,7 +1093,8 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 			rep->code = DNS_RC_SERVFAIL;
 			upstream_fail (&rep->request->server->up, rep->request->time);
 			req->func (rep, req->arg);
-
+			req->resolver->errors ++;
+			dns_check_throttling (req->resolver);
 			return;
 		}
 		r = send_dns_request (req);
@@ -1100,6 +1129,11 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	struct in_addr addr;
 	const gchar *name, *service, *proto;
 	gint r;
+
+	/* Check throttling */
+	if (resolver->throttling) {
+		return FALSE;
+	}
 
 	req = memory_pool_alloc (pool, sizeof (struct rspamd_dns_request));
 	req->pool = pool;
@@ -1248,6 +1282,9 @@ dns_resolver_init (struct config_file *cfg)
 	new->static_pool = cfg->cfg_pool;
 	new->request_timeout = cfg->dns_timeout;
 	new->max_retransmits = cfg->dns_retransmits;
+	new->max_errors = cfg->dns_throttling_errors;
+	new->throttling_time.tv_sec = cfg->dns_throttling_time / 1000;
+	new->throttling_time.tv_usec = (cfg->dns_throttling_time - new->throttling_time.tv_sec * 1000) * 1000;
 
 	if (cfg->nameservers == NULL) {
 		/* Parse resolv.conf */

@@ -320,6 +320,8 @@ struct config_file {
 
 	guint32 dns_timeout;							/**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;						/**< maximum retransmits count							*/
+	guint32 dns_throttling_errors;					/**< maximum errors for starting resolver throttling	*/
+	guint32 dns_throttling_time;					/**< time in seconds for DNS throttling					*/
 	GList *nameservers;								/**< list of nameservers or NULL to parse resolv.conf	*/
 };
 

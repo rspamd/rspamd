@@ -170,7 +170,9 @@ init_defaults (struct config_file *cfg)
 
 	cfg->dns_timeout = 1000;
 	cfg->dns_retransmits = 5;
-
+	/* After 20 errors do throttling for 10 seconds */
+	cfg->dns_throttling_errors = 20;
+	cfg->dns_throttling_time = 10000;
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
