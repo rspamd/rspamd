@@ -976,7 +976,7 @@ dns_throttling_cb (gint fd, short what, void *arg)
 static void
 dns_check_throttling (struct rspamd_dns_resolver *resolver)
 {
-	if (resolver->errors > resolver->max_errors) {
+	if (resolver->errors > resolver->max_errors && !resolver->throttling) {
 		msg_info ("starting DNS throttling after %ud errors", resolver->errors);
 		/* Init throttling timeout */
 		resolver->throttling = TRUE;
