@@ -605,8 +605,8 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	if (got_alarm) {
 		got_alarm = 0;
-		/* Set alarm for hard termination */
-		set_alarm (HARD_TERMINATION_TIME);
+		/* Set alarm for hard termination but with less time */
+		set_alarm (HARD_TERMINATION_TIME / 10);
 	}
 
 	if (waitpid (w->pid, &res, 0) == -1) {

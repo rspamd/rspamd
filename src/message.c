@@ -945,7 +945,10 @@ process_message (struct worker_task *task)
 	GMimePart                      *part;
 	GMimeDataWrapper               *wrapper;
 	struct received_header         *recv;
-	gchar                           *mid;
+	gchar                          *mid, *url_str, *p, *end;
+	struct uri                     *subject_url;
+	gsize                           len;
+	gint                            pos, rc;
 
 	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->begin;
@@ -1088,6 +1091,44 @@ process_message (struct worker_task *task)
 			}
 		}
 #endif
+	}
+
+	/* Parse urls inside Subject header */
+	cur = message_get_header (task->task_pool, task->message, "Subject", FALSE);
+	if (cur) {
+		p = cur->data;
+		len = strlen (p);
+		end = p + len;
+
+		while (p < end) {
+			/* Search to the end of url */
+			if (url_try_text (task->task_pool, p, end - p, &pos, &url_str)) {
+				if (url_str != NULL) {
+					subject_url = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
+					if (subject_url != NULL) {
+						/* Try to parse url */
+						rc = parse_uri (subject_url, url_str, task->task_pool);
+						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) &&
+								subject_url->hostlen > 0) {
+							if (subject_url->protocol != PROTOCOL_MAILTO) {
+								if (!g_tree_lookup (task->urls, subject_url)) {
+									g_tree_insert (task->urls, subject_url, subject_url);
+								}
+							}
+						}
+						else if (rc != URI_ERRNO_OK) {
+							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
+						}
+					}
+				}
+			}
+			else {
+				break;
+			}
+			p += pos;
+		}
+		/* Free header's list */
+		g_list_free (cur);
 	}
 
 	return 0;

@@ -283,13 +283,13 @@ local function add_multimap_rule(params)
 	if string.find(newrule['map'], '^cdb://.*$') then
 		local test = cdb.create(newrule['map'])
 		newrule['hash'] = cdb.create(newrule['map'])
+		newrule['cdb'] = true
 		if newrule['hash'] then
 			table.insert(rules, newrule)
 			return newrule
 		else
 			rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 		end
-		newrule['cdb'] = true
 	else
 		if newrule['type'] == 'ip' then
 			newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])

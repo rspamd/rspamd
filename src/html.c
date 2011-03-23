@@ -728,7 +728,13 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 							}
 						}
 						/* Compare parts and check for phished hostname */
-						if (c != NULL && g_ascii_strncasecmp (p, c, len) != 0) {
+						if (c != NULL) {
+							if (g_ascii_strncasecmp (p, c, len) != 0) {
+								href_url->is_phished = TRUE;
+								href_url->phished_url = new;
+							}
+						}
+						else {
 							href_url->is_phished = TRUE;
 							href_url->phished_url = new;
 						}
