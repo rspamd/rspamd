@@ -1026,9 +1026,11 @@ dns_timer_cb (gint fd, short what, void *arg)
 		rep->code = DNS_RC_SERVFAIL;
 		upstream_fail (&rep->request->server->up, rep->request->time);
 		remove_normal_event (req->session, dns_fin_cb, req);
-		req->func (rep, req->arg);
 		dns_check_throttling (req->resolver);
 		req->resolver->errors ++;
+
+		req->func (rep, req->arg);
+
 		return;
 	}
 	/* Select other server */
@@ -1092,9 +1094,11 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
 			upstream_fail (&rep->request->server->up, rep->request->time);
-			req->func (rep, req->arg);
 			req->resolver->errors ++;
 			dns_check_throttling (req->resolver);
+
+			req->func (rep, req->arg);
+
 			return;
 		}
 		r = send_dns_request (req);
