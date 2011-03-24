@@ -282,6 +282,35 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 
 }
 
+/*
+ * Pre-load mmaped file into memory
+ */
+static void
+statfile_preload (stat_file_t *file)
+{
+	guint8                         *pos, *end, t;
+	gsize                           size;
+
+	pos = (guint8 *)file->map;
+	end = (guint8 *)file->map + file->len;
+
+	if (madvise (pos, end - pos, MADV_SEQUENTIAL) == -1) {
+		msg_info ("madvise failed: %s", strerror (errno));
+	}
+	else {
+		/* Load pages of file */
+#ifdef HAVE_GETPAGESIZE
+		size = getpagesize ();
+#else
+		size = sysconf (_SC_PAGESIZE);
+#endif
+		while (pos < end) {
+			t = *pos;
+			pos += size;
+		}
+	}
+}
+
 stat_file_t                    *
 statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboolean forced)
 {
@@ -359,6 +388,8 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	new_file->open_time = time (NULL);
 	new_file->access_time = new_file->open_time;
 	new_file->lock = memory_pool_get_mutex (pool->pool);
+
+	statfile_preload (new_file);
 
 	memory_pool_unlock_mutex (pool->lock);
 
