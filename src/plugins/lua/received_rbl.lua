@@ -9,47 +9,22 @@
 local symbol = 'RECEIVED_RBL'
 local rbls = {}
 
-function dns_cb(task, to_resolve, results, err)
+function dns_cb(task, to_resolve, results, err, sym)
 	if results then
-		local _,_,o4,o3,o2,o1,in_rbl = string.find(to_resolve, '(%d+)%.(%d+)%.(%d+)%.(%d+)%.(.+)')
+		local _,_,o4,o3,o2,o1,in_rbl = string.find(to_resolve, '^(%d+)%.(%d+)%.(%d+)%.(%d+)%.(.+)$')
 		local ip = o1 .. '.' .. o2 .. '.' .. o3 .. '.' .. o4
-		-- Find incoming rbl in rbls list
-		for _,rbl in ipairs(rbls) do
-			if rbl == in_rbl then
-				task:insert_result(symbol, 1, rbl .. ': ' .. ip)
-			else 
-				local s, _ = string.find(rbl, in_rbl)
-				if s then
-					s, _ = string.find(rbl, ':')
-					if s then
-						task:insert_result(string.sub(rbl, s + 1, -1), 1, ip)
-					else
-						task:insert_result(symbol, 1, rbl .. ': ' .. ip)
-					end
-				end
-			end
-		end
+		task:insert_result(sym, 1, in_rbl .. ': ' .. ip)
 	end
 end
 
 function received_cb (task)
 	local recvh = task:get_received_headers()
     for _,rh in ipairs(recvh) do
-        for k,v in pairs(rh) do
-			if k == 'real_ip' then
-				local _,_,o1,o2,o3,o4 = string.find(v, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
-				for _,rbl in ipairs(rbls) do
-					local rbl_str = ''
-					local rb_s,_ = string.find(rbl, ':')
-					if rb_s then
-						-- We have rbl in form some_rbl:SYMBOL, so get first part
-						local actual_rbl = string.sub(rbl, 1, rb_s - 1)
-						rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. actual_rbl
-					else
-						rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rbl
-					end
-					task:resolve_dns_a(rbl_str, 'dns_cb')
-				end
+		if rh['real_ip'] then
+			local _,_,o1,o2,o3,o4 = string.find(rh['real_ip'], '^(%d+)%.(%d+)%.(%d+)%.(%d+)$')
+			for _,rbl in ipairs(rbls) do
+				rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rbl['rbl']
+				task:resolve_dns_a(rbl_str, 'dns_cb', rbl['symbol'])
 			end
         end
     end
@@ -68,20 +43,24 @@ local opts =  rspamd_config:get_all_opt('received_rbl')
 if opts then
     if opts['symbol'] then
         symbol = opts['symbol']
-        
+        local rbl_t = {}
         if opts['rbl'] then
 			if type(opts['rbl']) == 'table' then
-				rbls = opts['rbl']
+				rbl_t = opts['rbl']
 			else
-				rbls[1] = opts['rbl']
+				rbl_t[1] = opts['rbl']
 			end
         end
-        for _,rbl in ipairs(rbls) do
+        for _,rbl in ipairs(rbl_t) do
         	local s, _ = string.find(rbl, ':')
 			if s then
+				local sym = string.sub(rbl, s + 1, -1)
 				if type(rspamd_config.get_api_version) ~= 'nil' then
-					rspamd_config:register_virtual_symbol(string.sub(rbl, s + 1, -1), 1)
+					rspamd_config:register_virtual_symbol(sym, 1)
 				end
+				table.insert(rbls, {symbol = sym, rbl = rbl})
+			else
+				table.insert(rbls, {symbol = symbol, rbl = rbl})
 			end
 		end
         -- Register symbol's callback
