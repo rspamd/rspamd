@@ -605,6 +605,7 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 			param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 			debug_task ("send surbl dns request %s", surbl_req);
 			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback, (void *)param, DNS_REQUEST_A, surbl_req)) {
+				task->dns_requests ++;
 				param->task->save.saved++;
 			}
 		}

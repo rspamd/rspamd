@@ -571,6 +571,7 @@ lua_task_resolve_dns_a (lua_State * L)
 			return 0;
 		}
 		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_A, cd->to_resolve)) {
+			task->dns_requests ++;
 			task->save.saved++;
 		}
 	}
@@ -612,6 +613,7 @@ lua_task_resolve_dns_txt (lua_State * L)
 			return 0;
 		}
 		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_TXT, cd->to_resolve)) {
+			task->dns_requests ++;
 			task->save.saved++;
 		}
 	}
@@ -655,6 +657,7 @@ lua_task_resolve_dns_ptr (lua_State * L)
 			return 0;
 		}
 		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_PTR, ina)) {
+			task->dns_requests ++;
 			task->save.saved++;
 		}
 	}

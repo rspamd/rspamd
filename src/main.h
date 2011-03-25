@@ -229,6 +229,8 @@ struct worker_task {
 	gboolean (*fin_callback)(void *arg);						/**< calback for filters finalizing					*/
 	void *fin_arg;												/**< argument for fin callback						*/
 
+	guint32 dns_requests;										/**< number of DNS requests per this task			*/
+
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 };
 
