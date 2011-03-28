@@ -539,12 +539,10 @@ smtp_make_delay (struct smtp_session *session)
 		tv = memory_pool_alloc (session->pool, sizeof (struct timeval));
 		if (session->ctx->delay_jitter != 0) {
 			jitter = g_random_int_range (0, session->ctx->delay_jitter);
-			tv->tv_sec = (session->ctx->smtp_delay + jitter) / 1000;
-			tv->tv_usec = (session->ctx->smtp_delay + jitter - tv->tv_sec * 1000) * 1000;
+			msec_to_tv (session->ctx->smtp_delay + jitter, tv);
 		}
 		else {
-			tv->tv_sec = session->ctx->smtp_delay / 1000;
-			tv->tv_usec = (session->ctx->smtp_delay - tv->tv_sec * 1000) * 1000;
+			msec_to_tv (session->ctx->smtp_delay, tv);
 		}
 
 		evtimer_set (tev, smtp_delay_handler, session);
@@ -944,8 +942,7 @@ config_smtp_worker (struct rspamd_worker *worker)
 	gchar                          *value;
 
 	/* Init timeval */
-	ctx->smtp_timeout.tv_sec = ctx->smtp_timeout_raw / 1000;
-	ctx->smtp_timeout.tv_usec = (ctx->smtp_timeout_raw - ctx->smtp_timeout.tv_sec * 1000) * 1000;
+	msec_to_tv (ctx->smtp_timeout_raw, &ctx->smtp_timeout);
 
 	/* Init upstreams */
 	if ((value = ctx->upstreams_str) != NULL) {

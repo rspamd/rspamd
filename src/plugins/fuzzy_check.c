@@ -57,7 +57,7 @@
 #define DEFAULT_UPSTREAM_DEAD_TIME 300
 #define DEFAULT_UPSTREAM_MAXERRORS 10
 
-#define IO_TIMEOUT 5
+#define DEFAULT_IO_TIMEOUT 500
 #define DEFAULT_PORT 11335
 
 struct storage_server {
@@ -92,6 +92,7 @@ struct fuzzy_ctx {
 	gint32                          min_bytes;
 	gint32                          min_height;
 	gint32                          min_width;
+	guint32                         io_timeout;
 };
 
 struct fuzzy_client_session {
@@ -346,6 +347,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("fuzzy_check", "min_height", MODULE_OPT_TYPE_UINT);
 	register_module_opt ("fuzzy_check", "min_width", MODULE_OPT_TYPE_UINT);
 	register_module_opt ("fuzzy_check", "min_symbols", MODULE_OPT_TYPE_UINT);
+	register_module_opt ("fuzzy_check", "timeout", MODULE_OPT_TYPE_TIME);
 
 	return 0;
 }
@@ -392,6 +394,12 @@ fuzzy_check_module_config (struct config_file *cfg)
 	}
 	else {
 		fuzzy_module_ctx->min_width = 0;
+	}
+	if ((value = get_module_opt (cfg, "fuzzy_check", "timeout")) != NULL) {
+		fuzzy_module_ctx->io_timeout = parse_time (value, TIME_SECONDS);
+	}
+	else {
+		fuzzy_module_ctx->io_timeout = DEFAULT_IO_TIMEOUT;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "mime_types")) != NULL) {
 		fuzzy_module_ctx->mime_types = parse_mime_types (value);
@@ -625,8 +633,7 @@ register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
 			/* Create session for a socket */
 			session = memory_pool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
 			event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback, session);
-			session->tv.tv_sec = IO_TIMEOUT;
-			session->tv.tv_usec = 0;
+			msec_to_tv (fuzzy_module_ctx->io_timeout, &session->tv);
 			session->state = 0;
 			session->h = h;
 			session->task = task;
@@ -753,8 +760,7 @@ register_fuzzy_controller_call (struct controller_session *session, struct worke
 			/* Socket is made, create session */
 			s = memory_pool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
 			event_set (&s->ev, sock, EV_WRITE, fuzzy_learn_callback, s);
-			s->tv.tv_sec = IO_TIMEOUT;
-			s->tv.tv_usec = 0;
+			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
 			s->task = task;
 			s->h = memory_pool_alloc (session->session_pool, sizeof (fuzzy_hash_t));
 			memcpy (s->h, h, sizeof (fuzzy_hash_t));

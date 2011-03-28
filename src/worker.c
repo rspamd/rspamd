@@ -52,6 +52,9 @@ extern PerlInterpreter         *perl_interpreter;
 #   include <glib/gprintf.h>
 #endif
 
+/* 60 seconds for worker's IO */
+#define DEFAULT_WORKER_IO_TIMEOUT 60000
+
 #ifndef BUILD_STATIC
 
 #define MODULE_INIT_FUNC "module_init"
@@ -60,15 +63,14 @@ extern PerlInterpreter         *perl_interpreter;
 #define MODULE_AFTER_CONNECT_FUNC "after_connect"
 #define MODULE_PARSE_LINE_FUNC "parse_line"
 
-struct custom_filter
-{
-  gchar                          *filename;	/*< filename           */
-  GModule                        *handle;	/*< returned by dlopen */
-  void                            (*init_func) (struct config_file * cfg);	/*< called at start of worker */
-  void                           *(*before_connect) (void);	/*< called when clients connects */
-                                  gboolean (*process_line) (const gchar * line, size_t len, gchar ** output, void *user_data);	/*< called when client send data line */
-  void                            (*after_connect) (gchar ** output, gchar ** log_line, void *user_data);	/*< called when client disconnects */
-  void                            (*fin_func) (void);
+struct custom_filter {
+	gchar                          *filename;	/*< filename           */
+	GModule                        *handle;	/*< returned by dlopen */
+	void                            (*init_func) (struct config_file * cfg);	/*< called at start of worker */
+	void                           *(*before_connect) (void);	/*< called when clients connects */
+	gboolean (*process_line) (const gchar * line, size_t len, gchar ** output, void *user_data);	/*< called when client send data line */
+	void                            (*after_connect) (gchar ** output, gchar ** log_line, void *user_data);	/*< called when client disconnects */
+	void                            (*fin_func) (void);
 };
 
 #endif
@@ -76,16 +78,16 @@ struct custom_filter
 /*
  * Worker's context
  */
-struct rspamd_worker_ctx
-{
-  struct timeval                  io_tv;
-  /* Detect whether this worker is mime worker */
-  gboolean                        is_mime;
-  /* Detect whether this worker is mime worker */
-  gboolean                        is_custom;
-  GList                          *custom_filters;
-  /* DNS resolver */
-  struct rspamd_dns_resolver     *resolver;
+struct rspamd_worker_ctx {
+	guint32                         timeout;
+	struct timeval                  io_tv;
+	/* Detect whether this worker is mime worker */
+	gboolean                        is_mime;
+	/* Detect whether this worker is mime worker */
+	gboolean                        is_custom;
+	GList                          *custom_filters;
+	/* DNS resolver */
+	struct rspamd_dns_resolver     *resolver;
 };
 
 static gboolean                 write_socket (void *arg);
@@ -603,8 +605,7 @@ accept_socket (gint fd, short what, void *arg)
 	new_task->is_mime = ctx->is_mime;
 	worker->srv->stat->connections_count++;
 	new_task->resolver = ctx->resolver;
-	ctx->io_tv.tv_sec = WORKER_IO_TIMEOUT;
-	ctx->io_tv.tv_usec = 0;
+	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	/* Set up dispatcher */
 	new_task->dispatcher =
@@ -737,7 +738,10 @@ init_worker (void)
 	ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
 
 	ctx->is_mime = TRUE;
+	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
+
 	register_worker_opt (TYPE_WORKER, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
+	register_worker_opt (TYPE_WORKER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
 
 	return ctx;
 }

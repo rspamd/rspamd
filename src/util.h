@@ -173,4 +173,9 @@ const gchar * process_to_str (enum process_type type);
  */
 enum process_type str_to_process (const gchar *str);
 
+/*
+ * Convert milliseconds to timeval fields
+ */
+#define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = ((msec) - (tv)->tv_sec * 1000) * 1000; } while(0)
+
 #endif

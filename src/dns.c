@@ -1198,10 +1198,8 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	}
 
 	/* Fill timeout */
-	req->tv.tv_sec = resolver->request_timeout / 1000;
-	req->tv.tv_usec = (resolver->request_timeout - req->tv.tv_sec * 1000) * 1000;
+	msec_to_tv (resolver->request_timeout, &req->tv);
 	
-
 	/* Now send request to server */
 	r = send_dns_request (req);
 
@@ -1287,8 +1285,7 @@ dns_resolver_init (struct config_file *cfg)
 	new->request_timeout = cfg->dns_timeout;
 	new->max_retransmits = cfg->dns_retransmits;
 	new->max_errors = cfg->dns_throttling_errors;
-	new->throttling_time.tv_sec = cfg->dns_throttling_time / 1000;
-	new->throttling_time.tv_usec = (cfg->dns_throttling_time - new->throttling_time.tv_sec * 1000) * 1000;
+	msec_to_tv (cfg->dns_throttling_time, &new->throttling_time);
 
 	if (cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
