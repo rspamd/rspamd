@@ -61,7 +61,7 @@ struct custom_command {
  * @param line line of user's input
  * @return 0 if line was successfully parsed and -1 if we have protocol error
  */
-gint read_rspamd_input_line (struct worker_task *task, f_str_t *line);
+gboolean read_rspamd_input_line (struct worker_task *task, f_str_t *line);
 
 /**
  * Write reply for specified task command

@@ -179,6 +179,8 @@ struct worker_task {
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	
 	gint sock;													/**< socket descriptor								*/
     gboolean is_mime;                                           /**< if this task is mime task                      */
+    gboolean is_json;											/**< output is JSON									*/
+    gboolean is_http;											/**< output is HTTP									*/
     gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
 	gchar *helo;													/**< helo header value								*/
 	gchar *from;													/**< from header value								*/

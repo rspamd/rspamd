@@ -680,6 +680,33 @@ convert_old_config (struct rspamd_main *rspamd)
 }
 #endif
 
+static void
+preload_statfiles (struct rspamd_main *rspamd)
+{
+	struct classifier_config       *cf;
+	struct statfile                *st;
+	stat_file_t                    *stf;
+	GList                          *cur_cl, *cur_st;
+
+	cur_cl = rspamd->cfg->classifiers;
+	while (cur_cl) {
+		/* Open all statfiles */
+		cf = cur_cl->data;
+
+		cur_st = cf->statfiles;
+		while (cur_st) {
+			st = cur_st->data;
+			stf = statfile_pool_open (rspamd->statfile_pool, st->path, st->size, FALSE);
+			if (stf == NULL) {
+				msg_warn ("preload of %s from %s failed", st->symbol, st->path);
+			}
+			cur_st = g_list_next (cur_st);
+		}
+
+		cur_cl = g_list_next (cur_cl);
+	}
+}
+
 static gboolean
 load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 {
@@ -989,6 +1016,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Flush log */
 	flush_log_buf ();
+
+	/* Preload all statfiles */
+	preload_statfiles (rspamd);
 
 	/* Spawn workers */
 	rspamd->workers = g_hash_table_new (g_direct_hash, g_direct_equal);

@@ -81,10 +81,14 @@ struct custom_filter {
 struct rspamd_worker_ctx {
 	guint32                         timeout;
 	struct timeval                  io_tv;
-	/* Detect whether this worker is mime worker */
+	/* Detect whether this worker is mime worker 	*/
 	gboolean                        is_mime;
-	/* Detect whether this worker is mime worker */
+	/* Detect whether this worker is custom worker 	*/
 	gboolean                        is_custom;
+	/* HTTP worker									*/
+	gboolean                        is_http;
+	/* JSON output     								*/
+	gboolean                        is_json;
 	GList                          *custom_filters;
 	/* DNS resolver */
 	struct rspamd_dns_resolver     *resolver;
@@ -327,7 +331,7 @@ read_socket (f_str_t * in, void *arg)
 			}
 		}
 		else {
-			if (read_rspamd_input_line (task, in) != 0) {
+			if (!read_rspamd_input_line (task, in)) {
 				task->last_error = "Read error";
 				task->error_code = RSPAMD_NETWORK_ERROR;
 				task->state = WRITE_ERROR;
@@ -603,6 +607,9 @@ accept_socket (gint fd, short what, void *arg)
 
 	new_task->sock = nfd;
 	new_task->is_mime = ctx->is_mime;
+	new_task->is_json = ctx->is_json;
+	new_task->is_http = ctx->is_http;
+
 	worker->srv->stat->connections_count++;
 	new_task->resolver = ctx->resolver;
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
@@ -741,6 +748,8 @@ init_worker (void)
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
 	register_worker_opt (TYPE_WORKER, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
+	register_worker_opt (TYPE_WORKER, "http", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http));
+	register_worker_opt (TYPE_WORKER, "json", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json));
 	register_worker_opt (TYPE_WORKER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
 
 	return ctx;
