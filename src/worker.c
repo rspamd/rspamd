@@ -89,6 +89,8 @@ struct rspamd_worker_ctx {
 	gboolean                        is_http;
 	/* JSON output     								*/
 	gboolean                        is_json;
+	/* Allow learning throught worker				*/
+	gboolean                        allow_learn;
 	GList                          *custom_filters;
 	/* DNS resolver */
 	struct rspamd_dns_resolver     *resolver;
@@ -318,6 +320,7 @@ read_socket (f_str_t * in, void *arg)
 	struct worker_task             *task = (struct worker_task *) arg;
 	struct rspamd_worker_ctx       *ctx;
 	ssize_t                         r;
+	GError                         *err = NULL;
 
 	ctx = task->worker->ctx;
 	switch (task->state) {
@@ -332,8 +335,10 @@ read_socket (f_str_t * in, void *arg)
 		}
 		else {
 			if (!read_rspamd_input_line (task, in)) {
-				task->last_error = "Read error";
-				task->error_code = RSPAMD_NETWORK_ERROR;
+				if (!task->last_error) {
+					task->last_error = "Read error";
+					task->error_code = RSPAMD_NETWORK_ERROR;
+				}
 				task->state = WRITE_ERROR;
 			}
 		}
@@ -359,22 +364,38 @@ read_socket (f_str_t * in, void *arg)
 			task->state = WRITE_REPLY;
 			return write_socket (task);
 		}
-		r = process_filters (task);
-		if (r == -1) {
-			task->last_error = "Filter processing error";
-			task->error_code = RSPAMD_FILTER_ERROR;
-			task->state = WRITE_ERROR;
+		else if (task->cmd == CMD_LEARN) {
+			if (!learn_task (task->statfile, task, &err)) {
+				task->last_error = memory_pool_strdup (task->task_pool, err->message);
+				task->error_code = err->code;
+				g_error_free (err);
+				task->state = WRITE_ERROR;
+			}
+			else {
+				task->last_error = "learn ok";
+				task->error_code = 0;
+				task->state = WRITE_REPLY;
+			}
 			return write_socket (task);
-		}
-		else if (r == 0) {
-			task->state = WAIT_FILTER;
-			rspamd_dispatcher_pause (task->dispatcher);
 		}
 		else {
-			process_statfiles (task);
-			lua_call_post_filters (task);
-			task->state = WRITE_REPLY;
-			return write_socket (task);
+			r = process_filters (task);
+			if (r == -1) {
+				task->last_error = "Filter processing error";
+				task->error_code = RSPAMD_FILTER_ERROR;
+				task->state = WRITE_ERROR;
+				return write_socket (task);
+			}
+			else if (r == 0) {
+				task->state = WAIT_FILTER;
+				rspamd_dispatcher_pause (task->dispatcher);
+			}
+			else {
+				process_statfiles (task);
+				lua_call_post_filters (task);
+				task->state = WRITE_REPLY;
+				return write_socket (task);
+			}
 		}
 		break;
 	case WRITE_REPLY:
@@ -515,9 +536,8 @@ construct_task (struct rspamd_worker *worker)
 {
 	struct worker_task             *new_task;
 
-	new_task = g_malloc (sizeof (struct worker_task));
+	new_task = g_malloc0 (sizeof (struct worker_task));
 
-	bzero (new_task, sizeof (struct worker_task));
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;
 	new_task->cfg = worker->srv->cfg;
@@ -605,10 +625,12 @@ accept_socket (gint fd, short what, void *arg)
 				sizeof (struct in_addr));
 	}
 
+	/* Copy some variables */
 	new_task->sock = nfd;
 	new_task->is_mime = ctx->is_mime;
 	new_task->is_json = ctx->is_json;
 	new_task->is_http = ctx->is_http;
+	new_task->allow_learn = ctx->allow_learn;
 
 	worker->srv->stat->connections_count++;
 	new_task->resolver = ctx->resolver;
@@ -750,6 +772,7 @@ init_worker (void)
 	register_worker_opt (TYPE_WORKER, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
 	register_worker_opt (TYPE_WORKER, "http", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http));
 	register_worker_opt (TYPE_WORKER, "json", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json));
+	register_worker_opt (TYPE_WORKER, "allow_learn", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn));
 	register_worker_opt (TYPE_WORKER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
 
 	return ctx;

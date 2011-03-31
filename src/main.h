@@ -95,7 +95,7 @@ struct rspamd_main {
 
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
-    GHashTable *workers;                                        /**< workers pool indexed by pid                    */
+	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
 };
 
 struct counter_data {
@@ -117,9 +117,9 @@ struct save_point {
  * Union that would be used for storing sockaddrs
  */
 union sa_union {
-  struct sockaddr_storage ss;
-  struct sockaddr_in s4;
-  struct sockaddr_in6 s6;
+	struct sockaddr_storage ss;
+	struct sockaddr_in s4;
+	struct sockaddr_in6 s6;
 };
 
 /**
@@ -151,9 +151,9 @@ struct controller_session {
 	GList *parts;												/**< extracted mime parts							*/
 	gint in_class;												/**< positive or negative learn						*/
 	void (*other_handler)(struct controller_session *session, 
-								f_str_t *in);					/**< other command handler to execute at the end of processing */
+			f_str_t *in);					/**< other command handler to execute at the end of processing */
 	void *other_data;											/**< and its data 									*/
-    struct rspamd_async_session* s;								/**< async session object							*/
+	struct rspamd_async_session* s;								/**< async session object							*/
 };
 
 typedef void (*controller_func_t)(gchar **args, struct controller_session *session);
@@ -178,10 +178,12 @@ struct worker_task {
 	enum rspamd_command cmd;									/**< command										*/
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	
 	gint sock;													/**< socket descriptor								*/
-    gboolean is_mime;                                           /**< if this task is mime task                      */
-    gboolean is_json;											/**< output is JSON									*/
-    gboolean is_http;											/**< output is HTTP									*/
-    gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
+	gboolean is_mime;                                           /**< if this task is mime task                      */
+	gboolean is_json;											/**< output is JSON									*/
+	gboolean is_http;											/**< output is HTTP									*/
+	gboolean allow_learn;										/**< allow learning									*/
+	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
+
 	gchar *helo;													/**< helo header value								*/
 	gchar *from;													/**< from header value								*/
 	gchar *queue_id;												/**< queue id if specified							*/
@@ -193,9 +195,10 @@ struct worker_task {
 	gchar *deliver_to;											/**< address to deliver								*/
 	gchar *user;													/**< user to deliver								*/
 	gchar *subject;												/**< subject (for non-mime)							*/
+	gchar *statfile;											/**< statfile for learning							*/
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
-    struct rspamd_async_session* s;								/**< async session object							*/
+	struct rspamd_async_session* s;								/**< async session object							*/
 	gint parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/
 	GMimeObject *parser_parent_part;							/**< current parent part							*/
@@ -209,9 +212,9 @@ struct worker_task {
 	GList *images;												/**< list of images									*/
 	GList *raw_headers_list;									/**< list of raw headers							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
-																 *    metric's name									*/
+	 *    metric's name									*/
 	GHashTable *tokens;											/**< hash table of tokens indexed by tokenizer
-																 *    pointer 										*/
+	 *    pointer 										*/
 	GList *messages;											/**< list of messages that would be reported		*/
 	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
 	struct config_file *cfg;									/**< pointer to config object						*/

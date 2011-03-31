@@ -64,6 +64,11 @@
 #define MSG_CMD_PROCESS "process"
 
 /*
+ * Learn specified statfile using message
+ */
+#define MSG_CMD_LEARN "learn"
+
+/*
  * spamassassin greeting:
  */
 #define SPAMC_GREETING "SPAMC"
@@ -81,6 +86,7 @@
 #define NRCPT_HEADER "Recipient-Number"
 #define RCPT_HEADER "Rcpt"
 #define SUBJECT_HEADER "Subject"
+#define STATFILE_HEADER "Statfile"
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 #define USER_HEADER "User"
@@ -198,6 +204,22 @@ parse_check_command (struct worker_task *task, gchar *token)
 			return FALSE;
 		}
 		break;
+	case 'l':
+	case 'L':
+		if (g_ascii_strcasecmp (token + 1, MSG_CMD_LEARN + 1) == 0) {
+			if (task->allow_learn) {
+				task->cmd = CMD_LEARN;
+			}
+			else {
+				msg_info ("learning is disabled");
+				return FALSE;
+			}
+		}
+		else {
+			debug_task ("bad command: %s", token);
+			return FALSE;
+		}
+		break;
 	default:
 		cur = custom_commands;
 		while (cur) {
@@ -306,8 +328,8 @@ parse_http_command (struct worker_task *task, f_str_t * line)
 			}
 			else {
 				/* Copy command */
-				cmd = memory_pool_alloc (task->task_pool, p - c);
-				rspamd_strlcpy (cmd, c, p - c);
+				cmd = memory_pool_alloc (task->task_pool, p - c + 1);
+				rspamd_strlcpy (cmd, c, p - c + 1);
 				/* Skip the first '/' */
 				if (*cmd == '/') {
 					cmd ++;
@@ -379,8 +401,22 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			if (task->content_length > 0) {
-				rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_CHARACTER, task->content_length);
-				task->state = READ_MESSAGE;
+				if (task->cmd == CMD_LEARN) {
+					if (task->statfile != NULL) {
+						rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_CHARACTER, task->content_length);
+						task->state = READ_MESSAGE;
+					}
+					else {
+						task->last_error = "Unknown statfile";
+						task->error_code = RSPAMD_STATFILE_ERROR;
+						task->state = WRITE_ERROR;
+						return FALSE;
+					}
+				}
+				else {
+					rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_CHARACTER, task->content_length);
+					task->state = READ_MESSAGE;
+				}
 			}
 			else {
 				task->last_error = "Unknown content length";
@@ -527,6 +563,9 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'S':
 		if (g_ascii_strncasecmp (headern, SUBJECT_HEADER, sizeof (SUBJECT_HEADER) - 1) == 0) {
 			task->subject = memory_pool_fstrdup (task->task_pool, line);
+		}
+		else if (g_ascii_strncasecmp (headern, STATFILE_HEADER, sizeof (STATFILE_HEADER) - 1) == 0) {
+			task->statfile = memory_pool_fstrdup (task->task_pool, line);
 		}
 		else {
 			return FALSE;
@@ -1433,7 +1472,7 @@ write_reply (struct worker_task *task)
 		/* Write error message and error code to reply */
 		if (task->is_http) {
 			r = rspamd_snprintf (outbuf, sizeof (outbuf), "HTTP/1.0 400 Bad request" CRLF
-					"Connection: close" CRLF CRLF);
+					"Connection: close" CRLF CRLF "Error: %d - %s" CRLF, task->error_code, task->last_error);
 		}
 		else {
 			if (task->proto == SPAMC_PROTO) {
@@ -1469,6 +1508,19 @@ write_reply (struct worker_task *task)
 		case CMD_PING:
 			r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s 0 PONG" CRLF, 
 					(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER, rspamc_proto_str (task->proto_ver));
+			return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
+			break;
+		case CMD_LEARN:
+			if (task->is_http) {
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), "HTTP/1.0 200 Ok" CRLF
+									"Connection: close" CRLF CRLF "%s" CRLF, task->last_error);
+			}
+			else {
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s/%s 0 LEARN" CRLF CRLF "%s" CRLF,
+						(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
+						rspamc_proto_str (task->proto_ver),
+						task->last_error);
+			}
 			return rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE);
 			break;
 		case CMD_OTHER:

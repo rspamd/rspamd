@@ -13,6 +13,7 @@
 #define RSPAMD_NETWORK_ERROR 2
 #define RSPAMD_PROTOCOL_ERROR 3
 #define RSPAMD_LENGTH_ERROR 4
+#define RSPAMD_STATFILE_ERROR 5
 
 #define RSPAMC_PROTO_1_0 "1.0"
 #define RSPAMC_PROTO_1_1 "1.1"
@@ -44,6 +45,7 @@ enum rspamd_command {
 	CMD_SKIP,
 	CMD_PING,
 	CMD_PROCESS,
+	CMD_LEARN,
 	CMD_OTHER,
 };
 

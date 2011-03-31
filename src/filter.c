@@ -43,6 +43,12 @@
 #   include "lua/lua_common.h"
 #endif
 
+static inline                   GQuark
+filter_error_quark (void)
+{
+	return g_quark_from_static_string ("g-filter-error-quark");
+}
+
 static void
 insert_metric_result (struct worker_task *task, struct metric *metric, const gchar *symbol,
 		double flag, GList * opts, gboolean single)
@@ -799,6 +805,109 @@ check_metric_action (double score, double required_score, struct metric *metric)
 	}
 }
 
+gboolean
+learn_task (const gchar *statfile, struct worker_task *task, GError **err)
+{
+	GList                          *cur;
+	struct classifier_config       *cl;
+	struct classifier_ctx          *cls_ctx;
+	gchar                          *s;
+	f_str_t                         c;
+	GTree                          *tokens = NULL;
+	struct statfile                *st;
+	stat_file_t                    *stf;
+	gdouble                         sum;
+	struct mime_text_part          *part;
+
+	/* Load classifier by symbol */
+	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
+	if (cl == NULL) {
+		g_set_error (err, filter_error_quark(), 1, "Statfile %s is not configured in any classifier", statfile);
+		return FALSE;
+	}
+
+	/* If classifier has 'header' option just classify header of this type */
+	if ((s = g_hash_table_lookup (cl->opts, "header")) != NULL) {
+		cur = message_get_header (task->task_pool, task->message, s, FALSE);
+		if (cur) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+		}
+	}
+	else {
+		/* Classify message otherwise */
+		cur = g_list_first (task->text_parts);
+	}
+
+	/* Get tokens from each element */
+	while (cur) {
+		if (s != NULL) {
+			c.len = strlen (cur->data);
+			c.begin = cur->data;
+		}
+		else {
+			part = cur->data;
+			/* Skip empty parts */
+			if (part->is_empty) {
+				cur = g_list_next (cur);
+				continue;
+			}
+			c.begin = part->content->data;
+			c.len = part->content->len;
+		}
+		/* Get tokens */
+		if (!cl->tokenizer->tokenize_func (
+				cl->tokenizer, task->task_pool,
+				&c, &tokens)) {
+			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
+			return FALSE;
+		}
+		cur = g_list_next (cur);
+	}
+
+	/* Handle messages without text */
+	if (tokens == NULL) {
+		g_set_error (err, filter_error_quark(), 3, "Cannot tokenize message, no text data");
+		msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
+		return FALSE;
+	}
+
+	/* Take care of subject */
+	tokenize_subject (task, &tokens);
+
+	/* Init classifier */
+	cls_ctx = cl->classifier->init_func (
+			task->task_pool, cl);
+	/* Get or create statfile */
+	stf = get_statfile_by_symbol (task->worker->srv->statfile_pool,
+			cl, statfile, &st, TRUE);
+
+	/* Learn */
+	if (stf== NULL || !cl->classifier->learn_func (
+			cls_ctx, task->worker->srv->statfile_pool,
+			statfile, tokens, TRUE, &sum,
+			1.0, err)) {
+		if (*err) {
+			msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, (*err)->message);
+			return FALSE;
+		}
+		else {
+			g_set_error (err, filter_error_quark(), 4, "Learn failed, unknown learn classifier error");
+			msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
+			return FALSE;
+		}
+	}
+	/* Increase statistics */
+	task->worker->srv->stat->messages_learned++;
+
+	maybe_write_binlog (cl, st, stf, tokens);
+	msg_info ("learn success for message <%s>, for statfile: %s, sum weight: %.2f",
+			task->message_id, statfile, sum);
+	statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
+			DEFAULT_STATFILE_INVALIDATE_TIME,
+			DEFAULT_STATFILE_INVALIDATE_JITTER);
+
+	return TRUE;
+}
 
 /* 
  * vi:ts=4 

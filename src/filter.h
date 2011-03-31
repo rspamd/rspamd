@@ -123,6 +123,15 @@ void make_composites (struct worker_task *task);
  */
 double factor_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *unused);
 
+/*
+ * Learn specified statfile with message in a task
+ * @param statfile symbol of statfile
+ * @param task worker's task object
+ * @param err pointer to GError
+ * @return true if learn succeed
+ */
+gboolean learn_task (const gchar *statfile, struct worker_task *task, GError **err);
+
 gboolean check_action_str (const gchar *data, gint *result);
 const gchar *str_action_metric (enum rspamd_metric_action action);
 gint check_metric_action (double score, double required_score, struct metric *metric);

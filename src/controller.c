@@ -723,8 +723,6 @@ controller_read_socket (f_str_t * in, void *arg)
 {
 	struct controller_session      *session = (struct controller_session *)arg;
 	struct classifier_ctx          *cls_ctx;
-	stat_file_t                    *statfile;
-	struct statfile                *st;
 	gint                            len, i, r;
 	gchar                           *s, **params, *cmd, out_buf[128];
 	struct worker_task             *task;
@@ -733,7 +731,6 @@ controller_read_socket (f_str_t * in, void *arg)
 	GTree                          *tokens = NULL;
 	GError                         *err = NULL;
 	f_str_t                         c;
-	double                          sum;
 
 	switch (session->state) {
 	case STATE_COMMAND:
@@ -799,74 +796,14 @@ controller_read_socket (f_str_t * in, void *arg)
 			}
 			return FALSE;
 		}
-		if ((s = g_hash_table_lookup (session->learn_classifier->opts, "header")) != NULL) {
-			cur = message_get_header (task->task_pool, task->message, s, FALSE);
-			if (cur) {
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
-			}
-		}
-		else {
-			cur = g_list_first (task->text_parts);
-		}
-		while (cur) {
-			if (s != NULL) {
-				c.len = strlen (cur->data);
-				c.begin = cur->data;
-			}
-			else {
-				part = cur->data;
-				if (part->is_empty) {
-					cur = g_list_next (cur);
-					continue;
-				}
-				c.begin = part->content->data;
-				c.len = part->content->len;
-			}
-			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, tokenizer error" CRLF);
-				free_task (task, FALSE);
-				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-					return FALSE;
-				}
-				session->state = STATE_REPLY;
-				return TRUE;
-			}
-			cur = g_list_next (cur);
-		}
-		
-		/* Handle messages without text */
-		if (tokens == NULL) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, no tokens can be extracted (no text data)" CRLF END);
-			msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
-			free_task (task, FALSE);
-			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-				return FALSE;
-			}
-			session->state = STATE_REPLY;
-			return TRUE;
-		}
 
-		/* Take care of subject */
-		tokenize_subject (task, &tokens);
-
-		/* Init classifier */
-		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
-		/* Get or create statfile */
-		statfile = get_statfile_by_symbol (session->worker->srv->statfile_pool, session->learn_classifier,
-				session->learn_symbol, &st, TRUE);
-
-		if (statfile == NULL ||
-			! session->learn_classifier->classifier->learn_func (cls_ctx, session->worker->srv->statfile_pool,
-																session->learn_symbol, tokens, session->in_class, &sum,
-																session->learn_multiplier, &err)) {
+		if (!learn_task (session->learn_symbol, task, &err)) {
 			if (err) {
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
-				msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, err->message);
 				g_error_free (err);
 			}
 			else {
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
-				msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
 			}
 			free_task (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
@@ -875,18 +812,12 @@ controller_read_socket (f_str_t * in, void *arg)
 			session->state = STATE_REPLY;
 			return TRUE;
 		}
-		session->worker->srv->stat->messages_learned++;
 
-		maybe_write_binlog (session->learn_classifier, st, statfile, tokens);
-		msg_info ("learn success for message <%s>, for statfile: %s, sum weight: %.2f",
-				task->message_id, session->learn_symbol, sum);
-		statfile_pool_plan_invalidate (session->worker->srv->statfile_pool, DEFAULT_STATFILE_INVALIDATE_TIME, DEFAULT_STATFILE_INVALIDATE_JITTER);
 		free_task (task, FALSE);
-		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok, sum weight: %.2f" CRLF END, sum);
+		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
 		}
-
 		session->state = STATE_REPLY;
 		break;
 	case STATE_WEIGHTS:
