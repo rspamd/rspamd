@@ -52,6 +52,7 @@ struct rspamd_dns_resolver {
 	guint max_errors;
 	memory_pool_t *static_pool;			/**< permament pool (cfg_pool)				*/
 	gboolean throttling;				/**< dns servers are busy					*/
+	gboolean is_master_slave;			/**< if this is true, then select upstreams as master/slave */
 	guint errors;						/**< resolver errors						*/
 	struct timeval throttling_time;		/**< throttling time						*/
 	struct event throttling_event;		/**< throttling event						*/

@@ -1034,9 +1034,16 @@ dns_timer_cb (gint fd, short what, void *arg)
 		return;
 	}
 	/* Select other server */
-	req->server = (struct rspamd_dns_server *)get_upstream_round_robin (req->resolver->servers, 
+	if (req->resolver->is_master_slave) {
+		req->server = (struct rspamd_dns_server *)get_upstream_master_slave (req->resolver->servers,
+					req->resolver->servers_num, sizeof (struct rspamd_dns_server),
+					req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	}
+	else {
+		req->server = (struct rspamd_dns_server *)get_upstream_round_robin (req->resolver->servers,
 			req->resolver->servers_num, sizeof (struct rspamd_dns_server),
 			req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	}
 	if (req->server == NULL) {
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
@@ -1180,9 +1187,16 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	req->retransmits = 0;
 	req->time = time (NULL);
-	req->server = (struct rspamd_dns_server *)get_upstream_round_robin (resolver->servers, 
-			resolver->servers_num, sizeof (struct rspamd_dns_server),
-			req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	if (resolver->is_master_slave) {
+		req->server = (struct rspamd_dns_server *)get_upstream_master_slave (resolver->servers,
+				resolver->servers_num, sizeof (struct rspamd_dns_server),
+				req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	}
+	else {
+		req->server = (struct rspamd_dns_server *)get_upstream_round_robin (resolver->servers,
+				resolver->servers_num, sizeof (struct rspamd_dns_server),
+				req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	}
 	if (req->server == NULL) {
 		msg_err ("cannot find suitable server for request");
 		return FALSE;
@@ -1271,11 +1285,11 @@ parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 struct rspamd_dns_resolver *
 dns_resolver_init (struct config_file *cfg)
 {
-	GList *cur;
-	struct rspamd_dns_resolver *new;
-	gchar                           *begin, *p;
+	GList                          *cur;
+	struct rspamd_dns_resolver     *new;
+	gchar                          *begin, *p, *err;
 	gint                            priority, i;
-	struct rspamd_dns_server *serv;
+	struct rspamd_dns_server       *serv;
 	
 	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
 	new->requests = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -1302,7 +1316,27 @@ dns_resolver_init (struct config_file *cfg)
 			if (p != NULL) {
 				*p = '\0';
 				p ++;
-				priority = strtoul (p, NULL, 10);
+				if (!new->is_master_slave) {
+					priority = strtoul (p, &err, 10);
+					if (err != NULL && (*err == 'm' || *err == 'M' || *err == 's' || *err == 'S')) {
+						new->is_master_slave = TRUE;
+					}
+					else {
+						msg_info ("bad character '%c', must be 'm' or 's' or a numeric priority", *err);
+					}
+				}
+				if (new->is_master_slave) {
+					if (*p == 'm' || *p == 'M') {
+						priority = 100;
+					}
+					else if (*p == 's' || *p == 'S') {
+						priority = 1;
+					}
+					else {
+						msg_info ("master/slave mode is turned on, and %c character is invalid", *p);
+						priority = 0;
+					}
+				}
 			}
 			else {
 				priority = 0;

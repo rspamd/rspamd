@@ -238,6 +238,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"dns_nameserver",
+				options_handle_nameserver,
+				0,
+				NULL
+			},
+			{
 				"raw_mode",
 				xml_handle_boolean,
 				G_STRUCT_OFFSET (struct config_file, raw_mode),
@@ -773,6 +779,13 @@ handle_log_level (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 		return FALSE;
 	}
 
+	return TRUE;
+}
+
+gboolean
+options_handle_nameserver (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	cfg->nameservers = g_list_prepend (cfg->nameservers, memory_pool_strdup (cfg->cfg_pool, data));
 	return TRUE;
 }
 

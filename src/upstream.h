@@ -36,6 +36,10 @@ struct upstream* get_upstream_by_hash_ketama (void *ups, size_t members, size_t 
 										time_t error_timeout, time_t revive_timeout, size_t max_errors,
 										gchar *key, size_t keylen);
 
+struct upstream* get_upstream_master_slave (void *ups, size_t members, size_t msize,
+										time_t now, time_t error_timeout,
+										time_t revive_timeout, size_t max_errors);
+
 
 #endif /* UPSTREAM_H */
 /* 
