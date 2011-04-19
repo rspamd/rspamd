@@ -679,18 +679,41 @@ html_strncasestr (const gchar *s, const gchar *find, gsize len)
 }
 
 static void
-check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text, gsize remain)
+check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text, gsize remain, tag_id_t id)
 {
 	struct uri                     *new;
 	gchar                          *url_str;
 	const gchar                    *p, *c;
+	gchar                           tagbuf[128];
+	struct html_tag                *tag;
 	gsize                           len = 0;
 	gint                            off, rc;
 
 	p = url_text;
 	while (len < remain) {
-		if (*p == '<' || *p == '>') {
-			break;
+		if (*p == '<') {
+			/* Get tag name */
+			p ++;
+			len ++;
+			if (*p == '/') {
+				/* Check tag name */
+				c = p + 1;
+				while (len < remain) {
+					if (!g_ascii_isspace (*p) && *p != '>') {
+						p ++;
+						len ++;
+					}
+					else {
+						break;
+					}
+				}
+				rspamd_strlcpy (tagbuf, c, MIN (sizeof(tagbuf), p - c + 1));
+				if ((tag = get_tag_by_name (tagbuf)) != NULL) {
+					if (tag->id == id) {
+						break;
+					}
+				}
+			}
 		}
 		len ++;
 		p ++;
@@ -843,7 +866,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			 */
 			if ((p = strchr (c, '>')) != NULL ) {
 				p ++;
-				check_phishing (task, url, p, remain - (p - tag_text));
+				check_phishing (task, url, p, remain - (p - tag_text), id);
 			}
 			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
 				g_tree_insert (part->html_urls, url_text, url);
