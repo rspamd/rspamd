@@ -65,6 +65,7 @@ LUA_FUNCTION_DEF (task, get_client_ip_num);
 LUA_FUNCTION_DEF (task, get_helo);
 LUA_FUNCTION_DEF (task, get_images);
 LUA_FUNCTION_DEF (task, get_symbol);
+LUA_FUNCTION_DEF (task, get_date);
 LUA_FUNCTION_DEF (task, get_metric_score);
 LUA_FUNCTION_DEF (task, get_metric_action);
 LUA_FUNCTION_DEF (task, learn_statfile);
@@ -93,6 +94,7 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_helo),
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_symbol),
+	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, learn_statfile),
@@ -1042,6 +1044,24 @@ lua_task_get_symbol (lua_State *L)
 	if (!found) {
 		lua_pushnil (L);
 	}
+	return 1;
+}
+
+static gint
+lua_task_get_date (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	time_t                          task_time;
+
+	if (task != NULL) {
+		/* Get GMT date and store it to time_t */
+		task_time = mktime (gmtime (&task->tv.tv_sec));
+		lua_pushnumber (L, task_time);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
 	return 1;
 }
 

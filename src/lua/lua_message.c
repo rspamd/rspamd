@@ -68,6 +68,7 @@ LUA_FUNCTION_DEF (message, set_reply_to);
 LUA_FUNCTION_DEF (message, get_header);
 LUA_FUNCTION_DEF (message, get_header_strong);
 LUA_FUNCTION_DEF (message, set_header);
+LUA_FUNCTION_DEF (message, get_date);
 
 static const struct luaL_reg    msglib_m[] = {
 	LUA_INTERFACE_DEF (message, get_subject),
@@ -81,6 +82,7 @@ static const struct luaL_reg    msglib_m[] = {
 	LUA_INTERFACE_DEF (message, get_header),
 	LUA_INTERFACE_DEF (message, get_header_strong),
 	LUA_INTERFACE_DEF (message, set_header),
+	LUA_INTERFACE_DEF (message, get_date),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -180,6 +182,25 @@ lua_message_set_header (lua_State * L)
 	return 1;
 }
 
+static gint
+lua_message_get_date (lua_State * L)
+{
+	GMimeMessage                   *obj = lua_check_message (L);
+	time_t                          msg_time;
+	int                             offset;
+
+	if (obj != NULL) {
+		g_mime_message_get_date (obj, &msg_time, &offset);
+		/* Convert result to GMT */
+		msg_time -= (offset / 100) * 3600;
+		lua_pushnumber (L, msg_time);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
 
 gint
 luaopen_message (lua_State * L)
