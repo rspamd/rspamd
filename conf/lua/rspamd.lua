@@ -40,6 +40,34 @@ reconf['R_EMPTY_IMAGE'] = function (task)
 	return false
 end
 
+-- Date issues
+reconf['DATE_IN_FUTURE'] = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+		local m = task:get_message()
+		local dm = m:get_date()
+		local dt = task:get_date()
+		-- An hour
+		if dm - dt > 3600 then
+			return true
+		end
+	end
+	
+	return false
+end
+reconf['DATE_IN_PAST'] = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+		local m = task:get_message()
+		local dm = m:get_date()
+		local dt = task:get_date()
+		-- A day
+		if dt - dm > 86400 then
+			return true
+		end
+	end
+	
+	return false
+end
+
 
 local function file_exists(filename)
 	local file = io.open(filename)

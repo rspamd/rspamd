@@ -282,6 +282,10 @@
  <symbol weight="3.0" description="Invalid Postfix Received">INVALID_POSTFIX_RECEIVED</symbol>
  <symbol weight="5.0" description="Invalid Exim Received">INVALID_EXIM_RECEIVED</symbol>
  <symbol weight="3.0" description="Invalid Exim Received">INVALID_EXIM_RECEIVED2</symbol>
+
+ <!-- Date checks -->
+ <symbol weight="1.5" description="Message date is in future">DATE_IN_FUTURE</symbol>
+ <symbol weight="1.0" description="Message date is in past">DATE_IN_PAST</symbol>
 </metric>
 <!-- End of metrics section -->
 
