@@ -456,7 +456,13 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
+			/* Check whitelist and set appropriate action for whitelisted users */
+			if (check_whitelist(task, us)) {
+				*result = METRIC_ACTION_NOACTION;
+				return TRUE;
+			}
 			if ((cur = g_hash_table_lookup (us->metric_actions, metric->name)) != NULL) {
+
 				while (cur) {
 					act = cur->data;
 					if (score >= act->score) {
@@ -467,6 +473,11 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 			}
 		}
 		else if (ds != NULL) {
+			/* Check whitelist and set appropriate action for whitelisted users */
+			if (check_whitelist(task, ds)) {
+				*result = METRIC_ACTION_NOACTION;
+				return TRUE;
+			}
 			if ((cur = g_hash_table_lookup (ds->metric_actions, metric->name)) != NULL) {
 				while (cur) {
 					act = cur->data;
