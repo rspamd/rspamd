@@ -35,7 +35,7 @@
 extern const int                primes[];
 
 int
-osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * input, GTree ** tree)
+osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * input, GTree ** tree, gboolean save_token)
 {
 	token_node_t                   *new = NULL;
 	f_str_t                         token = { NULL, 0, 0 }, *res;
@@ -69,6 +69,9 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 			new = memory_pool_alloc0 (pool, sizeof (token_node_t));
 			new->h1 = h1;
 			new->h2 = h2;
+			if (save_token) {
+				new->extra = (uintptr_t)memory_pool_fstrdup (pool, &token);
+			}
 
 			if (g_tree_lookup (*tree, new) == NULL) {
 				g_tree_insert (*tree, new, new);

@@ -850,7 +850,8 @@ controller_read_socket (f_str_t * in, void *arg)
 
 			c.begin = part->content->data;
 			c.len = part->content->len;
-			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer, session->session_pool, &c, &tokens)) {
+			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer,
+					session->session_pool, &c, &tokens, FALSE)) {
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF END);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {

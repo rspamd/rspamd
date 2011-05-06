@@ -113,7 +113,7 @@
 
 #cmakedefine HAVE_SETITIMER      1
 
-#cmakedefine WITHOUT_PERL        1
+#define      WITHOUT_PERL        1
 
 #cmakedefine WITH_LUA            1
 

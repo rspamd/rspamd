@@ -131,6 +131,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		if (cur->post_probability < G_MINDOUBLE * 100) {
 			cur->post_probability = G_MINDOUBLE * 100;
 		}
+
 	}
 	renorm = 0;
 	for (i = 0; i < cd->statfiles_num; i ++) {
@@ -144,6 +145,10 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		if (cur->post_probability < G_MINDOUBLE * 10) {
 			cur->post_probability = G_MINDOUBLE * 100;
 		}
+		if (cd->ctx->debug) {
+			msg_info ("token: %s, statfile: %s, probability: %.4f, post_probability: %.4f",
+					node->extra, cur->st->symbol, cur->value, cur->post_probability);
+		}
 	}
 
 	return FALSE;
@@ -156,7 +161,7 @@ bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
 
 	ctx->pool = pool;
 	ctx->cfg = cfg;
-
+	ctx->debug = FALSE;
 
 	return ctx;
 }

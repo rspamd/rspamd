@@ -36,9 +36,6 @@
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
-#ifndef WITHOUT_PERL
-#   include "perl.h"
-#endif
 #ifdef WITH_LUA
 #   include "lua/lua_common.h"
 #endif
@@ -615,7 +612,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.len = strlen (cur->data);
 				if (c.len > 0) {
 					c.begin = cur->data;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE)) {
 						msg_info ("cannot tokenize input");
 						return;
 					}
@@ -630,7 +627,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.begin = text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}
@@ -857,7 +854,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 		/* Get tokens */
 		if (!cl->tokenizer->tokenize_func (
 				cl->tokenizer, task->task_pool,
-				&c, &tokens)) {
+				&c, &tokens, FALSE)) {
 			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
 			return FALSE;
 		}

@@ -239,13 +239,13 @@ tokenize_subject (struct worker_task *task, GTree ** tree)
 		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
 		subject.begin = task->subject;
 		subject.len = strlen (task->subject);
-		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree);
+		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE);
 	}
 	if ((sub = g_mime_message_get_subject (task->message)) != NULL) {
 		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
 		subject.begin = (gchar *)sub;
 		subject.len = strlen (sub);
-		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree);
+		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE);
 	}
 }
 

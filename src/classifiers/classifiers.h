@@ -15,6 +15,7 @@ struct worker_task;
 struct classifier_ctx {
 	memory_pool_t *pool;
 	GHashTable *results;
+	gboolean debug;
 	struct classifier_config *cfg;
 };
 

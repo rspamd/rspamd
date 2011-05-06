@@ -7,7 +7,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 3)
-SET(RSPAMD_VERSION_PATCH 12)
+SET(RSPAMD_VERSION_PATCH 13)
 
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
@@ -19,7 +19,6 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
 
 OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
-OPTION(ENABLE_PERL         "Enable perl client API [default: OFF]"              OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
 OPTION(ENABLE_PROFILING    "Enable profiling [default: OFF]"                    OFF)
@@ -158,32 +157,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES m)
 	MESSAGE(STATUS "Configuring for Solaris")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
-
-IF(ENABLE_PERL MATCHES "ON")
-
-	IF(NOT PERL_EXECUTABLE)
-		MESSAGE(FATAL_ERROR "Error: Perl is not found but is required")
-	ENDIF(NOT PERL_EXECUTABLE)
-
-	# Find perl libraries and cflags
-	EXECUTE_PROCESS(COMMAND ${PERL_EXECUTABLE} -MExtUtils::Embed -e ccopts OUTPUT_VARIABLE PERL_CFLAGS)
-	EXECUTE_PROCESS(COMMAND ${PERL_EXECUTABLE} -MExtUtils::Embed -e ldopts OUTPUT_VARIABLE PERL_LDFLAGS)
-	STRING(REGEX REPLACE "[\r\n]" " " PERL_CFLAGS ${PERL_CFLAGS})
-	STRING(REGEX REPLACE " +$" "" PERL_CFLAGS ${PERL_CFLAGS})
-	STRING(REGEX REPLACE "[\r\n]" " " PERL_LDFLAGS ${PERL_LDFLAGS})
-	STRING(REGEX REPLACE " +$" "" PERL_LDFLAGS ${PERL_LDFLAGS})
-	# Handle DynaLoader
-	STRING(REGEX MATCH "/[^ ]*/DynaLoader.a" PERL_DYNALOADER ${PERL_LDFLAGS})
-	STRING(REGEX REPLACE "/[^ ]*/DynaLoader.a " "" PERL_LDFLAGS ${PERL_LDFLAGS})
-
-	IF(PERL_DYNALOADER)
-		EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E copy ${PERL_DYNALOADER} ${rspamd_BINARY_DIR}/compat/libdynaloader.so)
-		LINK_DIRECTORIES(${rspamd_BINARY_DIR}/compat/)
-	ENDIF(PERL_DYNALOADER)
-ELSE(ENABLE_PERL MATCHES "ON")
-	SET(WITHOUT_PERL 1)
-ENDIF(ENABLE_PERL MATCHES "ON")
-
 
 INCLUDE(FindLua51)
 # Check for luajit
@@ -525,11 +498,6 @@ ENDIF(SUPPORT_STD_FLAG)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
 
-
-IF(ENABLE_REDIRECTOR MATCHES "ON")
-	CONFIGURE_FILE(utils/redirector.pl.in utils/redirector.pl @ONLY)
-ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
-
 IF(DEBUG_MODE MATCHES "ON")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 ENDIF(DEBUG_MODE MATCHES "ON")
@@ -620,8 +588,8 @@ ADD_SUBDIRECTORY(src/client)
 
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
-# ADD_SUBDIRECTORY(src/evdns)
-# ADD_SUBDIRECTORY(src/plugins/custom)
+ADD_SUBDIRECTORY(utils)
+ADD_SUBDIRECTORY(test)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
@@ -636,47 +604,6 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/fuzzy_check.c
 				src/plugins/spf.c)
 
-SET(TESTSRC		test/rspamd_expression_test.c
-				test/rspamd_memcached_test.c
-				test/rspamd_mem_pool_test.c
-				test/rspamd_statfile_test.c
-				test/rspamd_fuzzy_test.c
-				test/rspamd_test_suite.c
-				test/rspamd_url_test.c
-				test/rspamd_dns_test.c)
-
-SET(TESTDEPENDS	src/mem_pool.c
-				src/hash.c
-				src/url.c
-				src/trie.c
-				src/util.c
-				src/radix.c
-				src/fuzzy.c
-				src/map.c
-				src/logger.c
-				src/memcached.c
-				src/message.c
-				src/html.c
-				src/expressions.c
-				src/statfile.c
-				src/events.c
-				src/upstream.c
-				src/dns.c)
-
-SET(UTILSSRC	utils/url_extracter.c)
-SET(EXPRSRC	utils/expression_parser.c)
-
-SET(UTILSDEPENDS src/mem_pool.c
-				src/hash.c
-				src/url.c
-				src/trie.c
-				src/fuzzy.c
-				src/expressions.c
-				src/message.c
-				src/html.c
-				src/util.c
-				src/radix.c)
-
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
 ############################ TARGETS SECTION ###############################
@@ -684,20 +611,6 @@ LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
 					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
 					WORKING_DIRECTORY src)
-
-IF(ENABLE_PERL MATCHES "ON")
-	ADD_CUSTOM_COMMAND(OUTPUT ${CMAKE_SOURCE_DIR}/perl/Makefile 
-						DEPENDS ${CMAKE_SOURCE_DIR}/perl/Makefile.PL
-						COMMAND ${PERL_EXECUTABLE} ./Makefile.PL DESTDIR=${DESTDIR} PREFIX=${PREFIX} INSTALLMAN3DIR=${MAN_PREFIX}/man3
-						WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/perl)
-	CONFIGURE_FILE(perl/Makefile.PL.in perl/Makefile.PL)
-	ADD_CUSTOM_TARGET(perlmodule
-						COMMAND ${CMAKE_MAKE_PROGRAM} DESTDIR=${DESTDIR}
-						DEPENDS ${CMAKE_SOURCE_DIR}/perl/Makefile
-						WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/perl
-						VERBATIM)
-	
-ENDIF(ENABLE_PERL MATCHES "ON")
 
 CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
@@ -709,19 +622,6 @@ ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC}
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
 SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
-
-IF(ENABLE_PERL MATCHES "ON")
-
-	SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS ${PERL_CFLAGS}
-											LINK_FLAGS ${PERL_LDFLAGS})
-	IF(PERL_DYNALOADER)
-		TARGET_LINK_LIBRARIES(rspamd dynaloader)
-	ENDIF(PERL_DYNALOADER)
-
-ENDIF(ENABLE_PERL MATCHES "ON")
-IF(ENABLE_PERL MATCHES "ON")
-	ADD_DEPENDENCIES(rspamd perlmodule)
-ENDIF(ENABLE_PERL MATCHES "ON")
 
 TARGET_LINK_LIBRARIES(rspamd rspamd_lua)
 IF(ENABLE_LUAJIT MATCHES "ON")
@@ -751,21 +651,6 @@ ENDIF(ENABLE_STATIC MATCHES "ON")
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamd profiler)
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
-
-ADD_EXECUTABLE(test/rspamd-test ${TESTDEPENDS} ${CONTRIBSRC} ${TESTSRC})
-SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES LINKER_LANGUAGE C)
-SET_TARGET_PROPERTIES(test/rspamd-test PROPERTIES COMPILE_FLAGS "-DRSPAMD_TEST")
-TARGET_LINK_LIBRARIES(test/rspamd-test event)
-TARGET_LINK_LIBRARIES(test/rspamd-test ${GLIB2_LIBRARIES})
-TARGET_LINK_LIBRARIES(test/rspamd-test ${CMAKE_REQUIRED_LIBRARIES})
-IF(GMIME2_FOUND)
-	TARGET_LINK_LIBRARIES(test/rspamd-test ${GMIME2_LIBRARIES})
-ELSE(GMIME2_FOUND)
-	TARGET_LINK_LIBRARIES(test/rspamd-test ${GMIME24_LIBRARIES})
-ENDIF(GMIME2_FOUND)
-IF(ENABLE_STATIC MATCHES "ON")
-	TARGET_LINK_LIBRARIES(test/rspamd-test ${PCRE_LIBRARIES})
-ENDIF(ENABLE_STATIC MATCHES "ON")
 
 
 ##################### INSTALLATION ##########################################
@@ -822,16 +707,6 @@ ENDFOREACH(LUA_CONF)
 # Manual pages
 INSTALL(FILES "doc/rspamd.8" DESTINATION man/man8)
 INSTALL(FILES "doc/rspamc.1" DESTINATION man/man1)
-
-# Perl lib
-IF(ENABLE_PERL MATCHES "ON")
-	INSTALL(CODE "EXECUTE_PROCESS(COMMAND make install WORKING_DIRECTORY perl)")
-ENDIF(ENABLE_PERL MATCHES "ON")
-
-# Redirector
-IF(ENABLE_REDIRECTOR MATCHES "ON")
-	INSTALL(PROGRAMS utils/redirector.pl DESTINATION bin RENAME rspamd-redirector)
-ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 
 # Start scripts
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" AND NOT BUILD_PORT)
