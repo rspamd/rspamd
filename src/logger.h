@@ -11,31 +11,32 @@ typedef void (*rspamd_log_func_t)(const gchar * log_domain, const gchar *functio
 								  GLogLevelFlags log_level, const gchar * message, 
 								  gboolean forced, gpointer arg);
 
+typedef struct rspamd_logger_s rspamd_logger_t;
 /**
  * Init logger
  */
-void rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct config_file *cfg);
+void rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct rspamd_main *main);
 /**
  * Open log file or initialize other structures
  */
-gint open_log (void);
+gint open_log (rspamd_logger_t *logger);
 /**
  * Close log file or destroy other structures
  */
-void close_log (void);
+void close_log (rspamd_logger_t *logger);
 /**
  * Close and open log again
  */
-gint reopen_log (void);
+gint reopen_log (rspamd_logger_t *logger);
 /**
  * Set log pid
  */
-void update_log_pid (enum process_type ptype);
+void update_log_pid (enum process_type ptype, rspamd_logger_t *logger);
 
 /**
  * Flush log buffer for some types of logging
  */
-void flush_log_buf (void);
+void flush_log_buf (rspamd_logger_t *logger);
 /**
  * Log function that is compatible for glib messages
  */
@@ -44,32 +45,32 @@ void rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level
 /**
  * Function with variable number of arguments support 
  */
-void rspamd_common_log_function (GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...);
+void rspamd_common_log_function (rspamd_logger_t *logger, GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...);
 
 /**
  * Conditional debug function
  */
-void rspamd_conditional_debug (guint32 addr, const gchar *function, const gchar *fmt, ...) ;
+void rspamd_conditional_debug (rspamd_logger_t *logger, guint32 addr, const gchar *function, const gchar *fmt, ...) ;
 
 /**
  * Temporary turn on debug
  */
-void rspamd_log_debug ();
+void rspamd_log_debug (rspamd_logger_t *logger);
 
 /**
  * Turn off debug
  */
-void rspamd_log_nodebug ();
+void rspamd_log_nodebug (rspamd_logger_t *logger);
 
 /* Typical functions */
 
 /* Logging in postfix style */
 #if (defined(RSPAMD_MAIN) || defined(RSPAMD_LIB) || defined(RSPAMD_TEST))
-#define msg_err(...)	rspamd_common_log_function(G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
-#define msg_warn(...)	rspamd_common_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
-#define msg_info(...)	rspamd_common_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
-#define msg_debug(...)	rspamd_conditional_debug(-1, __FUNCTION__, __VA_ARGS__)
-#define debug_task(...) rspamd_conditional_debug(task->from_addr.s_addr, __FUNCTION__, __VA_ARGS__)
+#define msg_err(...)	rspamd_common_log_function(rspamd_main->logger, G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
+#define msg_warn(...)	rspamd_common_log_function(rspamd_main->logger, G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
+#define msg_info(...)	rspamd_common_log_function(rspamd_main->logger, G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
+#define msg_debug(...)	rspamd_conditional_debug(rspamd_main->logger, -1, __FUNCTION__, __VA_ARGS__)
+#define debug_task(...) rspamd_conditional_debug(rspamd_main->logger, task->from_addr.s_addr, __FUNCTION__, __VA_ARGS__)
 
 #else
 #define msg_err(...)	rspamd_fprintf(stderr, __VA_ARGS__)

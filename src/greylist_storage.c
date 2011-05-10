@@ -104,7 +104,6 @@ sigusr_handler (gint fd, short what, void *arg)
 	event_del (&worker->sig_ev);
 	event_del (&worker->bind_ev);
 	close (worker->cf->listen_sock);
-	do_reopen_log = 1;
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
 	return;

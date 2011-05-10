@@ -33,11 +33,13 @@
 #include "util.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
-#include "lua/lua_common.h"
+
 #include "view.h"
 #include "map.h"
 #include "expressions.h"
 #include "settings.h"
+
+#include "lua/lua_common.h"
 
 /* Maximum attributes for param */
 #define MAX_PARAM 64
@@ -1077,7 +1079,6 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 			return FALSE;
 		}
 	}
-
 	return TRUE;
 }
 
@@ -1509,6 +1510,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 	struct rspamd_xml_userdata *ud = user_data;
 	struct classifier_config   *ccf;
 	gchar                      *res, *condition;
+
 
 	if (g_ascii_strcasecmp (element_name, "if") == 0) {
 		/* Push current state to queue */

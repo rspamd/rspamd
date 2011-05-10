@@ -96,6 +96,7 @@ struct rspamd_main {
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
+	rspamd_logger_t *logger;
 };
 
 struct counter_data {
@@ -267,20 +268,9 @@ void start_greylist_storage (struct rspamd_worker *worker);
 void register_custom_controller_command (const gchar *name, controller_func_t handler, gboolean privilleged, gboolean require_message);
 
 /**
- * Construct new task for worker
- */
-struct worker_task* construct_task (struct rspamd_worker *worker);
-/**
- * Destroy task object and remove its IO dispatcher if it exists
- */
-void free_task (struct worker_task *task, gboolean is_soft);
-void free_task_hard (gpointer ud);
-void free_task_soft (gpointer ud);
-
-/**
  * If set, reopen log file on next write
  */
-extern sig_atomic_t do_reopen_log;
+extern struct rspamd_main *rspamd_main;
 
 #endif
 

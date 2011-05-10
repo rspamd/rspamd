@@ -3,6 +3,7 @@
 #include "tests.h"
 #include "../src/dns.h"
 #include "../src/logger.h"
+#include "../src/main.h"
 #include "../src/events.h"
 #include "../src/cfg_file.h"
 

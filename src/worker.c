@@ -41,13 +41,6 @@
 
 #include "lua/lua_common.h"
 
-#ifndef WITHOUT_PERL
-#   include <EXTERN.h>		/* from the Perl distribution     */
-#   include <perl.h>		/* from the Perl distribution   */
-
-extern PerlInterpreter         *perl_interpreter;
-#endif
-
 #ifdef WITH_GPERF_TOOLS
 #   include <glib/gprintf.h>
 #endif
@@ -112,7 +105,7 @@ sig_handler (gint signo, siginfo_t * info, void *unused)
 
 	switch (signo) {
 	case SIGUSR1:
-		reopen_log ();
+		reopen_log (rspamd_main->logger);
 		break;
 	case SIGINT:
 	case SIGTERM:
@@ -145,24 +138,10 @@ sigusr_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev);
 		event_del (&worker->bind_ev);
-		do_reopen_log = 1;
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
 	return;
-}
-
-/*
- * Destructor for recipients list
- */
-static void
-rcpt_destruct (void *pointer)
-{
-	struct worker_task             *task = (struct worker_task *) pointer;
-
-	if (task->rcpt) {
-		g_list_free (task->rcpt);
-	}
 }
 
 #ifndef BUILD_STATIC
@@ -248,68 +227,6 @@ parse_line_custom (struct worker_task *task, f_str_t * in)
   return FALSE;
 }
 #endif
-
-/*
- * Free all structures of worker_task
- */
-void
-free_task (struct worker_task *task, gboolean is_soft)
-{
-	GList                          *part;
-	struct mime_part               *p;
-
-	if (task) {
-		debug_task ("free pointer %p", task);
-		while ((part = g_list_first (task->parts))) {
-			task->parts = g_list_remove_link (task->parts, part);
-			p = (struct mime_part *) part->data;
-			g_byte_array_free (p->content, TRUE);
-			g_list_free_1 (part);
-		}
-		if (task->text_parts) {
-			g_list_free (task->text_parts);
-		}
-		if (task->images) {
-			g_list_free (task->images);
-		}
-		if (task->messages) {
-			g_list_free (task->messages);
-		}
-		if (task->received) {
-			g_list_free (task->received);
-		}
-		memory_pool_delete (task->task_pool);
-		if (task->dispatcher) {
-			if (is_soft) {
-				/* Plan dispatcher shutdown */
-				task->dispatcher->wanna_die = 1;
-			}
-			else {
-				rspamd_remove_dispatcher (task->dispatcher);
-			}
-		}
-		if (task->sock != -1) {
-			close (task->sock);
-		}
-		g_free (task);
-	}
-}
-
-void
-free_task_hard (gpointer ud)
-{
-  struct worker_task             *task = ud;
-
-  free_task (task, FALSE);
-}
-
-void
-free_task_soft (gpointer ud)
-{
-  struct worker_task             *task = ud;
-
-  free_task (task, FALSE);
-}
 
 /*
  * Callback that is called when there is data to read in buffer
@@ -483,106 +400,6 @@ err_socket (GError * err, void *arg)
 	if (task->state != WRITE_REPLY) {
 		destroy_session (task->s);
 	}
-}
-
-/* Compare two emails for building emails tree */
-static gint
-compare_email_func (gconstpointer a, gconstpointer b)
-{
-	const struct uri               *u1 = a, *u2 = b;
-	gint                            r;
-
-	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
-		return u1->hostlen - u2->hostlen;
-	}
-	else {
-		if ((r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen)) == 0){
-			if (u1->userlen != u2->userlen || u1->userlen == 0) {
-				return u1->userlen - u2->userlen;
-			}
-			else {
-				return g_ascii_strncasecmp (u1->user, u2->user, u1->userlen);
-			}
-		}
-		else {
-			return r;
-		}
-	}
-
-	return 0;
-}
-
-static gint
-compare_url_func (gconstpointer a, gconstpointer b)
-{
-	const struct uri               *u1 = a, *u2 = b;
-	int                             r;
-
-	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
-		return u1->hostlen - u2->hostlen;
-	}
-	else {
-		r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen);
-	}
-
-	return r;
-}
-
-/*
- * Create new task
- */
-struct worker_task             *
-construct_task (struct rspamd_worker *worker)
-{
-	struct worker_task             *new_task;
-
-	new_task = g_malloc0 (sizeof (struct worker_task));
-
-	new_task->worker = worker;
-	new_task->state = READ_COMMAND;
-	new_task->cfg = worker->srv->cfg;
-	new_task->from_addr.s_addr = INADDR_NONE;
-	new_task->view_checked = FALSE;
-#ifdef HAVE_CLOCK_GETTIME
-# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
-# elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL, &new_task->ts);
-# else
-	clock_gettime (CLOCK_REALTIME, &new_task->ts);
-# endif
-#endif
-	if (gettimeofday (&new_task->tv, NULL) == -1) {
-		msg_warn ("gettimeofday failed: %s", strerror (errno));
-	}
-
-	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
-
-	/* Add destructor for recipients list (it would be better to use anonymous function here */
-	memory_pool_add_destructor (new_task->task_pool,
-			(pool_destruct_func) rcpt_destruct, new_task);
-	new_task->results = g_hash_table_new (g_str_hash, g_str_equal);
-	memory_pool_add_destructor (new_task->task_pool,
-			(pool_destruct_func) g_hash_table_destroy,
-			new_task->results);
-	new_task->re_cache = g_hash_table_new (g_str_hash, g_str_equal);
-	memory_pool_add_destructor (new_task->task_pool,
-			(pool_destruct_func) g_hash_table_destroy,
-			new_task->re_cache);
-	new_task->emails = g_tree_new (compare_email_func);
-	memory_pool_add_destructor (new_task->task_pool,
-				(pool_destruct_func) g_tree_destroy,
-				new_task->emails);
-	new_task->urls = g_tree_new (compare_url_func);
-	memory_pool_add_destructor (new_task->task_pool,
-					(pool_destruct_func) g_tree_destroy,
-					new_task->urls);
-	new_task->s =
-			new_async_session (new_task->task_pool, free_task_hard, new_task);
-	new_task->sock = -1;
-	new_task->is_mime = TRUE;
-
-	return new_task;
 }
 
 /*
@@ -839,7 +656,7 @@ start_worker (struct rspamd_worker *worker)
 	}
 #endif
 
-	close_log ();
+	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
 

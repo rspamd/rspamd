@@ -48,7 +48,7 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 {
 	switch (signo) {
 	case SIGUSR1:
-		reopen_log ();
+		reopen_log (rspamd_main->logger);
 		break;
 	case SIGINT:
 	case SIGTERM:
@@ -70,7 +70,6 @@ sigusr_handler (gint fd, short what, void *arg)
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev);
 	event_del (&worker->bind_ev);
-	do_reopen_log = 1;
 	msg_info ("lmtp worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
 	return;

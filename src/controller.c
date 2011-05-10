@@ -109,7 +109,7 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 	struct timeval                  tv;
 	switch (signo) {
 	case SIGUSR1:
-		reopen_log ();
+		reopen_log (rspamd_main->logger);
 		break;
 	case SIGINT:
 	case SIGTERM:

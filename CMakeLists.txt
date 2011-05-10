@@ -539,57 +539,16 @@ ENDIF(HG)
 
 ################################ SOURCES SECTION ###########################
 
+
 SET(RSPAMDSRC	src/modules.c
-				src/binlog.c
-                src/bloom.c
-				src/buffer.c
-				src/cfg_utils.c
-				src/cfg_xml.c
 				src/controller.c
-				src/dns.c
-				src/events.c
-				src/expressions.c
-				src/filter.c
-				src/fstring.c
-				src/fuzzy.c
 				src/fuzzy_storage.c
 				src/greylist_storage.c
-				src/hash.c
-				src/html.c
-				src/images.c
 				src/lmtp.c
-				src/lmtp_proto.c
-				src/logger.c
 				src/main.c
 				src/map.c
-				src/memcached.c
-				src/mem_pool.c
-				src/message.c
-				src/protocol.c
-				src/radix.c
-				src/settings.c
-				src/spf.c
 				src/smtp.c
-				src/smtp_proto.c
-				src/smtp_utils.c
-				src/statfile.c
-				src/statfile_sync.c
-				src/symbols_cache.c
-				src/trie.c
-				src/upstream.c
-				src/url.c
-				src/util.c
-				src/view.c
 				src/worker.c)
-
-ADD_SUBDIRECTORY(src/lua)
-ADD_SUBDIRECTORY(lib)
-ADD_SUBDIRECTORY(src/client)
-
-ADD_SUBDIRECTORY(src/json)
-ADD_SUBDIRECTORY(src/cdb)
-ADD_SUBDIRECTORY(utils)
-ADD_SUBDIRECTORY(test)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
 				src/tokenizers/osb.c)
@@ -604,6 +563,17 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/fuzzy_check.c
 				src/plugins/spf.c)
 
+ADD_SUBDIRECTORY(src/lua)
+ADD_SUBDIRECTORY(src/json)
+ADD_SUBDIRECTORY(src/cdb)
+
+ADD_SUBDIRECTORY(lib)
+ADD_SUBDIRECTORY(src/client)
+
+ADD_SUBDIRECTORY(utils)
+ADD_SUBDIRECTORY(test)
+
+
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
 ############################ TARGETS SECTION ###############################
@@ -617,13 +587,16 @@ CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ON
 CONFIGURE_FILE(rspamd.xml.sample conf/rspamd.xml.sample @ONLY)
 
 ######################### LINK SECTION ###############################
+
+
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} 
 					  ${CLASSIFIERSSRC} ${PLUGINSSRC})
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
 SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
 
-TARGET_LINK_LIBRARIES(rspamd rspamd_lua)
+TARGET_LINK_LIBRARIES(rspamd rspamdserver)
+
 IF(ENABLE_LUAJIT MATCHES "ON")
     TARGET_LINK_LIBRARIES(rspamd "${LUAJIT_LIBRARY}")
 ELSE(ENABLE_LUAJIT MATCHES "ON")
@@ -633,10 +606,8 @@ ENDIF(ENABLE_LUAJIT MATCHES "ON")
 IF(LIBJUDY_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd Judy)
 ENDIF(LIBJUDY_LIBRARY)
-# TARGET_LINK_LIBRARIES(rspamd rspamd_evdns)
 TARGET_LINK_LIBRARIES(rspamd event)
-TARGET_LINK_LIBRARIES(rspamd rspamd_json)
-TARGET_LINK_LIBRARIES(rspamd rspamd_cdb)
+
 TARGET_LINK_LIBRARIES(rspamd ${CMAKE_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})
 IF(GMIME2_FOUND)

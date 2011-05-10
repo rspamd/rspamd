@@ -758,16 +758,13 @@ gboolean
 call_expression_function (struct expression_function * func, struct worker_task * task)
 {
 	struct _fl                     *selected, key;
-#ifdef RSPAMD_MAIN
 	gboolean                        res;
-#endif
 
 	key.name = func->name;
 
 	selected = bsearch (&key, list_ptr, functions_number, sizeof (struct _fl), fl_cmp);
 	if (selected == NULL) {
 		/* Try to check lua function */
-#ifdef RSPAMD_MAIN
 		if (! lua_call_expression_func (NULL, func->name, task, func->args, &res)) {
 			msg_warn ("call to undefined function %s", key.name);
 			return FALSE;
@@ -775,9 +772,6 @@ call_expression_function (struct expression_function * func, struct worker_task 
 		else {
 			return res;
 		}
-#else
-		return FALSE;
-#endif
 	}
 
 	return selected->func (task, func->args, selected->user_data);

@@ -27,10 +27,13 @@
 #include "upstream.h"
 #include "util.h"
 #include "cfg_file.h"
+#include "logger.h"
 
 #define MAX_RSPAMD_SERVERS 255
 #define DEFAULT_CONNECT_TIMEOUT 500
 #define DEFAULT_READ_TIMEOUT 5000
+/* Default connect timeout for sync sockets */
+#define CONNECT_TIMEOUT 3
 #define G_RSPAMD_ERROR rspamd_error_quark ()
 
 struct rspamd_server {
@@ -59,6 +62,144 @@ struct rspamd_connection {
 };
 
 static struct rspamd_client *client = NULL;
+
+/** Util functions **/
+gint
+make_socket_nonblocking (gint fd)
+{
+	gint                            ofl;
+
+	ofl = fcntl (fd, F_GETFL, 0);
+
+	if (fcntl (fd, F_SETFL, ofl | O_NONBLOCK) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		return -1;
+	}
+	return 0;
+}
+
+gint
+make_socket_blocking (gint fd)
+{
+	gint                            ofl;
+
+	ofl = fcntl (fd, F_GETFL, 0);
+
+	if (fcntl (fd, F_SETFL, ofl & (~O_NONBLOCK)) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		return -1;
+	}
+	return 0;
+}
+
+gint
+poll_sync_socket (gint fd, gint timeout, short events)
+{
+	gint                            r;
+	struct pollfd                   fds[1];
+
+	fds->fd = fd;
+	fds->events = events;
+	fds->revents = 0;
+	while ((r = poll (fds, 1, timeout)) < 0) {
+		if (errno != EINTR) {
+			break;
+		}
+	}
+
+	return r;
+}
+
+static gint
+make_inet_socket (gint family, struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+{
+	gint                            fd, r, optlen, on = 1, s_error;
+	gint                            serrno;
+	struct sockaddr_in              sin;
+
+	/* Create socket */
+	fd = socket (AF_INET, family, 0);
+	if (fd == -1) {
+		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
+		return -1;
+	}
+
+	if (make_socket_nonblocking (fd) < 0) {
+		goto out;
+	}
+
+	/* Set close on exec */
+	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		goto out;
+	}
+
+	memset (&sin, 0, sizeof (sin));
+
+	/* Bind options */
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons (port);
+	sin.sin_addr.s_addr = addr->s_addr;
+
+	if (is_server) {
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	}
+	else {
+		r = connect (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
+	}
+
+	if (r == -1) {
+		if (errno != EINPROGRESS) {
+			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
+			goto out;
+		}
+		if (!async) {
+			/* Try to poll */
+			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
+				errno = ETIMEDOUT;
+				msg_warn ("bind/connect failed: timeout");
+				goto out;
+			}
+			else {
+				/* Make synced again */
+				if (make_socket_blocking (fd) < 0) {
+					goto out;
+				}
+			}
+		}
+	}
+	else {
+		/* Still need to check SO_ERROR on socket */
+		optlen = sizeof (s_error);
+		getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
+		if (s_error) {
+			errno = s_error;
+			goto out;
+		}
+	}
+
+
+	return (fd);
+
+  out:
+	serrno = errno;
+	close (fd);
+	errno = serrno;
+	return (-1);
+}
+
+gint
+make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+{
+	return make_inet_socket (SOCK_STREAM, addr, port, is_server, async);
+}
+
+gint
+make_udp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+{
+	return make_inet_socket (SOCK_DGRAM, addr, port, is_server, async);
+}
 
 /** Private functions **/
 static inline                   GQuark
@@ -847,16 +988,16 @@ rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
 	gint                            r;
 
 	/* Write command */
-	r = rspamd_snprintf (outbuf, sizeof (outbuf), "%s RSPAMC/1.3\r\n", command);
-	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "Content-Length: %uz\r\n", clen);
+	r = snprintf (outbuf, sizeof (outbuf), "%s RSPAMC/1.3\r\n", command);
+	r += snprintf (outbuf + r, sizeof (outbuf) - r, "Content-Length: %lu\r\n", (unsigned long)clen);
 	/* Iterate through headers */
 	if (headers != NULL) {
 		g_hash_table_iter_init (&it, headers);
 		while (g_hash_table_iter_next (&it, &key, &value)) {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s: %s\r\n", key, value);
+			r += snprintf (outbuf + r, sizeof (outbuf) - r, "%s: %s\r\n", (const gchar *)key, (const gchar *)value);
 		}
 	}
-	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "\r\n");
+	r += snprintf (outbuf + r, sizeof (outbuf) - r, "\r\n");
 
 	if ((r = write (c->socket, outbuf, r)) == -1) {
 		if (*err == NULL) {
@@ -967,7 +1108,7 @@ rspamd_controller_auth (struct rspamd_connection *c, const gchar *password, GErr
 	gint                            r;
 	GString                        *in;
 
-	r = rspamd_snprintf (outbuf, sizeof (outbuf), "password %s\r\n", password);
+	r = snprintf (outbuf, sizeof (outbuf), "password %s\r\n", password);
 	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
 
 	if (in == NULL) {
@@ -1249,7 +1390,7 @@ rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, c
 
 	r = length + sizeof ("learn %s %uz\r\n") + strlen (symbol) + sizeof ("4294967296");
 	outbuf = g_malloc (r);
-	r = rspamd_snprintf (outbuf, r, "learn %s %uz\r\n%s", symbol, length, message);
+	r = snprintf (outbuf, r, "learn %s %lu\r\n%s", symbol, (unsigned long)length, message);
 	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
 	g_free (outbuf);
 	if (in == NULL) {
@@ -1337,7 +1478,7 @@ rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **er
 	}
 	r = sizeof ("learn %s %uz\r\n") + strlen (symbol) + sizeof ("4294967296");
 	outbuf = g_malloc (r);
-	r = rspamd_snprintf (outbuf, r, "learn %s %uz\r\n", symbol, st.st_size);
+	r = snprintf (outbuf, r, "learn %s %lu\r\n", symbol, (unsigned long)st.st_size);
 	in = rspamd_send_controller_command (c, outbuf, r, fd, err);
 	g_free (outbuf);
 	if (in == NULL) {
@@ -1397,10 +1538,10 @@ rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password,
 	r = length + sizeof ("fuzzy_add %uz %d %d\r\n") + sizeof ("4294967296") * 3;
 	outbuf = g_malloc (r);
 	if (delete) {
-		r = rspamd_snprintf (outbuf, r, "fuzzy_del %uz %d %d\r\n%s", length, weight, flag, message);
+		r = snprintf (outbuf, r, "fuzzy_del %lu %d %d\r\n%s", (unsigned long)length, weight, flag, message);
 	}
 	else {
-		r = rspamd_snprintf (outbuf, r, "fuzzy_add %uz %d %d\r\n%s", length, weight, flag, message);
+		r = snprintf (outbuf, r, "fuzzy_add %lu %d %d\r\n%s", (unsigned long)length, weight, flag, message);
 	}
 	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
 	g_free (outbuf);
@@ -1489,10 +1630,10 @@ rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean
 	r = sizeof ("fuzzy_add %uz %d %d\r\n") + sizeof ("4294967296") * 3;
 	outbuf = g_malloc (r);
 	if (delete) {
-		r = rspamd_snprintf (outbuf, r, "fuzzy_del %uz %d %d\r\n", st.st_size, weight, flag);
+		r = snprintf (outbuf, r, "fuzzy_del %lu %d %d\r\n", (unsigned long)st.st_size, weight, flag);
 	}
 	else {
-		r = rspamd_snprintf (outbuf, r, "fuzzy_add %uz %d %d\r\n", st.st_size, weight, flag);
+		r = snprintf (outbuf, r, "fuzzy_add %lu %d %d\r\n", (unsigned long)st.st_size, weight, flag);
 	}
 	in = rspamd_send_controller_command (c, outbuf, r, fd, err);
 

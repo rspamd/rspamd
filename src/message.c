@@ -1007,9 +1007,7 @@ process_message (struct worker_task *task)
 		task->raw_headers = g_mime_message_get_headers (task->message);
 #endif
 
-#ifdef RSPAMD_MAIN
 		process_images (task);
-#endif
 
 		/* Parse received headers */
 		first = message_get_header (task->task_pool, message, "Received", FALSE);

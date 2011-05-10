@@ -267,6 +267,7 @@ struct config_file {
 	gboolean log_urls;								/**< whether we should log URLs                         */
 	GList *debug_symbols;							/**< symbols to debug									*/
 	gboolean log_color; 							/**< output colors for console output 					*/
+	gboolean log_extended;							/**< log extended information							*/
 
 	gsize max_statfile_size;						/**< maximum size for statfile							*/
 
@@ -291,6 +292,7 @@ struct config_file {
 	GList *filters;									/**< linked list of all filters							*/
 	GList *workers;									/**< linked list of all workers params					*/
 	gchar *filters_str;								/**< string of filters									*/
+	guint modules_num;
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/

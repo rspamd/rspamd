@@ -32,21 +32,7 @@
 #include "fuzzy_storage.h"
 #include "cfg_xml.h"
 #include "symbols_cache.h"
-
-#ifndef WITHOUT_PERL
-
-#   include <EXTERN.h>			/* from the Perl distribution     */
-#   include <perl.h>			/* from the Perl distribution     */
-
-#   ifndef PERL_IMPLICIT_CONTEXT
-#      undef  dTHXa
-#      define dTHXa(a)
-#   endif
-#   include "perl.h"
-
-#elif defined(WITH_LUA)
-#   include "lua/lua_common.h"
-#endif
+#include "lua/lua_common.h"
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
@@ -54,37 +40,39 @@
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
 #define HARD_TERMINATION_TIME 10
 
-
-rspamd_hash_t                  *counters;
+extern rspamd_hash_t           *counters;
 
 static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
 static gboolean                 load_rspamd_config (struct config_file *cfg, gboolean init_modules);
 static void                     init_cfg_cache (struct config_file *cfg);
 
-sig_atomic_t                    do_restart;
-sig_atomic_t                    do_terminate;
-sig_atomic_t                    child_dead;
-sig_atomic_t                    got_alarm;
+sig_atomic_t                    do_restart = 0;
+sig_atomic_t                    do_reopen_log = 0;
+sig_atomic_t                    do_terminate = 0;
+sig_atomic_t                    child_dead = 0;
+sig_atomic_t                    got_alarm = 0;
 
 #ifdef HAVE_SA_SIGINFO
-GQueue                         *signals_info;
+GQueue                         *signals_info = NULL;
 #endif
 
-static gboolean                 config_test;
-static gboolean                 no_fork;
-static gchar                   *cfg_name;
-static gchar                   *rspamd_user;
-static gchar                   *rspamd_group;
-static gchar                   *rspamd_pidfile;
-static gboolean                 dump_vars;
-static gboolean                 dump_cache;
-static gboolean                 is_debug;
+static gboolean                 config_test = FALSE;
+static gboolean                 no_fork = FALSE;
+static gchar                   *cfg_name = NULL;
+static gchar                   *rspamd_user = NULL;
+static gchar                   *rspamd_group = NULL;
+static gchar                   *rspamd_pidfile = NULL;
+static gboolean                 dump_vars = FALSE;
+static gboolean                 dump_cache = FALSE;
+static gboolean                 is_debug = FALSE;
 
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
 
 /* List of active listen sockets indexed by worker type */
-static GHashTable              *listen_sockets;
+static GHashTable              *listen_sockets = NULL;
+
+struct rspamd_main             *rspamd_main;
 
 /* Commandline options */
 static GOptionEntry entries[] = 
@@ -239,8 +227,8 @@ drop_priv (struct config_file *cfg)
 static void
 config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 {
-	rspamd_set_logger (rspamd->cfg->log_type, TYPE_MAIN, rspamd->cfg);
-	if (open_log () == -1) {
+	rspamd_set_logger (rspamd->cfg->log_type, TYPE_MAIN, rspamd);
+	if (open_log (rspamd->logger) == -1) {
 		if (is_fatal) {
 			fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 			exit (EXIT_FAILURE);
@@ -276,7 +264,7 @@ reread_config (struct rspamd_main *rspamd)
 		else {
 			msg_debug ("replacing config");
 			free_config (rspamd->cfg);
-			close_log ();
+			close_log (rspamd->logger);
 			g_free (rspamd->cfg);
 			rspamd->cfg = tmp_cfg;
 			/* Force debug log */
@@ -349,7 +337,7 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		switch (cur->pid) {
 		case 0:
 			/* Update pid for logging */
-			update_log_pid (cf->type);
+			update_log_pid (cf->type, rspamd->logger);
 			/* Drop privilleges */
 			drop_priv (rspamd->cfg);
 			/* Set limits */
@@ -812,7 +800,6 @@ init_workers_ctx (struct rspamd_main *main)
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	struct rspamd_main             *rspamd;
 	gint                            res = 0;
 	struct sigaction                signals;
 	struct rspamd_worker           *cur;
@@ -824,43 +811,40 @@ main (gint argc, gchar **argv, gchar **env)
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
 #endif
-	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
-	bzero (rspamd, sizeof (struct rspamd_main));
-	rspamd->server_pool = memory_pool_new (memory_pool_get_size ());
-	rspamd->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
-	if (!rspamd || !rspamd->cfg) {
+	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
+	memset (rspamd_main, 0, sizeof (struct rspamd_main));
+	rspamd_main->server_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+
+	if (!rspamd_main || !rspamd_main->cfg) {
 		fprintf (stderr, "Cannot allocate memory\n");
 		exit (-errno);
 	}
-
-	do_terminate = 0;
-	do_restart = 0;
-	child_dead = 0;
-	do_reopen_log = 0;
+	rspamd_main->cfg->modules_num = MODULES_NUM;
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, env);
 #endif
 
-	rspamd->stat = memory_pool_alloc_shared (rspamd->server_pool, sizeof (struct rspamd_stat));
-	bzero (rspamd->stat, sizeof (struct rspamd_stat));
+	rspamd_main->stat = memory_pool_alloc_shared (rspamd_main->server_pool, sizeof (struct rspamd_stat));
+	memset (rspamd_main->stat, 0, sizeof (struct rspamd_stat));
 
-	bzero (rspamd->cfg, sizeof (struct config_file));
-	rspamd->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
-	init_defaults (rspamd->cfg);
+	memset (rspamd_main->cfg, 0, sizeof (struct config_file));
+	rspamd_main->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+	init_defaults (rspamd_main->cfg);
 
-	bzero (&signals, sizeof (struct sigaction));
+	memset (&signals, 0, sizeof (struct sigaction));
 
-	read_cmd_line (argc, argv, rspamd->cfg);
-	if (rspamd->cfg->cfg_name == NULL) {
-		rspamd->cfg->cfg_name = FIXED_CONFIG_FILE;
+	read_cmd_line (argc, argv, rspamd_main->cfg);
+	if (rspamd_main->cfg->cfg_name == NULL) {
+		rspamd_main->cfg->cfg_name = FIXED_CONFIG_FILE;
 	}
 
-	if (rspamd->cfg->config_test || is_debug) {
-		rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
+	if (rspamd_main->cfg->config_test || is_debug) {
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
-		rspamd->cfg->log_level = G_LOG_LEVEL_CRITICAL;
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_CRITICAL;
 	}
 
 #ifdef HAVE_SETLOCALE
@@ -872,19 +856,19 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd->cfg);
-	(void)open_log ();
-	g_log_set_default_handler (rspamd_glib_log_function, rspamd->cfg);
+	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd_main);
+	(void)open_log (rspamd_main->logger);
+	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
-	init_lua (rspamd->cfg);
+	init_lua (rspamd_main->cfg);
 
 	/* Init counters */
-	counters = rspamd_hash_new_shared (rspamd->server_pool, g_str_hash, g_str_equal, 64);
+	counters = rspamd_hash_new_shared (rspamd_main->server_pool, g_str_hash, g_str_equal, 64);
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 	
 	/* Init contextes */
-	init_workers_ctx (rspamd);
+	init_workers_ctx (rspamd_main);
 
 	/* Init classifiers options */
 	register_classifier_opt ("bayes", "min_tokens");
@@ -892,53 +876,53 @@ main (gint argc, gchar **argv, gchar **env)
 	register_classifier_opt ("winnow", "learn_threshold");
 
 	/* Pre-init of cache */
-	rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
-	rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
-	rspamd->cfg->cache->cfg = rspamd->cfg;
+	rspamd_main->cfg->cache = g_new0 (struct symbols_cache, 1);
+	rspamd_main->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg->cache->cfg = rspamd_main->cfg;
 
 	/* Load config */
-	if (! load_rspamd_config (rspamd->cfg, TRUE)) {
+	if (! load_rspamd_config (rspamd_main->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 	
 	/* Force debug log */
 	if (is_debug) {
-		rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 
-	if (rspamd->cfg->config_test || dump_vars || dump_cache) {
+	if (rspamd_main->cfg->config_test || dump_vars || dump_cache) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
-		if (! init_lua_filters (rspamd->cfg)) {
+		if (! init_lua_filters (rspamd_main->cfg)) {
 			res = FALSE;
 		}
-		if (!check_modules_config (rspamd->cfg)) {
+		if (!check_modules_config (rspamd_main->cfg)) {
 			res = FALSE;
 		}
 		/* Perform modules configuring */
-		l = g_list_first (rspamd->cfg->filters);
+		l = g_list_first (rspamd_main->cfg->filters);
 
 		while (l) {
 			filt = l->data;
 			if (filt->module) {
-				if (!filt->module->module_config_func (rspamd->cfg)) {
+				if (!filt->module->module_config_func (rspamd_main->cfg)) {
 					res = FALSE;
 				}
 			}
 			l = g_list_next (l);
 		}
 		/* Insert classifiers symbols */
-		(void)insert_classifier_symbols (rspamd->cfg);
+		(void)insert_classifier_symbols (rspamd_main->cfg);
 
-		if (! validate_cache (rspamd->cfg->cache, rspamd->cfg, FALSE)) {
+		if (! validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE)) {
 			res = FALSE;
 		}
 		if (dump_vars) {
-			dump_cfg_vars (rspamd->cfg);
+			dump_cfg_vars (rspamd_main->cfg);
 		}
 		if (dump_cache) {
-			print_symbols_cache (rspamd->cfg);
+			print_symbols_cache (rspamd_main->cfg);
 			exit (EXIT_SUCCESS);
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
@@ -950,25 +934,25 @@ main (gint argc, gchar **argv, gchar **env)
 	rlim.rlim_cur = 100 * 1024 * 1024;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-	config_logger (rspamd, TRUE);
+	config_logger (rspamd_main, TRUE);
 
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
-	rspamd->cfg->cfg_name = memory_pool_strdup (rspamd->cfg->cfg_pool, rspamd->cfg->cfg_name);
+	rspamd_main->cfg->cfg_name = memory_pool_strdup (rspamd_main->cfg->cfg_pool, rspamd_main->cfg->cfg_name);
 
 	/* Daemonize */
-	if (!rspamd->cfg->no_fork && daemon (0, 0) == -1) {
+	if (!rspamd_main->cfg->no_fork && daemon (0, 0) == -1) {
 		fprintf (stderr, "Cannot daemonize\n");
 		exit (-errno);
 	}
 
 	/* Write info */
-	rspamd->pid = getpid ();
-	rspamd->type = TYPE_MAIN;
+	rspamd_main->pid = getpid ();
+	rspamd_main->type = TYPE_MAIN;
 
 	init_signals (&signals, sig_handler);
 
-	if (write_pid (rspamd) == -1) {
-		msg_err ("cannot write pid file %s", rspamd->cfg->pid_file);
+	if (write_pid (rspamd_main) == -1) {
+		msg_err ("cannot write pid file %s", rspamd_main->cfg->pid_file);
 		exit (-errno);
 	}
 
@@ -978,30 +962,30 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("main process");
 
 	/* Init statfile pool */
-	rspamd->statfile_pool = statfile_pool_new (rspamd->server_pool, rspamd->cfg->max_statfile_size);
+	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool, rspamd_main->cfg->max_statfile_size);
 
 	event_init ();
 	g_mime_init (0);
 
 	/* Init lua filters */
-	if (! init_lua_filters (rspamd->cfg)) {
+	if (! init_lua_filters (rspamd_main->cfg)) {
 		msg_err ("error loading lua plugins");
 		exit (EXIT_FAILURE);
 	}
 
 	/* Check configuration for modules */
-	(void)check_modules_config (rspamd->cfg);
+	(void)check_modules_config (rspamd_main->cfg);
 
 	/* Insert classifiers symbols */
-	(void)insert_classifier_symbols (rspamd->cfg);
+	(void)insert_classifier_symbols (rspamd_main->cfg);
 
 	/* Perform modules configuring */
-	l = g_list_first (rspamd->cfg->filters);
+	l = g_list_first (rspamd_main->cfg->filters);
 
 	while (l) {
 		filt = l->data;
 		if (filt->module) {
-			if (!filt->module->module_config_func (rspamd->cfg)) {
+			if (!filt->module->module_config_func (rspamd_main->cfg)) {
 				res = FALSE;
 			}
 		}
@@ -1009,20 +993,20 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Init config cache */
-	init_cfg_cache (rspamd->cfg);
+	init_cfg_cache (rspamd_main->cfg);
 
 	/* Validate cache */
-	(void)validate_cache (rspamd->cfg->cache, rspamd->cfg, FALSE);
+	(void)validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE);
 
 	/* Flush log */
-	flush_log_buf ();
+	flush_log_buf (rspamd_main->logger);
 
 	/* Preload all statfiles */
-	preload_statfiles (rspamd);
+	preload_statfiles (rspamd_main);
 
 	/* Spawn workers */
-	rspamd->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
-	spawn_workers (rspamd);
+	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
+	spawn_workers (rspamd_main);
 
 	/* Signal processing cycle */
 	for (;;) {
@@ -1034,7 +1018,7 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 		if (do_terminate) {
 			msg_debug ("catch termination signal, waiting for childs");
-			pass_signal_worker (rspamd->workers, SIGTERM);
+			pass_signal_worker (rspamd_main->workers, SIGTERM);
 			break;
 		}
 		if (child_dead) {
@@ -1042,10 +1026,10 @@ main (gint argc, gchar **argv, gchar **env)
 			msg_debug ("catch SIGCHLD signal, finding terminated worker");
 			/* Remove dead child form childs list */
 			wrk = waitpid (0, &res, 0);
-			if ((cur = g_hash_table_lookup (rspamd->workers, GSIZE_TO_POINTER (wrk))) != NULL) {
+			if ((cur = g_hash_table_lookup (rspamd_main->workers, GSIZE_TO_POINTER (wrk))) != NULL) {
 				/* Unlink dead process from queue and hash table */
 
-				g_hash_table_remove (rspamd->workers, GSIZE_TO_POINTER (wrk));
+				g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (wrk));
 
 				if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 					/* Normal worker termination, do not fork one more */
@@ -1070,21 +1054,21 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		if (do_restart) {
 			do_restart = 0;
-			reopen_log ();
+			reopen_log (rspamd_main->logger);
 			msg_info ("rspamd " RVERSION " is restarting");
-			g_hash_table_foreach (rspamd->workers, kill_old_workers, NULL);
+			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 			remove_all_maps ();
-			reread_config (rspamd);
-			spawn_workers (rspamd);
+			reread_config (rspamd_main);
+			spawn_workers (rspamd_main);
 		}
 		if (do_reopen_log) {
 			do_reopen_log = 0;
-			reopen_log ();
-			g_hash_table_foreach (rspamd->workers, reopen_log_handler, NULL);
+			reopen_log (rspamd_main->logger);
+			g_hash_table_foreach (rspamd_main->workers, reopen_log_handler, NULL);
 		}
 		if (got_alarm) {
 			got_alarm = 0;
-			fork_delayed (rspamd);
+			fork_delayed (rspamd_main);
 		}
 	}
 
@@ -1100,17 +1084,17 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Set alarm for hard termination */
 	set_alarm (HARD_TERMINATION_TIME);
 	/* Wait for workers termination */
-	g_hash_table_foreach_remove (rspamd->workers, wait_for_workers, NULL);
+	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
 	msg_info ("terminating...");
 
-	statfile_pool_delete (rspamd->statfile_pool);
+	statfile_pool_delete (rspamd_main->statfile_pool);
 
-	close_log ();
+	close_log (rspamd_main->logger);
 
-	free_config (rspamd->cfg);
-	g_free (rspamd->cfg);
-	g_free (rspamd);
+	free_config (rspamd_main->cfg);
+	g_free (rspamd_main->cfg);
+	g_free (rspamd_main);
 
 	return (res);
 }

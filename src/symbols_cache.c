@@ -950,9 +950,9 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 		}
 #endif
 		if (G_UNLIKELY (check_debug_symbol (task->cfg, item->s->symbol))) {
-			rspamd_log_debug ();
+			rspamd_log_debug (rspamd_main->logger);
 			item->func (task, item->user_data);
-			rspamd_log_nodebug ();
+			rspamd_log_nodebug (rspamd_main->logger);
 		}
 		else {
 			item->func (task, item->user_data);

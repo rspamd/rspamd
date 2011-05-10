@@ -65,7 +65,7 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 
 	switch (signo) {
 	case SIGUSR1:
-		reopen_log ();
+		reopen_log (rspamd_main->logger);
 		break;
 	case SIGINT:
 	case SIGTERM:
@@ -97,7 +97,6 @@ sigusr_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev);
 		event_del (&worker->bind_ev);
-		do_reopen_log = 1;
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
@@ -572,7 +571,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 		case SMTP_STATE_RESOLVE_REVERSE:
 			/* Parse reverse reply and start resolve of this ip */
 			if (reply->code != DNS_RC_NOERROR) {
-				rspamd_conditional_debug(session->client_addr.s_addr, __FUNCTION__,
+				rspamd_conditional_debug(rspamd_main->logger, session->client_addr.s_addr, __FUNCTION__,
 						"DNS error: %s", dns_strerror (reply->code));
 				
 				if (reply->code == DNS_RC_NXDOMAIN) {
@@ -596,7 +595,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 			break;
 		case SMTP_STATE_RESOLVE_NORMAL:
 			if (reply->code != DNS_RC_NOERROR) {
-				rspamd_conditional_debug(session->client_addr.s_addr, __FUNCTION__,
+				rspamd_conditional_debug(rspamd_main->logger, session->client_addr.s_addr, __FUNCTION__,
 										"DNS error: %s", dns_strerror (reply->code));
 
 				if (reply->code == DNS_RC_NXDOMAIN) {
@@ -1008,7 +1007,7 @@ start_smtp_worker (struct rspamd_worker *worker)
 
 	event_loop (0);
 	
-	close_log ();
+	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
 

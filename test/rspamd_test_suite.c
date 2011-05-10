@@ -3,9 +3,8 @@
 #include "../src/cfg_file.h"
 #include "tests.h"
 
-rspamd_hash_t *counters = NULL;
-
 static gboolean do_debug;
+struct rspamd_main             *rspamd_main = NULL;
 
 static GOptionEntry entries[] =
 {
@@ -32,7 +31,11 @@ main (int argc, char **argv)
 
 	g_test_init (&argc, &argv, NULL);
 
-	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
+	memset (rspamd_main, 0, sizeof (struct rspamd_main));
+	rspamd_main->server_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+	cfg = rspamd_main->cfg;
 	bzero (cfg, sizeof (struct config_file));
 	cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
 
@@ -43,9 +46,9 @@ main (int argc, char **argv)
 		cfg->log_level = G_LOG_LEVEL_INFO;
 	}
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, cfg);
-	(void)open_log ();
-	g_log_set_default_handler (rspamd_glib_log_function, cfg);
+	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd_main);
+	(void)open_log (rspamd_main->logger);
+	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	g_test_add_func ("/rspamd/memcached", rspamd_memcached_test_func);
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);

@@ -5,6 +5,7 @@
 #include "mem_pool.h"
 #include "radix.h"
 #include "statfile.h"
+#include "printf.h"
 
 struct config_file;
 struct rspamd_main;
@@ -97,44 +98,13 @@ gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
 
 void gperf_profiler_init (struct config_file *cfg, const gchar *descr);
 
-#ifdef RSPAMD_MAIN
 stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf, 
 		const gchar *symbol, struct statfile **st, gboolean try_create);
-#endif
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
 void g_ptr_array_unref (GPtrArray *array);
 #endif
-/*
- * supported formats:
- *	%[0][width][x][X]O		    off_t
- *	%[0][width]T			    time_t
- *	%[0][width][u][x|X]z	    ssize_t/size_t
- *	%[0][width][u][x|X]d	    gint/guint
- *	%[0][width][u][x|X]l	    long
- *	%[0][width][u][x|X]D	    gint32/guint32
- *	%[0][width][u][x|X]L	    gint64/guint64
- *	%[0][width][.width]f	    double
- *	%[0][width][.width]F	    long double
- *	%[0][width][.width]g	    double
- *	%[0][width][.width]G	    long double
- *	%P						    pid_t
- *	%r				            rlim_t
- *	%p						    void *
- *	%V						    f_str_t *
- *	%s						    null-terminated string
- *	%S						    ascii null-terminated string
- *	%*s					        length and string
- *	%Z						    '\0'
- *	%N						    '\n'
- *	%c						    gchar
- *	%%						    %
- *
- */
-gint rspamd_sprintf (gchar *buf, const gchar *fmt, ...);
-gint rspamd_fprintf (FILE *f, const gchar *fmt, ...);
-gint rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...);
-gchar *rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args);
+
 
 /*
  * Copy src to dest limited to len, in compare with standart strlcpy(3) rspamd strlcpy does not
@@ -177,5 +147,19 @@ enum process_type str_to_process (const gchar *str);
  * Convert milliseconds to timeval fields
  */
 #define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = ((msec) - (tv)->tv_sec * 1000) * 1000; } while(0)
+
+struct worker_task;
+struct rspamd_worker;
+
+/**
+ * Construct new task for worker
+ */
+struct worker_task* construct_task (struct rspamd_worker *worker);
+/**
+ * Destroy task object and remove its IO dispatcher if it exists
+ */
+void free_task (struct worker_task *task, gboolean is_soft);
+void free_task_hard (gpointer ud);
+void free_task_soft (gpointer ud);
 
 #endif

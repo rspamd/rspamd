@@ -26,6 +26,7 @@
 #include "mem_pool.h"
 #include "fstring.h"
 #include "logger.h"
+#include "main.h"
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L

@@ -31,9 +31,7 @@
 #include "settings.h"
 #include "classifiers/classifiers.h"
 #include "cfg_xml.h"
-#ifdef WITH_LUA
 #include "lua/lua_common.h"
-#endif
 
 #define DEFAULT_SCORE 10.0
 
@@ -183,6 +181,10 @@ init_defaults (struct config_file *cfg)
 	cfg->classifiers_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->metrics_symbols = g_hash_table_new (g_str_hash, g_str_equal);
+
+	cfg->log_level = G_LOG_LEVEL_WARNING;
+	cfg->log_extended = TRUE;
+
 	init_settings (cfg);
 
 }
@@ -528,9 +530,9 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 	while (*p) {
 		cur = NULL;
 		/* Search modules from known C modules */
-		for (i = 0; i < MODULES_NUM; i++) {
+		for (i = 0; i < cfg->modules_num; i++) {
 			g_strstrip (*p);
-			if (strcasecmp (modules[i].name, *p) == 0) {
+			if (modules[i].name != NULL && g_ascii_strcasecmp (modules[i].name, *p) == 0) {
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				msg_debug ("found C filter %s", *p);

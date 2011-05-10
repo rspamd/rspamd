@@ -30,9 +30,12 @@
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 #include "message.h"
+#include "lua/lua_common.h"
 
-
+module_t                        modules[] = { {NULL, NULL, NULL, NULL} };
+struct rspamd_main             *rspamd_main = NULL;
 static gchar                   *cfg_name;
+extern rspamd_hash_t           *counters;
 
 static GOptionEntry entries[] =
 {
@@ -84,13 +87,14 @@ classifiers_callback (gpointer value, void *arg)
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 	ctx->debug = TRUE;
 
+	cur = g_list_first (task->text_parts);
 	if ((tokens = g_hash_table_lookup (task->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
 			if (header) {
 				c.len = strlen (cur->data);
 				if (c.len > 0) {
 					c.begin = cur->data;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE)) {
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, TRUE)) {
 						msg_info ("cannot tokenize input");
 						return;
 					}
@@ -105,7 +109,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.begin = text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, TRUE)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}
@@ -207,55 +211,59 @@ process_file (const gchar *filename, struct rspamd_main *rspamd)
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	struct config_file             *cfg;
-	struct rspamd_main             *rspamd;
 	gchar                          **arg;
 
-	rspamd = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
-	bzero (rspamd, sizeof (struct rspamd_main));
-	rspamd->server_pool = memory_pool_new (memory_pool_get_size ());
-	rspamd->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
-	if (!rspamd || !rspamd->cfg) {
+	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
+	memset (rspamd_main, 0, sizeof (struct rspamd_main));
+	rspamd_main->server_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+	if (!rspamd_main || !rspamd_main->cfg) {
 		fprintf (stderr, "Cannot allocate memory\n");
 		exit (-errno);
 	}
+	rspamd_main->cfg->modules_num = 0;
 
-	bzero (rspamd->cfg, sizeof (struct config_file));
-	rspamd->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
-	init_defaults (rspamd->cfg);
+	memset (rspamd_main->cfg, 0, sizeof (struct config_file));
+	rspamd_main->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+	init_defaults (rspamd_main->cfg);
 
-	read_cmd_line (&argc, &argv, rspamd->cfg);
-	if (rspamd->cfg->cfg_name == NULL) {
-		rspamd->cfg->cfg_name = FIXED_CONFIG_FILE;
+	read_cmd_line (&argc, &argv, rspamd_main->cfg);
+	if (rspamd_main->cfg->cfg_name == NULL) {
+		rspamd_main->cfg->cfg_name = FIXED_CONFIG_FILE;
 	}
 
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd->cfg);
-	(void)open_log ();
-	g_log_set_default_handler (rspamd_glib_log_function, rspamd->cfg);
+	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd_main);
+	(void)open_log (rspamd_main->logger);
+	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main);
+	init_lua (rspamd_main->cfg);
+	/* Init counters */
+	counters = rspamd_hash_new_shared (rspamd_main->server_pool, g_str_hash, g_str_equal, 64);
 
 	/* Init classifiers options */
 	register_classifier_opt ("bayes", "min_tokens");
 	register_classifier_opt ("winnow", "min_tokens");
 	register_classifier_opt ("winnow", "learn_threshold");
 	/* Load config */
-	if (! load_rspamd_config (rspamd->cfg)) {
+	if (! load_rspamd_config (rspamd_main->cfg)) {
 		exit (EXIT_FAILURE);
 	}
 
 	/* Init statfile pool */
-	rspamd->statfile_pool = statfile_pool_new (rspamd->server_pool, rspamd->cfg->max_statfile_size);
+	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool, rspamd_main->cfg->max_statfile_size);
+	g_mime_init (0);
+	rspamd_main->cfg->log_extended = FALSE;
 
 	/* Check argc */
 	if (argc > 1) {
-		arg = argv[1];
+		arg = &argv[1];
 		while (*arg) {
-			process_file (*arg, rspamd);
+			process_file (*arg, rspamd_main);
 			arg ++;
 		}
 	}
 	else {
-		process_stdin (rspamd);
+		process_stdin (rspamd_main);
 	}
 
 	return 0;
