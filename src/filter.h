@@ -62,6 +62,7 @@ struct metric {
 	GHashTable *descriptions;						/**< descriptions of symbols in metric				*/
 	enum rspamd_metric_action action;				/**< action to do by this metric by default		  	*/
 	GList *actions;									/**< actions that can be performed by this metric 	*/
+	gchar *subject;									/**< subject rewrite string							*/
 };
 
 /**

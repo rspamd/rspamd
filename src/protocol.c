@@ -909,6 +909,39 @@ show_metric_symbols_json (struct metric_result *metric_res, struct metric_callba
 	return cd->alive;
 }
 
+/* Write new subject */
+static const gchar *
+make_rewritten_subject (struct metric *metric, struct worker_task *task)
+{
+	static gchar                    subj_buf[1024];
+	gchar                          *p = subj_buf, *end, *c, *res;
+	const gchar                    *s;
+
+	end = p + sizeof(subj_buf);
+	c = metric->subject;
+	s = g_mime_message_get_subject (task->message);
+
+	while (p < end) {
+		if (*c == '\0') {
+			*p = '\0';
+			break;
+		}
+		else if (*c == '%' && *(c + 1) == 's') {
+			p += rspamd_strlcpy (p, (s != NULL) ? s : "", end - p);
+			c += 2;
+		}
+		else {
+			*p = *c ++;
+		}
+		p ++;
+	}
+	res = g_mime_utils_header_encode_text (subj_buf);
+
+	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, res);
+
+	return res;
+}
+
 /* Print a single metric line */
 static gint
 print_metric_data_rspamc (struct worker_task *task, gchar *outbuf, gsize size,
@@ -980,6 +1013,10 @@ print_metric_data_rspamc (struct worker_task *task, gchar *outbuf, gsize size,
 			r += rspamd_snprintf (outbuf + r, size - r,
 					"Action: %s" CRLF, str_action_metric (action));
 		}
+		if (action == METRIC_ACTION_REWRITE_SUBJECT && metric_res->metric->subject != NULL) {
+			r += rspamd_snprintf (outbuf + r, size - r,
+					"Subject: %s" CRLF, make_rewritten_subject (metric_res->metric, task));
+		}
 	}
 
 	return r;
@@ -1020,6 +1057,10 @@ print_metric_data_json (struct worker_task *task, gchar *outbuf, gsize size,
 					metric_res->score,
 					task->is_skipped ? "true" : "false", ms, rs,
 					str_action_metric (action));
+		if (action == METRIC_ACTION_REWRITE_SUBJECT && metric_res->metric->subject != NULL) {
+			r += rspamd_snprintf (outbuf + r, size - r,
+					"    \"subject\": \"%s\"," CRLF, make_rewritten_subject (metric_res->metric, task));
+		}
 	}
 
 	return r;

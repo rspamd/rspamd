@@ -397,6 +397,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"subject",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct metric, subject),
+				NULL
+			},
+			{
 				"symbol",
 				handle_metric_symbol,
 				0,

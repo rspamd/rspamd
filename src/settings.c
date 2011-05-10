@@ -229,26 +229,24 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 						act_value = json_object_iter_value (act_it);
 
 						if (act_value && json_is_number (act_value)) {
-							if (check_action_str (json_object_iter_key (act_it), &j)) {
+							/* Special cases */
+							if (g_ascii_strcasecmp (json_object_iter_key (act_it), "spam_score") == 0) {
+								score = g_malloc (sizeof (double));
+								*score = json_number_value (act_value);
+								g_hash_table_insert (cur_settings->metric_scores,
+										g_strdup (json_object_iter_key (json_it)), score);
+							}
+							else if (g_ascii_strcasecmp (json_object_iter_key (act_it), "reject_score") == 0) {
+								score = g_malloc (sizeof (double));
+								*score = json_number_value (act_value);
+								g_hash_table_insert (cur_settings->reject_scores,
+										g_strdup (json_object_iter_key (json_it)), score);
+							}
+							else if (check_action_str (json_object_iter_key (act_it), &j)) {
 								new_act = g_malloc (sizeof (struct metric_action));
 								new_act->action = j;
 								new_act->score = json_number_value (act_value);
 								cur_act = g_list_prepend (cur_act, new_act);
-							}
-							else {
-								/* Special cases */
-								if (g_ascii_strcasecmp (json_object_iter_key (act_it), "spam_score") == 0) {
-									score = g_malloc (sizeof (double));
-									*score = json_number_value (act_value);
-									g_hash_table_insert (cur_settings->metric_scores,
-											g_strdup (json_object_iter_key (json_it)), score);
-								}
-								else if (g_ascii_strcasecmp (json_object_iter_key (act_it), "reject_score") == 0) {
-									score = g_malloc (sizeof (double));
-									*score = json_number_value (act_value);
-									g_hash_table_insert (cur_settings->reject_scores,
-											g_strdup (json_object_iter_key (json_it)), score);
-								}
 							}
 						}
 						act_it = json_object_iter_next (it_val, act_it);
