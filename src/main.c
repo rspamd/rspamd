@@ -820,7 +820,6 @@ main (gint argc, gchar **argv, gchar **env)
 		fprintf (stderr, "Cannot allocate memory\n");
 		exit (-errno);
 	}
-	rspamd_main->cfg->modules_num = MODULES_NUM;
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, env);
@@ -831,6 +830,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	memset (rspamd_main->cfg, 0, sizeof (struct config_file));
 	rspamd_main->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg->modules_num = MODULES_NUM;
 	init_defaults (rspamd_main->cfg);
 
 	memset (&signals, 0, sizeof (struct sigaction));
