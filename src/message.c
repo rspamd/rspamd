@@ -28,7 +28,6 @@
 #include "message.h"
 #include "cfg_file.h"
 #include "html.h"
-#include "modules.h"
 #include "images.h"
 
 #define RECURSION_LIMIT 30

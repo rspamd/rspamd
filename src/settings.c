@@ -329,6 +329,8 @@ static                          gboolean
 check_setting (struct worker_task *task, struct rspamd_settings **user_settings, struct rspamd_settings **domain_settings)
 {
 	gchar                           *field = NULL, *domain = NULL;
+	gchar                            cmp_buf[1024];
+	gint                             len;
 
 	if (task->deliver_to != NULL) {
 		/* First try to use deliver-to field */
@@ -359,10 +361,17 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 
 	/* First try to search per-user settings */
 	if (field != NULL) {
-		*user_settings = g_hash_table_lookup (task->cfg->user_settings, field);
+		if (*field == '<') {
+			field ++;
+		}
+		len = strcspn (field, ">");
+		rspamd_strlcpy (cmp_buf, field, MIN (sizeof (cmp_buf), len + 1));
+		*user_settings = g_hash_table_lookup (task->cfg->user_settings, cmp_buf);
 	}
 	if (domain != NULL) {
-		*domain_settings = g_hash_table_lookup (task->cfg->domain_settings, domain);
+		len = strcspn (domain, ">");
+		rspamd_strlcpy (cmp_buf, domain, MIN (sizeof (cmp_buf), len + 1));
+		*domain_settings = g_hash_table_lookup (task->cfg->domain_settings, cmp_buf);
 	}
 
 	if (*domain_settings != NULL || *user_settings != NULL) {
