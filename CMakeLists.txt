@@ -563,6 +563,10 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/fuzzy_check.c
 				src/plugins/spf.c)
 
+ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
+					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
+					WORKING_DIRECTORY src)
+
 ADD_SUBDIRECTORY(src/lua)
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
