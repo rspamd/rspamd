@@ -563,6 +563,10 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/fuzzy_check.c
 				src/plugins/spf.c)
 
+ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
+					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
+					WORKING_DIRECTORY src)
+
 ADD_SUBDIRECTORY(src/lua)
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
@@ -578,16 +582,13 @@ LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
 ############################ TARGETS SECTION ###############################
 
-ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
-					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
-					WORKING_DIRECTORY src)
+
 
 CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
 CONFIGURE_FILE(rspamd.xml.sample conf/rspamd.xml.sample @ONLY)
 
 ######################### LINK SECTION ###############################
-
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} 
 					  ${CLASSIFIERSSRC} ${PLUGINSSRC})

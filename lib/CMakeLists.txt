@@ -64,4 +64,9 @@ SET_TARGET_PROPERTIES(rspamdserver PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamdserver PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
 TARGET_LINK_LIBRARIES(rspamdserver rspamd_lua)
 TARGET_LINK_LIBRARIES(rspamdserver rspamd_json)
-TARGET_LINK_LIBRARIES(rspamdserver rspamd_cdb)          
+TARGET_LINK_LIBRARIES(rspamdserver rspamd_cdb)   
+
+ADD_CUSTOM_TARGET(genmodules
+					COMMAND ../utils/gen-modules.sh ${PLUGINSSRC}
+					WORKING_DIRECTORY src)   
+ADD_DEPENDENCIES(rspamdserver genmodules)
