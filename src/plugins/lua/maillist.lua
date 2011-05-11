@@ -153,6 +153,86 @@ function check_ml_subscriberu(task)
 
 end
 
+-- RFC 2369 headers
+function check_rfc2369(task)
+	local message = task:get_message()
+	local header = message:get_header('List-Id')
+	if not header then
+		return false
+	end
+	header = message:get_header('List-Unsubscribe')
+	if not header or not string.find(header[1], '^^<.+>$') then
+		return false
+	end
+	header = message:get_header('List-Subscribe')
+	if not header or not string.find(header[1], '^^<.+>$') then
+		return false
+	end
+	
+	return true
+end
+
+-- RFC 2919 headers
+function check_rfc2919(task)
+	local message = task:get_message()
+	local header = message:get_header('List-Id')
+	if not header or not string.find(header[1], '^<.+>$') then
+		return false
+	end
+	
+	return check_rfc2369(task)
+end
+
+-- Google groups detector
+-- header exists X-Google-Loop
+-- RFC 2919 headers exist
+--
+function check_ml_googlegroup(task)
+	local message = task:get_message()
+	local header = message:get_header('X-Google-Loop')
+	
+	if not header then
+		return false
+	end
+
+	return check_rfc2919(task)
+end
+
+-- Majordomo detector
+-- Check Sender for owner- or -owner
+-- Check Precendence for 'Bulk' or 'List'
+--
+-- And nothing more can be extracted :(
+function check_ml_majordomo(task)
+	local message = task:get_message()
+	local header = message:get_header('Sender')
+	if not header or (not string.find(header[1], '^owner-.*$') and not string.find(header[1], '^.*-owner$')) then
+		return false
+	end
+	
+	local header = message:get_header('Precedence')
+	if not header or (header[1] ~= 'list' and header[1] ~= 'bulk') then
+		return false
+	end
+
+	return true
+end
+
+-- CGP detector
+-- X-Listserver = CommuniGate Pro LIST
+-- RFC 2919 headers exist
+--
+function check_ml_cgp(task)
+	local message = task:get_message()
+	local header = message:get_header('X-Listserver')
+	
+	if not header or header ~= 'CommuniGate Pro LIST' then
+		return false
+	end
+
+	return check_rfc2919(task)
+end
+
 function check_maillist(task)
 	if check_ml_ezmlm(task) then
 		task:insert_result(symbol, 1, 'ezmlm')
@@ -160,6 +240,12 @@ function check_maillist(task)
 		task:insert_result(symbol, 1, 'mailman')
 	elseif check_ml_subscriberu(task) then
 		task:insert_result(symbol, 1, 'subscribe.ru')
+	elseif check_ml_googlegroup(task) then
+		task:insert_result(symbol, 1, 'googlegroups')
+	elseif check_ml_majordomo(task) then
+		task:insert_result(symbol, 1, 'majordomo')
+	elseif check_ml_cgp(task) then
+		task:insert_result(symbol, 1, 'cgp')
 	end
 end
 -- Registration
@@ -169,8 +255,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 	end
 end
 -- Configuration
-local opts =  rspamd_config:get_all_opt('maillist')
-if opts then
+local opts =  rspamd_config:get_all_opt('maillist')if opts then
 	if opts['symbol'] then
 		symbol = opts['symbol'] 
 		rspamd_config:register_symbol(symbol, 1.0, 'check_maillist')
