@@ -407,7 +407,7 @@ check_bwhitelist (struct worker_task *task, struct rspamd_settings *s, gboolean 
 {
 	gchar                           *src_email = NULL, *src_domain = NULL, *data;
 
-	if (task->from != NULL) {
+	if (task->from != NULL && *task->from != '\0') {
 		src_email = task->from;
 	} else {
 		return FALSE;
