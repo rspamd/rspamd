@@ -443,10 +443,10 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 			/* First look in user white list */
 			if (check_bwhitelist(task, us, &black)) {
 				if (black) {
-					*score = DEFAULT_REJECT_SCORE;
+					*score = -DEFAULT_REJECT_SCORE;
 				}
 				else {
-					*score = 0;
+					*score = DEFAULT_REJECT_SCORE;
 				}
 				return TRUE;
 			}
@@ -493,10 +493,11 @@ gboolean
 check_metric_action_settings (struct worker_task *task, struct metric *metric, double score, enum rspamd_metric_action *result)
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
-	struct metric_action           *act;
+	struct metric_action           *act, *sel = NULL;
 	GList                          *cur;
 	enum rspamd_metric_action       res = METRIC_ACTION_NOACTION;
 	gboolean                        black;
+	double                          rej = 0.;
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
@@ -516,6 +517,10 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 					act = cur->data;
 					if (score >= act->score) {
 						res = act->action;
+						sel = act;
+					}
+					if (res == METRIC_ACTION_REJECT) {
+						rej = act->score;
 					}
 					cur = g_list_next (cur);
 				}
@@ -537,6 +542,7 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 					act = cur->data;
 					if (score >= act->score) {
 						res = act->action;
+						sel = act;
 					}
 					cur = g_list_next (cur);
 				}
@@ -544,8 +550,16 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 		}
 	}
 
-	if (res != METRIC_ACTION_NOACTION && result != NULL) {
+	if (sel != NULL && result != NULL) {
 		*result = res;
+		if (res != rej && rej != 0.) {
+			msg_info ("<%s> applying action %s with score %.2f, reject: %.2f", task->message_id,
+					str_action_metric (sel->action), sel->score, rej);
+		}
+		else {
+			msg_info ("<%s> applying action %s with score %.2f", task->message_id,
+								str_action_metric (sel->action), sel->score);
+		}
 		return TRUE;
 	}
 
