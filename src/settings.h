@@ -10,6 +10,7 @@ struct rspamd_settings {
 	GHashTable *metric_actions;			/**< hash table of metric actions for this setting				*/
 	GHashTable *factors;				/**< hash table of new factors for this setting			*/
 	GHashTable *whitelist;				/**< hash table of whitelist for this setting			*/
+	GHashTable *blacklist;				/**< hash table of whitelist for this setting			*/
 	gchar *statfile_alias;				/**< alias for statfile used							*/
 	gboolean want_spam;					/**< if true disable rspamd checks						*/
 };

@@ -70,6 +70,9 @@ settings_free (gpointer data)
 	if (s->whitelist) {
 		g_hash_table_destroy (s->whitelist);
 	}
+	if (s->blacklist) {
+		g_hash_table_destroy (s->blacklist);
+	}
 	g_free (s);
 }
 
@@ -175,6 +178,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		cur_settings->metric_actions = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, settings_actions_free);
 		cur_settings->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->whitelist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		cur_settings->blacklist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 		cur_settings->statfile_alias = NULL;
 		cur_settings->want_spam = FALSE;
 
@@ -287,6 +291,19 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		    
 			}
 		}
+		/* Blacklist object */
+		cur_nm = json_object_get (cur_elt, "blacklist");
+		if (cur_nm != NULL && json_is_array (cur_nm)) {
+			n = json_array_size(cur_nm);
+			for(j = 0; j < n; j++) {
+				it_val = json_array_get(cur_nm, j);
+				if (it_val && json_is_string (it_val)) {
+					g_hash_table_insert (cur_settings->blacklist,
+							g_strdup (json_string_value (it_val)), g_strdup (json_string_value (it_val)));
+				}
+
+			}
+		}
 		/* Want spam */
 		cur_nm = json_object_get (cur_elt, "want_spam");
 		if (cur_nm != NULL) {
@@ -382,9 +399,9 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 }
 
 static				gboolean
-check_whitelist(struct worker_task *task, struct rspamd_settings *s)
+check_bwhitelist (struct worker_task *task, struct rspamd_settings *s, gboolean *is_black)
 {
-	gchar                           *src_email = NULL, *src_domain = NULL;
+	gchar                           *src_email = NULL, *src_domain = NULL, *data;
 
 	if (task->from != NULL) {
 		src_email = task->from;
@@ -397,8 +414,16 @@ check_whitelist(struct worker_task *task, struct rspamd_settings *s)
 		src_domain++;
 	}
 
-	if (((g_hash_table_lookup (s->whitelist, src_email) != NULL) ||
-			( (src_domain != NULL) && (g_hash_table_lookup (s->whitelist, src_domain) != NULL)) )) {
+	if ((((data = g_hash_table_lookup (s->blacklist, src_email)) != NULL) ||
+			( (src_domain != NULL) && ((data = g_hash_table_lookup (s->blacklist, src_domain)) != NULL)) )) {
+		*is_black = TRUE;
+		msg_info ("<%s> blacklisted as domain %s is in settings blacklist", task->message_id, data);
+		return TRUE;
+	}
+	if ((((data = g_hash_table_lookup (s->whitelist, src_email)) != NULL) ||
+			( (src_domain != NULL) && ((data = g_hash_table_lookup (s->whitelist, src_domain)) != NULL)) )) {
+		*is_black = FALSE;
+		msg_info ("<%s> whitelisted as domain %s is in settings blacklist", task->message_id, data);
 		return TRUE;
 	}
 	return FALSE;
@@ -409,14 +434,20 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
 	double                         *sc, *rs;
+	gboolean                        black;
 
 	*rscore = DEFAULT_REJECT_SCORE;
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
 			/* First look in user white list */
-			if (check_whitelist(task, us)) {
-				*score = DEFAULT_REJECT_SCORE;
+			if (check_bwhitelist(task, us, &black)) {
+				if (black) {
+					*score = DEFAULT_REJECT_SCORE;
+				}
+				else {
+					*score = 0;
+				}
 				return TRUE;
 			}
 			if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {
@@ -436,8 +467,13 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 			}
 		}
 		else if (ds != NULL) {
-			if (check_whitelist(task, ds)) {
-				*score = DEFAULT_REJECT_SCORE;
+			if (check_bwhitelist(task, ds, &black)) {
+				if (black) {
+					*score = DEFAULT_REJECT_SCORE;
+				}
+				else {
+					*score = 0;
+				}
 				return TRUE;
 			}
 			if ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL) {
@@ -460,12 +496,18 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 	struct metric_action           *act;
 	GList                          *cur;
 	enum rspamd_metric_action       res = METRIC_ACTION_NOACTION;
+	gboolean                        black;
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
 			/* Check whitelist and set appropriate action for whitelisted users */
-			if (check_whitelist(task, us)) {
-				*result = METRIC_ACTION_NOACTION;
+			if (check_bwhitelist(task, us, &black)) {
+				if (black) {
+					*result = METRIC_ACTION_REJECT;
+				}
+				else {
+					*result = METRIC_ACTION_NOACTION;
+				}
 				return TRUE;
 			}
 			if ((cur = g_hash_table_lookup (us->metric_actions, metric->name)) != NULL) {
@@ -481,8 +523,13 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 		}
 		else if (ds != NULL) {
 			/* Check whitelist and set appropriate action for whitelisted users */
-			if (check_whitelist(task, ds)) {
-				*result = METRIC_ACTION_NOACTION;
+			if (check_bwhitelist(task, ds, &black)) {
+				if (black) {
+					*result = METRIC_ACTION_REJECT;
+				}
+				else {
+					*result = METRIC_ACTION_NOACTION;
+				}
 				return TRUE;
 			}
 			if ((cur = g_hash_table_lookup (ds->metric_actions, metric->name)) != NULL) {
