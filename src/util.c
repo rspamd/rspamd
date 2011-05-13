@@ -1336,6 +1336,29 @@ free_task_soft (gpointer ud)
   free_task (task, FALSE);
 }
 
+gchar *
+escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in)
+{
+	gint                          len = 0;
+	gchar                        *res, *orig, *p;
+
+	orig = in->begin;
+	while ((g_ascii_isspace (*orig) || *orig == '<') && orig - in->begin < in->len) {
+		orig ++;
+	}
+
+	p = orig;
+	while ((!g_ascii_isspace (*p) && *p != '>') && p - in->begin < in->len) {
+		p ++;
+		len ++;
+	}
+
+	res = memory_pool_alloc (pool, len + 1);
+	rspamd_strlcpy (res, orig, len + 1);
+
+	return res;
+}
+
 /*
  * vi:ts=4
  */

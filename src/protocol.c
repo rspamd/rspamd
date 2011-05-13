@@ -457,7 +457,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'D':
 		/* Deliver-To */
 		if (g_ascii_strncasecmp (headern, DELIVER_TO_HEADER, sizeof (DELIVER_TO_HEADER) - 1) == 0) {
-			task->deliver_to = memory_pool_fstrdup (task->task_pool, line);
+			task->deliver_to = escape_braces_addr_fstr (task->task_pool, line);
 			debug_task ("read deliver-to header, value: %s", task->deliver_to);
 		}
 		else {
@@ -481,7 +481,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'F':
 		/* from */
 		if (g_ascii_strncasecmp (headern, FROM_HEADER, sizeof (FROM_HEADER) - 1) == 0) {
-			task->from = memory_pool_fstrdup (task->task_pool, line);
+			task->from = escape_braces_addr_fstr (task->task_pool, line);
 			debug_task ("read from header, value: %s", task->from);
 		}
 		else {
@@ -516,7 +516,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'R':
 		/* rcpt */
 		if (g_ascii_strncasecmp (headern, RCPT_HEADER, sizeof (RCPT_HEADER) - 1) == 0) {
-			tmp = memory_pool_fstrdup (task->task_pool, line);
+			tmp = escape_braces_addr_fstr (task->task_pool, line);
 			task->rcpt = g_list_prepend (task->rcpt, tmp);
 			debug_task ("read rcpt header, value: %s", tmp);
 		}

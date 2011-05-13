@@ -6,6 +6,7 @@
 #include "radix.h"
 #include "statfile.h"
 #include "printf.h"
+#include "fstring.h"
 
 struct config_file;
 struct rspamd_main;
@@ -142,6 +143,11 @@ const gchar * process_to_str (enum process_type type);
  * @return string representation of type
  */
 enum process_type str_to_process (const gchar *str);
+
+/*
+ * Strip <> from email address
+ */
+gchar * escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in);
 
 /*
  * Convert milliseconds to timeval fields

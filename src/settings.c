@@ -285,8 +285,10 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			for(j = 0; j < n; j++) {
 				it_val = json_array_get(cur_nm, j);
 				if (it_val && json_is_string (it_val)) {
-					g_hash_table_insert (cur_settings->whitelist,
+					if (strlen (json_string_value (it_val)) > 0) {
+						g_hash_table_insert (cur_settings->whitelist,
 							g_strdup (json_string_value (it_val)), g_strdup (json_string_value (it_val)));
+					}
 				}
 		    
 			}
@@ -298,8 +300,10 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			for(j = 0; j < n; j++) {
 				it_val = json_array_get(cur_nm, j);
 				if (it_val && json_is_string (it_val)) {
-					g_hash_table_insert (cur_settings->blacklist,
+					if (strlen (json_string_value (it_val)) > 0) {
+						g_hash_table_insert (cur_settings->blacklist,
 							g_strdup (json_string_value (it_val)), g_strdup (json_string_value (it_val)));
+					}
 				}
 
 			}
