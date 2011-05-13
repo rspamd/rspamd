@@ -34,6 +34,10 @@ static gchar                   *connect_str = "localhost";
 static gchar                   *password;
 static gchar                   *statfile;
 static gchar                   *ip;
+static gchar                   *from;
+static gchar                   *deliver_to;
+static gchar                   *rcpt;
+static gchar                   *user;
 static gint                     weight = 1;
 static gint                     flag;
 static gint                     timeout = 5;
@@ -51,6 +55,10 @@ static GOptionEntry entries[] =
 		{ "pass", 'p', 0, G_OPTION_ARG_NONE, &pass_all, "Pass all filters", NULL },
 		{ "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "More verbose output", NULL },
 		{ "ip", 'i', 0, G_OPTION_ARG_STRING, &ip, "Emulate that message was received from specified ip address", NULL },
+		{ "user", 'u', 0, G_OPTION_ARG_STRING, &user, "Emulate that message was from specified user", NULL },
+		{ "deliver", 'd', 0, G_OPTION_ARG_STRING, &deliver_to, "Emulate that message is delivered to specified user", NULL },
+		{ "from", 'F', 0, G_OPTION_ARG_STRING, &from, "Emulate that message is from specified user", NULL },
+		{ "rcpt", 'r', 0, G_OPTION_ARG_STRING, &rcpt, "Emulate that message is for specified user", NULL },
 		{ "timeout", 't', 0, G_OPTION_ARG_INT, &timeout, "Timeout for waiting for a reply", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
@@ -288,6 +296,18 @@ add_options (GHashTable *opts)
 {
 	if (ip != NULL) {
 		g_hash_table_insert (opts, "Ip", ip);
+	}
+	if (from != NULL) {
+		g_hash_table_insert (opts, "From", from);
+	}
+	if (user != NULL) {
+		g_hash_table_insert (opts, "User", user);
+	}
+	if (rcpt != NULL) {
+		g_hash_table_insert (opts, "Rcpt", rcpt);
+	}
+	if (deliver_to != NULL) {
+		g_hash_table_insert (opts, "Deliver-To", deliver_to);
 	}
 	if (pass_all) {
 		g_hash_table_insert (opts, "Pass", "all");

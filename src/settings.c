@@ -438,22 +438,11 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
 	double                         *sc, *rs;
-	gboolean                        black;
 
 	*rscore = DEFAULT_REJECT_SCORE;
 
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL) {
-			/* First look in user white list */
-			if (check_bwhitelist(task, us, &black)) {
-				if (black) {
-					*score = -DEFAULT_REJECT_SCORE;
-				}
-				else {
-					*score = DEFAULT_REJECT_SCORE;
-				}
-				return TRUE;
-			}
 			if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {
 				*rscore = *rs;
 			}
@@ -471,15 +460,6 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 			}
 		}
 		else if (ds != NULL) {
-			if (check_bwhitelist(task, ds, &black)) {
-				if (black) {
-					*score = DEFAULT_REJECT_SCORE;
-				}
-				else {
-					*score = 0;
-				}
-				return TRUE;
-			}
 			if ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL) {
 				*rscore = *rs;
 			}
