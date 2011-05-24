@@ -253,7 +253,7 @@ parse_qmail_recv (memory_pool_t * pool, gchar *line, struct received_header *r)
 {
 	gchar                           *s, *p, t;
 
-	/* We are intersted only with received from network headers */
+	/* We are interested only with received from network headers */
 	if ((p = strstr (line, "from network")) == NULL) {
 		r->is_error = 2;
 		return;
@@ -467,12 +467,12 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 static void
 process_raw_headers (struct worker_task *task)
 {
-	struct raw_header              *new;
+	struct raw_header              *new, *lp;
 	gchar                          *p, *c, *tmp, *tp;
 	gint                            state = 0, l, next_state, err_state, t_state;
 	gboolean                        valid_folding = FALSE;
 
-	p = task->raw_headers;
+	p = task->raw_headers_str;
 	c = p;
 	while (*p) {
 		/* FSM for processing headers */
@@ -480,7 +480,7 @@ process_raw_headers (struct worker_task *task)
 		case 0:
 			/* Begin processing headers */
 			if (!g_ascii_isalpha (*p)) {
-				/* We have some garbadge at the beginning of headers, skip this line */
+				/* We have some garbage at the beginning of headers, skip this line */
 				state = 100;
 				next_state = 0;
 			}
@@ -503,7 +503,7 @@ process_raw_headers (struct worker_task *task)
 				c = p;
 			}
 			else if (g_ascii_isspace (*p)) {
-				/* Not header but some garbadge */
+				/* Not header but some garbage */
 				state = 100;
 				next_state = 0;
 			}
@@ -554,6 +554,9 @@ process_raw_headers (struct worker_task *task)
 				next_state = 3;
 				err_state = 4;
 			}
+			else if (*(p + 1) == '\0') {
+				state = 4;
+			}
 			else {
 				p ++;
 			}
@@ -593,36 +596,59 @@ process_raw_headers (struct worker_task *task)
 			}
 			*tp = '\0';
 			new->value = tmp;
-			task->raw_headers_list = g_list_prepend (task->raw_headers_list, new);
+			new->next = NULL;
+			if ((lp = g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
+				while (lp->next != NULL) {
+					lp = lp->next;
+				}
+				lp->next = new;
+			}
+			else {
+				g_hash_table_insert (task->raw_headers, new->name, new);
+			}
 			debug_task ("add raw header %s: %s", new->name, new->value);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
-			task->raw_headers_list = g_list_prepend (task->raw_headers_list, new);
+			new->next = NULL;
+			if ((lp = g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
+				while (lp->next != NULL) {
+					lp = lp->next;
+				}
+				lp->next = new;
+			}
+			else {
+				g_hash_table_insert (task->raw_headers, new->name, new);
+			}
 			state = 0;
 			debug_task ("add raw header %s: %s", new->name, new->value);
 			break;
 		case 99:
 			/* Folding state */
-			if (*p == '\r' || *p == '\n') {
-				p ++;
-				valid_folding = FALSE;
-			}
-			else if (*p == '\t' || *p == ' ') {
-				/* Valid folding */
-				p ++;
-				valid_folding = TRUE;
+			if (*(p + 1) == '\0') {
+				state = err_state;
 			}
 			else {
-				if (valid_folding) {
-					debug_task ("go to state: %d->%d", state, next_state);
-					state = next_state;
+				if (*p == '\r' || *p == '\n') {
+					p ++;
+					valid_folding = FALSE;
+				}
+				else if (*p == '\t' || *p == ' ') {
+					/* Valid folding */
+					p ++;
+					valid_folding = TRUE;
 				}
 				else {
-					/* Fall back */
-					debug_task ("go to state: %d->%d", state, err_state);
-					state = err_state;
+					if (valid_folding) {
+						debug_task ("go to state: %d->%d", state, next_state);
+						state = next_state;
+					}
+					else {
+						/* Fall back */
+						debug_task ("go to state: %d->%d", state, err_state);
+						state = err_state;
+					}
 				}
 			}
 			break;
@@ -640,6 +666,9 @@ process_raw_headers (struct worker_task *task)
 					p ++;
 				}
 				p ++;
+				state = next_state;
+			}
+			else if (*(p + 1) == '\0') {
 				state = next_state;
 			}
 			else {
@@ -1001,9 +1030,9 @@ process_message (struct worker_task *task)
 		}
 
 #ifdef GMIME24
-		task->raw_headers = g_mime_object_get_headers (GMIME_OBJECT (task->message));
+		task->raw_headers_str = g_mime_object_get_headers (GMIME_OBJECT (task->message));
 #else
-		task->raw_headers = g_mime_message_get_headers (task->message);
+		task->raw_headers_str = g_mime_message_get_headers (task->message);
 #endif
 
 		process_images (task);
@@ -1021,10 +1050,9 @@ process_message (struct worker_task *task)
 			g_list_free (first);
 		}
 
-		if (task->raw_headers) {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers);
+		if (task->raw_headers_str) {
+			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers_str);
 			process_raw_headers (task);
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, task->raw_headers_list);
 		}
 
 		task->rcpts = g_mime_message_get_all_recipients (message);
@@ -1634,12 +1662,16 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 GList*
 message_get_raw_header (struct worker_task *task, const gchar *field, gboolean strong)
 {
-	GList                               *cur, *gret = NULL;
+	GList                               *gret = NULL;
 	struct raw_header                   *rh;
 
-	cur = task->raw_headers_list;
-	while (cur) {
-		rh = cur->data;
+	rh = g_hash_table_lookup (task->raw_headers, field);
+
+	if (rh == NULL) {
+		return NULL;
+	}
+
+	while (rh) {
 		if (strong) {
 			if (strcmp (rh->name, field) == 0) {
 				gret = g_list_prepend (gret, rh);
@@ -1650,7 +1682,7 @@ message_get_raw_header (struct worker_task *task, const gchar *field, gboolean s
 				gret = g_list_prepend (gret, rh);
 			}
 		}
-		cur = g_list_next (cur);
+		rh = rh->next;
 	}
 
 	if (gret != NULL) {

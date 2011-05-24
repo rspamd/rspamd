@@ -206,12 +206,12 @@ struct worker_task {
 	InternetAddressList *rcpts;									/**< list of all recipients 						*/
 	GList *parts;												/**< list of parsed parts							*/
 	GList *text_parts;											/**< list of text parts								*/
-	gchar *raw_headers;											/**< list of raw headers							*/
+	gchar *raw_headers_str;											/**< list of raw headers							*/
 	GList *received;											/**< list of received headers						*/
 	GTree *urls;												/**< list of parsed urls							*/
 	GTree *emails;												/**< list of parsed emails							*/
 	GList *images;												/**< list of images									*/
-	GList *raw_headers_list;									/**< list of raw headers							*/
+	GHashTable *raw_headers;									/**< list of raw headers							*/
 	GHashTable *results;										/**< hash table of metric_result indexed by 
 	 *    metric's name									*/
 	GHashTable *tokens;											/**< hash table of tokens indexed by tokenizer

@@ -1392,7 +1392,7 @@ struct addr_list {
 };
 
 #define COMPARE_RCPT_LEN 3
-#define MIN_RCPT_TO_COMPARE 5
+#define MIN_RCPT_TO_COMPARE 7
 
 gboolean
 rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused)

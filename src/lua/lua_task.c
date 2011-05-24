@@ -313,7 +313,7 @@ lua_task_get_raw_headers (lua_State * L)
 	struct worker_task             *task = lua_check_task (L);
 
 	if (task) {
-		lua_pushstring (L, task->raw_headers);
+		lua_pushstring (L, task->raw_headers_str);
 	}
 	else {
 		lua_pushnil (L);
@@ -326,7 +326,6 @@ static gint
 lua_task_get_raw_header_common (lua_State * L, gboolean strong)
 {
 	struct worker_task             *task = lua_check_task (L);
-	GList                          *cur;
 	struct raw_header  			   *rh;
 	gint                            i = 1;
 	const gchar                    *name;
@@ -338,23 +337,27 @@ lua_task_get_raw_header_common (lua_State * L, gboolean strong)
 			return 1;
 		}
 		lua_newtable (L);
-		cur = g_list_first (task->raw_headers_list);
-		while (cur) {
-			rh = cur->data;
+		rh = g_hash_table_lookup (task->raw_headers, name);
+
+		if (rh == NULL) {
+			return 1;
+		}
+
+		while (rh) {
 			if (rh->name == NULL) {
-				cur = g_list_next (cur);
+				rh = rh->next;
 				continue;
 			}
 			/* Check case sensivity */
 			if (strong) {
 				if (strcmp (rh->name, name) != 0) {
-					cur = g_list_next (cur);
+					rh = rh->next;
 					continue;
 				}
 			}
 			else {
 				if (g_ascii_strcasecmp (rh->name, name) != 0) {
-					cur = g_list_next (cur);
+					rh = rh->next;
 					continue;
 				}
 			}
@@ -371,7 +374,7 @@ lua_task_get_raw_header_common (lua_State * L, gboolean strong)
 			lua_set_table_index (L, "separator", rh->separator);
 			lua_rawseti (L, -2, i++);
 			/* Process next element */
-			cur = g_list_next (cur);
+			rh = rh->next;
 		}
 	}
 	else {

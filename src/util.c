@@ -1257,6 +1257,10 @@ construct_task (struct rspamd_worker *worker)
 	memory_pool_add_destructor (new_task->task_pool,
 			(pool_destruct_func) g_hash_table_destroy,
 			new_task->re_cache);
+	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	memory_pool_add_destructor (new_task->task_pool,
+				(pool_destruct_func) g_hash_table_destroy,
+				new_task->raw_headers);
 	new_task->emails = g_tree_new (compare_email_func);
 	memory_pool_add_destructor (new_task->task_pool,
 				(pool_destruct_func) g_tree_destroy,

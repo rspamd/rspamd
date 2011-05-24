@@ -1267,8 +1267,6 @@ static                          gboolean
 rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
-	GList                          *cur;
-	struct raw_header              *rh;
 
 	if (args == NULL || task == NULL) {
 		return FALSE;
@@ -1280,16 +1278,7 @@ rspamd_raw_header_exists (struct worker_task *task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	cur = task->raw_headers_list;
-	while (cur) {
-		rh = cur->data;
-		if (g_ascii_strcasecmp (rh->name, arg->data) == 0) {
-			return TRUE;
-		}
-		cur = g_list_next (cur);
-	}
-
-	return FALSE;
+	return g_hash_table_lookup (task->raw_headers, arg->data) != NULL;
 }
 
 static gboolean
