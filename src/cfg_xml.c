@@ -1001,14 +1001,10 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 	return TRUE;
 }
 
-/* Handle lua tag */
-gboolean 
-handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+static void
+set_lua_globals (struct config_file *cfg, lua_State *L)
 {
-	gchar                        *val, *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
-	lua_State                    *L = cfg->lua_state;
 	struct config_file           **pcfg;
-
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
 
@@ -1017,23 +1013,35 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 		lua_newtable (L);
 		lua_setglobal (L, "config");
 	}
+
 	lua_getglobal (L, "metrics");
 	if (lua_isnil (L, -1)) {
 		lua_newtable (L);
 		lua_setglobal (L, "metrics");
 	}
+
 	lua_getglobal (L, "composites");
 	if (lua_isnil (L, -1)) {
 		lua_newtable (L);
 		lua_setglobal (L, "composites");
 	}
-	lua_getglobal (L, "rspamd_config");
-	if (lua_isnil (L, -1)) {
-		pcfg = lua_newuserdata (L, sizeof (struct config_file *));
-		lua_setclass (L, "rspamd{config}", -1);
-		*pcfg = cfg;
-		lua_setglobal (L, "rspamd_config");
-	}
+
+	pcfg = lua_newuserdata (L, sizeof (struct config_file *));
+	lua_setclass (L, "rspamd{config}", -1);
+	*pcfg = cfg;
+	lua_setglobal (L, "rspamd_config");
+
+	/* Clear stack from globals */
+	lua_pop (L, 3);
+}
+
+/* Handle lua tag */
+gboolean
+handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	gchar                        *val, *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
+	lua_State                    *L = cfg->lua_state;
+
 	/* Now config tables can be used for configuring rspamd */
 	/* First check "src" attribute */
 	if (attrs != NULL && (val = g_hash_table_lookup (attrs, "src")) != NULL) {
@@ -1045,8 +1053,21 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 		if (lua_dir && lua_file) {
 			cur_dir = g_malloc (PATH_MAX);
 			if (getcwd (cur_dir, PATH_MAX) != NULL && chdir (lua_dir) != -1) {
-				if (luaL_dofile (L, lua_file) != 0) {
+				/* Load file */
+				if (luaL_loadfile (L, lua_file) != 0) {
 					msg_err ("cannot load lua file %s: %s", val, lua_tostring (L, -1));
+					if (chdir (cur_dir) == -1) {
+						msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+					}
+					g_free (cur_dir);
+					g_free (tmp1);
+					g_free (tmp2);
+					return FALSE;
+				}
+				set_lua_globals (cfg, L);
+				/* Now do it */
+				if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
+					msg_err ("init of %s failed: %s", val, lua_tostring (L, -1));
 					if (chdir (cur_dir) == -1) {
 						msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
 					}
@@ -1080,10 +1101,17 @@ handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable
 	}
 	else if (data != NULL && *data != '\0') {
 		/* Try to load a string */
-		if (luaL_dostring (L, data) != 0) {
+		if (luaL_loadstring (L, data) != 0) {
 			msg_err ("cannot load lua chunk: %s", lua_tostring (L, -1));
 			return FALSE;
 		}
+		set_lua_globals (cfg, L);
+		/* Now do it */
+		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
+			msg_err ("init of lua chunk failed: %s", lua_tostring (L, -1));
+			return FALSE;
+		}
+
 	}
 	return TRUE;
 }

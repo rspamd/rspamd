@@ -107,6 +107,12 @@ u_char* read_host_list (memory_pool_t *pool, u_char *chunk, size_t len, struct m
 void fin_host_list (memory_pool_t *pool, struct map_cb_data *data);
 
 /**
+ * Kv list is an ordinal list of keys and values separated by whitespace
+ */
+u_char* read_kv_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+void fin_kv_list (memory_pool_t *pool, struct map_cb_data *data);
+
+/**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
 u_char * abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func);

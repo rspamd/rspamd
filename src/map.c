@@ -553,6 +553,98 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
  * FSM for parsing lists
  */
 u_char                  *
+abstract_parse_kv_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func)
+{
+	u_char                         *c, *p, *key = NULL, *value = NULL;
+
+	p = chunk;
+	c = p;
+
+	while (p - chunk < len) {
+		switch (data->state) {
+		case 0:
+			/* read key */
+			/* Check here comments, eol and end of buffer */
+			if (*p == '#') {
+				if (key != NULL && p - c > 0) {
+					value = memory_pool_alloc (pool, p - c + 1);
+					memcpy (value, c, p - c);
+					value[p - c] = '\0';
+					value = g_strstrip (value);
+					func (data->cur_data, key, value);
+				}
+				data->state = 99;
+			}
+			else if (*p == '\r' || *p == '\n' || p - chunk == len - 1) {
+				if (key != NULL && p - c > 0) {
+					value = memory_pool_alloc (pool, p - c + 1);
+					memcpy (value, c, p - c);
+					value[p - c] = '\0';
+
+					value = g_strstrip (value);
+					func (data->cur_data, key, value);
+				}
+				data->state = 100;
+				key = NULL;
+			}
+			else if (g_ascii_isspace (*p)) {
+				if (p - c > 0) {
+					key = memory_pool_alloc (pool, p - c + 1);
+					memcpy (key, c, p - c);
+					key[p - c] = '\0';
+					data->state = 2;
+				}
+				else {
+					key = NULL;
+				}
+			}
+			else {
+				p ++;
+			}
+			break;
+		case 2:
+			/* Skip spaces before value */
+			if (!g_ascii_isspace (*p)) {
+				c = p;
+				data->state = 0;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case 99:
+			/* SKIP_COMMENT */
+			/* Skip comment till end of line */
+			if (*p == '\r' || *p == '\n') {
+				while ((*p == '\r' || *p == '\n') && p - chunk < len) {
+					p++;
+				}
+				c = p;
+				key = NULL;
+				data->state = 0;
+			}
+			else {
+				p++;
+			}
+			break;
+		case 100:
+			/* Skip \r\n and whitespaces */
+			if (*p == '\r' || *p == '\n' || g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else {
+				c = p;
+				key = NULL;
+				data->state = 0;
+			}
+			break;
+		}
+	}
+
+	return c;
+}
+
+u_char                  *
 abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func)
 {
 	u_char                         *s, *p, *str, *start;
@@ -702,6 +794,23 @@ read_host_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_
 
 void
 fin_host_list (memory_pool_t * pool, struct map_cb_data *data)
+{
+	if (data->prev_data) {
+		g_hash_table_destroy (data->prev_data);
+	}
+}
+
+u_char                         *
+read_kv_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+{
+	if (data->cur_data == NULL) {
+		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	}
+	return abstract_parse_kv_list (pool, chunk, len, data, (insert_func) g_hash_table_insert);
+}
+
+void
+fin_kv_list (memory_pool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);

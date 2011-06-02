@@ -38,6 +38,7 @@ LUA_FUNCTION_DEF (config, get_all_opt);
 LUA_FUNCTION_DEF (config, register_function);
 LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
+LUA_FUNCTION_DEF (config, add_kv_map);
 LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
 LUA_FUNCTION_DEF (config, register_virtual_symbol);
@@ -53,6 +54,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_function),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, add_hash_map),
+	LUA_INTERFACE_DEF (config, add_kv_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
 	LUA_INTERFACE_DEF (config, register_virtual_symbol),
@@ -495,6 +497,36 @@ lua_config_add_hash_map (lua_State *L)
 
 }
 
+static gint
+lua_config_add_kv_map (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	const gchar                     *map_line;
+	GHashTable                    **r, ***ud;
+
+	if (cfg) {
+		map_line = luaL_checkstring (L, 2);
+		r = g_malloc (sizeof (GHashTable *));
+		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		if (!add_map (map_line, read_kv_list, fin_kv_list, (void **)r)) {
+			msg_warn ("invalid hash map %s", map_line);
+			g_hash_table_destroy (*r);
+			g_free (r);
+			lua_pushnil (L);
+			return 1;
+		}
+		ud = lua_newuserdata (L, sizeof (GHashTable *));
+		*ud = r;
+		lua_setclass (L, "rspamd{hash_table}", -1);
+
+		return 1;
+	}
+
+	lua_pushnil (L);
+	return 1;
+
+}
+
 /*** Metric functions ***/
 
 
@@ -625,18 +657,18 @@ static gint
 lua_hash_table_get_key (lua_State * L)
 {
 	GHashTable                    *tbl = lua_check_hash_table (L);
-	const gchar                    *key;
+	const gchar                    *key, *value;
 
 	if (tbl) {
 		key = luaL_checkstring (L, 2);
 
-		if (g_hash_table_lookup (tbl, key) != NULL) {
-			lua_pushboolean (L, 1);
+		if ((value = g_hash_table_lookup (tbl, key)) != NULL) {
+			lua_pushstring (L, value);
 			return 1;
 		}
 	}
 
-	lua_pushboolean (L, 0);
+	lua_pushnil (L);
 	return 1;
 }
 
