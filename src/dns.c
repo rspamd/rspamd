@@ -889,8 +889,14 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			parsed = TRUE;
 		}
 		break;
+	case DNS_T_CNAME:
+		/* Skip cname records */
+		p += datalen;
+		break;
 	default:
 		msg_debug ("unexpected RR type: %d", type);
+		p += datalen;
+		break;
 	}
 	*remain -= datalen;
 	*pos = p;

@@ -275,6 +275,7 @@ rspamd_connect_random_server (gboolean is_control, GError **err)
 	}
 
 	new->in_buf = g_string_sized_new (BUFSIZ);
+	new->cur_metric = NULL;
 	return new;
 
 err:
