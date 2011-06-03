@@ -612,7 +612,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.len = strlen (cur->data);
 				if (c.len > 0) {
 					c.begin = cur->data;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE)) {
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, FALSE)) {
 						msg_info ("cannot tokenize input");
 						return;
 					}
@@ -627,7 +627,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.begin = text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, text_part->is_utf)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}
@@ -815,6 +815,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 	stat_file_t                    *stf;
 	gdouble                         sum;
 	struct mime_text_part          *part;
+	gboolean                        is_utf = FALSE;
 
 	/* Load classifier by symbol */
 	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
@@ -850,11 +851,12 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 			}
 			c.begin = part->content->data;
 			c.len = part->content->len;
+			is_utf = part->is_utf;
 		}
 		/* Get tokens */
 		if (!cl->tokenizer->tokenize_func (
 				cl->tokenizer, task->task_pool,
-				&c, &tokens, FALSE)) {
+				&c, &tokens, FALSE, is_utf)) {
 			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
 			return FALSE;
 		}

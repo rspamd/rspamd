@@ -36,7 +36,7 @@ extern const int                primes[];
 
 int
 osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * input, GTree ** tree,
-		gboolean save_token)
+		gboolean save_token, gboolean is_utf)
 {
 	token_node_t                   *new = NULL;
 	f_str_t                         token = { NULL, 0, 0 }, *res;
@@ -55,8 +55,15 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 
 	while ((res = tokenizer->get_next_word (input, &token)) != NULL) {
 		/* Skip small words */
-		if (token.len < MIN_LEN) {
-			continue;
+		if (is_utf) {
+			if (g_utf8_strlen (token.begin, token.len) < MIN_LEN) {
+				continue;
+			}
+		}
+		else {
+			if (token.len < MIN_LEN) {
+				continue;
+			}
 		}
 		/* Shift hashpipe */
 		for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
