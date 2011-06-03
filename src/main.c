@@ -316,7 +316,6 @@ set_worker_limits (struct worker_conf *cf)
 			msg_warn ("cannot set max core rlimit: %d, %s", cf->rlimit_maxcore, strerror (errno));
         }
 	}
-
 }
 
 static struct rspamd_worker    *

@@ -230,7 +230,7 @@ struct worker_conf {
 	guint16 count;									/**< number of workers									*/
 	gint listen_sock;								/**< listening socket desctiptor						*/
 	guint32 rlimit_nofile;							/**< max files limit									*/
-	guint32 rlimit_maxcore;						/**< maximum core file size								*/
+	guint32 rlimit_maxcore;							/**< maximum core file size								*/
 	GHashTable *params;								/**< params for worker									*/
 	GQueue *active_workers;							/**< linked list of spawned workers						*/
 	gboolean has_socket;							/**< whether we should make listening socket in main process */
