@@ -224,18 +224,74 @@ logic_priority (gchar a)
  * Return TRUE if symbol is operation symbol
  */
 static                          gboolean
-is_operation_symbol (gchar a)
+is_operation_symbol (gchar *a)
 {
-	switch (a) {
+	switch (*a) {
 	case '!':
 	case '&':
 	case '|':
 	case '(':
 	case ')':
 		return TRUE;
-	default:
-		return FALSE;
+	case 'O':
+	case 'o':
+		if (g_ascii_strncasecmp (a, "or", sizeof ("or") - 1) == 0&& g_ascii_isspace (a[2])) {
+			return TRUE;
+		}
+		break;
+	case 'A':
+	case 'a':
+		if (g_ascii_strncasecmp (a, "and", sizeof ("and") - 1) == 0&& g_ascii_isspace (a[3])) {
+			return TRUE;
+		}
+		break;
+	case 'N':
+	case 'n':
+		if (g_ascii_strncasecmp (a, "not", sizeof ("not") - 1) == 0 && g_ascii_isspace (a[3])) {
+			return TRUE;
+		}
+		break;
 	}
+
+	return FALSE;
+}
+
+/* Return character representation of operation */
+static gchar
+op_to_char (gchar *a, gchar **next)
+{
+	switch (*a) {
+	case '!':
+	case '&':
+	case '|':
+	case '(':
+	case ')':
+		*next = a + 1;
+		return *a;
+	case 'O':
+	case 'o':
+		if (g_ascii_strncasecmp (a, "or", sizeof ("or") - 1) == 0) {
+			*next = a + sizeof ("or") - 1;
+			return '|';
+		}
+		break;
+	case 'A':
+	case 'a':
+		if (g_ascii_strncasecmp (a, "and", sizeof ("and") - 1) == 0) {
+			*next = a + sizeof ("and") - 1;
+			return '&';
+		}
+		break;
+	case 'N':
+	case 'n':
+		if (g_ascii_strncasecmp (a, "not", sizeof ("not") - 1) == 0) {
+			*next = a + sizeof ("not") - 1;
+			return '!';
+		}
+		break;
+	}
+
+	return '\0';
 }
 
 /*
@@ -300,7 +356,7 @@ maybe_parse_expression (memory_pool_t * pool, gchar *line)
 	gchar                           *p = line;
 
 	while (*p) {
-		if (is_operation_symbol (*p)) {
+		if (is_operation_symbol (p)) {
 			return parse_expression (pool, line);
 		}
 		p++;
@@ -326,7 +382,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 	struct expression_function     *func = NULL;
 	struct expression              *arg;
 	GQueue                         *function_stack;
-	gchar                           *p, *c, *str, op, *copy;
+	gchar                           *p, *c, *str, op, newop, *copy, *next;
 	gboolean                        in_regexp = FALSE;
 	gint                            brackets = 0;
 
@@ -353,7 +409,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 		switch (state) {
 		case SKIP_SPACES:
 			if (!g_ascii_isspace (*p)) {
-				if (is_operation_symbol (*p)) {
+				if (is_operation_symbol (p)) {
 					state = READ_OPERATOR;
 				}
 				else if (*p == '/') {
@@ -391,23 +447,35 @@ parse_expression (memory_pool_t * pool, gchar *line)
 			}
 			else {
 				if (stack == NULL) {
-					stack = push_expression_stack (pool, stack, *p);
+					newop = op_to_char (p, &next);
+					if (newop != '\0') {
+						stack = push_expression_stack (pool, stack, newop);
+						p = next;
+						state = SKIP_SPACES;
+						continue;
+					}
 				}
 				/* Check priority of logic operation */
 				else {
-					if (logic_priority (stack->op) < logic_priority (*p)) {
-						stack = push_expression_stack (pool, stack, *p);
-					}
-					else {
-						/* Pop all operations that have higher priority than this one */
-						while ((stack != NULL) && (logic_priority (stack->op) >= logic_priority (*p))) {
-							op = delete_expression_stack (&stack);
-							if (op != '(') {
-								insert_expression (pool, &expr, EXPR_OPERATION, op, NULL, copy);
-							}
+					newop = op_to_char (p, &next);
+					if (newop != '\0') {
+						if (logic_priority (stack->op) < logic_priority (newop)) {
+							stack = push_expression_stack (pool, stack, newop);
 						}
-						stack = push_expression_stack (pool, stack, *p);
+						else {
+							/* Pop all operations that have higher priority than this one */
+							while ((stack != NULL) && (logic_priority (stack->op) >= logic_priority (newop))) {
+								op = delete_expression_stack (&stack);
+								if (op != '(') {
+									insert_expression (pool, &expr, EXPR_OPERATION, op, NULL, copy);
+								}
+							}
+							stack = push_expression_stack (pool, stack, newop);
+						}
 					}
+					p = next;
+					state = SKIP_SPACES;
+					continue;
 				}
 			}
 			p++;
@@ -466,7 +534,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				insert_expression (pool, &expr, EXPR_FUNCTION, 0, func, copy);
 				c = ++p;
 			}
-			else if (is_operation_symbol (*p)) {
+			else if (is_operation_symbol (p)) {
 				/* In fact it is not function, but symbol */
 				if (c != p) {
 					str = memory_pool_alloc (pool, p - c + 1);
