@@ -37,6 +37,7 @@ gint luaopen_classifier (lua_State *L);
 gint luaopen_statfile (lua_State * L);
 gint luaopen_glib_regexp (lua_State *L);
 gint luaopen_cdb (lua_State *L);
+gint luaopen_xmlrpc (lua_State * L);
 void init_lua (struct config_file *cfg);
 gboolean init_lua_filters (struct config_file *cfg);
 
