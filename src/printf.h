@@ -55,7 +55,17 @@
  */
 gint rspamd_sprintf (gchar *buf, const gchar *fmt, ...);
 gint rspamd_fprintf (FILE *f, const gchar *fmt, ...);
-gint rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...);
-gchar *rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args);
+gint rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...);
+gchar *rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args);
+
+/*
+ * Escape rspamd string to write it to log file or other 7 bit prefferable places
+ *
+ * @param dst destination string
+ * @param src source string
+ * @param len length of destination buffer
+ * @return pointer to end of buffer
+ */
+gchar * rspamd_escape_string (gchar *dst, const gchar *src, glong len);
 
 #endif /* PRINTF_H_ */

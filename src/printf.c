@@ -138,7 +138,7 @@ rspamd_sprintf (gchar *buf, const gchar *fmt, ...)
 
 
 gint
-rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...)
+rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...)
 {
 	gchar   *p;
 	va_list   args;
@@ -152,12 +152,16 @@ rspamd_snprintf (gchar *buf, size_t max, const gchar *fmt, ...)
 }
 
 gchar *
-rspamd_escape_string (gchar *dst, const gchar *src, gsize len)
+rspamd_escape_string (gchar *dst, const gchar *src, glong len)
 {
 	gchar              *buf = dst, *last = dst + len;
 	guint8              c;
 	const gchar        *p = src;
 	gunichar            uc;
+
+	if (len <= 0) {
+		return dst;
+	}
 
 	while (*p && buf < last) {
 		/* Detect utf8 */
@@ -202,7 +206,7 @@ rspamd_escape_string (gchar *dst, const gchar *src, gsize len)
 }
 
 gchar *
-rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args)
+rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 {
 	gchar              *p, zero, *last;
 	gint                d;
@@ -213,7 +217,7 @@ rspamd_vsnprintf (gchar *buf, size_t max, const gchar *fmt, va_list args)
 	guint               width, sign, hex, max_width, frac_width, i;
 	f_str_t			   *v;
 
-	if (max == 0) {
+	if (max <= 0) {
 		return buf;
 	}
 

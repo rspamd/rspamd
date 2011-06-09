@@ -25,9 +25,11 @@
 
 
 LUA_FUNCTION_DEF (xmlrpc, parse_reply);
+LUA_FUNCTION_DEF (xmlrpc, make_request);
 
 static const struct luaL_reg    xmlrpclib_m[] = {
 	LUA_INTERFACE_DEF (xmlrpc, parse_reply),
+	LUA_INTERFACE_DEF (xmlrpc, make_request),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -362,7 +364,7 @@ xmlrpc_error (GMarkupParseContext *context, GError *error, gpointer user_data)
 	msg_err ("xmlrpc parser error: %s", error->message, ud->parser_state);
 }
 
-gint
+static gint
 lua_xmlrpc_parse_reply (lua_State *L)
 {
 	const gchar                    *data;
@@ -387,6 +389,102 @@ lua_xmlrpc_parse_reply (lua_State *L)
 		if (! res) {
 			lua_pushnil (L);
 		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_xmlrpc_parse_table (lua_State *L, gint pos, gchar *databuf, gint pr, gsize size)
+{
+	gint                           r = pr;
+
+	r += rspamd_snprintf (databuf + r, size - r, "<struct>");
+	lua_pushnil (L);  /* first key */
+	while (lua_next (L, pos) != 0) {
+		/* uses 'key' (at index -2) and 'value' (at index -1) */
+		if (lua_type (L, -2) != LUA_TSTRING) {
+			/* Ignore non sting keys */
+			lua_pop(L, 1);
+			continue;
+		}
+		r += rspamd_snprintf (databuf + r, size - r, "<member><name>%s</name><value>",
+				lua_tostring (L, -2));
+		switch (lua_type (L, -1)) {
+		case LUA_TNUMBER:
+			r += rspamd_snprintf (databuf + r, size - r, "<int>%d</int>",
+					lua_tointeger (L, -1));
+			break;
+		case LUA_TBOOLEAN:
+			r += rspamd_snprintf (databuf + r, size - r, "<boolean>%d</boolean>",
+					lua_toboolean (L, -1) ? 1 : 0);
+			break;
+		case LUA_TSTRING:
+			r += rspamd_snprintf (databuf + r, size - r, "<string>%s</string>",
+					lua_tostring (L, -1));
+			break;
+		case LUA_TTABLE:
+			/* Recursive call */
+			r += lua_xmlrpc_parse_table (L, -1, databuf, r, sizeof (databuf));
+			break;
+		}
+		r += rspamd_snprintf (databuf + r, size - r, "</value></member>");
+		/* removes 'value'; keeps 'key' for next iteration */
+		lua_pop(L, 1);
+	}
+	r += rspamd_snprintf (databuf + r, size - r, "</struct>");
+
+	return r - pr;
+}
+
+/*
+ * Internal limitation: xmlrpc request must NOT be more than
+ * BUFSIZ * 2 (16384 bytes)
+ */
+static gint
+lua_xmlrpc_make_request (lua_State *L)
+{
+	gchar                          databuf[BUFSIZ * 2];
+	const gchar                   *func;
+	gint                           r, top, i;
+
+	func = luaL_checkstring (L, 1);
+
+	if (func) {
+		r = rspamd_snprintf (databuf, sizeof(databuf),
+				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+				"<methodCall><methodName>%s</methodName><params>",
+				func);
+		/* Extract arguments */
+		top = lua_gettop (L);
+		/* Get additional options */
+		for (i = 2; i <= top; i++) {
+			r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<param><value>");
+			switch (lua_type (L, i)) {
+			case LUA_TNUMBER:
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<int>%d</int>",
+						lua_tointeger (L, i));
+				break;
+			case LUA_TBOOLEAN:
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<boolean>%d</boolean>",
+						lua_toboolean (L, i) ? 1 : 0);
+				break;
+			case LUA_TSTRING:
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<string>%s</string>",
+						lua_tostring (L, i));
+				break;
+			case LUA_TTABLE:
+				r += lua_xmlrpc_parse_table (L, i, databuf, r, sizeof (databuf));
+				break;
+			}
+			r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "</value></param>");
+		}
+
+		r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "</params></methodCall>");
+		lua_pushlstring (L, databuf, r);
 	}
 	else {
 		lua_pushnil (L);

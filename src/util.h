@@ -120,16 +120,6 @@ void g_ptr_array_unref (GPtrArray *array);
 gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
 
 /*
- * Escape rspamd string to write it to log file or other 7 bit prefferable places
- *
- * @param dst destination string
- * @param src source string
- * @param len length of destination buffer
- * @return pointer to end of buffer
- */
-gchar * rspamd_escape_string (gchar *dst, const gchar *src, gsize len);
-
-/*
  * Convert process type to its name
  *
  * @param type numeric type
