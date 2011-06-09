@@ -7,7 +7,8 @@ SET(LUASRC			  lua_common.c
 					  lua_cfg_file.c
 					  lua_regexp.c
 					  lua_cdb.c
-					  lua_xmlrpc.c)
+					  lua_xmlrpc.c
+					  lua_http.c)
 
 ADD_LIBRARY(rspamd_lua STATIC ${LUASRC})
 TARGET_LINK_LIBRARIES(rspamd_lua ${LUALIB})
