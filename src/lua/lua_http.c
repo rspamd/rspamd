@@ -308,15 +308,12 @@ lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	ud->io_dispatcher = rspamd_create_dispatcher (ud->fd, BUFFER_LINE, lua_http_read_cb, NULL, lua_http_err_cb,
 			&tv, ud);
 	/* Write request */
+	register_async_event (ud->task->s, lua_http_fin, ud, FALSE);
 
-	if (!rspamd_dispatcher_write (ud->io_dispatcher, ud->req_buf, ud->req_len, FALSE, TRUE)) {
+	if (!rspamd_dispatcher_write (ud->io_dispatcher, ud->req_buf, ud->req_len, TRUE, TRUE)) {
 		lua_http_push_error (450, ud);
-		rspamd_remove_dispatcher (ud->io_dispatcher);
-		close (ud->fd);
 		return;
 	}
-
-	register_async_event (ud->task->s, lua_http_fin, ud, FALSE);
 }
 
 /**
