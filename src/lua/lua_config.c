@@ -721,6 +721,7 @@ lua_trie_search_text (lua_State *L)
 	const gchar                   *text, *pos;
 	gint                           id, i = 1;
 	gsize                          len;
+	gboolean                       found = FALSE;
 
 	if (trie) {
 		text = luaL_checkstring (L, 2);
@@ -733,6 +734,12 @@ lua_trie_search_text (lua_State *L)
 				lua_pushinteger (L, id);
 				lua_settable (L, -3);
 				i ++;
+				found = TRUE;
+				break;
+			}
+
+			if (!found) {
+				lua_pushnil (L);
 			}
 			return 1;
 		}
