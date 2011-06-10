@@ -461,7 +461,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			}
 			/* Add new symbol */
 			insert_result_single (cd->task, key, 1.0, NULL);
-			msg_info (logbuf);
+			msg_info ("%s", logbuf);
 		}
 	}
 
