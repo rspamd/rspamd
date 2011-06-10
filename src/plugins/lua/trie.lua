@@ -65,6 +65,7 @@ function check_trie(task)
 	for _,trie in ipairs(tries) do
 		if trie['trie']:search_task(task) then
 			task:insert_result(trie['symbol'], 1)
+			return
 		end
 		-- Search inside urls
 		urls = task:get_urls()
@@ -72,6 +73,7 @@ function check_trie(task)
 			for _,url in ipairs(urls) do
 				if trie['trie']:search_text(url:get_text()) then
 					task:insert_result(trie['symbol'], 1)
+					return
 				end
 			end
 		end
