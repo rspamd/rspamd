@@ -67,6 +67,15 @@ lua_check_task (lua_State * L)
 }
 
 static void
+lua_http_fin (void *arg)
+{
+	struct lua_http_ud             *ud = arg;
+
+	rspamd_remove_dispatcher (ud->io_dispatcher);
+	close (ud->fd);
+}
+
+static void
 lua_http_push_error (gint code, struct lua_http_ud *ud)
 {
 	struct worker_task            **ptask;
@@ -93,6 +102,7 @@ lua_http_push_error (gint code, struct lua_http_ud *ud)
 	}
 
 	ud->parser_state = 3;
+	remove_normal_event (ud->task->s, lua_http_fin, ud);
 
 	ud->task->save.saved--;
 	if (ud->task->save.saved == 0) {
@@ -140,6 +150,7 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 		ud->headers = NULL;
 	}
 
+	remove_normal_event (ud->task->s, lua_http_fin, ud);
 	ud->task->save.saved--;
 	if (ud->task->save.saved == 0) {
 		/* Call other filters */
@@ -147,7 +158,6 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 		process_filters (ud->task);
 	}
 }
-
 
 /*
  * Parsing utils
@@ -246,8 +256,6 @@ lua_http_read_cb (f_str_t * in, void *arg)
 	case 2:
 		/* Get reply */
 		lua_http_push_reply (in, ud);
-		rspamd_remove_dispatcher (ud->io_dispatcher);
-		close (ud->fd);
 		return FALSE;
 	}
 
@@ -264,9 +272,12 @@ lua_http_err_cb (GError * err, void *arg)
 	if (ud->parser_state != 3) {
 		lua_http_push_error (500, ud);
 	}
-	rspamd_remove_dispatcher (ud->io_dispatcher);
-	close (ud->fd);
+	else {
+		remove_normal_event (ud->task->s, lua_http_fin, ud);
+	}
 }
+
+
 
 static void
 lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
@@ -304,6 +315,8 @@ lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 		close (ud->fd);
 		return;
 	}
+
+	register_async_event (ud->task->s, lua_http_fin, ud, FALSE);
 }
 
 /**

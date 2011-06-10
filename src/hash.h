@@ -28,6 +28,22 @@ typedef struct rspamd_hash_s {
 	memory_pool_t            *pool;
 } rspamd_hash_t;
 
+typedef struct rspamd_lru_hash_s {
+	gint                      maxsize;
+	gint                      maxage;
+	GHashTable               *storage;
+	GDestroyNotify            value_destroy;
+	GQueue                   *q;
+} rspamd_lru_hash_t;
+
+typedef struct rspamd_lru_element_s {
+	gpointer                  data;
+	gpointer                  key;
+	time_t                    store_time;
+	rspamd_lru_hash_t        *hash;
+} rspamd_lru_element_t;
+
+
 #define rspamd_hash_size(x) (x)->nnodes
 
 /**
@@ -78,6 +94,38 @@ gpointer rspamd_hash_lookup (rspamd_hash_t *hash, gpointer key);
  * @param user_data pointer to user's data that would be passed to user's function
  */
 void rspamd_hash_foreach (rspamd_hash_t *hash, GHFunc func, gpointer user_data);
+
+/**
+ * Create new lru hash
+ * @param maxsize maximum elements in a hash
+ * @param maxage maximum age of elemnt
+ * @param hash_func pointer to hash function
+ * @param key_equal_func pointer to function for comparing keys
+ * @return new rspamd_hash object
+ */
+rspamd_lru_hash_t* rspamd_lru_hash_new (GHashFunc hash_func, GEqualFunc key_equal_func,
+		gint maxsize, gint maxage, GDestroyNotify key_destroy, GDestroyNotify value_destroy);
+/**
+ * Lookup item from hash
+ * @param hash hash object
+ * @param key key to find
+ * @return value of key or NULL if key is not found
+ */
+gpointer rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now);
+/**
+ * Insert item in hash
+ * @param hash hash object
+ * @param key key to insert
+ * @param value value of key
+ */
+void rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now);
+
+/**
+ * Remove lru hash
+ * @param hash hash object
+ */
+
+void rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash);
 
 #endif
 

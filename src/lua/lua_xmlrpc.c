@@ -38,6 +38,7 @@ struct lua_xmlrpc_ud {
 	gint parser_state;
 	gint depth;
 	gint param_count;
+	gboolean got_text;
 	lua_State *L;
 };
 
@@ -126,9 +127,15 @@ xmlrpc_start_element (GMarkupParseContext *context, const gchar *name, const gch
 		}
 		else if (g_ascii_strcasecmp (name, "string") == 0) {
 			ud->parser_state = 11;
+			ud->got_text = FALSE;
 		}
 		else if (g_ascii_strcasecmp (name, "int") == 0) {
 			ud->parser_state = 12;
+			ud->got_text = FALSE;
+		}
+		else if (g_ascii_strcasecmp (name, "double") == 0) {
+			ud->parser_state = 13;
+			ud->got_text = FALSE;
 		}
 		else {
 			/* Error state */
@@ -171,9 +178,15 @@ xmlrpc_start_element (GMarkupParseContext *context, const gchar *name, const gch
 		/* Primitives */
 		if (g_ascii_strcasecmp (name, "string") == 0) {
 			ud->parser_state = 11;
+			ud->got_text = FALSE;
 		}
 		else if (g_ascii_strcasecmp (name, "int") == 0) {
 			ud->parser_state = 12;
+			ud->got_text = FALSE;
+		}
+		else if (g_ascii_strcasecmp (name, "double") == 0) {
+			ud->parser_state = 13;
+			ud->got_text = FALSE;
 		}
 		/* Structure */
 		else if (g_ascii_strcasecmp (name, "struct") == 0) {
@@ -300,12 +313,23 @@ xmlrpc_end_element (GMarkupParseContext	*context, const gchar *name, gpointer us
 		break;
 	case 11:
 	case 12:
+	case 13:
 		/* Parse any values */
+		/* Handle empty tags */
+		if (!ud->got_text) {
+			lua_pushnil (ud->L);
+		}
+		else {
+			ud->got_text = FALSE;
+		}
 		/* Primitives */
 		if (g_ascii_strcasecmp (name, "string") == 0) {
 			ud->parser_state = 8;
 		}
 		else if (g_ascii_strcasecmp (name, "int") == 0) {
+			ud->parser_state = 8;
+		}
+		else if (g_ascii_strcasecmp (name, "double") == 0) {
 			ud->parser_state = 8;
 		}
 		else {
@@ -326,6 +350,7 @@ xmlrpc_text (GMarkupParseContext *context, const gchar *text, gsize text_len, gp
 {
 	struct lua_xmlrpc_ud           *ud = user_data;
 	gint                            num;
+	gdouble                         dnum;
 
 	/* Strip line */
 	while (g_ascii_isspace (*text) && text_len > 0) {
@@ -352,7 +377,13 @@ xmlrpc_text (GMarkupParseContext *context, const gchar *text, gsize text_len, gp
 			num = strtoul (text, NULL, 10);
 			lua_pushinteger (ud->L, num);
 			break;
+		case 13:
+			/* Push integer value */
+			dnum = strtod (text, NULL);
+			lua_pushnumber (ud->L, dnum);
+			break;
 		}
+		ud->got_text = TRUE;
 	}
 }
 
@@ -400,7 +431,8 @@ lua_xmlrpc_parse_reply (lua_State *L)
 static gint
 lua_xmlrpc_parse_table (lua_State *L, gint pos, gchar *databuf, gint pr, gsize size)
 {
-	gint                           r = pr;
+	gint                           r = pr, num;
+	double                         dnum;
 
 	r += rspamd_snprintf (databuf + r, size - r, "<struct>");
 	lua_pushnil (L);  /* first key */
@@ -415,8 +447,18 @@ lua_xmlrpc_parse_table (lua_State *L, gint pos, gchar *databuf, gint pr, gsize s
 				lua_tostring (L, -2));
 		switch (lua_type (L, -1)) {
 		case LUA_TNUMBER:
-			r += rspamd_snprintf (databuf + r, size - r, "<int>%d</int>",
-					lua_tointeger (L, -1));
+			num = lua_tointeger (L, -1);
+			dnum = lua_tonumber (L, -1);
+
+			/* Try to avoid conversion errors */
+			if (dnum != (double)num) {
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<double>%f</double>",
+						dnum);
+			}
+			else {
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<int>%d</int>",
+						num);
+			}
 			break;
 		case LUA_TBOOLEAN:
 			r += rspamd_snprintf (databuf + r, size - r, "<boolean>%d</boolean>",
@@ -449,7 +491,8 @@ lua_xmlrpc_make_request (lua_State *L)
 {
 	gchar                          databuf[BUFSIZ * 2];
 	const gchar                   *func;
-	gint                           r, top, i;
+	gint                           r, top, i, num;
+	double                         dnum;
 
 	func = luaL_checkstring (L, 1);
 
@@ -465,8 +508,18 @@ lua_xmlrpc_make_request (lua_State *L)
 			r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<param><value>");
 			switch (lua_type (L, i)) {
 			case LUA_TNUMBER:
-				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<int>%d</int>",
-						lua_tointeger (L, i));
+				num = lua_tointeger (L, i);
+				dnum = lua_tonumber (L, i);
+
+				/* Try to avoid conversion errors */
+				if (dnum != (double)num) {
+					r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<double>%f</double>",
+											dnum);
+				}
+				else {
+					r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<int>%d</int>",
+						num);
+				}
 				break;
 			case LUA_TBOOLEAN:
 				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<boolean>%d</boolean>",

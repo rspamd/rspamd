@@ -60,5 +60,7 @@ struct spf_record {
 
 gboolean resolve_spf (struct worker_task *task, spf_cb_t callback);
 
+gchar *get_spf_domain (struct worker_task *task);
+
 
 #endif

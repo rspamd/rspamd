@@ -66,6 +66,15 @@ function check_trie(task)
 		if trie['trie']:search_task(task) then
 			task:insert_result(trie['symbol'], 1)
 		end
+		-- Search inside urls
+		urls = task:get_urls()
+		if urls then
+			for _,url in urls do
+				if trie['trie']:search_text(url:get_text()) then
+					task:insert_result(trie['symbol'], 1)
+				end
+			end
+		end
 	end
 end
 

@@ -907,26 +907,27 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	return 0;
 }
 
-static struct rspamd_dns_reply *
-dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver, struct rspamd_dns_request **req_out)
+static gboolean
+dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver,
+		struct rspamd_dns_request **req_out, struct rspamd_dns_reply **_rep)
 {
 	struct dns_header *header = (struct dns_header *)in;
-	struct rspamd_dns_request *req;
-	struct rspamd_dns_reply *rep;
-	union rspamd_reply_element *elt;
-	guint8 *pos;
+	struct rspamd_dns_request      *req;
+	struct rspamd_dns_reply        *rep;
+	union rspamd_reply_element     *elt;
+	guint8                         *pos;
 	gint                            i, t;
 	
 	/* First check header fields */
 	if (header->qr == 0) {
 		msg_info ("got request while waiting for reply");
-		return NULL;
+		return FALSE;
 	}
 
 	/* Now try to find corresponding request */
 	if ((req = g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER (header->qid))) == NULL) {
 		/* No such requests found */
-		return NULL;
+		return FALSE;
 	}
 	*req_out = req;
 	/* 
@@ -934,7 +935,7 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver, struc
 	 * request QR section and reply QR section
 	 */
 	if ((pos = dns_request_reply_cmp (req, in + sizeof (struct dns_header), r - sizeof (struct dns_header))) == NULL) {
-		return NULL;
+		return FALSE;
 	}
 	/*
 	 * Remove delayed retransmits for this packet
@@ -949,24 +950,27 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver, struc
 	rep->elements = NULL;
 	rep->code = header->rcode;
 
-	r -= pos - in;
-	/* Extract RR records */
-	for (i = 0; i < ntohs (header->ancount); i ++) {
-		elt = memory_pool_alloc (req->pool, sizeof (union rspamd_reply_element));
-		t = dns_parse_rr (in, elt, &pos, rep, &r);
-		if (t == -1) {
-			msg_info ("incomplete reply");
-			break;
+	if (rep->code == DNS_RC_NOERROR) {
+		r -= pos - in;
+		/* Extract RR records */
+		for (i = 0; i < ntohs (header->ancount); i ++) {
+			elt = memory_pool_alloc (req->pool, sizeof (union rspamd_reply_element));
+			t = dns_parse_rr (in, elt, &pos, rep, &r);
+			if (t == -1) {
+				msg_info ("incomplete reply");
+				break;
+			}
+			else if (t == 1) {
+				rep->elements = g_list_prepend (rep->elements, elt);
+			}
 		}
-		else if (t == 1) {
-			rep->elements = g_list_prepend (rep->elements, elt);
+		if (rep->elements) {
+			memory_pool_add_destructor (req->pool, (pool_destruct_func)g_list_free, rep->elements);
 		}
-	}
-	if (rep->elements) {
-		memory_pool_add_destructor (req->pool, (pool_destruct_func)g_list_free, rep->elements);
 	}
 	
-	return rep;
+	*_rep = rep;
+	return TRUE;
 }
 
 static void
@@ -994,24 +998,25 @@ dns_check_throttling (struct rspamd_dns_resolver *resolver)
 static void
 dns_read_cb (gint fd, short what, void *arg)
 {
-	struct rspamd_dns_resolver *resolver = arg;
-	struct rspamd_dns_request *req = NULL;
+	struct rspamd_dns_resolver     *resolver = arg;
+	struct rspamd_dns_request      *req = NULL;
 	gint                            r;
-	struct rspamd_dns_reply *rep;
-	guint8 in[UDP_PACKET_SIZE];
+	struct rspamd_dns_reply        *rep;
+	guint8                          in[UDP_PACKET_SIZE];
 
 	/* This function is called each time when we have data on one of server's sockets */
 	
 	/* First read packet from socket */
 	r = read (fd, in, sizeof (in));
 	if (r > sizeof (struct dns_header) + sizeof (struct dns_query)) {
-		if ((rep = dns_parse_reply (in, r, resolver, &req)) != NULL) {
+		if (dns_parse_reply (in, r, resolver, &req, &rep)) {
 			/* Decrease errors count */
 			if (rep->request->resolver->errors > 0) {
 				rep->request->resolver->errors --;
 			}
 			upstream_ok (&rep->request->server->up, rep->request->time);
 			rep->request->func (rep, rep->request->arg);
+			remove_normal_event (req->session, dns_fin_cb, req);
 		}
 	}
 }

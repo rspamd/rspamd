@@ -43,10 +43,13 @@
 #include "../map.h"
 #include "../spf.h"
 #include "../cfg_xml.h"
+#include "../hash.h"
 
 #define DEFAULT_SYMBOL_FAIL "R_SPF_FAIL"
 #define DEFAULT_SYMBOL_SOFTFAIL "R_SPF_SOFTFAIL"
 #define DEFAULT_SYMBOL_ALLOW "R_SPF_ALLOW"
+#define DEFAULT_CACHE_SIZE 2048
+#define DEFAULT_CACHE_MAXAGE 86400
 
 struct spf_ctx {
 	gint                            (*filter) (struct worker_task * task);
@@ -54,13 +57,16 @@ struct spf_ctx {
 	gchar                           *symbol_softfail;
 	gchar                           *symbol_allow;
 
-	memory_pool_t                  *spf_pool;
-	radix_tree_t                   *whitelist_ip;
+	memory_pool_t                   *spf_pool;
+	radix_tree_t                    *whitelist_ip;
+	rspamd_lru_hash_t               *spf_hash;
 };
 
 static struct spf_ctx        *spf_module_ctx = NULL;
 
 static void                   spf_symbol_callback (struct worker_task *task, void *unused);
+static GList *                spf_record_copy (GList *addrs);
+static void                   spf_record_destroy (gpointer list);
 
 gint
 spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -73,6 +79,8 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("spf", "symbol_fail", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("spf", "symbol_softfail", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("spf", "symbol_allow", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("spf", "spf_cache_size", MODULE_OPT_TYPE_UINT);
+	register_module_opt ("spf", "spf_cache_expire", MODULE_OPT_TYPE_TIME);
 	register_module_opt ("spf", "whitelist", MODULE_OPT_TYPE_MAP);
 
 	return 0;
@@ -82,8 +90,9 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 spf_module_config (struct config_file *cfg)
 {
-	gchar                           *value;
+	gchar                          *value;
 	gint                            res = TRUE;
+	guint                           cache_size, cache_expire;
 
 	spf_module_ctx->whitelist_ip = radix_tree_create ();
 	
@@ -105,6 +114,18 @@ spf_module_config (struct config_file *cfg)
 	else {
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
+	if ((value = get_module_opt (cfg, "spf", "spf_cache_size")) != NULL) {
+		cache_size = strtoul (value, NULL, 10);
+	}
+	else {
+		cache_size = DEFAULT_CACHE_SIZE;
+	}
+	if ((value = get_module_opt (cfg, "spf", "spf_cache_expire")) != NULL) {
+		cache_expire = parse_time (value, TIME_SECONDS) / 1000;
+	}
+	else {
+		cache_expire = DEFAULT_CACHE_MAXAGE;
+	}
 	if ((value = get_module_opt (cfg, "spf", "whitelist")) != NULL) {
 		if (! add_map (value, read_radix_list, fin_radix_list, (void **)&spf_module_ctx->whitelist_ip)) {
 			msg_warn ("cannot load whitelist from %s", value);
@@ -114,6 +135,9 @@ spf_module_config (struct config_file *cfg)
 	register_symbol (&cfg->cache, spf_module_ctx->symbol_fail, 1, spf_symbol_callback, NULL);
 	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_softfail, 1);
 	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_allow, 1);
+
+	spf_module_ctx->spf_hash = rspamd_lru_hash_new (rspamd_strcase_hash, rspamd_strcase_equal,
+			cache_size, cache_expire, g_free, spf_record_destroy);
 
 	return res;
 }
@@ -175,7 +199,6 @@ spf_check_list (GList *list, struct worker_task *task)
 		addr = cur->data;
 		if (addr->is_list) {
 			/* Recursive call */
-			addr->data.list = g_list_reverse (addr->data.list);
 			if (spf_check_list (addr->data.list, task)) {
 				return TRUE;
 			}
@@ -194,9 +217,15 @@ spf_check_list (GList *list, struct worker_task *task)
 static void 
 spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 {
+	GList                           *l;
 	if (record) {
-		record->addrs = g_list_reverse (record->addrs);
-		spf_check_list (record->addrs, task);
+
+		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, record->sender_domain, task->tv.tv_sec)) == NULL) {
+			l = spf_record_copy (record->addrs);
+			rspamd_lru_hash_insert (spf_module_ctx->spf_hash, g_strdup (record->sender_domain),
+				l, task->tv.tv_sec);
+		}
+		spf_check_list (l, task);
 	}
 
 	if (task->save.saved == 0) {
@@ -211,14 +240,75 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 static void 
 spf_symbol_callback (struct worker_task *task, void *unused)
 {
+	gchar                           *domain;
+	GList                           *l;
+
 	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 		if (radix32tree_find (spf_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) == RADIX_NO_VALUE) {
-			if (!resolve_spf (task, spf_plugin_callback)) {
-				msg_info ("cannot make spf request for [%s]", task->message_id);
+
+			domain = get_spf_domain (task);
+			if (domain) {
+				if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain, task->tv.tv_sec)) != NULL) {
+					spf_check_list (l, task);
+				}
+				else if (!resolve_spf (task, spf_plugin_callback)) {
+					msg_info ("cannot make spf request for [%s]", task->message_id);
+				}
 			}
 		}
 		else {
 			msg_info ("ip %s is whitelisted for spf checks", inet_ntoa (task->from_addr));
 		}
 	}
+}
+
+/*
+ * Make a deep copy of list, note copy is REVERSED
+ */
+static GList *
+spf_record_copy (GList *addrs)
+{
+	GList                           *cur, *newl = NULL;
+	struct spf_addr                 *addr, *newa;
+
+	cur = addrs;
+
+	while (cur) {
+		addr = cur->data;
+		newa = g_malloc (sizeof (struct spf_addr));
+		memcpy (newa, addr, sizeof (struct spf_addr));
+		if (addr->is_list) {
+			/* Recursive call */
+			newa->data.list = spf_record_copy (addr->data.list);
+		}
+		newl = g_list_prepend (newl, newa);
+		cur = g_list_next (cur);
+	}
+
+	return newl;
+}
+
+/*
+ * Destroy allocated spf list
+ */
+
+
+static void
+spf_record_destroy (gpointer list)
+{
+	GList                           *cur = list;
+	struct spf_addr                 *addr;
+
+	while (cur) {
+		addr = cur->data;
+		if (addr->is_list) {
+			spf_record_destroy (addr->data.list);
+		}
+		else {
+			g_free (addr);
+		}
+		cur = g_list_next (cur);
+	}
+
+	g_list_free (list);
 }

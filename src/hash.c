@@ -301,6 +301,132 @@ rspamd_hash_foreach (rspamd_hash_t * hash, GHFunc func, gpointer user_data)
 	}
 }
 
+/**
+ * LRU hashing
+ */
+
+static void
+rspamd_lru_hash_destroy_node (gpointer v)
+{
+	rspamd_lru_element_t           *node = v;
+
+	if (node->hash->value_destroy) {
+		node->hash->value_destroy (node->data);
+	}
+
+	g_slice_free1 (sizeof (rspamd_lru_element_t), node);
+}
+
+static rspamd_lru_element_t*
+rspamd_lru_create_node (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now)
+{
+	rspamd_lru_element_t           *node;
+
+	node = g_slice_alloc (sizeof (rspamd_lru_element_t));
+	node->hash = hash;
+	node->data = value;
+	node->key = key;
+	node->store_time = now;
+
+	return node;
+}
+
+/**
+ * Create new lru hash
+ * @param maxsize maximum elements in a hash
+ * @param maxage maximum age of elemnt
+ * @param hash_func pointer to hash function
+ * @param key_equal_func pointer to function for comparing keys
+ * @return new rspamd_hash object
+ */
+rspamd_lru_hash_t*
+rspamd_lru_hash_new (GHashFunc hash_func, GEqualFunc key_equal_func, gint maxsize, gint maxage,
+		GDestroyNotify key_destroy, GDestroyNotify value_destroy)
+{
+	rspamd_lru_hash_t              *new;
+
+	new = g_malloc (sizeof (rspamd_lru_hash_t));
+	new->storage = g_hash_table_new_full (hash_func, key_equal_func, key_destroy, rspamd_lru_hash_destroy_node);
+	new->maxage = maxage;
+	new->maxsize = maxsize;
+	new->value_destroy = value_destroy;
+	new->q = g_queue_new ();
+
+	return new;
+}
+/**
+ * Lookup item from hash
+ * @param hash hash object
+ * @param key key to find
+ * @return value of key or NULL if key is not found
+ */
+gpointer
+rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now)
+{
+	rspamd_lru_element_t           *res;
+
+	if ((res = g_hash_table_lookup (hash->storage, key)) != NULL) {
+		if (now - res->store_time > hash->maxage) {
+			/* Expire elements from queue tail */
+			res = g_queue_pop_tail (hash->q);
+
+			while (res != NULL && now - res->store_time > hash->maxage) {
+				g_hash_table_remove (hash->storage, res->key);
+				res = g_queue_pop_tail (hash->q);
+			}
+			/* Restore last element */
+			if (res != NULL) {
+				g_queue_push_tail (hash->q, res);
+			}
+
+			return NULL;
+		}
+	}
+
+	if (res) {
+		return res->data;
+	}
+
+	return NULL;
+}
+/**
+ * Insert item in hash
+ * @param hash hash object
+ * @param key key to insert
+ * @param value value of key
+ */
+void
+rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now)
+{
+	rspamd_lru_element_t           *res;
+	gint                            removed = 0;
+
+	if (g_hash_table_size (hash->storage) >= hash->maxsize) {
+		/* Expire some elements */
+		res = g_queue_pop_tail (hash->q);
+		while (res != NULL && now - res->store_time > hash->maxage) {
+			g_hash_table_remove (hash->storage, res->key);
+			res = g_queue_pop_tail (hash->q);
+			removed ++;
+		}
+		if (removed != 0 && res != NULL) {
+			g_queue_push_tail (hash->q, res);
+		}
+	}
+
+	res = rspamd_lru_create_node (hash, key, value, now);
+	g_hash_table_insert (hash->storage, key, res);
+	g_queue_push_head (hash->q, res);
+}
+
+void
+rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash)
+{
+	g_hash_table_destroy (hash->storage);
+	g_queue_free (hash->q);
+	g_free (hash);
+}
+
 /*
  * vi:ts=4
  */

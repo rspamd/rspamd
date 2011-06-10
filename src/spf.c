@@ -1171,13 +1171,47 @@ spf_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	}
 }
 
+gchar *
+get_spf_domain (struct worker_task *task)
+{
+	gchar                           *domain, *res = NULL;
+	GList                           *domains;
+
+	if (task->from && (domain = strchr (task->from, '@')) != NULL && *domain == '@') {
+		res = memory_pool_strdup (task->task_pool, domain + 1);
+		if ((domain = strchr (res, '>')) != NULL) {
+			*domain = '\0';
+		}
+	}
+	else {
+		/* Extract from header */
+		domains = message_get_header (task->task_pool, task->message, "From", FALSE);
+
+		if (domains != NULL) {
+			res = memory_pool_strdup (task->task_pool, domains->data);
+
+			if ((domain = strrchr (res, '@')) == NULL) {
+				g_list_free (domains);
+				return NULL;
+			}
+			res = memory_pool_strdup (task->task_pool, domain + 1);
+			g_list_free (domains);
+
+			if ((domain = strchr (res, '>')) != NULL) {
+				*domain = '\0';
+			}
+		}
+	}
+
+	return res;
+}
 
 gboolean
 resolve_spf (struct worker_task *task, spf_cb_t callback)
 {
-	struct spf_record *rec;
+	struct spf_record               *rec;
 	gchar                           *domain;
-	GList *domains;
+	GList                           *domains;
 
 	rec = memory_pool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;

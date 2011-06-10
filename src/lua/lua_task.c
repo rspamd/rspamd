@@ -57,6 +57,7 @@ LUA_FUNCTION_DEF (task, resolve_dns_txt);
 LUA_FUNCTION_DEF (task, call_rspamd_function);
 LUA_FUNCTION_DEF (task, get_recipients);
 LUA_FUNCTION_DEF (task, get_from);
+LUA_FUNCTION_DEF (task, get_user);
 LUA_FUNCTION_DEF (task, get_recipients_headers);
 LUA_FUNCTION_DEF (task, get_from_headers);
 LUA_FUNCTION_DEF (task, get_from_ip);
@@ -86,6 +87,7 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, call_rspamd_function),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, get_from),
+	LUA_INTERFACE_DEF (task, get_user),
 	LUA_INTERFACE_DEF (task, get_recipients_headers),
 	LUA_INTERFACE_DEF (task, get_from_headers),
 	LUA_INTERFACE_DEF (task, get_from_ip),
@@ -827,6 +829,20 @@ lua_task_get_from (lua_State *L)
 #endif
 			return 1;
 		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_task_get_user (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+
+	if (task && task->user != NULL) {
+		lua_pushstring (L, task->user);
+		return 1;
 	}
 
 	lua_pushnil (L);
