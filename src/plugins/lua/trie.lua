@@ -69,7 +69,7 @@ function check_trie(task)
 		-- Search inside urls
 		urls = task:get_urls()
 		if urls then
-			for _,url in urls do
+			for _,url in ipairs(urls) do
 				if trie['trie']:search_text(url:get_text()) then
 					task:insert_result(trie['symbol'], 1)
 				end

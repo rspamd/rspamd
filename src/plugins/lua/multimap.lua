@@ -45,12 +45,12 @@ function check_multimap(task)
 		if rule['type'] == 'ip' then
 			if rule['cdb'] then
 				local ip = task:get_from_ip()
-				if rule['hash']:lookup(ip) then
+				if ip and rule['hash']:lookup(ip) then
 					task:insert_result(rule['symbol'], 1)
 				end
 			else
 				local ip = task:get_from_ip_num()
-				if rule['ips']:get_key(ip) then
+				if ip and rule['ips']:get_key(ip) then
 					task:insert_result(rule['symbol'], 1)
 				end
 			end

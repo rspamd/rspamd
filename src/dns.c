@@ -1016,7 +1016,6 @@ dns_read_cb (gint fd, short what, void *arg)
 			}
 			upstream_ok (&rep->request->server->up, rep->request->time);
 			rep->request->func (rep, rep->request->arg);
-			remove_normal_event (req->session, dns_fin_cb, req);
 		}
 	}
 }
