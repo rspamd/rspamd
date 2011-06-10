@@ -281,6 +281,11 @@ spf_record_copy (GList *addrs)
 			/* Recursive call */
 			newa->data.list = spf_record_copy (addr->data.list);
 		}
+		else {
+			if (addr->spf_string) {
+				newa->spf_string = g_strdup (addr->spf_string);
+			}
+		}
 		newl = g_list_prepend (newl, newa);
 		cur = g_list_next (cur);
 	}
@@ -305,8 +310,11 @@ spf_record_destroy (gpointer list)
 			spf_record_destroy (addr->data.list);
 		}
 		else {
-			g_free (addr);
+			if (addr->spf_string) {
+				g_free (addr->spf_string);
+			}
 		}
+		g_free (addr);
 		cur = g_list_next (cur);
 	}
 
