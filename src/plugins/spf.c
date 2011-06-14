@@ -218,7 +218,8 @@ static void
 spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 {
 	GList                           *l;
-	if (record) {
+
+	if (record && record->addrs) {
 
 		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, record->sender_domain, task->tv.tv_sec)) == NULL) {
 			l = spf_record_copy (record->addrs);
