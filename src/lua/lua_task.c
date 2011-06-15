@@ -1074,7 +1074,7 @@ lua_task_get_date (lua_State *L)
 
 	if (task != NULL) {
 		/* Get GMT date and store it to time_t */
-		task_time = mktime (gmtime (&task->tv.tv_sec));
+		task_time = task->tv.tv_sec;
 		lua_pushnumber (L, task_time);
 	}
 	else {

@@ -191,8 +191,6 @@ lua_message_get_date (lua_State * L)
 
 	if (obj != NULL) {
 		g_mime_message_get_date (obj, &msg_time, &offset);
-		/* Convert result to GMT */
-		msg_time -= (offset / 100) * 3600;
 		lua_pushnumber (L, msg_time);
 	}
 	else {
