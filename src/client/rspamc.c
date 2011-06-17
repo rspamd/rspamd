@@ -366,10 +366,6 @@ scan_rspamd_file (const gchar *file)
 	/* Init options hash */
 	opts = g_hash_table_new (g_str_hash, g_str_equal);
 	add_options (opts);
-
-	/* Add server */
-	add_rspamd_server (FALSE);
-
 	res = rspamd_scan_file (file, opts, &err);
 	g_hash_table_destroy (opts);
 	if (err != NULL) {
@@ -438,8 +434,6 @@ learn_rspamd_file (const gchar *file)
 		fprintf (stderr, "cannot learn message without password and symbol name\n");
 		exit (EXIT_FAILURE);
 	}
-	/* Add server */
-	add_rspamd_server (TRUE);
 
 	if (!rspamd_learn_file (file, statfile, password, &err)) {
 		if (err != NULL) {
@@ -516,8 +510,6 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 		fprintf (stderr, "cannot learn message without password\n");
 		exit (EXIT_FAILURE);
 	}
-	/* Add server */
-	add_rspamd_server (TRUE);
 
 	if (!rspamd_fuzzy_file (file, password, weight, flag, delete, &err)) {
 		if (err != NULL) {
@@ -649,6 +641,15 @@ main (gint argc, gchar **argv, gchar **env)
 	else {
 		if ((cmd = check_rspamc_command (argv[1])) != RSPAMC_COMMAND_UNKNOWN) {
 			/* In case of command read arguments starting from 2 */
+			switch (cmd) {
+			case RSPAMC_COMMAND_SYMBOLS:
+				/* Add server */
+				add_rspamd_server (FALSE);
+				break;
+			default:
+				add_rspamd_server (TRUE);
+				break;
+			}
 			for (i = 2; i < argc; i ++) {
 				if (tty) {
 					printf ("\033[1m");
