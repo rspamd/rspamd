@@ -635,6 +635,7 @@ main (gint argc, gchar **argv, gchar **env)
 			}
 		}
 		else {
+			add_rspamd_server (FALSE);
 			scan_rspamd_file (argv[1]);
 		}
 	}

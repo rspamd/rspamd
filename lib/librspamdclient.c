@@ -1243,6 +1243,7 @@ rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GE
 	struct rspamd_result                 *res = NULL;
 
 	g_assert (client != NULL);
+	g_assert (length > 0);
 
 	/* Connect to server */
 	c = rspamd_connect_random_server (FALSE, err);
@@ -1328,6 +1329,12 @@ rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
 		}
 		return NULL;
 	}
+	if (st.st_size == 0) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, -1, "File has zero length");
+		}
+		return NULL;
+	}
 	/* Set socket blocking for writing */
 	make_socket_blocking (c->socket);
 	/* Send command */
@@ -1366,6 +1373,7 @@ rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, c
 	static const gchar                    ok_str[] = "learn ok";
 
 	g_assert (client != NULL);
+	g_assert (length > 0);
 
 	/* Connect to server */
 	c = rspamd_connect_random_server (TRUE, err);
@@ -1477,6 +1485,12 @@ rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **er
 		}
 		return FALSE;
 	}
+	if (st.st_size == 0) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, -1, "File has zero length");
+		}
+		return FALSE;
+	}
 	r = sizeof ("learn %s %uz\r\n") + strlen (symbol) + sizeof ("4294967296");
 	outbuf = g_malloc (r);
 	r = snprintf (outbuf, r, "learn %s %lu\r\n", symbol, (unsigned long)st.st_size);
@@ -1513,6 +1527,7 @@ rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password,
 	static const gchar                    ok_str[] = "OK";
 
 	g_assert (client != NULL);
+	g_assert (length > 0);
 
 	/* Connect to server */
 	c = rspamd_connect_random_server (TRUE, err);
@@ -1625,6 +1640,12 @@ rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Stat error: %s",
 					strerror (errno));
+		}
+		return FALSE;
+	}
+	if (st.st_size == 0) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, -1, "File has zero length");
 		}
 		return FALSE;
 	}
