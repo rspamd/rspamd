@@ -1025,12 +1025,13 @@ remove_all_maps (void)
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
-		event_del (&map->ev);
 		cur = g_list_next (cur);
 	}
 	g_list_free (maps);
 	maps = NULL;
-	memory_pool_delete (map_pool);
-	map_pool = NULL;
+	if (map_pool != NULL) {
+		memory_pool_delete (map_pool);
+		map_pool = NULL;
+	}
 }
 
