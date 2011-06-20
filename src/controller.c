@@ -686,7 +686,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			"    sync - run synchronization of statfiles" CRLF
 			"    counters - show rspamd counters" CRLF 
 			"    uptime - rspamd uptime" CRLF
-			"    weights <statfile> <size> - weight of message in all statfiles");
+			"    weights <statfile> <size> - weight of message in all statfiles" CRLF);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return FALSE;
 		}

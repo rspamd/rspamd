@@ -251,6 +251,7 @@ reread_config (struct rspamd_main *rspamd)
 	if (tmp_cfg) {
 		bzero (tmp_cfg, sizeof (struct config_file));
 		tmp_cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+		tmp_cfg->modules_num = MODULES_NUM;
 		init_defaults (tmp_cfg);
 		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 		/* Save some variables */
