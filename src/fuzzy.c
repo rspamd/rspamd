@@ -321,7 +321,6 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 	gsize                           real_len = 0, len = part->content->len;
 	GList                          *cur_offset;
 	struct uri                     *cur_url = NULL;
-	GString                        *debug;
 
 	cur_offset = part->urls_offset;
 	if (cur_offset != NULL) {
@@ -350,8 +349,6 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 		}
 	}
 
-	debug = g_string_sized_new (real_len);
-
 	new->block_size = fuzzy_blocksize (real_len);
 	new2->block_size = new->block_size * 2;
 
@@ -370,19 +367,15 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 			if (cur_offset != NULL) {
 				cur_url = cur_offset->data;
 			}
-			msg_info ("skip url block of %d symbols", cur_url->len);
 		}
 		else {
 			if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
 				fuzzy_update2 (new, new2, *c);
-				g_string_append_c (debug, *c);
 			}
 			c++;
 			i++;
 		}
 	}
-
-	msg_info ("make hash of string: %v", debug);
 
 	/* Check whether we have more bytes in a rolling window */
 	if (new->rh != 0) {
