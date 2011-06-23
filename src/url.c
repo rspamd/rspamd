@@ -1157,10 +1157,10 @@ url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match
 void
 url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
-	gint                            rc, off = 0;
-	gchar                          *url_str = NULL;
+	gint                            rc;
+	gchar                          *url_str = NULL, *url_start, *url_end;
 	struct uri                     *new;
-	const guint8                   *p, *end;
+	gchar                          *p, *end, *begin;
 
 
 	if (!part->orig->data || part->orig->len == 0) {
@@ -1170,34 +1170,37 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 
 	if (url_init () == 0) {
 		if (is_html) {
-			p = part->orig->data;
-			end = p + part->orig->len;
+			begin = part->orig->data;
+			end = begin + part->orig->len;
+			p = begin;
 		}
 		else {
-			p = part->content->data;
-			end = p + part->content->len;
+			begin = part->content->data;
+			end = begin + part->content->len;
+			p = begin;
 		}
 		while (p < end) {
-			if (url_try_text (pool, p, end - p, &off, &url_str)) {
-				if (url_str != NULL &&
-						g_tree_lookup (is_html ? part->html_urls : part->urls, url_str) == NULL) {
+			if (url_try_text (pool, p, end - p, &url_start, &url_end, &url_str)) {
+				if (url_str != NULL) {
 					new = memory_pool_alloc0 (pool, sizeof (struct uri));
 					if (new != NULL) {
 						g_strstrip (url_str);
 						rc = parse_uri (new, url_str, pool);
 						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) &&
 								new->hostlen > 0) {
+							new->pos = url_start - begin;
+							new->len = url_end - url_start;
 							if (new->protocol == PROTOCOL_MAILTO) {
 								if (!g_tree_lookup (task->emails, new)) {
 									g_tree_insert (task->emails, new, new);
 								}
 							}
 							else {
-								g_tree_insert (is_html ? part->html_urls : part->urls, url_str, new);
 								if (!g_tree_lookup (task->urls, new)) {
 									g_tree_insert (task->urls, new, new);
 								}
 							}
+							part->urls_offset = g_list_prepend (part->urls_offset, new);
 						}
 						else if (rc != URI_ERRNO_OK) {
 							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
@@ -1208,13 +1211,18 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 			else {
 				break;
 			}
-			p += off;
+			p = url_end + 1;
 		}
+	}
+	/* Handle offsets of this part */
+	if (part->urls_offset != NULL) {
+		part->urls_offset = g_list_reverse (part->urls_offset);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, part->urls_offset);
 	}
 }
 
 gboolean
-url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gchar **url_str)
+url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **fin, gchar **url_str)
 {
 	const gchar                    *end, *pos;
 	gint                            idx, l;
@@ -1247,8 +1255,11 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gch
 			else {
 				*url_str = NULL;
 			}
-			if (res) {
-				*res = (pos - begin) + strlen (matcher->pattern);
+			if (start != NULL) {
+				*start = (gchar *)pos;
+			}
+			if (fin != NULL) {
+				*fin = (gchar *)pos + m.m_len;
 			}
 			return TRUE;
 		}

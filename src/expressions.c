@@ -1059,7 +1059,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			return FALSE;
 		}
 		if (!p1->is_empty && !p2->is_empty) {
-			diff = fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
+			diff = fuzzy_compare_parts (p1, p2);
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
 			if (diff <= threshold) {
 				return TRUE;

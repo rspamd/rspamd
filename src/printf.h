@@ -44,6 +44,7 @@
  *	%r				            rlim_t
  *	%p						    void *
  *	%V						    f_str_t *
+ *	%v                          GString *
  *	%s						    null-terminated string
  *	%S						    ascii null-terminated string
  *	%*s					        length and string

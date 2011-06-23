@@ -686,6 +686,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 		}
 
 		register_fuzzy_call (task, part->fuzzy);
+		register_fuzzy_call (task, part->double_fuzzy);
 
 		cur = g_list_next (cur);
 	}
@@ -834,6 +835,16 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				continue;
 			}
 			if (! register_fuzzy_controller_call (session, task, part->fuzzy, cmd, value, flag, saved)) {
+				/* Cannot write hash */
+				session->state = STATE_REPLY;
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return;
+				}
+				free_task (task, FALSE);
+				return;
+			}
+			if (! register_fuzzy_controller_call (session, task, part->double_fuzzy, cmd, value, flag, saved)) {
 				/* Cannot write hash */
 				session->state = STATE_REPLY;
 				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);

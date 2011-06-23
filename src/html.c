@@ -687,7 +687,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 	gchar                           tagbuf[128];
 	struct html_tag                *tag;
 	gsize                           len = 0;
-	gint                            off, rc;
+	gint                            rc;
 
 	p = url_text;
 	while (len < remain) {
@@ -719,7 +719,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 		p ++;
 	}
 
-	if (url_try_text (task->task_pool, url_text, len, &off, &url_str) && url_str != NULL) {
+	if (url_try_text (task->task_pool, url_text, len, NULL, NULL, &url_str) && url_str != NULL) {
 		new = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
 		if (new != NULL) {
 			g_strstrip (url_str);
@@ -864,12 +864,9 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 			/*
 			 * Check for phishing
 			 */
-			if ((p = strchr (c, '>')) != NULL ) {
+			if ((p = strchr (c, '>')) != NULL && id == Tag_A) {
 				p ++;
 				check_phishing (task, url, p, remain - (p - tag_text), id);
-			}
-			if (part->html_urls && g_tree_lookup (part->html_urls, url_text) == NULL) {
-				g_tree_insert (part->html_urls, url_text, url);
 			}
 			if (g_tree_lookup (task->urls, url) == NULL) {
 				g_tree_insert (task->urls, url, url);
@@ -938,7 +935,8 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 			/* Skip some tags */
 			if (data->tag && (data->tag->id == Tag_STYLE ||
 							  data->tag->id == Tag_SCRIPT ||
-							  data->tag->id == Tag_OBJECT)) {
+							  data->tag->id == Tag_OBJECT ||
+							  data->tag->id == Tag_TITLE)) {
 				return FALSE;
 			}
 		}

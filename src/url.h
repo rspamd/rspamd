@@ -32,6 +32,9 @@ struct uri {
 
 	struct uri *phished_url;
 
+	gsize pos;
+	gsize len;
+
 	/* @protocollen should only be usable if @protocol is either
 	 * PROTOCOL_USER or an uri string should be composed. */
 	guint protocollen;
@@ -76,7 +79,7 @@ enum protocol {
 
 void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
 enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool);
-gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gint *res, gchar **url_str);
+gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str);
 const gchar* url_strerror (enum uri_errno err);
 
 #endif

@@ -216,6 +216,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 	guint64             ui64;
 	guint               width, sign, hex, max_width, frac_width, i;
 	f_str_t			   *v;
+	GString            *gs;
 
 	if (max <= 0) {
 		return buf;
@@ -311,6 +312,15 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 				fmt++;
 
 				continue;
+
+			case 'v':
+				gs = va_arg (args, GString *);
+				len = gs->len;
+				len = (buf + len < last) ? len : (size_t) (last - buf);
+
+				buf = ((gchar *)memcpy (buf, gs->str, len)) + len;
+				fmt++;
+				break;
 
 			case 's':
 				p = va_arg(args, gchar *);

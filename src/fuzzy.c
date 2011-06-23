@@ -27,6 +27,9 @@
 #include "mem_pool.h"
 #include "fstring.h"
 #include "fuzzy.h"
+#include "message.h"
+#include "url.h"
+#include "main.h"
 
 #define ROLL_WINDOW_SIZE 9
 #define MIN_FUZZY_BLOCK_SIZE 3
@@ -81,16 +84,17 @@ fuzzy_fnv_hash (gchar c, guint32 hval)
 static                          guint32
 fuzzy_blocksize (guint32 len)
 {
+	guint32                     nlen = MIN_FUZZY_BLOCK_SIZE;
 
-	if (len < MIN_FUZZY_BLOCK_SIZE) {
-		return MIN_FUZZY_BLOCK_SIZE;
+	while (nlen * (FUZZY_HASHLEN - 1) < len) {
+		nlen *= 2;
 	}
-	return g_spaced_primes_closest (len / FUZZY_HASHLEN);
+	return nlen;
 }
 
 
 /* Update hash with new symbol */
-void
+static void
 fuzzy_update (fuzzy_hash_t * h, gchar c)
 {
 	h->rh = fuzzy_roll_hash (c);
@@ -101,6 +105,30 @@ fuzzy_update (fuzzy_hash_t * h, gchar c)
 		if (h->hi < FUZZY_HASHLEN - 2) {
 			h->h = HASH_INIT;
 			h->hi++;
+		}
+	}
+}
+
+static void
+fuzzy_update2 (fuzzy_hash_t * h1, fuzzy_hash_t *h2, gchar c)
+{
+	h1->rh = fuzzy_roll_hash (c);
+	h1->h = fuzzy_fnv_hash (c, h1->h);
+	h2->rh = h1->rh;
+	h2->h = fuzzy_fnv_hash (c, h2->h);
+
+	if (h1->rh % h1->block_size == (h1->block_size - 1)) {
+		h1->hash_pipe[h1->hi] = b64[h1->h % 64];
+		if (h1->hi < FUZZY_HASHLEN - 2) {
+			h1->h = HASH_INIT;
+			h1->hi++;
+		}
+	}
+	if (h2->rh % h2->block_size == (h2->block_size - 1)) {
+		h2->hash_pipe[h2->hi] = b64[h2->h % 64];
+		if (h2->hi < FUZZY_HASHLEN - 2) {
+			h2->h = HASH_INIT;
+			h2->hi++;
 		}
 	}
 }
@@ -284,6 +312,90 @@ fuzzy_init_byte_array (GByteArray * in, memory_pool_t * pool)
 	return fuzzy_init (&f, pool);
 }
 
+void
+fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
+{
+	fuzzy_hash_t                   *new, *new2;
+	gint                            i;
+	gchar                          *c;
+	gsize                           real_len = 0, len = part->content->len;
+	GList                          *cur_offset;
+	struct uri                     *cur_url = NULL;
+	GString                        *debug;
+
+	cur_offset = part->urls_offset;
+	if (cur_offset != NULL) {
+		cur_url = cur_offset->data;
+	}
+
+	c = part->content->data;
+	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	new2 = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	bzero (&rs, sizeof (rs));
+	for (i = 0; i < len;) {
+		if (cur_url != NULL && cur_url->pos == i) {
+			i += cur_url->len + 1;
+			c += cur_url->len + 1;
+			cur_offset = g_list_next (cur_offset);
+			if (cur_offset != NULL) {
+				cur_url = cur_offset->data;
+			}
+		}
+		else {
+			if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
+				real_len ++;
+			}
+			c++;
+			i++;
+		}
+	}
+
+	debug = g_string_sized_new (real_len);
+
+	new->block_size = fuzzy_blocksize (real_len);
+	new2->block_size = new->block_size * 2;
+
+	cur_offset = part->urls_offset;
+	if (cur_offset != NULL) {
+		cur_url = cur_offset->data;
+	}
+
+	c = part->content->data;
+
+	for (i = 0; i < len;) {
+		if (cur_url != NULL && cur_url->pos == i) {
+			i += cur_url->len + 1;
+			c += cur_url->len + 1;
+			cur_offset = g_list_next (cur_offset);
+			if (cur_offset != NULL) {
+				cur_url = cur_offset->data;
+			}
+			msg_info ("skip url block of %d symbols", cur_url->len);
+		}
+		else {
+			if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
+				fuzzy_update2 (new, new2, *c);
+				g_string_append_c (debug, *c);
+			}
+			c++;
+			i++;
+		}
+	}
+
+	msg_info ("make hash of string: %v", debug);
+
+	/* Check whether we have more bytes in a rolling window */
+	if (new->rh != 0) {
+		new->hash_pipe[new->hi] = b64[new->h % 64];
+	}
+	if (new2->rh != 0) {
+		new2->hash_pipe[new2->hi] = b64[new2->h % 64];
+	}
+
+	part->fuzzy = new;
+	part->double_fuzzy = new2;
+}
+
 /* Compare score of difference between two hashes 0 - different hashes, 100 - identical hashes */
 gint
 fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
@@ -306,6 +418,22 @@ fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
 	res = 100 - (2 * res * 100) / (l1 + l2);
 
 	return res;
+}
+
+gint
+fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
+{
+	if (p1->fuzzy->block_size == p2->fuzzy->block_size) {
+		return fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
+	}
+	else if (p1->double_fuzzy->block_size == p2->fuzzy->block_size) {
+		return fuzzy_compare_hashes (p1->double_fuzzy, p2->fuzzy);
+	}
+	else if (p2->double_fuzzy->block_size == p1->fuzzy->block_size) {
+		return fuzzy_compare_hashes (p2->double_fuzzy, p1->fuzzy);
+	}
+
+	return 0;
 }
 
 /* 

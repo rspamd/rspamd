@@ -30,9 +30,9 @@ struct mime_text_part {
 	GByteArray *orig;
 	GByteArray *content;
 	GNode *html_nodes;
-	GTree *urls;
-	GTree *html_urls;
+	GList *urls_offset;										    /**< list of offsets of urls						*/
 	fuzzy_hash_t *fuzzy;
+	fuzzy_hash_t *double_fuzzy;
 	GMimeObject *parent;
 };
 

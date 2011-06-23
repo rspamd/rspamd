@@ -845,31 +845,16 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			/*XXX: add support of it */
 			msg_warn ("numbered matches are not supported for url regexp");
 		}
-		cur = g_list_first (task->text_parts);
-		while (cur) {
-			part = (struct mime_text_part *)cur->data;
-			/* Skip empty parts */
-			if (part->is_empty) {
-				cur = g_list_next (cur);
-				continue;
-			}
-			if (part->is_raw) {
-				regexp = re->raw_regexp;
-			}
-			else {
-				regexp = re->regexp;
-			}
-			callback_param.task = task;
-			callback_param.regexp = regexp;
-			callback_param.re = re;
-			callback_param.found = FALSE;
-			if (part->urls) {
-				g_tree_foreach (part->urls, tree_url_callback, &callback_param);
-			}
-			if (part->html_urls && callback_param.found == FALSE) {
-				g_tree_foreach (part->html_urls, tree_url_callback, &callback_param);
-			}
-			cur = g_list_next (cur);
+		regexp = re->regexp;
+		callback_param.task = task;
+		callback_param.regexp = regexp;
+		callback_param.re = re;
+		callback_param.found = FALSE;
+		if (task->urls) {
+			g_tree_foreach (task->urls, tree_url_callback, &callback_param);
+		}
+		if (task->emails && callback_param.found == FALSE) {
+			g_tree_foreach (task->emails, tree_url_callback, &callback_param);
 		}
 		if (callback_param.found == FALSE) {
 			task_cache_add (task, re, 0);

@@ -784,9 +784,6 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		text_part->html_nodes = NULL;
 		text_part->parent = parent;
 
-		text_part->html_urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
-		text_part->urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
-
 		text_part->content = strip_html_tags (task, task->task_pool, text_part, text_part->orig, NULL);
 
 		if (text_part->html_nodes == NULL) {
@@ -800,10 +797,8 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 #endif
 		}
 
-		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
+		fuzzy_init_part (text_part, task->task_pool);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) free_byte_array_callback, text_part->content);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, text_part->html_urls);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, text_part->urls);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 	else if (g_mime_content_type_is_type (type, "text", "*")) {
@@ -821,12 +816,9 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		}
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->content = text_part->orig;
-		text_part->fuzzy = fuzzy_init_byte_array (text_part->content, task->task_pool);
-		text_part->html_urls = NULL;
-		text_part->urls = g_tree_new ((GCompareFunc) g_ascii_strcasecmp);
 		url_parse_text (task->task_pool, task, text_part, FALSE);
+		fuzzy_init_part (text_part, task->task_pool);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, text_part->urls);
 	}
 }
 
@@ -973,10 +965,10 @@ process_message (struct worker_task *task)
 	GMimePart                      *part;
 	GMimeDataWrapper               *wrapper;
 	struct received_header         *recv;
-	gchar                          *mid, *url_str, *p, *end;
+	gchar                          *mid, *url_str, *p, *end, *url_end;
 	struct uri                     *subject_url;
 	gsize                           len;
-	gint                            pos, rc;
+	gint                            rc;
 
 	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->begin;
@@ -1127,7 +1119,7 @@ process_message (struct worker_task *task)
 
 		while (p < end) {
 			/* Search to the end of url */
-			if (url_try_text (task->task_pool, p, end - p, &pos, &url_str)) {
+			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end, &url_str)) {
 				if (url_str != NULL) {
 					subject_url = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
 					if (subject_url != NULL) {
@@ -1150,7 +1142,7 @@ process_message (struct worker_task *task)
 			else {
 				break;
 			}
-			p += pos;
+			p = url_end + 1;
 		}
 		/* Free header's list */
 		g_list_free (cur);

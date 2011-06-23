@@ -20,6 +20,8 @@ typedef struct fuzzy_hash_s {
 	guint32 hi;							/**< current index in hash pipe		*/
 } fuzzy_hash_t;
 
+struct mime_text_part;
+
 /**
  * Calculate fuzzy hash for specified string
  * @param in input string
@@ -28,6 +30,9 @@ typedef struct fuzzy_hash_s {
  */
 fuzzy_hash_t * fuzzy_init (f_str_t *in, memory_pool_t *pool);
 fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
+void fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool);
+
+gint fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2);
 
 /**
  * Compare score of difference between two hashes 
