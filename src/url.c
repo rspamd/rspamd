@@ -1160,6 +1160,7 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 	gint                            rc;
 	gchar                          *url_str = NULL, *url_start, *url_end;
 	struct uri                     *new;
+	struct process_exception       *ex;
 	gchar                          *p, *end, *begin;
 
 
@@ -1183,13 +1184,14 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 			if (url_try_text (pool, p, end - p, &url_start, &url_end, &url_str)) {
 				if (url_str != NULL) {
 					new = memory_pool_alloc0 (pool, sizeof (struct uri));
+					ex = memory_pool_alloc0 (pool, sizeof (struct process_exception));
 					if (new != NULL) {
 						g_strstrip (url_str);
 						rc = parse_uri (new, url_str, pool);
 						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) &&
 								new->hostlen > 0) {
-							new->pos = url_start - begin;
-							new->len = url_end - url_start;
+							ex->pos = url_start - begin;
+							ex->len = url_end - url_start;
 							if (new->protocol == PROTOCOL_MAILTO) {
 								if (!g_tree_lookup (task->emails, new)) {
 									g_tree_insert (task->emails, new, new);
@@ -1200,7 +1202,7 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 									g_tree_insert (task->urls, new, new);
 								}
 							}
-							part->urls_offset = g_list_prepend (part->urls_offset, new);
+							part->urls_offset = g_list_prepend (part->urls_offset, ex);
 						}
 						else if (rc != URI_ERRNO_OK) {
 							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
@@ -1256,10 +1258,10 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start,
 				*url_str = NULL;
 			}
 			if (start != NULL) {
-				*start = (gchar *)pos;
+				*start = (gchar *)m.m_begin;
 			}
 			if (fin != NULL) {
-				*fin = (gchar *)pos + m.m_len;
+				*fin = (gchar *)m.m_begin + m.m_len;
 			}
 			return TRUE;
 		}

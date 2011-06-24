@@ -281,6 +281,18 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, filters_str),
 				NULL
 			},
+			{
+				"sync_interval",
+				xml_handle_seconds,
+				G_STRUCT_OFFSET (struct config_file, statfile_sync_interval),
+				NULL
+			},
+			{
+				"sync_timeout",
+				xml_handle_seconds,
+				G_STRUCT_OFFSET (struct config_file, statfile_sync_timeout),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR

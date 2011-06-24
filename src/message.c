@@ -686,25 +686,6 @@ free_byte_array_callback (void *pointer)
 	g_byte_array_free (arr, TRUE);
 }
 
-static void
-detect_real_charset (struct worker_task *task, GByteArray * part_content, struct mime_text_part *text_part)
-{
-	/* First of all try to detect UTF symbols */
-	text_part->is_utf = FALSE;
-	/* At first decision try to validate a single character */
-	if (g_utf8_get_char_validated (part_content->data, part_content->len) != -1) {
-		/* Now validate the whole part */
-		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
-			text_part->is_utf = TRUE;
-			text_part->real_charset = UTF8_CHARSET;
-			return;
-		}
-	}
-	
-	/* Now try to detect specific symbols from some charsets */
-	
-}
-
 static GByteArray              *
 convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeContentType * type, struct mime_text_part *text_part)
 {
@@ -726,6 +707,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 
 	if (g_ascii_strcasecmp (charset, "utf-8") == 0 || g_ascii_strcasecmp (charset, "utf8") == 0) {
 		text_part->is_raw = FALSE;
+		text_part->is_utf = TRUE;
 		return part_content;
 	}
 
@@ -741,6 +723,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 	result_array->len = write_bytes;
 	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, res_str);
 	text_part->is_raw = FALSE;
+	text_part->is_utf = TRUE;
 
 	return result_array;
 }

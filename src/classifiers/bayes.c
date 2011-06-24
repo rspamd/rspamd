@@ -43,11 +43,11 @@ bayes_error_quark (void)
 }
 
 struct bayes_statfile_data {
-	double                          hits;
-	double                          total_hits;
+	guint64                         hits;
+	guint64                         total_hits;
 	double                          local_probability;
 	double                          post_probability;
-	double                          value;
+	guint                           value;
 	struct statfile                *st;
 	stat_file_t                    *file;
 };
@@ -67,25 +67,22 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 {
 	token_node_t                   *node = key;
 	struct bayes_callback_data     *cd = data;
-	double                          v, c;
+	gint                            v, c;
 
 	c = (cd->in_class) ? 1 : -1;
 
 	/* Consider that not found blocks have value 1 */
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
-	if (fabs (v) < ALPHA && c > 0) {
+	if (v == 0 && c > 0) {
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
 	}
 	else {
-		if (G_LIKELY (c > 0 && c < G_MAXDOUBLE)) {
-			v += c;
+		if (G_LIKELY (c > 0)) {
+			v ++;
 		}
 		else if (c < 0){
-			if (v > -c) {
-				v -= c;
-			}
-			else {
-				v = 0;
+			if (v != 0) {
+				v --;
 			}
 		}
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v);
@@ -103,14 +100,15 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 
 	token_node_t                   *node = key;
 	struct bayes_callback_data     *cd = data;
-	double                          local_hits = 0, renorm = 0;
-	int                             i;
+	double                          renorm = 0;
+	gint                            i;
+	guint64                         local_hits = 0;
 	struct bayes_statfile_data     *cur;
 
 	for (i = 0; i < cd->statfiles_num; i ++) {
 		cur = &cd->statfiles[i];
 		cur->value = statfile_pool_get_block (cd->pool, cur->file, node->h1, node->h2, cd->now);
-		if (cur->value > ALPHA) {
+		if (cur->value > 0) {
 			cur->total_hits += cur->value;
 			cur->hits = cur->value;
 			local_hits += cur->value;
@@ -121,7 +119,8 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	}
 	for (i = 0; i < cd->statfiles_num; i ++) {
 		cur = &cd->statfiles[i];
-		cur->local_probability = 0.5 + (cur->value - (local_hits - cur->value)) / (LOCAL_PROB_DENOM * (local_hits + 1.0));
+		cur->local_probability = 0.5 + ((double)cur->value - ((double)local_hits - cur->value)) /
+				(LOCAL_PROB_DENOM * (1.0 + local_hits));
 		renorm += cur->post_probability * cur->local_probability;
 	}
 

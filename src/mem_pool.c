@@ -91,6 +91,7 @@ pool_chain_new (gsize size)
 	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
 	chain->next = NULL;
 	STAT_LOCK ();
+	mem_pool_stat->bytes_allocated += size;
 	mem_pool_stat->chunks_allocated++;
 	STAT_UNLOCK ();
 
@@ -135,6 +136,7 @@ pool_chain_new_shared (gsize size)
 	chain->next = NULL;
 	STAT_LOCK ();
 	mem_pool_stat->shared_chunks_allocated++;
+	mem_pool_stat->bytes_allocated += size;
 	STAT_UNLOCK ();
 
 	return chain;
@@ -225,16 +227,11 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 			cur->next = new;
 			pool->cur_pool = new;
 			new->pos += size;
-			STAT_LOCK ();
-			mem_pool_stat->bytes_allocated += size;
-			STAT_UNLOCK ();
+
 			return new->begin;
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
-		STAT_LOCK ();
-		mem_pool_stat->bytes_allocated += size;
-		STAT_UNLOCK ();
 		return tmp;
 	}
 	return NULL;
@@ -349,9 +346,6 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
-		STAT_LOCK ();
-		mem_pool_stat->bytes_allocated += size;
-		STAT_UNLOCK ();
 		return tmp;
 	}
 	return NULL;
@@ -506,20 +500,22 @@ memory_pool_delete (memory_pool_t * pool)
 	while (cur) {
 		tmp = cur;
 		cur = cur->next;
-		g_slice_free1 (tmp->len, tmp->begin);
-		g_slice_free (struct _pool_chain, tmp);
 		STAT_LOCK ();
 		mem_pool_stat->chunks_freed++;
+		mem_pool_stat->bytes_allocated -= tmp->len;
 		STAT_UNLOCK ();
+		g_slice_free1 (tmp->len, tmp->begin);
+		g_slice_free (struct _pool_chain, tmp);
 	}
 	/* Unmap shared memory */
 	while (cur_shared) {
 		tmp_shared = cur_shared;
 		cur_shared = cur_shared->next;
-		munmap ((void *)tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
 		STAT_LOCK ();
 		mem_pool_stat->chunks_freed++;
+		mem_pool_stat->bytes_allocated -= tmp->len;
 		STAT_UNLOCK ();
+		munmap ((void *)tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
 	}
 	if (pool->variables) {
 		g_hash_table_destroy (pool->variables);

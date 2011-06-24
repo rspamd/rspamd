@@ -32,9 +32,6 @@ struct uri {
 
 	struct uri *phished_url;
 
-	gsize pos;
-	gsize len;
-
 	/* @protocollen should only be usable if @protocol is either
 	 * PROTOCOL_USER or an uri string should be composed. */
 	guint protocollen;

@@ -580,7 +580,6 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1,
 	return 0;
 }
 
-#define RANDOM_EXPIRE G_MAXINT / CHAIN_LENGTH
 static void
 statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t t, double value, gboolean from_now)
 {
@@ -589,7 +588,6 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guin
 	guint                           i, blocknum;
 	u_char                         *c;
     double                          min = G_MAXDOUBLE;
-
 
 	if (from_now) {
 		file->access_time = t;
@@ -626,14 +624,10 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guin
 			return;
 		}
 		
-		/* Expire block if we have some random value that is lower than RANDOM_EXPIRE value */
-		if (g_random_int () < RANDOM_EXPIRE) {
-			to_expire = block;
-			break;
-		}
 		/* Expire block with minimum value otherwise */
 		if (block->value < min) {
 			to_expire = block;
+			min = block->value;
 		}
 		c += sizeof (struct stat_file_block);
 		block = (struct stat_file_block *)c;

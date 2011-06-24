@@ -212,7 +212,7 @@ write_whole_statfile (struct controller_session *session, gchar *symbol, struct 
 	struct statfile                *st;
 	gchar                           out_buf[BUFSIZ];
 	gint                            i;
-	guint64                         rev, ti, len, pos;
+	guint64                         rev, ti, len, pos, blocks;
 	gchar                           *out;
 	struct rspamd_binlog_element    log_elt;
 	struct stat_file_block         *stat_elt;
@@ -222,7 +222,7 @@ write_whole_statfile (struct controller_session *session, gchar *symbol, struct 
 	if (statfile == NULL) {
 		return FALSE;
 	}
-	
+
 	/* Begin to copy all blocks into array */
 	statfile_get_revision (statfile, &rev, (time_t *)&ti);
 	if (ti == 0) {
@@ -230,10 +230,13 @@ write_whole_statfile (struct controller_session *session, gchar *symbol, struct 
 		ti = time (NULL);
 		statfile_set_revision (statfile, rev, ti);
 	}
-	len = statfile->cur_section.length * sizeof (struct rspamd_binlog_element);
+	msg_info ("send a whole statfile %s with version %uL to slave", symbol, rev);
+
+	blocks = statfile_get_total_blocks (statfile);
+	len = blocks * sizeof (struct rspamd_binlog_element);
 	out = memory_pool_alloc (session->session_pool, len);
 
-	for (i = 0, pos = 0; i < statfile->cur_section.length; i ++) {
+	for (i = 0, pos = 0; i < blocks; i ++) {
 		stat_elt = (struct stat_file_block *)((u_char *)statfile->map + statfile->seek_pos + i * sizeof (struct stat_file_block));
 		if (fabs (stat_elt->value) > 0.001) {
 			/* Write only those values which value is not 0 */
@@ -324,6 +327,7 @@ process_sync_command (struct controller_session *session, gchar **args)
 	}
 	
 	while (binlog_sync (binlog, rev, &time, &data)) {
+		rev ++;
 		r = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %z" CRLF, rev, time, data->len);
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			if (data != NULL) {
@@ -339,7 +343,6 @@ process_sync_command (struct controller_session *session, gchar **args)
 				return FALSE;
 			}
 		}
-		rev ++;
 	}
 
 	if (time == 0) {
@@ -666,12 +669,6 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			}
 			return TRUE;
 		}
-		else {
-			if (! rspamd_dispatcher_write (session->dispatcher, CRLF, sizeof (CRLF) - 1, FALSE, TRUE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
 		break;
 	case COMMAND_HELP:
 		r = rspamd_snprintf (out_buf, sizeof (out_buf),
@@ -851,7 +848,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			c.begin = part->content->data;
 			c.len = part->content->len;
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer,
-					session->session_pool, &c, &tokens, FALSE, part->is_utf)) {
+					session->session_pool, &c, &tokens, FALSE, part->is_utf, part->urls_offset)) {
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF END);
 				free_task (task, FALSE);
 				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {

@@ -172,6 +172,9 @@ init_defaults (struct config_file *cfg)
 	cfg->dns_throttling_errors = 20;
 	cfg->dns_throttling_time = 10000;
 
+	cfg->statfile_sync_interval = 60000;
+	cfg->statfile_sync_timeout = 20000;
+
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);

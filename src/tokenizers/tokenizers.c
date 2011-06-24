@@ -52,7 +52,7 @@ const gchar t_delimiters[255] = {
 		1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 1, 0, 1, 1, 1, 1, 1, 0,
-		1, 1, 1, 1, 1, 0, 1, 1, 0, 0,
+		1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
 		1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -103,44 +103,76 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 }
 
 /* Get next word from specified f_str_t buf */
-f_str_t                        *
-get_next_word (f_str_t * buf, f_str_t * token)
+gchar *
+get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 {
-	size_t                          remain;
-	guchar                         *pos;
+	gsize                           remain, pos;
+	guchar                         *p;
+	struct process_exception	   *ex = NULL;
 
 	if (buf == NULL) {
 		return NULL;
 	}
-	if (token->begin == NULL) {
-		token->begin = buf->begin;
+
+	if (*exceptions != NULL) {
+		ex = (*exceptions)->data;
 	}
 
-	token->begin = token->begin + token->len;
+	if (token->begin == NULL) {
+		if (ex != NULL) {
+			if (ex->pos == 0) {
+				token->begin = buf->begin + ex->len;
+				token->len = ex->len;
+			}
+			else {
+				token->begin = buf->begin;
+				token->len = 0;
+			}
+		}
+		else {
+			token->begin = buf->begin;
+			token->len = 0;
+		}
+	}
+
 	token->len = 0;
 
 	remain = buf->len - (token->begin - buf->begin);
 	if (remain <= 0) {
 		return NULL;
 	}
-	pos = token->begin;
+	pos = token->begin - buf->begin;
+	p = token->begin;
 	/* Skip non delimiters symbols */
-	while (remain > 0 && t_delimiters[*pos]) {
-		token->begin++;
+	do {
+		if (ex != NULL && ex->pos == pos) {
+			/* Go to the next exception */
+			*exceptions = g_list_next (*exceptions);
+			return p + ex->len + 1;
+		}
 		pos++;
+		p++;
 		remain--;
-	}
-	while (remain > 0 && !t_delimiters[*pos]) {
+	} while (remain > 0 && t_delimiters[*p]);
+
+	token->begin = p;
+
+	while (remain > 0 && !t_delimiters[*p]) {
+		if (ex != NULL && ex->pos == pos) {
+			*exceptions = g_list_next (*exceptions);
+			return p + ex->len + 1;
+		}
 		token->len++;
 		pos++;
 		remain--;
+		p ++;
 	}
 
-	if (token->len == 0) {
+	if (remain == 0) {
 		return NULL;
 	}
 
-	return token;
+	return p;
 }
 
 /* Struct to access gmime headers */
@@ -239,13 +271,13 @@ tokenize_subject (struct worker_task *task, GTree ** tree)
 		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
 		subject.begin = task->subject;
 		subject.len = strlen (task->subject);
-		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE);
+		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE, NULL);
 	}
 	if ((sub = g_mime_message_get_subject (task->message)) != NULL) {
 		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
 		subject.begin = (gchar *)sub;
 		subject.len = strlen (sub);
-		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE);
+		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE, NULL);
 	}
 }
 

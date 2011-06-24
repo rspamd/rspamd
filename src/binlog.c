@@ -120,7 +120,7 @@ binlog_check_file (struct rspamd_binlog *log)
 		return FALSE;
 	}
 
-	log->cur_seq = log->cur_idx->last_index;
+	log->cur_seq = log->metaindex->last_index * BINLOG_IDX_LEN + log->cur_idx->last_index;
 	log->cur_time = log->cur_idx->indexes[log->cur_idx->last_index].time;
 
 	return TRUE;
@@ -423,6 +423,13 @@ binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GB
 	if (from_rev == log->cur_seq) {
 		/* Last record */
 		*rep = NULL;
+		return FALSE;
+	}
+	else if (from_rev > log->cur_seq) {
+		/* Slave has more actual copy, write this to log and abort sync */
+		msg_warn ("slave has more recent revision of statfile %s: %uL and our is: %uL", log->filename, from_rev, log->cur_seq);
+		*rep = NULL;
+		*from_time = 0;
 		return FALSE;
 	}
 

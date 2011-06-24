@@ -113,6 +113,13 @@ struct save_point {
 	guint saved;											/**< how much time we have delayed processing		*/
 };
 
+/**
+ * Structure to point exception in text from processing
+ */
+struct process_exception {
+	gsize pos;
+	gsize len;
+};
 
 /**
  * Union that would be used for storing sockaddrs

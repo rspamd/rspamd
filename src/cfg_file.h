@@ -270,6 +270,8 @@ struct config_file {
 	gboolean log_extended;							/**< log extended information							*/
 
 	gsize max_statfile_size;						/**< maximum size for statfile							*/
+	guint32 statfile_sync_interval;					/**< synchronization interval							*/
+	guint32 statfile_sync_timeout;					/**< synchronization timeout							*/
 
 	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];	/**< memcached servers				*/
 	gsize memcached_servers_num;					/**< number of memcached servers						*/

@@ -31,11 +31,6 @@
 #include "buffer.h"
 #include "statfile_sync.h"
 
-/* XXX: hardcoding this value is not very smart */
-#define MAX_SYNC_TIME 60
-#define IO_TIMEOUT 20
-
-
 enum rspamd_sync_state {
 	SYNC_STATE_GREETING,
 	SYNC_STATE_READ_LINE,
@@ -54,7 +49,9 @@ struct rspamd_sync_ctx {
 
 	struct timeval interval;
 	struct timeval io_tv;
-	gint                            sock;
+	gint sock;
+	guint32 timeout;
+	guint32 sync_interval;
 	enum rspamd_sync_state state;
 	gboolean is_busy;
 
@@ -141,9 +138,9 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 			}
 		}
 	}
-	
+
 	/* Current value must be len value and its value must not be 0 */
-	return ((val == &ctx->new_len) && *val != 0);
+	return ((val == &ctx->new_len));
 }
 
 static                          gboolean
@@ -193,8 +190,10 @@ sync_read (f_str_t * in, void *arg)
 				return FALSE;
 			}
 			else if (ctx->state != SYNC_STATE_QUIT) {
-				ctx->state = SYNC_STATE_READ_REV;
-				rspamd_set_dispatcher_policy (ctx->dispatcher, BUFFER_CHARACTER, ctx->new_len);
+				if (ctx->new_len > 0) {
+					ctx->state = SYNC_STATE_READ_REV;
+					rspamd_set_dispatcher_policy (ctx->dispatcher, BUFFER_CHARACTER, ctx->new_len);
+				}
 			}
 			else {
 				/* Quit this session */
@@ -247,11 +246,13 @@ static void
 sync_timer_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_sync_ctx *ctx = ud;
+	guint32 jittered_interval;
 	
 	/* Plan new event */
 	evtimer_del (&ctx->tm_ev);
-	ctx->interval.tv_sec = g_random_int_range (MAX_SYNC_TIME, MAX_SYNC_TIME * 2);
-	ctx->interval.tv_usec = 0;
+	/* Add some jittering for synchronization */
+	jittered_interval = g_random_int_range (ctx->sync_interval, ctx->sync_interval * 2);
+	msec_to_tv (jittered_interval, &ctx->interval);
 	evtimer_add (&ctx->tm_ev, &ctx->interval);
 	log_next_sync (ctx->st->symbol, ctx->interval.tv_sec);
 	
@@ -266,8 +267,7 @@ sync_timer_callback (gint fd, short what, void *ud)
 		return;
 	}
 	/* Now create and activate dispatcher */
-	ctx->io_tv.tv_sec = IO_TIMEOUT;
-	ctx->io_tv.tv_usec = 0;
+	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	ctx->dispatcher = rspamd_create_dispatcher (ctx->sock, BUFFER_LINE, sync_read, NULL, sync_err, &ctx->io_tv, ctx);
 	
 	ctx->state = SYNC_STATE_GREETING;
@@ -278,17 +278,20 @@ sync_timer_callback (gint fd, short what, void *ud)
 }
 
 static gboolean
-add_statfile_watch (statfile_pool_t *pool, struct statfile *st)
+add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_file *cfg)
 {
 	struct rspamd_sync_ctx *ctx;
+	guint32 jittered_interval;
 	
 	if (st->binlog->master_addr.s_addr != INADDR_NONE &&
 			st->binlog->master_addr.s_addr != INADDR_ANY) {
 		ctx = memory_pool_alloc (pool->pool, sizeof (struct rspamd_sync_ctx));
 		ctx->st = st;
+		ctx->timeout = cfg->statfile_sync_timeout;
+		ctx->sync_interval = cfg->statfile_sync_interval;
 		/* Add some jittering for synchronization */
-		ctx->interval.tv_sec = g_random_int_range (MAX_SYNC_TIME, MAX_SYNC_TIME * 2);
-		ctx->interval.tv_usec = 0;
+		jittered_interval = g_random_int_range (ctx->sync_interval, ctx->sync_interval * 2);
+		msec_to_tv (jittered_interval, &ctx->interval);
 		/* Open statfile and attach it to pool */
 		if ((ctx->real_statfile = statfile_pool_is_open (pool, st->path)) == NULL) {
 			if ((ctx->real_statfile = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
@@ -331,7 +334,7 @@ start_statfile_sync (statfile_pool_t *pool, struct config_file *cfg)
 		while (l) {
 			st = l->data;
 			if (st->binlog != NULL && st->binlog->affinity == AFFINITY_SLAVE) {
-				if (!add_statfile_watch (pool, st)) {
+				if (!add_statfile_watch (pool, st, cfg)) {
 					return FALSE;
 				}
 			}

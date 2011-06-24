@@ -297,6 +297,34 @@ fstrgrow (memory_pool_t * pool, f_str_t * orig, size_t newlen)
 	return res;
 }
 
+static guint32
+fstrhash_c (gchar c, guint32 hval)
+{
+	guint32                         tmp;
+	/*
+	 * xor in the current byte against each byte of hval
+	 * (which alone gaurantees that every bit of input will have
+	 * an effect on the output)
+	 */
+	tmp = c & 0xFF;
+	tmp = tmp | (tmp << 8) | (tmp << 16) | (tmp << 24);
+	hval ^= tmp;
+
+	/* add some bits out of the middle as low order bits */
+	hval = hval + ((hval >> 12) & 0x0000ffff);
+
+	/* swap most and min significative bytes */
+	tmp = (hval << 24) | ((hval >> 24) & 0xff);
+	/* zero most and min significative bytes of hval */
+	hval &= 0x00ffff00;
+	hval |= tmp;
+	/*
+	 * rotate hval 3 bits to the left (thereby making the
+	 * 3rd msb of the above mess the hsb of the output hash)
+	 */
+	return (hval << 3) + (hval >> 29);
+}
+
 /*
  * Return hash value for a string
  */
@@ -305,7 +333,6 @@ fstrhash (f_str_t * str)
 {
 	size_t                          i;
 	guint32                         hval;
-	guint32                         tmp;
 	gchar                           *c = str->begin;
 
 	if (str == NULL) {
@@ -314,29 +341,51 @@ fstrhash (f_str_t * str)
 	hval = str->len;
 
 	for (i = 0; i < str->len; i++, c++) {
-		/* 
-		 * xor in the current byte against each byte of hval
-		 * (which alone gaurantees that every bit of input will have
-		 * an effect on the output)
-		 */
-		tmp = *c & 0xFF;
-		tmp = tmp | (tmp << 8) | (tmp << 16) | (tmp << 24);
-		hval ^= tmp;
-
-		/* add some bits out of the middle as low order bits */
-		hval = hval + ((hval >> 12) & 0x0000ffff);
-
-		/* swap most and min significative bytes */
-		tmp = (hval << 24) | ((hval >> 24) & 0xff);
-		/* zero most and min significative bytes of hval */
-		hval &= 0x00ffff00;
-		hval |= tmp;
-		/*
-		 * rotate hval 3 bits to the left (thereby making the
-		 * 3rd msb of the above mess the hsb of the output hash)
-		 */
-		hval = (hval << 3) + (hval >> 29);
+		hval = fstrhash_c (*c, hval);
 	}
+	return hval;
+}
+
+/*
+ * Return hash value for a string
+ */
+guint32
+fstrhash_lowercase (f_str_t * str, gboolean is_utf)
+{
+	gsize                           i;
+	guint32                         j, hval;
+	const gchar                    *p = str->begin, *end = NULL;
+	gchar                           t;
+	gunichar                        uc;
+
+	if (str == NULL) {
+		return 0;
+	}
+	hval = str->len;
+
+	if (is_utf) {
+		while (end < str->begin + str->len) {
+			g_utf8_validate (p, str->len, &end);
+			while (p < end) {
+				uc = g_unichar_tolower (g_utf8_get_char (p));
+				for (j = 0; j < sizeof (gunichar); j ++) {
+					t = (uc >> (j * 8)) & 0xff;
+					if (t != 0) {
+						hval = fstrhash_c (t, hval);
+					}
+				}
+				p = g_utf8_next_char (p);
+			}
+			p = end + 1;
+		}
+
+	}
+	else {
+		for (i = 0; i < str->len; i++, p++) {
+			hval = fstrhash_c (g_ascii_tolower (*p), hval);
+		}
+	}
+
 	return hval;
 }
 

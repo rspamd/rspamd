@@ -612,7 +612,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.len = strlen (cur->data);
 				if (c.len > 0) {
 					c.begin = cur->data;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, FALSE)) {
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, FALSE, NULL)) {
 						msg_info ("cannot tokenize input");
 						return;
 					}
@@ -627,7 +627,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.begin = text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, text_part->is_utf)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, text_part->is_utf, text_part->urls_offset)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}
@@ -805,7 +805,7 @@ check_metric_action (double score, double required_score, struct metric *metric)
 gboolean
 learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 {
-	GList                          *cur;
+	GList                          *cur, *ex;
 	struct classifier_config       *cl;
 	struct classifier_ctx          *cls_ctx;
 	gchar                          *s;
@@ -841,6 +841,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 		if (s != NULL) {
 			c.len = strlen (cur->data);
 			c.begin = cur->data;
+			ex = NULL;
 		}
 		else {
 			part = cur->data;
@@ -852,11 +853,12 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 			c.begin = part->content->data;
 			c.len = part->content->len;
 			is_utf = part->is_utf;
+			ex = part->urls_offset;
 		}
 		/* Get tokens */
 		if (!cl->tokenizer->tokenize_func (
 				cl->tokenizer, task->task_pool,
-				&c, &tokens, FALSE, is_utf)) {
+				&c, &tokens, FALSE, is_utf, ex)) {
 			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
 			return FALSE;
 		}

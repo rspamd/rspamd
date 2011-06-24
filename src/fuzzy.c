@@ -320,11 +320,11 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 	gchar                          *c;
 	gsize                           real_len = 0, len = part->content->len;
 	GList                          *cur_offset;
-	struct uri                     *cur_url = NULL;
+	struct process_exception       *cur_ex = NULL;
 
 	cur_offset = part->urls_offset;
 	if (cur_offset != NULL) {
-		cur_url = cur_offset->data;
+		cur_ex = cur_offset->data;
 	}
 
 	c = part->content->data;
@@ -332,12 +332,12 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 	new2 = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
 	for (i = 0; i < len;) {
-		if (cur_url != NULL && cur_url->pos == i) {
-			i += cur_url->len + 1;
-			c += cur_url->len + 1;
+		if (cur_ex != NULL && cur_ex->pos == i) {
+			i += cur_ex->len + 1;
+			c += cur_ex->len + 1;
 			cur_offset = g_list_next (cur_offset);
 			if (cur_offset != NULL) {
-				cur_url = cur_offset->data;
+				cur_ex = cur_offset->data;
 			}
 		}
 		else {
@@ -354,18 +354,18 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 
 	cur_offset = part->urls_offset;
 	if (cur_offset != NULL) {
-		cur_url = cur_offset->data;
+		cur_ex = cur_offset->data;
 	}
 
 	c = part->content->data;
 
 	for (i = 0; i < len;) {
-		if (cur_url != NULL && cur_url->pos == i) {
-			i += cur_url->len + 1;
-			c += cur_url->len + 1;
+		if (cur_ex != NULL && cur_ex->pos == i) {
+			i += cur_ex->len + 1;
+			c += cur_ex->len + 1;
 			cur_offset = g_list_next (cur_offset);
 			if (cur_offset != NULL) {
-				cur_url = cur_offset->data;
+				cur_ex = cur_offset->data;
 			}
 		}
 		else {

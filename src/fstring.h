@@ -94,6 +94,10 @@ f_str_t* fstrgrow (memory_pool_t *pool, f_str_t *orig, size_t newlen);
 guint32 fstrhash (f_str_t *str);
 
 /*
+ * Return fast hash value for fixed string converted to lowercase
+ */
+guint32 fstrhash_lowercase (f_str_t *str, gboolean is_utf);
+/*
  * Make copy of string to 0-terminated string
  */
 gchar* fstrcstr (f_str_t *str, memory_pool_t *pool);
