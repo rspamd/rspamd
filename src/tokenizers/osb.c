@@ -86,7 +86,6 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 		}
 		k ++;
 		token.begin = res;
-		g_assert (k < 10000);
 	}
 
 	return TRUE;
