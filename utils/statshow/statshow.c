@@ -94,7 +94,7 @@ classifiers_callback (gpointer value, void *arg)
 				c.len = strlen (cur->data);
 				if (c.len > 0) {
 					c.begin = cur->data;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, TRUE)) {
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, TRUE, FALSE, NULL)) {
 						msg_info ("cannot tokenize input");
 						return;
 					}
@@ -109,7 +109,8 @@ classifiers_callback (gpointer value, void *arg)
 				c.begin = text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, TRUE)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, TRUE,
+						text_part->is_utf, text_part->urls_offset)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}

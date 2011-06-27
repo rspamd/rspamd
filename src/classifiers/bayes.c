@@ -47,7 +47,7 @@ struct bayes_statfile_data {
 	guint64                         total_hits;
 	double                          local_probability;
 	double                          post_probability;
-	guint                           value;
+	guint64                         value;
 	struct statfile                *st;
 	stat_file_t                    *file;
 };
@@ -145,7 +145,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 			cur->post_probability = G_MINDOUBLE * 100;
 		}
 		if (cd->ctx->debug) {
-			msg_info ("token: %s, statfile: %s, probability: %.4f, post_probability: %.4f",
+			msg_info ("token: %s, statfile: %s, probability: %uL, post_probability: %.4f",
 					node->extra, cur->st->symbol, cur->value, cur->post_probability);
 		}
 	}
