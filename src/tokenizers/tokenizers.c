@@ -148,7 +148,7 @@ get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 		if (ex != NULL && ex->pos == pos) {
 			/* Go to the next exception */
 			*exceptions = g_list_next (*exceptions);
-			return p + ex->len + 1;
+			return p + ex->len;
 		}
 		pos++;
 		p++;
@@ -160,7 +160,7 @@ get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 	while (remain > 0 && !t_delimiters[*p]) {
 		if (ex != NULL && ex->pos == pos) {
 			*exceptions = g_list_next (*exceptions);
-			return p + ex->len + 1;
+			return p + ex->len;
 		}
 		token->len++;
 		pos++;
