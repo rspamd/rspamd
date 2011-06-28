@@ -789,6 +789,22 @@ statfile_set_revision (stat_file_t *file, guint64 rev, time_t time)
 }
 
 gboolean 
+statfile_inc_revision (stat_file_t *file)
+{
+	struct stat_file_header        *header;
+
+	if (file == NULL || file->map == NULL) {
+		return FALSE;
+	}
+
+	header = (struct stat_file_header *)file->map;
+
+	header->revision ++;
+
+	return TRUE;
+}
+
+gboolean
 statfile_get_revision (stat_file_t *file, guint64 *rev, time_t *time)
 {
 	struct stat_file_header        *header;
@@ -799,8 +815,12 @@ statfile_get_revision (stat_file_t *file, guint64 *rev, time_t *time)
 	
 	header = (struct stat_file_header *)file->map;
 
-	*rev = header->revision;
-	*time = header->rev_time;
+	if (rev != NULL) {
+		*rev = header->revision;
+	}
+	if (time != NULL) {
+		*time = header->rev_time;
+	}
 
 	return TRUE;
 }

@@ -40,6 +40,8 @@
 #   include "lua/lua_common.h"
 #endif
 
+#define COMMON_PART_FACTOR 80
+
 static inline                   GQuark
 filter_error_quark (void)
 {
@@ -593,7 +595,8 @@ classifiers_callback (gpointer value, void *arg)
 	GTree                          *tokens = NULL;
 	GList                          *cur;
 	f_str_t                         c;
-	gchar                           *header = NULL;
+	gchar                          *header = NULL;
+	gboolean                        is_twopart = FALSE;
 	
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur = message_get_header (task->task_pool, task->message, header, FALSE);
@@ -603,6 +606,9 @@ classifiers_callback (gpointer value, void *arg)
 	}
 	else {
 		cur = g_list_first (task->text_parts);
+		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
+			is_twopart = TRUE;
+		}
 	}
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 
@@ -624,10 +630,18 @@ classifiers_callback (gpointer value, void *arg)
 					cur = g_list_next (cur);
 					continue;
 				}
+				if (is_twopart && cur->next == NULL) {
+					/* Compare part's content */
+					if (fuzzy_compare_parts (cur->data, cur->prev->data) >= COMMON_PART_FACTOR) {
+						msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+						break;
+					}
+				}
 				c.begin = text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, text_part->is_utf, text_part->urls_offset)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens,
+						FALSE, text_part->is_utf, text_part->urls_offset)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}
@@ -815,7 +829,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 	stat_file_t                    *stf;
 	gdouble                         sum;
 	struct mime_text_part          *part;
-	gboolean                        is_utf = FALSE;
+	gboolean                        is_utf = FALSE, is_twopart = FALSE;
 
 	/* Load classifier by symbol */
 	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
@@ -834,6 +848,9 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 	else {
 		/* Classify message otherwise */
 		cur = g_list_first (task->text_parts);
+		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
+			is_twopart = TRUE;
+		}
 	}
 
 	/* Get tokens from each element */
@@ -854,6 +871,13 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 			c.len = part->content->len;
 			is_utf = part->is_utf;
 			ex = part->urls_offset;
+			if (is_twopart && cur->next == NULL) {
+				/* Compare part's content */
+				if (fuzzy_compare_parts (cur->data, cur->prev->data) >= COMMON_PART_FACTOR) {
+					msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+					break;
+				}
+			}
 		}
 		/* Get tokens */
 		if (!cl->tokenizer->tokenize_func (

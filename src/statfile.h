@@ -225,6 +225,14 @@ guint32 statfile_get_section_by_name (const gchar *name);
 gboolean statfile_set_revision (stat_file_t *file, guint64 rev, time_t time);
 
 /**
+ * Increment statfile revision and revision time
+ * @param filename name of statfile
+ * @param time time of revision
+ * @return TRUE if revision was set
+ */
+gboolean statfile_inc_revision (stat_file_t *file);
+
+/**
  * Set statfile revision and revision time
  * @param filename name of statfile
  * @param revision saved number of revision

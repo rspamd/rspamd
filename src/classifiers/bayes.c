@@ -47,7 +47,8 @@ struct bayes_statfile_data {
 	guint64                         total_hits;
 	double                          local_probability;
 	double                          post_probability;
-	guint64                         value;
+	double                          corr;
+	double                          value;
 	struct statfile                *st;
 	stat_file_t                    *file;
 };
@@ -60,6 +61,7 @@ struct bayes_callback_data {
 	stat_file_t                    *file;
 	struct bayes_statfile_data     *statfiles;
 	guint32                         statfiles_num;
+	guint64                          learned_tokens;
 };
 
 static                          gboolean
@@ -67,7 +69,8 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 {
 	token_node_t                   *node = key;
 	struct bayes_callback_data     *cd = data;
-	gint                            v, c;
+	gint                            c;
+	guint64                         v;
 
 	c = (cd->in_class) ? 1 : -1;
 
@@ -75,8 +78,9 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
 	if (v == 0 && c > 0) {
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
+		cd->learned_tokens ++;
 	}
-	else {
+	else if (v != 0) {
 		if (G_LIKELY (c > 0)) {
 			v ++;
 		}
@@ -86,6 +90,7 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 			}
 		}
 		statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, v);
+		cd->learned_tokens ++;
 	}
 
 	return FALSE;
@@ -102,24 +107,21 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	struct bayes_callback_data     *cd = data;
 	double                          renorm = 0;
 	gint                            i;
-	guint64                         local_hits = 0;
+	double                          local_hits = 0;
 	struct bayes_statfile_data     *cur;
 
 	for (i = 0; i < cd->statfiles_num; i ++) {
 		cur = &cd->statfiles[i];
-		cur->value = statfile_pool_get_block (cd->pool, cur->file, node->h1, node->h2, cd->now);
+		cur->value = statfile_pool_get_block (cd->pool, cur->file, node->h1, node->h2, cd->now) * cur->corr;
 		if (cur->value > 0) {
-			cur->total_hits += cur->value;
+			cur->total_hits ++;
 			cur->hits = cur->value;
 			local_hits += cur->value;
-		}
-		else {
-			cur->value = 0;
 		}
 	}
 	for (i = 0; i < cd->statfiles_num; i ++) {
 		cur = &cd->statfiles[i];
-		cur->local_probability = 0.5 + ((double)cur->value - ((double)local_hits - cur->value)) /
+		cur->local_probability = 0.5 + (cur->value - (local_hits - cur->value)) /
 				(LOCAL_PROB_DENOM * (1.0 + local_hits));
 		renorm += cur->post_probability * cur->local_probability;
 	}
@@ -145,7 +147,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 			cur->post_probability = G_MINDOUBLE * 100;
 		}
 		if (cd->ctx->debug) {
-			msg_info ("token: %s, statfile: %s, probability: %uL, post_probability: %.4f",
+			msg_info ("token: %s, statfile: %s, probability: %.4f, post_probability: %.4f",
 					node->extra, cur->st->symbol, cur->value, cur->post_probability);
 		}
 	}
@@ -169,8 +171,9 @@ gboolean
 bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task)
 {
 	struct bayes_callback_data      data;
-	char                           *value;
-	int                             nodes, minnodes, i, cnt, best_num = 0;
+	gchar                          *value;
+	gint                            nodes, minnodes, i = 0, cnt, best_num = 0;
+	guint64                         rev, total_learns = 0;
 	double                          best = 0;
 	struct statfile                *st;
 	stat_file_t                    *file;
@@ -198,7 +201,6 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	data.ctx = ctx;
 
 	cur = ctx->cfg->statfiles;
-	i = 0;
 	while (cur) {
 		/* Select statfile to learn */
 		st = cur->data;
@@ -214,10 +216,20 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		data.statfiles[i].st = st;
 		data.statfiles[i].post_probability = 0.5;
 		data.statfiles[i].local_probability = 0.5;
-		i ++;
+		statfile_get_revision (file, &rev, NULL);
+		total_learns += rev;
+
 		cur = g_list_next (cur);
+		i ++;
 	}
+
 	cnt = i;
+
+	/* Calculate correction factor */
+	for (i = 0; i < cnt; i ++) {
+		statfile_get_revision (data.statfiles[i].file, &rev, NULL);
+		data.statfiles[i].corr = ((double)rev / cnt) / (double)total_learns;
+	}
 
 	g_tree_foreach (input, bayes_classify_callback, &data);
 
@@ -277,6 +289,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	data.in_class = in_class;
 	data.now = time (NULL);
 	data.ctx = ctx;
+	data.learned_tokens = 0;
 	cur = ctx->cfg->statfiles;
 	while (cur) {
 		/* Select statfile to learn */
@@ -321,7 +334,12 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	data.file = to_learn;
 	statfile_pool_lock_file (pool, data.file);
 	g_tree_foreach (input, bayes_learn_callback, &data);
+	statfile_inc_revision (to_learn);
 	statfile_pool_unlock_file (pool, data.file);
+
+	if (sum != NULL) {
+		*sum = data.learned_tokens;
+	}
 
 	return TRUE;
 }

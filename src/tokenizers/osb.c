@@ -41,13 +41,15 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 	token_node_t                   *new = NULL;
 	f_str_t                         token = { NULL, 0, 0 };
 	guint32                         hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
-	gint                            i, k = 0, l;
+	gint                            i, l;
 	gchar                          *res;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
 		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
 	}
+
+	memset (hashpipe, 0xfe, FEATURE_WINDOW_SIZE * sizeof (hashpipe[0]));
 
 	while ((res = tokenizer->get_next_word (input, &token, &exceptions)) != NULL) {
 		/* Skip small words */
@@ -68,23 +70,20 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 		}
 		hashpipe[0] = fstrhash_lowercase (&token, is_utf);
 
-		if (k > FEATURE_WINDOW_SIZE) {
-			for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
-				h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
-				h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
-				new = memory_pool_alloc0 (pool, sizeof (token_node_t));
-				new->h1 = h1;
-				new->h2 = h2;
-				if (save_token) {
-					new->extra = (uintptr_t)memory_pool_fstrdup (pool, &token);
-				}
+		for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
+			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
+			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
+			new = memory_pool_alloc0 (pool, sizeof (token_node_t));
+			new->h1 = h1;
+			new->h2 = h2;
+			if (save_token) {
+				new->extra = (uintptr_t)memory_pool_fstrdup (pool, &token);
+			}
 
-				if (g_tree_lookup (*tree, new) == NULL) {
-					g_tree_insert (*tree, new, new);
-				}
+			if (g_tree_lookup (*tree, new) == NULL) {
+				g_tree_insert (*tree, new, new);
 			}
 		}
-		k ++;
 		token.begin = res;
 	}
 
