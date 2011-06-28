@@ -234,6 +234,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("surbl", "exceptions", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("surbl", "whitelist", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("surbl", "/^suffix_.*$/", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("surbl", "/^options_.*$/", MODULE_OPT_TYPE_STRING);
 	register_module_opt ("surbl", "/^bit_.*$/", MODULE_OPT_TYPE_STRING);
 
 	return 0;
@@ -283,7 +284,7 @@ surbl_module_config (struct config_file *cfg)
 	struct suffix_item             *new_suffix;
 	struct surbl_bit_item          *new_bit;
 
-	gchar                           *value, *str, **strvec;
+	gchar                           *value, *str, **strvec, *optbuf;
 	guint32                         bit;
 	gint                            i, idx;
 
@@ -378,13 +379,26 @@ surbl_module_config (struct config_file *cfg)
 				*str = '\0';
 				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
 				new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-				msg_debug ("add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
+				new_suffix->options = 0;
 				*str = '_';
+				/* Search for options */
+				i = strlen (new_suffix->symbol) + sizeof ("options_");
+				optbuf = g_malloc (i);
+				rspamd_snprintf (optbuf, i, "options_%s", new_suffix->symbol);
+				if ((value = get_module_opt (cfg, "surbl", optbuf)) != NULL) {
+					if (strstr (value, "noip") != NULL) {
+						new_suffix->options |= SURBL_OPTION_NOIP;
+					}
+				}
+				g_free (optbuf);
+				/* Insert suffix to the list */
+				msg_debug ("add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 				surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 				register_callback_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 			}
 		}
-		if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
+		/* Search for bits */
+		else if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
 			if ((str = strchr (cur->param, '_')) != NULL) {
 				bit = strtoul (str + 1, NULL, 10);
 				if (bit != 0) {
@@ -496,6 +510,11 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	/* Check for numeric expressions */
 	if (is_numeric && dots_num == 3) {
 		/* This is ip address */
+		if ((suffix->options & SURBL_OPTION_NOIP) != 0) {
+			/* Ignore such requests */
+			msg_info ("ignore request of ip url for list %s", suffix->symbol);
+			return NULL;
+		}
 		result = memory_pool_alloc (pool, len);
 		r = rspamd_snprintf (result, len, "%*s.%*s.%*s.%*s", 
 				(gint)(hostname->len - (dots[2] - hostname->begin + 1)),
@@ -509,6 +528,11 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	}
 	else if (is_numeric && dots_num == 0) {
 		/* This is number */
+		if ((suffix->options & SURBL_OPTION_NOIP) != 0) {
+			/* Ignore such requests */
+			msg_info ("ignore request of ip url for list %s", suffix->symbol);
+			return NULL;
+		}
 		rspamd_strlcpy (num_buf, hostname->begin, MIN (hostname->len + 1, sizeof (num_buf)));
 		errno = 0;
 		ip_num = strtoull (num_buf, NULL, 10);

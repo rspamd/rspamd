@@ -16,6 +16,7 @@
 #define DEFAULT_SURBL_URL_EXPIRE 86400
 #define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
+#define SURBL_OPTION_NOIP 1
 #define MAX_LEVELS 10
 
 struct redirector_upstream {
@@ -52,6 +53,7 @@ struct surbl_ctx {
 struct suffix_item {
 	const gchar *suffix;
 	const gchar *symbol;
+	guint32 options;
 };
 
 struct dns_param {
