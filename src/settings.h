@@ -18,9 +18,11 @@ struct rspamd_settings {
 
 gboolean read_settings (const gchar *path, struct config_file *cfg, GHashTable *table);
 void init_settings (struct config_file *cfg);
-gboolean check_metric_settings (struct worker_task *task, struct metric *metric, double *score, double *rscore);
-gboolean check_metric_action_settings (struct worker_task *task, struct metric *metric, double score, enum rspamd_metric_action *result);
-gboolean check_factor_settings (struct worker_task *task, const gchar *symbol, double *factor);
+gboolean check_metric_settings (struct metric_result *res, double *score, double *rscore);
+gboolean check_metric_action_settings (struct worker_task *task, struct metric_result *res, double score, enum rspamd_metric_action *result);
+gboolean check_factor_settings (struct metric_result *res, const gchar *symbol, double *factor);
 gboolean check_want_spam (struct worker_task *task);
+
+gboolean apply_metric_settings (struct worker_task *task, struct metric *metric, struct metric_result *res);
 
 #endif

@@ -67,6 +67,9 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
 		metric_res->score = 0;
+		metric_res->domain_settings = NULL;
+		metric_res->user_settings = NULL;
+		apply_metric_settings (task, metric, metric_res);
 		g_hash_table_insert (task->results, (gpointer) metric->name, metric_res);
 	}
 	
@@ -238,7 +241,7 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
-		if (!check_metric_settings (task, metric, &ms, &rs)) {
+		if (!check_metric_settings (res, &ms, &rs)) {
 			ms = metric->required_score;
 		}
 		return res->score >= ms;
@@ -706,7 +709,7 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 
 	rspamd_snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
-	if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
+	if (!check_metric_settings (metric_res, &ms, &rs)) {
 		ms = metric_res->metric->required_score;
 	}
 	if (metric_res->score >= ms) {

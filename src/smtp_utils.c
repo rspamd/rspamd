@@ -152,11 +152,11 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 
 	task = cd->session->task;
 
-	if (!check_metric_settings (task, metric_res->metric, &ms, &rs)) {
+	if (!check_metric_settings (metric_res, &ms, &rs)) {
 		ms = metric_res->metric->required_score;
 		rs = metric_res->metric->reject_score;
 	}
-	if (! check_metric_action_settings (task, metric_res->metric, metric_res->score, &action)) {
+	if (! check_metric_action_settings (task, metric_res, metric_res->score, &action)) {
 		action = check_metric_action (metric_res->score, ms, metric_res->metric);
 	}
 	if (metric_res->score >= ms) {

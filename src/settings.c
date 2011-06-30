@@ -434,39 +434,38 @@ check_bwhitelist (struct worker_task *task, struct rspamd_settings *s, gboolean 
 }
 
 gboolean
-check_metric_settings (struct worker_task * task, struct metric * metric, double *score, double *rscore)
+check_metric_settings (struct metric_result *res, double *score, double *rscore)
 {
-	struct rspamd_settings         *us = NULL, *ds = NULL;
+	struct rspamd_settings         *us = res->user_settings, *ds = res->domain_settings;
 	double                         *sc, *rs;
+	struct metric                  *metric = res->metric;
 
 	*rscore = DEFAULT_REJECT_SCORE;
 
-	if (check_setting (task, &us, &ds)) {
-		if (us != NULL) {
-			if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {
-				*rscore = *rs;
-			}
-			if ((sc = g_hash_table_lookup (us->metric_scores, metric->name)) != NULL) {
-				*score = *sc;
-				return TRUE;
-			}
-			/* Now check in domain settings */
-			if (ds && ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL)) {
-				*rscore = *rs;
-			}
-			if (ds && (sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
-				*score = *sc;
-				return TRUE;
-			}
+	if (us != NULL) {
+		if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {
+			*rscore = *rs;
 		}
-		else if (ds != NULL) {
-			if ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL) {
-				*rscore = *rs;
-			}
-			if ((sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
-				*score = *sc;
-				return TRUE;
-			}
+		if ((sc = g_hash_table_lookup (us->metric_scores, metric->name)) != NULL) {
+			*score = *sc;
+			return TRUE;
+		}
+		/* Now check in domain settings */
+		if (ds && ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL)) {
+			*rscore = *rs;
+		}
+		if (ds && (sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
+			*score = *sc;
+			return TRUE;
+		}
+	}
+	else if (ds != NULL) {
+		if ((rs = g_hash_table_lookup (ds->reject_scores, metric->name)) != NULL) {
+			*rscore = *rs;
+		}
+		if ((sc = g_hash_table_lookup (ds->metric_scores, metric->name)) != NULL) {
+			*score = *sc;
+			return TRUE;
 		}
 	}
 
@@ -474,76 +473,66 @@ check_metric_settings (struct worker_task * task, struct metric * metric, double
 }
 
 gboolean
-check_metric_action_settings (struct worker_task *task, struct metric *metric, double score, enum rspamd_metric_action *result)
+check_metric_action_settings (struct worker_task *task, struct metric_result *res,
+		double score, enum rspamd_metric_action *result)
 {
-	struct rspamd_settings         *us = NULL, *ds = NULL;
+	struct rspamd_settings         *us = res->user_settings, *ds = res->domain_settings;
 	struct metric_action           *act, *sel = NULL;
 	GList                          *cur;
-	enum rspamd_metric_action       res = METRIC_ACTION_NOACTION;
+	enum rspamd_metric_action       r = METRIC_ACTION_NOACTION;
 	gboolean                        black;
 	double                          rej = 0.;
 
-	if (check_setting (task, &us, &ds)) {
-		if (us != NULL) {
-			/* Check whitelist and set appropriate action for whitelisted users */
-			if (check_bwhitelist(task, us, &black)) {
-				if (black) {
-					*result = METRIC_ACTION_REJECT;
-				}
-				else {
-					*result = METRIC_ACTION_NOACTION;
-				}
-				return TRUE;
+	if (us != NULL) {
+		/* Check whitelist and set appropriate action for whitelisted users */
+		if (check_bwhitelist(task, us, &black)) {
+			if (black) {
+				*result = METRIC_ACTION_REJECT;
 			}
-			if ((cur = g_hash_table_lookup (us->metric_actions, metric->name)) != NULL) {
-
-				while (cur) {
-					act = cur->data;
-					if (score >= act->score) {
-						res = act->action;
-						sel = act;
-					}
-					if (res == METRIC_ACTION_REJECT) {
-						rej = act->score;
-					}
-					cur = g_list_next (cur);
+			else {
+				*result = METRIC_ACTION_NOACTION;
+			}
+			return TRUE;
+		}
+		if ((cur = g_hash_table_lookup (us->metric_actions, res->metric->name)) != NULL) {
+			while (cur) {
+				act = cur->data;
+				if (score >= act->score) {
+					r = act->action;
+					sel = act;
 				}
+				if (r == METRIC_ACTION_REJECT) {
+					rej = act->score;
+				}
+				cur = g_list_next (cur);
 			}
 		}
-		else if (ds != NULL) {
-			/* Check whitelist and set appropriate action for whitelisted users */
-			if (check_bwhitelist(task, ds, &black)) {
-				if (black) {
-					*result = METRIC_ACTION_REJECT;
-				}
-				else {
-					*result = METRIC_ACTION_NOACTION;
-				}
-				return TRUE;
+	}
+	else if (ds != NULL) {
+		/* Check whitelist and set appropriate action for whitelisted users */
+		if (check_bwhitelist(task, ds, &black)) {
+			if (black) {
+				*result = METRIC_ACTION_REJECT;
 			}
-			if ((cur = g_hash_table_lookup (ds->metric_actions, metric->name)) != NULL) {
-				while (cur) {
-					act = cur->data;
-					if (score >= act->score) {
-						res = act->action;
-						sel = act;
-					}
-					cur = g_list_next (cur);
+			else {
+				*result = METRIC_ACTION_NOACTION;
+			}
+			return TRUE;
+		}
+		if ((cur = g_hash_table_lookup (ds->metric_actions, res->metric->name)) != NULL) {
+			while (cur) {
+				act = cur->data;
+				if (score >= act->score) {
+					r = act->action;
+					sel = act;
 				}
+				cur = g_list_next (cur);
 			}
 		}
 	}
 
 	if (sel != NULL && result != NULL) {
-		*result = res;
-		if (res != rej && rej != 0.) {
-			msg_info ("<%s> applying action %s with score %.2f, reject: %.2f", task->message_id,
-					str_action_metric (sel->action), sel->score, rej);
-		}
-		else {
-			msg_info ("<%s> applying action %s with score %.2f", task->message_id,
-								str_action_metric (sel->action), sel->score);
-		}
+		*result = r;
 		return TRUE;
 	}
 
@@ -551,29 +540,48 @@ check_metric_action_settings (struct worker_task *task, struct metric *metric, d
 }
 
 gboolean
-check_factor_settings (struct worker_task * task, const gchar *symbol, double *factor)
+apply_metric_settings (struct worker_task *task, struct metric *metric, struct metric_result *res)
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
-	double                         *fc;
 
 	if (check_setting (task, &us, &ds)) {
-		if (us != NULL) {
-			/* First search in user's settings */
-			if ((fc = g_hash_table_lookup (us->factors, symbol)) != NULL) {
-				*factor = *fc;
-				return TRUE;
+		if (us != NULL || ds != NULL) {
+			if (us != NULL) {
+				res->user_settings = us;
 			}
-			/* Now check in domain settings */
-			if (ds && (fc = g_hash_table_lookup (ds->factors, symbol)) != NULL) {
-				*factor = *fc;
-				return TRUE;
+			if (ds != NULL) {
+				res->domain_settings = ds;
 			}
 		}
-		else if (ds != NULL) {
-			if ((fc = g_hash_table_lookup (ds->factors, symbol)) != NULL) {
-				*factor = *fc;
-				return TRUE;
-			}
+		else {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+check_factor_settings (struct metric_result *res, const gchar *symbol, double *factor)
+{
+	double                         *fc;
+
+	if (res->user_settings != NULL) {
+		/* First search in user's settings */
+		if ((fc = g_hash_table_lookup (res->user_settings->factors, symbol)) != NULL) {
+			*factor = *fc;
+			return TRUE;
+		}
+		/* Now check in domain settings */
+		if (res->domain_settings && (fc = g_hash_table_lookup (res->domain_settings->factors, symbol)) != NULL) {
+			*factor = *fc;
+			return TRUE;
+		}
+	}
+	else if (res->domain_settings != NULL) {
+		if ((fc = g_hash_table_lookup (res->domain_settings->factors, symbol)) != NULL) {
+			*factor = *fc;
+			return TRUE;
 		}
 	}
 
@@ -583,7 +591,7 @@ check_factor_settings (struct worker_task * task, const gchar *symbol, double *f
 
 
 gboolean
-check_want_spam (struct worker_task * task)
+check_want_spam (struct worker_task *task)
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
 

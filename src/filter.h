@@ -10,6 +10,7 @@
 #include "symbols_cache.h"
 
 struct worker_task;
+struct rspamd_settings;
 
 typedef double (*metric_cons_func)(struct worker_task *task, const gchar *metric_name, const gchar *func_name);
 typedef void (*filter_func)(struct worker_task *task);
@@ -74,6 +75,8 @@ struct metric_result {
 	GHashTable *symbols;							/**< symbols of metric						*/
 	gboolean checked;								/**< whether metric result is consolidated  */
 	double grow_factor;								/**< current grow factor					*/
+	struct rspamd_settings *user_settings;			/**< settings for metric					*/
+	struct rspamd_settings *domain_settings;		/**< settings for metric					*/
 };
 
 /**
