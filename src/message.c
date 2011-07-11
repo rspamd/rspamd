@@ -70,7 +70,13 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 				state = 1;
 			}
 			else if (state == 1) {
-				depth++;
+				/* Opening bracket without closing one */
+				p --;
+				while (g_ascii_isspace (*p) && p > src->data) {
+					p --;
+				}
+				p ++;
+				goto unbreak_tag;
 			}
 			break;
 
@@ -107,7 +113,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 			if (in_q) {
 				break;
 			}
-
+unbreak_tag:
 			switch (state) {
 			case 1:			/* HTML/XML */
 				lc = '>';

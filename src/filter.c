@@ -80,18 +80,9 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	else {
 		w = (*weight) * flag;
 	}
-	/* Handle grow factor */
-	if (metric_res->grow_factor && w > 0) {
-		w *= metric_res->grow_factor;
-		metric_res->grow_factor *= metric->grow_factor;
-	}
-	else if (w > 0) {
-		metric_res->grow_factor = metric->grow_factor;
-	}
+
 
 	/* Add metric score */
-
-
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts && opts != s->options) {
 			/* Append new options */
@@ -106,6 +97,14 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
 		}
 		if (!single) {
+			/* Handle grow factor */
+			if (metric_res->grow_factor && w > 0) {
+				w *= metric_res->grow_factor;
+				metric_res->grow_factor *= metric->grow_factor;
+			}
+			else if (w > 0) {
+				metric_res->grow_factor = metric->grow_factor;
+			}
 			s->score += w;
 			metric_res->score += w;
 		}
@@ -114,6 +113,14 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
 		s->score = w;
 
+		/* Handle grow factor */
+		if (metric_res->grow_factor && w > 0) {
+			w *= metric_res->grow_factor;
+			metric_res->grow_factor *= metric->grow_factor;
+		}
+		else if (w > 0) {
+			metric_res->grow_factor = metric->grow_factor;
+		}
 		s->name = symbol;
 		metric_res->score += w;
 

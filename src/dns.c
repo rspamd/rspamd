@@ -566,7 +566,7 @@ dns_fin_cb (gpointer arg)
 	struct rspamd_dns_request *req = arg;
 	
 	event_del (&req->timer_event);
-	g_hash_table_remove (req->resolver->requests, GUINT_TO_POINTER (req->id));
+	g_hash_table_remove (req->resolver->requests, GUINT_TO_POINTER ((guint)req->id));
 }
 
 static guint8 *
@@ -925,7 +925,7 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver,
 	}
 
 	/* Now try to find corresponding request */
-	if ((req = g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER (header->qid))) == NULL) {
+	if ((req = g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER ((guint)header->qid))) == NULL) {
 		/* No such requests found */
 		return FALSE;
 	}
@@ -1134,7 +1134,7 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 			evtimer_add (&req->timer_event, &req->tv);
 
 			/* Add request to hash table */
-			g_hash_table_insert (req->resolver->requests, GUINT_TO_POINTER (req->id), req); 
+			g_hash_table_insert (req->resolver->requests, GUINT_TO_POINTER ((guint)req->id), req);
 			register_async_event (req->session, (event_finalizer_t)dns_fin_cb, req, FALSE);
 		}
 	}
@@ -1233,7 +1233,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		evtimer_add (&req->timer_event, &req->tv);
 
 		/* Add request to hash table */
-		g_hash_table_insert (resolver->requests, GUINT_TO_POINTER (req->id), req); 
+		g_hash_table_insert (resolver->requests, GUINT_TO_POINTER ((guint)req->id), req);
 		register_async_event (session, (event_finalizer_t)dns_fin_cb, req, FALSE);
 	}
 	else if (r == -1) {

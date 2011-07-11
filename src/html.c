@@ -662,7 +662,7 @@ static gchar *
 html_strncasestr (const gchar *s, const gchar *find, gsize len)
 {
 	gchar                           c, sc;
-	size_t mlen;
+	gsize                           mlen;
 
 	if ((c = *find++) != 0) {
 		c = g_ascii_tolower (c);
@@ -692,26 +692,41 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 	p = url_text;
 	while (len < remain) {
 		if (*p == '<') {
-			/* Get tag name */
-			p ++;
-			len ++;
-			if (*p == '/') {
-				/* Check tag name */
+			/* Check tag name */
+			if (*(p + 1) == '/') {
+				c = p + 2;
+			}
+			else {
 				c = p + 1;
-				while (len < remain) {
-					if (!g_ascii_isspace (*p) && *p != '>') {
+			}
+			while (len < remain) {
+				if (!g_ascii_isspace (*p) && *p != '>') {
+					p ++;
+					len ++;
+				}
+				else {
+					break;
+				}
+			}
+			rspamd_strlcpy (tagbuf, c, MIN (sizeof(tagbuf), p - c + 1));
+			if ((tag = get_tag_by_name (tagbuf)) != NULL) {
+				if (tag->id == id) {
+					break;
+				}
+				else if (tag->id == Tag_IMG) {
+					/* We should ignore IMG tag here */
+					while (len < remain && *p != '>' && *p != '<') {
 						p ++;
 						len ++;
 					}
-					else {
-						break;
+					if (*p == '>' && len < remain) {
+						p ++;
 					}
-				}
-				rspamd_strlcpy (tagbuf, c, MIN (sizeof(tagbuf), p - c + 1));
-				if ((tag = get_tag_by_name (tagbuf)) != NULL) {
-					if (tag->id == id) {
-						break;
-					}
+
+					remain -= p - url_text;
+					url_text = p;
+					len = 0;
+					continue;
 				}
 			}
 		}
@@ -724,6 +739,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 		if (new != NULL) {
 			g_strstrip (url_str);
 			rc = parse_uri (new, url_str, task->task_pool);
+
 			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
 				if (g_ascii_strncasecmp (href_url->host, new->host,
 						MAX (href_url->hostlen, new->hostlen)) != 0) {
