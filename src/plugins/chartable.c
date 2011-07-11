@@ -116,8 +116,10 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 	guchar                          *p, *p1;
 	gunichar                        c, t;
 	GUnicodeScript                  scc, sct;
-	guint32                         mark = 0, total = 0;
+	guint32                         mark = 0, total = 0, max = 0, i;
 	guint32                         remain = part->content->len;
+	guint32                         scripts[G_UNICODE_SCRIPT_NKO];
+	GUnicodeScript                  sel = 0;
 
 	p = part->content->data;
 
@@ -136,6 +138,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 		}
 	}
 	else {
+		memset (&scripts, 0, sizeof (scripts));
 		while (remain > 0) {
 			c = g_utf8_get_char_validated (p, remain);
 			if (c == (gunichar) -2 || c == (gunichar) -1) {
@@ -144,6 +147,9 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 			}
 
 			scc = g_unichar_get_script (c);
+			if (scc < G_N_ELEMENTS (scripts)) {
+				scripts[scc] ++;
+			}
 			p1 = g_utf8_next_char (p);
 			remain -= p1 - p;
 			p = p1;
@@ -167,6 +173,14 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 				p = p1;
 			}
 		}
+		/* Detect the mostly charset of this part */
+		for (i = 0; i < G_N_ELEMENTS (scripts); i ++) {
+			if (scripts[i] > max) {
+				max = scripts[i];
+				sel = i;
+			}
+		}
+		part->script = sel;
 	}
 
 	return ((double)mark / (double)total) > chartable_module_ctx->threshold;

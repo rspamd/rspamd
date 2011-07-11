@@ -34,6 +34,7 @@ struct mime_text_part {
 	fuzzy_hash_t *fuzzy;
 	fuzzy_hash_t *double_fuzzy;
 	GMimeObject *parent;
+	GUnicodeScript script;
 };
 
 struct received_header {

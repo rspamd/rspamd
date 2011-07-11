@@ -109,12 +109,14 @@ LUA_FUNCTION_DEF (textpart, get_content);
 LUA_FUNCTION_DEF (textpart, is_empty);
 LUA_FUNCTION_DEF (textpart, is_html);
 LUA_FUNCTION_DEF (textpart, get_fuzzy);
+LUA_FUNCTION_DEF (textpart, get_language);
 
 static const struct luaL_reg    textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_content),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_fuzzy),
+	LUA_INTERFACE_DEF (textpart, get_language),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1237,6 +1239,105 @@ lua_textpart_get_fuzzy (lua_State * L)
 	}
 
 	lua_pushlstring (L, part->fuzzy->hash_pipe, sizeof (part->fuzzy->hash_pipe));
+	return 1;
+}
+
+static gint
+lua_textpart_get_language (lua_State * L)
+{
+	struct mime_text_part          *part = lua_check_textpart (L);
+	static const gchar              languages[][4] = {
+			"",    /* G_UNICODE_SCRIPT_COMMON */
+			"",    /* G_UNICODE_SCRIPT_INHERITED */
+			"ar",  /* G_UNICODE_SCRIPT_ARABIC */
+			"hy",  /* G_UNICODE_SCRIPT_ARMENIAN */
+			"bn",  /* G_UNICODE_SCRIPT_BENGALI */
+			/* Used primarily in Taiwan, but not part of the standard
+			 * zh-tw orthography  */
+			"",    /* G_UNICODE_SCRIPT_BOPOMOFO */
+			"chr", /* G_UNICODE_SCRIPT_CHEROKEE */
+			"cop", /* G_UNICODE_SCRIPT_COPTIC */
+			"ru",  /* G_UNICODE_SCRIPT_CYRILLIC */
+			/* Deseret was used to write English */
+			"",    /* G_UNICODE_SCRIPT_DESERET */
+			"hi",  /* G_UNICODE_SCRIPT_DEVANAGARI */
+			"am",  /* G_UNICODE_SCRIPT_ETHIOPIC */
+			"ka",  /* G_UNICODE_SCRIPT_GEORGIAN */
+			"",    /* G_UNICODE_SCRIPT_GOTHIC */
+			"el",  /* G_UNICODE_SCRIPT_GREEK */
+			"gu",  /* G_UNICODE_SCRIPT_GUJARATI */
+			"pa",  /* G_UNICODE_SCRIPT_GURMUKHI */
+			"",    /* G_UNICODE_SCRIPT_HAN */
+			"ko",  /* G_UNICODE_SCRIPT_HANGUL */
+			"he",  /* G_UNICODE_SCRIPT_HEBREW */
+			"ja",  /* G_UNICODE_SCRIPT_HIRAGANA */
+			"kn",  /* G_UNICODE_SCRIPT_KANNADA */
+			"ja",  /* G_UNICODE_SCRIPT_KATAKANA */
+			"km",  /* G_UNICODE_SCRIPT_KHMER */
+			"lo",  /* G_UNICODE_SCRIPT_LAO */
+			"en",  /* G_UNICODE_SCRIPT_LATIN */
+			"ml",  /* G_UNICODE_SCRIPT_MALAYALAM */
+			"mn",  /* G_UNICODE_SCRIPT_MONGOLIAN */
+			"my",  /* G_UNICODE_SCRIPT_MYANMAR */
+			/* Ogham was used to write old Irish */
+			"",    /* G_UNICODE_SCRIPT_OGHAM */
+			"",    /* G_UNICODE_SCRIPT_OLD_ITALIC */
+			"or",  /* G_UNICODE_SCRIPT_ORIYA */
+			"",    /* G_UNICODE_SCRIPT_RUNIC */
+			"si",  /* G_UNICODE_SCRIPT_SINHALA */
+			"syr", /* G_UNICODE_SCRIPT_SYRIAC */
+			"ta",  /* G_UNICODE_SCRIPT_TAMIL */
+			"te",  /* G_UNICODE_SCRIPT_TELUGU */
+			"dv",  /* G_UNICODE_SCRIPT_THAANA */
+			"th",  /* G_UNICODE_SCRIPT_THAI */
+			"bo",  /* G_UNICODE_SCRIPT_TIBETAN */
+			"iu",  /* G_UNICODE_SCRIPT_CANADIAN_ABORIGINAL */
+			"",    /* G_UNICODE_SCRIPT_YI */
+			"tl",  /* G_UNICODE_SCRIPT_TAGALOG */
+			/* Phillipino languages/scripts */
+			"hnn", /* G_UNICODE_SCRIPT_HANUNOO */
+			"bku", /* G_UNICODE_SCRIPT_BUHID */
+			"tbw", /* G_UNICODE_SCRIPT_TAGBANWA */
+
+			"",    /* G_UNICODE_SCRIPT_BRAILLE */
+			"",    /* G_UNICODE_SCRIPT_CYPRIOT */
+			"",    /* G_UNICODE_SCRIPT_LIMBU */
+			/* Used for Somali (so) in the past */
+			"",    /* G_UNICODE_SCRIPT_OSMANYA */
+			/* The Shavian alphabet was designed for English */
+			"",    /* G_UNICODE_SCRIPT_SHAVIAN */
+			"",    /* G_UNICODE_SCRIPT_LINEAR_B */
+			"",    /* G_UNICODE_SCRIPT_TAI_LE */
+			"uga", /* G_UNICODE_SCRIPT_UGARITIC */
+
+			"",    /* G_UNICODE_SCRIPT_NEW_TAI_LUE */
+			"bug", /* G_UNICODE_SCRIPT_BUGINESE */
+			/* The original script for Old Church Slavonic (chu), later
+			 * written with Cyrillic */
+			"",    /* G_UNICODE_SCRIPT_GLAGOLITIC */
+			/* Used for for Berber (ber), but Arabic script is more common */
+			"",    /* G_UNICODE_SCRIPT_TIFINAGH */
+			"syl", /* G_UNICODE_SCRIPT_SYLOTI_NAGRI */
+			"peo", /* G_UNICODE_SCRIPT_OLD_PERSIAN */
+			"",    /* G_UNICODE_SCRIPT_KHAROSHTHI */
+
+			"",    /* G_UNICODE_SCRIPT_UNKNOWN */
+			"",    /* G_UNICODE_SCRIPT_BALINESE */
+			"",    /* G_UNICODE_SCRIPT_CUNEIFORM */
+			"",    /* G_UNICODE_SCRIPT_PHOENICIAN */
+			"",    /* G_UNICODE_SCRIPT_PHAGS_PA */
+			"nqo"  /* G_UNICODE_SCRIPT_NKO */
+	};
+	const gchar                    *sel;
+
+	if (part != NULL && part->script > 0 && part->script < G_N_ELEMENTS (languages)) {
+		sel = languages[part->script];
+		if (*sel != '\0') {
+			lua_pushstring (L, sel);
+		}
+	}
+
+	lua_pushnil (L);
 	return 1;
 }
 
