@@ -189,6 +189,8 @@ struct statfile {
     statfile_normalize_func normalizer;             /**< function that is used as normaliser                */
     void *normalizer_data;                          /**< normalizer function params                         */
 	gchar *normalizer_str;							/**< source string (for dump)							*/
+	GHashTable *opts;								/**< different statfile options							*/
+	gboolean is_spam;								/**< spam flag											*/
 };
 
 /**

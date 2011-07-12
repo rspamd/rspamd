@@ -1016,7 +1016,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 	struct expression_argument     *arg;
 	GMimeObject                    *parent;
 	const GMimeContentType         *ct;
-
+	gint                           *pdiff;
 
 	if (args == NULL) {
 		debug_task ("no threshold is specified, assume it 100");
@@ -1032,10 +1032,23 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		}
 	}
 
+	if ((pdiff = memory_pool_get_variable (task->task_pool, "parts_distance")) != NULL) {
+		diff = *pdiff;
+		if (diff != -1 && diff <= threshold) {
+			return TRUE;
+		}
+		else {
+			return FALSE;
+		}
+	}
+
 	if (g_list_length (task->text_parts) == 2) {
 		cur = g_list_first (task->text_parts);
 		p1 = cur->data;
 		cur = g_list_next (cur);
+		pdiff = memory_pool_alloc (task->task_pool, sizeof (gint));
+		*pdiff = -1;
+
 		if (cur == NULL) {
 			msg_info ("bad parts list");
 			return FALSE;
@@ -1051,30 +1064,38 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			if (ct == NULL || ! g_mime_content_type_is_type ((GMimeContentType *)ct, "multipart", "alternative")) {
 #endif
 				debug_task ("two parts are not belong to multipart/alternative container, skip check");
+				memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 				return FALSE;
 			}
 		}
 		else {
 			debug_task ("message contains two parts but they are in different multi-parts");
+			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			return FALSE;
 		}
 		if (!p1->is_empty && !p2->is_empty) {
 			diff = fuzzy_compare_parts (p1, p2);
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
+			*pdiff = diff;
+			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			if (diff <= threshold) {
 				return TRUE;
 			}
 		}
 		else if ((p1->is_empty && !p2->is_empty) || (!p1->is_empty && p2->is_empty)) {
 			/* Empty and non empty parts are different */
+			*pdiff = 0;
+			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			return TRUE;
 		}
 	}
 	else {
 		debug_task ("message has too many text parts, so do not try to compare them with each other");
+		memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 		return FALSE;
 	}
 
+	memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 	return FALSE;
 }
 
