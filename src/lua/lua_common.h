@@ -51,7 +51,7 @@ void lua_call_post_filters (struct worker_task *task);
 void add_luabuf (const gchar *line);
 
 /* Classify functions */
-GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task);
+GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task, gboolean is_learn, gboolean is_spam);
 double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in);
 
 double lua_normalizer_func (struct config_file *cfg, long double score, void *params);

@@ -751,10 +751,24 @@ parse_comma_list (memory_pool_t * pool, gchar *line)
 }
 
 struct classifier_config       *
-check_classifier_cfg (struct config_file *cfg, struct classifier_config *c)
+check_classifier_conf (struct config_file *cfg, struct classifier_config *c)
 {
 	if (c == NULL) {
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct classifier_config));
+	}
+	if (c->opts == NULL) {
+		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
+	}
+
+	return c;
+}
+
+struct statfile*
+check_statfile_conf (struct config_file *cfg, struct statfile *c)
+{
+	if (c == NULL) {
+		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 	}
 	if (c->opts == NULL) {
 		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
@@ -1004,6 +1018,30 @@ void
 insert_classifier_symbols (struct config_file *cfg)
 {
 	g_hash_table_foreach (cfg->classifiers_symbols, symbols_classifiers_callback, cfg);
+}
+
+struct classifier_config*
+find_classifier_conf (struct config_file *cfg, const gchar *name)
+{
+	GList                          *cur;
+	struct classifier_config       *cf;
+
+	if (name == NULL) {
+		return NULL;
+	}
+
+	cur = cfg->classifiers;
+	while (cur) {
+		cf = cur->data;
+
+		if (g_ascii_strcasecmp (cf->classifier->name, name) == 0) {
+			return cf;
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return NULL;
 }
 
 /*

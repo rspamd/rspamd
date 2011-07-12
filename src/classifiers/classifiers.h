@@ -32,6 +32,8 @@ struct classifier {
 	gboolean (*learn_func)(struct classifier_ctx* ctx, statfile_pool_t *pool,
 							const char *symbol, GTree *input, gboolean in_class,
 							double *sum, double multiplier, GError **err);
+	gboolean (*learn_spam_func)(struct classifier_ctx* ctx, statfile_pool_t *pool,
+								GTree *input, struct worker_task *task, gboolean is_spam, GError **err);
 	GList* (*weights_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 };
 
@@ -43,6 +45,8 @@ struct classifier_ctx* winnow_init (memory_pool_t *pool, struct classifier_confi
 gboolean winnow_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 gboolean winnow_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symbol, GTree *input,
 				gboolean in_class, double *sum, double multiplier, GError **err);
+gboolean winnow_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
+			GTree *input, struct worker_task *task, gboolean is_spam, GError **err);
 GList *winnow_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 
 /* Bayes algorithm */
@@ -50,6 +54,8 @@ struct classifier_ctx* bayes_init (memory_pool_t *pool, struct classifier_config
 gboolean bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 gboolean bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symbol, GTree *input,
 				gboolean in_class, double *sum, double multiplier, GError **err);
+gboolean bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
+			GTree *input, struct worker_task *task, gboolean is_spam, GError **err);
 GList *bayes_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 /* Array of all defined classifiers */
 extern struct classifier classifiers[];

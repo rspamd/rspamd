@@ -655,29 +655,6 @@ decode_entitles (gchar *s, guint * len)
 	}
 }
 
-/*
- * Find the first occurrence of find in s, ignore case.
- */
-static gchar *
-html_strncasestr (const gchar *s, const gchar *find, gsize len)
-{
-	gchar                           c, sc;
-	gsize                           mlen;
-
-	if ((c = *find++) != 0) {
-		c = g_ascii_tolower (c);
-		mlen = strlen (find);
-		do {
-			do {
-				if ((sc = *s++) == 0 || len -- == 0)
-					return (NULL);
-			} while (g_ascii_tolower (sc) != c);
-		} while (g_ascii_strncasecmp (s, find, mlen) != 0);
-		s--;
-	}
-	return ((gchar *)s);
-}
-
 static void
 check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text, gsize remain, tag_id_t id)
 {
@@ -803,11 +780,11 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 
 	/* For A tags search for href= and for IMG tags search for src= */
 	if (id == Tag_A) {
-		c = html_strncasestr (tag_text, "href=", tag_len);
+		c = rspamd_strncasestr (tag_text, "href=", tag_len);
 		len = sizeof ("href=") - 1;
 	}
 	else if (id == Tag_IMG) {
-		c = html_strncasestr (tag_text, "src=", tag_len);
+		c = rspamd_strncasestr (tag_text, "src=", tag_len);
 		len = sizeof ("src=") - 1;
 	}
 

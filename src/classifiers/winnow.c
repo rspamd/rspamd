@@ -223,19 +223,14 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		}
 	}
 
-    if (ctx->cfg->pre_callbacks) {
-#ifdef WITH_LUA
-        cur = call_classifier_pre_callbacks (ctx->cfg, task);
-        if (cur) {
-            memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
-        }
-#else
-	    cur = ctx->cfg->statfiles;
-#endif
-    }
-    else {
-	    cur = ctx->cfg->statfiles;
-    }
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
+	if (cur) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+	}
+	else {
+		cur = ctx->cfg->statfiles;
+	}
+
 	while (cur) {
 		st = cur->data;
 		data.sum = 0;
@@ -596,4 +591,16 @@ end:
 #endif
 	}
 	return TRUE;
+}
+
+gboolean
+winnow_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
+		GTree *input, struct worker_task *task, gboolean is_spam, GError **err)
+{
+	g_set_error (err,
+					winnow_error_quark(),		/* error domain */
+					1,            				/* error code */
+					"learn spam is not supported for winnow"
+					);
+	return FALSE;
 }

@@ -944,6 +944,89 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 	return TRUE;
 }
 
+gboolean
+learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolean is_spam, GError **err)
+{
+	GList                          *cur, *ex;
+	struct classifier_ctx          *cls_ctx;
+	f_str_t                         c;
+	GTree                          *tokens = NULL;
+	struct mime_text_part          *part;
+	gboolean                        is_utf = FALSE, is_twopart = FALSE;
+
+	cur = g_list_first (task->text_parts);
+	if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
+		is_twopart = TRUE;
+	}
+
+	/* Get tokens from each element */
+	while (cur) {
+		part = cur->data;
+		/* Skip empty parts */
+		if (part->is_empty) {
+			cur = g_list_next (cur);
+			continue;
+		}
+		c.begin = part->content->data;
+		c.len = part->content->len;
+		is_utf = part->is_utf;
+		ex = part->urls_offset;
+		if (is_twopart && cur->next == NULL) {
+			/* Compare part's content */
+			if (fuzzy_compare_parts (cur->data, cur->prev->data) >= COMMON_PART_FACTOR) {
+				msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+				break;
+			}
+		}
+		/* Get tokens */
+		if (!cl->tokenizer->tokenize_func (
+				cl->tokenizer, task->task_pool,
+				&c, &tokens, FALSE, is_utf, ex)) {
+			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
+			return FALSE;
+		}
+		cur = g_list_next (cur);
+	}
+
+	/* Handle messages without text */
+	if (tokens == NULL) {
+		g_set_error (err, filter_error_quark(), 3, "Cannot tokenize message, no text data");
+		msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
+		return FALSE;
+	}
+
+	/* Take care of subject */
+	tokenize_subject (task, &tokens);
+
+	/* Init classifier */
+	cls_ctx = cl->classifier->init_func (
+			task->task_pool, cl);
+	/* Learn */
+	if (!cl->classifier->learn_spam_func (
+			cls_ctx, task->worker->srv->statfile_pool,
+			tokens, task, is_spam, err)) {
+		if (*err) {
+			msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, (*err)->message);
+			return FALSE;
+		}
+		else {
+			g_set_error (err, filter_error_quark(), 4, "Learn failed, unknown learn classifier error");
+			msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
+			return FALSE;
+		}
+	}
+	/* Increase statistics */
+	task->worker->srv->stat->messages_learned++;
+
+	msg_info ("learn success for message <%s>",
+			task->message_id);
+	statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
+			DEFAULT_STATFILE_INVALIDATE_TIME,
+			DEFAULT_STATFILE_INVALIDATE_JITTER);
+
+	return TRUE;
+}
+
 /* 
  * vi:ts=4 
  */

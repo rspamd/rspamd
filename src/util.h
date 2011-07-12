@@ -158,4 +158,7 @@ void free_task (struct worker_task *task, gboolean is_soft);
 void free_task_hard (gpointer ud);
 void free_task_soft (gpointer ud);
 
+/* Find string find in string s ignoring case */
+gchar* rspamd_strncasestr (const gchar *s, const gchar *find, gint len);
+
 #endif

@@ -64,6 +64,7 @@ struct classifier_config;
 struct mime_part;
 struct rspamd_view;
 struct rspamd_dns_resolver;
+struct worker_task;
 
 /** 
  * Server statistics
@@ -138,6 +139,8 @@ struct controller_session {
 	enum {
 		STATE_COMMAND,
 		STATE_LEARN,
+		STATE_LEARN_SPAM_PRE,
+		STATE_LEARN_SPAM,
 		STATE_REPLY,
 		STATE_QUIT,
 		STATE_OTHER,
@@ -162,6 +165,7 @@ struct controller_session {
 			f_str_t *in);					/**< other command handler to execute at the end of processing */
 	void *other_data;											/**< and its data 									*/
 	struct rspamd_async_session* s;								/**< async session object							*/
+	struct worker_task *learn_task;
 };
 
 typedef void (*controller_func_t)(gchar **args, struct controller_session *session);

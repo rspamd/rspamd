@@ -35,6 +35,7 @@
 #include "classifiers/classifiers.h"
 #include "binlog.h"
 #include "statfile_sync.h"
+#include "lua/lua_common.h"
 
 #define END "END" CRLF
 
@@ -49,6 +50,8 @@ enum command_type {
 	COMMAND_SHUTDOWN,
 	COMMAND_UPTIME,
 	COMMAND_LEARN,
+	COMMAND_LEARN_SPAM,
+	COMMAND_LEARN_HAM,
 	COMMAND_HELP,
 	COMMAND_COUNTERS,
 	COMMAND_SYNC,
@@ -84,7 +87,9 @@ static struct controller_command commands[] = {
 	{"weights", FALSE, COMMAND_WEIGHTS},
 	{"help", FALSE, COMMAND_HELP},
 	{"counters", FALSE, COMMAND_COUNTERS},
-	{"sync", FALSE, COMMAND_SYNC}
+	{"sync", FALSE, COMMAND_SYNC},
+	{"learn_spam", TRUE, COMMAND_LEARN_SPAM},
+	{"learn_ham", TRUE, COMMAND_LEARN_HAM}
 };
 
 static GList                   *custom_commands = NULL;
@@ -519,6 +524,98 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			}
 		}
 		break;
+	case COMMAND_LEARN_SPAM:
+		if (check_auth (cmd, session)) {
+			arg = *cmd_args;
+			if (!arg || *arg == '\0') {
+				msg_debug ("no statfile specified in learn command");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+			}
+			arg = *(cmd_args + 1);
+			if (arg == NULL || *arg == '\0') {
+				msg_debug ("no message size specified in learn command");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: symbol and message size" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+			}
+			size = strtoul (arg, &err_str, 10);
+			if (err_str && *err_str != '\0') {
+				msg_debug ("message size is invalid: %s", arg);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+			}
+			cl = find_classifier_conf (session->cfg, *cmd_args);
+			if (cl == NULL) {
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "classifier %s is not defined" CRLF, *cmd_args);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+
+			}
+			session->learn_classifier = cl;
+
+			/* By default learn positive */
+			session->in_class = TRUE;
+			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
+			session->state = STATE_LEARN_SPAM;
+		}
+		break;
+	case COMMAND_LEARN_HAM:
+		if (check_auth (cmd, session)) {
+			arg = *cmd_args;
+			if (!arg || *arg == '\0') {
+				msg_debug ("no statfile specified in learn command");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+			}
+			arg = *(cmd_args + 1);
+			if (arg == NULL || *arg == '\0') {
+				msg_debug ("no message size specified in learn command");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: symbol and message size" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+			}
+			size = strtoul (arg, &err_str, 10);
+			if (err_str && *err_str != '\0') {
+				msg_debug ("message size is invalid: %s", arg);
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+			}
+			cl = find_classifier_conf (session->cfg, *cmd_args);
+			if (cl == NULL) {
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "classifier %s is not defined" CRLF, *cmd_args);
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+				return TRUE;
+
+			}
+			session->learn_classifier = cl;
+
+			/* By default learn positive */
+			session->in_class = FALSE;
+			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
+			session->state = STATE_LEARN_SPAM;
+		}
+		break;
 	case COMMAND_LEARN:
 		if (check_auth (cmd, session)) {
 			arg = *cmd_args;
@@ -532,8 +629,8 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			}
 			arg = *(cmd_args + 1);
 			if (arg == NULL || *arg == '\0') {
-				msg_debug ("no statfile size specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
+				msg_debug ("no message size specified in learn command");
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: symbol and message size" CRLF);
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return FALSE;
 				}
@@ -817,6 +914,65 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 		session->state = STATE_REPLY;
 		break;
+	case STATE_LEARN_SPAM_PRE:
+		session->learn_buf = in;
+		task = construct_task (session->worker);
+
+		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+		task->msg->begin = in->begin;
+		task->msg->len = in->len;
+
+
+		r = process_message (task);
+		if (r == -1) {
+			msg_warn ("processing of message failed");
+			free_task (task, FALSE);
+			session->state = STATE_REPLY;
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return FALSE;
+			}
+			return FALSE;
+		}
+
+		r = process_filters (task);
+		if (r == -1) {
+			session->state = STATE_REPLY;
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
+			free_task (task, FALSE);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return FALSE;
+			}
+		}
+		else if (r == 0) {
+			session->state = STATE_LEARN;
+			task->dispatcher = session->dispatcher;
+			session->learn_task = task;
+			rspamd_dispatcher_pause (session->dispatcher);
+		}
+		else {
+			lua_call_post_filters (task);
+			session->state = STATE_REPLY;
+
+			if (! learn_task_spam (session->learn_classifier, task, session->in_class, &err)) {
+				if (err) {
+					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
+					g_error_free (err);
+				}
+				else {
+					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
+				}
+			}
+			else {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
+			}
+
+			free_task (task, FALSE);
+			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+				return FALSE;
+			}
+		}
+		break;
 	case STATE_WEIGHTS:
 		session->learn_buf = in;
 		task = construct_task (session->worker);
@@ -926,11 +1082,36 @@ static                          gboolean
 controller_write_socket (void *arg)
 {
 	struct controller_session      *session = (struct controller_session *)arg;
+	gint                            i;
+	gchar                           out_buf[64];
+	GError                         *err = NULL;
 
 	if (session->state == STATE_QUIT) {
 		/* Free buffers */
 		destroy_session (session->s);
 		return FALSE;
+	}
+	else if (session->state == STATE_LEARN) {
+		/* Perform actual learn here */
+		if (! learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err)) {
+			if (err) {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
+				g_error_free (err);
+			}
+			else {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
+			}
+		}
+		else {
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
+		}
+		learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err);
+		session->learn_task->dispatcher = NULL;
+		free_task (session->learn_task, FALSE);
+		session->state = STATE_REPLY;
+		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+			return FALSE;
+		}
 	}
 	else if (session->state == STATE_REPLY) {
 		session->state = STATE_COMMAND;

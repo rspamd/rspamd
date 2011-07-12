@@ -471,6 +471,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"spam",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct statfile, is_spam),
+				NULL
+			},
+			{
 				"normalizer",
 				handle_statfile_normalizer,
 				0,
@@ -496,7 +502,11 @@ static struct xml_parser_rule grammar[] = {
 			},
 			NULL_ATTR
 		},
-		NULL_DEF_ATTR
+		{
+				handle_statfile_opt,
+				0,
+				NULL
+		}
 	},
 	{ XML_SECTION_MODULE, {
 			NULL_ATTR
@@ -1017,9 +1027,9 @@ static void
 set_lua_globals (struct config_file *cfg, lua_State *L)
 {
 	struct config_file           **pcfg;
+
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
-
 	if (lua_isnil (L, -1)) {
 		/* Assign global table to set up attributes */
 		lua_newtable (L);
@@ -1038,13 +1048,19 @@ set_lua_globals (struct config_file *cfg, lua_State *L)
 		lua_setglobal (L, "composites");
 	}
 
+	lua_getglobal (L, "classifiers");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "classifiers");
+	}
+
 	pcfg = lua_newuserdata (L, sizeof (struct config_file *));
 	lua_setclass (L, "rspamd{config}", -1);
 	*pcfg = cfg;
 	lua_setglobal (L, "rspamd_config");
 
 	/* Clear stack from globals */
-	lua_pop (L, 3);
+	lua_pop (L, 4);
 }
 
 /* Handle lua tag */
@@ -1402,6 +1418,27 @@ handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userda
 	return TRUE;
 }
 
+gboolean
+handle_statfile_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	struct statfile                *st = ctx->section_pointer;
+	const gchar                    *name;
+
+	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
+		if (attrs == NULL || (name = g_hash_table_lookup (attrs, "name")) == NULL) {
+			msg_err ("worker param tag must have \"name\" attribute");
+			return FALSE;
+		}
+	}
+	else {
+		name = memory_pool_strdup (cfg->cfg_pool, tag);
+	}
+
+	g_hash_table_insert (st->opts, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
+
+	return TRUE;
+}
+
 /* Common handlers */
 gboolean 
 xml_handle_string (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
@@ -1617,7 +1654,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				if (extract_attr ("type", attribute_names, attribute_values, &res)) {
 					ud->state = XML_READ_CLASSIFIER;
 					/* Create object */
-					ccf = check_classifier_cfg (ud->cfg, NULL);
+					ccf = check_classifier_conf (ud->cfg, NULL);
 					if ((ccf->classifier = get_classifier (res)) == NULL) {
 						*error = g_error_new (xml_error_quark (), XML_INVALID_ATTR, "invalid classifier type: %s", res);
 						ud->state = XML_ERROR;
@@ -1665,7 +1702,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 
 				/* Now section pointer is statfile and parent pointer is classifier */
 				ud->parent_pointer = ud->section_pointer;
-				ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct statfile));
+				ud->section_pointer = check_statfile_conf (ud->cfg, NULL);
 			}
 			else {
 				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));

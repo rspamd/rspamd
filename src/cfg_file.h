@@ -422,13 +422,16 @@ gboolean get_config_checksum (struct config_file *cfg);
 void unescape_quotes (gchar *line);
 
 GList* parse_comma_list (memory_pool_t *pool, gchar *line);
-struct classifier_config* check_classifier_cfg (struct config_file *cfg, struct classifier_config *c);
+struct classifier_config* check_classifier_conf (struct config_file *cfg, struct classifier_config *c);
 struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
 struct metric* check_metric_conf (struct config_file *cfg, struct metric *c);
+struct statfile* check_statfile_conf (struct config_file *cfg, struct statfile *c);
 gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line);
 gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
 gboolean check_modules_config (struct config_file *cfg);
 void insert_classifier_symbols (struct config_file *cfg);
+
+struct classifier_config* find_classifier_conf (struct config_file *cfg, const gchar *name);
 
 #endif /* ifdef CFG_FILE_H */
 /* 

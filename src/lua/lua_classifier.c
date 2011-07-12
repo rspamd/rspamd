@@ -41,7 +41,18 @@ static const struct luaL_reg    classifierlib_m[] = {
 };
 
 
+LUA_FUNCTION_DEF (statfile, get_symbol);
+LUA_FUNCTION_DEF (statfile, get_path);
+LUA_FUNCTION_DEF (statfile, get_size);
+LUA_FUNCTION_DEF (statfile, is_spam);
+LUA_FUNCTION_DEF (statfile, get_param);
+
 static const struct luaL_reg    statfilelib_m[] = {
+	LUA_INTERFACE_DEF (statfile, get_symbol),
+	LUA_INTERFACE_DEF (statfile, get_path),
+	LUA_INTERFACE_DEF (statfile, get_size),
+	LUA_INTERFACE_DEF (statfile, is_spam),
+	LUA_INTERFACE_DEF (statfile, get_param),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -64,16 +75,55 @@ lua_check_classifier (lua_State * L)
 	return *((struct classifier_config **)ud);
 }
 
-/* Return list of statfiles that should be checked for this message */
-GList *
-call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task)
+static GList *
+call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task *task,
+		lua_State *L, gboolean is_learn, gboolean is_spam)
 {
-	GList                          *res = NULL, *cur;
-	struct classifier_callback_data *cd;
 	struct classifier_config      **pccf;
 	struct worker_task            **ptask;
 	struct statfile                *st;
 	gint                            i, len;
+	GList                          *res = NULL;
+
+	pccf = lua_newuserdata (L, sizeof (struct classifier_config *));
+	lua_setclass (L, "rspamd{classifier}", -1);
+	*pccf = ccf;
+
+	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+	lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+
+	lua_pushboolean (L, is_learn);
+	lua_pushboolean (L, is_spam);
+
+	if (lua_pcall (L, 4, 1, 0) != 0) {
+		msg_warn ("error running pre classifier callback %s", lua_tostring (L, -1));
+	}
+	else {
+		if (lua_istable (L, 1)) {
+			len = lua_objlen (L, 1);
+			for (i = 1; i <= len; i ++) {
+				lua_rawgeti (L, 1, i);
+				st = lua_check_statfile (L);
+				if (st) {
+					res = g_list_prepend (res, st);
+				}
+			}
+		}
+	}
+
+	return res;
+}
+
+/* Return list of statfiles that should be checked for this message */
+GList *
+call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task,
+		gboolean is_learn, gboolean is_spam)
+{
+	GList                           *res = NULL, *cur;
+	struct classifier_callback_data *cd;
+	lua_State                       *L;
+
 
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
@@ -81,33 +131,25 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 		cd = cur->data;
 		lua_getglobal (cd->L, cd->name);
 
-		pccf = lua_newuserdata (cd->L, sizeof (struct classifier_config *));
-		lua_setclass (cd->L, "rspamd{classifier}", -1);
-		*pccf = ccf;
-
-		ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
-		lua_setclass (cd->L, "rspamd{task}", -1);
-		*ptask = task;
-
-		if (lua_pcall (cd->L, 2, 1, 0) != 0) {
-			msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
-		}
-		else {
-			if (lua_istable (cd->L, 1)) {
-				len = lua_objlen (cd->L, 1);
-				for (i = 1; i <= len; i ++) {
-					lua_rawgeti (cd->L, 1, i);
-					st = lua_check_statfile (cd->L);
-					if (st) {
-						res = g_list_prepend (res, st);
-					}
-				}
-			}
-		}
+		res = g_list_concat (res, call_classifier_pre_callback (ccf, task, cd->L, is_learn, is_spam));
 
 		cur = g_list_next (cur);
 	}
 	
+	if (res == NULL) {
+		L = task->cfg->lua_state;
+		/* Check function from global table 'classifiers' */
+		lua_getglobal (L, "classifiers");
+		if (lua_istable (L, -1)) {
+			lua_pushstring (L, ccf->classifier->name);
+			lua_gettable (L, -2);
+			/* Function is now on top */
+			if (lua_isfunction (L, 1)) {
+				res = call_classifier_pre_callback (ccf, task, L, is_learn, is_spam);
+			}
+		}
+	}
+
 	return res;
 }
 
@@ -226,6 +268,86 @@ lua_classifier_get_statfiles (lua_State *L)
 }
 
 /* Statfile functions */
+static gint
+lua_statfile_get_symbol (lua_State *L)
+{
+	struct statfile                *st = lua_check_statfile (L);
+
+	if (st != NULL) {
+		lua_pushstring (L, st->symbol);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_statfile_get_path (lua_State *L)
+{
+	struct statfile                *st = lua_check_statfile (L);
+
+	if (st != NULL) {
+		lua_pushstring (L, st->path);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_statfile_get_size (lua_State *L)
+{
+	struct statfile                *st = lua_check_statfile (L);
+
+	if (st != NULL) {
+		lua_pushinteger (L, st->size);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_statfile_is_spam (lua_State *L)
+{
+	struct statfile                *st = lua_check_statfile (L);
+
+	if (st != NULL) {
+		lua_pushboolean (L, st->is_spam);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_statfile_get_param (lua_State *L)
+{
+	struct statfile                *st = lua_check_statfile (L);
+	const gchar                    *param, *value;
+
+	param = luaL_checkstring (L, 2);
+
+	if (st != NULL && param != NULL) {
+		value = g_hash_table_lookup (st->opts, param);
+		if (param != NULL) {
+			lua_pushstring (L, value);
+			return 1;
+		}
+	}
+	lua_pushnil (L);
+
+	return 1;
+}
+
 static struct statfile      *
 lua_check_statfile (lua_State * L)
 {

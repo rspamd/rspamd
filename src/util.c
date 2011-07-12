@@ -1364,5 +1364,28 @@ escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in)
 }
 
 /*
+ * Find the first occurrence of find in s, ignore case.
+ */
+gchar *
+rspamd_strncasestr (const gchar *s, const gchar *find, gint len)
+{
+	gchar                           c, sc;
+	gsize                           mlen;
+
+	if ((c = *find++) != 0) {
+		c = g_ascii_tolower (c);
+		mlen = strlen (find);
+		do {
+			do {
+				if ((sc = *s++) == 0 || len -- == 0)
+					return (NULL);
+			} while (g_ascii_tolower (sc) != c);
+		} while (g_ascii_strncasecmp (s, find, mlen) != 0);
+		s--;
+	}
+	return ((gchar *)s);
+}
+
+/*
  * vi:ts=4
  */

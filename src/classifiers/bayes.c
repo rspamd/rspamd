@@ -30,9 +30,8 @@
 #include "../main.h"
 #include "../filter.h"
 #include "../cfg_file.h"
-#ifdef WITH_LUA
+#include "../binlog.h"
 #include "../lua/lua_common.h"
-#endif
 
 #define LOCAL_PROB_DENOM 16.0
 
@@ -194,15 +193,22 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		}
 	}
 
-	data.statfiles_num = g_list_length (ctx->cfg->statfiles);
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
+	if (cur) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+	}
+	else {
+		cur = ctx->cfg->statfiles;
+	}
+
+	data.statfiles_num = g_list_length (cur);
 	data.statfiles = g_new0 (struct bayes_statfile_data, data.statfiles_num);
 	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
 
-	cur = ctx->cfg->statfiles;
 	while (cur) {
-		/* Select statfile to learn */
+		/* Select statfile to classify */
 		st = cur->data;
 		if ((file = statfile_pool_is_open (pool, st->path)) == NULL) {
 			if ((file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
@@ -339,6 +345,70 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 
 	if (sum != NULL) {
 		*sum = data.learned_tokens;
+	}
+
+	return TRUE;
+}
+
+gboolean
+bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
+		GTree *input, struct worker_task *task, gboolean is_spam, GError **err)
+{
+	struct bayes_callback_data      data;
+	gchar                          *value;
+	gint                            nodes, minnodes;
+	struct statfile                *st;
+	stat_file_t                    *file;
+	GList                          *cur;
+
+	g_assert (pool != NULL);
+	g_assert (ctx != NULL);
+
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+		minnodes = strtol (value, NULL, 10);
+		nodes = g_tree_nnodes (input);
+		if (nodes > FEATURE_WINDOW_SIZE) {
+			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
+		}
+		if (nodes < minnodes) {
+			return FALSE;
+		}
+	}
+
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
+	if (cur) {
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+	}
+	else {
+		cur = ctx->cfg->statfiles;
+	}
+
+	data.pool = pool;
+	data.now = time (NULL);
+	data.ctx = ctx;
+
+	while (cur) {
+		/* Select statfiles to learn */
+		st = cur->data;
+		if (st->is_spam != is_spam) {
+			cur = g_list_next (cur);
+			continue;
+		}
+		if ((file = statfile_pool_is_open (pool, st->path)) == NULL) {
+			if ((file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
+				msg_warn ("cannot open %s", st->path);
+				cur = g_list_next (cur);
+				continue;
+			}
+		}
+		data.file = file;
+		statfile_pool_lock_file (pool, data.file);
+		g_tree_foreach (input, bayes_learn_callback, &data);
+		statfile_inc_revision (file);
+		statfile_pool_unlock_file (pool, data.file);
+		maybe_write_binlog (ctx->cfg, st, file, input);
+
+		cur = g_list_next (cur);
 	}
 
 	return TRUE;
