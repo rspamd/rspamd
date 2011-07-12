@@ -334,7 +334,7 @@ static entity                   entities_defs[] = {
 	{"upsih", 978, "upsih"},
 	{"piv", 982, "piv"},
 	{"bull", 8226, "bull"},
-	{"hellip", 8230, "hellip"},
+	{"hellip", 8230, "..."},
 	{"prime", 8242, "'"},
 	{"Prime", 8243, "'"},
 	{"oline", 8254, "-"},

@@ -48,7 +48,7 @@ static struct roll_state        rs;
 
 /* Rolling hash function based on Adler-32 checksum */
 static                          guint32
-fuzzy_roll_hash (gchar c)
+fuzzy_roll_hash (guint c)
 {
 	/* Check window position */
 	if (rs.n == ROLL_WINDOW_SIZE) {
@@ -73,7 +73,7 @@ fuzzy_roll_hash (gchar c)
 
 /* A simple non-rolling hash, based on the FNV hash */
 static                          guint32
-fuzzy_fnv_hash (gchar c, guint32 hval)
+fuzzy_fnv_hash (guint c, guint32 hval)
 {
 	hval ^= c;
 	hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
@@ -95,7 +95,7 @@ fuzzy_blocksize (guint32 len)
 
 /* Update hash with new symbol */
 static void
-fuzzy_update (fuzzy_hash_t * h, gchar c)
+fuzzy_update (fuzzy_hash_t * h, guint c)
 {
 	h->rh = fuzzy_roll_hash (c);
 	h->h = fuzzy_fnv_hash (c, h->h);
@@ -110,7 +110,7 @@ fuzzy_update (fuzzy_hash_t * h, gchar c)
 }
 
 static void
-fuzzy_update2 (fuzzy_hash_t * h1, fuzzy_hash_t *h2, gchar c)
+fuzzy_update2 (fuzzy_hash_t * h1, fuzzy_hash_t *h2, guint c)
 {
 	h1->rh = fuzzy_roll_hash (c);
 	h1->h = fuzzy_fnv_hash (c, h1->h);
@@ -316,36 +316,57 @@ void
 fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 {
 	fuzzy_hash_t                   *new, *new2;
-	gint                            i;
-	gchar                          *c;
+	gchar                          *c, *end, *begin;
 	gsize                           real_len = 0, len = part->content->len;
 	GList                          *cur_offset;
 	struct process_exception       *cur_ex = NULL;
+	gunichar                        uc;
 
 	cur_offset = part->urls_offset;
 	if (cur_offset != NULL) {
 		cur_ex = cur_offset->data;
 	}
 
-	c = part->content->data;
+	begin = part->content->data;
+	c = begin;
 	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	new2 = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
-	for (i = 0; i < len;) {
-		if (cur_ex != NULL && cur_ex->pos == i) {
-			i += cur_ex->len + 1;
-			c += cur_ex->len + 1;
-			cur_offset = g_list_next (cur_offset);
-			if (cur_offset != NULL) {
-				cur_ex = cur_offset->data;
+	end = c + len;
+
+	if (part->is_utf) {
+		while (c < end) {
+			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+				c += cur_ex->len + 1;
+				cur_offset = g_list_next (cur_offset);
+				if (cur_offset != NULL) {
+					cur_ex = cur_offset->data;
+				}
+			}
+			else {
+				uc = g_utf8_get_char (c);
+				if (g_unichar_isalnum (uc)) {
+					real_len ++;
+				}
+				c = g_utf8_next_char (c);
 			}
 		}
-		else {
-			if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
-				real_len ++;
+	}
+	else {
+		while (c < end) {
+			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+				c += cur_ex->len + 1;
+				cur_offset = g_list_next (cur_offset);
+				if (cur_offset != NULL) {
+					cur_ex = cur_offset->data;
+				}
 			}
-			c++;
-			i++;
+			else {
+				if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
+					real_len ++;
+				}
+				c++;
+			}
 		}
 	}
 
@@ -357,26 +378,45 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 		cur_ex = cur_offset->data;
 	}
 
-	c = part->content->data;
+	begin = part->content->data;
+	c = begin;
+	end = c + len;
+	if (part->is_utf) {
 
-	for (i = 0; i < len;) {
-		if (cur_ex != NULL && cur_ex->pos == i) {
-			i += cur_ex->len + 1;
-			c += cur_ex->len + 1;
-			cur_offset = g_list_next (cur_offset);
-			if (cur_offset != NULL) {
-				cur_ex = cur_offset->data;
+		while (c < end) {
+			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+				c += cur_ex->len + 1;
+				cur_offset = g_list_next (cur_offset);
+				if (cur_offset != NULL) {
+					cur_ex = cur_offset->data;
+				}
 			}
-		}
-		else {
-			if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
-				fuzzy_update2 (new, new2, *c);
+			else {
+				uc = g_utf8_get_char (c);
+				if (g_unichar_isalnum (uc)) {
+					fuzzy_update2 (new, new2, uc);
+				}
+				c = g_utf8_next_char (c);
 			}
-			c++;
-			i++;
 		}
 	}
-
+	else {
+		while (c < end) {
+			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+				c += cur_ex->len + 1;
+				cur_offset = g_list_next (cur_offset);
+				if (cur_offset != NULL) {
+					cur_ex = cur_offset->data;
+				}
+			}
+			else {
+				if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
+					fuzzy_update2 (new, new2, *c);
+				}
+				c++;
+			}
+		}
+	}
 	/* Check whether we have more bytes in a rolling window */
 	if (new->rh != 0) {
 		new->hash_pipe[new->hi] = b64[new->h % 64];
