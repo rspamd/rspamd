@@ -110,6 +110,7 @@ LUA_FUNCTION_DEF (textpart, is_empty);
 LUA_FUNCTION_DEF (textpart, is_html);
 LUA_FUNCTION_DEF (textpart, get_fuzzy);
 LUA_FUNCTION_DEF (textpart, get_language);
+LUA_FUNCTION_DEF (textpart, compare_distance);
 
 static const struct luaL_reg    textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_content),
@@ -117,6 +118,7 @@ static const struct luaL_reg    textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_fuzzy),
 	LUA_INTERFACE_DEF (textpart, get_language),
+	LUA_INTERFACE_DEF (textpart, compare_distance),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1338,6 +1340,49 @@ lua_textpart_get_language (lua_State * L)
 	}
 
 	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_textpart_compare_distance (lua_State * L)
+{
+	struct mime_text_part          *part = lua_check_textpart (L), *other;
+	void                           *ud = luaL_checkudata (L, 2, "rspamd{textpart}");
+	gint                            diff = -1;
+	GMimeObject                    *parent;
+	const GMimeContentType         *ct;
+
+	luaL_argcheck (L, ud != NULL, 2, "'textpart' expected");
+	other = *((struct mime_text_part **)ud);
+
+	if (part->parent && part->parent == other->parent) {
+		parent = part->parent;
+		ct = g_mime_object_get_content_type (parent);
+#ifndef GMIME24
+		if (ct == NULL || ! g_mime_content_type_is_type (ct, "multipart", "alternative")) {
+#else
+		if (ct == NULL || ! g_mime_content_type_is_type ((GMimeContentType *)ct, "multipart", "alternative")) {
+#endif
+			diff = -1;
+
+		}
+		else {
+			if (!part->is_empty && !other->is_empty) {
+				diff = fuzzy_compare_parts (part, other);
+			}
+			else if ((part->is_empty && !other->is_empty) || (!part->is_empty && other->is_empty)) {
+				/* Empty and non empty parts are different */
+				diff = 0;
+			}
+		}
+	}
+	else {
+			diff = -1;
+	}
+
+
+	lua_pushinteger (L, diff);
+
 	return 1;
 }
 

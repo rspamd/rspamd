@@ -321,6 +321,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 	GList                          *cur_offset;
 	struct process_exception       *cur_ex = NULL;
 	gunichar                        uc;
+	GString *debug;
 
 	cur_offset = part->urls_offset;
 	if (cur_offset != NULL) {
@@ -370,6 +371,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 		}
 	}
 
+	debug = g_string_sized_new (real_len);
 	new->block_size = fuzzy_blocksize (real_len);
 	new2->block_size = new->block_size * 2;
 
@@ -395,6 +397,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 				uc = g_utf8_get_char (c);
 				if (g_unichar_isalnum (uc)) {
 					fuzzy_update2 (new, new2, uc);
+					g_string_append_unichar (debug, uc);
 				}
 				c = g_utf8_next_char (c);
 			}
@@ -412,11 +415,13 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool)
 			else {
 				if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
 					fuzzy_update2 (new, new2, *c);
+					g_string_append_c (debug, *c);
 				}
 				c++;
 			}
 		}
 	}
+	msg_info ("make hash of string: %v", debug);
 	/* Check whether we have more bytes in a rolling window */
 	if (new->rh != 0) {
 		new->hash_pipe[new->hi] = b64[new->h % 64];
