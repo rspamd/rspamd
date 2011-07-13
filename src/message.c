@@ -786,7 +786,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 #endif
 		}
 
-		fuzzy_init_part (text_part, task->task_pool);
+		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) free_byte_array_callback, text_part->content);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
@@ -806,7 +806,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
 		text_part->content = text_part->orig;
 		url_parse_text (task->task_pool, task, text_part, FALSE);
-		fuzzy_init_part (text_part, task->task_pool);
+		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 }

@@ -241,6 +241,23 @@ fstrpush (f_str_t * dest, gchar c)
 }
 
 /*
+ * Push one character to fstr
+ */
+gint
+fstrpush_unichar (f_str_t * dest, gunichar c)
+{
+	int                            l;
+	if (dest->size < dest->len) {
+		/* Need to reallocate string */
+		return 0;
+	}
+
+	l = g_unichar_to_utf8 (c, dest->begin + dest->len);
+	dest->len += l;
+	return l;
+}
+
+/*
  * Allocate memory for f_str_t
  */
 f_str_t                        *

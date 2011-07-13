@@ -28,6 +28,7 @@ SET(RSPAMDLIBSRC ../src/binlog.c
 				../src/buffer.c
 				../src/cfg_utils.c
 				../src/cfg_xml.c
+				../src/diff.c
 				../src/dns.c
 				../src/events.c
 				../src/expressions.c

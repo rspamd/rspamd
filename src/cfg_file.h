@@ -259,6 +259,8 @@ struct config_file {
 	gboolean check_text_attachements;				/**< check text attachements as text					*/
 	gboolean convert_config;						/**< convert config to XML format						*/
 
+	gsize max_diff;									/**< maximum diff size for text parts					*/
+
 	enum rspamd_log_type log_type;					/**< log type											*/
 	gint log_facility;								/**< log facility in case of syslog						*/
 	gint log_level;									/**< log level trigger									*/

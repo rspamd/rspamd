@@ -175,6 +175,9 @@ init_defaults (struct config_file *cfg)
 	cfg->statfile_sync_interval = 60000;
 	cfg->statfile_sync_timeout = 20000;
 
+	/* 20 Kb */
+	cfg->max_diff = 20480;
+
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);

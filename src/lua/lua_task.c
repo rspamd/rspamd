@@ -37,6 +37,7 @@
 #include "../classifiers/classifiers.h"
 #include "../binlog.h"
 #include "../statfile_sync.h"
+#include "../diff.h"
 
 extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
 		const gchar *symbol, struct statfile **st, gboolean try_create);
@@ -1368,7 +1369,12 @@ lua_textpart_compare_distance (lua_State * L)
 		}
 		else {
 			if (!part->is_empty && !other->is_empty) {
-				diff = fuzzy_compare_parts (part, other);
+				if (part->diff_str != NULL && other->diff_str != NULL) {
+					diff = compare_diff_distance (part->diff_str, other->diff_str);
+				}
+				else {
+					diff = fuzzy_compare_parts (part, other);
+				}
 			}
 			else if ((part->is_empty && !other->is_empty) || (!part->is_empty && other->is_empty)) {
 				/* Empty and non empty parts are different */

@@ -30,7 +30,7 @@ struct mime_text_part;
  */
 fuzzy_hash_t * fuzzy_init (f_str_t *in, memory_pool_t *pool);
 fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
-void fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool);
+void fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_diff);
 
 gint fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2);
 

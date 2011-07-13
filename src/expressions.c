@@ -31,6 +31,7 @@
 #include "expressions.h"
 #include "html.h"
 #include "lua/lua_common.h"
+#include "diff.h"
 
 gboolean                        rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused);
 gboolean                        rspamd_header_exists (struct worker_task *task, GList * args, void *unused);
@@ -1083,7 +1084,12 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			return FALSE;
 		}
 		if (!p1->is_empty && !p2->is_empty) {
-			diff = fuzzy_compare_parts (p1, p2);
+			if (p1->diff_str != NULL && p2->diff_str != NULL) {
+				diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+			}
+			else {
+				diff = fuzzy_compare_parts (p1, p2);
+			}
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
 			*pdiff = diff;
 			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);

@@ -69,6 +69,11 @@ size_t fstrcat (f_str_t *dest, f_str_t *src);
 gint fstrpush (f_str_t *dest, gchar c);
 
 /*
+ * Push one character to fstr
+ */
+gint fstrpush_unichar (f_str_t *dest, gunichar c);
+
+/*
  * Allocate memory for f_str_t
  */
 f_str_t* fstralloc (memory_pool_t *pool, size_t len);
