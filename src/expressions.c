@@ -58,26 +58,26 @@ static struct _fl {
 	rspamd_internal_func_t          func;
 	void                           *user_data;
 } rspamd_functions_list[] = {
-	{
-	"compare_encoding", rspamd_compare_encoding, NULL}, {
-	"compare_parts_distance", rspamd_parts_distance, NULL}, {
-	"compare_recipients_distance", rspamd_recipients_distance, NULL}, {
-	"compare_transfer_encoding", rspamd_compare_transfer_encoding, NULL}, {
-	"content_type_compare_param", rspamd_content_type_compare_param, NULL}, {
-	"content_type_has_param", rspamd_content_type_has_param, NULL}, {
-	"content_type_is_subtype", rspamd_content_type_is_subtype, NULL}, {
-	"content_type_is_type", rspamd_content_type_is_type, NULL}, {
-	"has_content_part", rspamd_has_content_part, NULL}, {
-	"has_content_part_len", rspamd_has_content_part_len, NULL}, {
-	"has_fake_html", rspamd_has_fake_html, NULL}, {
-	"has_html_tag", rspamd_has_html_tag, NULL}, {
-	"has_only_html_part", rspamd_has_only_html_part, NULL}, {
-	"header_exists", rspamd_header_exists, NULL}, {
-	"is_html_balanced", rspamd_is_html_balanced, NULL}, {
-	"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},};
+	{"compare_encoding", rspamd_compare_encoding, NULL},
+	{"compare_parts_distance", rspamd_parts_distance, NULL},
+	{"compare_recipients_distance", rspamd_recipients_distance, NULL},
+	{"compare_transfer_encoding", rspamd_compare_transfer_encoding, NULL},
+	{"content_type_compare_param", rspamd_content_type_compare_param, NULL},
+	{"content_type_has_param", rspamd_content_type_has_param, NULL},
+	{"content_type_is_subtype", rspamd_content_type_is_subtype, NULL},
+	{"content_type_is_type", rspamd_content_type_is_type, NULL},
+	{"has_content_part", rspamd_has_content_part, NULL},
+	{"has_content_part_len", rspamd_has_content_part_len, NULL},
+	{"has_fake_html", rspamd_has_fake_html, NULL},
+	{"has_html_tag", rspamd_has_html_tag, NULL},
+	{"has_only_html_part", rspamd_has_only_html_part, NULL},
+	{"header_exists", rspamd_header_exists, NULL},
+	{"is_html_balanced", rspamd_is_html_balanced, NULL},
+	{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL}
+};
 
 static struct _fl              *list_ptr = &rspamd_functions_list[0];
-static guint32                 functions_number = sizeof (rspamd_functions_list) / sizeof (struct _fl);
+static guint32                  functions_number = sizeof (rspamd_functions_list) / sizeof (struct _fl);
 static gboolean                 list_allocated = FALSE;
 
 /* Bsearch routine */
@@ -1010,7 +1010,7 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
 gboolean
 rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 {
-	gint                            threshold, diff;
+	gint                            threshold, threshold2 = -1, diff;
 	struct mime_text_part          *p1, *p2;
 	GList                          *cur;
 	struct expression_argument     *arg;
@@ -1029,6 +1029,15 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		if (errno != 0) {
 			msg_info ("bad numeric value for threshold \"%s\", assume it 100", (gchar *)args->data);
 			threshold = 100;
+		}
+		if (args->next) {
+			arg = get_function_arg (args->next->data, task, TRUE);
+			errno = 0;
+			threshold2 = strtoul ((gchar *)arg->data, NULL, 10);
+			if (errno != 0) {
+				msg_info ("bad numeric value for threshold \"%s\", ignore it", (gchar *)arg->data);
+				threshold2 = -1;
+			}
 		}
 	}
 
@@ -1078,8 +1087,15 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
 			*pdiff = diff;
 			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
-			if (diff <= threshold) {
-				return TRUE;
+			if (threshold2 > 0 && threshold > threshold2) {
+				if (diff <= threshold && diff >= threshold2) {
+					return TRUE;
+				}
+			}
+			else {
+				if (diff <= threshold) {
+					return TRUE;
+				}
 			}
 		}
 		else if ((p1->is_empty && !p2->is_empty) || (!p1->is_empty && p2->is_empty)) {
