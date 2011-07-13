@@ -430,6 +430,7 @@ gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const g
 gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
 gboolean check_modules_config (struct config_file *cfg);
 void insert_classifier_symbols (struct config_file *cfg);
+gboolean check_classifier_statfiles (struct classifier_config *cf);
 
 struct classifier_config* find_classifier_conf (struct config_file *cfg, const gchar *name);
 

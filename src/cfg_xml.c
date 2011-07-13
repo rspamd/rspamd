@@ -1790,8 +1790,8 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			CHECK_TAG ("classifier", FALSE);
 			if (res) {
 				ccf = ud->section_pointer;
-				if (ccf->statfiles == NULL) {
-					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "classifier cannot contains no statfiles");
+				if (ccf->statfiles == NULL || !check_classifier_statfiles (ccf)) {
+					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "classifier cannot contains no statfiles or statfiles of the same class");
 					ud->state = XML_ERROR;
 					return;
 				}

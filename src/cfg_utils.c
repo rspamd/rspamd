@@ -1044,6 +1044,62 @@ find_classifier_conf (struct config_file *cfg, const gchar *name)
 	return NULL;
 }
 
+gboolean
+check_classifier_statfiles (struct classifier_config *cf)
+{
+	struct statfile                *st;
+	gboolean                        has_other = FALSE, cur_class;
+	GList                          *cur;
+
+	/* First check classes directly */
+	cur = cf->statfiles;
+	while (cur) {
+		st = cur->data;
+		if (!has_other) {
+			cur_class = st->is_spam;
+			has_other = TRUE;
+		}
+		else {
+			if (cur_class != st->is_spam) {
+				return TRUE;
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	if (!has_other) {
+		/* We have only one statfile */
+		return FALSE;
+	}
+	/* We have not detected any statfile that has different class, so turn on euristic based on symbol's name */
+	has_other = FALSE;
+	cur = cf->statfiles;
+	while (cur) {
+		st = cur->data;
+		if (rspamd_strncasestr (st->symbol, "spam", -1) != NULL) {
+			st->is_spam = TRUE;
+		}
+		else if (rspamd_strncasestr (st->symbol, "ham", -1) != NULL) {
+			st->is_spam = FALSE;
+		}
+
+		if (!has_other) {
+			cur_class = st->is_spam;
+			has_other = TRUE;
+		}
+		else {
+			if (cur_class != st->is_spam) {
+				return TRUE;
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
 /*
  * vi:ts=4
  */
