@@ -1046,7 +1046,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		diff = *pdiff;
 		if (diff != -1) {
 			if (threshold2 > 0) {
-				if (diff >= MIN (threshold, threshold2) && diff <= MAX (threshold, threshold2)) {
+				if (diff >= MIN (threshold, threshold2) && diff < MAX (threshold, threshold2)) {
 					return TRUE;
 				}
 			}
@@ -1104,7 +1104,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			*pdiff = diff;
 			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			if (threshold2 > 0) {
-				if (diff >= MIN (threshold, threshold2) && diff <= MAX (threshold, threshold2)) {
+				if (diff >= MIN (threshold, threshold2) && diff < MAX (threshold, threshold2)) {
 					return TRUE;
 				}
 			}
