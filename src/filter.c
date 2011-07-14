@@ -33,6 +33,7 @@
 #include "settings.h"
 #include "view.h"
 #include "binlog.h"
+#include "diff.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -40,7 +41,7 @@
 #   include "lua/lua_common.h"
 #endif
 
-#define COMMON_PART_FACTOR 80
+#define COMMON_PART_FACTOR 95
 
 static inline                   GQuark
 filter_error_quark (void)
@@ -600,12 +601,13 @@ classifiers_callback (gpointer value, void *arg)
 	struct worker_task             *task = arg;
 	struct classifier_config       *cl = value;
 	struct classifier_ctx          *ctx;
-	struct mime_text_part          *text_part;
+	struct mime_text_part          *text_part, *p1, *p2;
 	struct statfile                *st;
 	GTree                          *tokens = NULL;
 	GList                          *cur;
 	f_str_t                         c;
 	gchar                          *header = NULL;
+	gint                           *dist = NULL, diff;
 	gboolean                        is_twopart = FALSE;
 	
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
@@ -616,6 +618,7 @@ classifiers_callback (gpointer value, void *arg)
 	}
 	else {
 		cur = g_list_first (task->text_parts);
+		dist =  memory_pool_get_variable (task->task_pool, "parts_distance");
 		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
 			is_twopart = TRUE;
 		}
@@ -640,9 +643,24 @@ classifiers_callback (gpointer value, void *arg)
 					cur = g_list_next (cur);
 					continue;
 				}
-				if (is_twopart && cur->next == NULL) {
+				if (dist != NULL && cur->next == NULL) {
 					/* Compare part's content */
-					if (fuzzy_compare_parts (cur->data, cur->prev->data) >= COMMON_PART_FACTOR) {
+
+					if (*dist >= COMMON_PART_FACTOR) {
+						msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+						break;
+					}
+				}
+				else if (cur->next == NULL && is_twopart) {
+					p1 = cur->prev->data;
+					p2 = text_part;
+					if (p1->diff_str != NULL && p2->diff_str != NULL) {
+						diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+					}
+					else {
+						diff = fuzzy_compare_parts (p1, p2);
+					}
+					if (diff >= COMMON_PART_FACTOR) {
 						msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
 						break;
 					}
@@ -838,8 +856,10 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 	struct statfile                *st;
 	stat_file_t                    *stf;
 	gdouble                         sum;
-	struct mime_text_part          *part;
+	struct mime_text_part          *part, *p1, *p2;
 	gboolean                        is_utf = FALSE, is_twopart = FALSE;
+	gint                            diff;
+
 
 	/* Load classifier by symbol */
 	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
@@ -883,7 +903,15 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 			ex = part->urls_offset;
 			if (is_twopart && cur->next == NULL) {
 				/* Compare part's content */
-				if (fuzzy_compare_parts (cur->data, cur->prev->data) >= COMMON_PART_FACTOR) {
+				p1 = cur->prev->data;
+				p2 = part;
+				if (p1->diff_str != NULL && p2->diff_str != NULL) {
+					diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+				}
+				else {
+					diff = fuzzy_compare_parts (p1, p2);
+				}
+				if (diff >= COMMON_PART_FACTOR) {
 					msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
 					break;
 				}
@@ -951,8 +979,9 @@ learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolea
 	struct classifier_ctx          *cls_ctx;
 	f_str_t                         c;
 	GTree                          *tokens = NULL;
-	struct mime_text_part          *part;
+	struct mime_text_part          *part, *p1, *p2;
 	gboolean                        is_utf = FALSE, is_twopart = FALSE;
+	gint                            diff;
 
 	cur = g_list_first (task->text_parts);
 	if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
@@ -972,8 +1001,19 @@ learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolea
 		is_utf = part->is_utf;
 		ex = part->urls_offset;
 		if (is_twopart && cur->next == NULL) {
-			/* Compare part's content */
-			if (fuzzy_compare_parts (cur->data, cur->prev->data) >= COMMON_PART_FACTOR) {
+			/*
+			 * Compare part's content
+			 * Note: here we don't have filters proceeded this message, so using pool variable is a bad idea
+			 */
+			p1 = cur->prev->data;
+			p2 = part;
+			if (p1->diff_str != NULL && p2->diff_str != NULL) {
+				diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+			}
+			else {
+				diff = fuzzy_compare_parts (p1, p2);
+			}
+			if (diff >= COMMON_PART_FACTOR) {
 				msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
 				break;
 			}

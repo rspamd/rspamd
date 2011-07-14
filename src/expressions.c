@@ -1093,8 +1093,8 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
 			*pdiff = diff;
 			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
-			if (threshold2 > 0 && threshold > threshold2) {
-				if (diff <= threshold && diff >= threshold2) {
+			if (threshold2 > 0 && threshold < threshold2) {
+				if (diff >= threshold && diff <= threshold2) {
 					return TRUE;
 				}
 			}
