@@ -1044,8 +1044,18 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 
 	if ((pdiff = memory_pool_get_variable (task->task_pool, "parts_distance")) != NULL) {
 		diff = *pdiff;
-		if (diff != -1 && diff <= threshold) {
-			return TRUE;
+		if (diff != -1) {
+			if (threshold2 > 0) {
+				if (diff >= MIN (threshold, threshold2) && diff <= MAX (threshold, threshold2)) {
+					return TRUE;
+				}
+			}
+			else {
+				if (diff <= threshold) {
+					return TRUE;
+				}
+			}
+			return FALSE;
 		}
 		else {
 			return FALSE;
