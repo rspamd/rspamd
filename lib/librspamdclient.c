@@ -1383,7 +1383,7 @@ rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, c
 	}
 
 	/* Read greeting */
-	if (! rspamd_read_controller_greeting(c, err)) {
+	if (! rspamd_read_controller_greeting (c, err)) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
 		}
@@ -1463,7 +1463,7 @@ rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **er
 	}
 
 	/* Read greeting */
-	if (! rspamd_read_controller_greeting(c, err)) {
+	if (! rspamd_read_controller_greeting (c, err)) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
 		}
@@ -1515,6 +1515,163 @@ rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **er
 }
 
 /*
+ * Learn message from memory
+ */
+gboolean
+rspamd_learn_spam_memory (const guchar *message, gsize length, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
+{
+	struct rspamd_connection             *c;
+	GString                              *in;
+	gchar                                *outbuf;
+	guint                                 r;
+	static const gchar                    ok_str[] = "learn ok";
+
+	g_assert (client != NULL);
+	g_assert (length > 0);
+
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	/* Read greeting */
+	if (! rspamd_read_controller_greeting (c, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
+		}
+		return FALSE;
+	}
+	/* Perform auth */
+	if (! rspamd_controller_auth (c, password, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+		}
+		return FALSE;
+	}
+
+	r = length + sizeof ("learn_spam %s %uz\r\n") + strlen (classifier) + sizeof ("4294967296");
+	outbuf = g_malloc (r);
+	r = snprintf (outbuf, r, "learn_%s %s %lu\r\n%s", is_spam ? "spam" : "ham",
+			classifier, (unsigned long)length, message);
+	in = rspamd_send_controller_command (c, outbuf, r, -1, err);
+	g_free (outbuf);
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	/* Search for string learn ok */
+	if (in->len > sizeof (ok_str) - 1 && memcmp (in->str, ok_str, sizeof (ok_str) - 1) == 0) {
+		upstream_ok (&c->server->up, c->connection_time);
+		return TRUE;
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Bad reply: %s", in->str);
+		}
+	}
+	return FALSE;
+}
+
+/*
+ * Learn message from file
+ */
+gboolean
+rspamd_learn_spam_file (const guchar *filename, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
+{
+	gint                                 fd;
+	g_assert (client != NULL);
+
+	/* Open file */
+	if ((fd = open (filename, O_RDONLY)) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Open error for file %s: %s",
+					filename, strerror (errno));
+		}
+		return FALSE;
+	}
+
+	return rspamd_learn_spam_fd (fd, classifier, is_spam, password, err);
+}
+
+/*
+ * Learn message from fd
+ */
+gboolean
+rspamd_learn_spam_fd (int fd, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
+{
+	struct rspamd_connection             *c;
+	GString                              *in;
+	gchar                                *outbuf;
+	guint                                 r;
+	struct stat                           st;
+	static const gchar                    ok_str[] = "learn ok";
+
+	g_assert (client != NULL);
+
+	/* Connect to server */
+	c = rspamd_connect_random_server (TRUE, err);
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	/* Read greeting */
+	if (! rspamd_read_controller_greeting (c, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
+		}
+		return FALSE;
+	}
+	/* Perform auth */
+	if (! rspamd_controller_auth (c, password, err)) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+		}
+		return FALSE;
+	}
+
+	/* Get length */
+	if (fstat (fd, &st) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Stat error: %s",
+					strerror (errno));
+		}
+		return FALSE;
+	}
+	if (st.st_size == 0) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, -1, "File has zero length");
+		}
+		return FALSE;
+	}
+	r = sizeof ("learn_spam %s %uz\r\n") + strlen (classifier) + sizeof ("4294967296");
+	outbuf = g_malloc (r);
+	r = snprintf (outbuf, r, "learn_%s %s %lu\r\n", is_spam ? "spam" : "ham",
+			classifier, (unsigned long)st.st_size);
+	in = rspamd_send_controller_command (c, outbuf, r, fd, err);
+	g_free (outbuf);
+	if (in == NULL) {
+		return FALSE;
+	}
+
+	/* Search for string learn ok */
+	if (in->len > sizeof (ok_str) - 1 && memcmp (in->str, ok_str, sizeof (ok_str) - 1) == 0) {
+		upstream_ok (&c->server->up, c->connection_time);
+		return TRUE;
+	}
+	else {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Bad reply: %s", in->str);
+		}
+	}
+
+	return FALSE;
+}
+
+
+/*
  * Learn message fuzzy from memory
  */
 gboolean
@@ -1537,7 +1694,7 @@ rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password,
 	}
 
 	/* Read greeting */
-	if (! rspamd_read_controller_greeting(c, err)) {
+	if (! rspamd_read_controller_greeting (c, err)) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
 		}
@@ -1622,7 +1779,7 @@ rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean
 	}
 
 	/* Read greeting */
-	if (! rspamd_read_controller_greeting(c, err)) {
+	if (! rspamd_read_controller_greeting (c, err)) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid greeting");
 		}

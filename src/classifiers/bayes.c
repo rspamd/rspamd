@@ -111,7 +111,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 
 	for (i = 0; i < cd->statfiles_num; i ++) {
 		cur = &cd->statfiles[i];
-		cur->value = statfile_pool_get_block (cd->pool, cur->file, node->h1, node->h2, cd->now) * cur->corr;
+		cur->value = statfile_pool_get_block (cd->pool, cur->file, node->h1, node->h2, cd->now);
 		if (cur->value > 0) {
 			cur->total_hits ++;
 			cur->hits = cur->value;

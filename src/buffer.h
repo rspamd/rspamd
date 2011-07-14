@@ -51,6 +51,7 @@ typedef struct rspamd_io_dispatcher_s {
 	gint sendfile_fd;
 	gboolean in_sendfile;											/**< whether buffer is in sendfile mode */
 	gboolean strip_eol;												/**< strip or not line ends in BUFFER_LINE policy */
+	gboolean is_restored;											/**< call a callback when dispatcher is restored */
 #ifndef HAVE_SENDFILE
 	void *map;
 #endif

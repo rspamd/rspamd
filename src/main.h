@@ -166,6 +166,7 @@ struct controller_session {
 	void *other_data;											/**< and its data 									*/
 	struct rspamd_async_session* s;								/**< async session object							*/
 	struct worker_task *learn_task;
+	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 };
 
 typedef void (*controller_func_t)(gchar **args, struct controller_session *session);

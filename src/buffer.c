@@ -463,6 +463,13 @@ dispatcher_cb (gint fd, short what, void *arg)
 				event_del (d->ev);
 				event_set (d->ev, fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
 				event_add (d->ev, d->tv);
+				if (d->is_restored && d->write_callback) {
+					if (!d->write_callback (d->user_data)) {
+						debug_ip ("callback set wanna_die flag, terminating");
+						return;
+					}
+					d->is_restored = FALSE;
+				}
 			}
 			else {
 				/* Delayed write */
@@ -637,7 +644,9 @@ rspamd_dispatcher_pause (rspamd_io_dispatcher_t * d)
 void
 rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
 {
+	event_set (d->ev, d->fd, EV_READ | EV_WRITE, dispatcher_cb, d);
 	event_add (d->ev, d->tv);
+	d->is_restored = TRUE;
 }
 
 #undef debug_ip

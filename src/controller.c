@@ -31,6 +31,8 @@
 #include "cfg_file.h"
 #include "cfg_xml.h"
 #include "modules.h"
+#include "map.h"
+#include "dns.h"
 #include "tokenizers/tokenizers.h"
 #include "classifiers/classifiers.h"
 #include "binlog.h"
@@ -74,6 +76,7 @@ struct custom_controller_command {
 struct rspamd_controller_ctx {
 	char 						   *password;
 	guint32							timeout;
+	struct rspamd_dns_resolver     *resolver;
 };
 
 static struct controller_command commands[] = {
@@ -558,7 +561,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			/* By default learn positive */
 			session->in_class = TRUE;
 			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
-			session->state = STATE_LEARN_SPAM;
+			session->state = STATE_LEARN_SPAM_PRE;
 		}
 		break;
 	case COMMAND_LEARN_HAM:
@@ -604,7 +607,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			/* By default learn positive */
 			session->in_class = FALSE;
 			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
-			session->state = STATE_LEARN_SPAM;
+			session->state = STATE_LEARN_SPAM_PRE;
 		}
 		break;
 	case COMMAND_LEARN:
@@ -864,7 +867,8 @@ controller_read_socket (f_str_t * in, void *arg)
 		if (session->state == STATE_COMMAND) {
 			session->state = STATE_REPLY;
 		}
-		if (session->state != STATE_LEARN && session->state != STATE_WEIGHTS && session->state != STATE_OTHER) {
+		if (session->state != STATE_LEARN && session->state != STATE_LEARN_SPAM_PRE
+				&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER) {
 			if (!rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE, TRUE)) {
 				return FALSE;
 			}
@@ -922,6 +926,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		task->msg->begin = in->begin;
 		task->msg->len = in->len;
 
+		task->resolver = session->resolver;
 
 		r = process_message (task);
 		if (r == -1) {
@@ -1105,7 +1110,6 @@ controller_write_socket (void *arg)
 		else {
 			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
 		}
-		learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err);
 		session->learn_task->dispatcher = NULL;
 		free_task (session->learn_task, FALSE);
 		session->state = STATE_REPLY;
@@ -1162,6 +1166,7 @@ accept_socket (gint fd, short what, void *arg)
 	new_session->cfg = worker->srv->cfg;
 	new_session->state = STATE_COMMAND;
 	new_session->session_pool = memory_pool_new (memory_pool_get_size () - 1);
+	new_session->resolver = ctx->resolver;
 	worker->srv->stat->control_connections_count++;
 
 	/* Set up dispatcher */
@@ -1198,8 +1203,11 @@ start_controller (struct rspamd_worker *worker)
 	struct sigaction                signals;
 	gchar                          *hostbuf;
 	gsize                           hostmax;
+	struct rspamd_controller_ctx   *ctx;
 
 	worker->srv->pid = getpid ();
+	ctx = worker->ctx;
+
 	event_init ();
 	g_mime_init (0);
 
@@ -1228,9 +1236,14 @@ start_controller (struct rspamd_worker *worker)
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
 	event_add (&worker->bind_ev, NULL);
 
+	start_map_watch ();
+	ctx->resolver = dns_resolver_init (worker->srv->cfg);
+
 	gperf_profiler_init (worker->srv->cfg, "controller");
 
 	event_loop (0);
+
+	close_log (worker->srv->logger);
 
 	exit (EXIT_SUCCESS);
 }

@@ -70,6 +70,21 @@ struct rspamd_result * rspamd_scan_fd (int fd, GHashTable *headers, GError **err
 /*
  * Learn message from memory
  */
+gboolean rspamd_learn_spam_memory (const guchar *message, gsize length, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err);
+
+/*
+ * Learn message from file
+ */
+gboolean rspamd_learn_spam_file (const guchar *filename, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err);
+
+/*
+ * Learn message from fd
+ */
+gboolean rspamd_learn_spam_fd (int fd, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err);
+
+/*
+ * Learn message from memory
+ */
 gboolean rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, const gchar *password, GError **err);
 
 /*

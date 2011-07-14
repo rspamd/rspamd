@@ -31,13 +31,14 @@
 #define DEFAULT_CONTROL_PORT 11334
 
 static gchar                   *connect_str = "localhost";
-static gchar                   *password;
-static gchar                   *statfile;
-static gchar                   *ip;
-static gchar                   *from;
-static gchar                   *deliver_to;
-static gchar                   *rcpt;
-static gchar                   *user;
+static gchar                   *password = NULL;
+static gchar                   *statfile = NULL;
+static gchar                   *ip = NULL;
+static gchar                   *from = NULL;
+static gchar                   *deliver_to = NULL;
+static gchar                   *rcpt = NULL;
+static gchar                   *user = NULL;
+static gchar                   *classifier = NULL;
 static gint                     weight = 1;
 static gint                     flag;
 static gint                     timeout = 5;
@@ -50,6 +51,7 @@ static GOptionEntry entries[] =
 		{ "connect", 'h', 0, G_OPTION_ARG_STRING, &connect_str, "Specify host and port", NULL },
 		{ "password", 'P', 0, G_OPTION_ARG_STRING, &password, "Specify control password", NULL },
 		{ "statfile", 's', 0, G_OPTION_ARG_STRING, &statfile, "Statfile to learn (symbol name)", NULL },
+		{ "classifier", 'c', 0, G_OPTION_ARG_STRING, &classifier, "Classifier to learn spam or ham", NULL },
 		{ "weight", 'w', 0, G_OPTION_ARG_INT, &weight, "Weight for fuzzy operations", NULL },
 		{ "flag", 'f', 0, G_OPTION_ARG_INT, &flag, "Flag for fuzzy operations", NULL },
 		{ "pass", 'p', 0, G_OPTION_ARG_NONE, &pass_all, "Pass all filters", NULL },
@@ -67,6 +69,8 @@ enum rspamc_command {
 	RSPAMC_COMMAND_UNKNOWN = 0,
 	RSPAMC_COMMAND_SYMBOLS,
 	RSPAMC_COMMAND_LEARN,
+	RSPAMC_COMMAND_LEARN_SPAM,
+	RSPAMC_COMMAND_LEARN_HAM,
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_STAT,
@@ -110,6 +114,12 @@ check_rspamc_command (const gchar *cmd)
 	}
 	else if (g_ascii_strcasecmp (cmd, "LEARN") == 0) {
 		return RSPAMC_COMMAND_LEARN;
+	}
+	else if (g_ascii_strcasecmp (cmd, "LEARN_SPAM") == 0) {
+		return RSPAMC_COMMAND_LEARN_SPAM;
+	}
+	else if (g_ascii_strcasecmp (cmd, "LEARN_HAM") == 0) {
+		return RSPAMC_COMMAND_LEARN_HAM;
 	}
 	else if (g_ascii_strcasecmp (cmd, "FUZZY_ADD") == 0) {
 		return RSPAMC_COMMAND_FUZZY_ADD;
@@ -379,14 +389,14 @@ scan_rspamd_file (const gchar *file)
 }
 
 static void
-learn_rspamd_stdin ()
+learn_rspamd_stdin (gboolean is_spam)
 {
 	gchar                           *in_buf;
 	gint                             r = 0, len;
 	GError                          *err = NULL;
 
-	if (password == NULL || statfile == NULL) {
-		fprintf (stderr, "cannot learn message without password and symbol name\n");
+	if (password == NULL || (statfile == NULL && classifier == NULL)) {
+		fprintf (stderr, "cannot learn message without password and symbol/classifier name\n");
 		exit (EXIT_FAILURE);
 	}
 	/* Add server */
@@ -405,51 +415,94 @@ learn_rspamd_stdin ()
 			in_buf = g_realloc (in_buf, len);
 		}
 	}
-	if (!rspamd_learn_memory (in_buf, r, statfile, password, &err)) {
-		if (err != NULL) {
-			fprintf (stderr, "cannot learn message: %s\n", err->message);
+	if (statfile != NULL) {
+		if (!rspamd_learn_memory (in_buf, r, statfile, password, &err)) {
+			if (err != NULL) {
+				fprintf (stderr, "cannot learn message: %s\n", err->message);
+			}
+			else {
+				fprintf (stderr, "cannot learn message\n");
+			}
+			exit (EXIT_FAILURE);
 		}
 		else {
-			fprintf (stderr, "cannot learn message\n");
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("Results for host: %s: learn ok\n", connect_str);
+			if (tty) {
+				printf ("\033[0m");
+			}
 		}
-		exit (EXIT_FAILURE);
 	}
-	else {
-		if (tty) {
-			printf ("\033[1m");
+	else if (classifier != NULL) {
+		if (!rspamd_learn_spam_memory (in_buf, r, classifier, is_spam, password, &err)) {
+			if (err != NULL) {
+				fprintf (stderr, "cannot learn message: %s\n", err->message);
+			}
+			else {
+				fprintf (stderr, "cannot learn message\n");
+			}
+			exit (EXIT_FAILURE);
 		}
-		PRINT_FUNC ("Results for host: %s: learn ok\n", connect_str);
-		if (tty) {
-			printf ("\033[0m");
+		else {
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("Results for host: %s: learn ok\n", connect_str);
+			if (tty) {
+				printf ("\033[0m");
+			}
 		}
 	}
 }
 
 static void
-learn_rspamd_file (const gchar *file)
+learn_rspamd_file (gboolean is_spam, const gchar *file)
 {
 	GError                          *err = NULL;
 
-	if (password == NULL || statfile == NULL) {
-		fprintf (stderr, "cannot learn message without password and symbol name\n");
+	if (password == NULL || (statfile == NULL && classifier == NULL)) {
+		fprintf (stderr, "cannot learn message without password and symbol/classifier name\n");
 		exit (EXIT_FAILURE);
 	}
 
-	if (!rspamd_learn_file (file, statfile, password, &err)) {
-		if (err != NULL) {
-			fprintf (stderr, "cannot learn message: %s\n", err->message);
+	if (statfile != NULL) {
+		if (!rspamd_learn_file (file, statfile, password, &err)) {
+			if (err != NULL) {
+				fprintf (stderr, "cannot learn message: %s\n", err->message);
+			}
+			else {
+				fprintf (stderr, "cannot learn message\n");
+			}
 		}
 		else {
-			fprintf (stderr, "cannot learn message\n");
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("learn ok\n");
+			if (tty) {
+				printf ("\033[0m");
+			}
 		}
 	}
-	else {
-		if (tty) {
-			printf ("\033[1m");
+	else if (classifier != NULL) {
+		if (!rspamd_learn_spam_file (file, classifier, is_spam, password, &err)) {
+			if (err != NULL) {
+				fprintf (stderr, "cannot learn message: %s\n", err->message);
+			}
+			else {
+				fprintf (stderr, "cannot learn message\n");
+			}
 		}
-		PRINT_FUNC ("learn ok\n");
-		if (tty) {
-			printf ("\033[0m");
+		else {
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("learn ok\n");
+			if (tty) {
+				printf ("\033[0m");
+			}
 		}
 	}
 }
@@ -615,7 +668,25 @@ main (gint argc, gchar **argv, gchar **env)
 				scan_rspamd_stdin ();
 				break;
 			case RSPAMC_COMMAND_LEARN:
-				learn_rspamd_stdin ();
+				learn_rspamd_stdin (TRUE);
+				break;
+			case RSPAMC_COMMAND_LEARN_SPAM:
+				if (classifier != NULL) {
+					learn_rspamd_stdin (TRUE);
+				}
+				else {
+					fprintf (stderr, "no classifier specified\n");
+					exit (EXIT_FAILURE);
+				}
+				break;
+			case RSPAMC_COMMAND_LEARN_HAM:
+				if (classifier != NULL) {
+					learn_rspamd_stdin (FALSE);
+				}
+				else {
+					fprintf (stderr, "no classifier specified\n");
+					exit (EXIT_FAILURE);
+				}
 				break;
 			case RSPAMC_COMMAND_FUZZY_ADD:
 				fuzzy_rspamd_stdin (FALSE);
@@ -664,7 +735,25 @@ main (gint argc, gchar **argv, gchar **env)
 					scan_rspamd_file (argv[i]);
 					break;
 				case RSPAMC_COMMAND_LEARN:
-					learn_rspamd_file (argv[i]);
+					learn_rspamd_file (TRUE, argv[i]);
+					break;
+				case RSPAMC_COMMAND_LEARN_SPAM:
+					if (classifier != NULL) {
+						learn_rspamd_file (TRUE, argv[i]);
+					}
+					else {
+						fprintf (stderr, "no classifier specified\n");
+						exit (EXIT_FAILURE);
+					}
+					break;
+				case RSPAMC_COMMAND_LEARN_HAM:
+					if (classifier != NULL) {
+						learn_rspamd_file (FALSE, argv[i]);
+					}
+					else {
+						fprintf (stderr, "no classifier specified\n");
+						exit (EXIT_FAILURE);
+					}
 					break;
 				case RSPAMC_COMMAND_FUZZY_ADD:
 					fuzzy_rspamd_file (argv[i], FALSE);

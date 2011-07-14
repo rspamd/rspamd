@@ -290,12 +290,12 @@ end:
 	/* Call post filters */
 	lua_call_post_filters (task);
 	task->state = WRITE_REPLY;
-	/* XXX: ugly direct call */
+
 	if (task->fin_callback) {
 		task->fin_callback (task->fin_arg);
 	}
 	else {
-		task->dispatcher->write_callback (task);
+		rspamd_dispatcher_restore (task->dispatcher);
 	}
 	return 1;
 }
