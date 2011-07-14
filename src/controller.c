@@ -94,10 +94,9 @@ static struct controller_command commands[] = {
 
 static GList                   *custom_commands = NULL;
 
-static GCompletion             *comp;
 static time_t                   start_time;
 
-static gchar                     greetingbuf[1024];
+static gchar                    greetingbuf[1024];
 static sig_atomic_t             wanna_die = 0;
 extern rspamd_hash_t           *counters;
 
@@ -145,14 +144,6 @@ sigusr_handler (gint fd, short what, void *arg)
 	msg_info ("controller's shutdown is pending in %d sec", 2);
 	event_loopexit (&tv);
 	return;
-}
-
-static gchar                   *
-completion_func (gpointer elem)
-{
-	struct controller_command      *cmd = (struct controller_command *)elem;
-
-	return cmd->command;
 }
 
 static void
@@ -812,16 +803,33 @@ process_custom_command (gchar *line, gchar **cmd_args, struct controller_session
 	return FALSE;
 }
 
+static struct controller_command *
+process_normal_command (const gchar *line)
+{
+	gint                            i;
+	struct controller_command      *c;
+
+	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
+		c = &commands[i];
+		if (g_ascii_strcasecmp (line, c->command) == 0) {
+			return c;
+		}
+	}
+
+	return NULL;
+}
+
 static                          gboolean
 controller_read_socket (f_str_t * in, void *arg)
 {
 	struct controller_session      *session = (struct controller_session *)arg;
 	struct classifier_ctx          *cls_ctx;
 	gint                            len, i, r;
-	gchar                           *s, **params, *cmd, out_buf[128];
+	gchar                          *s, **params, *cmd, out_buf[128];
+	struct controller_command      *command;
 	struct worker_task             *task;
 	struct mime_text_part          *part;
-	GList                          *comp_list, *cur = NULL;
+	GList                          *cur = NULL;
 	GTree                          *tokens = NULL;
 	GError                         *err = NULL;
 	f_str_t                         c;
@@ -836,14 +844,14 @@ controller_read_socket (f_str_t * in, void *arg)
 		len = g_strv_length (params);
 		if (len > 0) {
 			cmd = g_strstrip (params[0]);
-			comp_list = g_completion_complete (comp, cmd, NULL);
-			switch (g_list_length (comp_list)) {
-			case 1:
-				if (! process_command ((struct controller_command *)comp_list->data, &params[1], session)) {
+
+			command = process_normal_command (cmd);
+			if (command != NULL) {
+				if (! process_command (command, &params[1], session)) {
 					return FALSE;
 				}
-				break;
-			case 0:
+			}
+			else {
 				if (!process_custom_command (cmd, &params[1], session)) {
 					msg_debug ("'%s'", cmd);
 					i = rspamd_snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
@@ -851,14 +859,6 @@ controller_read_socket (f_str_t * in, void *arg)
 						return FALSE;
 					}
 				}
-				break;
-			default:
-				msg_debug ("'%s'", cmd);
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "Ambigious command" CRLF);
-				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-					return FALSE;
-				}
-				break;
 			}
 		}
 		if (session->state == STATE_COMMAND) {
@@ -1196,8 +1196,6 @@ void
 start_controller (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
-	gint                            i;
-	GList                          *comp_list = NULL;
 	gchar                          *hostbuf;
 	gsize                           hostmax;
 
@@ -1220,13 +1218,6 @@ start_controller (struct rspamd_worker *worker)
 		msg_info ("cannot start statfile synchronization, statfiles would not be synchronized");
 	}
 
-	/* Init command completion */
-	for (i = 0; i < G_N_ELEMENTS (commands); i++) {
-		comp_list = g_list_prepend (comp_list, &commands[i]);
-	}
-	comp = g_completion_new (completion_func);
-	g_completion_add_items (comp, comp_list);
-	g_completion_set_compare (comp, g_ascii_strncasecmp);
 	/* Fill hostname buf */
 	hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
 	hostbuf = alloca (hostmax);
