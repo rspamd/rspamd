@@ -1088,7 +1088,7 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		m = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
 		default_required_score = m->required_score;
 		default_score = 0;
-		if (!check_metric_settings (metric_res, &ms, &rs)) {
+		if (metric_res != NULL && !check_metric_settings (metric_res, &ms, &rs)) {
 			ms = m->required_score;
 			rs = m->reject_score;
 		}
