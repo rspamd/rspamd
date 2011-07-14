@@ -371,7 +371,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 		}
 	}
 
-	write_diff = real_len < max_diff;
+	write_diff = real_len > 0 && real_len < max_diff;
 
 	if (write_diff) {
 		part->diff_str = fstralloc (pool, real_len);
