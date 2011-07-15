@@ -14,11 +14,11 @@
   <!-- Maximum size of statistics mapped in memory -->
   <statfile_pool_size>250M</statfile_pool_size>
   <!-- Raw mode is non-utf mode. In utf mode all messages are converted to utf8 (if possible) -->
-  <raw_mode>yes</raw_mode>
+  <raw_mode>no</raw_mode>
   <!-- Check text attachements as ordinary text parts -->
   <check_attachements>no</check_attachements>
   <!-- If a rule has been met several times do not add additional score -->
-  <one_shot>no</one_shot>
+  <one_shot>yes</one_shot>
   <!-- DNS requests global timeout -->
   <dns_timeout>1s</dns_timeout>
   <!-- DNS retransmits count -->
@@ -48,11 +48,12 @@
 <!-- Metrics section -->
 <metric>
  <name>default</name>
- <required_score>10.0</required_score>
+
+ <required_score>14.0</required_score>
  <!-- Sample actions -->
  <action>reject</action>
- <action>greylist:5</action>
- <action>add_header:5</action>
+ <action>greylist:4</action>
+ <action>add_header:8</action>
 
  <!-- Weights for symbols -->
 
@@ -235,20 +236,23 @@
 
  <!-- multi.surbl.org lists (more details at http://www.surbl.org) -->
  <!-- Phishing and malware sites -->
- <symbol weight="5.50" description="Phishing and malware sites">PH_SURBL_MULTI</symbol>
+ <symbol weight="10.50" description="Phishing and malware sites">PH_SURBL_MULTI</symbol>
  <!-- Outblaze URI Blacklist -->
- <symbol weight="5.50" description="Outblaze URI Blacklist">OB_SURBL_MULTI</symbol>
+ <symbol weight="10.50" description="Outblaze URI Blacklist">OB_SURBL_MULTI</symbol>
  <!-- AbuseButler web sites -->
- <symbol weight="5.50" description="AbuseButler web sites">AB_SURBL_MULTI</symbol>
+ <symbol weight="10.50" description="AbuseButler web sites">AB_SURBL_MULTI</symbol>
  <!-- SpamCop web sites -->
- <symbol weight="5.50" description="SpamCop web sites">SC_SURBL_MULTI</symbol>
+ <symbol weight="10.50" description="SpamCop web sites">SC_SURBL_MULTI</symbol>
  <!-- jwSpamSpy + Prolocation sites -->
- <symbol weight="5.50" description="jwSpamSpy + Prolocation sites">JP_SURBL_MULTI</symbol>
+ <symbol weight="10.50" description="jwSpamSpy + Prolocation sites">JP_SURBL_MULTI</symbol>
  <!-- sa-blacklist web sites -->
- <symbol weight="5.50" description="sa-blacklist web sites ">WS_SURBL_MULTI</symbol>
+ <symbol weight="10.50" description="sa-blacklist web sites ">WS_SURBL_MULTI</symbol>
 
  <!-- rambler.ru uribl -->
- <symbol weight="9.50" description="rambler.ru uribl">RAMBLER_URIBL</symbol>
+ <symbol weight="12.50" description="rambler.ru uribl">RAMBLER_URIBL</symbol>
+ 
+ <!-- DBL uribl -->
+ <symbol weight="11.50" description="dbl.spamhaus.org uribl">DBL</symbol>
 
  <!-- rambler.ru emailbl -->
  <symbol weight="9.50" description="rambler.ru emailbl">RAMBLER_EMAILBL</symbol>
@@ -302,7 +306,7 @@
   <maxfiles>2048</maxfiles>
   <maxcore>0</maxcore>
 <!-- Other params -->
-    <hashfile>/tmp/fuzzy.db</hashfile>
+    <hashfile>/var/run/rspamd/fuzzy.db</hashfile>
     <use_judy>yes</use_judy>
 </worker>
 <worker>
@@ -359,9 +363,14 @@
   <bit_2>SC</bit_2>
   <suffix_RAMBLER_URIBL>uribl.rambler.ru</suffix_RAMBLER_URIBL>
   <option name="suffix_%b_SURBL_MULTI">multi.surbl.org</option>
+  <suffix_DBL>dbl.spamhaus.org</suffix_DBL>
+  <options_DBL>noip</options_DBL>
+<!-- Redirector sample setup -->
+<!--
   <redirector_read_timeout>10s</redirector_read_timeout>
   <redirector_connect_timeout>1s</redirector_connect_timeout>
   <redirector>localhost:8080</redirector>
+ -->
 </module>
 
 <!-- received_rbl -->
@@ -419,10 +428,13 @@
 
 <!-- Emails blacklist -->
 <module name="emails">
-  <option name="rule">symbol = RAMBLER_EMAILBL, dnsbl = email-bl.rambler.ru, domain_only = false</option>
-  <!--
-  <option name="rule">symbol = R_BAD_EMAIL1, map = file:///tmp/emails.list, domain_only = true</option>
-  -->
+  <rule>symbol = RAMBLER_EMAILBL, dnsbl = email-bl.rambler.ru, domain_only = false</rule>
+</module>
+
+<!-- SPF module setup -->
+<module name="spf">
+ <spf_cache_size>2048</spf_cache_size>
+ <spf_cache_expire>1d</spf_cache_expire>
 </module>
 
 
@@ -477,13 +489,11 @@
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
   <path>/var/run/rspamd/bayes.ham</path>
-  <binlog>master</binlog>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
   <path>/var/run/rspamd/bayes.spam</path>
-  <binlog>master</binlog>
  </statfile>
 </classifier>
 

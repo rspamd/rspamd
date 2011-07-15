@@ -587,7 +587,7 @@ LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
 CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
-CONFIGURE_FILE(rspamd.xml.sample conf/rspamd.xml.sample @ONLY)
+CONFIGURE_FILE(conf/rspamd-basic.xml.in conf/rspamd.xml.sample @ONLY)
 
 ######################### LINK SECTION ###############################
 
