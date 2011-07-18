@@ -85,7 +85,7 @@ json_read_cb (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_da
 
 	if (data->cur_data == NULL) {
 		jb = g_malloc (sizeof (struct json_buf));
-		jb->table = ((struct json_buf *)data->prev_data)->table;
+		jb->table = g_hash_table_ref (((struct json_buf *)data->prev_data)->table);
 		jb->buf = NULL;
 		jb->pos = NULL;
 		data->cur_data = jb;
