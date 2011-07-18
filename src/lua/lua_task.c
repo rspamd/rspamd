@@ -1337,6 +1337,7 @@ lua_textpart_get_language (lua_State * L)
 		sel = languages[part->script];
 		if (*sel != '\0') {
 			lua_pushstring (L, sel);
+			return 1;
 		}
 	}
 
