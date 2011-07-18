@@ -144,7 +144,7 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 			lua_pushstring (L, ccf->classifier->name);
 			lua_gettable (L, -2);
 			/* Function is now on top */
-			if (lua_isfunction (L, 1)) {
+			if (lua_isfunction (L, -1)) {
 				res = call_classifier_pre_callback (ccf, task, L, is_learn, is_spam);
 			}
 		}

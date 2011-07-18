@@ -397,6 +397,24 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 		if ((file = statfile_pool_is_open (pool, st->path)) == NULL) {
 			if ((file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 				msg_warn ("cannot open %s", st->path);
+				if (statfile_pool_create (pool, st->path, st->size) == -1) {
+					msg_err ("cannot create statfile %s", st->path);
+					g_set_error (err,
+							bayes_error_quark(),		/* error domain */
+							1,            				/* error code */
+							"cannot create statfile: %s",
+							st->path);
+					return FALSE;
+				}
+				if ((file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
+					g_set_error (err,
+							bayes_error_quark(),		/* error domain */
+							1,            				/* error code */
+							"cannot open statfile %s after creation",
+							st->path);
+					msg_err ("cannot open statfile %s after creation", st->path);
+					return FALSE;
+				}
 				cur = g_list_next (cur);
 				continue;
 			}
