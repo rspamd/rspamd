@@ -135,7 +135,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		jb = data->prev_data;
 		/* Clean prev data */
 		if (jb->table) {
-			g_hash_table_remove_all (jb->table);
+			g_hash_table_unref (jb->table);
 		}
 		if (jb->buf) {
 			g_free (jb->buf);
@@ -547,10 +547,17 @@ apply_metric_settings (struct worker_task *task, struct metric *metric, struct m
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL || ds != NULL) {
 			if (us != NULL) {
+				g_hash_table_ref (task->cfg->user_settings);
 				res->user_settings = us;
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref,
+						task->cfg->user_settings);
 			}
 			if (ds != NULL) {
+				/* Need to ref hash table to avoid occasional data corruption */
+				g_hash_table_ref (task->cfg->domain_settings);
 				res->domain_settings = ds;
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref,
+						task->cfg->domain_settings);
 			}
 		}
 		else {
