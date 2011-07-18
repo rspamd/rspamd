@@ -644,6 +644,7 @@ rspamd_dispatcher_pause (rspamd_io_dispatcher_t * d)
 void
 rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
 {
+	event_del (d->ev);
 	event_set (d->ev, d->fd, EV_READ | EV_WRITE, dispatcher_cb, d);
 	event_add (d->ev, d->tv);
 	d->is_restored = TRUE;
