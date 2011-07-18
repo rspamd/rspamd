@@ -1051,7 +1051,7 @@ gboolean
 check_classifier_statfiles (struct classifier_config *cf)
 {
 	struct statfile                *st;
-	gboolean                        has_other = FALSE, cur_class;
+	gboolean                        has_other = FALSE, res = FALSE, cur_class;
 	GList                          *cur;
 
 	/* First check classes directly */
@@ -1093,14 +1093,14 @@ check_classifier_statfiles (struct classifier_config *cf)
 		}
 		else {
 			if (cur_class != st->is_spam) {
-				return TRUE;
+				res = TRUE;
 			}
 		}
 
 		cur = g_list_next (cur);
 	}
 
-	return FALSE;
+	return res;
 }
 
 /*

@@ -81,8 +81,7 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 {
 	struct classifier_config      **pccf;
 	struct worker_task            **ptask;
-	struct statfile                *st;
-	gint                            i, len;
+	struct statfile               **pst;
 	GList                          *res = NULL;
 
 	pccf = lua_newuserdata (L, sizeof (struct classifier_config *));
@@ -100,15 +99,16 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 		msg_warn ("error running pre classifier callback %s", lua_tostring (L, -1));
 	}
 	else {
-		if (lua_istable (L, 1)) {
-			len = lua_objlen (L, 1);
-			for (i = 1; i <= len; i ++) {
-				lua_rawgeti (L, 1, i);
-				st = lua_check_statfile (L);
-				if (st) {
-					res = g_list_prepend (res, st);
+		if (lua_istable (L, -1)) {
+			lua_pushnil (L);
+			while(lua_next (L, -2)) {
+				pst = luaL_checkudata (L, -1, "rspamd{statfile}");
+				if (pst) {
+					res = g_list_prepend (res, *pst);
 				}
+				lua_pop (L, 1);
 			}
+			lua_pop (L, 1);
 		}
 	}
 
