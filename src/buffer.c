@@ -465,7 +465,6 @@ dispatcher_cb (gint fd, short what, void *arg)
 				event_add (d->ev, d->tv);
 				if (d->is_restored && d->write_callback) {
 					if (!d->write_callback (d->user_data)) {
-						debug_ip ("callback set wanna_die flag, terminating");
 						return;
 					}
 					d->is_restored = FALSE;
