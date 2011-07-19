@@ -82,3 +82,7 @@ end
 if file_exists('rspamd.local.lua') then
 	dofile('rspamd.local.lua')
 end
+
+if file_exists('rspamd.classifiers.lua') then
+	dofile('rspamd.classifiers.lua')
+end
