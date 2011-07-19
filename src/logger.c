@@ -185,7 +185,7 @@ close_log (rspamd_logger_t *rspamd_log)
 				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "Last message repeated %ud times", rspamd_log->repeats);
 				rspamd_log->repeats = 0;
 				if (rspamd_log->saved_message) {
-					file_log_function (NULL, rspamd_log->saved_function, rspamd_log->cfg->log_level, rspamd_log->saved_message, TRUE, NULL);
+					file_log_function (NULL, rspamd_log->saved_function, rspamd_log->cfg->log_level, rspamd_log->saved_message, TRUE, rspamd_log);
 					g_free (rspamd_log->saved_message);
 					g_free (rspamd_log->saved_function);
 					rspamd_log->saved_message = NULL;

@@ -236,9 +236,9 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 		/* Read first chunk data */
 		skip = read_chunk_header (buf, len, data);
 		p += skip;
+		len -= skip;
 	}
 
-	len -= skip;
 	data->chunk_read += len;
 	if (data->chunk_read >= data->chunk) {
 		/* Read next chunk and feed callback with remaining buffer */
@@ -247,9 +247,11 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 			/* copy remaining buffer to start of buffer */
 			data->rlen = len - (remain - p);
 			memmove (p, remain, data->rlen);
+			data->chunk_read -= data->rlen;
 		}
-
-		p = buf + (len - (data->chunk_read - data->chunk));
+	}
+	if (data->chunk_read >= data->chunk) {
+		p = p + (len - (data->chunk_read - data->chunk));
 		if (*p != '\r') {
 			if (*p == '0') {
 				return TRUE;
@@ -903,6 +905,11 @@ http_async_callback (gint fd, short what, void *ud)
 			cbd->cbdata.state = 0;
 			cbd->cbdata.prev_data = *cbd->map->user_data;
 			cbd->cbdata.cur_data = NULL;
+			cbd->data->rlen = 0;
+			cbd->data->chunk = 0;
+			cbd->data->chunk_read = 0;
+			cbd->data->chunked = FALSE;
+			cbd->data->read_buf[0] = '\0';
 
 			event_add (&cbd->ev, &cbd->tv);
 		}

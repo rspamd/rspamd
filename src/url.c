@@ -1252,17 +1252,23 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start,
 					memcpy (*url_str, m.m_begin, m.m_len);
 					(*url_str)[m.m_len] = '\0';
 				}
-
+				if (start != NULL) {
+					*start = (gchar *)m.m_begin;
+				}
+				if (fin != NULL) {
+					*fin = (gchar *)m.m_begin + m.m_len;
+				}
 			}
 			else {
 				*url_str = NULL;
+				if (start != NULL) {
+					*start = (gchar *)pos;
+				}
+				if (fin != NULL) {
+					*fin = (gchar *)pos + strlen (m.prefix);
+				}
 			}
-			if (start != NULL) {
-				*start = (gchar *)m.m_begin;
-			}
-			if (fin != NULL) {
-				*fin = (gchar *)m.m_begin + m.m_len;
-			}
+
 			return TRUE;
 		}
 	}
