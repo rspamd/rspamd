@@ -32,8 +32,8 @@
 
 struct json_buf {
 	GHashTable                     *table;
-	u_char                         *buf;
-	u_char                         *pos;
+	gchar                         *buf;
+	gchar                         *pos;
 	size_t                          buflen;
 };
 
@@ -77,8 +77,8 @@ settings_free (gpointer data)
 }
 
 
-u_char                         *
-json_read_cb (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+gchar                         *
+json_read_cb (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
 	size_t                          free, off;

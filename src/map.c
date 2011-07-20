@@ -34,14 +34,13 @@
 static memory_pool_t           *map_pool = NULL;
 
 static GList                   *maps = NULL;
-static gchar                    *hash_fill = "1";
+static gchar                   *hash_fill = "1";
 
 /* Http reply */
 struct http_reply {
 	gint                            code;
 	GHashTable                     *headers;
-	gchar                           *cur_header;
-
+	gchar                          *cur_header;
 	gint                            parser_state;
 };
 
@@ -103,10 +102,10 @@ write_http_request (struct rspamd_map *map, struct http_map_data *data, gint soc
 /**
  * FSM for parsing HTTP reply
  */
-static u_char                  *
-parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
+static gchar                  *
+parse_http_reply (gchar * chunk, size_t len, struct http_reply *reply)
 {
-	u_char                         *s, *p, *err_str, *tmp;
+	gchar                         *s, *p, *err_str, *tmp;
 	p = chunk;
 	s = chunk;
 
@@ -195,30 +194,34 @@ parse_http_reply (u_char * chunk, size_t len, struct http_reply *reply)
  * Read and parse chunked header
  */
 static gint
-read_chunk_header (u_char * buf, size_t len, struct http_map_data *data)
+read_chunk_header (gchar * buf, size_t len, struct http_map_data *data)
 {
-	u_char                          chunkbuf[32], *p, *c;
+	gchar                           chunkbuf[32], *p, *c, *err_str;
 	gint                            skip = 0;
 
 	p = chunkbuf;
 	c = buf;
 	/* Find hex digits */
-	while (g_ascii_isxdigit (*c) && p - chunkbuf < sizeof (chunkbuf) - 1) {
+	while (g_ascii_isxdigit (*c) && p - chunkbuf < sizeof (chunkbuf) - 1 && skip < len) {
 		*p++ = *c++;
 		skip++;
 	}
 	*p = '\0';
-	data->chunk = strtoul (chunkbuf, NULL, 16);
+	data->chunk = strtoul (chunkbuf, &err_str, 16);
+	if (*err_str != '\0') {
+		return -1;
+	}
+
 	/* Now skip to CRLF */
-	while (*c != '\n' && c - buf < len) {
+	while (*c != '\n' && skip < len) {
 		c++;
 		skip++;
 	}
-	if (*c == '\n') {
+	if (*c == '\n' && skip < len) {
 		skip++;
 		c++;
 	}
-	data->chunk_read = 0;
+	data->chunk_remain = data->chunk;
 
 	return skip;
 }
@@ -227,61 +230,67 @@ read_chunk_header (u_char * buf, size_t len, struct http_map_data *data)
  * Helper callback for reading chunked reply
  */
 static                          gboolean
-read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http_map_data *data, struct map_cb_data *cbdata)
+read_http_chunked (gchar * buf, size_t len, struct rspamd_map *map, struct http_map_data *data, struct map_cb_data *cbdata)
 {
-	u_char                         *p = buf, *remain;
-	guint32                         skip = 0;
+	gchar                          *p = buf, *remain;
+	gint                            skip = 0;
 
-	if (data->chunk == 0) {
+	if (data->chunked == 1) {
 		/* Read first chunk data */
-		skip = read_chunk_header (buf, len, data);
-		p += skip;
-		len -= skip;
-	}
-
-	data->chunk_read += len;
-	if (data->chunk_read >= data->chunk) {
-		/* Read next chunk and feed callback with remaining buffer */
-		remain = map->read_callback (map->pool, p, len - (data->chunk_read - data->chunk), cbdata);
-		if (remain != NULL && remain != p) {
-			/* copy remaining buffer to start of buffer */
-			data->rlen = len - (remain - p);
-			memmove (p, remain, data->rlen);
-			data->chunk_read -= data->rlen;
+		if ((skip = read_chunk_header (buf, len, data)) != -1) {
+			p += skip;
+			len -= skip;
+			data->chunked = 2;
+		}
+		else {
+			msg_info ("invalid chunked reply: %*s", (gint)len, buf);
+			return FALSE;
 		}
 	}
-	if (data->chunk_read >= data->chunk) {
-		p = p + (len - (data->chunk_read - data->chunk));
-		if (*p != '\r') {
-			if (*p == '0') {
-				return TRUE;
-			}
-			else {
-				msg_info ("invalid chunked reply: %*s", (gint)len, buf);
-				return FALSE;
-			}
-		}
-		p += 2;
-		if (len == p - buf) {
-			/* Next chunk data is not available */
-			data->chunk = 0;
-			return TRUE;
-		}
 
-		len -= p - buf;
-		skip = read_chunk_header (p, len, data);
-		p += skip;
-		len -= skip;
+	if (data->chunk_remain == 0) {
+		/* Read another chunk */
+		if ((skip = read_chunk_header (buf, len, data)) != -1) {
+			p += skip;
+			len -= skip;
+		}
+		else {
+			msg_info ("invalid chunked reply: %*s", (gint)len, buf);
+			return FALSE;
+		}
 		if (data->chunk == 0) {
 			return FALSE;
 		}
 	}
 
-	remain = map->read_callback (map->pool, p, len, cbdata);
-	if (remain != NULL && remain != p + len) {
-		/* copy remaining buffer to start of buffer */
-		data->rlen = len - (remain - p);
-		memmove (p, remain, data->rlen);
+	if (data->chunk_remain <= len ) {
+		/* Call callback and move remaining buffer */
+		remain = map->read_callback (map->pool, p, data->chunk_remain, cbdata);
+		if (remain != NULL && remain != p + data->chunk_remain) {
+			/* Copy remaining buffer to start of buffer */
+			data->rlen = len - (remain - p);
+			memmove (buf, remain, data->rlen);
+			data->chunk_remain -= data->rlen;
+		}
+		else {
+			/* Copy other part */
+			data->rlen = len - data->chunk_remain;
+			if (data->rlen > 0) {
+				memmove (buf, p + data->chunk_remain, data->rlen);
+			}
+			data->chunk_remain = 0;
+		}
+
+	}
+	else {
+		/* Just read another portion of chunk */
+		data->chunk_remain -= len;
+		remain = map->read_callback (map->pool, p, len, cbdata);
+		if (remain != NULL && remain != p + len) {
+			/* copy remaining buffer to start of buffer */
+			data->rlen = len - (remain - p);
+			memmove (buf, remain, data->rlen);
+		}
 	}
 
 	return TRUE;
@@ -293,7 +302,7 @@ read_http_chunked (u_char * buf, size_t len, struct rspamd_map *map, struct http
 static                          gboolean
 read_http_common (struct rspamd_map *map, struct http_map_data *data, struct http_reply *reply, struct map_cb_data *cbdata, gint fd)
 {
-	u_char                         *remain, *pos;
+	gchar                         *remain, *pos;
 	ssize_t                         r;
 	gchar                           *te;
 	
@@ -323,12 +332,21 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 			}
 			pos = data->read_buf;
 			/* Check for chunked */
-			if (!data->chunked && (te = g_hash_table_lookup (reply->headers, "Transfer-Encoding")) != NULL) {
-				if (g_ascii_strcasecmp (te, "chunked") == 0) {
-					data->chunked = TRUE;
+			if (data->chunked == 0) {
+				if ((te = g_hash_table_lookup (reply->headers, "Transfer-Encoding")) != NULL) {
+					if (g_ascii_strcasecmp (te, "chunked") == 0) {
+						data->chunked = 1;
+					}
+					else {
+						data->chunked = -1;
+					}
+				}
+				else {
+					data->chunked = -1;
 				}
 			}
-			if (data->chunked) {
+
+			if (data->chunked > 0) {
 				return read_http_chunked (data->read_buf, r, map, data, cbdata);
 			}
 			/* Read more data */
@@ -396,7 +414,7 @@ static void
 read_map_file (struct rspamd_map *map, struct file_map_data *data)
 {
 	struct map_cb_data              cbdata;
-	u_char                          buf[BUFSIZ], *remain;
+	gchar                          buf[BUFSIZ], *remain;
 	ssize_t                         r;
 	gint                            fd, rlen;
 
@@ -554,10 +572,10 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 /**
  * FSM for parsing lists
  */
-u_char                  *
-abstract_parse_kv_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func)
+gchar                  *
+abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data, insert_func func)
 {
-	u_char                         *c, *p, *key = NULL, *value = NULL;
+	gchar                         *c, *p, *key = NULL, *value = NULL;
 
 	p = chunk;
 	c = p;
@@ -646,10 +664,10 @@ abstract_parse_kv_list (memory_pool_t * pool, u_char * chunk, size_t len, struct
 	return c;
 }
 
-u_char                  *
-abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func)
+gchar                  *
+abstract_parse_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data, insert_func func)
 {
-	u_char                         *s, *p, *str, *start;
+	gchar                         *s, *p, *str, *start;
 
 	p = chunk;
 	start = p;
@@ -785,8 +803,8 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 }
 
 /* Helpers */
-u_char                         *
-read_host_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+gchar                         *
+read_host_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -802,8 +820,8 @@ fin_host_list (memory_pool_t * pool, struct map_cb_data *data)
 	}
 }
 
-u_char                         *
-read_kv_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+gchar                         *
+read_kv_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -819,8 +837,8 @@ fin_kv_list (memory_pool_t * pool, struct map_cb_data *data)
 	}
 }
 
-u_char                         *
-read_radix_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+gchar                         *
+read_radix_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = radix_tree_create ();
@@ -907,7 +925,7 @@ http_async_callback (gint fd, short what, void *ud)
 			cbd->cbdata.cur_data = NULL;
 			cbd->data->rlen = 0;
 			cbd->data->chunk = 0;
-			cbd->data->chunk_read = 0;
+			cbd->data->chunk_remain = 0;
 			cbd->data->chunked = FALSE;
 			cbd->data->read_buf[0] = '\0';
 

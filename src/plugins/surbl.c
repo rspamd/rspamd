@@ -100,8 +100,8 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 	g_hash_table_insert (t[level], val, value);
 }
 
-static u_char *
-read_exceptions_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+static gchar *
+read_exceptions_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = memory_pool_alloc0 (pool, sizeof (GHashTable *) * MAX_LEVELS);
@@ -174,8 +174,8 @@ redirector_item_free (gpointer p)
 	}
 }
 
-static u_char                         *
-read_redirectors_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data)
+static gchar                         *
+read_redirectors_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, redirector_item_free);
@@ -792,7 +792,7 @@ register_memcached_call (struct uri *url, struct worker_task *task, struct suffi
 
 	param->ctx = memory_pool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
 
-	cur_param->buf = (u_char *) url_count;
+	cur_param->buf = (gchar *) url_count;
 	cur_param->bufsize = sizeof (gint);
 
 	sum_str = g_compute_checksum_for_string (G_CHECKSUM_MD5, struri (url), -1);

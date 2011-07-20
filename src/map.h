@@ -42,17 +42,17 @@ struct http_map_data {
 	gchar *path;
 	gchar *host;
 	time_t last_checked;
-	gboolean chunked;
-	u_char read_buf[BUFSIZ];
+	gshort chunked;
+	gchar  read_buf[BUFSIZ];
 	guint32 rlen;
 	guint32 chunk;
-	guint32 chunk_read;
+	guint32 chunk_remain;
 };
 
 /**
  * Callback types
  */
-typedef u_char* (*map_cb_t)(memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+typedef gchar* (*map_cb_t)(memory_pool_t *pool, gchar *chunk, size_t len, struct map_cb_data *data);
 typedef void (*map_fin_cb_t)(memory_pool_t *pool, struct map_cb_data *data);
 
 /**
@@ -97,24 +97,24 @@ typedef void                    (*insert_func) (gpointer st, gconstpointer key, 
 /**
  * Radix list is a list like ip/mask
  */
-u_char* read_radix_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+gchar* read_radix_list (memory_pool_t *pool, gchar *chunk, size_t len, struct map_cb_data *data);
 void fin_radix_list (memory_pool_t *pool, struct map_cb_data *data);
 
 /**
  * Host list is an ordinal list of hosts or domains
  */
-u_char* read_host_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+gchar* read_host_list (memory_pool_t *pool, gchar *chunk, size_t len, struct map_cb_data *data);
 void fin_host_list (memory_pool_t *pool, struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
  */
-u_char* read_kv_list (memory_pool_t *pool, u_char *chunk, size_t len, struct map_cb_data *data);
+gchar* read_kv_list (memory_pool_t *pool, gchar *chunk, size_t len, struct map_cb_data *data);
 void fin_kv_list (memory_pool_t *pool, struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
-u_char * abstract_parse_list (memory_pool_t * pool, u_char * chunk, size_t len, struct map_cb_data *data, insert_func func);
+gchar * abstract_parse_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data, insert_func func);
 
 #endif

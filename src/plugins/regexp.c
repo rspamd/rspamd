@@ -66,8 +66,8 @@ struct regexp_ctx {
 };
 
 struct regexp_json_buf {
-	guint8                         *buf;
-	guint8                         *pos;
+	gchar                          *buf;
+	gchar                          *pos;
 	size_t                          buflen;
 	struct config_file             *cfg;
 };
@@ -142,7 +142,7 @@ op_less_equal (gint a, gint b)
 static gboolean
 parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
 {
-	const gchar *pos;
+	const gchar                    *pos;
 	gchar                           ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
 	gint                            state = 0, dots = 0;
 	
@@ -252,8 +252,8 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 
 
 /* Callbacks for reading json dynamic rules */
-guint8                         *
-json_regexp_read_cb (memory_pool_t * pool, guint8 * chunk, size_t len, struct map_cb_data *data)
+gchar                         *
+json_regexp_read_cb (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
 {
 	struct regexp_json_buf                *jb;
 	size_t                          free, off;
