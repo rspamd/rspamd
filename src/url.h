@@ -74,9 +74,38 @@ enum protocol {
 
 #define struri(uri) ((uri)->string)
 
+/*
+ * Parse urls inside text
+ * @param pool memory pool
+ * @param task task object
+ * @param part current text part
+ * @param is_html turn on html euristic
+ */
 void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
+
+/*
+ * Parse a single url into an uri structure
+ * @param pool memory pool
+ * @param uristring text form of url
+ * @param uri url object, must be pre allocated
+ */
 enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool);
+
+/*
+ * Try to extract url from a text
+ * @param pool memory pool
+ * @param begin begin of text
+ * @param len length of text
+ * @param start storage for start position of url found (or NULL)
+ * @param end storage for end position of url found (or NULL)
+ * @param url_str storage for url string(or NULL)
+ * @return TRUE if url is found in specified text
+ */
 gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str);
+
+/*
+ * Return text representation of url parsing error
+ */
 const gchar* url_strerror (enum uri_errno err);
 
 #endif

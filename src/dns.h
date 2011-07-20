@@ -227,11 +227,35 @@ struct dns_query {
 };
 
 /* Rspamd DNS API */
+
+/*
+ * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
+ */
 struct rspamd_dns_resolver *dns_resolver_init (struct config_file *cfg);
+
+/*
+ * Make a DNS request
+ * @param resolver resolver object
+ * @param session async session to register event
+ * @param pool memory pool for storage
+ * @param cb callback to call on resolve completing
+ * @param ud user data for callback
+ * @param type request type
+ * @param ... string or ip address based on a request type
+ * @return TRUE if request was sent.
+ */
 gboolean make_dns_request (struct rspamd_dns_resolver *resolver, 
 		struct rspamd_async_session *session, memory_pool_t *pool, dns_callback_type cb, 
 		gpointer ud, enum rspamd_request_type type, ...);
+
+/*
+ * Get textual presentation of DNS error code
+ */
 const gchar *dns_strerror (enum dns_rcode rcode);
+
+/*
+ * Get textual presentation of DNS request type
+ */
 const gchar *dns_strtype (enum rspamd_request_type type);
 
 #endif

@@ -119,8 +119,20 @@ struct smtp_filter {
 	gpointer filter_data;
 };
 
+/*
+ * Perform initialization of SMTP worker
+ */
 gpointer init_smtp_worker (void);
+
+/*
+ * Start SMTP worker
+ */
 void start_smtp_worker (struct rspamd_worker *worker);
+
+/*
+ * Register new SMTP filter
+ * XXX: work is still in progress
+ */
 void register_smtp_filter (struct smtp_worker_ctx *ctx, enum rspamd_smtp_stage stage, smtp_filter_t filter, gpointer filter_data);
 
 #endif

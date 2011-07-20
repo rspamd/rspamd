@@ -1,0 +1,120 @@
+#!/bin/sh
+#
+# rspamd - this script starts and stops the rspamd daemon
+#
+# chkconfig:   - 85 15 
+# description:  rspamd is a spam filtering system
+# processname: rspamd
+# config:      /etc/rspamd/rspamd.xml
+# config:      /etc/sysconfig/rspamd
+# pidfile:     /var/run/rspamd/rspamd.pid
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+# Check that networking is up.
+[ "$NETWORKING" = "no" ] && exit 0
+
+rspamd="/usr/bin/rspamd"
+prog=$(basename $rspamd)
+
+RSPAMD_CONF_FILE="/etc/rspamd/rspamd"
+RSPAMD_USER="nobody"
+RSPAMD_GROUP="nobody"
+
+[ -f /etc/sysconfig/rspamd ] && . /etc/sysconfig/rspamd
+
+lockfile=/var/lock/subsys/rspamd
+
+start() {
+    [ -x $rspamd ] || exit 5
+    [ -f $rspamd_CONF_FILE ] || exit 6
+    echo -n $"Starting $prog: "
+    daemon $rspamd -c $RSPAMD_CONF_FILE -u $RSPAMD_USER -g $RSPAMD_GROUP
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && touch $lockfile
+    return $retval
+}
+
+stop() {
+    echo -n $"Stopping $prog: "
+    killproc $prog -QUIT
+    retval=$?
+    if [ $retval -eq 0 ]; then
+        if [ "$CONSOLETYPE" != "serial" ]; then
+           echo -en "\\033[16G"
+        fi
+        while rh_status_q
+        do
+            sleep 1
+            echo -n $"."
+        done
+        rm -f $lockfile
+    fi
+    echo
+    return $retval
+}
+
+restart() {
+    configtest || return $?
+    stop
+    start
+}
+
+reload() {
+    configtest || return $?
+    echo -n $"Reloading $prog: "
+    killproc $rspamd -HUP
+    RETVAL=$?
+    echo
+}
+
+force_reload() {
+    restart
+}
+
+configtest() {
+  $rspamd -t -c $RSPAMD_CONF_FILE
+}
+
+rh_status() {
+    status $prog
+}
+
+rh_status_q() {
+    rh_status >/dev/null 2>&1
+}
+
+case "$1" in
+    start)
+        rh_status_q && exit 0
+        $1
+        ;;
+    stop)
+        rh_status_q || exit 0
+        $1
+        ;;
+    restart|configtest)
+        $1
+        ;;
+    reload)
+        rh_status_q || exit 7
+        $1
+        ;;
+    force-reload)
+        force_reload
+        ;;
+    status)
+        rh_status
+        ;;
+    condrestart|try-restart)
+        rh_status_q || exit 0
+	    ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload|configtest}"
+        exit 2
+esac

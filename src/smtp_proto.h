@@ -36,17 +36,56 @@ struct smtp_command {
 	GList *args;
 };
 
+/*
+ * Generate SMTP error message
+ */
 gchar * make_smtp_error (struct smtp_session *session, gint error_code, const gchar *format, ...);
+
+/*
+ * Parse a single SMTP command
+ */
 gboolean parse_smtp_command (struct smtp_session *session, f_str_t *line, struct smtp_command **cmd);
+
+/*
+ * Parse HELO command
+ */
 gboolean parse_smtp_helo (struct smtp_session *session, struct smtp_command *cmd);
+
+/*
+ * Parse MAIL command
+ */
 gboolean parse_smtp_from (struct smtp_session *session, struct smtp_command *cmd);
+
+/*
+ * Parse RCPT command
+ */
 gboolean parse_smtp_rcpt (struct smtp_session *session, struct smtp_command *cmd);
 
 /* Upstream SMTP */
+
+/*
+ * Read a line from SMTP upstream
+ */
 gboolean smtp_upstream_read_socket (f_str_t * in, void *arg);
+
+/*
+ * Write to SMTP upstream
+ */
 gboolean smtp_upstream_write_socket (void *arg);
+
+/*
+ * Error handler for SMTP upstream
+ */
 void smtp_upstream_err_socket (GError *err, void *arg);
+
+/*
+ * Terminate connection with upstream
+ */
 void smtp_upstream_finalize_connection (gpointer data);
+
+/*
+ * Write a list of strings to the upstream
+ */
 size_t smtp_upstream_write_list (GList *args, gchar *buf, size_t buflen);
 
 #endif

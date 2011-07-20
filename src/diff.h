@@ -42,8 +42,26 @@ struct diff_edit
 	gint len;
 };
 
+/*
+ * Calculate difference between two strings using diff algorithm
+ * @param a the first line begin
+ * @param aoff the first line offset
+ * @param n the first line length
+ * @param b the second line begin
+ * @param boff the second line offset
+ * @param b the second line length
+ * @param dmax maximum differences number
+ * @param ses here would be stored the shortest script to transform a to b
+ * @param sn here would be stored a number of differences between a and b
+ * @return distance between strings or -1 in case of error
+ */
 gint rspamd_diff(const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
 		gint dmax, GArray *ses, gint *sn);
+
+/*
+ * Calculate distance between two strings (in percentage) using diff algorithm.
+ * @return 100 in case of identical strings and 0 in case of totally different strings.
+ */
 guint32 compare_diff_distance (f_str_t *s1, f_str_t *s2);
 
 #endif /* DIFF_H_ */

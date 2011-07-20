@@ -29,10 +29,22 @@ struct mime_text_part;
  * @return fuzzy_hash object allocated in pool
  */
 fuzzy_hash_t * fuzzy_init (f_str_t *in, memory_pool_t *pool);
+/**
+ * Calculate fuzzy hash for specified byte array
+ * @param in input string
+ * @param pool pool object
+ * @return fuzzy_hash object allocated in pool
+ */
 fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
-void fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_diff);
 
-gint fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2);
+/**
+ * Calculate fuzzy hash for specified text part
+ * @param part text part object
+ * @param pool pool object
+ * @param max_diff maximum text length to use diff algorithm in comparasions
+ * @return fuzzy_hash object allocated in pool
+ */
+void fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_diff);
 
 /**
  * Compare score of difference between two hashes 
@@ -42,6 +54,15 @@ gint fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2);
  */
 gint fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2);
 
+/*
+ * Compare two text parts and return percents of difference
+ */
+gint fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2);
+
+/*
+ * Calculate levenstein distance between two strings. Note: this algorithm should be used
+ * only for short texts - it runs too slow on long ones.
+ */
 guint32 lev_distance (gchar *s1, gint len1, gchar *s2, gint len2);
 
 

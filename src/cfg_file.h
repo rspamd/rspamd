@@ -423,17 +423,56 @@ gboolean get_config_checksum (struct config_file *cfg);
  */
 void unescape_quotes (gchar *line);
 
+/*
+ * Convert comma separated string to a list of strings
+ */
 GList* parse_comma_list (memory_pool_t *pool, gchar *line);
+
+/*
+ * Return a new classifier_config structure, setting default and non-conflicting attributes
+ */
 struct classifier_config* check_classifier_conf (struct config_file *cfg, struct classifier_config *c);
+/*
+ * Return a new worker_conf structure, setting default and non-conflicting attributes
+ */
 struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
+/*
+ * Return a new metric structure, setting default and non-conflicting attributes
+ */
 struct metric* check_metric_conf (struct config_file *cfg, struct metric *c);
+/*
+ * Return a new statfile structure, setting default and non-conflicting attributes
+ */
 struct statfile* check_statfile_conf (struct config_file *cfg, struct statfile *c);
+
+/*
+ * XXX: Depreciated function, now it is used for
+ */
 gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line);
+
+/*
+ * Read XML configuration file
+ */
 gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
+
+/*
+ * Check modules configuration for semantic validity
+ */
 gboolean check_modules_config (struct config_file *cfg);
+
+/*
+ * Register symbols of classifiers inside metrics
+ */
 void insert_classifier_symbols (struct config_file *cfg);
+
+/*
+ * Check statfiles inside a classifier
+ */
 gboolean check_classifier_statfiles (struct classifier_config *cf);
 
+/*
+ * Find classifier config by name
+ */
 struct classifier_config* find_classifier_conf (struct config_file *cfg, const gchar *name);
 
 #endif /* ifdef CFG_FILE_H */

@@ -58,8 +58,14 @@ struct spf_record {
 };
 
 
+/*
+ * Resolve spf record for specified task and call a callback after resolution fails/succeed
+ */
 gboolean resolve_spf (struct worker_task *task, spf_cb_t callback);
 
+/*
+ * Get a domain for spf for specified task
+ */
 gchar *get_spf_domain (struct worker_task *task);
 
 

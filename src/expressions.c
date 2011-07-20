@@ -909,10 +909,12 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+					break;
 				case '|':
 					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+					break;
 				default:
 					it = it->next;
 					continue;

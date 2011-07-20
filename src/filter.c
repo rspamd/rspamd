@@ -205,41 +205,6 @@ insert_result_single (struct worker_task *task, const gchar *symbol, double flag
 	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
-/* 
- * Call perl or C module function for specified part of message 
- */
-static void
-call_filter_by_name (struct worker_task *task, const gchar *name, enum filter_type filt_type)
-{
-	struct module_ctx              *c_module;
-	gint                            res = 0;
-
-	switch (filt_type) {
-	case C_FILTER:
-		c_module = g_hash_table_lookup (task->cfg->c_modules, name);
-		if (c_module) {
-			res = 1;
-			c_module->filter (task);
-		}
-		else {
-			debug_task ("%s is not a C module", name);
-		}
-		break;
-	case PERL_FILTER:
-		res = 1;
-#ifndef WITHOUT_PERL
-		perl_call_filter (name, task);
-#elif defined(WITH_LUA)
-		lua_call_filter (name, task);
-#else
-		msg_err ("trying to call perl function while perl support is disabled %s", name);
-#endif
-		break;
-	}
-
-	debug_task ("filter name: %s, result: %d", name, (gint)res);
-}
-
 /* Return true if metric has score that is more than spam score for it */
 static                          gboolean
 check_metric_is_spam (struct worker_task *task, struct metric *metric)
@@ -418,10 +383,12 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 				op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 				g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
+				break;
 			case '|':
 				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 				op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
 				g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
+				break;
 			default:
 				expr = expr->next;
 				continue;

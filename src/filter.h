@@ -146,8 +146,19 @@ gboolean learn_task (const gchar *statfile, struct worker_task *task, GError **e
  */
 gboolean learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolean is_spam, GError **err);
 
+/*
+ * Get action from a string
+ */
 gboolean check_action_str (const gchar *data, gint *result);
+
+/*
+ * Return textual representation of action enumeration
+ */
 const gchar *str_action_metric (enum rspamd_metric_action action);
+
+/*
+ * Get action for specific metric
+ */
 gint check_metric_action (double score, double required_score, struct metric *metric);
 
 #endif

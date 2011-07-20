@@ -55,11 +55,39 @@ struct rspamd_binlog {
 
 struct classifier_config;
 
+/*
+ * Open binlog at specified path with specified rotate params
+ */
 struct rspamd_binlog* binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter);
+
+/*
+ * Get and open binlog for specified statfile
+ */
 struct rspamd_binlog* get_binlog_by_statfile (struct statfile *st);
+
+/*
+ * Close binlog
+ */
 void binlog_close (struct rspamd_binlog *log);
+
+/*
+ * Insert new nodes inside binlog
+ */
 gboolean binlog_insert (struct rspamd_binlog *log, GTree *nodes);
+
+/*
+ * Sync binlog from specified revision
+ * @param log binlog structure
+ * @param from_rev from revision
+ * @param from_time from time
+ * @param rep a portion of changes for revision is stored here
+ * @return TRUE if there are more revisions to get and FALSE if synchronization is complete
+ */
 gboolean binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GByteArray **rep);
+
+/*
+ * Conditional write to a binlog for specified statfile
+ */
 gboolean maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_file_t *file, GTree *nodes);
 
 #endif

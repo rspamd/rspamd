@@ -20,7 +20,14 @@ struct rspamd_image {
 	const gchar *filename;
 };
 
+/*
+ * Process images from a worker task
+ */
 void process_images (struct worker_task *task);
+
+/*
+ * Get textual representation of an image's type
+ */
 const gchar *image_type_str (enum known_image_types type);
 
 #endif /* IMAGES_H_ */
