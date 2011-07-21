@@ -342,7 +342,7 @@ rspamd_diff(const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
 		g_array_free (tmp, TRUE);
 		return -1;
 	}
-	if (ses && sn) {
+	if (ses && sn && e) {
 		*sn = e->op ? ctx.si + 1 : 0;
 	}
 

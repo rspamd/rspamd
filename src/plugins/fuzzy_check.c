@@ -271,7 +271,7 @@ parse_servers_string (gchar *str)
 		else {
 			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;
 			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;
-			memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, hent->h_addr, sizeof (struct in_addr));
+			memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, &addr, sizeof (struct in_addr));
 			fuzzy_module_ctx->servers_num++;
 		}
 

@@ -72,7 +72,7 @@ lua_check_classifier (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{classifier}");
 	luaL_argcheck (L, ud != NULL, 1, "'classifier' expected");
-	return *((struct classifier_config **)ud);
+	return ud ? *((struct classifier_config **)ud) : NULL;
 }
 
 static GList *
@@ -353,7 +353,7 @@ lua_check_statfile (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{statfile}");
 	luaL_argcheck (L, ud != NULL, 1, "'statfile' expected");
-	return *((struct statfile **)ud);
+	return ud ? *((struct statfile **)ud) : NULL;
 }
 
 

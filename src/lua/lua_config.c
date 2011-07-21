@@ -109,7 +109,7 @@ lua_check_config (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
-	return *((struct config_file **)ud);
+	return ud ? *((struct config_file **)ud) : NULL;
 }
 
 static radix_tree_t           *
@@ -117,7 +117,7 @@ lua_check_radix (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{radix}");
 	luaL_argcheck (L, ud != NULL, 1, "'radix' expected");
-	return **((radix_tree_t ***)ud);
+	return ud ? **((radix_tree_t ***)ud) : NULL;
 }
 
 static GHashTable           *
@@ -125,7 +125,7 @@ lua_check_hash_table (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{hash_table}");
 	luaL_argcheck (L, ud != NULL, 1, "'hash_table' expected");
-	return **((GHashTable ***)ud);
+	return ud ? **((GHashTable ***)ud) : NULL;
 }
 
 static rspamd_trie_t          *
@@ -134,7 +134,7 @@ lua_check_trie (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{trie}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'trie' expected");
-	return *((rspamd_trie_t **)ud);
+	return ud ? *((rspamd_trie_t **)ud) : NULL;
 }
 
 /*** Config functions ***/
@@ -764,7 +764,7 @@ lua_trie_search_task (lua_State *L)
 	if (trie) {
 		ud = luaL_checkudata (L, 2, "rspamd{task}");
 		luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-		task = *((struct worker_task **)ud);
+		task = ud ? *((struct worker_task **)ud) : NULL;
 		if (task) {
 			lua_newtable (L);
 			cur = task->text_parts;

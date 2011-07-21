@@ -1427,23 +1427,24 @@ lua_regexp_match (lua_State *L)
 	struct worker_task             *task;
 	const gchar                    *re_text;
 	struct rspamd_regexp           *re;
-	gint                            r;
+	gint                            r = 0;
 
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	task = *((struct worker_task **)ud);
+	task = ud ? *((struct worker_task **)ud) : NULL;
 	re_text = luaL_checkstring (L, 2);
 
-
 	/* This is a regexp */
-	if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
-		re = parse_regexp (task->cfg->cfg_pool, (gchar *)re_text, task->cfg->raw_mode);
-		if (re == NULL) {
-			msg_warn ("cannot compile regexp for function");
-			return FALSE;
+	if (task != NULL) {
+		if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
+			re = parse_regexp (task->cfg->cfg_pool, (gchar *)re_text, task->cfg->raw_mode);
+			if (re == NULL) {
+				msg_warn ("cannot compile regexp for function");
+				return FALSE;
+			}
+			re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
 		}
-		re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
+		r = process_regexp (re, task, NULL, 0, NULL);
 	}
-	r = process_regexp (re, task, NULL, 0, NULL);
 	lua_pushboolean (L, r == 1);
 
 	return 1;

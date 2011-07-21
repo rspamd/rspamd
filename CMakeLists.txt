@@ -43,7 +43,6 @@ INCLUDE(FindPerl)
 
 # Initial set
 SET(CMAKE_REQUIRED_LIBRARIES m)
-SET(CMAKE_REQUIRED_INCLUDES sys/mman.h stdlib.h stdio.h unistd.h time.h sched.h)
 
 IF(CMAKE_INSTALL_PREFIX)
     SET(PREFIX ${CMAKE_INSTALL_PREFIX})
@@ -127,7 +126,13 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     	IF(NOT MAN_PREFIX)
     		SET(MAN_PREFIX /usr/share/man)
     	ENDIF(NOT MAN_PREFIX)
-    ENDIF(CMAKE_INSTALL_PREFIX)    
+    ENDIF(CMAKE_INSTALL_PREFIX)
+    
+    # Workaround with architecture specific includes
+    IF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/") 
+    	INCLUDE_DIRECTORIES("/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
+    	SET(CMAKE_REQUIRED_INCLUDES "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
+    ENDIF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
     
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)

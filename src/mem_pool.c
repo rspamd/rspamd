@@ -513,7 +513,7 @@ memory_pool_delete (memory_pool_t * pool)
 		cur_shared = cur_shared->next;
 		STAT_LOCK ();
 		mem_pool_stat->chunks_freed++;
-		mem_pool_stat->bytes_allocated -= tmp->len;
+		mem_pool_stat->bytes_allocated -= tmp_shared->len;
 		STAT_UNLOCK ();
 		munmap ((void *)tmp_shared, tmp_shared->len + sizeof (struct _pool_chain_shared));
 	}

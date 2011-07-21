@@ -1611,7 +1611,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'condition' is required for tag 'if'");
 			ud->state = XML_ERROR;
 		}
-		if (! lua_check_condition (ud->cfg, condition)) {
+		else if (! lua_check_condition (ud->cfg, condition)) {
 			ud->state = XML_SKIP_ELEMENTS;
 		}
 		return;

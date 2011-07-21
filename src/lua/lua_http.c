@@ -63,7 +63,7 @@ lua_check_task (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{task}");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	return *((struct worker_task **)ud);
+	return ud ? *((struct worker_task **)ud) : NULL;
 }
 
 static void

@@ -166,7 +166,7 @@ lua_check_task (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{task}");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	return *((struct worker_task **)ud);
+	return ud ? *((struct worker_task **)ud) : NULL;
 }
 
 static struct mime_text_part   *
@@ -174,7 +174,7 @@ lua_check_textpart (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{textpart}");
 	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
-	return *((struct mime_text_part **)ud);
+	return ud ? *((struct mime_text_part **)ud) : NULL;
 }
 
 static struct rspamd_image      *
@@ -182,7 +182,7 @@ lua_check_image (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{image}");
 	luaL_argcheck (L, ud != NULL, 1, "'image' expected");
-	return *((struct rspamd_image **)ud);
+	return ud ? *((struct rspamd_image **)ud) : NULL;
 }
 
 static struct uri      *
@@ -190,7 +190,7 @@ lua_check_url (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{url}");
 	luaL_argcheck (L, ud != NULL, 1, "'url' expected");
-	return *((struct uri **)ud);
+	return ud ? *((struct uri **)ud) : NULL;
 }
 
 /*** Task interface	***/
@@ -1355,7 +1355,7 @@ lua_textpart_compare_distance (lua_State * L)
 	const GMimeContentType         *ct;
 
 	luaL_argcheck (L, ud != NULL, 2, "'textpart' expected");
-	other = *((struct mime_text_part **)ud);
+	other = ud ? *((struct mime_text_part **)ud) : NULL;
 
 	if (part->parent && part->parent == other->parent) {
 		parent = part->parent;

@@ -528,7 +528,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	}
 	else if (is_numeric && dots_num == 0) {
 		/* This is number */
-		if ((suffix->options & SURBL_OPTION_NOIP) != 0) {
+		if (suffix != NULL && (suffix->options & SURBL_OPTION_NOIP) != 0) {
 			/* Ignore such requests */
 			msg_info ("ignore request of ip url for list %s", suffix->symbol);
 			return NULL;

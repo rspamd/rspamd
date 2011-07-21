@@ -456,7 +456,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 	time_t                          now;
 	struct tm                      *tms;
 	struct iovec                    iov[4];
-	gint                            r;
+	gint                            r = 0;
 	guint32                         cksum;
 	size_t                          mlen;
 	const gchar                     *cptype = NULL;

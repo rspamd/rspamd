@@ -783,10 +783,12 @@ parse_uri (struct uri *uri, gchar *uristring, memory_pool_t * pool)
 		prefix_end = host_end + 1;
 	}
 
-	if (uri->ipv6)
+	if (uri->ipv6 && rbracket != NULL) {
 		host_end = rbracket + strcspn (rbracket, ":/?");
-	else
+	}
+	else {
 		host_end = prefix_end + strcspn (prefix_end, ":/?");
+	}
 
 	if (uri->ipv6) {
 		addrlen = rbracket - lbracket - 1;

@@ -49,7 +49,7 @@ lua_check_cdb (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{cdb}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'cdb' expected");
-	return *((struct cdb **)ud);
+	return ud ? *((struct cdb **)ud) : NULL;
 }
 
 static gint

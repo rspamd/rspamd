@@ -666,7 +666,7 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 	else {
 		result->header = memory_pool_strdup (pool, line);
 		result->type = REGEXP_HEADER;
-		line = begin;
+		line = start;
 	}
 	/* Find begin of regexp */
 	while (*line && *line != '/') {

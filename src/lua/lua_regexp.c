@@ -53,7 +53,7 @@ lua_check_regexp (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{regexp}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'regexp' expected");
-	return *((GRegex **)ud);
+	return ud ? *((GRegex **)ud) : NULL;
 }
 
 static int
