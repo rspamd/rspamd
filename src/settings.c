@@ -73,7 +73,40 @@ settings_free (gpointer data)
 	if (s->blacklist) {
 		g_hash_table_destroy (s->blacklist);
 	}
-	g_free (s);
+	g_slice_free1 (sizeof (struct rspamd_settings), s);
+}
+
+static struct rspamd_settings *
+settings_ref (struct rspamd_settings *s)
+{
+	if (s == NULL) {
+		s = g_slice_alloc (sizeof (struct rspamd_settings));
+		s->metric_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		s->reject_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		s->metric_actions = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, settings_actions_free);
+		s->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		s->whitelist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		s->blacklist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		s->statfile_alias = NULL;
+		s->want_spam = FALSE;
+		s->ref_count = 1;
+	}
+	else {
+		s->ref_count ++;
+	}
+
+	return s;
+}
+
+static void
+settings_unref (struct rspamd_settings *s)
+{
+	if (s != NULL) {
+		s->ref_count --;
+		if (s->ref_count <= 0) {
+			settings_free (s);
+		}
+	}
 }
 
 
@@ -127,7 +160,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	struct metric_action           *new_act;
 	struct rspamd_settings         *cur_settings;
 	GList                          *cur_act;
-	gchar                           *cur_name;
+	gchar                          *cur_name;
 	void                           *json_it;
 	double                         *score;
 
@@ -172,26 +205,20 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 
 	nelts = json_array_size (js);
 	for (i = 0; i < nelts; i++) {
-		cur_settings = g_malloc (sizeof (struct rspamd_settings));
-		cur_settings->metric_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		cur_settings->reject_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		cur_settings->metric_actions = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, settings_actions_free);
-		cur_settings->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		cur_settings->whitelist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		cur_settings->blacklist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		cur_settings->statfile_alias = NULL;
-		cur_settings->want_spam = FALSE;
+		cur_settings = settings_ref (NULL);
 
 		cur_elt = json_array_get (js, i);
 		if (!cur_elt || !json_is_object (cur_elt)) {
 			json_decref (js);
 			msg_err ("loaded json is not an object");
+			settings_unref (cur_settings);
 			return;
 		}
 		cur_nm = json_object_get (cur_elt, "name");
 		if (cur_nm == NULL || !json_is_string (cur_nm)) {
 			json_decref (js);
 			msg_err ("name is not a string or not exists");
+			settings_unref (cur_settings);
 			return;
 		}
 		cur_name = g_strdup (json_string_value (cur_nm));
@@ -315,7 +342,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 				cur_settings->want_spam = TRUE;
 			}
 		}
-		g_hash_table_insert (((struct json_buf *)data->cur_data)->table, cur_name, cur_settings);
+		g_hash_table_replace (((struct json_buf *)data->cur_data)->table, cur_name, cur_settings);
 	}
 	json_decref (js);
 }
@@ -342,8 +369,10 @@ read_settings (const gchar *path, struct config_file *cfg, GHashTable * table)
 void
 init_settings (struct config_file *cfg)
 {
-	cfg->domain_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, settings_free);
-	cfg->user_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, settings_free);
+	cfg->domain_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal,
+			g_free, (GDestroyNotify)settings_unref);
+	cfg->user_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal,
+			g_free, (GDestroyNotify)settings_unref);
 }
 
 static                          gboolean
@@ -547,17 +576,15 @@ apply_metric_settings (struct worker_task *task, struct metric *metric, struct m
 	if (check_setting (task, &us, &ds)) {
 		if (us != NULL || ds != NULL) {
 			if (us != NULL) {
-				g_hash_table_ref (task->cfg->user_settings);
-				res->user_settings = us;
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref,
-						task->cfg->user_settings);
+				res->user_settings = settings_ref (us);
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)settings_unref,
+						us);
 			}
 			if (ds != NULL) {
 				/* Need to ref hash table to avoid occasional data corruption */
-				g_hash_table_ref (task->cfg->domain_settings);
-				res->domain_settings = ds;
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref,
-						task->cfg->domain_settings);
+				res->domain_settings = settings_ref (ds);
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)settings_unref,
+						ds);
 			}
 		}
 		else {

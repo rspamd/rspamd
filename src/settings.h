@@ -13,6 +13,7 @@ struct rspamd_settings {
 	GHashTable *blacklist;				/**< hash table of whitelist for this setting			*/
 	gchar *statfile_alias;				/**< alias for statfile used							*/
 	gboolean want_spam;					/**< if true disable rspamd checks						*/
+	gint ref_count;						/**< reference counter									*/
 };
 
 
