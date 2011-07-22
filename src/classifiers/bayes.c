@@ -371,6 +371,11 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
 		}
 		if (nodes < minnodes) {
+			g_set_error (err,
+					bayes_error_quark(),		/* error domain */
+					1,            				/* error code */
+					"message contains too few tokens: %d, while min is %d",
+					nodes, minnodes);
 			return FALSE;
 		}
 	}
