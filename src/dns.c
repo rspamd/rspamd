@@ -539,6 +539,7 @@ send_dns_request (struct rspamd_dns_request *req)
 	r = send (req->sock, req->packet, req->pos, 0);
 	if (r == -1) {
 		if (errno == EAGAIN) {
+			event_del (&req->io_event);
 			event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 			event_add (&req->io_event, &req->tv);
 			register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
@@ -551,6 +552,7 @@ send_dns_request (struct rspamd_dns_request *req)
 		}
 	}
 	else if (r < req->pos) {
+		event_del (&req->io_event);
 		event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 		event_add (&req->io_event, &req->tv);
 		register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
@@ -981,6 +983,7 @@ dns_throttling_cb (gint fd, short what, void *arg)
 	resolver->throttling = FALSE;
 	resolver->errors = 0;
 	msg_info ("stop DNS throttling after %d seconds", (int)resolver->throttling_time.tv_sec);
+	event_del (&resolver->throttling_event);
 }
 
 static void
@@ -1130,6 +1133,7 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 		}
 		else if (r == 1) {
 			/* Add timer event */
+			event_del (&req->timer_event);
 			evtimer_set (&req->timer_event, dns_timer_cb, req);
 			evtimer_add (&req->timer_event, &req->tv);
 
