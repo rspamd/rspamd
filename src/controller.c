@@ -1088,7 +1088,7 @@ controller_write_socket (void *arg)
 {
 	struct controller_session      *session = (struct controller_session *)arg;
 	gint                            i;
-	gchar                           out_buf[64];
+	gchar                           out_buf[1024];
 	GError                         *err = NULL;
 
 	if (session->state == STATE_QUIT) {
