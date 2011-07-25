@@ -474,6 +474,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 			goto err;
 		}
 		else {
+			event_del (&session->ev);
 			event_set (&session->ev, fd, EV_READ, fuzzy_io_callback, session);
 			event_add (&session->ev, &session->tv);
 		}
@@ -559,6 +560,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 			goto err;
 		}
 		else {
+			event_del (&session->ev);
 			event_set (&session->ev, fd, EV_READ, fuzzy_learn_callback, session);
 			event_add (&session->ev, &session->tv);
 		}

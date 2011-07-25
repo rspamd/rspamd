@@ -539,7 +539,6 @@ send_dns_request (struct rspamd_dns_request *req)
 	r = send (req->sock, req->packet, req->pos, 0);
 	if (r == -1) {
 		if (errno == EAGAIN) {
-			event_del (&req->io_event);
 			event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 			event_add (&req->io_event, &req->tv);
 			register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
@@ -552,7 +551,6 @@ send_dns_request (struct rspamd_dns_request *req)
 		}
 	}
 	else if (r < req->pos) {
-		event_del (&req->io_event);
 		event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 		event_add (&req->io_event, &req->tv);
 		register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
@@ -1086,7 +1084,6 @@ dns_timer_cb (gint fd, short what, void *arg)
 	evtimer_add (&req->timer_event, &req->tv);
 	r = send_dns_request (req);
 	if (r == -1) {
-		event_del (&req->io_event);
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
@@ -1107,9 +1104,9 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 	if (what == EV_WRITE) {
 		/* Retransmit dns request */
 		req->retransmits ++;
+		event_del (&req->io_event);
 		if (req->retransmits >= req->resolver->max_retransmits) {
 			msg_err ("maximum number of retransmits expired for %s", req->requested_name);
-			event_del (&req->io_event);
 			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
@@ -1123,7 +1120,6 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 		}
 		r = send_dns_request (req);
 		if (r == -1) {
-			event_del (&req->io_event);
 			rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 			rep->request = req;
 			rep->code = DNS_RC_SERVFAIL;
@@ -1227,13 +1223,13 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	/* Fill timeout */
 	msec_to_tv (resolver->request_timeout, &req->tv);
+	evtimer_set (&req->timer_event, dns_timer_cb, req);
 	
 	/* Now send request to server */
 	r = send_dns_request (req);
 
 	if (r == 1) {
 		/* Add timer event */
-		evtimer_set (&req->timer_event, dns_timer_cb, req);
 		evtimer_add (&req->timer_event, &req->tv);
 
 		/* Add request to hash table */
