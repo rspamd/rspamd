@@ -478,14 +478,16 @@ fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
 gint
 fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
 {
-	if (p1->fuzzy->block_size == p2->fuzzy->block_size) {
-		return fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
-	}
-	else if (p1->double_fuzzy->block_size == p2->fuzzy->block_size) {
-		return fuzzy_compare_hashes (p1->double_fuzzy, p2->fuzzy);
-	}
-	else if (p2->double_fuzzy->block_size == p1->fuzzy->block_size) {
-		return fuzzy_compare_hashes (p2->double_fuzzy, p1->fuzzy);
+	if (p1->fuzzy != NULL && p2->fuzzy != NULL) {
+		if (p1->fuzzy->block_size == p2->fuzzy->block_size) {
+			return fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
+		}
+		else if (p1->double_fuzzy->block_size == p2->fuzzy->block_size) {
+			return fuzzy_compare_hashes (p1->double_fuzzy, p2->fuzzy);
+		}
+		else if (p2->double_fuzzy->block_size == p1->fuzzy->block_size) {
+			return fuzzy_compare_hashes (p2->double_fuzzy, p1->fuzzy);
+		}
 	}
 
 	return 0;
