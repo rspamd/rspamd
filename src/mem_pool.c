@@ -178,6 +178,7 @@ memory_pool_new (gsize size)
 #else
 #   	error No mmap methods are defined
 #endif
+		memset (map, 0, sizeof (memory_pool_stat_t));
 	}
 
 	new = g_slice_alloc (sizeof (memory_pool_t));
