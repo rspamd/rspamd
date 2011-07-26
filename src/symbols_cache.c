@@ -120,12 +120,14 @@ post_cache_init (struct symbols_cache *cache)
 	while (cur) {
 		item = cur->data;
 		total_frequency += item->s->frequency;
+		g_hash_table_insert (cache->items_by_symbol, item->s->symbol, item);
 		cur = g_list_next (cur);
 	}
 	cur = g_list_first (cache->static_items);
 	while (cur) {
 		item = cur->data;
 		total_frequency += item->s->frequency;
+		g_hash_table_insert (cache->items_by_symbol, item->s->symbol, item);
 		cur = g_list_next (cur);
 	}
 
@@ -388,6 +390,8 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	set_counter (item->s->symbol, 0);
 	
+	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
+
 	if (networks == NULL) {
 		pcache->dynamic_items = g_list_prepend (pcache->dynamic_items, item);
 	}
@@ -497,7 +501,7 @@ free_cache (gpointer arg)
 	if (cache->negative_dynamic_map) {
 		radix_tree_free (cache->negative_dynamic_map);
 	}
-
+	g_hash_table_destroy (cache->items_by_symbol);
 	memory_pool_delete (cache->static_pool);
 
 	g_free (cache);
@@ -618,7 +622,10 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 	}
 	/* MMap cache file and copy saved_cache structures */
 	res = mmap_cache_file (cache, fd, pool);
+	cache->items_by_symbol = g_hash_table_new (g_str_hash, g_str_equal);
+
 	memory_pool_add_destructor (pool, (pool_destruct_func)free_cache, cache);
+
 	return res;
 }
 

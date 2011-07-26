@@ -163,25 +163,9 @@ insert_result_common (struct worker_task *task, const gchar *symbol, double flag
 
 	/* Process cache item */
 	if (task->cfg->cache) {
-		cur = task->cfg->cache->static_items;
-		while (cur)
-		{
-			item = cur->data;
-
-			if (strcmp (item->s->symbol, symbol) == 0) {
-				item->s->frequency++;
-			}
-			cur = g_list_next (cur);
-		}
-		cur = task->cfg->cache->negative_items;
-		while (cur)
-		{
-			item = cur->data;
-
-			if (strcmp (item->s->symbol, symbol) == 0) {
-				item->s->frequency++;
-			}
-			cur = g_list_next (cur);
+		item = g_hash_table_lookup (task->cfg->cache->items_by_symbol, symbol);
+		if (item != NULL) {
+			item->s->frequency++;
 		}
 	}
 

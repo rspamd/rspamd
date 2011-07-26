@@ -60,6 +60,9 @@ struct symbols_cache {
 	/* Common dynamic rules */
 	GList *dynamic_items;
 
+	/* Hash table for fast access */
+	GHashTable *items_by_symbol;
+
 	memory_pool_t *static_pool;
 
 	guint cur_items;

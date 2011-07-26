@@ -204,6 +204,7 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 {
 	guint8                         *tmp;
 	struct _pool_chain             *new, *cur;
+	gsize                           free;
 
 	if (pool) {
 #ifdef MEMORY_GREEDY
@@ -212,10 +213,10 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 		cur = pool->cur_pool;
 #endif
 		/* Find free space in pool chain */
-		while (pool_chain_free (cur) < size && cur->next) {
+		while ((free = pool_chain_free (cur)) < size && cur->next) {
 			cur = cur->next;
 		}
-		if (cur->next == NULL) {
+		if (free < size && cur->next == NULL) {
 			/* Allocate new pool */
 			if (cur->len >= size) {
 				new = pool_chain_new (cur->len);
