@@ -87,6 +87,10 @@ struct rspamd_worker_ctx {
 	GList                          *custom_filters;
 	/* DNS resolver */
 	struct rspamd_dns_resolver     *resolver;
+	/* Current tasks */
+	guint32                         tasks;
+	/* Limit of tasks */
+	guint32                         max_tasks;
 };
 
 static gboolean                 write_socket (void *arg);
@@ -403,6 +407,17 @@ err_socket (GError * err, void *arg)
 }
 
 /*
+ * Reduce number of tasks proceeded
+ */
+static void
+reduce_tasks_count (gpointer arg)
+{
+	guint32                        *tasks = arg;
+
+	(*tasks) --;
+}
+
+/*
  * Accept new connection and construct task
  */
 static void
@@ -419,6 +434,12 @@ accept_socket (gint fd, short what, void *arg)
 	gint                            nfd;
 
 	ctx = worker->ctx;
+
+	if (ctx->max_tasks != 0 && ctx->tasks > ctx->max_tasks) {
+		msg_info ("current tasks is now: %uD while maximum is: %uD", ctx->tasks, ctx->max_tasks);
+		return;
+	}
+
 	if ((nfd =
 			accept_from_socket (fd, (struct sockaddr *) &su.ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
@@ -458,6 +479,8 @@ accept_socket (gint fd, short what, void *arg)
 			rspamd_create_dispatcher (nfd, BUFFER_LINE, read_socket, write_socket,
 					err_socket, &ctx->io_tv, (void *) new_task);
 	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
+	ctx->tasks ++;
+	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)reduce_tasks_count, &ctx->tasks);
 
 	/* Init custom filters */
 #ifndef BUILD_STATIC
@@ -591,6 +614,7 @@ init_worker (void)
 	register_worker_opt (TYPE_WORKER, "json", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json));
 	register_worker_opt (TYPE_WORKER, "allow_learn", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn));
 	register_worker_opt (TYPE_WORKER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
+	register_worker_opt (TYPE_WORKER, "max_tasks", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, max_tasks));
 
 	return ctx;
 }
