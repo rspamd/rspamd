@@ -31,7 +31,7 @@
 static const int maxscale = 7;
 
 static gchar *
-humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
+rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 {
 	const gchar *prefixes;
 	int i, r, remainder, sign;
@@ -646,7 +646,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 				buf = rspamd_sprintf_num (buf, last, ui64, zero, hex, width);
 			}
 			else {
-				buf = humanize_number (buf, last, ui64, bytes);
+				buf = rspamd_humanize_number (buf, last, ui64, bytes);
 			}
 
 			fmt++;
