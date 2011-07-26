@@ -25,6 +25,69 @@
 #include "fstring.h"
 #include "main.h"
 
+/**
+ * From FreeBSD libutil code
+ */
+static const int maxscale = 7;
+
+static gchar *
+humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
+{
+	const gchar *prefixes;
+	int i, r, remainder, sign;
+	gint64 divisor;
+	gsize baselen, len = last - buf;
+
+	remainder = 0;
+
+	baselen = 1;
+	if (!bytes) {
+		divisor = 1000;
+		prefixes = "\0\0\0k\0\0M\0\0G\0\0T\0\0P\0\0E";
+	}
+	else {
+		divisor = 1024;
+		prefixes = "B\0\0k\0\0M\0\0G\0\0T\0\0P\0\0E";
+	}
+
+
+#define SCALE2PREFIX(scale)     (&prefixes[(scale) * 3])
+
+	if (num < 0) {
+		sign = -1;
+		num = -num;
+		baselen += 2; /* sign, digit */
+	}
+	else {
+		sign = 1;
+		baselen += 1; /* digit */
+	}
+
+	/* Check if enough room for `x y' + suffix + `\0' */
+	if (len < baselen + 1) {
+		return buf;
+	}
+
+	/*
+	 * Divide the number until it fits the given column.
+	 * If there will be an overflow by the rounding below,
+	 * divide once more.
+	 */
+	for (i = 0; i < maxscale && num > divisor; i++) {
+		remainder = num % divisor;
+		num /= divisor;
+	}
+
+	r = rspamd_snprintf (buf, len, "%L%s",
+			sign * (num + (remainder + 50) / 1000),
+			SCALE2PREFIX (i));
+
+#undef SCALE2PREFIX
+
+	return buf + r;
+}
+
+
 static gchar *
 rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	guint                           hexadecimal, guint width)
@@ -214,7 +277,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 	size_t              len, slen;
 	gint64              i64;
 	guint64             ui64;
-	guint               width, sign, hex, max_width, frac_width, i;
+	guint               width, sign, hex, humanize, bytes, max_width, frac_width, i;
 	f_str_t			   *v;
 	GString            *gs;
 
@@ -240,6 +303,8 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 			width = 0;
 			sign = 1;
 			hex = 0;
+			bytes = 0;
+			humanize = 0;
 			max_width = 0;
 			frac_width = 0;
 			slen = (size_t) -1;
@@ -272,6 +337,17 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 					hex = 1;
 					sign = 0;
 					fmt++;
+					continue;
+				case 'H':
+					humanize = 1;
+					bytes = 1;
+					sign = 0;
+					fmt ++;
+					continue;
+				case 'h':
+					humanize = 1;
+					sign = 0;
+					fmt ++;
 					continue;
 				case '.':
 					fmt++;
@@ -566,7 +642,12 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 				}
 			}
 
-			buf = rspamd_sprintf_num (buf, last, ui64, zero, hex, width);
+			if (!humanize) {
+				buf = rspamd_sprintf_num (buf, last, ui64, zero, hex, width);
+			}
+			else {
+				buf = humanize_number (buf, last, ui64, bytes);
+			}
 
 			fmt++;
 

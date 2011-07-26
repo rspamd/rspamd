@@ -57,12 +57,13 @@ struct autolearn_data {
 };
 
 struct regexp_ctx {
-	gint                            (*filter) (struct worker_task * task);
+	gint                          (*filter) (struct worker_task * task);
 	GHashTable                     *autolearn_symbols;
-	gchar                           *statfile_prefix;
+	gchar                          *statfile_prefix;
 
 	memory_pool_t                  *regexp_pool;
 	memory_pool_t                  *dynamic_pool;
+	gsize                           max_size;
 };
 
 struct regexp_json_buf {
@@ -444,6 +445,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	(void)luaopen_regexp (cfg->lua_state);
 	register_module_opt ("regexp", "dynamic_rules", MODULE_OPT_TYPE_STRING);
+	register_module_opt ("regexp", "max_size", MODULE_OPT_TYPE_SIZE);
 	register_module_opt ("regexp", "/^\\S+$/", MODULE_OPT_TYPE_STRING);
 
 	return 0;
@@ -496,6 +498,12 @@ regexp_module_config (struct config_file *cfg)
 	}
 	else {
 		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
+	}
+	if ((value = get_module_opt (cfg, "regexp", "max_size")) != NULL) {
+		regexp_module_ctx->max_size = parse_limit (value);
+	}
+	else {
+		regexp_module_ctx->max_size = 0;
 	}
 	if ((value = get_module_opt (cfg, "regexp", "dynamic_rules")) != NULL) {
 		jb = g_malloc (sizeof (struct regexp_json_buf));
@@ -725,6 +733,12 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				cur = g_list_next (cur);
 				continue;
 			}
+			/* Skip too large parts */
+			if (regexp_module_ctx->max_size != 0 && part->content->len > regexp_module_ctx->max_size) {
+				msg_info ("<%s> skip part of size %Hud", task->message_id, part->content->len);
+				cur = g_list_next (cur);
+				continue;
+			}
 			/* Check raw flags */
 			if (part->is_raw) {
 				regexp = re->raw_regexp;
@@ -795,6 +809,10 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		ct = task->msg->begin;
 		clen = task->msg->len;
 
+		if (regexp_module_ctx->max_size != 0 && clen > regexp_module_ctx->max_size) {
+			msg_info ("<%s> skip message of size %Hz", task->message_id, clen);
+			return 0;
+		}
 		/* If we have limit, apply regexp so much times as we can */
 		if (f != NULL && limit > 1) {
 			end = 0;

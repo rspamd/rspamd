@@ -31,11 +31,11 @@
  * supported formats:
  *	%[0][width][x][X]O		    off_t
  *	%[0][width]T			    time_t
- *	%[0][width][u][x|X]z	    ssize_t/size_t
- *	%[0][width][u][x|X]d	    gint/guint
- *	%[0][width][u][x|X]l	    long
- *	%[0][width][u][x|X]D	    gint32/guint32
- *	%[0][width][u][x|X]L	    gint64/guint64
+ *	%[0][width][u][x|X|h|H]z	    ssize_t/size_t
+ *	%[0][width][u][x|X|h|H]d	    gint/guint
+ *	%[0][width][u][x|X|h|H]l	    long
+ *	%[0][width][u][x|X|h|H]D	    gint32/guint32
+ *	%[0][width][u][x|X|h|H]L	    gint64/guint64
  *	%[0][width][.width]f	    double
  *	%[0][width][.width]F	    long double
  *	%[0][width][.width]g	    double
