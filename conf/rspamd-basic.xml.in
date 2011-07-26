@@ -49,7 +49,7 @@
 <metric>
  <name>default</name>
 
- <required_score>14.0</required_score>
+ <required_score>15.0</required_score>
  <!-- Sample actions -->
  <action>reject</action>
  <action>greylist:4</action>
@@ -304,7 +304,6 @@
   <bind_socket>localhost:11335</bind_socket>
   <count>1</count>
   <maxfiles>2048</maxfiles>
-  <maxcore>0</maxcore>
 <!-- Other params -->
     <hashfile>/var/run/rspamd/fuzzy.db</hashfile>
     <use_judy>yes</use_judy>
@@ -314,16 +313,14 @@
   <bind_socket>localhost:11334</bind_socket>
   <count>1</count>
   <maxfiles>2048</maxfiles>
-  <maxcore>0</maxcore>
 <!-- Other params -->
     <password>q1</password>
 </worker>
 <worker>
   <type>normal</type>
   <bind_socket>*:11333</bind_socket>
-  <count>1</count>
+  <count>2</count>
   <maxfiles>2048</maxfiles>
-  <maxcore>0</maxcore>
 <!-- Other params -->
 </worker>
 <!-- End of workers section -->
@@ -364,6 +361,7 @@
   <suffix_RAMBLER_URIBL>uribl.rambler.ru</suffix_RAMBLER_URIBL>
   <option name="suffix_%b_SURBL_MULTI">multi.surbl.org</option>
   <suffix_DBL>dbl.spamhaus.org</suffix_DBL>
+  <!-- Do not send ip urls to this URIBL -->
   <options_DBL>noip</options_DBL>
 <!-- Redirector sample setup -->
 <!--
@@ -384,14 +382,15 @@
 <!-- whitelist -->
 <!-- Example of using HTTP maps for whitelisting
 <module name="whitelist">
-  <ip_whitelist>http://cebka.pp.ru/stuff/grey_whitelist.conf</ip_whitelist>
+  <ip_whitelist>http://highsecure.ru/grey_whitelist.conf</ip_whitelist>
   <symbol_ip>WHITELIST_IP</symbol_ip>
 </module>
 -->
 
 <!-- chartable -->
 <module name="chartable">
-  <threshold>0.1</threshold>
+  <!-- Division of symbols from different charsets to a total number of symbols -->
+  <threshold>0.3</threshold>
   <symbol>R_MIXED_CHARSET</symbol>
 </module>
 
@@ -416,13 +415,19 @@
 <!-- phishing -->
 <module name="phishing">
    <symbol>PHISHING</symbol>
-   <!-- <domains>file://path/to/domains</domains> -->
+   <!-- Check phishing only for specified domains
+	<domains>file://path/to/domains</domains> 
+	-->
+   <!-- If phishing detected for that domains insert another symbol specified after semicolon symbol
+	<strict_domains>file://path/to/domains:STRICT_PHISHING</strict_domains> 
+	-->
 </module>
 
 <!-- Trie module -->
 <!-- 
 <module name="trie">
-  <option name="rule">TRIE1:bad pattern</option>
+  <rule>TRIE1:bad pattern</rule>
+  <rule>TRIE2:file:///var/run/rspamd/bad_patterns.list</rule>
 </module>
 -->
 
@@ -433,13 +438,18 @@
 
 <!-- SPF module setup -->
 <module name="spf">
+ <!-- Cache setup for spf records to accelerate spf checks -->
  <spf_cache_size>2048</spf_cache_size>
  <spf_cache_expire>1d</spf_cache_expire>
 </module>
 
+<!-- Regexp module configuration -->
+<module name="regexp">
+  <!-- Maximum size of text for regexp checks -->
+  <max_size>1M</max_size>
+</module>
 
 <!-- End of modules section -->
-
 <!-- Classifiers section -->
 <!--
 <classifier type="winnow">
@@ -479,12 +489,47 @@
   <binlog_master>localhost:11334</binlog_master>
  </statfile>
 </classifier>
-
 -->
+
+<!-- Example of language specific statfiles -->
+
+<!--
 <classifier type="bayes">
  <tokenizer>osb-text</tokenizer>
  <metric>default</metric>
  <min_tokens>10</min_tokens>
+ <max_tokens>1000</max_tokens>
+ <statfile>
+  <symbol>BAYES_HAM_RU</symbol>
+  <size>50M</size>
+  <path>/var/run/rspamd/bayes_ru.ham</path>
+  <param name="language">ru</param>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_SPAM_RU</symbol>
+  <size>50M</size>
+  <path>/var/run/rspamd/bayes_ru.spam</path>
+  <param name="language">ru</param>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>50M</size>
+  <path>/var/run/rspamd/bayes.ham</path>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>50M</size>
+  <path>/var/run/rspamd/bayes.spam</path>
+ </statfile>
+</classifier>
+-->
+
+<!-- Ordinary statistic for a small mail system -->
+<classifier type="bayes">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <min_tokens>10</min_tokens>
+ <max_tokens>1000</max_tokens>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>

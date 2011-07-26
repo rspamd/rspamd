@@ -533,6 +533,10 @@ regexp_module_config (struct config_file *cfg)
 			cur_opt = g_list_next (cur_opt);
 			continue;
 		}
+		else if (g_ascii_strncasecmp (cur->param, "max_size", sizeof ("max_size") - 1) == 0) {
+			cur_opt = g_list_next (cur_opt);
+			continue;
+		}
 		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 		cur_item->symbol = cur->param;
 		if (cur->is_lua && cur->lua_type == LUA_VAR_STRING) {
