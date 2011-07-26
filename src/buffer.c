@@ -446,14 +446,16 @@ dispatcher_cb (gint fd, short what, void *arg)
 
 	debug_ip("in dispatcher callback, what: %d, fd: %d", (gint)what, fd);
 
-	switch (what) {
-	case EV_TIMEOUT:
+	if ((what & EV_TIMEOUT) != 0) {
 		if (d->err_callback) {
 			err = g_error_new (G_DISPATCHER_ERROR, ETIMEDOUT, "IO timeout");
 			d->err_callback (err, d->user_data);
 		}
-		break;
-	case EV_WRITE:
+	}
+	else if ((what & EV_READ) != 0) {
+		read_buffers (fd, d, FALSE);
+	}
+	else if ((what & EV_WRITE) != 0) {
 		/* No data to write, disable further EV_WRITE to this fd */
 		if (d->in_sendfile) {
 			sendfile_callback (d);
@@ -475,10 +477,6 @@ dispatcher_cb (gint fd, short what, void *arg)
 				write_buffers (fd, d, TRUE);
 			}
 		}
-		break;
-	case EV_READ:
-		read_buffers (fd, d, FALSE);
-		break;
 	}
 }
 

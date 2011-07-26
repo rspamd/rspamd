@@ -873,6 +873,8 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init classifiers options */
 	register_classifier_opt ("bayes", "min_tokens");
 	register_classifier_opt ("winnow", "min_tokens");
+	register_classifier_opt ("bayes", "max_tokens");
+	register_classifier_opt ("winnow", "max_tokens");
 	register_classifier_opt ("winnow", "learn_threshold");
 
 	/* Pre-init of cache */

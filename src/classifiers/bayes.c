@@ -60,7 +60,8 @@ struct bayes_callback_data {
 	stat_file_t                    *file;
 	struct bayes_statfile_data     *statfiles;
 	guint32                         statfiles_num;
-	guint64                          learned_tokens;
+	guint64                         learned_tokens;
+	gsize                           max_tokens;
 };
 
 static                          gboolean
@@ -92,6 +93,10 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 		cd->learned_tokens ++;
 	}
 
+	if (cd->max_tokens != 0 && cd->learned_tokens > cd->max_tokens) {
+		/* Stop learning on max tokens */
+		return TRUE;
+	}
 	return FALSE;
 }
 
@@ -151,6 +156,12 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		}
 	}
 
+	cd->learned_tokens ++;
+	if (cd->max_tokens != 0 && cd->learned_tokens > cd->max_tokens) {
+		/* Stop classifying on max tokens */
+		return TRUE;
+	}
+
 	return FALSE;
 }
 
@@ -171,7 +182,8 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 {
 	struct bayes_callback_data      data;
 	gchar                          *value;
-	gint                            nodes, minnodes, i = 0, cnt, best_num = 0;
+	gint                            nodes, i = 0, cnt, best_num = 0;
+	gsize                           minnodes;
 	guint64                         rev, total_learns = 0;
 	double                          best = 0;
 	struct statfile                *st;
@@ -206,6 +218,15 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
+
+	data.learned_tokens = 0;
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
+		minnodes = parse_limit (value);
+		data.max_tokens = minnodes;
+	}
+	else {
+		data.max_tokens = 0;
+	}
 
 	while (cur) {
 		/* Select statfile to classify */
@@ -264,8 +285,9 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 				gboolean in_class, double *sum, double multiplier, GError **err)
 {
 	struct bayes_callback_data      data;
-	char                           *value;
-	int                             nodes, minnodes;
+	gchar                          *value;
+	gint                            nodes;
+	gsize                           minnodes;
 	struct statfile                *st, *sel_st = NULL;
 	stat_file_t                    *to_learn;
 	GList                          *cur;
@@ -286,7 +308,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	                   bayes_error_quark(),		/* error domain */
 	                   1,            				/* error code */
 	                   "message contains too few tokens: %d, while min is %d",
-	                   nodes, minnodes);
+	                   nodes, (int)minnodes);
 			return FALSE;
 		}
 	}
@@ -296,6 +318,14 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	data.now = time (NULL);
 	data.ctx = ctx;
 	data.learned_tokens = 0;
+	data.learned_tokens = 0;
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
+		minnodes = parse_limit (value);
+		data.max_tokens = minnodes;
+	}
+	else {
+		data.max_tokens = 0;
+	}
 	cur = ctx->cfg->statfiles;
 	while (cur) {
 		/* Select statfile to learn */
@@ -356,7 +386,8 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 {
 	struct bayes_callback_data      data;
 	gchar                          *value;
-	gint                            nodes, minnodes;
+	gint                            nodes;
+	gsize                           minnodes;
 	struct statfile                *st;
 	stat_file_t                    *file;
 	GList                          *cur;
@@ -375,7 +406,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 					bayes_error_quark(),		/* error domain */
 					1,            				/* error code */
 					"message contains too few tokens: %d, while min is %d",
-					nodes, minnodes);
+					nodes, (int)minnodes);
 			return FALSE;
 		}
 	}
@@ -391,6 +422,15 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
+
+	data.learned_tokens = 0;
+	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
+		minnodes = parse_limit (value);
+		data.max_tokens = minnodes;
+	}
+	else {
+		data.max_tokens = 0;
+	}
 
 	while (cur) {
 		/* Select statfiles to learn */
