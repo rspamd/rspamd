@@ -23,7 +23,7 @@
  */
 
 #include "lua_common.h"
-#include "../expressions.h"
+#include "expressions.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"

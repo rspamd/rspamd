@@ -1,7 +1,7 @@
 #ifndef RSPAMD_PREFIX_TREE_H
 #define RSPAMD_PREFIX_TREE_H
 
-#include "../../../config.h"
+#include "config.h"
 
 #define LETTERS_NUMBER 26
 

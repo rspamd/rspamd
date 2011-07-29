@@ -23,8 +23,8 @@
  */
 
 #include "lua_common.h"
-#include "../expressions.h"
-#include "../symbols_cache.h"
+#include "expressions.h"
+#include "symbols_cache.h"
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif

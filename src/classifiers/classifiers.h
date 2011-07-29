@@ -1,10 +1,10 @@
 #ifndef CLASSIFIERS_H
 #define CLASSIFIERS_H
 
-#include "../config.h"
-#include "../mem_pool.h"
-#include "../statfile.h"
-#include "../tokenizers/tokenizers.h"
+#include "config.h"
+#include "mem_pool.h"
+#include "statfile.h"
+#include "tokenizers/tokenizers.h"
 
 /* Consider this value as 0 */
 #define ALPHA 0.0001

@@ -3,9 +3,9 @@ SET(LIBRSPAMDSRC			  librspamdclient.c ../src/mem_pool.c ../src/upstream.c ../sr
 
 ADD_LIBRARY(rspamdclient SHARED ${LIBRSPAMDSRC})
 ADD_LIBRARY(rspamdclient_static STATIC ${LIBRSPAMDSRC})
-SET_TARGET_PROPERTIES(rspamdclient PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing -I../src/")
+SET_TARGET_PROPERTIES(rspamdclient PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
 SET_TARGET_PROPERTIES(rspamdclient PROPERTIES PUBLIC_HEADER "librspamdclient.h")
-SET_TARGET_PROPERTIES(rspamdclient_static PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing -I../src/")
+SET_TARGET_PROPERTIES(rspamdclient_static PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
 
 TARGET_LINK_LIBRARIES(rspamdclient ${CMAKE_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamdclient ${GLIB2_LIBRARIES})
@@ -15,6 +15,11 @@ TARGET_LINK_LIBRARIES(rspamdclient_static ${GLIB2_LIBRARIES})
 
 SET_TARGET_PROPERTIES(rspamdclient PROPERTIES VERSION ${RSPAMD_VERSION})
 SET_TARGET_PROPERTIES(rspamdclient_static PROPERTIES VERSION ${RSPAMD_VERSION})
+
+IF(GLIB_COMPAT)
+	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/lgpl")
+	TARGET_LINK_LIBRARIES(rspamdclient glibadditions)
+ENDIF(GLIB_COMPAT)
 
 INSTALL(TARGETS rspamdclient rspamdclient_static LIBRARY PUBLIC_HEADER 
     LIBRARY DESTINATION lib 

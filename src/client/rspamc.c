@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "../../lib/librspamdclient.h"
+#include "librspamdclient.h"
 
 #define PRINT_FUNC printf
 
@@ -175,14 +175,65 @@ add_rspamd_server (gboolean is_control)
 }
 
 static void
+show_symbol_result (gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_symbol            *s = value;
+	GList                           *cur;
+	static gboolean                  first = TRUE;
+
+	if (verbose) {
+		if (tty) {
+			PRINT_FUNC ("\n\033[1mSymbol\033[0m - %s(%.2f)", s->name, s->weight);
+		}
+		else {
+			PRINT_FUNC ("\nSymbol - %s(%.2f)", s->name, s->weight);
+		}
+		if (s->options) {
+			PRINT_FUNC (": ");
+			cur = g_list_first (s->options);
+			while (cur) {
+				if (cur->next) {
+					PRINT_FUNC ("%s,", (const gchar *)cur->data);
+				}
+				else {
+					PRINT_FUNC ("%s", (const gchar *)cur->data);
+				}
+				cur = g_list_next (cur);
+			}
+		}
+		if (s->description) {
+			PRINT_FUNC (" - \"%s\"", s->description);
+		}
+	}
+	else {
+		if (! first) {
+			PRINT_FUNC (", ");
+		}
+		else {
+			first = FALSE;
+		}
+		PRINT_FUNC ("%s(%.2f)", s->name, s->weight);
+
+		if (s->options) {
+			PRINT_FUNC ("(");
+			cur = g_list_first (s->options);
+			while (cur) {
+				if (cur->next) {
+					PRINT_FUNC ("%s,", (const gchar *)cur->data);
+				}
+				else {
+					PRINT_FUNC ("%s)", (const gchar *)cur->data);
+				}
+				cur = g_list_next (cur);
+			}
+		}
+	}
+}
+
+static void
 show_metric_result (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_metric            *metric = value;
-	struct rspamd_symbol            *s;
-	GList                           *cur;
-	GHashTableIter                   it;
-	gpointer                         k, v;
-	gboolean                         first;
 
 	if (metric->is_skipped) {
 		PRINT_FUNC ("\n%s: Skipped\n", (const gchar *)key);
@@ -213,70 +264,26 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 			}
 		}
 		if (metric->symbols) {
-			first = TRUE;
-			g_hash_table_iter_init (&it, metric->symbols);
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				s = v;
-				if (verbose) {
-					if (tty) {
-						PRINT_FUNC ("\n\033[1mSymbol\033[0m - %s(%.2f)", s->name, s->weight);
-					}
-					else {
-						PRINT_FUNC ("\nSymbol - %s(%.2f)", s->name, s->weight);
-					}
-					if (s->options) {
-						PRINT_FUNC (": ");
-						cur = g_list_first (s->options);
-						while (cur) {
-							if (cur->next) {
-								PRINT_FUNC ("%s,", (const gchar *)cur->data);
-							}
-							else {
-								PRINT_FUNC ("%s", (const gchar *)cur->data);
-							}
-							cur = g_list_next (cur);
-						}
-					}
-					if (s->description) {
-						PRINT_FUNC (" - \"%s\"", s->description);
-					}
-				}
-				else {
-					if (! first) {
-						PRINT_FUNC (", ");
-					}
-					else {
-						first = FALSE;
-					}
-					PRINT_FUNC ("%s(%.2f)", s->name, s->weight);
-
-					if (s->options) {
-						PRINT_FUNC ("(");
-						cur = g_list_first (s->options);
-						while (cur) {
-							if (cur->next) {
-								PRINT_FUNC ("%s,", (const gchar *)cur->data);
-							}
-							else {
-								PRINT_FUNC ("%s)", (const gchar *)cur->data);
-							}
-							cur = g_list_next (cur);
-						}
-					}
-
-				}
-			}
+			g_hash_table_foreach (metric->symbols, show_symbol_result, NULL);
 		}
 		PRINT_FUNC ("\n");
 	}
 }
 
 static void
+show_header_result (gpointer key, gpointer value, gpointer ud)
+{
+	if (tty) {
+		PRINT_FUNC ("\033[1m%s:\033[0m %s\n", (const gchar *)key, (const gchar *)value);
+	}
+	else {
+		PRINT_FUNC ("%s: %s\n", (const gchar *)key, (const gchar *)value);
+	}
+}
+
+static void
 print_rspamd_result (struct rspamd_result *res)
 {
-	GHashTableIter                   it;
-	gpointer                         k, v;
-
 	g_assert (res != 0);
 
 	if (tty) {
@@ -288,16 +295,8 @@ print_rspamd_result (struct rspamd_result *res)
 	}
 	g_hash_table_foreach (res->metrics, show_metric_result, NULL);
 	/* Show other headers */
-	g_hash_table_iter_init (&it, res->headers);
 	PRINT_FUNC ("\n");
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		if (tty) {
-			PRINT_FUNC ("\033[1m%s:\033[0m %s\n", (const gchar *)k, (const gchar *)v);
-		}
-		else {
-			PRINT_FUNC ("%s: %s\n", (const gchar *)k, (const gchar *)v);
-		}
-	}
+	g_hash_table_foreach (res->headers, show_header_result, NULL);
 	PRINT_FUNC ("\n");
 }
 

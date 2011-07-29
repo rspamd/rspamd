@@ -32,7 +32,7 @@
  * accesssing the array directly... 
  */
 
-#include "../../../config.h"
+#include "config.h"
 #include "metaphone.h"
 
 /*

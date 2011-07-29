@@ -1,7 +1,7 @@
 #ifndef RSPAMD_METAPHONE_H
 #define RSPAMD_METAPHONE_H
 
-#include "../../../config.h"
+#include "config.h"
 
 
 #define ENCODE(c) (g_ascii_isalpha(c) ? _codes[((g_ascii_toupper(c)) - 'A')] : 0)

@@ -8,7 +8,7 @@
 #ifndef TINYCDB_VERSION
 #define TINYCDB_VERSION 0.77
 
-#include "../config.h"
+#include "config.h"
 
 #ifdef __cplusplus
 extern "C" {

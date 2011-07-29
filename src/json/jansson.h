@@ -8,7 +8,7 @@
 #ifndef JANSSON_H
 #define JANSSON_H
 
-#include "../config.h"
+#include "config.h"
 
 /* types */
 

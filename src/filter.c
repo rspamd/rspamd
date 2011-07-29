@@ -675,6 +675,7 @@ process_statfiles (struct worker_task *task)
 static void
 insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data)
 {
+#ifndef GLIB_HASH_COMPAT
 	struct worker_task             *task = (struct worker_task *)data;
 	gint                            r = 0;
 	/* Try to be rfc2822 compatible and avoid long headers with folding */
@@ -713,6 +714,7 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	g_mime_message_add_header (task->message, header_name, outbuf);
 #endif
 
+#endif /* GLIB_COMPAT */
 }
 
 void

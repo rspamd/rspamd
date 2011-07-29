@@ -27,7 +27,7 @@
  */
 
 #include <sys/types.h>
-#include "../main.h"
+#include "main.h"
 #include "tokenizers.h"
 
 struct tokenizer                tokenizers[] = {

@@ -730,6 +730,7 @@ validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean s
 		}
 		cur = g_list_next (cur);
 	}
+#ifndef GLIB_HASH_COMPAT
 	/* Now check each metric item and find corresponding symbol in a cache */
 	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
 	cur = metric_symbols;
@@ -763,6 +764,7 @@ validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean s
 		}
 		cur = g_list_next (cur);
 	}
+#endif /* GLIB_COMPAT */
 
 	return TRUE;
 }

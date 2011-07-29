@@ -28,18 +28,18 @@
 
 
 
-#include "../config.h"
-#include "../main.h"
-#include "../message.h"
-#include "../modules.h"
-#include "../cfg_file.h"
-#include "../map.h"
-#include "../util.h"
-#include "../expressions.h"
-#include "../view.h"
-#include "../lua/lua_common.h"
-#include "../json/jansson.h"
-#include "../cfg_xml.h"
+#include "config.h"
+#include "main.h"
+#include "message.h"
+#include "cfg_file.h"
+#include "map.h"
+#include "util.h"
+#include "expressions.h"
+#include "view.h"
+#include "lua/lua_common.h"
+#include "json/jansson.h"
+#include "cfg_xml.h"
+
 
 #define DEFAULT_STATFILE_PREFIX "./"
 

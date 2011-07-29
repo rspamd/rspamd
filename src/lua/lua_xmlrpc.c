@@ -414,7 +414,7 @@ lua_xmlrpc_parse_reply (lua_State *L)
 		ud.param_count = 0;
 
 		ctx = g_markup_parse_context_new (&xmlrpc_parser,
-				G_MARKUP_TREAT_CDATA_AS_TEXT | G_MARKUP_PREFIX_ERROR_POSITION, &ud, NULL);
+				G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
 		res = g_markup_parse_context_parse (ctx, data, s, &err);
 
 		if (! res) {

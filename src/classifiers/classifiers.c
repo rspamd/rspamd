@@ -26,7 +26,6 @@
  * Common classifier functions
  */
 
-#include <sys/types.h>
 #include "classifiers.h"
 
 struct classifier               classifiers[] = {

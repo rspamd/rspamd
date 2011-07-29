@@ -24,7 +24,7 @@
 
 
 #include "lua_common.h"
-#include "../message.h"
+#include "message.h"
 
 #define LUA_GMIME_BRIDGE_GET(class, name, mime_class)									\
 static gint																				\

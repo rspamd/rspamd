@@ -134,6 +134,11 @@
 
 #cmakedefine HAVE_CLOCK_GETTIME  1
 
+#cmakedefine GLIB_COMPAT         1
+#cmakedefine GLIB_RE_COMPAT		 1
+#cmakedefine GLIB_UNISCRIPT_COMPAT		 1
+#cmakedefine GLIB_HASH_COMPAT		 1
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RID               "${ID}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
@@ -334,6 +339,17 @@
 #include <signal.h>
 #include <event.h>
 #include <glib.h>
+
+
+#ifdef GLIB_RE_COMPAT
+#include "gregex.h"
+#endif
+#ifdef GLIB_UNISCRIPT_COMPAT
+#include "guniscript.h"
+#endif
+#ifdef GLIB_COMPAT
+#include "gchecksum.h"
+#endif
 
 #ifndef BUILD_STATIC
 #include <gmodule.h>

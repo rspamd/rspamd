@@ -1,11 +1,11 @@
 #ifndef RSPAMD_LUA_H
 #define RSPAMD_LUA_H
 
-#include "../config.h"
+#include "config.h"
 #ifdef WITH_LUA
 
-#include "../main.h"
-#include "../cfg_file.h"
+#include "main.h"
+#include "cfg_file.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>

@@ -22,7 +22,7 @@
  */
 
 #include "lua_common.h"
-#include "../cdb/cdb.h"
+#include "cdb/cdb.h"
 
 #define CDB_REFRESH_TIME 60
 
@@ -104,7 +104,7 @@ lua_cdb_lookup (lua_State *L)
 	const gchar                    *what;
 	gchar                          *value;
 	gsize                           vlen;
-	goffset                         vpos;
+	gint64                          vpos;
 
 	/*
 	 * XXX: this code is placed here because event_loop is called inside workers, so start

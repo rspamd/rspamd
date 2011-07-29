@@ -26,12 +26,12 @@
  * Bayesian classifier
  */
 #include "classifiers.h"
-#include "../tokenizers/tokenizers.h"
-#include "../main.h"
-#include "../filter.h"
-#include "../cfg_file.h"
-#include "../binlog.h"
-#include "../lua/lua_common.h"
+#include "tokenizers/tokenizers.h"
+#include "main.h"
+#include "filter.h"
+#include "cfg_file.h"
+#include "binlog.h"
+#include "lua/lua_common.h"
 
 #define LOCAL_PROB_DENOM 16.0
 

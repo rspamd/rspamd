@@ -27,13 +27,11 @@
  */
 
 #include "classifiers.h"
-#include "../tokenizers/tokenizers.h"
-#include "../main.h"
-#include "../filter.h"
-#include "../cfg_file.h"
-#ifdef WITH_LUA
-#include "../lua/lua_common.h"
-#endif
+#include "tokenizers/tokenizers.h"
+#include "main.h"
+#include "filter.h"
+#include "cfg_file.h"
+#include "lua/lua_common.h"
 
 #define WINNOW_PROMOTION 1.23
 #define WINNOW_DEMOTION 0.83

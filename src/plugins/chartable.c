@@ -31,14 +31,13 @@
  *   (e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), default: 0.1
  */
 
-#include "../config.h"
-#include "../main.h"
-#include "../message.h"
-#include "../modules.h"
-#include "../cfg_file.h"
-#include "../expressions.h"
-#include "../view.h"
-#include "../cfg_xml.h"
+#include "config.h"
+#include "main.h"
+#include "message.h"
+#include "cfg_file.h"
+#include "expressions.h"
+#include "view.h"
+#include "cfg_xml.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1

@@ -361,7 +361,7 @@ process_sync_command (struct controller_session *session, gchar **args)
 static gboolean
 process_stat_command (struct controller_session *session)
 {
-	gchar                           out_buf[BUFSIZ], *numbuf;
+	gchar                           out_buf[BUFSIZ];
 	gint                            r;
 	guint64                         used, total, rev;
 	time_t                          ti;
@@ -406,13 +406,11 @@ process_stat_command (struct controller_session *session)
 				total = statfile_get_total_blocks (statfile);
 				statfile_get_revision (statfile, &rev, &ti);
 				if (total != (guint64)-1 && used != (guint64)-1) {
-					numbuf = g_format_size_for_display (st->size);
 					r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, 
-							"Statfile: %s (version %uL); length: %s; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
-							st->symbol, rev, numbuf, 
+							"Statfile: %s (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
+							st->symbol, rev, st->size,
 							(total - used), total,
 							(double)((double)(total - used) / (double)total) * 100.);
-					g_free (numbuf);
 				}
 			}
 			cur_st = g_list_next (cur_st);

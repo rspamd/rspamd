@@ -41,13 +41,17 @@
  * - bit (string): describes a prefix for a single bit
  */
 
-#include "../config.h"
-#include "../util.h"
-#include "../message.h"
-#include "../view.h"
-#include "../map.h"
-#include "../dns.h"
-#include "../cfg_xml.h"
+#include "config.h"
+#include "main.h"
+#include "message.h"
+#include "cfg_file.h"
+#include "expressions.h"
+#include "util.h"
+#include "view.h"
+#include "map.h"
+#include "dns.h"
+#include "cfg_xml.h"
+#include "hash.h"
 
 #include "surbl.h"
 

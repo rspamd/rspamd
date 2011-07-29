@@ -39,18 +39,17 @@
  *   fuzzy hashes
  */
 
-#include "../config.h"
-#include "../main.h"
-#include "../message.h"
-#include "../modules.h"
-#include "../cfg_file.h"
-#include "../expressions.h"
-#include "../util.h"
-#include "../view.h"
-#include "../map.h"
-#include "../images.h"
-#include "../fuzzy_storage.h"
-#include "../cfg_xml.h"
+#include "config.h"
+#include "main.h"
+#include "message.h"
+#include "cfg_file.h"
+#include "expressions.h"
+#include "util.h"
+#include "view.h"
+#include "map.h"
+#include "images.h"
+#include "fuzzy_storage.h"
+#include "cfg_xml.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10

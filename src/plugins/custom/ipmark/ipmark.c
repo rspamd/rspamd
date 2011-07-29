@@ -31,9 +31,9 @@
  * This plugin is a sample of custom filters system in rspamd
  */
 
-#include "../../../config.h"
-#include "../../../cfg_file.h"
-#include "../../../radix.h"
+#include "config.h"
+#include "cfg_file.h"
+#include "radix.h"
 
 #define ADD_COMMAND "add"
 #define DELETE_COMMAND "delete"

@@ -1,12 +1,11 @@
 #ifndef RSPAMD_MODULE_SURBL
 #define RSPAMD_MODULE_SURBL
 
-#include "../config.h"
-#include "../main.h"
-#include "../modules.h"
-#include "../cfg_file.h"
-#include "../memcached.h"
-#include "../trie.h"
+#include "config.h"
+#include "main.h"
+#include "cfg_file.h"
+#include "memcached.h"
+#include "trie.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
 #define DEFAULT_SURBL_WEIGHT 10

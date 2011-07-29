@@ -22,8 +22,8 @@
  */
 
 #include "lua_common.h"
-#include "../buffer.h"
-#include "../dns.h"
+#include "buffer.h"
+#include "dns.h"
 
 #define MAX_HEADERS_SIZE 8192
 

@@ -1,15 +1,10 @@
 #ifndef TOKENIZERS_H
 #define TOKENIZERS_H
 
-#include <sys/types.h>
-#include "../config.h"
-
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
-#include "../mem_pool.h"
-#include "../fstring.h"
-#include "../main.h"
+#include "config.h"
+#include "mem_pool.h"
+#include "fstring.h"
+#include "main.h"
 
 /* Size for features pipe */
 #define FEATURE_WINDOW_SIZE 5

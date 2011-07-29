@@ -979,6 +979,7 @@ err:
 	return FALSE;
 }
 
+#ifndef GLIB_HASH_COMPAT
 static gboolean
 rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
 		gsize clen, GHashTable *headers, GError **err)
@@ -1010,6 +1011,55 @@ rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
 
 	return TRUE;
 }
+#else
+/* Compatible version */
+struct hash_iter_cb {
+	gchar *buf;
+	gsize size;
+	gsize pos;
+};
+
+static void
+rspamd_hash_iter_cb (gpointer key, gpointer value, gpointer ud)
+{
+	struct hash_iter_cb            *cd = ud;
+
+	cd->pos += snprintf (cd->buf + cd->pos, cd->size - cd->pos,
+			"%s: %s\r\n", (const gchar *)key, (const gchar *)value);
+}
+
+static gboolean
+rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
+		gsize clen, GHashTable *headers, GError **err)
+{
+	static gchar                    outbuf[16384];
+	gint                            r;
+	struct hash_iter_cb             cbdata;
+
+	/* Write command */
+	r = snprintf (outbuf, sizeof (outbuf), "%s RSPAMC/1.3\r\n", command);
+	r += snprintf (outbuf + r, sizeof (outbuf) - r, "Content-Length: %lu\r\n", (unsigned long)clen);
+	/* Iterate through headers */
+	if (headers != NULL) {
+		cbdata.size = sizeof (outbuf);
+		cbdata.pos = r;
+		cbdata.buf = outbuf;
+		g_hash_table_foreach (headers, rspamd_hash_iter_cb, &cbdata);
+		r = cbdata.pos;
+	}
+	r += snprintf (outbuf + r, sizeof (outbuf) - r, "\r\n");
+
+	if ((r = write (c->socket, outbuf, r)) == -1) {
+		if (*err == NULL) {
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Write error: %s",
+				strerror (errno));
+		}
+		return FALSE;
+	}
+
+	return TRUE;
+}
+#endif
 
 static void
 rspamd_free_connection (struct rspamd_connection *c)

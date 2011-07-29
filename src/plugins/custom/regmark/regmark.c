@@ -45,9 +45,9 @@
  *  <string> level
  */
 
-#include "../../../config.h"
-#include "../../../cfg_file.h"
-#include "../../../main.h"
+#include "config.h"
+#include "cfg_file.h"
+#include "main.h"
 #include "metaphone.h"
 #include "prefix_tree.h"
 

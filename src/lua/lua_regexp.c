@@ -22,7 +22,7 @@
  */
 
 #include "lua_common.h"
-#include "../expressions.h"
+#include "expressions.h"
 
 LUA_FUNCTION_DEF (regexp, create);
 LUA_FUNCTION_DEF (regexp, get_cached);

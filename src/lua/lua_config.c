@@ -24,13 +24,13 @@
 
 
 #include "lua_common.h"
-#include "../expressions.h"
-#include "../map.h"
-#include "../message.h"
-#include "../radix.h"
-#include "../trie.h"
-#include "../classifiers/classifiers.h"
-#include "../cfg_xml.h"
+#include "expressions.h"
+#include "map.h"
+#include "message.h"
+#include "radix.h"
+#include "trie.h"
+#include "classifiers/classifiers.h"
+#include "cfg_xml.h"
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
