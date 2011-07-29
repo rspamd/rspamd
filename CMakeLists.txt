@@ -749,7 +749,6 @@ INCLUDE(CPack)
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     INCLUDE("linux/cmake/DpkgDeb.cmake")
-    INCLUDE("linux/cmake/UseRPMTools.cmake")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -773,57 +772,6 @@ ELSE(GMIME24)
 ENDIF(GMIME24)
 
 SET(PACKAGE_VERSION "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
-
-IF(RPMTools_FOUND)
-    FILE(WRITE linux/rspamd.spec
-"# -*- rpm-spec -*-
-Summary:        ${RPMNAME}
-Name:           ${RPMNAME}
-Version:        ${PACKAGE_VERSION}
-Release:        ${PACKAGE_RELEASE}
-License:        BSD
-Group:          Mail
-Source:         ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz
-BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root
-#BuildRequires:	cmake, gmime-devel, glib2-devel, perl, libevent-devel, lua-devel
-
-%define prefix /usr
-%define rpmprefix $RPM_BUILD_ROOT%{prefix}
-%define srcdirname %{name}-%{version}-Source
-
-%description
-${RPMNAME} : Fast and modular antispam system written in C
-
-%prep
-%setup -q -n %{srcdirname}
-
-%build
-cd ..
-cd %{srcdirname}
-rm -f CMakeCache.txt
-cmake -DCMAKE_INSTALL_PREFIX=%{prefix} -DDESTDIR=%{rpmprefix} .
-make clean
-make DESTDIR=%{rpmprefix} CMAKE_INSTALL_PREFIX=%{prefix}
-
-  
-%install 
-make DESTDIR=%{rpmprefix} CMAKE_INSTALL_PREFIX=%{prefix} install
-cd ..
-
-%clean
-rm -rf %{srcdirname}
-
-%files
-%defattr(-,root,root,-)
-%dir %{prefix}
-%{prefix}/*
-
-%changelog
-* Wed Sep 15 2010 vstakhov <vsevolod@highsecure.ru>
-  Release 0.3.2
-")
-    RPMTools_ADD_RPM_TARGETS("rspamd" "linux/rspamd.spec")
-ENDIF(RPMTools_FOUND)
 
 IF(DPKG_FOUND STREQUAL "YES")
     ADD_DEBIAN_PACKAGE("rspamd")    
