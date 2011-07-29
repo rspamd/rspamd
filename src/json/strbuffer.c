@@ -5,7 +5,7 @@
  * it under the terms of the MIT license. See LICENSE for details.
  */
 
-#include "../config.h"
+#include "config.h"
 #include "strbuffer.h"
 #include "util.h"
 

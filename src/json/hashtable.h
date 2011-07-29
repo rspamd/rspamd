@@ -8,7 +8,7 @@
 #ifndef HASHTABLE_H
 #define HASHTABLE_H
 
-#include "../config.h"
+#include "config.h"
 
 typedef unsigned int (*key_hash_fn)(const void *key);
 typedef int (*key_cmp_fn)(const void *key1, const void *key2);
