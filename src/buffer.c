@@ -635,16 +635,21 @@ rspamd_dispatcher_sendfile (rspamd_io_dispatcher_t *d, gint fd, size_t len)
 void
 rspamd_dispatcher_pause (rspamd_io_dispatcher_t * d)
 {
+	debug_ip ("paused dispatcher");
 	event_del (d->ev);
+	d->is_restored = FALSE;
 }
 
 void
 rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
 {
-	event_del (d->ev);
-	event_set (d->ev, d->fd, EV_READ | EV_WRITE, dispatcher_cb, d);
-	event_add (d->ev, d->tv);
-	d->is_restored = TRUE;
+	if (!d->is_restored) {
+		debug_ip ("restored dispatcher");
+		event_del (d->ev);
+		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, d);
+		event_add (d->ev, d->tv);
+		d->is_restored = TRUE;
+	}
 }
 
 #undef debug_ip
