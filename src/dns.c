@@ -1150,6 +1150,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	struct in_addr addr;
 	const gchar *name, *service, *proto;
 	gint r;
+	struct dns_header *header;
 
 	/* Check throttling */
 	if (resolver->throttling) {
@@ -1233,6 +1234,12 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		evtimer_add (&req->timer_event, &req->tv);
 
 		/* Add request to hash table */
+		while (g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER ((guint)req->id))) {
+			/* Check for unique id */
+			header = (struct dns_header *)req->packet;
+			header->qid = dns_k_permutor_step (resolver->permutor);
+			req->id = header->qid;
+		}
 		g_hash_table_insert (resolver->requests, GUINT_TO_POINTER ((guint)req->id), req);
 		register_async_event (session, (event_finalizer_t)dns_fin_cb, req, FALSE);
 	}
