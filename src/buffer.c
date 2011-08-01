@@ -314,8 +314,8 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 			d->in_buf->pos += r;
 			d->in_buf->data->len += r;
 		}
-		debug_ip("read %z characters, policy is %s, watermark is: %z", r,
-				d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", d->nchars);
+		debug_ip("read %z characters, policy is %s, watermark is: %z, buffer has %z bytes", r,
+				d->policy == BUFFER_LINE ? "LINE" : "CHARACTER", d->nchars, d->in_buf->data->len);
 	}
 
 	saved_policy = d->policy;

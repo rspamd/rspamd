@@ -272,6 +272,7 @@ read_socket (f_str_t * in, void *arg)
 		task->msg->begin = in->begin;
 		task->msg->len = in->len;
 		debug_task ("got string of length %z", task->msg->len);
+		task->state = WAIT_FILTER;
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");
@@ -322,6 +323,9 @@ read_socket (f_str_t * in, void *arg)
 	case WRITE_REPLY:
 	case WRITE_ERROR:
 		return write_socket (task);
+		break;
+	case WAIT_FILTER:
+		msg_info ("ignoring trailing garbadge of size %z", in->len);
 		break;
 	default:
 		debug_task ("invalid state on reading stage");

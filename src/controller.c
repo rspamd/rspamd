@@ -911,10 +911,10 @@ controller_read_socket (f_str_t * in, void *arg)
 
 		free_task (task, FALSE);
 		i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
+		session->state = STATE_REPLY;
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
 		}
-		session->state = STATE_REPLY;
 		break;
 	case STATE_LEARN_SPAM_PRE:
 		session->learn_buf = in;
@@ -948,7 +948,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			}
 		}
 		else if (r == 0) {
-			session->state = STATE_LEARN;
+			session->state = STATE_LEARN_SPAM;
 			task->dispatcher = session->dispatcher;
 			session->learn_task = task;
 			rspamd_dispatcher_pause (session->dispatcher);
@@ -1075,7 +1075,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	}
 
 	if (session->state == STATE_REPLY || session->state == STATE_QUIT) {
-		return controller_write_socket (session);
+		rspamd_dispatcher_restore (session->dispatcher);
 	}
 
 	return TRUE;
@@ -1094,7 +1094,7 @@ controller_write_socket (void *arg)
 		destroy_session (session->s);
 		return FALSE;
 	}
-	else if (session->state == STATE_LEARN) {
+	else if (session->state == STATE_LEARN_SPAM) {
 		/* Perform actual learn here */
 		if (! learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err)) {
 			if (err) {
@@ -1114,6 +1114,7 @@ controller_write_socket (void *arg)
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
 		}
+		return TRUE;
 	}
 	else if (session->state == STATE_REPLY) {
 		session->state = STATE_COMMAND;
@@ -1140,16 +1141,16 @@ static void
 accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	struct sockaddr_storage         ss;
+	union sa_union                  su;
 	struct controller_session      *new_session;
 	struct timeval                 *io_tv;
-	socklen_t                       addrlen = sizeof (ss);
+	socklen_t                       addrlen = sizeof (su.ss);
 	gint                            nfd;
 	struct rspamd_controller_ctx   *ctx;
 
 	ctx = worker->ctx;
 
-	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&ss, &addrlen)) == -1) {
+	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
 		return;
 	}
 
@@ -1175,6 +1176,16 @@ accept_socket (gint fd, short what, void *arg)
 	new_session->s = new_async_session (new_session->session_pool, free_session, new_session);
 
 	new_session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, controller_read_socket, controller_write_socket, controller_err_socket, io_tv, (void *)new_session);
+	if (su.ss.ss_family == AF_UNIX) {
+		msg_info ("accepted connection from unix socket");
+		new_session->dispatcher->peer_addr = INADDR_LOOPBACK;
+	}
+	else if (su.ss.ss_family == AF_INET) {
+		msg_info ("accepted connection from %s port %d",
+				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
+		memcpy (&new_session->dispatcher->peer_addr, &su.s4.sin_addr,
+				sizeof (guint32));
+	}
 	if (! rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
 		msg_warn ("cannot write greeting");
 	}

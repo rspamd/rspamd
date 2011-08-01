@@ -899,9 +899,12 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 		}
 	}
 	/* Poll socket */
-	if (poll_sync_socket (c->socket, client->read_timeout, POLL_IN) == -1) {
+	if ((r = poll_sync_socket (c->socket, client->read_timeout, POLL_IN)) <= 0) {
 		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Could not connect to server %s: %s",
+			if (r == 0) {
+				errno = ETIMEDOUT;
+			}
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
 					c->server->name, strerror (errno));
 		}
 		upstream_fail (&c->server->up, c->connection_time);
@@ -1100,8 +1103,11 @@ rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, 
 	make_socket_nonblocking (c->socket);
 	/* Poll socket */
 	do {
-		if (poll_sync_socket (c->socket, client->read_timeout, POLL_IN) == -1) {
+		if ((r = poll_sync_socket (c->socket, client->read_timeout, POLL_IN)) <= 0) {
 			if (*err == NULL) {
+				if (r == 0) {
+					errno = ETIMEDOUT;
+				}
 				*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
 						c->server->name, strerror (errno));
 			}
@@ -1186,8 +1192,11 @@ rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
 	gint                            r;
 	static const gchar              greeting_str[] = "Rspamd";
 
-	if (poll_sync_socket (c->socket, client->read_timeout, POLL_IN) == -1) {
+	if ((r = poll_sync_socket (c->socket, client->read_timeout, POLL_IN)) <= 0) {
 		if (*err == NULL) {
+			if (r == 0) {
+				errno = ETIMEDOUT;
+			}
 			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
 					c->server->name, strerror (errno));
 		}
