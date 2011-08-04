@@ -828,13 +828,15 @@ static gboolean
 show_metric_symbols_rspamc (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
 	cd->cur_metric = metric_res->metric;
-	g_hash_table_foreach (metric_res->symbols, metric_symbols_callback_rspamc, cd);
-	/* Remove last , from log buf */
-	if (cd->log_buf[cd->log_offset - 1] == ',') {
-		cd->log_buf[--cd->log_offset] = '\0';
-	}
-	if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
-		cd->symbols_buf[--cd->symbols_offset] = '\0';
+	if (cd->alive) {
+		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback_rspamc, cd);
+		/* Remove last , from log buf */
+		if (cd->log_buf[cd->log_offset - 1] == ',') {
+			cd->log_buf[--cd->log_offset] = '\0';
+		}
+		if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
+			cd->symbols_buf[--cd->symbols_offset] = '\0';
+		}
 	}
 
 	return TRUE;
