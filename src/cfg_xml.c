@@ -690,7 +690,7 @@ call_param_handler (struct rspamd_xml_userdata *ctx, const gchar *name, gchar *v
 {
 	struct xml_parser_rule         *rule;
 	struct xml_config_param        *param;
-	gint                            i;
+	guint                           i;
 	
 	/* First find required section */
 	for (i = 0; i < G_N_ELEMENTS (grammar); i ++) {
@@ -1159,7 +1159,7 @@ handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	glob_t globbuf;
 	gchar                           *pattern;
 	size_t len;
-	gint                            i;
+	guint                           i;
 
 	if (stat (data, &st) == -1) {
 		msg_err ("cannot stat path %s, %s", data, strerror (errno));

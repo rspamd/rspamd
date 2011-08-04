@@ -506,12 +506,12 @@ make_listen_key (struct in_addr *addr, gint port, gint family, gchar *path)
 	if (family == AF_INET) {
 		/* Make fnv hash from bytes of addr and port */
 		key = (gchar *)&addr->s_addr;
-		while (key - (gchar *)&addr->s_addr < sizeof (addr->s_addr)) {
+		while (key - (gchar *)&addr->s_addr < (gint)sizeof (addr->s_addr)) {
 			res ^= (gchar)*key++;
 			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
 		}
 		key = (gchar *)&port;
-		while (key - (gchar *)&port < sizeof (addr->s_addr)) {
+		while (key - (gchar *)&port < (gint)sizeof (addr->s_addr)) {
 			res ^= (gchar)*key++;
 			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
 		}

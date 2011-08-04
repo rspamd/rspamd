@@ -54,7 +54,7 @@ rspamd_trie_create (gboolean icase)
  * Insert a single character as level of binary trie
  */
 static struct rspamd_trie_state *
-rspamd_trie_insert_char (rspamd_trie_t *trie, gint depth, struct rspamd_trie_state *q, gchar c)
+rspamd_trie_insert_char (rspamd_trie_t *trie, guint depth, struct rspamd_trie_state *q, gchar c)
 {
 	struct rspamd_trie_match     *m;
 
@@ -103,7 +103,7 @@ rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 	const guchar               *p =  pattern;
 	struct rspamd_trie_state   *q, *q1, *r;
 	struct rspamd_trie_match   *m, *n;
-	gint                        i, depth = 0;
+	guint                       i, depth = 0;
 	gchar                       c;
 
 	/* Insert pattern to the trie */

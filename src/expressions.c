@@ -1731,7 +1731,7 @@ compare_subtype (struct worker_task *task, GMimeContentType * ct, gchar *subtype
 }
 
 static inline                   gboolean
-compare_len (struct mime_part *part, gint min, gint max)
+compare_len (struct mime_part *part, guint min, guint max)
 {
 	if (min == 0 && max == 0) {
 		return TRUE;

@@ -101,7 +101,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			event_add (d->ev, d->tv);
 		}
 	}
-	else if (r + d->offset < d->file_size) {
+	else if (r + d->offset < (ssize_t)d->file_size) {
 		debug_ip("partially write data, retry");
 		/* Wait for other event */
 		event_del (d->ev);
@@ -334,7 +334,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		* c - pointer to current position (buffer->begin + r)
 		* res - result string 
 		*/
-		while (r < len) {
+		while (r < (ssize_t)len) {
 			if (*c == '\n') {
 				res.begin = b;
 				res.len = c - b;
@@ -389,7 +389,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		break;
 	case BUFFER_CHARACTER:
 		r = d->nchars;
-		if (len >= r) {
+		if ((ssize_t)len >= r) {
 			res.begin = b;
 			res.len = r;
 			c = b + r;
@@ -398,7 +398,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					return;
 				}
 				/* Move remaining string to begin of buffer (draining) */
-				if (len > r) {
+				if ((ssize_t)len > r) {
 					len -= r;
 					memmove (d->in_buf->data->begin, c, len);
 					d->in_buf->data->len = len;
@@ -409,7 +409,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					d->in_buf->data->len = 0;
 					d->in_buf->pos = d->in_buf->data->begin;
 				}
-				if (d->policy != saved_policy && len != r) {
+				if (d->policy != saved_policy && (ssize_t)len != r) {
 					debug_ip("policy changed during callback, restart buffer's processing");
 					read_buffers (fd, d, TRUE);
 					return;

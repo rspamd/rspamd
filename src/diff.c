@@ -355,7 +355,7 @@ compare_diff_distance (f_str_t *s1, f_str_t *s2)
 {
 	GArray *ses;
 	struct diff_edit *e;
-	gint i;
+	guint i;
 	guint32 distance = 0;
 
 	ses = g_array_sized_new (FALSE, TRUE, sizeof (struct diff_edit), MAX_DIFF);

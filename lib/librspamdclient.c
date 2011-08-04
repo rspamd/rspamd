@@ -439,7 +439,7 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 		case 1:
 			/* Read boolean result */
 			if (*p == ';') {
-				if (p - c >= sizeof("Skip")) {
+				if (p - c >= (gint)sizeof("Skip")) {
 					if (memcmp (c, "Skip", p - c - 1) == 0) {
 						new->is_skipped = TRUE;
 					}
@@ -879,12 +879,12 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 	/* Try to obtain string from the input buffer */
 	if (c->in_buf->len > 0) {
 		len = 0;
-		while (len < c->in_buf->len) {
+		while (len < (gint)c->in_buf->len) {
 			p = c->in_buf->str[len];
 			if (p == '\r' || p == '\n') {
 				if (parse_rspamd_reply_line (c, len, err)) {
 					/* Strip '\r\n' */
-					while (len < c->in_buf->len && (p == '\r' || p == '\n')) {
+					while (len < (gint)c->in_buf->len && (p == '\r' || p == '\n')) {
 						p = c->in_buf->str[++len];
 					}
 					/* Move remaining buffer to the begin of string */
@@ -1116,7 +1116,7 @@ rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, 
 		}
 		if ((r = read (c->socket, tmpbuf, sizeof (tmpbuf))) > 0) {
 			/* Check the end of the buffer for END marker */
-			if (r >= sizeof (end_marker) - 1 &&
+			if (r >= (gint)sizeof (end_marker) - 1 &&
 					memcmp (tmpbuf + r - sizeof (end_marker) + 1, end_marker, sizeof (end_marker) - 1) == 0) {
 				r -= sizeof (end_marker) - 1;
 				/* Copy the rest to the result string */
@@ -1204,7 +1204,7 @@ rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
 		return FALSE;
 	}
 	if ((r = read (c->socket, inbuf, sizeof (inbuf))) > 0) {
-		if (r >= sizeof (greeting_str) - 1 &&
+		if (r >= (gint)sizeof (greeting_str) - 1 &&
 				memcmp (inbuf, greeting_str, sizeof (greeting_str) - 1) == 0) {
 			return TRUE;
 		}

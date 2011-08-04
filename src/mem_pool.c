@@ -58,13 +58,10 @@ static memory_pool_stat_t      *mem_pool_stat = NULL;
  * Function that return free space in pool page
  * @param x pool page struct
  */
-static gsize
+static gint
 pool_chain_free (struct _pool_chain *chain)
 {
-	guint8                         *p;
-
-	p = align_ptr (chain->pos, MEM_ALIGNMENT);
-	return chain->len - (p - chain->begin);
+	return (gint)chain->len - (chain->pos - chain->begin + MEM_ALIGNMENT);
 }
 
 static struct _pool_chain      *
@@ -87,8 +84,8 @@ pool_chain_new (gsize size)
 		abort ();
 	}
 
-	chain->len = size;
 	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
+	chain->len = size;
 	chain->next = NULL;
 	STAT_LOCK ();
 	mem_pool_stat->bytes_allocated += size;
@@ -129,9 +126,8 @@ pool_chain_new_shared (gsize size)
 #else
 #   	error No mmap methods are defined
 #endif
-	chain->len = size;
-	chain->pos = chain->begin;
 	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
+	chain->len = size;
 	chain->lock = NULL;
 	chain->next = NULL;
 	STAT_LOCK ();
@@ -204,7 +200,7 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 {
 	guint8                         *tmp;
 	struct _pool_chain             *new, *cur;
-	gsize                           free;
+	gint                            free;
 
 	if (pool) {
 #ifdef MEMORY_GREEDY
@@ -213,27 +209,29 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 		cur = pool->cur_pool;
 #endif
 		/* Find free space in pool chain */
-		while ((free = pool_chain_free (cur)) < size && cur->next) {
+		while ((free = pool_chain_free (cur)) < (gint)size && cur->next) {
 			cur = cur->next;
 		}
-		if (free < size && cur->next == NULL) {
+		if (free < (gint)size && cur->next == NULL) {
 			/* Allocate new pool */
-			if (cur->len >= size) {
+			if (cur->len >= size + MEM_ALIGNMENT) {
 				new = pool_chain_new (cur->len);
 			}
 			else {
 				mem_pool_stat->oversized_chunks++;
-				new = pool_chain_new (size + pool->first_pool->len);
+				new = pool_chain_new (size + pool->first_pool->len + MEM_ALIGNMENT);
 			}
 			/* Attach new pool to chain */
 			cur->next = new;
 			pool->cur_pool = new;
-			new->pos += size;
-
-			return new->begin;
+			/* No need to align again */
+			tmp = new->pos;
+			new->pos = tmp + size;
+			return tmp;
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
+		g_assert (cur->pos - cur->begin <= (gint)cur->len);
 		return tmp;
 	}
 	return NULL;
@@ -315,6 +313,7 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 {
 	guint8                         *tmp;
 	struct _pool_chain_shared      *new, *cur;
+	gint                            free;
 
 	if (pool) {
 		g_return_val_if_fail (size > 0, NULL);
@@ -326,17 +325,17 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 		}
 
 		/* Find free space in pool chain */
-		while (pool_chain_free ((struct _pool_chain *)cur) < size && cur->next) {
+		while ((free = pool_chain_free ((struct _pool_chain *)cur)) < (gint)size && cur->next) {
 			cur = cur->next;
 		}
-		if (cur->next == NULL) {
+		if (free < (gint)size && cur->next == NULL) {
 			/* Allocate new pool */
-			if (cur->len >= size) {
+			if (cur->len >= size + MEM_ALIGNMENT) {
 				new = pool_chain_new_shared (cur->len);
 			}
 			else {
 				mem_pool_stat->oversized_chunks++;
-				new = pool_chain_new_shared (size + cur->len);
+				new = pool_chain_new_shared (size + pool->first_pool->len + MEM_ALIGNMENT);
 			}
 			/* Attach new pool to chain */
 			cur->next = new;

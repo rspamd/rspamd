@@ -227,7 +227,7 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 				break;
 			case 1:
 				/* Begin parse ip */
-				if (p - ip_buf >= sizeof (ip_buf) || dots > 3) {
+				if (p - ip_buf >= (gint)sizeof (ip_buf) || dots > 3) {
 					return FALSE;
 				}
 				if (g_ascii_isdigit (*pos)) {
@@ -686,7 +686,7 @@ reverse_spf_ip (gchar *ip, gint len)
 	gchar                           ipbuf[sizeof("255.255.255.255") - 1], *p, *c;
 	gint                            t = 0, l = len;
 
-	if (len > sizeof (ipbuf)) {
+	if (len > (gint)sizeof (ipbuf)) {
 		msg_info ("cannot reverse string of length %d", len);
 		return;
 	}

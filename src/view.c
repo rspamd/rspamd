@@ -229,7 +229,7 @@ check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 	cur = task->rcpt;
 	while (cur) {
 		if ((p = strchr (cur->data, '@')) != NULL) {
-			l = MIN (sizeof (rcpt_user) - 1, p - (gchar *)cur->data);
+			l = MIN ((gint)sizeof (rcpt_user) - 1, p - (gchar *)cur->data);
 			memcpy (rcpt_user, cur->data, l);
 			rcpt_user[l] = '\0';
 			/* First try to lookup in hashtable */

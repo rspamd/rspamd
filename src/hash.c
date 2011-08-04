@@ -401,7 +401,7 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value, t
 	rspamd_lru_element_t           *res;
 	gint                            removed = 0;
 
-	if (g_hash_table_size (hash->storage) >= hash->maxsize) {
+	if ((gint)g_hash_table_size (hash->storage) >= hash->maxsize) {
 		/* Expire some elements */
 		res = g_queue_pop_tail (hash->q);
 		while (res != NULL && now - res->store_time > hash->maxage) {

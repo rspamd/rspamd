@@ -84,13 +84,13 @@ struct fuzzy_ctx {
 	gint                            servers_num;
 	memory_pool_t                  *fuzzy_pool;
 	double                          max_score;
-	gint32                          min_hash_len;
+	guint32                         min_hash_len;
 	radix_tree_t                   *whitelist;
 	GHashTable                     *mappings;
 	GList                          *mime_types;
-	gint32                          min_bytes;
-	gint32                          min_height;
-	gint32                          min_width;
+	guint32                         min_bytes;
+	guint32                         min_height;
+	guint32                         min_width;
 	guint32                         io_timeout;
 };
 
@@ -240,7 +240,7 @@ parse_servers_string (gchar *str)
 		if ((p = strchr (strvec[i], ':')) != NULL) {
 			j = 0;
 			p++;
-			while (g_ascii_isdigit (*(p + j)) && j < sizeof (portbuf) - 1) {
+			while (g_ascii_isdigit (*(p + j)) && j < (gint)sizeof (portbuf) - 1) {
 				portbuf[j] = *(p + j);
 				j++;
 			}

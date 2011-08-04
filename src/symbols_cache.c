@@ -364,6 +364,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	double                         *w;  
 	guint32                         mask = 0xFFFFFFFF;
 	struct dynamic_map_item        *it;
+	gint                            rr;
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
@@ -412,19 +413,19 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 					t = g_list_prepend (t, item);
 					/* Replace pointers in radix tree and in destructor function */
 					memory_pool_replace_destructor (dynamic_pool, (pool_destruct_func)g_list_free, (gpointer)r, t);
-					r = radix32tree_replace (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-					if (r == -1) {
+					rr = radix32tree_replace (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (rr == -1) {
 						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
 					}
 				}
 				else {
 					t = g_list_prepend (NULL, item);
 					memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
-					r = radix32tree_insert (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-					if (r == -1) {
+					rr = radix32tree_insert (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (rr == -1) {
 						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
 					}
-					else if (r == 1) {
+					else if (rr == 1) {
 						msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
 					}
 				}
@@ -437,19 +438,19 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 					t = g_list_prepend (t, item);
 					/* Replace pointers in radix tree and in destructor function */
 					memory_pool_replace_destructor (dynamic_pool, (pool_destruct_func)g_list_free, (gpointer)r, t);
-					r = radix32tree_replace (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-					if (r == -1) {
+					rr = radix32tree_replace (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (rr == -1) {
 						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
 					}
 				}
 				else {
 					t = g_list_prepend (NULL, item);
 					memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
-					r = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-					if (r == -1) {
+					rr = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					if (rr == -1) {
 						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
 					}
-					else if (r == 1) {
+					else if (rr == 1) {
 						msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
 					}
 				}

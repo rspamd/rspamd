@@ -146,7 +146,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 			}
 
 			scc = g_unichar_get_script (c);
-			if (scc < G_N_ELEMENTS (scripts)) {
+			if (scc < (gint)G_N_ELEMENTS (scripts)) {
 				scripts[scc] ++;
 			}
 			p1 = g_utf8_next_char (p);

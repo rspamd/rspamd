@@ -103,7 +103,7 @@ write_http_request (struct rspamd_map *map, struct http_map_data *data, gint soc
  * FSM for parsing HTTP reply
  */
 static gchar                  *
-parse_http_reply (gchar * chunk, size_t len, struct http_reply *reply)
+parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 {
 	gchar                         *s, *p, *err_str, *tmp;
 	p = chunk;
@@ -194,7 +194,7 @@ parse_http_reply (gchar * chunk, size_t len, struct http_reply *reply)
  * Read and parse chunked header
  */
 static gint
-read_chunk_header (gchar * buf, size_t len, struct http_map_data *data)
+read_chunk_header (gchar * buf, gint len, struct http_map_data *data)
 {
 	gchar                           chunkbuf[32], *p, *c, *err_str;
 	gint                            skip = 0;
@@ -202,7 +202,7 @@ read_chunk_header (gchar * buf, size_t len, struct http_map_data *data)
 	p = chunkbuf;
 	c = buf;
 	/* Find hex digits */
-	while (g_ascii_isxdigit (*c) && p - chunkbuf < sizeof (chunkbuf) - 1 && skip < len) {
+	while (g_ascii_isxdigit (*c) && p - chunkbuf < (gint)(sizeof (chunkbuf) - 1) && skip < len) {
 		*p++ = *c++;
 		skip++;
 	}
@@ -517,7 +517,7 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 			hostend = p;
 			i = 0;
 			p++;
-			while (g_ascii_isdigit (*p) && i < sizeof (portbuf) - 1) {
+			while (g_ascii_isdigit (*p) && i < (gint)sizeof (portbuf) - 1) {
 				portbuf[i++] = *p++;
 			}
 			if (*p != '/') {
@@ -573,7 +573,7 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
  * FSM for parsing lists
  */
 gchar                  *
-abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data, insert_func func)
+abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
 {
 	gchar                         *c, *p, *key = NULL, *value = NULL;
 
@@ -665,7 +665,7 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, size_t len, struct 
 }
 
 gchar                  *
-abstract_parse_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data, insert_func func)
+abstract_parse_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
 {
 	gchar                         *s, *p, *str, *start;
 
@@ -804,7 +804,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 
 /* Helpers */
 gchar                         *
-read_host_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+read_host_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -821,7 +821,7 @@ fin_host_list (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 gchar                         *
-read_kv_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+read_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -838,7 +838,7 @@ fin_kv_list (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 gchar                         *
-read_radix_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+read_radix_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = radix_tree_create ();

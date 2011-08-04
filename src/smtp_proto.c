@@ -62,7 +62,7 @@ parse_smtp_command (struct smtp_session *session, f_str_t *line, struct smtp_com
 		SMTP_PARSE_DONE
 	}                              state;
 	gchar                         *p, *c, ch, cmd_buf[4];
-	gint                            i;
+	guint                          i;
 	f_str_t                       *arg = NULL;
 	struct smtp_command           *pcmd;
 	
@@ -202,7 +202,7 @@ end:
 static gboolean
 check_smtp_path (f_str_t *path)
 {
-	gint                            i;
+	guint                            i;
 	gchar                           *p;
 
 	p = path->begin;

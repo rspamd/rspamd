@@ -256,7 +256,7 @@ fuzzy_hash_t                   *
 fuzzy_init (f_str_t * in, memory_pool_t * pool)
 {
 	fuzzy_hash_t                   *new;
-	gint                            i, repeats = 0;
+	guint                           i, repeats = 0;
 	gchar                          *c = in->begin, last = '\0';
 	gsize                           real_len = 0;
 
@@ -337,7 +337,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 
 	if (part->is_utf) {
 		while (c < end) {
-			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+			if (cur_ex != NULL && (gint)cur_ex->pos == c - begin) {
 				c += cur_ex->len + 1;
 				cur_offset = g_list_next (cur_offset);
 				if (cur_offset != NULL) {
@@ -355,7 +355,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 	}
 	else {
 		while (c < end) {
-			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+			if (cur_ex != NULL && (gint)cur_ex->pos == c - begin) {
 				c += cur_ex->len + 1;
 				cur_offset = g_list_next (cur_offset);
 				if (cur_offset != NULL) {
@@ -394,7 +394,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 	if (part->is_utf) {
 
 		while (c < end) {
-			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+			if (cur_ex != NULL && (gint)cur_ex->pos == c - begin) {
 				c += cur_ex->len + 1;
 				cur_offset = g_list_next (cur_offset);
 				if (cur_offset != NULL) {
@@ -415,7 +415,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 	}
 	else {
 		while (c < end) {
-			if (cur_ex != NULL && cur_ex->pos == c - begin) {
+			if (cur_ex != NULL && (gint)cur_ex->pos == c - begin) {
 				c += cur_ex->len + 1;
 				cur_offset = g_list_next (cur_offset);
 				if (cur_offset != NULL) {

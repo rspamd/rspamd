@@ -216,7 +216,7 @@ check_uri_file (gchar *name)
 static gint
 url_init (void)
 {
-	gint                            i;
+	guint                            i;
 	if (url_scanner == NULL) {
 		url_scanner = g_malloc (sizeof (struct url_match_scanner));
 		url_scanner->matchers = matchers;
@@ -918,7 +918,7 @@ url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_
 {
 	const gchar                    *p;
 	gchar                           stop;
-	gint                            i;
+	guint                            i;
 
 	p = pos + strlen (match->pattern);
 	if (*p == '/') {
@@ -964,9 +964,9 @@ url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 {
 	const gchar                    *p, *c;
 	gchar                           open_brace = '\0', close_brace = '\0';
-	gint                            i, brace_stack = 0;
+	gint                            brace_stack = 0;
 	gboolean                        passwd = FALSE;
-	guint                           port;
+	guint                           port, i;
 
 	p = pos + strlen (match->pattern);
 	for (i = 0; i < G_N_ELEMENTS (url_braces) / 2; i += 2) {

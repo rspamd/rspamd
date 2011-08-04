@@ -340,7 +340,8 @@ lua_call_filter (const gchar *function, struct worker_task *task)
 gint
 lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number)
 {
-	gint                            result, i;
+	gint                            result;
+	guint                           i;
 	lua_State                      *L = task->cfg->lua_state;
 
 	lua_getglobal (L, function);

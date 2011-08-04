@@ -685,7 +685,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 					break;
 				}
 			}
-			rspamd_strlcpy (tagbuf, c, MIN (sizeof(tagbuf), p - c + 1));
+			rspamd_strlcpy (tagbuf, c, MIN ((gint)sizeof(tagbuf), p - c + 1));
 			if ((tag = get_tag_by_name (tagbuf)) != NULL) {
 				if (tag->id == id) {
 					break;
@@ -797,7 +797,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 		}
 		len = 0;
 		p = c;
-		while (*p && p - tag_text < tag_len) {
+		while (*p && (guint)(p - tag_text) < tag_len) {
 			if (got_double_quote) {
 				if (*p == '"') {
 					break;

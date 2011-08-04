@@ -110,7 +110,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	token_node_t                   *node = key;
 	struct bayes_callback_data     *cd = data;
 	double                          renorm = 0;
-	gint                            i;
+	guint                            i;
 	double                          local_hits = 0;
 	struct bayes_statfile_data     *cur;
 
@@ -183,7 +183,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	struct bayes_callback_data      data;
 	gchar                          *value;
 	gint                            nodes, i = 0, cnt, best_num = 0;
-	gsize                           minnodes;
+	gint                            minnodes;
 	guint64                         rev, total_learns = 0;
 	double                          best = 0;
 	struct statfile                *st;
@@ -287,7 +287,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	struct bayes_callback_data      data;
 	gchar                          *value;
 	gint                            nodes;
-	gsize                           minnodes;
+	gint                            minnodes;
 	struct statfile                *st, *sel_st = NULL;
 	stat_file_t                    *to_learn;
 	GList                          *cur;
@@ -387,7 +387,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	struct bayes_callback_data      data;
 	gchar                          *value;
 	gint                            nodes;
-	gsize                           minnodes;
+	gint                            minnodes;
 	struct statfile                *st;
 	stat_file_t                    *file;
 	GList                          *cur;

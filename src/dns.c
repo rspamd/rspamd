@@ -770,7 +770,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		msg_info ("bad RR name");
 		return -1;
 	}
-	if (p - *pos >= *remain - sizeof (guint16) * 5 || *remain <= 0) {
+	if ((gint)(p - *pos) >= (gint)(*remain - sizeof (guint16) * 5) || *remain <= 0) {
 		msg_info ("stripped dns reply");
 		return -1;
 	}
@@ -875,7 +875,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			p += datalen;
 		}
 		else {
-			if (p - *pos > *remain - sizeof (guint16) * 3) {
+			if (p - *pos > (gint)(*remain - sizeof (guint16) * 3)) {
 				msg_info ("stripped dns reply while reading SRV record");
 				return -1;
 			}
@@ -937,10 +937,6 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver,
 	if ((pos = dns_request_reply_cmp (req, in + sizeof (struct dns_header), r - sizeof (struct dns_header))) == NULL) {
 		return FALSE;
 	}
-	/*
-	 * Remove delayed retransmits for this packet
-	 */
-	event_del (&req->timer_event);
 	/*
 	 * Now pos is in answer section, so we should extract data and form reply
 	 */
@@ -1009,7 +1005,7 @@ dns_read_cb (gint fd, short what, void *arg)
 	
 	/* First read packet from socket */
 	r = read (fd, in, sizeof (in));
-	if (r > sizeof (struct dns_header) + sizeof (struct dns_query)) {
+	if (r > (gint)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
 		if (dns_parse_reply (in, r, resolver, &req, &rep)) {
 			/* Decrease errors count */
 			if (rep->request->resolver->errors > 0) {

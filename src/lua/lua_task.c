@@ -1333,7 +1333,7 @@ lua_textpart_get_language (lua_State * L)
 	};
 	const gchar                    *sel;
 
-	if (part != NULL && part->script > 0 && part->script < G_N_ELEMENTS (languages)) {
+	if (part != NULL && part->script > 0 && part->script < (gint)G_N_ELEMENTS (languages)) {
 		sel = languages[part->script];
 		if (*sel != '\0') {
 			lua_pushstring (L, sel);

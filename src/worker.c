@@ -566,7 +566,7 @@ load_custom_filters (struct rspamd_worker *worker, const gchar * path)
 		return FALSE;
 	}
 
-	for (i = 0; i < gp.gl_pathc; i++) {
+	for (i = 0; i < (gint)gp.gl_pathc; i++) {
 		if (!load_custom_filter (worker->srv->cfg, gp.gl_pathv[i], ctx)) {
 			globfree (&gp);
 			return FALSE;

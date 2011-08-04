@@ -521,7 +521,7 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 {
 	gchar                         **strvec, **p;
 	struct filter                  *cur;
-	gint                            i;
+	guint                           i;
 
 	if (str == NULL) {
 		return;

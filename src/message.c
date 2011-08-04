@@ -56,7 +56,7 @@ strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_tex
 	end = src->data + src->len;
 	br = 0;
 
-	while (i < src->len) {
+	while (i < (gint)src->len) {
 		switch (c) {
 		case '\0':
 			break;
@@ -233,7 +233,7 @@ unbreak_tag:
 			break;
 		}
 		i++;
-		if (i < src->len) {
+		if (i < (gint)src->len) {
 			c = *(++p);
 		}
 	}

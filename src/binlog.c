@@ -313,7 +313,7 @@ maybe_rotate_binlog (struct rspamd_binlog *log)
 {
 	guint64                         now = time (NULL);
 
-	if (log->rotate_time && ((now - log->header.create_time) > log->rotate_time + log->rotate_jitter)) {
+	if (log->rotate_time && ((now - log->header.create_time) > (guint)(log->rotate_time + log->rotate_jitter))) {
 		return TRUE;
 	}
 	return FALSE;

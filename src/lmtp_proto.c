@@ -111,7 +111,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 {
 	gchar                           *c, *rcpt;
 	f_str_t                         fstr;
-	guint                           i = 0, l = 0, size;
+	gint                            i = 0, l = 0, size;
 
 	switch (lmtp->state) {
 	case LMTP_READ_LHLO:
@@ -125,7 +125,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			i += lhlo_command.len;
 			c = line->begin + i;
 			/* Skip spaces */
-			while (g_ascii_isspace (*c) && i < line->len) {
+			while (g_ascii_isspace (*c) && i < (gint)line->len) {
 				i++;
 				c++;
 			}
@@ -222,9 +222,9 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		else {
 			l = lmtp->task->msg->len;
 			size = lmtp->task->msg->size;
-			if (l + line->len > size) {
+			if ((gint)(l + line->len) > size) {
 				/* Grow buffer */
-				if (line->len > size) {
+				if ((gint)line->len > size) {
 					size += line->len << 1;
 				}
 				else {

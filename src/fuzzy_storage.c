@@ -364,7 +364,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 		}
 		else {
 #endif
-		if (node->value > ctx->frequent_score) {
+		if (node->value > (gint)ctx->frequent_score) {
 			g_queue_push_head (frequent, node);
 		}
 		else {
@@ -453,7 +453,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd
 				h->value += update_value;
 				msg_info ("new hash weight: %d", h->value);
 			}
-			if (h->value > ctx->frequent_score) {
+			if (h->value > (gint)ctx->frequent_score) {
 				g_queue_unlink (hash, cur);
 				g_queue_push_head_link (frequent, cur);
 				msg_info ("moved hash to frequent list");

@@ -126,7 +126,7 @@ rspamc_proto_str (guint ver)
 static gchar                    *
 separate_command (f_str_t * in, gchar c)
 {
-	gint                            r = 0;
+	guint                            r = 0;
 	gchar                           *p = in->begin, *b;
 	b = p;
 

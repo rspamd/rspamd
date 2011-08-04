@@ -50,7 +50,7 @@ struct classifier               classifiers[] = {
 struct classifier              *
 get_classifier (char *name)
 {
-	int                             i;
+	guint                             i;
 
 	for (i = 0; i < sizeof (classifiers) / sizeof (classifiers[0]); i++) {
 		if (strcmp (classifiers[i].name, name) == 0) {

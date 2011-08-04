@@ -169,7 +169,7 @@ parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
 				break;
 			case 1:
 				/* Begin parse ip */
-				if (p - ip_buf >= sizeof (ip_buf) || dots > 3) {
+				if (p - ip_buf >= (gint)sizeof (ip_buf) || dots > 3) {
 					return FALSE;
 				}
 				if (g_ascii_isdigit (*pos)) {
@@ -254,10 +254,10 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, 
 
 /* Callbacks for reading json dynamic rules */
 gchar                         *
-json_regexp_read_cb (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+json_regexp_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct regexp_json_buf                *jb;
-	size_t                          free, off;
+	gint                            free, off;
 
 	if (data->cur_data == NULL) {
 		jb = g_malloc (sizeof (struct regexp_json_buf));
@@ -297,7 +297,7 @@ void
 json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 {
 	struct regexp_json_buf         *jb;
-	gint                            nelts, i, j;
+	guint                           nelts, i, j;
 	json_t                         *js, *cur_elt, *cur_nm, *it_val;
 	json_error_t                    je;
 	gchar                           *cur_rule, *cur_symbol;

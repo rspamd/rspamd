@@ -156,9 +156,9 @@ upstream_ok (struct upstream *up, time_t now)
 void
 revive_all_upstreams (void *ups, size_t members, size_t msize)
 {
-	gint                            i;
-	struct upstream                *cur;
-	u_char                         *p;
+	guint                            i;
+	struct upstream                 *cur;
+	guchar                          *p;
 
 	U_WLOCK ();
 	p = ups;
@@ -180,9 +180,9 @@ revive_all_upstreams (void *ups, size_t members, size_t msize)
 static gint
 rescan_upstreams (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	gint                            i, alive;
+	guint                           i, alive;
 	struct upstream                *cur;
-	u_char                         *p;
+	guchar                         *p;
 
 	/* Recheck all upstreams */
 	p = ups;
@@ -209,7 +209,7 @@ rescan_upstreams (void *ups, size_t members, size_t msize, time_t now, time_t er
 static struct upstream         *
 get_upstream_by_number (void *ups, size_t members, size_t msize, gint selected)
 {
-	gint                            i;
+	guint                           i;
 	u_char                         *p, *c;
 	struct upstream                *cur;
 
@@ -231,7 +231,7 @@ get_upstream_by_number (void *ups, size_t members, size_t msize, gint selected)
 			continue;
 		}
 		/* Return selected upstream */
-		if (i == selected) {
+		if ((gint)i == selected) {
 			U_UNLOCK ();
 			return cur;
 		}
@@ -334,7 +334,7 @@ get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_
 struct upstream                *
 get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	gint                            alive, max_weight, i;
+	guint                            alive, max_weight, i;
 	struct upstream                *cur, *selected = NULL;
 	u_char                         *p;
 
@@ -348,7 +348,7 @@ get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, t
 	for (i = 0; i < members; i++) {
 		cur = (struct upstream *)p;
 		if (!cur->dead) {
-			if (max_weight < cur->weight) {
+			if (max_weight < (guint)cur->weight) {
 				max_weight = cur->weight;
 				selected = cur;
 			}
@@ -383,7 +383,7 @@ get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, t
 struct upstream                *
 get_upstream_master_slave (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	gint                            alive, max_weight, i;
+	guint                            alive, max_weight, i;
 	struct upstream                *cur, *selected = NULL;
 	u_char                         *p;
 
@@ -427,7 +427,7 @@ upstream_ketama_add (struct upstream *up, gchar *up_key, size_t keylen, size_t k
 {
 	guint32                         h = 0;
 	gchar                           tmp[4];
-	gint                            i;
+	guint                           i;
 
 	/* Allocate ketama points array */
 	if (up->ketama_points == NULL) {
@@ -461,7 +461,7 @@ upstream_ketama_add (struct upstream *up, gchar *up_key, size_t keylen, size_t k
 struct upstream                *
 get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, gchar *key, size_t keylen)
 {
-	gint                            alive, i;
+	guint                           alive, i;
 	guint32                         h = 0, step, middle, d, min_diff = UINT_MAX;
 	gchar                           *p;
 	struct upstream                *cur = NULL, *nearest = NULL;
@@ -485,7 +485,7 @@ get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now
 			middle = step;
 			while (step != 1) {
 				d = cur->ketama_points[middle] - h;
-				if (abs (d) < min_diff) {
+				if (abs (d) < (gint)min_diff) {
 					min_diff = abs (d);
 					nearest = cur;
 				}

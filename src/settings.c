@@ -111,7 +111,7 @@ settings_unref (struct rspamd_settings *s)
 
 
 gchar                         *
-json_read_cb (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+json_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
 	size_t                          free, off;
@@ -137,7 +137,7 @@ json_read_cb (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_dat
 	off = jb->pos - jb->buf;
 	free = jb->buflen - off;
 
-	if (free < len) {
+	if ((gint)free < len) {
 		jb->buflen = MAX (jb->buflen * 2, jb->buflen + len * 2);
 		jb->buf = g_realloc (jb->buf, jb->buflen);
 		jb->pos = jb->buf + off;
@@ -415,12 +415,12 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 			field ++;
 		}
 		len = strcspn (field, ">");
-		rspamd_strlcpy (cmp_buf, field, MIN (sizeof (cmp_buf), len + 1));
+		rspamd_strlcpy (cmp_buf, field, MIN ((gint)sizeof (cmp_buf), len + 1));
 		*user_settings = g_hash_table_lookup (task->cfg->user_settings, cmp_buf);
 	}
 	if (domain != NULL) {
 		len = strcspn (domain, ">");
-		rspamd_strlcpy (cmp_buf, domain, MIN (sizeof (cmp_buf), len + 1));
+		rspamd_strlcpy (cmp_buf, domain, MIN ((gint)sizeof (cmp_buf), len + 1));
 		*domain_settings = g_hash_table_lookup (task->cfg->domain_settings, cmp_buf);
 	}
 

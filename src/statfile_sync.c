@@ -83,7 +83,7 @@ log_next_sync (const gchar *symbol, time_t delay)
 static                          gboolean
 parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 {
-	gint                            i, state = 0;
+	guint                           i, state = 0;
 	gchar                           *p, *c, numbuf[sizeof("18446744073709551615")];
 	guint64                         *val;
 
@@ -111,7 +111,7 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 					/* One more character */
 					p ++;
 				}
-				rspamd_strlcpy (numbuf, c, MIN (p - c + 1, sizeof (numbuf)));
+				rspamd_strlcpy (numbuf, c, MIN (p - c + 1, (gint)sizeof (numbuf)));
 				errno = 0;
 				*val = strtoull (numbuf, NULL, 10);
 				if (errno != 0) {
@@ -147,7 +147,7 @@ static                          gboolean
 read_blocks (struct rspamd_sync_ctx *ctx, f_str_t *in)
 {
 	struct rspamd_binlog_element *elt;
-	gint                            i;
+	guint                         i;
 	
 	statfile_pool_lock_file (ctx->pool, ctx->real_statfile);
 	elt = (struct rspamd_binlog_element *)in->begin;

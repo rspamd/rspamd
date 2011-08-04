@@ -210,7 +210,7 @@ write_whole_statfile (struct controller_session *session, gchar *symbol, struct 
 	stat_file_t                    *statfile;
 	struct statfile                *st;
 	gchar                           out_buf[BUFSIZ];
-	gint                            i;
+	guint                           i;
 	guint64                         rev, ti, len, pos, blocks;
 	gchar                           *out;
 	struct rspamd_binlog_element    log_elt;
@@ -807,7 +807,7 @@ process_custom_command (gchar *line, gchar **cmd_args, struct controller_session
 static struct controller_command *
 process_normal_command (const gchar *line)
 {
-	gint                            i;
+	guint                           i;
 	struct controller_command      *c;
 
 	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {

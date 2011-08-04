@@ -79,7 +79,7 @@ const gchar t_delimiters[255] = {
 struct tokenizer               *
 get_tokenizer (char *name)
 {
-	int                             i;
+	guint                            i;
 
 	for (i = 0; i < sizeof (tokenizers) / sizeof (tokenizers[0]); i++) {
 		if (strcmp (tokenizers[i].name, name) == 0) {

@@ -283,7 +283,7 @@ read_handler (gint fd, short what, memcached_ctx_t * ctx)
 					return;
 				}
 				/* Check if we already have all data in buffer */
-				if (r >= datalen + sizeof (END_TRAILER) + sizeof (CRLF) - 2) {
+				if (r >= (ssize_t)(datalen + sizeof (END_TRAILER) + sizeof (CRLF) - 2)) {
 					/* Store all data in param's buffer */
 					memcpy (ctx->param->buf + ctx->param->bufpos, p, datalen);
 					/* Increment count */
@@ -355,7 +355,7 @@ delete_handler (gint fd, short what, memcached_ctx_t * ctx)
 			iov[1].iov_base = read_buf;
 			iov[1].iov_len = r;
 			ctx->param->bufpos = writev (ctx->sock, iov, 2);
-			if (ctx->param->bufpos == -1) {
+			if (ctx->param->bufpos == (size_t)-1) {
 				memc_log (ctx, __LINE__, "memc_write: writev failed: %s", strerror (errno));
 			}
 		}

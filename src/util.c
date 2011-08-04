@@ -897,7 +897,7 @@ fstr_strcase_hash (gconstpointer key)
 	guint                           h = 0;
 	
 	p = f->begin;
-	while (p - f->begin < f->len) {
+	while (p - f->begin < (gint)f->len) {
 		h = (h << 5) - h + g_tolower (*p);
 		p++;
 	}
@@ -1347,12 +1347,12 @@ escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in)
 	gchar                        *res, *orig, *p;
 
 	orig = in->begin;
-	while ((g_ascii_isspace (*orig) || *orig == '<') && orig - in->begin < in->len) {
+	while ((g_ascii_isspace (*orig) || *orig == '<') && orig - in->begin < (gint)in->len) {
 		orig ++;
 	}
 
 	p = orig;
-	while ((!g_ascii_isspace (*p) && *p != '>') && p - in->begin < in->len) {
+	while ((!g_ascii_isspace (*p) && *p != '>') && p - in->begin < (gint)in->len) {
 		p ++;
 		len ++;
 	}

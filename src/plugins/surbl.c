@@ -105,7 +105,7 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 }
 
 static gchar *
-read_exceptions_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+read_exceptions_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = memory_pool_alloc0 (pool, sizeof (GHashTable *) * MAX_LEVELS);
@@ -179,7 +179,7 @@ redirector_item_free (gpointer p)
 }
 
 static gchar                         *
-read_redirectors_list (memory_pool_t * pool, gchar * chunk, size_t len, struct map_cb_data *data)
+read_redirectors_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, redirector_item_free);
@@ -500,7 +500,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	len = hostname->len + slen + 2;
 	
 	p = hostname->begin;
-	while (p - hostname->begin < hostname->len && dots_num < MAX_LEVELS) {
+	while (p - hostname->begin < (gint)hostname->len && dots_num < MAX_LEVELS) {
 		if (*p == '.') {
 			dots[dots_num] = p;
 			dots_num ++;
@@ -748,7 +748,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 		else {
 			url_count = (gint *)param->ctx->param->buf;
 			/* Do not check DNS for urls that have count more than max_urls */
-			if (*url_count > surbl_module_ctx->max_urls) {
+			if (*url_count > (gint)surbl_module_ctx->max_urls) {
 				msg_info ("url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
 				/* 
 				 * XXX: try to understand why we should use memcached here

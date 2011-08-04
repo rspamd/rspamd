@@ -164,7 +164,7 @@ bloom_create (size_t size, size_t nfuncs, ...)
 {
 	bloom_filter_t                 *bloom;
 	va_list                         l;
-	gint                            n;
+	gsize                           n;
 
 	if (!(bloom = g_malloc (sizeof (bloom_filter_t)))) {
 		return NULL;

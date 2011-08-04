@@ -265,7 +265,7 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 	}
 
 	pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
-	while (pos - map < old_size) {
+	while (pos - map < (gint)old_size) {
 		block = (struct stat_file_block *)pos;
 		if (block->hash1 != 0 && block->value != 0) {
 			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, 0, block->value, FALSE);
@@ -331,13 +331,13 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 		return NULL;
 	}
 
-	if (!forced && st.st_size > pool->max) {
+	if (!forced && (gsize)st.st_size > pool->max) {
 		msg_info ("cannot attach file to pool, too large: %Hz", (size_t) st.st_size);
 		return NULL;
 	}
 
 	memory_pool_lock_mutex (pool->lock);
-	if (!forced && abs (st.st_size - size) > sizeof (struct stat_file)) {
+	if (!forced && abs (st.st_size - size) > (gint)sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
 		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
@@ -684,7 +684,7 @@ statfile_pool_set_section (statfile_pool_t * pool, stat_file_t * file, guint32 c
 	else {
 		cur_offset = file->seek_pos - sizeof (struct stat_file_section);
 	}
-	while (cur_offset < file->len) {
+	while (cur_offset < (off_t)file->len) {
 		sec = (struct stat_file_section *)((gchar *)file->map + cur_offset);
 		if (sec->code == code) {
 			file->cur_section.code = code;

@@ -282,7 +282,7 @@ process_smtp_data (struct smtp_session *session)
 	}
 	/* Now mmap temp file if it is small enough */
 	session->temp_size = st.st_size;
-	if (session->ctx->max_size == 0 || st.st_size < session->ctx->max_size) {
+	if (session->ctx->max_size == 0 || st.st_size < (off_t)session->ctx->max_size) {
 		session->task = construct_task (session->worker);
 		session->task->resolver = session->resolver;
 		session->task->fin_callback = smtp_write_socket;
@@ -405,7 +405,7 @@ smtp_read_socket (f_str_t * in, void *arg)
 				return process_smtp_data (session);
 			}
 
-			if (write (session->temp_fd, in->begin, in->len) != in->len) {
+			if (write (session->temp_fd, in->begin, in->len) != (ssize_t)in->len) {
 				msg_err ("cannot write to temp file: %s", strerror (errno));
 				session->error = SMTP_ERROR_FILE;
 				session->state = SMTP_STATE_CRITICAL_ERROR;

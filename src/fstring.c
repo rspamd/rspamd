@@ -30,7 +30,7 @@
 ssize_t
 fstrchr (f_str_t * src, gchar c)
 {
-	register ssize_t                cur = 0;
+	register size_t                cur = 0;
 
 	while (cur < src->len) {
 		if (*(src->begin + cur) == c) {
@@ -66,7 +66,7 @@ fstrrchr (f_str_t * src, gchar c)
 ssize_t
 fstrstr (f_str_t * orig, f_str_t * pattern)
 {
-	register ssize_t                cur = 0, pcur = 0;
+	register size_t                cur = 0, pcur = 0;
 
 	if (pattern->len > orig->len) {
 		return -1;
@@ -97,7 +97,7 @@ fstrstr (f_str_t * orig, f_str_t * pattern)
 ssize_t
 fstrstri (f_str_t * orig, f_str_t * pattern)
 {
-	register ssize_t                cur = 0, pcur = 0;
+	register size_t                cur = 0, pcur = 0;
 
 	if (pattern->len > orig->len) {
 		return -1;
@@ -410,7 +410,7 @@ void
 fstrstrip (f_str_t * str)
 {
 	gchar                           *p = str->begin;
-	gint                            r = 0;
+	guint                            r = 0;
 
 	while (r < str->len) {
 		if (g_ascii_isspace (*p)) {
