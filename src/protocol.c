@@ -815,6 +815,7 @@ metric_symbols_callback_rspamc (gpointer key, gpointer value, void *user_data)
 	if (cd->task->cmd == CMD_SYMBOLS) {
 		if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			cd->alive = FALSE;
+			return;
 		}
 	}
 	cd->report_offset += rspamd_snprintf (cd->report_buf + cd->report_offset, cd->report_size - cd->report_offset,

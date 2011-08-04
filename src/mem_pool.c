@@ -231,7 +231,6 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
-		g_assert (cur->pos - cur->begin <= (gint)cur->len);
 		return tmp;
 	}
 	return NULL;
