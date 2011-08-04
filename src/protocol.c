@@ -1195,16 +1195,18 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 			}
 		}
 	}
+	if (cd->alive) {
 #ifdef HAVE_CLOCK_GETTIME
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
+		cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 			cd->log_size - cd->log_offset, "]), len: %z, time: %s, dns req: %d,",
 			task->msg->len, calculate_check_time (&task->tv, &task->ts,
 					task->cfg->clock_res), task->dns_requests);
 #else
-	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
+		cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 			"]), len: %z, time: %s, dns req: %d,",
 			task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res), task->dns_requests);
 #endif
+	}
 }
 
 static gboolean
