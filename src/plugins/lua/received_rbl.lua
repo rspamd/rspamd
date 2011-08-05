@@ -22,9 +22,11 @@ function received_cb (task)
     for _,rh in ipairs(recvh) do
 		if rh['real_ip'] then
 			local _,_,o1,o2,o3,o4 = string.find(rh['real_ip'], '^(%d+)%.(%d+)%.(%d+)%.(%d+)$')
-			for _,rbl in ipairs(rbls) do
-				rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rbl['rbl']
-				task:resolve_dns_a(rbl_str, 'dns_cb', rbl['symbol'])
+			if o1 and o2 and o3 and o4 then
+				for _,rbl in ipairs(rbls) do
+					rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rbl['rbl']
+					task:resolve_dns_a(rbl_str, 'dns_cb', rbl['symbol'])
+				end
 			end
         end
     end

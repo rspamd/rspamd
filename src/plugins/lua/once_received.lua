@@ -28,10 +28,12 @@ function check_quantity_received (task)
 			for _,h in ipairs(bad_hosts) do
 				if string.find(hn, h) then
 					-- Check for good hostname
-					for _,gh in ipairs(good_hosts) do
-						if string.find(hn, gh) then
-							i = false
-							break
+					if good_hosts then
+						for _,gh in ipairs(good_hosts) do
+							if string.find(hn, gh) then
+								i = false
+								break
+							end
 						end
 					end
 					if i then
