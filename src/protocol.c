@@ -829,7 +829,9 @@ show_metric_symbols_rspamc (struct metric_result *metric_res, struct metric_call
 {
 	cd->cur_metric = metric_res->metric;
 	if (cd->alive) {
+		g_hash_table_ref (metric_res->symbols);
 		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback_rspamc, cd);
+		g_hash_table_unref (metric_res->symbols);
 		/* Remove last , from log buf */
 		if (cd->log_buf[cd->log_offset - 1] == ',') {
 			cd->log_buf[--cd->log_offset] = '\0';
@@ -899,7 +901,9 @@ show_metric_symbols_json (struct metric_result *metric_res, struct metric_callba
 			"    \"symbols\": [");
 
 	/* Print all symbols */
+	g_hash_table_ref (metric_res->symbols);
 	g_hash_table_foreach (metric_res->symbols, metric_symbols_callback_json, cd);
+	g_hash_table_unref (metric_res->symbols);
 	/* Remove last ',' symbol */
 	if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
 			cd->symbols_buf[--cd->symbols_offset] = '\0';
@@ -1314,7 +1318,9 @@ write_check_reply (struct worker_task *task)
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
+		g_hash_table_ref (task->results);
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		g_hash_table_unref (task->results);
 		if (!cd.alive) {
 			return FALSE;
 		}
@@ -1468,7 +1474,9 @@ write_process_reply (struct worker_task *task)
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
+		g_hash_table_ref (task->results);
 		g_hash_table_foreach (task->results, show_metric_result, &cd);
+		g_hash_table_unref (task->results);
 		if (! cd.alive) {
 			return FALSE;
 		}

@@ -64,7 +64,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
 		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
 		metric_res->checked = FALSE;
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_destroy, metric_res->symbols);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_unref, metric_res->symbols);
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
 		metric_res->score = 0;
@@ -663,7 +663,7 @@ process_statfiles (struct worker_task *task)
 
 	if (task->tokens == NULL) {
 		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_destroy, task->tokens);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref, task->tokens);
 	}
 
 	g_list_foreach (task->cfg->classifiers, classifiers_callback, task);
