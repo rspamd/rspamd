@@ -8,7 +8,7 @@
   <!-- Temporary directory -->
   <tempdir>/tmp</tempdir>
   <!-- Path to pid file -->
-  <pidfile>/var/run/rspamd/rspamd.pid</pidfile>
+  <pidfile>@LOCALSTATES_PREFIX@/rspamd.pid</pidfile>
   <!-- Turned on C filters -->
   <filters>regexp,surbl,chartable,fuzzy_check,spf</filters>
   <!-- Maximum size of statistics mapped in memory -->
@@ -24,7 +24,7 @@
   <!-- DNS retransmits count -->
   <dns_retransmits>5</dns_retransmits>
   <!-- File for saving settings of symbols cache -->
-  <cache_file>/var/run/rspamd/symbols.cache</cache_file>
+  <cache_file>@LOCALSTATES_PREFIX@/symbols.cache</cache_file>
 </options>
 <!-- End of options section -->
 
@@ -305,7 +305,7 @@
   <count>1</count>
   <maxfiles>2048</maxfiles>
 <!-- Other params -->
-    <hashfile>/var/run/rspamd/fuzzy.db</hashfile>
+    <hashfile>@LOCALSTATES_PREFIX@/fuzzy.db</hashfile>
     <use_judy>yes</use_judy>
 </worker>
 <worker>
@@ -427,7 +427,7 @@
 <!-- 
 <module name="trie">
   <rule>TRIE1:bad pattern</rule>
-  <rule>TRIE2:file:///var/run/rspamd/bad_patterns.list</rule>
+  <rule>TRIE2:file://@LOCALSTATES_PREFIX@/bad_patterns.list</rule>
 </module>
 -->
 
@@ -459,12 +459,12 @@
  <statfile>
   <symbol>WINNOW_HAM</symbol>
   <size>100M</size>
-  <path>/var/run/rspamd/data.ham</path>
+  <path>@LOCALSTATES_PREFIX@/data.ham</path>
  </statfile>
  <statfile>
   <symbol>WINNOW_SPAM</symbol>
   <size>100M</size>
-  <path>/var/run/rspamd/data.spam</path>
+  <path>@LOCALSTATES_PREFIX@/data.spam</path>
  </statfile>
 </classifier>
 -->
@@ -477,14 +477,14 @@
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>/var/run/rspamd/bayes_slave.ham</path>
+  <path>@LOCALSTATES_PREFIX@/bayes_slave.ham</path>
   <binlog_master>localhost:11334</binlog_master>
   <binlog>slave</binlog>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>/var/run/rspamd/bayes_slave.spam</path>
+  <path>@LOCALSTATES_PREFIX@/bayes_slave.spam</path>
   <binlog>slave</binlog>
   <binlog_master>localhost:11334</binlog_master>
  </statfile>
@@ -502,24 +502,24 @@
  <statfile>
   <symbol>BAYES_HAM_RU</symbol>
   <size>50M</size>
-  <path>/var/run/rspamd/bayes_ru.ham</path>
+  <path>@LOCALSTATES_PREFIX@/bayes_ru.ham</path>
   <param name="language">ru</param>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM_RU</symbol>
   <size>50M</size>
-  <path>/var/run/rspamd/bayes_ru.spam</path>
+  <path>@LOCALSTATES_PREFIX@/bayes_ru.spam</path>
   <param name="language">ru</param>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>50M</size>
-  <path>/var/run/rspamd/bayes.ham</path>
+  <path>@LOCALSTATES_PREFIX@/bayes.ham</path>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>50M</size>
-  <path>/var/run/rspamd/bayes.spam</path>
+  <path>@LOCALSTATES_PREFIX@/bayes.spam</path>
  </statfile>
 </classifier>
 -->
@@ -533,12 +533,12 @@
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>/var/run/rspamd/bayes.ham</path>
+  <path>@LOCALSTATES_PREFIX@/bayes.ham</path>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>/var/run/rspamd/bayes.spam</path>
+  <path>@LOCALSTATES_PREFIX@/bayes.spam</path>
  </statfile>
 </classifier>
 
