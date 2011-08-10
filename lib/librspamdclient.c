@@ -987,7 +987,7 @@ static gboolean
 rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
 		gsize clen, GHashTable *headers, GError **err)
 {
-	static gchar                    outbuf[16384];
+	gchar                           outbuf[16384];
 	GHashTableIter                  it;
 	gpointer                        key, value;
 	gint                            r;
@@ -1035,7 +1035,7 @@ static gboolean
 rspamd_send_normal_command (struct rspamd_connection *c, const gchar *command,
 		gsize clen, GHashTable *headers, GError **err)
 {
-	static gchar                    outbuf[16384];
+	gchar                           outbuf[16384];
 	gint                            r;
 	struct hash_iter_cb             cbdata;
 
@@ -1081,7 +1081,7 @@ static GString *
 rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, gsize len, gint fd, GError **err)
 {
 	GString                        *res = NULL;
-	static gchar                    tmpbuf[BUFSIZ];
+	gchar                           tmpbuf[BUFSIZ];
 	gint                            r = 0;
 	static const gchar              end_marker[] = "END\r\n";
 
