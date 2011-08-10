@@ -53,6 +53,7 @@ struct rspamd_client {
 
 struct rspamd_connection {
 	struct rspamd_server *server;
+	struct rspamd_client *client;
 	time_t connection_time;
 	gint socket;
 	struct rspamd_result *result;
@@ -60,8 +61,6 @@ struct rspamd_connection {
 	struct rspamd_metric *cur_metric;
 	gint version;
 };
-
-static struct rspamd_client *client = NULL;
 
 /** Util functions **/
 gint
@@ -232,7 +231,7 @@ symbol_free_func (gpointer arg)
 }
 
 static struct rspamd_connection *
-rspamd_connect_random_server (gboolean is_control, GError **err)
+rspamd_connect_random_server (struct rspamd_client *client, gboolean is_control, GError **err)
 {
 	struct rspamd_server            *selected = NULL;
 	struct rspamd_connection        *new;
@@ -261,6 +260,7 @@ rspamd_connect_random_server (gboolean is_control, GError **err)
 	new = g_malloc (sizeof (struct rspamd_connection));
 	new->server = selected;
 	new->connection_time = now;
+	new->client = client;
 	/* Create socket */
 	new->socket = make_tcp_socket (&selected->addr,
 								is_control ? selected->controller_port : selected->client_port,
@@ -899,7 +899,7 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 		}
 	}
 	/* Poll socket */
-	if ((r = poll_sync_socket (c->socket, client->read_timeout, POLL_IN)) <= 0) {
+	if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLL_IN)) <= 0) {
 		if (*err == NULL) {
 			if (r == 0) {
 				errno = ETIMEDOUT;
@@ -1103,7 +1103,7 @@ rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, 
 	make_socket_nonblocking (c->socket);
 	/* Poll socket */
 	do {
-		if ((r = poll_sync_socket (c->socket, client->read_timeout, POLL_IN)) <= 0) {
+		if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLL_IN)) <= 0) {
 			if (*err == NULL) {
 				if (r == 0) {
 					errno = ETIMEDOUT;
@@ -1192,7 +1192,7 @@ rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
 	gint                            r;
 	static const gchar              greeting_str[] = "Rspamd";
 
-	if ((r = poll_sync_socket (c->socket, client->read_timeout, POLL_IN)) <= 0) {
+	if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLL_IN)) <= 0) {
 		if (*err == NULL) {
 			if (r == 0) {
 				errno = ETIMEDOUT;
@@ -1226,22 +1226,24 @@ rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
 /*
  * Init rspamd client library
  */
-void
+struct rspamd_client*
 rspamd_client_init (void)
 {
-	if (client != NULL) {
-		rspamd_client_close ();
-	}
+	struct rspamd_client           *client;
+
 	client = g_malloc0 (sizeof (struct rspamd_client));
 	client->read_timeout = DEFAULT_READ_TIMEOUT;
 	client->connect_timeout = DEFAULT_CONNECT_TIMEOUT;
+
+	return client;
 }
 
 /*
  * Add rspamd server
  */
 gboolean
-rspamd_add_server (const gchar *host, guint16 port, guint16 controller_port, GError **err)
+rspamd_add_server (struct rspamd_client *client, const gchar *host, guint16 port,
+		guint16 controller_port, GError **err)
 {
 	struct rspamd_server           *new;
 	struct hostent                 *hent;
@@ -1280,7 +1282,7 @@ rspamd_add_server (const gchar *host, guint16 port, guint16 controller_port, GEr
  * Set timeouts (values in milliseconds)
  */
 void
-rspamd_set_timeout (guint connect_timeout, guint read_timeout)
+rspamd_set_timeout (struct rspamd_client *client, guint connect_timeout, guint read_timeout)
 {
 	g_assert (client != NULL);
 
@@ -1296,7 +1298,7 @@ rspamd_set_timeout (guint connect_timeout, guint read_timeout)
  * Scan message from memory
  */
 struct rspamd_result *
-rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GError **err)
+rspamd_scan_memory (struct rspamd_client *client, const guchar *message, gsize length, GHashTable *headers, GError **err)
 {
 	struct rspamd_connection             *c;
 	struct rspamd_result                 *res = NULL;
@@ -1305,7 +1307,7 @@ rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GE
 	g_assert (length > 0);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (FALSE, err);
+	c = rspamd_connect_random_server (client, FALSE, err);
 
 	if (c == NULL) {
 		return NULL;
@@ -1344,7 +1346,7 @@ rspamd_scan_memory (const guchar *message, gsize length, GHashTable *headers, GE
  * Scan message from file
  */
 struct rspamd_result *
-rspamd_scan_file (const guchar *filename, GHashTable *headers, GError **err)
+rspamd_scan_file (struct rspamd_client *client, const guchar *filename, GHashTable *headers, GError **err)
 {
 	gint                                 fd;
 	g_assert (client != NULL);
@@ -1358,14 +1360,14 @@ rspamd_scan_file (const guchar *filename, GHashTable *headers, GError **err)
 		return NULL;
 	}
 
-	return rspamd_scan_fd (fd, headers, err);
+	return rspamd_scan_fd (client, fd, headers, err);
 }
 
 /*
  * Scan message from fd
  */
 struct rspamd_result *
-rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
+rspamd_scan_fd (struct rspamd_client *client, int fd, GHashTable *headers, GError **err)
 {
 	struct rspamd_connection             *c;
 	struct rspamd_result                 *res = NULL;
@@ -1374,7 +1376,7 @@ rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
 	g_assert (client != NULL);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (FALSE, err);
+	c = rspamd_connect_random_server (client, FALSE, err);
 
 	if (c == NULL) {
 		return NULL;
@@ -1423,7 +1425,7 @@ rspamd_scan_fd (int fd, GHashTable *headers, GError **err)
  * Learn message from memory
  */
 gboolean
-rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, const gchar *password, GError **err)
+rspamd_learn_memory (struct rspamd_client *client, const guchar *message, gsize length, const gchar *symbol, const gchar *password, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *in;
@@ -1435,7 +1437,7 @@ rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, c
 	g_assert (length > 0);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return FALSE;
@@ -1482,7 +1484,7 @@ rspamd_learn_memory (const guchar *message, gsize length, const gchar *symbol, c
  * Learn message from file
  */
 gboolean
-rspamd_learn_file (const guchar *filename, const gchar *symbol, const gchar *password, GError **err)
+rspamd_learn_file (struct rspamd_client *client, const guchar *filename, const gchar *symbol, const gchar *password, GError **err)
 {
 	gint                                 fd;
 	g_assert (client != NULL);
@@ -1496,14 +1498,14 @@ rspamd_learn_file (const guchar *filename, const gchar *symbol, const gchar *pas
 		return FALSE;
 	}
 
-	return rspamd_learn_fd (fd, symbol, password, err);
+	return rspamd_learn_fd (client, fd, symbol, password, err);
 }
 
 /*
  * Learn message from fd
  */
 gboolean
-rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **err)
+rspamd_learn_fd (struct rspamd_client *client, int fd, const gchar *symbol, const gchar *password, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *in;
@@ -1515,7 +1517,7 @@ rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **er
 	g_assert (client != NULL);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return FALSE;
@@ -1577,7 +1579,7 @@ rspamd_learn_fd (int fd, const gchar *symbol, const gchar *password, GError **er
  * Learn message from memory
  */
 gboolean
-rspamd_learn_spam_memory (const guchar *message, gsize length, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
+rspamd_learn_spam_memory (struct rspamd_client *client, const guchar *message, gsize length, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *in;
@@ -1589,7 +1591,7 @@ rspamd_learn_spam_memory (const guchar *message, gsize length, const gchar *clas
 	g_assert (length > 0);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return FALSE;
@@ -1637,7 +1639,7 @@ rspamd_learn_spam_memory (const guchar *message, gsize length, const gchar *clas
  * Learn message from file
  */
 gboolean
-rspamd_learn_spam_file (const guchar *filename, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
+rspamd_learn_spam_file (struct rspamd_client *client, const guchar *filename, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
 {
 	gint                                 fd;
 	g_assert (client != NULL);
@@ -1651,14 +1653,14 @@ rspamd_learn_spam_file (const guchar *filename, const gchar *classifier, gboolea
 		return FALSE;
 	}
 
-	return rspamd_learn_spam_fd (fd, classifier, is_spam, password, err);
+	return rspamd_learn_spam_fd (client, fd, classifier, is_spam, password, err);
 }
 
 /*
  * Learn message from fd
  */
 gboolean
-rspamd_learn_spam_fd (int fd, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
+rspamd_learn_spam_fd (struct rspamd_client *client, int fd, const gchar *classifier, gboolean is_spam, const gchar *password, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *in;
@@ -1670,7 +1672,7 @@ rspamd_learn_spam_fd (int fd, const gchar *classifier, gboolean is_spam, const g
 	g_assert (client != NULL);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return FALSE;
@@ -1734,7 +1736,7 @@ rspamd_learn_spam_fd (int fd, const gchar *classifier, gboolean is_spam, const g
  * Learn message fuzzy from memory
  */
 gboolean
-rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
+rspamd_fuzzy_memory (struct rspamd_client *client, const guchar *message, gsize length, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *in;
@@ -1746,7 +1748,7 @@ rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password,
 	g_assert (length > 0);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return FALSE;
@@ -1798,7 +1800,7 @@ rspamd_fuzzy_memory (const guchar *message, gsize length, const gchar *password,
  * Learn message fuzzy from file
  */
 gboolean
-rspamd_fuzzy_file (const guchar *filename, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
+rspamd_fuzzy_file (struct rspamd_client *client, const guchar *filename, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
 {
 	gint                                 fd;
 	g_assert (client != NULL);
@@ -1812,14 +1814,14 @@ rspamd_fuzzy_file (const guchar *filename, const gchar *password, gint weight, g
 		return FALSE;
 	}
 
-	return rspamd_fuzzy_fd (fd, password, weight, flag, delete, err);
+	return rspamd_fuzzy_fd (client, fd, password, weight, flag, delete, err);
 }
 
 /*
  * Learn message fuzzy from fd
  */
 gboolean
-rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
+rspamd_fuzzy_fd (struct rspamd_client *client, int fd, const gchar *password, gint weight, gint flag, gboolean delete, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *in;
@@ -1831,7 +1833,7 @@ rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean
 	g_assert (client != NULL);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return FALSE;
@@ -1894,7 +1896,7 @@ rspamd_fuzzy_fd (int fd, const gchar *password, gint weight, gint flag, gboolean
 }
 
 GString *
-rspamd_get_stat (GError **err)
+rspamd_get_stat (struct rspamd_client *client, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *res;
@@ -1903,7 +1905,7 @@ rspamd_get_stat (GError **err)
 	g_assert (client != NULL);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return NULL;
@@ -1915,7 +1917,7 @@ rspamd_get_stat (GError **err)
 }
 
 GString *
-rspamd_get_uptime (GError **err)
+rspamd_get_uptime (struct rspamd_client *client, GError **err)
 {
 	struct rspamd_connection             *c;
 	GString                              *res;
@@ -1924,7 +1926,7 @@ rspamd_get_uptime (GError **err)
 	g_assert (client != NULL);
 
 	/* Connect to server */
-	c = rspamd_connect_random_server (TRUE, err);
+	c = rspamd_connect_random_server (client, TRUE, err);
 
 	if (c == NULL) {
 		return NULL;
@@ -1941,7 +1943,6 @@ rspamd_get_uptime (GError **err)
 void
 rspamd_free_result (struct rspamd_result *result)
 {
-	g_assert (client != NULL);
 	g_assert (result != NULL);
 
 	g_hash_table_destroy (result->headers);
@@ -1953,10 +1954,7 @@ rspamd_free_result (struct rspamd_result *result)
  * Close library and free associated resources
  */
 void
-rspamd_client_close (void)
+rspamd_client_close (struct rspamd_client *client)
 {
-	g_assert (client != NULL);
-
 	g_free (client);
-	client = NULL;
 }

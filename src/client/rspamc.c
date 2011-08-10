@@ -45,6 +45,7 @@ static gint                     timeout = 5;
 static gboolean                 pass_all;
 static gboolean                 tty = FALSE;
 static gboolean                 verbose = FALSE;
+static struct rspamd_client    *client = NULL;
 
 static GOptionEntry entries[] =
 {
@@ -168,7 +169,7 @@ add_rspamd_server (gboolean is_control)
 		}
 	}
 
-	if (! rspamd_add_server (vec[0], port, port, &err)) {
+	if (! rspamd_add_server (client, vec[0], port, port, &err)) {
 		fprintf (stderr, "cannot connect to rspamd server: %s, error: %s\n", connect_str, err->message);
 		exit (EXIT_FAILURE);
 	}
@@ -355,7 +356,7 @@ scan_rspamd_stdin ()
 			in_buf = g_realloc (in_buf, len);
 		}
 	}
-	res = rspamd_scan_memory (in_buf, r, opts, &err);
+	res = rspamd_scan_memory (client, in_buf, r, opts, &err);
 	g_hash_table_destroy (opts);
 	if (err != NULL) {
 		fprintf (stderr, "cannot scan message: %s\n", err->message);
@@ -375,7 +376,7 @@ scan_rspamd_file (const gchar *file)
 	/* Init options hash */
 	opts = g_hash_table_new (g_str_hash, g_str_equal);
 	add_options (opts);
-	res = rspamd_scan_file (file, opts, &err);
+	res = rspamd_scan_file (client, file, opts, &err);
 	g_hash_table_destroy (opts);
 	if (err != NULL) {
 		fprintf (stderr, "cannot scan message: %s\n", err->message);
@@ -415,7 +416,7 @@ learn_rspamd_stdin (gboolean is_spam)
 		}
 	}
 	if (statfile != NULL) {
-		if (!rspamd_learn_memory (in_buf, r, statfile, password, &err)) {
+		if (!rspamd_learn_memory (client, in_buf, r, statfile, password, &err)) {
 			if (err != NULL) {
 				fprintf (stderr, "cannot learn message: %s\n", err->message);
 			}
@@ -435,7 +436,7 @@ learn_rspamd_stdin (gboolean is_spam)
 		}
 	}
 	else if (classifier != NULL) {
-		if (!rspamd_learn_spam_memory (in_buf, r, classifier, is_spam, password, &err)) {
+		if (!rspamd_learn_spam_memory (client, in_buf, r, classifier, is_spam, password, &err)) {
 			if (err != NULL) {
 				fprintf (stderr, "cannot learn message: %s\n", err->message);
 			}
@@ -467,7 +468,7 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 	}
 
 	if (statfile != NULL) {
-		if (!rspamd_learn_file (file, statfile, password, &err)) {
+		if (!rspamd_learn_file (client, file, statfile, password, &err)) {
 			if (err != NULL) {
 				fprintf (stderr, "cannot learn message: %s\n", err->message);
 			}
@@ -486,7 +487,7 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 		}
 	}
 	else if (classifier != NULL) {
-		if (!rspamd_learn_spam_file (file, classifier, is_spam, password, &err)) {
+		if (!rspamd_learn_spam_file (client, file, classifier, is_spam, password, &err)) {
 			if (err != NULL) {
 				fprintf (stderr, "cannot learn message: %s\n", err->message);
 			}
@@ -533,7 +534,7 @@ fuzzy_rspamd_stdin (gboolean delete)
 			in_buf = g_realloc (in_buf, len);
 		}
 	}
-	if (!rspamd_fuzzy_memory (in_buf, r, password, weight, flag, delete, &err)) {
+	if (!rspamd_fuzzy_memory (client, in_buf, r, password, weight, flag, delete, &err)) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot learn message: %s\n", err->message);
 		}
@@ -563,7 +564,7 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 		exit (EXIT_FAILURE);
 	}
 
-	if (!rspamd_fuzzy_file (file, password, weight, flag, delete, &err)) {
+	if (!rspamd_fuzzy_file (client, file, password, weight, flag, delete, &err)) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot learn message: %s\n", err->message);
 		}
@@ -591,7 +592,7 @@ rspamd_do_stat ()
 	/* Add server */
 	add_rspamd_server (TRUE);
 
-	res = rspamd_get_stat (&err);
+	res = rspamd_get_stat (client, &err);
 	if (res == NULL) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot stat: %s\n", err->message);
@@ -621,7 +622,7 @@ rspamd_do_uptime ()
 	/* Add server */
 	add_rspamd_server (TRUE);
 
-	res = rspamd_get_uptime (&err);
+	res = rspamd_get_uptime (client, &err);
 	if (res == NULL) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot uptime: %s\n", err->message);
@@ -648,10 +649,10 @@ main (gint argc, gchar **argv, gchar **env)
 	enum rspamc_command             cmd;
 	gint                            i;
 
-	rspamd_client_init ();
+	client = rspamd_client_init ();
 
 	read_cmd_line (&argc, &argv);
-	rspamd_set_timeout (1000, timeout * 1000);
+	rspamd_set_timeout (client, 1000, timeout * 1000);
 	tty = isatty (STDOUT_FILENO);
 	/* Now read other args from argc and argv */
 	if (argc == 1) {
@@ -773,7 +774,7 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 	}
 
-	rspamd_client_close ();
+	rspamd_client_close (client);
 
 	return 0;
 }
