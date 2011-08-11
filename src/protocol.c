@@ -827,17 +827,21 @@ metric_symbols_callback_rspamc (gpointer key, gpointer value, void *user_data)
 static gboolean
 show_metric_symbols_rspamc (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
+	GHashTable                     *h;
+
 	cd->cur_metric = metric_res->metric;
 	if (cd->alive) {
-		g_hash_table_ref (metric_res->symbols);
-		g_hash_table_foreach (metric_res->symbols, metric_symbols_callback_rspamc, cd);
-		g_hash_table_unref (metric_res->symbols);
-		/* Remove last , from log buf */
-		if (cd->log_buf[cd->log_offset - 1] == ',') {
-			cd->log_buf[--cd->log_offset] = '\0';
-		}
-		if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
-			cd->symbols_buf[--cd->symbols_offset] = '\0';
+		h = g_hash_table_ref (metric_res->symbols);
+		g_hash_table_foreach (h, metric_symbols_callback_rspamc, cd);
+		g_hash_table_unref (h);
+		if (cd->alive) {
+			/* Remove last , from log buf */
+			if (cd->log_buf[cd->log_offset - 1] == ',') {
+				cd->log_buf[--cd->log_offset] = '\0';
+			}
+			if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
+				cd->symbols_buf[--cd->symbols_offset] = '\0';
+			}
 		}
 	}
 
@@ -894,6 +898,7 @@ metric_symbols_callback_json (gpointer key, gpointer value, void *user_data)
 static gboolean
 show_metric_symbols_json (struct metric_result *metric_res, struct metric_callback_data *cd)
 {
+	GHashTable                     *h;
 
 	cd->cur_metric = metric_res->metric;
 	cd->symbols_offset = 0;
@@ -901,17 +906,19 @@ show_metric_symbols_json (struct metric_result *metric_res, struct metric_callba
 			"    \"symbols\": [");
 
 	/* Print all symbols */
-	g_hash_table_ref (metric_res->symbols);
-	g_hash_table_foreach (metric_res->symbols, metric_symbols_callback_json, cd);
-	g_hash_table_unref (metric_res->symbols);
-	/* Remove last ',' symbol */
-	if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
+	h = g_hash_table_ref (metric_res->symbols);
+	g_hash_table_foreach (h, metric_symbols_callback_json, cd);
+	g_hash_table_unref (h);
+	if (cd->alive) {
+		/* Remove last ',' symbol */
+		if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
 			cd->symbols_buf[--cd->symbols_offset] = '\0';
-	}
-	cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
+		}
+		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
 				CRLF "    ]" CRLF "  }" CRLF);
-	if (! rspamd_dispatcher_write (cd->task->dispatcher, cd->symbols_buf, cd->symbols_offset, FALSE, FALSE)) {
-		cd->alive = FALSE;
+		if (! rspamd_dispatcher_write (cd->task->dispatcher, cd->symbols_buf, cd->symbols_offset, FALSE, FALSE)) {
+			cd->alive = FALSE;
+		}
 	}
 	return cd->alive;
 }
@@ -1243,6 +1250,7 @@ write_check_reply (struct worker_task *task)
 									reportbuf[OUTBUFSIZ], symbolsbuf[OUTBUFSIZ];
 	struct metric_result           *metric_res;
 	struct metric_callback_data     cd;
+	GHashTable                     *h;
 
 	/* Output the first line - check status */
 	if (task->is_http) {
@@ -1318,9 +1326,9 @@ write_check_reply (struct worker_task *task)
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
-		g_hash_table_ref (task->results);
-		g_hash_table_foreach (task->results, show_metric_result, &cd);
-		g_hash_table_unref (task->results);
+		h = g_hash_table_ref (task->results);
+		g_hash_table_foreach (h, show_metric_result, &cd);
+		g_hash_table_unref (h);
 		if (!cd.alive) {
 			return FALSE;
 		}
@@ -1412,6 +1420,7 @@ write_process_reply (struct worker_task *task)
 	gsize                           len;
 	struct metric_result           *metric_res;
 	struct metric_callback_data     cd;
+	GHashTable                     *h;
 
 	/* Output the first line - check status */
 	if (task->is_http) {
@@ -1474,9 +1483,9 @@ write_process_reply (struct worker_task *task)
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
-		g_hash_table_ref (task->results);
-		g_hash_table_foreach (task->results, show_metric_result, &cd);
-		g_hash_table_unref (task->results);
+		h = g_hash_table_ref (task->results);
+		g_hash_table_foreach (h, show_metric_result, &cd);
+		g_hash_table_unref (h);
 		if (! cd.alive) {
 			return FALSE;
 		}
