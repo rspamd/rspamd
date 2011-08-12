@@ -956,6 +956,7 @@ maybe_call_lua_function (const gchar *name, struct worker_task *task)
 {
 	lua_State                      *L = task->cfg->lua_state;
 	struct worker_task            **ptask;
+	gboolean                        res;
 
 	lua_getglobal (L, name);
 	if (lua_isfunction (L, -1)) {
@@ -967,9 +968,13 @@ maybe_call_lua_function (const gchar *name, struct worker_task *task)
 			msg_info ("call to %s failed: %s", (gchar *)name, lua_tostring (L, -1));
 			return FALSE;
 		}
-		return lua_toboolean (L, -1);
+		res = lua_toboolean (L, -1);
+		lua_pop (L, 1);
+		return res;
 	}
-
+	else {
+		lua_pop (L, 1);
+	}
 	return FALSE;
 }
 

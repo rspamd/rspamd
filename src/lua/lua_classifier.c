@@ -108,8 +108,8 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 				}
 				lua_pop (L, 1);
 			}
-			lua_pop (L, 1);
 		}
+		lua_pop (L, 1);
 	}
 
 	return res;
@@ -123,7 +123,6 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 	GList                           *res = NULL, *cur;
 	struct classifier_callback_data *cd;
 	lua_State                       *L;
-
 
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
@@ -147,9 +146,10 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 			if (lua_isfunction (L, -1)) {
 				res = call_classifier_pre_callback (ccf, task, L, is_learn, is_spam);
 			}
+			lua_pop (L, 1);
 		}
+		lua_pop (L, 1);
 	}
-
 	return res;
 }
 
@@ -186,6 +186,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 			if (lua_isnumber (cd->L, 1)) {
 				out = lua_tonumber (cd->L, 1);
 			}
+			lua_pop (cd->L, 1);
 		}
 
 		cur = g_list_next (cur);

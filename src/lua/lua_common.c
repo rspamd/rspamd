@@ -371,7 +371,7 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	struct worker_task            **ptask;
 	GList                          *cur;
 	struct expression_argument     *arg;
-	int                             nargs = 1;
+	int                             nargs = 1, pop = 0;
 
 	/* Call specified function and expect result of given expected_type */
 	/* First check function in config table */
@@ -381,19 +381,25 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 		lua_gettable (L, -2);
 		if (lua_isnil (L, -1)) {
 			/* Try to get global variable */
+			lua_pop (L, 1);
 			lua_getglobal (L, function);
 		}
 		else {
 			/* Call local function in table */
 			lua_pushstring (L, function);
 			lua_gettable (L, -2);
+			pop += 2;
 		}
 	}
 	else {
 		/* Try to get global variable */
+		lua_pop (L, 1);
 		lua_getglobal (L, function);
 	}
 	if (lua_isnil (L, -1)) {
+		if (pop > 0) {
+			lua_pop (L, pop);
+		}
 		msg_err ("function with name %s is not defined", function);
 		return FALSE;
 	}
@@ -427,13 +433,16 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 		msg_info ("call to %s failed: %s", function, lua_tostring (L, -1));
 		return FALSE;
 	}
+	pop ++;
 
 	if (!lua_isboolean (L, -1)) {
+		lua_pop (L, pop);
 		msg_info ("function %s must return a boolean", function);
 		return FALSE;
 	}
 	*res = lua_toboolean (L, -1);
-	
+	lua_pop (L, pop);
+
 	return TRUE;
 }
 
@@ -518,6 +527,7 @@ lua_normalizer_func (struct config_file *cfg, long double score, void *params)
 		msg_info ("function %s must return a number", p->data);
 	}
 	res = lua_tonumber (L, -1);
+	lua_pop (L, 1);
 
     return res;
 }

@@ -500,7 +500,6 @@ accept_socket (gint fd, short what, void *arg)
 		new_task->rcpt = g_list_reverse (new_task->rcpt);
 	}
 #endif
-
 }
 
 #ifndef BUILD_STATIC

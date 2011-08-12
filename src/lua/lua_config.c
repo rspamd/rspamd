@@ -319,6 +319,7 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 		if (lua_isboolean (cd->L, 1)) {
 			res = lua_toboolean (cd->L, 1);
 		}
+		lua_pop (cd->L, 1);
 	}
 
 	return res;
@@ -410,7 +411,7 @@ lua_call_post_filters (struct worker_task *task)
 		lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
-		if (lua_pcall (cd->L, 1, 1, 0) != 0) {
+		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
 			msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
 		}
 		cur = g_list_next (cur);
@@ -535,13 +536,12 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 {
 	struct lua_callback_data       *cd = ud;
 	struct worker_task            **ptask;
-
 	lua_getglobal (cd->L, cd->name);
 	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
 	lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 
-	if (lua_pcall (cd->L, 1, 1, 0) != 0) {
+	if (lua_pcall (cd->L, 1, 0, 0) != 0) {
 		msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
 	}
 }

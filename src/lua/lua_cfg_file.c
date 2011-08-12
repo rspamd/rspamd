@@ -396,32 +396,39 @@ lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, enum l
 				switch (expected_type) {
 					case LUA_VAR_NUM:
 						if (!lua_isnumber (L, -1)) {
+							lua_pop (L, 1);
 							*res = NULL;
 							return FALSE;
 						}
 						num_res = lua_tonumber (L, -1);
 						*res = memory_pool_alloc (task->task_pool, sizeof (double));
 						**(double **)res = num_res;
+						lua_pop (L, 1);
 						return TRUE;
 					case LUA_VAR_BOOLEAN:
 						if (!lua_isboolean (L, -1)) {
+							lua_pop (L, 1);
 							*res = NULL;
 							return FALSE;
 						}
 						bool_res = lua_toboolean (L, -1);
 						*res = memory_pool_alloc (task->task_pool, sizeof (gboolean));
 						**(gboolean **)res = bool_res;
+						lua_pop (L, 1);
 						return TRUE;
 					case LUA_VAR_STRING:
 						if (!lua_isstring (L, -1)) {
+							lua_pop (L, 1);
 							*res = NULL;
 							return FALSE;
 						}
 						str_res = memory_pool_strdup (task->task_pool, lua_tostring (L, -1));
 						*res = str_res;
+						lua_pop (L, 1);
 						return TRUE;
 					case LUA_VAR_FUNCTION:
 					case LUA_VAR_UNKNOWN:
+						lua_pop (L, 1);
 						msg_err ("cannot expect function or unknown types");
 						*res = NULL;
 						return FALSE;
