@@ -969,7 +969,7 @@ print_metric_data_rspamc (struct worker_task *task, gchar *outbuf, gsize size,
 	if (metric_res == NULL) {
 		if (task->proto == SPAMC_PROTO) {
 			r = rspamd_snprintf (outbuf, size,
-					"Spam: False ; 0 / %.2f" CRLF, ms);
+					"Spam: False ; 0.00 / %.2f" CRLF, ms);
 		}
 		else {
 			if (task->proto_ver >= 11) {
@@ -1103,6 +1103,10 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		default_required_score = m->required_score;
 		default_score = 0;
 		if (metric_res != NULL && !check_metric_settings (metric_res, &ms, &rs)) {
+			ms = m->required_score;
+			rs = m->reject_score;
+		}
+		else if (metric_res == NULL) {
 			ms = m->required_score;
 			rs = m->reject_score;
 		}

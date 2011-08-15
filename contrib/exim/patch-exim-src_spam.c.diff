@@ -48,7 +48,7 @@
  
    /* dig in the spamd output and put the report in a multiline header, if requested */
 -  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
-+  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\n\r\nSpam: %*s ; %lf / %lf\r\nContent-length: %*u\r\n\r\n%n",
++  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\nContent-length: %*u\r\n\r\n%n",
               spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
  
      /* try to fall back to pre-2.50 spamd output */
