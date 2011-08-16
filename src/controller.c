@@ -929,7 +929,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");
-			free_task (task, FALSE);
+			destroy_session (task->s);
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
@@ -942,7 +942,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		if (r == -1) {
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
-			free_task (task, FALSE);
+			destroy_session (task->s);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -970,7 +970,7 @@ controller_read_socket (f_str_t * in, void *arg)
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
 			}
 
-			free_task (task, FALSE);
+			destroy_session (task->s);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -1109,7 +1109,7 @@ controller_write_socket (void *arg)
 			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
 		}
 		session->learn_task->dispatcher = NULL;
-		free_task (session->learn_task, FALSE);
+		destroy_session (session->learn_task->s);
 		session->state = STATE_REPLY;
 		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 			return FALSE;
