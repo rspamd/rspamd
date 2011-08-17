@@ -112,7 +112,6 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	}
 	else {
 		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
-		s->score = w;
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && w > 0) {
@@ -122,6 +121,8 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		else if (w > 0) {
 			metric_res->grow_factor = metric->grow_factor;
 		}
+
+		s->score = w;
 		s->name = symbol;
 		metric_res->score += w;
 
