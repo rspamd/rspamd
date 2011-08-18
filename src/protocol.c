@@ -873,11 +873,11 @@ metric_symbols_callback_json (gpointer key, gpointer value, void *user_data)
 				(gchar *)key, s->score);
 	if (description != NULL) {
 		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
-				"        \"description\": \"%s\"%s" CRLF, description, s->options ? "" : ",");
+				"        \"description\": \"%s\"%s" CRLF, description, s->options ? "," : "");
 	}
 	else {
 		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
-				"        \"description\": \"\"%s" CRLF, s->options ? "" : ",");
+				"        \"description\": \"\"%s" CRLF, s->options ? "," : "");
 	}
 	if (s->options) {
 		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
