@@ -826,13 +826,44 @@ options_handle_nameserver (struct config_file *cfg, struct rspamd_xml_userdata *
 }
 
 /* Worker section */
+
+struct wrk_cbdata {
+	struct worker_conf *wrk;
+	struct config_file *cfg;
+	struct rspamd_xml_userdata *ctx;
+};
+
+static void
+worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
+{
+	struct wrk_cbdata              *cd = ud;
+	struct xml_config_param        *cparam;
+	GHashTable                     *worker_config;
+
+	if (cd->wrk->ctx == NULL) {
+		cd->wrk->ctx = init_workers_ctx (cd->wrk->type);
+	}
+
+	if (!worker_options || (worker_config = g_hash_table_lookup (worker_options, &cd->wrk->type)) == NULL ||
+			(cparam = g_hash_table_lookup (worker_config, k)) == NULL) {
+		msg_warn ("unregistered worker attribute '%s' for worker %s", k, process_to_str (cd->wrk->type));
+	}
+	else {
+
+		if (cd->wrk->ctx != NULL) {
+			cparam->handler (cd->cfg, cd->ctx, NULL, v, NULL, cd->wrk->ctx, cparam->offset);
+		}
+		else {
+			msg_err ("Bad error detected: module %s has not initialized its context", process_to_str (cd->wrk->type));
+		}
+	}
+}
+
 gboolean 
 worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
 	const gchar                    *name;
-	struct xml_config_param        *cparam;
-	GHashTable                     *worker_config;
 
 	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0)  {
 		if (attrs == NULL || (name = g_hash_table_lookup (attrs, "name")) == NULL) {
@@ -844,18 +875,11 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, c
 		name = memory_pool_strdup (cfg->cfg_pool, tag);
 	}
 
-	if (!worker_options ||
-			(worker_config = g_hash_table_lookup (worker_options, &wrk->type)) == NULL ||
-			(cparam = g_hash_table_lookup (worker_config, name)) == NULL) {
-		msg_warn ("unregistered worker attribute '%s' for worker %s", name, process_to_str (wrk->type));
-		g_hash_table_insert (wrk->params, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
-	}
-	else {
-		return cparam->handler (cfg, ctx, attrs, data, NULL, cparam->user_data, cparam->offset);
-	}
+	g_hash_table_insert (wrk->params, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
 
 	return TRUE;
 }
+
 gboolean 
 worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
@@ -1764,6 +1788,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 	struct statfile            *st;
 	gboolean                    res;
 	gpointer                    tptr;
+	struct wrk_cbdata           wcd;
 	
 	if (g_ascii_strcasecmp (element_name, "if") == 0) {
 		tptr = g_queue_pop_head (ud->if_stack);
@@ -1845,6 +1870,12 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		case XML_READ_WORKER:
 			CHECK_TAG ("worker", FALSE);
 			if (res) {
+				/* Parse params */
+				wcd.wrk = ud->section_pointer;
+				wcd.cfg = ud->cfg;
+				wcd.ctx = ud;
+				g_hash_table_foreach (wcd.wrk->params,
+						worker_foreach_callback, &wcd);
 				/* Insert object to list */
 				ud->cfg->workers = g_list_prepend (ud->cfg->workers, ud->section_pointer);
 			}
@@ -2156,17 +2187,6 @@ register_worker_opt (gint wtype, const gchar *optname, element_handler_func func
 	}
 	if ((param = g_hash_table_lookup (worker, optname)) == NULL) {
 		/* Register new param */
-		param = g_malloc (sizeof (struct xml_config_param));
-		param->handler = func;
-		param->user_data = dest_struct;
-		param->offset = offset;
-		param->name = optname;
-		g_hash_table_insert (worker, (char *)optname, param);
-	}
-	else {
-		/* Param already exists replace it */
-		msg_warn ("replace old handler for param '%s'", optname);
-		g_free (param);
 		param = g_malloc (sizeof (struct xml_config_param));
 		param->handler = func;
 		param->user_data = dest_struct;

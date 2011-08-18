@@ -92,8 +92,6 @@ struct rspamd_main {
 	guint ev_initialized;										/**< is event system is initialized					*/
 	struct rspamd_stat *stat;									/**< pointer to statistics							*/
 
-	gpointer workers_ctx[TYPE_MAX];								/** Array of workers' contexts						*/
-
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
@@ -278,6 +276,11 @@ void start_greylist_storage (struct rspamd_worker *worker);
  * Register custom controller function
  */
 void register_custom_controller_command (const gchar *name, controller_func_t handler, gboolean privilleged, gboolean require_message);
+
+/**
+ * Initialize context for worker of specified type
+ */
+gpointer init_workers_ctx (enum process_type type);
 
 /**
  * If set, reopen log file on next write

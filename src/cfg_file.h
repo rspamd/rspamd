@@ -236,6 +236,7 @@ struct worker_conf {
 	GHashTable *params;								/**< params for worker									*/
 	GQueue *active_workers;							/**< linked list of spawned workers						*/
 	gboolean has_socket;							/**< whether we should make listening socket in main process */
+	gpointer *ctx;									/**< worker's context									*/
 };
 
 /**

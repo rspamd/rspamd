@@ -331,7 +331,13 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		cur->type = cf->type;
 		cur->pid = fork ();
 		cur->cf = g_malloc (sizeof (struct worker_conf));
-		cur->ctx = rspamd->workers_ctx[cf->type];
+		/* Copy or init context */
+		if (cf->ctx) {
+			cur->ctx = cf->ctx;
+		}
+		else {
+			cur->ctx = init_workers_ctx (cf->type);
+		}
 		memcpy (cur->cf, cf, sizeof (struct worker_conf));
 		cur->pending = FALSE;
 		switch (cur->pid) {
@@ -788,13 +794,21 @@ print_symbols_cache (struct config_file *cfg)
 	}
 }
 
-static void
-init_workers_ctx (struct rspamd_main *main)
+gpointer
+init_workers_ctx (enum process_type type)
 {
-	main->workers_ctx[TYPE_WORKER] = init_worker ();
-	main->workers_ctx[TYPE_CONTROLLER] = init_controller ();
-	main->workers_ctx[TYPE_FUZZY] = init_fuzzy_storage ();
-	main->workers_ctx[TYPE_SMTP] = init_smtp_worker ();
+	switch (type) {
+	case TYPE_WORKER:
+		return init_worker ();
+	case TYPE_CONTROLLER:
+		return init_controller ();
+	case TYPE_FUZZY:
+		return init_fuzzy_storage ();
+	case TYPE_SMTP:
+		return init_smtp_worker ();
+	default:
+		return NULL;
+	}
 }
 
 gint
@@ -866,9 +880,6 @@ main (gint argc, gchar **argv, gchar **env)
 	counters = rspamd_hash_new_shared (rspamd_main->server_pool, g_str_hash, g_str_equal, 64);
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
-	
-	/* Init contextes */
-	init_workers_ctx (rspamd_main);
 
 	/* Init classifiers options */
 	register_classifier_opt ("bayes", "min_tokens");

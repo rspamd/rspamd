@@ -582,8 +582,10 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		break;
 	default:
-		msg_info ("wrong header: %s", headern);
-		return FALSE;
+		if (!task->is_http) {
+			msg_info ("wrong header: %s", headern);
+			return FALSE;
+		}
 	}
 
 	return TRUE;
