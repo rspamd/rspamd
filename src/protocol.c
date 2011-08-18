@@ -875,6 +875,10 @@ metric_symbols_callback_json (gpointer key, gpointer value, void *user_data)
 		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
 				"        \"description\": \"%s\"" CRLF, description);
 	}
+	else {
+		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
+				"        \"description\": \"\"" CRLF);
+	}
 	if (s->options) {
 		cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
 						"        \"options\": [" CRLF "        ");
