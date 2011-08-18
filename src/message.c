@@ -676,6 +676,7 @@ process_raw_headers (struct worker_task *task)
 			}
 			else if (*(p + 1) == '\0') {
 				state = next_state;
+				p ++;
 			}
 			else {
 				p ++;
