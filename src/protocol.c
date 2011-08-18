@@ -589,7 +589,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 	}
 
-	return res;
+	return res || task->is_http;
 }
 
 gboolean
