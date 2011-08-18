@@ -392,6 +392,7 @@ static gboolean
 parse_header (struct worker_task *task, f_str_t * line)
 {
 	gchar                           *headern, *err, *tmp;
+	gboolean                         res = TRUE;
 
 	/* Check end of headers */
 	if (line->len == 0) {
@@ -462,7 +463,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'h':
@@ -474,7 +475,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'f':
@@ -486,7 +487,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'j':
@@ -497,7 +498,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'q':
@@ -509,7 +510,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'r':
@@ -527,7 +528,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'i':
@@ -543,7 +544,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'p':
@@ -556,7 +557,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 			} 
 		}
 		else {
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 's':
@@ -568,7 +569,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 			task->statfile = memory_pool_fstrdup (task->task_pool, line);
 		}
 		else {
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'u':
@@ -578,17 +579,17 @@ parse_header (struct worker_task *task, f_str_t * line)
 			task->user = memory_pool_fstrdup (task->task_pool, line);
 		}
 		else {
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	default:
 		if (!task->is_http) {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 	}
 
-	return TRUE;
+	return res;
 }
 
 gboolean
