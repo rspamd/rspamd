@@ -6,6 +6,32 @@ local symbol_strict = nil
 local bad_hosts = {}
 local good_hosts = {}
 
+function recv_dns_cb(task, to_resolve, results, err)
+	if not results then
+		task:insert_result(symbol_strict, 1)
+	else
+		rspamd_logger.info(string.format('SMTP resolver failed to resolve: %s is %s', to_resolve, results[1]))
+		local i = true
+		for _,h in ipairs(bad_hosts) do
+			if string.find(results[1], h) then
+				-- Check for good hostname
+				if good_hosts then
+					for _,gh in ipairs(good_hosts) do
+						if string.find(results[1], gh) then
+							i = false
+							break
+						end
+					end
+				end
+				if i then
+					task:insert_result(symbol_strict, 1, h)
+					return
+				end
+			end
+		end
+	end
+end
+
 function check_quantity_received (task)
 	local recvh = task:get_received_headers()
 	if table.maxn(recvh) <= 1 then
@@ -18,7 +44,12 @@ function check_quantity_received (task)
             end
 			-- Unresolved host
 			if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
-				task:insert_result(symbol_strict, 1)
+				if r['real_ip'] then
+					-- Try to resolve it again
+					task:resolve_dns_ptr(r['real_ip'], 'recv_dns_cb')
+				else
+					task:insert_result(symbol_strict, 1)
+				end
                 return
 			end
 
@@ -69,9 +100,17 @@ if opts then
 					rspamd_config:register_virtual_symbol(symbol_strict, 1.0)
 				end
 			elseif n == 'bad_host' then
-			    bad_hosts = v
+				if type(v) == 'string' then
+			    	bad_hosts[1] = v
+				else
+					bad_hosts = v
+				end
 			elseif n == 'good_host' then
-			    good_hosts = v
+				if type(v) == 'string' then
+			    	good_hosts[1] = v
+				else
+					good_hosts = v
+				end
 		    end
 	    end
 

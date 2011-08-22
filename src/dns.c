@@ -422,18 +422,15 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 }
 
 static void
-make_ptr_req (struct rspamd_dns_request *req, struct in_addr addr)
+make_ptr_req (struct rspamd_dns_request *req, struct in_addr *addr)
 {
 	gchar                           ipbuf[sizeof("255.255.255.255.in-addr.arpa")];
-	guint32 a = ntohl (addr.s_addr), r;
-	guint16 *p;
+	guint32                         r;
+	guint16                        *p;
+	guint8                         *addr_p = (guint8 *)&addr->s_addr;
 
 	r = rspamd_snprintf (ipbuf, sizeof(ipbuf), "%d.%d.%d.%d.in-addr.arpa",
-			(gint)(guint8)((a	) & 0xff),
-			(gint)(guint8)((a>>8 ) & 0xff),
-			(gint)(guint8)((a>>16) & 0xff),
-			(gint)(guint8)((a>>24) & 0xff));
-	
+			addr_p[3], addr_p[2], addr_p[1], addr_p[0]);
 	allocate_packet (req, r);
 	make_dns_header (req);
 	format_dns_name (req, ipbuf, r);
@@ -1143,7 +1140,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 {
 	va_list args;
 	struct rspamd_dns_request *req;
-	struct in_addr addr;
+	struct in_addr *addr;
 	const gchar *name, *service, *proto;
 	gint r;
 	struct dns_header *header;
@@ -1164,7 +1161,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	va_start (args, type);
 	switch (type) {
 		case DNS_REQUEST_PTR:
-			addr = va_arg (args, struct in_addr);
+			addr = va_arg (args, struct in_addr *);
 			make_ptr_req (req, addr);
 			break;
 		case DNS_REQUEST_MX:

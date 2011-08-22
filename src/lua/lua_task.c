@@ -668,7 +668,8 @@ lua_task_resolve_dns_ptr (lua_State * L)
 			msg_info ("invalid parameters passed to function");
 			return 0;
 		}
-		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_PTR, ina)) {
+		if (make_dns_request (task->resolver, task->s, task->task_pool,
+				lua_dns_callback, (void *)cd, DNS_REQUEST_PTR, ina)) {
 			task->dns_requests ++;
 			task->save.saved++;
 		}
