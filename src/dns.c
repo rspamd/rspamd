@@ -39,6 +39,15 @@
 #define DEFAULT_UPSTREAM_DEAD_TIME 300
 #define DEFAULT_UPSTREAM_MAXERRORS 10
 
+static const unsigned base         = 36;
+static const unsigned t_min        = 1;
+static const unsigned t_max        = 26;
+static const unsigned skew         = 38;
+static const unsigned damp         = 700;
+static const unsigned initial_n    = 128;
+static const unsigned initial_bias = 72;
+
+
 #ifdef HAVE_ARC4RANDOM
 #define DNS_RANDOM arc4random
 #elif defined HAVE_RANDOM
@@ -50,6 +59,142 @@
 #define UDP_PACKET_SIZE 512
 
 #define DNS_COMPRESSION_BITS 0xC0
+
+/* Punycode utility */
+static guint digit(unsigned n)
+{
+	return "abcdefghijklmnopqrstuvwxyz0123456789"[n];
+}
+
+static guint adapt(guint delta, guint numpoints, gint first)
+{
+	guint k;
+
+	if (first) {
+		delta = delta / damp;
+	}
+	else {
+		delta /= 2;
+	}
+	delta += delta / numpoints;
+	k = 0;
+	while (delta > ((base - t_min) * t_max) / 2) {
+		delta /= base - t_min;
+		k += base;
+	}
+	return k + (((base - t_min + 1) * delta) / (delta + skew));
+}
+
+/**
+ * Convert an UCS4 string to a puny-coded DNS label string suitable
+ * when combined with delimiters and other labels for DNS lookup.
+ *
+ * @param in an UCS4 string to convert
+ * @param in_len the length of in.
+ * @param out the resulting puny-coded string. The string is not NUL
+ * terminatied.
+ * @param out_len before processing out_len should be the length of
+ * the out variable, after processing it will be the length of the out
+ * string.
+ *
+ * @return returns 0 on success, an wind error code otherwise
+ * @ingroup wind
+ */
+
+gboolean
+punycode_label_toascii(const gunichar *in, gsize in_len, gchar *out,
+		gsize *out_len)
+{
+	guint n = initial_n;
+	guint delta = 0;
+	guint bias = initial_bias;
+	guint h = 0;
+	guint b;
+	guint i;
+	guint o = 0;
+	guint m;
+
+	for (i = 0; i < in_len; ++i) {
+		if (in[i] < 0x80) {
+			++h;
+			if (o >= *out_len) {
+				return FALSE;
+			}
+			out[o++] = in[i];
+		}
+	}
+	b = h;
+	if (b > 0) {
+		if (o >= *out_len) {
+			return FALSE;
+		}
+		out[o++] = 0x2D;
+	}
+	/* is this string punycoded */
+	if (h < in_len) {
+		if (o + 4 >= *out_len) {
+			return FALSE;
+		}
+		memmove (out + 4, out, o);
+		memcpy (out, "xn--", 4);
+		o += 4;
+	}
+
+	while (h < in_len) {
+		m = (guint) -1;
+		for (i = 0; i < in_len; ++i) {
+
+			if (in[i] < m && in[i] >= n) {
+				m = in[i];
+			}
+		}
+		delta += (m - n) * (h + 1);
+		n = m;
+		for (i = 0; i < in_len; ++i) {
+			if (in[i] < n) {
+				++delta;
+			}
+			else if (in[i] == n) {
+				guint q = delta;
+				guint k;
+				for (k = base;; k += base) {
+					guint t;
+					if (k <= bias) {
+						t = t_min;
+					}
+					else if (k >= bias + t_max) {
+						t = t_max;
+					}
+					else {
+						t = k - bias;
+					}
+					if (q < t) {
+						break;
+					}
+					if (o >= *out_len) {
+						return -1;
+					}
+					out[o++] = digit (t + ((q - t) % (base - t)));
+					q = (q - t) / (base - t);
+				}
+				if (o >= *out_len) {
+					return -1;
+				}
+				out[o++] = digit (q);
+				/* output */
+				bias = adapt (delta, h + 1, h == b);
+				delta = 0;
+				++h;
+			}
+		}
+		++delta;
+		++n;
+	}
+
+	*out_len = o;
+	return TRUE;
+}
+
 
 /*
  * P E R M U T A T I O N  G E N E R A T O R
@@ -346,12 +491,47 @@ make_dns_header (struct rspamd_dns_request *req)
 	req->id = header->qid;
 }
 
+static gboolean
+maybe_punycode_label (guint8 *begin, guint8 **res, guint8 **dot, guint *label_len)
+{
+	gboolean ret = FALSE;
+	guint8 *p = begin;
+
+	*dot = NULL;
+
+	while (*p) {
+		if (*p == '.') {
+			*dot = p;
+			break;
+		}
+		else if ((*p) & 0x80) {
+			ret = TRUE;
+		}
+		p ++;
+	}
+
+	if (*p) {
+		*res = p - 1;
+		*label_len = p - begin;
+	}
+	else {
+		*res = p;
+		*label_len = p - begin;
+	}
+
+	return ret;
+}
+
 static void
 format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namelen)
 {
-	guint8 *pos = req->packet + req->pos, *end, *dot, *begin;
+	guint8 *pos = req->packet + req->pos, *end, *dot, *name_pos, *begin;
 	guint remain = req->packet_len - req->pos - 5, label_len;
 	GList *table = NULL;
+	gunichar *uclabel;
+	glong uclabel_len;
+	gsize punylabel_len;
+	gchar tmp_label[DNS_D_MAXLABEL];
 
 	if (namelen == 0) {
 		namelen = strlen (name);
@@ -360,53 +540,78 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 	begin = (guint8 *)name;
 	end = (guint8 *)name + namelen;
 	for (;;) {
-		dot = strchr (begin, '.');
-		if (dot) {
-			label_len = dot - begin;
-			if (label_len > DNS_D_MAXLABEL) {
-				msg_err ("dns name component is longer than 63 bytes, should be stripped");
-				label_len = DNS_D_MAXLABEL;
-			}
-			if (remain < label_len + 1) {
-				label_len = remain - 1;
-				msg_err ("no buffer remain for constructing query, strip to %ud", label_len);
-			}
-			if (label_len == 0) {
-				/* Two dots in order, skip this */
-				msg_info ("name contains two or more dots in a row, replace it with one dot");
-				begin = dot + 1;
-				continue;
-			}
-			/* First try to compress name */
-			if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, &table)) {
-				*pos++ = (guint8)label_len;
-				memcpy (pos, begin, label_len);
-				pos += label_len;
+		/* Check label for unicode characters */
+		if (maybe_punycode_label (begin, &name_pos, &dot, &label_len)) {
+			/* Convert to ucs4 */
+			uclabel = g_utf8_to_ucs4_fast (begin, label_len, &uclabel_len);
+			memory_pool_add_destructor (req->pool, g_free, uclabel);
+			punylabel_len = DNS_D_MAXLABEL;
+
+			punycode_label_toascii (uclabel, uclabel_len, tmp_label, &punylabel_len);
+			/* Try to compress name */
+			if (! try_compress_label (req->pool, pos, req->packet, punylabel_len, tmp_label, &table)) {
+				/* Copy punylabel */
+				*pos++ = (guint8)punylabel_len;
+				memcpy (pos, tmp_label, punylabel_len);
+				pos += punylabel_len;
 			}
 			else {
 				pos += 2;
 			}
-			remain -= label_len + 1;
-			begin = dot + 1;
-		}
-		else {
-			label_len = end - begin;
-			if (label_len == 0) {
-				/* If name is ended with dot */
+			if (dot) {
+				remain -= label_len + 1;
+				begin = dot + 1;
+			}
+			else {
 				break;
 			}
-			if (label_len > DNS_D_MAXLABEL) {
-				msg_err ("dns name component is longer than 63 bytes, should be stripped");
-				label_len = DNS_D_MAXLABEL;
+		}
+		else {
+			if (dot) {
+				if (label_len > DNS_D_MAXLABEL) {
+					msg_err ("dns name component is longer than 63 bytes, should be stripped");
+					label_len = DNS_D_MAXLABEL;
+				}
+				if (remain < label_len + 1) {
+					label_len = remain - 1;
+					msg_err ("no buffer remain for constructing query, strip to %ud", label_len);
+				}
+				if (label_len == 0) {
+					/* Two dots in order, skip this */
+					msg_info ("name contains two or more dots in a row, replace it with one dot");
+					begin = dot + 1;
+					continue;
+				}
+				/* First try to compress name */
+				if (! try_compress_label (req->pool, pos, req->packet, end - begin, begin, &table)) {
+					*pos++ = (guint8)label_len;
+					memcpy (pos, begin, label_len);
+					pos += label_len;
+				}
+				else {
+					pos += 2;
+				}
+				remain -= label_len + 1;
+				begin = dot + 1;
 			}
-			if (remain < label_len + 1) {
-				label_len = remain - 1;
-				msg_err ("no buffer remain for constructing query, strip to %ud", label_len);
+			else {
+				if (label_len == 0) {
+					/* If name is ended with dot */
+					break;
+				}
+				if (label_len > DNS_D_MAXLABEL) {
+					msg_err ("dns name component is longer than 63 bytes, should be stripped");
+					label_len = DNS_D_MAXLABEL;
+				}
+				if (remain < label_len + 1) {
+					label_len = remain - 1;
+					msg_err ("no buffer remain for constructing query, strip to %ud", label_len);
+				}
+				*pos++ = (guint8)label_len;
+				memcpy (pos, begin, label_len);
+				pos += label_len;
+				break;
 			}
-			*pos++ = (guint8)label_len;
-			memcpy (pos, begin, label_len);
-			pos += label_len;
-			break;
 		}
 		if (remain == 0) {
 			msg_err ("no buffer space available, aborting");

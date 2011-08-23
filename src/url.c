@@ -1006,20 +1006,20 @@ url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 
 		goto domain;
 	}
-	else if (is_domain (*p)) {
+	else if (is_domain (*p) || (*p & 0x80)) {
 domain:
 		while (p < end) {
-			if (!is_domain (*p)) {
+			if (!is_domain (*p) && !(*p & 0x80)) {
 				break;
 			}
 
 			p++;
 
-			while (p < end && is_domain (*p)) {
+			while (p < end && (is_domain (*p) || (*p & 0x80))) {
 				p++;
 			}
 
-			if ((p + 1) < end && *p == '.' && (is_domain (*(p + 1)) || *(p + 1) == '/')) {
+			if ((p + 1) < end && *p == '.' && (is_domain (*(p + 1)) || *(p + 1) == '/' || (*(p + 1) & 0x80))) {
 				p++;
 			}
 		}
