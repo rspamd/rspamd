@@ -827,12 +827,18 @@ lua_task_get_from (lua_State *L)
 #else
 			addrs = internet_address_list_parse_string (task->from);
 #endif
-			lua_push_internet_address_list (L, addrs);
+			if (L != NULL) {
+				lua_push_internet_address_list (L, addrs);
 #ifndef	GMIME24
-			internet_address_list_destroy (addrs);
+				internet_address_list_destroy (addrs);
 #else
-			g_object_unref (addrs);
+				g_object_unref (addrs);
 #endif
+			}
+			else {
+				lua_pushnil (L);
+			}
+
 			return 1;
 		}
 	}
