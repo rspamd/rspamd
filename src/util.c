@@ -287,13 +287,13 @@ write_pid (struct rspamd_main *main)
 	if (main->cfg->pid_file == NULL) {
 		return -1;
 	}
-	main->pfh = pidfile_open (main->cfg->pid_file, 0644, &pid);
+	main->pfh = rspamd_pidfile_open (main->cfg->pid_file, 0644, &pid);
 
 	if (main->pfh == NULL) {
 		return -1;
 	}
 
-	pidfile_write (main->pfh);
+	rspamd_pidfile_write (main->pfh);
 
 	return 0;
 }
@@ -490,10 +490,10 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 
 #ifndef HAVE_PIDFILE
 extern gchar                    *__progname;
-static gint                      _pidfile_remove (struct pidfh *pfh, gint freeit);
+static gint                      _rspamd_pidfile_remove (rspamd_pidfh_t *pfh, gint freeit);
 
 static gint
-pidfile_verify (struct pidfh *pfh)
+rspamd_pidfile_verify (rspamd_pidfh_t *pfh)
 {
 	struct stat                     sb;
 
@@ -510,7 +510,7 @@ pidfile_verify (struct pidfh *pfh)
 }
 
 static gint
-pidfile_read (const gchar *path, pid_t * pidptr)
+rspamd_pidfile_read (const gchar *path, pid_t * pidptr)
 {
 	gchar                           buf[16], *endptr;
 	gint                            error, fd, i;
@@ -535,10 +535,10 @@ pidfile_read (const gchar *path, pid_t * pidptr)
 	return 0;
 }
 
-struct pidfh                   *
-pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
+rspamd_pidfh_t                   *
+rspamd_pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 {
-	struct pidfh                   *pfh;
+	rspamd_pidfh_t                 *pfh;
 	struct stat                     sb;
 	gint                            error, fd, len, count;
 	struct timespec                 rqtp;
@@ -571,7 +571,7 @@ pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 		rqtp.tv_nsec = 5000000;
 		if (errno == EWOULDBLOCK && pidptr != NULL) {
 		  again:
-			errno = pidfile_read (pfh->pf_path, pidptr);
+			errno = rspamd_pidfile_read (pfh->pf_path, pidptr);
 			if (errno == 0)
 				errno = EEXIST;
 			else if (errno == EAGAIN) {
@@ -605,7 +605,7 @@ pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 }
 
 gint
-pidfile_write (struct pidfh *pfh)
+rspamd_pidfile_write (rspamd_pidfh_t *pfh)
 {
 	gchar                           pidstr[16];
 	gint                            error, fd;
@@ -614,7 +614,7 @@ pidfile_write (struct pidfh *pfh)
 	 * Check remembered descriptor, so we don't overwrite some other
 	 * file if pidfile was closed and descriptor reused.
 	 */
-	errno = pidfile_verify (pfh);
+	errno = rspamd_pidfile_verify (pfh);
 	if (errno != 0) {
 		/*
 		 * Don't close descriptor, because we are not sure if it's ours.
@@ -628,7 +628,7 @@ pidfile_write (struct pidfh *pfh)
 	 */
 	if (ftruncate (fd, 0) == -1) {
 		error = errno;
-		_pidfile_remove (pfh, 0);
+		_rspamd_pidfile_remove (pfh, 0);
 		errno = error;
 		return -1;
 	}
@@ -636,7 +636,7 @@ pidfile_write (struct pidfh *pfh)
 	rspamd_snprintf (pidstr, sizeof (pidstr), "%P", getpid ());
 	if (pwrite (fd, pidstr, strlen (pidstr), 0) != (ssize_t) strlen (pidstr)) {
 		error = errno;
-		_pidfile_remove (pfh, 0);
+		_rspamd_pidfile_remove (pfh, 0);
 		errno = error;
 		return -1;
 	}
@@ -645,11 +645,11 @@ pidfile_write (struct pidfh *pfh)
 }
 
 gint
-pidfile_close (struct pidfh *pfh)
+rspamd_pidfile_close (rspamd_pidfh_t *pfh)
 {
 	gint                            error;
 
-	error = pidfile_verify (pfh);
+	error = rspamd_pidfile_verify (pfh);
 	if (error != 0) {
 		errno = error;
 		return -1;
@@ -666,11 +666,11 @@ pidfile_close (struct pidfh *pfh)
 }
 
 static gint
-_pidfile_remove (struct pidfh *pfh, gint freeit)
+_rspamd_pidfile_remove (rspamd_pidfh_t *pfh, gint freeit)
 {
 	gint                            error;
 
-	error = pidfile_verify (pfh);
+	error = rspamd_pidfile_verify (pfh);
 	if (error != 0) {
 		errno = error;
 		return -1;
@@ -678,7 +678,7 @@ _pidfile_remove (struct pidfh *pfh, gint freeit)
 
 	if (unlink (pfh->pf_path) == -1)
 		error = errno;
-	if (! unlock_file (pfh->pf_fd, FALSE)) {
+	if (!unlock_file (pfh->pf_fd, FALSE)) {
 		if (error == 0)
 			error = errno;
 	}
@@ -698,10 +698,10 @@ _pidfile_remove (struct pidfh *pfh, gint freeit)
 }
 
 gint
-pidfile_remove (struct pidfh *pfh)
+rspamd_pidfile_remove (rspamd_pidfh_t *pfh)
 {
 
-	return (_pidfile_remove (pfh, 1));
+	return (_rspamd_pidfile_remove (pfh, 1));
 }
 #endif
 

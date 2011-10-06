@@ -95,7 +95,7 @@ gint setproctitle(const gchar *fmt, ...);
 /*
  * Pidfile functions from FreeBSD libutil code
  */
-struct pidfh {
+typedef struct rspamd_pidfh_s {
 	gint pf_fd;
 #ifdef HAVE_PATH_MAX
 	gchar    pf_path[PATH_MAX + 1];
@@ -106,11 +106,17 @@ struct pidfh {
 #endif
  	dev_t pf_dev;
  	ino_t   pf_ino;
-};
-struct pidfh *pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr);
-gint pidfile_write(struct pidfh *pfh);
-gint pidfile_close(struct pidfh *pfh);
-gint pidfile_remove(struct pidfh *pfh);
+} rspamd_pidfh_t;
+rspamd_pidfh_t *rspamd_pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr);
+gint rspamd_pidfile_write(rspamd_pidfh_t *pfh);
+gint rspamd_pidfile_close(rspamd_pidfh_t *pfh);
+gint rspamd_pidfile_remove(rspamd_pidfh_t *pfh);
+#else
+typedef struct pidfh rspamd_pidfh_t;
+#define rspamd_pidfile_open pidfile_open
+#define rspamd_pidfile_write pidfile_write
+#define rspamd_pidfile_close pidfile_close
+#define rspamd_pidfile_remove pidfile_remove
 #endif
 
 /*

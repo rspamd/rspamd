@@ -87,7 +87,7 @@ struct rspamd_main {
 	struct config_file *cfg;									/**< pointer to config structure					*/
 	pid_t pid;													/**< main pid										*/
 	/* Pid file structure */
-	struct pidfh *pfh;											/**< struct pidfh for pidfile						*/
+	rspamd_pidfh_t *pfh;											/**< struct pidfh for pidfile						*/
 	enum process_type type;										/**< process type									*/
 	guint ev_initialized;										/**< is event system is initialized					*/
 	struct rspamd_stat *stat;									/**< pointer to statistics							*/

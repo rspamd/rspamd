@@ -351,38 +351,38 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			switch (cf->type) {
 			case TYPE_CONTROLLER:
 				setproctitle ("controller process");
-				pidfile_close (rspamd->pfh);
+				rspamd_pidfile_close (rspamd->pfh);
 				msg_info ("starting controller process %P", getpid ());
 				start_controller (cur);
 				break;
 			case TYPE_LMTP:
 				setproctitle ("lmtp process");
-				pidfile_close (rspamd->pfh);
+				rspamd_pidfile_close (rspamd->pfh);
 				msg_info ("starting lmtp process %P", getpid ());
 				start_lmtp_worker (cur);
 				break;
 			case TYPE_SMTP:
 				setproctitle ("smtp process");
-				pidfile_close (rspamd->pfh);
+				rspamd_pidfile_close (rspamd->pfh);
 				msg_info ("starting smtp process %P", getpid ());
 				start_smtp_worker (cur);
 				break;
 			case TYPE_FUZZY:
 				setproctitle ("fuzzy storage");
-				pidfile_close (rspamd->pfh);
+				rspamd_pidfile_close (rspamd->pfh);
 				msg_info ("starting fuzzy storage process %P", getpid ());
 				start_fuzzy_storage (cur);
 				break;
 			case TYPE_GREYLIST:
 				setproctitle ("greylist storage");
-				pidfile_close (rspamd->pfh);
+				rspamd_pidfile_close (rspamd->pfh);
 				msg_info ("starting greylist storage process %P", getpid ());
 				start_greylist_storage (cur);
 				break;
 			case TYPE_WORKER:
 			default:
 				setproctitle ("worker process");
-				pidfile_close (rspamd->pfh);
+				rspamd_pidfile_close (rspamd->pfh);
 				msg_info ("starting worker process %P", getpid ());
 				start_worker (cur);
 				break;
@@ -390,7 +390,7 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			break;
 		case -1:
 			msg_err ("cannot fork main process. %s", strerror (errno));
-			pidfile_remove (rspamd->pfh);
+			rspamd_pidfile_remove (rspamd->pfh);
 			exit (-errno);
 			break;
 		default:
