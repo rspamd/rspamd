@@ -28,12 +28,22 @@ typedef struct rspamd_hash_s {
 	memory_pool_t            *pool;
 } rspamd_hash_t;
 
+typedef void (*lru_cache_insert_func)(gpointer storage, gpointer key, gpointer value);
+typedef gpointer (*lru_cache_lookup_func)(gpointer storage, gpointer key);
+typedef gboolean (*lru_cache_delete_func)(gpointer storage, gpointer key);
+typedef void (*lru_cache_destroy_func)(gpointer storage);
+
 typedef struct rspamd_lru_hash_s {
 	gint                      maxsize;
 	gint                      maxage;
-	GHashTable               *storage;
 	GDestroyNotify            value_destroy;
+	GDestroyNotify			  key_destroy;
 	GQueue                   *q;
+	gpointer                  storage;
+	lru_cache_insert_func     insert_func;
+	lru_cache_lookup_func     lookup_func;
+	lru_cache_delete_func     delete_func;
+	lru_cache_destroy_func    destroy_func;
 } rspamd_lru_hash_t;
 
 typedef struct rspamd_lru_element_s {
@@ -105,6 +115,19 @@ void rspamd_hash_foreach (rspamd_hash_t *hash, GHFunc func, gpointer user_data);
  */
 rspamd_lru_hash_t* rspamd_lru_hash_new (GHashFunc hash_func, GEqualFunc key_equal_func,
 		gint maxsize, gint maxage, GDestroyNotify key_destroy, GDestroyNotify value_destroy);
+
+/**
+ * Create new lru hash with custom storage
+ * @param maxsize maximum elements in a hash
+ * @param maxage maximum age of elemnt
+ * @param hash_func pointer to hash function
+ * @param key_equal_func pointer to function for comparing keys
+ * @return new rspamd_hash object
+ */
+rspamd_lru_hash_t* rspamd_lru_hash_new_full (GHashFunc hash_func, GEqualFunc key_equal_func,
+		gint maxsize, gint maxage, GDestroyNotify key_destroy, GDestroyNotify value_destroy,
+		gpointer storage, lru_cache_insert_func insert_func, lru_cache_lookup_func lookup_func,
+		lru_cache_delete_func delete_func);
 /**
  * Lookup item from hash
  * @param hash hash object

@@ -332,7 +332,7 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash, gpointer key, gpointer value, t
 }
 
 /**
- * Create new lru hash
+ * Create new lru hash with GHashTable as storage
  * @param maxsize maximum elements in a hash
  * @param maxage maximum age of elemnt
  * @param hash_func pointer to hash function
@@ -350,10 +350,46 @@ rspamd_lru_hash_new (GHashFunc hash_func, GEqualFunc key_equal_func, gint maxsiz
 	new->maxage = maxage;
 	new->maxsize = maxsize;
 	new->value_destroy = value_destroy;
+	new->key_destroy = NULL;
 	new->q = g_queue_new ();
+	new->insert_func = (lru_cache_insert_func)g_hash_table_replace;
+	new->lookup_func = (lru_cache_lookup_func)g_hash_table_lookup;
+	new->delete_func = (lru_cache_delete_func)g_hash_table_remove;
+	new->destroy_func = (lru_cache_destroy_func)g_hash_table_destroy;
 
 	return new;
 }
+/**
+ * Create new lru hash with custom storage
+ * @param maxsize maximum elements in a hash
+ * @param maxage maximum age of elemnt
+ * @param hash_func pointer to hash function
+ * @param key_equal_func pointer to function for comparing keys
+ * @return new rspamd_hash object
+ */
+rspamd_lru_hash_t*
+rspamd_lru_hash_new_full (GHashFunc hash_func, GEqualFunc key_equal_func,
+		gint maxsize, gint maxage, GDestroyNotify key_destroy, GDestroyNotify value_destroy,
+		gpointer storage, lru_cache_insert_func insert_func, lru_cache_lookup_func lookup_func,
+		lru_cache_delete_func delete_func)
+{
+	rspamd_lru_hash_t              *new;
+
+	new = g_malloc (sizeof (rspamd_lru_hash_t));
+	new->storage = storage;
+	new->maxage = maxage;
+	new->maxsize = maxsize;
+	new->value_destroy = value_destroy;
+	new->key_destroy = key_destroy;
+	new->q = g_queue_new ();
+	new->insert_func = insert_func;
+	new->lookup_func = lookup_func;
+	new->delete_func = delete_func;
+	new->destroy_func = NULL;
+
+	return new;
+}
+
 /**
  * Lookup item from hash
  * @param hash hash object
@@ -365,21 +401,23 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now)
 {
 	rspamd_lru_element_t           *res;
 
-	if ((res = g_hash_table_lookup (hash->storage, key)) != NULL) {
-		if (now - res->store_time > hash->maxage) {
-			/* Expire elements from queue tail */
-			res = g_queue_pop_tail (hash->q);
-
-			while (res != NULL && now - res->store_time > hash->maxage) {
-				g_hash_table_remove (hash->storage, res->key);
+	if ((res = hash->lookup_func (hash->storage, key)) != NULL) {
+		if (hash->maxage > 0) {
+			if (now - res->store_time > hash->maxage) {
+				/* Expire elements from queue tail */
 				res = g_queue_pop_tail (hash->q);
-			}
-			/* Restore last element */
-			if (res != NULL) {
-				g_queue_push_tail (hash->q, res);
-			}
 
-			return NULL;
+				while (res != NULL && now - res->store_time > hash->maxage) {
+					hash->delete_func (hash->storage, res->key);
+					res = g_queue_pop_tail (hash->q);
+				}
+				/* Restore last element */
+				if (res != NULL) {
+					g_queue_push_tail (hash->q, res);
+				}
+
+				return NULL;
+			}
 		}
 	}
 
@@ -401,28 +439,35 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value, t
 	rspamd_lru_element_t           *res;
 	gint                            removed = 0;
 
-	if ((gint)g_hash_table_size (hash->storage) >= hash->maxsize) {
+	if ((gint)g_queue_get_length (hash->q) >= hash->maxsize) {
 		/* Expire some elements */
 		res = g_queue_pop_tail (hash->q);
-		while (res != NULL && now - res->store_time > hash->maxage) {
-			g_hash_table_remove (hash->storage, res->key);
-			res = g_queue_pop_tail (hash->q);
-			removed ++;
+		if (hash->maxage > 0) {
+			while (res != NULL && now - res->store_time > hash->maxage) {
+				if (res->key != NULL) {
+					hash->delete_func (hash->storage, res->key);
+				}
+				res = g_queue_pop_tail (hash->q);
+				removed ++;
+			}
 		}
+		/* If elements are already removed do not expire extra elements */
 		if (removed != 0 && res != NULL) {
 			g_queue_push_tail (hash->q, res);
 		}
 	}
 
 	res = rspamd_lru_create_node (hash, key, value, now);
-	g_hash_table_insert (hash->storage, key, res);
+	hash->insert_func (hash->storage, key, res);
 	g_queue_push_head (hash->q, res);
 }
 
 void
 rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash)
 {
-	g_hash_table_destroy (hash->storage);
+	if (hash->destroy_func) {
+		hash->destroy_func (hash->storage);
+	}
 	g_queue_free (hash->q);
 	g_free (hash);
 }
