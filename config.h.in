@@ -121,6 +121,8 @@
 
 #cmakedefine WITH_JUDY           1
 
+#cmakedefine WITH_DB             1
+
 #cmakedefine WITH_GPERF_TOOLS    1
 
 #cmakedefine HAVE_ASM_PAUSE      1

@@ -7,7 +7,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 4)
-SET(RSPAMD_VERSION_PATCH 4)
+SET(RSPAMD_VERSION_PATCH 5)
 
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
@@ -361,10 +361,16 @@ LINK_DIRECTORIES(${GLIB2_LIBRARY_DIRS})
 
 # Check for libevent
 
-FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATHS /lib
-                                           		/opt/lib
-                                            	/usr/lib
-                                            	/usr/local/lib
+FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
                  DOC "Path where the libevent library can be found")
 IF(NOT LIBEVENT_LIBRARY)
 	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
@@ -380,10 +386,16 @@ INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
 LINK_DIRECTORIES("${LIBEVENT_PATH}")
 
 # Find libjudy
-FIND_LIBRARY(LIBJUDY_LIBRARY NAMES Judy PATHS /lib
-                                           		/opt/lib
-                                            	/usr/lib
-                                            	/usr/local/lib
+FIND_LIBRARY(LIBJUDY_LIBRARY NAMES Judy PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
                  DOC "Path where the libjudy library can be found")
 IF(LIBJUDY_LIBRARY)
 	FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
@@ -396,6 +408,30 @@ IF(LIBJUDY_LIBRARY)
 	LINK_DIRECTORIES("${LIBJUDY_PATH}")
 	SET(WITH_JUDY 1)
 ENDIF(LIBJUDY_LIBRARY)
+
+# Find libbd
+FIND_LIBRARY(LIBDB_LIBRARY NAMES db-4 PATHS PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
+                 DOC "Path where the libdb library can be found")
+IF(LIBDB_LIBRARY)
+	FIND_PATH(LIBDB_INCLUDE db.h PATHS 	/opt/include
+											/usr/include
+											/usr/local/include
+											DOC "Path where the bdb header files can be found")
+
+	GET_FILENAME_COMPONENT(LIBDB_PATH "${LIBDB_LIBRARY}" PATH)
+	INCLUDE_DIRECTORIES("${LIBDB_INCLUDE}")
+	LINK_DIRECTORIES("${LIBDB_PATH}")
+	SET(WITH_DB 1)
+ENDIF(LIBDB_LIBRARY)
 
 IF(ENABLE_PROFILING MATCHES "ON")
 	SET(WITH_PROFILER 1)
@@ -419,10 +455,16 @@ IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 													/usr/local/include
 											  DOC "Path where google perftools includes can be found")
 	INCLUDE_DIRECTORIES("${GPERF_INCLUDE}")
-	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler PATHS /lib
-													/opt/lib
-													/usr/lib
-													/usr/local/lib
+	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
 					DOC "Path where the gperf library can be found")
 	IF(NOT GPERF_LIBRARY)
 		MESSAGE(FATAL_ERROR "gperf tools support is enabled but not found in system")
@@ -435,10 +477,16 @@ ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 # Find util library
 
-FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	/lib
-                                           		/opt/lib
-                                            	/usr/lib
-                                            	/usr/local/lib
+FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
                  DOC "Path where the libutil library can be found")
 IF(LIBUTIL_LIBRARY)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES util)
@@ -713,6 +761,9 @@ ENDIF(ENABLE_LUAJIT MATCHES "ON")
 IF(LIBJUDY_LIBRARY)
 	TARGET_LINK_LIBRARIES(rspamd Judy)
 ENDIF(LIBJUDY_LIBRARY)
+IF(LIBDB_LIBRARY)
+	TARGET_LINK_LIBRARIES(rspamd db-4)
+ENDIF(LIBDB_LIBRARY)
 TARGET_LINK_LIBRARIES(rspamd event)
 TARGET_LINK_LIBRARIES(rspamd pcre)
 
