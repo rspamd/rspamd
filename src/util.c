@@ -280,6 +280,37 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_serve
 }
 
 gint
+make_socketpair (gint pair[2])
+{
+	gint                            s_error, r, optlen, serrno, on = 1;
+
+	r = socketpair (PF_LOCAL, SOCK_STREAM, 0, pair);
+
+	if (r == -1) {
+		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (errno));
+		return -1;
+	}
+	/* Set close on exec */
+	if (fcntl (pair[0], F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		goto out;
+	}
+	if (fcntl (pair[1], F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		goto out;
+	}
+
+	return 0;
+
+out:
+	serrno = errno;
+	close (pair[0]);
+	close (pair[1]);
+	errno = serrno;
+	return (-1);
+}
+
+gint
 write_pid (struct rspamd_main *main)
 {
 	pid_t                           pid;

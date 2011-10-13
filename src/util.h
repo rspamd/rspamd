@@ -47,6 +47,11 @@ gint accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t *len
 gint make_unix_socket (const gchar *, struct sockaddr_un *, gboolean is_server);
 
 /*
+ * Create socketpair
+ */
+gint make_socketpair (gint pair[2]);
+
+/*
  * Write pid to file
  */
 gint write_pid (struct rspamd_main *);
