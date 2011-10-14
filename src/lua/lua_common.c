@@ -444,8 +444,6 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 		return FALSE;
 	}
 	*res = lua_toboolean (L, -1);
-	lua_gc (L, LUA_GCCOLLECT, 0);
-	msg_info ("lua eats %d kbytes", lua_gc (L, LUA_GCCOUNT, 0));
 	lua_pop (L, pop);
 
 	return TRUE;
