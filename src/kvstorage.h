@@ -45,30 +45,35 @@ typedef void (*backend_init)(struct rspamd_kv_backend *backend);
 typedef gboolean (*backend_insert)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
 typedef gboolean (*backend_replace)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
 typedef struct rspamd_kv_element* (*backend_lookup)(struct rspamd_kv_backend *backend, gpointer key);
-typedef gboolean (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key);
+typedef struct rspamd_kv_element* (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key);
 typedef void (*backend_destroy)(struct rspamd_kv_backend *backend);
 
 /* Callbacks for expire */
 typedef void (*expire_init)(struct rspamd_kv_expire *expire);
 typedef void (*expire_insert)(struct rspamd_kv_expire *expire, struct rspamd_kv_element *elt);
 typedef void (*expire_delete)(struct rspamd_kv_expire *expire, struct rspamd_kv_element *elt);
-typedef gboolean (*expire_step)(struct rspamd_kv_expire *expire, struct rspamd_kv_storage *storage);
+typedef gboolean (*expire_step)(struct rspamd_kv_expire *expire, struct rspamd_kv_storage *storage, time_t now);
 typedef void (*expire_destroy)(struct rspamd_kv_expire *expire);
 
 
 /* Flags of element */
 enum rspamd_kv_flags {
 	KV_ELT_ARRAY = 1 << 0,
-	KV_ELT_PERSISTEN = 1 << 1
+	KV_ELT_PERSISTENT = 1 << 1,
+	KV_ELT_DIRTY = 1 << 2,
+	KV_ELT_OUSTED = 1 << 3
 };
 
 /* Common structures description */
 
 struct rspamd_kv_element {
 	time_t age;									/*< age of element */
+	guint32 expire;								/*< expire of element */
 	enum rspamd_kv_flags flags;					/*< element flags  */
 	gsize size;									/*< size of element */
-	TAILQ_ENTRY(rspamd_kv_element) entry;		/*< list entry */
+	TAILQ_ENTRY (rspamd_kv_element) entry;		/*< list entry */
+	guint32 hash;								/*< numeric hash */
+	gpointer key;								/*< pointer to key */
 
 	gchar data[1];								/*< expandable data */
 };
@@ -126,12 +131,28 @@ gboolean rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer k
 gboolean rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, struct rspamd_kv_element *elt);
 
 /** Lookup an element inside kv storage */
-struct rspamd_kv_element* rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key);
+struct rspamd_kv_element* rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_t now);
 
 /** Expire an element from kv storage */
 gboolean rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key);
 
 /** Destroy kv storage */
 void rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage);
+
+/**
+ * LRU expire
+ */
+struct rspamd_kv_expire* rspamd_lru_expire_new (guint queues);
+
+/**
+ * Ordinary hash
+ */
+struct rspamd_kv_cache* rspamd_kv_hash_new (void);
+
+/**
+ * Radix tree
+ */
+struct rspamd_kv_cache* rspamd_kv_radix_new (void);
+
 
 #endif /* KVSTORAGE_H_ */
