@@ -384,11 +384,14 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 			lua_pop (L, 1);
 			lua_getglobal (L, function);
 		}
-		else {
+		else if (lua_istable (L, -1)) {
 			/* Call local function in table */
 			lua_pushstring (L, function);
 			lua_gettable (L, -2);
 			pop += 2;
+		}
+		else {
+			msg_err ("Bad type: %s for function: %s for module: %s", lua_typename (L, lua_type (L, -1)), function, module);
 		}
 	}
 	else {
@@ -441,6 +444,8 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 		return FALSE;
 	}
 	*res = lua_toboolean (L, -1);
+	lua_gc (L, LUA_GCCOLLECT, 0);
+	msg_info ("lua eats %d kbytes", lua_gc (L, LUA_GCCOUNT, 0));
 	lua_pop (L, pop);
 
 	return TRUE;

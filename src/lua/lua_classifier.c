@@ -109,7 +109,6 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 				lua_pop (L, 1);
 			}
 		}
-		lua_pop (L, 1);
 	}
 
 	return res;
