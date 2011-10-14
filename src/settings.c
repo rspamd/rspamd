@@ -510,7 +510,6 @@ check_metric_action_settings (struct worker_task *task, struct metric_result *re
 	GList                          *cur;
 	enum rspamd_metric_action       r = METRIC_ACTION_NOACTION;
 	gboolean                        black;
-	double                          rej = 0.;
 
 	if (us != NULL) {
 		/* Check whitelist and set appropriate action for whitelisted users */
@@ -529,9 +528,6 @@ check_metric_action_settings (struct worker_task *task, struct metric_result *re
 				if (score >= act->score) {
 					r = act->action;
 					sel = act;
-				}
-				if (r == METRIC_ACTION_REJECT) {
-					rej = act->score;
 				}
 				cur = g_list_next (cur);
 			}

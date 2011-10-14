@@ -334,12 +334,12 @@ get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_
 struct upstream                *
 get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	guint                            alive, max_weight, i;
+	guint                           max_weight, i;
 	struct upstream                *cur, *selected = NULL;
 	u_char                         *p;
 
 	/* Recheck all upstreams */
-	alive = rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);
+	(void)rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);
 
 	p = ups;
 	max_weight = 0;
@@ -383,12 +383,12 @@ get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, t
 struct upstream                *
 get_upstream_master_slave (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
 {
-	guint                            alive, max_weight, i;
+	guint                           max_weight, i;
 	struct upstream                *cur, *selected = NULL;
 	u_char                         *p;
 
 	/* Recheck all upstreams */
-	alive = rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);
+	(void)rescan_upstreams (ups, members, msize, now, error_timeout, revive_timeout, max_errors);
 
 	p = ups;
 	max_weight = 0;

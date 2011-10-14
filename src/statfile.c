@@ -288,7 +288,8 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 static void
 statfile_preload (stat_file_t *file)
 {
-	guint8                         *pos, *end, t;
+	guint8                         *pos, *end;
+	volatile guint8					t;
 	gsize                           size;
 
 	pos = (guint8 *)file->map;
@@ -306,6 +307,7 @@ statfile_preload (stat_file_t *file)
 #endif
 		while (pos < end) {
 			t = *pos;
+			(void)t;
 			pos += size;
 		}
 	}
@@ -550,7 +552,6 @@ double
 statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t now)
 {
 	struct stat_file_block         *block;
-	struct stat_file_header        *header;
 	guint                           i, blocknum;
 	u_char                         *c;
 
@@ -561,7 +562,6 @@ statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1,
 	}
 
 	blocknum = h1 % file->cur_section.length;
-	header = (struct stat_file_header *)file->map;
 	c = (u_char *) file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 	block = (struct stat_file_block *)c;
 

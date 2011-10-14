@@ -302,7 +302,6 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	json_error_t                    je;
 	gchar                           *cur_rule, *cur_symbol;
 	double                          score;
-	gboolean                        enabled;
 	struct regexp_module_item      *cur_item;
 	GList                          *cur_networks = NULL;
 	struct dynamic_map_item        *cur_nitem;
@@ -356,7 +355,6 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	for (i = 0; i < nelts; i++) {
 		cur_networks = NULL;
 		cur_rule = NULL;
-		enabled = TRUE;
 
 		cur_elt = json_array_get (js, i);
 		if (!cur_elt || !json_is_object (cur_elt)) {

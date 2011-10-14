@@ -172,13 +172,12 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 gint
 rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 {
-	gchar   *p;
 	va_list   args;
     gchar buf[BUFSIZ];
     gint r;
 
 	va_start (args, fmt);
-	p = rspamd_vsnprintf (buf, sizeof (buf), fmt, args);
+	rspamd_vsnprintf (buf, sizeof (buf), fmt, args);
 	va_end (args);
 
     r = fprintf (f, "%s", buf);
@@ -277,7 +276,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 	size_t              len, slen;
 	gint64              i64;
 	guint64             ui64;
-	guint               width, sign, hex, humanize, bytes, max_width, frac_width, i;
+	guint               width, sign, hex, humanize, bytes, frac_width, i;
 	f_str_t			   *v;
 	GString            *gs;
 
@@ -305,7 +304,6 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 			hex = 0;
 			bytes = 0;
 			humanize = 0;
-			max_width = 0;
 			frac_width = 0;
 			slen = (size_t) -1;
 
@@ -323,7 +321,6 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 					continue;
 
 				case 'm':
-					max_width = 1;
 					fmt++;
 					continue;
 

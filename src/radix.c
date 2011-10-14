@@ -197,7 +197,6 @@ radix32tree_delete (radix_tree_t * tree, guint32 key, guint32 mask)
 {
 	guint32                         bit;
 	radix_node_t                   *node;
-	radix_node_t                   *tmp;
 
 	bit = 0x80000000;
 	node = tree->root;
@@ -236,7 +235,6 @@ radix32tree_delete (radix_tree_t * tree, guint32 key, guint32 mask)
 			node->parent->left = NULL;
 		}
 
-		tmp = node;
 		node = node->parent;
 
 		if (node->right || node->left) {

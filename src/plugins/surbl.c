@@ -1004,7 +1004,6 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	struct redirector_param        *param = data;
 	struct worker_task             *task;
 	struct uri                     *url = value;
-	f_str_t                         f;
 	gchar                          *red_domain;
 	const gchar                    *pos;
 	GRegex                         *re;
@@ -1018,8 +1017,6 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	}
 
 	if (surbl_module_ctx->use_redirector) {
-		f.begin = url->host;
-		f.len = url->hostlen;
 		/* Search in trie */
 		if (surbl_module_ctx->redirector_trie &&
 				(pos = rspamd_trie_lookup (surbl_module_ctx->redirector_trie, url->host, url->hostlen, &idx)) != NULL &&

@@ -1044,14 +1044,6 @@ start_map_watch (void)
 void 
 remove_all_maps (void)
 {
-	GList                          *cur = maps;
-	struct rspamd_map              *map;
-
-	/* First of all do synced read of data */
-	while (cur) {
-		map = cur->data;
-		cur = g_list_next (cur);
-	}
 	g_list_free (maps);
 	maps = NULL;
 	if (map_pool != NULL) {

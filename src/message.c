@@ -36,7 +36,7 @@
 GByteArray                     *
 strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
 {
-	uint8_t                        *tbuf = NULL, *p, *tp = NULL, *rp, *tbegin = NULL, *end, c, lc;
+	uint8_t                        *p, *rp, *tbegin = NULL, *end, c, lc;
 	gint                            br, i = 0, depth = 0, in_q = 0;
 	gint                            state = 0;
 	GByteArray                     *buf;
@@ -124,19 +124,16 @@ unbreak_tag:
 			case 2:			/* PHP */
 				if (!br && lc != '\"' && *(p - 1) == '?') {
 					in_q = state = 0;
-					tp = tbuf;
 				}
 				break;
 
 			case 3:
 				in_q = state = 0;
-				tp = tbuf;
 				break;
 
 			case 4:			/* JavaScript/CSS/etc... */
 				if (p >= src->data + 2 && *(p - 1) == '-' && *(p - 2) == '-') {
 					in_q = state = 0;
-					tp = tbuf;
 				}
 				break;
 
