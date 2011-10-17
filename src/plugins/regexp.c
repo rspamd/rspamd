@@ -696,6 +696,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			while (cur) {
 				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
 				/* Try to match regexp */
+				if (!re->is_raw) {
+					/* Validate input */
+					if (!g_utf8_validate (cur->data, -1, NULL)) {
+						cur = g_list_next (cur);
+						continue;
+					}
+				}
 				if (cur->data && g_regex_match_full (re->regexp, cur->data, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const gchar *)cur->data);
@@ -746,6 +753,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				regexp = re->raw_regexp;
 			}
 			else {
+				/* This time there is no need to validate anything as conversion succeed only for valid characters */
 				regexp = re->regexp;
 			}
 			/* Select data for regexp */
@@ -913,6 +921,13 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				debug_task ("found header \"%s\" with value \"%s\"", re->header, (const gchar *)cur->data);
 				rh = cur->data;
 				/* Try to match regexp */
+				if (!re->is_raw) {
+					/* Validate input */
+					if (!g_utf8_validate (rh->value, -1, NULL)) {
+						cur = g_list_next (cur);
+						continue;
+					}
+				}
 				if (rh->value && g_regex_match_full (re->regexp, rh->value, -1, 0, 0, NULL, &err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info ("process test regexp %s for header %s with value '%s' returned TRUE", re->regexp_text, re->header, (const gchar *)cur->data);

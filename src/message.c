@@ -710,14 +710,21 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 	}
 
 	if (g_ascii_strcasecmp (charset, "utf-8") == 0 || g_ascii_strcasecmp (charset, "utf8") == 0) {
-		text_part->is_raw = FALSE;
-		text_part->is_utf = TRUE;
-		return part_content;
+		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
+			text_part->is_raw = FALSE;
+			text_part->is_utf = TRUE;
+			return part_content;
+		}
+		else {
+			msg_info ("<%s>: contains invalid utf8 characters, assume it as raw", task->message_id);
+			text_part->is_raw = TRUE;
+			return part_content;
+		}
 	}
 
 	res_str = g_convert_with_fallback (part_content->data, part_content->len, UTF8_CHARSET, charset, NULL, &read_bytes, &write_bytes, &err);
 	if (res_str == NULL) {
-		msg_warn ("cannot convert from %s to utf8: %s", charset, err ? err->message : "unknown problem");
+		msg_warn ("<%s>: cannot convert from %s to utf8: %s", task->message_id, charset, err ? err->message : "unknown problem");
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
@@ -986,6 +993,12 @@ process_message (struct worker_task *task)
 		task->message = message;
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) destroy_message, task->message);
 
+		/* Save message id for future use */
+		task->message_id = g_mime_message_get_message_id (task->message);
+		if (task->message_id == NULL) {
+			task->message_id = "undef";
+		}
+
 		task->parser_recursion = 0;
 #ifdef GMIME24
 		g_mime_message_foreach (message, mime_foreach_callback, task);
@@ -1002,10 +1015,6 @@ process_message (struct worker_task *task)
 		debug_task ("found %d parts in message", task->parts_count);
 		if (task->queue_id == NULL) {
 			task->queue_id = "undef";
-		}
-		task->message_id = g_mime_message_get_message_id (task->message);
-		if (task->message_id == NULL) {
-			task->message_id = "undef";
 		}
 
 #ifdef GMIME24
