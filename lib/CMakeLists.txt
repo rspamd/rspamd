@@ -48,6 +48,7 @@ SET(RSPAMDLIBSRC ../src/binlog.c
 				../src/html.c
 				../src/images.c
 				../src/kvstorage.c
+				../src/kvstorage_config.c
 				../src/lmtp_proto.c
 				../src/logger.c
 				../src/map.c

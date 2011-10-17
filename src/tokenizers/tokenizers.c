@@ -256,7 +256,6 @@ tokenize_subject (struct worker_task *task, GTree ** tree)
 {
 	f_str_t                         subject;
 	const gchar                    *sub;
-	token_node_t                   *new = NULL;
 	struct tokenizer               *osb_tokenizer;
 
 	if (*tree == NULL) {
@@ -268,13 +267,11 @@ tokenize_subject (struct worker_task *task, GTree ** tree)
 
 	/* Try to use pre-defined subject */
 	if (task->subject != NULL) {
-		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
 		subject.begin = task->subject;
 		subject.len = strlen (task->subject);
 		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE, NULL);
 	}
 	if ((sub = g_mime_message_get_subject (task->message)) != NULL) {
-		new = memory_pool_alloc (task->task_pool, sizeof (token_node_t));
 		subject.begin = (gchar *)sub;
 		subject.len = strlen (sub);
 		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE, NULL);

@@ -1521,7 +1521,7 @@ xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 	gsize                      *dest;
 
 	dest = (gsize *)G_STRUCT_MEMBER_P (dest_struct, offset);
-	*dest = parse_limit (data);
+	*dest = parse_limit (data, -1);
 	
 	return TRUE;
 }
@@ -1792,7 +1792,7 @@ if (g_ascii_strcasecmp (element_name, (x)) == 0) {																							\
 else {																																		\
 	res = FALSE;																															\
 	if ((required) == TRUE) {																												\
-	*error = g_error_new (xml_error_quark (), XML_UNMATCHED_TAG, "element %s is unexpected in this state, expected %s", element_name, (x));	\
+	if (*error == NULL) *error = g_error_new (xml_error_quark (), XML_UNMATCHED_TAG, "element %s is unexpected in this state, expected %s", element_name, (x));	\
 	ud->state = XML_ERROR;																													\
 	}																																		\
 }																																			\
@@ -2137,7 +2137,7 @@ check_module_option (const gchar *mname, const gchar *optname, const gchar *data
 		}
 		break;
 	case MODULE_OPT_TYPE_SIZE:
-		(void)parse_limit (data);
+		(void)parse_limit (data, -1);
 		if (errno != 0) {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s': %s", optname, mname, strerror (errno));
 			return FALSE;

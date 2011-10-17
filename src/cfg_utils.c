@@ -268,16 +268,17 @@ get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 }
 
 gsize
-parse_limit (const gchar *limit)
+parse_limit (const gchar *limit, guint len)
 {
 	gsize                          result = 0;
-	gchar                           *err_str;
+	const gchar                   *err_str;
 
-	if (!limit || *limit == '\0')
+	if (!limit || *limit == '\0' || len == 0) {
 		return 0;
+	}
 
 	errno = 0;
-	result = strtoul (limit, &err_str, 10);
+	result = strtoul (limit, (gchar **)&err_str, 10);
 
 	if (*err_str != '\0') {
 		/* Megabytes */
@@ -292,7 +293,7 @@ parse_limit (const gchar *limit)
 		else if (*err_str == 'g' || *err_str == 'G') {
 			result *= 1073741824L;
 		}
-		else {
+		else if (len > 0 && err_str - limit != len) {
 			msg_warn ("invalid limit value '%s' at position '%s'", limit, err_str);
 			result = 0;
 		}

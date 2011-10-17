@@ -167,12 +167,15 @@ void register_worker_opt (gint wtype, const gchar *optname, element_handler_func
 void register_classifier_opt (const gchar *ctype, const gchar *optname);
 
 /* Register new xml subparser */
-void register_suparser (const gchar *tag, enum xml_read_state state, const GMarkupParser *parser, gpointer user_data);
+void register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupParser *parser, gpointer user_data);
 
 /* Check validity of module option */
 gboolean check_module_option (const gchar *mname, const gchar *optname, const gchar *data);
 
 /* Dumper functions */
 gboolean xml_dump_config (struct config_file *cfg, const gchar *filename);
+
+/* XML error quark for reporting errors */
+GQuark xml_error_quark (void);
 
 #endif

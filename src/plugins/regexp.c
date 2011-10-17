@@ -498,7 +498,7 @@ regexp_module_config (struct config_file *cfg)
 		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
 	}
 	if ((value = get_module_opt (cfg, "regexp", "max_size")) != NULL) {
-		regexp_module_ctx->max_size = parse_limit (value);
+		regexp_module_ctx->max_size = parse_limit (value, -1);
 	}
 	else {
 		regexp_module_ctx->max_size = 0;

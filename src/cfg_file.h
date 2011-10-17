@@ -378,7 +378,7 @@ gchar* get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_n
  * @param limit string representation of limit (eg. 1M)
  * @return numeric value of limit
  */
-gsize parse_limit (const gchar *limit);
+gsize parse_limit (const gchar *limit, guint len);
 
 /**
  * Parse time

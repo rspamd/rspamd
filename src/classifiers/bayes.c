@@ -221,7 +221,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 
 	data.learned_tokens = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
-		minnodes = parse_limit (value);
+		minnodes = parse_limit (value, -1);
 		data.max_tokens = minnodes;
 	}
 	else {
@@ -320,7 +320,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	data.learned_tokens = 0;
 	data.learned_tokens = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
-		minnodes = parse_limit (value);
+		minnodes = parse_limit (value, -1);
 		data.max_tokens = minnodes;
 	}
 	else {
@@ -425,7 +425,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 
 	data.learned_tokens = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
-		minnodes = parse_limit (value);
+		minnodes = parse_limit (value, -1);
 		data.max_tokens = minnodes;
 	}
 	else {
