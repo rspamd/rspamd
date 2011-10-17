@@ -93,6 +93,12 @@ struct xml_parser_rule {
 	struct xml_default_config_param default_param;
 };
 
+struct xml_subparser {
+	enum xml_read_state state;
+	const GMarkupParser *parser;
+	gpointer user_data;
+};
+
 /* Here we describes our basic grammar */
 static struct xml_parser_rule grammar[] = {
 	{ XML_SECTION_MAIN, {
@@ -579,7 +585,8 @@ static struct xml_parser_rule grammar[] = {
 
 GHashTable *module_options = NULL,
 		   *worker_options = NULL,
-		   *classifier_options = NULL;
+		   *classifier_options = NULL,
+		   *subparsers = NULL;
 
 GQuark
 xml_error_quark (void)
@@ -621,6 +628,8 @@ xml_state_to_string (struct rspamd_xml_userdata *ud)
 			return "error occured";
 		case XML_END:
 			return "read final tag";
+		case XML_SUBPARSER:
+			return "subparser handle";
 	}
 	/* Unreached */
 	return "unknown state";
@@ -1621,6 +1630,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 								const gchar **attribute_values, gpointer user_data, GError **error)
 {
 	struct rspamd_xml_userdata *ud = user_data;
+	struct xml_subparser       *subparser;
 	struct classifier_config   *ccf;
 	gchar                      *res, *condition;
 
@@ -1719,6 +1729,10 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				/* Create object */
 				ud->section_pointer = init_view (ud->cfg->cfg_pool);
 			}
+			else if (subparsers != NULL && (subparser = g_hash_table_lookup (subparsers, element_name)) != NULL) {
+				ud->state = XML_SUBPARSER;
+				g_markup_parse_context_push (context, subparser->parser, subparser->user_data);
+			}
 			else {
 				/* Extract other tags */
 				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
@@ -1754,6 +1768,11 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			/* Save attributes */
 			ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
+			break;
+		case XML_SUBPARSER:
+			/* Recursive call of this function but with other state */
+			ud->state = XML_READ_PARAM;
+			rspamd_xml_start_element (context, element_name, attribute_names, attribute_values, user_data, error);
 			break;
 		default:
 			if (*error == NULL) {
@@ -2230,6 +2249,23 @@ register_classifier_opt (const gchar *ctype, const gchar *optname)
 		param->name = optname;
 		g_hash_table_insert (classifier, (char *)optname, param);
 	}
+}
+
+void
+register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupParser *parser, gpointer user_data)
+{
+	struct xml_subparser			 *subparser;
+
+	if (subparsers == NULL) {
+		subparsers = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+	}
+	subparser = g_malloc (sizeof (struct xml_subparser));
+
+	subparser->parser = parser;
+	subparser->state = state;
+	subparser->user_data = user_data;
+
+	g_hash_table_replace (subparsers, g_strdup (tag), subparser);
 }
 
 
