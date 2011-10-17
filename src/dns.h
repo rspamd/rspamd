@@ -146,7 +146,7 @@ struct rspamd_dns_reply {
 struct dns_header {
 		guint qid:16;
 
-#if __BYTE_ORDER == BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
 		guint qr:1;
 		guint opcode:4;
 		guint aa:1;

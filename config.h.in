@@ -58,6 +58,36 @@
 #cmakedefine HAVE_MACHINE_ENDIAN_H  1
 #cmakedefine HAVE_SYS_CDEFS_H    1
 
+ #ifdef HAVE_ENDIAN_H
+ #include <endian.h>
+ #else 
+ #ifdef HAVE_SYS_ENDIAN_H
+ #include <sys/endian.h>
+ #else
+ #ifdef HAVE_MACHINE_ENDIAN_H
+ #include <machine/endian.h>
+ #else
+ #define LITTLE_ENDIAN   1234    
+ #define BIG_ENDIAN      4321    
+ #if defined(i386) || defined(__i386) || defined(__amd64) || \
+ 	 defined(BIT_ZERO_ON_RIGHT) || defined(__x86__)
+ #define BYTE_ORDER      LITTLE_ENDIAN
+ #endif
+ 
+ #if defined(__sparc) || defined(__sparc__) || defined(__powerpc__)
+ #define BYTE_ORDER      BIG_ENDIAN
+ #endif
+ 
+ #endif /* HAVE_MACHINE_ENDIAN_H */
+ #endif /* HAVE_SYS_ENDIAN_H */
+ #endif /* HAVE_ENDIAN_H */
+ 
+ #if !defined(BYTE_ORDER) || (BYTE_ORDER != BIG_ENDIAN && BYTE_ORDER != LITTLE_ENDIAN)
+         error "Undefined or unknown BYTE_ORDER";
+ #endif
+ 
+
+
 #cmakedefine HAVE_SYS_QUEUE_H    1
 #cmakedefine HAVE_SYS_MMAN_H     1
 #cmakedefine HAVE_SYS_SOCKET_H   1
