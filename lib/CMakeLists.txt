@@ -1,9 +1,9 @@
 # Librspamdclient
-SET(LIBRSPAMDSRC			  librspamdclient.c ../src/mem_pool.c ../src/upstream.c ../src/printf.c)
+SET(LIBRSPAMDSRC			  client/librspamdclient.c ../src/mem_pool.c ../src/upstream.c ../src/printf.c)
 
 ADD_LIBRARY(rspamdclient SHARED ${LIBRSPAMDSRC})
 ADD_LIBRARY(rspamdclient_static STATIC ${LIBRSPAMDSRC})
-SET_TARGET_PROPERTIES(rspamdclient PROPERTIES PUBLIC_HEADER "librspamdclient.h")
+SET_TARGET_PROPERTIES(rspamdclient PROPERTIES PUBLIC_HEADER "client/librspamdclient.h")
 
 IF(CMAKE_COMPILER_IS_GNUCC)
 SET_TARGET_PROPERTIES(rspamdclient PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
