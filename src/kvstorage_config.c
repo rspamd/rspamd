@@ -25,6 +25,8 @@
 #include "main.h"
 #include "cfg_xml.h"
 
+#define LRU_QUEUES 32
+
 /* Global hash of storages indexed by id */
 GHashTable *storages = NULL;
 /* Last used id for explicit numbering */
@@ -59,9 +61,46 @@ kvstorage_config_destroy (gpointer k)
 		g_free (kconf->name);
 	}
 
+	if (kconf->storage) {
+		rspamd_kv_storage_destroy (kconf->storage);
+	}
+
 	g_free (kconf);
 }
 
+/* Init kvstorage */
+static void
+kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unused)
+{
+	struct kvstorage_config				*kconf = value;
+	struct rspamd_kv_cache				*cache;
+	struct rspamd_kv_backend			*backend;
+	struct rspamd_kv_expire				*expire;
+
+	switch (kconf->cache.type) {
+	case KVSTORAGE_TYPE_CACHE_HASH:
+		cache = rspamd_kv_hash_new ();
+		break;
+	case KVSTORAGE_TYPE_CACHE_RADIX:
+		cache = rspamd_kv_radix_new ();
+		break;
+	}
+
+	switch (kconf->backend.type) {
+	case KVSTORAGE_TYPE_BACKEND_NULL:
+		backend = NULL;
+		break;
+	}
+
+	switch (kconf->expire.type) {
+	case KVSTORAGE_TYPE_EXPIRE_LRU:
+		expire = rspamd_lru_expire_new (LRU_QUEUES);
+		break;
+	}
+
+	kconf->storage = rspamd_kv_storage_new (kconf->id, kconf->name, cache, backend, expire,
+			kconf->cache.max_elements, kconf->cache.max_memory);
+}
 
 /* XML parse callbacks */
 /* Called for open tags <foo bar="baz"> */
@@ -175,6 +214,7 @@ void kvstorage_xml_end_element (GMarkupParseContext	*context,
 			g_hash_table_insert (storages, &kv_parser->current_storage->id, kv_parser->current_storage);
 			kv_parser->state = KVSTORAGE_STATE_INIT;
 			g_markup_parse_context_pop (context);
+			g_hash_table_foreach (storages, kvstorage_init_callback, NULL);
 			return;
 		}
 		if (*error == NULL) {
