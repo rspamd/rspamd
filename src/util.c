@@ -215,7 +215,7 @@ accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t * len)
 }
 
 gint
-make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_server)
+make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_server, gboolean async)
 {
 	gint                            fd, s_error, r, optlen, serrno, on = 1;
 
@@ -258,6 +258,20 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_serve
 			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
+		if (!async) {
+			/* Try to poll */
+			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
+				errno = ETIMEDOUT;
+				msg_warn ("bind/connect failed: timeout");
+				goto out;
+			}
+			else {
+				/* Make synced again */
+				if (make_socket_blocking (fd) < 0) {
+					goto out;
+				}
+			}
+		}
 	}
 	else {
 		/* Still need to check SO_ERROR on socket */
@@ -277,6 +291,78 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_serve
 	close (fd);
 	errno = serrno;
 	return (-1);
+}
+
+/**
+ * Make universal stream socket
+ * @param credits host, ip or path to unix socket
+ * @param port port (used for network sockets)
+ * @param async make this socket asynced
+ * @param is_server make this socket as server socket
+ * @param try_resolve try name resolution for a socket (BLOCKING)
+ */
+gint
+make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async, gboolean is_server, gboolean try_resolve)
+{
+	struct sockaddr_un              un;
+	struct stat                     st;
+	struct in_addr                  in;
+	struct hostent 				   *he;
+	gint                            r;
+
+	if (*credits == '/') {
+		r = stat (credits, &st);
+		if (is_server) {
+			if (r == -1) {
+				return make_unix_socket (credits, &un, is_server, async);
+			}
+			else {
+				/* Unix socket exists, it must be unlinked first */
+				errno = EEXIST;
+				return -1;
+			}
+		}
+		else {
+			if (r == -1) {
+				/* Unix socket doesn't exists it must be created first */
+				errno = ENOENT;
+				return -1;
+			}
+			else {
+				if ((st.st_mode & S_IFSOCK) == 0) {
+					/* Path is not valid socket */
+					errno = EINVAL;
+					return -1;
+				}
+				else {
+					return make_unix_socket (credits, &un, is_server, async);
+				}
+			}
+		}
+	}
+	else {
+		/* TCP related part */
+		if (inet_aton (credits, &in) == 0) {
+			/* Try to resolve */
+			if (try_resolve) {
+				if ((he = gethostbyname (credits)) == NULL) {
+					errno = ENOENT;
+					return -1;
+				}
+				else {
+					memcpy (&in, he->h_addr, sizeof (struct in_addr));
+					return make_tcp_socket (&in, port, is_server, async);
+				}
+			}
+			else {
+				errno = ENOENT;
+				return -1;
+			}
+		}
+		else {
+			return make_tcp_socket (&in, port, is_server, async);
+		}
+	}
 }
 
 gint

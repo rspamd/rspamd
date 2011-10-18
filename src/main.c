@@ -473,7 +473,7 @@ create_listen_socket (struct in_addr *addr, gint port, gint family, gchar *path)
 	}
 	else {
 		un_addr = (struct sockaddr_un *)alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (path, un_addr, TRUE)) == -1) {
+		if (!un_addr || (listen_sock = make_unix_socket (path, un_addr, TRUE, TRUE)) == -1) {
 			msg_err ("cannot create unix listen socket. %s", strerror (errno));
 		}
 	}

@@ -78,7 +78,7 @@ create_smtp_upstream_connection (struct smtp_session *session)
 	/* Now try to create socket */
 	if (selected->is_unix) {
 		un = alloca (sizeof (struct sockaddr_un));
-		session->upstream_sock = make_unix_socket (selected->name, un, FALSE);
+		session->upstream_sock = make_unix_socket (selected->name, un, FALSE, TRUE);
 	}
 	else {
 		session->upstream_sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE);

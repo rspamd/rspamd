@@ -452,7 +452,7 @@ lmtp_deliver_mta (struct worker_task *task)
 
 	if (task->cfg->deliver_family == AF_UNIX) {
 		un = alloca (sizeof (struct sockaddr_un));
-		sock = make_unix_socket (task->cfg->deliver_host, un, FALSE);
+		sock = make_unix_socket (task->cfg->deliver_host, un, FALSE, TRUE);
 	}
 	else {
 		sock = make_tcp_socket (&task->cfg->deliver_addr, task->cfg->deliver_port, FALSE, TRUE);

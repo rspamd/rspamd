@@ -44,7 +44,18 @@ gint accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t *len
 /*
  * Create and bind or connect unix socket
  */
-gint make_unix_socket (const gchar *, struct sockaddr_un *, gboolean is_server);
+gint make_unix_socket (const gchar *, struct sockaddr_un *, gboolean is_server, gboolean async);
+
+/**
+ * Make universal stream socket
+ * @param credits host, ip or path to unix socket
+ * @param port port (used for network sockets)
+ * @param async make this socket asynced
+ * @param is_server make this socket as server socket
+ * @param try_resolve try name resolution for a socket (BLOCKING)
+ */
+gint make_universal_stream_socket (const gchar *credits, guint16 port,
+		gboolean async, gboolean is_server, gboolean try_resolve);
 
 /*
  * Create socketpair
