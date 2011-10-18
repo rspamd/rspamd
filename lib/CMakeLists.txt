@@ -77,3 +77,37 @@ SET_TARGET_PROPERTIES(rspamdserver PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
 TARGET_LINK_LIBRARIES(rspamdserver rspamd_lua)
 TARGET_LINK_LIBRARIES(rspamdserver rspamd_json)
 TARGET_LINK_LIBRARIES(rspamdserver rspamd_cdb)   
+
+
+# Libkvstorageclient
+SET(LIBRKVSTORAGESRC			  kvstorage/libkvstorageclient.c ../src/mem_pool.c ../src/upstream.c ../src/printf.c ../src/util.c)
+
+ADD_LIBRARY(kvstorageclient SHARED ${LIBRKVSTORAGESRC})
+ADD_LIBRARY(kvstorageclient_static STATIC ${LIBRKVSTORAGESRC})
+SET_TARGET_PROPERTIES(kvstorageclient PROPERTIES PUBLIC_HEADER "kvstorage/libkvstorageclient.h")
+
+IF(CMAKE_COMPILER_IS_GNUCC)
+SET_TARGET_PROPERTIES(kvstorageclient PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
+SET_TARGET_PROPERTIES(kvstorageclient_static PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
+ENDIF(CMAKE_COMPILER_IS_GNUCC)
+
+TARGET_LINK_LIBRARIES(kvstorageclient ${CMAKE_REQUIRED_LIBRARIES})
+TARGET_LINK_LIBRARIES(kvstorageclient pcre)
+TARGET_LINK_LIBRARIES(kvstorageclient ${GLIB2_LIBRARIES})
+
+TARGET_LINK_LIBRARIES(kvstorageclient_static ${CMAKE_REQUIRED_LIBRARIES})
+TARGET_LINK_LIBRARIES(kvstorageclient_static ${GLIB2_LIBRARIES})
+
+SET_TARGET_PROPERTIES(kvstorageclient PROPERTIES VERSION ${RSPAMD_VERSION})
+SET_TARGET_PROPERTIES(kvstorageclient_static PROPERTIES VERSION ${RSPAMD_VERSION})
+
+IF(GLIB_COMPAT)
+	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/lgpl")
+	TARGET_LINK_LIBRARIES(kvstorageclient glibadditions)
+ENDIF(GLIB_COMPAT)
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+INSTALL(TARGETS rspamdclient rspamdclient_static LIBRARY PUBLIC_HEADER 
+    LIBRARY DESTINATION lib 
+    PUBLIC_HEADER DESTINATION include
+    ARCHIVE DESTINATION lib)
