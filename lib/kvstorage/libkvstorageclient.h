@@ -31,9 +31,11 @@
 enum rspamd_kvstorage_error {
 	KVSTORAGE_ERROR_OK = 0,
 	KVSTORAGE_ERROR_TIMEOUT,
-	KVSTORAGE_ERROR_NOT_EXIST,
+	KVSTORAGE_ERROR_NOT_FOUND,
 	KVSTORAGE_ERROR_NOT_STORED,
+	KVSTORAGE_ERROR_EXISTS,
 	KVSTORAGE_ERROR_SERVER_ERROR,
+	KVSTORAGE_ERROR_CLIENT_ERROR,
 	KVSTORAGE_ERROR_INTERNAL_ERROR
 };
 
@@ -120,7 +122,7 @@ enum rspamd_kvstorage_error rspamd_kvstorage_connect_sync (const gchar *host,
  * @param value value readed
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_get_sync (struct rspamd_kvstorage_connection *conn,
-		const gpointer key, gpointer **value);
+		const gpointer key, gpointer **value, guint *len);
 
 /**
  * Write key synced
