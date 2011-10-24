@@ -87,7 +87,7 @@ gint poll_sync_socket (gint fd, gint timeout, short events);
 #ifdef HAVE_SA_SIGINFO
 void init_signals (struct sigaction *sa, void (*sig_handler)(gint, siginfo_t *, void *));
 #else
-void init_signals (struct sigaction *sa, sighandler_t);
+void init_signals (struct sigaction *sa, void (*sig_handler)(gint));
 #endif
 
 /*

@@ -418,7 +418,7 @@ void
 init_signals (struct sigaction *signals, void (*sig_handler)(gint, siginfo_t *, void *))
 #else
 void
-init_signals (struct sigaction *signals, sighandler_t sig_handler)
+init_signals (struct sigaction *signals, void (*sig_handler)(gint))
 #endif
 {
 	struct sigaction                sigpipe_act;

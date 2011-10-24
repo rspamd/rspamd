@@ -40,6 +40,8 @@
 
 #cmakedefine HAVE_SYSLOG_H       1
 
+#cmakedefine HAVE_SIGINFO_H      1
+
 #cmakedefine HAVE_LIBUTIL_H      1
 
 #cmakedefine HAVE_LIBGEN_H       1
@@ -369,6 +371,9 @@
 
 #include <errno.h>
 #include <signal.h>
+#ifdef HAVE_SIGINFO_H
+# include <siginfo.h>
+#endif
 #include <event.h>
 #include <glib.h>
 
