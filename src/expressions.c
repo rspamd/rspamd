@@ -1193,31 +1193,33 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 			if ((param_data = g_mime_content_type_get_parameter ((GMimeContentType *)ct, param_name)) == NULL) {
 				result = FALSE;
 			}
-			if (*param_pattern == '/') {
-				/* This is regexp, so compile and create g_regexp object */
-				if ((re = re_cache_check (param_pattern, task->cfg->cfg_pool)) == NULL) {
-					re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
-					if (re == NULL) {
-						msg_warn ("cannot compile regexp for function");
-						return FALSE;
+			else {
+				if (*param_pattern == '/') {
+					/* This is regexp, so compile and create g_regexp object */
+					if ((re = re_cache_check (param_pattern, task->cfg->cfg_pool)) == NULL) {
+						re = parse_regexp (task->cfg->cfg_pool, param_pattern, task->cfg->raw_mode);
+						if (re == NULL) {
+							msg_warn ("cannot compile regexp for function");
+							return FALSE;
+						}
+						re_cache_add (param_pattern, re, task->cfg->cfg_pool);
 					}
-					re_cache_add (param_pattern, re, task->cfg->cfg_pool);
-				}
-				if ((r = task_cache_check (task, re)) == -1) {
-					if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
-						task_cache_add (task, re, 1);
-						return TRUE;
+					if ((r = task_cache_check (task, re)) == -1) {
+						if (g_regex_match (re->regexp, param_data, 0, NULL) == TRUE) {
+							task_cache_add (task, re, 1);
+							return TRUE;
+						}
+						task_cache_add (task, re, 0);
 					}
-					task_cache_add (task, re, 0);
+					else {
+
+					}
 				}
 				else {
-
-				}
-			}
-			else {
-				/* Just do strcasecmp */
-				if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
-					return TRUE;
+					/* Just do strcasecmp */
+					if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
+						return TRUE;
+					}
 				}
 			}
 			/* Get next part */
