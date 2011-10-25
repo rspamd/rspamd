@@ -698,7 +698,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				/* Try to match regexp */
 				if (!re->is_raw) {
 					/* Validate input */
-					if (!g_utf8_validate (cur->data, -1, NULL)) {
+					if (!cur->data || !g_utf8_validate (cur->data, -1, NULL)) {
 						cur = g_list_next (cur);
 						continue;
 					}
@@ -923,7 +923,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 				/* Try to match regexp */
 				if (!re->is_raw) {
 					/* Validate input */
-					if (!g_utf8_validate (rh->value, -1, NULL)) {
+					if (!rh->value || !g_utf8_validate (rh->value, -1, NULL)) {
 						cur = g_list_next (cur);
 						continue;
 					}

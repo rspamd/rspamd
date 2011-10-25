@@ -898,6 +898,8 @@ metric_symbols_callback_json (gpointer key, gpointer value, void *user_data)
 	}
 	cd->symbols_offset += rspamd_snprintf (cd->symbols_buf + cd->symbols_offset, cd->symbols_size - cd->symbols_offset,
 			"      },");
+	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
+				"%s,", (gchar *)key);
 }
 /*
  * Print a single symbol using json protocol
@@ -917,6 +919,10 @@ show_metric_symbols_json (struct metric_result *metric_res, struct metric_callba
 	g_hash_table_foreach (h, metric_symbols_callback_json, cd);
 	g_hash_table_unref (h);
 	if (cd->alive) {
+		/* Remove last , from log buf */
+		if (cd->log_buf[cd->log_offset - 1] == ',') {
+			cd->log_buf[--cd->log_offset] = '\0';
+		}
 		/* Remove last ',' symbol */
 		if (cd->symbols_buf[cd->symbols_offset - 1] == ',') {
 			cd->symbols_buf[--cd->symbols_offset] = '\0';
