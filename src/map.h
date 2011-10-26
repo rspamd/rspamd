@@ -66,6 +66,7 @@ struct rspamd_map {
 	void **user_data;
 	struct event ev;
 	struct timeval tv;
+	struct event_base *ev_base;
 	void *map_data;
 };
 
@@ -81,7 +82,7 @@ gboolean add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fi
 /**
  * Start watching of maps by adding events to libevent event loop
  */
-void start_map_watch (void);
+void start_map_watch (struct event_base *ev_base);
 
 /**
  * Remove all maps watched (remove events)

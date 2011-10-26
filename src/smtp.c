@@ -684,6 +684,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->cfg = worker->srv->cfg;
 	session->session_time = time (NULL);
 	session->resolver = ctx->resolver;
+	session->ev_base = ctx->ev_base;
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */
@@ -698,7 +699,7 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 	else {
-		session->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, 
+		session->dispatcher = rspamd_create_dispatcher (session->ev_base, nfd, BUFFER_LINE,
 								smtp_read_socket, smtp_write_socket, smtp_err_socket, &session->ctx->smtp_timeout, session);
 		session->dispatcher->peer_addr = session->client_addr.s_addr;
 	}
@@ -963,8 +964,6 @@ config_smtp_worker (struct rspamd_worker *worker)
 	if ((value = ctx->smtp_capabilities_str) != NULL) {
 		make_capabilities (ctx, value);
 	}
-
-	ctx->resolver = dns_resolver_init (worker->srv->cfg);
 	
 	return TRUE;
 }
@@ -977,11 +976,12 @@ void
 start_smtp_worker (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
+	struct smtp_worker_ctx         *ctx = worker->ctx;
 
 	gperf_profiler_init (worker->srv->cfg, "worker");
 
 	worker->srv->pid = getpid ();
-	event_init ();
+	ctx->ev_base = event_init ();
 
 	/* Set smtp options */
 	if ( !config_smtp_worker (worker)) {
@@ -994,19 +994,24 @@ start_smtp_worker (struct rspamd_worker *worker)
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *)worker);
+	event_base_set (ctx->ev_base, &worker->sig_ev);
 	signal_add (&worker->sig_ev, NULL);
 
 	/* Accept event */
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
+	event_base_set (ctx->ev_base, &worker->bind_ev);
 	event_add (&worker->bind_ev, NULL);
 
 	/* Maps events */
-	start_map_watch ();
+	start_map_watch (ctx->ev_base);
+
+	/* DNS resolver */
+	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
 	/* Set umask */
 	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);
 
-	event_loop (0);
+	event_base_loop (ctx->ev_base, 0);
 	
 	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);

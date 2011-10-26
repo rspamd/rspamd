@@ -250,13 +250,14 @@ accept_socket (gint fd, short what, void *arg)
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (g_str_hash, g_str_equal);
+	new_task->ev_base = worker->ctx;
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) g_hash_table_destroy, new_task->results);
 	worker->srv->stat->connections_count++;
 	lmtp->task = new_task;
 	lmtp->state = LMTP_READ_LHLO;
 
 	/* Set up dispatcher */
-	new_task->dispatcher = rspamd_create_dispatcher (nfd, BUFFER_LINE, lmtp_read_socket, lmtp_write_socket, lmtp_err_socket, &io_tv, (void *)lmtp);
+	new_task->dispatcher = rspamd_create_dispatcher (new_task->ev_base, nfd, BUFFER_LINE, lmtp_read_socket, lmtp_write_socket, lmtp_err_socket, &io_tv, (void *)lmtp);
 	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
 	if (! rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
 		msg_warn ("cannot write greeting");
@@ -276,7 +277,7 @@ start_lmtp_worker (struct rspamd_worker *worker)
 
 	worker->srv->pid = getpid ();
 	worker->srv->type = TYPE_LMTP;
-	event_init ();
+	worker->ctx = event_init ();
 	g_mime_init (0);
 
 	init_signals (&signals, sig_handler);
@@ -284,10 +285,12 @@ start_lmtp_worker (struct rspamd_worker *worker)
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *)worker);
+	event_base_set (worker->ctx, &worker->sig_ev);
 	signal_add (&worker->sig_ev, NULL);
 
 	/* Accept event */
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
+	event_base_set (worker->ctx, &worker->bind_ev);
 	event_add (&worker->bind_ev, NULL);
 
 	/* Perform modules configuring */
@@ -307,7 +310,7 @@ start_lmtp_worker (struct rspamd_worker *worker)
 
 	gperf_profiler_init (worker->srv->cfg, "lmtp");
 
-	event_loop (0);
+	event_base_loop (worker->ctx, 0);
 	exit (EXIT_SUCCESS);
 }
 

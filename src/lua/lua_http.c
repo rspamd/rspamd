@@ -305,8 +305,8 @@ lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 
 	/* Create dispatcher for HTTP protocol */
 	msec_to_tv (ud->timeout, &tv);
-	ud->io_dispatcher = rspamd_create_dispatcher (ud->fd, BUFFER_LINE, lua_http_read_cb, NULL, lua_http_err_cb,
-			&tv, ud);
+	ud->io_dispatcher = rspamd_create_dispatcher (ud->task->ev_base, ud->fd, BUFFER_LINE, lua_http_read_cb, NULL,
+			lua_http_err_cb, &tv, ud);
 	/* Write request */
 	register_async_event (ud->task->s, lua_http_fin, ud, FALSE);
 

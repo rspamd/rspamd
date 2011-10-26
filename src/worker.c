@@ -91,6 +91,7 @@ struct rspamd_worker_ctx {
 	guint32                         tasks;
 	/* Limit of tasks */
 	guint32                         max_tasks;
+	struct event_base              *ev_base;
 };
 
 static gboolean                 write_socket (void *arg);
@@ -477,9 +478,10 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Set up dispatcher */
 	new_task->dispatcher =
-			rspamd_create_dispatcher (nfd, BUFFER_LINE, read_socket, write_socket,
+			rspamd_create_dispatcher (ctx->ev_base, nfd, BUFFER_LINE, read_socket, write_socket,
 					err_socket, &ctx->io_tv, (void *) new_task);
 	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
+	new_task->ev_base = ctx->ev_base;
 	ctx->tasks ++;
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)reduce_tasks_count, &ctx->tasks);
 
@@ -638,18 +640,20 @@ start_worker (struct rspamd_worker *worker)
 
 	worker->srv->pid = getpid ();
 
-	event_init ();
+	ctx->ev_base = event_init ();
 
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *) worker);
+	event_base_set (ctx->ev_base, &worker->sig_ev);
 	signal_add (&worker->sig_ev, NULL);
 
 	/* Accept event */
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST,
 			accept_socket, (void *) worker);
+	event_base_set (ctx->ev_base, &worker->bind_ev);
 	event_add (&worker->bind_ev, NULL);
 
 
@@ -665,14 +669,14 @@ start_worker (struct rspamd_worker *worker)
 	else {
 #endif
 		/* Maps events */
-		start_map_watch ();
+		start_map_watch (ctx->ev_base);
 #ifndef BUILD_STATIC
 	}
 #endif
 
-	ctx->resolver = dns_resolver_init (worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
-	event_loop (0);
+	event_base_loop (ctx->ev_base, 0);
 
 #ifndef BUILD_STATIC
 	if (ctx->is_custom) {

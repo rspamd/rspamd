@@ -464,7 +464,7 @@ lmtp_deliver_mta (struct worker_task *task)
 	cd = memory_pool_alloc (task->task_pool, sizeof (struct mta_callback_data));
 	cd->task = task;
 	cd->state = LMTP_WANT_GREETING;
-	cd->dispatcher = rspamd_create_dispatcher (sock, BUFFER_LINE, mta_read_socket, NULL, mta_err_socket, NULL, (void *)cd);
+	cd->dispatcher = rspamd_create_dispatcher (task->ev_base, sock, BUFFER_LINE, mta_read_socket, NULL, mta_err_socket, NULL, (void *)cd);
 	return 0;
 }
 

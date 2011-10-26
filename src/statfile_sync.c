@@ -44,6 +44,7 @@ struct rspamd_sync_ctx {
 	stat_file_t *real_statfile;
 	statfile_pool_t *pool;
 	rspamd_io_dispatcher_t *dispatcher;
+	struct event_base *ev_base;
 
 	struct event tm_ev;
 
@@ -268,7 +269,7 @@ sync_timer_callback (gint fd, short what, void *ud)
 	}
 	/* Now create and activate dispatcher */
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
-	ctx->dispatcher = rspamd_create_dispatcher (ctx->sock, BUFFER_LINE, sync_read, NULL, sync_err, &ctx->io_tv, ctx);
+	ctx->dispatcher = rspamd_create_dispatcher (ctx->ev_base, ctx->sock, BUFFER_LINE, sync_read, NULL, sync_err, &ctx->io_tv, ctx);
 	
 	ctx->state = SYNC_STATE_GREETING;
 	ctx->is_busy = TRUE;
@@ -278,7 +279,7 @@ sync_timer_callback (gint fd, short what, void *ud)
 }
 
 static gboolean
-add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_file *cfg)
+add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_file *cfg, struct event_base *ev_base)
 {
 	struct rspamd_sync_ctx *ctx;
 	guint32 jittered_interval;
@@ -289,6 +290,7 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_fi
 		ctx->st = st;
 		ctx->timeout = cfg->statfile_sync_timeout;
 		ctx->sync_interval = cfg->statfile_sync_interval;
+		ctx->ev_base = ev_base;
 		/* Add some jittering for synchronization */
 		jittered_interval = g_random_int_range (ctx->sync_interval, ctx->sync_interval * 2);
 		msec_to_tv (jittered_interval, &ctx->interval);
@@ -305,6 +307,7 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_fi
 		}
 		/* Now plan event for it's future executing */
 		evtimer_set (&ctx->tm_ev, sync_timer_callback, ctx);
+		event_base_set (ctx->ev_base, &ctx->tm_ev);
 		evtimer_add (&ctx->tm_ev, &ctx->interval);
 		log_next_sync (st->symbol, ctx->interval.tv_sec);
 	}
@@ -317,7 +320,7 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_fi
 }
 
 gboolean 
-start_statfile_sync (statfile_pool_t *pool, struct config_file *cfg)
+start_statfile_sync (statfile_pool_t *pool, struct config_file *cfg, struct event_base *ev_base)
 {
 	GList *cur, *l;
 	struct classifier_config *cl;
@@ -334,7 +337,7 @@ start_statfile_sync (statfile_pool_t *pool, struct config_file *cfg)
 		while (l) {
 			st = l->data;
 			if (st->binlog != NULL && st->binlog->affinity == AFFINITY_SLAVE) {
-				if (!add_statfile_watch (pool, st, cfg)) {
+				if (!add_statfile_watch (pool, st, cfg, ev_base)) {
 					return FALSE;
 				}
 			}

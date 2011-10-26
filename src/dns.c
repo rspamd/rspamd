@@ -742,6 +742,7 @@ send_dns_request (struct rspamd_dns_request *req)
 	if (r == -1) {
 		if (errno == EAGAIN) {
 			event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
+			event_base_set (req->resolver->ev_base, &req->io_event);
 			event_add (&req->io_event, &req->tv);
 			register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
 			return 0;
@@ -754,6 +755,7 @@ send_dns_request (struct rspamd_dns_request *req)
 	}
 	else if (r < req->pos) {
 		event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
+		event_base_set (req->resolver->ev_base, &req->io_event);
 		event_add (&req->io_event, &req->tv);
 		register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
 		return 0;
@@ -1190,6 +1192,7 @@ dns_check_throttling (struct rspamd_dns_resolver *resolver)
 		/* Init throttling timeout */
 		resolver->throttling = TRUE;
 		evtimer_set (&resolver->throttling_event, dns_throttling_cb, resolver);
+		event_base_set (resolver->ev_base, &resolver->throttling_event);
 		event_add (&resolver->throttling_event, &resolver->throttling_time);
 	}
 }
@@ -1329,6 +1332,7 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 			/* Add timer event */
 			event_del (&req->timer_event);
 			evtimer_set (&req->timer_event, dns_timer_cb, req);
+			event_base_set (req->resolver->ev_base, &req->timer_event);
 			evtimer_add (&req->timer_event, &req->tv);
 
 			/* Add request to hash table */
@@ -1423,6 +1427,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	/* Fill timeout */
 	msec_to_tv (resolver->request_timeout, &req->tv);
 	evtimer_set (&req->timer_event, dns_timer_cb, req);
+	event_base_set (req->resolver->ev_base, &req->timer_event);
 	
 	/* Now send request to server */
 	r = send_dns_request (req);
@@ -1498,7 +1503,7 @@ parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 }
 
 struct rspamd_dns_resolver *
-dns_resolver_init (struct config_file *cfg)
+dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 {
 	GList                          *cur;
 	struct rspamd_dns_resolver     *new;
@@ -1507,6 +1512,7 @@ dns_resolver_init (struct config_file *cfg)
 	struct rspamd_dns_server       *serv;
 	
 	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
+	new->ev_base = ev_base;
 	new->requests = g_hash_table_new (g_direct_hash, g_direct_equal);
 	new->permutor = memory_pool_alloc (cfg->cfg_pool, sizeof (struct dns_k_permutor));
 	dns_k_permutor_init (new->permutor, 0, G_MAXUINT16);
@@ -1588,6 +1594,7 @@ dns_resolver_init (struct config_file *cfg)
 		}
 		else {
 			event_set (&serv->ev, serv->sock, EV_READ | EV_PERSIST, dns_read_cb, new);
+			event_base_set (new->ev_base, &serv->ev);
 			event_add (&serv->ev, NULL);
 		}
 	}

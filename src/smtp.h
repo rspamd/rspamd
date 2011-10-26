@@ -51,6 +51,7 @@ struct smtp_worker_ctx {
 	gchar *metric;
 	GList *smtp_filters[SMTP_STAGE_MAX];
 	struct rspamd_dns_resolver *resolver;
+	struct event_base *ev_base;
 };
 
 enum rspamd_smtp_state {
@@ -110,6 +111,7 @@ struct smtp_session {
 	gboolean resolved;
 	gboolean esmtp;
 	struct rspamd_dns_resolver *resolver;
+	struct event_base *ev_base;
 };
 
 typedef gboolean (*smtp_filter_t)(struct smtp_session *session, gpointer filter_data);

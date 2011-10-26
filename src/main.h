@@ -165,6 +165,7 @@ struct controller_session {
 	struct rspamd_async_session* s;								/**< async session object							*/
 	struct worker_task *learn_task;
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
+	struct event_base *ev_base;									/**< Event base										*/
 };
 
 typedef void (*controller_func_t)(gchar **args, struct controller_session *session);
@@ -247,6 +248,7 @@ struct worker_task {
 	guint32 dns_requests;										/**< number of DNS requests per this task			*/
 
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
+	struct event_base *ev_base;									/**< Event base										*/
 };
 
 /**

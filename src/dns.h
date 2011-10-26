@@ -56,6 +56,7 @@ struct rspamd_dns_resolver {
 	guint errors;						/**< resolver errors						*/
 	struct timeval throttling_time;		/**< throttling time						*/
 	struct event throttling_event;		/**< throttling event						*/
+	struct event_base *ev_base;			/**< base for event ops						*/
 };
 
 struct dns_header;
@@ -231,7 +232,7 @@ struct dns_query {
 /*
  * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
  */
-struct rspamd_dns_resolver *dns_resolver_init (struct config_file *cfg);
+struct rspamd_dns_resolver *dns_resolver_init (struct event_base *ev_base, struct config_file *cfg);
 
 /*
  * Make a DNS request

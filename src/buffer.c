@@ -66,6 +66,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			d->offset += off;
 			event_del (d->ev);
 			event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
+			event_base_set (d->ev_base, d->ev);
 			event_add (d->ev, d->tv);
 		}
 	}
@@ -78,6 +79,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		}
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 		d->in_sendfile = FALSE;
 	}
@@ -98,6 +100,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
+			event_base_set (d->ev_base, d->ev);
 			event_add (d->ev, d->tv);
 		}
 	}
@@ -106,6 +109,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		/* Wait for other event */
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 	}
 	else {
@@ -117,6 +121,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		}
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 		d->in_sendfile = FALSE;
 	}
@@ -137,6 +142,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
+			event_base_set (d->ev_base, d->ev);
 			event_add (d->ev, d->tv);
 		}
 	}
@@ -146,6 +152,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		/* Wait for other event */
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 	}
 	else {
@@ -157,6 +164,7 @@ sendfile_callback (rspamd_io_dispatcher_t *d)
 		}
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 		d->in_sendfile = FALSE;
 	}
@@ -215,6 +223,7 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			/* Wait for other event */
 			event_del (d->ev);
 			event_set (d->ev, fd, EV_WRITE, dispatcher_cb, (void *)d);
+			event_base_set (d->ev_base, d->ev);
 			event_add (d->ev, d->tv);
 			return TRUE;
 		}
@@ -237,12 +246,14 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 
 		event_del (d->ev);
 		event_set (d->ev, fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 	}
 	else {
 		/* Plan other write event */
 		event_del (d->ev);
 		event_set (d->ev, fd, EV_WRITE, dispatcher_cb, (void *)d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 	}
 
@@ -464,6 +475,7 @@ dispatcher_cb (gint fd, short what, void *arg)
 			if (d->out_buffers == NULL) {
 				event_del (d->ev);
 				event_set (d->ev, fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
+				event_base_set (d->ev_base, d->ev);
 				event_add (d->ev, d->tv);
 				if (d->is_restored && d->write_callback) {
 					if (!d->write_callback (d->user_data)) {
@@ -482,7 +494,7 @@ dispatcher_cb (gint fd, short what, void *arg)
 
 
 rspamd_io_dispatcher_t         *
-rspamd_create_dispatcher (gint fd, enum io_policy policy,
+rspamd_create_dispatcher (struct event_base *base, gint fd, enum io_policy policy,
 	dispatcher_read_callback_t read_cb, dispatcher_write_callback_t write_cb, dispatcher_err_callback_t err_cb, struct timeval *tv, void *user_data)
 {
 	rspamd_io_dispatcher_t         *new;
@@ -513,8 +525,10 @@ rspamd_create_dispatcher (gint fd, enum io_policy policy,
 
 	new->ev = memory_pool_alloc0 (new->pool, sizeof (struct event));
 	new->fd = fd;
+	new->ev_base = base;
 
 	event_set (new->ev, fd, EV_WRITE, dispatcher_cb, (void *)new);
+	event_base_set (new->ev_base, new->ev);
 	event_add (new->ev, new->tv);
 
 	return new;
@@ -647,6 +661,7 @@ rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
 		debug_ip ("restored dispatcher");
 		event_del (d->ev);
 		event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, d);
+		event_base_set (d->ev_base, d->ev);
 		event_add (d->ev, d->tv);
 		d->is_restored = TRUE;
 	}

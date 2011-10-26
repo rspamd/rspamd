@@ -52,6 +52,7 @@ typedef struct rspamd_io_dispatcher_s {
 	gboolean in_sendfile;											/**< whether buffer is in sendfile mode */
 	gboolean strip_eol;												/**< strip or not line ends in BUFFER_LINE policy */
 	gboolean is_restored;											/**< call a callback when dispatcher is restored */
+	struct event_base *ev_base;										/**< event base for io operations */
 #ifndef HAVE_SENDFILE
 	void *map;
 #endif
@@ -68,7 +69,7 @@ typedef struct rspamd_io_dispatcher_s {
  * @param user_data pointer to user's data
  * @return new dispatcher object or NULL in case of failure
  */
-rspamd_io_dispatcher_t* rspamd_create_dispatcher (gint fd, 
+rspamd_io_dispatcher_t* rspamd_create_dispatcher (struct event_base *base, gint fd,
 												  enum io_policy policy,
 												  dispatcher_read_callback_t read_cb,
 												  dispatcher_write_callback_t write_cb,

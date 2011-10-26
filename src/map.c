@@ -46,6 +46,7 @@ struct http_reply {
 
 struct http_callback_data {
 	struct event                    ev;
+	struct event_base			   *ev_base;
 	struct timeval                  tv;
 	struct rspamd_map              *map;
 	struct http_map_data           *data;
@@ -912,6 +913,7 @@ http_async_callback (gint fd, short what, void *ud)
 			write_http_request (cbd->map, cbd->data, fd);
 			/* Plan reading */
 			event_set (&cbd->ev, cbd->fd, EV_READ | EV_PERSIST, http_async_callback, cbd);
+			event_base_set (cbd->ev_base, &cbd->ev);
 			cbd->tv.tv_sec = HTTP_READ_TIMEOUT;
 			cbd->tv.tv_usec = 0;
 			cbd->state = 1;
@@ -997,7 +999,9 @@ http_callback (gint fd, short what, void *ud)
 	else {
 		/* Plan event */
 		cbd = g_malloc (sizeof (struct http_callback_data));
+		cbd->ev_base = map->ev_base;
 		event_set (&cbd->ev, sock, EV_WRITE, http_async_callback, cbd);
+		event_base_set (cbd->ev_base, &cbd->ev);
 		cbd->tv.tv_sec = HTTP_CONNECT_TIMEOUT;
 		cbd->tv.tv_usec = 0;
 		cbd->map = map;
@@ -1011,7 +1015,7 @@ http_callback (gint fd, short what, void *ud)
 
 /* Start watching event for all maps */
 void
-start_map_watch (void)
+start_map_watch (struct event_base *ev_base)
 {
 	GList                          *cur = maps;
 	struct rspamd_map              *map;
@@ -1019,8 +1023,10 @@ start_map_watch (void)
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
+		map->ev_base = ev_base;
 		if (map->protocol == PROTO_FILE) {
 			evtimer_set (&map->ev, file_callback, map);
+			event_base_set (map->ev_base, &map->ev);
 			/* Read initial data */
 			read_map_file (map, map->map_data);
 			/* Plan event with jitter */
@@ -1030,6 +1036,7 @@ start_map_watch (void)
 		}
 		else if (map->protocol == PROTO_HTTP) {
 			evtimer_set (&map->ev, http_callback, map);
+			event_base_set (map->ev_base, &map->ev);
 			/* Read initial data */
 			read_http_sync (map, map->map_data);
 			/* Plan event with jitter */

@@ -89,7 +89,7 @@ create_smtp_upstream_connection (struct smtp_session *session)
 		return FALSE;
 	}
 	/* Create a dispatcher for upstream connection */
-	session->upstream_dispatcher = rspamd_create_dispatcher (session->upstream_sock, BUFFER_LINE,
+	session->upstream_dispatcher = rspamd_create_dispatcher (session->ev_base, session->upstream_sock, BUFFER_LINE,
 							smtp_upstream_read_socket, smtp_upstream_write_socket, smtp_upstream_err_socket,
 							&session->ctx->smtp_timeout, session);
 	session->state = SMTP_STATE_WAIT_UPSTREAM;
