@@ -739,6 +739,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/controller.c
 				src/fuzzy_storage.c
 				src/greylist_storage.c
+				src/kvstorage_server.c
 				src/lmtp.c
 				src/main.c
 				src/map.c

@@ -919,6 +919,10 @@ worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 		wrk->type = TYPE_GREYLIST;
 		wrk->has_socket = FALSE;
 	}
+	else if (g_ascii_strcasecmp (data, "keystorage") == 0) {
+		wrk->type = TYPE_KVSTORAGE;
+		wrk->has_socket = TRUE;
+	}
 	else {
 		msg_err ("unknown worker type: %s", data);
 		return FALSE;

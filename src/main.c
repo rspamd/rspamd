@@ -30,6 +30,7 @@
 #include "smtp.h"
 #include "map.h"
 #include "fuzzy_storage.h"
+#include "kvstorage_server.h"
 #include "cfg_xml.h"
 #include "symbols_cache.h"
 #include "lua/lua_common.h"
@@ -379,6 +380,12 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 				msg_info ("starting greylist storage process %P", getpid ());
 				start_greylist_storage (cur);
 				break;
+			case TYPE_KVSTORAGE:
+				setproctitle ("kv storage");
+				rspamd_pidfile_close (rspamd->pfh);
+				msg_info ("starting key-value storage process %P", getpid ());
+				start_kvstorage_worker (cur);
+				break;
 			case TYPE_WORKER:
 			default:
 				setproctitle ("worker process");
@@ -570,6 +577,9 @@ spawn_workers (struct rspamd_main *rspamd)
 			if (cf->count > 1) {
 				msg_err ("cannot spawn more than 1 fuzzy storage worker, so spawn one");
 			}
+			fork_worker (rspamd, cf);
+		}
+		else if (cf->type == TYPE_KVSTORAGE) {
 			fork_worker (rspamd, cf);
 		}
 		else {
@@ -806,6 +816,8 @@ init_workers_ctx (enum process_type type)
 		return init_fuzzy_storage ();
 	case TYPE_SMTP:
 		return init_smtp_worker ();
+	case TYPE_KVSTORAGE:
+		return init_kvstorage_worker ();
 	default:
 		return NULL;
 	}

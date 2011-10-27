@@ -370,10 +370,10 @@ make_socketpair (gint pair[2])
 {
 	gint                            r;
 
-	r = socketpair (PF_LOCAL, SOCK_STREAM, 0, pair);
+	r = socketpair (AF_LOCAL, SOCK_STREAM, 0, pair);
 
 	if (r == -1) {
-		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (errno), pair[0], pair[1]);
 		return -1;
 	}
 	/* Set close on exec */
