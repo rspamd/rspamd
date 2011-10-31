@@ -178,7 +178,7 @@ static                          gboolean
 write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 {
 	GList                          *cur;
-	GError                         *err;
+	GError                         *err = NULL;
 	rspamd_buffer_t                *buf;
 	ssize_t                         r;
 
@@ -264,7 +264,7 @@ static void
 read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 {
 	ssize_t                         r;
-	GError                         *err;
+	GError                         *err = NULL;
 	f_str_t                         res;
 	gchar                           *c, *b;
 	gchar                           *end;
@@ -453,7 +453,7 @@ static void
 dispatcher_cb (gint fd, short what, void *arg)
 {
 	rspamd_io_dispatcher_t         *d = (rspamd_io_dispatcher_t *) arg;
-	GError                         *err;
+	GError                         *err = NULL;
 
 	debug_ip("in dispatcher callback, what: %d, fd: %d", (gint)what, fd);
 

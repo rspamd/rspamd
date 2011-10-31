@@ -375,6 +375,9 @@
 # include <siginfo.h>
 #endif
 #include <event.h>
+#if _EVENT_NUMERIC_VERSION > 0x02000000
+# include <event2/thread.h>
+#endif
 #include <glib.h>
 
 

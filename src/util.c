@@ -1239,6 +1239,8 @@ process_to_str (enum process_type type)
 		return "lmtp";
 	case TYPE_SMTP:
 		return "smtp";
+	case TYPE_KVSTORAGE:
+		return "keystorage";
 	default:
 		return "unknown";
 	}

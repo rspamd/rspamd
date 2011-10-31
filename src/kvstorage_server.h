@@ -38,6 +38,7 @@ struct kvstorage_worker_ctx {
 	memory_pool_t *pool;
 	struct event_base *ev_base;
 	GStaticMutex log_mtx;
+	GStaticMutex accept_mtx;
 };
 
 struct kvstorage_worker_thread {
@@ -48,6 +49,7 @@ struct kvstorage_worker_thread {
 	GThread *thr;
 	struct event_base *ev_base;
 	GStaticMutex *log_mtx;
+	GStaticMutex *accept_mtx;
 	guint id;
 };
 
