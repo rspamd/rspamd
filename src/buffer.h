@@ -33,7 +33,7 @@ typedef struct rspamd_buffer_s {
 
 typedef struct rspamd_io_dispatcher_s {
 	rspamd_buffer_t *in_buf;										/**< input buffer			*/
-	GList *out_buffers;												/**< out buffers chain		*/
+	GQueue *out_buffers;											/**< out buffers chain		*/
 	struct timeval *tv;												/**< io timeout				*/
 	struct event *ev;												/**< libevent io event		*/
 	memory_pool_t *pool;											/**< where to store data	*/

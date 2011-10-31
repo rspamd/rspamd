@@ -355,10 +355,10 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 					r = rspamd_snprintf (outbuf, sizeof (outbuf), "VALUE %s %ud %ud" CRLF,
 							elt->key, elt->flags, elt->size);
 					if (!rspamd_dispatcher_write (session->dispather, outbuf,
-																r, FALSE, FALSE)) {
+																r, TRUE, FALSE)) {
 						return FALSE;
 					}
-					if (!rspamd_dispatcher_write (session->dispather, elt->data, elt->size, FALSE, TRUE)) {
+					if (!rspamd_dispatcher_write (session->dispather, elt->data, elt->size, TRUE, TRUE)) {
 						return FALSE;
 					}
 					return rspamd_dispatcher_write (session->dispather, CRLF "END" CRLF,
@@ -443,9 +443,9 @@ thr_accept_socket (gint fd, short what, void *arg)
 		g_static_mutex_unlock (thr->accept_mtx);
 		return;
 	}
+	g_static_mutex_unlock (thr->accept_mtx);
 	/* Check for EAGAIN */
 	if (nfd == 0) {
-		g_static_mutex_unlock (thr->accept_mtx);
 		return;
 	}
 
@@ -465,7 +465,6 @@ thr_accept_socket (gint fd, short what, void *arg)
 		memcpy (&session->client_addr, &su.s4.sin_addr,
 						sizeof (struct in_addr));
 	}
-	g_static_mutex_unlock (thr->accept_mtx);
 }
 
 /**
