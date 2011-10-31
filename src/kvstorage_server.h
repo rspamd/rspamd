@@ -27,6 +27,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include "buffer.h"
 
 /* Configuration context for kvstorage worker */
 struct kvstorage_worker_ctx {
@@ -48,6 +49,31 @@ struct kvstorage_worker_thread {
 	struct event_base *ev_base;
 	GStaticMutex *log_mtx;
 	guint id;
+};
+
+struct kvstorage_session {
+	rspamd_io_dispatcher_t *dispather;
+	enum {
+		KVSTORAGE_STATE_READ_CMD,
+		KVSTORAGE_STATE_READ_DATA
+	} state;
+	enum {
+		KVSTORAGE_CMD_SET,
+		KVSTORAGE_CMD_GET,
+		KVSTORAGE_CMD_DELETE,
+		KVSTORAGE_CMD_QUIT
+	} command;
+	guint id;
+	memory_pool_t *pool;
+	gchar *key;
+	struct kvstorage_config *cf;
+	struct kvstorage_worker_thread *thr;
+	struct in_addr client_addr;
+	gint sock;
+	guint flags;
+	guint expire;
+	guint length;
+	time_t now;
 };
 
 gpointer init_kvstorage_worker (void);

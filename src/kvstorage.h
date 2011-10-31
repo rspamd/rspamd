@@ -117,6 +117,7 @@ struct rspamd_kv_storage {
 
 	gint id;									/* char ID */
 	gchar *name;								/* numeric ID */
+	GStaticRWLock rwlock;						/* rwlock for threaded access */
 };
 
 /** Create new kv storage */
@@ -125,7 +126,7 @@ struct rspamd_kv_storage *rspamd_kv_storage_new (gint id, const gchar *name,
 		gsize max_elts, gsize max_memory);
 
 /** Insert new element to the kv storage */
-gboolean rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpointer data, gsize len, gint flags);
+gboolean rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpointer data, gsize len, gint flags, guint expire);
 
 /** Replace an element in the kv storage */
 gboolean rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, struct rspamd_kv_element *elt);

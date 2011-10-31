@@ -97,6 +97,7 @@ struct xml_subparser {
 	enum xml_read_state state;
 	const GMarkupParser *parser;
 	gpointer user_data;
+	void (*fin_func)(gpointer ud);
 };
 
 /* Here we describes our basic grammar */
@@ -1736,6 +1737,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			else if (subparsers != NULL && (subparser = g_hash_table_lookup (subparsers, element_name)) != NULL) {
 				ud->state = XML_SUBPARSER;
 				g_markup_parse_context_push (context, subparser->parser, subparser->user_data);
+				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			}
 			else {
 				/* Extract other tags */
@@ -1812,6 +1814,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 	gboolean                    res;
 	gpointer                    tptr;
 	struct wrk_cbdata           wcd;
+	struct xml_subparser       *subparser;
 	
 	if (g_ascii_strcasecmp (element_name, "if") == 0) {
 		tptr = g_queue_pop_head (ud->if_stack);
@@ -1929,6 +1932,18 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			break;
 		case XML_SKIP_ELEMENTS:
 			return;
+		case XML_SUBPARSER:
+			CHECK_TAG (ud->section_name, TRUE);
+			if (subparsers != NULL && (subparser = g_hash_table_lookup (subparsers, element_name)) != NULL) {
+				if (subparser->fin_func) {
+					subparser->fin_func (g_markup_parse_context_pop (context));
+				}
+				else {
+					g_markup_parse_context_pop (context);
+				}
+			}
+			ud->state = XML_READ_PARAM;
+			break;
 		default:
 			ud->state = XML_ERROR;
 			break;
@@ -2256,7 +2271,7 @@ register_classifier_opt (const gchar *ctype, const gchar *optname)
 }
 
 void
-register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupParser *parser, gpointer user_data)
+register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupParser *parser, void (*fin_func)(gpointer ud), gpointer user_data)
 {
 	struct xml_subparser			 *subparser;
 
@@ -2268,6 +2283,7 @@ register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupPa
 	subparser->parser = parser;
 	subparser->state = state;
 	subparser->user_data = user_data;
+	subparser->fin_func = fin_func;
 
 	g_hash_table_replace (subparsers, g_strdup (tag), subparser);
 }

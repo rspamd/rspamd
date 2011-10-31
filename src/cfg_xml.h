@@ -167,7 +167,8 @@ void register_worker_opt (gint wtype, const gchar *optname, element_handler_func
 void register_classifier_opt (const gchar *ctype, const gchar *optname);
 
 /* Register new xml subparser */
-void register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupParser *parser, gpointer user_data);
+void register_subparser (const gchar *tag, enum xml_read_state state,
+		const GMarkupParser *parser, void (*fin_func)(gpointer ud), gpointer user_data);
 
 /* Check validity of module option */
 gboolean check_module_option (const gchar *mname, const gchar *optname, const gchar *data);

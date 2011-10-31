@@ -57,6 +57,8 @@ rspamd_kv_storage_new (gint id, const gchar *name, struct rspamd_kv_cache *cache
 		rspamd_snprintf (new->name, sizeof ("18446744073709551616"), "%d", id);
 	}
 
+	g_static_rw_lock_init (&new->rwlock);
+
 	/* Init structures */
 	if (new->cache->init_func) {
 		new->cache->init_func (new->cache);
@@ -78,22 +80,25 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, struct rsp
 	gint 								steps = 0;
 
 	/* Hard limit */
-	if (elt->size > storage->max_memory) {
-		msg_info ("<%s>: trying to insert value of length %z while limit is %z", elt->size, storage->max_memory);
-		return FALSE;
-	}
-
-	/* Now check limits */
-	while (storage->memory + elt->size > storage->max_memory || storage->elts >= storage->max_elts) {
-		if (storage->expire) {
-			storage->expire->step_func (storage->expire, storage, time (NULL));
-		}
-		else {
-			msg_warn ("<%s>: storage %s is full and no expire function is defined", storage->name);
-		}
-		if (++steps > MAX_EXPIRE_STEPS) {
-			msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+	if (storage->max_memory > 0) {
+		if (elt->size > storage->max_memory) {
+			msg_info ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
+					elt->size, storage->max_memory);
 			return FALSE;
+		}
+
+		/* Now check limits */
+		while (storage->memory + elt->size > storage->max_memory || storage->elts >= storage->max_elts) {
+			if (storage->expire) {
+				storage->expire->step_func (storage->expire, storage, time (NULL));
+			}
+			else {
+				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
+			}
+			if (++steps > MAX_EXPIRE_STEPS) {
+				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+				return FALSE;
+			}
 		}
 	}
 
@@ -116,29 +121,32 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, struct rsp
 
 /** Insert new element to the kv storage */
 gboolean
-rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpointer data, gsize len, gint flags)
+rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpointer data, gsize len, gint flags, guint expire)
 {
 	gint 								steps = 0;
 	struct rspamd_kv_element           *elt;
 	gboolean							res = TRUE;
 
 	/* Hard limit */
-	if (len > storage->max_memory) {
-		msg_info ("<%s>: trying to insert value of length %z while limit is %z", len, storage->max_memory);
-		return FALSE;
-	}
-
-	/* Now check limits */
-	while (storage->memory + len > storage->max_memory || storage->elts >= storage->max_elts) {
-		if (storage->expire) {
-			storage->expire->step_func (storage->expire, storage, time (NULL));
-		}
-		else {
-			msg_warn ("<%s>: storage %s is full and no expire function is defined", storage->name);
-		}
-		if (++steps > MAX_EXPIRE_STEPS) {
-			msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+	if (storage->max_memory > 0) {
+		if (len > storage->max_memory) {
+			msg_info ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
+					len, storage->max_memory);
 			return FALSE;
+		}
+
+		/* Now check limits */
+		while (storage->memory + len > storage->max_memory || storage->elts >= storage->max_elts) {
+			if (storage->expire) {
+				storage->expire->step_func (storage->expire, storage, time (NULL));
+			}
+			else {
+				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
+			}
+			if (++steps > MAX_EXPIRE_STEPS) {
+				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+				return FALSE;
+			}
 		}
 	}
 
@@ -149,6 +157,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpoin
 	}
 	elt->flags = flags;
 	elt->size = len;
+	elt->expire = expire;
 
 	/* Place to the backend */
 	if (storage->backend) {
@@ -174,22 +183,25 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, stru
 	gint							steps = 0;
 
 	/* Hard limit */
-	if (elt->size > storage->max_memory) {
-		msg_info ("<%s>: trying to replace value of length %z while limit is %z", elt->size, storage->max_memory);
-		return FALSE;
-	}
-
-	/* Now check limits */
-	while (storage->memory + elt->size > storage->max_memory) {
-		if (storage->expire) {
-			storage->expire->step_func (storage->expire, storage, time (NULL));
-		}
-		else {
-			msg_warn ("<%s>: storage %s is full and no expire function is defined", storage->name);
-		}
-		if (++steps > MAX_EXPIRE_STEPS) {
-			msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+	if (storage->max_memory > 0) {
+		if (elt->size > storage->max_memory) {
+			msg_info ("<%s>: trying to replace value of length %z while limit is %z", storage->name,
+					elt->size, storage->max_memory);
 			return FALSE;
+		}
+
+		/* Now check limits */
+		while (storage->memory + elt->size > storage->max_memory) {
+			if (storage->expire) {
+				storage->expire->step_func (storage->expire, storage, time (NULL));
+			}
+			else {
+				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
+			}
+			if (++steps > MAX_EXPIRE_STEPS) {
+				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+				return FALSE;
+			}
 		}
 	}
 

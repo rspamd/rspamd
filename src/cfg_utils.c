@@ -32,6 +32,7 @@
 #include "classifiers/classifiers.h"
 #include "cfg_xml.h"
 #include "lua/lua_common.h"
+#include "kvstorage_config.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -960,6 +961,7 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 	ud.if_stack = g_queue_new ();
 
 	ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
+	init_kvstorage_config ();
 	res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
 
 	if (g_queue_get_length (ud.if_stack) != 0) {

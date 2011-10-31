@@ -30,6 +30,13 @@
 #include "cfg_xml.h"
 #include "main.h"
 
+#define ERROR_COMMON "ERROR" CRLF
+#define ERROR_UNKNOWN_COMMAND "CLIENT_ERROR unknown command" CRLF
+#define ERROR_NOT_STORED "NOT_STORED" CRLF
+#define ERROR_EXISTS "EXISTS" CRLF
+#define ERROR_NOT_FOUND "NOT_FOUND" CRLF
+#define ERROR_INVALID_KEYSTORAGE "CLIENT_ERROR storage does not exists" CRLF
+
 /* This is required for normal signals processing */
 static GList *global_evbases = NULL;
 static struct event_base *main_base = NULL;
@@ -148,11 +155,311 @@ config_kvstorage_worker (struct rspamd_worker *worker)
 	return TRUE;
 }
 
+/*
+ * Free kvstorage session
+ */
+static void
+free_kvstorage_session (struct kvstorage_session *session)
+{
+	rspamd_remove_dispatcher (session->dispather);
+	memory_pool_delete (session->pool);
+	close (session->sock);
+}
+
 /**
- * Accept function
+ * Parse kvstorage command
+ */
+static gboolean
+parse_kvstorage_command (struct kvstorage_session *session, f_str_t *in)
+{
+	gchar								*p, *c, *end;
+	gint								 state = 0, next_state;
+
+	p = in->begin;
+	end = in->begin + in->len;
+	c = p;
+
+	/* State machine for parsing */
+	while (p <= end) {
+		switch (state) {
+		case 0:
+			/* At this state we try to read identifier of storage */
+			if (g_ascii_isdigit (*p)) {
+				p ++;
+			}
+			else {
+				if (g_ascii_isspace (*p) && p != c) {
+					/* We have some digits, so parse id */
+					session->id = strtoul (c, NULL, 10);
+					state = 99;
+					next_state = 1;
+				}
+				else if (c == p) {
+					/* We have some character, so assume id as 0 and parse command */
+					session->id = 0;
+					state = 1;
+				}
+				else {
+					/* We have something wrong here (like some digits and then come non-digits) */
+					return FALSE;
+				}
+			}
+			break;
+		case 1:
+			/* At this state we parse command */
+			if (g_ascii_isalpha (*p) && p != end) {
+				p ++;
+			}
+			else {
+				if ((g_ascii_isspace (*p) || p == end) && p != c) {
+					/* We got some command, try to parse it */
+					if (p - c == 3) {
+						/* Set or get command */
+						if (memcmp (c, "get", 3) == 0) {
+							session->command = KVSTORAGE_CMD_GET;
+						}
+						else if (memcmp (c, "set", 3) == 0) {
+							session->command = KVSTORAGE_CMD_SET;
+						}
+						else {
+							/* Error */
+							return FALSE;
+						}
+					}
+					else if (p - c == 4) {
+						if (memcmp (c, "quit", 4) == 0) {
+							session->command = KVSTORAGE_CMD_QUIT;
+							state = 100;
+							continue;
+						}
+					}
+					else if (p - c == 6) {
+						if (memcmp (c, "delete", 6) == 0) {
+							session->command = KVSTORAGE_CMD_DELETE;
+						}
+						else {
+							return FALSE;
+						}
+					}
+					else {
+						return FALSE;
+					}
+					/* Skip spaces and try to parse key */
+					state = 99;
+					next_state = 2;
+				}
+				else {
+					/* Some error */
+					return FALSE;
+				}
+			}
+			break;
+		case 2:
+			/* Read and store key */
+			if (!g_ascii_isspace (*p) && end != p) {
+				p ++;
+			}
+			else {
+				if (p == c) {
+					return FALSE;
+				}
+				else {
+					session->key = memory_pool_alloc (session->pool, p - c + 1);
+					rspamd_strlcpy (session->key, c, p - c + 1);
+					/* Now we must select next state based on command */
+					if (session->command == KVSTORAGE_CMD_SET) {
+						/* Read flags */
+						state = 99;
+						next_state = 3;
+					}
+					else {
+						/* Nothing to read for other commands */
+						state = 100;
+					}
+				}
+			}
+			break;
+		case 3:
+			/* Read flags */
+			if (g_ascii_isdigit (*p)) {
+				p ++;
+			}
+			else {
+				if (g_ascii_isspace (*p)) {
+					session->flags = strtoul (c, NULL, 10);
+					state = 99;
+					next_state = 4;
+				}
+				else {
+					return FALSE;
+				}
+			}
+			break;
+		case 4:
+			/* Read exptime */
+			if (g_ascii_isdigit (*p)) {
+				p ++;
+			}
+			else {
+				if (g_ascii_isspace (*p)) {
+					session->expire = strtoul (c, NULL, 10);
+					state = 99;
+					next_state = 5;
+				}
+				else {
+					return FALSE;
+				}
+			}
+			break;
+		case 5:
+			/* Read size */
+			if (g_ascii_isdigit (*p)) {
+				p ++;
+			}
+			else {
+				if (g_ascii_isspace (*p) || end == p) {
+					session->length = strtoul (c, NULL, 10);
+					state = 100;
+				}
+				else {
+					return FALSE;
+				}
+			}
+			break;
+		case 99:
+			/* Skip spaces state */
+			if (g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else {
+				c = p;
+				state = next_state;
+			}
+			break;
+		case 100:
+			/* Successful state */
+			return TRUE;
+			break;
+		}
+	}
+
+	return state == 100;
+}
+
+/**
+ * Dispatcher callbacks
  */
 /*
- * Accept new connection and construct task
+ * Callback that is called when there is data to read in buffer
+ */
+static gboolean
+kvstorage_read_socket (f_str_t * in, void *arg)
+{
+	struct kvstorage_session			*session = (struct kvstorage_session *) arg;
+	struct kvstorage_worker_thread		*thr;
+	struct rspamd_kv_element			*elt;
+	gint								 r;
+	gchar								 outbuf[BUFSIZ];
+
+	if (in->len == 0) {
+		/* Skip empty commands */
+		return TRUE;
+	}
+	thr = session->thr;
+	switch (session->state) {
+	case KVSTORAGE_STATE_READ_CMD:
+		/* Update timestamp */
+		session->now = time (NULL);
+		if (! parse_kvstorage_command (session, in)) {
+			thr_info ("%ud: unknown command: %V", thr->id, in);
+			return rspamd_dispatcher_write (session->dispather, ERROR_UNKNOWN_COMMAND,
+					sizeof (ERROR_UNKNOWN_COMMAND) - 1, FALSE, TRUE);
+		}
+		else {
+			session->cf = get_kvstorage_config (session->id);
+			if (session->cf == NULL) {
+				thr_info ("%ud: bad keystorage: %ud", thr->id, session->id);
+				return rspamd_dispatcher_write (session->dispather, ERROR_INVALID_KEYSTORAGE,
+						sizeof (ERROR_INVALID_KEYSTORAGE) - 1, FALSE, TRUE);
+			}
+			if (session->command == KVSTORAGE_CMD_SET) {
+				session->state = KVSTORAGE_STATE_READ_DATA;
+				rspamd_set_dispatcher_policy (session->dispather, BUFFER_CHARACTER, session->length);
+			}
+			else if (session->command == KVSTORAGE_CMD_GET) {
+				elt = rspamd_kv_storage_lookup (session->cf->storage, session->key, session->now);
+				if (elt == NULL) {
+					return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
+																sizeof (ERROR_NOT_FOUND) - 1, FALSE, TRUE);
+				}
+				else {
+					r = rspamd_snprintf (outbuf, sizeof (outbuf), "VALUE %s %ud %ud" CRLF,
+							elt->key, elt->flags, elt->size);
+					if (!rspamd_dispatcher_write (session->dispather, outbuf,
+																r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					if (!rspamd_dispatcher_write (session->dispather, elt->data, elt->size, FALSE, TRUE)) {
+						return FALSE;
+					}
+					return rspamd_dispatcher_write (session->dispather, CRLF "END" CRLF,
+							sizeof (CRLF "END" CRLF) - 1, FALSE, TRUE);
+				}
+			}
+			else if (session->command == KVSTORAGE_CMD_DELETE) {
+				if (rspamd_kv_storage_delete (session->cf->storage, session->key)) {
+					return rspamd_dispatcher_write (session->dispather, "DELETED" CRLF,
+																sizeof ("DELETED" CRLF) - 1, FALSE, TRUE);
+				}
+				else {
+					return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
+														sizeof (ERROR_NOT_FOUND) - 1, FALSE, TRUE);
+				}
+			}
+			else if (session->command == KVSTORAGE_CMD_QUIT) {
+				/* Quit session */
+				free_kvstorage_session (session);
+				return FALSE;
+			}
+		}
+		break;
+	case KVSTORAGE_STATE_READ_DATA:
+		session->state = KVSTORAGE_STATE_READ_CMD;
+		rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
+		if (rspamd_kv_storage_insert (session->cf->storage, session->key, in->begin, in->len,
+				session->flags, session->expire)) {
+			return rspamd_dispatcher_write (session->dispather, "STORED" CRLF,
+											sizeof ("STORED" CRLF) - 1, FALSE, TRUE);
+		}
+		else {
+			return rspamd_dispatcher_write (session->dispather, ERROR_NOT_STORED,
+									sizeof (ERROR_NOT_STORED) - 1, FALSE, TRUE);
+		}
+
+		break;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Called if something goes wrong
+ */
+static void
+kvstorage_err_socket (GError * err, void *arg)
+{
+	struct kvstorage_session			*session = (struct kvstorage_session *) arg;
+	struct kvstorage_worker_thread		*thr;
+
+	thr = session->thr;
+	thr_info ("%ud: abnormally closing connection from: %s, error: %s",
+			thr->id, inet_ntoa (session->client_addr), err->message);
+	g_error_free (err);
+	free_kvstorage_session (session);
+}
+
+/**
+ * Accept function
  */
 static void
 thr_accept_socket (gint fd, short what, void *arg)
@@ -161,6 +468,7 @@ thr_accept_socket (gint fd, short what, void *arg)
 	union sa_union                 		 su;
 	socklen_t                       	 addrlen = sizeof (su.ss);
 	gint                            	 nfd;
+	struct kvstorage_session			*session;
 
 	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
 		thr_warn ("%ud: accept failed: %s", thr->id, strerror (errno));
@@ -171,15 +479,26 @@ thr_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
+	session = g_malloc (sizeof (struct kvstorage_session));
+	session->pool = memory_pool_new (memory_pool_get_size ());
+	session->state = KVSTORAGE_STATE_READ_CMD;
+	session->thr = thr;
+	session->sock = nfd;
+	session->dispather = rspamd_create_dispatcher (thr->ctx->ev_base, nfd, BUFFER_LINE,
+			kvstorage_read_socket, NULL,
+			kvstorage_err_socket, thr->tv, session);
+	session->dispather->strip_eol = TRUE;
+
 	if (su.ss.ss_family == AF_UNIX) {
 		thr_info ("%ud: accepted connection from unix socket", thr->id);
+		session->client_addr.s_addr = INADDR_NONE;
 	}
 	else if (su.ss.ss_family == AF_INET) {
 		thr_info ("%ud: accepted connection from %s port %d", thr->id,
 				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
+		memcpy (&session->client_addr, &su.s4.sin_addr,
+						sizeof (struct in_addr));
 	}
-	/* XXX: write the logic */
-	close (nfd);
 }
 
 /**
@@ -253,6 +572,12 @@ start_kvstorage_worker (struct rspamd_worker *worker)
 	ctx->threads = NULL;
 
 	g_thread_init (NULL);
+#if _EVENT_NUMERIC_VERSION > 0x02000000
+	if (evthread_use_pthreads () == -1) {
+		msg_err ("threads support is not supported in your libevent so kvstorage is not functionable");
+		exit (EXIT_SUCCESS);
+	}
+#endif
 	main_base = ctx->ev_base;
 
 	/* Set kvstorage options */

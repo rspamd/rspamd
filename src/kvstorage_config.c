@@ -115,37 +115,47 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 
 	switch (kv_parser->state) {
 	case KVSTORAGE_STATE_INIT:
-		/* Make temporary pool */
-		if (kv_parser->pool != NULL) {
-			memory_pool_delete (kv_parser->pool);
-		}
-		kv_parser->pool = memory_pool_new (memory_pool_get_size ());
-
-		/* Create new kvstorage_config */
-		kv_parser->current_storage = g_malloc0 (sizeof (struct kvstorage_config));
-		kv_parser->current_storage->id = ++last_id;
+		/* XXX: never get this state */
 		break;
 	case KVSTORAGE_STATE_PARAM:
+		if (kv_parser->current_storage == NULL) {
+			/* Make temporary pool */
+			if (kv_parser->pool != NULL) {
+				memory_pool_delete (kv_parser->pool);
+			}
+			kv_parser->pool = memory_pool_new (memory_pool_get_size ());
+
+			/* Create new kvstorage_config */
+			kv_parser->current_storage = g_malloc0 (sizeof (struct kvstorage_config));
+			kv_parser->current_storage->id = last_id++;
+		}
 		if (g_ascii_strcasecmp (element_name, "type") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_CACHE_TYPE;
+			kv_parser->cur_elt = "type";
 		}
 		else if (g_ascii_strcasecmp (element_name, "max_elements") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_CACHE_MAX_ELTS;
+			kv_parser->cur_elt = "max_elements";
 		}
 		else if (g_ascii_strcasecmp (element_name, "max_memory") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_CACHE_MAX_MEM;
+			kv_parser->cur_elt = "max_memory";
 		}
 		else if (g_ascii_strcasecmp (element_name, "id") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_ID;
+			kv_parser->cur_elt = "id";
 		}
 		else if (g_ascii_strcasecmp (element_name, "name") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_NAME;
+			kv_parser->cur_elt = "name";
 		}
 		else if (g_ascii_strcasecmp (element_name, "backend") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_BACKEND;
+			kv_parser->cur_elt = "backend";
 		}
 		else if (g_ascii_strcasecmp (element_name, "expire") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_EXPIRE;
+			kv_parser->cur_elt = "expire";
 		}
 		else {
 			if (*error == NULL) {
@@ -154,11 +164,11 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 			}
 			kv_parser->state = KVSTORAGE_STATE_ERROR;
 		}
-		kv_parser->cur_elt = memory_pool_strdup (kv_parser->pool, element_name);
 		break;
 	case KVSTORAGE_STATE_BACKEND:
 		if (g_ascii_strcasecmp (element_name, "type") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_BACKEND_TYPE;
+			kv_parser->cur_elt = "type";
 		}
 		else {
 			if (*error == NULL) {
@@ -171,6 +181,7 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 	case KVSTORAGE_STATE_EXPIRE:
 		if (g_ascii_strcasecmp (element_name, "type") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_EXPIRE_TYPE;
+			kv_parser->cur_elt = "type";
 		}
 		else {
 			if (*error == NULL) {
@@ -211,10 +222,6 @@ void kvstorage_xml_end_element (GMarkupParseContext	*context,
 	case KVSTORAGE_STATE_PARAM:
 		if (g_ascii_strcasecmp (element_name, "keystorage") == 0) {
 			/* XXX: Init actual storage */
-			g_hash_table_insert (storages, &kv_parser->current_storage->id, kv_parser->current_storage);
-			kv_parser->state = KVSTORAGE_STATE_INIT;
-			g_markup_parse_context_pop (context);
-			g_hash_table_foreach (storages, kvstorage_init_callback, NULL);
 			return;
 		}
 		if (*error == NULL) {
@@ -277,6 +284,15 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 	struct kvstorage_config_parser 	*kv_parser = user_data;
 	gchar                           *err_str;
 
+	/* Strip space symbols */
+	while (*text && g_ascii_isspace (*text)) {
+		text ++;
+	}
+	if (*text == '\0') {
+		/* Skip empty text */
+		return;
+	}
+
 	switch (kv_parser->state) {
 	case KVSTORAGE_STATE_INIT:
 	case KVSTORAGE_STATE_PARAM:
@@ -294,7 +310,8 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 			kv_parser->state = KVSTORAGE_STATE_ERROR;
 		}
 		else {
-			last_id = kv_parser->current_storage->id;
+			last_id ++;
+			last_id = MAX (kv_parser->current_storage->id, last_id);
 		}
 		break;
 	case KVSTORAGE_STATE_NAME:
@@ -353,11 +370,26 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 /* Called on error, including one set by other
 * methods in the vtable. The GError should not be freed.
 */
-void kvstorage_xml_error	(GMarkupParseContext		*context,
+void
+kvstorage_xml_error	(GMarkupParseContext		*context,
 								GError              *error,
 								gpointer             user_data)
 {
 	msg_err ("kvstorage xml parser error: %s", error->message);
+}
+
+/*
+ * Cleanup kvstorage after end tag was read
+ */
+static void
+kvstorage_cleanup (gpointer ud)
+{
+	struct kvstorage_config_parser 	*kv_parser = ud;
+
+	g_hash_table_insert (storages, &kv_parser->current_storage->id, kv_parser->current_storage);
+	kv_parser->state = KVSTORAGE_STATE_INIT;
+	g_hash_table_foreach (storages, kvstorage_init_callback, NULL);
+	kv_parser->current_storage = NULL;
 }
 
 /** Public API */
@@ -387,8 +419,9 @@ init_kvstorage_config (void)
 
 	kv_parser = g_malloc0 (sizeof (struct kvstorage_config_parser));
 	kv_parser->state = KVSTORAGE_STATE_PARAM;
+	kv_parser->pool = memory_pool_new (memory_pool_get_size ());
 
-	register_subparser ("keystorage", XML_READ_START, parser, kv_parser);
+	register_subparser ("keystorage", XML_READ_START, parser, kvstorage_cleanup, kv_parser);
 }
 
 /* Get configuration for kvstorage with specified ID */
