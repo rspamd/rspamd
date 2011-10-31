@@ -387,7 +387,9 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 				rspamd_set_dispatcher_policy (session->dispather, BUFFER_CHARACTER, session->length);
 			}
 			else if (session->command == KVSTORAGE_CMD_GET) {
+				g_static_rw_lock_reader_lock (&session->cf->storage->rwlock);
 				elt = rspamd_kv_storage_lookup (session->cf->storage, session->key, session->now);
+				g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 				if (elt == NULL) {
 					return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
 																sizeof (ERROR_NOT_FOUND) - 1, FALSE, TRUE);
@@ -407,11 +409,14 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 				}
 			}
 			else if (session->command == KVSTORAGE_CMD_DELETE) {
+				g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
 				if (rspamd_kv_storage_delete (session->cf->storage, session->key)) {
+					g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 					return rspamd_dispatcher_write (session->dispather, "DELETED" CRLF,
 																sizeof ("DELETED" CRLF) - 1, FALSE, TRUE);
 				}
 				else {
+					g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 					return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
 														sizeof (ERROR_NOT_FOUND) - 1, FALSE, TRUE);
 				}
@@ -426,12 +431,15 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 	case KVSTORAGE_STATE_READ_DATA:
 		session->state = KVSTORAGE_STATE_READ_CMD;
 		rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
+		g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
 		if (rspamd_kv_storage_insert (session->cf->storage, session->key, in->begin, in->len,
 				session->flags, session->expire)) {
+			g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 			return rspamd_dispatcher_write (session->dispather, "STORED" CRLF,
 											sizeof ("STORED" CRLF) - 1, FALSE, TRUE);
 		}
 		else {
+			g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 			return rspamd_dispatcher_write (session->dispather, ERROR_NOT_STORED,
 									sizeof (ERROR_NOT_STORED) - 1, FALSE, TRUE);
 		}
