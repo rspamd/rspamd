@@ -367,7 +367,12 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 			}
 			else if (session->command == KVSTORAGE_CMD_DELETE) {
 				g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
-				if (rspamd_kv_storage_delete (session->cf->storage, session->key)) {
+				elt = rspamd_kv_storage_delete (session->cf->storage, session->key);
+				if (elt != NULL) {
+					if ((elt->flags & KV_ELT_DIRTY) == 0) {
+						/* Free memory if backend has deleted this element */
+						g_slice_free1 (elt->size + sizeof (struct rspamd_kv_element), elt);
+					}
 					g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 					return rspamd_dispatcher_write (session->dispather, "DELETED" CRLF,
 																sizeof ("DELETED" CRLF) - 1, FALSE, TRUE);

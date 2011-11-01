@@ -135,10 +135,21 @@ gboolean rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer 
 struct rspamd_kv_element* rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_t now);
 
 /** Expire an element from kv storage */
-gboolean rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key);
+struct rspamd_kv_element* rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key);
 
 /** Destroy kv storage */
 void rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage);
+
+/** Insert array */
+gboolean rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key, guint elt_size, gpointer data, gsize len, gint flags, guint expire);
+
+/** Set element inside array */
+gboolean rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key, guint elt_num,
+		gpointer data, gsize len, time_t now);
+
+/** Get element inside array */
+gboolean rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key, guint elt_num,
+		gpointer *data, gsize *len, time_t now);
 
 /**
  * LRU expire

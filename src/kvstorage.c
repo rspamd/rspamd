@@ -75,20 +75,22 @@ rspamd_kv_storage_new (gint id, const gchar *name, struct rspamd_kv_cache *cache
 
 /** Internal insertion to the kv storage from backend */
 gboolean
-rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, struct rspamd_kv_element *elt)
+rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, gpointer key,
+		gpointer data, gsize len, gint flags, guint expire, struct rspamd_kv_element **pelt)
 {
 	gint 								steps = 0;
+	struct rspamd_kv_element		 	*elt = *pelt;
 
 	/* Hard limit */
 	if (storage->max_memory > 0) {
-		if (elt->size > storage->max_memory) {
+		if (len > storage->max_memory) {
 			msg_info ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
-					elt->size, storage->max_memory);
+					len, storage->max_memory);
 			return FALSE;
 		}
 
 		/* Now check limits */
-		while (storage->memory + elt->size > storage->max_memory || storage->elts >= storage->max_elts) {
+		while (storage->memory + len > storage->max_memory || storage->elts >= storage->max_elts) {
 			if (storage->expire) {
 				storage->expire->step_func (storage->expire, storage, time (NULL));
 			}
@@ -103,10 +105,14 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, struct rsp
 	}
 
 	/* Insert elt to the cache */
-	elt = storage->cache->insert_func (storage->cache, elt->key, elt->data, elt->size);
+	elt = storage->cache->insert_func (storage->cache, key, data, len);
 	if (elt == NULL) {
 		return FALSE;
 	}
+	/* Copy data */
+	elt->flags = flags;
+	elt->expire = expire;
+	*pelt = elt;
 
 	/* Insert to the expire */
 	if (storage->expire) {
@@ -121,7 +127,8 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, struct rsp
 
 /** Insert new element to the kv storage */
 gboolean
-rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpointer data, gsize len, gint flags, guint expire)
+rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
+		gpointer data, gsize len, gint flags, guint expire)
 {
 	gint 								steps = 0;
 	struct rspamd_kv_element           *elt;
@@ -230,7 +237,7 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_
 		elt = storage->backend->lookup_func (storage->backend, key);
 		if (elt) {
 			/* Put this element into cache */
-			rspamd_kv_storage_insert_internal (storage, elt);
+			rspamd_kv_storage_insert_internal (storage, elt->key, elt->data, elt->size, elt->flags, elt->expire, &elt);
 		}
 	}
 
@@ -246,7 +253,7 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_
 }
 
 /** Expire an element from kv storage */
-gboolean
+struct rspamd_kv_element *
 rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key)
 {
 	struct rspamd_kv_element           *elt;
@@ -270,7 +277,7 @@ rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key)
 		storage->memory -= elt->size;
 	}
 
-	return elt != NULL;
+	return elt;
 }
 
 /** Destroy kv storage */
@@ -291,6 +298,103 @@ rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage)
 	g_slice_free1 (sizeof (struct rspamd_kv_storage), storage);
 }
 
+/** Insert array */
+gboolean
+rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key,
+		guint elt_size, gpointer data, gsize len, gint flags, guint expire)
+{
+	struct rspamd_kv_element			*elt;
+	guint								*es;
+	gpointer 							 arr_data;
+
+	/* Make temporary copy */
+	arr_data = g_slice_alloc (len + sizeof (guint));
+	es = arr_data;
+	*es = elt_size;
+	memcpy (arr_data, (gchar *)data + sizeof (guint), len);
+	if (!rspamd_kv_storage_insert_internal (storage, key, arr_data, len + sizeof (guint),
+			flags, expire, &elt)) {
+		g_slice_free1 (len + sizeof (guint), arr_data);
+		return FALSE;
+	}
+	/* Now set special data of element */
+	elt->flags |= KV_ELT_ARRAY;
+	g_slice_free1 (len + sizeof (guint), arr_data);
+	/* Place to the backend */
+	if (storage->backend) {
+		return storage->backend->insert_func (storage->backend, key, elt);
+	}
+
+	return TRUE;
+}
+
+/** Set element inside array */
+gboolean
+rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key,
+		guint elt_num, gpointer data, gsize len, time_t now)
+{
+	struct rspamd_kv_element			*elt;
+	guint								*es;
+	gpointer							 target;
+
+	elt = rspamd_kv_storage_lookup (storage, key, now);
+	if (elt == NULL) {
+		return FALSE;
+	}
+
+	if ((elt->flags & KV_ELT_ARRAY) == 0) {
+		return FALSE;
+	}
+	/* Get element size */
+	es = (guint *)elt->data;
+	if (elt_num > (elt->size - sizeof (guint)) / (*es)) {
+		/* Invalid index */
+		return FALSE;
+	}
+	target = (gchar *)elt->data + sizeof (guint) + (*es) * elt_num;
+	if (len != *es) {
+		/* Invalid size */
+		return FALSE;
+	}
+	memcpy (target, data, len);
+	/* Place to the backend */
+	if (storage->backend) {
+		return storage->backend->replace_func (storage->backend, key, elt);
+	}
+
+	return TRUE;
+}
+
+/** Get element inside array */
+gboolean
+rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key,
+		guint elt_num, gpointer *data, gsize *len, time_t now)
+{
+	struct rspamd_kv_element			*elt;
+	guint								*es;
+	gpointer							 target;
+
+	elt = rspamd_kv_storage_lookup (storage, key, now);
+	if (elt == NULL) {
+		return FALSE;
+	}
+
+	if ((elt->flags & KV_ELT_ARRAY) == 0) {
+		return FALSE;
+	}
+	/* Get element size */
+	es = (guint *)elt->data;
+	if (elt_num > (elt->size - sizeof (guint)) / (*es)) {
+		/* Invalid index */
+		return FALSE;
+	}
+	target = elt->data + sizeof (guint) + (*es) * elt_num;
+
+	*len = *es;
+	*data = target;
+
+	return TRUE;
+}
 
 /**
  * LRU expire functions
