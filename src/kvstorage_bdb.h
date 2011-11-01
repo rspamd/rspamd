@@ -22,65 +22,17 @@
  */
 
 
-#ifndef KVSTORAGE_CONFIG_H_
-#define KVSTORAGE_CONFIG_H_
+#ifndef KVSTORAGE_BDB_H_
+#define KVSTORAGE_BDB_H_
 
 #include "config.h"
 #include "kvstorage.h"
 
-/* Type of kvstorage cache */
-enum kvstorage_cache_type {
-	KVSTORAGE_TYPE_CACHE_HASH,
-	KVSTORAGE_TYPE_CACHE_RADIX
-};
-
-/* Type of kvstorage backend */
-enum kvstorage_backend_type {
-	KVSTORAGE_TYPE_BACKEND_NULL = 0,
 #ifdef WITH_DB
-	KVSTORAGE_TYPE_BACKEND_BDB
+
+/* Create new bdb backend */
+struct rspamd_kv_backend* rspamd_kv_bdb_new (const gchar *filename, guint sync_ops);
+
 #endif
-};
 
-/* Type of kvstorage expire */
-enum kvstorage_expire_type {
-	KVSTORAGE_TYPE_EXPIRE_LRU
-};
-
-/* Cache config */
-struct kvstorage_cache_config {
-	gsize max_elements;
-	gsize max_memory;
-	enum kvstorage_cache_type type;
-};
-
-/* Backend config */
-struct kvstorage_backend_config {
-	enum kvstorage_backend_type type;
-	gchar *filename;
-	guint sync_ops;
-};
-
-
-/* Expire config */
-struct kvstorage_expire_config {
-	enum kvstorage_expire_type type;
-};
-
-/* The main keystorage config */
-struct kvstorage_config {
-	gint id;
-	gchar *name;
-	struct kvstorage_cache_config cache;
-	struct kvstorage_backend_config backend;
-	struct kvstorage_expire_config expire;
-	struct rspamd_kv_storage *storage;
-};
-
-/* Init subparser of kvstorage config */
-void init_kvstorage_config (void);
-
-/* Get configuration for kvstorage with specified ID */
-struct kvstorage_config* get_kvstorage_config (gint id);
-
-#endif /* KVSTORAGE_CONFIG_H_ */
+#endif /* KVSTORAGE_BDB_H_ */

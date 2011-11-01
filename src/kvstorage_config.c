@@ -24,6 +24,9 @@
 #include "kvstorage_config.h"
 #include "main.h"
 #include "cfg_xml.h"
+#ifdef WITH_DB
+#include "kvstorage_bdb.h"
+#endif
 
 #define LRU_QUEUES 32
 
@@ -44,6 +47,8 @@ struct kvstorage_config_parser {
 		KVSTORAGE_STATE_CACHE_MAX_ELTS,
 		KVSTORAGE_STATE_CACHE_MAX_MEM,
 		KVSTORAGE_STATE_BACKEND_TYPE,
+		KVSTORAGE_STATE_BACKEND_FILENAME,
+		KVSTORAGE_STATE_BACKEND_SYNC_OPS,
 		KVSTORAGE_STATE_EXPIRE_TYPE,
 		KVSTORAGE_STATE_ERROR
 	} state;
@@ -90,6 +95,11 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 	case KVSTORAGE_TYPE_BACKEND_NULL:
 		backend = NULL;
 		break;
+#ifdef WITH_DB
+	case KVSTORAGE_TYPE_BACKEND_BDB:
+		backend = rspamd_kv_bdb_new (kconf->backend.filename, kconf->backend.sync_ops);
+		break;
+#endif
 	}
 
 	switch (kconf->expire.type) {
@@ -170,6 +180,14 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 			kv_parser->state = KVSTORAGE_STATE_BACKEND_TYPE;
 			kv_parser->cur_elt = "type";
 		}
+		else if (g_ascii_strcasecmp (element_name, "filename") == 0) {
+			kv_parser->state = KVSTORAGE_STATE_BACKEND_FILENAME;
+			kv_parser->cur_elt = "filename";
+		}
+		else if (g_ascii_strcasecmp (element_name, "sync_ops") == 0) {
+			kv_parser->state = KVSTORAGE_STATE_BACKEND_SYNC_OPS;
+			kv_parser->cur_elt = "sync_ops";
+		}
 		else {
 			if (*error == NULL) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is unexpected in backend definition",
@@ -238,6 +256,8 @@ void kvstorage_xml_end_element (GMarkupParseContext	*context,
 		CHECK_TAG (KVSTORAGE_STATE_PARAM);
 		break;
 	case KVSTORAGE_STATE_BACKEND_TYPE:
+	case KVSTORAGE_STATE_BACKEND_FILENAME:
+	case KVSTORAGE_STATE_BACKEND_SYNC_OPS:
 		CHECK_TAG (KVSTORAGE_STATE_BACKEND);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
@@ -342,12 +362,24 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 		if (g_ascii_strncasecmp (text, "null", MIN (text_len, sizeof ("null") - 1)) == 0) {
 			kv_parser->current_storage->backend.type = KVSTORAGE_TYPE_BACKEND_NULL;
 		}
+#ifdef WITH_DB
+		else if (g_ascii_strncasecmp (text, "bdb", MIN (text_len, sizeof ("bdb") - 1)) == 0) {
+			kv_parser->current_storage->backend.type = KVSTORAGE_TYPE_BACKEND_BDB;
+		}
+#endif
 		else {
 			if (*error == NULL) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "invalid backend type: %*s", (int)text_len, text);
 			}
 			kv_parser->state = KVSTORAGE_STATE_ERROR;
 		}
+		break;
+	case KVSTORAGE_STATE_BACKEND_FILENAME:
+		kv_parser->current_storage->backend.filename = g_malloc (text_len + 1);
+		rspamd_strlcpy (kv_parser->current_storage->backend.filename, text, text_len + 1);
+		break;
+	case KVSTORAGE_STATE_BACKEND_SYNC_OPS:
+		kv_parser->current_storage->backend.sync_ops = parse_limit (text, text_len);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
 		if (g_ascii_strncasecmp (text, "lru", MIN (text_len, sizeof ("lru") - 1)) == 0) {

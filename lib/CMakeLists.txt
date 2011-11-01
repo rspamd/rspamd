@@ -70,6 +70,10 @@ SET(RSPAMDLIBSRC ../src/binlog.c
 				../src/url.c
 				../src/util.c
 				../src/view.c)
+
+IF(WITH_DB)
+	LIST(APPEND RSPAMDLIBSRC ../src/kvstorage_bdb.c)
+ENDIF(WITH_DB)
 				
 ADD_LIBRARY(rspamdserver STATIC ${RSPAMDLIBSRC})
 SET_TARGET_PROPERTIES(rspamdserver PROPERTIES LINKER_LANGUAGE C)

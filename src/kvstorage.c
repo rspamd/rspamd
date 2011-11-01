@@ -227,17 +227,21 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, stru
 struct rspamd_kv_element*
 rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_t now)
 {
-	struct rspamd_kv_element			*elt = NULL;
+	struct rspamd_kv_element			*elt = NULL, *belt;
 
 	/* First try to look at cache */
 	elt = storage->cache->lookup_func (storage->cache, key);
 
 	/* Next look at the backend */
 	if (elt == NULL && storage->backend) {
-		elt = storage->backend->lookup_func (storage->backend, key);
-		if (elt) {
+		belt = storage->backend->lookup_func (storage->backend, key);
+		if (belt) {
 			/* Put this element into cache */
-			rspamd_kv_storage_insert_internal (storage, elt->key, elt->data, elt->size, elt->flags, elt->expire, &elt);
+			rspamd_kv_storage_insert_internal (storage, belt->key, belt->data, belt->size, belt->flags,
+					belt->expire, &elt);
+			if ((belt->flags & KV_ELT_DIRTY) == 0) {
+				g_free (belt);
+			}
 		}
 	}
 
@@ -263,12 +267,7 @@ rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key)
 
 	/* Now delete from backend */
 	if (storage->backend) {
-		if (elt == NULL) {
-			elt = storage->backend->delete_func (storage->backend, key);
-		}
-		else {
-			storage->backend->delete_func (storage->backend, key);
-		}
+		storage->backend->delete_func (storage->backend, key);
 	}
 	/* Notify expire */
 	if (elt) {

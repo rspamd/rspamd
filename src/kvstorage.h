@@ -45,7 +45,7 @@ typedef void (*backend_init)(struct rspamd_kv_backend *backend);
 typedef gboolean (*backend_insert)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
 typedef gboolean (*backend_replace)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
 typedef struct rspamd_kv_element* (*backend_lookup)(struct rspamd_kv_backend *backend, gpointer key);
-typedef struct rspamd_kv_element* (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key);
+typedef void (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key);
 typedef void (*backend_destroy)(struct rspamd_kv_backend *backend);
 
 /* Callbacks for expire */
