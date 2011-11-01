@@ -26,6 +26,7 @@
 #include "kvstorage.h"
 #include "kvstorage_bdb.h"
 #include "util.h"
+#include "main.h"
 #include <db.h>
 
 struct bdb_op {
@@ -65,20 +66,21 @@ bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, DBC *cursorp,
 	memset (&db_data, 0, sizeof(DBT));
 	db_key.size = strlen (op->elt->key);
 	db_key.data = op->elt->key;
-	db_data.size = op->elt->size;
+	db_data.size = op->elt->size + sizeof (struct rspamd_kv_element);
 	db_data.data = op->elt;
 
 	switch (op->op) {
 	case BDB_OP_INSERT:
 	case BDB_OP_REPLACE:
-		if (cursorp->put (cursorp, &db_key, &db_data, 0) != 0) {
+		db_data.flags = DB_DBT_USERMEM;
+		if (cursorp->put (cursorp, &db_key, &db_data, DB_KEYFIRST) != 0) {
 			return FALSE;
 		}
 		break;
 	case BDB_OP_DELETE:
 		db_data.flags = DB_DBT_USERMEM;
 		/* Set cursor */
-		if (cursorp->get (cursorp, &db_key, &db_data, 0) != 0) {
+		if (cursorp->get (cursorp, &db_key, &db_data, DB_SET) != 0) {
 			return FALSE;
 		}
 		/* Del record */
@@ -88,6 +90,7 @@ bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, DBC *cursorp,
 		break;
 	}
 
+	op->elt->flags &= ~KV_ELT_DIRTY;
 	return TRUE;
 }
 
@@ -133,7 +136,7 @@ bdb_process_queue (struct rspamd_bdb_backend *db)
 		g_hash_table_remove (db->ops_hash, op->elt->key);
 		if (op->op == BDB_OP_DELETE) {
 			/* Also clean memory */
-			g_free (op->elt);
+			g_slice_free1 (sizeof (struct rspamd_kv_element) + op->elt->size, op->elt);
 		}
 		cur = g_list_next (cur);
 		g_queue_delete_link (db->ops_queue, tmp);
@@ -150,18 +153,22 @@ rspamd_bdb_init (struct rspamd_kv_backend *backend)
 {
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	guint32										 flags;
+	gint										 ret;
 
-	if (db_env_create (&db->envp, 0) != 0) {
+	if ((ret = db_env_create (&db->envp, 0)) != 0) {
 		/* Cannot create environment */
 		goto err;
 	}
 
-	flags = DB_CREATE    |    /* Create the environment if it does not already exist. */
-			DB_INIT_TXN  |    /* Initialize transactions */
-			DB_INIT_LOCK |    /* Initialize locking. */
-			DB_THREAD;        /* Use threads */
+	flags = DB_INIT_MPOOL |
+			DB_RECOVER    |
+			DB_CREATE     |    /* Create the environment if it does not already exist. */
+			DB_INIT_TXN   |    /* Initialize transactions */
+			DB_INIT_LOCK  |    /* Initialize locking. */
+			DB_INIT_LOG   |    /* Initialize logging */
+			DB_THREAD;         /* Use threads */
 
-	if (db->envp->open (db->envp, db->dirname, flags, 0) != 0) {
+	if ((ret = db->envp->open (db->envp, db->dirname, flags, 0)) != 0) {
 		/* Cannot open environment */
 		goto err;
 	}
@@ -172,13 +179,13 @@ rspamd_bdb_init (struct rspamd_kv_backend *backend)
 	 */
 	db->envp->set_lk_detect(db->envp, DB_LOCK_MINWRITE);
 
-	flags = DB_CREATE | DB_THREAD;
+	flags = DB_CREATE | DB_THREAD | DB_AUTO_COMMIT;
 	/* Create and open db pointer */
-	if (db_create (&db->dbp, db->envp, 0) != 0) {
+	if ((ret = db_create (&db->dbp, db->envp, 0)) != 0) {
 		goto err;
 	}
 
-	if (db->dbp->open (db->dbp, NULL, db->filename, NULL, DB_BTREE, flags, 0) != 0) {
+	if ((ret = db->dbp->open (db->dbp, NULL, db->filename, NULL, DB_BTREE, flags, 0)) != 0) {
 		goto err;
 	}
 
@@ -187,9 +194,11 @@ rspamd_bdb_init (struct rspamd_kv_backend *backend)
 	return;
 err:
 	if (db->dbp != NULL) {
+		msg_err ("error opening bdb database: %s", db_strerror (ret));
 		db->dbp->close (db->dbp, 0);
 	}
 	if (db->envp != NULL) {
+		msg_err ("error opening bdb environment: %s", db_strerror (ret));
 		db->envp->close (db->envp, 0);
 	}
 }
@@ -209,8 +218,8 @@ rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspam
 	op->elt = elt;
 	elt->flags |= KV_ELT_DIRTY;
 
-	g_queue_push_head (db->ops_queue, elt);
-	g_hash_table_insert (db->ops_hash, key, elt);
+	g_queue_push_head (db->ops_queue, op);
+	g_hash_table_insert (db->ops_hash, key, op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return bdb_process_queue (db);
@@ -234,8 +243,8 @@ rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 	op->elt = elt;
 	elt->flags |= KV_ELT_DIRTY;
 
-	g_queue_push_head (db->ops_queue, elt);
-	g_hash_table_insert (db->ops_hash, key, elt);
+	g_queue_push_head (db->ops_queue, op);
+	g_hash_table_insert (db->ops_hash, key, op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return bdb_process_queue (db);
@@ -275,8 +284,10 @@ rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
 	db_key.data = key;
 	db_data.flags = DB_DBT_MALLOC;
 
-	if (cursorp->get (cursorp, &db_key, &db_data, 0) == 0) {
+	if (cursorp->get (cursorp, &db_key, &db_data, DB_SET) == 0) {
 		elt = db_data.data;
+		elt->key = key;
+		elt->flags &= ~KV_ELT_DIRTY;
 	}
 
 	cursorp->close (cursorp);
@@ -295,6 +306,7 @@ rspamd_bdb_delete (struct rspamd_kv_backend *backend, gpointer key)
 	}
 
 	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+		op->op = BDB_OP_DELETE;
 		return;
 	}
 
@@ -323,6 +335,7 @@ rspamd_bdb_destroy (struct rspamd_kv_backend *backend)
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 
 	if (db->initialized) {
+		bdb_process_queue (db);
 		if (db->dbp != NULL) {
 			db->dbp->close (db->dbp, 0);
 		}
@@ -354,6 +367,7 @@ rspamd_kv_bdb_new (const gchar *filename, guint sync_ops)
 		if (dirname != NULL) {
 			g_free (dirname);
 		}
+		msg_err ("invalid file: %s", filename);
 		return NULL;
 	}
 

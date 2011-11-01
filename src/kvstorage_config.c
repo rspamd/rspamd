@@ -465,3 +465,12 @@ get_kvstorage_config (gint id)
 	}
 	return g_hash_table_lookup (storages, &id);
 }
+
+void
+destroy_kvstorage_config (void)
+{
+	if (storages != NULL) {
+		g_hash_table_destroy (storages);
+		storages = NULL;
+	}
+}

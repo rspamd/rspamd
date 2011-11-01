@@ -122,7 +122,8 @@ struct rspamd_kv_storage {
 
 /** Create new kv storage */
 struct rspamd_kv_storage *rspamd_kv_storage_new (gint id, const gchar *name,
-		struct rspamd_kv_cache *cache, struct rspamd_kv_backend *backend, struct rspamd_kv_expire *expire,
+		struct rspamd_kv_cache *cache, struct rspamd_kv_backend *backend,
+		struct rspamd_kv_expire *expire,
 		gsize max_elts, gsize max_memory);
 
 /** Insert new element to the kv storage */

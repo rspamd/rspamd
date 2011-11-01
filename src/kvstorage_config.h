@@ -83,4 +83,6 @@ void init_kvstorage_config (void);
 /* Get configuration for kvstorage with specified ID */
 struct kvstorage_config* get_kvstorage_config (gint id);
 
+void destroy_kvstorage_config (void);
+
 #endif /* KVSTORAGE_CONFIG_H_ */
