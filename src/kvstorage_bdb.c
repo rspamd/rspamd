@@ -64,9 +64,10 @@ bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, DBC *cursorp,
 
 	memset (&db_key, 0, sizeof(DBT));
 	memset (&db_data, 0, sizeof(DBT));
-	db_key.size = strlen (op->elt->key);
-	db_key.data = op->elt->key;
-	db_data.size = op->elt->size + sizeof (struct rspamd_kv_element);
+
+	db_key.size = op->elt->keylen;
+	db_key.data = ELT_KEY (op->elt);
+	db_data.size = op->elt->size + sizeof (struct rspamd_kv_element) + op->elt->keylen + 1;
 	db_data.data = op->elt;
 
 	switch (op->op) {
@@ -101,7 +102,7 @@ bdb_process_queue (struct rspamd_bdb_backend *db)
 	struct bdb_op								*op;
 	DBC 										*cursorp;
 	DB_TXN 										*txn = NULL;
-	GList										*cur, *tmp;
+	GList										*cur;
 
 	/* Start transaction */
 	if (db->envp->txn_begin (db->envp, NULL, &txn, 0) != 0) {
@@ -132,16 +133,16 @@ bdb_process_queue (struct rspamd_bdb_backend *db)
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		tmp = cur;
-		g_hash_table_remove (db->ops_hash, op->elt->key);
 		if (op->op == BDB_OP_DELETE) {
 			/* Also clean memory */
-			g_slice_free1 (sizeof (struct rspamd_kv_element) + op->elt->size, op->elt);
+			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
-		cur = g_list_next (cur);
-		g_queue_delete_link (db->ops_queue, tmp);
 		g_slice_free1 (sizeof (struct bdb_op), op);
+		cur = g_list_next (cur);
 	}
+
+	g_hash_table_remove_all (db->ops_hash);
+	g_queue_clear (db->ops_queue);
 
 	return TRUE;
 
@@ -219,7 +220,7 @@ rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspam
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, key, op);
+	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return bdb_process_queue (db);
@@ -244,7 +245,7 @@ rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, key, op);
+	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return bdb_process_queue (db);
@@ -286,7 +287,6 @@ rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
 
 	if (cursorp->get (cursorp, &db_key, &db_data, DB_SET) == 0) {
 		elt = db_data.data;
-		elt->key = key;
 		elt->flags &= ~KV_ELT_DIRTY;
 	}
 
@@ -319,8 +319,8 @@ rspamd_bdb_delete (struct rspamd_kv_backend *backend, gpointer key)
 	op->elt = elt;
 	elt->flags |= KV_ELT_DIRTY;
 
-	g_queue_push_head (db->ops_queue, elt);
-	g_hash_table_insert (db->ops_hash, key, elt);
+	g_queue_push_head (db->ops_queue, op);
+	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		bdb_process_queue (db);

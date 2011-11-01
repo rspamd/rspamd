@@ -64,6 +64,10 @@ enum rspamd_kv_flags {
 	KV_ELT_OUSTED = 1 << 3
 };
 
+#define ELT_DATA(elt) (gchar *)(elt)->data + (elt)->keylen + 1
+#define ELT_KEY(elt) (gchar *)(elt)->data
+#define ELT_SIZE(elt) elt->size + sizeof(struct rspamd_kv_element) + elt->keylen + 1
+
 /* Common structures description */
 
 struct rspamd_kv_element {
@@ -73,7 +77,7 @@ struct rspamd_kv_element {
 	gsize size;									/*< size of element */
 	TAILQ_ENTRY (rspamd_kv_element) entry;		/*< list entry */
 	guint32 hash;								/*< numeric hash */
-	gpointer key;								/*< pointer to key */
+	guint keylen;								/*< length of key */
 
 	gchar data[1];								/*< expandable data */
 };

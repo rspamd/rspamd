@@ -353,12 +353,12 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 				}
 				else {
 					r = rspamd_snprintf (outbuf, sizeof (outbuf), "VALUE %s %ud %ud" CRLF,
-							elt->key, elt->flags, elt->size);
+							ELT_KEY (elt), elt->flags, elt->size);
 					if (!rspamd_dispatcher_write (session->dispather, outbuf,
 																r, TRUE, FALSE)) {
 						return FALSE;
 					}
-					if (!rspamd_dispatcher_write (session->dispather, elt->data, elt->size, TRUE, TRUE)) {
+					if (!rspamd_dispatcher_write (session->dispather, ELT_DATA(elt), elt->size, TRUE, TRUE)) {
 						return FALSE;
 					}
 					return rspamd_dispatcher_write (session->dispather, CRLF "END" CRLF,
@@ -371,7 +371,7 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 				if (elt != NULL) {
 					if ((elt->flags & KV_ELT_DIRTY) == 0) {
 						/* Free memory if backend has deleted this element */
-						g_slice_free1 (elt->size + sizeof (struct rspamd_kv_element), elt);
+						g_slice_free1 (ELT_SIZE (elt), elt);
 					}
 					g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 					return rspamd_dispatcher_write (session->dispather, "DELETED" CRLF,

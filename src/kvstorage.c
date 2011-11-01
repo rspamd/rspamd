@@ -237,7 +237,8 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_
 		belt = storage->backend->lookup_func (storage->backend, key);
 		if (belt) {
 			/* Put this element into cache */
-			rspamd_kv_storage_insert_internal (storage, belt->key, belt->data, belt->size, belt->flags,
+			rspamd_kv_storage_insert_internal (storage, ELT_KEY (belt), ELT_DATA (belt),
+					belt->size, belt->flags,
 					belt->expire, &elt);
 			if ((belt->flags & KV_ELT_DIRTY) == 0) {
 				g_free (belt);
@@ -466,14 +467,14 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 			}
 			else {
 				/* This element is already expired */
-				rspamd_kv_storage_delete (storage, elt->key);
+				rspamd_kv_storage_delete (storage, ELT_KEY (elt));
 				res = TRUE;
 				/* Check other elements in this queue */
 				TAILQ_FOREACH_SAFE (elt, &expire->heads[i], entry, temp) {
 					if ((elt->flags & KV_ELT_PERSISTENT) != 0 || elt->expire < (now - elt->age)) {
 						break;
 					}
-					rspamd_kv_storage_delete (storage, elt->key);
+					rspamd_kv_storage_delete (storage, ELT_KEY (elt));
 				}
 				break;
 			}
@@ -482,7 +483,7 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 
 	if (!res) {
 		/* Oust the oldest element from cache */
-		storage->cache->delete_func (storage->cache, oldest_elt->key);
+		storage->cache->delete_func (storage->cache, ELT_KEY (oldest_elt));
 		oldest_elt->flags |= KV_ELT_OUSTED;
 		storage->memory -= oldest_elt->size + sizeof (*elt);
 		storage->elts --;
@@ -554,15 +555,18 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 {
 	struct rspamd_kv_element 			*elt;
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
+	guint								 keylen;
 
 	if ((elt = g_hash_table_lookup (cache->hash, key)) == NULL) {
-		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len);
+		keylen = strlen (key);
+		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
-		elt->key = key;
+		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rspamd_strcase_hash (key);
-		memcpy (elt->data, value, len);
-		g_hash_table_insert (cache->hash, key, elt);
+		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_DATA (elt), value, len);
+		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
 	}
 
 	return elt;
@@ -639,7 +643,7 @@ rspamd_kv_hash_new (void)
 	struct rspamd_kv_hash_cache			*new;
 
 	new = g_slice_alloc (sizeof (struct rspamd_kv_hash_cache));
-	new->hash = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, NULL, kv_elt_destroy_func);
+	new->hash = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, NULL, NULL);
 	new->init_func = NULL;
 	new->insert_func = rspamd_kv_hash_insert;
 	new->lookup_func = rspamd_kv_hash_lookup;
@@ -687,18 +691,20 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
 	struct rspamd_kv_element 			*elt;
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
 	guint32								 rkey = rspamd_kv_radix_validate (key);
+	guint								 keylen;
 
 	if (rkey == 0) {
 		return NULL;
 	}
 	elt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
 	if ((uintptr_t)elt == RADIX_NO_VALUE) {
-		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len);
+		keylen = strlen (key);
+		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
-		elt->key = key;
 		elt->size = len;
 		elt->hash = rkey;
-		memcpy (elt->data, value, len);
+		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_DATA (elt), value, len);
 		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
 	}
 
