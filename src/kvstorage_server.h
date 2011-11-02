@@ -51,6 +51,7 @@ struct kvstorage_worker_thread {
 	GStaticMutex *log_mtx;
 	GStaticMutex *accept_mtx;
 	guint id;
+	sigset_t *signals;
 };
 
 struct kvstorage_session {

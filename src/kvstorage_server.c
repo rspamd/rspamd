@@ -480,6 +480,8 @@ kvstorage_thread (gpointer ud)
 {
 	struct kvstorage_worker_thread		*thr = ud;
 
+	/* Block signals as it is dispatcher deity */
+	sigprocmask (SIG_BLOCK, thr->signals, NULL);
 	/* Init thread specific events */
 	thr->ev_base = event_init ();
 	event_set (&thr->bind_ev, thr->worker->cf->listen_sock, EV_READ | EV_PERSIST, thr_accept_socket, (void *)thr);
@@ -495,7 +497,7 @@ kvstorage_thread (gpointer ud)
  * Create new thread, set it detached
  */
 static struct kvstorage_worker_thread *
-create_kvstorage_thread (struct rspamd_worker *worker, struct kvstorage_worker_ctx *ctx, guint id)
+create_kvstorage_thread (struct rspamd_worker *worker, struct kvstorage_worker_ctx *ctx, guint id, sigset_t *signals)
 {
 	struct kvstorage_worker_thread 		*new;
 	GError								*err = NULL;
@@ -509,6 +511,7 @@ create_kvstorage_thread (struct rspamd_worker *worker, struct kvstorage_worker_c
 	new->id = id;
 	new->thr = g_thread_create (kvstorage_thread, new, FALSE, &err);
 	new->ev_base = NULL;
+	new->signals = signals;
 
 	if (new->thr == NULL) {
 		msg_err ("cannot create thread: %s", err->message);
@@ -568,7 +571,7 @@ start_kvstorage_worker (struct rspamd_worker *worker)
 	g_static_mutex_init (&ctx->log_mtx);
 	g_static_mutex_init (&ctx->accept_mtx);
 	for (i = 0; i < worker->cf->count; i ++) {
-		thr = create_kvstorage_thread (worker, ctx, i);
+		thr = create_kvstorage_thread (worker, ctx, i, &signals.sa_mask);
 		ctx->threads = g_list_prepend (ctx->threads, thr);
 	}
 
