@@ -157,6 +157,18 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 		}
 	}
 
+	/* First try to search it in cache */
+	elt = storage->cache->lookup_func (storage->cache, key);
+	if (elt) {
+		if (elt->flags & KV_ELT_DIRTY) {
+			/* Element is in backend storage queue */
+			elt->flags |= KV_ELT_NEED_FREE;
+		}
+		else {
+			g_slice_free1 (ELT_SIZE (elt), elt);
+		}
+	}
+
 	/* Insert elt to the cache */
 	elt = storage->cache->insert_func (storage->cache, key, data, len);
 	if (elt == NULL) {
@@ -346,12 +358,12 @@ rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key,
 		return FALSE;
 	}
 	/* Get element size */
-	es = (guint *)elt->data;
+	es = (guint *)ELT_DATA (elt);
 	if (elt_num > (elt->size - sizeof (guint)) / (*es)) {
 		/* Invalid index */
 		return FALSE;
 	}
-	target = (gchar *)elt->data + sizeof (guint) + (*es) * elt_num;
+	target = (gchar *)ELT_DATA (elt) + sizeof (guint) + (*es) * elt_num;
 	if (len != *es) {
 		/* Invalid size */
 		return FALSE;
@@ -383,12 +395,12 @@ rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key,
 		return FALSE;
 	}
 	/* Get element size */
-	es = (guint *)elt->data;
+	es = (guint *)ELT_DATA (elt);
 	if (elt_num > (elt->size - sizeof (guint)) / (*es)) {
 		/* Invalid index */
 		return FALSE;
 	}
-	target = elt->data + sizeof (guint) + (*es) * elt_num;
+	target = ELT_DATA (elt) + sizeof (guint) + (*es) * elt_num;
 
 	*len = *es;
 	*data = target;

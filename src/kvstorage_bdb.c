@@ -58,7 +58,7 @@ struct rspamd_bdb_backend {
 
 /* Process single bdb operation */
 static gboolean
-bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, DBC *cursorp, struct bdb_op *op)
+bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, struct bdb_op *op)
 {
 	DBT 										 db_key, db_data;
 
@@ -74,18 +74,14 @@ bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, DBC *cursorp,
 	case BDB_OP_INSERT:
 	case BDB_OP_REPLACE:
 		db_data.flags = DB_DBT_USERMEM;
-		if (cursorp->put (cursorp, &db_key, &db_data, DB_KEYFIRST) != 0) {
+		if (db->dbp->put (db->dbp, NULL, &db_key, &db_data, 0) != 0) {
 			return FALSE;
 		}
 		break;
 	case BDB_OP_DELETE:
 		db_data.flags = DB_DBT_USERMEM;
 		/* Set cursor */
-		if (cursorp->get (cursorp, &db_key, &db_data, DB_SET) != 0) {
-			return FALSE;
-		}
-		/* Del record */
-		if (cursorp->del (cursorp, 0) != 0) {
+		if (db->dbp->del (db->dbp, NULL, &db_key, 0) != 0) {
 			return FALSE;
 		}
 		break;
@@ -100,40 +96,22 @@ static gboolean
 bdb_process_queue (struct rspamd_bdb_backend *db)
 {
 	struct bdb_op								*op;
-	DBC 										*cursorp;
-	DB_TXN 										*txn = NULL;
 	GList										*cur;
-
-	/* Start transaction */
-	if (db->envp->txn_begin (db->envp, NULL, &txn, 0) != 0) {
-		return FALSE;
-	}
-	if (db->dbp->cursor (db->dbp, txn, &cursorp, 0) != 0) {
-		txn->abort (txn);
-		return FALSE;
-	}
 
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (! bdb_process_single_op (db, txn, cursorp, op)) {
-			txn->abort (txn);
+		if (! bdb_process_single_op (db, NULL, op)) {
 			return FALSE;
 		}
 		cur = g_list_next (cur);
-	}
-
-	/* Commit transaction */
-	cursorp->close (cursorp);
-	if (txn->commit (txn, 0) != 0) {
-		return FALSE;
 	}
 
 	/* Clean the queue */
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (op->op == BDB_OP_DELETE) {
+		if (op->op == BDB_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
@@ -162,11 +140,8 @@ rspamd_bdb_init (struct rspamd_kv_backend *backend)
 	}
 
 	flags = DB_INIT_MPOOL |
-			DB_RECOVER    |
 			DB_CREATE     |    /* Create the environment if it does not already exist. */
-			DB_INIT_TXN   |    /* Initialize transactions */
 			DB_INIT_LOCK  |    /* Initialize locking. */
-			DB_INIT_LOG   |    /* Initialize logging */
 			DB_THREAD;         /* Use threads */
 
 	if ((ret = db->envp->open (db->envp, db->dirname, flags, 0)) != 0) {
@@ -178,9 +153,9 @@ rspamd_bdb_init (struct rspamd_kv_backend *backend)
 	 * choose the transaction that has performed the least amount of
 	 * writing to break the deadlock in the event that one is detected.
 	 */
-	db->envp->set_lk_detect(db->envp, DB_LOCK_MINWRITE);
+	db->envp->set_lk_detect (db->envp, DB_LOCK_DEFAULT);
 
-	flags = DB_CREATE | DB_THREAD | DB_AUTO_COMMIT;
+	flags = DB_CREATE | DB_THREAD;
 	/* Create and open db pointer */
 	if ((ret = db_create (&db->dbp, db->envp, 0)) != 0) {
 		goto err;
@@ -259,7 +234,6 @@ rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
 {
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	struct bdb_op								*op;
-	DBC 										*cursorp;
 	DBT 										 db_key, db_data;
 	struct rspamd_kv_element					*elt = NULL;
 
@@ -275,22 +249,17 @@ rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
 		return op->elt;
 	}
 
-	/* Now try to search in bdb */
-	if (db->dbp->cursor (db->dbp, NULL, &cursorp, 0) != 0) {
-		return NULL;
-	}
 	memset (&db_key, 0, sizeof(DBT));
 	memset (&db_data, 0, sizeof(DBT));
 	db_key.size = strlen (key);
 	db_key.data = key;
 	db_data.flags = DB_DBT_MALLOC;
 
-	if (cursorp->get (cursorp, &db_key, &db_data, DB_SET) == 0) {
+	if (db->dbp->get (db->dbp, NULL, &db_key, &db_data, 0) == 0) {
 		elt = db_data.data;
 		elt->flags &= ~KV_ELT_DIRTY;
 	}
 
-	cursorp->close (cursorp);
 	return elt;
 }
 

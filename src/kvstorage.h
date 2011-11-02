@@ -61,7 +61,8 @@ enum rspamd_kv_flags {
 	KV_ELT_ARRAY = 1 << 0,
 	KV_ELT_PERSISTENT = 1 << 1,
 	KV_ELT_DIRTY = 1 << 2,
-	KV_ELT_OUSTED = 1 << 3
+	KV_ELT_OUSTED = 1 << 3,
+	KV_ELT_NEED_FREE = 1 << 4
 };
 
 #define ELT_DATA(elt) (gchar *)(elt)->data + (elt)->keylen + 1

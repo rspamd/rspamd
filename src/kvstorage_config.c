@@ -27,6 +27,9 @@
 #ifdef WITH_DB
 #include "kvstorage_bdb.h"
 #endif
+#ifdef WITH_SQLITE
+#include "kvstorage_sqlite.h"
+#endif
 
 #define LRU_QUEUES 32
 
@@ -93,11 +96,17 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 
 	switch (kconf->backend.type) {
 	case KVSTORAGE_TYPE_BACKEND_NULL:
+	case KVSTORAGE_TYPE_BACKEND_MAX:
 		backend = NULL;
 		break;
 #ifdef WITH_DB
 	case KVSTORAGE_TYPE_BACKEND_BDB:
 		backend = rspamd_kv_bdb_new (kconf->backend.filename, kconf->backend.sync_ops);
+		break;
+#endif
+#ifdef WITH_SQLITE
+	case KVSTORAGE_TYPE_BACKEND_SQLITE:
+		backend = rspamd_kv_sqlite_new (kconf->backend.filename, kconf->backend.sync_ops);
 		break;
 #endif
 	}
@@ -365,6 +374,11 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 #ifdef WITH_DB
 		else if (g_ascii_strncasecmp (text, "bdb", MIN (text_len, sizeof ("bdb") - 1)) == 0) {
 			kv_parser->current_storage->backend.type = KVSTORAGE_TYPE_BACKEND_BDB;
+		}
+#endif
+#ifdef WITH_SQLITE
+		else if (g_ascii_strncasecmp (text, "sqlite", MIN (text_len, sizeof ("sqlite") - 1)) == 0) {
+			kv_parser->current_storage->backend.type = KVSTORAGE_TYPE_BACKEND_SQLITE;
 		}
 #endif
 		else {

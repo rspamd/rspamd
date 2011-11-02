@@ -38,8 +38,12 @@ enum kvstorage_cache_type {
 enum kvstorage_backend_type {
 	KVSTORAGE_TYPE_BACKEND_NULL = 0,
 #ifdef WITH_DB
-	KVSTORAGE_TYPE_BACKEND_BDB
+	KVSTORAGE_TYPE_BACKEND_BDB,
 #endif
+#ifdef WITH_SQLITE
+	KVSTORAGE_TYPE_BACKEND_SQLITE,
+#endif
+	KVSTORAGE_TYPE_BACKEND_MAX = 255
 };
 
 /* Type of kvstorage expire */
