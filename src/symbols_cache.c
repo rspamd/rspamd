@@ -151,33 +151,35 @@ mmap_cache_file (struct symbols_cache *cache, gint fd, memory_pool_t *pool)
 	GList                          *cur;
 	struct cache_item              *item;
 
-	map = mmap (NULL, cache->used_items * sizeof (struct saved_cache_item), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (map == MAP_FAILED) {
-		msg_err ("cannot mmap cache file: %d, %s", errno, strerror (errno));
+	if (cache->used_items > 0) {
+		map = mmap (NULL, cache->used_items * sizeof (struct saved_cache_item), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		if (map == MAP_FAILED) {
+			msg_err ("cannot mmap cache file: %d, %s", errno, strerror (errno));
+			close (fd);
+			return FALSE;
+		}
+		/* Close descriptor as it would never be used */
 		close (fd);
-		return FALSE;
-	}
-	/* Close descriptor as it would never be used */
-	close (fd);
-	cache->map = map;
-	/* Now free old values for saved cache items and fill them with mmapped ones */
-	i = 0;
-	cur = g_list_first (cache->negative_items);
-	while (cur) {
-		item = cur->data;
-		item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
-		cur = g_list_next (cur);
-		i ++;
-	}
-	cur = g_list_first (cache->static_items);
-	while (cur) {
-		item = cur->data;
-		item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
-		cur = g_list_next (cur);
-		i ++;
-	}
+		cache->map = map;
+		/* Now free old values for saved cache items and fill them with mmapped ones */
+		i = 0;
+		cur = g_list_first (cache->negative_items);
+		while (cur) {
+			item = cur->data;
+			item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
+			cur = g_list_next (cur);
+			i ++;
+		}
+		cur = g_list_first (cache->static_items);
+		while (cur) {
+			item = cur->data;
+			item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
+			cur = g_list_next (cur);
+			i ++;
+		}
 
-	post_cache_init (cache);
+		post_cache_init (cache);
+	}
 
 	return TRUE;
 }
