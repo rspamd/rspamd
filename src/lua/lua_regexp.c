@@ -160,6 +160,7 @@ lua_regexp_match (lua_State *L)
 	if (re) {
 		data = luaL_checkstring (L, 2);
 		if (data) {
+#if GLIB_MINOR_VERSION >= 26
 			if ((g_regex_get_compile_flags (re) & G_REGEX_RAW) == 0) {
 				/* Validate input */
 				if (!g_utf8_validate (data, -1, NULL)) {
@@ -167,6 +168,7 @@ lua_regexp_match (lua_State *L)
 					return 1;
 				}
 			}
+#endif
 			if (g_regex_match_full (re, data, -1, 0, 0, &mi, NULL)) {
 				matches = g_match_info_fetch_all (mi);
 				lua_newtable (L);

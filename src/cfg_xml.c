@@ -1734,11 +1734,13 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				/* Create object */
 				ud->section_pointer = init_view (ud->cfg->cfg_pool);
 			}
+#if GLIB_MINOR_VERSION >= 18
 			else if (subparsers != NULL && (subparser = g_hash_table_lookup (subparsers, element_name)) != NULL) {
 				ud->state = XML_SUBPARSER;
 				g_markup_parse_context_push (context, subparser->parser, subparser->user_data);
 				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
 			}
+#endif
 			else {
 				/* Extract other tags */
 				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
@@ -1932,6 +1934,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			break;
 		case XML_SKIP_ELEMENTS:
 			return;
+#if GLIB_MINOR_VERSION >= 18
 		case XML_SUBPARSER:
 			CHECK_TAG (ud->section_name, TRUE);
 			if (subparsers != NULL && (subparser = g_hash_table_lookup (subparsers, element_name)) != NULL) {
@@ -1944,6 +1947,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			}
 			ud->state = XML_READ_PARAM;
 			break;
+#endif
 		default:
 			ud->state = XML_ERROR;
 			break;

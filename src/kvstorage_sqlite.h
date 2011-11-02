@@ -28,7 +28,7 @@
 #include "config.h"
 #include "kvstorage.h"
 
-#ifdef WITH_DB
+#ifdef WITH_SQLITE
 
 /* Create new bdb backend */
 struct rspamd_kv_backend* rspamd_kv_sqlite_new (const gchar *filename, guint sync_ops);
