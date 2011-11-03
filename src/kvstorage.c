@@ -160,6 +160,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	/* First try to search it in cache */
 	elt = storage->cache->lookup_func (storage->cache, key);
 	if (elt) {
+		storage->cache->steal_func (storage->cache, elt);
 		if (elt->flags & KV_ELT_DIRTY) {
 			/* Element is in backend storage queue */
 			elt->flags |= KV_ELT_NEED_FREE;
@@ -555,6 +556,7 @@ struct rspamd_kv_hash_cache {
 	cache_replace replace_func;					/*< this callback is called when element is replace */
 	cache_lookup lookup_func;					/*< this callback is used for lookup of element */
 	cache_delete delete_func;					/*< this callback is called when an element is deleted */
+	cache_steal steal_func;						/*< this callback is used to replace duplicates in cache */
 	cache_destroy destroy_func;					/*< this callback is used for destroying all elements inside cache */
 	GHashTable *hash;
 };
@@ -625,6 +627,17 @@ rspamd_kv_hash_delete (struct rspamd_kv_cache *c, gpointer key)
 }
 
 /**
+ * Steal an element from cache
+ */
+static void
+rspamd_kv_hash_steal (struct rspamd_kv_cache *c, struct rspamd_kv_element *elt)
+{
+	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
+
+	g_hash_table_steal (cache->hash, ELT_KEY (elt));
+}
+
+/**
  * Destroy the whole cache
  */
 static void
@@ -661,6 +674,7 @@ rspamd_kv_hash_new (void)
 	new->lookup_func = rspamd_kv_hash_lookup;
 	new->replace_func = rspamd_kv_hash_replace;
 	new->delete_func = rspamd_kv_hash_delete;
+	new->steal_func = rspamd_kv_hash_steal;
 	new->destroy_func = rspamd_kv_hash_destroy;
 
 	return (struct rspamd_kv_cache *)new;
@@ -675,6 +689,7 @@ struct rspamd_kv_radix_cache {
 	cache_replace replace_func;					/*< this callback is called when element is replace */
 	cache_lookup lookup_func;					/*< this callback is used for lookup of element */
 	cache_delete delete_func;					/*< this callback is called when an element is deleted */
+	cache_steal steal_func;						/*< this callback is used to replace duplicates in cache */
 	cache_destroy destroy_func;					/*< this callback is used for destroying all elements inside cache */
 	radix_tree_t *tree;
 };
@@ -776,6 +791,19 @@ rspamd_kv_radix_delete (struct rspamd_kv_cache *c, gpointer key)
 }
 
 /**
+ * Delete an element from cache
+ */
+static void
+rspamd_kv_radix_steal (struct rspamd_kv_cache *c, struct rspamd_kv_element *elt)
+{
+	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
+	guint32								 rkey = rspamd_kv_radix_validate (ELT_KEY (elt));
+
+
+	radix32tree_delete (cache->tree, rkey, 0xffffffff);
+}
+
+/**
  * Destroy the whole cache
  */
 static void
@@ -802,6 +830,7 @@ rspamd_kv_radix_new (void)
 	new->lookup_func = rspamd_kv_radix_lookup;
 	new->replace_func = rspamd_kv_radix_replace;
 	new->delete_func = rspamd_kv_radix_delete;
+	new->steal_func = rspamd_kv_radix_steal;
 	new->destroy_func = rspamd_kv_radix_destroy;
 
 	return (struct rspamd_kv_cache *)new;

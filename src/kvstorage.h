@@ -38,6 +38,7 @@ typedef struct rspamd_kv_element* (*cache_insert)(struct rspamd_kv_cache *cache,
 typedef gboolean (*cache_replace)(struct rspamd_kv_cache *cache, gpointer key, struct rspamd_kv_element *elt);
 typedef struct rspamd_kv_element* (*cache_lookup)(struct rspamd_kv_cache *cache, gpointer key);
 typedef struct rspamd_kv_element* (*cache_delete)(struct rspamd_kv_cache *cache, gpointer key);
+typedef void (*cache_steal)(struct rspamd_kv_cache *cache, struct rspamd_kv_element* elt);
 typedef void (*cache_destroy)(struct rspamd_kv_cache *cache);
 
 /* Callbacks for backend */
@@ -89,6 +90,7 @@ struct rspamd_kv_cache {
 	cache_replace replace_func;					/*< this callback is called when element is replace */
 	cache_lookup lookup_func;					/*< this callback is used for lookup of element */
 	cache_delete delete_func;					/*< this callback is called when an element is deleted */
+	cache_steal steal_func;						/*< this callback is used to replace duplicates in cache */
 	cache_destroy destroy_func;					/*< this callback is used for destroying all elements inside cache */
 };
 struct rspamd_kv_backend {
