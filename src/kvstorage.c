@@ -259,7 +259,7 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_
 		}
 	}
 
-	if (elt && (elt->flags & KV_ELT_PERSISTENT) == 0) {
+	if (elt && (elt->flags & KV_ELT_PERSISTENT) == 0 && elt->expire > 0) {
 		/* Check expiration */
 		if (now - elt->age > elt->expire) {
 			rspamd_kv_storage_delete (storage, key);

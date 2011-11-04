@@ -35,6 +35,7 @@ struct kvstorage_worker_ctx {
 	guint32 timeout_raw;
 	GList *threads;
 	gint s_pair[2];
+	gboolean is_redis;
 	memory_pool_t *pool;
 	struct event_base *ev_base;
 	GStaticMutex log_mtx;
