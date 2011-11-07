@@ -45,6 +45,7 @@ struct rspamd_bdb_backend {
 	backend_replace replace_func;				/*< this callback is called when element is replaced */
 	backend_lookup lookup_func;					/*< this callback is used for lookup of element */
 	backend_delete delete_func;					/*< this callback is called when an element is deleted */
+	backend_sync sync_func;						/*< this callback is called when backend need to be synced */
 	backend_destroy destroy_func;				/*< this callback is used for destroying all elements inside backend */
 	DB_ENV *envp;								/*< db environment */
 	DB *dbp;									/*< db pointer */
@@ -93,8 +94,9 @@ bdb_process_single_op (struct rspamd_bdb_backend *db, DB_TXN *txn, struct bdb_op
 
 /* Process operations queue */
 static gboolean
-bdb_process_queue (struct rspamd_bdb_backend *db)
+bdb_process_queue (struct rspamd_kv_backend *backend)
 {
+	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	struct bdb_op								*op;
 	GList										*cur;
 
@@ -198,7 +200,7 @@ rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspam
 	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		return bdb_process_queue (db);
+		return bdb_process_queue (backend);
 	}
 
 	return TRUE;
@@ -223,7 +225,7 @@ rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		return bdb_process_queue (db);
+		return bdb_process_queue (backend);
 	}
 
 	return TRUE;
@@ -292,7 +294,7 @@ rspamd_bdb_delete (struct rspamd_kv_backend *backend, gpointer key)
 	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		bdb_process_queue (db);
+		bdb_process_queue (backend);
 	}
 
 	return;
@@ -304,7 +306,7 @@ rspamd_bdb_destroy (struct rspamd_kv_backend *backend)
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 
 	if (db->initialized) {
-		bdb_process_queue (db);
+		bdb_process_queue (backend);
 		if (db->dbp != NULL) {
 			db->dbp->close (db->dbp, 0);
 		}
@@ -353,6 +355,7 @@ rspamd_kv_bdb_new (const gchar *filename, guint sync_ops)
 	new->lookup_func = rspamd_bdb_lookup;
 	new->delete_func = rspamd_bdb_delete;
 	new->replace_func = rspamd_bdb_replace;
+	new->sync_func = bdb_process_queue;
 	new->destroy_func = rspamd_bdb_destroy;
 
 	return (struct rspamd_kv_backend *)new;

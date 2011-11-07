@@ -51,6 +51,7 @@ struct rspamd_sqlite_backend {
 	backend_replace replace_func;				/*< this callback is called when element is replaced */
 	backend_lookup lookup_func;					/*< this callback is used for lookup of element */
 	backend_delete delete_func;					/*< this callback is called when an element is deleted */
+	backend_sync sync_func;						/*< this callback is called when backend need to be synced */
 	backend_destroy destroy_func;				/*< this callback is used for destroying all elements inside backend */
 	sqlite3 *dbp;
 	gchar *filename;
@@ -100,8 +101,9 @@ sqlite_process_single_op (struct rspamd_sqlite_backend *db, struct sqlite_op *op
 
 /* Process operations queue */
 static gboolean
-sqlite_process_queue (struct rspamd_sqlite_backend *db)
+sqlite_process_queue (struct rspamd_kv_backend *backend)
 {
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 	struct sqlite_op							*op;
 	GList										*cur;
 
@@ -261,7 +263,7 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, struct rs
 	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		return sqlite_process_queue (db);
+		return sqlite_process_queue (backend);
 	}
 
 	return TRUE;
@@ -286,7 +288,7 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct r
 	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		return sqlite_process_queue (db);
+		return sqlite_process_queue (backend);
 	}
 
 	return TRUE;
@@ -356,7 +358,7 @@ rspamd_sqlite_delete (struct rspamd_kv_backend *backend, gpointer key)
 	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
 
 	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		sqlite_process_queue (db);
+		sqlite_process_queue (backend);
 	}
 
 	return;
@@ -368,7 +370,7 @@ rspamd_sqlite_destroy (struct rspamd_kv_backend *backend)
 	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 
 	if (db->initialized) {
-		sqlite_process_queue (db);
+		sqlite_process_queue (backend);
 		if (db->get_stmt != NULL) {
 			sqlite3_finalize (db->get_stmt);
 		}
@@ -422,6 +424,7 @@ rspamd_kv_sqlite_new (const gchar *filename, guint sync_ops)
 	new->lookup_func = rspamd_sqlite_lookup;
 	new->delete_func = rspamd_sqlite_delete;
 	new->replace_func = rspamd_sqlite_replace;
+	new->sync_func = sqlite_process_queue;
 	new->destroy_func = rspamd_sqlite_destroy;
 
 	return (struct rspamd_kv_backend *)new;

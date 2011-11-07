@@ -47,6 +47,7 @@ typedef gboolean (*backend_insert)(struct rspamd_kv_backend *backend, gpointer k
 typedef gboolean (*backend_replace)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
 typedef struct rspamd_kv_element* (*backend_lookup)(struct rspamd_kv_backend *backend, gpointer key);
 typedef void (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key);
+typedef gboolean (*backend_sync)(struct rspamd_kv_backend *backend);
 typedef void (*backend_destroy)(struct rspamd_kv_backend *backend);
 
 /* Callbacks for expire */
@@ -99,6 +100,7 @@ struct rspamd_kv_backend {
 	backend_replace replace_func;				/*< this callback is called when element is replaced */
 	backend_lookup lookup_func;					/*< this callback is used for lookup of element */
 	backend_delete delete_func;					/*< this callback is called when an element is deleted */
+	backend_sync sync_func;						/*< this callback is called when backend need to be synced */
 	backend_destroy destroy_func;				/*< this callback is used for destroying all elements inside backend */
 };
 struct rspamd_kv_expire {

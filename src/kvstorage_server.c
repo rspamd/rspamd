@@ -199,16 +199,22 @@ parse_kvstorage_command (struct kvstorage_session *session, f_str_t *in)
 						}
 					}
 					else if (p - c == 4) {
-						if (memcmp (c, "quit", 4) == 0) {
+						if (g_ascii_strncasecmp (c, "quit", 4) == 0) {
 							session->command = KVSTORAGE_CMD_QUIT;
+							state = 100;
+							continue;
+						}
+						if (g_ascii_strncasecmp (c, "sync", 4) == 0) {
+							session->command = KVSTORAGE_CMD_SYNC;
 							state = 100;
 							continue;
 						}
 					}
 					else if (p - c == 6) {
-						if (memcmp (c, "delete", 6) == 0) {
+						if (g_ascii_strncasecmp (c, "delete", 6) == 0) {
 							session->command = KVSTORAGE_CMD_DELETE;
 						}
+
 						else {
 							return FALSE;
 						}
@@ -444,6 +450,41 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 								sizeof (":0" CRLF) - 1, FALSE, TRUE);
 					}
 				}
+			}
+			else if (session->command == KVSTORAGE_CMD_SYNC) {
+				if (session->cf->storage->backend == NULL || session->cf->storage->backend->sync_func == NULL) {
+					if (!is_redis) {
+						return rspamd_dispatcher_write (session->dispather, ERROR_COMMON,
+								sizeof (ERROR_COMMON) - 1, FALSE, TRUE);
+					}
+					else {
+						return rspamd_dispatcher_write (session->dispather, "-ERR unsupported" CRLF,
+								sizeof ("-ERR unsupported" CRLF) - 1, FALSE, TRUE);
+					}
+				}
+				else {
+					if (session->cf->storage->backend->sync_func (session->cf->storage->backend)) {
+						if (!is_redis) {
+							return rspamd_dispatcher_write (session->dispather, "SYNCED" CRLF,
+									sizeof ("SYNCED" CRLF) - 1, FALSE, TRUE);
+						}
+						else {
+							return rspamd_dispatcher_write (session->dispather, "+OK" CRLF,
+									sizeof ("+OK" CRLF) - 1, FALSE, TRUE);
+						}
+					}
+					else {
+						if (!is_redis) {
+							return rspamd_dispatcher_write (session->dispather, "NOT_SYNCED" CRLF,
+									sizeof ("NOT_SYNCED" CRLF) - 1, FALSE, TRUE);
+						}
+						else {
+							return rspamd_dispatcher_write (session->dispather, "-ERR not synced" CRLF,
+									sizeof ("-ERR not synced" CRLF) - 1, FALSE, TRUE);
+						}
+					}
+				}
+				g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
 			}
 			else if (session->command == KVSTORAGE_CMD_QUIT) {
 				/* Quit session */

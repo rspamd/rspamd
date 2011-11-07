@@ -65,6 +65,7 @@ struct kvstorage_session {
 		KVSTORAGE_CMD_SET,
 		KVSTORAGE_CMD_GET,
 		KVSTORAGE_CMD_DELETE,
+		KVSTORAGE_CMD_SYNC,
 		KVSTORAGE_CMD_QUIT
 	} command;
 	guint id;
