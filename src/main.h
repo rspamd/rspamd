@@ -182,7 +182,8 @@ struct worker_task {
 		WRITE_REPLY,
 		WRITE_ERROR,
 		WAIT_FILTER,
-		CLOSING_CONNECTION
+		CLOSING_CONNECTION,
+		WRITING_REPLY
 	} state;													/**< current session state							*/
 	size_t content_length;										/**< length of user's input							*/
 	enum rspamd_protocol proto;									/**< protocol (rspamc or spamc)						*/

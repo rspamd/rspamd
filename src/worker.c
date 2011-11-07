@@ -349,6 +349,7 @@ write_socket (void *arg)
 
 	switch (task->state) {
 	case WRITE_REPLY:
+		task->state = WRITING_REPLY;
 		if (!write_reply (task)) {
 			return FALSE;
 		}
@@ -359,6 +360,7 @@ write_socket (void *arg)
 		return FALSE;
 		break;
 	case WRITE_ERROR:
+		task->state = WRITING_REPLY;
 		if (!write_reply (task)) {
 			return FALSE;
 		}
@@ -375,6 +377,9 @@ write_socket (void *arg)
 		}
 		destroy_session (task->s);
 		return FALSE;
+		break;
+	case WRITING_REPLY:
+		/* Do nothing here */
 		break;
 	default:
 		msg_info ("abnormally closing connection");
