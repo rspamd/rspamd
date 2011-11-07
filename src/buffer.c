@@ -187,6 +187,9 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 	len = g_queue_get_length (d->out_buffers);
 	if (len > 1) {
 		/* IOV version */
+
+		/* Unset delayed as actually we HAVE buffers to write */
+		is_delayed = TRUE;
 		cur = d->out_buffers->tail;
 		iov = g_slice_alloc (len * sizeof (struct iovec));
 		i = 0;

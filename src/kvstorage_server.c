@@ -396,6 +396,8 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 					}
 				}
 				else {
+					session->elt = elt;
+
 					if (!is_redis) {
 						r = rspamd_snprintf (outbuf, sizeof (outbuf), "VALUE %s %ud %ud" CRLF,
 								ELT_KEY (elt), elt->flags, elt->size);
@@ -421,7 +423,10 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 						res = rspamd_dispatcher_write (session->dispather, CRLF,
 								sizeof (CRLF) - 1, FALSE, TRUE);
 					}
-					g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
+					if (!res) {
+						g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
+					}
+
 					return res;
 				}
 			}
@@ -526,6 +531,22 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 }
 
 /*
+ * Called if buffers were written
+ */
+static gboolean
+kvstorage_write_socket (void *arg)
+{
+	struct kvstorage_session			*session = (struct kvstorage_session *) arg;
+
+	if (session->elt) {
+		g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
+		session->elt = NULL;
+	}
+
+	return TRUE;
+}
+
+/*
  * Called if something goes wrong
  */
 static void
@@ -573,8 +594,9 @@ thr_accept_socket (gint fd, short what, void *arg)
 	session->thr = thr;
 	session->sock = nfd;
 	session->dispather = rspamd_create_dispatcher (thr->ev_base, nfd, BUFFER_LINE,
-			kvstorage_read_socket, NULL,
+			kvstorage_read_socket, kvstorage_write_socket,
 			kvstorage_err_socket, thr->tv, session);
+	session->elt = NULL;
 
 	if (su.ss.ss_family == AF_UNIX) {
 		session->client_addr.s_addr = INADDR_NONE;

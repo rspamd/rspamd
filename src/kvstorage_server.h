@@ -73,6 +73,7 @@ struct kvstorage_session {
 	gchar *key;
 	struct kvstorage_config *cf;
 	struct kvstorage_worker_thread *thr;
+	struct rspamd_kv_element *elt;
 	struct in_addr client_addr;
 	gint sock;
 	guint flags;
