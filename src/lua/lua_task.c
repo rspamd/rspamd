@@ -767,11 +767,13 @@ lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs)
 	gsize                          len, i;
 
 	lua_newtable (L);
-	len = internet_address_list_length (addrs);
-	for (i = 0; i < len; i ++) {
-		ia = internet_address_list_get_address (addrs, i);
-		if (lua_push_internet_address (L, ia)) {
-			lua_rawseti (L, -2, idx++);
+	if (addrs != NULL) {
+		len = internet_address_list_length (addrs);
+		for (i = 0; i < len; i ++) {
+			ia = internet_address_list_get_address (addrs, i);
+			if (lua_push_internet_address (L, ia)) {
+				lua_rawseti (L, -2, idx++);
+			}
 		}
 	}
 #endif
@@ -792,17 +794,21 @@ lua_task_get_recipients (lua_State *L)
 			while (cur) {
 #ifndef GMIME24
 				addrs = internet_address_parse_string (cur->data);
-				if (lua_push_internet_address (L, internet_address_list_get_address (addrs))) {
-					lua_rawseti (L, -2, idx++);
+				if (addrs) {
+					if (lua_push_internet_address (L, internet_address_list_get_address (addrs))) {
+						lua_rawseti (L, -2, idx++);
+					}
+					internet_address_list_destroy (addrs);
 				}
-				internet_address_list_destroy (addrs);
 #else
 
 				addrs = internet_address_list_parse_string (cur->data);
-				if (lua_push_internet_address (L, internet_address_list_get_address (addrs, 0))) {
-					lua_rawseti (L, -2, idx++);
+				if (addrs) {
+					if (lua_push_internet_address (L, internet_address_list_get_address (addrs, 0))) {
+						lua_rawseti (L, -2, idx++);
+					}
+					g_object_unref (addrs);
 				}
-				g_object_unref (addrs);
 #endif
 				cur = g_list_next (cur);
 			}
@@ -869,7 +875,7 @@ lua_task_get_recipients_headers (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
 
-	if (task) {
+	if (task && task->rcpts) {
 		lua_push_internet_address_list (L, task->rcpts);
 		return 1;
 	}
@@ -890,12 +896,17 @@ lua_task_get_from_headers (lua_State *L)
 #else
 		addrs = internet_address_list_parse_string (g_mime_message_get_sender (task->message));
 #endif
-		lua_push_internet_address_list (L, addrs);
+		if (addrs) {
+			lua_push_internet_address_list (L, addrs);
 #ifndef	GMIME24
-		internet_address_list_destroy (addrs);
+			internet_address_list_destroy (addrs);
 #else
-		g_object_unref (addrs);
+			g_object_unref (addrs);
 #endif
+		}
+		else {
+			lua_pushnil (L);
+		}
 		return 1;
 	}
 
