@@ -178,6 +178,9 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	elt->flags = flags;
 	elt->size = len;
 	elt->expire = expire;
+	if (expire == 0) {
+		elt->flags |= KV_ELT_PERSISTENT;
+	}
 
 	/* Place to the backend */
 	if (storage->backend) {
@@ -469,7 +472,7 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 
 	for (i = 0; i < expire->queues; i ++) {
 		elt = expire->heads[i].tqh_first;
-		if (elt && (elt->flags & KV_ELT_PERSISTENT) == 0) {
+		if (elt && (elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) == 0) {
 			diff = elt->expire - (now - elt->age);
 			if (diff > 0) {
 				/* This element is not expired */
@@ -480,14 +483,18 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 			}
 			else {
 				/* This element is already expired */
-				rspamd_kv_storage_delete (storage, ELT_KEY (elt));
+				storage->cache->steal_func (storage->cache, elt);
+				/* Free memory */
+				g_slice_free1 (ELT_SIZE (elt), elt);
 				res = TRUE;
 				/* Check other elements in this queue */
 				TAILQ_FOREACH_SAFE (elt, &expire->heads[i], entry, temp) {
-					if ((elt->flags & KV_ELT_PERSISTENT) != 0 || elt->expire < (now - elt->age)) {
+					if ((elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) != 0 || elt->expire < (now - elt->age)) {
 						break;
 					}
-					rspamd_kv_storage_delete (storage, ELT_KEY (elt));
+					storage->cache->steal_func (storage->cache, elt);
+					/* Free memory */
+					g_slice_free1 (ELT_SIZE (elt), elt);
 				}
 				break;
 			}
@@ -495,12 +502,16 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 	}
 
 	if (!res) {
-		/* Oust the oldest element from cache */
-		storage->cache->delete_func (storage->cache, ELT_KEY (oldest_elt));
-		oldest_elt->flags |= KV_ELT_OUSTED;
-		storage->memory -= oldest_elt->size + sizeof (*elt);
+		storage->memory -= ELT_SIZE (oldest_elt);
 		storage->elts --;
-		rspamd_lru_delete (e, oldest_elt);
+		storage->cache->steal_func (storage->cache, oldest_elt);
+		/* Free memory */
+		if ((oldest_elt->flags & KV_ELT_DIRTY) != 0) {
+			oldest_elt->flags |= KV_ELT_NEED_FREE;
+		}
+		else {
+			g_slice_free1 (ELT_SIZE (oldest_elt), oldest_elt);
+		}
 	}
 
 	return TRUE;
@@ -582,6 +593,25 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 		memcpy (ELT_DATA (elt), value, len);
 		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
 	}
+	else {
+		g_hash_table_steal (cache->hash, ELT_KEY (elt));
+		if ((elt->flags & KV_ELT_DIRTY) != 0) {
+			elt->flags |= KV_ELT_NEED_FREE;
+		}
+		else {
+			/* Free it by self */
+			g_slice_free1 (ELT_SIZE (elt), elt);
+		}
+		keylen = strlen (key);
+		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
+		elt->age = time (NULL);
+		elt->keylen = keylen;
+		elt->size = len;
+		elt->hash = rspamd_strcase_hash (key);
+		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_DATA (elt), value, len);
+		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
+	}
 
 	return elt;
 }
@@ -604,10 +634,23 @@ static gboolean
 rspamd_kv_hash_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_kv_element *elt)
 {
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
+	struct rspamd_kv_element 			*oldelt;
 
-	g_hash_table_replace (cache->hash, key, elt);
+	if ((oldelt = g_hash_table_lookup (cache->hash, key)) != NULL) {
+		g_hash_table_steal (cache->hash, key);
 
-	return TRUE;
+		if ((oldelt->flags & KV_ELT_DIRTY) != 0) {
+			oldelt->flags |= KV_ELT_NEED_FREE;
+		}
+		else {
+			/* Free it by self */
+			g_slice_free1 (ELT_SIZE (oldelt), oldelt);
+		}
+		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 /**
