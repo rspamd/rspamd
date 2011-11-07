@@ -345,7 +345,7 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 	struct rspamd_kv_element			*elt;
 	gint								 r;
 	gchar								 outbuf[BUFSIZ];
-	gboolean							 is_redis;
+	gboolean							 is_redis, res;
 
 	if (in->len == 0) {
 		/* Skip empty commands */
@@ -384,8 +384,8 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 			else if (session->command == KVSTORAGE_CMD_GET) {
 				g_static_rw_lock_reader_lock (&session->cf->storage->rwlock);
 				elt = rspamd_kv_storage_lookup (session->cf->storage, session->key, session->now);
-				g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 				if (elt == NULL) {
+					g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 					if (!is_redis) {
 						return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
 								sizeof (ERROR_NOT_FOUND) - 1, FALSE, TRUE);
@@ -406,19 +406,23 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 					}
 					if (!rspamd_dispatcher_write (session->dispather, outbuf,
 																r, TRUE, FALSE)) {
+						g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 						return FALSE;
 					}
 					if (!rspamd_dispatcher_write (session->dispather, ELT_DATA(elt), elt->size, TRUE, TRUE)) {
+						g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 						return FALSE;
 					}
 					if (!is_redis) {
-						return rspamd_dispatcher_write (session->dispather, CRLF "END" CRLF,
+						res = rspamd_dispatcher_write (session->dispather, CRLF "END" CRLF,
 								sizeof (CRLF "END" CRLF) - 1, FALSE, TRUE);
 					}
 					else {
-						return rspamd_dispatcher_write (session->dispather, CRLF,
+						res = rspamd_dispatcher_write (session->dispather, CRLF,
 								sizeof (CRLF) - 1, FALSE, TRUE);
 					}
+					g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
+					return res;
 				}
 			}
 			else if (session->command == KVSTORAGE_CMD_DELETE) {

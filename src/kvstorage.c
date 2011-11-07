@@ -163,6 +163,9 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	/* First try to search it in cache */
 	elt = storage->cache->lookup_func (storage->cache, key);
 	if (elt) {
+		if (storage->expire) {
+			storage->expire->delete_func (storage->expire, elt);
+		}
 		storage->cache->steal_func (storage->cache, elt);
 		if (elt->flags & KV_ELT_DIRTY) {
 			/* Element is in backend storage queue */
@@ -268,7 +271,6 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_
 	if (elt && (elt->flags & KV_ELT_PERSISTENT) == 0 && elt->expire > 0) {
 		/* Check expiration */
 		if (now - elt->age > elt->expire) {
-			rspamd_kv_storage_delete (storage, key);
 			elt = NULL;
 		}
 	}
@@ -291,7 +293,9 @@ rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key)
 	}
 	/* Notify expire */
 	if (elt) {
-		storage->expire->delete_func (storage->expire, elt);
+		if (storage->expire) {
+			storage->expire->delete_func (storage->expire, elt);
+		}
 		storage->elts --;
 		storage->memory -= elt->size;
 	}
@@ -439,6 +443,7 @@ rspamd_lru_insert (struct rspamd_kv_expire *e, struct rspamd_kv_element *elt)
 
 	/* Get a proper queue */
 	TAILQ_INSERT_TAIL (&expire->head, elt, entry);
+	//msg_info ("insert elt: %p", elt);
 }
 /**
  * Delete an element from expire queue
@@ -472,11 +477,11 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 		else {
 			/* This element is already expired */
 			storage->cache->steal_func (storage->cache, elt);
-			/* Free memory */
-			g_slice_free1 (ELT_SIZE (elt), elt);
-			storage->memory -= ELT_SIZE (oldest_elt);
+			storage->memory -= ELT_SIZE (elt);
 			storage->elts --;
 			TAILQ_REMOVE (&expire->head, elt, entry);
+			/* Free memory */
+			g_slice_free1 (ELT_SIZE (elt), elt);
 			res = TRUE;
 			/* Check other elements in this queue */
 			TAILQ_FOREACH_SAFE (elt, &expire->head, entry, temp) {
@@ -486,9 +491,10 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 				storage->memory -= ELT_SIZE (elt);
 				storage->elts --;
 				storage->cache->steal_func (storage->cache, elt);
+				TAILQ_REMOVE (&expire->head, elt, entry);
 				/* Free memory */
 				g_slice_free1 (ELT_SIZE (elt), elt);
-				TAILQ_REMOVE (&expire->head, elt, entry);
+
 			}
 		}
 	}
@@ -497,6 +503,7 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 		storage->memory -= ELT_SIZE (oldest_elt);
 		storage->elts --;
 		storage->cache->steal_func (storage->cache, oldest_elt);
+		TAILQ_REMOVE (&expire->head, oldest_elt, entry);
 		/* Free memory */
 		if ((oldest_elt->flags & KV_ELT_DIRTY) != 0) {
 			oldest_elt->flags |= KV_ELT_NEED_FREE;
@@ -504,7 +511,7 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 		else {
 			g_slice_free1 (ELT_SIZE (oldest_elt), oldest_elt);
 		}
-		TAILQ_REMOVE (&expire->head, oldest_elt, entry);
+		//msg_info ("remove elt: %p, prev: %p, next: %p", oldest_elt, TAILQ_PREV (oldest_elt, eltq, entry), TAILQ_NEXT (oldest_elt, entry));
 	}
 
 	return TRUE;
