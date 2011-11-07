@@ -31,7 +31,6 @@
 #include "kvstorage_sqlite.h"
 #endif
 
-#define LRU_QUEUES 32
 
 /* Global hash of storages indexed by id */
 GHashTable *storages = NULL;
@@ -92,6 +91,14 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 	case KVSTORAGE_TYPE_CACHE_RADIX:
 		cache = rspamd_kv_radix_new ();
 		break;
+#ifdef WITH_JUDY
+	case KVSTORAGE_TYPE_CACHE_JUDY:
+		cache = rspamd_kv_judy_new ();
+		break;
+#endif
+	default:
+		msg_err ("unknown cache type, internal error");
+		return;
 	}
 
 	switch (kconf->backend.type) {
@@ -113,7 +120,7 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 
 	switch (kconf->expire.type) {
 	case KVSTORAGE_TYPE_EXPIRE_LRU:
-		expire = rspamd_lru_expire_new (LRU_QUEUES);
+		expire = rspamd_lru_expire_new ();
 		break;
 	}
 
@@ -360,6 +367,11 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 		else if (g_ascii_strncasecmp (text, "radix", MIN (text_len, sizeof ("radix") - 1)) == 0) {
 			kv_parser->current_storage->cache.type = KVSTORAGE_TYPE_CACHE_RADIX;
 		}
+#ifdef WITH_JUDY
+		else if (g_ascii_strncasecmp (text, "judy", MIN (text_len, sizeof ("judy") - 1)) == 0) {
+			kv_parser->current_storage->cache.type = KVSTORAGE_TYPE_CACHE_JUDY;
+		}
+#endif
 		else {
 			if (*error == NULL) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "invalid cache type: %*s", (int)text_len, text);

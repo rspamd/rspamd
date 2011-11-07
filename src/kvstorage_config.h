@@ -31,7 +31,11 @@
 /* Type of kvstorage cache */
 enum kvstorage_cache_type {
 	KVSTORAGE_TYPE_CACHE_HASH,
-	KVSTORAGE_TYPE_CACHE_RADIX
+	KVSTORAGE_TYPE_CACHE_RADIX,
+#ifdef WITH_JUDY
+	KVSTORAGE_TYPE_CACHE_JUDY,
+#endif
+	KVSTORAGE_TYPE_MAX = 255
 };
 
 /* Type of kvstorage backend */

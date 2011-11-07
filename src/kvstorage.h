@@ -54,7 +54,7 @@ typedef void (*backend_destroy)(struct rspamd_kv_backend *backend);
 typedef void (*expire_init)(struct rspamd_kv_expire *expire);
 typedef void (*expire_insert)(struct rspamd_kv_expire *expire, struct rspamd_kv_element *elt);
 typedef void (*expire_delete)(struct rspamd_kv_expire *expire, struct rspamd_kv_element *elt);
-typedef gboolean (*expire_step)(struct rspamd_kv_expire *expire, struct rspamd_kv_storage *storage, time_t now);
+typedef gboolean (*expire_step)(struct rspamd_kv_expire *expire, struct rspamd_kv_storage *storage, time_t now, gboolean forced);
 typedef void (*expire_destroy)(struct rspamd_kv_expire *expire);
 
 
@@ -164,7 +164,7 @@ gboolean rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointe
 /**
  * LRU expire
  */
-struct rspamd_kv_expire* rspamd_lru_expire_new (guint queues);
+struct rspamd_kv_expire* rspamd_lru_expire_new ();
 
 /**
  * Ordinary hash
@@ -176,5 +176,11 @@ struct rspamd_kv_cache* rspamd_kv_hash_new (void);
  */
 struct rspamd_kv_cache* rspamd_kv_radix_new (void);
 
+#ifdef WITH_JUDY
+/**
+ * Judy tree
+ */
+struct rspamd_kv_cache* rspamd_kv_judy_new (void);
+#endif
 
 #endif /* KVSTORAGE_H_ */
