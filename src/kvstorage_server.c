@@ -204,7 +204,7 @@ parse_kvstorage_command (struct kvstorage_session *session, f_str_t *in)
 							state = 100;
 							continue;
 						}
-						if (g_ascii_strncasecmp (c, "sync", 4) == 0) {
+						if (g_ascii_strncasecmp (c, "sync", 4) == 0 || g_ascii_strncasecmp (c, "save", 4) == 0) {
 							session->command = KVSTORAGE_CMD_SYNC;
 							state = 100;
 							continue;
@@ -214,7 +214,12 @@ parse_kvstorage_command (struct kvstorage_session *session, f_str_t *in)
 						if (g_ascii_strncasecmp (c, "delete", 6) == 0) {
 							session->command = KVSTORAGE_CMD_DELETE;
 						}
-
+						else if (g_ascii_strncasecmp (c, "select", 6) == 0) {
+							session->command = KVSTORAGE_CMD_SELECT;
+							state = 99;
+							next_state = 6;
+							continue;
+						}
 						else {
 							return FALSE;
 						}
@@ -311,6 +316,21 @@ parse_kvstorage_command (struct kvstorage_session *session, f_str_t *in)
 				}
 			}
 			break;
+		case 6:
+			/* Read index of storage */
+			if (g_ascii_isdigit (*p)) {
+				p ++;
+			}
+			else {
+				if (g_ascii_isspace (*p) || end == p) {
+					session->id = strtoul (c, NULL, 10);
+					state = 100;
+				}
+				else {
+					return FALSE;
+				}
+			}
+			break;
 		case 99:
 			/* Skip spaces state */
 			if (g_ascii_isspace (*p)) {
@@ -374,8 +394,14 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 			session->cf = get_kvstorage_config (session->id);
 			if (session->cf == NULL) {
 				thr_info ("%ud: bad keystorage: %ud", thr->id, session->id);
-				return rspamd_dispatcher_write (session->dispather, ERROR_INVALID_KEYSTORAGE,
+				if (!is_redis) {
+					return rspamd_dispatcher_write (session->dispather, ERROR_INVALID_KEYSTORAGE,
 						sizeof (ERROR_INVALID_KEYSTORAGE) - 1, FALSE, TRUE);
+				}
+				else {
+					return rspamd_dispatcher_write (session->dispather, "-ERR unknown keystorage" CRLF,
+						sizeof ("-ERR unknown keystorage" CRLF) - 1, FALSE, TRUE);
+				}
 			}
 			if (session->command == KVSTORAGE_CMD_SET) {
 				session->state = KVSTORAGE_STATE_READ_DATA;
@@ -494,6 +520,16 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 					}
 				}
 				g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
+			}
+			else if (session->command == KVSTORAGE_CMD_SELECT) {
+				if (!is_redis) {
+					return rspamd_dispatcher_write (session->dispather, "SELECTED" CRLF,
+												sizeof ("SELECTED" CRLF) - 1, FALSE, TRUE);
+				}
+				else {
+					return rspamd_dispatcher_write (session->dispather, "+OK" CRLF,
+							sizeof ("+OK" CRLF) - 1, FALSE, TRUE);
+				}
 			}
 			else if (session->command == KVSTORAGE_CMD_QUIT) {
 				/* Quit session */
