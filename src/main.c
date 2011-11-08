@@ -615,9 +615,16 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	if (waitpid (w->pid, &res, 0) == -1) {
 		if (errno == EINTR) {
-			msg_info ("terminate worker %P with SIGKILL", w->pid);
-			kill (w->pid, SIGKILL);
 			got_alarm = 1;
+			if (w->type != TYPE_KVSTORAGE) {
+				msg_info ("terminate worker %P with SIGKILL", w->pid);
+				kill (w->pid, SIGKILL);
+			}
+			else {
+				msg_info ("waiting for storages to sync");
+				wait_for_workers (key, value, unused);
+				return TRUE;
+			}
 		}
 	}
 

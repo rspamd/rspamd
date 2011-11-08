@@ -262,7 +262,7 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, struct rs
 	g_queue_push_head (db->ops_queue, op);
 	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
-	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return sqlite_process_queue (backend);
 	}
 
@@ -287,7 +287,7 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct r
 	g_queue_push_head (db->ops_queue, op);
 	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
 
-	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return sqlite_process_queue (backend);
 	}
 
@@ -357,7 +357,7 @@ rspamd_sqlite_delete (struct rspamd_kv_backend *backend, gpointer key)
 	g_queue_push_head (db->ops_queue, op);
 	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
 
-	if (g_queue_get_length (db->ops_queue) >= db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		sqlite_process_queue (backend);
 	}
 

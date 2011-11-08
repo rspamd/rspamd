@@ -790,6 +790,7 @@ start_kvstorage_worker (struct rspamd_worker *worker)
 		}
 	}
 
+	msg_info ("syncing storages");
 	destroy_kvstorage_config ();
 	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
