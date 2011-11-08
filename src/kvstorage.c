@@ -443,7 +443,6 @@ rspamd_lru_insert (struct rspamd_kv_expire *e, struct rspamd_kv_element *elt)
 
 	/* Get a proper queue */
 	TAILQ_INSERT_TAIL (&expire->head, elt, entry);
-	//msg_info ("insert elt: %p", elt);
 }
 /**
  * Delete an element from expire queue
@@ -511,7 +510,6 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 		else {
 			g_slice_free1 (ELT_SIZE (oldest_elt), oldest_elt);
 		}
-		//msg_info ("remove elt: %p, prev: %p, next: %p", oldest_elt, TAILQ_PREV (oldest_elt, eltq, entry), TAILQ_NEXT (oldest_elt, entry));
 	}
 
 	return TRUE;
@@ -575,7 +573,7 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 
 	if ((elt = g_hash_table_lookup (cache->hash, key)) == NULL) {
 		keylen = strlen (key);
-		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
+		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
@@ -594,7 +592,7 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 			g_slice_free1 (ELT_SIZE (elt), elt);
 		}
 		keylen = strlen (key);
-		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
+		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
@@ -757,11 +755,32 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
 	if (rkey == 0) {
 		return NULL;
 	}
+
 	elt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
 	if ((uintptr_t)elt == RADIX_NO_VALUE) {
 		keylen = strlen (key);
-		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
+		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
+		elt->keylen = keylen;
+		elt->size = len;
+		elt->hash = rkey;
+		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_DATA (elt), value, len);
+		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
+	}
+	else {
+		radix32tree_delete (cache->tree, rkey, 0xffffffff);
+		if ((elt->flags & KV_ELT_DIRTY) != 0) {
+			elt->flags |= KV_ELT_NEED_FREE;
+		}
+		else {
+			/* Free it by self */
+			g_slice_free1 (ELT_SIZE (elt), elt);
+		}
+		keylen = strlen (key);
+		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
+		elt->age = time (NULL);
+		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rkey;
 		memcpy (elt->data, key, keylen + 1);
@@ -798,10 +817,24 @@ rspamd_kv_radix_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_
 {
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
 	guint32								 rkey = rspamd_kv_radix_validate (key);
+	struct rspamd_kv_element 			*oldelt;
 
-	radix32tree_replace (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
+	oldelt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
+	if ((uintptr_t)oldelt != RADIX_NO_VALUE) {
+		radix32tree_delete (cache->tree, rkey, 0xffffffff);
 
-	return TRUE;
+		if ((oldelt->flags & KV_ELT_DIRTY) != 0) {
+			oldelt->flags |= KV_ELT_NEED_FREE;
+		}
+		else {
+			/* Free it by self */
+			g_slice_free1 (ELT_SIZE (oldelt), oldelt);
+		}
+		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 /**
@@ -944,7 +977,7 @@ rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 
 	if ((elt = rspamd_kv_judy_lookup (c, key)) == NULL) {
 		keylen = strlen (key);
-		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
+		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
