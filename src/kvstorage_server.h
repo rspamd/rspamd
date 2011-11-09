@@ -59,6 +59,8 @@ struct kvstorage_session {
 	rspamd_io_dispatcher_t *dispather;
 	enum {
 		KVSTORAGE_STATE_READ_CMD,
+		KVSTORAGE_STATE_READ_ARGLEN,
+		KVSTORAGE_STATE_READ_ARG,
 		KVSTORAGE_STATE_READ_DATA
 	} state;
 	enum {
@@ -70,6 +72,8 @@ struct kvstorage_session {
 		KVSTORAGE_CMD_QUIT
 	} command;
 	guint id;
+	guint argc;
+	guint argnum;
 	memory_pool_t *pool;
 	gchar *key;
 	struct kvstorage_config *cf;
