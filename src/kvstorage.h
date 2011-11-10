@@ -64,10 +64,12 @@ enum rspamd_kv_flags {
 	KV_ELT_PERSISTENT = 1 << 1,
 	KV_ELT_DIRTY = 1 << 2,
 	KV_ELT_OUSTED = 1 << 3,
-	KV_ELT_NEED_FREE = 1 << 4
+	KV_ELT_NEED_FREE = 1 << 4,
+	KV_ELT_INTEGER = 1 << 5
 };
 
 #define ELT_DATA(elt) (gchar *)(elt)->data + (elt)->keylen + 1
+#define ELT_LONG(elt) *((glong *)((elt)->data + (elt)->keylen + 1))
 #define ELT_KEY(elt) (gchar *)(elt)->data
 #define ELT_SIZE(elt) elt->size + sizeof(struct rspamd_kv_element) + elt->keylen + 1
 
@@ -140,6 +142,9 @@ gboolean rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer k
 
 /** Replace an element in the kv storage */
 gboolean rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, struct rspamd_kv_element *elt);
+
+/** Increment value in kvstorage */
+gboolean rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, glong *value);
 
 /** Lookup an element inside kv storage */
 struct rspamd_kv_element* rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_t now);

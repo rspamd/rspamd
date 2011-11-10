@@ -248,4 +248,14 @@ void free_task_soft (gpointer ud);
  */
 gchar* rspamd_strncasestr (const gchar *s, const gchar *find, gint len);
 
+/*
+ * Try to convert string of length to long
+ */
+gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
+
+/*
+ * Try to convert string of length to unsigned long
+ */
+gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
+
 #endif

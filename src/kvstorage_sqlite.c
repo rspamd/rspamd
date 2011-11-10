@@ -254,13 +254,24 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, struct rs
 		return FALSE;
 	}
 
-	op = g_slice_alloc (sizeof (struct sqlite_op));
-	op->op = SQLITE_OP_INSERT;
-	op->elt = elt;
-	elt->flags |= KV_ELT_DIRTY;
+	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+		/* We found another op with such key in this queue */
+		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
+			/* Also clean memory */
+			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
+		}
+		op->op = SQLITE_OP_INSERT;
+		op->elt = elt;
+	}
+	else {
+		op = g_slice_alloc (sizeof (struct sqlite_op));
+		op->op = SQLITE_OP_INSERT;
+		op->elt = elt;
+		elt->flags |= KV_ELT_DIRTY;
 
-	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+		g_queue_push_head (db->ops_queue, op);
+		g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+	}
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return sqlite_process_queue (backend);
@@ -278,14 +289,24 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct r
 	if (!db->initialized) {
 		return FALSE;
 	}
+	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+		/* We found another op with such key in this queue */
+		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
+			/* Also clean memory */
+			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
+		}
+		op->op = SQLITE_OP_REPLACE;
+		op->elt = elt;
+	}
+	else {
+		op = g_slice_alloc (sizeof (struct sqlite_op));
+		op->op = SQLITE_OP_REPLACE;
+		op->elt = elt;
+		elt->flags |= KV_ELT_DIRTY;
 
-	op = g_slice_alloc (sizeof (struct sqlite_op));
-	op->op = SQLITE_OP_REPLACE;
-	op->elt = elt;
-	elt->flags |= KV_ELT_DIRTY;
-
-	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+		g_queue_push_head (db->ops_queue, op);
+		g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+	}
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return sqlite_process_queue (backend);

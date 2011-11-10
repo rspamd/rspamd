@@ -69,6 +69,8 @@ struct kvstorage_session {
 		KVSTORAGE_CMD_DELETE,
 		KVSTORAGE_CMD_SYNC,
 		KVSTORAGE_CMD_SELECT,
+		KVSTORAGE_CMD_INCR,
+		KVSTORAGE_CMD_DECR,
 		KVSTORAGE_CMD_QUIT
 	} command;
 	guint id;
@@ -83,7 +85,10 @@ struct kvstorage_session {
 	gint sock;
 	guint flags;
 	guint expire;
-	guint length;
+	union {
+		glong value;
+		guint length;
+	} arg_data;
 	time_t now;
 };
 

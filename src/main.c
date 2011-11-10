@@ -1050,7 +1050,8 @@ main (gint argc, gchar **argv, gchar **env)
 		print_signals_info ();
 #endif
 		if (do_terminate) {
-			msg_debug ("catch termination signal, waiting for childs");
+			do_terminate = 0;
+			msg_info ("catch termination signal, waiting for childs");
 			pass_signal_worker (rspamd_main->workers, SIGTERM);
 			break;
 		}

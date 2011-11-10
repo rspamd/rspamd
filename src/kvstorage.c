@@ -136,6 +136,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	gint 								steps = 0;
 	struct rspamd_kv_element           *elt;
 	gboolean							res = TRUE;
+	glong								longval;
 
 	/* Hard limit */
 	if (storage->max_memory > 0) {
@@ -177,12 +178,25 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	}
 
 	/* Insert elt to the cache */
-	elt = storage->cache->insert_func (storage->cache, key, data, len);
-	if (elt == NULL) {
-		return FALSE;
+
+	/* First of all check element for integer */
+	if (rspamd_strtol (data, len, &longval)) {
+		elt = storage->cache->insert_func (storage->cache, key, &longval, sizeof (glong));
+		if (elt == NULL) {
+			return FALSE;
+		}
+		else {
+			elt->flags |= KV_ELT_INTEGER;
+		}
 	}
-	elt->flags = flags;
-	elt->size = len;
+	else {
+		elt = storage->cache->insert_func (storage->cache, key, data, len);
+		if (elt == NULL) {
+			return FALSE;
+		}
+	}
+
+	elt->flags |= flags;
 	elt->expire = expire;
 	if (expire == 0) {
 		elt->flags |= KV_ELT_PERSISTENT;
@@ -243,6 +257,45 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, stru
 	}
 
 	return res;
+}
+
+/** Increment value in kvstorage */
+gboolean
+rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, glong *value)
+{
+	struct rspamd_kv_element			*elt = NULL, *belt;
+	glong								*lp;
+
+	/* First try to look at cache */
+	elt = storage->cache->lookup_func (storage->cache, key);
+
+	if (elt == NULL && storage->backend) {
+		belt = storage->backend->lookup_func (storage->backend, key);
+		if (belt) {
+			/* Put this element into cache */
+			if ((belt->flags & KV_ELT_INTEGER) != 0) {
+				rspamd_kv_storage_insert_internal (storage, ELT_KEY (belt), ELT_DATA (belt),
+					belt->size, belt->flags,
+					belt->expire, &elt);
+			}
+			if ((belt->flags & KV_ELT_DIRTY) == 0) {
+				g_free (belt);
+			}
+		}
+	}
+	if (elt && (elt->flags & KV_ELT_INTEGER) != 0) {
+		lp = &ELT_LONG (elt);
+		*lp += *value;
+		*value = *lp;
+		if (storage->backend) {
+			return storage->backend->replace_func (storage->backend, key, elt);
+		}
+		else {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 /** Lookup an element inside kv storage */
@@ -578,6 +631,7 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rspamd_strcase_hash (key);
+		elt->flags = 0;
 		memcpy (elt->data, key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
 		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
@@ -596,6 +650,7 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
+		elt->flags = 0;
 		elt->hash = rspamd_strcase_hash (key);
 		memcpy (elt->data, key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
@@ -764,6 +819,7 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
 		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rkey;
+		elt->flags = 0;
 		memcpy (elt->data, key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
 		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
@@ -783,6 +839,7 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
 		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rkey;
+		elt->flags = 0;
 		memcpy (elt->data, key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
 		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
@@ -982,6 +1039,7 @@ rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rspamd_strcase_hash (key);
+		elt->flags = 0;
 		memcpy (elt->data, key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
 		JHSI (pelt, cache->judy, ELT_KEY (elt), elt->keylen);
@@ -1002,6 +1060,7 @@ rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 		elt->keylen = keylen;
 		elt->size = len;
 		elt->hash = rspamd_strcase_hash (key);
+		elt->flags = 0;
 		memcpy (elt->data, key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
 		JHSI (pelt, cache->judy, ELT_KEY (elt), elt->keylen);

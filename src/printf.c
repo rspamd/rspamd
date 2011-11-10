@@ -468,9 +468,9 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 
 			case 'l':
 				if (sign) {
-					i64 = (gint64) va_arg(args, long);
+					i64 = (gint64) va_arg(args, glong);
 				} else {
-					ui64 = (guint64) va_arg(args, guint32);
+					ui64 = (guint64) va_arg(args, gulong);
 				}
 				break;
 

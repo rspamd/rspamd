@@ -1504,5 +1504,87 @@ rspamd_strncasestr (const gchar *s, const gchar *find, gint len)
 }
 
 /*
+ * Try to convert string of length to long
+ */
+gboolean
+rspamd_strtol (const gchar *s, gsize len, glong *value)
+{
+	const gchar                    *p = s, *end = s + len;
+	gchar							c;
+	glong							v = 0;
+	const glong						cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
+	gboolean                        neg;
+
+	/* Case negative values */
+	if (*p == '-') {
+		neg = TRUE;
+		p ++;
+	}
+	else {
+		neg = FALSE;
+	}
+	/* Some preparations for range errors */
+
+	while (p < end) {
+		c = *p;
+		if (c >= '0' && c <= '9') {
+			c -= '0';
+			if (v > cutoff || (v == cutoff && c > cutlim)) {
+				/* Range error */
+				*value = neg ? G_MINLONG : G_MAXLONG;
+				return FALSE;
+			}
+			else {
+				v *= 10;
+				v += c;
+			}
+		}
+		else {
+			return FALSE;
+		}
+		p ++;
+	}
+
+	*value = neg ? -(v) : v;
+	return TRUE;
+}
+
+/*
+ * Try to convert string of length to long
+ */
+gboolean
+rspamd_strtoul (const gchar *s, gsize len, gulong *value)
+{
+	const gchar                    *p = s, *end = s + len;
+	gchar							c;
+	gulong							v = 0;
+	const gulong					cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
+
+	/* Some preparations for range errors */
+	while (p < end) {
+		c = *p;
+		if (c >= '0' && c <= '9') {
+			c -= '0';
+			if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) {
+				/* Range error */
+				*value = G_MAXULONG;
+				return FALSE;
+			}
+			else {
+				v *= 10;
+				v += c;
+			}
+		}
+		else {
+			return FALSE;
+		}
+		p ++;
+	}
+
+	*value = v;
+	return TRUE;
+}
+
+/*
  * vi:ts=4
  */
