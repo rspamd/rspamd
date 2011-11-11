@@ -386,7 +386,7 @@ gsize parse_limit (const gchar *limit, guint len);
  * @param default_type dimension of time if no suffix is specified
  * @return value of time in milliseconds
  */
-guint parse_time (const gchar *t, enum time_type default_type);
+guint cfg_parse_time (const gchar *t, enum time_type default_type);
 
 /**
  * Parse flag

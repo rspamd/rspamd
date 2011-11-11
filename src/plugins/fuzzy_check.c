@@ -395,7 +395,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 		fuzzy_module_ctx->min_width = 0;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "timeout")) != NULL) {
-		fuzzy_module_ctx->io_timeout = parse_time (value, TIME_SECONDS);
+		fuzzy_module_ctx->io_timeout = cfg_parse_time (value, TIME_SECONDS);
 	}
 	else {
 		fuzzy_module_ctx->io_timeout = DEFAULT_IO_TIMEOUT;
