@@ -304,7 +304,7 @@ parse_limit (const gchar *limit, guint len)
 }
 
 guint
-parse_time (const gchar *t, enum time_type default_type)
+cfg_parse_time (const gchar *t, enum time_type default_type)
 {
 	union {
 		guint                       i;

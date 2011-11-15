@@ -1441,7 +1441,7 @@ handle_statfile_binlog_rotate (struct config_file *cfg, struct rspamd_xml_userda
 	if (st->binlog == NULL) {
 		st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 	}
-	st->binlog->rotate_time = parse_time (data, TIME_SECONDS);
+	st->binlog->rotate_time = cfg_parse_time (data, TIME_SECONDS);
 	
 	return TRUE;
 }
@@ -1537,7 +1537,7 @@ xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	guint32                      *dest;
 
 	dest = (guint32 *)G_STRUCT_MEMBER_P (dest_struct, offset);
-	*dest = parse_time (data, TIME_SECONDS);
+	*dest = cfg_parse_time (data, TIME_SECONDS);
 	
 	return TRUE;
 }
@@ -2153,7 +2153,7 @@ check_module_option (const gchar *mname, const gchar *optname, const gchar *data
 		}
 		break;
 	case MODULE_OPT_TYPE_TIME:
-		(void)parse_time (data, TIME_SECONDS);
+		(void)cfg_parse_time (data, TIME_SECONDS);
 		if (errno != 0) {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s': %s", optname, mname, strerror (errno));
 			return FALSE;

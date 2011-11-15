@@ -120,7 +120,7 @@ spf_module_config (struct config_file *cfg)
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
 	if ((value = get_module_opt (cfg, "spf", "spf_cache_expire")) != NULL) {
-		cache_expire = parse_time (value, TIME_SECONDS) / 1000;
+		cache_expire = cfg_parse_time (value, TIME_SECONDS) / 1000;
 	}
 	else {
 		cache_expire = DEFAULT_CACHE_MAXAGE;
