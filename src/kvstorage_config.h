@@ -41,6 +41,7 @@ enum kvstorage_cache_type {
 /* Type of kvstorage backend */
 enum kvstorage_backend_type {
 	KVSTORAGE_TYPE_BACKEND_NULL = 0,
+	KVSTORAGE_TYPE_BACKEND_FILE,
 #ifdef WITH_DB
 	KVSTORAGE_TYPE_BACKEND_BDB,
 #endif

@@ -22,17 +22,14 @@
  */
 
 
-#ifndef KVSTORAGE_SQLITE_H_
-#define KVSTORAGE_SQLITE_H_
+#ifndef KVSTORAGE_FILE_H_
+#define KVSTORAGE_FILE_H_
 
 #include "config.h"
 #include "kvstorage.h"
 
-#ifdef WITH_SQLITE
+/* Create new file backend */
+struct rspamd_kv_backend* rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels);
 
-/* Create new sqlite backend */
-struct rspamd_kv_backend* rspamd_kv_sqlite_new (const gchar *filename, guint sync_ops);
 
-#endif
-
-#endif /* KVSTORAGE_SQLITE_H_ */
+#endif /* KVSTORAGE_FILE_H_ */

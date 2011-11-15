@@ -30,6 +30,9 @@
 #ifdef WITH_SQLITE
 #include "kvstorage_sqlite.h"
 #endif
+#include "kvstorage_file.h"
+
+#define FILE_STORAGE_LEVELS 3
 
 
 /* Global hash of storages indexed by id */
@@ -105,6 +108,9 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 	case KVSTORAGE_TYPE_BACKEND_NULL:
 	case KVSTORAGE_TYPE_BACKEND_MAX:
 		backend = NULL;
+		break;
+	case KVSTORAGE_TYPE_BACKEND_FILE:
+		backend = rspamd_kv_file_new (kconf->backend.filename, kconf->backend.sync_ops, FILE_STORAGE_LEVELS);
 		break;
 #ifdef WITH_DB
 	case KVSTORAGE_TYPE_BACKEND_BDB:
@@ -382,6 +388,9 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 	case KVSTORAGE_STATE_BACKEND_TYPE:
 		if (g_ascii_strncasecmp (text, "null", MIN (text_len, sizeof ("null") - 1)) == 0) {
 			kv_parser->current_storage->backend.type = KVSTORAGE_TYPE_BACKEND_NULL;
+		}
+		else if (g_ascii_strncasecmp (text, "file", MIN (text_len, sizeof ("file") - 1)) == 0) {
+			kv_parser->current_storage->backend.type = KVSTORAGE_TYPE_BACKEND_FILE;
 		}
 #ifdef WITH_DB
 		else if (g_ascii_strncasecmp (text, "bdb", MIN (text_len, sizeof ("bdb") - 1)) == 0) {
