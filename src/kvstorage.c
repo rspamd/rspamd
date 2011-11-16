@@ -140,14 +140,30 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 
 	/* Hard limit */
 	if (storage->max_memory > 0) {
-		if (len > storage->max_memory) {
-			msg_info ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
+		if (len + sizeof (struct rspamd_kv_element) >= storage->max_memory) {
+			msg_warn ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
 					len, storage->max_memory);
 			return FALSE;
 		}
 
 		/* Now check limits */
-		while (storage->memory + len > storage->max_memory || storage->elts >= storage->max_elts) {
+		while (storage->memory + len > storage->max_memory) {
+			if (storage->expire) {
+				storage->expire->step_func (storage->expire, storage, time (NULL), steps);
+			}
+			else {
+				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
+			}
+			if (++steps > MAX_EXPIRE_STEPS) {
+				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
+				return FALSE;
+			}
+		}
+	}
+	if (storage->max_elts > 0 && storage->elts > storage->max_elts) {
+		/* More expire */
+		steps = 0;
+		while (storage->elts > storage->max_elts) {
 			if (storage->expire) {
 				storage->expire->step_func (storage->expire, storage, time (NULL), steps);
 			}
@@ -167,6 +183,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 		if (storage->expire) {
 			storage->expire->delete_func (storage->expire, elt);
 		}
+		storage->memory -= ELT_SIZE (elt);
 		storage->cache->steal_func (storage->cache, elt);
 		if (elt->flags & KV_ELT_DIRTY) {
 			/* Element is in backend storage queue */
@@ -213,7 +230,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	}
 
 	storage->elts ++;
-	storage->memory += len + sizeof (struct rspamd_kv_element);
+	storage->memory += ELT_SIZE (elt);
 
 	return res;
 }
@@ -537,7 +554,8 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 			res = TRUE;
 			/* Check other elements in this queue */
 			TAILQ_FOREACH_SAFE (elt, &expire->head, entry, temp) {
-				if ((elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) != 0 || elt->expire < (now - elt->age)) {
+				if ((!forced &&
+					(elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) != 0) || elt->expire < (now - elt->age)) {
 					break;
 				}
 				storage->memory -= ELT_SIZE (elt);
