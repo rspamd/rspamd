@@ -120,6 +120,10 @@
 
 #cmakedefine HAVE_MMAP_NOCORE    1
 
+#cmakedefine HAVE_O_DIRECT       1
+
+#cmakedefine HAVE_FADVISE        1
+#cmakedefine HAVE_FDATASYNC      1
 #cmakedefine HAVE_COMPATIBLE_QUEUE_H    1
 
 #cmakedefine HAVE_SC_NPROCESSORS_ONLN 1

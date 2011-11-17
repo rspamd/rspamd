@@ -93,7 +93,7 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, gpointer k
 		}
 
 		/* Now check limits */
-		while (storage->memory + len > storage->max_memory || storage->elts >= storage->max_elts) {
+		while (storage->memory + len > storage->max_memory) {
 			if (storage->expire) {
 				storage->expire->step_func (storage->expire, storage, time (NULL), steps);
 			}
