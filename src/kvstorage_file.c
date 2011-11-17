@@ -63,7 +63,7 @@ static gboolean
 get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *filebuf, guint buflen)
 {
 	gchar										*p = filebuf, *end = filebuf + buflen,
-												*k = key;
+												*k = key, t;
 	guint										 i;
 
 	/* First copy backend dirname to file buf */
@@ -84,13 +84,18 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 	}
 	/* Now we have directory, append base64 encoded filename */
 	k = key;
-	if (end - p < (keylen / 3 + 1) * 4 + 4 + 1) {
+	if (end - p < keylen * 2 + 1) {
 		/* Filebuf is not large enough */
 		return FALSE;
 	}
 
 	i = 0;
-	p += g_base64_encode_step (key, keylen, FALSE, p, &i, &i);
+	while (k < key + keylen) {
+		t = *k;
+		*p++ = hexdigits[(t >> 4) & 0xf];
+		*p++ = hexdigits[t & 0xf];
+		k ++;
+	}
 	*p = '\0';
 
 	return TRUE;
