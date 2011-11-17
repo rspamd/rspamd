@@ -34,19 +34,19 @@ struct rspamd_kv_element;
 
 /* Callbacks for cache */
 typedef void (*cache_init)(struct rspamd_kv_cache *cache);
-typedef struct rspamd_kv_element* (*cache_insert)(struct rspamd_kv_cache *cache, gpointer key, gpointer value, gsize len);
-typedef gboolean (*cache_replace)(struct rspamd_kv_cache *cache, gpointer key, struct rspamd_kv_element *elt);
-typedef struct rspamd_kv_element* (*cache_lookup)(struct rspamd_kv_cache *cache, gpointer key);
-typedef struct rspamd_kv_element* (*cache_delete)(struct rspamd_kv_cache *cache, gpointer key);
+typedef struct rspamd_kv_element* (*cache_insert)(struct rspamd_kv_cache *cache, gpointer key, guint keylen, gpointer value, gsize len);
+typedef gboolean (*cache_replace)(struct rspamd_kv_cache *cache, gpointer key, guint keylen, struct rspamd_kv_element *elt);
+typedef struct rspamd_kv_element* (*cache_lookup)(struct rspamd_kv_cache *cache, gpointer key, guint keylen);
+typedef struct rspamd_kv_element* (*cache_delete)(struct rspamd_kv_cache *cache, gpointer key, guint keylen);
 typedef void (*cache_steal)(struct rspamd_kv_cache *cache, struct rspamd_kv_element* elt);
 typedef void (*cache_destroy)(struct rspamd_kv_cache *cache);
 
 /* Callbacks for backend */
 typedef void (*backend_init)(struct rspamd_kv_backend *backend);
-typedef gboolean (*backend_insert)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
-typedef gboolean (*backend_replace)(struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt);
-typedef struct rspamd_kv_element* (*backend_lookup)(struct rspamd_kv_backend *backend, gpointer key);
-typedef void (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key);
+typedef gboolean (*backend_insert)(struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt);
+typedef gboolean (*backend_replace)(struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt);
+typedef struct rspamd_kv_element* (*backend_lookup)(struct rspamd_kv_backend *backend, gpointer key, guint keylen);
+typedef void (*backend_delete)(struct rspamd_kv_backend *backend, gpointer key, guint keylen);
 typedef gboolean (*backend_sync)(struct rspamd_kv_backend *backend);
 typedef void (*backend_destroy)(struct rspamd_kv_backend *backend);
 
@@ -81,9 +81,9 @@ struct rspamd_kv_element {
 	enum rspamd_kv_flags flags;					/*< element flags  */
 	gsize size;									/*< size of element */
 	TAILQ_ENTRY (rspamd_kv_element) entry;		/*< list entry */
-	guint32 hash;								/*< numeric hash */
 	guint keylen;								/*< length of key */
 
+	gpointer p;									/*< pointer to data */
 	gchar data[1];								/*< expandable data */
 };
 
@@ -138,33 +138,37 @@ struct rspamd_kv_storage *rspamd_kv_storage_new (gint id, const gchar *name,
 		gsize max_elts, gsize max_memory);
 
 /** Insert new element to the kv storage */
-gboolean rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, gpointer data, gsize len, gint flags, guint expire);
+gboolean rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint keylen, gpointer data, gsize len, gint flags, guint expire);
 
 /** Replace an element in the kv storage */
-gboolean rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, struct rspamd_kv_element *elt);
+gboolean rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, guint keylen, struct rspamd_kv_element *elt);
 
 /** Increment value in kvstorage */
-gboolean rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, glong *value);
+gboolean rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, guint keylen, glong *value);
 
 /** Lookup an element inside kv storage */
-struct rspamd_kv_element* rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_t now);
+struct rspamd_kv_element* rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, guint keylen, time_t now);
 
 /** Expire an element from kv storage */
-struct rspamd_kv_element* rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key);
+struct rspamd_kv_element* rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key, guint keylen);
 
 /** Destroy kv storage */
 void rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage);
 
 /** Insert array */
-gboolean rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key, guint elt_size, gpointer data, gsize len, gint flags, guint expire);
+gboolean rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key, guint keylen, guint elt_size, gpointer data, gsize len, gint flags, guint expire);
 
 /** Set element inside array */
-gboolean rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key, guint elt_num,
+gboolean rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key, guint keylen, guint elt_num,
 		gpointer data, gsize len, time_t now);
 
 /** Get element inside array */
-gboolean rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key, guint elt_num,
+gboolean rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key, guint keylen, guint elt_num,
 		gpointer *data, gsize *len, time_t now);
+
+/* Hash table functions */
+guint kv_elt_hash_func (gconstpointer e);
+gboolean kv_elt_compare_func (gconstpointer e1, gconstpointer e2);
 
 /**
  * LRU expire

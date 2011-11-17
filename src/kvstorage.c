@@ -78,7 +78,7 @@ rspamd_kv_storage_new (gint id, const gchar *name, struct rspamd_kv_cache *cache
 
 /** Internal insertion to the kv storage from backend */
 gboolean
-rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, gpointer key,
+rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, gpointer key, guint keylen,
 		gpointer data, gsize len, gint flags, guint expire, struct rspamd_kv_element **pelt)
 {
 	gint 								steps = 0;
@@ -108,7 +108,7 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, gpointer k
 	}
 
 	/* Insert elt to the cache */
-	elt = storage->cache->insert_func (storage->cache, key, data, len);
+	elt = storage->cache->insert_func (storage->cache, key, keylen, data, len);
 	if (elt == NULL) {
 		return FALSE;
 	}
@@ -130,7 +130,7 @@ rspamd_kv_storage_insert_internal (struct rspamd_kv_storage *storage, gpointer k
 
 /** Insert new element to the kv storage */
 gboolean
-rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
+rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint keylen,
 		gpointer data, gsize len, gint flags, guint expire)
 {
 	gint 								steps = 0;
@@ -140,14 +140,14 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 
 	/* Hard limit */
 	if (storage->max_memory > 0) {
-		if (len + sizeof (struct rspamd_kv_element) >= storage->max_memory) {
+		if (len + sizeof (struct rspamd_kv_element) + keylen >= storage->max_memory) {
 			msg_warn ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
 					len, storage->max_memory);
 			return FALSE;
 		}
 
 		/* Now check limits */
-		while (storage->memory + len > storage->max_memory) {
+		while (storage->memory + len + keylen > storage->max_memory) {
 			if (storage->expire) {
 				storage->expire->step_func (storage->expire, storage, time (NULL), steps);
 			}
@@ -178,7 +178,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 	}
 
 	/* First try to search it in cache */
-	elt = storage->cache->lookup_func (storage->cache, key);
+	elt = storage->cache->lookup_func (storage->cache, key, keylen);
 	if (elt) {
 		if (storage->expire) {
 			storage->expire->delete_func (storage->expire, elt);
@@ -198,7 +198,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 
 	/* First of all check element for integer */
 	if (rspamd_strtol (data, len, &longval)) {
-		elt = storage->cache->insert_func (storage->cache, key, &longval, sizeof (glong));
+		elt = storage->cache->insert_func (storage->cache, key, keylen, &longval, sizeof (glong));
 		if (elt == NULL) {
 			return FALSE;
 		}
@@ -207,7 +207,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 		}
 	}
 	else {
-		elt = storage->cache->insert_func (storage->cache, key, data, len);
+		elt = storage->cache->insert_func (storage->cache, key, keylen, data, len);
 		if (elt == NULL) {
 			return FALSE;
 		}
@@ -221,7 +221,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 
 	/* Place to the backend */
 	if (storage->backend) {
-		res = storage->backend->insert_func (storage->backend, key, elt);
+		res = storage->backend->insert_func (storage->backend, key, keylen, elt);
 	}
 
 	/* Insert to the expire */
@@ -237,7 +237,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key,
 
 /** Replace an element in the kv storage */
 gboolean
-rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, struct rspamd_kv_element *elt)
+rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	gboolean						res = TRUE;
 	gint							steps = 0;
@@ -251,7 +251,7 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, stru
 		}
 
 		/* Now check limits */
-		while (storage->memory + elt->size > storage->max_memory) {
+		while (storage->memory + ELT_SIZE (elt) > storage->max_memory) {
 			if (storage->expire) {
 				storage->expire->step_func (storage->expire, storage, time (NULL), steps);
 			}
@@ -266,11 +266,11 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, stru
 	}
 
 	/* Insert elt to the cache */
-	res = storage->cache->replace_func (storage->cache, key, elt);
+	res = storage->cache->replace_func (storage->cache, key, keylen, elt);
 
 	/* Place to the backend */
 	if (res && storage->backend) {
-		res = storage->backend->replace_func (storage->backend, key, elt);
+		res = storage->backend->replace_func (storage->backend, key, keylen, elt);
 	}
 
 	return res;
@@ -278,20 +278,20 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, stru
 
 /** Increment value in kvstorage */
 gboolean
-rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, glong *value)
+rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, guint keylen, glong *value)
 {
 	struct rspamd_kv_element			*elt = NULL, *belt;
 	glong								*lp;
 
 	/* First try to look at cache */
-	elt = storage->cache->lookup_func (storage->cache, key);
+	elt = storage->cache->lookup_func (storage->cache, key, keylen);
 
 	if (elt == NULL && storage->backend) {
-		belt = storage->backend->lookup_func (storage->backend, key);
+		belt = storage->backend->lookup_func (storage->backend, key, keylen);
 		if (belt) {
 			/* Put this element into cache */
 			if ((belt->flags & KV_ELT_INTEGER) != 0) {
-				rspamd_kv_storage_insert_internal (storage, ELT_KEY (belt), ELT_DATA (belt),
+				rspamd_kv_storage_insert_internal (storage, ELT_KEY (belt), keylen, ELT_DATA (belt),
 					belt->size, belt->flags,
 					belt->expire, &elt);
 			}
@@ -305,7 +305,7 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gl
 		*lp += *value;
 		*value = *lp;
 		if (storage->backend) {
-			return storage->backend->replace_func (storage->backend, key, elt);
+			return storage->backend->replace_func (storage->backend, key, keylen, elt);
 		}
 		else {
 			return TRUE;
@@ -317,19 +317,19 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gl
 
 /** Lookup an element inside kv storage */
 struct rspamd_kv_element*
-rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_t now)
+rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, guint keylen, time_t now)
 {
 	struct rspamd_kv_element			*elt = NULL, *belt;
 
 	/* First try to look at cache */
-	elt = storage->cache->lookup_func (storage->cache, key);
+	elt = storage->cache->lookup_func (storage->cache, key, keylen);
 
 	/* Next look at the backend */
 	if (elt == NULL && storage->backend) {
-		belt = storage->backend->lookup_func (storage->backend, key);
+		belt = storage->backend->lookup_func (storage->backend, key, keylen);
 		if (belt) {
 			/* Put this element into cache */
-			rspamd_kv_storage_insert_internal (storage, ELT_KEY (belt), ELT_DATA (belt),
+			rspamd_kv_storage_insert_internal (storage, ELT_KEY (belt), keylen, ELT_DATA (belt),
 					belt->size, belt->flags,
 					belt->expire, &elt);
 			if ((belt->flags & KV_ELT_DIRTY) == 0) {
@@ -350,16 +350,16 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, time_
 
 /** Expire an element from kv storage */
 struct rspamd_kv_element *
-rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key)
+rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key, guint keylen)
 {
 	struct rspamd_kv_element           *elt;
 
 	/* First delete key from cache */
-	elt = storage->cache->delete_func (storage->cache, key);
+	elt = storage->cache->delete_func (storage->cache, key, keylen);
 
 	/* Now delete from backend */
 	if (storage->backend) {
-		storage->backend->delete_func (storage->backend, key);
+		storage->backend->delete_func (storage->backend, key, keylen);
 	}
 	/* Notify expire */
 	if (elt) {
@@ -393,7 +393,7 @@ rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage)
 
 /** Insert array */
 gboolean
-rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key,
+rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key, guint keylen,
 		guint elt_size, gpointer data, gsize len, gint flags, guint expire)
 {
 	struct rspamd_kv_element			*elt;
@@ -405,7 +405,7 @@ rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key,
 	es = arr_data;
 	*es = elt_size;
 	memcpy (arr_data, (gchar *)data + sizeof (guint), len);
-	if (!rspamd_kv_storage_insert_internal (storage, key, arr_data, len + sizeof (guint),
+	if (!rspamd_kv_storage_insert_internal (storage, key, keylen, arr_data, len + sizeof (guint),
 			flags, expire, &elt)) {
 		g_slice_free1 (len + sizeof (guint), arr_data);
 		return FALSE;
@@ -415,7 +415,7 @@ rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key,
 	g_slice_free1 (len + sizeof (guint), arr_data);
 	/* Place to the backend */
 	if (storage->backend) {
-		return storage->backend->insert_func (storage->backend, key, elt);
+		return storage->backend->insert_func (storage->backend, key, keylen, elt);
 	}
 
 	return TRUE;
@@ -423,14 +423,14 @@ rspamd_kv_storage_insert_array (struct rspamd_kv_storage *storage, gpointer key,
 
 /** Set element inside array */
 gboolean
-rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key,
+rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key, guint keylen,
 		guint elt_num, gpointer data, gsize len, time_t now)
 {
 	struct rspamd_kv_element			*elt;
 	guint								*es;
 	gpointer							 target;
 
-	elt = rspamd_kv_storage_lookup (storage, key, now);
+	elt = rspamd_kv_storage_lookup (storage, key, keylen, now);
 	if (elt == NULL) {
 		return FALSE;
 	}
@@ -452,7 +452,7 @@ rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key,
 	memcpy (target, data, len);
 	/* Place to the backend */
 	if (storage->backend) {
-		return storage->backend->replace_func (storage->backend, key, elt);
+		return storage->backend->replace_func (storage->backend, key, keylen, elt);
 	}
 
 	return TRUE;
@@ -460,14 +460,14 @@ rspamd_kv_storage_set_array (struct rspamd_kv_storage *storage, gpointer key,
 
 /** Get element inside array */
 gboolean
-rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key,
+rspamd_kv_storage_get_array (struct rspamd_kv_storage *storage, gpointer key, guint keylen,
 		guint elt_num, gpointer *data, gsize *len, time_t now)
 {
 	struct rspamd_kv_element			*elt;
 	guint								*es;
 	gpointer							 target;
 
-	elt = rspamd_kv_storage_lookup (storage, key, now);
+	elt = rspamd_kv_storage_lookup (storage, key, keylen, now);
 	if (elt == NULL) {
 		return FALSE;
 	}
@@ -636,26 +636,28 @@ struct rspamd_kv_hash_cache {
  * Insert an element inside cache
  */
 static struct rspamd_kv_element*
-rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, gsize len)
+rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, guint keylen, gpointer value, gsize len)
 {
 	struct rspamd_kv_element 			*elt;
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
-	guint								 keylen;
+	struct rspamd_kv_element			 search_elt;
 
-	if ((elt = g_hash_table_lookup (cache->hash, key)) == NULL) {
-		keylen = strlen (key);
+	search_elt.keylen = keylen;
+	search_elt.p = key;
+
+	if ((elt = g_hash_table_lookup (cache->hash, &search_elt)) == NULL) {
 		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
-		elt->hash = rspamd_strcase_hash (key);
 		elt->flags = 0;
-		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_KEY (elt), key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
-		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
+		elt->p = &elt->data;
+		g_hash_table_insert (cache->hash, elt, elt);
 	}
 	else {
-		g_hash_table_steal (cache->hash, ELT_KEY (elt));
+		g_hash_table_steal (cache->hash, elt);
 		if ((elt->flags & KV_ELT_DIRTY) != 0) {
 			elt->flags |= KV_ELT_NEED_FREE;
 		}
@@ -663,16 +665,15 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 			/* Free it by self */
 			g_slice_free1 (ELT_SIZE (elt), elt);
 		}
-		keylen = strlen (key);
 		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
 		elt->flags = 0;
-		elt->hash = rspamd_strcase_hash (key);
-		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_KEY (elt), key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
-		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
+		elt->p = &elt->data;
+		g_hash_table_insert (cache->hash, elt, elt);
 	}
 
 	return elt;
@@ -682,24 +683,31 @@ rspamd_kv_hash_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
  * Lookup an item inside hash
  */
 static struct rspamd_kv_element*
-rspamd_kv_hash_lookup (struct rspamd_kv_cache *c, gpointer key)
+rspamd_kv_hash_lookup (struct rspamd_kv_cache *c, gpointer key, guint keylen)
 {
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
+	struct rspamd_kv_element			 search_elt;
 
-	return g_hash_table_lookup (cache->hash, key);
+	search_elt.keylen = keylen;
+	search_elt.p = key;
+
+	return g_hash_table_lookup (cache->hash, &search_elt);
 }
 
 /**
  * Replace an element inside cache
  */
 static gboolean
-rspamd_kv_hash_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_kv_element *elt)
+rspamd_kv_hash_replace (struct rspamd_kv_cache *c, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
-	struct rspamd_kv_element 			*oldelt;
+	struct rspamd_kv_element 			*oldelt, search_elt;
 
-	if ((oldelt = g_hash_table_lookup (cache->hash, key)) != NULL) {
-		g_hash_table_steal (cache->hash, key);
+	search_elt.keylen = keylen;
+	search_elt.p = key;
+
+	if ((oldelt = g_hash_table_lookup (cache->hash, &search_elt)) != NULL) {
+		g_hash_table_steal (cache->hash, oldelt);
 
 		if ((oldelt->flags & KV_ELT_DIRTY) != 0) {
 			oldelt->flags |= KV_ELT_NEED_FREE;
@@ -708,7 +716,7 @@ rspamd_kv_hash_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_k
 			/* Free it by self */
 			g_slice_free1 (ELT_SIZE (oldelt), oldelt);
 		}
-		g_hash_table_insert (cache->hash, ELT_KEY (elt), elt);
+		g_hash_table_insert (cache->hash, elt, elt);
 		return TRUE;
 	}
 
@@ -719,14 +727,18 @@ rspamd_kv_hash_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_k
  * Delete an element from cache
  */
 static struct rspamd_kv_element *
-rspamd_kv_hash_delete (struct rspamd_kv_cache *c, gpointer key)
+rspamd_kv_hash_delete (struct rspamd_kv_cache *c, gpointer key, guint keylen)
 {
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
 	struct rspamd_kv_element            *elt;
+	struct rspamd_kv_element			 search_elt;
 
-	elt = g_hash_table_lookup (cache->hash, key);
+	search_elt.keylen = keylen;
+	search_elt.p = key;
+
+	elt = g_hash_table_lookup (cache->hash, &search_elt);
 	if (elt) {
-		g_hash_table_steal (cache->hash, key);
+		g_hash_table_steal (cache->hash, &search_elt);
 	}
 	return elt;
 }
@@ -739,7 +751,7 @@ rspamd_kv_hash_steal (struct rspamd_kv_cache *c, struct rspamd_kv_element *elt)
 {
 	struct rspamd_kv_hash_cache			*cache = (struct rspamd_kv_hash_cache *)c;
 
-	g_hash_table_steal (cache->hash, ELT_KEY (elt));
+	g_hash_table_steal (cache->hash, elt);
 }
 
 /**
@@ -755,13 +767,193 @@ rspamd_kv_hash_destroy (struct rspamd_kv_cache *c)
 }
 
 /**
- * Destroy kv_element structure
+ * Make hash for element
  */
-static void
-kv_elt_destroy_func (gpointer e)
+#define rot(x,k) (((x)<<(k)) ^ ((x)>>(32-(k))))
+#define mix(a,b,c) \
+{ \
+  a -= c;  a ^= rot(c, 4);  c += b; \
+  b -= a;  b ^= rot(a, 6);  a += c; \
+  c -= b;  c ^= rot(b, 8);  b += a; \
+  a -= c;  a ^= rot(c,16);  c += b; \
+  b -= a;  b ^= rot(a,19);  a += c; \
+  c -= b;  c ^= rot(b, 4);  b += a; \
+}
+#define final(a,b,c) \
+{ \
+  c ^= b; c -= rot(b,14); \
+  a ^= c; a -= rot(c,11); \
+  b ^= a; b -= rot(a,25); \
+  c ^= b; c -= rot(b,16); \
+  a ^= c; a -= rot(c,4);  \
+  b ^= a; b -= rot(a,14); \
+  c ^= b; c -= rot(b,24); \
+}
+/*
+ *    The hash function used here is by Bob Jenkins, 1996:
+ *    <http://burtleburtle.net/bob/hash/doobs.html>
+ *       "By Bob Jenkins, 1996.  bob_jenkins@burtleburtle.net.
+ *       You may use this code any way you wish, private, educational,
+ *       or commercial.  It's free."
+ *
+ */
+guint
+kv_elt_hash_func (gconstpointer e)
 {
-	struct rspamd_kv_element 			*elt = e;
-	g_slice_free1 (sizeof (struct rspamd_kv_element) + elt->size, elt);
+	struct rspamd_kv_element 			*elt = (struct rspamd_kv_element *)e;
+	guint32 							 a, b, c;
+	union { const void *ptr; size_t i; } u;
+	guint								 length;
+
+	/* Set up the internal state */
+	length = elt->keylen;
+	a = b = c = 0xdeadbeef + length;
+
+	u.ptr = elt->p;
+	if (((u.i & 0x3) == 0)) {
+		const guint32 *k = (const guint32 *)elt->p; /* read 32-bit chunks */
+
+		/*------ all but last block: aligned reads and affect 32 bits of (a,b,c) */
+		while (length > 12) {
+			a += k[0];
+			b += k[1];
+			c += k[2];
+			mix (a,b,c);
+			length -= 12;
+			k += 3;
+		}
+
+		/*----------------------------- handle the last (probably partial) block */
+		/*
+		 * "k[2]&0xffffff" actually reads beyond the end of the string, but
+		 * then masks off the part it's not allowed to read.  Because the
+		 * string is aligned, the masked-off tail is in the same word as the
+		 * rest of the string.  Every machine with memory protection I've seen
+		 * does it on word boundaries, so is OK with this.  But VALGRIND will
+		 * still catch it and complain.  The masking trick does make the hash
+		 * noticably faster for short strings (like English words).
+		 */
+		switch (length)
+		{
+		case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
+		case 11: c+=k[2]&0xffffff; b+=k[1]; a+=k[0]; break;
+		case 10: c+=k[2]&0xffff; b+=k[1]; a+=k[0]; break;
+		case 9 : c+=k[2]&0xff; b+=k[1]; a+=k[0]; break;
+		case 8 : b+=k[1]; a+=k[0]; break;
+		case 7 : b+=k[1]&0xffffff; a+=k[0]; break;
+		case 6 : b+=k[1]&0xffff; a+=k[0]; break;
+		case 5 : b+=k[1]&0xff; a+=k[0]; break;
+		case 4 : a+=k[0]; break;
+		case 3 : a+=k[0]&0xffffff; break;
+		case 2 : a+=k[0]&0xffff; break;
+		case 1 : a+=k[0]&0xff; break;
+		case 0 : return c;  /* zero length strings require no mixing */
+		}
+
+	} else if (((u.i & 0x1) == 0)) {
+		const guint16 *k = (const guint16 *)elt->p;                           /* read 16-bit chunks */
+		const guint8  *k8;
+
+		/*--------------- all but last block: aligned reads and different mixing */
+		while (length > 12) {
+			a += k[0] + (((guint32)k[1])<<16);
+			b += k[2] + (((guint32)k[3])<<16);
+			c += k[4] + (((guint32)k[5])<<16);
+			mix (a,b,c);
+			length -= 12;
+			k += 6;
+		}
+
+		/*----------------------------- handle the last (probably partial) block */
+		k8 = (const guint8 *)k;
+		switch (length)
+		{
+		case 12: c+=k[4]+(((guint32)k[5])<<16);
+		b+=k[2]+(((guint32)k[3])<<16);
+		a+=k[0]+(((guint32)k[1])<<16);
+		break;
+		case 11: c+=((guint32)k8[10])<<16;     /* @fallthrough */
+		case 10: c+=k[4];                       /* @fallthrough@ */
+		b+=k[2]+(((guint32)k[3])<<16);
+		a+=k[0]+(((guint32)k[1])<<16);
+		break;
+		case 9 : c+=k8[8];                      /* @fallthrough */
+		case 8 : b+=k[2]+(((guint32)k[3])<<16);
+		a+=k[0]+(((guint32)k[1])<<16);
+		break;
+		case 7 : b+=((guint32)k8[6])<<16;      /* @fallthrough */
+		case 6 : b+=k[2];
+		a+=k[0]+(((guint32)k[1])<<16);
+		break;
+		case 5 : b+=k8[4];                      /* @fallthrough */
+		case 4 : a+=k[0]+(((guint32)k[1])<<16);
+		break;
+		case 3 : a+=((guint32)k8[2])<<16;      /* @fallthrough */
+		case 2 : a+=k[0];
+		break;
+		case 1 : a+=k8[0];
+		break;
+		case 0 : return c;  /* zero length strings require no mixing */
+		}
+
+	} else {                        /* need to read the key one byte at a time */
+		const guint8 *k = elt->p;
+
+		/*--------------- all but the last block: affect some 32 bits of (a,b,c) */
+		while (length > 12)
+		{
+			a += k[0];
+			a += ((guint32)k[1])<<8;
+			a += ((guint32)k[2])<<16;
+			a += ((guint32)k[3])<<24;
+			b += k[4];
+			b += ((guint32)k[5])<<8;
+			b += ((guint32)k[6])<<16;
+			b += ((guint32)k[7])<<24;
+			c += k[8];
+			c += ((guint32)k[9])<<8;
+			c += ((guint32)k[10])<<16;
+			c += ((guint32)k[11])<<24;
+			mix(a,b,c);
+			length -= 12;
+			k += 12;
+		}
+
+		/*-------------------------------- last block: affect all 32 bits of (c) */
+		switch (length)                   /* all the case statements fall through */
+		{
+		case 12: c+=((guint32)k[11])<<24;
+		case 11: c+=((guint32)k[10])<<16;
+		case 10: c+=((guint32)k[9])<<8;
+		case 9 : c+=k[8];
+		case 8 : b+=((guint32)k[7])<<24;
+		case 7 : b+=((guint32)k[6])<<16;
+		case 6 : b+=((guint32)k[5])<<8;
+		case 5 : b+=k[4];
+		case 4 : a+=((guint32)k[3])<<24;
+		case 3 : a+=((guint32)k[2])<<16;
+		case 2 : a+=((guint32)k[1])<<8;
+		case 1 : a+=k[0];
+		break;
+		case 0 : return c;  /* zero length strings require no mixing */
+		}
+	}
+
+	final (a,b,c);
+	return c;             /* zero length strings require no mixing */
+}
+
+gboolean
+kv_elt_compare_func (gconstpointer e1, gconstpointer e2)
+{
+	struct rspamd_kv_element 			*elt1 = (struct rspamd_kv_element *) e1,
+										*elt2 = (struct rspamd_kv_element *) e2;
+
+	if (elt1->keylen == elt2->keylen) {
+		return memcmp (elt1->p, elt2->p, elt1->keylen) == 0;
+	}
+
+	return FALSE;
 }
 
 /**
@@ -773,7 +965,7 @@ rspamd_kv_hash_new (void)
 	struct rspamd_kv_hash_cache			*new;
 
 	new = g_slice_alloc (sizeof (struct rspamd_kv_hash_cache));
-	new->hash = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, NULL, NULL);
+	new->hash = g_hash_table_new_full (kv_elt_hash_func, kv_elt_compare_func, NULL, NULL);
 	new->init_func = NULL;
 	new->insert_func = rspamd_kv_hash_insert;
 	new->lookup_func = rspamd_kv_hash_lookup;
@@ -803,7 +995,7 @@ struct rspamd_kv_radix_cache {
  * Validate a key for radix
  */
 static guint32
-rspamd_kv_radix_validate (gpointer key)
+rspamd_kv_radix_validate (gpointer key, guint keylen)
 {
 	struct in_addr				addr;
 
@@ -818,12 +1010,11 @@ rspamd_kv_radix_validate (gpointer key)
  * Insert an element inside cache
  */
 static struct rspamd_kv_element*
-rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, gsize len)
+rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, guint keylen, gpointer value, gsize len)
 {
 	struct rspamd_kv_element 			*elt;
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
-	guint32								 rkey = rspamd_kv_radix_validate (key);
-	guint								 keylen;
+	guint32								 rkey = rspamd_kv_radix_validate (key, keylen);
 
 	if (rkey == 0) {
 		return NULL;
@@ -831,15 +1022,14 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
 
 	elt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
 	if ((uintptr_t)elt == RADIX_NO_VALUE) {
-		keylen = strlen (key);
 		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
-		elt->hash = rkey;
 		elt->flags = 0;
-		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_KEY (elt), key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
+		elt->p = &elt->data;
 		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
 	}
 	else {
@@ -851,15 +1041,14 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
 			/* Free it by self */
 			g_slice_free1 (ELT_SIZE (elt), elt);
 		}
-		keylen = strlen (key);
 		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
-		elt->hash = rkey;
 		elt->flags = 0;
-		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_KEY (elt), key, keylen + 1);
 		memcpy (ELT_DATA (elt), value, len);
+		elt->p = &elt->data;
 		radix32tree_insert (cache->tree, rkey, 0xffffffff, (uintptr_t)elt);
 	}
 
@@ -870,10 +1059,10 @@ rspamd_kv_radix_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value,
  * Lookup an item inside radix
  */
 static struct rspamd_kv_element*
-rspamd_kv_radix_lookup (struct rspamd_kv_cache *c, gpointer key)
+rspamd_kv_radix_lookup (struct rspamd_kv_cache *c, gpointer key, guint keylen)
 {
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
-	guint32								 rkey = rspamd_kv_radix_validate (key);
+	guint32								 rkey = rspamd_kv_radix_validate (key, keylen);
 	struct rspamd_kv_element 			*elt;
 
 	elt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
@@ -888,10 +1077,10 @@ rspamd_kv_radix_lookup (struct rspamd_kv_cache *c, gpointer key)
  * Replace an element inside cache
  */
 static gboolean
-rspamd_kv_radix_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_kv_element *elt)
+rspamd_kv_radix_replace (struct rspamd_kv_cache *c, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
-	guint32								 rkey = rspamd_kv_radix_validate (key);
+	guint32								 rkey = rspamd_kv_radix_validate (key, keylen);
 	struct rspamd_kv_element 			*oldelt;
 
 	oldelt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
@@ -916,11 +1105,11 @@ rspamd_kv_radix_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_
  * Delete an element from cache
  */
 static struct rspamd_kv_element *
-rspamd_kv_radix_delete (struct rspamd_kv_cache *c, gpointer key)
+rspamd_kv_radix_delete (struct rspamd_kv_cache *c, gpointer key, guint keylen)
 {
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
 	struct rspamd_kv_element            *elt;
-	guint32								 rkey = rspamd_kv_radix_validate (key);
+	guint32								 rkey = rspamd_kv_radix_validate (key, keylen);
 
 	elt = (struct rspamd_kv_element *)radix32tree_find (cache->tree, rkey);
 	if ((uintptr_t)elt != RADIX_NO_VALUE) {
@@ -939,7 +1128,7 @@ static void
 rspamd_kv_radix_steal (struct rspamd_kv_cache *c, struct rspamd_kv_element *elt)
 {
 	struct rspamd_kv_radix_cache		*cache = (struct rspamd_kv_radix_cache *)c;
-	guint32								 rkey = rspamd_kv_radix_validate (ELT_KEY (elt));
+	guint32								 rkey = rspamd_kv_radix_validate (ELT_KEY (elt), elt->keylen);
 
 
 	radix32tree_delete (cache->tree, rkey, 0xffffffff);
@@ -999,12 +1188,12 @@ struct rspamd_kv_judy_cache {
  * Lookup an item inside judy
  */
 static struct rspamd_kv_element*
-rspamd_kv_judy_lookup (struct rspamd_kv_cache *c, gpointer key)
+rspamd_kv_judy_lookup (struct rspamd_kv_cache *c, gpointer key, guint keylen)
 {
 	struct rspamd_kv_judy_cache			*cache = (struct rspamd_kv_judy_cache *)c;
 	struct rspamd_kv_element			*elt = NULL, **pelt;
 
-	JHSG (pelt, cache->judy, key, strlen (key));
+	JHSG (pelt, cache->judy, key, keylen);
 	if (pelt != NULL) {
 		elt = *pelt;
 	}
@@ -1015,13 +1204,13 @@ rspamd_kv_judy_lookup (struct rspamd_kv_cache *c, gpointer key)
  * Delete an element from cache
  */
 static struct rspamd_kv_element *
-rspamd_kv_judy_delete (struct rspamd_kv_cache *c, gpointer key)
+rspamd_kv_judy_delete (struct rspamd_kv_cache *c, gpointer key, guint keylen)
 {
 	struct rspamd_kv_judy_cache			*cache = (struct rspamd_kv_judy_cache *)c;
 	struct rspamd_kv_element            *elt;
 	gint								 rc;
 
-	elt = rspamd_kv_judy_lookup (c, key);
+	elt = rspamd_kv_judy_lookup (c, key, keylen);
 	if (elt) {
 		JHSD (rc, cache->judy, ELT_KEY (elt), elt->keylen);
 	}
@@ -1044,23 +1233,21 @@ rspamd_kv_judy_steal (struct rspamd_kv_cache *c, struct rspamd_kv_element *elt)
  * Insert an element inside cache
  */
 static struct rspamd_kv_element*
-rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, gsize len)
+rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, guint keylen, gpointer value, gsize len)
 {
 	struct rspamd_kv_element 			*elt, **pelt;
 	struct rspamd_kv_judy_cache			*cache = (struct rspamd_kv_judy_cache *)c;
-	guint								 keylen;
 
-	if ((elt = rspamd_kv_judy_lookup (c, key)) == NULL) {
-		keylen = strlen (key);
+	if ((elt = rspamd_kv_judy_lookup (c, key, keylen)) == NULL) {
 		elt = g_slice_alloc (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
-		elt->hash = rspamd_strcase_hash (key);
 		elt->flags = 0;
-		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_KEY (elt), key, keylen);
 		memcpy (ELT_DATA (elt), value, len);
 		JHSI (pelt, cache->judy, ELT_KEY (elt), elt->keylen);
+		elt->p = &elt->data;
 		*pelt = elt;
 	}
 	else {
@@ -1072,15 +1259,14 @@ rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
 			/* Free it by self */
 			g_slice_free1 (ELT_SIZE (elt), elt);
 		}
-		keylen = strlen (key);
 		elt = g_slice_alloc0 (sizeof (struct rspamd_kv_element) + len + keylen + 1);
 		elt->age = time (NULL);
 		elt->keylen = keylen;
 		elt->size = len;
-		elt->hash = rspamd_strcase_hash (key);
 		elt->flags = 0;
-		memcpy (elt->data, key, keylen + 1);
+		memcpy (ELT_KEY (elt), key, keylen);
 		memcpy (ELT_DATA (elt), value, len);
+		elt->p = &elt->data;
 		JHSI (pelt, cache->judy, ELT_KEY (elt), elt->keylen);
 		*pelt = elt;
 	}
@@ -1092,12 +1278,12 @@ rspamd_kv_judy_insert (struct rspamd_kv_cache *c, gpointer key, gpointer value, 
  * Replace an element inside cache
  */
 static gboolean
-rspamd_kv_judy_replace (struct rspamd_kv_cache *c, gpointer key, struct rspamd_kv_element *elt)
+rspamd_kv_judy_replace (struct rspamd_kv_cache *c, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_kv_judy_cache			*cache = (struct rspamd_kv_judy_cache *)c;
 	struct rspamd_kv_element 			*oldelt, **pelt;
 
-	if ((oldelt = rspamd_kv_judy_lookup (c, key)) != NULL) {
+	if ((oldelt = rspamd_kv_judy_lookup (c, key, keylen)) != NULL) {
 		rspamd_kv_judy_steal (c, elt);
 
 		if ((oldelt->flags & KV_ELT_DIRTY) != 0) {

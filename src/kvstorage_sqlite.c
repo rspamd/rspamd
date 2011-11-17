@@ -245,16 +245,20 @@ err:
 }
 
 static gboolean
-rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt)
+rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 	struct sqlite_op							*op;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return FALSE;
 	}
 
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		/* We found another op with such key in this queue */
 		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
@@ -270,7 +274,7 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, struct rs
 		elt->flags |= KV_ELT_DIRTY;
 
 		g_queue_push_head (db->ops_queue, op);
-		g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
@@ -281,7 +285,7 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, struct rs
 }
 
 static gboolean
-rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt)
+rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 	struct sqlite_op							*op;
@@ -289,7 +293,7 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct r
 	if (!db->initialized) {
 		return FALSE;
 	}
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, elt)) != NULL) {
 		/* We found another op with such key in this queue */
 		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
@@ -305,7 +309,7 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct r
 		elt->flags |= KV_ELT_DIRTY;
 
 		g_queue_push_head (db->ops_queue, op);
-		g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
@@ -316,19 +320,23 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, struct r
 }
 
 static struct rspamd_kv_element*
-rspamd_sqlite_lookup (struct rspamd_kv_backend *backend, gpointer key)
+rspamd_sqlite_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 	struct sqlite_op							*op;
 	struct rspamd_kv_element					*elt = NULL;
 	gint										 l;
 	gconstpointer								 d;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return NULL;
 	}
 	/* First search in ops queue */
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		if (op->op == SQLITE_OP_DELETE) {
 			/* To delete, so assume it as not found */
 			return NULL;
@@ -336,7 +344,7 @@ rspamd_sqlite_lookup (struct rspamd_kv_backend *backend, gpointer key)
 		return op->elt;
 	}
 
-	if (sqlite3_bind_text (db->get_stmt, 1, key, strlen (key), SQLITE_STATIC) == SQLITE_OK) {
+	if (sqlite3_bind_text (db->get_stmt, 1, key, keylen, SQLITE_STATIC) == SQLITE_OK) {
 		if (sqlite3_step (db->get_stmt) == SQLITE_ROW) {
 			l = sqlite3_column_bytes (db->get_stmt, 0);
 			elt = g_malloc (l);
@@ -351,22 +359,26 @@ rspamd_sqlite_lookup (struct rspamd_kv_backend *backend, gpointer key)
 }
 
 static void
-rspamd_sqlite_delete (struct rspamd_kv_backend *backend, gpointer key)
+rspamd_sqlite_delete (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 	struct sqlite_op							*op;
 	struct rspamd_kv_element					*elt;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return;
 	}
 
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		op->op = SQLITE_OP_DELETE;
 		return;
 	}
 
-	elt = rspamd_sqlite_lookup (backend, key);
+	elt = rspamd_sqlite_lookup (backend, key, keylen);
 	if (elt == NULL) {
 		return;
 	}
@@ -376,7 +388,7 @@ rspamd_sqlite_delete (struct rspamd_kv_backend *backend, gpointer key)
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
+	g_hash_table_insert (db->ops_hash, elt, op);
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		sqlite_process_queue (backend);
@@ -437,7 +449,7 @@ rspamd_kv_sqlite_new (const gchar *filename, guint sync_ops)
 	new->filename = g_strdup (filename);
 	new->sync_ops = sync_ops;
 	new->ops_queue = g_queue_new ();
-	new->ops_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->ops_hash = g_hash_table_new (kv_elt_hash_func, kv_elt_compare_func);
 
 	/* Init callbacks */
 	new->init_func = rspamd_sqlite_init;

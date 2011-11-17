@@ -182,7 +182,7 @@ err:
 }
 
 static gboolean
-rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt)
+rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	struct bdb_op								*op;
@@ -197,7 +197,7 @@ rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspam
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+	g_hash_table_insert (db->ops_hash, elt, op);
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return bdb_process_queue (backend);
@@ -207,7 +207,7 @@ rspamd_bdb_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspam
 }
 
 static gboolean
-rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt)
+rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	struct bdb_op								*op;
@@ -222,7 +222,7 @@ rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+	g_hash_table_insert (db->ops_hash, elt, op);
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return bdb_process_queue (backend);
@@ -232,18 +232,22 @@ rspamd_bdb_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 }
 
 static struct rspamd_kv_element*
-rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
+rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	struct bdb_op								*op;
 	DBT 										 db_key, db_data;
 	struct rspamd_kv_element					*elt = NULL;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return NULL;
 	}
 	/* First search in ops queue */
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		if (op->op == BDB_OP_DELETE) {
 			/* To delete, so assume it as not found */
 			return NULL;
@@ -253,7 +257,7 @@ rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
 
 	memset (&db_key, 0, sizeof(DBT));
 	memset (&db_data, 0, sizeof(DBT));
-	db_key.size = strlen (key);
+	db_key.size = keylen;
 	db_key.data = key;
 	db_data.flags = DB_DBT_MALLOC;
 
@@ -266,22 +270,26 @@ rspamd_bdb_lookup (struct rspamd_kv_backend *backend, gpointer key)
 }
 
 static void
-rspamd_bdb_delete (struct rspamd_kv_backend *backend, gpointer key)
+rspamd_bdb_delete (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_bdb_backend					*db = (struct rspamd_bdb_backend *)backend;
 	struct bdb_op								*op;
 	struct rspamd_kv_element					*elt;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return;
 	}
 
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		op->op = BDB_OP_DELETE;
 		return;
 	}
 
-	elt = rspamd_bdb_lookup (backend, key);
+	elt = rspamd_bdb_lookup (backend, key, keylen);
 	if (elt == NULL) {
 		return;
 	}
@@ -291,7 +299,7 @@ rspamd_bdb_delete (struct rspamd_kv_backend *backend, gpointer key)
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
+	g_hash_table_insert (db->ops_hash, elt, op);
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		bdb_process_queue (backend);
@@ -347,7 +355,7 @@ rspamd_kv_bdb_new (const gchar *filename, guint sync_ops)
 	new->filename = g_strdup (filename);
 	new->sync_ops = sync_ops;
 	new->ops_queue = g_queue_new ();
-	new->ops_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->ops_hash = g_hash_table_new (kv_elt_hash_func, kv_elt_compare_func);
 
 	/* Init callbacks */
 	new->init_func = rspamd_bdb_init;

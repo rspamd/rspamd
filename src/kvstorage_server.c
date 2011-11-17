@@ -307,6 +307,7 @@ parse_kvstorage_line (struct kvstorage_session *session, f_str_t *in)
 				else {
 					session->key = memory_pool_alloc (session->pool, p - c + 1);
 					rspamd_strlcpy (session->key, c, p - c + 1);
+					session->keylen = p - c;
 					/* Now we must select next state based on command */
 					if (session->command == KVSTORAGE_CMD_SET ||
 							session->command == KVSTORAGE_CMD_INCR ||
@@ -473,7 +474,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 	}
 	else if (session->command == KVSTORAGE_CMD_GET) {
 		g_static_rw_lock_reader_lock (&session->cf->storage->rwlock);
-		elt = rspamd_kv_storage_lookup (session->cf->storage, session->key, session->now);
+		elt = rspamd_kv_storage_lookup (session->cf->storage, session->key, session->keylen, session->now);
 		if (elt == NULL) {
 			g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 			if (!is_redis) {
@@ -537,7 +538,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 	}
 	else if (session->command == KVSTORAGE_CMD_DELETE) {
 		g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
-		elt = rspamd_kv_storage_delete (session->cf->storage, session->key);
+		elt = rspamd_kv_storage_delete (session->cf->storage, session->key, session->keylen);
 		if (elt != NULL) {
 			if ((elt->flags & KV_ELT_DIRTY) == 0) {
 				/* Free memory if backend has deleted this element */
@@ -568,7 +569,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 	else if (session->command == KVSTORAGE_CMD_INCR || session->command == KVSTORAGE_CMD_DECR) {
 		g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
 		longval = session->arg_data.value;
-		if (!rspamd_kv_storage_increment (session->cf->storage, session->key, &longval)) {
+		if (!rspamd_kv_storage_increment (session->cf->storage, session->key, session->keylen, &longval)) {
 			g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 			if (!is_redis) {
 				return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
@@ -815,6 +816,7 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 			if (session->command != KVSTORAGE_CMD_SELECT) {
 				/* This argument is a key for normal command */
 				session->key = memory_pool_fstrdup (session->pool, in);
+				session->keylen = in->len;
 				if (session->argnum == session->argc - 1) {
 					session->state = KVSTORAGE_STATE_READ_CMD;
 					rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
@@ -841,7 +843,8 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 				session->state = KVSTORAGE_STATE_READ_CMD;
 				rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
 				g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
-				if (rspamd_kv_storage_insert (session->cf->storage, session->key, in->begin, in->len,
+				if (rspamd_kv_storage_insert (session->cf->storage, session->key, session->keylen,
+						in->begin, in->len,
 						session->flags, session->expire)) {
 					g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 					return rspamd_dispatcher_write (session->dispather, "+OK" CRLF,
@@ -868,7 +871,8 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 		session->state = KVSTORAGE_STATE_READ_CMD;
 		rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
 		g_static_rw_lock_writer_lock (&session->cf->storage->rwlock);
-		if (rspamd_kv_storage_insert (session->cf->storage, session->key, in->begin, in->len,
+		if (rspamd_kv_storage_insert (session->cf->storage, session->key, session->keylen,
+				in->begin, in->len,
 				session->flags, session->expire)) {
 			g_static_rw_lock_writer_unlock (&session->cf->storage->rwlock);
 			if (!is_redis) {

@@ -78,7 +78,8 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 			/* Filebuf is not large enough */
 			return FALSE;
 		}
-		*p++ = hexdigits[(*k) % 16];
+		t = *k;
+		*p++ = hexdigits[(t & 0xf) ^ ((t & 0xf0) >> 4)];
 		*p++ = G_DIR_SEPARATOR;
 		k ++;
 	}
@@ -249,16 +250,20 @@ err:
 }
 
 static gboolean
-rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt)
+rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
 	struct file_op								*op;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return FALSE;
 	}
 
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		/* We found another op with such key in this queue */
 		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
@@ -274,7 +279,7 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 		elt->flags |= KV_ELT_DIRTY;
 
 		g_queue_push_head (db->ops_queue, op);
-		g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
@@ -285,15 +290,19 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, struct rspa
 }
 
 static gboolean
-rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, struct rspamd_kv_element *elt)
+rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
 	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
 	struct file_op								*op;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return FALSE;
 	}
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		/* We found another op with such key in this queue */
 		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
@@ -309,7 +318,7 @@ rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, struct rsp
 		elt->flags |= KV_ELT_DIRTY;
 
 		g_queue_push_head (db->ops_queue, op);
-		g_hash_table_insert (db->ops_hash, ELT_KEY (elt), op);
+		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
@@ -320,7 +329,7 @@ rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, struct rsp
 }
 
 static struct rspamd_kv_element*
-rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key)
+rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
 	struct file_op								*op;
@@ -328,12 +337,16 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key)
 	gchar										 filebuf[PATH_MAX];
 	gint										 fd, flags;
 	struct stat									 st;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return NULL;
 	}
 	/* First search in ops queue */
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		if (op->op == FILE_OP_DELETE) {
 			/* To delete, so assume it as not found */
 			return NULL;
@@ -342,7 +355,7 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key)
 	}
 
 	/* Get filename */
-	if (!get_file_name (db, key, strlen (key), filebuf, sizeof (filebuf))) {
+	if (!get_file_name (db, key, keylen, filebuf, sizeof (filebuf))) {
 		return NULL;
 	}
 
@@ -378,22 +391,26 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key)
 }
 
 static void
-rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key)
+rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
 	struct file_op								*op;
 	struct rspamd_kv_element					*elt;
+	struct rspamd_kv_element			 		 search_elt;
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
 
 	if (!db->initialized) {
 		return;
 	}
 
-	if ((op = g_hash_table_lookup (db->ops_hash, key)) != NULL) {
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		op->op = FILE_OP_DELETE;
 		return;
 	}
 
-	elt = rspamd_file_lookup (backend, key);
+	elt = rspamd_file_lookup (backend, key, keylen);
 	if (elt == NULL) {
 		return;
 	}
@@ -403,7 +420,7 @@ rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key)
 	elt->flags |= KV_ELT_DIRTY;
 
 	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, ELT_KEY(elt), op);
+	g_hash_table_insert (db->ops_hash, elt, op);
 
 	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		file_process_queue (backend);
@@ -459,7 +476,7 @@ rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels)
 	new->sync_ops = sync_ops;
 	new->levels = levels;
 	new->ops_queue = g_queue_new ();
-	new->ops_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->ops_hash = g_hash_table_new (kv_elt_hash_func, kv_elt_compare_func);
 
 	/* Init callbacks */
 	new->init_func = rspamd_file_init;

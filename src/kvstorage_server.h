@@ -78,6 +78,7 @@ struct kvstorage_session {
 	guint argnum;
 	memory_pool_t *pool;
 	gchar *key;
+	guint keylen;
 	struct kvstorage_config *cf;
 	struct kvstorage_worker_thread *thr;
 	struct rspamd_kv_element *elt;
