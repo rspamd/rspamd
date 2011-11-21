@@ -729,7 +729,7 @@ lua_push_internet_address (lua_State *L, InternetAddress *ia)
 	return FALSE;
 #else
 	InternetAddressMailbox        *iamb;
-	if (ia) {
+	if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
 		lua_newtable (L);
 		iamb = INTERNET_ADDRESS_MAILBOX (ia);
 		lua_set_table_index (L, "name", internet_address_get_name (ia));
