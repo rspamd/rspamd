@@ -104,7 +104,7 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 
 /* Process single file operation */
 static gboolean
-file_process_single_op (struct rspamd_file_backend *db, struct file_op *op)
+file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint *pfd)
 {
 	gchar										 filebuf[PATH_MAX];
 	gint										 fd, flags;
@@ -115,6 +115,7 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op)
 	}
 
 	if (op->op == FILE_OP_DELETE) {
+		*pfd = -1;
 		return unlink (filebuf) != -1;
 	}
 	else {
@@ -125,6 +126,7 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op)
 #endif
 		/* Open file */
 		if ((fd = open (filebuf, flags, S_IRUSR|S_IWUSR|S_IRGRP)) == -1) {
+			*pfd = -1;
 			return FALSE;
 		}
 
@@ -133,19 +135,32 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op)
 #endif
 		if (write (fd, op->elt, ELT_SIZE (op->elt)) == -1) {
 			msg_info ("%d: %s", errno, strerror (errno));
-			close (fd);
+			*pfd = fd;
 			return FALSE;
 		}
 	}
 
-#ifdef HAVE_FDATASYNC
-	fdatasync (fd);
-#else
-	fsync (fd);
-#endif
-
-	close (fd);
+	*pfd = fd;
 	return TRUE;
+}
+
+/* Sync vector of descriptors */
+static void
+file_sync_fds (gint *fds, gint len)
+{
+	gint										i, fd;
+
+	for (i = 0; i < len; i ++) {
+		fd = fds[i];
+		if (fd != -1) {
+#ifdef HAVE_FDATASYNC
+			fdatasync (fd);
+#else
+			fsync (fd);
+#endif
+			close (fd);
+		}
+	}
 }
 
 /* Process operations queue */
@@ -155,15 +170,29 @@ file_process_queue (struct rspamd_kv_backend *backend)
 	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
 	struct file_op								*op;
 	GList										*cur;
+	gint										*fds, i = 0, len;
 
+	len = g_queue_get_length (db->ops_queue);
+	if (len == 0) {
+		/* Nothing to process */
+		return TRUE;
+	}
+
+	fds = g_slice_alloc (len * sizeof (gint));
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (! file_process_single_op (db, op)) {
+		if (! file_process_single_op (db, op, &fds[i])) {
+			file_sync_fds (fds, i);
+			g_slice_free1 (len * sizeof (gint), fds);
 			return FALSE;
 		}
+		i ++;
 		cur = g_list_next (cur);
 	}
+
+	file_sync_fds (fds, i);
+	g_slice_free1 (len * sizeof (gint), fds);
 
 	/* Clean the queue */
 	cur = db->ops_queue->head;
