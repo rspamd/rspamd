@@ -1,0 +1,17 @@
+Source: rspamd
+Section: mail
+Priority: extra
+Maintainer: Vsevolod Stakhov <vsevolod@highsecure.ru>
+Build-Depends: debhelper (>= 7.0.50~), cmake, libevent1-dev(>= 1.3), libglib2.0-dev (>= 2.16.0), libgmime-2.4-dev, liblua5.1-0-dev, libpcre3-dev, cdbs
+Standards-Version: 3.9.1
+Homepage: https://bitbucket.org/vstakhov/rspamd/
+Vcs-Hg: https://bitbucket.org/vstakhov/rspamd/
+Vcs-Browser: https://bitbucket.org/vstakhov/rspamd/src
+
+Package: rspamd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Fast spam filtering system
+ Rspamd is fast, modular and lightweight spam filter. It is designed to work
+ with big ammount of mail and can be easily extended with own filters written in
+ lua.

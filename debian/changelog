@@ -1,0 +1,17 @@
+rspamd (0.4.5-1) unstable; urgency=low
+
+  * Upgrade to 0.4.5
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Mon, 21 Nov 2011 17:04:33 +0400
+
+rspamd (0.4.4-1) unstable; urgency=low
+
+  * Upgrade to 0.4.4
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Tue, 15 Nov 2011 17:54:33 +0400
+
+rspamd (0.4.3-1) unstable; urgency=low
+
+  * Initial release
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Tue, 16 Aug 2011 17:54:33 +0400

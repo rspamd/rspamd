@@ -1,0 +1,12 @@
+/var/log/rspamd/rspamd.log{
+       daily
+       rotate 4
+       delaycompress
+       compress
+       notifempty
+       missingok
+       postrotate
+          reload rspamd >/dev/null 2>&1 || true
+       endscript
+}
+
