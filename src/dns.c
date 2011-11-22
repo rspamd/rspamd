@@ -56,7 +56,7 @@ static const unsigned initial_bias = 72;
 #define DNS_RANDOM rand
 #endif
 
-#define UDP_PACKET_SIZE 512
+#define UDP_PACKET_SIZE 4096
 
 #define DNS_COMPRESSION_BITS 0xC0
 
@@ -770,7 +770,7 @@ dns_fin_cb (gpointer arg)
 	struct rspamd_dns_request *req = arg;
 	
 	event_del (&req->timer_event);
-	g_hash_table_remove (req->resolver->requests, GUINT_TO_POINTER ((guint)req->id));
+	g_hash_table_remove (req->resolver->requests, &req->id);
 }
 
 static guint8 *
@@ -1120,6 +1120,7 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver,
 	struct rspamd_dns_reply        *rep;
 	union rspamd_reply_element     *elt;
 	guint8                         *pos;
+	guint16                         id;
 	gint                            i, t;
 	
 	/* First check header fields */
@@ -1129,7 +1130,8 @@ dns_parse_reply (guint8 *in, gint r, struct rspamd_dns_resolver *resolver,
 	}
 
 	/* Now try to find corresponding request */
-	if ((req = g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER ((guint)header->qid))) == NULL) {
+	id = header->qid;
+	if ((req = g_hash_table_lookup (resolver->requests, &id)) == NULL) {
 		/* No such requests found */
 		return FALSE;
 	}
@@ -1281,8 +1283,6 @@ dns_timer_cb (gint fd, short what, void *arg)
 		return;
 	}
 	/* Add other retransmit event */
-
-	evtimer_add (&req->timer_event, &req->tv);
 	r = send_dns_request (req);
 	if (r == -1) {
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
@@ -1291,8 +1291,9 @@ dns_timer_cb (gint fd, short what, void *arg)
 		remove_normal_event (req->session, dns_fin_cb, req);
 		upstream_fail (&rep->request->server->up, rep->request->time);
 		req->func (rep, req->arg);
-
+		return;
 	}
+	evtimer_add (&req->timer_event, &req->tv);
 }
 
 static void
@@ -1336,7 +1337,7 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 			evtimer_add (&req->timer_event, &req->tv);
 
 			/* Add request to hash table */
-			g_hash_table_insert (req->resolver->requests, GUINT_TO_POINTER ((guint)req->id), req);
+			g_hash_table_insert (req->resolver->requests, &req->id, req);
 			register_async_event (req->session, (event_finalizer_t)dns_fin_cb, req, FALSE);
 		}
 	}
@@ -1437,13 +1438,13 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		evtimer_add (&req->timer_event, &req->tv);
 
 		/* Add request to hash table */
-		while (g_hash_table_lookup (resolver->requests, GUINT_TO_POINTER ((guint)req->id))) {
+		while (g_hash_table_lookup (resolver->requests, &req->id)) {
 			/* Check for unique id */
 			header = (struct dns_header *)req->packet;
 			header->qid = dns_k_permutor_step (resolver->permutor);
 			req->id = header->qid;
 		}
-		g_hash_table_insert (resolver->requests, GUINT_TO_POINTER ((guint)req->id), req);
+		g_hash_table_insert (resolver->requests, &req->id, req);
 		register_async_event (session, (event_finalizer_t)dns_fin_cb, req, FALSE);
 	}
 	else if (r == -1) {
@@ -1502,6 +1503,20 @@ parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 	return TRUE;
 }
 
+/* Hashing utilities */
+static gboolean
+dns_id_equal (gconstpointer v1, gconstpointer v2)
+{
+	return *((const guint16*) v1) == *((const guint16*) v2);
+}
+
+static guint
+dns_id_hash (gconstpointer v)
+{
+	return *(const guint16 *) v;
+}
+
+
 struct rspamd_dns_resolver *
 dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 {
@@ -1513,7 +1528,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	
 	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
 	new->ev_base = ev_base;
-	new->requests = g_hash_table_new (g_direct_hash, g_direct_equal);
+	new->requests = g_hash_table_new (dns_id_hash, dns_id_equal);
 	new->permutor = memory_pool_alloc (cfg->cfg_pool, sizeof (struct dns_k_permutor));
 	dns_k_permutor_init (new->permutor, 0, G_MAXUINT16);
 	new->static_pool = cfg->cfg_pool;
