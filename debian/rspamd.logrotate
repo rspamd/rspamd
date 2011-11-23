@@ -6,7 +6,7 @@
        notifempty
        missingok
        postrotate
-          reload rspamd >/dev/null 2>&1 || true
+          service rspamd reopenlog >/dev/null 2>&1 || true
        endscript
 }
 
