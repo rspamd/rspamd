@@ -201,9 +201,14 @@ file_process_queue (struct rspamd_kv_backend *backend)
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
+		if (op->op == FILE_OP_DELETE || ((op->elt->flags & KV_ELT_NEED_FREE) != 0 &&
+				(op->elt->flags & KV_ELT_NEED_INSERT) == 0)) {
 			/* Also clean memory */
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
+		}
+		else {
+			/* Unset dirty flag */
+			op->elt->flags &= ~KV_ELT_DIRTY;
 		}
 		g_slice_free1 (sizeof (struct file_op), op);
 		cur = g_list_next (cur);
@@ -419,6 +424,8 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 
 	close (fd);
 
+	elt->flags &= ~(KV_ELT_DIRTY|KV_ELT_NEED_FREE);
+
 	return elt;
 }
 
@@ -426,39 +433,27 @@ static void
 rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
 	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	struct file_op								*op;
-	struct rspamd_kv_element					*elt;
+	gchar										 filebuf[PATH_MAX];
 	struct rspamd_kv_element			 		 search_elt;
-
-	search_elt.keylen = keylen;
-	search_elt.p = key;
+	struct file_op								*op;
 
 	if (!db->initialized) {
 		return;
 	}
 
+	search_elt.keylen = keylen;
+	search_elt.p = key;
+	/* First search in ops queue */
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		op->op = FILE_OP_DELETE;
 		return;
 	}
-
-	elt = rspamd_file_lookup (backend, key, keylen);
-	if (elt == NULL) {
+	/* Get filename */
+	if (!get_file_name (db, key, keylen, filebuf, sizeof (filebuf))) {
 		return;
 	}
-	op = g_slice_alloc (sizeof (struct file_op));
-	op->op = FILE_OP_DELETE;
-	op->elt = elt;
-	elt->flags |= KV_ELT_DIRTY;
 
-	g_queue_push_head (db->ops_queue, op);
-	g_hash_table_insert (db->ops_hash, elt, op);
-
-	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
-		file_process_queue (backend);
-	}
-
-	return;
+	unlink (filebuf);
 }
 
 static void

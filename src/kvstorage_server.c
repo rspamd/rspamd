@@ -508,11 +508,13 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 			}
 			if (elt->flags & KV_ELT_INTEGER) {
 				if (!rspamd_dispatcher_write (session->dispather, intbuf, eltlen, TRUE, TRUE)) {
+					g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 					return FALSE;
 				}
 			}
 			else {
-				if (!rspamd_dispatcher_write (session->dispather, ELT_DATA(elt), eltlen, TRUE, FALSE)) {
+				if (!rspamd_dispatcher_write (session->dispather, ELT_DATA(elt), eltlen, TRUE, TRUE)) {
+					g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 					return FALSE;
 				}
 			}
@@ -523,6 +525,9 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 			else {
 				res = rspamd_dispatcher_write (session->dispather, CRLF,
 						sizeof (CRLF) - 1, FALSE, TRUE);
+			}
+			if (!res) {
+				g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 			}
 
 			return res;
@@ -890,7 +895,22 @@ kvstorage_write_socket (void *arg)
 	struct kvstorage_session			*session = (struct kvstorage_session *) arg;
 
 	if (session->elt) {
+
+		if ((session->elt->flags & KV_ELT_NEED_INSERT) != 0) {
+			/* Insert to cache and free element */
+			session->elt->flags &= ~KV_ELT_NEED_INSERT;
+			g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
+			rspamd_kv_storage_insert_cache (session->cf->storage, ELT_KEY (session->elt),
+							session->elt->keylen, ELT_DATA (session->elt),
+							session->elt->size, session->elt->flags,
+							session->elt->expire, NULL);
+			g_free (session->elt);
+			session->elt = NULL;
+			return TRUE;
+		}
+		g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 		session->elt = NULL;
+
 	}
 
 	return TRUE;
@@ -972,6 +992,7 @@ kvstorage_thread (gpointer ud)
 	sigprocmask (SIG_BLOCK, thr->signals, NULL);
 	/* Init thread specific events */
 	thr->ev_base = event_init ();
+
 	event_set (&thr->bind_ev, thr->worker->cf->listen_sock, EV_READ | EV_PERSIST, thr_accept_socket, (void *)thr);
 	event_base_set (thr->ev_base, &thr->bind_ev);
 	event_add (&thr->bind_ev, NULL);
