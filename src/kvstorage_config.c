@@ -54,6 +54,7 @@ struct kvstorage_config_parser {
 		KVSTORAGE_STATE_BACKEND_TYPE,
 		KVSTORAGE_STATE_BACKEND_FILENAME,
 		KVSTORAGE_STATE_BACKEND_SYNC_OPS,
+		KVSTORAGE_STATE_BACKEND_DO_FSYNC,
 		KVSTORAGE_STATE_EXPIRE_TYPE,
 		KVSTORAGE_STATE_ERROR
 	} state;
@@ -110,7 +111,8 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 		backend = NULL;
 		break;
 	case KVSTORAGE_TYPE_BACKEND_FILE:
-		backend = rspamd_kv_file_new (kconf->backend.filename, kconf->backend.sync_ops, FILE_STORAGE_LEVELS);
+		backend = rspamd_kv_file_new (kconf->backend.filename, kconf->backend.sync_ops,
+				FILE_STORAGE_LEVELS, kconf->backend.do_fsync);
 		break;
 #ifdef WITH_DB
 	case KVSTORAGE_TYPE_BACKEND_BDB:
@@ -210,6 +212,10 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 			kv_parser->state = KVSTORAGE_STATE_BACKEND_SYNC_OPS;
 			kv_parser->cur_elt = "sync_ops";
 		}
+		else if (g_ascii_strcasecmp (element_name, "fsync") == 0) {
+			kv_parser->state = KVSTORAGE_STATE_BACKEND_DO_FSYNC;
+			kv_parser->cur_elt = "fsync";
+		}
 		else {
 			if (*error == NULL) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is unexpected in backend definition",
@@ -280,6 +286,7 @@ void kvstorage_xml_end_element (GMarkupParseContext	*context,
 	case KVSTORAGE_STATE_BACKEND_TYPE:
 	case KVSTORAGE_STATE_BACKEND_FILENAME:
 	case KVSTORAGE_STATE_BACKEND_SYNC_OPS:
+	case KVSTORAGE_STATE_BACKEND_DO_FSYNC:
 		CHECK_TAG (KVSTORAGE_STATE_BACKEND);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
@@ -415,6 +422,9 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 		break;
 	case KVSTORAGE_STATE_BACKEND_SYNC_OPS:
 		kv_parser->current_storage->backend.sync_ops = parse_limit (text, text_len);
+		break;
+	case KVSTORAGE_STATE_BACKEND_DO_FSYNC:
+		kv_parser->current_storage->backend.do_fsync = parse_flag (text);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
 		if (g_ascii_strncasecmp (text, "lru", MIN (text_len, sizeof ("lru") - 1)) == 0) {

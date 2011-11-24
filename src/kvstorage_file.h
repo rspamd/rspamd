@@ -29,7 +29,7 @@
 #include "kvstorage.h"
 
 /* Create new file backend */
-struct rspamd_kv_backend* rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels);
+struct rspamd_kv_backend* rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolean do_fsync);
 
 
 #endif /* KVSTORAGE_FILE_H_ */

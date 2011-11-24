@@ -68,6 +68,7 @@ struct kvstorage_backend_config {
 	enum kvstorage_backend_type type;
 	gchar *filename;
 	guint sync_ops;
+	gboolean do_fsync;
 };
 
 

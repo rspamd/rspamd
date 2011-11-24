@@ -53,6 +53,7 @@ struct rspamd_file_backend {
 	guint levels;
 	GQueue *ops_queue;
 	GHashTable *ops_hash;
+	gboolean do_fsync;
 	gboolean initialized;
 };
 
@@ -146,18 +147,20 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint
 
 /* Sync vector of descriptors */
 static void
-file_sync_fds (gint *fds, gint len)
+file_sync_fds (gint *fds, gint len, gboolean fsync)
 {
 	gint										i, fd;
 
 	for (i = 0; i < len; i ++) {
 		fd = fds[i];
 		if (fd != -1) {
+			if (fsync) {
 #ifdef HAVE_FDATASYNC
-			fdatasync (fd);
+				fdatasync (fd);
 #else
-			fsync (fd);
+				fsync (fd);
 #endif
+			}
 			close (fd);
 		}
 	}
@@ -183,7 +186,7 @@ file_process_queue (struct rspamd_kv_backend *backend)
 	while (cur) {
 		op = cur->data;
 		if (! file_process_single_op (db, op, &fds[i])) {
-			file_sync_fds (fds, i);
+			file_sync_fds (fds, i, db->do_fsync);
 			g_slice_free1 (len * sizeof (gint), fds);
 			return FALSE;
 		}
@@ -191,7 +194,7 @@ file_process_queue (struct rspamd_kv_backend *backend)
 		cur = g_list_next (cur);
 	}
 
-	file_sync_fds (fds, i);
+	file_sync_fds (fds, i, db->do_fsync);
 	g_slice_free1 (len * sizeof (gint), fds);
 
 	/* Clean the queue */
@@ -478,7 +481,7 @@ rspamd_file_destroy (struct rspamd_kv_backend *backend)
 
 /* Create new file backend */
 struct rspamd_kv_backend *
-rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels)
+rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolean do_fsync)
 {
 	struct rspamd_file_backend			 		*new;
 	struct stat 								 st;
@@ -504,6 +507,7 @@ rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels)
 	new->filename = g_strdup (filename);
 	new->sync_ops = sync_ops;
 	new->levels = levels;
+	new->do_fsync = do_fsync;
 	new->ops_queue = g_queue_new ();
 	new->ops_hash = g_hash_table_new (kv_elt_hash_func, kv_elt_compare_func);
 

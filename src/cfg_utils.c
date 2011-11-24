@@ -420,19 +420,19 @@ parse_flag (const gchar *str)
 	if (!str || !*str)
 		return -1;
 
-	if ((*str == 'Y' || *str == 'y') && *(str + 1) == '\0') {
+	if ((*str == 'Y' || *str == 'y')) {
 		return 1;
 	}
 
-	if ((*str == 'Y' || *str == 'y') && (*(str + 1) == 'E' || *(str + 1) == 'e') && (*(str + 2) == 'S' || *(str + 2) == 's') && *(str + 3) == '\0') {
+	if ((*str == 'Y' || *str == 'y') && (*(str + 1) == 'E' || *(str + 1) == 'e') && (*(str + 2) == 'S' || *(str + 2) == 's')) {
 		return 1;
 	}
 
-	if ((*str == 'N' || *str == 'n') && *(str + 1) == '\0') {
+	if ((*str == 'N' || *str == 'n')) {
 		return 0;
 	}
 
-	if ((*str == 'N' || *str == 'n') && (*(str + 1) == 'O' || *(str + 1) == 'o') && *(str + 2) == '\0') {
+	if ((*str == 'N' || *str == 'n') && (*(str + 1) == 'O' || *(str + 1) == 'o')) {
 		return 0;
 	}
 
