@@ -147,14 +147,14 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint
 
 /* Sync vector of descriptors */
 static void
-file_sync_fds (gint *fds, gint len, gboolean fsync)
+file_sync_fds (gint *fds, gint len, gboolean do_fsync)
 {
 	gint										i, fd;
 
 	for (i = 0; i < len; i ++) {
 		fd = fds[i];
 		if (fd != -1) {
-			if (fsync) {
+			if (do_fsync) {
 #ifdef HAVE_FDATASYNC
 				fdatasync (fd);
 #else
