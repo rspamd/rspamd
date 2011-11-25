@@ -475,6 +475,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 	else if (session->command == KVSTORAGE_CMD_GET) {
 		elt = rspamd_kv_storage_lookup (session->cf->storage, session->key, session->keylen, session->now);
 		if (elt == NULL) {
+			g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 			if (!is_redis) {
 				return rspamd_dispatcher_write (session->dispather, ERROR_NOT_FOUND,
 						sizeof (ERROR_NOT_FOUND) - 1, FALSE, TRUE);
@@ -485,7 +486,6 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 			}
 		}
 		else {
-			session->elt = elt;
 			if (elt->flags & KV_ELT_INTEGER) {
 				eltlen = rspamd_snprintf (intbuf, sizeof (intbuf), "%l", ELT_LONG (elt));
 
@@ -504,6 +504,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 			}
 			if (!rspamd_dispatcher_write (session->dispather, outbuf,
 					r, TRUE, FALSE)) {
+				g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
 				return FALSE;
 			}
 			if (elt->flags & KV_ELT_INTEGER) {
@@ -518,6 +519,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 					return FALSE;
 				}
 			}
+			session->elt = elt;
 			if (!is_redis) {
 				res = rspamd_dispatcher_write (session->dispather, CRLF "END" CRLF,
 						sizeof (CRLF "END" CRLF) - 1, FALSE, TRUE);
@@ -895,7 +897,6 @@ kvstorage_write_socket (void *arg)
 	struct kvstorage_session			*session = (struct kvstorage_session *) arg;
 
 	if (session->elt) {
-
 		if ((session->elt->flags & KV_ELT_NEED_INSERT) != 0) {
 			/* Insert to cache and free element */
 			session->elt->flags &= ~KV_ELT_NEED_INSERT;
@@ -930,6 +931,12 @@ kvstorage_err_socket (GError * err, void *arg)
 		thr_info ("%ud: abnormally closing connection from: %s, error: %s",
 			thr->id, inet_ntoa (session->client_addr), err->message);
 	}
+
+	if (session->elt) {
+		g_static_rw_lock_reader_unlock (&session->cf->storage->rwlock);
+		session->elt = NULL;
+	}
+
 	g_error_free (err);
 	free_kvstorage_session (session);
 }
