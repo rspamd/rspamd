@@ -966,7 +966,7 @@ thr_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	session = g_slice_alloc (sizeof (struct kvstorage_session));
+	session = g_slice_alloc0 (sizeof (struct kvstorage_session));
 	session->pool = memory_pool_new (memory_pool_get_size ());
 	session->state = KVSTORAGE_STATE_READ_CMD;
 	session->thr = thr;

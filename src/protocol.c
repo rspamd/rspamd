@@ -651,6 +651,7 @@ struct tree_cb_data {
 	gchar                          *buf;
 	gsize                           len;
 	gsize                           off;
+	struct worker_task             *task;
 };
 
 /*
@@ -672,6 +673,12 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		cb->off += rspamd_snprintf (cb->buf + cb->off, cb->len - cb->off, " %*s,",
 								url->hostlen, url->host);
 	}
+
+	if (cb->task->cfg->log_urls) {
+		msg_info ("<%s> URL: %s - %s: %s", cb->task->message_id, cb->task->user ?
+				cb->task->user : "unknown", inet_ntoa (cb->task->client_addr), struri (url));
+	}
+
 	return FALSE;
 }
 
@@ -687,6 +694,7 @@ show_url_header (struct worker_task *task)
 	cb.buf = outbuf;
 	cb.len = sizeof (outbuf);
 	cb.off = r;
+	cb.task = task;
 
 	g_tree_foreach (task->urls, urls_protocol_cb, &cb);
 	/* Strip last ',' */
@@ -736,6 +744,7 @@ show_email_header (struct worker_task *task)
 	cb.buf = outbuf;
 	cb.len = sizeof (outbuf);
 	cb.off = r;
+	cb.task = task;
 
 	g_tree_foreach (task->emails, emails_protocol_cb, &cb);
 	/* Strip last ',' */
