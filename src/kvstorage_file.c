@@ -198,6 +198,7 @@ file_process_queue (struct rspamd_kv_backend *backend)
 	g_slice_free1 (len * sizeof (gint), fds);
 
 	/* Clean the queue */
+	g_hash_table_remove_all (db->ops_hash);
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
@@ -214,7 +215,6 @@ file_process_queue (struct rspamd_kv_backend *backend)
 		cur = g_list_next (cur);
 	}
 
-	g_hash_table_remove_all (db->ops_hash);
 	g_queue_clear (db->ops_queue);
 
 	return TRUE;
@@ -304,10 +304,13 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 		/* We found another op with such key in this queue */
 		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
+			g_hash_table_steal (db->ops_hash, &search_elt);
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
 		op->op = FILE_OP_INSERT;
 		op->elt = elt;
+		elt->flags |= KV_ELT_DIRTY;
+		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 	else {
 		op = g_slice_alloc (sizeof (struct file_op));
@@ -343,10 +346,13 @@ rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, guint keyl
 		/* We found another op with such key in this queue */
 		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
+			g_hash_table_steal (db->ops_hash, &search_elt);
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
 		op->op = FILE_OP_REPLACE;
 		op->elt = elt;
+		elt->flags |= KV_ELT_DIRTY;
+		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 	else {
 		op = g_slice_alloc (sizeof (struct file_op));
