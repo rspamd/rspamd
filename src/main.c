@@ -66,6 +66,7 @@ static gchar                   *rspamd_pidfile = NULL;
 static gboolean                 dump_vars = FALSE;
 static gboolean                 dump_cache = FALSE;
 static gboolean                 is_debug = FALSE;
+static gboolean                 is_insecure = FALSE;
 
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
@@ -87,6 +88,7 @@ static GOptionEntry entries[] =
   { "dump-vars", 'V', 0, G_OPTION_ARG_NONE, &dump_vars, "Print all rspamd variables and exit", NULL },
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
+  { "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure, "Ignore running workers as privileged users (insecure)", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -202,26 +204,35 @@ detect_priv (struct rspamd_main *rspamd)
 	euid = geteuid ();
 
 	if (euid == 0) {
-		if (!rspamd->cfg->rspamd_user) {
-			msg_err ("cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user");
+		if (!rspamd->cfg->rspamd_user && !is_insecure) {
+			msg_err ("cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user or specify --insecure flag");
 			exit (EXIT_FAILURE);
 		}
-
-		rspamd->is_privilleged = TRUE;
-		pwd = getpwnam (rspamd->cfg->rspamd_user);
-		if (pwd == NULL) {
-			msg_err ("user specified does not exists (%s), aborting", strerror (errno));
-			exit (-errno);
+		else if (is_insecure) {
+			rspamd->is_privilleged = TRUE;
+			rspamd->workers_uid = 0;
+			rspamd->workers_gid = 0;
 		}
-		if (rspamd->cfg->rspamd_group) {
-			grp = getgrnam (rspamd->cfg->rspamd_group);
-			if (grp == NULL) {
-				msg_err ("group specified does not exists (%s), aborting", strerror (errno));
+		else {
+			rspamd->is_privilleged = TRUE;
+			pwd = getpwnam (rspamd->cfg->rspamd_user);
+			if (pwd == NULL) {
+				msg_err ("user specified does not exists (%s), aborting", strerror (errno));
 				exit (-errno);
 			}
-			rspamd->workers_gid = grp->gr_gid;
+			if (rspamd->cfg->rspamd_group) {
+				grp = getgrnam (rspamd->cfg->rspamd_group);
+				if (grp == NULL) {
+					msg_err ("group specified does not exists (%s), aborting", strerror (errno));
+					exit (-errno);
+				}
+				rspamd->workers_gid = grp->gr_gid;
+			}
+			else {
+				rspamd->workers_gid = -1;
+			}
+			rspamd->workers_uid = pwd->pw_uid;
 		}
-		rspamd->workers_uid = pwd->pw_uid;
 	}
 	else {
 		rspamd->is_privilleged = FALSE;
@@ -238,7 +249,8 @@ drop_priv (struct rspamd_main *rspamd)
 			msg_err ("cannot setgid to %d (%s), aborting", (gint)rspamd->workers_gid, strerror (errno));
 			exit (-errno);
 		}
-		if (initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
+		if (rspamd->cfg->rspamd_user &&
+				initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
 			msg_err ("initgroups failed (%s), aborting", strerror (errno));
 			exit (-errno);
 		}

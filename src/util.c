@@ -408,6 +408,11 @@ write_pid (struct rspamd_main *main)
 		return -1;
 	}
 
+	if (main->is_privilleged) {
+		/* Force root user as owner of pid file */
+		fchown (main->pfh->pf_fd, 0, 0);
+	}
+
 	rspamd_pidfile_write (main->pfh);
 
 	return 0;
