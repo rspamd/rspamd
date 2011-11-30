@@ -117,7 +117,7 @@ direct_write_log_line (rspamd_logger_t *rspamd_log, void *data, gint count, gboo
 		if (r == -1) {
 			/* We cannot write message to file, so we need to detect error and make decision */
 			r = rspamd_snprintf (errmsg, sizeof (errmsg), "direct_write_log_line: cannot write log line: %s", strerror (errno));
-			if (errno == EBADF || errno == EIO || errno == EINTR) {
+			if (errno == EIO || errno == EINTR) {
 				/* Descriptor is somehow invalid, try to restart */
 				reopen_log (rspamd_log);
 				if (write (rspamd_log->fd, errmsg, r) != -1) {
@@ -130,8 +130,8 @@ direct_write_log_line (rspamd_logger_t *rspamd_log, void *data, gint count, gboo
 				rspamd_log->throttling = TRUE;
 				rspamd_log->throttling_time = time (NULL);
 			}
-			else if (errno == EPIPE) {
-				/* We write to some pipe and it disappears, disable logging */
+			else if (errno == EPIPE || errno == EBADF) {
+				/* We write to some pipe and it disappears, disable logging or we has opened bad file descriptor */
 				rspamd_log->enabled = FALSE;
 			}
 		}
@@ -143,17 +143,16 @@ direct_write_log_line (rspamd_logger_t *rspamd_log, void *data, gint count, gboo
 
 /* Logging utility functions */
 gint
-open_log (rspamd_logger_t *rspamd_log)
+open_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
-
-	rspamd_log->enabled = TRUE;
-
 	switch (rspamd_log->cfg->log_type) {
 	case RSPAMD_LOG_CONSOLE:
 		/* Do nothing with console */
+		rspamd_log->enabled = TRUE;
 		return 0;
 	case RSPAMD_LOG_SYSLOG:
 		openlog ("rspamd", LOG_NDELAY | LOG_PID, rspamd_log->cfg->log_facility);
+		rspamd_log->enabled = TRUE;
 		return 0;
 	case RSPAMD_LOG_FILE:
 		rspamd_log->fd = open (rspamd_log->cfg->log_file, O_CREAT | O_WRONLY | O_APPEND, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
@@ -161,13 +160,18 @@ open_log (rspamd_logger_t *rspamd_log)
 			fprintf (stderr, "open_log: cannot open desired log file: %s, %s", rspamd_log->cfg->log_file, strerror (errno));
 			return -1;
 		}
+		if (fchown (rspamd_log->fd, uid, gid) == -1) {
+			fprintf (stderr, "open_log: cannot chown desired log file: %s, %s", rspamd_log->cfg->log_file, strerror (errno));
+			return -1;
+		}
+		rspamd_log->enabled = TRUE;
 		return 0;
 	}
 	return -1;
 }
 
 void
-close_log (rspamd_logger_t *rspamd_log)
+close_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
 	gchar                           tmpbuf[256];
 	flush_log_buf (rspamd_log);
@@ -205,6 +209,43 @@ close_log (rspamd_logger_t *rspamd_log)
 	}
 
 	rspamd_log->enabled = FALSE;
+}
+
+gint
+reopen_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+{
+	close_log_priv (rspamd_log, uid, gid);
+	if (open_log_priv (rspamd_log, uid, gid) == 0) {
+		msg_info ("log file reopened");
+		return 0;
+	}
+
+	return -1;
+}
+
+/**
+ * Open log file or initialize other structures
+ */
+gint
+open_log (rspamd_logger_t *logger)
+{
+	return open_log_priv (logger, -1, -1);
+}
+/**
+ * Close log file or destroy other structures
+ */
+void
+close_log (rspamd_logger_t *logger)
+{
+	close_log_priv (logger, -1, -1);
+}
+/**
+ * Close and open log again
+ */
+gint
+reopen_log (rspamd_logger_t *logger)
+{
+	return reopen_log_priv (logger, -1, -1);
 }
 
 /*
@@ -293,18 +334,6 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct rs
 		radix_tree_free (rspamd->logger->debug_ip);
 		rspamd->logger->debug_ip = NULL;
 	}
-}
-
-gint
-reopen_log (rspamd_logger_t *rspamd_log)
-{
-	close_log (rspamd_log);
-	if (open_log (rspamd_log) == 0) {
-		msg_info ("log file reopened");
-		return 0;
-	}
-
-	return -1;
 }
 
 /**

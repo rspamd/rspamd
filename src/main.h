@@ -97,6 +97,9 @@ struct rspamd_main {
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
 	rspamd_logger_t *logger;
+	uid_t workers_uid;											/**< worker's uid running to 						*/
+	gid_t workers_gid;											/**< worker's gid running to						*/
+	gboolean is_privilleged;									/**< true if run in privilleged mode 				*/
 };
 
 struct counter_data {

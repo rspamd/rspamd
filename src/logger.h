@@ -28,6 +28,20 @@ void close_log (rspamd_logger_t *logger);
  * Close and open log again
  */
 gint reopen_log (rspamd_logger_t *logger);
+
+/**
+ * Open log file or initialize other structures for privileged processes
+ */
+gint open_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+/**
+ * Close log file or destroy other structures for privileged processes
+ */
+void close_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+/**
+ * Close and open log again for privileged processes
+ */
+gint reopen_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+
 /**
  * Set log pid
  */

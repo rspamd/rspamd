@@ -191,35 +191,59 @@ read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
 	cfg->pid_file = rspamd_pidfile;
 }
 
+/* Detect privilleged mode */
 static void
-drop_priv (struct config_file *cfg)
+detect_priv (struct rspamd_main *rspamd)
 {
 	struct passwd                  *pwd;
 	struct group                   *grp;
+	uid_t                           euid;
 
-	if (geteuid () == 0 && cfg->rspamd_user) {
-		pwd = getpwnam (cfg->rspamd_user);
+	euid = geteuid ();
+
+	if (euid == 0) {
+		if (!rspamd->cfg->rspamd_user) {
+			msg_err ("cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user");
+			exit (EXIT_FAILURE);
+		}
+
+		rspamd->is_privilleged = TRUE;
+		pwd = getpwnam (rspamd->cfg->rspamd_user);
 		if (pwd == NULL) {
 			msg_err ("user specified does not exists (%s), aborting", strerror (errno));
 			exit (-errno);
 		}
-		if (cfg->rspamd_group) {
-			grp = getgrnam (cfg->rspamd_group);
+		if (rspamd->cfg->rspamd_group) {
+			grp = getgrnam (rspamd->cfg->rspamd_group);
 			if (grp == NULL) {
 				msg_err ("group specified does not exists (%s), aborting", strerror (errno));
 				exit (-errno);
 			}
-			if (setgid (grp->gr_gid) == -1) {
-				msg_err ("cannot setgid to %d (%s), aborting", (gint)grp->gr_gid, strerror (errno));
-				exit (-errno);
-			}
-			if (initgroups (cfg->rspamd_user, grp->gr_gid) == -1) {
-				msg_err ("initgroups failed (%s), aborting", strerror (errno));
-				exit (-errno);
-			}
+			rspamd->workers_gid = grp->gr_gid;
 		}
-		if (setuid (pwd->pw_uid) == -1) {
-			msg_err ("cannot setuid to %d (%s), aborting", (gint)pwd->pw_uid, strerror (errno));
+		rspamd->workers_uid = pwd->pw_uid;
+	}
+	else {
+		rspamd->is_privilleged = FALSE;
+		rspamd->workers_uid = -1;
+		rspamd->workers_gid = -1;
+	}
+}
+
+static void
+drop_priv (struct rspamd_main *rspamd)
+{
+	if (rspamd->is_privilleged) {
+		if (setgid (rspamd->workers_gid) == -1) {
+			msg_err ("cannot setgid to %d (%s), aborting", (gint)rspamd->workers_gid, strerror (errno));
+			exit (-errno);
+		}
+		if (initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
+			msg_err ("initgroups failed (%s), aborting", strerror (errno));
+			exit (-errno);
+		}
+		if (setuid (rspamd->workers_uid) == -1) {
+			msg_err ("cannot setuid to %d (%s), aborting", (gint)rspamd->workers_uid, strerror (errno));
 			exit (-errno);
 		}
 	}
@@ -229,7 +253,7 @@ static void
 config_logger (struct rspamd_main *rspamd, gboolean is_fatal)
 {
 	rspamd_set_logger (rspamd->cfg->log_type, TYPE_MAIN, rspamd);
-	if (open_log (rspamd->logger) == -1) {
+	if (open_log_priv (rspamd->logger, rspamd->workers_uid, rspamd->workers_gid) == -1) {
 		if (is_fatal) {
 			fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 			exit (EXIT_FAILURE);
@@ -346,7 +370,7 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			/* Update pid for logging */
 			update_log_pid (cf->type, rspamd->logger);
 			/* Drop privilleges */
-			drop_priv (rspamd->cfg);
+			drop_priv (rspamd);
 			/* Set limits */
 			set_worker_limits (cf);
 			switch (cf->type) {
@@ -887,6 +911,7 @@ main (gint argc, gchar **argv, gchar **env)
 	(void)open_log (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
+	detect_priv (rspamd_main);
 	init_lua (rspamd_main->cfg);
 
 	/* Init counters */
@@ -1082,7 +1107,7 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		if (do_restart) {
 			do_restart = 0;
-			reopen_log (rspamd_main->logger);
+			reopen_log_priv (rspamd_main->logger, rspamd_main->workers_uid, rspamd_main->workers_gid);
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 			remove_all_maps ();
@@ -1091,7 +1116,7 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		if (do_reopen_log) {
 			do_reopen_log = 0;
-			reopen_log (rspamd_main->logger);
+			reopen_log_priv (rspamd_main->logger, rspamd_main->workers_uid, rspamd_main->workers_gid);
 			g_hash_table_foreach (rspamd_main->workers, reopen_log_handler, NULL);
 		}
 		if (got_alarm) {
