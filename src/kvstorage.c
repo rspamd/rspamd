@@ -132,7 +132,7 @@ rspamd_kv_storage_insert_cache (struct rspamd_kv_storage *storage, gpointer key,
 	}
 
 	storage->elts ++;
-	storage->memory += elt->size + sizeof (struct rspamd_kv_element);
+	storage->memory += ELT_SIZE (elt);
 	g_static_rw_lock_writer_unlock (&storage->rwlock);
 
 	return TRUE;
@@ -585,7 +585,7 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 	elt = TAILQ_FIRST (&expire->head);
 	if (elt && (forced || (elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) == 0)) {
 		diff = elt->expire - (now - elt->age);
-		if (diff > 0) {
+		if (diff > 0 || (forced && elt->expire == 0)) {
 			oldest_elt = elt;
 		}
 		else {
