@@ -50,7 +50,8 @@ struct rspamd_worker {
 	gboolean pending;											/**< if worker is pending to run					*/
 	struct rspamd_main *srv;									/**< pointer to server structure					*/
 	enum process_type type;										/**< process type									*/
-	struct event sig_ev;										/**< signals event									*/
+	struct event sig_ev_usr1;									/**< signals event									*/
+	struct event sig_ev_usr2;									/**< signals event									*/
 	struct event bind_ev;										/**< socket events									*/
 	struct worker_conf *cf;										/**< worker config data								*/
 	gpointer ctx;												/**< worker's specific data							*/
@@ -272,8 +273,6 @@ gpointer init_worker (void);
 void start_worker (struct rspamd_worker *worker);
 gpointer init_controller (void);
 void start_controller (struct rspamd_worker *worker);
-gpointer init_greylist (void);
-void start_greylist_storage (struct rspamd_worker *worker);
 
 /**
  * Register custom controller function

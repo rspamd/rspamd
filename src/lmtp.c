@@ -47,9 +47,6 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
-	case SIGUSR1:
-		reopen_log (rspamd_main->logger);
-		break;
 	case SIGINT:
 	case SIGTERM:
 		_exit (1);
@@ -61,17 +58,31 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr_handler (gint fd, short what, void *arg)
+sigusr2_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
 	struct timeval                  tv;
 	tv.tv_sec = SOFT_SHUTDOWN_TIME;
 	tv.tv_usec = 0;
-	event_del (&worker->sig_ev);
+	event_del (&worker->sig_ev_usr1);
+	event_del (&worker->sig_ev_usr2);
 	event_del (&worker->bind_ev);
 	msg_info ("lmtp worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
+	return;
+}
+
+/*
+ * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
+ */
+static void
+sigusr1_handler (gint fd, short what, void *arg)
+{
+	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+
+	reopen_log (worker->srv->logger);
+
 	return;
 }
 
@@ -284,9 +295,14 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *)worker);
-	event_base_set (worker->ctx, &worker->sig_ev);
-	signal_add (&worker->sig_ev, NULL);
+	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
+	event_base_set (worker->ctx, &worker->sig_ev_usr2);
+	signal_add (&worker->sig_ev_usr2, NULL);
+
+	/* SIGUSR1 handler */
+	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
+	event_base_set (worker->ctx, &worker->sig_ev_usr1);
+	signal_add (&worker->sig_ev_usr1, NULL);
 
 	/* Accept event */
 	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);

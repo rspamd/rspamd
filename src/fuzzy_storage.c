@@ -102,9 +102,6 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 	switch (signo) {
-	case SIGUSR1:
-		reopen_log (rspamd_main->logger);
-		break;
 	case SIGINT:
 	case SIGTERM:
 		/* Ignore SIGINT and SIGTERM as they are handled by libevent handler */
@@ -251,7 +248,7 @@ sigterm_handler (gint fd, short what, void *arg)
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr_handler (gint fd, short what, void *arg)
+sigusr2_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
@@ -261,13 +258,27 @@ sigusr_handler (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 	tv.tv_sec = SOFT_SHUTDOWN_TIME;
 	tv.tv_usec = 0;
-	event_del (&worker->sig_ev);
+	event_del (&worker->sig_ev_usr1);
+	event_del (&worker->sig_ev_usr2);
 	event_del (&worker->bind_ev);
 	close (worker->cf->listen_sock);
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
 	mods = ctx->max_mods + 1;
 	sync_cache (worker);
+	return;
+}
+
+/*
+ * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
+ */
+static void
+sigusr1_handler (gint fd, short what, void *arg)
+{
+	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+
+	reopen_log (worker->srv->logger);
+
 	return;
 }
 
@@ -790,8 +801,13 @@ start_fuzzy_storage (struct rspamd_worker *worker)
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev, SIGUSR2, sigusr_handler, (void *)worker);
-	signal_add (&worker->sig_ev, NULL);
+	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
+	signal_add (&worker->sig_ev_usr2, NULL);
+
+	/* SIGUSR1 handler */
+	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
+	signal_add (&worker->sig_ev_usr1, NULL);
+
 	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
 	signal_add (&sev, NULL);
 

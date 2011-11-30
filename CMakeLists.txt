@@ -777,7 +777,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src")
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
 				src/fuzzy_storage.c
-				src/greylist_storage.c
 				src/kvstorage_server.c
 				src/lmtp.c
 				src/main.c

@@ -1231,8 +1231,6 @@ process_to_str (enum process_type type)
 		return "worker";
 	case TYPE_FUZZY:
 		return "fuzzy";
-	case TYPE_GREYLIST:
-		return "greylist";
 	case TYPE_CONTROLLER:
 		return "controller";
 	case TYPE_LMTP:
@@ -1259,9 +1257,6 @@ str_to_process (const gchar *str)
 	}
 	else if (g_ascii_strcasecmp (str, "fuzzy") == 0) {
 		return TYPE_FUZZY;
-	}
-	else if (g_ascii_strcasecmp (str, "greylist") == 0) {
-		return TYPE_GREYLIST;
 	}
 	else if (g_ascii_strcasecmp (str, "controller") == 0) {
 		return TYPE_CONTROLLER;

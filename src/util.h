@@ -25,7 +25,6 @@ enum process_type {
 	TYPE_LMTP,
 	TYPE_SMTP,
 	TYPE_FUZZY,
-	TYPE_GREYLIST,
 	TYPE_KVSTORAGE,
 	TYPE_MAX=255
 };
