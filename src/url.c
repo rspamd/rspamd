@@ -1195,8 +1195,10 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 							ex->pos = url_start - begin;
 							ex->len = url_end - url_start;
 							if (new->protocol == PROTOCOL_MAILTO) {
-								if (!g_tree_lookup (task->emails, new)) {
-									g_tree_insert (task->emails, new, new);
+								if (new->userlen > 0) {
+									if (!g_tree_lookup (task->emails, new)) {
+										g_tree_insert (task->emails, new, new);
+									}
 								}
 							}
 							else {
