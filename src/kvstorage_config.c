@@ -51,10 +51,12 @@ struct kvstorage_config_parser {
 		KVSTORAGE_STATE_CACHE_TYPE,
 		KVSTORAGE_STATE_CACHE_MAX_ELTS,
 		KVSTORAGE_STATE_CACHE_MAX_MEM,
+		KVSTORAGE_STATE_CACHE_NO_OVERWRITE,
 		KVSTORAGE_STATE_BACKEND_TYPE,
 		KVSTORAGE_STATE_BACKEND_FILENAME,
 		KVSTORAGE_STATE_BACKEND_SYNC_OPS,
 		KVSTORAGE_STATE_BACKEND_DO_FSYNC,
+		KVSTORAGE_STATE_BACKEND_DO_REF,
 		KVSTORAGE_STATE_EXPIRE_TYPE,
 		KVSTORAGE_STATE_ERROR
 	} state;
@@ -112,7 +114,7 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 		break;
 	case KVSTORAGE_TYPE_BACKEND_FILE:
 		backend = rspamd_kv_file_new (kconf->backend.filename, kconf->backend.sync_ops,
-				FILE_STORAGE_LEVELS, kconf->backend.do_fsync);
+				FILE_STORAGE_LEVELS, kconf->backend.do_fsync, kconf->backend.do_ref);
 		break;
 #ifdef WITH_DB
 	case KVSTORAGE_TYPE_BACKEND_BDB:
@@ -133,7 +135,7 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 	}
 
 	kconf->storage = rspamd_kv_storage_new (kconf->id, kconf->name, cache, backend, expire,
-			kconf->cache.max_elements, kconf->cache.max_memory);
+			kconf->cache.max_elements, kconf->cache.max_memory, kconf->cache.no_overwrite);
 }
 
 /* XML parse callbacks */
@@ -175,6 +177,10 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 			kv_parser->state = KVSTORAGE_STATE_CACHE_MAX_MEM;
 			kv_parser->cur_elt = "max_memory";
 		}
+		else if (g_ascii_strcasecmp (element_name, "no_overwrite") == 0) {
+			kv_parser->state = KVSTORAGE_STATE_CACHE_NO_OVERWRITE;
+			kv_parser->cur_elt = "no_overwrite";
+		}
 		else if (g_ascii_strcasecmp (element_name, "id") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_ID;
 			kv_parser->cur_elt = "id";
@@ -215,6 +221,10 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 		else if (g_ascii_strcasecmp (element_name, "fsync") == 0) {
 			kv_parser->state = KVSTORAGE_STATE_BACKEND_DO_FSYNC;
 			kv_parser->cur_elt = "fsync";
+		}
+		else if (g_ascii_strcasecmp (element_name, "ref") == 0) {
+			kv_parser->state = KVSTORAGE_STATE_BACKEND_DO_REF;
+			kv_parser->cur_elt = "ref";
 		}
 		else {
 			if (*error == NULL) {
@@ -281,12 +291,14 @@ void kvstorage_xml_end_element (GMarkupParseContext	*context,
 	case KVSTORAGE_STATE_CACHE_TYPE:
 	case KVSTORAGE_STATE_CACHE_MAX_ELTS:
 	case KVSTORAGE_STATE_CACHE_MAX_MEM:
+	case KVSTORAGE_STATE_CACHE_NO_OVERWRITE:
 		CHECK_TAG (KVSTORAGE_STATE_PARAM);
 		break;
 	case KVSTORAGE_STATE_BACKEND_TYPE:
 	case KVSTORAGE_STATE_BACKEND_FILENAME:
 	case KVSTORAGE_STATE_BACKEND_SYNC_OPS:
 	case KVSTORAGE_STATE_BACKEND_DO_FSYNC:
+	case KVSTORAGE_STATE_BACKEND_DO_REF:
 		CHECK_TAG (KVSTORAGE_STATE_BACKEND);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
@@ -373,6 +385,9 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 	case KVSTORAGE_STATE_CACHE_MAX_MEM:
 		kv_parser->current_storage->cache.max_memory = parse_limit (text, text_len);
 		break;
+	case KVSTORAGE_STATE_CACHE_NO_OVERWRITE:
+		kv_parser->current_storage->cache.no_overwrite = parse_flag (text);
+		break;
 	case KVSTORAGE_STATE_CACHE_TYPE:
 		if (g_ascii_strncasecmp (text, "hash", MIN (text_len, sizeof ("hash") - 1)) == 0) {
 			kv_parser->current_storage->cache.type = KVSTORAGE_TYPE_CACHE_HASH;
@@ -425,6 +440,9 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 		break;
 	case KVSTORAGE_STATE_BACKEND_DO_FSYNC:
 		kv_parser->current_storage->backend.do_fsync = parse_flag (text);
+		break;
+	case KVSTORAGE_STATE_BACKEND_DO_REF:
+		kv_parser->current_storage->backend.do_ref = parse_flag (text);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
 		if (g_ascii_strncasecmp (text, "lru", MIN (text_len, sizeof ("lru") - 1)) == 0) {

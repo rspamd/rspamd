@@ -60,6 +60,7 @@ enum kvstorage_expire_type {
 struct kvstorage_cache_config {
 	gsize max_elements;
 	gsize max_memory;
+	gboolean no_overwrite;
 	enum kvstorage_cache_type type;
 };
 
@@ -69,6 +70,7 @@ struct kvstorage_backend_config {
 	gchar *filename;
 	guint sync_ops;
 	gboolean do_fsync;
+	gboolean do_ref;
 };
 
 

@@ -35,6 +35,7 @@ struct file_op {
 		FILE_OP_DELETE,
 		FILE_OP_REPLACE
 	} op;
+	guint32 ref;
 };
 
 /* Main file structure */
@@ -45,6 +46,7 @@ struct rspamd_file_backend {
 	backend_lookup lookup_func;					/*< this callback is used for lookup of element */
 	backend_delete delete_func;					/*< this callback is called when an element is deleted */
 	backend_sync sync_func;						/*< this callback is called when backend need to be synced */
+	backend_incref incref_func;					/*< this callback is called when element must be ref'd */
 	backend_destroy destroy_func;				/*< this callback is used for destroying all elements inside backend */
 	gchar *filename;
 	gchar *dirname;
@@ -54,6 +56,7 @@ struct rspamd_file_backend {
 	GQueue *ops_queue;
 	GHashTable *ops_hash;
 	gboolean do_fsync;
+	gboolean do_ref;
 	gboolean initialized;
 };
 
@@ -103,41 +106,137 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 	return TRUE;
 }
 
+/* Read reference from specified file */
+static guint32
+file_get_ref (gint fd)
+{
+	guint32										 target;
+
+	if (read (fd, &target, sizeof (guint32)) != sizeof (guint32)) {
+		return 0;
+	}
+
+	return target;
+}
+
+/* Set reference to specified file */
+static gboolean
+file_set_ref (gint fd, guint32 ref)
+{
+	if (write (fd, &ref, sizeof (guint32)) != sizeof (guint32)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * Open file, set posix_fadvise and all necessary flags
+ */
+static gint
+file_open_fd (const gchar *path, gsize *len, gint flags)
+{
+	gint										 fd;
+	struct stat									 st;
+
+	if ((flags & O_CREAT) != 0) {
+		/* Open file */
+		if ((fd = open (path, flags, S_IRUSR|S_IWUSR|S_IRGRP)) != -1) {
+#ifdef HAVE_FADVISE
+			posix_fadvise (fd, 0, *len, POSIX_FADV_SEQUENTIAL);
+#endif
+		}
+	}
+	else {
+		/* Open file */
+		if ((fd = open (path, flags)) == -1) {
+			return -1;
+		}
+
+		if (fstat (fd, &st) == -1) {
+			close (fd);
+			return -1;
+		}
+
+#ifdef HAVE_FADVISE
+		posix_fadvise (fd, 0, st.st_size, POSIX_FADV_SEQUENTIAL);
+#endif
+		*len = st.st_size;
+	}
+
+	return fd;
+}
+
 /* Process single file operation */
 static gboolean
 file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint *pfd)
 {
 	gchar										 filebuf[PATH_MAX];
-	gint										 fd, flags;
+	gint										 fd;
+	gsize										 len;
+	struct iovec								 iov[2];
+	guint32										 ref;
 
 	/* Get filename */
 	if (!get_file_name (db, ELT_KEY (op->elt), op->elt->keylen, filebuf, sizeof (filebuf))) {
 		return FALSE;
 	}
 
-	if (op->op == FILE_OP_DELETE) {
-		*pfd = -1;
-		return unlink (filebuf) != -1;
+	if (db->do_ref) {
+		len = ELT_SIZE (op->elt) + sizeof (guint32);
 	}
 	else {
-#ifdef HAVE_O_DIRECT
-		flags = O_CREAT|O_TRUNC|O_WRONLY;
-#else
-		flags = O_CREAT|O_TRUNC|O_WRONLY;
-#endif
-		/* Open file */
-		if ((fd = open (filebuf, flags, S_IRUSR|S_IWUSR|S_IRGRP)) == -1) {
+		len = ELT_SIZE (op->elt);
+	}
+
+	if (op->op == FILE_OP_DELETE) {
+		if (db->do_ref) {
+			if ((fd = file_open_fd (filebuf, &len, O_RDWR)) == -1) {
+				*pfd = -1;
+				return FALSE;
+			}
+			if ((ref = file_get_ref (fd)) <= 1) {
+				/* Refcount is not enough, remove file */
+				close (fd);
+				*pfd = -1;
+				return unlink (filebuf) != -1;
+			}
+			else {
+				/* Decrease ref */
+				lseek (fd, 0, SEEK_SET);
+				if (! file_set_ref (fd, --ref)) {
+					*pfd = fd;
+					return FALSE;
+				}
+			}
+		}
+		else {
+			*pfd = -1;
+			return unlink (filebuf) != -1;
+		}
+	}
+	else {
+		if ((fd = file_open_fd (filebuf, &len, O_CREAT|O_WRONLY|O_TRUNC)) == -1) {
 			*pfd = -1;
 			return FALSE;
 		}
-
-#ifdef HAVE_FADVISE
-		posix_fadvise (fd, 0, ELT_SIZE (op->elt), POSIX_FADV_SEQUENTIAL);
-#endif
-		if (write (fd, op->elt, ELT_SIZE (op->elt)) == -1) {
-			msg_info ("%d: %s", errno, strerror (errno));
-			*pfd = fd;
-			return FALSE;
+		if (db->do_ref) {
+			iov[0].iov_base = &op->ref;
+			iov[0].iov_len = sizeof (guint32);
+			iov[1].iov_base = op->elt;
+			iov[1].iov_len = ELT_SIZE (op->elt);
+			if (writev (fd, iov, G_N_ELEMENTS (iov)) == -1) {
+				msg_info ("%d: %s", errno, strerror (errno));
+				*pfd = fd;
+				return FALSE;
+			}
+		}
+		else {
+			if (write (fd, op->elt, ELT_SIZE (op->elt)) == -1) {
+				msg_info ("%d: %s", errno, strerror (errno));
+				*pfd = fd;
+				return FALSE;
+			}
 		}
 	}
 
@@ -149,7 +248,7 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint
 static void
 file_sync_fds (gint *fds, gint len, gboolean do_fsync)
 {
-	gint										i, fd;
+	gint										 i, fd;
 
 	for (i = 0; i < len; i ++) {
 		fd = fds[i];
@@ -308,6 +407,7 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
 		op->op = FILE_OP_INSERT;
+		op->ref ++;
 		op->elt = elt;
 		elt->flags |= KV_ELT_DIRTY;
 		g_hash_table_insert (db->ops_hash, elt, op);
@@ -316,6 +416,7 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 		op = g_slice_alloc (sizeof (struct file_op));
 		op->op = FILE_OP_INSERT;
 		op->elt = elt;
+		op->ref = 1;
 		elt->flags |= KV_ELT_DIRTY;
 
 		g_queue_push_head (db->ops_queue, op);
@@ -358,6 +459,7 @@ rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, guint keyl
 		op = g_slice_alloc (sizeof (struct file_op));
 		op->op = FILE_OP_REPLACE;
 		op->elt = elt;
+		op->ref = 1;
 		elt->flags |= KV_ELT_DIRTY;
 
 		g_queue_push_head (db->ops_queue, op);
@@ -378,9 +480,9 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 	struct file_op								*op;
 	struct rspamd_kv_element					*elt = NULL;
 	gchar										 filebuf[PATH_MAX];
-	gint										 fd, flags;
-	struct stat									 st;
+	gint										 fd;
 	struct rspamd_kv_element			 		 search_elt;
+	gsize										 len;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -402,27 +504,17 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 		return NULL;
 	}
 
-#ifdef HAVE_O_DIRECT
-	flags = O_RDONLY;
-#else
-	flags = O_RDONLY;
-#endif
-	/* Open file */
-	if ((fd = open (filebuf, flags)) == -1) {
+	if ((fd = file_open_fd (filebuf, &len, O_RDONLY)) == -1) {
 		return NULL;
 	}
-
-	if (fstat (fd, &st) == -1) {
-		return NULL;
-	}
-
-#ifdef HAVE_FADVISE
-	posix_fadvise (fd, 0, st.st_size, POSIX_FADV_SEQUENTIAL);
-#endif
 
 	/* Read element */
-	elt = g_malloc (st.st_size);
-	if (read (fd, elt, st.st_size) == -1) {
+	if (db->do_ref) {
+		lseek (fd, sizeof (guint32), SEEK_CUR);
+		len -= sizeof (guint32);
+	}
+	elt = g_malloc (len);
+	if (read (fd, elt, len) == -1) {
 		g_free (elt);
 		close (fd);
 		return NULL;
@@ -442,6 +534,9 @@ rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 	gchar										 filebuf[PATH_MAX];
 	struct rspamd_kv_element			 		 search_elt;
 	struct file_op								*op;
+	gsize										 len;
+	gint										 fd;
+	guint32										 ref;
 
 	if (!db->initialized) {
 		return;
@@ -452,6 +547,9 @@ rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 	/* First search in ops queue */
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		op->op = FILE_OP_DELETE;
+		if (op->ref > 0) {
+			op->ref --;
+		}
 		return;
 	}
 	/* Get filename */
@@ -459,7 +557,77 @@ rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 		return;
 	}
 
+	if (db->do_ref) {
+		if ((fd = file_open_fd (filebuf, &len, O_RDWR)) == -1) {
+			return;
+		}
+		if ((ref = file_get_ref (fd)) <= 1) {
+			/* Refcount is not enough, remove file */
+			close (fd);
+			unlink (filebuf);
+		}
+		else {
+			/* Decrease ref */
+			lseek (fd, 0, SEEK_SET);
+			file_set_ref (fd, --ref);
+		}
+		return;
+	}
+
 	unlink (filebuf);
+}
+
+static gboolean
+rspamd_file_incref (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
+{
+	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
+	gchar										 filebuf[PATH_MAX];
+	struct rspamd_kv_element			 		 search_elt;
+	struct file_op								*op;
+	gsize										 len;
+	gint										 fd;
+	guint32										 ref;
+
+	if (!db->initialized) {
+		return FALSE;
+	}
+	if (!db->do_ref) {
+		return TRUE;
+	}
+
+	search_elt.keylen = keylen;
+	search_elt.p = key;
+	/* First search in ops queue */
+	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
+		op->ref ++;
+		if (op->op == FILE_OP_DELETE) {
+			op->op = FILE_OP_INSERT;
+		}
+		return TRUE;
+	}
+
+	/* Get filename */
+	if (!get_file_name (db, key, keylen, filebuf, sizeof (filebuf))) {
+		return FALSE;
+	}
+
+	if ((fd = file_open_fd (filebuf, &len, O_RDWR)) == -1) {
+		return FALSE;
+	}
+
+	ref = file_get_ref (fd);
+
+	/* Decrease ref */
+	lseek (fd, 0, SEEK_SET);
+
+	if (file_set_ref (fd, ++ref)) {
+		close (fd);
+		return TRUE;
+	}
+	else {
+		close (fd);
+		return FALSE;
+	}
 }
 
 static void
@@ -482,7 +650,7 @@ rspamd_file_destroy (struct rspamd_kv_backend *backend)
 
 /* Create new file backend */
 struct rspamd_kv_backend *
-rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolean do_fsync)
+rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolean do_fsync, gboolean do_ref)
 {
 	struct rspamd_file_backend			 		*new;
 	struct stat 								 st;
@@ -509,6 +677,7 @@ rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolea
 	new->sync_ops = sync_ops;
 	new->levels = levels;
 	new->do_fsync = do_fsync;
+	new->do_ref = do_ref;
 	new->ops_queue = g_queue_new ();
 	new->ops_hash = g_hash_table_new (kv_elt_hash_func, kv_elt_compare_func);
 
@@ -519,6 +688,7 @@ rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolea
 	new->delete_func = rspamd_file_delete;
 	new->replace_func = rspamd_file_replace;
 	new->sync_func = file_process_queue;
+	new->incref_func = rspamd_file_incref;
 	new->destroy_func = rspamd_file_destroy;
 
 	return (struct rspamd_kv_backend *)new;

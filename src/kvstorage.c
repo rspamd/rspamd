@@ -34,7 +34,7 @@
 /** Create new kv storage */
 struct rspamd_kv_storage *
 rspamd_kv_storage_new (gint id, const gchar *name, struct rspamd_kv_cache *cache, struct rspamd_kv_backend *backend, struct rspamd_kv_expire *expire,
-		gsize max_elts, gsize max_memory)
+		gsize max_elts, gsize max_memory, gboolean no_overwrite)
 {
 	struct rspamd_kv_storage 			*new;
 
@@ -50,6 +50,8 @@ rspamd_kv_storage_new (gint id, const gchar *name, struct rspamd_kv_cache *cache
 	new->max_memory = max_memory;
 
 	new->id = id;
+
+	new->no_overwrite = no_overwrite;
 
 	if (name != NULL) {
 		new->name = g_strdup (name);
@@ -114,10 +116,7 @@ rspamd_kv_storage_insert_cache (struct rspamd_kv_storage *storage, gpointer key,
 
 	elt = storage->cache->insert_func (storage->cache, key, keylen, data, len);
 
-	if (elt == NULL) {
-		g_static_rw_lock_writer_unlock (&storage->rwlock);
-		return FALSE;
-	}
+
 	/* Copy data */
 	elt->flags = flags;
 	elt->expire = expire;
@@ -195,17 +194,33 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 
 	elt = storage->cache->lookup_func (storage->cache, key, keylen);
 	if (elt) {
-		if (storage->expire) {
-			storage->expire->delete_func (storage->expire, elt);
-		}
-		storage->memory -= ELT_SIZE (elt);
-		storage->cache->steal_func (storage->cache, elt);
-		if (elt->flags & KV_ELT_DIRTY) {
-			/* Element is in backend storage queue */
-			elt->flags |= KV_ELT_NEED_FREE;
+		if (!storage->no_overwrite) {
+			/* Remove old elt */
+			if (storage->expire) {
+				storage->expire->delete_func (storage->expire, elt);
+			}
+			storage->memory -= ELT_SIZE (elt);
+			storage->cache->steal_func (storage->cache, elt);
+			if (elt->flags & KV_ELT_DIRTY) {
+				/* Element is in backend storage queue */
+				elt->flags |= KV_ELT_NEED_FREE;
+			}
+			else {
+				g_slice_free1 (ELT_SIZE (elt), elt);
+			}
 		}
 		else {
-			g_slice_free1 (ELT_SIZE (elt), elt);
+			/* Just do incref and nothing more */
+			if (storage->backend && storage->backend->incref_func) {
+				if (storage->backend->incref_func (storage->backend, key, keylen)) {
+					g_static_rw_lock_writer_unlock (&storage->rwlock);
+					return TRUE;
+				}
+				else {
+					g_static_rw_lock_writer_unlock (&storage->rwlock);
+					return FALSE;
+				}
+			}
 		}
 	}
 
