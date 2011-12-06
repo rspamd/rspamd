@@ -10,7 +10,6 @@ use strict;
 # databases/p5-Cache-Memcached-Fast
 # devel/p5-Proc-Daemon
 # sysutils/p5-Proc-PidUtil
-# security/p5-Digest-SHA256
 
 # POE::Component::Client::HTTP uses HTTP::Request and response
 # objects.
@@ -23,7 +22,7 @@ use HTTP::Response;
 use HTML::HeadParser; 
 use SWF::Element; # p5-SWF-File
 use Cache::Memcached::Fast;
-use Digest::SHA256;
+use Digest;
 
 use HTML::HeadParser;
 use Proc::Daemon;
@@ -186,7 +185,7 @@ sub swf_tag_callback {
 sub memcached_check_url {
     my ( $url ) = @_;
 
-    my $context = Digest::SHA256::new($cfg{digest_bits});
+    my $context = Digest->new("SHA-256");
 
     return $memd->get(unpack("H*", ($context->hash($url))));
 }
@@ -195,7 +194,7 @@ sub memcached_check_url {
 sub memcached_cache_url {
     my ( $url, $url_real ) = @_;
 
-    my $context = Digest::SHA256::new($cfg{digest_bits});
+    my $context = Digest->new("SHA-256");
 
     $memd->set(unpack("H*", ($context->hash($url))), $url_real, $cfg{cache_expire});
 }
