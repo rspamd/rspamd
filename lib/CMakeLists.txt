@@ -1,5 +1,8 @@
 # Librspamdclient
-SET(LIBRSPAMDSRC			  client/librspamdclient.c ../src/mem_pool.c ../src/upstream.c ../src/printf.c)
+SET(LIBRSPAMDSRC			  client/librspamdclient.c 
+							  ../src/mem_pool.c 
+							  ../src/upstream.c 
+							  ../src/printf.c)
 
 ADD_LIBRARY(rspamdclient SHARED ${LIBRSPAMDSRC})
 ADD_LIBRARY(rspamdclient_static STATIC ${LIBRSPAMDSRC})
@@ -88,7 +91,11 @@ TARGET_LINK_LIBRARIES(rspamdserver rspamd_cdb)
 
 
 # Libkvstorageclient
-SET(LIBRKVSTORAGESRC			  kvstorage/libkvstorageclient.c ../src/mem_pool.c ../src/upstream.c ../src/printf.c ../src/util.c)
+SET(LIBRKVSTORAGESRC			  kvstorage/libkvstorageclient.c 
+								  ../src/mem_pool.c 
+								  ../src/upstream.c 
+								  ../src/printf.c 
+								  ../src/util.c)
 
 ADD_LIBRARY(kvstorageclient SHARED ${LIBRKVSTORAGESRC})
 ADD_LIBRARY(kvstorageclient_static STATIC ${LIBRKVSTORAGESRC})
@@ -102,6 +109,7 @@ ENDIF(CMAKE_COMPILER_IS_GNUCC)
 TARGET_LINK_LIBRARIES(kvstorageclient ${CMAKE_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(kvstorageclient pcre)
 TARGET_LINK_LIBRARIES(kvstorageclient ${GLIB2_LIBRARIES})
+TARGET_LINK_LIBRARIES(kvstorageclient event)
 
 TARGET_LINK_LIBRARIES(kvstorageclient_static ${CMAKE_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(kvstorageclient_static ${GLIB2_LIBRARIES})

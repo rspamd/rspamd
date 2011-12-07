@@ -26,6 +26,7 @@
 #define LIBKVSTORAGECLIENT_H_
 
 #include <glib.h>
+#include <sys/time.h>
 
 /* Errors */
 enum rspamd_kvstorage_error {
@@ -45,10 +46,11 @@ struct rspamd_kvstorage_connection;
 /* Callbacks for async API */
 typedef void (*kvstorage_connect_cb) (enum rspamd_kvstorage_error code,
 									struct rspamd_kvstorage_connection *conn, gpointer user_data);
-typedef void (*kvstorage_read_cb) (enum rspamd_kvstorage_error code, const gpointer key,
+typedef void (*kvstorage_read_cb) (enum rspamd_kvstorage_error code, const gpointer key, guint keylen,
 									const gpointer value, gsize datalen, struct rspamd_kvstorage_connection *conn,
 									gpointer user_data);
-typedef void (*kvstorage_write_cb) (enum rspamd_kvstorage_error code, const gpointer key, struct rspamd_kvstorage_connection *conn,
+typedef void (*kvstorage_write_cb) (enum rspamd_kvstorage_error code, const gpointer key, guint keylen,
+									struct rspamd_kvstorage_connection *conn,
 									gpointer user_data);
 
 /* Asynced API */
@@ -74,7 +76,7 @@ enum rspamd_kvstorage_error rspamd_kvstorage_connect_async (const gchar *host,
  * @param ud user data for callback
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_get_async (struct rspamd_kvstorage_connection *conn,
-		const gpointer key, kvstorage_read_cb cb, gpointer ud);
+		const gpointer key, guint keylen, kvstorage_read_cb cb, gpointer ud);
 
 /**
  * Write key asynced
@@ -85,7 +87,7 @@ enum rspamd_kvstorage_error rspamd_kvstorage_get_async (struct rspamd_kvstorage_
  * @param ud user data for callback
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_set_async (struct rspamd_kvstorage_connection *conn,
-		const gpointer key, const gpointer value, gsize len, guint expire, kvstorage_write_cb cb, gpointer ud);
+		const gpointer key, guint keylen, const gpointer value, gsize len, guint expire, kvstorage_write_cb cb, gpointer ud);
 
 /**
  * Delete key asynced
@@ -95,7 +97,7 @@ enum rspamd_kvstorage_error rspamd_kvstorage_set_async (struct rspamd_kvstorage_
  * @param ud user data for callback
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_delete_async (struct rspamd_kvstorage_connection *conn,
-		const gpointer key, kvstorage_write_cb cb, gpointer ud);
+		const gpointer key, guint keylen, kvstorage_write_cb cb, gpointer ud);
 
 /**
  * Close connection
@@ -122,7 +124,7 @@ enum rspamd_kvstorage_error rspamd_kvstorage_connect_sync (const gchar *host,
  * @param value value readed
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_get_sync (struct rspamd_kvstorage_connection *conn,
-		const gpointer key, gpointer **value, guint *len);
+		const gpointer key, guint keylen, gpointer **value, guint *len);
 
 /**
  * Write key synced
@@ -131,7 +133,7 @@ enum rspamd_kvstorage_error rspamd_kvstorage_get_sync (struct rspamd_kvstorage_c
  * @param value data to write
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_set_sync (struct rspamd_kvstorage_connection *conn,
-		const gpointer key, const gpointer value, gsize len, guint expire);
+		const gpointer key, guint keylen, const gpointer value, gsize len, guint expire);
 
 /**
  * Delete key synced
@@ -139,12 +141,18 @@ enum rspamd_kvstorage_error rspamd_kvstorage_set_sync (struct rspamd_kvstorage_c
  * @param key key to delete
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_delete_sync (struct rspamd_kvstorage_connection *conn,
-		const gpointer key);
+		const gpointer key, guint keylen);
 
 /**
  * Close connection
  * @param conn connection structure
  */
 enum rspamd_kvstorage_error rspamd_kvstorage_close_sync (struct rspamd_kvstorage_connection *conn);
+
+/**
+ * Convert error code to string
+ * @param err error code to be converted
+ */
+const gchar* rspamd_kvstorage_strerror (enum rspamd_kvstorage_error err);
 
 #endif /* LIBKVSTORAGECLIENT_H_ */

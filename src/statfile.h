@@ -96,6 +96,10 @@ typedef struct statfile_pool_s {
 	struct timeval invalidate_tv;
 } statfile_pool_t;
 
+/* Forwarded declarations */
+struct classifier_config;
+struct statfile;
+
 /**
  * Create new statfile pool
  * @param max_size maximum size
@@ -260,5 +264,16 @@ guint64 statfile_get_total_blocks (stat_file_t *file);
  * Plan statfile pool invalidation
  */
 void statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jitter);
+
+/**
+ * Get a statfile by symbol
+ * @param pool pool object
+ * @param ccf ccf classifier config
+ * @param symbol symbol to search
+ * @param st statfile to get
+ * @param try_create whether we need to create statfile if it is absent
+ */
+stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
+		const gchar *symbol, struct statfile **st, gboolean try_create);
 
 #endif

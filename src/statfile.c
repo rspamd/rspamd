@@ -891,3 +891,51 @@ statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jit
 		msg_info ("invalidate of statfile pool is planned in %d seconds", (gint)pool->invalidate_tv.tv_sec);
 	}
 }
+
+
+stat_file_t *
+get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
+        const gchar *symbol, struct statfile **st, gboolean try_create)
+{
+    stat_file_t *res = NULL;
+    GList *cur;
+
+    if (pool == NULL || ccf == NULL || symbol == NULL) {
+		msg_err ("invalid input arguments");
+        return NULL;
+    }
+
+    cur = g_list_first (ccf->statfiles);
+	while (cur) {
+		*st = cur->data;
+		if (strcmp (symbol, (*st)->symbol) == 0) {
+			break;
+		}
+		*st = NULL;
+		cur = g_list_next (cur);
+	}
+    if (*st == NULL) {
+		msg_info ("cannot find statfile with symbol %s", symbol);
+        return NULL;
+    }
+
+    if ((res = statfile_pool_is_open (pool, (*st)->path)) == NULL) {
+		if ((res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE)) == NULL) {
+			msg_warn ("cannot open %s", (*st)->path);
+            if (try_create) {
+                if (statfile_pool_create (pool, (*st)->path, (*st)->size) == -1) {
+					msg_err ("cannot create statfile %s", (*st)->path);
+					return NULL;
+				}
+                res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE);
+				if (res == NULL) {
+					msg_err ("cannot open statfile %s after creation", (*st)->path);
+				}
+            }
+		}
+	}
+
+    return res;
+}
+
+

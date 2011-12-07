@@ -149,11 +149,6 @@ const gchar* calculate_check_time (struct timeval *begin, gint resolution);
 #endif
 
 /*
- * Set counter for a symbol
- */
-double set_counter (const gchar *name, guint32 value);
-
-/*
  * File locking functions
  */
 gboolean lock_file (gint fd, gboolean async);
@@ -175,12 +170,6 @@ gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
  * Google perf-tools initialization function
  */
 void gperf_profiler_init (struct config_file *cfg, const gchar *descr);
-
-/*
- * Get a statfile by symbol
- */
-stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf, 
-		const gchar *symbol, struct statfile **st, gboolean try_create);
 
 /*
  * Workaround for older versions of glib
@@ -228,19 +217,11 @@ gchar * escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in);
 #define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = ((msec) - (tv)->tv_sec * 1000) * 1000; } while(0)
 #define tv_to_msec(tv) (tv)->tv_sec * 1000 + (tv)->tv_usec / 1000
 
-struct worker_task;
-struct rspamd_worker;
+/* Compare two emails for building emails tree */
+gint compare_email_func (gconstpointer a, gconstpointer b);
 
-/**
- * Construct new task for worker
- */
-struct worker_task* construct_task (struct rspamd_worker *worker);
-/**
- * Destroy task object and remove its IO dispatcher if it exists
- */
-void free_task (struct worker_task *task, gboolean is_soft);
-void free_task_hard (gpointer ud);
-void free_task_soft (gpointer ud);
+/* Compare two urls for building emails tree */
+gint compare_url_func (gconstpointer a, gconstpointer b);
 
 /*
  * Find string find in string s ignoring case

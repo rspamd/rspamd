@@ -98,6 +98,8 @@ static gboolean                 write_socket (void *arg);
 
 static sig_atomic_t             wanna_die = 0;
 
+rspamd_hash_t                  *counters = NULL;
+
 #ifndef HAVE_SA_SIGINFO
 static void
 sig_handler (gint signo)
@@ -158,6 +160,172 @@ sigusr1_handler (gint fd, short what, void *arg)
 	reopen_log (worker->srv->logger);
 
 	return;
+}
+
+/*
+ * Destructor for recipients list in a task
+ */
+static void
+rcpt_destruct (void *pointer)
+{
+	struct worker_task             *task = (struct worker_task *) pointer;
+
+	if (task->rcpt) {
+		g_list_free (task->rcpt);
+	}
+}
+
+/*
+ * Create new task
+ */
+struct worker_task             *
+construct_task (struct rspamd_worker *worker)
+{
+	struct worker_task             *new_task;
+
+	new_task = g_slice_alloc0 (sizeof (struct worker_task));
+
+	new_task->worker = worker;
+	new_task->state = READ_COMMAND;
+	new_task->cfg = worker->srv->cfg;
+	new_task->from_addr.s_addr = INADDR_NONE;
+	new_task->view_checked = FALSE;
+#ifdef HAVE_CLOCK_GETTIME
+# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
+	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
+# elif defined(HAVE_CLOCK_VIRTUAL)
+	clock_gettime (CLOCK_VIRTUAL, &new_task->ts);
+# else
+	clock_gettime (CLOCK_REALTIME, &new_task->ts);
+# endif
+#endif
+	if (gettimeofday (&new_task->tv, NULL) == -1) {
+		msg_warn ("gettimeofday failed: %s", strerror (errno));
+	}
+
+	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
+
+	/* Add destructor for recipients list (it would be better to use anonymous function here */
+	memory_pool_add_destructor (new_task->task_pool,
+			(pool_destruct_func) rcpt_destruct, new_task);
+	new_task->results = g_hash_table_new (g_str_hash, g_str_equal);
+	memory_pool_add_destructor (new_task->task_pool,
+			(pool_destruct_func) g_hash_table_destroy,
+			new_task->results);
+	new_task->re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+	memory_pool_add_destructor (new_task->task_pool,
+			(pool_destruct_func) g_hash_table_destroy,
+			new_task->re_cache);
+	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	memory_pool_add_destructor (new_task->task_pool,
+				(pool_destruct_func) g_hash_table_destroy,
+				new_task->raw_headers);
+	new_task->emails = g_tree_new (compare_email_func);
+	memory_pool_add_destructor (new_task->task_pool,
+				(pool_destruct_func) g_tree_destroy,
+				new_task->emails);
+	new_task->urls = g_tree_new (compare_url_func);
+	memory_pool_add_destructor (new_task->task_pool,
+					(pool_destruct_func) g_tree_destroy,
+					new_task->urls);
+	new_task->s =
+			new_async_session (new_task->task_pool, free_task_hard, new_task);
+	new_task->sock = -1;
+	new_task->is_mime = TRUE;
+
+	return new_task;
+}
+
+
+/*
+ * Free all structures of worker_task
+ */
+void
+free_task (struct worker_task *task, gboolean is_soft)
+{
+	GList                          *part;
+	struct mime_part               *p;
+
+	if (task) {
+		debug_task ("free pointer %p", task);
+		while ((part = g_list_first (task->parts))) {
+			task->parts = g_list_remove_link (task->parts, part);
+			p = (struct mime_part *) part->data;
+			g_byte_array_free (p->content, TRUE);
+			g_list_free_1 (part);
+		}
+		if (task->text_parts) {
+			g_list_free (task->text_parts);
+		}
+		if (task->images) {
+			g_list_free (task->images);
+		}
+		if (task->messages) {
+			g_list_free (task->messages);
+		}
+		if (task->received) {
+			g_list_free (task->received);
+		}
+		memory_pool_delete (task->task_pool);
+		if (task->dispatcher) {
+			if (is_soft) {
+				/* Plan dispatcher shutdown */
+				task->dispatcher->wanna_die = 1;
+			}
+			else {
+				rspamd_remove_dispatcher (task->dispatcher);
+			}
+		}
+		if (task->sock != -1) {
+			close (task->sock);
+		}
+		g_slice_free1 (sizeof (struct worker_task), task);
+	}
+}
+
+void
+free_task_hard (gpointer ud)
+{
+  struct worker_task             *task = ud;
+
+  free_task (task, FALSE);
+}
+
+void
+free_task_soft (gpointer ud)
+{
+  struct worker_task             *task = ud;
+
+  free_task (task, FALSE);
+}
+
+double
+set_counter (const gchar *name, guint32 value)
+{
+	struct counter_data            *cd;
+	double                          alpha;
+	gchar                           *key;
+
+	cd = rspamd_hash_lookup (counters, (gpointer) name);
+
+	if (cd == NULL) {
+		cd = memory_pool_alloc_shared (counters->pool, sizeof (struct counter_data));
+		cd->value = value;
+		cd->number = 0;
+		key = memory_pool_strdup_shared (counters->pool, name);
+		rspamd_hash_insert (counters, (gpointer) key, (gpointer) cd);
+	}
+	else {
+		/* Calculate new value */
+		memory_pool_wlock_rwlock (counters->lock);
+
+		alpha = 2. / (++cd->number + 1);
+		cd->value = cd->value * (1. - alpha) + value * alpha;
+
+		memory_pool_wunlock_rwlock (counters->lock);
+	}
+
+	return cd->value;
 }
 
 #ifndef BUILD_STATIC
@@ -243,6 +411,7 @@ parse_line_custom (struct worker_task *task, f_str_t * in)
   return FALSE;
 }
 #endif
+
 
 /*
  * Callback that is called when there is data to read in buffer
