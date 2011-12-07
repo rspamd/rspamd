@@ -11,7 +11,10 @@ function check_forged_headers(task)
 	
 	if smtp_rcpt then
 		local mime_rcpt = task:get_recipients_headers()
-		local count = table.maxn(mime_rcpt)
+		local count = 0
+		if mime_rcpt then 
+			count = table.maxn(mime_rcpt)
+		end
 		if count < table.maxn(smtp_rcpt) then
 			task:insert_result(symbol_rcpt, 1)
 		else
