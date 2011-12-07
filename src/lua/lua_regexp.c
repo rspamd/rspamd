@@ -47,20 +47,27 @@ static const struct luaL_reg    regexplib_f[] = {
 
 memory_pool_t *regexp_static_pool = NULL;
 
-static GRegex	*
+struct rspamd_lua_regexp {
+	GRegex *re;
+	gchar *re_pattern;
+	gint re_flags;
+};
+
+static struct rspamd_lua_regexp	*
 lua_check_regexp (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{regexp}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'regexp' expected");
-	return ud ? *((GRegex **)ud) : NULL;
+	return ud ? *((struct rspamd_lua_regexp **)ud) : NULL;
 }
 
 static int
 lua_regexp_create (lua_State *L)
 {
 	gint                            regexp_flags = 0;
-	GRegex                         *new, **pnew;
+	GRegex                         *re;
+	struct rspamd_lua_regexp       *new, **pnew;
 	const gchar                    *string, *flags_str = NULL;
 	GError                         *err = NULL;
 
@@ -101,16 +108,20 @@ lua_regexp_create (lua_State *L)
 		}
 	}
 
-	new = g_regex_new (string, regexp_flags, 0, &err);
-	if (new == NULL) {
+	re = g_regex_new (string, regexp_flags, 0, &err);
+	if (re == NULL) {
 		lua_pushnil (L);
 		msg_info ("cannot parse regexp: %s, error: %s", string, err == NULL ? "undefined" : err->message);
 	}
 	else {
-		pnew = lua_newuserdata (L, sizeof (GRegex *));
+		new = g_slice_alloc (sizeof (struct rspamd_lua_regexp));
+		new->re = re;
+		new->re_flags = regexp_flags;
+		new->re_pattern = g_strdup (string);
+		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
-		re_cache_add (g_regex_get_pattern (new), new, regexp_static_pool);
+		re_cache_add (new->re_pattern, new, regexp_static_pool);
 	}
 
 	return 1;
@@ -119,13 +130,13 @@ lua_regexp_create (lua_State *L)
 static int
 lua_regexp_get_cached (lua_State *L)
 {
-	GRegex                         *new, **pnew;
+	struct rspamd_lua_regexp       *new, **pnew;
 	const gchar                    *line;
 
 	line = luaL_checkstring (L, 1);
 	new = re_cache_check (line, regexp_static_pool);
 	if (new) {
-		pnew = lua_newuserdata (L, sizeof (GRegex *));
+		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
 	}
@@ -139,10 +150,10 @@ lua_regexp_get_cached (lua_State *L)
 static int
 lua_regexp_get_pattern (lua_State *L)
 {
-	GRegex                         *re = lua_check_regexp (L);
+	struct rspamd_lua_regexp      *re = lua_check_regexp (L);
 
 	if (re) {
-		lua_pushstring (L, g_regex_get_pattern (re));
+		lua_pushstring (L, re->re_pattern);
 	}
 
 	return 1;
@@ -151,7 +162,7 @@ lua_regexp_get_pattern (lua_State *L)
 static int
 lua_regexp_match (lua_State *L)
 {
-	GRegex                         *re = lua_check_regexp (L);
+	struct rspamd_lua_regexp       *re = lua_check_regexp (L);
 	GMatchInfo                     *mi;
 	const gchar                    *data;
 	gchar                         **matches;
@@ -160,16 +171,14 @@ lua_regexp_match (lua_State *L)
 	if (re) {
 		data = luaL_checkstring (L, 2);
 		if (data) {
-#if GLIB_MINOR_VERSION >= 26
-			if ((g_regex_get_compile_flags (re) & G_REGEX_RAW) == 0) {
+			if ((re->re_flags & G_REGEX_RAW) == 0) {
 				/* Validate input */
 				if (!g_utf8_validate (data, -1, NULL)) {
 					lua_pushnil (L);
 					return 1;
 				}
 			}
-#endif
-			if (g_regex_match_full (re, data, -1, 0, 0, &mi, NULL)) {
+			if (g_regex_match_full (re->re, data, -1, 0, 0, &mi, NULL)) {
 				matches = g_match_info_fetch_all (mi);
 				lua_newtable (L);
 				for (i = 1; matches[i - 1] != NULL; i ++) {
@@ -193,7 +202,7 @@ lua_regexp_match (lua_State *L)
 static int
 lua_regexp_split (lua_State *L)
 {
-	GRegex                         *re = lua_check_regexp (L);
+	struct rspamd_lua_regexp       *re = lua_check_regexp (L);
 	const gchar                    *data;
 	gchar                         **parts;
 	gint                            i;
@@ -201,7 +210,14 @@ lua_regexp_split (lua_State *L)
 	if (re) {
 		data = luaL_checkstring (L, 2);
 		if (data) {
-			parts = g_regex_split (re, data, 0);
+			if ((re->re_flags & G_REGEX_RAW) == 0) {
+				/* Validate input */
+				if (!g_utf8_validate (data, -1, NULL)) {
+					lua_pushnil (L);
+					return 1;
+				}
+			}
+			parts = g_regex_split (re->re, data, 0);
 			lua_newtable (L);
 			for (i = 1; parts[i - 1] != NULL; i ++) {
 				lua_pushstring (L, parts[i - 1]);
@@ -226,11 +242,13 @@ lua_regexp_split (lua_State *L)
 static gint
 lua_regexp_destroy (lua_State *L)
 {
-	GRegex                         *to_del = lua_check_regexp (L);
+	struct rspamd_lua_regexp           *to_del = lua_check_regexp (L);
 
 	if (to_del) {
-		re_cache_del (g_regex_get_pattern (to_del), regexp_static_pool);
-		g_regex_unref (to_del);
+		re_cache_del (to_del->re_pattern, regexp_static_pool);
+		g_regex_unref (to_del->re);
+		g_free (to_del->re_pattern);
+		g_slice_free1 (sizeof (struct rspamd_lua_regexp), to_del);
 	}
 
 	return 0;
