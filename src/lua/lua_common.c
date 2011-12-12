@@ -241,6 +241,7 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_cdb (L);
 	(void)luaopen_xmlrpc (L);
 	(void)luaopen_http (L);
+	(void)luaopen_redis (L);
 	cfg->lua_state = L;
 	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
 
@@ -509,7 +510,7 @@ double
 lua_normalizer_func (struct config_file *cfg, long double score, void *params)
 {
     GList                          *p = params;
-    long double                          res = score;
+    long double                    	res = score;
 	lua_State                      *L = cfg->lua_state;
 
     /* Call specified function and put input score on stack */
@@ -533,4 +534,41 @@ lua_normalizer_func (struct config_file *cfg, long double score, void *params)
 	lua_pop (L, 1);
 
     return res;
+}
+
+
+void
+lua_dumpstack (lua_State *L)
+{
+	gint 							i, t, r = 0;
+	gint 							top = lua_gettop (L);
+	gchar 							buf[BUFSIZ];
+
+	r += rspamd_snprintf (buf + r, sizeof (buf) - r, "lua stack: ");
+	for (i = 1; i <= top; i++) { /* repeat for each level */
+		t = lua_type (L, i);
+		switch (t)
+		{
+		case LUA_TSTRING: /* strings */
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r, "str: %s", lua_tostring(L, i));
+			break;
+
+		case LUA_TBOOLEAN: /* booleans */
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r,lua_toboolean (L, i) ? "bool: true" : "bool: false");
+			break;
+
+		case LUA_TNUMBER: /* numbers */
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r, "number: %.2f", lua_tonumber (L, i));
+			break;
+
+		default: /* other values */
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r, "type: %s", lua_typename (L, t));
+			break;
+
+		}
+		if (i < top) {
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r, " -> "); /* put a separator */
+		}
+	}
+	msg_info (buf);
 }
