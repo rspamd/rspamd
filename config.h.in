@@ -163,6 +163,8 @@
 
 #cmakedefine WITH_GPERF_TOOLS    1
 
+#cmakedefine WITH_SYSTEM_HIREDIS 1
+
 #cmakedefine HAVE_ASM_PAUSE      1
 
 #cmakedefine BUILD_STATIC        1

@@ -23,9 +23,17 @@
 
 #include "lua_common.h"
 #include "dns.h"
+
+#ifndef WITH_SYSTEM_HIREDIS
 #include "hiredis.h"
 #include "async.h"
 #include "adapters/libevent.h"
+#else
+#include <hiredis/hiredis.h>
+#include <hiredis/async.h>
+#include <hiredis/adapters/libevent.h>
+#endif
+
 
 /**
  * Redis access API for lua from task object
