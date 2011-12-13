@@ -317,7 +317,7 @@ IF(PCRE_LIBRARY_DIRS)
 ENDIF(PCRE_LIBRARY_DIRS)
 
 # Find optional sqlite3 support
-pkg_check_modules(SQLITE sqlite3)
+pkg_check_modules(SQLITE sqlite3>=3.6.0)
 IF(SQLITE_FOUND)
 	SET(WITH_SQLITE 1)
 ENDIF(SQLITE_FOUND)
