@@ -85,7 +85,7 @@
  #endif /* HAVE_ENDIAN_H */
  
  #if !defined(BYTE_ORDER) || (BYTE_ORDER != BIG_ENDIAN && BYTE_ORDER != LITTLE_ENDIAN)
-         error "Undefined or unknown BYTE_ORDER";
+ # error "Undefined or unknown BYTE_ORDER"
  #endif
  
 
@@ -123,6 +123,10 @@
 #cmakedefine HAVE_O_DIRECT       1
 
 #cmakedefine HAVE_FADVISE        1
+
+#cmakedefine HAVE_FALLOCATE      1
+#cmakedefine HAVE_POSIX_FALLOCATE 1
+
 #cmakedefine HAVE_FDATASYNC      1
 #cmakedefine HAVE_COMPATIBLE_QUEUE_H    1
 
@@ -305,6 +309,11 @@
 /* fcntl */
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
+#endif
+
+/* Linux specific falloc.h */
+#ifdef HAVE_LINUX_FALLOC_H
+#include <linux/falloc.h>
 #endif
 
 /* poll */

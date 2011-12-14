@@ -465,6 +465,8 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 		return -1;
 	}
 
+	rspamd_fallocate (fd, 0, sizeof (header) + sizeof (section) + sizeof (block) * nblocks);
+
 	header.create_time = (guint64) time (NULL);
 	if (write (fd, &header, sizeof (header)) == -1) {
 		msg_info ("cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));

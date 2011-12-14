@@ -142,6 +142,7 @@ file_open_fd (const gchar *path, gsize *len, gint flags)
 	if ((flags & O_CREAT) != 0) {
 		/* Open file */
 		if ((fd = open (path, flags, S_IRUSR|S_IWUSR|S_IRGRP)) != -1) {
+			rspamd_fallocate (fd, 0, *len);
 #ifdef HAVE_FADVISE
 			posix_fadvise (fd, 0, *len, POSIX_FADV_SEQUENTIAL);
 #endif

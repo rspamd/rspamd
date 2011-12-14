@@ -1381,6 +1381,19 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 	return TRUE;
 }
 
+gint
+rspamd_fallocate (gint fd, off_t offset, off_t len)
+{
+#if defined(HAVE_FALLOCATE) && defined(FALLOC_FL_KEEP_SIZE)
+	return fallocate (fd, FALLOC_FL_KEEP_SIZE, offset, len);
+#elif defined(HAVE_POSIX_FALLOCATE)
+	return posix_fallocate (fd, offset, len);
+#else
+	/* Return 0 as nothing can be done on this system */
+	return 0;
+#endif
+}
+
 /*
  * vi:ts=4
  */

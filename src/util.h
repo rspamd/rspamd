@@ -241,4 +241,13 @@ gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
  */
 gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
 
+/**
+ * Try to allocate a file on filesystem (using fallocate or posix_fallocate)
+ * @param fd descriptor
+ * @param offset offset of file
+ * @param len length to allocate
+ * @return -1 in case of failure
+ */
+gint rspamd_fallocate (gint fd, off_t offset, off_t len);
+
 #endif
