@@ -1124,6 +1124,17 @@ g_ptr_array_unref (GPtrArray *array)
 	g_ptr_array_free (array, TRUE);
 }
 #endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14))
+void
+g_queue_clear (GQueue *queue)
+{
+	g_return_if_fail (queue != NULL);
+
+	g_list_free (queue->head);
+	queue->head = queue->tail = NULL;
+	queue->length = 0;
+}
+#endif
 
 gsize
 rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)

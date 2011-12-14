@@ -172,10 +172,13 @@ gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
 void gperf_profiler_init (struct config_file *cfg, const gchar *descr);
 
 /*
- * Workaround for older versions of glib
+ * Workarounds for older versions of glib
  */
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
 void g_ptr_array_unref (GPtrArray *array);
+#endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14))
+void g_queue_clear (GQueue *queue);
 #endif
 
 
