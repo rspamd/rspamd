@@ -634,7 +634,6 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 			debug_task ("send surbl dns request %s", surbl_req);
 			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback, (void *)param, DNS_REQUEST_A, surbl_req)) {
 				task->dns_requests ++;
-				param->task->save.saved++;
 			}
 		}
 		else if (err != NULL && err->code != WHITELIST_ERROR) {
@@ -703,13 +702,6 @@ dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	else {
 		debug_task ("<%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
 	}
-
-	param->task->save.saved--;
-	if (param->task->save.saved == 0) {
-		/* Call other filters */
-		param->task->save.saved = 1;
-		process_filters (param->task);
-	}
 }
 
 static void
@@ -723,12 +715,6 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 		if (error != OK) {
 			msg_info ("memcached returned error %s on CONNECT stage", memc_strerror (error));
 			memc_close_ctx (param->ctx);
-			param->task->save.saved--;
-			if (param->task->save.saved == 0) {
-				/* Call other filters */
-				param->task->save.saved = 1;
-				process_filters (param->task);
-			}
 		}
 		else {
 			memc_get (param->ctx, param->ctx->param);
@@ -738,12 +724,6 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 		if (error != OK) {
 			msg_info ("memcached returned error %s on READ stage", memc_strerror (error));
 			memc_close_ctx (param->ctx);
-			param->task->save.saved--;
-			if (param->task->save.saved == 0) {
-				/* Call other filters */
-				param->task->save.saved = 1;
-				process_filters (param->task);
-			}
 		}
 		else {
 			url_count = (gint *)param->ctx->param->buf;
@@ -764,12 +744,6 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 			msg_info ("memcached returned error %s on WRITE stage", memc_strerror (error));
 		}
 		memc_close_ctx (param->ctx);
-		param->task->save.saved--;
-		if (param->task->save.saved == 0) {
-			/* Call other filters */
-			param->task->save.saved = 1;
-			process_filters (param->task);
-		}
 		make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 		break;
 	default:
@@ -862,14 +836,6 @@ redirector_callback (gint fd, short what, void *arg)
 				msg_err ("write failed %s to %s", strerror (errno), param->redirector->name);
 				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
 				remove_normal_event (param->task->s, free_redirector_session, param);
-
-				param->task->save.saved--;
-				make_surbl_requests (param->url, param->task, param->suffix, FALSE);
-				if (param->task->save.saved == 0) {
-					/* Call other filters */
-					param->task->save.saved = 1;
-					process_filters (param->task);
-				}
 				return;
 			}
 			param->state = STATE_READ;
@@ -880,13 +846,6 @@ redirector_callback (gint fd, short what, void *arg)
 			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
 			remove_normal_event (param->task->s, free_redirector_session, param);
 
-			param->task->save.saved--;
-			make_surbl_requests (param->url, param->task, param->suffix, FALSE);
-			if (param->task->save.saved == 0) {
-				/* Call other filters */
-				param->task->save.saved = 1;
-				process_filters (param->task);
-			}
 			return;
 		}
 		break;
@@ -896,14 +855,8 @@ redirector_callback (gint fd, short what, void *arg)
 			if (r <= 0) {
 				msg_err ("read failed: %s from %s", strerror (errno), param->redirector->name);
 				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
-				remove_normal_event (param->task->s, free_redirector_session, param);
-				param->task->save.saved--;
 				make_surbl_requests (param->url, param->task, param->suffix, FALSE);
-				if (param->task->save.saved == 0) {
-					/* Call other filters */
-					param->task->save.saved = 1;
-					process_filters (param->task);
-				}
+				remove_normal_event (param->task->s, free_redirector_session, param);
 				return;
 			}
 
@@ -925,29 +878,12 @@ redirector_callback (gint fd, short what, void *arg)
 			}
 			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);
 			remove_normal_event (param->task->s, free_redirector_session, param);
-
-			param->task->save.saved--;
-			make_surbl_requests (param->url, param->task, param->suffix, FALSE);
-			if (param->task->save.saved == 0) {
-				/* Call other filters */
-				param->task->save.saved = 1;
-				process_filters (param->task);
-			}
-
 		}
 		else {
 			msg_info ("<%s> reading redirector %s timed out, while waiting for read",
 					param->redirector->name, param->task->message_id);
 			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
 			remove_normal_event (param->task->s, free_redirector_session, param);
-
-			param->task->save.saved--;
-			make_surbl_requests (param->url, param->task, param->suffix, FALSE);
-			if (param->task->save.saved == 0) {
-				/* Call other filters */
-				param->task->save.saved = 1;
-				process_filters (param->task);
-			}
 		}
 		break;
 	}
@@ -975,7 +911,6 @@ register_redirector_call (struct uri *url, struct worker_task *task,
 
 	if (s == -1) {
 		msg_info ("<%s> cannot create tcp socket failed: %s", task->message_id, strerror (errno));
-		task->save.saved--;
 		make_surbl_requests (url, task, suffix, FALSE);
 		return;
 	}
@@ -1036,7 +971,6 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 							insert_result (param->task, surbl_module_ctx->redirector_symbol, 1, g_list_prepend (NULL, red_domain));
 						}
 						register_redirector_call (url, param->task, param->suffix, red_domain);
-						param->task->save.saved++;
 						return FALSE;
 					}
 				}
@@ -1047,7 +981,6 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	else {
 		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
 			register_memcached_call (url, param->task, param->suffix);
-			param->task->save.saved++;
 		}
 		else {
 			make_surbl_requests (url, param->task, param->suffix, FALSE);

@@ -538,13 +538,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	if (lua_pcall (cd->L, 5, 0, 0) != 0) {
 		msg_info ("call to %s failed: %s", cd->callback, lua_tostring (cd->L, -1));
 	}
-
-	cd->task->save.saved--;
-	if (cd->task->save.saved == 0) {
-		/* Call other filters */
-		cd->task->save.saved = 1;
-		process_filters (cd->task);
-	}
 }
 
 static gint
@@ -584,7 +577,6 @@ lua_task_resolve_dns_a (lua_State * L)
 		}
 		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_A, cd->to_resolve)) {
 			task->dns_requests ++;
-			task->save.saved++;
 		}
 	}
 	return 0;
@@ -626,7 +618,6 @@ lua_task_resolve_dns_txt (lua_State * L)
 		}
 		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_TXT, cd->to_resolve)) {
 			task->dns_requests ++;
-			task->save.saved++;
 		}
 	}
 	return 0;
@@ -671,7 +662,6 @@ lua_task_resolve_dns_ptr (lua_State * L)
 		if (make_dns_request (task->resolver, task->s, task->task_pool,
 				lua_dns_callback, (void *)cd, DNS_REQUEST_PTR, ina)) {
 			task->dns_requests ++;
-			task->save.saved++;
 		}
 	}
 	return 0;

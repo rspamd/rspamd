@@ -341,7 +341,6 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 						/* Now resolve A record for this MX */
 						if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, elt_data->mx.name)) {
 							task->dns_requests ++;
-							task->save.saved++;
 						}
 					}
 					else if (reply->type == DNS_REQUEST_A) {
@@ -460,11 +459,6 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					break;
 		}
 	}
-
-	cb->rec->task->save.saved--;
-	if (cb->rec->task->save.saved == 0 && cb->rec->callback) {
-		cb->rec->callback (cb->rec, cb->rec->task);
-	}
 }
 
 static gboolean
@@ -494,7 +488,6 @@ parse_spf_a (struct worker_task *task, const gchar *begin, struct spf_record *re
 	cb->in_include = rec->in_include;
 	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
 		task->dns_requests ++;
-		task->save.saved++;
 		
 		return TRUE;
 	}
@@ -542,7 +535,6 @@ parse_spf_mx (struct worker_task *task, const gchar *begin, struct spf_record *r
 	cb->in_include = rec->in_include;
 	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_MX, host)) {
 		task->dns_requests ++;
-		task->save.saved++;
 		
 		return TRUE;
 	}
@@ -600,8 +592,7 @@ parse_spf_include (struct worker_task *task, const gchar *begin, struct spf_reco
 	domain = memory_pool_strdup (task->task_pool, begin);
 	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
 		task->dns_requests ++;
-		task->save.saved++;
-		
+
 		return TRUE;
 	}
 
@@ -640,7 +631,6 @@ parse_spf_redirect (struct worker_task *task, const gchar *begin, struct spf_rec
 	domain = memory_pool_strdup (task->task_pool, begin);
 	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
 		task->dns_requests ++;
-		task->save.saved++;
 		
 		return TRUE;
 	}
@@ -672,7 +662,6 @@ parse_spf_exists (struct worker_task *task, const gchar *begin, struct spf_recor
 
 	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
 		task->dns_requests ++;
-		task->save.saved++;
 		
 		return TRUE;
 	}
@@ -1164,11 +1153,6 @@ spf_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			cur = g_list_next (cur);
 		}
 	}
-
-	rec->task->save.saved--;
-	if (rec->task->save.saved == 0 && rec->callback) {
-		rec->callback (rec, rec->task);
-	}
 }
 
 gchar *
@@ -1236,7 +1220,6 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 
 		if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
 			task->dns_requests ++;
-			task->save.saved++;
 			return TRUE;
 		}
 	}
@@ -1266,7 +1249,6 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 			rec->sender_domain = rec->cur_domain;
 			if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
 				task->dns_requests ++;
-				task->save.saved++;
 				return TRUE;
 			}
 		}

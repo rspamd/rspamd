@@ -103,13 +103,6 @@ lua_http_push_error (gint code, struct lua_http_ud *ud)
 
 	ud->parser_state = 3;
 	remove_normal_event (ud->task->s, lua_http_fin, ud);
-
-	ud->task->save.saved--;
-	if (ud->task->save.saved == 0) {
-		/* Call other filters */
-		ud->task->save.saved = 1;
-		process_filters (ud->task);
-	}
 }
 
 static void
@@ -151,12 +144,6 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 	}
 
 	remove_normal_event (ud->task->s, lua_http_fin, ud);
-	ud->task->save.saved--;
-	if (ud->task->save.saved == 0) {
-		/* Call other filters */
-		ud->task->save.saved = 1;
-		process_filters (ud->task);
-	}
 }
 
 /*
@@ -384,7 +371,6 @@ lua_http_make_request_common (lua_State *L, struct worker_task *task, const gcha
 	if (make_dns_request (task->resolver, task->s, task->task_pool, lua_http_dns_callback, ud,
 			DNS_REQUEST_A, hostname)) {
 		task->dns_requests ++;
-		task->save.saved++;
 	}
 
 	return 0;

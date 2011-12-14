@@ -522,13 +522,6 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	msg_err ("got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
   ok:
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
-
-	session->task->save.saved--;
-	if (session->task->save.saved == 0) {
-		/* Call other filters */
-		session->task->save.saved = 1;
-		process_filters (session->task);
-	}
 }
 
 static void
@@ -601,12 +594,6 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
   ok:
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
-
-	(*session->saved)--;
-	if (*session->saved == 0) {
-		session->session->state = STATE_REPLY;
-		session->session->dispatcher->write_callback (session->session);
-	}
 }
 
 static inline void
@@ -642,7 +629,6 @@ register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
 			session->server = selected;
 			event_add (&session->ev, &session->tv);
 			register_async_event (task->s, fuzzy_io_fin, session, FALSE);
-			task->save.saved++;
 		}
 	}
 }

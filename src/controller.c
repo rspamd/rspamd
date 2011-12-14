@@ -832,6 +832,26 @@ process_normal_command (const gchar *line)
 	return NULL;
 }
 
+static void
+fin_learn_task (void *arg)
+{
+	struct worker_task             *task = (struct worker_task *)arg;
+
+	/* XXX: this is bad logic in fact */
+	/* Process all statfiles */
+	process_statfiles (task);
+	/* Call post filters */
+	lua_call_post_filters (task);
+	task->state = WRITE_REPLY;
+
+	if (task->fin_callback) {
+		task->fin_callback (task->fin_arg);
+	}
+	else {
+		rspamd_dispatcher_restore (task->dispatcher);
+	}
+}
+
 static                          gboolean
 controller_read_socket (f_str_t * in, void *arg)
 {
@@ -943,7 +963,6 @@ controller_read_socket (f_str_t * in, void *arg)
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");
-			destroy_session (task->s);
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
@@ -951,7 +970,8 @@ controller_read_socket (f_str_t * in, void *arg)
 			}
 			return FALSE;
 		}
-
+		/* Set up async session */
+		task->s = new_async_session (task->task_pool, fin_learn_task, free_task_hard, task);
 		r = process_filters (task);
 		if (r == -1) {
 			session->state = STATE_REPLY;
@@ -961,33 +981,11 @@ controller_read_socket (f_str_t * in, void *arg)
 				return FALSE;
 			}
 		}
-		else if (r == 0) {
+		else {
 			session->state = STATE_LEARN_SPAM;
 			task->dispatcher = session->dispatcher;
 			session->learn_task = task;
 			rspamd_dispatcher_pause (session->dispatcher);
-		}
-		else {
-			lua_call_post_filters (task);
-			session->state = STATE_REPLY;
-
-			if (! learn_task_spam (session->learn_classifier, task, session->in_class, &err)) {
-				if (err) {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
-					g_error_free (err);
-				}
-				else {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
-				}
-			}
-			else {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
-			}
-
-			destroy_session (task->s);
-			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-				return FALSE;
-			}
 		}
 		break;
 	case STATE_WEIGHTS:
@@ -1189,7 +1187,7 @@ accept_socket (gint fd, short what, void *arg)
 	io_tv->tv_sec = ctx->timeout / 1000;
 	io_tv->tv_usec = ctx->timeout - io_tv->tv_sec * 1000;
 
-	new_session->s = new_async_session (new_session->session_pool, free_session, new_session);
+	new_session->s = new_async_session (new_session->session_pool, NULL, free_session, new_session);
 
 	new_session->dispatcher = rspamd_create_dispatcher (ctx->ev_base, nfd, BUFFER_LINE, controller_read_socket,
 			controller_write_socket, controller_err_socket, io_tv, (void *)new_session);

@@ -227,13 +227,6 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 		}
 		spf_check_list (l, task);
 	}
-
-	if (task->save.saved == 0) {
-		/* Call other filters */
-		task->save.saved = 1;
-		/* Note that here task MAY be destroyed */
-		process_filters (task);
-	}
 }
 
 

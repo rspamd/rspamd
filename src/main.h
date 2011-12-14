@@ -108,15 +108,6 @@ struct counter_data {
 };
 
 /**
- * Save point object for delayed filters processing
- */
-struct save_point {
-	GList *entry;												/**< pointer to saved metric						*/
-	void *item;													/**< pointer to saved item 							*/
-	guint saved;											/**< how much time we have delayed processing		*/
-};
-
-/**
  * Structure to point exception in text from processing
  */
 struct process_exception {
@@ -235,7 +226,6 @@ struct worker_task {
 	GList *messages;											/**< list of messages that would be reported		*/
 	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
 	struct config_file *cfg;									/**< pointer to config object						*/
-	struct save_point save;										/**< save point for delayed processing				*/
 	gchar *last_error;											/**< last error										*/
 	gint error_code;												/**< code of last error								*/
 	memory_pool_t *task_pool;									/**< memory pool for task							*/

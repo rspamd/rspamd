@@ -82,15 +82,8 @@ lua_redis_fin (void *arg)
 	struct lua_redis_userdata			*ud = arg;
 
 	if (ud->ctx) {
-		msg_info ("hui");
 		redisAsyncFree (ud->ctx);
 		luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-		/*
-		ud->task->save.saved--;
-		if (ud->task->save.saved == 0) {
-			ud->task->save.saved = 1;
-			process_filters (ud->task);
-		}*/
 	}
 }
 
@@ -112,7 +105,7 @@ lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud, gboolean 
 	*ptask = ud->task;
 	/* String of error */
 	lua_pushstring (ud->L, err);
-	/* Data */
+	/* Data is nil */
 	lua_pushnil (ud->L);
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
@@ -138,8 +131,8 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 	lua_setclass (ud->L, "rspamd{task}", -1);
 
 	*ptask = ud->task;
-	/* String of error */
-	lua_pushstring (ud->L, ud->ctx->errstr);
+	/* Error is nil */
+	lua_pushnil (ud->L);
 	/* Data */
 	lua_pushlstring (ud->L, r->str, r->len);
 
@@ -162,8 +155,6 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	redisReply 							*reply = r;
 	struct lua_redis_userdata			*ud = priv;
 
-	msg_info ("in callback: err: %d, r: %p", c->err, r);
-
 	if (c->err == 0) {
 		if (r != NULL) {
 			lua_redis_push_data (reply, ud);
@@ -173,7 +164,12 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 	}
 	else {
-		lua_redis_push_error (c->errstr, ud, TRUE);
+		if (c->err == REDIS_ERR_IO) {
+			lua_redis_push_error (strerror (errno), ud, TRUE);
+		}
+		else {
+			lua_redis_push_error (c->errstr, ud, TRUE);
+		}
 	}
 }
 /**
@@ -191,7 +187,6 @@ lua_redis_make_request_real (struct lua_redis_userdata *ud)
 	}
 	else {
 		register_async_event (ud->task->s, lua_redis_fin, ud, FALSE);
-		ud->task->save.saved ++;
 	}
 	redisLibeventAttach (ud->ctx, ud->task->ev_base);
 	/* Make a request now */
@@ -279,7 +274,7 @@ lua_redis_make_request (lua_State *L)
 			/* Now get remaining args */
 			ud->args_num = lua_gettop (L) - 5;
 			ud->args = memory_pool_alloc (task->task_pool, ud->args_num * sizeof (f_str_t));
-			for (i = 0; i < ud->args_num - 1; i ++) {
+			for (i = 0; i < ud->args_num; i ++) {
 				tmp = lua_tolstring (L, i + 6, &ud->args[i].len);
 				/* Make a copy of argument */
 				ud->args[i].begin = memory_pool_alloc (task->task_pool, ud->args[i].len);

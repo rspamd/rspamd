@@ -1220,6 +1220,7 @@ dns_read_cb (gint fd, short what, void *arg)
 			}
 			upstream_ok (&rep->request->server->up, rep->request->time);
 			rep->request->func (rep, rep->request->arg);
+			remove_normal_event (req->session, dns_fin_cb, req);
 		}
 	}
 }
@@ -1239,11 +1240,11 @@ dns_timer_cb (gint fd, short what, void *arg)
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		upstream_fail (&rep->request->server->up, rep->request->time);
-		remove_normal_event (req->session, dns_fin_cb, req);
 		dns_check_throttling (req->resolver);
 		req->resolver->errors ++;
 
 		req->func (rep, req->arg);
+		remove_normal_event (req->session, dns_fin_cb, req);
 
 		return;
 	}
@@ -1262,8 +1263,9 @@ dns_timer_cb (gint fd, short what, void *arg)
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
-		remove_normal_event (req->session, dns_fin_cb, req);
+
 		req->func (rep, req->arg);
+		remove_normal_event (req->session, dns_fin_cb, req);
 		return;
 	}
 	
@@ -1277,8 +1279,9 @@ dns_timer_cb (gint fd, short what, void *arg)
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
 		upstream_fail (&rep->request->server->up, rep->request->time);
-		remove_normal_event (req->session, dns_fin_cb, req);
+
 		req->func (rep, req->arg);
+		remove_normal_event (req->session, dns_fin_cb, req);
 
 		return;
 	}
@@ -1288,9 +1291,9 @@ dns_timer_cb (gint fd, short what, void *arg)
 		rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 		rep->request = req;
 		rep->code = DNS_RC_SERVFAIL;
-		remove_normal_event (req->session, dns_fin_cb, req);
 		upstream_fail (&rep->request->server->up, rep->request->time);
 		req->func (rep, req->arg);
+		remove_normal_event (req->session, dns_fin_cb, req);
 		return;
 	}
 	evtimer_add (&req->timer_event, &req->tv);
@@ -1302,6 +1305,8 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 	struct rspamd_dns_request *req = arg;
 	struct rspamd_dns_reply *rep;
 	gint r;
+
+	remove_normal_event (req->session, (event_finalizer_t)event_del, &req->io_event);
 
 	if (what == EV_WRITE) {
 		/* Retransmit dns request */

@@ -208,48 +208,6 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 	return FALSE;
 }
 
-static gint
-continue_process_filters (struct worker_task *task)
-{
-	GList                          *cur;
-	gpointer                        item = task->save.item;
-	struct metric                  *metric;
-
-	while (call_symbol_callback (task, task->cfg->cache, &item)) {
-		cur = task->cfg->metrics_list;
-		while (cur) {
-			metric = cur->data;
-			/* call_filter_by_name (task, filt->func_name, filt->type, SCRIPT_HEADER); */
-			if (task->save.saved) {
-				task->save.entry = cur;
-				task->save.item = item;
-				return 0;
-			}
-			else if (!task->pass_all_filters && 
-						metric->action == METRIC_ACTION_REJECT && 
-						check_metric_is_spam (task, metric)) {
-				goto end;
-			}
-			cur = g_list_next (cur);
-		}
-	}
-
-end:
-	/* Process all statfiles */
-	process_statfiles (task);
-	/* Call post filters */
-	lua_call_post_filters (task);
-	task->state = WRITE_REPLY;
-
-	if (task->fin_callback) {
-		task->fin_callback (task->fin_arg);
-	}
-	else {
-		rspamd_dispatcher_restore (task->dispatcher);
-	}
-	return 1;
-}
-
 gint
 process_filters (struct worker_task *task)
 {
@@ -257,10 +215,6 @@ process_filters (struct worker_task *task)
 	struct metric                  *metric;
 	gpointer                        item = NULL;
 
-	if (task->save.saved) {
-		task->save.saved = 0;
-		return continue_process_filters (task);
-	}
 	/* Check skip */
 	if (check_skip (task->cfg->views, task)) {
 		task->is_skipped = TRUE;
@@ -282,15 +236,10 @@ process_filters (struct worker_task *task)
 		cur = task->cfg->metrics_list;
 		while (cur) {
 			metric = cur->data;
-			if (task->save.saved) {
-				task->save.entry = cur;
-				task->save.item = item;
-				return 0;
-			}
-			else if (!task->pass_all_filters && 
+			if (!task->pass_all_filters &&
 						metric->action == METRIC_ACTION_REJECT && 
 						check_metric_is_spam (task, metric)) {
-				task->state = WRITE_REPLY;
+				check_session_pending (task->s);
 				return 1;
 			}
 			cur = g_list_next (cur);

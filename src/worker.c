@@ -228,8 +228,6 @@ construct_task (struct rspamd_worker *worker)
 	memory_pool_add_destructor (new_task->task_pool,
 					(pool_destruct_func) g_tree_destroy,
 					new_task->urls);
-	new_task->s =
-			new_async_session (new_task->task_pool, free_task_hard, new_task);
 	new_task->sock = -1;
 	new_task->is_mime = TRUE;
 
@@ -489,16 +487,6 @@ read_socket (f_str_t * in, void *arg)
 				task->state = WRITE_ERROR;
 				return write_socket (task);
 			}
-			else if (r == 0) {
-				task->state = WAIT_FILTER;
-				rspamd_dispatcher_pause (task->dispatcher);
-			}
-			else {
-				process_statfiles (task);
-				lua_call_post_filters (task);
-				task->state = WRITE_REPLY;
-				return write_socket (task);
-			}
 		}
 		break;
 	case WRITE_REPLY:
@@ -594,6 +582,28 @@ err_socket (GError * err, void *arg)
 }
 
 /*
+ * Called if all filters are processed
+ */
+static void
+fin_task (void *arg)
+{
+	struct worker_task             *task = (struct worker_task *) arg;
+
+	/* Process all statfiles */
+	process_statfiles (task);
+	/* Call post filters */
+	lua_call_post_filters (task);
+	task->state = WRITE_REPLY;
+
+	if (task->fin_callback) {
+		task->fin_callback (task->fin_arg);
+	}
+	else {
+		rspamd_dispatcher_restore (task->dispatcher);
+	}
+}
+
+/*
  * Reduce number of tasks proceeded
  */
 static void
@@ -669,6 +679,10 @@ accept_socket (gint fd, short what, void *arg)
 	new_task->ev_base = ctx->ev_base;
 	ctx->tasks ++;
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)reduce_tasks_count, &ctx->tasks);
+
+	/* Set up async session */
+	new_task->s =
+				new_async_session (new_task->task_pool, fin_task, free_task_hard, new_task);
 
 	/* Init custom filters */
 #ifndef BUILD_STATIC

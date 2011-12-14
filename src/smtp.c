@@ -700,7 +700,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Resolve client's addr */
 	/* Set up async session */
-	session->s = new_async_session (session->pool, free_smtp_session, session);
+	session->s = new_async_session (session->pool, NULL, free_smtp_session, session);
 	session->state = SMTP_STATE_RESOLVE_REVERSE;
 	if (! make_dns_request (session->resolver, session->s, session->pool,
 			smtp_dns_cb, session, DNS_REQUEST_PTR, &session->client_addr)) {
