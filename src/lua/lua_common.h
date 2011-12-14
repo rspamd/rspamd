@@ -16,13 +16,33 @@
 
 extern const luaL_reg null_reg[];
 
-#define RSPAMD_LUA_API_VERSION 8
+#define RSPAMD_LUA_API_VERSION 9
 
 /* Common utility functions */
+
+/**
+ * Create and register new class
+ */
 void lua_newclass (lua_State *L, const gchar *classname, const struct luaL_reg *func);
+
+/**
+ * Set class name for object at @param objidx position
+ */
 void lua_setclass (lua_State *L, const gchar *classname, gint objidx);
+
+/**
+ * Set index of table to value (like t['index'] = value)
+ */
 void lua_set_table_index (lua_State *L, const gchar *index, const gchar *value);
+
+/**
+ * Convert classname to string
+ */
 gint lua_class_tostring (lua_State *L);
+
+/**
+ * Open libraries functions
+ */
 gint luaopen_message (lua_State *L);
 gint luaopen_task (lua_State *L);
 gint luaopen_config (lua_State *L);
