@@ -82,9 +82,15 @@ lua_redis_fin (void *arg)
 	struct lua_redis_userdata			*ud = arg;
 
 	if (ud->ctx) {
-		redisAsyncDisconnect (ud->ctx);
+		msg_info ("hui");
 		redisAsyncFree (ud->ctx);
 		luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
+		/*
+		ud->task->save.saved--;
+		if (ud->task->save.saved == 0) {
+			ud->task->save.saved = 1;
+			process_filters (ud->task);
+		}*/
 	}
 }
 
@@ -94,13 +100,12 @@ lua_redis_fin (void *arg)
  * @param ud
  */
 static void
-lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud)
+lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud, gboolean connected)
 {
 	struct worker_task					**ptask;
 
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-	lua_dumpstack (ud->L);
 	ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
 	lua_setclass (ud->L, "rspamd{task}", -1);
 
@@ -109,18 +114,11 @@ lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud)
 	lua_pushstring (ud->L, err);
 	/* Data */
 	lua_pushnil (ud->L);
-	lua_dumpstack (ud->L);
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
 	}
-
-	remove_normal_event (ud->task->s, lua_redis_fin, ud);
-
-	ud->task->save.saved--;
-	if (ud->task->save.saved == 0) {
-		/* Call other filters */
-		ud->task->save.saved = 1;
-		process_filters (ud->task);
+	if (connected) {
+		remove_normal_event (ud->task->s, lua_redis_fin, ud);
 	}
 }
 
@@ -150,13 +148,6 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 	}
 
 	remove_normal_event (ud->task->s, lua_redis_fin, ud);
-
-	ud->task->save.saved--;
-	if (ud->task->save.saved == 0) {
-		/* Call other filters */
-		ud->task->save.saved = 1;
-		process_filters (ud->task);
-	}
 }
 
 /**
@@ -171,16 +162,18 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	redisReply 							*reply = r;
 	struct lua_redis_userdata			*ud = priv;
 
+	msg_info ("in callback: err: %d, r: %p", c->err, r);
+
 	if (c->err == 0) {
 		if (r != NULL) {
 			lua_redis_push_data (reply, ud);
 		}
 		else {
-			lua_redis_push_error ("received no data from server", ud);
+			lua_redis_push_error ("received no data from server", ud, TRUE);
 		}
 	}
 	else {
-		lua_redis_push_error (c->errstr, ud);
+		lua_redis_push_error (c->errstr, ud, TRUE);
 	}
 }
 /**
@@ -193,7 +186,7 @@ lua_redis_make_request_real (struct lua_redis_userdata *ud)
 {
 	ud->ctx = redisAsyncConnect (inet_ntoa (ud->ina), ud->port);
 	if (ud->ctx == NULL || ud->ctx->err) {
-		lua_redis_push_error (ud->ctx ? ud->ctx->errstr : "unknown error", ud);
+		lua_redis_push_error (ud->ctx ? ud->ctx->errstr : "unknown error", ud, FALSE);
 		return FALSE;
 	}
 	else {
@@ -237,7 +230,7 @@ lua_redis_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 
 
 	if (reply->code != DNS_RC_NOERROR) {
-		lua_redis_push_error (dns_strerror (reply->code), ud);
+		lua_redis_push_error (dns_strerror (reply->code), ud, FALSE);
 		return;
 	}
 	else {
@@ -279,14 +272,10 @@ lua_redis_make_request (lua_State *L)
 			ud->L = L;
 			ud->ctx = NULL;
 			/* Pop other arguments */
-			lua_dumpstack (L);
 			lua_pushvalue (L, 4);
-			lua_dumpstack (L);
 			/* Get a reference */
 			ud->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-			lua_dumpstack (L);
 			ud->reqline = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 5));
-			lua_dumpstack (L);
 			/* Now get remaining args */
 			ud->args_num = lua_gettop (L) - 5;
 			ud->args = memory_pool_alloc (task->task_pool, ud->args_num * sizeof (f_str_t));
