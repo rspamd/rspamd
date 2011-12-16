@@ -134,7 +134,19 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 	/* Error is nil */
 	lua_pushnil (ud->L);
 	/* Data */
-	lua_pushlstring (ud->L, r->str, r->len);
+	if (r->type == REDIS_REPLY_STRING) {
+		lua_pushlstring (ud->L, r->str, r->len);
+	}
+	else if (r->type == REDIS_REPLY_INTEGER) {
+		lua_pushnumber (ud->L, r->integer);
+	}
+	else if (r->type == REDIS_REPLY_STATUS) {
+		lua_pushlstring (ud->L, r->str, r->len);
+	}
+	else {
+		msg_info ("bad type is passed: %d", r->type);
+		lua_pushnil (ud->L);
+	}
 
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
@@ -157,10 +169,15 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (c->err == 0) {
 		if (r != NULL) {
-			lua_redis_push_data (reply, ud);
+			if (reply->type != REDIS_REPLY_ERROR) {
+				lua_redis_push_data (reply, ud);
+			}
+			else {
+				lua_redis_push_error (reply->str, ud, TRUE);
+			}
 		}
 		else {
-			lua_redis_push_error ("received no data from server", ud, TRUE);
+			lua_redis_push_error ("received no data from server", ud, FALSE);
 		}
 	}
 	else {

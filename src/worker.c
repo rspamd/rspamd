@@ -494,6 +494,7 @@ read_socket (f_str_t * in, void *arg)
 		return write_socket (task);
 		break;
 	case WAIT_FILTER:
+	case WAIT_POST_FILTER:
 		msg_info ("ignoring trailing garbadge of size %z", in->len);
 		break;
 	default:
@@ -547,10 +548,12 @@ write_socket (void *arg)
 		return FALSE;
 		break;
 	case WRITING_REPLY:
+	case WAIT_FILTER:
+	case WAIT_POST_FILTER:
 		/* Do nothing here */
 		break;
 	default:
-		msg_info ("abnormally closing connection");
+		msg_info ("abnormally closing connection at state: %d", task->state);
 		if (ctx->is_custom) {
 			fin_custom_filters (task);
 		}
@@ -589,18 +592,33 @@ fin_task (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
 
-	/* Process all statfiles */
-	process_statfiles (task);
-	/* Call post filters */
-	lua_call_post_filters (task);
-	task->state = WRITE_REPLY;
+	if (task->state != WAIT_POST_FILTER) {
+		/* Process all statfiles */
+		process_statfiles (task);
+		/* Call post filters */
+		lua_call_post_filters (task);
+	}
 
+	/* Check if we have all events finished */
+	task->state = WRITE_REPLY;
 	if (task->fin_callback) {
 		task->fin_callback (task->fin_arg);
 	}
 	else {
 		rspamd_dispatcher_restore (task->dispatcher);
 	}
+}
+
+/*
+ * Called if session was restored inside fin callback
+ */
+static void
+restore_task (void *arg)
+{
+	struct worker_task             *task = (struct worker_task *) arg;
+
+	/* Special state */
+	task->state = WAIT_POST_FILTER;
 }
 
 /*
@@ -682,7 +700,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Set up async session */
 	new_task->s =
-				new_async_session (new_task->task_pool, fin_task, free_task_hard, new_task);
+				new_async_session (new_task->task_pool, fin_task, restore_task, free_task_hard, new_task);
 
 	/* Init custom filters */
 #ifndef BUILD_STATIC

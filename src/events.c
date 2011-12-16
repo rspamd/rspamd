@@ -58,13 +58,15 @@ rspamd_event_hash (gconstpointer a)
 }
 
 struct rspamd_async_session    *
-new_async_session (memory_pool_t * pool, event_finalizer_t fin, event_finalizer_t cleanup, void *user_data)
+new_async_session (memory_pool_t * pool, event_finalizer_t fin,
+		event_finalizer_t restore, event_finalizer_t cleanup, void *user_data)
 {
 	struct rspamd_async_session    *new;
 
 	new = memory_pool_alloc (pool, sizeof (struct rspamd_async_session));
 	new->pool = pool;
 	new->fin = fin;
+	new->restore = restore;
 	new->cleanup = cleanup;
 	new->user_data = user_data;
 	new->wanna_die = FALSE;
@@ -207,7 +209,13 @@ check_session_pending (struct rspamd_async_session *session)
 		if (session->fin != NULL) {
 			session->fin (session->user_data);
 		}
-		/* No more events */
+		/* Check events count again */
+		if (g_hash_table_size (session->events) != 0) {
+			if (session->restore != NULL) {
+				session->restore (session->user_data);
+			}
+			return TRUE;
+		}
 		return FALSE;
 	}
 

@@ -177,6 +177,7 @@ struct worker_task {
 		WRITE_REPLY,
 		WRITE_ERROR,
 		WAIT_FILTER,
+		WAIT_POST_FILTER,
 		CLOSING_CONNECTION,
 		WRITING_REPLY
 	} state;													/**< current session state							*/

@@ -580,7 +580,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 						longval);
 			}
 			else {
-				r = rspamd_snprintf (outbuf, sizeof (outbuf), "$%l" CRLF,
+				r = rspamd_snprintf (outbuf, sizeof (outbuf), ":%l" CRLF,
 						longval);
 			}
 			if (!rspamd_dispatcher_write (session->dispather, outbuf,
@@ -691,10 +691,10 @@ kvstorage_check_argnum (struct kvstorage_session *session)
 	case KVSTORAGE_CMD_SYNC:
 		return session->argc == 1;
 	case KVSTORAGE_CMD_SET:
-		return session->argc == 3;
+		return session->argc == 3 || session->argc == 4;
 	case KVSTORAGE_CMD_INCR:
 	case KVSTORAGE_CMD_DECR:
-		return session->argc == 1 || session->argc == 2;
+		return session->argc == 2 || session->argc == 3;
 	default:
 		return session->argc == 2;
 	}
@@ -831,7 +831,7 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 		}
 		else if (session->argnum == 2) {
 			/* We get datablock for set command */
-			if (session->command == KVSTORAGE_CMD_SET) {
+			if (session->command == KVSTORAGE_CMD_SET && session->argc == 3) {
 				session->state = KVSTORAGE_STATE_READ_CMD;
 				rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
 				if (rspamd_kv_storage_insert (session->cf->storage, session->key, session->keylen,
@@ -845,6 +845,14 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 							sizeof ("-ERR not stored" CRLF) - 1, FALSE, TRUE);
 				}
 			}
+			else if (session->command == KVSTORAGE_CMD_SET && session->argc == 4) {
+				/* It is expire argument */
+				session->state = KVSTORAGE_STATE_READ_CMD;
+				rspamd_strtol (in->begin, in->len, (glong *)&session->expire);
+				session->argnum ++;
+				session->state = KVSTORAGE_STATE_READ_ARGLEN;
+				rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
+			}
 			else {
 				session->state = KVSTORAGE_STATE_READ_CMD;
 				rspamd_strtol (in->begin, in->len, &session->arg_data.value);
@@ -853,6 +861,23 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 				}
 				rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
 				return kvstorage_process_command (session, TRUE);
+			}
+		}
+		else if (session->argnum == 3) {
+			/* We get datablock for set command */
+			if (session->command == KVSTORAGE_CMD_SET && session->argc == 4) {
+				session->state = KVSTORAGE_STATE_READ_CMD;
+				rspamd_set_dispatcher_policy (session->dispather, BUFFER_LINE, -1);
+				if (rspamd_kv_storage_insert (session->cf->storage, session->key, session->keylen,
+						in->begin, in->len,
+						session->flags, session->expire)) {
+					return rspamd_dispatcher_write (session->dispather, "+OK" CRLF,
+							sizeof ("+OK" CRLF) - 1, FALSE, TRUE);
+				}
+				else {
+					return rspamd_dispatcher_write (session->dispather, "-ERR not stored" CRLF,
+							sizeof ("-ERR not stored" CRLF) - 1, FALSE, TRUE);
+				}
 			}
 		}
 		break;

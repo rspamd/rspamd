@@ -16,6 +16,7 @@ struct rspamd_async_event {
 
 struct rspamd_async_session {
 	event_finalizer_t fin;
+	event_finalizer_t restore;
 	event_finalizer_t cleanup;
 	GHashTable *events;
 	GQueue *forced_events;
@@ -28,12 +29,14 @@ struct rspamd_async_session {
  * Make new async session
  * @param pool pool to alloc memory from
  * @param fin a callback called when no events are found in session
+ * @param restore a callback is called to restore processing of session
  * @param cleanup a callback called when session is forcefully destroyed
  * @param user_data abstract user data
  * @return
  */
 struct rspamd_async_session *new_async_session (memory_pool_t *pool,
-		event_finalizer_t fin, event_finalizer_t cleanup, void *user_data);
+		event_finalizer_t fin, event_finalizer_t restore,
+		event_finalizer_t cleanup, void *user_data);
 
 /**
  * Insert new event to the session
