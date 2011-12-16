@@ -343,9 +343,16 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gu
 		lp = &ELT_LONG (elt);
 		*lp += *value;
 		*value = *lp;
+		elt->age = time (NULL);
 		if (storage->backend) {
-			g_static_rw_lock_writer_unlock (&storage->rwlock);
-			return storage->backend->replace_func (storage->backend, key, keylen, elt);
+			if (storage->backend->replace_func (storage->backend, key, keylen, elt)) {
+				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				return TRUE;
+			}
+			else {
+				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				return FALSE;
+			}
 		}
 		else {
 			g_static_rw_lock_writer_unlock (&storage->rwlock);
