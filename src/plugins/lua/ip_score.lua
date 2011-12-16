@@ -10,6 +10,8 @@ local no_action_score = -2
 local symbol = 'IP_SCORE'
 -- This score is used for normalization of scores from keystorage
 local normalize_score = 100 
+local whitelist = nil
+local expire = 240
 
 -- Set score based on metric's action
 local ip_score_set = function(task)
@@ -26,7 +28,7 @@ local ip_score_set = function(task)
 							end
 						end
 					end
-					rspamd_redis.make_request(task, 'localhost', 6050, cb_set, 'SET %b %b %b', ip, '100', '0')
+					rspamd_redis.make_request(task, keystorage_host, keystorage_port, cb_set, 'SET %b %b %b', ip, expire, '0')
 				else
 					rspamd_logger.info('got error while incrementing: ' .. err)
 				end
@@ -36,6 +38,15 @@ local ip_score_set = function(task)
 	end
 	local action = task:get_metric_action(metric)
 	if action then
+		-- Check whitelist 
+		if whitelist then
+			local ipnum = task:get_from_ip_num()
+			if ipnum and whitelist:get_key(ipnum) then
+				-- Address is whitelisted
+				return
+			end
+		end
+		-- Now check action
 		if action == 'reject' then
 			local ip = task:get_from_ip()
 			if ip then
@@ -74,7 +85,7 @@ end
 local ip_score_check = function(task)
 	local cb = function(task, err, data)
 		if err then
-			-- Key is not found
+			-- Key is not found or error occured
 			return
 		elseif data then
 			local score = tonumber(data)
@@ -91,6 +102,13 @@ local ip_score_check = function(task)
 	end
 	local ip = task:get_from_ip()
 	if ip then
+		if whitelist then
+			local ipnum = task:get_from_ip_num()
+			if whitelist:get_key(ipnum) then
+				-- Address is whitelisted
+				return
+			end
+		end
 		rspamd_redis.make_request(task, keystorage_host, keystorage_port, cb, 'GET %b', ip)
 	end
 end
@@ -124,6 +142,12 @@ local configure_ip_score_module = function()
 		if opts['normalize_score'] then
 			normalize_score = opts['normalize_score']
 		end
+		if opts['whitelist'] then
+			whitelist = rspamd_config:add_radix_map(opts['whitelist'])
+		end
+		if opts['expire'] then
+			expire = opts['expire']
+		end
 	end
 end
 
@@ -137,6 +161,8 @@ if rspamd_config:get_api_version() >= 9 then
 	rspamd_config:register_module_option('ip_score', 'no_action_score', 'int')
 	rspamd_config:register_module_option('ip_score', 'symbol', 'string')
 	rspamd_config:register_module_option('ip_score', 'normalize_score', 'uint')
+	rspamd_config:register_module_option('ip_score', 'whitelist', 'map')
+	rspamd_config:register_module_option('ip_score', 'expire', 'uint')
 
 	configure_ip_score_module()
 	if keystorage_host and keystorage_port and normalize_score > 0 then

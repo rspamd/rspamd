@@ -73,7 +73,8 @@ enum rspamd_kv_flags {
 	KV_ELT_OUSTED = 1 << 3,
 	KV_ELT_NEED_FREE = 1 << 4,
 	KV_ELT_INTEGER = 1 << 5,
-	KV_ELT_NEED_INSERT = 1 << 6
+	KV_ELT_NEED_INSERT = 1 << 6,
+	KV_ELT_NEED_EXPIRE = 1 << 7
 };
 
 #define ELT_DATA(elt) (gchar *)(elt)->data + (elt)->keylen + 1

@@ -143,6 +143,9 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 	else if (r->type == REDIS_REPLY_STATUS) {
 		lua_pushlstring (ud->L, r->str, r->len);
 	}
+	else if (r->type == REDIS_REPLY_NIL) {
+		lua_pushnil (ud->L);
+	}
 	else {
 		msg_info ("bad type is passed: %d", r->type);
 		lua_pushnil (ud->L);

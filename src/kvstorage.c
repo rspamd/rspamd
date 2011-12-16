@@ -341,8 +341,14 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gu
 	}
 	if (elt && (elt->flags & KV_ELT_INTEGER) != 0) {
 		lp = &ELT_LONG (elt);
-		*lp += *value;
-		*value = *lp;
+		/* Handle need expire here */
+		if (elt->flags & KV_ELT_NEED_EXPIRE) {
+			*lp = *value;
+		}
+		else {
+			*lp += *value;
+			*value = *lp;
+		}
 		elt->age = time (NULL);
 		if (storage->backend) {
 			if (storage->backend->replace_func (storage->backend, key, keylen, elt)) {
@@ -394,6 +400,8 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, guint
 	if (elt && (elt->flags & KV_ELT_PERSISTENT) == 0 && elt->expire > 0) {
 		/* Check expiration */
 		if (now - elt->age > elt->expire) {
+			/* Set need expire as we have no write lock here */
+			elt->flags |= KV_ELT_NEED_EXPIRE;
 			elt = NULL;
 		}
 	}
