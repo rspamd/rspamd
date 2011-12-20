@@ -1,3 +1,13 @@
+rspamd (0.4.6-1) unstable; urgency=low
+
+  * Upgrade to 0.4.6
+   - Add keystorage/redis client to lua API
+   - Write plugin for marking ip addresses
+   - Rewrite events system
+   - Fix several bugs
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Tue, 20 Dec 2011 17:21:33 +0400
+
 rspamd (0.4.5-1) unstable; urgency=low
 
   * Upgrade to 0.4.5
