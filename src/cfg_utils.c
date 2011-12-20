@@ -101,7 +101,7 @@ gint
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 {
 	gchar                          **host;
-	gint16                        *family, *port;
+	guint16                        *family, *port;
 	struct in_addr                 *addr;
 
 	if (str == NULL)

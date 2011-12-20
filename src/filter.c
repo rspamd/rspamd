@@ -566,7 +566,7 @@ classifiers_callback (gpointer value, void *arg)
 						break;
 					}
 				}
-				c.begin = text_part->content->data;
+				c.begin = (gchar *)text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
 				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens,
@@ -800,7 +800,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 				cur = g_list_next (cur);
 				continue;
 			}
-			c.begin = part->content->data;
+			c.begin = (gchar *)part->content->data;
 			c.len = part->content->len;
 			is_utf = part->is_utf;
 			ex = part->urls_offset;
@@ -899,7 +899,7 @@ learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolea
 			cur = g_list_next (cur);
 			continue;
 		}
-		c.begin = part->content->data;
+		c.begin = (gchar *)part->content->data;
 		c.len = part->content->len;
 		is_utf = part->is_utf;
 		ex = part->urls_offset;

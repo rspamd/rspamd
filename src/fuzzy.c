@@ -306,7 +306,7 @@ fuzzy_init_byte_array (GByteArray * in, memory_pool_t * pool)
 {
 	f_str_t                         f;
 
-	f.begin = in->data;
+	f.begin = (gchar *)in->data;
 	f.len = in->len;
 
 	return fuzzy_init (&f, pool);
@@ -328,7 +328,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 		cur_ex = cur_offset->data;
 	}
 
-	begin = part->content->data;
+	begin = (gchar *)part->content->data;
 	c = begin;
 	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	new2 = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
@@ -388,7 +388,7 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 		cur_ex = cur_offset->data;
 	}
 
-	begin = part->content->data;
+	begin = (gchar *)part->content->data;
 	c = begin;
 	end = c + len;
 	if (part->is_utf) {

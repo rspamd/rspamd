@@ -514,7 +514,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	/* Check for numeric expressions */
 	if (is_numeric && dots_num == 3) {
 		/* This is ip address */
-		if ((suffix->options & SURBL_OPTION_NOIP) != 0) {
+		if (suffix != NULL && (suffix->options & SURBL_OPTION_NOIP) != 0) {
 			/* Ignore such requests */
 			msg_info ("ignore request of ip url for list %s", suffix->symbol);
 			return NULL;

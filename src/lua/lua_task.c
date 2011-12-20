@@ -1248,7 +1248,7 @@ lua_textpart_get_content (lua_State * L)
 		return 1;
 	}
 
-	lua_pushlstring (L, part->content->data, part->content->len);
+	lua_pushlstring (L, (const gchar *)part->content->data, part->content->len);
 
 	return 1;
 }

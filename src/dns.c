@@ -531,7 +531,7 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 	gunichar *uclabel;
 	glong uclabel_len;
 	gsize punylabel_len;
-	gchar tmp_label[DNS_D_MAXLABEL];
+	guint8 tmp_label[DNS_D_MAXLABEL];
 
 	if (namelen == 0) {
 		namelen = strlen (name);
@@ -543,11 +543,11 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 		/* Check label for unicode characters */
 		if (maybe_punycode_label (begin, &name_pos, &dot, &label_len)) {
 			/* Convert to ucs4 */
-			uclabel = g_utf8_to_ucs4_fast (begin, label_len, &uclabel_len);
+			uclabel = g_utf8_to_ucs4_fast ((gchar *)begin, label_len, &uclabel_len);
 			memory_pool_add_destructor (req->pool, g_free, uclabel);
 			punylabel_len = DNS_D_MAXLABEL;
 
-			punycode_label_toascii (uclabel, uclabel_len, tmp_label, &punylabel_len);
+			punycode_label_toascii (uclabel, uclabel_len, (gchar *)tmp_label, &punylabel_len);
 			/* Try to compress name */
 			if (! try_compress_label (req->pool, pos, req->packet, punylabel_len, tmp_label, &table)) {
 				/* Copy punylabel */
