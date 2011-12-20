@@ -87,8 +87,8 @@ kvstorage_init_callback (const gpointer key, const gpointer value, gpointer unus
 {
 	struct kvstorage_config				*kconf = value;
 	struct rspamd_kv_cache				*cache;
-	struct rspamd_kv_backend			*backend;
-	struct rspamd_kv_expire				*expire;
+	struct rspamd_kv_backend			*backend = NULL;
+	struct rspamd_kv_expire				*expire = NULL;
 
 	switch (kconf->cache.type) {
 	case KVSTORAGE_TYPE_CACHE_HASH:

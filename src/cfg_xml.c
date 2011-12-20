@@ -2097,6 +2097,11 @@ check_module_option (const gchar *mname, const gchar *optname, const gchar *data
 	GHashTable                       *module;
 	gchar                            *err_str;
 	struct option_callback_data       cd;
+	union {
+		gint i;
+		gdouble d;
+		guint ui;
+	}                                 t;
 
 	if (module_options == NULL) {
 		msg_warn ("no module options registered while checking option %s for module %s", mname, optname);
@@ -2128,39 +2133,44 @@ check_module_option (const gchar *mname, const gchar *optname, const gchar *data
 		/* Allways OK */
 		return TRUE;
 	case MODULE_OPT_TYPE_INT:
-		(void)strtol (data, &err_str, 10);
+		t.i = strtol (data, &err_str, 10);
 		if (*err_str != '\0') {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
 			return FALSE;
 		}
+		(void)t.i;
 		break;
 	case MODULE_OPT_TYPE_UINT:
-		(void)strtoul (data, &err_str, 10);
+		t.ui = strtoul (data, &err_str, 10);
 		if (*err_str != '\0') {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
 			return FALSE;
 		}
+		(void)t.ui;
 		break;
 	case MODULE_OPT_TYPE_DOUBLE:
-		(void)strtod (data, &err_str);
+		t.d = strtod (data, &err_str);
 		if (*err_str != '\0') {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s' at position: '%s'", optname, mname, err_str);
 			return FALSE;
 		}
+		(void)t.d;
 		break;
 	case MODULE_OPT_TYPE_TIME:
-		(void)cfg_parse_time (data, TIME_SECONDS);
+		t.ui = cfg_parse_time (data, TIME_SECONDS);
 		if (errno != 0) {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s': %s", optname, mname, strerror (errno));
 			return FALSE;
 		}
+		(void)t.ui;
 		break;
 	case MODULE_OPT_TYPE_SIZE:
-		(void)parse_limit (data, -1);
+		t.ui = parse_limit (data, -1);
 		if (errno != 0) {
 			msg_warn ("non-numeric data for option: '%s' for module: '%s': %s", optname, mname, strerror (errno));
 			return FALSE;
 		}
+		(void)t.ui;
 		break;
 	case MODULE_OPT_TYPE_MAP:
 		if (!check_map_proto (data, NULL, NULL)) {

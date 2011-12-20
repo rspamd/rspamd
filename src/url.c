@@ -918,9 +918,10 @@ url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_
 {
 	const gchar                    *p;
 	gchar                           stop;
-	guint                            i;
+	guint                           i;
 
 	p = pos + strlen (match->pattern);
+	stop = *p;
 	if (*p == '/') {
 		p ++;
 	}

@@ -222,7 +222,7 @@ static gboolean
 parse_kvstorage_line (struct kvstorage_session *session, f_str_t *in)
 {
 	gchar								*p, *c, *end;
-	gint								 state = 0, next_state;
+	gint								 state = 0, next_state = 0;
 	gboolean							 is_redis;
 
 	p = in->begin;
@@ -648,6 +648,7 @@ kvstorage_read_arglen (f_str_t *in, guint *len)
 	gchar								*p = in->begin, *end = in->begin + in->len, *c;
 	gint								 state = 0;
 
+	c = p;
 	while (p < end) {
 		switch (state) {
 		case 0:
@@ -716,7 +717,7 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 	struct kvstorage_session			*session = (struct kvstorage_session *) arg;
 	struct kvstorage_worker_thread		*thr;
 	gint								 r;
-	guint								 arglen;
+	guint								 arglen = 0;
 	gchar								 outbuf[BUFSIZ];
 	gboolean							 is_redis;
 

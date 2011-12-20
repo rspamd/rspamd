@@ -470,9 +470,9 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 static void
 process_raw_headers (struct worker_task *task)
 {
-	struct raw_header              *new, *lp;
+	struct raw_header              *new = NULL, *lp;
 	gchar                          *p, *c, *tmp, *tp;
-	gint                            state = 0, l, next_state, err_state, t_state;
+	gint                            state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean                        valid_folding = FALSE;
 
 	p = task->raw_headers_str;

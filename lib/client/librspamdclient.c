@@ -323,7 +323,7 @@ static gboolean
 parse_rspamd_first_line (struct rspamd_connection *conn, guint len, GError **err)
 {
 	gchar                           *b = conn->in_buf->str + sizeof("RSPAMD/") - 1, *p, *c;
-	guint                            remain = len - sizeof("RSPAMD/") + 1, state = 0, next_state;
+	guint                            remain = len - sizeof("RSPAMD/") + 1, state = 0, next_state = 0;
 	gdouble                          dver;
 
 	p = b;
@@ -401,8 +401,8 @@ static gboolean
 parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **err)
 {
 	gchar                           *b = conn->in_buf->str + sizeof("Metric:") - 1, *p, *c, *err_str;
-	guint                            remain = len - sizeof("Metric:") + 1, state = 0, next_state;
-	struct rspamd_metric            *new;
+	guint                            remain = len - sizeof("Metric:") + 1, state = 0, next_state = 0;
+	struct rspamd_metric            *new = NULL;
 
 	p = b;
 
@@ -543,8 +543,8 @@ static gboolean
 parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **err)
 {
 	gchar                           *b = conn->in_buf->str + sizeof("Symbol:") - 1, *p, *c, *err_str, *sym;
-	guint                            remain = len - sizeof("Symbol:") + 1, state = 0, next_state, l;
-	struct rspamd_symbol            *new;
+	guint                            remain = len - sizeof("Symbol:") + 1, state = 0, next_state = 0, l;
+	struct rspamd_symbol            *new = NULL;
 
 	p = b;
 	while (g_ascii_isspace (*p)) {
@@ -684,7 +684,7 @@ static gboolean
 parse_rspamd_action_line (struct rspamd_connection *conn, guint len, GError **err)
 {
 	gchar                           *b = conn->in_buf->str + sizeof("Action:") - 1, *p, *c, *sym;
-	guint                            remain = len - sizeof("Action:") + 1, state = 0, next_state;
+	guint                            remain = len - sizeof("Action:") + 1, state = 0, next_state = 0;
 
 	p = b;
 	c = b;
@@ -752,7 +752,7 @@ static gboolean
 parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **err)
 {
 	gchar                           *b = conn->in_buf->str, *p, *c, *hname = NULL, *hvalue = NULL;
-	guint                            remain = len, state = 0, next_state;
+	guint                            remain = len, state = 0, next_state = 0;
 
 	p = b;
 	c = b;

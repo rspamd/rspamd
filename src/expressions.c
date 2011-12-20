@@ -1144,7 +1144,7 @@ rspamd_content_type_compare_param (struct worker_task * task, GList * args, void
 	GMimeContentType               *ct;
 	gint                            r;
 	gboolean                        recursive = FALSE, result = FALSE;
-	GList                          *cur;
+	GList                          *cur = NULL;
 	struct mime_part               *cur_part;
 
 	if (args == NULL) {
@@ -1253,7 +1253,7 @@ rspamd_content_type_has_param (struct worker_task * task, GList * args, void *un
 	GMimeObject                    *part;
 	GMimeContentType               *ct;
 	gboolean                        recursive = FALSE, result = FALSE;
-	GList                          *cur;
+	GList                          *cur = NULL;
 	struct mime_part               *cur_part;
 
 	if (args == NULL) {
@@ -1326,7 +1326,7 @@ rspamd_content_type_is_subtype (struct worker_task *task, GList * args, void *un
 	GMimeContentType               *ct;
 	gint                            r;
 	gboolean                        recursive = FALSE, result = FALSE;
-	GList                          *cur;
+	GList                          *cur = NULL;
 	struct mime_part               *cur_part;
 
 	if (args == NULL) {
@@ -1423,7 +1423,7 @@ rspamd_content_type_is_type (struct worker_task * task, GList * args, void *unus
 	GMimeContentType               *ct;
 	gint                            r;
 	gboolean                        recursive = FALSE, result = FALSE;
-	GList                          *cur;
+	GList                          *cur = NULL;
 	struct mime_part               *cur_part;
 
 	if (args == NULL) {

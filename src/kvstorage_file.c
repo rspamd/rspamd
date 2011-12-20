@@ -339,11 +339,17 @@ rspamd_recursive_mkdir (guint levels)
 				return FALSE;
 			}
 			else if (levels > 1) {
-				chdir (nbuf);
+				if (chdir (nbuf) == -1) {
+					msg_err ("chdir to %s failed: %s", nbuf, strerror (errno));
+					return FALSE;
+				}
 				if (! rspamd_recursive_mkdir (levels - 1)) {
 					return FALSE;
 				}
-				chdir ("../");
+				if (chdir ("../") == -1) {
+					msg_err ("chdir to ../ failed: %s", strerror (errno));
+					return FALSE;
+				}
 			}
 		}
 	}
@@ -378,11 +384,15 @@ rspamd_file_init (struct rspamd_kv_backend *backend)
 
 	db->initialized = TRUE;
 
-	chdir (pathbuf);
+	if (chdir (pathbuf) == -1) {
+		msg_err ("chdir to %s failed: %s", pathbuf, strerror (errno));
+	}
 	return;
 err:
 	if (pathbuf[0] != '\0') {
-		chdir (pathbuf);
+		if (chdir (pathbuf) == -1) {
+			msg_err ("chdir to %s failed: %s", pathbuf, strerror (errno));
+		}
 	}
 }
 

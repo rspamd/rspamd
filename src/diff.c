@@ -225,7 +225,12 @@ static gint
 _ses(const void *a, gint aoff, gint n, const void *b, gint boff,
 		gint m, struct _ctx *ctx)
 {
-	struct middle_snake ms;
+	struct middle_snake ms = {
+		.x = 0,
+		.y = 0,
+		.u = 0,
+		.v = 0
+	};
 	gint d;
 
 	if (n == 0) {

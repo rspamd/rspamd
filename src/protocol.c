@@ -292,10 +292,11 @@ static gboolean
 parse_http_command (struct worker_task *task, f_str_t * line)
 {
 	guint8                         *p, *end, *c;
-	gint                            state = 0, next_state;
+	gint                            state = 0, next_state = 0;
 	gchar                          *cmd;
 
 	p = line->begin;
+	c = p;
 	end = p + line->len;
 	task->proto = RSPAMC_PROTO;
 

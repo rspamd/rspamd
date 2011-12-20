@@ -408,7 +408,9 @@ write_pid (struct rspamd_main *main)
 
 	if (main->is_privilleged) {
 		/* Force root user as owner of pid file */
-		fchown (main->pfh->pf_fd, 0, 0);
+		if (fchown (main->pfh->pf_fd, 0, 0) == -1) {
+			msg_err ("cannot chown of pidfile %s to 0:0 user", main->cfg->pid_file);
+		}
 	}
 
 	rspamd_pidfile_write (main->pfh);
