@@ -35,7 +35,9 @@ INSTALL(TARGETS rspamdclient rspamdclient_static LIBRARY PUBLIC_HEADER
 
     
 # Librspamdserver
-SET(RSPAMDLIBSRC ../src/binlog.c
+SET(RSPAMDLIBSRC
+				../src/aio_event.c 
+				../src/binlog.c
                 ../src/bloom.c
 				../src/buffer.c
 				../src/cfg_utils.c

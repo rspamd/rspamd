@@ -175,6 +175,9 @@
 
 #cmakedefine HAVE_SENDFILE       1
 #cmakedefine HAVE_SYS_SENDFILE_H 1
+#cmakedefine HAVE_SYS_EVENTFD_H  1
+#cmakedefine HAVE_AIO_H          1
+#cmakedefine HAVE_LIBAIO_H       1
 
 #cmakedefine HAVE_MKSTEMP        1
 
@@ -376,6 +379,14 @@
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #define HAVE_SETLOCALE 1
+#endif
+
+#ifdef HAVE_SYS_EVENTFD_H
+#include <sys/eventfd.h>
+#endif
+
+#ifdef HAVE_AIO_H
+#include <aio.h>
 #endif
 
 #ifdef HAVE_SYS_SENDFILE_H
