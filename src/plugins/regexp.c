@@ -91,6 +91,18 @@ static gboolean                 rspamd_check_smtp_data (struct worker_task *task
 static gboolean                 rspamd_regexp_occurs_number (struct worker_task *task, GList * args, void *unused);
 static void                     process_regexp_item (struct worker_task *task, void *user_data);
 
+/* Initialization */
+gint regexp_module_init (struct config_file *cfg, struct module_ctx **ctx);
+gint regexp_module_config (struct config_file *cfg);
+gint regexp_module_reconfig (struct config_file *cfg);
+
+module_t regexp_module = {
+	"regexp",
+	regexp_module_init,
+	regexp_module_config,
+	regexp_module_reconfig
+};
+
 static gint
 luaopen_regexp (lua_State * L)
 {

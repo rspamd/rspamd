@@ -34,7 +34,6 @@
 #include "cfg_file.h"
 #include "cfg_xml.h"
 #include "url.h"
-#include "modules.h"
 #include "message.h"
 #include "fuzzy.h"
 #include "bloom.h"
@@ -62,6 +61,20 @@
 #define FUZZY_FILE_MAGIC "rsh"
 /* Current version of fuzzy hash file format */
 #define CURRENT_FUZZY_VERSION 1
+
+/* Init functions */
+gpointer init_fuzzy ();
+void start_fuzzy (struct rspamd_worker *worker);
+
+worker_t fuzzy_worker = {
+	"fuzzy",					/* Name */
+	init_fuzzy,					/* Init function */
+	start_fuzzy,				/* Start function */
+	TRUE,						/* Has socket */
+	TRUE,						/* Non unique */
+	FALSE,						/* Non threaded */
+	FALSE						/* Non killable */
+};
 
 static GQueue                  *hashes[BUCKETS];
 static GQueue                  *frequent;
@@ -756,9 +769,12 @@ sync_callback (gint fd, short what, void *arg)
 }
 
 gpointer
-init_fuzzy_storage (void)
+init_fuzzy (void)
 {
 	struct rspamd_fuzzy_storage_ctx       *ctx;
+	GQuark							       type;
+
+	type = g_quark_try_string ("fuzzy");
 
 	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
 
@@ -766,15 +782,15 @@ init_fuzzy_storage (void)
 	ctx->frequent_score = DEFAULT_FREQUENT_SCORE;
 	ctx->expire = DEFAULT_EXPIRE;
 
-	register_worker_opt (TYPE_FUZZY, "hashfile", xml_handle_string, ctx,
+	register_worker_opt (type, "hashfile", xml_handle_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile));
-	register_worker_opt (TYPE_FUZZY, "max_mods", xml_handle_uint32, ctx,
+	register_worker_opt (type, "max_mods", xml_handle_uint32, ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, max_mods));
-	register_worker_opt (TYPE_FUZZY, "frequent_score", xml_handle_uint32, ctx,
+	register_worker_opt (type, "frequent_score", xml_handle_uint32, ctx,
 				G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, frequent_score));
-	register_worker_opt (TYPE_FUZZY, "expire", xml_handle_seconds, ctx,
+	register_worker_opt (type, "expire", xml_handle_seconds, ctx,
 					G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, expire));
-	register_worker_opt (TYPE_FUZZY, "use_judy", xml_handle_boolean, ctx,
+	register_worker_opt (type, "use_judy", xml_handle_boolean, ctx,
 				G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, use_judy));
 
 	return ctx;
@@ -784,14 +800,13 @@ init_fuzzy_storage (void)
  * Start worker process
  */
 void
-start_fuzzy_storage (struct rspamd_worker *worker)
+start_fuzzy (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
 	struct event                    sev;
 	gint                            retries = 0;
 
 	worker->srv->pid = getpid ();
-	worker->srv->type = TYPE_FUZZY;
 
 	event_init ();
 

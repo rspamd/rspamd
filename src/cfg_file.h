@@ -224,7 +224,8 @@ struct config_scalar {
  * Config params for rspamd worker
  */
 struct worker_conf {
-	gint type;										/**< worker type										*/
+	worker_t *worker;								/**< pointer to worker type								*/
+	GQuark type;									/**< type of worker										*/
 	gchar *bind_host;								/**< bind line											*/
 	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
 	guint16 bind_port;								/**< bind port in case of TCP socket					*/
@@ -299,7 +300,6 @@ struct config_file {
 	GList *filters;									/**< linked list of all filters							*/
 	GList *workers;									/**< linked list of all workers params					*/
 	gchar *filters_str;								/**< string of filters									*/
-	guint modules_num;
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/

@@ -3,11 +3,14 @@
 #
 # Cmake configuration file
 #
+
+############################# INITIAL SECTION #############################################
+
 PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 4)
-SET(RSPAMD_VERSION_PATCH 6)
+SET(RSPAMD_VERSION_PATCH 7)
 
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
@@ -16,6 +19,8 @@ SET(RSPAMD_USER "nobody")
 SET(RSPAMD_GROUP "nobody")
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
+
+############################# OPTIONS SECTION #############################################
 
 OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
@@ -30,7 +35,7 @@ OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
 
-############################# CONFIG SECTION #############################################
+############################# INCLUDE SECTION #############################################
 
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckFunctionExists)
@@ -41,6 +46,51 @@ INCLUDE(FindPkgConfig)
 INCLUDE(CheckCCompilerFlag)
 INCLUDE(FindPerl)
 
+############################# MODULES SECTION #############################################
+
+MACRO(_AddModulesForced MLIST WLIST)
+# Generate unique string for this build
+	STRING(RANDOM LENGTH 8 _MODULES_ID)
+	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
+	FILE(WRITE "src/modules.c" "/* ${MODULES_ID} */\n#include \"config.h\"\n")
+	FOREACH(MOD IN LISTS ${MLIST})
+		FILE(APPEND "src/modules.c" "extern module_t ${MOD}_module;\n")
+	ENDFOREACH(MOD IN LISTS ${MLIST})
+		 
+	FILE(APPEND "src/modules.c" "\n\nmodule_t *modules[] = {\n")
+	
+	FOREACH(MOD IN LISTS ${MLIST})
+		FILE(APPEND "src/modules.c" "&${MOD}_module,\n")
+	ENDFOREACH(MOD IN LISTS ${MLIST})
+	FILE(APPEND "src/modules.c" "NULL\n};\n")
+	
+	FOREACH(WRK IN LISTS ${WLIST})
+		FILE(APPEND "src/modules.c" "extern worker_t ${WRK}_worker;\n")
+	ENDFOREACH(WRK IN LISTS ${WLIST})
+	 
+	FILE(APPEND "src/modules.c" "\n\nworker_t *workers[] = {\n")
+	
+	FOREACH(WRK IN LISTS ${WLIST})
+		FILE(APPEND "src/modules.c" "&${WRK}_worker,\n")
+	ENDFOREACH(WRK IN LISTS ${WLIST})
+	FILE(APPEND "src/modules.c" "NULL\n};\n")
+ENDMACRO(_AddModulesForced MLIST WLIST)
+
+MACRO(AddModules MLIST WLIST)
+	_AddModulesForced(${MLIST} ${WLIST})
+	#IF(NOT EXISTS "src/modules.c")
+	#	_AddModulesForced(${MLIST} ${WLIST})
+	#ELSE(NOT EXISTS "src/modules.c")
+	#	FILE(STRINGS "src/modules.c" FILE_ID_RAW REGEX "^/.*[a-zA-Z0-9]+.*/$")
+	#	STRING(REGEX MATCH "[a-zA-Z0-9]+" FILE_ID "${FILE_ID_RAW}")
+	#	IF(NOT FILE_ID STREQUAL MODULES_ID)
+	#		MESSAGE("Regenerate modules info")
+	#		_AddModulesForced(${MLIST} ${WLIST})
+	#	ENDIF(NOT FILE_ID STREQUAL MODULES_ID)
+	#ENDIF(NOT EXISTS "src/modules.c")
+ENDMACRO(AddModules MLIST WLIST)
+
+############################# CONFIG SECTION #############################################
 # Initial set
 
 IF(CMAKE_INSTALL_PREFIX)
@@ -812,13 +862,13 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/chartable.c
 				src/plugins/fuzzy_check.c
 				src/plugins/spf.c)
+				
+SET(MODULES_LIST surbl regexp chartable fuzzy_check spf)
+SET(WORKERS_LIST normal controller smtp lmtp fuzzy keystorage)
 
+AddModules(MODULES_LIST WORKERS_LIST)
 
 ################################ SUBDIRS SECTION ###########################
-
-ADD_CUSTOM_COMMAND(OUTPUT src/modules.c
-					COMMAND ${CMAKE_SOURCE_DIR}/utils/gen-modules.sh ${PLUGINSSRC}
-					WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/src)
 
 ADD_SUBDIRECTORY(contrib/lgpl)
 IF(GLIB_COMPAT)

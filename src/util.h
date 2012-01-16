@@ -14,21 +14,6 @@ struct workq;
 struct statfile;
 struct classifier_config;
 
-/**
- * Process type: main or worker
- */
-enum process_type {
-	TYPE_UNKNOWN=-1,
-	TYPE_MAIN,
-	TYPE_WORKER,
-	TYPE_CONTROLLER,
-	TYPE_LMTP,
-	TYPE_SMTP,
-	TYPE_FUZZY,
-	TYPE_KVSTORAGE,
-	TYPE_MAX=255
-};
-
 /*
  * Create socket and bind or connect it to specified address and port
  */
@@ -195,21 +180,6 @@ void g_queue_clear (GQueue *queue);
 gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
 
 /*
- * Convert process type to its name
- *
- * @param type numeric type
- * @return string representation of type
- */
-const gchar * process_to_str (enum process_type type);
-/*
- * Convert string to process type
- *
- * @param type numeric type
- * @return string representation of type
- */
-enum process_type str_to_process (const gchar *str);
-
-/*
  * Strip <> from email address
  */
 gchar * escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in);
@@ -249,5 +219,12 @@ gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
  * @return -1 in case of failure
  */
 gint rspamd_fallocate (gint fd, off_t offset, off_t len);
+
+/**
+ * Return worker's control structure by its type
+ * @param type
+ * @return worker's control structure or NULL
+ */
+worker_t* get_worker_by_type (GQuark type);
 
 #endif

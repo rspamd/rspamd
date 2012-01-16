@@ -30,13 +30,24 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "url.h"
-#include "modules.h"
 #include "message.h"
 
 static gchar                     greetingbuf[1024];
 static struct timeval           io_tv;
 
 static gboolean                 lmtp_write_socket (void *arg);
+
+void start_lmtp (struct rspamd_worker *worker);
+
+worker_t lmtp_worker = {
+	"controller",				/* Name */
+	NULL,						/* Init function */
+	start_lmtp,					/* Start function */
+	TRUE,						/* Has socket */
+	FALSE,						/* Non unique */
+	FALSE,						/* Non threaded */
+	TRUE						/* Killable */
+};
 
 #ifndef HAVE_SA_SIGINFO
 static void
@@ -279,15 +290,14 @@ accept_socket (gint fd, short what, void *arg)
  * Start lmtp worker process
  */
 void
-start_lmtp_worker (struct rspamd_worker *worker)
+start_lmtp (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
-	gint                            i;
 	gchar                          *hostbuf;
 	gsize                           hostmax;
+	module_t					  **mod;
 
 	worker->srv->pid = getpid ();
-	worker->srv->type = TYPE_LMTP;
 	worker->ctx = event_init ();
 	g_mime_init (0);
 
@@ -310,8 +320,10 @@ start_lmtp_worker (struct rspamd_worker *worker)
 	event_add (&worker->bind_ev, NULL);
 
 	/* Perform modules configuring */
-	for (i = 0; i < MODULES_NUM; i++) {
-		modules[i].module_config_func (worker->srv->cfg);
+	mod = &modules[0];
+	while (*mod) {
+		(*mod)->module_config_func (worker->srv->cfg);
+		mod ++;
 	}
 
 	/* Fill hostname buf */

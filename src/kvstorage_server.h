@@ -93,7 +93,4 @@ struct kvstorage_session {
 	time_t now;
 };
 
-gpointer init_kvstorage_worker (void);
-void start_kvstorage_worker (struct rspamd_worker *worker);
-
 #endif /* KVSTORAGE_SERVER_H_ */

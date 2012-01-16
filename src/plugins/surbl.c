@@ -75,6 +75,18 @@ surbl_error_quark (void)
 	return g_quark_from_static_string ("surbl-error-quark");
 }
 
+/* Initialization */
+gint surbl_module_init (struct config_file *cfg, struct module_ctx **ctx);
+gint surbl_module_config (struct config_file *cfg);
+gint surbl_module_reconfig (struct config_file *cfg);
+
+module_t surbl_module = {
+	"surbl",
+	surbl_module_init,
+	surbl_module_config,
+	surbl_module_reconfig
+};
+
 static void
 exception_insert (gpointer st, gconstpointer key, gpointer value)
 {

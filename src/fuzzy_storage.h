@@ -27,7 +27,4 @@ struct fuzzy_session {
 	struct sockaddr_storage sa;
 };
 
-gpointer init_fuzzy_storage (void);
-void start_fuzzy_storage (struct rspamd_worker *worker);
-
 #endif

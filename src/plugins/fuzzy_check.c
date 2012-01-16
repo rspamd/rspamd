@@ -126,6 +126,18 @@ static void                     fuzzy_symbol_callback (struct worker_task *task,
 static void                     fuzzy_add_handler (gchar **args, struct controller_session *session);
 static void                     fuzzy_delete_handler (gchar **args, struct controller_session *session);
 
+/* Initialization */
+gint fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx);
+gint fuzzy_check_module_config (struct config_file *cfg);
+gint fuzzy_check_module_reconfig (struct config_file *cfg);
+
+module_t fuzzy_check_module = {
+	"fuzzy_check",
+	fuzzy_check_module_init,
+	fuzzy_check_module_config,
+	fuzzy_check_module_reconfig
+};
+
 /* Flags string is in format <numeric_flag>:<SYMBOL>:weight[, <numeric_flag>:<SYMBOL>:weight...] */
 static void
 parse_flags_string (struct config_file *cfg, gchar *str)

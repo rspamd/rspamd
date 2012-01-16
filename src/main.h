@@ -49,13 +49,17 @@ struct rspamd_worker {
 	gboolean is_dying;											/**< if worker is going to shutdown					*/
 	gboolean pending;											/**< if worker is pending to run					*/
 	struct rspamd_main *srv;									/**< pointer to server structure					*/
-	enum process_type type;										/**< process type									*/
+	GQuark type;												/**< process type									*/
 	struct event sig_ev_usr1;									/**< signals event									*/
 	struct event sig_ev_usr2;									/**< signals event									*/
 	struct event bind_ev;										/**< socket events									*/
 	struct worker_conf *cf;										/**< worker config data								*/
 	gpointer ctx;												/**< worker's specific data							*/
 };
+
+/**
+ * Module
+ */
 
 struct pidfh;
 struct config_file;
@@ -88,8 +92,8 @@ struct rspamd_main {
 	struct config_file *cfg;									/**< pointer to config structure					*/
 	pid_t pid;													/**< main pid										*/
 	/* Pid file structure */
-	rspamd_pidfh_t *pfh;											/**< struct pidfh for pidfile						*/
-	enum process_type type;										/**< process type									*/
+	rspamd_pidfh_t *pfh;										/**< struct pidfh for pidfile						*/
+	GQuark type;												/**< process type									*/
 	guint ev_initialized;										/**< is event system is initialized					*/
 	struct rspamd_stat *stat;									/**< pointer to statistics							*/
 
@@ -262,21 +266,10 @@ struct c_module {
 	struct module_ctx *ctx;										/**< pointer to context								*/
 };
 
-/* Workers' initialization and start functions */
-gpointer init_worker (void);
-void start_worker (struct rspamd_worker *worker);
-gpointer init_controller (void);
-void start_controller (struct rspamd_worker *worker);
-
 /**
  * Register custom controller function
  */
 void register_custom_controller_command (const gchar *name, controller_func_t handler, gboolean privilleged, gboolean require_message);
-
-/**
- * Initialize context for worker of specified type
- */
-gpointer init_workers_ctx (enum process_type type);
 
 /**
  * If set, reopen log file on next write

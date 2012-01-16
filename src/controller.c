@@ -30,7 +30,6 @@
 #include "upstream.h"
 #include "cfg_file.h"
 #include "cfg_xml.h"
-#include "modules.h"
 #include "map.h"
 #include "dns.h"
 #include "tokenizers/tokenizers.h"
@@ -43,6 +42,20 @@
 
 /* 120 seconds for controller's IO */
 #define CONTROLLER_IO_TIMEOUT 120
+
+/* Init functions */
+gpointer init_controller ();
+void start_controller (struct rspamd_worker *worker);
+
+worker_t controller_worker = {
+	"controller",				/* Name */
+	init_controller,			/* Init function */
+	start_controller,			/* Start function */
+	TRUE,						/* Has socket */
+	FALSE,						/* Non unique */
+	FALSE,						/* Non threaded */
+	TRUE						/* Killable */
+};
 
 enum command_type {
 	COMMAND_PASSWORD,
@@ -1229,16 +1242,18 @@ accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_controller (void)
+init_controller ()
 {
 	struct rspamd_controller_ctx       *ctx;
+	GQuark								type;
 
+	type = g_quark_try_string ("controller");
 	ctx = g_malloc0 (sizeof (struct rspamd_controller_ctx));
 
 	ctx->timeout = CONTROLLER_IO_TIMEOUT * 1000;
 
-	register_worker_opt (TYPE_CONTROLLER, "password", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, password));
-	register_worker_opt (TYPE_CONTROLLER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, timeout));
+	register_worker_opt (type, "password", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, password));
+	register_worker_opt (type, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, timeout));
 
 	return ctx;
 }

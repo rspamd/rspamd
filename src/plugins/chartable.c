@@ -42,6 +42,18 @@
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1
 
+/* Initialization */
+gint chartable_module_init (struct config_file *cfg, struct module_ctx **ctx);
+gint chartable_module_config (struct config_file *cfg);
+gint chartable_module_reconfig (struct config_file *cfg);
+
+module_t chartable_module = {
+	"chartable",
+	chartable_module_init,
+	chartable_module_config,
+	chartable_module_reconfig
+};
+
 struct chartable_ctx {
 	gint                            (*filter) (struct worker_task * task);
 	gchar                           *symbol;

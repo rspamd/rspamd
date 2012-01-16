@@ -15,6 +15,4 @@
 #define LMTP_NO_RCPT        554
 #define LMTP_TEMP_FAIL      421
 
-void start_lmtp_worker (struct rspamd_worker *worker);
-
 #endif

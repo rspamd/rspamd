@@ -54,7 +54,7 @@ struct rspamd_logger_s {
 	sig_atomic_t             do_reopen_log;
 	enum rspamd_log_type     type;
 	pid_t                    pid;
-	enum process_type		 process_type;
+	GQuark					 process_type;
 	radix_tree_t            *debug_ip;
 	guint32                  last_line_cksum;
 	guint32                  repeats;
@@ -252,7 +252,7 @@ reopen_log (rspamd_logger_t *logger)
  * Setup logger
  */
 void
-rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct rspamd_main *rspamd)
+rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *rspamd)
 {
 	gchar                           **strvec, *p, *err;
 	gint                            num, i, k;
@@ -340,7 +340,7 @@ rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct rs
  * Used after fork() for updating structure params
  */
 void
-update_log_pid (enum process_type ptype, rspamd_logger_t *rspamd_log)
+update_log_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
 {
 	rspamd_log->pid = getpid ();
 	rspamd_log->process_type = ptype;
@@ -568,7 +568,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 			tms = localtime (&now);
 
 			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
-			cptype = process_to_str (rspamd_log->process_type);
+			cptype = g_quark_to_string (rspamd_log->process_type);
 
 			if (rspamd_log->cfg->log_color) {
 				if (log_level >= G_LOG_LEVEL_INFO) {

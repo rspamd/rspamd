@@ -122,16 +122,6 @@ struct smtp_filter {
 };
 
 /*
- * Perform initialization of SMTP worker
- */
-gpointer init_smtp_worker (void);
-
-/*
- * Start SMTP worker
- */
-void start_smtp_worker (struct rspamd_worker *worker);
-
-/*
  * Register new SMTP filter
  * XXX: work is still in progress
  */

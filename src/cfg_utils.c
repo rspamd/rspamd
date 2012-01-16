@@ -523,7 +523,7 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 {
 	gchar                         **strvec, **p;
 	struct filter                  *cur;
-	guint                           i;
+	module_t					  **pmodule;
 
 	if (str == NULL) {
 		return;
@@ -538,18 +538,20 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 	while (*p) {
 		cur = NULL;
 		/* Search modules from known C modules */
-		for (i = 0; i < cfg->modules_num; i++) {
+		pmodule = &modules[0];
+		while (*pmodule) {
 			g_strstrip (*p);
-			if (modules[i].name != NULL && g_ascii_strcasecmp (modules[i].name, *p) == 0) {
+			if ((*pmodule)->name != NULL && g_ascii_strcasecmp ((*pmodule)->name, *p) == 0) {
 				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				msg_debug ("found C filter %s", *p);
 				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-				cur->module = &modules[i];
+				cur->module = (*pmodule);
 				cfg->filters = g_list_prepend (cfg->filters, cur);
 
 				break;
 			}
+			pmodule ++;
 		}
 		if (cur != NULL) {
 			/* Go to next iteration */

@@ -15,7 +15,7 @@ typedef struct rspamd_logger_s rspamd_logger_t;
 /**
  * Init logger
  */
-void rspamd_set_logger (enum rspamd_log_type type, enum process_type ptype, struct rspamd_main *main);
+void rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *main);
 /**
  * Open log file or initialize other structures
  */
@@ -45,7 +45,7 @@ gint reopen_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 /**
  * Set log pid
  */
-void update_log_pid (enum process_type ptype, rspamd_logger_t *logger);
+void update_log_pid (GQuark ptype, rspamd_logger_t *logger);
 
 /**
  * Flush log buffer for some types of logging

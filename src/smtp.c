@@ -52,6 +52,19 @@ static gboolean smtp_write_socket (void *arg);
 
 static sig_atomic_t                    wanna_die = 0;
 
+/* Init functions */
+gpointer init_smtp ();
+void start_smtp (struct rspamd_worker *worker);
+
+worker_t smtp_worker = {
+	"smtp",						/* Name */
+	init_smtp,					/* Init function */
+	start_smtp,					/* Start function */
+	TRUE,						/* Has socket */
+	FALSE,						/* Non unique */
+	FALSE,						/* Non threaded */
+	TRUE						/* Killable */
+};
 
 #ifndef HAVE_SA_SIGINFO
 static void
@@ -907,9 +920,12 @@ make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 }
 
 gpointer
-init_smtp_worker (void)
+init_smtp (void)
 {
-	struct smtp_worker_ctx         *ctx;
+	struct smtp_worker_ctx         		*ctx;
+	GQuark								type;
+
+	type = g_quark_try_string ("smtp");
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
 	ctx->pool = memory_pool_new (memory_pool_get_size ());
@@ -922,25 +938,25 @@ init_smtp_worker (void)
 	ctx->max_errors = DEFAULT_MAX_ERRORS;
 	ctx->reject_message = DEFAULT_REJECT_MESSAGE;
 
-	register_worker_opt (TYPE_SMTP, "upstreams", xml_handle_string, ctx,
+	register_worker_opt (type, "upstreams", xml_handle_string, ctx,
 				G_STRUCT_OFFSET (struct smtp_worker_ctx, upstreams_str));
-	register_worker_opt (TYPE_SMTP, "banner", xml_handle_string, ctx,
+	register_worker_opt (type, "banner", xml_handle_string, ctx,
 					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_banner_str));
-	register_worker_opt (TYPE_SMTP, "timeout", xml_handle_seconds, ctx,
+	register_worker_opt (type, "timeout", xml_handle_seconds, ctx,
 					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_timeout_raw));
-	register_worker_opt (TYPE_SMTP, "delay", xml_handle_seconds, ctx,
+	register_worker_opt (type, "delay", xml_handle_seconds, ctx,
 					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_delay));
-	register_worker_opt (TYPE_SMTP, "jitter", xml_handle_seconds, ctx,
+	register_worker_opt (type, "jitter", xml_handle_seconds, ctx,
 						G_STRUCT_OFFSET (struct smtp_worker_ctx, delay_jitter));
-	register_worker_opt (TYPE_SMTP, "capabilities", xml_handle_string, ctx,
+	register_worker_opt (type, "capabilities", xml_handle_string, ctx,
 					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_capabilities_str));
-	register_worker_opt (TYPE_SMTP, "xclient", xml_handle_boolean, ctx,
+	register_worker_opt (type, "xclient", xml_handle_boolean, ctx,
 					G_STRUCT_OFFSET (struct smtp_worker_ctx, use_xclient));
-	register_worker_opt (TYPE_SMTP, "reject_message", xml_handle_string, ctx,
+	register_worker_opt (type, "reject_message", xml_handle_string, ctx,
 						G_STRUCT_OFFSET (struct smtp_worker_ctx, reject_message));
-	register_worker_opt (TYPE_SMTP, "max_errors", xml_handle_uint32, ctx,
+	register_worker_opt (type, "max_errors", xml_handle_uint32, ctx,
 						G_STRUCT_OFFSET (struct smtp_worker_ctx, max_errors));
-	register_worker_opt (TYPE_SMTP, "max_size", xml_handle_size, ctx,
+	register_worker_opt (type, "max_size", xml_handle_size, ctx,
 						G_STRUCT_OFFSET (struct smtp_worker_ctx, max_size));
 
 	return ctx;
@@ -984,7 +1000,7 @@ config_smtp_worker (struct rspamd_worker *worker)
  * Start worker process
  */
 void
-start_smtp_worker (struct rspamd_worker *worker)
+start_smtp (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
 	struct smtp_worker_ctx         *ctx = worker->ctx;

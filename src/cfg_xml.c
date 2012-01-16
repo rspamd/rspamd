@@ -850,13 +850,9 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 	struct xml_config_param        *cparam;
 	GHashTable                     *worker_config;
 
-	if (cd->wrk->ctx == NULL) {
-		cd->wrk->ctx = init_workers_ctx (cd->wrk->type);
-	}
-
 	if (!worker_options || (worker_config = g_hash_table_lookup (worker_options, &cd->wrk->type)) == NULL ||
 			(cparam = g_hash_table_lookup (worker_config, k)) == NULL) {
-		msg_warn ("unregistered worker attribute '%s' for worker %s", k, process_to_str (cd->wrk->type));
+		msg_warn ("unregistered worker attribute '%s' for worker %s", k, g_quark_to_string (cd->wrk->type));
 	}
 	else {
 
@@ -864,7 +860,7 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 			cparam->handler (cd->cfg, cd->ctx, NULL, v, NULL, cd->wrk->ctx, cparam->offset);
 		}
 		else {
-			msg_err ("Bad error detected: module %s has not initialized its context", process_to_str (cd->wrk->type));
+			msg_err ("Bad error detected: module %s has not initialized its context", g_quark_to_string (cd->wrk->type));
 		}
 	}
 }
@@ -894,31 +890,20 @@ gboolean
 worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
-
+	GQuark 							type;
 	
-	if (g_ascii_strcasecmp (data, "normal") == 0) {
-		wrk->type = TYPE_WORKER;
-		wrk->has_socket = TRUE;
-	}
-	else if (g_ascii_strcasecmp (data, "controller") == 0) {
-		wrk->type = TYPE_CONTROLLER;
-		wrk->has_socket = TRUE;
-	}
-	else if (g_ascii_strcasecmp (data, "lmtp") == 0) {
-		wrk->type = TYPE_LMTP;
-		wrk->has_socket = TRUE;
-	}
-	else if (g_ascii_strcasecmp (data, "smtp") == 0) {
-		wrk->type = TYPE_SMTP;
-		wrk->has_socket = TRUE;
-	}
-	else if (g_ascii_strcasecmp (data, "fuzzy") == 0) {
-		wrk->type = TYPE_FUZZY;
-		wrk->has_socket = FALSE;
-	}
-	else if (g_ascii_strcasecmp (data, "keystorage") == 0) {
-		wrk->type = TYPE_KVSTORAGE;
-		wrk->has_socket = TRUE;
+	type = g_quark_try_string (data);
+
+	if (type != 0) {
+		 wrk->worker = get_worker_by_type (type);
+		 if (wrk->worker == NULL) {
+			 msg_err ("unknown worker type: %s", data);
+			 return FALSE;
+		 }
+		 wrk->type = type;
+		 if (wrk->worker->worker_init_func) {
+			 wrk->ctx = wrk->worker->worker_init_func ();
+		 }
 	}
 	else {
 		msg_err ("unknown worker type: %s", data);
@@ -2441,23 +2426,8 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 		wrk = cur->data;
 		
 		rspamd_fprintf (f, "<worker>" EOL);
-		switch (wrk->type) {
-			case TYPE_WORKER:
-				rspamd_fprintf (f, "  <type>normal</type>" EOL);
-				break;
-			case TYPE_CONTROLLER:
-				rspamd_fprintf (f, "  <type>controller</type>" EOL);
-				break;
-			case TYPE_FUZZY:
-				rspamd_fprintf (f, "  <type>fuzzy</type>" EOL);
-				break;
-			case TYPE_LMTP:
-				rspamd_fprintf (f, "  <type>lmtp</type>" EOL);
-				break;
-			case TYPE_SMTP:
-				rspamd_fprintf (f, "  <type>smtp</type>" EOL);
-				break;
-		}
+
+		rspamd_fprintf (f, "  <type>%s</type>" EOL, g_quark_to_string (wrk->type));
 		escaped_str = g_markup_escape_text (wrk->bind_host, -1); 
 		rspamd_fprintf (f, "  <bind_socket>%s</bind_socket>" EOL, escaped_str);
 		g_free (escaped_str);

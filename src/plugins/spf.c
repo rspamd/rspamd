@@ -67,6 +67,18 @@ static void                   spf_symbol_callback (struct worker_task *task, voi
 static GList *                spf_record_copy (GList *addrs);
 static void                   spf_record_destroy (gpointer list);
 
+/* Initialization */
+gint spf_module_init (struct config_file *cfg, struct module_ctx **ctx);
+gint spf_module_config (struct config_file *cfg);
+gint spf_module_reconfig (struct config_file *cfg);
+
+module_t spf_module = {
+	"spf",
+	spf_module_init,
+	spf_module_config,
+	spf_module_reconfig
+};
+
 gint
 spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {

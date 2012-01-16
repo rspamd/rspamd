@@ -34,7 +34,6 @@
 #include "cfg_file.h"
 #include "cfg_xml.h"
 #include "url.h"
-#include "modules.h"
 #include "message.h"
 #include "map.h"
 #include "dns.h"
@@ -47,6 +46,19 @@
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
+
+gpointer init_worker (void);
+void start_worker (struct rspamd_worker *worker);
+
+worker_t normal_worker = {
+	"normal",					/* Name */
+	init_worker,				/* Init function */
+	start_worker,				/* Start function */
+	TRUE,						/* Has socket */
+	FALSE,						/* Non unique */
+	FALSE,						/* Non threaded */
+	TRUE						/* Killable */
+};
 
 #ifndef BUILD_STATIC
 
@@ -822,18 +834,21 @@ gpointer
 init_worker (void)
 {
 	struct rspamd_worker_ctx       *ctx;
+	GQuark								type;
+
+	type = g_quark_try_string ("normal");
 
 	ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
 
 	ctx->is_mime = TRUE;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
-	register_worker_opt (TYPE_WORKER, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
-	register_worker_opt (TYPE_WORKER, "http", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http));
-	register_worker_opt (TYPE_WORKER, "json", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json));
-	register_worker_opt (TYPE_WORKER, "allow_learn", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn));
-	register_worker_opt (TYPE_WORKER, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
-	register_worker_opt (TYPE_WORKER, "max_tasks", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, max_tasks));
+	register_worker_opt (type, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
+	register_worker_opt (type, "http", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http));
+	register_worker_opt (type, "json", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json));
+	register_worker_opt (type, "allow_learn", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn));
+	register_worker_opt (type, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
+	register_worker_opt (type, "max_tasks", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, max_tasks));
 
 	return ctx;
 }

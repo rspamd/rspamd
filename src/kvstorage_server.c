@@ -63,6 +63,20 @@ static sig_atomic_t soft_wanna_die = 0;
 	g_static_mutex_unlock (thr->log_mtx);																\
 } while (0)
 
+/* Init functions */
+gpointer init_keystorage ();
+void start_keystorage (struct rspamd_worker *worker);
+
+worker_t keystorage_worker = {
+	"keystorage",				/* Name */
+	init_keystorage,			/* Init function */
+	start_keystorage,			/* Start function */
+	TRUE,						/* Has socket */
+	FALSE,						/* Non unique */
+	TRUE,						/* Non threaded */
+	FALSE						/* Non killable */
+};
+
 #ifndef HAVE_SA_SIGINFO
 static void
 sig_handler (gint signo)
@@ -86,19 +100,21 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 }
 
 gpointer
-init_kvstorage_worker (void)
+init_keystorage (void)
 {
 	struct kvstorage_worker_ctx         *ctx;
+	GQuark								type;
 
+	type = g_quark_try_string ("keystorage");
 	ctx = g_malloc0 (sizeof (struct kvstorage_worker_ctx));
 	ctx->pool = memory_pool_new (memory_pool_get_size ());
 
 	/* Set default values */
 	ctx->timeout_raw = 300000;
 
-	register_worker_opt (TYPE_KVSTORAGE, "timeout", xml_handle_seconds, ctx,
+	register_worker_opt (type, "timeout", xml_handle_seconds, ctx,
 					G_STRUCT_OFFSET (struct kvstorage_worker_ctx, timeout_raw));
-	register_worker_opt (TYPE_KVSTORAGE, "redis", xml_handle_boolean, ctx,
+	register_worker_opt (type, "redis", xml_handle_boolean, ctx,
 						G_STRUCT_OFFSET (struct kvstorage_worker_ctx, is_redis));
 	return ctx;
 }
@@ -1066,7 +1082,7 @@ create_kvstorage_thread (struct rspamd_worker *worker, struct kvstorage_worker_c
  * Start worker process
  */
 void
-start_kvstorage_worker (struct rspamd_worker *worker)
+start_keystorage (struct rspamd_worker *worker)
 {
 	struct sigaction                	 signals;
 	struct kvstorage_worker_ctx         *ctx = worker->ctx;

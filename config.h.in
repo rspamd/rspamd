@@ -433,14 +433,26 @@
 /* Forwarded declaration */
 struct module_ctx;
 struct config_file;
+struct rspamd_worker;
 
 typedef struct module_s {
-	const char *name;
+	const gchar *name;
 	int (*module_init_func)(struct config_file *cfg, struct module_ctx **ctx);
 	int (*module_config_func)(struct config_file *cfg);
 	int (*module_reconfig_func)(struct config_file *cfg);
 } module_t;
 
-extern module_t modules[];
+typedef struct worker_s {
+	const gchar *name;
+	gpointer (*worker_init_func)();
+	void (*worker_start_func)(struct rspamd_worker *worker);
+	gboolean has_socket;
+	gboolean unique;
+	gboolean threaded;
+	gboolean killable;
+} worker_t;
+
+extern module_t *modules[];
+extern worker_t *workers[];
 
 #endif

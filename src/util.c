@@ -1161,57 +1161,6 @@ rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
 	return (s - src - 1);    /* count does not include NUL */
 }
 
-/* Convert process type to its name */
-const gchar              *
-process_to_str (enum process_type type)
-{
-	switch (type) {
-	case TYPE_MAIN:
-		return "main";
-	case TYPE_WORKER:
-		return "worker";
-	case TYPE_FUZZY:
-		return "fuzzy";
-	case TYPE_CONTROLLER:
-		return "controller";
-	case TYPE_LMTP:
-		return "lmtp";
-	case TYPE_SMTP:
-		return "smtp";
-	case TYPE_KVSTORAGE:
-		return "keystorage";
-	default:
-		return "unknown";
-	}
-
-	return NULL;
-}
-/* Convert string to process type */
-enum process_type
-str_to_process (const gchar *str)
-{
-	if (g_ascii_strcasecmp (str, "main") == 0) {
-		return TYPE_MAIN;
-	}
-	else if (g_ascii_strcasecmp (str, "worker") == 0) {
-		return TYPE_WORKER;
-	}
-	else if (g_ascii_strcasecmp (str, "fuzzy") == 0) {
-		return TYPE_FUZZY;
-	}
-	else if (g_ascii_strcasecmp (str, "controller") == 0) {
-		return TYPE_CONTROLLER;
-	}
-	else if (g_ascii_strcasecmp (str, "smtp") == 0) {
-		return TYPE_SMTP;
-	}
-	else if (g_ascii_strcasecmp (str, "lmtp") == 0) {
-		return TYPE_LMTP;
-	}
-
-	return TYPE_UNKNOWN;
-}
-
 /* Compare two emails for building emails tree */
 gint
 compare_email_func (gconstpointer a, gconstpointer b)
@@ -1395,6 +1344,29 @@ rspamd_fallocate (gint fd, off_t offset, off_t len)
 	return 0;
 #endif
 }
+
+
+/**
+ * Return worker's control structure by its type
+ * @param type
+ * @return worker's control structure or NULL
+ */
+worker_t*
+get_worker_by_type (GQuark type)
+{
+	worker_t						**cur;
+
+	cur = &workers[0];
+	while (*cur) {
+		if (g_quark_from_string ((*cur)->name) == type) {
+			return *cur;
+		}
+		cur ++;
+	}
+
+	return NULL;
+}
+
 
 /*
  * vi:ts=4
