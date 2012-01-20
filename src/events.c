@@ -44,17 +44,8 @@ static guint
 rspamd_event_hash (gconstpointer a)
 {
 	const struct rspamd_async_event  *ev = a;
-	guint                             h = 0, i;
-	gchar                            *p;
 
-	p = (gchar *)ev->user_data;
-	for (i = 0; i < sizeof (gpointer); i ++) {
-		h ^= *p;
-		h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-		p ++;
-	}
-
-	return h;
+	return GPOINTER_TO_UINT (ev->user_data);
 }
 
 struct rspamd_async_session    *
