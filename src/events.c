@@ -62,10 +62,9 @@ new_async_session (memory_pool_t * pool, event_finalizer_t fin,
 	new->user_data = user_data;
 	new->wanna_die = FALSE;
 	new->events = g_hash_table_new (rspamd_event_hash, rspamd_event_equal);
-	new->forced_events = g_queue_new ();
+	new->threads = 0;
 
 	memory_pool_add_destructor (pool, (pool_destruct_func) g_hash_table_destroy, new->events);
-	memory_pool_add_destructor (pool, (pool_destruct_func) g_queue_free, new->forced_events);
 
 	return new;
 }
@@ -73,68 +72,21 @@ new_async_session (memory_pool_t * pool, event_finalizer_t fin,
 void
 register_async_event (struct rspamd_async_session *session, event_finalizer_t fin, void *user_data, gboolean forced)
 {
-	struct rspamd_async_event      *new, *ev;
-	GList                          *cur;
+	struct rspamd_async_event      *new;
 
 	if (session == NULL) {
 		msg_info ("session is NULL");
 		return;
-	}
-
-	if (forced) {
-		/* For forced events try first to increase its reference */
-		cur = session->forced_events->head;
-		while (cur) {
-			ev = cur->data;
-			if (ev->forced && ev->fin == fin) {
-				ev->ref++;
-				return;
-			}
-			cur = g_list_next (cur);
-		}
 	}
 
 	new = memory_pool_alloc (session->pool, sizeof (struct rspamd_async_event));
 	new->fin = fin;
 	new->user_data = user_data;
-	new->forced = forced;
-	new->ref = 1;
+
 	g_hash_table_insert (session->events, new, new);
 #ifdef RSPAMD_EVENTS_DEBUG
 	msg_info ("added event: %p, pending %d events", user_data, g_hash_table_size (session->events));
 #endif
-}
-
-void
-remove_forced_event (struct rspamd_async_session *session, event_finalizer_t fin)
-{
-	struct rspamd_async_event      *ev;
-	GList                          *cur;
-
-	if (session == NULL) {
-		msg_info ("session is NULL");
-		return;
-	}
-
-	cur = session->forced_events->head;
-	while (cur) {
-		ev = cur->data;
-		if (ev->forced && ev->fin == fin) {
-			ev->ref--;
-			if (ev->ref == 0) {
-				g_queue_delete_link (session->forced_events, cur);
-			}
-			break;
-		}
-		cur = g_list_next (cur);
-	}
-
-	check_session_pending (session);
-
-	if (session->wanna_die && session->fin != NULL && g_queue_get_length (session->forced_events) == 0) {
-		/* Call session destroy after all forced events are ready */
-		session->cleanup (session->user_data);
-	}
 }
 
 void
@@ -183,7 +135,7 @@ destroy_session (struct rspamd_async_session *session)
 
 	g_hash_table_foreach (session->events, rspamd_session_destroy, session);
 
-	if (g_queue_get_length (session->forced_events) == 0) {
+	if (session->threads == 0) {
 		if (session->cleanup != NULL) {
 			session->cleanup (session->user_data);
 		}
@@ -196,7 +148,7 @@ destroy_session (struct rspamd_async_session *session)
 gboolean
 check_session_pending (struct rspamd_async_session *session)
 {
-	if (g_queue_get_length (session->forced_events) == 0 && g_hash_table_size (session->events) == 0) {
+	if (session->threads == 0 && g_hash_table_size (session->events) == 0) {
 		if (session->fin != NULL) {
 			session->fin (session->user_data);
 		}
@@ -211,4 +163,27 @@ check_session_pending (struct rspamd_async_session *session)
 	}
 
 	return TRUE;
+}
+
+
+/**
+ * Add new async thread to session
+ * @param session session object
+ */
+void
+register_async_thread (struct rspamd_async_session *session)
+{
+	g_atomic_int_inc (&session->threads);
+}
+
+/**
+ * Remove async thread from session and check whether session can be terminated
+ * @param session session object
+ */
+void
+remove_async_thread (struct rspamd_async_session *session)
+{
+	if (g_atomic_int_dec_and_test (&session->threads)) {
+		(void) check_session_pending (session);
+	}
 }

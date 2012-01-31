@@ -1227,6 +1227,7 @@ process_regexp_item_threaded (gpointer data, gpointer user_data)
 			g_mutex_unlock (workers_mtx);
 		}
 	}
+	remove_async_thread (ud->task->s);
 }
 
 static void
@@ -1240,6 +1241,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 		thr_ud = memory_pool_alloc (task->task_pool, sizeof (struct regexp_threaded_ud));
 		thr_ud->item = item;
 		thr_ud->task = task;
+		register_async_thread (task->s);
 		g_thread_pool_push (regexp_module_ctx->workers, thr_ud, NULL);
 	}
 	else {

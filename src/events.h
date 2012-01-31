@@ -10,7 +10,6 @@ typedef void (*event_finalizer_t)(void *user_data);
 struct rspamd_async_event {
 	event_finalizer_t fin;
 	void *user_data;
-	gboolean forced;
 	guint ref;
 };
 
@@ -19,10 +18,10 @@ struct rspamd_async_session {
 	event_finalizer_t restore;
 	event_finalizer_t cleanup;
 	GHashTable *events;
-	GQueue *forced_events;
 	void *user_data;
 	memory_pool_t *pool;
 	gboolean wanna_die;
+	guint threads;
 };
 
 /**
@@ -43,18 +42,10 @@ struct rspamd_async_session *new_async_session (memory_pool_t *pool,
  * @param session session object
  * @param fin finalizer callback
  * @param user_data abstract user_data
- * @param forced session cannot be destroyed until forced event are still in it
+ * @param forced unused
  */
 void register_async_event (struct rspamd_async_session *session,
 		event_finalizer_t fin, void *user_data, gboolean forced);
-
-
-/**
- * Remove forced event
- * @param session session object
- * @param fin destructor function
- */
-void remove_forced_event (struct rspamd_async_session *session, event_finalizer_t fin);
 
 /**
  * Remove normal event
@@ -76,5 +67,17 @@ gboolean destroy_session (struct rspamd_async_session *session);
  * @return TRUE if session has pending events
  */
 gboolean check_session_pending (struct rspamd_async_session *session);
+
+/**
+ * Add new async thread to session
+ * @param session session object
+ */
+void register_async_thread (struct rspamd_async_session *session);
+
+/**
+ * Remove async thread from session and check whether session can be terminated
+ * @param session session object
+ */
+void remove_async_thread (struct rspamd_async_session *session);
 
 #endif /* RSPAMD_EVENTS_H */

@@ -589,8 +589,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 	gint                            res = 0;
 	union rspamd_reply_element     *elt;
 	GList                          *cur;
-	
-	remove_forced_event (session->s, (event_finalizer_t)smtp_dns_cb);
+
 	switch (session->state) {
 		case SMTP_STATE_RESOLVE_REVERSE:
 			/* Parse reverse reply and start resolve of this ip */
