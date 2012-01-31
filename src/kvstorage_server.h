@@ -38,21 +38,23 @@ struct kvstorage_worker_ctx {
 	gboolean is_redis;
 	memory_pool_t *pool;
 	struct event_base *ev_base;
-	GStaticMutex log_mtx;
-	GStaticMutex accept_mtx;
+	GMutex *log_mtx;
+	GMutex *accept_mtx;
 };
 
 struct kvstorage_worker_thread {
 	struct event bind_ev;
+	struct event term_ev;
 	struct timeval *tv;
 	struct kvstorage_worker_ctx *ctx;
 	struct rspamd_worker *worker;
 	GThread *thr;
 	struct event_base *ev_base;
-	GStaticMutex *log_mtx;
-	GStaticMutex *accept_mtx;
+	GMutex *log_mtx;
+	GMutex *accept_mtx;
 	guint id;
 	sigset_t *signals;
+	gint term_sock[2];
 };
 
 struct kvstorage_session {

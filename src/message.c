@@ -1182,7 +1182,7 @@ header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, 
 {
 	while (h) {
 		if (G_LIKELY (!strong)) {
-			if (h->value && !g_strncasecmp (field, h->name, strlen (field))) {
+			if (h->value && !g_ascii_strncasecmp (field, h->name, strlen (field))) {
 				if (pool != NULL) {
 					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
 				}
@@ -1223,7 +1223,7 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
 			if (G_LIKELY (!strong)) {
-				if (!g_strncasecmp (field, name, strlen (name))) {
+				if (!g_ascii_strncasecmp (field, name, strlen (name))) {
 					if (pool != NULL) {
 						*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
 					}
@@ -1556,11 +1556,11 @@ message_set_header (GMimeMessage * message, const gchar *field, const gchar *val
 {
 	gint                            i;
 
-	if (!g_strcasecmp (field, "MIME-Version:") || !g_strncasecmp (field, "Content-", 8)) {
+	if (!g_ascii_strcasecmp (field, "MIME-Version:") || !g_ascii_strncasecmp (field, "Content-", 8)) {
 		return;
 	}
 	for (i = 0; i <= HEADER_UNKNOWN; ++i) {
-		if (!fieldfunc[i].name || !g_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
+		if (!fieldfunc[i].name || !g_ascii_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
 			switch (fieldfunc[i].functype) {
 			case FUNC_CHARPTR:
 				(*(fieldfunc[i].setfunc)) (message, value);
@@ -1593,7 +1593,7 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 	InternetAddressList            *ia_list = NULL, *ia;
 
 	for (i = 0; i <= HEADER_UNKNOWN; ++i) {
-		if (!fieldfunc[i].name || !g_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
+		if (!fieldfunc[i].name || !g_ascii_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
 			switch (fieldfunc[i].functype) {
 			case FUNC_CHARFREEPTR:
 				ret = (gchar *)(*(fieldfunc[i].func)) (message);

@@ -389,7 +389,7 @@ surbl_module_config (struct config_file *cfg)
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, "surbl");
 	while (cur_opt) {
 		cur = cur_opt->data;
-		if (!g_strncasecmp (cur->param, "suffix", sizeof ("suffix") - 1)) {
+		if (!g_ascii_strncasecmp (cur->param, "suffix", sizeof ("suffix") - 1)) {
 			if ((str = strchr (cur->param, '_')) != NULL) {
 				new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
 				*str = '\0';
@@ -414,7 +414,7 @@ surbl_module_config (struct config_file *cfg)
 			}
 		}
 		/* Search for bits */
-		else if (!g_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
+		else if (!g_ascii_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
 			if ((str = strchr (cur->param, '_')) != NULL) {
 				bit = strtoul (str + 1, NULL, 10);
 				if (bit != 0) {

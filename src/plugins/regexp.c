@@ -84,6 +84,7 @@ static const struct luaL_reg    regexplib_m[] = {
 };
 
 static struct regexp_ctx       *regexp_module_ctx = NULL;
+static GMutex 				   *workers_mtx = NULL;
 
 static gint                     regexp_common_filter (struct worker_task *task);
 static void						process_regexp_item_threaded (gpointer data, gpointer user_data);
@@ -525,7 +526,13 @@ regexp_module_config (struct config_file *cfg)
 		if (g_thread_supported ()) {
 			thr = parse_limit (value, -1);
 			if (thr > 1) {
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 				g_thread_init (NULL);
+				workers_mtx = g_mutex_new ();
+#else
+				workers_mtx = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (GMutex));
+				g_mutex_init (workers_mtx);
+#endif
 				regexp_module_ctx->workers = g_thread_pool_new (process_regexp_item_threaded, regexp_module_ctx, thr, TRUE, &err);
 				if (err != NULL) {
 					msg_err ("thread pool creation failed: %s", err->message);
@@ -552,11 +559,8 @@ regexp_module_config (struct config_file *cfg)
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
 	while (cur_opt) {
 		cur = cur_opt->data;
-		if (strcmp (cur->param, "metric") == 0 || strcmp (cur->param, "statfile_prefix") == 0) {
-			cur_opt = g_list_next (cur_opt);
-			continue;
-		}
-		else if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
+		/* Skip several options that are not regexp */
+		if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
 			parse_autolearn_param (cur->param, cur->value, cfg);
 			cur_opt = g_list_next (cur_opt);
 			continue;
@@ -569,6 +573,11 @@ regexp_module_config (struct config_file *cfg)
 			cur_opt = g_list_next (cur_opt);
 			continue;
 		}
+		else if (g_ascii_strncasecmp (cur->param, "max_threads", sizeof ("max_threads") - 1) == 0) {
+			cur_opt = g_list_next (cur_opt);
+			continue;
+		}
+		/* Handle regexps */
 		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 		cur_item->symbol = cur->param;
 		if (cur->is_lua && cur->lua_type == LUA_VAR_STRING) {
@@ -1205,13 +1214,17 @@ process_regexp_item_threaded (gpointer data, gpointer user_data)
 	if (ud->item->lua_function) {
 		/* Just call function */
 		if (lua_call_expression_func ("regexp", ud->item->lua_function, ud->task, NULL, &res) && res) {
+			g_mutex_lock (workers_mtx);
 			insert_result (ud->task, ud->item->symbol, 1, NULL);
+			g_mutex_unlock (workers_mtx);
 		}
 	}
 	else {
 		/* Process expression */
 		if (process_regexp_expression (ud->item->expr, ud->item->symbol, ud->task, NULL)) {
+			g_mutex_lock (workers_mtx);
 			insert_result (ud->task, ud->item->symbol, 1, NULL);
+			g_mutex_unlock (workers_mtx);
 		}
 	}
 }

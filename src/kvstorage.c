@@ -61,8 +61,12 @@ rspamd_kv_storage_new (gint id, const gchar *name, struct rspamd_kv_cache *cache
 		new->name = g_malloc (sizeof ("18446744073709551616"));
 		rspamd_snprintf (new->name, sizeof ("18446744073709551616"), "%d", id);
 	}
-
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_init (&new->rwlock);
+#else
 	g_static_rw_lock_init (&new->rwlock);
+#endif
+
 
 	/* Init structures */
 	if (new->cache->init_func) {
@@ -86,13 +90,13 @@ rspamd_kv_storage_insert_cache (struct rspamd_kv_storage *storage, gpointer key,
 	gint 								steps = 0;
 	struct rspamd_kv_element		 	*elt;
 
-	g_static_rw_lock_writer_lock (&storage->rwlock);
+	RW_W_LOCK (&storage->rwlock);
 	/* Hard limit */
 	if (storage->max_memory > 0) {
 		if (len > storage->max_memory) {
 			msg_info ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
 					len, storage->max_memory);
-			g_static_rw_lock_writer_unlock (&storage->rwlock);
+			RW_W_UNLOCK (&storage->rwlock);
 			return FALSE;
 		}
 
@@ -105,7 +109,7 @@ rspamd_kv_storage_insert_cache (struct rspamd_kv_storage *storage, gpointer key,
 				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
 			}
 			if (++steps > MAX_EXPIRE_STEPS) {
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
 				return FALSE;
 			}
@@ -132,7 +136,7 @@ rspamd_kv_storage_insert_cache (struct rspamd_kv_storage *storage, gpointer key,
 
 	storage->elts ++;
 	storage->memory += ELT_SIZE (elt);
-	g_static_rw_lock_writer_unlock (&storage->rwlock);
+	RW_W_UNLOCK (&storage->rwlock);
 
 	return TRUE;
 }
@@ -148,12 +152,12 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 	glong								longval;
 
 	/* Hard limit */
-	g_static_rw_lock_writer_lock (&storage->rwlock);
+	RW_W_LOCK (&storage->rwlock);
 	if (storage->max_memory > 0) {
 		if (len + sizeof (struct rspamd_kv_element) + keylen >= storage->max_memory) {
 			msg_warn ("<%s>: trying to insert value of length %z while limit is %z", storage->name,
 					len, storage->max_memory);
-			g_static_rw_lock_writer_unlock (&storage->rwlock);
+			RW_W_UNLOCK (&storage->rwlock);
 			return FALSE;
 		}
 
@@ -166,7 +170,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
 			}
 			if (++steps > MAX_EXPIRE_STEPS) {
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
 				return FALSE;
 			}
@@ -183,7 +187,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
 			}
 			if (++steps > MAX_EXPIRE_STEPS) {
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 				msg_warn ("<%s>: cannot expire enough keys in storage", storage->name);
 				return FALSE;
 			}
@@ -213,11 +217,11 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 			/* Just do incref and nothing more */
 			if (storage->backend && storage->backend->incref_func) {
 				if (storage->backend->incref_func (storage->backend, key, keylen)) {
-					g_static_rw_lock_writer_unlock (&storage->rwlock);
+					RW_W_UNLOCK (&storage->rwlock);
 					return TRUE;
 				}
 				else {
-					g_static_rw_lock_writer_unlock (&storage->rwlock);
+					RW_W_UNLOCK (&storage->rwlock);
 					return FALSE;
 				}
 			}
@@ -239,7 +243,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 	else {
 		elt = storage->cache->insert_func (storage->cache, key, keylen, data, len);
 		if (elt == NULL) {
-			g_static_rw_lock_writer_unlock (&storage->rwlock);
+			RW_W_UNLOCK (&storage->rwlock);
 			return FALSE;
 		}
 	}
@@ -262,7 +266,7 @@ rspamd_kv_storage_insert (struct rspamd_kv_storage *storage, gpointer key, guint
 
 	storage->elts ++;
 	storage->memory += ELT_SIZE (elt);
-	g_static_rw_lock_writer_unlock (&storage->rwlock);
+	RW_W_UNLOCK (&storage->rwlock);
 
 	return res;
 }
@@ -285,9 +289,9 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, guin
 		/* Now check limits */
 		while (storage->memory + ELT_SIZE (elt) > storage->max_memory) {
 			if (storage->expire) {
-				g_static_rw_lock_writer_lock (&storage->rwlock);
+				RW_W_LOCK (&storage->rwlock);
 				storage->expire->step_func (storage->expire, storage, time (NULL), steps);
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 			}
 			else {
 				msg_warn ("<%s>: storage is full and no expire function is defined", storage->name);
@@ -299,7 +303,7 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, guin
 		}
 	}
 
-	g_static_rw_lock_writer_lock (&storage->rwlock);
+	RW_W_LOCK (&storage->rwlock);
 	/* Insert elt to the cache */
 	res = storage->cache->replace_func (storage->cache, key, keylen, elt);
 
@@ -307,7 +311,7 @@ rspamd_kv_storage_replace (struct rspamd_kv_storage *storage, gpointer key, guin
 	if (res && storage->backend) {
 		res = storage->backend->replace_func (storage->backend, key, keylen, elt);
 	}
-	g_static_rw_lock_writer_unlock (&storage->rwlock);
+	RW_W_UNLOCK (&storage->rwlock);
 
 	return res;
 }
@@ -320,7 +324,7 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gu
 	glong								*lp;
 
 	/* First try to look at cache */
-	g_static_rw_lock_writer_lock (&storage->rwlock);
+	RW_W_LOCK (&storage->rwlock);
 	elt = storage->cache->lookup_func (storage->cache, key, keylen);
 
 	if (elt == NULL && storage->backend) {
@@ -328,11 +332,11 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gu
 		if (belt) {
 			/* Put this element into cache */
 			if ((belt->flags & KV_ELT_INTEGER) != 0) {
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 				rspamd_kv_storage_insert_cache (storage, ELT_KEY (belt), keylen, ELT_DATA (belt),
 					belt->size, belt->flags,
 					belt->expire, &elt);
-				g_static_rw_lock_writer_lock (&storage->rwlock);
+				RW_W_LOCK (&storage->rwlock);
 			}
 			if ((belt->flags & KV_ELT_DIRTY) == 0) {
 				g_free (belt);
@@ -352,21 +356,21 @@ rspamd_kv_storage_increment (struct rspamd_kv_storage *storage, gpointer key, gu
 		elt->age = time (NULL);
 		if (storage->backend) {
 			if (storage->backend->replace_func (storage->backend, key, keylen, elt)) {
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 				return TRUE;
 			}
 			else {
-				g_static_rw_lock_writer_unlock (&storage->rwlock);
+				RW_W_UNLOCK (&storage->rwlock);
 				return FALSE;
 			}
 		}
 		else {
-			g_static_rw_lock_writer_unlock (&storage->rwlock);
+			RW_W_UNLOCK (&storage->rwlock);
 			return TRUE;
 		}
 	}
 
-	g_static_rw_lock_writer_unlock (&storage->rwlock);
+	RW_W_UNLOCK (&storage->rwlock);
 
 	return FALSE;
 }
@@ -378,7 +382,7 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, guint
 	struct rspamd_kv_element			*elt = NULL, *belt;
 
 	/* First try to look at cache */
-	g_static_rw_lock_reader_lock (&storage->rwlock);
+	RW_R_LOCK (&storage->rwlock);
 	elt = storage->cache->lookup_func (storage->cache, key, keylen);
 
 	/* Next look at the backend */
@@ -417,7 +421,7 @@ rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key, guint
 	struct rspamd_kv_element           *elt;
 
 	/* First delete key from cache */
-	g_static_rw_lock_writer_lock (&storage->rwlock);
+	RW_W_LOCK (&storage->rwlock);
 	elt = storage->cache->delete_func (storage->cache, key, keylen);
 
 	/* Now delete from backend */
@@ -439,7 +443,7 @@ rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key, guint
 		}
 	}
 
-	g_static_rw_lock_writer_unlock (&storage->rwlock);
+	RW_W_UNLOCK (&storage->rwlock);
 
 	return elt;
 }
@@ -448,7 +452,7 @@ rspamd_kv_storage_delete (struct rspamd_kv_storage *storage, gpointer key, guint
 void
 rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage)
 {
-	g_static_rw_lock_writer_lock (&storage->rwlock);
+	RW_W_LOCK (&storage->rwlock);
 	if (storage->backend && storage->backend->destroy_func) {
 		storage->backend->destroy_func (storage->backend);
 	}
@@ -461,7 +465,7 @@ rspamd_kv_storage_destroy (struct rspamd_kv_storage *storage)
 
 	g_free (storage->name);
 
-	g_static_rw_lock_writer_unlock (&storage->rwlock);
+	RW_W_UNLOCK (&storage->rwlock);
 	g_slice_free1 (sizeof (struct rspamd_kv_storage), storage);
 }
 

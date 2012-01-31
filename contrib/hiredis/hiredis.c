@@ -796,7 +796,7 @@ int redisvFormatCommand(char **target, const char *format, va_list ap) {
                     }
 
                     /* Consume and discard vararg */
-                    va_arg(ap,void);
+                    (void)va_arg(ap,int);
                 }
             }
 

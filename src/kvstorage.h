@@ -32,6 +32,19 @@ struct rspamd_kv_storage;
 struct rspamd_kv_expire;
 struct rspamd_kv_element;
 
+/* Locking definitions */
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+#define RW_R_LOCK g_rw_lock_reader_lock
+#define RW_R_UNLOCK g_rw_lock_reader_unlock
+#define RW_W_LOCK g_rw_lock_writer_lock
+#define RW_W_UNLOCK g_rw_lock_writer_unlock
+#else
+#define RW_R_LOCK g_static_rw_lock_reader_lock
+#define RW_R_UNLOCK g_static_rw_lock_reader_unlock
+#define RW_W_LOCK g_static_rw_lock_writer_lock
+#define RW_W_UNLOCK g_static_rw_lock_writer_unlock
+#endif
+
 /* Callbacks for cache */
 typedef void (*cache_init)(struct rspamd_kv_cache *cache);
 typedef struct rspamd_kv_element* (*cache_insert)(struct rspamd_kv_cache *cache,
@@ -140,7 +153,11 @@ struct rspamd_kv_storage {
 	gchar *name;								/* numeric ID */
 
 	gboolean no_overwrite;						/* do not overwrite data with the same keys */
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	GRWLock rwlock;								/* rwlock in new glib */
+#else
 	GStaticRWLock rwlock;						/* rwlock for threaded access */
+#endif
 };
 
 /** Create new kv storage */
