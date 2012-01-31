@@ -103,6 +103,11 @@ struct rspamd_worker_ctx {
 	guint32                         tasks;
 	/* Limit of tasks */
 	guint32                         max_tasks;
+	/* Classify threads */
+	guint32							classify_threads;
+	/* Classify threads */
+	GThreadPool					   *classify_pool;
+	/* Events base */
 	struct event_base              *ev_base;
 };
 
@@ -499,6 +504,16 @@ read_socket (f_str_t * in, void *arg)
 				task->state = WRITE_ERROR;
 				return write_socket (task);
 			}
+			/* Add task to classify to classify pool */
+			if (ctx->classify_pool) {
+				g_thread_pool_push (ctx->classify_pool, task, &err);
+				if (err != NULL) {
+					msg_err ("cannot pull task to the pool: %s", err->message);
+				}
+				else {
+					register_async_thread (task->s);
+				}
+			}
 		}
 		break;
 	case WRITE_REPLY:
@@ -603,10 +618,19 @@ static void
 fin_task (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
+	struct rspamd_worker_ctx       *ctx;
 
+	ctx = task->worker->ctx;
 	if (task->state != WAIT_POST_FILTER) {
 		/* Process all statfiles */
-		process_statfiles (task);
+		if (ctx->classify_pool == NULL) {
+			/* Non-threaded version */
+			process_statfiles (task);
+		}
+		else {
+			/* Just process composites */
+			make_composites (task);
+		}
 		/* Call post filters */
 		lua_call_post_filters (task);
 	}
@@ -842,6 +866,7 @@ init_worker (void)
 
 	ctx->is_mime = TRUE;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
+	ctx->classify_threads = 1;
 
 	register_worker_opt (type, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
 	register_worker_opt (type, "http", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http));
@@ -849,6 +874,7 @@ init_worker (void)
 	register_worker_opt (type, "allow_learn", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn));
 	register_worker_opt (type, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
 	register_worker_opt (type, "max_tasks", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, max_tasks));
+	register_worker_opt (type, "classify_threads", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, classify_threads));
 
 	return ctx;
 }
@@ -862,6 +888,7 @@ start_worker (struct rspamd_worker *worker)
 	struct sigaction                signals;
 	gchar                          *is_custom_str;
 	struct rspamd_worker_ctx       *ctx = worker->ctx;
+	GError						   *err = NULL;
 
 #ifdef WITH_PROFILER
 	extern void                     _start (void), etext (void);
@@ -912,6 +939,16 @@ start_worker (struct rspamd_worker *worker)
 #endif
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+
+	/* Create classify pool */
+	ctx->classify_pool = NULL;
+	if (ctx->classify_threads > 1) {
+		ctx->classify_pool = g_thread_pool_new (process_statfiles_threaded, ctx, ctx->classify_threads, TRUE, &err);
+		if (err != NULL) {
+			msg_err ("pool create failed: %s", err->message);
+			ctx->classify_pool = NULL;
+		}
+	}
 
 	event_base_loop (ctx->ev_base, 0);
 

@@ -22,6 +22,7 @@ struct rspamd_async_session {
 	memory_pool_t *pool;
 	gboolean wanna_die;
 	guint threads;
+	GMutex *mtx;
 };
 
 /**

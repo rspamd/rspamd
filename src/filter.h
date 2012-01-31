@@ -94,6 +94,12 @@ gint process_filters (struct worker_task *task);
 void process_statfiles (struct worker_task *task);
 
 /**
+ * Process message with statfiles threaded
+ * @param data worker's task that present message from user
+ */
+void process_statfiles_threaded (gpointer data, gpointer user_data);
+
+/**
  * Insert a result to task
  * @param task worker's task that present message from user
  * @param metric_name metric's name to which we need to insert result

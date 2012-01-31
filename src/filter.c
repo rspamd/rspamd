@@ -239,12 +239,14 @@ process_filters (struct worker_task *task)
 			if (!task->pass_all_filters &&
 						metric->action == METRIC_ACTION_REJECT && 
 						check_metric_is_spam (task, metric)) {
+				task->s->wanna_die = TRUE;
 				check_session_pending (task->s);
 				return 1;
 			}
 			cur = g_list_next (cur);
 		}
 	}
+	task->s->wanna_die = TRUE;
 	check_session_pending (task->s);
 
 	return 1;
@@ -621,6 +623,24 @@ process_statfiles (struct worker_task *task)
 
 	/* Process results */
 	make_composites (task);
+}
+
+void
+process_statfiles_threaded (gpointer data, gpointer user_data)
+{
+	struct worker_task             *task = (struct worker_task *)data;
+
+	if (task->is_skipped) {
+		return;
+	}
+
+	if (task->tokens == NULL) {
+		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
+		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref, task->tokens);
+	}
+
+	g_list_foreach (task->cfg->classifiers, classifiers_callback, task);
+	remove_async_thread (task->s);
 }
 
 static void
