@@ -245,6 +245,7 @@ process_filters (struct worker_task *task)
 			cur = g_list_next (cur);
 		}
 	}
+	check_session_pending (task->s);
 
 	return 1;
 }
