@@ -48,6 +48,16 @@ rspamd_event_hash (gconstpointer a)
 	return GPOINTER_TO_UINT (ev->user_data);
 }
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+static void
+event_mutex_free (gpointer data)
+{
+	GMutex						   *mtx = data;
+
+	g_mutex_free (mtx);
+}
+#endif
+
 struct rspamd_async_session    *
 new_async_session (memory_pool_t * pool, event_finalizer_t fin,
 		event_finalizer_t restore, event_finalizer_t cleanup, void *user_data)
@@ -64,7 +74,7 @@ new_async_session (memory_pool_t * pool, event_finalizer_t fin,
 	new->events = g_hash_table_new (rspamd_event_hash, rspamd_event_equal);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	new->mtx = g_mutex_new ();
-	memory_pool_add_destructor (pool, (pool_destruct_func) g_mutex_free, new->mtx);
+	memory_pool_add_destructor (pool, (pool_destruct_func) event_mutex_free, new->mtx);
 #else
 	new->mtx = memory_pool_alloc (pool, sizeof (GMutex));
 	g_mutex_init (new->mtx);
