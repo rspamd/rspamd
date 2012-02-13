@@ -15,6 +15,7 @@
 #define LUA_INTERFACE_DEF(class, name) { #name, lua_##class##_##name }
 
 extern const luaL_reg null_reg[];
+extern GMutex *lua_mtx;
 
 #define RSPAMD_LUA_API_VERSION 9
 

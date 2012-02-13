@@ -76,6 +76,11 @@ typedef struct memory_pool_s {
 	struct _pool_chain_shared *shared_pool;	/**< shared chain							*/
 	struct _pool_destructors *destructors;	/**< destructors chain						*/
 	GHashTable *variables;					/**< private memory pool variables			*/
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	GStaticMutex mtx;						/**< threads lock							*/
+#else
+	GMutex mtx;								/**< threads lock							*/
+#endif
 } memory_pool_t;
 
 /**

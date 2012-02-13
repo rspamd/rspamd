@@ -846,9 +846,9 @@ process_normal_command (const gchar *line)
 }
 
 /*
- * Called if all filters are processed
+ * Called if all filters are processed, non-threaded and simple version
  */
-static void
+static gboolean
 fin_learn_task (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
@@ -870,6 +870,8 @@ fin_learn_task (void *arg)
 			rspamd_dispatcher_restore (task->dispatcher);
 		}
 	}
+
+	return TRUE;
 }
 
 /*

@@ -613,7 +613,7 @@ err_socket (GError * err, void *arg)
 /*
  * Called if all filters are processed
  */
-static void
+static gboolean
 fin_task (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
@@ -630,20 +630,25 @@ fin_task (void *arg)
 			/* Just process composites */
 			make_composites (task);
 		}
-		/* Call post filters */
-		lua_call_post_filters (task);
+		if (task->cfg->post_filters) {
+			/* More to process */
+			/* Special state */
+			task->state = WAIT_POST_FILTER;
+			return FALSE;
+		}
+
 	}
 
 	/* Check if we have all events finished */
-	if (g_hash_table_size (task->s->events) == 0 && task->s->threads == 0) {
-		task->state = WRITE_REPLY;
-		if (task->fin_callback) {
-			task->fin_callback (task->fin_arg);
-		}
-		else {
-			rspamd_dispatcher_restore (task->dispatcher);
-		}
+	task->state = WRITE_REPLY;
+	if (task->fin_callback) {
+		task->fin_callback (task->fin_arg);
 	}
+	else {
+		rspamd_dispatcher_restore (task->dispatcher);
+	}
+
+	return TRUE;
 }
 
 /*
@@ -654,8 +659,8 @@ restore_task (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
 
-	/* Special state */
-	task->state = WAIT_POST_FILTER;
+	/* Call post filters */
+	lua_call_post_filters (task);
 	task->s->wanna_die = TRUE;
 }
 

@@ -123,6 +123,7 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 	struct classifier_callback_data *cd;
 	lua_State                       *L;
 
+
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
 	while (cur) {
@@ -134,6 +135,7 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 		cur = g_list_next (cur);
 	}
 	
+	g_mutex_lock (lua_mtx);
 	if (res == NULL) {
 		L = task->cfg->lua_state;
 		/* Check function from global table 'classifiers' */
@@ -149,6 +151,8 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 		}
 		lua_pop (L, 1);
 	}
+	g_mutex_unlock (lua_mtx);
+
 	return res;
 }
 
@@ -162,6 +166,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 	double                          out = in;
 	GList                          *cur;
 
+	g_mutex_lock (lua_mtx);
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
 	while (cur) {
@@ -190,6 +195,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 
 		cur = g_list_next (cur);
 	}
+	g_mutex_unlock (lua_mtx);
 
 	return out;
 

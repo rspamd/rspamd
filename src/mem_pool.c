@@ -41,6 +41,14 @@ pthread_mutex_t                 stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 #   define STAT_UNLOCK() do {} while (0)
 #endif
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+#	define POOL_MTX_LOCK()	do { g_static_mutex_lock (&pool->mtx); } while (0)
+#	define POOL_MTX_UNLOCK()	do { g_static_mutex_unlock (&pool->mtx); } while (0)
+#else
+#	define POOL_MTX_LOCK()	do { g_mutex_lock (&pool->mtx); } while (0)
+#	define POOL_MTX_UNLOCK()	do { g_mutex_unlock (&pool->mtx); } while (0)
+#endif
+
 /* 
  * This define specify whether we should check all pools for free space for new object
  * or just begin scan from current (recently attached) pool
@@ -100,6 +108,7 @@ pool_chain_new_shared (gsize size)
 {
 	struct _pool_chain_shared      *chain;
 	gpointer                        map;
+
 
 #if defined(HAVE_MMAP_ANON)
 	map = mmap (NULL, size + sizeof (struct _pool_chain_shared), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
@@ -189,6 +198,11 @@ memory_pool_new (gsize size)
 	new->destructors = NULL;
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	new->mtx = G_STATIC_MUTEX_INIT;
+#else
+	g_mutex_init (&new->mtx);
+#endif
 
 	mem_pool_stat->pools_allocated++;
 
@@ -203,6 +217,7 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 	gint                            free;
 
 	if (pool) {
+		POOL_MTX_LOCK ();
 #ifdef MEMORY_GREEDY
 		cur = pool->first_pool;
 #else
@@ -214,6 +229,7 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 		}
 		if (free < (gint)size && cur->next == NULL) {
 			/* Allocate new pool */
+
 			if (cur->len >= size + MEM_ALIGNMENT) {
 				new = pool_chain_new (cur->len);
 			}
@@ -227,10 +243,12 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 			/* No need to align again */
 			tmp = new->pos;
 			new->pos = tmp + size;
+			POOL_MTX_UNLOCK ();
 			return tmp;
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
+		POOL_MTX_UNLOCK ();
 		return tmp;
 	}
 	return NULL;
@@ -317,6 +335,7 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 	if (pool) {
 		g_return_val_if_fail (size > 0, NULL);
 
+		POOL_MTX_LOCK ();
 		cur = pool->shared_pool;
 		if (!cur) {
 			cur = pool_chain_new_shared (pool->first_pool->len);
@@ -329,6 +348,7 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 		}
 		if (free < (gint)size && cur->next == NULL) {
 			/* Allocate new pool */
+
 			if (cur->len >= size + MEM_ALIGNMENT) {
 				new = pool_chain_new_shared (cur->len);
 			}
@@ -342,10 +362,12 @@ memory_pool_alloc_shared (memory_pool_t * pool, gsize size)
 			STAT_LOCK ();
 			mem_pool_stat->bytes_allocated += size;
 			STAT_UNLOCK ();
+			POOL_MTX_UNLOCK ();
 			return new->begin;
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
+		POOL_MTX_UNLOCK ();
 		return tmp;
 	}
 	return NULL;
@@ -455,12 +477,14 @@ memory_pool_add_destructor_full (memory_pool_t * pool, pool_destruct_func func, 
 
 	cur = memory_pool_alloc (pool, sizeof (struct _pool_destructors));
 	if (cur) {
+		POOL_MTX_LOCK ();
 		cur->func = func;
 		cur->data = data;
 		cur->function = function;
 		cur->loc = line;
 		cur->prev = pool->destructors;
 		pool->destructors = cur;
+		POOL_MTX_UNLOCK ();
 	}
 }
 
@@ -488,6 +512,7 @@ memory_pool_delete (memory_pool_t * pool)
 	struct _pool_chain_shared      *cur_shared = pool->shared_pool, *tmp_shared;
 	struct _pool_destructors       *destructor = pool->destructors;
 
+	POOL_MTX_LOCK ();
 	/* Call all pool destructors */
 	while (destructor) {
 		/* Avoid calling destructors for NULL pointers */
@@ -522,6 +547,7 @@ memory_pool_delete (memory_pool_t * pool)
 	}
 
 	mem_pool_stat->pools_freed++;
+	POOL_MTX_UNLOCK ();
 	g_slice_free (memory_pool_t, pool);
 }
 

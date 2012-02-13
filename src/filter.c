@@ -140,6 +140,12 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	
 }
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+static GStaticMutex result_mtx =  G_STATIC_MUTEX_INIT;
+#else
+G_LOCK_DEFINE (result_mtx);
+#endif
+
 static void
 insert_result_common (struct worker_task *task, const gchar *symbol, double flag, GList * opts, gboolean single)
 {
@@ -147,6 +153,12 @@ insert_result_common (struct worker_task *task, const gchar *symbol, double flag
 	struct cache_item              *item;
 	GList                          *cur, *metric_list;
 
+	/* Avoid concurrenting inserting of results */
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_static_mutex_lock (&result_mtx);
+#else
+	G_LOCK (result_mtx);
+#endif
 	metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
 	if (metric_list) {
 		cur = metric_list;
@@ -174,6 +186,11 @@ insert_result_common (struct worker_task *task, const gchar *symbol, double flag
 		/* XXX: it is not wise to destroy them here */
 		g_list_free (opts);
 	}
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_static_mutex_unlock (&result_mtx);
+#else
+	G_UNLOCK (result_mtx);
+#endif
 }
 
 /* Insert result that may be increased on next insertions */

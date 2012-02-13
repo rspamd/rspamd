@@ -28,6 +28,9 @@
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
 
+/* Global lua mutex */
+GMutex *lua_mtx = NULL;
+
 const luaL_reg                  null_reg[] = {
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -224,6 +227,13 @@ init_lua (struct config_file *cfg)
 	L = lua_open ();
 	luaL_openlibs (L);
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	lua_mtx = g_mutex_new ();
+#else
+	lua_mtx = g_malloc (sizeof (GMutex));
+	g_mutex_init (lua_mtx);
+#endif
+
 	(void)luaopen_rspamd (L);
 	(void)luaopen_logger (L);
 	(void)luaopen_config (L);
@@ -320,6 +330,7 @@ lua_call_filter (const gchar *function, struct worker_task *task)
 	struct worker_task            **ptask;
 	lua_State                      *L = task->cfg->lua_state;
 
+	g_mutex_lock (lua_mtx);
 	lua_getglobal (L, function);
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
 	lua_setclass (L, "rspamd{task}", -1);
@@ -335,6 +346,8 @@ lua_call_filter (const gchar *function, struct worker_task *task)
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);				/* pop returned value */
+	g_mutex_unlock (lua_mtx);
+
 	return result;
 }
 
@@ -345,6 +358,7 @@ lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *ma
 	guint                           i;
 	lua_State                      *L = task->cfg->lua_state;
 
+	g_mutex_lock (lua_mtx);
 	lua_getglobal (L, function);
 
 	for (i = 0; i < number; i++) {
@@ -360,6 +374,8 @@ lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *ma
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);				/* pop returned value */
+	g_mutex_unlock (lua_mtx);
+
 	return result;
 }
 
@@ -374,6 +390,7 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	struct expression_argument     *arg;
 	int                             nargs = 1, pop = 0;
 
+	g_mutex_lock (lua_mtx);
 	/* Call specified function and expect result of given expected_type */
 	/* First check function in config table */
 	lua_getglobal (L, "config");
@@ -435,6 +452,7 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 
 	if (lua_pcall (L, nargs, 1, 0) != 0) {
 		msg_info ("call to %s failed: %s", function, lua_tostring (L, -1));
+		g_mutex_unlock (lua_mtx);
 		return FALSE;
 	}
 	pop ++;
@@ -442,11 +460,13 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	if (!lua_isboolean (L, -1)) {
 		lua_pop (L, pop);
 		msg_info ("function %s must return a boolean", function);
+		g_mutex_unlock (lua_mtx);
 		return FALSE;
 	}
 	*res = lua_toboolean (L, -1);
 	lua_pop (L, pop);
 
+	g_mutex_unlock (lua_mtx);
 	return TRUE;
 }
 
@@ -468,6 +488,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	struct consolidation_callback_data *data = (struct consolidation_callback_data *)arg;
 	lua_State                      *L = data->task->cfg->lua_state;
 
+	g_mutex_lock (lua_mtx);
 	lua_getglobal (L, data->func);
 
 	lua_pushstring (L, (const gchar *)key);
@@ -483,6 +504,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	res = lua_tonumber (L, -1);
 	lua_pop (L, 1);				/* pop returned value */
 	data->score += res;
+	g_mutex_unlock (lua_mtx);
 }
 
 double
@@ -519,6 +541,7 @@ lua_normalizer_func (struct config_file *cfg, long double score, void *params)
         return score;
     }
 
+    g_mutex_lock (lua_mtx);
     lua_getglobal (L, p->data);
     lua_pushnumber (L, score);
 
@@ -533,6 +556,7 @@ lua_normalizer_func (struct config_file *cfg, long double score, void *params)
 	res = lua_tonumber (L, -1);
 	lua_pop (L, 1);
 
+	g_mutex_unlock (lua_mtx);
     return res;
 }
 

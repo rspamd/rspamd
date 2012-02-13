@@ -165,6 +165,16 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	return FALSE;
 }
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+static void
+bayes_mutex_free (gpointer data)
+{
+	GMutex						   *mtx = data;
+
+	g_mutex_free (mtx);
+}
+#endif
+
 struct classifier_ctx*
 bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
 {
@@ -173,6 +183,13 @@ bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
 	ctx->pool = pool;
 	ctx->cfg = cfg;
 	ctx->debug = FALSE;
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	ctx->mtx = g_mutex_new ();
+	memory_pool_add_destructor (pool, (pool_destruct_func) bayes_mutex_free, ctx->mtx);
+#else
+	ctx->mtx = memory_pool_alloc (pool, sizeof (GMutex));
+	g_mutex_init (ctx->mtx);
+#endif
 
 	return ctx;
 }
@@ -205,6 +222,8 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		}
 	}
 
+	/* Critical section as here can be lua callbacks calling */
+	g_mutex_lock (ctx->mtx);
 	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
 	if (cur) {
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
@@ -212,6 +231,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	else {
 		cur = ctx->cfg->statfiles;
 	}
+	g_mutex_unlock (ctx->mtx);
 
 	data.statfiles_num = g_list_length (cur);
 	data.statfiles = g_new0 (struct bayes_statfile_data, data.statfiles_num);

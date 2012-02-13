@@ -17,6 +17,7 @@ struct classifier_ctx {
 	GHashTable *results;
 	gboolean debug;
 	struct classifier_config *cfg;
+	GMutex *mtx;
 };
 
 struct classify_weight {

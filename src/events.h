@@ -6,6 +6,7 @@
 struct rspamd_async_event;
 
 typedef void (*event_finalizer_t)(void *user_data);
+typedef gboolean (*session_finalizer_t)(void *user_data);
 
 struct rspamd_async_event {
 	GQuark subsystem;
@@ -15,7 +16,7 @@ struct rspamd_async_event {
 };
 
 struct rspamd_async_session {
-	event_finalizer_t fin;
+	session_finalizer_t fin;
 	event_finalizer_t restore;
 	event_finalizer_t cleanup;
 	GHashTable *events;
@@ -24,6 +25,7 @@ struct rspamd_async_session {
 	gboolean wanna_die;
 	guint threads;
 	GMutex *mtx;
+	GCond *cond;
 };
 
 /**
@@ -36,7 +38,7 @@ struct rspamd_async_session {
  * @return
  */
 struct rspamd_async_session *new_async_session (memory_pool_t *pool,
-		event_finalizer_t fin, event_finalizer_t restore,
+		session_finalizer_t fin, event_finalizer_t restore,
 		event_finalizer_t cleanup, void *user_data);
 
 /**

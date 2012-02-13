@@ -28,7 +28,7 @@
 #include "smtp.h"
 #include "smtp_proto.h"
 
-void
+gboolean
 free_smtp_session (gpointer arg)
 {
 	struct smtp_session            *session = arg;
@@ -56,6 +56,8 @@ free_smtp_session (gpointer arg)
 		memory_pool_delete (session->pool);
 		g_free (session);
 	}
+
+	return TRUE;
 }
 
 gboolean
