@@ -8,6 +8,7 @@ struct rspamd_async_event;
 typedef void (*event_finalizer_t)(void *user_data);
 
 struct rspamd_async_event {
+	GQuark subsystem;
 	event_finalizer_t fin;
 	void *user_data;
 	guint ref;
@@ -46,7 +47,7 @@ struct rspamd_async_session *new_async_session (memory_pool_t *pool,
  * @param forced unused
  */
 void register_async_event (struct rspamd_async_session *session,
-		event_finalizer_t fin, void *user_data, gboolean forced);
+		event_finalizer_t fin, void *user_data, GQuark subsystem);
 
 /**
  * Remove normal event

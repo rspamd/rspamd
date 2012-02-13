@@ -94,7 +94,7 @@ create_smtp_upstream_connection (struct smtp_session *session)
 							&session->ctx->smtp_timeout, session);
 	session->state = SMTP_STATE_WAIT_UPSTREAM;
 	session->upstream_state = SMTP_STATE_GREETING;
-	register_async_event (session->s, (event_finalizer_t)smtp_upstream_finalize_connection, session, FALSE);
+	register_async_event (session->s, (event_finalizer_t)smtp_upstream_finalize_connection, session, g_quark_from_static_string ("smtp proxy"));
 	return TRUE;
 }
 

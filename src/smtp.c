@@ -570,7 +570,7 @@ smtp_make_delay (struct smtp_session *session)
 
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
-		register_async_event (session->s, (event_finalizer_t)event_del, tev, FALSE);
+		register_async_event (session->s, (event_finalizer_t)event_del, tev, g_quark_from_static_string ("smtp proxy"));
 		session->delay_timer = tev;
 	}
 	else if (session->state == SMTP_STATE_DELAY) {

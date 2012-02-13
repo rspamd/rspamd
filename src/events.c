@@ -87,7 +87,7 @@ new_async_session (memory_pool_t * pool, event_finalizer_t fin,
 }
 
 void
-register_async_event (struct rspamd_async_session *session, event_finalizer_t fin, void *user_data, gboolean forced)
+register_async_event (struct rspamd_async_session *session, event_finalizer_t fin, void *user_data, GQuark subsystem)
 {
 	struct rspamd_async_event      *new;
 
@@ -99,32 +99,39 @@ register_async_event (struct rspamd_async_session *session, event_finalizer_t fi
 	new = memory_pool_alloc (session->pool, sizeof (struct rspamd_async_event));
 	new->fin = fin;
 	new->user_data = user_data;
+	new->subsystem = subsystem;
 
 	g_hash_table_insert (session->events, new, new);
 #ifdef RSPAMD_EVENTS_DEBUG
-	msg_info ("added event: %p, pending %d events", user_data, g_hash_table_size (session->events));
+	msg_info ("added event: %p, pending %d events, subsystem: %s", user_data, g_hash_table_size (session->events),
+			g_quark_to_string (subsystem));
 #endif
 }
 
 void
 remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin, void *ud)
 {
-	struct rspamd_async_event       search_ev;
+	struct rspamd_async_event       search_ev, *found_ev;
 
 	if (session == NULL) {
 		msg_info ("session is NULL");
 		return;
 	}
 
+	/* Search for event */
 	search_ev.fin = fin;
 	search_ev.user_data = ud;
-	if (g_hash_table_remove (session->events, &search_ev)) {
+	if ((found_ev = g_hash_table_lookup (session->events, &search_ev)) != NULL) {
+		g_hash_table_remove (session->events, found_ev);
+#ifdef RSPAMD_EVENTS_DEBUG
+		msg_info ("removed event: %p, subsystem: %s, pending %d events", ud,
+			g_quark_to_string (found_ev->subsystem), g_hash_table_size (session->events));
+#endif
+		/* Remove event */
 		fin (ud);
 	}
 
-#ifdef RSPAMD_EVENTS_DEBUG
-	msg_info ("removed event: %p, pending %d events", ud, g_hash_table_size (session->events));
-#endif
+
 
 	check_session_pending (session);
 }

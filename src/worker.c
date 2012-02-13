@@ -506,12 +506,11 @@ read_socket (f_str_t * in, void *arg)
 			}
 			/* Add task to classify to classify pool */
 			if (ctx->classify_pool) {
+				register_async_thread (task->s);
 				g_thread_pool_push (ctx->classify_pool, task, &err);
 				if (err != NULL) {
 					msg_err ("cannot pull task to the pool: %s", err->message);
-				}
-				else {
-					register_async_thread (task->s);
+					remove_async_thread (task->s);
 				}
 			}
 		}
@@ -636,12 +635,14 @@ fin_task (void *arg)
 	}
 
 	/* Check if we have all events finished */
-	task->state = WRITE_REPLY;
-	if (task->fin_callback) {
-		task->fin_callback (task->fin_arg);
-	}
-	else {
-		rspamd_dispatcher_restore (task->dispatcher);
+	if (g_hash_table_size (task->s->events) == 0 && task->s->threads == 0) {
+		task->state = WRITE_REPLY;
+		if (task->fin_callback) {
+			task->fin_callback (task->fin_arg);
+		}
+		else {
+			rspamd_dispatcher_restore (task->dispatcher);
+		}
 	}
 }
 
@@ -655,6 +656,7 @@ restore_task (void *arg)
 
 	/* Special state */
 	task->state = WAIT_POST_FILTER;
+	task->s->wanna_die = TRUE;
 }
 
 /*

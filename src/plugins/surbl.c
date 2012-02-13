@@ -939,7 +939,7 @@ register_redirector_call (struct uri *url, struct worker_task *task,
 	timeout->tv_usec = (surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000) * 1000;
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
 	event_add (&param->ev, timeout);
-	register_async_event (task->s, free_redirector_session, param, FALSE);
+	register_async_event (task->s, free_redirector_session, param, g_quark_from_static_string ("surbl"));
 
 	msg_info ("<%s> registered redirector call for %s to %s, according to rule: %s",
 			task->message_id, struri (url), selected->name, rule);

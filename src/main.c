@@ -382,6 +382,9 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			set_worker_limits (cf);
 			setproctitle ("%s process", cf->worker->name);
 			rspamd_pidfile_close (rspamd->pfh);
+			/* Do silent log reopen to avoid collisions */
+			close_log (rspamd->logger);
+			open_log (rspamd->logger);
 			msg_info ("starting %s process %P", cf->worker->name, getpid ());
 			cf->worker->worker_start_func (cur);
 			break;

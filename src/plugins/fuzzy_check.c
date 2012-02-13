@@ -640,7 +640,7 @@ register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
 			session->fd = sock;
 			session->server = selected;
 			event_add (&session->ev, &session->tv);
-			register_async_event (task->s, fuzzy_io_fin, session, FALSE);
+			register_async_event (task->s, fuzzy_io_fin, session, g_quark_from_static_string ("fuzzy check"));
 		}
 	}
 }
@@ -773,7 +773,7 @@ register_fuzzy_controller_call (struct controller_session *session, struct worke
 			s->fd = sock;
 			event_add (&s->ev, &s->tv);
 			(*saved)++;
-			register_async_event (session->s, fuzzy_learn_fin, s, FALSE);
+			register_async_event (session->s, fuzzy_learn_fin, s, g_quark_from_static_string ("fuzzy check"));
 			return TRUE;
 		}
 	}

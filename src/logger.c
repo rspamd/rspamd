@@ -60,6 +60,7 @@ struct rspamd_logger_s {
 	guint32                  repeats;
 	gchar                   *saved_message;
 	gchar                   *saved_function;
+	GMutex					*mtx;
 };
 
 static const gchar lf_chr = '\n';
@@ -268,6 +269,13 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 	rspamd->logger->pid = getpid ();
 	rspamd->logger->process_type = ptype;
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	rspamd->logger->mtx = g_mutex_new ();
+#else
+	rspamd->logger->mtx = g_malloc (sizeof (GMutex));
+	g_mutex_init (rspamd->logger->mtx);
+#endif
+
 	switch (type) {
 		case RSPAMD_LOG_CONSOLE:
 			rspamd->logger->log_func = file_log_function;
@@ -369,12 +377,14 @@ rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_leve
     u_char                         *end;
 
 	if (log_level <= rspamd_log->cfg->log_level) {
+		g_mutex_lock (rspamd_log->mtx);
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
 		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
 		va_end (vp);
 		rspamd_log->log_func (NULL, function, log_level, escaped_logbuf, FALSE, rspamd_log);
+		g_mutex_unlock (rspamd_log->mtx);
 	}
 }
 
@@ -643,12 +653,14 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log, guint32 addr, const gchar
 	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG || rspamd_log->is_debug ||
 			(rspamd_log->debug_ip != NULL && radix32tree_find (rspamd_log->debug_ip, ntohl (addr)) != RADIX_NO_VALUE)) {
 
+		g_mutex_lock (rspamd_log->mtx);
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
 		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
 		va_end (vp);
 		rspamd_log->log_func (NULL, function, G_LOG_LEVEL_DEBUG, escaped_logbuf, TRUE, rspamd_log);
+		g_mutex_unlock (rspamd_log->mtx);
 	}
 } 
 
@@ -662,8 +674,10 @@ rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level, con
 	rspamd_logger_t              *rspamd_log = arg;
 
 	if (rspamd_log->enabled) {
+		g_mutex_lock (rspamd_log->mtx);
 		(void)rspamd_escape_string (escaped_logbuf, message, sizeof (escaped_logbuf));
 		rspamd_log->log_func (log_domain, NULL, log_level, escaped_logbuf, FALSE, rspamd_log);
+		g_mutex_unlock (rspamd_log->mtx);
 	}
 }
 

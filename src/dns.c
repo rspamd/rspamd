@@ -744,7 +744,7 @@ send_dns_request (struct rspamd_dns_request *req)
 			event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 			event_base_set (req->resolver->ev_base, &req->io_event);
 			event_add (&req->io_event, &req->tv);
-			register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
+			register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, g_quark_from_static_string ("dns resolver"));
 			return 0;
 		} 
 		else {
@@ -757,7 +757,7 @@ send_dns_request (struct rspamd_dns_request *req)
 		event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 		event_base_set (req->resolver->ev_base, &req->io_event);
 		event_add (&req->io_event, &req->tv);
-		register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, FALSE);
+		register_async_event (req->session, (event_finalizer_t)event_del, &req->io_event, g_quark_from_static_string ("dns resolver"));
 		return 0;
 	}
 	
@@ -1343,7 +1343,7 @@ dns_retransmit_handler (gint fd, short what, void *arg)
 
 			/* Add request to hash table */
 			g_hash_table_insert (req->resolver->requests, &req->id, req);
-			register_async_event (req->session, (event_finalizer_t)dns_fin_cb, req, FALSE);
+			register_async_event (req->session, (event_finalizer_t)dns_fin_cb, req, g_quark_from_static_string ("dns resolver"));
 		}
 	}
 }
@@ -1450,7 +1450,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			req->id = header->qid;
 		}
 		g_hash_table_insert (resolver->requests, &req->id, req);
-		register_async_event (session, (event_finalizer_t)dns_fin_cb, req, FALSE);
+		register_async_event (session, (event_finalizer_t)dns_fin_cb, req, g_quark_from_static_string ("dns resolver"));
 	}
 	else if (r == -1) {
 		return FALSE;

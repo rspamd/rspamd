@@ -206,7 +206,7 @@ lua_redis_make_request_real (struct lua_redis_userdata *ud)
 		return FALSE;
 	}
 	else {
-		register_async_event (ud->task->s, lua_redis_fin, ud, FALSE);
+		register_async_event (ud->task->s, lua_redis_fin, ud, g_quark_from_static_string ("lua redis"));
 	}
 	redisLibeventAttach (ud->ctx, ud->task->ev_base);
 	/* Make a request now */
