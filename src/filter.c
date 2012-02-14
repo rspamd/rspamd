@@ -214,13 +214,30 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 	struct metric_result           *res;
 	double                          ms, rs;
 
+	/* Avoid concurrenting while checking results */
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_static_mutex_lock (&result_mtx);
+#else
+	G_LOCK (result_mtx);
+#endif
 	res = g_hash_table_lookup (task->results, metric->name);
 	if (res) {
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+		g_static_mutex_unlock (&result_mtx);
+#else
+		G_UNLOCK (result_mtx);
+#endif
 		if (!check_metric_settings (res, &ms, &rs)) {
 			ms = metric->required_score;
 		}
 		return res->score >= ms;
 	}
+
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_static_mutex_unlock (&result_mtx);
+#else
+	G_UNLOCK (result_mtx);
+#endif
 
 	return FALSE;
 }

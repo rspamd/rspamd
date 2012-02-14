@@ -134,33 +134,6 @@ re_cache_del (const gchar *line, memory_pool_t *pool)
 
 }
 
-/* Task cache functions */
-void
-task_cache_add (struct worker_task *task, struct rspamd_regexp *re, gint32 result)
-{
-	if (result == 0) {
-		result = -1;
-	}
-
-	g_hash_table_insert (task->re_cache, re->regexp_text, GINT_TO_POINTER (result));
-}
-
-gint32
-task_cache_check (struct worker_task *task, struct rspamd_regexp *re)
-{
-	gpointer                        res;
-	gint32                          r;
-
-	if ((res = g_hash_table_lookup (task->re_cache, re->regexp_text)) != NULL) {
-		r = GPOINTER_TO_INT (res);
-		if (r == -1) {
-			return 0;
-		}
-		return 1;
-	}
-	return -1;
-}
-
 /*
  * Functions for parsing expressions
  */

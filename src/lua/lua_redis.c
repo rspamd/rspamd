@@ -83,7 +83,9 @@ lua_redis_fin (void *arg)
 
 	if (ud->ctx) {
 		redisAsyncFree (ud->ctx);
+		g_mutex_lock (lua_mtx);
 		luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
+		g_mutex_unlock (lua_mtx);
 	}
 }
 
@@ -97,6 +99,7 @@ lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud, gboolean 
 {
 	struct worker_task					**ptask;
 
+	g_mutex_lock (lua_mtx);
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
@@ -110,9 +113,12 @@ lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud, gboolean 
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
 	}
+	g_mutex_unlock (lua_mtx);
+
 	if (connected) {
 		remove_normal_event (ud->task->s, lua_redis_fin, ud);
 	}
+
 }
 
 /**
@@ -125,6 +131,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 {
 	struct worker_task					**ptask;
 
+	g_mutex_lock (lua_mtx);
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
@@ -154,6 +161,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
 	}
+	g_mutex_unlock (lua_mtx);
 
 	remove_normal_event (ud->task->s, lua_redis_fin, ud);
 }
