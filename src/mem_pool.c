@@ -199,7 +199,7 @@ memory_pool_new (gsize size)
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	new->mtx = G_STATIC_MUTEX_INIT;
+	g_static_mutex_init (&new->mtx);
 #else
 	g_mutex_init (&new->mtx);
 #endif
