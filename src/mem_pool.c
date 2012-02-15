@@ -195,6 +195,8 @@ memory_pool_new (gsize size)
 	new->cur_pool = pool_chain_new (size);
 	new->shared_pool = NULL;
 	new->first_pool = new->cur_pool;
+	new->cur_pool_tmp = NULL;
+	new->first_pool_tmp = NULL;
 	new->destructors = NULL;
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
@@ -209,8 +211,8 @@ memory_pool_new (gsize size)
 	return new;
 }
 
-void                           *
-memory_pool_alloc (memory_pool_t * pool, gsize size)
+static void                           *
+memory_pool_alloc_common (memory_pool_t * pool, gsize size, gboolean is_tmp)
 {
 	guint8                         *tmp;
 	struct _pool_chain             *new, *cur;
@@ -219,33 +221,68 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 	if (pool) {
 		POOL_MTX_LOCK ();
 #ifdef MEMORY_GREEDY
-		cur = pool->first_pool;
+		if (is_tmp) {
+			cur = pool->first_pool_tmp;
+		}
+		else {
+			cur = pool->first_pool;
+		}
 #else
-		cur = pool->cur_pool;
+		if (is_tmp) {
+			cur = pool->cur_pool_tmp;
+		}
+		else {
+			cur = pool->cur_pool;
+		}
 #endif
 		/* Find free space in pool chain */
-		while ((free = pool_chain_free (cur)) < (gint)size && cur->next) {
+		while (cur != NULL &&
+				(free = pool_chain_free (cur)) < (gint)size &&
+				cur->next != NULL) {
 			cur = cur->next;
 		}
-		if (free < (gint)size && cur->next == NULL) {
-			/* Allocate new pool */
 
-			if (cur->len >= size + MEM_ALIGNMENT) {
-				new = pool_chain_new (cur->len);
+		if (cur == NULL || (free < (gint)size && cur->next == NULL)) {
+			/* Allocate new pool */
+			if (cur == NULL) {
+				if (pool->first_pool->len >= size + MEM_ALIGNMENT) {
+					new = pool_chain_new (pool->first_pool->len);
+				}
+				else {
+					new = pool_chain_new (size + pool->first_pool->len + MEM_ALIGNMENT);
+				}
+				/* Connect to pool subsystem */
+				if (is_tmp) {
+					pool->first_pool_tmp = new;
+				}
+				else {
+					pool->first_pool = new;
+				}
 			}
 			else {
-				mem_pool_stat->oversized_chunks++;
-				new = pool_chain_new (size + pool->first_pool->len + MEM_ALIGNMENT);
+				if (cur->len >= size + MEM_ALIGNMENT) {
+					new = pool_chain_new (cur->len);
+				}
+				else {
+					mem_pool_stat->oversized_chunks++;
+					new = pool_chain_new (size + pool->first_pool->len + MEM_ALIGNMENT);
+				}
+				/* Attach new pool to chain */
+				cur->next = new;
 			}
-			/* Attach new pool to chain */
-			cur->next = new;
-			pool->cur_pool = new;
+			if (is_tmp) {
+				pool->cur_pool_tmp = new;
+			}
+			else {
+				pool->cur_pool = new;
+			}
 			/* No need to align again */
 			tmp = new->pos;
 			new->pos = tmp + size;
 			POOL_MTX_UNLOCK ();
 			return tmp;
 		}
+		/* No need to allocate page */
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
 		POOL_MTX_UNLOCK ();
@@ -254,10 +291,33 @@ memory_pool_alloc (memory_pool_t * pool, gsize size)
 	return NULL;
 }
 
+
+void                           *
+memory_pool_alloc (memory_pool_t * pool, gsize size)
+{
+	return memory_pool_alloc_common (pool, size, FALSE);
+}
+
+void                           *
+memory_pool_alloc_tmp (memory_pool_t * pool, gsize size)
+{
+	return memory_pool_alloc_common (pool, size, TRUE);
+}
+
 void                           *
 memory_pool_alloc0 (memory_pool_t * pool, gsize size)
 {
 	void                           *pointer = memory_pool_alloc (pool, size);
+	if (pointer) {
+		memset (pointer, 0, size);
+	}
+	return pointer;
+}
+
+void                           *
+memory_pool_alloc0_tmp (memory_pool_t * pool, gsize size)
+{
+	void                           *pointer = memory_pool_alloc_tmp (pool, size);
 	if (pointer) {
 		memset (pointer, 0, size);
 	}
@@ -532,6 +592,18 @@ memory_pool_delete (memory_pool_t * pool)
 		g_slice_free1 (tmp->len, tmp->begin);
 		g_slice_free (struct _pool_chain, tmp);
 	}
+	/* Clean temporary pools */
+	cur = pool->first_pool_tmp;
+	while (cur) {
+		tmp = cur;
+		cur = cur->next;
+		STAT_LOCK ();
+		mem_pool_stat->chunks_freed++;
+		mem_pool_stat->bytes_allocated -= tmp->len;
+		STAT_UNLOCK ();
+		g_slice_free1 (tmp->len, tmp->begin);
+		g_slice_free (struct _pool_chain, tmp);
+	}
 	/* Unmap shared memory */
 	while (cur_shared) {
 		tmp_shared = cur_shared;
@@ -549,6 +621,27 @@ memory_pool_delete (memory_pool_t * pool)
 	mem_pool_stat->pools_freed++;
 	POOL_MTX_UNLOCK ();
 	g_slice_free (memory_pool_t, pool);
+}
+
+void
+memory_pool_cleanup_tmp (memory_pool_t* pool)
+{
+	struct _pool_chain             *cur = pool->first_pool, *tmp;
+
+	POOL_MTX_LOCK ();
+	cur = pool->first_pool_tmp;
+	while (cur) {
+		tmp = cur;
+		cur = cur->next;
+		STAT_LOCK ();
+		mem_pool_stat->chunks_freed++;
+		mem_pool_stat->bytes_allocated -= tmp->len;
+		STAT_UNLOCK ();
+		g_slice_free1 (tmp->len, tmp->begin);
+		g_slice_free (struct _pool_chain, tmp);
+	}
+	mem_pool_stat->pools_freed++;
+	POOL_MTX_UNLOCK ();
 }
 
 void

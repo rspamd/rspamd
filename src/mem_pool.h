@@ -73,6 +73,8 @@ struct _pool_destructors {
 typedef struct memory_pool_s {
 	struct _pool_chain *cur_pool;			/**< currently used page					*/
 	struct _pool_chain *first_pool;			/**< first page								*/
+	struct _pool_chain *cur_pool_tmp;		/**< currently used temporary page			*/
+	struct _pool_chain *first_pool_tmp;		/**< first temporary page					*/
 	struct _pool_chain_shared *shared_pool;	/**< shared chain							*/
 	struct _pool_destructors *destructors;	/**< destructors chain						*/
 	GHashTable *variables;					/**< private memory pool variables			*/
@@ -120,12 +122,33 @@ memory_pool_t* memory_pool_new (gsize size);
 void* memory_pool_alloc (memory_pool_t* pool, gsize size);
 
 /**
+ * Get memory from temporary pool
+ * @param pool memory pool object
+ * @param size bytes to allocate
+ * @return pointer to allocated object
+ */
+void* memory_pool_alloc_tmp (memory_pool_t* pool, gsize size);
+
+/**
  * Get memory and set it to zero
  * @param pool memory pool object
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
 void* memory_pool_alloc0 (memory_pool_t* pool, gsize size);
+
+/**
+ * Get memory and set it to zero
+ * @param pool memory pool object
+ * @param size bytes to allocate
+ * @return pointer to allocated object
+ */
+void* memory_pool_alloc0_tmp (memory_pool_t* pool, gsize size);
+
+/**
+ * Cleanup temporary data in pool
+ */
+void memory_pool_cleanup_tmp (memory_pool_t* pool);
 
 /**
  * Make a copy of string in pool
