@@ -353,12 +353,12 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 	}
 
 	if (d->in_buf == NULL) {
-		d->in_buf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
+		d->in_buf = memory_pool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
 		if (d->policy == BUFFER_LINE || d->policy == BUFFER_ANY) {
-			d->in_buf->data = fstralloc (d->pool, BUFSIZ);
+			d->in_buf->data = fstralloc_tmp (d->pool, BUFSIZ);
 		}
 		else {
-			d->in_buf->data = fstralloc (d->pool, d->nchars + 1);
+			d->in_buf->data = fstralloc_tmp (d->pool, d->nchars + 1);
 		}
 		d->in_buf->pos = d->in_buf->data->begin;
 	}
@@ -634,7 +634,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 		/* Resize input buffer if needed */
 		if (policy == BUFFER_CHARACTER && nchars != 0) {
 			if (d->in_buf && d->in_buf->data->size < nchars) {
-				tmp = fstralloc (d->pool, d->nchars + 1);
+				tmp = fstralloc_tmp (d->pool, d->nchars + 1);
 				memcpy (tmp->begin, d->in_buf->data->begin, d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;
 				tmp->len = d->in_buf->data->len;
@@ -644,7 +644,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 		}
 		else if (policy == BUFFER_LINE || policy == BUFFER_ANY) {
 			if (d->in_buf && d->nchars < BUFSIZ) {
-				tmp = fstralloc (d->pool, BUFSIZ);
+				tmp = fstralloc_tmp (d->pool, BUFSIZ);
 				memcpy (tmp->begin, d->in_buf->data->begin, d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;
 				tmp->len = d->in_buf->data->len;
@@ -663,20 +663,23 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 {
 	rspamd_buffer_t                *newbuf;
 
-	newbuf = memory_pool_alloc (d->pool, sizeof (rspamd_buffer_t));
+	newbuf = memory_pool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
 	if (len == 0) {
 		/* Assume NULL terminated */
 		len = strlen ((gchar *)data);
 	}
 
 	if (!allocated) {
-		newbuf->data = fstralloc (d->pool, len);
+		newbuf->data = memory_pool_alloc_tmp (d->pool, sizeof (f_str_t));
+		newbuf->data->begin = memory_pool_alloc_tmp (d->pool, len);
+		newbuf->data->size = len;
+		newbuf->data->len = len;
 
 		/* We need to copy data to temporary internal buffer to avoid using of stack variables */
 		memcpy (newbuf->data->begin, data, len);
 	}
 	else {
-		newbuf->data = memory_pool_alloc (d->pool, sizeof (f_str_t));
+		newbuf->data = memory_pool_alloc_tmp (d->pool, sizeof (f_str_t));
 		newbuf->data->begin = data;
 		newbuf->data->size = len;
 	}
@@ -740,6 +743,15 @@ rspamd_dispatcher_restore (rspamd_io_dispatcher_t * d)
 		event_add (d->ev, d->tv);
 		d->is_restored = TRUE;
 	}
+}
+
+void
+rspamd_dispacther_cleanup (rspamd_io_dispatcher_t *d)
+{
+	g_queue_clear (d->out_buffers);
+	/* Cleanup temporary data */
+	memory_pool_cleanup_tmp (d->pool);
+	d->in_buf = NULL;
 }
 
 #undef debug_ip

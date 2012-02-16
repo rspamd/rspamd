@@ -123,4 +123,10 @@ void rspamd_dispatcher_restore (rspamd_io_dispatcher_t *d);
  */
 void rspamd_remove_dispatcher (rspamd_io_dispatcher_t *dispatcher);
 
+/**
+ * Cleanup dispatcher freeing all temporary data
+ * @param dispatcher pointer to dispatcher's object
+ */
+void rspamd_dispacther_cleanup (rspamd_io_dispatcher_t *dispatcher);
+
 #endif

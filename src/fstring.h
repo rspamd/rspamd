@@ -79,6 +79,11 @@ gint fstrpush_unichar (f_str_t *dest, gunichar c);
 f_str_t* fstralloc (memory_pool_t *pool, size_t len);
 
 /*
+ * Allocate memory for f_str_t from temporary pool
+ */
+f_str_t* fstralloc_tmp (memory_pool_t *pool, size_t len);
+
+/*
  * Truncate string to its len
  */
 f_str_t* fstrtruncate (memory_pool_t *pool, f_str_t *orig);

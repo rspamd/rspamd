@@ -273,6 +273,21 @@ fstralloc (memory_pool_t * pool, size_t len)
 }
 
 /*
+ * Allocate memory for f_str_t from temporary pool
+ */
+f_str_t                        *
+fstralloc_tmp (memory_pool_t * pool, size_t len)
+{
+	f_str_t                        *res = memory_pool_alloc_tmp (pool, sizeof (f_str_t));
+
+	res->begin = memory_pool_alloc_tmp (pool, len);
+
+	res->size = len;
+	res->len = 0;
+	return res;
+}
+
+/*
  * Truncate string to its len
  */
 f_str_t                        *
