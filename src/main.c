@@ -385,6 +385,9 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			/* Do silent log reopen to avoid collisions */
 			close_log (rspamd->logger);
 			open_log (rspamd->logger);
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+			g_thread_init (NULL);
+#endif
 			msg_info ("starting %s process %P", cf->worker->name, getpid ());
 			cf->worker->worker_start_func (cur);
 			break;
@@ -820,6 +823,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
+#endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_thread_init (NULL);
 #endif
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));

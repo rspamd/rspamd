@@ -1144,9 +1144,6 @@ start_keystorage (struct rspamd_worker *worker)
 	}
 	worker->srv->pid = getpid ();
 	ctx->threads = NULL;
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_thread_init (NULL);
-#endif
 
 #if _EVENT_NUMERIC_VERSION > 0x02000000
 	if (evthread_use_pthreads () == -1) {
