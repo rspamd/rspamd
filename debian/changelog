@@ -1,3 +1,12 @@
+rspamd (0.4.7-1) unstable; urgency=low
+
+  * Upgrade to 0.4.7
+   - Rework events system
+   - Add threading support to regexp and classifying
+   - Fix several major bugs
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Fri, 17 Feb 2012 21:06:01 +0400
+
 rspamd (0.4.6-1) unstable; urgency=low
 
   * Upgrade to 0.4.6
