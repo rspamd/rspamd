@@ -549,6 +549,7 @@ dispatcher_cb (gint fd, short what, void *arg)
 		}
 		else {
 			if (g_queue_get_length (d->out_buffers) == 0) {
+				/* Want read again */
 				event_del (d->ev);
 				event_set (d->ev, fd, EV_READ | EV_PERSIST, dispatcher_cb, (void *)d);
 				event_base_set (d->ev_base, d->ev);
@@ -628,7 +629,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 	f_str_t                        *tmp;
 	gint                            t;
 
-	if (d->policy != policy) {
+	if (d->policy != policy || nchars != d->nchars) {
 		d->policy = policy;
 		d->nchars = nchars ? nchars : BUFSIZ;
 		/* Resize input buffer if needed */
@@ -693,6 +694,11 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 		debug_ip("plan write event");
 		return write_buffers (d->fd, d, FALSE);
 	}
+	/* Otherwise plan write event */
+	event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
+	event_base_set (d->ev_base, d->ev);
+	event_add (d->ev, d->tv);
+
 	return TRUE;
 }
 
