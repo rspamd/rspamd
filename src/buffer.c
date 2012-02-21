@@ -695,6 +695,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 		return write_buffers (d->fd, d, FALSE);
 	}
 	/* Otherwise plan write event */
+	event_del (d->ev);
 	event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
 	event_base_set (d->ev_base, d->ev);
 	event_add (d->ev, d->tv);
