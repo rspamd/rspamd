@@ -5,6 +5,8 @@
 
 static gboolean do_debug;
 struct rspamd_main             *rspamd_main = NULL;
+struct event_base              *base = NULL;
+worker_t *workers[] = { NULL };
 
 static GOptionEntry entries[] =
 {
@@ -15,7 +17,7 @@ static GOptionEntry entries[] =
 int
 main (int argc, char **argv)
 {
-	struct config_file             *cfg;
+	struct config_file            *cfg;
 	GError                         *error = NULL;
 	GOptionContext                 *context;
 
@@ -39,6 +41,8 @@ main (int argc, char **argv)
 	bzero (cfg, sizeof (struct config_file));
 	cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
 
+	base = event_init ();
+
 	if (do_debug) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
@@ -46,11 +50,13 @@ main (int argc, char **argv)
 		cfg->log_level = G_LOG_LEVEL_INFO;
 	}
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, TYPE_MAIN, rspamd_main);
+	rspamd_set_logger (RSPAMD_LOG_CONSOLE, g_quark_from_static_string("rspamd-test"), rspamd_main);
 	(void)open_log (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
+#if 0
 	g_test_add_func ("/rspamd/memcached", rspamd_memcached_test_func);
+#endif
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);
 	g_test_add_func ("/rspamd/fuzzy", rspamd_fuzzy_test_func);
 	g_test_add_func ("/rspamd/url", rspamd_url_test_func);

@@ -1335,8 +1335,8 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 gint
 rspamd_fallocate (gint fd, off_t offset, off_t len)
 {
-#if defined(HAVE_FALLOCATE) && defined(FALLOC_FL_KEEP_SIZE)
-	return fallocate (fd, FALLOC_FL_KEEP_SIZE, offset, len);
+#if defined(HAVE_FALLOCATE)
+	return fallocate (fd, 0, offset, len);
 #elif defined(HAVE_POSIX_FALLOCATE)
 	return posix_fallocate (fd, offset, len);
 #else

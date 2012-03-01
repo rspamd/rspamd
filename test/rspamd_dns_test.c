@@ -8,6 +8,7 @@
 #include "../src/cfg_file.h"
 
 static guint requests = 0;
+extern struct event_base *base;
 
 static void
 test_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
@@ -49,7 +50,7 @@ test_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 	}
 }
 
-void
+gboolean
 session_fin (gpointer unused)
 {
 	struct timeval tv;
@@ -57,6 +58,8 @@ session_fin (gpointer unused)
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	event_loopexit (&tv);
+
+	return TRUE;
 }
 
 void
@@ -76,9 +79,9 @@ rspamd_dns_test_func ()
 	pool = memory_pool_new (memory_pool_get_size ());
 
 	event_init ();
-	s = new_async_session (pool, session_fin, NULL);
+	s = new_async_session (pool, session_fin, NULL, NULL, NULL);
 
-	resolver = dns_resolver_init (cfg);
+	resolver = dns_resolver_init (base, cfg);
 
 	requests ++;
 	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_A, "google.com"));
