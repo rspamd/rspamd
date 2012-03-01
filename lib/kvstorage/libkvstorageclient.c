@@ -182,10 +182,10 @@ rspamd_kvstorage_buf_drainline (struct kvstorage_buf *buf)
 
 	p = buf->data + buf->pos;
 	/* Skip \r and \n characters */
-	while (p - buf->data < buf->len && (*p == '\r' || *p == '\n')) {
+	while (p - buf->data < (gint)buf->len && (*p == '\r' || *p == '\n')) {
 		p ++;
 	}
-	if (p - buf->data == buf->len) {
+	if (p - buf->data == (gint)buf->len) {
 		/* Do not move anything */
 		buf->pos = 0;
 		return;
@@ -207,9 +207,9 @@ rspamd_kvstorage_parse_reply_error (struct kvstorage_buf *buf)
 
 	/* Get one word */
 	p = buf->data;
-	while (p - buf->data < buf->pos) {
+	while (p - buf->data < (gint)buf->pos) {
 		if (g_ascii_isspace (*p)) {
-			while (p - buf->data < buf->pos && g_ascii_isspace (*p)) {
+			while (p - buf->data < (gint)buf->pos && g_ascii_isspace (*p)) {
 				p ++;
 			}
 			break;
@@ -262,7 +262,7 @@ rspamd_kvstorage_parse_get_line (struct kvstorage_buf *buf, guint *len, guint *f
 	while (p < end) {
 		if (g_ascii_isspace (*p)) {
 			error = FALSE;
-			while (p - buf->data < buf->pos && g_ascii_isspace (*p)) {
+			while (p - buf->data < (gint)buf->pos && g_ascii_isspace (*p)) {
 				p ++;
 			}
 			break;
@@ -302,7 +302,7 @@ rspamd_kvstorage_parse_get_line (struct kvstorage_buf *buf, guint *len, guint *f
 		if (g_ascii_isspace (*p)) {
 			error = FALSE;
 			/* Skip spaces after flags */
-			while (p - buf->data < buf->pos && g_ascii_isspace (*p)) {
+			while (p - buf->data < (gint)buf->pos && g_ascii_isspace (*p)) {
 				p ++;
 			}
 			break;

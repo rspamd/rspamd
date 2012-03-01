@@ -578,7 +578,7 @@ decode_entitles (gchar *s, guint * len)
 		l = *len;
 	}
 
-	while (h - s < l) {
+	while (h - s < (gint)l) {
 		switch (state) {
 			/* Out of entitle */
 		case 0:

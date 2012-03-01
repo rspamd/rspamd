@@ -483,7 +483,7 @@ binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GB
 	}
 	
 	(*rep)->data = g_malloc (idx->len);
-	if ((read (log->fd, (*rep)->data, idx->len)) != idx->len) {
+	if ((read (log->fd, (*rep)->data, idx->len)) != (ssize_t)idx->len) {
 		msg_warn ("cannot read file %s, error %d, %s", log->filename, errno, strerror (errno));
 		res = FALSE;
 		goto end;

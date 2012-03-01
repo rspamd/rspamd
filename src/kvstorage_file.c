@@ -89,7 +89,7 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 	}
 	/* Now we have directory, append base64 encoded filename */
 	k = key;
-	if (end - p < keylen * 2 + 1) {
+	if (end - p < (gint)keylen * 2 + 1) {
 		/* Filebuf is not large enough */
 		return FALSE;
 	}

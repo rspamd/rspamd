@@ -224,7 +224,7 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			while (cur) {
 				buf = cur->data;
 				blen = BUFREMAIN (buf);
-				if (r >= blen) {
+				if (r >= (ssize_t)blen) {
 					tmp = cur;
 					cur = g_list_previous (cur);
 					/* Mark this buffer as read */

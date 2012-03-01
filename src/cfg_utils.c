@@ -294,7 +294,7 @@ parse_limit (const gchar *limit, guint len)
 		else if (*err_str == 'g' || *err_str == 'G') {
 			result *= 1073741824L;
 		}
-		else if (len > 0 && err_str - limit != len) {
+		else if (len > 0 && err_str - limit != (gint)len) {
 			msg_warn ("invalid limit value '%s' at position '%s'", limit, err_str);
 			result = 0;
 		}

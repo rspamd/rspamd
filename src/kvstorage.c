@@ -403,7 +403,7 @@ rspamd_kv_storage_lookup (struct rspamd_kv_storage *storage, gpointer key, guint
 
 	if (elt && (elt->flags & KV_ELT_PERSISTENT) == 0 && elt->expire > 0) {
 		/* Check expiration */
-		if (now - elt->age > elt->expire) {
+		if (now - elt->age > (gint)elt->expire) {
 			/* Set need expire as we have no write lock here */
 			elt->flags |= KV_ELT_NEED_EXPIRE;
 			elt = NULL;
@@ -639,7 +639,7 @@ rspamd_lru_expire_step (struct rspamd_kv_expire *e, struct rspamd_kv_storage *st
 			/* Check other elements in this queue */
 			TAILQ_FOREACH_SAFE (elt, &expire->head, entry, temp) {
 				if ((!forced &&
-					(elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) != 0) || elt->expire < (now - elt->age)) {
+					(elt->flags & (KV_ELT_PERSISTENT|KV_ELT_DIRTY)) != 0) || (gint)elt->expire < (now - elt->age)) {
 					break;
 				}
 				storage->memory -= ELT_SIZE (elt);

@@ -328,7 +328,7 @@ parse_rspamd_first_line (struct rspamd_connection *conn, guint len, GError **err
 
 	p = b;
 	c = p;
-	while (p - b < remain) {
+	while (p - b < (gint)remain) {
 		switch (state) {
 		case 0:
 			/* Read version */
@@ -359,7 +359,7 @@ parse_rspamd_first_line (struct rspamd_connection *conn, guint len, GError **err
 			break;
 		case 2:
 			/* Read message */
-			if (g_ascii_isspace (*p) || p - b == remain - 1) {
+			if (g_ascii_isspace (*p) || p - b == (gint)remain - 1) {
 				state = 99;
 				next_state = 3;
 			}
@@ -411,7 +411,7 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 	}
 	c = p;
 
-	while (p - b < remain) {
+	while (p - b < (gint)remain) {
 		switch (state) {
 		case 0:
 			/* Read metric's name */
@@ -475,7 +475,7 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 			break;
 		case 4:
 			/* Read required score */
-			if (g_ascii_isspace (*p) || p - b == remain - 1) {
+			if (g_ascii_isspace (*p) || p - b == (gint)remain - 1) {
 				new->required_score = strtod (c, &err_str);
 				if (*err_str != *p && *err_str != *(p + 1)) {
 					/* Invalid score */
@@ -499,7 +499,7 @@ parse_rspamd_metric_line (struct rspamd_connection *conn, guint len, GError **er
 			break;
 		case 6:
 			/* Read reject score */
-			if (g_ascii_isspace (*p) || p - b == remain - 1) {
+			if (g_ascii_isspace (*p) || p - b == (gint)remain - 1) {
 				new->reject_score = strtod (c, &err_str);
 				if (*err_str != *p && *err_str != *(p + 1)) {
 					/* Invalid score */
@@ -551,17 +551,17 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 		p ++;
 	}
 	c = p;
-	while (p - b < remain) {
+	while (p - b < (gint)remain) {
 		switch (state) {
 		case 0:
 			/* Read symbol's name */
-			if (p - b == remain - 1 || *p == ';' || *p == '(') {
+			if (p - b == (gint)remain - 1 || *p == ';' || *p == '(') {
 				if (p - c <= 1) {
 					/* Empty symbol name */
 					goto err;
 				}
 				else {
-					if (p - b == remain - 1) {
+					if (p - b == (gint)remain - 1) {
 						l = p - c + 1;
 					}
 					else {
@@ -614,7 +614,7 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 			break;
 		case 2:
 			/* Read description */
-			if (*p == ';' || p - b == remain - 1) {
+			if (*p == ';' || p - b == (gint)remain - 1) {
 				if (*p == ';') {
 					l = p - c;
 				}
@@ -635,10 +635,10 @@ parse_rspamd_symbol_line (struct rspamd_connection *conn, guint len, GError **er
 			break;
 		case 3:
 			/* Read option */
-			if (*p == ',' || p - b == remain - 1) {
+			if (*p == ',' || p - b == (gint)remain - 1) {
 				/* Insert option into linked list */
 				l = p - c;
-				if (p - b == remain - 1) {
+				if (p - b == (gint)remain - 1) {
 					l ++;
 				}
 				sym = g_malloc (l + 1);
@@ -688,7 +688,7 @@ parse_rspamd_action_line (struct rspamd_connection *conn, guint len, GError **er
 
 	p = b;
 	c = b;
-	while (p - b < remain) {
+	while (p - b < (gint)remain) {
 		switch (state) {
 		case 0:
 			/* Read action */
@@ -701,7 +701,7 @@ parse_rspamd_action_line (struct rspamd_connection *conn, guint len, GError **er
 			}
 			break;
 		case 1:
-			if (p - b == remain - 1) {
+			if (p - b == (gint)remain - 1) {
 				if (p - c <= 1) {
 					/* Empty action name */
 					goto err;
@@ -756,7 +756,7 @@ parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **er
 
 	p = b;
 	c = b;
-	while (p - b < remain) {
+	while (p - b < (gint)remain) {
 		switch (state) {
 		case 0:
 			/* Read header name */
@@ -777,7 +777,7 @@ parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **er
 			p ++;
 			break;
 		case 1:
-			if (p - b == remain - 1) {
+			if (p - b == (gint)remain - 1) {
 				if (p - c <= 1) {
 					/* Empty action name */
 					goto err;

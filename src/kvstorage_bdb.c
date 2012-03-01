@@ -157,13 +157,18 @@ rspamd_bdb_init (struct rspamd_kv_backend *backend)
 	 */
 	db->envp->set_lk_detect (db->envp, DB_LOCK_DEFAULT);
 
+	/*
+	 * Avoid explicit sync on committing
+	 */
+	db->envp->set_flags (db->envp, DB_TXN_NOSYNC, 1);
+
 	flags = DB_CREATE | DB_THREAD;
 	/* Create and open db pointer */
 	if ((ret = db_create (&db->dbp, db->envp, 0)) != 0) {
 		goto err;
 	}
 
-	if ((ret = db->dbp->open (db->dbp, NULL, db->filename, NULL, DB_BTREE, flags, 0)) != 0) {
+	if ((ret = db->dbp->open (db->dbp, NULL, db->filename, NULL, DB_HASH, flags, 0)) != 0) {
 		goto err;
 	}
 

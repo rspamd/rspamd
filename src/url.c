@@ -818,7 +818,7 @@ parse_uri (struct uri *uri, gchar *uristring, memory_pool_t * pool)
 			return URI_ERRNO_NO_PORT_COLON;
 
 		/* We only use 8 bits for portlen so better check */
-		if (uri->portlen != port_end - host_end)
+		if ((gint)uri->portlen != port_end - host_end)
 			return URI_ERRNO_INVALID_PORT;
 
 		/* test if port is number */
