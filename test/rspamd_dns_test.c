@@ -69,6 +69,7 @@ rspamd_dns_test_func ()
 	struct config_file *cfg;
 	memory_pool_t *pool;
 	struct rspamd_async_session *s;
+	struct in_addr ina;
 
 	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	bzero (cfg, sizeof (struct config_file));
@@ -78,15 +79,16 @@ rspamd_dns_test_func ()
 
 	pool = memory_pool_new (memory_pool_get_size ());
 
-	event_init ();
 	s = new_async_session (pool, session_fin, NULL, NULL, NULL);
 
 	resolver = dns_resolver_init (base, cfg);
 
+	ina.s_addr = inet_addr ("81.19.70.3");
+
 	requests ++;
 	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_A, "google.com"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_PTR, inet_addr ("81.19.70.3")));
+	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_PTR, &ina));
 	requests ++;
 	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, DNS_REQUEST_MX, "rambler.ru"));
 	requests ++;

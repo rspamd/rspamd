@@ -35,6 +35,7 @@
 #define MAX_AIO_EV        32768
 
 struct io_cbdata {
+	gint fd;
 	rspamd_aio_cb cb;
 	gsize len;
 	gpointer buf;
@@ -58,33 +59,53 @@ typedef enum io_iocb_cmd {
 	IO_CMD_NOOP = 6,
 } io_iocb_cmd_t;
 
-struct io_iocb_common {
-	void *buf;
-	unsigned __pad1;
-	long nbytes;
-	unsigned __pad2;
-	long long offset;
-	long long __pad3;
-    unsigned flags;
-    unsigned resfd;
-}; /* result code is the amount read or -'ve errno */
+#if defined(__LITTLE_ENDIAN)
+#define PADDED(x,y)     x, y
+#elif defined(__BIG_ENDIAN)
+#define PADDED(x,y)     y, x
+#else
+#error edit for your odd byteorder.
+#endif
+
+/*
+ * we always use a 64bit off_t when communicating
+ * with userland.  its up to libraries to do the
+ * proper padding and aio_error abstraction
+ */
 
 struct iocb {
-	void *data;
-	unsigned key;
-	short aio_lio_opcode;
-	short aio_reqprio;
-	int aio_fildes;
-	union {
-		struct io_iocb_common c;
-	} u;
+	/* these are internal to the kernel/libc. */
+	guint64 aio_data; /* data to be returned in event's data */
+	guint32 PADDED(aio_key, aio_reserved1);
+	/* the kernel sets aio_key to the req # */
+
+	/* common fields */
+	guint16 aio_lio_opcode; /* see IOCB_CMD_ above */
+	gint16 aio_reqprio;
+	guint32 aio_fildes;
+
+	guint64 aio_buf;
+	guint64 aio_nbytes;
+	guint64 aio_offset;
+
+	/* extra parameters */
+	guint64 aio_reserved2; /* TODO: use this for a (struct sigevent *) */
+
+	/* flags for the "struct iocb" */
+	guint32 aio_flags;
+
+	/*
+	 * if the IOCB_FLAG_RESFD flag of "aio_flags" is set, this is an
+	 * eventfd to signal AIO readiness to
+	 */
+	guint32 aio_resfd;
 };
 
 struct io_event {
-	uint64_t  data;  /* the data field from the iocb */
-	uint64_t  obj;   /* what iocb this event came from */
-	int64_t   res;   /* result code for this event */
-	int64_t   res2;  /* secondary result */
+	guint64  data;  /* the data field from the iocb */
+	guint64  obj;   /* what iocb this event came from */
+	gint64   res;   /* result code for this event */
+	gint64   res2;  /* secondary result */
 };
 
 /* Linux specific io calls */
@@ -178,7 +199,7 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 			for (i = 0; i < done; i ++) {
 				ev_data = (struct io_cbdata *) (uintptr_t) event[i].data;
 				/* Call this callback */
-				ev_data->cb (event[i].res, ev_data->len, ev_data->buf, ev_data->ud);
+				ev_data->cb (ev_data->fd, event[i].res, ev_data->len, ev_data->buf, ev_data->ud);
 			}
 		}
 		else if (done == 0) {
@@ -221,6 +242,7 @@ rspamd_aio_init (struct event_base *base)
 		else {
 			event_set (&new->eventfd_ev, new->event_fd, EV_READ|EV_PERSIST, rspamd_eventfdcb, new);
 			event_base_set (new->base, &new->eventfd_ev);
+			event_add (&new->eventfd_ev, NULL);
 			if (io_setup (MAX_AIO_EV, &new->io_ctx) == -1) {
 				msg_err ("io_setup failed: %s", strerror (errno));
 				close (new->event_fd);
@@ -278,18 +300,19 @@ rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspa
 		cbdata->buf = buf;
 		cbdata->len = len;
 		cbdata->ud = ud;
+		cbdata->fd = fd;
 
 		iocb[0] = alloca (sizeof (struct iocb));
 		memset (iocb[0], 0, sizeof (struct iocb));
 		iocb[0]->aio_fildes = fd;
 		iocb[0]->aio_lio_opcode = IO_CMD_PREAD;
 		iocb[0]->aio_reqprio = 0;
-		iocb[0]->u.c.buf = buf;
-		iocb[0]->u.c.nbytes = len;
-		iocb[0]->u.c.offset = 0;
-		iocb[0]->u.c.flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
-		iocb[0]->u.c.resfd = ctx->event_fd;
-		iocb[0]->data = cbdata;
+		iocb[0]->aio_buf = (guint64)((uintptr_t)buf);
+		iocb[0]->aio_nbytes = len;
+		iocb[0]->aio_offset = 0;
+		iocb[0]->aio_flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
+		iocb[0]->aio_resfd = ctx->event_fd;
+		iocb[0]->aio_data = (guint64)((uintptr_t)cbdata);
 
 		/* Iocb is copied to kernel internally, so it is safe to put it on stack */
 		if (io_submit (ctx->io_ctx, 1, iocb) == 1) {
@@ -311,10 +334,10 @@ rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspa
 blocking:
 		r = read (fd, buf, len);
 		if (r >= 0) {
-			cb (0, r, buf, ud);
+			cb (fd, 0, r, buf, ud);
 		}
 		else {
-			cb (r, -1, buf, ud);
+			cb (fd, r, -1, buf, ud);
 		}
 	}
 
@@ -339,18 +362,19 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rsp
 		cbdata->buf = buf;
 		cbdata->len = len;
 		cbdata->ud = ud;
+		cbdata->fd = fd;
 
 		iocb[0] = alloca (sizeof (struct iocb));
 		memset (iocb[0], 0, sizeof (struct iocb));
 		iocb[0]->aio_fildes = fd;
 		iocb[0]->aio_lio_opcode = IO_CMD_PWRITE;
 		iocb[0]->aio_reqprio = 0;
-		iocb[0]->u.c.buf = buf;
-		iocb[0]->u.c.nbytes = len;
-		iocb[0]->u.c.offset = 0;
-		iocb[0]->u.c.flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
-		iocb[0]->u.c.resfd = ctx->event_fd;
-		iocb[0]->data = cbdata;
+		iocb[0]->aio_buf = (guint64)((uintptr_t)buf);
+		iocb[0]->aio_nbytes = len;
+		iocb[0]->aio_offset = 0;
+		iocb[0]->aio_flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
+		iocb[0]->aio_resfd = ctx->event_fd;
+		iocb[0]->aio_data = (guint64)((uintptr_t)cbdata);
 
 		/* Iocb is copied to kernel internally, so it is safe to put it on stack */
 		if (io_submit (ctx->io_ctx, 1, iocb) == 1) {
@@ -372,10 +396,10 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rsp
 blocking:
 		r = write (fd, buf, len);
 		if (r >= 0) {
-			cb (0, r, buf, ud);
+			cb (fd, 0, r, buf, ud);
 		}
 		else {
-			cb (r, -1, buf, ud);
+			cb (fd, r, -1, buf, ud);
 		}
 	}
 

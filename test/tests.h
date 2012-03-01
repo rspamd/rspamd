@@ -26,4 +26,7 @@ void rspamd_statfile_test_func ();
 /* DNS resolving */
 void rspamd_dns_test_func ();
 
+/* Async IO */
+void rspamd_async_test_func ();
+
 #endif

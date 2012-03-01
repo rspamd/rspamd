@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Vsevolod Stakhov
+/* Copyright (c) 2011, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -21,45 +21,67 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
-#ifndef AIO_EVENT_H_
-#define AIO_EVENT_H_
-
 #include "config.h"
+#include "tests.h"
+#include "main.h"
+#include "aio_event.h"
 
-/**
- * AIO context
- */
-struct aio_context;
 
-/**
- * Callback for notifying
- */
-typedef void (*rspamd_aio_cb) (gint fd, gint res, gsize len, gpointer data, gpointer ud);
+extern struct event_base *base;
 
-/**
- * Initialize aio with specified event base
- */
-struct aio_context* rspamd_aio_init (struct event_base *base);
+static void
+aio_read_cb (gint fd, gint res, gsize len, gpointer data, gpointer ud)
+{
+	guchar *p = data;
+	guint i;
 
-/**
- * Open file for aio
- */
-gint rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags);
+	g_assert (res != -1);
 
-/**
- * Asynchronous read of file
- */
-gint rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
+	g_assert (len == BUFSIZ);
+	for (i = 0; i < len; i ++) {
+		g_assert (p[i] == 0xef);
+	}
 
-/**
- * Asynchronous write of file
- */
-gint rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
+	event_base_loopbreak (base);
+}
 
-/**
- * Close of aio operations
- */
-gint rspamd_aio_close (gint fd, struct aio_context *ctx);
+static void
+aio_write_cb (gint fd, gint res, gsize len, gpointer data, gpointer ud)
+{
+	struct aio_context *aio_ctx = ud;
+	static gchar testbuf[BUFSIZ];
 
-#endif /* AIO_EVENT_H_ */
+	g_assert (res != -1);
+
+	g_assert (rspamd_aio_read (fd, testbuf, sizeof (testbuf), aio_ctx, aio_read_cb, aio_ctx) != -1);
+}
+
+void
+rspamd_async_test_func ()
+{
+	struct aio_context *aio_ctx;
+	gchar *tmpfile;
+	static gchar testbuf[BUFSIZ];
+	gint fd, afd, ret;
+
+	aio_ctx = rspamd_aio_init (base);
+
+	g_assert (aio_ctx != NULL);
+
+	fd = g_file_open_tmp ("raXXXXXX", &tmpfile, NULL);
+	g_assert (fd != -1);
+
+	afd = rspamd_aio_open (aio_ctx, tmpfile, O_RDWR);
+	g_assert (fd != -1);
+
+	/* Write some data */
+	memset (testbuf, 0xef, sizeof (testbuf));
+	ret = rspamd_aio_write (afd, testbuf, sizeof (testbuf), aio_ctx, aio_write_cb, aio_ctx);
+	g_assert (ret != -1);
+
+	event_base_loop (base, 0);
+
+	close (afd);
+	close (fd);
+	unlink (tmpfile);
+}
