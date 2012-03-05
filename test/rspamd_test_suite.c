@@ -34,6 +34,11 @@ main (int argc, char **argv)
 	g_test_init (&argc, &argv, NULL);
 
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
+
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_thread_init (NULL);
+#endif
+
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
 	rspamd_main->server_pool = memory_pool_new (memory_pool_get_size ());
 	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
