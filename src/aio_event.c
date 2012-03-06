@@ -26,11 +26,27 @@
 #include "main.h"
 
 /* Linux syscall numbers */
-#define SYS_io_setup      245
-#define SYS_io_destroy    246
-#define SYS_io_getevents  247
-#define SYS_io_submit     248
-#define SYS_io_cancel     249
+#if defined(__i386__)
+# define SYS_io_setup      245
+# define SYS_io_destroy    246
+# define SYS_io_getevents  247
+# define SYS_io_submit     248
+# define SYS_io_cancel     249
+#elif defined(__x86_64__)
+# define SYS_io_setup       206
+# define SYS_io_destroy     207
+# define SYS_io_getevents   208
+# define SYS_io_submit      209
+# define SYS_io_cancel      210
+#else
+# warning "aio is not supported on this platform, please contact author for details"
+# define SYS_io_setup       0
+# define SYS_io_destroy     0
+# define SYS_io_getevents   0
+# define SYS_io_submit      0
+# define SYS_io_cancel      0
+#endif
+
 #define SYS_eventfd       323
 #define MAX_AIO_EV        32768
 
