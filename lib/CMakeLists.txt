@@ -63,6 +63,7 @@ SET(RSPAMDLIBSRC
 				../src/message.c
 				../src/printf.c
 				../src/protocol.c
+				../src/proxy.c
 				../src/radix.c
 				../src/settings.c
 				../src/spf.c

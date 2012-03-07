@@ -28,7 +28,7 @@
 #include "smtp.h"
 #include "smtp_proto.h"
 
-gboolean
+void
 free_smtp_session (gpointer arg)
 {
 	struct smtp_session            *session = arg;
@@ -56,8 +56,6 @@ free_smtp_session (gpointer arg)
 		memory_pool_delete (session->pool);
 		g_free (session);
 	}
-
-	return TRUE;
 }
 
 gboolean
@@ -312,4 +310,60 @@ err:
 	}
 	destroy_session (session->s);
 	return FALSE;
+}
+
+gboolean
+parse_upstreams_line (memory_pool_t *pool, struct smtp_upstream *upstreams, const gchar *line, gsize *count)
+{
+	gchar                           **strv, *p, *t, *tt, *err_str;
+	guint32                         num, i;
+	struct smtp_upstream           *cur;
+	gchar                           resolved_path[PATH_MAX];
+
+	strv = g_strsplit_set (line, ",; ", -1);
+	num = g_strv_length (strv);
+
+	if (num >= MAX_SMTP_UPSTREAMS) {
+		msg_err ("cannot define %d upstreams %d is max", num, MAX_SMTP_UPSTREAMS);
+		return FALSE;
+	}
+	*count = 0;
+
+	for (i = 0; i < num; i ++) {
+		p = strv[i];
+		cur = &upstreams[*count];
+		if ((t = strrchr (p, ':')) != NULL && (tt = strchr (p, ':')) != t) {
+			/* Assume that after last `:' we have weigth */
+			*t = '\0';
+			t ++;
+			errno = 0;
+			cur->up.priority = strtoul (t, &err_str, 10);
+			if (errno != 0 || (err_str && *err_str != '\0')) {
+				msg_err ("cannot convert weight: %s, %s", t, strerror (errno));
+				g_strfreev (strv);
+				return FALSE;
+			}
+		}
+		if (*p == '/') {
+			cur->is_unix = TRUE;
+			if (realpath (p, resolved_path) == NULL) {
+				msg_err ("cannot resolve path: %s", resolved_path);
+				g_strfreev (strv);
+				return FALSE;
+			}
+			cur->name = memory_pool_strdup (pool, resolved_path);
+			(*count) ++;
+		}
+		else {
+			if (! parse_host_port (p, &cur->addr, &cur->port)) {
+				g_strfreev (strv);
+				return FALSE;
+			}
+			cur->name = memory_pool_strdup (pool, p);
+			(*count) ++;
+		}
+	}
+
+	g_strfreev (strv);
+	return TRUE;
 }

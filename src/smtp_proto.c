@@ -31,7 +31,7 @@
 #include "smtp_utils.h"
 
 gchar                           *
-make_smtp_error (struct smtp_session *session, gint error_code, const gchar *format, ...)
+make_smtp_error (memory_pool_t *pool, gint error_code, const gchar *format, ...)
 {
 	va_list                         vp;
 	gchar                           *result = NULL, *p;
@@ -42,7 +42,7 @@ make_smtp_error (struct smtp_session *session, gint error_code, const gchar *for
 	va_end (vp);
 	va_start (vp, format);
 	len += sizeof ("65535 ") + sizeof (CRLF) - 1;
-	result = memory_pool_alloc (session->pool, len);
+	result = memory_pool_alloc (pool, len);
 	p = result + rspamd_snprintf (result, len, "%d ", error_code);
 	p = rspamd_vsnprintf (p, len - (p - result), format, vp);
 	*p++ = CR; *p++ = LF; *p = '\0';

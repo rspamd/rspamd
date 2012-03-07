@@ -18,6 +18,10 @@
 
 #define DATA_END_TRAILER "." CRLF
 
+#define XCLIENT_HOST_UNAVAILABLE "[UNAVAILABLE]"
+#define XCLIENT_HOST_TEMPFAIL "[TEMPUNAVAIL]"
+
+#define MAX_SMTP_UPSTREAMS 128
 
 struct smtp_command {
 	enum {
@@ -39,7 +43,7 @@ struct smtp_command {
 /*
  * Generate SMTP error message
  */
-gchar * make_smtp_error (struct smtp_session *session, gint error_code, const gchar *format, ...);
+gchar * make_smtp_error (memory_pool_t *pool, gint error_code, const gchar *format, ...);
 
 /*
  * Parse a single SMTP command

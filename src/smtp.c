@@ -45,9 +45,6 @@
 
 #define DEFAULT_REJECT_MESSAGE "450 4.5.0 Spam message rejected"
 
-#define XCLIENT_HOST_UNAVAILABLE "[UNAVAILABLE]"
-#define XCLIENT_HOST_TEMPFAIL "[TEMPUNAVAIL]"
-
 static gboolean smtp_write_socket (void *arg);
 
 static sig_atomic_t                    wanna_die = 0;
@@ -397,7 +394,7 @@ smtp_read_socket (f_str_t * in, void *arg)
 		case SMTP_STATE_RESOLVE_REVERSE:
 		case SMTP_STATE_RESOLVE_NORMAL:
 		case SMTP_STATE_DELAY:
-			session->error = make_smtp_error (session, 550, "%s Improper use of SMTP command pipelining", "5.5.0");
+			session->error = make_smtp_error (session->pool, 550, "%s Improper use of SMTP command pipelining", "5.5.0");
 			session->state = SMTP_STATE_ERROR;
 			break;
 		case SMTP_STATE_GREETING:
@@ -444,7 +441,7 @@ smtp_read_socket (f_str_t * in, void *arg)
 			rspamd_dispatcher_pause (session->dispatcher);
 			break;
 		default:
-			session->error = make_smtp_error (session, 550, "%s Internal error", "5.5.0");
+			session->error = make_smtp_error (session->pool, 550, "%s Internal error", "5.5.0");
 			session->state = SMTP_STATE_ERROR;
 			break;
 	}
@@ -820,61 +817,6 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const gchar *line)
 	}
 }
 
-static gboolean
-parse_upstreams_line (struct smtp_worker_ctx *ctx, const gchar *line)
-{
-	gchar                           **strv, *p, *t, *tt, *err_str;
-	guint32                         num, i;
-	struct smtp_upstream           *cur;
-	gchar                           resolved_path[PATH_MAX];
-	
-	strv = g_strsplit_set (line, ",; ", -1);
-	num = g_strv_length (strv);
-
-	if (num >= MAX_UPSTREAM) {
-		msg_err ("cannot define %d upstreams %d is max", num, MAX_UPSTREAM);
-		return FALSE;
-	}
-
-	for (i = 0; i < num; i ++) {
-		p = strv[i];
-		cur = &ctx->upstreams[ctx->upstream_num];
-		if ((t = strrchr (p, ':')) != NULL && (tt = strchr (p, ':')) != t) {
-			/* Assume that after last `:' we have weigth */
-			*t = '\0';
-			t ++;
-			errno = 0;
-			cur->up.priority = strtoul (t, &err_str, 10);
-			if (errno != 0 || (err_str && *err_str != '\0')) {
-				msg_err ("cannot convert weight: %s, %s", t, strerror (errno));
-				g_strfreev (strv);
-				return FALSE;
-			}
-		}
-		if (*p == '/') {
-			cur->is_unix = TRUE;
-			if (realpath (p, resolved_path) == NULL) {
-				msg_err ("cannot resolve path: %s", resolved_path);
-				g_strfreev (strv);
-				return FALSE;
-			}
-			cur->name = memory_pool_strdup (ctx->pool, resolved_path);
-			ctx->upstream_num ++;
-		}
-		else {
-			if (! parse_host_port (p, &cur->addr, &cur->port)) {
-				g_strfreev (strv);
-				return FALSE;
-			}
-			cur->name = memory_pool_strdup (ctx->pool, p);
-			ctx->upstream_num ++;
-		}
-	}
-
-	g_strfreev (strv);
-	return TRUE;
-}
-
 static void
 make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 {
@@ -973,7 +915,7 @@ config_smtp_worker (struct rspamd_worker *worker)
 
 	/* Init upstreams */
 	if ((value = ctx->upstreams_str) != NULL) {
-		if (!parse_upstreams_line (ctx, value)) {
+		if (!parse_upstreams_line (ctx->pool, ctx->upstreams, value, &ctx->upstream_num)) {
 			return FALSE;
 		}
 	}

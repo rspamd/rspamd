@@ -848,6 +848,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/main.c
 				src/map.c
 				src/smtp.c
+				src/smtp_proxy.c
 				src/worker.c)
 
 SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
@@ -864,7 +865,7 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/spf.c)
 				
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf)
-SET(WORKERS_LIST normal controller smtp lmtp fuzzy keystorage)
+SET(WORKERS_LIST normal controller smtp smtp_proxy lmtp fuzzy keystorage)
 
 AddModules(MODULES_LIST WORKERS_LIST)
 

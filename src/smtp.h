@@ -4,19 +4,10 @@
 #include "config.h"
 #include "main.h"
 #include "upstream.h"
-
-struct smtp_upstream {
-	struct upstream up;
-	
-	const gchar *name;
-	struct in_addr addr;
-	guint16 port;
-	gboolean is_unix;
-}; 
+#include "smtp_utils.h"
 
 struct rspamd_dns_resolver;
 
-#define MAX_UPSTREAM 128
 #define DEFAULT_MAX_ERRORS 10
 
 enum rspamd_smtp_stage {
@@ -29,8 +20,8 @@ enum rspamd_smtp_stage {
 };
 
 struct smtp_worker_ctx {
-	struct smtp_upstream upstreams[MAX_UPSTREAM];
-	size_t upstream_num;
+	struct smtp_upstream upstreams[MAX_SMTP_UPSTREAMS];
+	gsize upstream_num;
 	gchar *upstreams_str;
 	
 	memory_pool_t *pool;
