@@ -302,7 +302,7 @@ rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags)
  * Asynchronous read of file
  */
 gint
-rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_read (gint fd, gpointer buf, gsize len, off_t offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
 {
 	struct io_cbdata							*cbdata;
 	gint										 r = -1;
@@ -325,7 +325,7 @@ rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspa
 		iocb[0]->aio_reqprio = 0;
 		iocb[0]->aio_buf = (guint64)((uintptr_t)buf);
 		iocb[0]->aio_nbytes = len;
-		iocb[0]->aio_offset = 0;
+		iocb[0]->aio_offset = offset;
 		iocb[0]->aio_flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
 		iocb[0]->aio_resfd = ctx->event_fd;
 		iocb[0]->aio_data = (guint64)((uintptr_t)cbdata);
@@ -348,12 +348,15 @@ rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspa
 	else {
 		/* Blocking variant */
 blocking:
-		r = read (fd, buf, len);
-		if (r >= 0) {
-			cb (fd, 0, r, buf, ud);
-		}
-		else {
-			cb (fd, r, -1, buf, ud);
+		r = lseek (fd, offset, SEEK_SET);
+		if (r > 0) {
+			r = read (fd, buf, len);
+			if (r >= 0) {
+				cb (fd, 0, r, buf, ud);
+			}
+			else {
+				cb (fd, r, -1, buf, ud);
+			}
 		}
 	}
 
@@ -364,7 +367,7 @@ blocking:
  * Asynchronous write of file
  */
 gint
-rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
 {
 	struct io_cbdata							*cbdata;
 	gint										 r = -1;
@@ -387,7 +390,7 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rsp
 		iocb[0]->aio_reqprio = 0;
 		iocb[0]->aio_buf = (guint64)((uintptr_t)buf);
 		iocb[0]->aio_nbytes = len;
-		iocb[0]->aio_offset = 0;
+		iocb[0]->aio_offset = offset;
 		iocb[0]->aio_flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
 		iocb[0]->aio_resfd = ctx->event_fd;
 		iocb[0]->aio_data = (guint64)((uintptr_t)cbdata);
@@ -410,12 +413,15 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rsp
 	else {
 		/* Blocking variant */
 blocking:
-		r = write (fd, buf, len);
-		if (r >= 0) {
-			cb (fd, 0, r, buf, ud);
-		}
-		else {
-			cb (fd, r, -1, buf, ud);
+		r = lseek (fd, offset, SEEK_SET);
+		if (r > 0) {
+			r = write (fd, buf, len);
+			if (r >= 0) {
+				cb (fd, 0, r, buf, ud);
+			}
+			else {
+				cb (fd, r, -1, buf, ud);
+			}
 		}
 	}
 

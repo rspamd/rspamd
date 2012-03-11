@@ -50,12 +50,14 @@ gint rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags);
 /**
  * Asynchronous read of file
  */
-gint rspamd_aio_read (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
+gint rspamd_aio_read (gint fd, gpointer buf, gsize len, off_t offset,
+		struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
 
 /**
  * Asynchronous write of file
  */
-gint rspamd_aio_write (gint fd, gpointer buf, gsize len, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
+gint rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset,
+		struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
 
 /**
  * Close of aio operations
