@@ -25,6 +25,7 @@
 #include "tests.h"
 #include "main.h"
 #include "aio_event.h"
+#include "mem_pool.h"
 
 
 extern struct event_base *base;
@@ -35,7 +36,7 @@ aio_read_cb (gint fd, gint res, gsize len, gpointer data, gpointer ud)
 	guchar *p = data;
 	guint i;
 
-	g_assert (res != -1);
+	g_assert (res > 0);
 
 	g_assert (len == BUFSIZ);
 	for (i = 0; i < len; i ++) {
@@ -49,11 +50,13 @@ static void
 aio_write_cb (gint fd, gint res, gsize len, gpointer data, gpointer ud)
 {
 	struct aio_context *aio_ctx = ud;
-	static gchar testbuf[BUFSIZ];
+	gchar *testbuf;
 
-	g_assert (res != -1);
+	g_assert (res > 0);
 
-	g_assert (rspamd_aio_read (fd, testbuf, sizeof (testbuf), aio_ctx, aio_read_cb, aio_ctx) != -1);
+	g_assert (posix_memalign ((void **)&testbuf, 512, BUFSIZ) == 0);
+
+	g_assert (rspamd_aio_read (fd, testbuf, BUFSIZ, 0, aio_ctx, aio_read_cb, aio_ctx) != -1);
 }
 
 void
@@ -76,7 +79,7 @@ rspamd_async_test_func ()
 
 	/* Write some data */
 	memset (testbuf, 0xef, sizeof (testbuf));
-	ret = rspamd_aio_write (afd, testbuf, sizeof (testbuf), aio_ctx, aio_write_cb, aio_ctx);
+	ret = rspamd_aio_write (afd, testbuf, sizeof (testbuf), 0, aio_ctx, aio_write_cb, aio_ctx);
 	g_assert (ret != -1);
 
 	event_base_loop (base, 0);

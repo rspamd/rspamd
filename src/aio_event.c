@@ -48,7 +48,7 @@
 #endif
 
 #define SYS_eventfd       323
-#define MAX_AIO_EV        32768
+#define MAX_AIO_EV        1024
 
 struct io_cbdata {
 	gint fd;
@@ -62,7 +62,7 @@ struct io_cbdata {
 
 /* Linux specific mappings and utilities to avoid using of libaio */
 
-typedef unsigned int aio_context_t;
+typedef unsigned long aio_context_t;
 
 typedef enum io_iocb_cmd {
 	IO_CMD_PREAD = 0,
@@ -102,7 +102,7 @@ struct iocb {
 
 	guint64 aio_buf;
 	guint64 aio_nbytes;
-	guint64 aio_offset;
+	gint64 aio_offset;
 
 	/* extra parameters */
 	guint64 aio_reserved2; /* TODO: use this for a (struct sigevent *) */
@@ -157,7 +157,7 @@ io_cancel (aio_context_t ctx, struct iocb *iocb, struct io_event *result)
 
 # ifndef HAVE_SYS_EVENTFD_H
 static int
-eventfd(guint initval, guint flags)
+eventfd (guint initval, guint flags)
 {
 	return syscall (SYS_eventfd, initval);
 }
@@ -176,6 +176,8 @@ struct aio_context {
 	gint event_fd;
 	struct event eventfd_ev;
 	aio_context_t io_ctx;
+	gpointer buf;
+	gsize buflen;
 #elif defined(HAVE_AIO_H)
 	/* POSIX aio */
 	struct event rtsigs[SIGRTMAX - SIGRTMIN];
@@ -190,7 +192,7 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 	struct aio_context					*ctx = ud;
 	guint64								 ready;
 	gint								 done, i;
-	struct io_event   					 event[64];
+	struct io_event   					 event[32];
 	struct timespec   					 ts;
 	struct io_cbdata					*ev_data;
 
@@ -207,7 +209,7 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 
 	while (ready) {
 		/* Get events ready */
-		done = io_getevents (ctx->io_ctx, 1, 64, event, &ts);
+		done = io_getevents (ctx->io_ctx, 1, 32, event, &ts);
 
 		if (done > 0) {
 			ready -= done;
@@ -288,11 +290,11 @@ rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags)
 	}
 #ifdef LINUX
 
-	fd = open (path, flags | O_DIRECT | O_NONBLOCK);
+	fd = open (path, flags | O_DIRECT);
 
 	return fd;
 #elif defined(HAVE_AIO_H)
-	fd = open (path, flags | O_NONBLOCK);
+	fd = open (path, flags);
 #endif
 
 	return fd;
@@ -376,6 +378,19 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset, struct aio_con
 #ifdef LINUX
 		struct iocb								 *iocb[1];
 
+		/* We need to align pointer on boundary of 512 bytes here */
+		if (ctx->buflen < len) {
+			if (ctx->buf) {
+				free (ctx->buf);
+			}
+			if (posix_memalign (&ctx->buf, 512, len) != 0) {
+				return -1;
+			}
+			else {
+				ctx->buflen = len;
+				memcpy (ctx->buf, buf, len);
+			}
+		}
 		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
 		cbdata->buf = buf;
@@ -388,7 +403,7 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset, struct aio_con
 		iocb[0]->aio_fildes = fd;
 		iocb[0]->aio_lio_opcode = IO_CMD_PWRITE;
 		iocb[0]->aio_reqprio = 0;
-		iocb[0]->aio_buf = (guint64)((uintptr_t)buf);
+		iocb[0]->aio_buf = (guint64)((uintptr_t)ctx->buf);
 		iocb[0]->aio_nbytes = len;
 		iocb[0]->aio_offset = offset;
 		iocb[0]->aio_flags |= (1 << 0) /* IOCB_FLAG_RESFD */;
@@ -447,6 +462,9 @@ rspamd_aio_close (gint fd, struct aio_context *ctx)
 
 		/* Iocb is copied to kernel internally, so it is safe to put it on stack */
 		r = io_cancel (ctx->io_ctx, &iocb, &ev);
+		if (ctx->buf) {
+			free (ctx->buf);
+		}
 		close (fd);
 		return r;
 
