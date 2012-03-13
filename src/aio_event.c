@@ -218,6 +218,7 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 				ev_data = (struct io_cbdata *) (uintptr_t) event[i].data;
 				/* Call this callback */
 				ev_data->cb (ev_data->fd, event[i].res, ev_data->len, ev_data->buf, ev_data->ud);
+				g_slice_free1 (sizeof (struct io_cbdata), ev_data);
 			}
 		}
 		else if (done == 0) {
