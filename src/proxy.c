@@ -87,10 +87,10 @@ rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 			if (proxy->buf_offset == proxy->read_len) {
 				/* We wrote everything */
 				event_del (&proxy->client_ev);
-				event_set (&proxy->client_ev, proxy->bfd, EV_READ, rspamd_proxy_client_handler, proxy);
+				event_set (&proxy->client_ev, proxy->cfd, EV_READ, rspamd_proxy_client_handler, proxy);
 				event_add (&proxy->client_ev, proxy->tv);
 				event_del (&proxy->backend_ev);
-				event_set (&proxy->backend_ev, proxy->bfd, EV_READ, rspamd_proxy_client_handler, proxy);
+				event_set (&proxy->backend_ev, proxy->bfd, EV_READ, rspamd_proxy_backend_handler, proxy);
 				event_add (&proxy->backend_ev, proxy->tv);
 			}
 			else {
@@ -126,12 +126,12 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 {
 	rspamd_proxy_t						*proxy = data;
 	gint								 r;
-	GError								*err;
+	GError								*err = NULL;
 
 	if (what == EV_READ) {
 		/* Got data from backend */
 		event_del (&proxy->backend_ev);
-		r = read (proxy->cfd, proxy->buf, proxy->bufsize);
+		r = read (proxy->bfd, proxy->buf, proxy->bufsize);
 		if (r > 0) {
 			/* Write this buffer to client */
 			proxy->read_len = r;
@@ -164,10 +164,10 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 			if (proxy->buf_offset == proxy->read_len) {
 				/* We wrote everything */
 				event_del (&proxy->backend_ev);
-				event_set (&proxy->backend_ev, proxy->bfd, EV_READ, rspamd_proxy_client_handler, proxy);
+				event_set (&proxy->backend_ev, proxy->bfd, EV_READ, rspamd_proxy_backend_handler, proxy);
 				event_add (&proxy->backend_ev, proxy->tv);
 				event_del (&proxy->client_ev);
-				event_set (&proxy->client_ev, proxy->bfd, EV_READ, rspamd_proxy_client_handler, proxy);
+				event_set (&proxy->client_ev, proxy->cfd, EV_READ, rspamd_proxy_client_handler, proxy);
 				event_add (&proxy->client_ev, proxy->tv);
 			}
 			else {

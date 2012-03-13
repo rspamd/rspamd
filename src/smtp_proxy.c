@@ -182,7 +182,7 @@ free_smtp_proxy_session (gpointer arg)
 
 		close (session->sock);
 		memory_pool_delete (session->pool);
-		g_free (session);
+		g_slice_free1 (sizeof (struct smtp_proxy_session), session);
 	}
 }
 
@@ -191,7 +191,10 @@ smtp_proxy_err_proxy (GError * err, void *arg)
 {
 	struct smtp_proxy_session            *session = arg;
 
-	msg_info ("abnormally closing connection, error: %s", err->message);
+	if (err) {
+		g_error_free (err);
+		msg_info ("abnormally closing connection, error: %s", err->message);
+	}
 	/* Free buffers */
 	destroy_session (session->s);
 }
@@ -411,7 +414,10 @@ smtp_proxy_err_socket (GError * err, void *arg)
 {
 	struct smtp_proxy_session            *session = arg;
 
-	msg_info ("abnormally closing connection, error: %s", err->message);
+	if (err) {
+		g_error_free (err);
+		msg_info ("abnormally closing connection, error: %s", err->message);
+	}
 	/* Free buffers */
 	destroy_session (session->s);
 }
@@ -536,7 +542,7 @@ void
 start_smtp_proxy (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
-	struct smtp_worker_ctx         *ctx = worker->ctx;
+	struct smtp_proxy_ctx         *ctx = worker->ctx;
 
 	gperf_profiler_init (worker->srv->cfg, "worker");
 

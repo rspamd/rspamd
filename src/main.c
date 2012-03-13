@@ -553,37 +553,42 @@ spawn_workers (struct rspamd_main *rspamd)
 	while (cur) {
 		cf = cur->data;
 
-		if (cf->worker->has_socket) {
-			if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
-								make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)))) == NULL) {
-				/* Create listen socket */
-				listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
-				if (listen_sock == -1) {
-					exit (-errno);
-				}
-				g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
-								make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)), 
-								GINT_TO_POINTER (listen_sock));
-			}
-			else {
-				/* We had socket for this type of worker */
-				listen_sock = GPOINTER_TO_INT (p);
-			}
-			cf->listen_sock = listen_sock;
-		}
-		
-		if (cf->worker->unique) {
-			if (cf->count > 1) {
-				msg_err ("cannot spawn more than 1 %s worker, so spawn one", cf->worker->name);
-			}
-			fork_worker (rspamd, cf);
-		}
-		else if (cf->worker->threaded) {
-			fork_worker (rspamd, cf);
+		if (cf->worker == NULL) {
+			msg_err ("type of worker is unspecified, skip spawning");
 		}
 		else {
-			for (i = 0; i < cf->count; i++) {
+			if (cf->worker->has_socket) {
+				if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
+						make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)))) == NULL) {
+					/* Create listen socket */
+					listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
+					if (listen_sock == -1) {
+						exit (-errno);
+					}
+					g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
+							make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)),
+							GINT_TO_POINTER (listen_sock));
+				}
+				else {
+					/* We had socket for this type of worker */
+					listen_sock = GPOINTER_TO_INT (p);
+				}
+				cf->listen_sock = listen_sock;
+			}
+
+			if (cf->worker->unique) {
+				if (cf->count > 1) {
+					msg_err ("cannot spawn more than 1 %s worker, so spawn one", cf->worker->name);
+				}
 				fork_worker (rspamd, cf);
+			}
+			else if (cf->worker->threaded) {
+				fork_worker (rspamd, cf);
+			}
+			else {
+				for (i = 0; i < cf->count; i++) {
+					fork_worker (rspamd, cf);
+				}
 			}
 		}
 
