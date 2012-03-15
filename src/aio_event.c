@@ -392,6 +392,9 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset, struct aio_con
 				memcpy (ctx->buf, buf, len);
 			}
 		}
+		else {
+			memcpy (ctx->buf, buf, len);
+		}
 		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
 		cbdata->buf = buf;
