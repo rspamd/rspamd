@@ -38,6 +38,7 @@ pthread_rwlock_t                upstream_mtx = PTHREAD_RWLOCK_INITIALIZER;
 #endif
 
 #define MAX_TRIES 20
+#define HASH_COMPAT
 
 /*
  * Poly: 0xedb88320
@@ -248,17 +249,26 @@ get_upstream_by_number (void *ups, size_t members, size_t msize, gint selected)
  * Get hash key for specified key (perl hash)
  */
 static                          guint32
-get_hash_for_key (guint32 hash, gchar *key, size_t keylen)
+get_hash_for_key (guint32 hash, const gchar *key, size_t keylen)
 {
 	guint32                         h, index;
 	const gchar                     *end = key + keylen;
 
 	h = ~hash;
 
-	while (key < end) {
-		index = (h ^ (u_char) * key) & 0x000000ffU;
-		h = (h >> 8) ^ crc32lookup[index];
-		++key;
+	if (end != key) {
+		while (key < end) {
+			index = (h ^ (u_char) * key) & 0x000000ffU;
+			h = (h >> 8) ^ crc32lookup[index];
+			++key;
+		}
+	}
+	else {
+		while (*key) {
+			index = (h ^ (u_char) * key) & 0x000000ffU;
+			h = (h >> 8) ^ crc32lookup[index];
+			++key;
+		}
 	}
 
 	return (~h);
@@ -268,7 +278,8 @@ get_hash_for_key (guint32 hash, gchar *key, size_t keylen)
  * Recheck all upstreams and return random active upstream
  */
 struct upstream                *
-get_random_upstream (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
+get_random_upstream (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout,
+		time_t revive_timeout, size_t max_errors)
 {
 	gint                            alive, selected;
 
@@ -282,7 +293,8 @@ get_random_upstream (void *ups, size_t members, size_t msize, time_t now, time_t
  * Return upstream by hash, that is calculated from active upstreams number
  */
 struct upstream                *
-get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, gchar *key, size_t keylen)
+get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout,
+		time_t revive_timeout, size_t max_errors, const gchar *key, size_t keylen)
 {
 	gint                            alive, tries = 0, r;
 	guint32                         h = 0, ht;
@@ -332,7 +344,8 @@ get_upstream_by_hash (void *ups, size_t members, size_t msize, time_t now, time_
  * Recheck all upstreams and return upstream in round-robin order according to weight and priority
  */
 struct upstream                *
-get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
+get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout,
+		time_t revive_timeout, size_t max_errors)
 {
 	guint                           max_weight, i;
 	struct upstream                *cur, *selected = NULL;
@@ -381,7 +394,8 @@ get_upstream_round_robin (void *ups, size_t members, size_t msize, time_t now, t
  * Recheck all upstreams and return upstream in round-robin order according to only priority (master-slaves)
  */
 struct upstream                *
-get_upstream_master_slave (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors)
+get_upstream_master_slave (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout,
+		time_t revive_timeout, size_t max_errors)
 {
 	guint                           max_weight, i;
 	struct upstream                *cur, *selected = NULL;
@@ -459,7 +473,8 @@ upstream_ketama_add (struct upstream *up, gchar *up_key, size_t keylen, size_t k
  * Return upstream by hash and find nearest ketama point in some server
  */
 struct upstream                *
-get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, gchar *key, size_t keylen)
+get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize,
+		time_t now, time_t error_timeout, time_t revive_timeout, size_t max_errors, const gchar *key, size_t keylen)
 {
 	guint                           alive, i;
 	guint32                         h = 0, step, middle, d, min_diff = UINT_MAX;

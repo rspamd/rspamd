@@ -252,6 +252,7 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_xmlrpc (L);
 	(void)luaopen_http (L);
 	(void)luaopen_redis (L);
+	(void)luaopen_upstream (L);
 	cfg->lua_state = L;
 	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
 

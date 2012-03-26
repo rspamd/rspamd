@@ -17,7 +17,7 @@
 extern const luaL_reg null_reg[];
 extern GMutex *lua_mtx;
 
-#define RSPAMD_LUA_API_VERSION 9
+#define RSPAMD_LUA_API_VERSION 10
 
 /* Common utility functions */
 
@@ -61,6 +61,7 @@ gint luaopen_cdb (lua_State *L);
 gint luaopen_xmlrpc (lua_State * L);
 gint luaopen_http (lua_State * L);
 gint luaopen_redis (lua_State * L);
+gint luaopen_upstream (lua_State * L);
 void init_lua (struct config_file *cfg);
 gboolean init_lua_filters (struct config_file *cfg);
 

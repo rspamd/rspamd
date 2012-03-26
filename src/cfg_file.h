@@ -336,12 +336,29 @@ struct config_file {
 
 
 /**
+ * Parse host[:port[:priority]] line
+ * @param ina host address
+ * @param port port
+ * @param priority priority
+ * @return TRUE if string was parsed
+ */
+gboolean parse_host_port_priority (const gchar *str, struct in_addr *ina, guint16 *port, guint *priority);
+
+/**
  * Parse host:port line
  * @param ina host address
  * @param port port
  * @return TRUE if string was parsed
  */
 gboolean parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port);
+
+/**
+ * Parse host:priority line
+ * @param ina host address
+ * @param priority priority
+ * @return TRUE if string was parsed
+ */
+gboolean parse_host_priority (const gchar *str, struct in_addr *ina, guint *priority);
 
 /**
  * Parse bind credits

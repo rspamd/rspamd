@@ -41,11 +41,11 @@
 
 
 gboolean
-parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port)
+parse_host_port_priority (const gchar *str, struct in_addr *ina, guint16 *port, guint *priority)
 {
-	gchar                           **tokens, *err_str;
+	gchar                          **tokens, *err_str, *cur_tok;
 	struct hostent                 *hent;
-	guint                           port_parsed, saved_errno = errno;
+	guint                           port_parsed, priority_parsed, saved_errno = errno;
 
 	tokens = g_strsplit_set (str, ":", 0);
 	if (!tokens || !tokens[0]) {
@@ -72,18 +72,38 @@ parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port)
 	}
 	if (tokens[1] != NULL) {
 		/* Port part */
-		errno = 0;
-		port_parsed = strtoul (tokens[1], &err_str, 10);
-		if (*err_str != '\0' || errno != 0) {
-			msg_warn ("cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
-			goto err;
+		if (port != NULL) {
+			errno = 0;
+			port_parsed = strtoul (tokens[1], &err_str, 10);
+			if (*err_str != '\0' || errno != 0) {
+				msg_warn ("cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+				goto err;
+			}
+			if (port_parsed > G_MAXUINT16) {
+				errno = ERANGE;
+				msg_warn ("cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
+				goto err;
+			}
+			*port = port_parsed;
 		}
-		if (port_parsed > G_MAXUINT16) {
-			errno = ERANGE;
-			msg_warn ("cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
-			goto err;
+		if (priority != NULL) {
+			if (port != NULL) {
+				cur_tok = tokens[2];
+			}
+			else {
+				cur_tok = tokens[1];
+			}
+			if (cur_tok != NULL) {
+				/* Priority part */
+				errno = 0;
+				priority_parsed = strtoul (cur_tok, &err_str, 10);
+				if (*err_str != '\0' || errno != 0) {
+					msg_warn ("cannot parse priority: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+					goto err;
+				}
+				*priority = priority_parsed;
+			}
 		}
-		*port = port_parsed;
 	}
 	
 	/* Restore errno */
@@ -95,6 +115,18 @@ err:
 	errno = saved_errno;
 	g_strfreev (tokens);
 	return FALSE;
+}
+
+gboolean
+parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port)
+{
+	return parse_host_port_priority (str, ina, port, NULL);
+}
+
+gboolean
+parse_host_priority (const gchar *str, struct in_addr *ina, guint *priority)
+{
+	return parse_host_port_priority (str, ina, NULL, priority);
 }
 
 gint
