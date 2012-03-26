@@ -387,8 +387,8 @@ static gboolean
 process_stat_command (struct controller_session *session)
 {
 	gchar                           out_buf[BUFSIZ];
-	gint                            r;
-	guint64                         used, total, rev;
+	gint                            r, i;
+	guint64                         used, total, rev, ham = 0, spam = 0;
 	time_t                          ti;
 	memory_pool_stat_t              mem_st;
 	struct classifier_config       *ccf;
@@ -399,10 +399,20 @@ process_stat_command (struct controller_session *session)
 	memory_pool_stat (&mem_st);
 	r = rspamd_snprintf (out_buf, sizeof (out_buf), "Messages scanned: %ud" CRLF, session->worker->srv->stat->messages_scanned);
 	if (session->worker->srv->stat->messages_scanned > 0) {
-		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %ud, %.2f%%" CRLF, session->worker->srv->stat->messages_spam,
-								(double)session->worker->srv->stat->messages_spam / (double)session->worker->srv->stat->messages_scanned * 100.);
-		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %ud, %.2f%%" CRLF, session->worker->srv->stat->messages_ham,
-								(double)session->worker->srv->stat->messages_ham / (double)session->worker->srv->stat->messages_scanned * 100.);
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
+			r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages with action %s: %ud" CRLF,
+					str_action_metric (i), session->worker->srv->stat->actions_stat[i]);
+			if (i < METRIC_ACTION_GREYLIST) {
+				spam += session->worker->srv->stat->actions_stat[i];
+			}
+			else {
+				ham += session->worker->srv->stat->actions_stat[i];
+			}
+		}
+		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %ud, %.2f%%" CRLF, spam,
+								(double)spam / (double)session->worker->srv->stat->messages_scanned * 100.);
+		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %ud, %.2f%%" CRLF, ham,
+								(double)ham / (double)session->worker->srv->stat->messages_scanned * 100.);
 	}
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %ud" CRLF, session->worker->srv->stat->messages_learned);
 	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %ud" CRLF, session->worker->srv->stat->connections_count);

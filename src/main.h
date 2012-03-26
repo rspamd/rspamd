@@ -76,10 +76,9 @@ struct worker_task;
  */
 struct rspamd_stat {
 	guint messages_scanned;								/**< total number of messages scanned				*/
-	guint messages_spam;									/**< messages treated as spam						*/
-	guint messages_ham;									/**< messages treated as ham						*/
-	guint connections_count;								/**< total connections count						*/
-	guint control_connections_count;						/**< connections count to control interface			*/
+	guint actions_stat[METRIC_ACTION_NOACTION + 1];		/**< statistic for each action						*/
+	guint connections_count;							/**< total connections count						*/
+	guint control_connections_count;					/**< connections count to control interface			*/
 	guint messages_learned;								/**< messages learned								*/
 	guint fuzzy_hashes;									/**< number of fuzzy hashes stored					*/
 	guint fuzzy_hashes_expired;							/**< number of fuzzy hashes expired					*/

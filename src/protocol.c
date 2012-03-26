@@ -1170,6 +1170,10 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 					metric_res->metric);
 		}
 
+		if (G_LIKELY (action <= METRIC_ACTION_NOACTION)) {
+			task->worker->srv->stat->actions_stat[action] ++;
+		}
+
 		if (!task->is_json) {
 			r = print_metric_data_rspamc (task, outbuf, sizeof (outbuf), metric_res, metric_res->metric, ms, rs, action);
 		}
@@ -1428,12 +1432,6 @@ write_check_reply (struct worker_task *task)
 
 	/* Increase counters */
 	task->worker->srv->stat->messages_scanned++;
-	if (default_score >= default_required_score) {
-		task->worker->srv->stat->messages_spam ++;
-	}
-	else {
-		task->worker->srv->stat->messages_ham ++;
-	}
 
 	return TRUE;
 }
@@ -1541,12 +1539,6 @@ write_process_reply (struct worker_task *task)
 	}
 
 	task->worker->srv->stat->messages_scanned++;
-	if (default_score >= default_required_score) {
-		task->worker->srv->stat->messages_spam ++;
-	}
-	else {
-		task->worker->srv->stat->messages_ham ++;
-	}
 
 	return TRUE;
 }
