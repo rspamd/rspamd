@@ -307,7 +307,7 @@ rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags)
  * Asynchronous read of file
  */
 gint
-rspamd_aio_read (gint fd, gpointer buf, gsize len, off_t offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_read (gint fd, gpointer buf, gsize len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
 {
 	struct io_cbdata							*cbdata;
 	gint										 r = -1;
@@ -354,7 +354,11 @@ rspamd_aio_read (gint fd, gpointer buf, gsize len, off_t offset, struct aio_cont
 	else {
 		/* Blocking variant */
 blocking:
+#ifdef _LARGEFILE64_SOURCE
+		r = lseek64 (fd, offset, SEEK_SET);
+#else
 		r = lseek (fd, offset, SEEK_SET);
+#endif
 		if (r > 0) {
 			r = read (fd, buf, len);
 			if (r >= 0) {
@@ -373,7 +377,7 @@ blocking:
  * Asynchronous write of file
  */
 gint
-rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_write (gint fd, gpointer buf, gsize len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
 {
 	struct io_cbdata							*cbdata;
 	gint										 r = -1;
@@ -424,7 +428,11 @@ rspamd_aio_write (gint fd, gpointer buf, gsize len, off_t offset, struct aio_con
 	else {
 		/* Blocking variant */
 blocking:
+#ifdef _LARGEFILE64_SOURCE
+		r = lseek64 (fd, offset, SEEK_SET);
+#else
 		r = lseek (fd, offset, SEEK_SET);
+#endif
 		if (r > 0) {
 			r = write (fd, buf, len);
 			if (r >= 0) {
