@@ -97,6 +97,19 @@ IF(CMAKE_INSTALL_PREFIX)
     SET(PREFIX ${CMAKE_INSTALL_PREFIX})
 ENDIF(CMAKE_INSTALL_PREFIX)
 
+# Try to detect platform for further configuration
+CHECK_C_SOURCE_COMPILES ("#if !defined(__x86_64) && !defined(__amd64) && !defined(_M_X64)
+					#error assume 32 bit arch
+					#endif
+					int main() { return 0;}" AMD_64)
+IF(NOT BUILD_CPU_MODE)
+	IF(AMD_64)
+		SET (BUILD_CPU_MODE "64")
+	ELSE(AMD_64)
+		SET (BUILD_CPU_MODE "32")
+	ENDIF(AMD_64)
+ENDIF(NOT BUILD_CPU_MODE)
+
 # Platform specific configuration
 IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_BSD_SOURCE -DFREEBSD")
