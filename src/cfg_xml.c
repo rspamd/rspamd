@@ -1507,8 +1507,20 @@ xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHash
 	gsize                      *dest;
 
 	dest = (gsize *)G_STRUCT_MEMBER_P (dest_struct, offset);
-	*dest = parse_limit (data, -1);
+	*dest = (gsize)parse_limit (data, -1);
 	
+	return TRUE;
+}
+
+/* Guint64 variant */
+gboolean
+xml_handle_size_64 (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	guint64                    *dest;
+
+	dest = (guint64 *)G_STRUCT_MEMBER_P (dest_struct, offset);
+	*dest = parse_limit (data, -1);
+
 	return TRUE;
 }
 

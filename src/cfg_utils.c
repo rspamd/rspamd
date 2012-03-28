@@ -300,10 +300,10 @@ get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
 	return NULL;
 }
 
-gsize
+guint64
 parse_limit (const gchar *limit, guint len)
 {
-	gsize                          result = 0;
+	guint64                        result = 0;
 	const gchar                   *err_str;
 
 	if (!limit || *limit == '\0' || len == 0) {
@@ -311,7 +311,7 @@ parse_limit (const gchar *limit, guint len)
 	}
 
 	errno = 0;
-	result = strtoul (limit, (gchar **)&err_str, 10);
+	result = strtoull (limit, (gchar **)&err_str, 10);
 
 	if (*err_str != '\0') {
 		/* Megabytes */
