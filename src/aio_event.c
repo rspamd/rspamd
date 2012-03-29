@@ -53,7 +53,7 @@
 struct io_cbdata {
 	gint fd;
 	rspamd_aio_cb cb;
-	gsize len;
+	guint64 len;
 	gpointer buf;
 	gpointer io_buf;
 	gpointer ud;
@@ -307,7 +307,7 @@ rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags)
  * Asynchronous read of file
  */
 gint
-rspamd_aio_read (gint fd, gpointer buf, gsize len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_read (gint fd, gpointer buf, guint64 len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
 {
 	struct io_cbdata							*cbdata;
 	gint										 r = -1;
@@ -377,7 +377,7 @@ blocking:
  * Asynchronous write of file
  */
 gint
-rspamd_aio_write (gint fd, gpointer buf, gsize len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_write (gint fd, gpointer buf, guint64 len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
 {
 	struct io_cbdata							*cbdata;
 	gint										 r = -1;
