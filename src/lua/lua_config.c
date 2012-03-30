@@ -44,6 +44,7 @@ LUA_FUNCTION_DEF (config, register_symbol);
 LUA_FUNCTION_DEF (config, register_virtual_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
+LUA_FUNCTION_DEF (config, register_pre_filter);
 LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
 LUA_FUNCTION_DEF (config, get_api_version);
@@ -61,6 +62,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, register_module_option),
+	LUA_INTERFACE_DEF (config, register_pre_filter),
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	LUA_INTERFACE_DEF (config, get_api_version),
 	{"__tostring", lua_class_tostring},
@@ -484,6 +486,61 @@ lua_config_register_post_filter (lua_State *L)
 		}
 		cd->L = L;
 		cfg->post_filters = g_list_prepend (cfg->post_filters, cd);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+	}
+	return 1;
+}
+
+void
+lua_call_pre_filters (struct worker_task *task)
+{
+	struct lua_callback_data       *cd;
+	struct worker_task            **ptask;
+	GList                          *cur;
+
+	g_mutex_lock (lua_mtx);
+	cur = task->cfg->pre_filters;
+	while (cur) {
+		cd = cur->data;
+		if (cd->cb_is_ref) {
+			lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
+		}
+		else {
+			lua_getglobal (cd->L, cd->callback.name);
+		}
+		ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+		lua_setclass (cd->L, "rspamd{task}", -1);
+		*ptask = task;
+
+		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
+			msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
+							cd->callback.name, lua_tostring (cd->L, -1));
+		}
+		cur = g_list_next (cur);
+	}
+	g_mutex_unlock (lua_mtx);
+}
+
+static gint
+lua_config_register_pre_filter (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	struct lua_callback_data       *cd;
+
+	if (cfg) {
+		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+			cd->cb_is_ref = FALSE;
+		}
+		else {
+			lua_pushvalue (L, 2);
+			/* Get a reference */
+			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
+			cd->cb_is_ref = TRUE;
+		}
+		cd->L = L;
+		cfg->pre_filters = g_list_prepend (cfg->pre_filters, cd);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;

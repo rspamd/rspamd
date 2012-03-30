@@ -312,6 +312,7 @@ struct config_file {
 	GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
 	GHashTable* cfg_params;							/**< all cfg params indexed by its name in this structure */
 	GList *views;									/**< views												*/
+	GList *pre_filters;								/**< list of pre-processing lua filters					*/
 	GList *post_filters;							/**< list of post-processing lua filters				*/
 	GHashTable* domain_settings;                    /**< settings per-domains                               */
 	GHashTable* user_settings;                      /**< settings per-user                                  */

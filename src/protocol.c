@@ -988,32 +988,48 @@ print_metric_data_rspamc (struct worker_task *task, gchar *outbuf, gsize size,
 {
 	gint                            r = 0;
 	gboolean                        is_spam = FALSE;
+	gchar							*local_act;
 
 	if (metric_res == NULL) {
+		/* This is case when we got reject result from pre filters */
 		if (task->proto == SPAMC_PROTO) {
 			r = rspamd_snprintf (outbuf, size,
 					"Spam: False ; 0.00 / %.2f" CRLF, ms);
 		}
 		else {
+			local_act = "False";
+			msg_info ("action: %s", str_action_metric (task->pre_result.action));
+			if (task->pre_result.action <= METRIC_ACTION_SOFT_REJECT) {
+				local_act = "True";
+			}
+
 			if (task->proto_ver >= 11) {
-				if (!task->is_skipped) {
-					r = rspamd_snprintf (outbuf, size,
-							"Metric: default; False; 0.00 / %.2f / %.2f" CRLF, ms,
-							rs);
+				if (task->is_skipped) {
+					local_act = "Skip";
 				}
-				else {
-					r = rspamd_snprintf (outbuf, size,
-							"Metric: default; Skip; 0.00 / %.2f / %.2f" CRLF, ms,
-							rs);
-				}
+				r = rspamd_snprintf (outbuf, size,
+						"Metric: default; %s; 0.00 / %.2f / %.2f" CRLF, local_act, ms,
+						rs);
 			}
 			else {
 				r = rspamd_snprintf (outbuf, size,
-						"Metric: default; False; 0.00 / %.2f" CRLF, ms);
+						"Metric: default; %s; 0.00 / %.2f" CRLF, local_act, ms);
 			}
-			r += rspamd_snprintf (outbuf + r, size - r,
+
+			if (task->pre_result.action == METRIC_ACTION_NOACTION) {
+				r += rspamd_snprintf (outbuf + r, size - r,
 					"Action: %s" CRLF, str_action_metric (
 							METRIC_ACTION_NOACTION));
+			}
+			else {
+				r += rspamd_snprintf (outbuf + r, size - r,
+						"Action: %s" CRLF, str_action_metric (
+								task->pre_result.action));
+				if (task->pre_result.str != NULL) {
+					r += rspamd_snprintf (outbuf + r, size - r,
+							"Message: %s" CRLF, task->pre_result.str);
+				}
+			}
 		}
 	}
 	else {
@@ -1067,29 +1083,38 @@ print_metric_data_json (struct worker_task *task, gchar *outbuf, gsize size,
 		enum rspamd_metric_action action)
 {
 	gint                            r = 0;
+	gchar							*local_act;
 
-
+	if (task->pre_result.action == METRIC_ACTION_NOACTION) {
+		local_act = "False";
+	}
+	else if (task->pre_result.action <= METRIC_ACTION_SOFT_REJECT) {
+		local_act = "True";
+	}
 	if (metric_res == NULL) {
-			r = rspamd_snprintf (outbuf, size,
-					"  {" CRLF "    \"name\": \"default\"," CRLF
-					"    \"is_spam\": false," CRLF
-					"    \"is_skipped\": %s," CRLF
-					"    \"score\": 0.00," CRLF
-					"    \"required_score\": %.2f," CRLF
-					"    \"reject_score\": %.2f," CRLF
-					"    \"action\": \"%s\"," CRLF,
-					task->is_skipped ? "true" : "false", ms, rs,
-					str_action_metric (METRIC_ACTION_NOACTION));
+		/* This is case when we got reject result from pre filters */
+		r = rspamd_snprintf (outbuf, size,
+				"  {" CRLF "    \"name\": \"default\"," CRLF
+				"    \"is_spam\": %s," CRLF
+				"    \"is_skipped\": %s," CRLF
+				"    \"score\": 0.00," CRLF
+				"    \"required_score\": %.2f," CRLF
+				"    \"reject_score\": %.2f," CRLF
+				"    \"action\": \"%s\"," CRLF,
+				local_act,
+				task->is_skipped ? "true" : "false", ms, rs,
+				str_action_metric (task->pre_result.action));
 	}
 	else {
 		r = rspamd_snprintf (outbuf, size,
-					"  {" CRLF "    \"name\": \"default\"," CRLF
+					"  {" CRLF "    \"name\": \"%s\"," CRLF
 					"    \"is_spam\": %s," CRLF
 					"    \"is_skipped\": %s," CRLF
 					"    \"score\": %.2f," CRLF
 					"    \"required_score\": %.2f," CRLF
 					"    \"reject_score\": %.2f," CRLF
 					"    \"action\": \"%s\"," CRLF,
+					metric_res->metric->name,
 					metric_res->score >= ms ? "true" : "false",
 					metric_res->score,
 					task->is_skipped ? "true" : "false", ms, rs,

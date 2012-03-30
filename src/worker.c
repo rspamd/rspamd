@@ -247,6 +247,7 @@ construct_task (struct rspamd_worker *worker)
 					new_task->urls);
 	new_task->sock = -1;
 	new_task->is_mime = TRUE;
+	new_task->pre_result.action = METRIC_ACTION_NOACTION;
 
 	return new_task;
 }
@@ -497,21 +498,30 @@ read_socket (f_str_t * in, void *arg)
 			return write_socket (task);
 		}
 		else {
-			r = process_filters (task);
-			if (r == -1) {
-				task->last_error = "Filter processing error";
-				task->error_code = RSPAMD_FILTER_ERROR;
-				task->state = WRITE_ERROR;
-				return write_socket (task);
-			}
-			/* Add task to classify to classify pool */
-			if (ctx->classify_pool) {
-				register_async_thread (task->s);
-				g_thread_pool_push (ctx->classify_pool, task, &err);
-				if (err != NULL) {
-					msg_err ("cannot pull task to the pool: %s", err->message);
-					remove_async_thread (task->s);
+			if (task->cfg->pre_filters == NULL) {
+				r = process_filters (task);
+				if (r == -1) {
+					task->last_error = "Filter processing error";
+					task->error_code = RSPAMD_FILTER_ERROR;
+					task->state = WRITE_ERROR;
+					return write_socket (task);
 				}
+				/* Add task to classify to classify pool */
+				if (ctx->classify_pool) {
+					register_async_thread (task->s);
+					g_thread_pool_push (ctx->classify_pool, task, &err);
+					if (err != NULL) {
+						msg_err ("cannot pull task to the pool: %s", err->message);
+						remove_async_thread (task->s);
+					}
+				}
+			}
+			else {
+				lua_call_pre_filters (task);
+				/* We want fin_task after pre filters are processed */
+				task->s->wanna_die = TRUE;
+				task->state = WAIT_PRE_FILTER;
+				check_session_pending (task->s);
 			}
 		}
 		break;
@@ -521,6 +531,7 @@ read_socket (f_str_t * in, void *arg)
 		break;
 	case WAIT_FILTER:
 	case WAIT_POST_FILTER:
+	case WAIT_PRE_FILTER:
 		msg_info ("ignoring trailing garbadge of size %z", in->len);
 		break;
 	default:
@@ -539,6 +550,8 @@ write_socket (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
 	struct rspamd_worker_ctx       *ctx;
+	GError							*err = NULL;
+	gint							 r;
 
 	ctx = task->worker->ctx;
 
@@ -578,6 +591,25 @@ write_socket (void *arg)
 	case WAIT_POST_FILTER:
 		/* Do nothing here */
 		break;
+	case WAIT_PRE_FILTER:
+		task->state = WAIT_FILTER;
+		r = process_filters (task);
+		if (r == -1) {
+			task->last_error = "Filter processing error";
+			task->error_code = RSPAMD_FILTER_ERROR;
+			task->state = WRITE_ERROR;
+			return write_socket (task);
+		}
+		/* Add task to classify to classify pool */
+		if (ctx->classify_pool) {
+			register_async_thread (task->s);
+			g_thread_pool_push (ctx->classify_pool, task, &err);
+			if (err != NULL) {
+				msg_err ("cannot pull task to the pool: %s", err->message);
+				remove_async_thread (task->s);
+			}
+		}
+		break;
 	default:
 		msg_info ("abnormally closing connection at state: %d", task->state);
 		if (ctx->is_custom) {
@@ -616,11 +648,12 @@ err_socket (GError * err, void *arg)
 static gboolean
 fin_task (void *arg)
 {
-	struct worker_task             *task = (struct worker_task *) arg;
-	struct rspamd_worker_ctx       *ctx;
+	struct worker_task              *task = (struct worker_task *) arg;
+	struct rspamd_worker_ctx        *ctx;
+
 
 	ctx = task->worker->ctx;
-	if (task->state != WAIT_POST_FILTER) {
+	if (task->state != WAIT_POST_FILTER && task->state != WAIT_PRE_FILTER) {
 		/* Process all statfiles */
 		if (ctx->classify_pool == NULL) {
 			/* Non-threaded version */
@@ -639,13 +672,31 @@ fin_task (void *arg)
 
 	}
 
-	/* Check if we have all events finished */
-	task->state = WRITE_REPLY;
-	if (task->fin_callback) {
-		task->fin_callback (task->fin_arg);
+	if (task->state != WAIT_PRE_FILTER) {
+		/* Check if we have all events finished */
+		task->state = WRITE_REPLY;
+		if (task->fin_callback) {
+			task->fin_callback (task->fin_arg);
+		}
+		else {
+			rspamd_dispatcher_restore (task->dispatcher);
+		}
 	}
 	else {
-		rspamd_dispatcher_restore (task->dispatcher);
+		if (task->pre_result.action != METRIC_ACTION_NOACTION) {
+			/* Write result based on pre filters */
+			task->state = WRITE_REPLY;
+			if (task->fin_callback) {
+				task->fin_callback (task->fin_arg);
+			}
+			else {
+				rspamd_dispatcher_restore (task->dispatcher);
+			}
+		}
+		else {
+			/* Check normal filters in write callback */
+			rspamd_dispatcher_restore (task->dispatcher);
+		}
 	}
 
 	return TRUE;

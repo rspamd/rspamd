@@ -17,7 +17,7 @@
 extern const luaL_reg null_reg[];
 extern GMutex *lua_mtx;
 
-#define RSPAMD_LUA_API_VERSION 10
+#define RSPAMD_LUA_API_VERSION 11
 
 /* Common utility functions */
 
@@ -71,6 +71,7 @@ gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gin
 double lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name);
 gboolean lua_call_expression_func (const gchar *module, const gchar *symbol, struct worker_task *task, GList *args, gboolean *res);
 void lua_call_post_filters (struct worker_task *task);
+void lua_call_pre_filters (struct worker_task *task);
 void add_luabuf (const gchar *line);
 
 /* Classify functions */

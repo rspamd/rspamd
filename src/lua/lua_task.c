@@ -45,6 +45,7 @@ extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classi
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
 LUA_FUNCTION_DEF (task, insert_result);
+LUA_FUNCTION_DEF (task, set_pre_result);
 LUA_FUNCTION_DEF (task, get_urls);
 LUA_FUNCTION_DEF (task, get_emails);
 LUA_FUNCTION_DEF (task, get_text_parts);
@@ -75,6 +76,7 @@ LUA_FUNCTION_DEF (task, learn_statfile);
 static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
 	LUA_INTERFACE_DEF (task, insert_result),
+	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, get_urls),
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
@@ -229,6 +231,29 @@ lua_task_insert_result (lua_State * L)
 		}
 
 		insert_result (task, symbol_name, flag, params);
+	}
+	return 1;
+}
+
+static gint
+lua_task_set_pre_result (lua_State * L)
+{
+	struct worker_task				*task = lua_check_task (L);
+	gchar		                    *action_str;
+	guint                            action;
+
+	if (task != NULL) {
+		action = luaL_checkinteger (L, 2);
+		if (action < task->pre_result.action) {
+			task->pre_result.action = action;
+			if (lua_gettop (L) >= 3) {
+				action_str = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+				task->pre_result.str = action_str;
+			}
+			else {
+				task->pre_result.str = NULL;
+			}
+		}
 	}
 	return 1;
 }

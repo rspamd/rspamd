@@ -179,6 +179,7 @@ struct worker_task {
 		READ_MESSAGE,
 		WRITE_REPLY,
 		WRITE_ERROR,
+		WAIT_PRE_FILTER,
 		WAIT_FILTER,
 		WAIT_POST_FILTER,
 		CLOSING_CONNECTION,
@@ -248,6 +249,11 @@ struct worker_task {
 
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 	struct event_base *ev_base;									/**< Event base										*/
+
+	struct {
+		enum rspamd_metric_action action;						/**< Action of pre filters							*/
+		gchar *str;												/**< String describing action						*/
+	} pre_result;												/**< Result of pre-filters							*/
 };
 
 /**

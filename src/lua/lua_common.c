@@ -219,6 +219,22 @@ luaopen_logger (lua_State * L)
 	return 1;
 }
 
+static void
+lua_add_actions_global (lua_State *L)
+{
+	gint							i;
+
+	lua_newtable (L);
+
+	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
+		lua_pushstring (L, str_action_metric (i));
+		lua_pushinteger (L, i);
+		lua_settable (L, -3);
+	}
+	/* Set global table */
+	lua_setglobal (L, "rspamd_actions");
+}
+
 void
 init_lua (struct config_file *cfg)
 {
@@ -253,6 +269,8 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_http (L);
 	(void)luaopen_redis (L);
 	(void)luaopen_upstream (L);
+	(void)lua_add_actions_global (L);
+
 	cfg->lua_state = L;
 	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
 
