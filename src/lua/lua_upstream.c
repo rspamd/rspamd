@@ -72,8 +72,8 @@ static const struct luaL_reg  upstream_m[] = {
 	LUA_INTERFACE_DEF (upstream, get_ip_string),
 	LUA_INTERFACE_DEF (upstream, get_port),
 	LUA_INTERFACE_DEF (upstream, get_priority),
+	LUA_INTERFACE_DEF (upstream, destroy),
 	{"__tostring", lua_class_tostring},
-	{"__gc", lua_upstream_destroy},
 	{NULL, NULL}
 };
 static const struct luaL_reg  upstream_f[] = {
