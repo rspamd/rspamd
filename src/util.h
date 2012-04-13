@@ -227,4 +227,82 @@ gint rspamd_fallocate (gint fd, off_t offset, off_t len);
  */
 worker_t* get_worker_by_type (GQuark type);
 
+/**
+ * Utils for working with threads to be compatible with all glib versions
+ */
+typedef struct rspamd_mutex_s {
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	GMutex mtx;
+#else
+	GStaticMutex mtx;
+#endif
+} rspamd_mutex_t;
+
+typedef struct rspamd_rwlock_s {
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	GRWLock rwlock;
+#else
+	GStaticRWLock rwlock;
+#endif
+} rspamd_rwlock_t;
+
+
+/**
+ * Create new mutex
+ * @return mutex or NULL
+ */
+rspamd_mutex_t* rspamd_mutex_new ();
+
+/**
+ * Lock mutex
+ * @param mtx
+ */
+void rspamd_mutex_lock (rspamd_mutex_t *mtx);
+
+/**
+ * Unlock mutex
+ * @param mtx
+ */
+void rspamd_mutex_unlock (rspamd_mutex_t *mtx);
+
+/**
+ * Create new rwloc
+ * @return
+ */
+rspamd_rwlock_t* rspamd_rwlock_new ();
+
+/**
+ * Lock rwlock for writing
+ * @param mtx
+ */
+void rspamd_rwlock_writer_lock (rspamd_rwlock_t *mtx);
+
+/**
+ * Lock rwlock for reading
+ * @param mtx
+ */
+void rspamd_rwlock_reader_lock (rspamd_rwlock_t *mtx);
+
+/**
+ * Unlock rwlock from writing
+ * @param mtx
+ */
+void rspamd_rwlock_writer_unlock (rspamd_rwlock_t *mtx);
+
+/**
+ * Unlock rwlock from reading
+ * @param mtx
+ */
+void rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx);
+
+/**
+ * Create new named thread
+ * @param name name pattern
+ * @param func function to start
+ * @param data data to pass to function
+ * @param err error pointer
+ * @return new thread object that can be joined
+ */
+GThread* rspamd_create_thread (const gchar *name, GThreadFunc func, gpointer data, GError **err);
+
 #endif

@@ -1367,6 +1367,195 @@ get_worker_by_type (GQuark type)
 	return NULL;
 }
 
+/**
+ * Create new mutex
+ * @return mutex or NULL
+ */
+inline rspamd_mutex_t*
+rspamd_mutex_new ()
+{
+	rspamd_mutex_t					*new;
+
+	new = g_malloc (sizeof (rspamd_mutex_t));
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_mutex_init (&new->mtx);
+#else
+	g_static_mutex_init (&new->mtx);
+#endif
+
+	return new;
+}
+
+/**
+ * Lock mutex
+ * @param mtx
+ */
+inline void
+rspamd_mutex_lock (rspamd_mutex_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_mutex_lock (&mtx->mtx);
+#else
+	g_static_mutex_lock (&mtx->mtx);
+#endif
+}
+
+/**
+ * Unlock mutex
+ * @param mtx
+ */
+inline void
+rspamd_mutex_unlock (rspamd_mutex_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_mutex_unlock (&mtx->mtx);
+#else
+	g_static_mutex_unlock (&mtx->mtx);
+#endif
+}
+
+/**
+ * Create new rwlock
+ * @return
+ */
+rspamd_rwlock_t*
+rspamd_rwlock_new ()
+{
+	rspamd_rwlock_t					*new;
+
+	new = g_malloc (sizeof (rspamd_rwlock_t));
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_init (&new->rwlock);
+#else
+	g_static_rw_lock_init (&new->rwlock);
+#endif
+
+	return new;
+}
+
+/**
+ * Lock rwlock for writing
+ * @param mtx
+ */
+inline void
+rspamd_rwlock_writer_lock (rspamd_rwlock_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_writer_lock (&mtx->rwlock);
+#else
+	g_static_rw_lock_writer_lock (&mtx->rwlock);
+#endif
+}
+
+/**
+ * Lock rwlock for reading
+ * @param mtx
+ */
+inline void
+rspamd_rwlock_reader_lock (rspamd_rwlock_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_reader_lock (&mtx->rwlock);
+#else
+	g_static_rw_lock_reader_lock (&mtx->rwlock);
+#endif
+}
+
+/**
+ * Unlock rwlock from writing
+ * @param mtx
+ */
+inline void
+rspamd_rwlock_writer_unlock (rspamd_rwlock_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_writer_unlock (&mtx->rwlock);
+#else
+	g_static_rw_lock_writer_unlock (&mtx->rwlock);
+#endif
+}
+
+/**
+ * Unlock rwlock from reading
+ * @param mtx
+ */
+inline void
+rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_reader_unlock (&mtx->rwlock);
+#else
+	g_static_rw_lock_reader_unlock (&mtx->rwlock);
+#endif
+}
+
+
+struct rspamd_thread_data {
+	gchar *name;
+	gint id;
+	GThreadFunc func;
+	gpointer data;
+};
+
+static gpointer
+rspamd_thread_func (gpointer ud)
+{
+	struct rspamd_thread_data		*td = ud;
+	sigset_t						 s_mask;
+
+	/* Ignore signals in thread */
+	sigemptyset (&s_mask);
+	sigaddset (&s_mask, SIGTERM);
+	sigaddset (&s_mask, SIGINT);
+	sigaddset (&s_mask, SIGHUP);
+	sigaddset (&s_mask, SIGCHLD);
+	sigaddset (&s_mask, SIGUSR1);
+	sigaddset (&s_mask, SIGUSR2);
+	sigaddset (&s_mask, SIGALRM);
+	sigaddset (&s_mask, SIGPIPE);
+
+	sigprocmask (SIG_BLOCK, &s_mask, NULL);
+
+	ud = td->func (td->data);
+	g_free (td->name);
+	g_free (td);
+
+	return ud;
+}
+
+/**
+ * Create new named thread
+ * @param name name pattern
+ * @param func function to start
+ * @param data data to pass to function
+ * @param err error pointer
+ * @return new thread object that can be joined
+ */
+GThread*
+rspamd_create_thread (const gchar *name, GThreadFunc func, gpointer data, GError **err)
+{
+	GThread							*new;
+	struct rspamd_thread_data		*td;
+	static gint32					 id;
+	guint							 r;
+
+	r = strlen (name);
+	td = g_malloc (sizeof (struct rspamd_thread_data));
+	td->id = ++id;
+	td->name = g_malloc (r + sizeof ("4294967296"));
+	td->func = func;
+	td->data = data;
+
+	rspamd_snprintf (td->name, r + sizeof ("4294967296"), "%s-%d", name, id);
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	new = g_thread_try_new (td->name, rspamd_thread_func, td, err);
+#else
+	new = g_thread_create (rspamd_thread_func, td, TRUE, err);
+#endif
+
+	return new;
+}
+
 
 /*
  * vi:ts=4
