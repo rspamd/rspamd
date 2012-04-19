@@ -470,6 +470,8 @@ read_socket (f_str_t * in, void *arg)
 		task->msg->len = in->len;
 		debug_task ("got string of length %z", task->msg->len);
 		task->state = WAIT_FILTER;
+		/* No more need of reading allowing half-closed connections to be proceed */
+		task->dispatcher->want_read = FALSE;
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");

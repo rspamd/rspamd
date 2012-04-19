@@ -48,7 +48,7 @@
 #endif
 
 #define SYS_eventfd       323
-#define MAX_AIO_EV        1024
+#define MAX_AIO_EV        64
 
 struct io_cbdata {
 	gint fd;
