@@ -940,12 +940,13 @@ controller_read_socket (f_str_t * in, void *arg)
 				}
 			}
 		}
-		if (session->state == STATE_COMMAND) {
-			session->state = STATE_REPLY;
-		}
 		if (session->state != STATE_LEARN && session->state != STATE_LEARN_SPAM_PRE
 				&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER) {
 			if (!rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE, TRUE)) {
+				return FALSE;
+			}
+			if (session->state == STATE_QUIT) {
+				destroy_session (session->s);
 				return FALSE;
 			}
 		}
