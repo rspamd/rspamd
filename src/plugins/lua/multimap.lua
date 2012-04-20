@@ -89,8 +89,11 @@ function check_multimap(task)
 			local ip = task:get_from_ip()
 			if ip then
 				local _,_,o1,o2,o3,o4 = string.find(ip, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
-				local rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rule['map']
-				task:resolve_dns_a(rbl_str, 'multimap_rbl_cb')
+				if r then
+					-- TODO: cannot handle ipv6 addresses
+					local rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rule['map']
+					task:resolve_dns_a(rbl_str, 'multimap_rbl_cb')
+				end
 			end
 		elseif rule['type'] == 'rcpt' then
 			-- First try to get rcpt field
