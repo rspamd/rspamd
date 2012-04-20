@@ -634,9 +634,12 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 static GList *
 check_dynamic_item (struct worker_task *task, struct symbols_cache *cache)
 {
+#ifdef HAVE_INET_PTON
+	/* TODO: radix doesn't support ipv6 addrs */
+	return NULL;
+#else
 	GList                          *res = NULL;
 	uintptr_t                       r;
-
 	if (cache->dynamic_map != NULL && task->from_addr.s_addr != INADDR_NONE) {
 		if ((r = radix32tree_find (cache->dynamic_map, ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
 			res = (GList *)((gpointer)r);
@@ -646,13 +649,18 @@ check_dynamic_item (struct worker_task *task, struct symbols_cache *cache)
 			return NULL;
 		}
 	}
-
 	return res;
+#endif
 }
 
 static gboolean
 check_negative_dynamic_item (struct worker_task *task, struct symbols_cache *cache, struct cache_item *item)
 {
+
+#ifdef HAVE_INET_PTON
+	/* TODO: radix doesn't support ipv6 addrs */
+	return FALSE;
+#else
 	GList                          *res = NULL;
 	uintptr_t                       r;
 
@@ -667,8 +675,9 @@ check_negative_dynamic_item (struct worker_task *task, struct symbols_cache *cac
 			}
 		}
 	}
-
 	return FALSE;
+#endif
+
 }
 
 static gboolean

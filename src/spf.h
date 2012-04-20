@@ -19,6 +19,7 @@ typedef enum spf_action_e {
 	SPF_RESOLVE_MX,
 	SPF_RESOLVE_A,
 	SPF_RESOLVE_PTR,
+	SPF_RESOLVE_AAA,
 	SPF_RESOLVE_REDIRECT,
 	SPF_RESOLVE_INCLUDE,
 	SPF_RESOLVE_EXISTS,
@@ -28,8 +29,16 @@ typedef enum spf_action_e {
 struct spf_addr {
 	union {
 		struct {
-			guint32 addr;
+			union {
+				struct in_addr in4;
+#ifdef HAVE_INET_PTON
+				struct in6_addr in6;
+#endif
+			} d;
 			guint32 mask;
+			gboolean ipv6;
+			gboolean parsed;
+			gboolean addr_any;
 		} normal;
 		GList *list;
 	} data;
@@ -45,6 +54,7 @@ struct spf_record {
 	gint elt_num;
 	gint nested;
 	gint dns_requests;
+	gint requests_inflight;
 
 	GList *addrs;
 	gchar *cur_domain;

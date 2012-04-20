@@ -203,7 +203,18 @@ struct worker_task {
 	const gchar *message_id;										/**< message id										*/
 	GList *rcpt;												/**< recipients list								*/
 	guint nrcpt;											/**< number of recipients							*/
+#ifdef HAVE_INET_PTON
+	struct {
+		union {
+			struct in_addr in4;
+			struct in6_addr in6;
+		} d;
+		gboolean ipv6;
+		gboolean has_addr;
+	} from_addr;
+#else
 	struct in_addr from_addr;									/**< client addr in numeric form					*/
+#endif
 	struct in_addr client_addr;									/**< client addr in numeric form					*/
 	gchar *deliver_to;											/**< address to deliver								*/
 	gchar *user;													/**< user to deliver								*/

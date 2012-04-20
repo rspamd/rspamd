@@ -166,17 +166,75 @@ spf_module_reconfig (struct config_file *cfg)
 static gboolean
 spf_check_element (struct spf_addr *addr, struct worker_task *task)
 {
+	gboolean                        res = FALSE;
+#ifdef HAVE_INET_PTON
+	guint8                         *s, *d, t;
+	guint                           nbits, addrlen;
+	struct in_addr					in4s, in4d;
+	struct in6_addr                 in6s, in6d;
+
+	/* Basic comparing algorithm */
+	if (addr->data.normal.ipv6 == task->from_addr.ipv6) {
+		if (addr->data.normal.ipv6) {
+			addrlen = sizeof (struct in6_addr);
+			memcpy (&in6s, &addr->data.normal.d.in6, sizeof (struct in6_addr));
+			memcpy (&in6d, &task->from_addr.d.in6, sizeof (struct in6_addr));
+			s = (guint8 *)&in6s;
+			d = (guint8 *)&in6d;
+		}
+		else {
+			addrlen = sizeof (struct in_addr);
+			memcpy (&in4s, &addr->data.normal.d.in4, sizeof (struct in_addr));
+			memcpy (&in4d, &task->from_addr.d.in4, sizeof (struct in_addr));
+			s = (guint8 *)&in4s;
+			d = (guint8 *)&in4d;
+		}
+		/* Move pointers to the less significant byte */
+		t = 0x1;
+		s += addrlen - 1;
+		d += addrlen - 1;
+		/* TODO: improve this cycle by masking by words */
+		for (nbits = 0; nbits < addrlen * CHAR_BIT - addr->data.normal.mask; nbits ++) {
+			/* Skip bits from the beginning as we know that data is in network byte order */
+			if (nbits != 0 && nbits % 8 == 0) {
+				/* Move pointer to the next byte */
+				s --;
+				d --;
+				t = 0x1;
+			}
+			*s |= t;
+			*d |= t;
+			t <<= 1;
+		}
+		if (addr->data.normal.ipv6) {
+			res = memcmp (&in6d, &in6s, sizeof (struct in6_addr)) == 0;
+		}
+		else {
+			res = memcmp (&in4d, &in4s, sizeof (struct in_addr)) == 0;
+		}
+	}
+	else {
+		if (addr->data.normal.addr_any) {
+			res = TRUE;
+		}
+		else {
+			res = FALSE;
+		}
+	}
+#else
 	guint32                         s, m;
 
 	if (addr->data.normal.mask == 0) {
 		m = 0;
 	}
 	else {
-		m = G_MAXUINT32 << (32 - addr->data.normal.mask);
+		m = htonl (G_MAXUINT32 << (32 - addr->data.normal.mask));
 	}
-	s = ntohl (task->from_addr.s_addr);
+	s = task->from_addr.s_addr;
+	res = (s & m) == (addr->data.normal.d.in4.s_addr & m);
+#endif
 
-	if ((s & m) == (addr->data.normal.addr & m)) {
+	if (res) {
 		switch (addr->mech) {
 		case SPF_FAIL:
 			insert_result (task, spf_module_ctx->symbol_fail, 1, g_list_prepend (NULL, addr->spf_string));
@@ -248,9 +306,13 @@ spf_symbol_callback (struct worker_task *task, void *unused)
 	gchar                           *domain;
 	GList                           *l;
 
+#ifdef HAVE_INET_PTON
+	if (task->from_addr.has_addr) {
+		if (TRUE) {
+#else
 	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 		if (radix32tree_find (spf_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) == RADIX_NO_VALUE) {
-
+#endif
 			domain = get_spf_domain (task);
 			if (domain) {
 				if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain, task->tv.tv_sec)) != NULL) {
@@ -261,9 +323,11 @@ spf_symbol_callback (struct worker_task *task, void *unused)
 				}
 			}
 		}
+#ifndef HAVE_INET_PTON
 		else {
 			msg_info ("ip %s is whitelisted for spf checks", inet_ntoa (task->from_addr));
 		}
+#endif
 	}
 }
 

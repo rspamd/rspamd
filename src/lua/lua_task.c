@@ -981,12 +981,26 @@ static gint
 lua_task_get_from_ip (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
+#ifdef HAVE_INET_PTON
+	gchar							ipbuf[INET6_ADDRSTRLEN];
+#endif
 	
 	if (task) {
+#ifdef HAVE_INET_PTON
+		if (task->from_addr.ipv6) {
+			inet_ntop (AF_INET6, &task->from_addr.d.in6, ipbuf, sizeof (ipbuf));
+		}
+		else {
+			inet_ntop (AF_INET, &task->from_addr.d.in4, ipbuf, sizeof (ipbuf));
+		}
+		lua_pushstring (L, ipbuf);
+		return 1;
+#else
 		if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 			lua_pushstring (L, inet_ntoa (task->from_addr));
 			return 1;
 		}
+#endif
 	}
 
 	lua_pushnil (L);
@@ -999,10 +1013,19 @@ lua_task_get_from_ip_num (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	
 	if (task) {
+#ifdef HAVE_INET_PTON
+		if (!task->from_addr.ipv6 && task->from_addr.d.in4.s_addr != INADDR_NONE) {
+			lua_pushinteger (L, ntohl (task->from_addr.d.in4.s_addr));
+			return 1;
+		}
+		/* TODO: do something with ipv6 numeric representation */
+#else
 		if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
 			lua_pushinteger (L, ntohl (task->from_addr.s_addr));
 			return 1;
 		}
+
+#endif
 	}
 
 	lua_pushnil (L);

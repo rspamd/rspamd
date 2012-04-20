@@ -663,6 +663,24 @@ make_a_req (struct rspamd_dns_request *req, const gchar *name)
 	req->requested_name = name;
 }
 
+#ifdef HAVE_INET_PTON
+static void
+make_aaa_req (struct rspamd_dns_request *req, const gchar *name)
+{
+	guint16 *p;
+
+	allocate_packet (req, strlen (name));
+	make_dns_header (req);
+	format_dns_name (req, name, 0);
+	p = (guint16 *)(req->packet + req->pos);
+	*p++ = htons (DNS_T_AAAA);
+	*p = htons (DNS_C_IN);
+	req->pos += sizeof (guint16) * 2;
+	req->type = DNS_REQUEST_AAA;
+	req->requested_name = name;
+}
+#endif
+
 static void
 make_txt_req (struct rspamd_dns_request *req, const gchar *name)
 {
@@ -1001,6 +1019,24 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			}
 		}
 		break;
+#ifdef HAVE_INET_PTON
+	case DNS_T_AAAA:
+		if (rep->request->type != DNS_REQUEST_AAA) {
+			p += datalen;
+		}
+		else {
+			if (datalen == sizeof (struct in6_addr) && datalen <= *remain) {
+				memcpy (&elt->aaa.addr, p, sizeof (struct in6_addr));
+				p += datalen;
+				parsed = TRUE;
+			}
+			else {
+				msg_info ("corrupted AAAA record");
+				return -1;
+			}
+		}
+		break;
+#endif
 	case DNS_T_PTR:
 		if (rep->request->type != DNS_REQUEST_PTR) {
 			p += datalen;
@@ -1387,6 +1423,15 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			name = va_arg (args, const gchar *);
 			make_a_req (req, name);
 			break;
+		case DNS_REQUEST_AAA:
+#ifdef HAVE_INET_PTON
+			name = va_arg (args, const gchar *);
+			make_aaa_req (req, name);
+			break;
+#else
+			msg_err ("your system has no ipv6 support, cannot make aaa request");
+			break;
+#endif
 		case DNS_REQUEST_TXT:
 			name = va_arg (args, const gchar *);
 			make_txt_req (req, name);
@@ -1649,13 +1694,14 @@ dns_strerror (enum dns_rcode rcode)
 	return dns_rcodes[rcode];
 }
 
-static gchar dns_types[6][16] = {
+static gchar dns_types[7][16] = {
 		[DNS_REQUEST_A] = "A request",
 		[DNS_REQUEST_PTR] = "PTR request",
 		[DNS_REQUEST_MX] = "MX request",
 		[DNS_REQUEST_TXT] = "TXT request",
 		[DNS_REQUEST_SRV] = "SRV request",
-		[DNS_REQUEST_SPF] = "SPF request"
+		[DNS_REQUEST_SPF] = "SPF request",
+		[DNS_REQUEST_AAA] = "AAA request"
 };
 
 const gchar *

@@ -537,10 +537,27 @@ parse_header (struct worker_task *task, f_str_t * line)
 		/* ip_addr */
 		if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, sizeof (IP_ADDR_HEADER) - 1) == 0) {
 			tmp = memory_pool_fstrdup (task->task_pool, line);
+#ifdef HAVE_INET_PTON
+			if (inet_pton (AF_INET, tmp, &task->from_addr.d.in4) != 1) {
+				/* Try ipv6 */
+				if (inet_pton (AF_INET6, tmp, &task->from_addr.d.in6) == 1) {
+					task->from_addr.ipv6 = TRUE;
+				}
+				else {
+					msg_info ("bad ip header: '%s'", tmp);
+					return FALSE;
+				}
+			}
+			else {
+				task->from_addr.ipv6 = FALSE;
+			}
+			task->from_addr.has_addr = TRUE;
+#else
 			if (!inet_aton (tmp, &task->from_addr)) {
 				msg_info ("bad ip header: '%s'", tmp);
 				return FALSE;
 			}
+#endif
 			debug_task ("read IP header, value: %s", tmp);
 		}
 		else {

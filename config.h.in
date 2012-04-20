@@ -153,6 +153,8 @@
 
 #cmakedefine HAVE_SETITIMER      1
 
+#cmakedefine HAVE_INET_PTON      1
+
 #define      WITHOUT_PERL        1
 
 #cmakedefine WITH_LUA            1

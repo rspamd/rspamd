@@ -205,7 +205,6 @@ construct_task (struct rspamd_worker *worker)
 	new_task->worker = worker;
 	new_task->state = READ_COMMAND;
 	new_task->cfg = worker->srv->cfg;
-	new_task->from_addr.s_addr = INADDR_NONE;
 	new_task->view_checked = FALSE;
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID

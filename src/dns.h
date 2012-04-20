@@ -68,7 +68,8 @@ enum rspamd_request_type {
 	DNS_REQUEST_MX,
 	DNS_REQUEST_TXT,
 	DNS_REQUEST_SRV,
-	DNS_REQUEST_SPF
+	DNS_REQUEST_SPF,
+	DNS_REQUEST_AAA
 };
 
 struct rspamd_dns_request {
@@ -100,6 +101,11 @@ union rspamd_reply_element {
 		struct in_addr addr[MAX_ADDRS];
 		guint16 addrcount;
 	} a;
+#ifdef HAVE_INET_PTON
+	struct {
+		struct in6_addr addr;
+	} aaa;
+#endif
 	struct {
 		gchar *name;
 	} ptr;

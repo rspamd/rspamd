@@ -135,6 +135,24 @@ find_view_by_ip (GList * views, struct worker_task *task)
 	GList                          *cur;
 	struct rspamd_view             *v;
 
+#ifdef HAVE_INET_PTON
+
+	if (task->from_addr.ipv6 || task->from_addr.d.in4.s_addr == INADDR_NONE) {
+		return NULL;
+	}
+
+	cur = views;
+	while (cur) {
+		v = cur->data;
+		if (radix32tree_find (v->ip_tree, ntohl (task->from_addr.d.in4.s_addr)) != RADIX_NO_VALUE) {
+			return v;
+		}
+		cur = g_list_next (cur);
+	}
+
+	return NULL;
+#else
+
 	if (task->from_addr.s_addr == INADDR_NONE) {
 		return NULL;
 	}
@@ -149,6 +167,7 @@ find_view_by_ip (GList * views, struct worker_task *task)
 	}
 
 	return NULL;
+#endif
 }
 
 static struct rspamd_view             *
