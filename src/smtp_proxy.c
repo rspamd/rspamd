@@ -45,6 +45,8 @@
 #define DEFAULT_UPSTREAM_DEAD_TIME 300
 #define DEFAULT_UPSTREAM_MAXERRORS 10
 
+#define DEFAULT_PROXY_BUF_LEN 100 * 1024
+
 static sig_atomic_t                    wanna_die = 0;
 
 /* Init functions */
@@ -71,6 +73,10 @@ struct smtp_proxy_ctx {
 	guint32 delay_jitter;
 	guint32 smtp_timeout_raw;
 	struct timeval smtp_timeout;
+
+	gboolean use_xclient;
+
+	gsize proxy_buf_len;
 
 	struct rspamd_dns_resolver *resolver;
 	struct event_base *ev_base;
@@ -232,7 +238,8 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 	/* Create a proxy for upstream connection */
 	rspamd_dispatcher_pause (session->dispatcher);
 	session->proxy = rspamd_create_proxy (session->sock, session->upstream_sock, session->pool,
-			session->ev_base, BUFSIZ, &session->ctx->smtp_timeout, smtp_proxy_err_proxy, session);
+			session->ev_base, session->ctx->proxy_buf_len,
+			&session->ctx->smtp_timeout, smtp_proxy_err_proxy, session);
 
 	return TRUE;
 }
@@ -507,6 +514,10 @@ init_smtp_proxy (void)
 					G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_delay));
 	register_worker_opt (type, "jitter", xml_handle_seconds, ctx,
 						G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter));
+	register_worker_opt (type, "xclient", xml_handle_boolean, ctx,
+							G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient));
+	register_worker_opt (type, "proxy_buffer", xml_handle_size, ctx,
+								G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len));
 
 	return ctx;
 }
@@ -530,6 +541,10 @@ config_smtp_proxy_worker (struct rspamd_worker *worker)
 	else {
 		msg_err ("no upstreams defined, don't know what to do");
 		return FALSE;
+	}
+
+	if (ctx->proxy_buf_len == 0) {
+		ctx->proxy_buf_len = DEFAULT_PROXY_BUF_LEN;
 	}
 
 	return TRUE;

@@ -843,11 +843,21 @@ struct wrk_cbdata {
 	struct rspamd_xml_userdata *ctx;
 };
 
+struct wrk_param {
+	gboolean is_list;
+	union {
+		gchar *param;
+		GList *list;
+	} d;
+};
+
 static void
 worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 {
 	struct wrk_cbdata              *cd = ud;
+	struct wrk_param               *param = v;
 	struct xml_config_param        *cparam;
+	GList                          *cur;
 	GHashTable                     *worker_config;
 
 	if (!worker_options || (worker_config = g_hash_table_lookup (worker_options, &cd->wrk->type)) == NULL ||
@@ -857,10 +867,19 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 	else {
 
 		if (cd->wrk->ctx != NULL) {
-			cparam->handler (cd->cfg, cd->ctx, NULL, v, NULL, cd->wrk->ctx, cparam->offset);
+			if (param->is_list) {
+				cur = param->d.list;
+				while (cur) {
+					cparam->handler (cd->cfg, cd->ctx, NULL, cur->data, NULL, cd->wrk->ctx, cparam->offset);
+					cur = g_list_next (cur);
+				}
+			}
+			else {
+				cparam->handler (cd->cfg, cd->ctx, NULL, param->d.param, NULL, cd->wrk->ctx, cparam->offset);
+			}
 		}
 		else {
-			msg_err ("Bad error detected: module %s has not initialized its context", g_quark_to_string (cd->wrk->type));
+			msg_err ("Bad error detected: worker %s has not initialized its context", g_quark_to_string (cd->wrk->type));
 		}
 	}
 }
@@ -869,7 +888,8 @@ gboolean
 worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	struct worker_conf             *wrk = ctx->section_pointer;
-	const gchar                    *name;
+	const gchar                    *name, *tmp;
+	struct wrk_param               *param;
 
 	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0)  {
 		if (attrs == NULL || (name = g_hash_table_lookup (attrs, "name")) == NULL) {
@@ -881,7 +901,24 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, c
 		name = memory_pool_strdup (cfg->cfg_pool, tag);
 	}
 
-	g_hash_table_insert (wrk->params, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
+	if ((param = g_hash_table_lookup (wrk->params, name)) == NULL) {
+		param = memory_pool_alloc (cfg->cfg_pool, sizeof (struct wrk_param));
+		param->is_list = FALSE;
+		param->d.param = memory_pool_strdup (cfg->cfg_pool, data);
+		g_hash_table_insert (wrk->params, (char *)name, param);
+	}
+	else {
+		if (param->is_list) {
+			param->d.list = g_list_append (param->d.list, memory_pool_strdup (cfg->cfg_pool, data));
+		}
+		else {
+			/* Convert to list */
+			param->is_list = TRUE;
+			tmp = param->d.param;
+			param->d.list = g_list_prepend (NULL, (gpointer)tmp);
+			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, param->d.list);
+		}
+	}
 
 	return TRUE;
 }
