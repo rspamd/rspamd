@@ -48,6 +48,7 @@ typedef struct rspamd_proxy_s {
 	gint buf_offset;						/**< offset to write */
 	gpointer user_data;						/**< user's data for callbacks */
 	struct timeval *tv;						/**< timeout for communications */
+	gboolean closed;						/**< whether descriptors are closed */
 } rspamd_proxy_t;
 
 /**
@@ -62,5 +63,7 @@ typedef struct rspamd_proxy_s {
 rspamd_proxy_t* rspamd_create_proxy (gint cfd, gint bfd, memory_pool_t *pool,
 		struct event_base *base, gsize bufsize, struct timeval *tv,
 		dispatcher_err_callback_t err_cb, gpointer ud);
+
+void rspamd_proxy_close (rspamd_proxy_t *proxy);
 
 #endif /* PROXY_H_ */

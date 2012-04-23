@@ -34,14 +34,17 @@ proxy_error_quark (void)
 	return g_quark_from_static_string ("proxy-error");
 }
 
-static void
+void
 rspamd_proxy_close (rspamd_proxy_t *proxy)
 {
-	close (proxy->cfd);
-	close (proxy->bfd);
+	if (!proxy->closed) {
+		close (proxy->cfd);
+		close (proxy->bfd);
 
-	event_del (&proxy->client_ev);
-	event_del (&proxy->backend_ev);
+		event_del (&proxy->client_ev);
+		event_del (&proxy->backend_ev);
+		proxy->closed = TRUE;
+	}
 }
 
 static void
@@ -215,8 +218,8 @@ rspamd_create_proxy (gint cfd, gint bfd, memory_pool_t *pool, struct event_base 
 
 	new = memory_pool_alloc0 (pool, sizeof (rspamd_proxy_t));
 
-	new->cfd = cfd;
-	new->bfd = bfd;
+	new->cfd = dup (cfd);
+	new->bfd = dup (bfd);
 	new->pool = pool;
 	new->base = base;
 	new->bufsize = bufsize;
