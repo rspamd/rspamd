@@ -395,7 +395,7 @@ learn_rspamd_stdin (gboolean is_spam)
 	gint                             r = 0, len;
 	GError                          *err = NULL;
 
-	if (password == NULL || (statfile == NULL && classifier == NULL)) {
+	if ((statfile == NULL && classifier == NULL)) {
 		fprintf (stderr, "cannot learn message without password and symbol/classifier name\n");
 		exit (EXIT_FAILURE);
 	}
@@ -462,7 +462,7 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 {
 	GError                          *err = NULL;
 
-	if (password == NULL || (statfile == NULL && classifier == NULL)) {
+	if ((statfile == NULL && classifier == NULL)) {
 		fprintf (stderr, "cannot learn message without password and symbol/classifier name\n");
 		exit (EXIT_FAILURE);
 	}
@@ -514,10 +514,6 @@ fuzzy_rspamd_stdin (gboolean delete)
 	gint                             r = 0, len;
 	GError                          *err = NULL;
 
-	if (password == NULL) {
-		fprintf (stderr, "cannot learn message without password\n");
-		exit (EXIT_FAILURE);
-	}
 	/* Add server */
 	add_rspamd_server (TRUE);
 
@@ -558,11 +554,6 @@ static void
 fuzzy_rspamd_file (const gchar *file, gboolean delete)
 {
 	GError                          *err = NULL;
-
-	if (password == NULL) {
-		fprintf (stderr, "cannot learn message without password\n");
-		exit (EXIT_FAILURE);
-	}
 
 	if (!rspamd_fuzzy_file (client, file, password, weight, flag, delete, &err)) {
 		if (err != NULL) {

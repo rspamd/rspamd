@@ -1081,9 +1081,9 @@ static GString *
 rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, gsize len, gint fd, GError **err)
 {
 	GString                        *res = NULL;
-	gchar                           tmpbuf[BUFSIZ];
+	gchar                           tmpbuf[BUFSIZ], *p;
 	gint                            r = 0;
-	static const gchar              end_marker[] = "END\r\n";
+	static const gchar              end_marker[] = "\r\nEND\r\n";
 
 	/* Set blocking for writing */
 	make_socket_blocking (c->socket);
@@ -1114,20 +1114,21 @@ rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, 
 			upstream_fail (&c->server->up, c->connection_time);
 			return NULL;
 		}
-		if ((r = read (c->socket, tmpbuf, sizeof (tmpbuf))) > 0) {
+		if ((r = read (c->socket, tmpbuf, sizeof (tmpbuf) - 1)) > 0) {
 			/* Check the end of the buffer for END marker */
+			tmpbuf[r] = '\0';
 			if (r >= (gint)sizeof (end_marker) - 1 &&
-					memcmp (tmpbuf + r - sizeof (end_marker) + 1, end_marker, sizeof (end_marker) - 1) == 0) {
-				r -= sizeof (end_marker) - 1;
+					(p = strstr (tmpbuf, end_marker)) != NULL) {
+				*p = '\0';
 				/* Copy the rest to the result string */
 				if (res == NULL) {
-					res = g_string_new_len (tmpbuf, r);
+					res = g_string_new (tmpbuf);
 					return res;
 				}
 				else {
 					/* Append data to string */
 					if (r > 0) {
-						res = g_string_append_len (res, tmpbuf, r);
+						res = g_string_append (res, tmpbuf);
 					}
 					return res;
 				}
@@ -1450,12 +1451,14 @@ rspamd_learn_memory (struct rspamd_client *client, const guchar *message, gsize 
 		}
 		return FALSE;
 	}
-	/* Perform auth */
-	if (! rspamd_controller_auth (c, password, err)) {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+	if (password != NULL) {
+		/* Perform auth */
+		if (! rspamd_controller_auth (c, password, err)) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+			}
+			return FALSE;
 		}
-		return FALSE;
 	}
 
 	r = length + sizeof ("learn %s %uz\r\n") + strlen (symbol) + sizeof ("4294967296");
@@ -1530,12 +1533,14 @@ rspamd_learn_fd (struct rspamd_client *client, int fd, const gchar *symbol, cons
 		}
 		return FALSE;
 	}
-	/* Perform auth */
-	if (! rspamd_controller_auth (c, password, err)) {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+	if (password != NULL) {
+		/* Perform auth */
+		if (! rspamd_controller_auth (c, password, err)) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+			}
+			return FALSE;
 		}
-		return FALSE;
 	}
 
 	/* Get length */
@@ -1604,12 +1609,14 @@ rspamd_learn_spam_memory (struct rspamd_client *client, const guchar *message, g
 		}
 		return FALSE;
 	}
-	/* Perform auth */
-	if (! rspamd_controller_auth (c, password, err)) {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+	if (password != NULL) {
+		/* Perform auth */
+		if (! rspamd_controller_auth (c, password, err)) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+			}
+			return FALSE;
 		}
-		return FALSE;
 	}
 
 	r = length + sizeof ("learn_spam %s %uz\r\n") + strlen (classifier) + sizeof ("4294967296");
@@ -1685,12 +1692,14 @@ rspamd_learn_spam_fd (struct rspamd_client *client, int fd, const gchar *classif
 		}
 		return FALSE;
 	}
-	/* Perform auth */
-	if (! rspamd_controller_auth (c, password, err)) {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+	if (password != NULL) {
+		/* Perform auth */
+		if (! rspamd_controller_auth (c, password, err)) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+			}
+			return FALSE;
 		}
-		return FALSE;
 	}
 
 	/* Get length */
@@ -1761,12 +1770,14 @@ rspamd_fuzzy_memory (struct rspamd_client *client, const guchar *message, gsize 
 		}
 		return FALSE;
 	}
-	/* Perform auth */
-	if (! rspamd_controller_auth (c, password, err)) {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+	if (password != NULL) {
+		/* Perform auth */
+		if (! rspamd_controller_auth (c, password, err)) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+			}
+			return FALSE;
 		}
-		return FALSE;
 	}
 
 	r = length + sizeof ("fuzzy_add %uz %d %d\r\n") + sizeof ("4294967296") * 3;
@@ -1846,12 +1857,14 @@ rspamd_fuzzy_fd (struct rspamd_client *client, int fd, const gchar *password, gi
 		}
 		return FALSE;
 	}
-	/* Perform auth */
-	if (! rspamd_controller_auth (c, password, err)) {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+	if (password != NULL) {
+		/* Perform auth */
+		if (! rspamd_controller_auth (c, password, err)) {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Authentication error");
+			}
+			return FALSE;
 		}
-		return FALSE;
 	}
 	/* Get length */
 	if (fstat (fd, &st) == -1) {

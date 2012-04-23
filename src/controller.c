@@ -194,7 +194,7 @@ free_session (void *ud)
 	close (session->sock);
 
 	memory_pool_delete (session->session_pool);
-	g_free (session);
+	g_slice_free1 (sizeof (struct controller_session), session);
 }
 
 static gint
@@ -478,7 +478,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			return TRUE;
 		}
 		if (ctx->password == NULL) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access unallowed" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access granted" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -1196,12 +1196,12 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	new_session = g_malloc (sizeof (struct controller_session));
+	new_session = g_slice_alloc0 (sizeof (struct controller_session));
 	if (new_session == NULL) {
 		msg_err ("cannot allocate memory for task, %s", strerror (errno));
 		return;
 	}
-	bzero (new_session, sizeof (struct controller_session));
+
 	new_session->worker = worker;
 	new_session->sock = nfd;
 	new_session->cfg = worker->srv->cfg;
@@ -1209,6 +1209,9 @@ accept_socket (gint fd, short what, void *arg)
 	new_session->session_pool = memory_pool_new (memory_pool_get_size () - 1);
 	new_session->resolver = ctx->resolver;
 	new_session->ev_base = ctx->ev_base;
+	if (ctx->password == NULL) {
+		new_session->authorized = TRUE;
+	}
 	worker->srv->stat->control_connections_count++;
 
 	/* Set up dispatcher */
