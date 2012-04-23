@@ -1537,6 +1537,18 @@ xml_handle_string_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx
 	return TRUE;
 }
 
+gboolean
+xml_handle_list (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	/* Simply assign pointer to pointer */
+	GList                       **dest;
+
+	dest = (GList **)G_STRUCT_MEMBER_P (dest_struct, offset);
+	*dest = g_list_prepend (*dest, memory_pool_strdup (cfg->cfg_pool, data));
+
+	return TRUE;
+}
+
 
 gboolean 
 xml_handle_size (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
