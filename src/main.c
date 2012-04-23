@@ -59,7 +59,7 @@ GQueue                         *signals_info = NULL;
 
 static gboolean                 config_test = FALSE;
 static gboolean                 no_fork = FALSE;
-static gchar                   *cfg_name = NULL;
+static gchar                  **cfg_names = NULL;
 static gchar                   *rspamd_user = NULL;
 static gchar                   *rspamd_group = NULL;
 static gchar                   *rspamd_pidfile = NULL;
@@ -71,6 +71,9 @@ static gboolean                 is_insecure = FALSE;
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
 
+/* List of unrelated forked processes */
+static GArray                  *other_workers = NULL;
+
 /* List of active listen sockets indexed by worker type */
 static GHashTable              *listen_sockets = NULL;
 
@@ -81,7 +84,7 @@ static GOptionEntry entries[] =
 {
   { "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test, "Do config test and exit", NULL },
   { "no-fork", 'f', 0, G_OPTION_ARG_NONE, &no_fork, "Do not daemonize main process", NULL },
-  { "config", 'c', 0, G_OPTION_ARG_STRING, &cfg_name, "Specify config file", NULL },
+  { "config", 'c', 0, G_OPTION_ARG_FILENAME_ARRAY, &cfg_names, "Specify config file(s)", NULL },
   { "user", 'u', 0, G_OPTION_ARG_STRING, &rspamd_user, "User to run rspamd as", NULL },
   { "group", 'g', 0, G_OPTION_ARG_STRING, &rspamd_group, "Group to run rspamd as", NULL },
   { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
@@ -177,6 +180,8 @@ read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
 {
 	GError                         *error = NULL;
 	GOptionContext                 *context;
+	guint							i, cfg_num;
+	pid_t							r;
 
 	context = g_option_context_new ("- run rspamd daemon");
 	g_option_context_set_summary (context, "Summary:\n  Rspamd daemon version " RVERSION "\n  Release id: " RID);
@@ -189,7 +194,28 @@ read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
 	cfg->config_test = config_test;
 	cfg->rspamd_user = rspamd_user;
 	cfg->rspamd_group = rspamd_group;
-	cfg->cfg_name = cfg_name;
+	cfg_num = g_strv_length (cfg_names);
+	if (cfg_num == 0) {
+		cfg->cfg_name = FIXED_CONFIG_FILE;
+	}
+	else {
+		cfg->cfg_name = cfg_names[0];
+	}
+	for (i = 1; i < cfg_num; i ++) {
+		r = fork ();
+		if (r == 0) {
+			/* Spawning new main process */
+			cfg->cfg_name = cfg_names[i];
+			(void)setsid ();
+		}
+		else if (r == -1) {
+			fprintf (stderr, "fork failed while spawning process for %s configuration file: %s\n", cfg_names[i], strerror (errno));
+		}
+		else {
+			/* Save pid to the list of other main processes, we need it to ignore SIGCHLD from them */
+			g_array_append_val (other_workers, r);
+		}
+	}
 	cfg->pid_file = rspamd_pidfile;
 }
 
@@ -819,7 +845,7 @@ print_symbols_cache (struct config_file *cfg)
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint                            res = 0;
+	gint                            res = 0, i;
 	struct sigaction                signals;
 	struct rspamd_worker           *cur;
 	struct rlimit                   rlim;
@@ -858,10 +884,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	memset (&signals, 0, sizeof (struct sigaction));
 
+	other_workers = g_array_new (FALSE, TRUE, sizeof (pid_t));
+
 	read_cmd_line (argc, argv, rspamd_main->cfg);
-	if (rspamd_main->cfg->cfg_name == NULL) {
-		rspamd_main->cfg->cfg_name = FIXED_CONFIG_FILE;
-	}
 
 	if (rspamd_main->cfg->config_test || is_debug) {
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -1083,7 +1108,12 @@ main (gint argc, gchar **argv, gchar **env)
 				g_free (cur);
 			}
 			else {
-				msg_err ("got SIGCHLD, but pid %P is not found in workers hash table, something goes wrong", wrk);
+				for (i = 0; i < (gint)other_workers->len; i ++) {
+					if (g_array_index (other_workers, pid_t, i) == wrk) {
+						g_array_remove_index_fast (other_workers, i);
+						msg_info ("related process %P terminated", wrk);
+					}
+				}
 			}
 		}
 		if (do_restart) {
