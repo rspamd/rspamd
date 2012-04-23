@@ -581,14 +581,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				return TRUE;
 			}
 			cl = find_classifier_conf (session->cfg, *cmd_args);
-			if (cl == NULL) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "classifier %s is not defined" CRLF, *cmd_args);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-				return TRUE;
 
-			}
 			session->learn_classifier = cl;
 
 			/* By default learn positive */
@@ -627,14 +620,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				return TRUE;
 			}
 			cl = find_classifier_conf (session->cfg, *cmd_args);
-			if (cl == NULL) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "classifier %s is not defined" CRLF, *cmd_args);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-				return TRUE;
 
-			}
 			session->learn_classifier = cl;
 
 			/* By default learn positive */
@@ -675,14 +661,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 
 			session->learn_symbol = memory_pool_strdup (session->session_pool, *cmd_args);
 			cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
-			if (cl == NULL) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-				return TRUE;
 
-			}
 			session->learn_classifier = cl;
 
 			/* By default learn positive */
@@ -867,8 +846,6 @@ fin_learn_task (void *arg)
 		task->state = WRITE_REPLY;
 		/* Process all statfiles */
 		process_statfiles (task);
-		/* Call post filters */
-		lua_call_post_filters (task);
 	}
 
 	/* Check if we have all events finished */
@@ -1156,17 +1133,22 @@ controller_write_socket (void *arg)
 	}
 	else if (session->state == STATE_LEARN_SPAM) {
 		/* Perform actual learn here */
-		if (! learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err)) {
-			if (err) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
-				g_error_free (err);
-			}
-			else {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
-			}
+		if (session->learn_classifier == NULL) {
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, "unknown classifier");
 		}
 		else {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
+			if (! learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err)) {
+				if (err) {
+					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
+					g_error_free (err);
+				}
+				else {
+					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
+				}
+			}
+			else {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
+			}
 		}
 		session->learn_task->dispatcher = NULL;
 		destroy_session (session->learn_task->s);
