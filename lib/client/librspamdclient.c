@@ -49,6 +49,7 @@ struct rspamd_client {
 	guint servers_num;
 	guint connect_timeout;
 	guint read_timeout;
+	struct in_addr *bind_addr;
 };
 
 struct rspamd_connection {
@@ -110,11 +111,12 @@ poll_sync_socket (gint fd, gint timeout, short events)
 }
 
 static gint
-make_inet_socket (gint family, struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+lib_make_inet_socket (gint family, struct in_addr *addr, struct in_addr *local_addr,
+		u_short port, gboolean is_server, gboolean async)
 {
 	gint                            fd, r, optlen, on = 1, s_error;
 	gint                            serrno;
-	struct sockaddr_in              sin;
+	struct sockaddr_in              sin, local;
 
 	/* Create socket */
 	fd = socket (AF_INET, family, 0);
@@ -139,6 +141,18 @@ make_inet_socket (gint family, struct in_addr *addr, u_short port, gboolean is_s
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons (port);
 	sin.sin_addr.s_addr = addr->s_addr;
+
+	if (!is_server && local_addr != NULL) {
+		/* Bind to local addr */
+		memset (&local, 0, sizeof (struct sockaddr_in));
+		memcpy (&local.sin_addr,local_addr, sizeof (struct in_addr));
+		local.sin_family = AF_INET;
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+		if (bind (fd, (struct sockaddr *)&local, sizeof (local)) == -1) {
+			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
+			goto out;
+		}
+	}
 
 	if (is_server) {
 		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
@@ -188,16 +202,10 @@ make_inet_socket (gint family, struct in_addr *addr, u_short port, gboolean is_s
 	return (-1);
 }
 
-gint
-make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+static gint
+lib_make_tcp_socket (struct in_addr *addr, struct in_addr *local_addr, u_short port, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_STREAM, addr, port, is_server, async);
-}
-
-gint
-make_udp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
-{
-	return make_inet_socket (SOCK_DGRAM, addr, port, is_server, async);
+	return lib_make_inet_socket (SOCK_STREAM, addr, local_addr, port, is_server, async);
 }
 
 /** Private functions **/
@@ -262,7 +270,7 @@ rspamd_connect_random_server (struct rspamd_client *client, gboolean is_control,
 	new->connection_time = now;
 	new->client = client;
 	/* Create socket */
-	new->socket = make_tcp_socket (&selected->addr,
+	new->socket = lib_make_tcp_socket (&selected->addr, client->bind_addr,
 								is_control ? selected->controller_port : selected->client_port,
 									FALSE, TRUE);
 	if (new->socket == -1) {
@@ -1228,7 +1236,7 @@ rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
  * Init rspamd client library
  */
 struct rspamd_client*
-rspamd_client_init (void)
+rspamd_client_init_binded (const struct in_addr *addr)
 {
 	struct rspamd_client           *client;
 
@@ -1236,7 +1244,18 @@ rspamd_client_init (void)
 	client->read_timeout = DEFAULT_READ_TIMEOUT;
 	client->connect_timeout = DEFAULT_CONNECT_TIMEOUT;
 
+	if (addr != NULL) {
+		client->bind_addr = g_malloc (sizeof (struct in_addr));
+		memcpy (client->bind_addr, addr, sizeof (struct in_addr));
+	}
+
 	return client;
+}
+
+struct rspamd_client*
+rspamd_client_init (void)
+{
+	return rspamd_client_init_binded (NULL);
 }
 
 /*
@@ -1969,5 +1988,8 @@ rspamd_free_result (struct rspamd_result *result)
 void
 rspamd_client_close (struct rspamd_client *client)
 {
+	if (client->bind_addr) {
+		g_free (client->bind_addr);
+	}
 	g_free (client);
 }

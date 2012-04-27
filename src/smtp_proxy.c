@@ -80,15 +80,19 @@ struct smtp_proxy_ctx {
 
 	struct rspamd_dns_resolver *resolver;
 	struct event_base *ev_base;
+
+	GList *rbls;
 };
 
 enum rspamd_smtp_proxy_state {
 	SMTP_PROXY_STATE_RESOLVE_REVERSE = 0,
 	SMTP_PROXY_STATE_RESOLVE_NORMAL,
+	SMTP_PROXY_STATE_RESOLVE_RBL,
 	SMTP_PROXY_STATE_DELAY,
 	SMTP_PROXY_STATE_GREETING,
 	SMTP_PROXY_STATE_XCLIENT,
-	SMTP_PROXY_STATE_PROXY
+	SMTP_PROXY_STATE_PROXY,
+	SMTP_PROXY_STATE_REJECT
 };
 
 struct smtp_proxy_session {
@@ -119,6 +123,9 @@ struct smtp_proxy_session {
 	struct event_base *ev_base;
 
 	GString *upstream_greeting;
+
+	guint rbl_requests;
+	gchar *dnsbl_applied;
 };
 
 #ifndef HAVE_SA_SIGINFO
@@ -197,7 +204,7 @@ free_smtp_proxy_session (gpointer arg)
 			g_string_free (session->upstream_greeting, TRUE);
 		}
 
-		if (session->state != SMTP_PROXY_STATE_PROXY) {
+		if (session->state != SMTP_PROXY_STATE_PROXY && session->state != SMTP_PROXY_STATE_REJECT) {
 			/* Send 521 fatal error */
 			write (session->sock, fatal_smtp_error, sizeof (fatal_smtp_error));
 		}
@@ -226,6 +233,7 @@ smtp_proxy_err_proxy (GError * err, void *arg)
 		msg_info ("abnormally closing connection, error: %s", err->message);
 	}
 	/* Free buffers */
+	session->state = SMTP_PROXY_STATE_REJECT;
 	destroy_session (session->s);
 }
 
@@ -455,6 +463,90 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 	return TRUE;
 }
 
+static void
+smtp_dnsbl_cb (struct rspamd_dns_reply *reply, void *arg)
+{
+	struct smtp_proxy_session 						*session = arg;
+	const gchar										*p;
+	gint											 dots = 0;
+
+	session->rbl_requests --;
+
+	msg_debug ("got reply for %s: %s", reply->request->requested_name, dns_strerror (reply->code));
+
+	if (session->state != SMTP_PROXY_STATE_REJECT) {
+
+		if (reply->code == DNS_RC_NOERROR) {
+			/* This means that address is in dnsbl */
+			p = reply->request->requested_name;
+			while (*p) {
+				if (*p == '.') {
+					dots ++;
+				}
+				if (dots == 4) {
+					session->dnsbl_applied = (gchar *)p + 1;
+					break;
+				}
+				p ++;
+			}
+			session->state = SMTP_PROXY_STATE_REJECT;
+		}
+	}
+
+	if (session->rbl_requests == 0) {
+		if (session->state != SMTP_PROXY_STATE_REJECT) {
+			/* Make proxy */
+			if (!create_smtp_proxy_upstream_connection (session)) {
+				rspamd_dispatcher_restore (session->dispatcher);
+			}
+		}
+		else {
+			/* TODO: add handler for denied connections */
+			msg_info ("%s is denied by dnsbl: %s", inet_ntoa (session->client_addr), session->dnsbl_applied);
+			if (!rspamd_dispatcher_write (session->dispatcher,
+					make_smtp_error (session->pool, 521, "%s Client denied by %s", "5.2.1", session->dnsbl_applied),
+					0, FALSE, TRUE)) {
+				msg_err ("cannot write smtp error");
+			}
+			rspamd_dispatcher_restore (session->dispatcher);
+		}
+	}
+}
+
+/*
+ * Create requests to all rbls
+ */
+static void
+make_rbl_requests (struct smtp_proxy_session *session)
+{
+	GList									*cur;
+	gchar									*p, *dst;
+	guint									 len;
+
+	cur = session->ctx->rbls;
+	while (cur) {
+		len = INET_ADDRSTRLEN + strlen (cur->data) + 1;
+		dst = memory_pool_alloc (session->pool, len);
+		/* Print ipv4 addr */
+		p = (gchar *)&session->client_addr.s_addr;
+		rspamd_snprintf (dst, len, "%ud.%ud.%ud.%ud.%s", (guint)p[3],
+				(guint)p[2], (guint)p[1], (guint)p[0], cur->data);
+		if (make_dns_request (session->resolver, session->s, session->pool,
+								smtp_dnsbl_cb, session, DNS_REQUEST_A, dst)) {
+			session->rbl_requests ++;
+			msg_debug ("send request to %s", dst);
+		}
+		cur = g_list_next (cur);
+	}
+
+	if (session->rbl_requests == 0) {
+		/* Create proxy */
+		if (! create_smtp_proxy_upstream_connection (session)) {
+			rspamd_dispatcher_restore (session->dispatcher);
+		}
+	}
+}
+
 /* Resolving and delay handlers */
 /*
  * Return from a delay
@@ -468,15 +560,24 @@ smtp_delay_handler (gint fd, short what, void *arg)
 			session->delay_timer);
 	if (session->state == SMTP_PROXY_STATE_DELAY) {
 		/* TODO: Create upstream connection here */
-		create_smtp_proxy_upstream_connection (session);
+		if (session->ctx->rbls) {
+			make_rbl_requests (session);
+		}
+		else {
+			if (!create_smtp_proxy_upstream_connection (session)) {
+				rspamd_dispatcher_restore (session->dispatcher);
+			}
+		}
 	}
 	else {
 		/* TODO: Write error here */
-		if (rspamd_dispatcher_write (session->dispatcher,
-				make_smtp_error (session->pool, 550, "%s Improper use of SMTP command pipelining", "5.5.0"),
+		session->state = SMTP_PROXY_STATE_REJECT;
+		if (!rspamd_dispatcher_write (session->dispatcher,
+				make_smtp_error (session->pool, 521, "%s Improper use of SMTP command pipelining", "5.2.1"),
 				0, FALSE, TRUE)) {
-			destroy_session (session->s);
+			msg_err ("cannot write smtp error");
 		}
+		rspamd_dispatcher_restore (session->dispatcher);
 	}
 }
 
@@ -509,7 +610,14 @@ smtp_make_delay (struct smtp_proxy_session *session)
 	}
 	else if (session->state == SMTP_PROXY_STATE_DELAY) {
 		/* TODO: Create upstream connection here */
-		create_smtp_proxy_upstream_connection (session);
+		if (session->ctx->rbls) {
+			make_rbl_requests (session);
+		}
+		else {
+			if (!create_smtp_proxy_upstream_connection (session)) {
+				rspamd_dispatcher_restore (session->dispatcher);
+			}
+		}
 	}
 }
 
@@ -612,16 +720,27 @@ smtp_proxy_read_socket (f_str_t * in, void *arg)
 	struct smtp_proxy_session            *session = arg;
 
 	/* This can be called only if client is using invalid pipelining */
-	if (rspamd_dispatcher_write (session->dispatcher,
-			make_smtp_error (session->pool, 550, "%s Improper use of SMTP command pipelining", "5.5.0"),
+	session->state = SMTP_PROXY_STATE_REJECT;
+	if (!rspamd_dispatcher_write (session->dispatcher,
+			make_smtp_error (session->pool, 521, "%s Improper use of SMTP command pipelining", "5.2.1"),
 			0, FALSE, TRUE)) {
-		destroy_session (session->s);
+		msg_err ("cannot write smtp error");
 	}
-	else {
-		return FALSE;
-	}
+	destroy_session (session->s);
 
-	return TRUE;
+	return FALSE;
+}
+
+/*
+ * Actually called only if something goes wrong
+ */
+static                          gboolean
+smtp_proxy_write_socket (void *arg)
+{
+	struct smtp_proxy_session            *session = arg;
+
+	destroy_session (session->s);
+	return FALSE;
 }
 
 /*
@@ -633,8 +752,8 @@ smtp_proxy_err_socket (GError * err, void *arg)
 	struct smtp_proxy_session            *session = arg;
 
 	if (err) {
-		g_error_free (err);
 		msg_info ("abnormally closing connection, error: %s", err->message);
+		g_error_free (err);
 	}
 	/* Free buffers */
 	destroy_session (session->s);
@@ -697,7 +816,7 @@ accept_socket (gint fd, short what, void *arg)
 	}
 	else {
 		session->dispatcher = rspamd_create_dispatcher (session->ev_base, nfd, BUFFER_ANY,
-								smtp_proxy_read_socket, NULL, smtp_proxy_err_socket,
+								smtp_proxy_read_socket, smtp_proxy_write_socket, smtp_proxy_err_socket,
 								&session->ctx->smtp_timeout, session);
 		session->dispatcher->peer_addr = session->client_addr.s_addr;
 	}
@@ -721,15 +840,17 @@ init_smtp_proxy (void)
 	register_worker_opt (type, "upstreams", xml_handle_string, ctx,
 				G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str));
 	register_worker_opt (type, "timeout", xml_handle_seconds, ctx,
-					G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_timeout_raw));
+				G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_timeout_raw));
 	register_worker_opt (type, "delay", xml_handle_seconds, ctx,
-					G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_delay));
+				G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_delay));
 	register_worker_opt (type, "jitter", xml_handle_seconds, ctx,
-						G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter));
+				G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter));
 	register_worker_opt (type, "xclient", xml_handle_boolean, ctx,
-							G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient));
+				G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient));
 	register_worker_opt (type, "proxy_buffer", xml_handle_size, ctx,
-								G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len));
+				G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len));
+	register_worker_opt (type, "dnsbl", xml_handle_list, ctx,
+				G_STRUCT_OFFSET (struct smtp_proxy_ctx, rbls));
 
 	return ctx;
 }

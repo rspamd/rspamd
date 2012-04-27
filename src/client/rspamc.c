@@ -39,6 +39,7 @@ static gchar                   *deliver_to = NULL;
 static gchar                   *rcpt = NULL;
 static gchar                   *user = NULL;
 static gchar                   *classifier = NULL;
+static gchar                   *local_addr = NULL;
 static gint                     weight = 1;
 static gint                     flag;
 static gint                     timeout = 5;
@@ -63,6 +64,7 @@ static GOptionEntry entries[] =
 		{ "from", 'F', 0, G_OPTION_ARG_STRING, &from, "Emulate that message is from specified user", NULL },
 		{ "rcpt", 'r', 0, G_OPTION_ARG_STRING, &rcpt, "Emulate that message is for specified user", NULL },
 		{ "timeout", 't', 0, G_OPTION_ARG_INT, &timeout, "Timeout for waiting for a reply", NULL },
+		{ "bind", 'b', 0, G_OPTION_ARG_STRING, &local_addr, "Bind to specified ip address", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -639,10 +641,24 @@ main (gint argc, gchar **argv, gchar **env)
 {
 	enum rspamc_command             cmd;
 	gint                            i;
+	struct in_addr					ina;
 
-	client = rspamd_client_init ();
 
 	read_cmd_line (&argc, &argv);
+
+	if (local_addr) {
+		if (inet_aton (local_addr, &ina) != 0) {
+			client = rspamd_client_init_binded (&ina);
+		}
+		else {
+			fprintf (stderr, "%s is not a valid ip address\n", local_addr);
+			exit (EXIT_FAILURE);
+		}
+	}
+	else {
+		client = rspamd_client_init ();
+	}
+
 	rspamd_set_timeout (client, 1000, timeout * 1000);
 	tty = isatty (STDOUT_FILENO);
 	/* Now read other args from argc and argv */

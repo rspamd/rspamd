@@ -28,6 +28,8 @@ struct rspamd_metric {
 
 struct rspamd_connection;
 struct rspamd_client;
+struct in_addr;
+
 /**
  * Result of scan
  */
@@ -42,6 +44,11 @@ struct rspamd_result {
  * Init rspamd client library
  */
 struct rspamd_client* rspamd_client_init (void);
+
+/*
+ * Init rspamd client library and bind it
+ */
+struct rspamd_client* rspamd_client_init_binded (const struct in_addr *local_addr);
 
 /*
  * Add rspamd server

@@ -916,6 +916,7 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, c
 			param->is_list = TRUE;
 			tmp = param->d.param;
 			param->d.list = g_list_prepend (NULL, (gpointer)tmp);
+			param->d.list = g_list_append (param->d.list, memory_pool_strdup (cfg->cfg_pool, data));
 			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, param->d.list);
 		}
 	}
