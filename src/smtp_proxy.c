@@ -47,6 +47,8 @@
 
 #define DEFAULT_PROXY_BUF_LEN 100 * 1024
 
+#define SMTP_MAXERRORS 15
+
 static sig_atomic_t                    wanna_die = 0;
 
 /* Init functions */
@@ -76,6 +78,8 @@ struct smtp_proxy_ctx {
 
 	gboolean use_xclient;
 
+	gboolean instant_reject;
+
 	gsize proxy_buf_len;
 
 	struct rspamd_dns_resolver *resolver;
@@ -92,7 +96,8 @@ enum rspamd_smtp_proxy_state {
 	SMTP_PROXY_STATE_GREETING,
 	SMTP_PROXY_STATE_XCLIENT,
 	SMTP_PROXY_STATE_PROXY,
-	SMTP_PROXY_STATE_REJECT
+	SMTP_PROXY_STATE_REJECT,
+	SMTP_PROXY_STATE_REJECT_EMULATE
 };
 
 struct smtp_proxy_session {
@@ -126,6 +131,11 @@ struct smtp_proxy_session {
 
 	guint rbl_requests;
 	gchar *dnsbl_applied;
+
+	gchar *from;
+	gchar *rcpt;
+
+	guint errors;
 };
 
 #ifndef HAVE_SA_SIGINFO
@@ -204,9 +214,15 @@ free_smtp_proxy_session (gpointer arg)
 			g_string_free (session->upstream_greeting, TRUE);
 		}
 
-		if (session->state != SMTP_PROXY_STATE_PROXY && session->state != SMTP_PROXY_STATE_REJECT) {
+		if (session->state != SMTP_PROXY_STATE_PROXY && session->state != SMTP_PROXY_STATE_REJECT &&
+				session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
 			/* Send 521 fatal error */
 			write (session->sock, fatal_smtp_error, sizeof (fatal_smtp_error));
+		}
+		else if ((session->state == SMTP_PROXY_STATE_REJECT || session->state == SMTP_PROXY_STATE_REJECT_EMULATE) &&
+				session->from && session->rcpt && session->dnsbl_applied) {
+			msg_info ("reject by %s mail from <%s> to <%s>, ip: %s", session->dnsbl_applied,
+					session->from, session->rcpt, inet_ntoa (session->client_addr));
 		}
 
 		close (session->sock);
@@ -501,12 +517,23 @@ smtp_dnsbl_cb (struct rspamd_dns_reply *reply, void *arg)
 			}
 		}
 		else {
-			/* TODO: add handler for denied connections */
-			msg_info ("%s is denied by dnsbl: %s", inet_ntoa (session->client_addr), session->dnsbl_applied);
-			if (!rspamd_dispatcher_write (session->dispatcher,
-					make_smtp_error (session->pool, 521, "%s Client denied by %s", "5.2.1", session->dnsbl_applied),
-					0, FALSE, TRUE)) {
-				msg_err ("cannot write smtp error");
+			if (session->ctx->instant_reject) {
+				msg_info ("reject %s is denied by dnsbl: %s",
+						inet_ntoa (session->client_addr), session->dnsbl_applied);
+				if (!rspamd_dispatcher_write (session->dispatcher,
+						make_smtp_error (session->pool, 521, "%s Client denied by %s", "5.2.1", session->dnsbl_applied),
+						0, FALSE, TRUE)) {
+					msg_err ("cannot write smtp error");
+				}
+			}
+			else {
+				/* Emulate fake smtp session */
+				rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, 0);
+				if (!rspamd_dispatcher_write (session->dispatcher,
+						make_smtp_error (session->pool, 220, "smtp ready"),
+						0, FALSE, TRUE)) {
+					msg_err ("cannot write smtp reply");
+				}
 			}
 			rspamd_dispatcher_restore (session->dispatcher);
 		}
@@ -711,6 +738,53 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 	}
 }
 
+static void
+proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
+{
+	gchar								 *p, *c, *end;
+	gsize								  len;
+
+	p = line->begin;
+	end = line->begin + line->len;
+	if (line->len >= sizeof("rcpt to: ") - 1 && (*p == 'r' || *p == 'R') && session->rcpt == NULL) {
+		if (g_ascii_strncasecmp (p, "rcpt to: ", sizeof ("rcpt to: ") - 1) == 0) {
+			p += sizeof ("rcpt to: ") - 1;
+			/* Skip spaces */
+			while ((g_ascii_isspace (*p) || *p == '<') && p < end) {
+				p ++;
+			}
+			c = p;
+			while (!(g_ascii_isspace (*p) || *p == '>') && p < end) {
+				p ++;
+			}
+			len = p - c;
+			session->rcpt = memory_pool_alloc (session->pool, len + 1);
+			rspamd_strlcpy (session->rcpt, c, len + 1);
+		}
+	}
+	else if (line->len >= sizeof("mail from: ") - 1 && (*p == 'm' || *p == 'M') && session->from == NULL) {
+		if (g_ascii_strncasecmp (p, "mail from: ", sizeof ("mail from: ") - 1) == 0) {
+			p += sizeof ("mail from: ") - 1;
+			/* Skip spaces */
+			while ((g_ascii_isspace (*p) || *p == '<') && p < end) {
+				p ++;
+			}
+			c = p;
+			while (!(g_ascii_isspace (*p) || *p == '>') && p < end) {
+				p ++;
+			}
+			len = p - c;
+			session->from = memory_pool_alloc (session->pool, len + 1);
+			rspamd_strlcpy (session->from, c, len + 1);
+		}
+	}
+	else if (line->len >= sizeof ("quit") - 1 && (*p == 'q' || *p == 'Q')) {
+		if (g_ascii_strncasecmp (p, "quit", sizeof ("quit") - 1) == 0) {
+			session->state = SMTP_PROXY_STATE_REJECT;
+		}
+	}
+}
+
 /*
  * Callback that is called when there is data to read in buffer
  */
@@ -718,15 +792,60 @@ static                          gboolean
 smtp_proxy_read_socket (f_str_t * in, void *arg)
 {
 	struct smtp_proxy_session            *session = arg;
+	gchar								 *p;
 
-	/* This can be called only if client is using invalid pipelining */
-	session->state = SMTP_PROXY_STATE_REJECT;
-	if (!rspamd_dispatcher_write (session->dispatcher,
-			make_smtp_error (session->pool, 521, "%s Improper use of SMTP command pipelining", "5.2.1"),
-			0, FALSE, TRUE)) {
-		msg_err ("cannot write smtp error");
+	if (session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
+		/* This can be called only if client is using invalid pipelining */
+		session->state = SMTP_PROXY_STATE_REJECT;
+		if (!rspamd_dispatcher_write (session->dispatcher,
+				make_smtp_error (session->pool, 521, "%s Improper use of SMTP command pipelining", "5.2.1"),
+				0, FALSE, TRUE)) {
+			msg_err ("cannot write smtp error");
+		}
+		destroy_session (session->s);
 	}
-	destroy_session (session->s);
+	else {
+		/* Try to extract data */
+		p = in->begin;
+		if (in->len >= sizeof ("helo") - 1 && (*p == 'h' || *p == 'H' || *p == 'e' || *p == 'E')) {
+			return rspamd_dispatcher_write (session->dispatcher,
+					"220 smtp ready" CRLF,
+					0, FALSE, TRUE);
+		}
+		else if (in->len > 0) {
+			proxy_parse_smtp_input (in, session);
+		}
+		if (session->state == SMTP_PROXY_STATE_REJECT) {
+			/* Received QUIT command */
+			if (!rspamd_dispatcher_write (session->dispatcher,
+					"221 2.0.0 Bye" CRLF,
+					0, FALSE, TRUE)) {
+				msg_err ("cannot write smtp error");
+			}
+			destroy_session (session->s);
+			return FALSE;
+		}
+		if (session->rcpt != NULL) {
+			session->errors ++;
+			if (session->errors > SMTP_MAXERRORS) {
+				if (!rspamd_dispatcher_write (session->dispatcher,
+						"521 5.2.1 Maximum errors reached" CRLF,
+						0, FALSE, TRUE)) {
+					msg_err ("cannot write smtp error");
+				}
+				destroy_session (session->s);
+				return FALSE;
+			}
+			return rspamd_dispatcher_write (session->dispatcher,
+					make_smtp_error (session->pool, 521, "%s Client denied by %s", "5.2.1", session->dnsbl_applied),
+					0, FALSE, TRUE);
+		}
+		else {
+			return rspamd_dispatcher_write (session->dispatcher,
+					"250 smtp ready" CRLF,
+					0, FALSE, TRUE);
+		}
+	}
 
 	return FALSE;
 }
@@ -739,8 +858,15 @@ smtp_proxy_write_socket (void *arg)
 {
 	struct smtp_proxy_session            *session = arg;
 
-	destroy_session (session->s);
-	return FALSE;
+	if (session->ctx->instant_reject) {
+		destroy_session (session->s);
+		return FALSE;
+	}
+	else {
+		session->state = SMTP_PROXY_STATE_REJECT_EMULATE;
+	}
+
+	return TRUE;
 }
 
 /*
@@ -752,6 +878,14 @@ smtp_proxy_err_socket (GError * err, void *arg)
 	struct smtp_proxy_session            *session = arg;
 
 	if (err) {
+		if (err->code == ETIMEDOUT) {
+			/* Write smtp error */
+			if (!rspamd_dispatcher_write (session->dispatcher,
+					"421 4.4.2 Error: timeout exceeded" CRLF,
+					0, FALSE, TRUE)) {
+				msg_err ("cannot write smtp error");
+			}
+		}
 		msg_info ("abnormally closing connection, error: %s", err->message);
 		g_error_free (err);
 	}
@@ -836,6 +970,7 @@ init_smtp_proxy (void)
 	/* Set default values */
 	ctx->smtp_timeout_raw = 300000;
 	ctx->smtp_delay = 0;
+	ctx->instant_reject = TRUE;
 
 	register_worker_opt (type, "upstreams", xml_handle_string, ctx,
 				G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str));
@@ -847,6 +982,8 @@ init_smtp_proxy (void)
 				G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter));
 	register_worker_opt (type, "xclient", xml_handle_boolean, ctx,
 				G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient));
+	register_worker_opt (type, "instant_reject", xml_handle_boolean, ctx,
+					G_STRUCT_OFFSET (struct smtp_proxy_ctx, instant_reject));
 	register_worker_opt (type, "proxy_buffer", xml_handle_size, ctx,
 				G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len));
 	register_worker_opt (type, "dnsbl", xml_handle_list, ctx,
