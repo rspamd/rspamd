@@ -43,6 +43,7 @@ SET(RSPAMDLIBSRC
 				../src/cfg_utils.c
 				../src/cfg_xml.c
 				../src/diff.c
+				../src/dkim.c
 				../src/dns.c
 				../src/events.c
 				../src/expressions.c
