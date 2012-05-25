@@ -24,6 +24,7 @@
 #include "config.h"
 #include "main.h"
 #include "dkim.h"
+#include "dns.h"
 
 /* Parser of dkim params */
 typedef gboolean (*dkim_parse_param_f) (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
@@ -299,7 +300,7 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gs
 rspamd_dkim_context_t*
 rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 {
-	const gchar						*p, *c, *tag;
+	const gchar						*p, *c, *tag, *end;
 	gsize							 taglen;
 	gint							 param = DKIM_PARAM_UNKNOWN;
 	time_t							 now;
@@ -322,7 +323,10 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 	state = DKIM_STATE_SKIP_SPACES;
 	next_state = DKIM_STATE_TAG;
 	taglen = 0;
-	while (*p) {
+	p = sig;
+	c = sig;
+	end = p + strlen (p);
+	while (p <= end) {
 		switch (state) {
 		case DKIM_STATE_TAG:
 			if (g_ascii_isspace (*p)) {
@@ -437,6 +441,11 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 					state = DKIM_STATE_ERROR;
 				}
 			}
+			else if (p == end) {
+				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c, err)) {
+					state = DKIM_STATE_ERROR;
+				}
+			}
 			else {
 				p ++;
 			}
@@ -503,7 +512,103 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 		return NULL;
 	}
 
+	/* Now create dns key to request further */
+	taglen = strlen (new->domain) + strlen (new->selector) + sizeof (DKIM_DNSKEYNAME) + 2;
+	new->dns_key = memory_pool_alloc (new->pool, taglen);
+	rspamd_snprintf (new->dns_key, taglen, "%s.%s.%s", new->selector, DKIM_DNSKEYNAME, new->domain);
+
 	return new;
+}
+
+struct rspamd_dkim_key_cbdata {
+	rspamd_dkim_context_t *ctx;
+	dkim_key_handler_f handler;
+	gpointer ud;
+};
+
+static rspamd_dkim_key_t*
+rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
+{
+	const gchar									*c, *p, *end;
+	gint										 state = 0;
+	gsize										 len;
+	rspamd_dkim_key_t							*key = NULL;
+
+	c = txt;
+	p = txt;
+	end = txt + strlen (txt);
+
+	while (p <= end) {
+		switch (state) {
+		case 0:
+			if (p != end && p[0] == 'p' && p[1] == '=') {
+				/* We got something like public key */
+				c = p + 2;
+				p = c;
+				state = 1;
+			}
+			else {
+				/* Ignore everything */
+				p ++;
+			}
+			break;
+		case 1:
+			/* State when we got p= and looking for some public key */
+			if ((*p == ';' || p == end) && p > c) {
+				len = (p == end) ? p - c : p - c - 1;
+				key = g_slice_alloc (len + 1);
+				/* For free data */
+				*keylen = len + 1;
+				rspamd_strlcpy (key, c, len + 1);
+				g_base64_decode_inplace (key, &len);
+				return key;
+			}
+			break;
+		}
+	}
+
+	if (p - c == 0) {
+		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYREVOKED, "key was revoked");
+	}
+	else {
+		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL, "key was not found");
+	}
+
+	return NULL;
+}
+
+/* Get TXT request data and parse it */
+static void
+rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
+{
+	struct rspamd_dkim_key_cbdata				*cbdata = arg;
+	rspamd_dkim_key_t							*key;
+	GError										*err = NULL;
+	GList										*cur;
+	union rspamd_reply_element					*elt;
+	gsize										 keylen = 0;
+
+	if (reply->code != DNS_RC_NOERROR) {
+		g_set_error (&err, DKIM_ERROR, DKIM_SIGERROR_NOKEY, "dns request to %s failed: %s", cbdata->ctx->dns_key,
+				dns_strerror (reply->code));
+		cbdata->handler (NULL, 0, cbdata->ctx, cbdata->ud, err);
+	}
+	else {
+		cur = reply->elements;
+		while (cur) {
+			elt = cur->data;
+			key = rspamd_dkim_parse_key (elt->txt.data, &keylen, &err);
+			if (key) {
+				break;
+			}
+		}
+		if (key != NULL && err != NULL) {
+			/* Free error as it is insignificant */
+			g_error_free (err);
+			err = NULL;
+		}
+		cbdata->handler (key, keylen, cbdata->ctx, cbdata->ud, err);
+	}
 }
 
 /**
@@ -513,12 +618,21 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
  * @param s async session to make request
  * @return
  */
-rspamd_dkim_key_t*
+gboolean
 rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *resolver,
-		struct rspamd_async_session *s)
+		struct rspamd_async_session *s, dkim_key_handler_f handler, gpointer ud)
 {
-	/* TODO: add this parser as well */
-	return NULL;
+	struct rspamd_dkim_key_cbdata				*cbdata;
+
+	g_return_val_if_fail (ctx != NULL, FALSE);
+	g_return_val_if_fail (ctx->dns_key != NULL, FALSE);
+
+	cbdata = memory_pool_alloc (ctx->pool, sizeof (struct rspamd_dkim_key_cbdata));
+	cbdata->ctx = ctx;
+	cbdata->handler = handler;
+	cbdata->ud = ud;
+
+	return make_dns_request (resolver, s, ctx->pool, rspamd_dkim_dns_cb, cbdata, DNS_REQUEST_TXT, ctx->dns_key);
 }
 
 /**

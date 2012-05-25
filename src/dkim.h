@@ -136,18 +136,19 @@ typedef struct rspamd_dkim_context_s {
 	gchar *selector;
 	time_t timestamp;
 	time_t expiration;
-	gchar *b;
-	gchar *bh;
+	gint8 *b;
+	gint8 *bh;
 	GList *hlist;
 	guint ver;
+	gchar *dns_key;
 } rspamd_dkim_context_t;
 
-typedef struct rspamd_dkim_key_s {
-	memory_pool_t *pool;
-	/* TODO: make this structure */
-} rspamd_dkim_key_t;
+typedef guint8 rspamd_dkim_key_t;
 
 struct worker_task;
+
+/* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
+typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
 
 /**
  * Create new dkim context from signature
@@ -165,8 +166,8 @@ rspamd_dkim_context_t* rspamd_create_dkim_context (const gchar *sig, memory_pool
  * @param s async session to make request
  * @return
  */
-rspamd_dkim_key_t* rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *resolver,
-		struct rspamd_async_session *s);
+gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *resolver,
+		struct rspamd_async_session *s, dkim_key_handler_f handler, gpointer ud);
 
 /**
  * Check task for dkim context using dkim key
