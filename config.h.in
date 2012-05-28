@@ -185,6 +185,8 @@
 
 #cmakedefine HAVE_CLOCK_GETTIME  1
 
+#cmakedefine HAVE_OPENSSL		 1
+
 #cmakedefine GLIB_COMPAT         1
 #cmakedefine GLIB_RE_COMPAT		 1
 #cmakedefine GLIB_UNISCRIPT_COMPAT		 1

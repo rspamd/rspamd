@@ -28,6 +28,10 @@
 #include "config.h"
 #include "event.h"
 #include "dns.h"
+#ifdef HAVE_OPENSSL
+#include <openssl/rsa.h>
+#include <openssl/engine.h>
+#endif
 
 /* Main types and definitions */
 
@@ -138,12 +142,26 @@ typedef struct rspamd_dkim_context_s {
 	time_t expiration;
 	gint8 *b;
 	gint8 *bh;
+	guint bhlen;
+	guint blen;
 	GList *hlist;
 	guint ver;
 	gchar *dns_key;
+	GChecksum *headers_hash;
+	GChecksum *body_hash;
 } rspamd_dkim_context_t;
 
-typedef guint8 rspamd_dkim_key_t;
+typedef struct rspamd_dkim_key_s {
+	guint8 *keydata;
+	guint keylen;
+	gsize decoded_len;
+#ifdef HAVE_OPENSSL
+	RSA *rsa_key;
+	BIO *key_bio;
+	EVP_PKEY *key_evp;
+#endif
+}
+rspamd_dkim_key_t;
 
 struct worker_task;
 
@@ -177,5 +195,11 @@ gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_reso
  * @return
  */
 gint rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct worker_task *task);
+
+/**
+ * Free DKIM key
+ * @param key
+ */
+void rspamd_dkim_key_free (rspamd_dkim_key_t *key);
 
 #endif /* DKIM_H_ */
