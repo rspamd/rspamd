@@ -135,17 +135,17 @@ rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 	}
 	else {
 		/* First check header */
-		if (sl == 6 && memcmp (param, "simple", len) == 0) {
+		if (sl == 6 && memcmp (param, "simple", sl) == 0) {
 			ctx->header_canon_type = DKIM_CANON_SIMPLE;
 		}
-		else if (sl == 7 && memcmp (param, "relaxed", len) == 0) {
+		else if (sl == 7 && memcmp (param, "relaxed", sl) == 0) {
 			ctx->header_canon_type = DKIM_CANON_RELAXED;
 		}
 		else {
 			goto err;
 		}
 		/* Check body */
-		len = len - sl - 1;
+		len -= sl + 1;
 		slash ++;
 		if (len == 6 && memcmp (slash, "simple", len) == 0) {
 			ctx->body_canon_type = DKIM_CANON_SIMPLE;
@@ -158,7 +158,7 @@ rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 	}
 
 err:
-	g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_A, "invalid dkim sign algorithm");
+	g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_A, "invalid dkim canonization algorithm");
 	return FALSE;
 }
 
@@ -189,14 +189,8 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 	while (p <= end) {
 		if ((*p == ':' || p == end) && p - c > 0) {
 			/* Insert new header to the list */
-			if (p == end) {
-				h = memory_pool_alloc (ctx->pool, p - c + 1);
-				rspamd_strlcpy (h, c, p - c + 1);
-			}
-			else {
-				h = memory_pool_alloc (ctx->pool, p - c);
-				rspamd_strlcpy (h, c, p - c);
-			}
+			h = memory_pool_alloc (ctx->pool, p - c + 1);
+			rspamd_strlcpy (h, c, p - c + 1);
 			/* Check mandatory from */
 			if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
 				from_found = TRUE;
@@ -357,8 +351,8 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 				tag = c;
 			}
 			else {
-				p ++;
 				taglen ++;
+				p ++;
 			}
 			break;
 		case DKIM_STATE_AFTER_TAG:
@@ -432,20 +426,29 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 			}
 			if (state != DKIM_STATE_ERROR) {
 				/* Skip spaces */
-				p ++;
 				state = DKIM_STATE_SKIP_SPACES;
 				next_state = DKIM_STATE_VALUE;
 			}
 			break;
 		case DKIM_STATE_VALUE:
 			if (*p == ';') {
-				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c - 1, err)) {
+				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c, err)) {
 					state = DKIM_STATE_ERROR;
+				}
+				else {
+					state = DKIM_STATE_SKIP_SPACES;
+					next_state = DKIM_STATE_TAG;
+					p ++;
+					taglen = 0;
 				}
 			}
 			else if (p == end) {
-				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c, err)) {
+				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c + 1, err)) {
 					state = DKIM_STATE_ERROR;
+				}
+				else {
+					/* Finish processing */
+					p ++;
 				}
 			}
 			else {
@@ -646,6 +649,9 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 			if ((*p == ';' || p == end) && p > c) {
 				len = (p == end) ? p - c : p - c - 1;
 				return rspamd_dkim_make_key (c, len, err);
+			}
+			else {
+				p ++;
 			}
 			break;
 		}

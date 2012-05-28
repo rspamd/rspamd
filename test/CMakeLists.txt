@@ -6,7 +6,8 @@ SET(TESTSRC		rspamd_expression_test.c
 				rspamd_test_suite.c
 				rspamd_url_test.c
 				rspamd_dns_test.c
-				rspamd_async_test.c)
+				rspamd_async_test.c
+				rspamd_dkim_test.c)
 
 ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE C)
@@ -34,3 +35,6 @@ IF(ENABLE_LUAJIT MATCHES "ON")
 ELSE(ENABLE_LUAJIT MATCHES "ON")
     TARGET_LINK_LIBRARIES(rspamd-test "${LUA_LIBRARY}")
 ENDIF(ENABLE_LUAJIT MATCHES "ON")
+IF(OPENSSL_FOUND)
+	TARGET_LINK_LIBRARIES(rspamd-test ${OPENSSL_LIBRARIES})
+ENDIF(OPENSSL_FOUND)

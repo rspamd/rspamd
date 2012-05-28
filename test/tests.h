@@ -29,4 +29,7 @@ void rspamd_dns_test_func ();
 /* Async IO */
 void rspamd_async_test_func ();
 
+/* DKIM test */
+void rspamd_dkim_test_func ();
+
 #endif
