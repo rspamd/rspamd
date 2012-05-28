@@ -560,7 +560,7 @@ struct rspamd_dkim_key_cbdata {
 };
 
 static rspamd_dkim_key_t*
-rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError *err)
+rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError **err)
 {
 	rspamd_dkim_key_t							*key = NULL;
 
@@ -571,7 +571,7 @@ rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError *err)
 	key->decoded_len = keylen + 1;
 	g_base64_decode_inplace (key->keydata, &key->decoded_len);
 #ifdef HAVE_OPENSSL
-	key->key_bio = BIO_new_mem_buf (key->keydata, decoded_len);
+	key->key_bio = BIO_new_mem_buf (key->keydata, key->decoded_len);
 	if (key->key_bio == NULL) {
 		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL, "cannot make ssl bio from key");
 		rspamd_dkim_key_free (key);
@@ -874,8 +874,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 	GList										*cur;
 	gchar										*digest;
 	gsize										 dlen;
+	gint										 res = DKIM_CONTINUE;
 #ifdef HAVE_OPENSSL
-	RSA											 *rsa;
+	gint										 nid;
 #endif
 
 	g_return_val_if_fail (ctx != NULL, DKIM_ERROR);
@@ -964,14 +965,21 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 
 #ifdef HAVE_OPENSSL
 	/* Check headers signature */
-	rsa = RSA_new ();
 
-	rsa->rsa_rsa = key->rsa_key;
-	rsa->rsa_keysize = RSA_size (rsa->rsa_rsa);
-	rsa->rsa_pad = RSA_PKCS1_PADDING;
+	if (ctx->sig_alg == DKIM_SIGN_RSASHA1) {
+		nid = NID_sha1;
+	}
+	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256) {
+		nid = NID_sha256;
+	}
+	else {
+		/* Not reached */
+		nid = NID_sha1;
+	}
 
-
-	RSA_free (rsa);
+	if (RSA_verify (nid, digest, dlen, ctx->b, ctx->blen, key->key_rsa) != 1) {
+		res = DKIM_ERROR;
+	}
 #endif
-	return DKIM_CONTINUE;
+	return res;
 }
