@@ -415,30 +415,37 @@ reconf['FORGED_GENERIC_RECEIVED3'] =	'Received=/^\\s*(.+\\n)*by \\d{1,3}\\.\\d{1
 reconf['FORGED_GENERIC_RECEIVED4'] =	'Received=/^\\s*(.+\\n)*from localhost by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0[\\s\\r\\n]*$/X'
 
 reconf['FORGED_GENERIC_RECEIVED5'] = function (task)
-	local regexp_text = 'Received:\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*Received:\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0\\n'
+	local regexp_text = '^\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$'
 	local re = regexp.get_cached(regexp_text)
 	if not re then re = regexp.create(regexp_text, 'i') end
-	local res = re:match(task:get_raw_headers())
-	if res then
-                return true
-        else
-                return false
-        end
+	local headers_recv = task:get_raw_header('Received')
+	if headers_recv then
+		for _,header_r in ipairs(headers_recv) do
+			if re:match(header_r['value']) then
+				return true
+			end
+		end
+	end
+    return false
 end
 
 reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X'
 
 reconf['INVALID_EXIM_RECEIVED'] = function (task)
 	local headers_to = task:get_message():get_header('To')
-	if headers_to then
-		local raw_headers = task:get_raw_headers()
+	if headers_to and table.maxn(headers_to) < 5 then
+		local headers_recv = task:get_raw_header('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\(\\S*?[\\?\\@\\(\\)\\s\\.\\+\\*\'\'\\/\\\\,]\\S*\\)[\\s\\r\\n]+id \\S*?[\\)\\(<>\\/\\\\,\\-:=]'
 		local re = regexp.get_cached(regexp_text)
 		if not re then re = regexp.create(regexp_text, 's') end
-		for _,header_to in ipairs(headers_to) do
-			if re:match(header_to.."|"..raw_headers) then
+		if headers_recv then
+			for _,header_to in ipairs(headers_to) do
+				for _,header_r in ipairs(headers_recv) do
+					if re:match(header_to.."|"..header_r['value']) then
         		        return true
-        		end
+        			end
+				end
+			end
 		end
 	end
 	return false
@@ -446,15 +453,19 @@ end
 
 reconf['INVALID_EXIM_RECEIVED2'] = function (task)
 	local headers_to = task:get_message():get_header('To')
-	if headers_to then
-		local raw_headers = task:get_raw_headers()
+	if headers_to and table.maxn(headers_to) < 5 then
+		local headers_recv = task:get_raw_header('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\([A-Z]{9,12} [A-Z]{5,6}\\)[\\s\\r\\n]+id [a-zA-Z\\d]{6}-[a-zA-Z\\d]{6}-[a-zA-Z\\d]{2}[\\s\\r\\n]+'
 		local re = regexp.get_cached(regexp_text)
 		if not re then re = regexp.create(regexp_text, 's') end
-		for _,header_to in ipairs(headers_to) do
-			if re:match(header_to.."|"..raw_headers) then
+		if headers_recv then
+			for _,header_to in ipairs(headers_to) do
+				for _,header_r in ipairs(headers_recv) do
+					if re:match(header_to.."|"..header_r['value']) then
         		        return true
-        		end
+        			end
+				end
+			end
 		end
 	end
 	return false

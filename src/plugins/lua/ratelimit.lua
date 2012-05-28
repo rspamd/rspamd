@@ -21,6 +21,7 @@ local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-da
 -- Do not check ratelimits for these senders
 local whitelisted_rcpts = {'postmaster', 'mailer-daemon'}
 local whitelisted_ip = nil
+local max_rcpt = 5
 local upstreams = nil
 
 --- Parse atime and bucket of limit
@@ -167,6 +168,11 @@ local function rate_test_set(task, func)
 		rcpts = task:get_recipients_headers()
 	end
 	if rcpts then
+		if table.maxn(rcpts) > max_rcpt then
+			rspamd_logger.info(string.format('message <%s> contains %d recipients, maximum is %d',
+				task:get_message_id(), table.maxn(rcpts), max_rcpt))
+			return
+		end
 		for i,r in ipairs(rcpts) do
 			rcpts_user[i] = get_local_part(r['addr'])
 		end
@@ -276,6 +282,7 @@ if rspamd_config:get_api_version() >= 9 then
 	rspamd_config:register_module_option('ratelimit', 'whitelisted_rcpts', 'string')
 	rspamd_config:register_module_option('ratelimit', 'whitelisted_ip', 'map')
 	rspamd_config:register_module_option('ratelimit', 'limit', 'string')
+	rspamd_config:register_module_option('ratelimit', 'max_rcpt', 'uint')
 end
 
 local function parse_whitelisted_rcpts(str)
@@ -299,6 +306,10 @@ if opts then
 	
 	if opts['whitelisted_ip'] then
 		whitelisted_ip = rspamd_config:add_hash_map (opts['whitelisted_ip'])
+	end
+	
+	if opts['max_rcpt'] then
+		max_rcpt = tonumber (opts['max_rcpt'])
 	end
 	
 	if not opts['servers'] then
