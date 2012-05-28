@@ -432,8 +432,9 @@ end
 reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X'
 
 reconf['INVALID_EXIM_RECEIVED'] = function (task)
+	local checked = 0
 	local headers_to = task:get_message():get_header('To')
-	if headers_to and table.maxn(headers_to) < 5 then
+	if headers_to then
 		local headers_recv = task:get_raw_header('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\(\\S*?[\\?\\@\\(\\)\\s\\.\\+\\*\'\'\\/\\\\,]\\S*\\)[\\s\\r\\n]+id \\S*?[\\)\\(<>\\/\\\\,\\-:=]'
 		local re = regexp.get_cached(regexp_text)
@@ -445,6 +446,11 @@ reconf['INVALID_EXIM_RECEIVED'] = function (task)
         		        return true
         			end
 				end
+				checked = checked + 1
+				if checked > 5 then
+					-- Stop on 5 rcpt
+					return false
+				end
 			end
 		end
 	end
@@ -452,8 +458,9 @@ reconf['INVALID_EXIM_RECEIVED'] = function (task)
 end
 
 reconf['INVALID_EXIM_RECEIVED2'] = function (task)
+	local checked = 0
 	local headers_to = task:get_message():get_header('To')
-	if headers_to and table.maxn(headers_to) < 5 then
+	if headers_to then
 		local headers_recv = task:get_raw_header('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\([A-Z]{9,12} [A-Z]{5,6}\\)[\\s\\r\\n]+id [a-zA-Z\\d]{6}-[a-zA-Z\\d]{6}-[a-zA-Z\\d]{2}[\\s\\r\\n]+'
 		local re = regexp.get_cached(regexp_text)
@@ -464,6 +471,11 @@ reconf['INVALID_EXIM_RECEIVED2'] = function (task)
 					if re:match(header_to.."|"..header_r['value']) then
         		        return true
         			end
+				end
+				checked = checked + 1
+				if checked > 5 then
+					-- Stop on 5 rcpt
+					return false
 				end
 			end
 		end
