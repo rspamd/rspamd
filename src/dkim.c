@@ -875,7 +875,7 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *tas
 gint
 rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct worker_task *task)
 {
-	const gchar									*p, *headers_end = NULL, *end;
+	const gchar									*p, *headers_end = NULL, *end, *body_end;
 	gboolean									 got_cr = FALSE, got_crlf = FALSE, got_lf = FALSE;
 	GList										*cur;
 	gchar										*digest;
@@ -891,6 +891,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 
 	/* First of all find place of body */
 	p = task->msg->begin;
+
 	end = task->msg->begin + task->msg->len;
 
 	while (p <= end) {
@@ -945,7 +946,19 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 	}
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (ctx, headers_end, end)) {
+	if (headers_end) {
+		if (ctx->len == 0 || (gint)ctx->len > end - headers_end) {
+			body_end = end;
+		}
+		else {
+			/* Strip message */
+			body_end = headers_end + ctx->len;
+		}
+	}
+	else {
+		body_end = end;
+	}
+	if (!rspamd_dkim_canonize_body (ctx, headers_end, body_end)) {
 		return DKIM_ERROR;
 	}
 	/* Now canonize headers */
