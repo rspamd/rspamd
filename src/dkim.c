@@ -191,6 +191,7 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 			/* Insert new header to the list */
 			h = memory_pool_alloc (ctx->pool, p - c + 1);
 			rspamd_strlcpy (h, c, p - c + 1);
+			g_strstrip (h);
 			/* Check mandatory from */
 			if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
 				from_found = TRUE;
@@ -735,9 +736,13 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 			g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
 		}
 		else {
+			end --;
 			while (end > start + 2) {
 				if (*end == '\n' && *(end - 1) == '\r' && *(end - 2) == '\n') {
 					end -= 2;
+				}
+				else {
+					break;
 				}
 			}
 			if (end == start || end == start + 2) {
@@ -745,7 +750,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 				g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
 			}
 			else {
-				g_checksum_update (ctx->body_hash, start, end - start);
+				g_checksum_update (ctx->body_hash, start, end - start + 1);
 			}
 		}
 		return TRUE;
@@ -764,16 +769,18 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 
 	end = begin + len;
 	p = begin;
+	c = begin;
 	tag = TRUE;
 	skip = FALSE;
 
-	while (p >= end) {
+	while (p < end) {
 		if (tag && p[0] == 'b' && p[1] == '=') {
 			/* Add to signature */
+			msg_debug ("initial update hash with signature part: %*s", p - c + 2, c);
 			g_checksum_update (ctx->headers_hash, c, p - c + 2);
 			skip = TRUE;
 		}
-		else if (skip && *p == ';') {
+		else if (skip && (*p == ';' || p == end - 1)) {
 			skip = FALSE;
 			c = p;
 		}
@@ -790,7 +797,10 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 	while ((*p == '\r' || *p == '\n') && p > c) {
 		p --;
 	}
-	g_checksum_update (ctx->headers_hash, c, p - c);
+	if (p - c > 0) {
+		msg_debug ("final update hash with signature part: %*s", p - c, c);
+		g_checksum_update (ctx->headers_hash, c, p - c);
+	}
 }
 
 static gboolean
@@ -811,7 +821,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 			/* Compare state */
 			if (*p == ':') {
 				/* Compare header's name with desired one */
-				if (p - c - 1 == hlen) {
+				if (p - c == hlen) {
 					if (g_ascii_strncasecmp (c, header_name, hlen) == 0) {
 						/* Get value */
 						state = 2;
@@ -837,7 +847,8 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 			/* c contains the beginning of header */
 			if (*p == '\n' && (!g_ascii_isspace (p[1]) || p[1] == '\0')) {
 				if (!is_sign) {
-					g_checksum_update (ctx->headers_hash, c, p - c);
+					msg_debug ("update signature with header: %*s", p - c + 1, c);
+					g_checksum_update (ctx->headers_hash, c, p - c + 1);
 				}
 				else {
 					rspamd_dkim_signature_update (ctx, c, p - c);
@@ -943,6 +954,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 				got_cr = TRUE;
 			}
 		}
+		else {
+			got_cr = FALSE;
+			got_crlf = FALSE;
+		}
+		p ++;
 	}
 
 	/* Start canonization of body part */
@@ -959,13 +975,13 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 		body_end = end;
 	}
 	if (!rspamd_dkim_canonize_body (ctx, headers_end, body_end)) {
-		return DKIM_ERROR;
+		return DKIM_RECORD_ERROR;
 	}
 	/* Now canonize headers */
 	cur = ctx->hlist;
 	while (cur) {
 		if (!rspamd_dkim_canonize_header (ctx, task, cur->data, FALSE)) {
-			return DKIM_ERROR;
+			return DKIM_RECORD_ERROR;
 		}
 		cur = g_list_next (cur);
 	}
@@ -979,9 +995,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 
 	/* Check bh field */
 	if (memcmp (ctx->bh, digest, dlen) != 0) {
-		return DKIM_ERROR;
+		msg_debug ("bh value missmatch");
+		return DKIM_REJECT;
 	}
 
+	g_checksum_get_digest (ctx->headers_hash, digest, &dlen);
 #ifdef HAVE_OPENSSL
 	/* Check headers signature */
 
@@ -997,7 +1015,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 	}
 
 	if (RSA_verify (nid, digest, dlen, ctx->b, ctx->blen, key->key_rsa) != 1) {
-		res = DKIM_ERROR;
+		msg_debug ("rsa verify failed");
+		res = DKIM_REJECT;
 	}
 #endif
 	return res;

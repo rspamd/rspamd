@@ -885,9 +885,10 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/regexp.c
 				src/plugins/chartable.c
 				src/plugins/fuzzy_check.c
-				src/plugins/spf.c)
+				src/plugins/spf.c
+				src/plugins/dkim_check.c)
 				
-SET(MODULES_LIST surbl regexp chartable fuzzy_check spf)
+SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
 SET(WORKERS_LIST normal controller smtp smtp_proxy lmtp fuzzy keystorage)
 
 AddModules(MODULES_LIST WORKERS_LIST)
