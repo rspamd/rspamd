@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "main.h"
+#include "message.h"
 #include "dkim.h"
 #include "dns.h"
 
@@ -743,24 +744,24 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 		len = remain;
 		finished = TRUE;
 	}
-	len = MIN (sizeof (buf), remain);
 	inlen = len;
 	h = *start;
 	t = &buf[0];
 	got_sp = FALSE;
 
 	while (len && inlen) {
-		if ((*h == '\r' || *h == '\n') && got_sp) {
+		if (*h == '\r' || *h == '\n') {
 			/* Ignore spaces at the end of line */
-			got_sp = FALSE;
-			t --;
-			len --;
+			if (got_sp) {
+				got_sp = FALSE;
+				t --;
+			}
 		}
 		else if (g_ascii_isspace (*h)) {
 			if (got_sp) {
 				/* Ignore multiply spaces */
 				h ++;
-				inlen --;
+				len --;
 				continue;
 			}
 			else {
@@ -779,7 +780,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 
 	g_checksum_update (ck, buf, t - buf);
 
-	return finished;
+	return !finished;
 }
 
 static gboolean
@@ -787,7 +788,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 {
 	if (start == NULL) {
 		/* Empty body */
-		g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
+		g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
 	}
 	else {
 		end --;
@@ -801,7 +802,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 		}
 		if (end == start || end == start + 2) {
 			/* Empty body */
-			g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
+			g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
 		}
 		else {
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
@@ -810,6 +811,10 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 			}
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start + 1));
+			}
+			if (*end != '\n' || *(end - 1) != '\r') {
+				msg_debug ("append CRLF");
+				g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
 			}
 		}
 		return TRUE;
@@ -852,14 +857,83 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 		p ++;
 	}
 
+	p --;
 	/* Skip \r\n at the end */
-	while ((*p == '\r' || *p == '\n') && p > c) {
+	while ((*p == '\r' || *p == '\n') && p >= c) {
 		p --;
 	}
 	if (p - c > 0) {
-		msg_debug ("final update hash with signature part: %*s", p - c, c);
-		g_checksum_update (ctx->headers_hash, c, p - c);
+		msg_debug ("final update hash with signature part: %*s", p - c + 1, c);
+		g_checksum_update (ctx->headers_hash, c, p - c + 1);
 	}
+}
+
+static gboolean
+rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *header, const gchar *header_name, gboolean is_sign)
+{
+	const gchar									*h;
+	gchar										*t, *buf, *v;
+	guint										 inlen;
+	gboolean									 got_sp, allocated = FALSE;
+
+	inlen = strlen (header) + strlen (header_name) + sizeof (":" CRLF);
+	if (inlen > BUFSIZ) {
+		buf = g_malloc (inlen);
+		allocated = TRUE;
+	}
+	else {
+		/* Faster */
+		buf = g_alloca (inlen);
+	}
+
+	/* Name part */
+	t = buf;
+	h = header_name;
+	while (*h) {
+		*t ++ = g_ascii_tolower (*h++);
+	}
+	*t++ = ':';
+
+	/* Value part */
+	v = t;
+	h = header;
+	got_sp = FALSE;
+
+	while (*h) {
+		if (g_ascii_isspace (*h)) {
+			if (got_sp) {
+				h ++;
+				continue;
+			}
+			else {
+				got_sp = TRUE;
+			}
+		}
+		else {
+			got_sp = FALSE;
+		}
+		*t ++ = *h ++;
+	}
+	if (g_ascii_isspace (*(t - 1))) {
+		t --;
+	}
+	*t++ = '\r';
+	*t++ = '\n';
+	*t = '\0';
+
+	if (!is_sign) {
+		msg_debug ("update signature with header: %s", buf);
+		g_checksum_update (ctx->headers_hash, buf, t - buf);
+	}
+	else {
+		rspamd_dkim_signature_update (ctx, buf, t - buf);
+	}
+
+	if (allocated) {
+		g_free (buf);
+	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -914,7 +988,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 					g_checksum_update (ctx->headers_hash, c, p - c + 1);
 				}
 				else {
-					rspamd_dkim_signature_update (ctx, c, p - c);
+					rspamd_dkim_signature_update (ctx, c, p - c + 1);
 				}
 				c = p + 1;
 				state = 0;
@@ -931,8 +1005,22 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 static gboolean
 rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *task, const gchar *header_name, gboolean is_sig)
 {
+	struct raw_header 							*rh;
+
 	if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 		return rspamd_dkim_canonize_header_simple (ctx, task->raw_headers_str, header_name, is_sig);
+	}
+	else {
+		rh = g_hash_table_lookup (task->raw_headers, header_name);
+		if (rh) {
+			while (rh) {
+				if (! rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig)) {
+					return FALSE;
+				}
+				rh = rh->next;
+			}
+			return TRUE;
+		}
 	}
 
 	/* TODO: Implement relaxed algorithm */
