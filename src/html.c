@@ -900,7 +900,7 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 	else {
 		new = construct_html_node (pool, tag_text, tag_len);
 		if (new == NULL) {
-			debug_task ("cannot construct HTML node for text '%s'", tag_text);
+			debug_task ("cannot construct HTML node for text '%*s'", tag_len, tag_text);
 			return FALSE;
 		}
 		data = new->data;

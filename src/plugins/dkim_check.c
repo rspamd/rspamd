@@ -22,14 +22,17 @@
  */
 
 
-/***MODULE:spf
- * rspamd module that checks spf records of incoming email
+/***MODULE:dkim
+ * rspamd module that checks dkim records of incoming email
  *
  * Allowed options:
- * - symbol_allow (string): symbol to insert (default: 'R_SPF_ALLOW')
- * - symbol_fail (string): symbol to insert (default: 'R_SPF_FAIL')
- * - symbol_softfail (string): symbol to insert (default: 'R_SPF_SOFTFAIL')
+ * - symbol_allow (string): symbol to insert in case of allow (default: 'R_DKIM_ALLOW')
+ * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
+ * - symbol_rempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
  * - whitelist (map): map of whitelisted networks
+ * - domains (map): map of domains to check (if absent all domains are checked)
+ * - strict_domains (map): map of domains that requires strict score for dkim
+ * - strict_multiplier (number): multiplier for strict domains
  */
 
 #include "config.h"
@@ -59,6 +62,8 @@ struct dkim_ctx {
 	memory_pool_t                   *dkim_pool;
 	radix_tree_t                    *whitelist_ip;
 	GHashTable						*dkim_domains;
+	GHashTable						*strict_domains;
+	guint							 strict_multiplier;
 	rspamd_lru_hash_t               *dkim_hash;
 };
 
@@ -93,6 +98,8 @@ dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("dkim", "dkim_cache_expire", MODULE_OPT_TYPE_TIME);
 	register_module_opt ("dkim", "whitelist", MODULE_OPT_TYPE_MAP);
 	register_module_opt ("dkim", "domains", MODULE_OPT_TYPE_MAP);
+	register_module_opt ("dkim", "strict_domains", MODULE_OPT_TYPE_MAP);
+	register_module_opt ("dkim", "strict_multiplier", MODULE_OPT_TYPE_UINT);
 
 	return 0;
 }
@@ -146,6 +153,11 @@ dkim_module_config (struct config_file *cfg)
 			msg_warn ("cannot load domains list from %s", value);
 		}
 	}
+	if ((value = get_module_opt (cfg, "dkim", "strict_domains")) != NULL) {
+		if (! add_map (value, read_host_list, fin_host_list, (void **)&dkim_module_ctx->strict_domains)) {
+			msg_warn ("cannot load strict domains list from %s", value);
+		}
+	}
 
 	register_symbol (&cfg->cache, dkim_module_ctx->symbol_reject, 1, dkim_symbol_callback, NULL);
 	register_virtual_symbol (&cfg->cache, dkim_module_ctx->symbol_tempfail, 1);
@@ -173,10 +185,17 @@ dkim_module_reconfig (struct config_file *cfg)
 static void
 dkim_module_check (struct worker_task *task, rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key)
 {
-	gint								 res;
+	gint								 res, score = 1;
 
 	msg_debug ("check dkim signature for %s domain", ctx->dns_key);
 	res = rspamd_dkim_check (ctx, key, task);
+
+	if (dkim_module_ctx->strict_domains != NULL && dkim_module_ctx->strict_multiplier > 0) {
+		/* Perform strict check */
+		if (g_hash_table_lookup (dkim_module_ctx->strict_domains, ctx->dns_key) != NULL) {
+			score *= dkim_module_ctx->strict_multiplier;
+		}
+	}
 
 	if (res == DKIM_REJECT) {
 		insert_result (task, dkim_module_ctx->symbol_reject, 1, NULL);
@@ -202,6 +221,7 @@ dkim_module_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_conte
 	}
 	else {
 		/* Insert tempfail symbol */
+		msg_info ("cannot get key for domain %s", ctx->dns_key);
 		insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
 	}
 }
@@ -236,9 +256,12 @@ dkim_symbol_callback (struct worker_task *task, void *unused)
 				/* Get key */
 				key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash, ctx->dns_key, task->tv.tv_sec);
 				if (key != NULL) {
+					debug_task ("found key for %s in cache", ctx->dns_key);
 					dkim_module_check (task, ctx, key);
 				}
 				else {
+					debug_task ("request key for %s from DNS", ctx->dns_key);
+					task->dns_requests ++;
 					rspamd_get_dkim_key (ctx, task->resolver, task->s, dkim_module_key_handler, task);
 				}
 			}

@@ -648,7 +648,7 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 		case 1:
 			/* State when we got p= and looking for some public key */
 			if ((*p == ';' || p == end) && p > c) {
-				len = (p == end) ? p - c : p - c - 1;
+				len = p - c;
 				return rspamd_dkim_make_key (c, len, err);
 			}
 			else {
@@ -692,6 +692,7 @@ rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 			if (key) {
 				break;
 			}
+			cur = g_list_next (cur);
 		}
 		if (key != NULL && err != NULL) {
 			/* Free error as it is insignificant */
@@ -727,30 +728,88 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *res
 }
 
 static gboolean
+rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
+{
+	const gchar									*h;
+	static gchar								 buf[BUFSIZ];
+	gchar										*t;
+	guint										 len, inlen;
+	gboolean									 got_sp, finished = FALSE;
+
+	if (remain > sizeof (buf)) {
+		len = sizeof (buf);
+	}
+	else {
+		len = remain;
+		finished = TRUE;
+	}
+	len = MIN (sizeof (buf), remain);
+	inlen = len;
+	h = *start;
+	t = &buf[0];
+	got_sp = FALSE;
+
+	while (len && inlen) {
+		if ((*h == '\r' || *h == '\n') && got_sp) {
+			/* Ignore spaces at the end of line */
+			got_sp = FALSE;
+			t --;
+			len --;
+		}
+		else if (g_ascii_isspace (*h)) {
+			if (got_sp) {
+				/* Ignore multiply spaces */
+				h ++;
+				inlen --;
+				continue;
+			}
+			else {
+				got_sp = TRUE;
+			}
+		}
+		else {
+			got_sp = FALSE;
+		}
+		*t++ = *h++;
+		inlen --;
+		len --;
+	}
+
+	*start = h;
+
+	g_checksum_update (ck, buf, t - buf);
+
+	return finished;
+}
+
+static gboolean
 rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const gchar *end)
 {
-	if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
-		/* Perform simple canonization */
-		if (start == NULL) {
+	if (start == NULL) {
+		/* Empty body */
+		g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
+	}
+	else {
+		end --;
+		while (end > start + 2) {
+			if (*end == '\n' && *(end - 1) == '\r' && *(end - 2) == '\n') {
+				end -= 2;
+			}
+			else {
+				break;
+			}
+		}
+		if (end == start || end == start + 2) {
 			/* Empty body */
 			g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
 		}
 		else {
-			end --;
-			while (end > start + 2) {
-				if (*end == '\n' && *(end - 1) == '\r' && *(end - 2) == '\n') {
-					end -= 2;
-				}
-				else {
-					break;
-				}
-			}
-			if (end == start || end == start + 2) {
-				/* Empty body */
-				g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 2);
+			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
+				/* Simple canonization */
+				g_checksum_update (ctx->body_hash, start, end - start + 1);
 			}
 			else {
-				g_checksum_update (ctx->body_hash, start, end - start + 1);
+				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start + 1));
 			}
 		}
 		return TRUE;
@@ -825,6 +884,10 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 					if (g_ascii_strncasecmp (c, header_name, hlen) == 0) {
 						/* Get value */
 						state = 2;
+					}
+					else {
+						/* Skip the whole header */
+						state = 1;
 					}
 				}
 				else {
@@ -981,6 +1044,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 	cur = ctx->hlist;
 	while (cur) {
 		if (!rspamd_dkim_canonize_header (ctx, task, cur->data, FALSE)) {
+			msg_debug ("cannot find header %s for canonization", cur->data);
 			return DKIM_RECORD_ERROR;
 		}
 		cur = g_list_next (cur);
