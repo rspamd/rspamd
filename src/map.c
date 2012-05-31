@@ -587,23 +587,35 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct ma
 			/* read key */
 			/* Check here comments, eol and end of buffer */
 			if (*p == '#') {
-				if (key != NULL && p - c > 0) {
+				if (key != NULL && p - c  >= 0) {
 					value = memory_pool_alloc (pool, p - c + 1);
 					memcpy (value, c, p - c);
 					value[p - c] = '\0';
 					value = g_strstrip (value);
 					func (data->cur_data, key, value);
+					msg_debug ("insert kv pair: %s -> %s", key, value);
 				}
 				data->state = 99;
 			}
 			else if (*p == '\r' || *p == '\n' || p - chunk == len - 1) {
-				if (key != NULL && p - c > 0) {
+				if (key != NULL && p - c >= 0) {
 					value = memory_pool_alloc (pool, p - c + 1);
 					memcpy (value, c, p - c);
 					value[p - c] = '\0';
 
 					value = g_strstrip (value);
 					func (data->cur_data, key, value);
+					msg_debug ("insert kv pair: %s -> %s", key, value);
+				}
+				else if (key == NULL && p - c > 0) {
+					/* Key only line */
+					key = memory_pool_alloc (pool, p - c + 1);
+					memcpy (key, c, p - c);
+					key[p - c] = '\0';
+					value = memory_pool_alloc (pool, 1);
+					*value = '\0';
+					func (data->cur_data, key, value);
+					msg_debug ("insert kv pair: %s -> %s", key, value);
 				}
 				data->state = 100;
 				key = NULL;

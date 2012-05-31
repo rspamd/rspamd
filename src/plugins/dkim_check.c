@@ -214,18 +214,23 @@ dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
 static void
 dkim_module_check (struct worker_task *task, rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key)
 {
-	gint								 res, score_allow, score_deny;
+	gint								 res, score_allow = 1, score_deny = 1;
 	const gchar							*strict_value;
 
-	msg_debug ("check dkim signature for %s domain", ctx->dns_key);
+	msg_debug ("check dkim signature for %s domain from %s", ctx->domain, ctx->dns_key);
 	res = rspamd_dkim_check (ctx, key, task);
 
 	if (dkim_module_ctx->strict_domains != NULL) {
 		/* Perform strict check */
-		if ((strict_value = g_hash_table_lookup (dkim_module_ctx->strict_domains, ctx->dns_key)) != NULL) {
+		if ((strict_value = g_hash_table_lookup (dkim_module_ctx->strict_domains, ctx->domain)) != NULL) {
 			if (!dkim_module_parse_strict (strict_value, &score_allow, &score_deny)) {
 				score_allow = dkim_module_ctx->strict_multiplier;
 				score_deny = dkim_module_ctx->strict_multiplier;
+				msg_debug ("no specific score found for %s domain, using %d for it", ctx->domain, score_deny);
+			}
+			else {
+				msg_debug ("specific score found for %s domain: using %d for deny and %d for allow",
+						ctx->dns_key, score_deny, score_allow);
 			}
 		}
 	}
