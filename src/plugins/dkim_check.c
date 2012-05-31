@@ -154,9 +154,15 @@ dkim_module_config (struct config_file *cfg)
 		}
 	}
 	if ((value = get_module_opt (cfg, "dkim", "strict_domains")) != NULL) {
-		if (! add_map (value, read_host_list, fin_host_list, (void **)&dkim_module_ctx->strict_domains)) {
+		if (! add_map (value, read_kv_list, fin_kv_list, (void **)&dkim_module_ctx->strict_domains)) {
 			msg_warn ("cannot load strict domains list from %s", value);
 		}
+	}
+	if ((value = get_module_opt (cfg, "dkim", "strict_multiplier")) != NULL) {
+		dkim_module_ctx->strict_multiplier = strtoul (value, NULL, 10);
+	}
+	else {
+		dkim_module_ctx->strict_multiplier = 1;
 	}
 
 	register_symbol (&cfg->cache, dkim_module_ctx->symbol_reject, 1, dkim_symbol_callback, NULL);
@@ -182,29 +188,56 @@ dkim_module_reconfig (struct config_file *cfg)
 	return dkim_module_config (cfg);
 }
 
+/*
+ * Parse strict value for domain in format: 'reject_multiplier:deny_multiplier'
+ */
+static gboolean
+dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
+{
+	const gchar							*colon;
+	gulong								 val;
+
+	colon = strchr (value, ':');
+	if (colon) {
+		if (rspamd_strtoul (value, colon - value, &val)) {
+			*deny = val;
+			colon ++;
+			if (rspamd_strtoul (colon, strlen (colon), &val)) {
+				*allow = val;
+				return TRUE;
+			}
+		}
+	}
+	return FALSE;
+}
+
 static void
 dkim_module_check (struct worker_task *task, rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key)
 {
-	gint								 res, score = 1;
+	gint								 res, score_allow, score_deny;
+	const gchar							*strict_value;
 
 	msg_debug ("check dkim signature for %s domain", ctx->dns_key);
 	res = rspamd_dkim_check (ctx, key, task);
 
-	if (dkim_module_ctx->strict_domains != NULL && dkim_module_ctx->strict_multiplier > 0) {
+	if (dkim_module_ctx->strict_domains != NULL) {
 		/* Perform strict check */
-		if (g_hash_table_lookup (dkim_module_ctx->strict_domains, ctx->dns_key) != NULL) {
-			score *= dkim_module_ctx->strict_multiplier;
+		if ((strict_value = g_hash_table_lookup (dkim_module_ctx->strict_domains, ctx->dns_key)) != NULL) {
+			if (!dkim_module_parse_strict (strict_value, &score_allow, &score_deny)) {
+				score_allow = dkim_module_ctx->strict_multiplier;
+				score_deny = dkim_module_ctx->strict_multiplier;
+			}
 		}
 	}
 
 	if (res == DKIM_REJECT) {
-		insert_result (task, dkim_module_ctx->symbol_reject, 1, NULL);
+		insert_result (task, dkim_module_ctx->symbol_reject, score_deny, NULL);
 	}
 	else if (res == DKIM_TRYAGAIN) {
 		insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
 	}
 	else if (res == DKIM_CONTINUE) {
-		insert_result (task, dkim_module_ctx->symbol_allow, 1, NULL);
+		insert_result (task, dkim_module_ctx->symbol_allow, score_allow, NULL);
 	}
 }
 
