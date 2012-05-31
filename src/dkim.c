@@ -765,7 +765,12 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 				continue;
 			}
 			else {
+				*t++ = ' ';
+				h ++;
+				inlen --;
+				len --;
 				got_sp = TRUE;
+				continue;
 			}
 		}
 		else {
@@ -778,6 +783,9 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 
 	*start = h;
 
+	/* Maybe extremely slow
+	 * msg_debug ("update signature with buffer: %*s", t - buf, buf);
+	 */
 	g_checksum_update (ck, buf, t - buf);
 
 	return !finished;
@@ -862,7 +870,8 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 	while ((*p == '\r' || *p == '\n') && p >= c) {
 		p --;
 	}
-	if (p - c > 0) {
+
+	if (p - c + 1 > 0) {
 		msg_debug ("final update hash with signature part: %*s", p - c + 1, c);
 		g_checksum_update (ctx->headers_hash, c, p - c + 1);
 	}
@@ -872,7 +881,7 @@ static gboolean
 rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *header, const gchar *header_name, gboolean is_sign)
 {
 	const gchar									*h;
-	gchar										*t, *buf, *v;
+	gchar										*t, *buf;
 	guint										 inlen;
 	gboolean									 got_sp, allocated = FALSE;
 
@@ -895,7 +904,6 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 	*t++ = ':';
 
 	/* Value part */
-	v = t;
 	h = header;
 	got_sp = FALSE;
 
@@ -907,6 +915,9 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 			}
 			else {
 				got_sp = TRUE;
+				*t ++ = ' ';
+				h ++;
+				continue;
 			}
 		}
 		else {
@@ -1017,7 +1028,12 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *tas
 				if (! rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig)) {
 					return FALSE;
 				}
-				rh = rh->next;
+				if (!is_sig) {
+					rh = rh->next;
+				}
+				else {
+					rh = NULL;
+				}
 			}
 			return TRUE;
 		}
