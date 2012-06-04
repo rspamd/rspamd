@@ -727,7 +727,7 @@ static void
 rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct rspamd_dkim_key_cbdata				*cbdata = arg;
-	rspamd_dkim_key_t							*key;
+	rspamd_dkim_key_t							*key = NULL;
 	GError										*err = NULL;
 	GList										*cur;
 	union rspamd_reply_element					*elt;
