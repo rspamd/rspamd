@@ -33,6 +33,7 @@
  * - domains (map): map of domains to check (if absent all domains are checked)
  * - strict_domains (map): map of domains that requires strict score for dkim
  * - strict_multiplier (number): multiplier for strict domains
+ * - time_jitter (number): jitter in seconds to allow time diff while checking
  */
 
 #include "config.h"
@@ -52,6 +53,7 @@
 #define DEFAULT_SYMBOL_ALLOW "R_DKIM_ALLOW"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
+#define DEFAULT_TIME_JITTER 60
 
 struct dkim_ctx {
 	gint                            (*filter) (struct worker_task * task);
@@ -64,6 +66,7 @@ struct dkim_ctx {
 	GHashTable						*dkim_domains;
 	GHashTable						*strict_domains;
 	guint							 strict_multiplier;
+	guint							 time_jitter;
 	rspamd_lru_hash_t               *dkim_hash;
 };
 
@@ -100,6 +103,7 @@ dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("dkim", "domains", MODULE_OPT_TYPE_MAP);
 	register_module_opt ("dkim", "strict_domains", MODULE_OPT_TYPE_MAP);
 	register_module_opt ("dkim", "strict_multiplier", MODULE_OPT_TYPE_UINT);
+	register_module_opt ("dkim", "time_jitter", MODULE_OPT_TYPE_TIME);
 
 	return 0;
 }
@@ -142,6 +146,12 @@ dkim_module_config (struct config_file *cfg)
 	}
 	else {
 		cache_expire = DEFAULT_CACHE_MAXAGE;
+	}
+	if ((value = get_module_opt (cfg, "dkim", "time_jitter")) != NULL) {
+		dkim_module_ctx->time_jitter = cfg_parse_time (value, TIME_SECONDS) / 1000;
+	}
+	else {
+		dkim_module_ctx->time_jitter = DEFAULT_TIME_JITTER;
 	}
 	if ((value = get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
 		if (! add_map (value, read_radix_list, fin_radix_list, (void **)&dkim_module_ctx->whitelist_ip)) {
@@ -285,7 +295,7 @@ dkim_symbol_callback (struct worker_task *task, void *unused)
 #endif
 			/* Parse signature */
 			msg_debug ("create dkim signature");
-			ctx = rspamd_create_dkim_context (hlist->data, task->task_pool, &err);
+			ctx = rspamd_create_dkim_context (hlist->data, task->task_pool, dkim_module_ctx->time_jitter, &err);
 			if (ctx == NULL) {
 				msg_info ("cannot parse DKIM context: %s", err->message);
 				g_error_free (err);

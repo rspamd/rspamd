@@ -81,7 +81,7 @@ rspamd_dkim_test_func ()
 
 	g_assert (resolver != NULL);
 
-	ctx = rspamd_create_dkim_context (test_dkim_sig, pool, &err);
+	ctx = rspamd_create_dkim_context (test_dkim_sig, pool, 0, &err);
 
 	g_assert (ctx != NULL);
 

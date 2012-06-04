@@ -172,10 +172,11 @@ typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen, rspamd_
  * Create new dkim context from signature
  * @param sig message's signature
  * @param pool pool to allocate memory from
+ * @param time_jitter jitter in seconds to allow time diff while checking
  * @param err pointer to error object
  * @return new context or NULL
  */
-rspamd_dkim_context_t* rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err);
+rspamd_dkim_context_t* rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool,  guint time_jitter, GError **err);
 
 /**
  * Make DNS request for specified context and obtain and parse key

@@ -349,7 +349,7 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gs
  * @return new context or NULL
  */
 rspamd_dkim_context_t*
-rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
+rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_jitter, GError **err)
 {
 	const gchar						*p, *c, *tag, *end;
 	gsize							 taglen;
@@ -577,7 +577,7 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, GError **err)
 	}
 	/* Check expiration */
 	now = time (NULL);
-	if (new->timestamp && new->timestamp > now) {
+	if (new->timestamp && now < new->timestamp && new->timestamp - now > (gint)time_jitter) {
 		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_FUTURE, "signature was made in future, ignoring");
 		return NULL;
 	}
