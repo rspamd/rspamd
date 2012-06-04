@@ -400,8 +400,9 @@ process_stat_command (struct controller_session *session)
 	r = rspamd_snprintf (out_buf, sizeof (out_buf), "Messages scanned: %ud" CRLF, session->worker->srv->stat->messages_scanned);
 	if (session->worker->srv->stat->messages_scanned > 0) {
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
-			r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages with action %s: %ud" CRLF,
-					str_action_metric (i), session->worker->srv->stat->actions_stat[i]);
+			r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages with action %s: %ud, %.2f%%" CRLF,
+					str_action_metric (i), session->worker->srv->stat->actions_stat[i],
+					(double)session->worker->srv->stat->actions_stat[i] / (double)session->worker->srv->stat->messages_scanned * 100.);
 			if (i < METRIC_ACTION_GREYLIST) {
 				spam += session->worker->srv->stat->actions_stat[i];
 			}
