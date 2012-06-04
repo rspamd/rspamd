@@ -225,7 +225,7 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 	}
 
 	if (count > 0) {
-		ctx->hlist = g_ptr_array_new_full (count, NULL);
+		ctx->hlist = g_ptr_array_sized_new (count);
 	}
 	else {
 		return FALSE;
