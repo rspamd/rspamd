@@ -541,7 +541,7 @@ process_raw_headers (struct worker_task *task)
 			else {
 				/* Process value */
 				l = p - c;
-				if (l > 0) {
+				if (l >= 0) {
 					tmp = memory_pool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
@@ -615,6 +615,7 @@ process_raw_headers (struct worker_task *task)
 		case 5:
 			/* Header has only name, no value */
 			new->next = NULL;
+			new->value = "";
 			if ((lp = g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
 				while (lp->next != NULL) {
 					lp = lp->next;
