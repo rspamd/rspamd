@@ -61,6 +61,11 @@ static const dkim_parse_param_f parser_funcs[] = {
 	[DKIM_PARAM_BODYLENGTH] = rspamd_dkim_parse_bodylength
 };
 
+struct rspamd_dkim_header {
+	gchar *name;
+	guint count;
+};
+
 #define DKIM_ERROR dkim_error_quark ()
 GQuark
 dkim_error_quark (void)
@@ -178,26 +183,75 @@ rspamd_dkim_parse_selector (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 	return TRUE;
 }
 
+static struct rspamd_dkim_header*
+rspamd_dkim_find_header (GPtrArray *arr, const gchar *name, gsize len)
+{
+	guint							 i;
+	struct rspamd_dkim_header		*h;
+
+	for (i = 0; i < arr->len; i ++) {
+		h = g_ptr_array_index (arr, i);
+		if (g_ascii_strncasecmp (h->name, name, len) == 0) {
+			return h;
+		}
+	}
+
+	return NULL;
+}
+
+static void
+rspamd_dkim_hlist_free (void *ud)
+{
+	GPtrArray						*a = ud;
+
+	g_ptr_array_free (a, TRUE);
+}
+
 static gboolean
 rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
 {
 	const gchar						*c, *p, *end = param + len;
 	gchar							*h;
 	gboolean						 from_found = FALSE;
+	guint							 count = 0;
+	struct rspamd_dkim_header		*new;
+
+	p = param;
+	while (p <= end) {
+		if ((*p == ':' || p == end)) {
+			count ++;
+		}
+		p ++;
+	}
+
+	if (count > 0) {
+		ctx->hlist = g_ptr_array_new_full (count, NULL);
+	}
+	else {
+		return FALSE;
+	}
 
 	c = param;
 	p = param;
 	while (p <= end) {
 		if ((*p == ':' || p == end) && p - c > 0) {
-			/* Insert new header to the list */
-			h = memory_pool_alloc (ctx->pool, p - c + 1);
-			rspamd_strlcpy (h, c, p - c + 1);
-			g_strstrip (h);
-			/* Check mandatory from */
-			if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
-				from_found = TRUE;
+			if ((new = rspamd_dkim_find_header (ctx->hlist, c, p - c)) != NULL) {
+				new->count ++;
 			}
-			ctx->hlist = g_list_prepend (ctx->hlist, h);
+			else {
+				/* Insert new header to the list */
+				new = memory_pool_alloc (ctx->pool, sizeof (struct rspamd_dkim_header));
+				h = memory_pool_alloc (ctx->pool, p - c + 1);
+				rspamd_strlcpy (h, c, p - c + 1);
+				g_strstrip (h);
+				new->name = h;
+				new->count = 1;
+				/* Check mandatory from */
+				if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
+					from_found = TRUE;
+				}
+				g_ptr_array_add (ctx->hlist, new);
+			}
 			c = p + 1;
 			p ++;
 		}
@@ -212,13 +266,12 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 	}
 	else {
 		if (!from_found) {
-			g_list_free (ctx->hlist);
+			g_ptr_array_free (ctx->hlist, TRUE);
 			g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_H, "invalid dkim header list, from header is missing");
 			return FALSE;
 		}
 		/* Reverse list */
-		ctx->hlist = g_list_reverse (ctx->hlist);
-		memory_pool_add_destructor (ctx->pool, (pool_destruct_func)g_list_free, ctx->hlist);
+		memory_pool_add_destructor (ctx->pool, (pool_destruct_func)rspamd_dkim_hlist_free, ctx->hlist);
 	}
 
 	return TRUE;
@@ -744,7 +797,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 		len = remain;
 		finished = TRUE;
 	}
-	inlen = len;
+	inlen = sizeof (buf) - 1;
 	h = *start;
 	t = &buf[0];
 	got_sp = FALSE;
@@ -755,6 +808,24 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 			if (got_sp) {
 				got_sp = FALSE;
 				t --;
+			}
+			/* Replace a single \n or \r with \r\n */
+			if (*h == '\n' && *(h - 1) != '\r') {
+				*t ++ = '\r';
+				inlen --;
+			}
+			else if (*h == '\r' && *(h + 1) != '\n') {
+				*t ++ = *h ++;
+				*t ++ = '\n';
+				if (inlen > 1) {
+					inlen -= 2;
+				}
+				else {
+					/* It is safe as inlen = sizeof (buf) - 1 */
+					inlen = 0;
+				}
+				len --;
+				continue;
 			}
 		}
 		else if (g_ascii_isspace (*h)) {
@@ -783,9 +854,9 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 
 	*start = h;
 
-	/* Maybe extremely slow
-	 * msg_debug ("update signature with buffer: %*s", t - buf, buf);
-	 */
+#if 1
+	msg_debug ("update signature with buffer: %*s", t - buf, buf);
+#endif
 	g_checksum_update (ck, buf, t - buf);
 
 	return !finished;
@@ -947,14 +1018,24 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 	return TRUE;
 }
 
+struct rspamd_dkim_sign_chunk {
+	const gchar *begin;
+	gsize len;
+};
+
 static gboolean
-rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *headers, const gchar *header_name, gboolean is_sign)
+rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *headers,
+		const gchar *header_name, guint count, gboolean is_sign)
 {
 	const gchar									*p, *c;
 	gint										 state = 0, hlen;
 	gboolean									 found = FALSE;
+	GArray										*to_sign;
+	struct rspamd_dkim_sign_chunk				 chunk, *elt;
+	gint										 i;
 
 	/* This process is very similar to raw headers processing */
+	to_sign = g_array_sized_new (FALSE, FALSE, sizeof (struct rspamd_dkim_sign_chunk), count);
 	p = headers;
 	c = p;
 	hlen = strlen (header_name);
@@ -994,13 +1075,9 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 		case 2:
 			/* c contains the beginning of header */
 			if (*p == '\n' && (!g_ascii_isspace (p[1]) || p[1] == '\0')) {
-				if (!is_sign) {
-					msg_debug ("update signature with header: %*s", p - c + 1, c);
-					g_checksum_update (ctx->headers_hash, c, p - c + 1);
-				}
-				else {
-					rspamd_dkim_signature_update (ctx, c, p - c + 1);
-				}
+				chunk.begin = c;
+				chunk.len = p - c + 1;
+				g_array_append_val (to_sign, chunk);
 				c = p + 1;
 				state = 0;
 				found = TRUE;
@@ -1010,30 +1087,72 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 		}
 	}
 
+	if (!is_sign) {
+
+		for (i = to_sign->len - 1; i >= 0 && count > 0; i --, count --) {
+			elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, i);
+			msg_debug ("update signature with header: %*s", elt->len, elt->begin);
+			g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+		}
+	}
+	else {
+		elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, to_sign->len - 1);
+		rspamd_dkim_signature_update (ctx, elt->begin, elt->len);
+	}
+
+	g_array_free (to_sign, TRUE);
+
 	return found;
 }
 
 static gboolean
-rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *task, const gchar *header_name, gboolean is_sig)
+rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *task, const gchar *header_name,
+		guint count, gboolean is_sig)
 {
-	struct raw_header 							*rh;
+	struct raw_header 							*rh, *rh_iter;
+	guint										 rh_num = 0;
+	GList										*nh = NULL, *cur;
 
 	if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
-		return rspamd_dkim_canonize_header_simple (ctx, task->raw_headers_str, header_name, is_sig);
+		return rspamd_dkim_canonize_header_simple (ctx, task->raw_headers_str, header_name, count, is_sig);
 	}
 	else {
 		rh = g_hash_table_lookup (task->raw_headers, header_name);
 		if (rh) {
-			while (rh) {
+			rh_iter = rh;
+			while (rh_iter) {
+				rh_num ++;
+				rh_iter = rh_iter->next;
+			}
+
+			if (rh_num > count) {
+				/* Set skip count */
+				rh_num -= count;
+			}
+			else {
+				rh_num = 0;
+			}
+			rh_iter = rh;
+			while (rh_num) {
+				rh_iter = rh_iter->next;
+				rh_num --;
+			}
+			/* Now insert required headers */
+			while (rh_iter) {
+				nh = g_list_prepend (nh, rh_iter);
+				rh_iter = rh_iter->next;
+			}
+			cur = nh;
+			while (cur) {
+				rh = cur->data;
 				if (! rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig)) {
+					g_list_free (nh);
 					return FALSE;
 				}
-				if (!is_sig) {
-					rh = rh->next;
-				}
-				else {
-					rh = NULL;
-				}
+				cur = g_list_next (cur);
+			}
+			if (nh != NULL) {
+				g_list_free (nh);
 			}
 			return TRUE;
 		}
@@ -1055,10 +1174,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 {
 	const gchar									*p, *headers_end = NULL, *end, *body_end;
 	gboolean									 got_cr = FALSE, got_crlf = FALSE, got_lf = FALSE;
-	GList										*cur;
 	gchar										*digest;
 	gsize										 dlen;
 	gint										 res = DKIM_CONTINUE;
+	guint										 i;
+	struct rspamd_dkim_header					*dh;
 #ifdef HAVE_OPENSSL
 	gint										 nid;
 #endif
@@ -1085,6 +1205,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 					/* Set got crlf flag */
 					got_crlf = TRUE;
 					got_cr = FALSE;
+					got_lf = FALSE;
 				}
 			}
 			else if (got_cr && *(p - 1) != '\r') {
@@ -1145,17 +1266,13 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 		return DKIM_RECORD_ERROR;
 	}
 	/* Now canonize headers */
-	cur = ctx->hlist;
-	while (cur) {
-		if (!rspamd_dkim_canonize_header (ctx, task, cur->data, FALSE)) {
-			msg_debug ("cannot find header %s for canonization", cur->data);
-			return DKIM_RECORD_ERROR;
-		}
-		cur = g_list_next (cur);
+	for (i = 0; i < ctx->hlist->len; i ++) {
+		dh = g_ptr_array_index (ctx->hlist, i);
+		rspamd_dkim_canonize_header (ctx, task, dh->name, dh->count, FALSE);
 	}
 
 	/* Canonize dkim signature */
-	rspamd_dkim_canonize_header (ctx, task, DKIM_SIGNHEADER, TRUE);
+	rspamd_dkim_canonize_header (ctx, task, DKIM_SIGNHEADER, 1, TRUE);
 
 	dlen = ctx->bhlen;
 	digest = g_alloca (dlen);
