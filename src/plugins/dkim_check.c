@@ -30,10 +30,11 @@
  * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
  * - symbol_rempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
  * - whitelist (map): map of whitelisted networks
- * - domains (map): map of domains to check (if absent all domains are checked)
- * - strict_domains (map): map of domains that requires strict score for dkim
+ * - domains (map): map of domains to check
  * - strict_multiplier (number): multiplier for strict domains
  * - time_jitter (number): jitter in seconds to allow time diff while checking
+ * - trusted_only (flag): check signatures only for domains in 'domains' map
+ * - skip_mutli (flag): skip messages with multiply dkim signatures
  */
 
 #include "config.h"
@@ -64,10 +65,11 @@ struct dkim_ctx {
 	memory_pool_t                   *dkim_pool;
 	radix_tree_t                    *whitelist_ip;
 	GHashTable						*dkim_domains;
-	GHashTable						*strict_domains;
 	guint							 strict_multiplier;
 	guint							 time_jitter;
 	rspamd_lru_hash_t               *dkim_hash;
+	gboolean						 trusted_only;
+	gboolean						 skip_multi;
 };
 
 static struct dkim_ctx        *dkim_module_ctx = NULL;
@@ -101,9 +103,10 @@ dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_module_opt ("dkim", "dkim_cache_expire", MODULE_OPT_TYPE_TIME);
 	register_module_opt ("dkim", "whitelist", MODULE_OPT_TYPE_MAP);
 	register_module_opt ("dkim", "domains", MODULE_OPT_TYPE_MAP);
-	register_module_opt ("dkim", "strict_domains", MODULE_OPT_TYPE_MAP);
 	register_module_opt ("dkim", "strict_multiplier", MODULE_OPT_TYPE_UINT);
 	register_module_opt ("dkim", "time_jitter", MODULE_OPT_TYPE_TIME);
+	register_module_opt ("dkim", "trusted_only", MODULE_OPT_TYPE_FLAG);
+	register_module_opt ("dkim", "skip_multi", MODULE_OPT_TYPE_FLAG);
 
 	return 0;
 }
@@ -114,6 +117,7 @@ dkim_module_config (struct config_file *cfg)
 	gchar                          *value;
 	gint                            res = TRUE;
 	guint                           cache_size, cache_expire;
+	gboolean						got_trusted = FALSE;
 
 	dkim_module_ctx->whitelist_ip = radix_tree_create ();
 
@@ -159,13 +163,11 @@ dkim_module_config (struct config_file *cfg)
 		}
 	}
 	if ((value = get_module_opt (cfg, "dkim", "domains")) != NULL) {
-		if (! add_map (value, read_host_list, fin_host_list, (void **)&dkim_module_ctx->dkim_domains)) {
-			msg_warn ("cannot load domains list from %s", value);
+		if (! add_map (value, read_kv_list, fin_kv_list, (void **)&dkim_module_ctx->dkim_domains)) {
+			msg_warn ("cannot load dkim domains list from %s", value);
 		}
-	}
-	if ((value = get_module_opt (cfg, "dkim", "strict_domains")) != NULL) {
-		if (! add_map (value, read_kv_list, fin_kv_list, (void **)&dkim_module_ctx->strict_domains)) {
-			msg_warn ("cannot load strict domains list from %s", value);
+		else {
+			got_trusted = TRUE;
 		}
 	}
 	if ((value = get_module_opt (cfg, "dkim", "strict_multiplier")) != NULL) {
@@ -174,13 +176,35 @@ dkim_module_config (struct config_file *cfg)
 	else {
 		dkim_module_ctx->strict_multiplier = 1;
 	}
+	if ((value = get_module_opt (cfg, "dkim", "trusted_only")) != NULL) {
+		dkim_module_ctx->trusted_only = parse_flag (value) == 1;
+	}
+	else {
+		dkim_module_ctx->trusted_only = FALSE;
+	}
+	if ((value = get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
+		dkim_module_ctx->skip_multi = parse_flag (value) == 1;
+	}
+	else {
+		dkim_module_ctx->skip_multi = FALSE;
+	}
 
-	register_symbol (&cfg->cache, dkim_module_ctx->symbol_reject, 1, dkim_symbol_callback, NULL);
-	register_virtual_symbol (&cfg->cache, dkim_module_ctx->symbol_tempfail, 1);
-	register_virtual_symbol (&cfg->cache, dkim_module_ctx->symbol_allow, 1);
+	if (dkim_module_ctx->trusted_only && !got_trusted) {
+		msg_err ("trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
+	}
+	else {
+		register_symbol (&cfg->cache, dkim_module_ctx->symbol_reject, 1, dkim_symbol_callback, NULL);
+		register_virtual_symbol (&cfg->cache, dkim_module_ctx->symbol_tempfail, 1);
+		register_virtual_symbol (&cfg->cache, dkim_module_ctx->symbol_allow, 1);
 
-	dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (rspamd_strcase_hash, rspamd_strcase_equal,
-			cache_size, cache_expire, g_free, (GDestroyNotify)rspamd_dkim_key_free);
+		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (rspamd_strcase_hash, rspamd_strcase_equal,
+				cache_size, cache_expire, g_free, (GDestroyNotify)rspamd_dkim_key_free);
+
+
+#ifndef HAVE_OPENSSL
+		msg_warn ("openssl is not found so dkim rsa check is disabled, only check body hash, it is NOT safe to trust these results");
+#endif
+	}
 
 	return res;
 }
@@ -230,9 +254,9 @@ dkim_module_check (struct worker_task *task, rspamd_dkim_context_t *ctx, rspamd_
 	msg_debug ("check dkim signature for %s domain from %s", ctx->domain, ctx->dns_key);
 	res = rspamd_dkim_check (ctx, key, task);
 
-	if (dkim_module_ctx->strict_domains != NULL) {
+	if (dkim_module_ctx->dkim_domains != NULL) {
 		/* Perform strict check */
-		if ((strict_value = g_hash_table_lookup (dkim_module_ctx->strict_domains, ctx->domain)) != NULL) {
+		if ((strict_value = g_hash_table_lookup (dkim_module_ctx->dkim_domains, ctx->domain)) != NULL) {
 			if (!dkim_module_parse_strict (strict_value, &score_allow, &score_deny)) {
 				score_allow = dkim_module_ctx->strict_multiplier;
 				score_deny = dkim_module_ctx->strict_multiplier;
@@ -295,6 +319,14 @@ dkim_symbol_callback (struct worker_task *task, void *unused)
 #endif
 			/* Parse signature */
 			msg_debug ("create dkim signature");
+			/* Check only last signature as there is no way to check embeded signatures after resend or something like this */
+			if (dkim_module_ctx->skip_multi) {
+				if (hlist->next != NULL) {
+					msg_info ("<%s> skip dkim check as it has several dkim signatures", task->message_id);
+					return;
+				}
+			}
+			hlist = g_list_last (hlist);
 			ctx = rspamd_create_dkim_context (hlist->data, task->task_pool, dkim_module_ctx->time_jitter, &err);
 			if (ctx == NULL) {
 				msg_info ("cannot parse DKIM context: %s", err->message);
@@ -302,6 +334,10 @@ dkim_symbol_callback (struct worker_task *task, void *unused)
 			}
 			else {
 				/* Get key */
+				if (dkim_module_ctx->trusted_only && (dkim_module_ctx->dkim_domains == NULL || g_hash_table_lookup (dkim_module_ctx->dkim_domains, ctx->domain) == NULL)) {
+					msg_debug ("skip dkim check for %s domain", ctx->domain);
+					return;
+				}
 				key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash, ctx->dns_key, task->tv.tv_sec);
 				if (key != NULL) {
 					debug_task ("found key for %s in cache", ctx->dns_key);

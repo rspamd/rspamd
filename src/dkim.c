@@ -854,7 +854,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 
 	*start = h;
 
-#if 1
+#if 0
 	msg_debug ("update signature with buffer: %*s", t - buf, buf);
 #endif
 	g_checksum_update (ck, buf, t - buf);
@@ -1087,17 +1087,19 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 		}
 	}
 
-	if (!is_sign) {
+	if (found) {
+		if (!is_sign) {
 
-		for (i = to_sign->len - 1; i >= 0 && count > 0; i --, count --) {
-			elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, i);
-			msg_debug ("update signature with header: %*s", elt->len, elt->begin);
-			g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+			for (i = to_sign->len - 1; i >= 0 && count > 0; i --, count --) {
+				elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, i);
+				msg_debug ("update signature with header: %*s", elt->len, elt->begin);
+				g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+			}
 		}
-	}
-	else {
-		elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, to_sign->len - 1);
-		rspamd_dkim_signature_update (ctx, elt->begin, elt->len);
+		else {
+			elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, 0);
+			rspamd_dkim_signature_update (ctx, elt->begin, elt->len);
+		}
 	}
 
 	g_array_free (to_sign, TRUE);
@@ -1119,40 +1121,46 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *tas
 	else {
 		rh = g_hash_table_lookup (task->raw_headers, header_name);
 		if (rh) {
-			rh_iter = rh;
-			while (rh_iter) {
-				rh_num ++;
-				rh_iter = rh_iter->next;
-			}
+			if (!is_sig) {
+				rh_iter = rh;
+				while (rh_iter) {
+					rh_num ++;
+					rh_iter = rh_iter->next;
+				}
 
-			if (rh_num > count) {
-				/* Set skip count */
-				rh_num -= count;
+				if (rh_num > count) {
+					/* Set skip count */
+					rh_num -= count;
+				}
+				else {
+					rh_num = 0;
+				}
+				rh_iter = rh;
+				while (rh_num) {
+					rh_iter = rh_iter->next;
+					rh_num --;
+				}
+				/* Now insert required headers */
+				while (rh_iter) {
+					nh = g_list_prepend (nh, rh_iter);
+					rh_iter = rh_iter->next;
+				}
+				cur = nh;
+				while (cur) {
+					rh = cur->data;
+					if (! rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig)) {
+						g_list_free (nh);
+						return FALSE;
+					}
+					cur = g_list_next (cur);
+				}
+				if (nh != NULL) {
+					g_list_free (nh);
+				}
 			}
 			else {
-				rh_num = 0;
-			}
-			rh_iter = rh;
-			while (rh_num) {
-				rh_iter = rh_iter->next;
-				rh_num --;
-			}
-			/* Now insert required headers */
-			while (rh_iter) {
-				nh = g_list_prepend (nh, rh_iter);
-				rh_iter = rh_iter->next;
-			}
-			cur = nh;
-			while (cur) {
-				rh = cur->data;
-				if (! rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig)) {
-					g_list_free (nh);
-					return FALSE;
-				}
-				cur = g_list_next (cur);
-			}
-			if (nh != NULL) {
-				g_list_free (nh);
+				/* For signature check just use the first dkim header */
+				rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig);
 			}
 			return TRUE;
 		}

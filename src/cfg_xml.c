@@ -2224,6 +2224,11 @@ check_module_option (const gchar *mname, const gchar *optname, const gchar *data
 			return FALSE;
 		}
 		break;
+	case MODULE_OPT_TYPE_FLAG:
+		if (parse_flag (data) == -1) {
+			return FALSE;
+		}
+		break;
 	}
 
 	return TRUE;

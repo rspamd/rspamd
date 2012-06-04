@@ -449,23 +449,45 @@ cfg_parse_time (const gchar *t, enum time_type default_type)
 gchar
 parse_flag (const gchar *str)
 {
-	if (!str || !*str)
+	guint							 len;
+	gchar							 c;
+
+	if (!str || !*str) {
 		return -1;
-
-	if ((*str == 'Y' || *str == 'y')) {
-		return 1;
 	}
 
-	if ((*str == 'Y' || *str == 'y') && (*(str + 1) == 'E' || *(str + 1) == 'e') && (*(str + 2) == 'S' || *(str + 2) == 's')) {
-		return 1;
-	}
+	len = strlen (str);
 
-	if ((*str == 'N' || *str == 'n')) {
-		return 0;
-	}
-
-	if ((*str == 'N' || *str == 'n') && (*(str + 1) == 'O' || *(str + 1) == 'o')) {
-		return 0;
+	switch (len) {
+	case 1:
+		c = g_ascii_tolower (*str);
+		if (c == 'y' || c == '1') {
+			return 1;
+		}
+		else if (c == 'n' || c == '0') {
+			return 0;
+		}
+		break;
+	case 2:
+		if (g_ascii_strncasecmp (str, "no", len) == 0) {
+			return 0;
+		}
+		break;
+	case 3:
+		if (g_ascii_strncasecmp (str, "yes", len) == 0) {
+			return 1;
+		}
+		break;
+	case 4:
+		if (g_ascii_strncasecmp (str, "true", len) == 0) {
+			return 1;
+		}
+		break;
+	case 5:
+		if (g_ascii_strncasecmp (str, "false", len) == 0) {
+			return 0;
+		}
+		break;
 	}
 
 	return -1;
