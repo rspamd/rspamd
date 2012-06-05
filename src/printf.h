@@ -56,6 +56,7 @@
  */
 gint rspamd_sprintf (gchar *buf, const gchar *fmt, ...);
 gint rspamd_fprintf (FILE *f, const gchar *fmt, ...);
+gint rspamd_log_fprintf (FILE *f, const gchar *fmt, ...);
 gint rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...);
 gchar *rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args);
 

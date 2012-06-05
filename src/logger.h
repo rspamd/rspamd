@@ -90,11 +90,11 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 # define debug_task(...) rspamd_conditional_debug(rspamd_main->logger, task->from_addr.s_addr, __FUNCTION__, __VA_ARGS__)
 #endif
 #else
-#define msg_err(...)	rspamd_fprintf(stderr, __VA_ARGS__)
-#define msg_warn(...)	rspamd_fprintf(stderr, __VA_ARGS__)
-#define msg_info(...)	rspamd_fprintf(stderr, __VA_ARGS__)
-#define msg_debug(...)	rspamd_fprintf(stderr, __VA_ARGS__)
-#define debug_task(...) rspamd_fprintf(stderr, __VA_ARGS__)
+#define msg_err(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
+#define msg_warn(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
+#define msg_info(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
+#define msg_debug(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
+#define debug_task(...) rspamd_log_fprintf(stderr, __VA_ARGS__)
 #endif
 
 #endif

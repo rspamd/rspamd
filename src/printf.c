@@ -186,6 +186,23 @@ rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 }
 
 gint
+rspamd_log_fprintf (FILE *f, const gchar *fmt, ...)
+{
+	va_list   args;
+    gchar buf[BUFSIZ];
+    gint r;
+
+	va_start (args, fmt);
+	rspamd_vsnprintf (buf, sizeof (buf), fmt, args);
+	va_end (args);
+
+    r = fprintf (f, "%s\n", buf);
+    fflush (f);
+
+    return r;
+}
+
+gint
 rspamd_sprintf (gchar *buf, const gchar *fmt, ...)
 {
 	gchar   *p;

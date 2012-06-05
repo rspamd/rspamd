@@ -6,7 +6,7 @@ SET(JSONSRC				dump.c
 						utf.c
 						value.c)
 
-ADD_LIBRARY(rspamd-json SHARED ${JSONSRC})
+ADD_LIBRARY(rspamd-json ${LINK_TYPE} ${JSONSRC})
 SET_TARGET_PROPERTIES(rspamd-json PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
 INSTALL(TARGETS rspamd-json 
     LIBRARY DESTINATION ${LIBDIR} 

@@ -3,7 +3,7 @@ SET(CDBSRC				cdb_init.c
 						cdb_find.c
 						cdb_make.c)
 
-ADD_LIBRARY(rspamd-cdb SHARED ${CDBSRC})
+ADD_LIBRARY(rspamd-cdb ${LINK_TYPE} ${CDBSRC})
 SET_TARGET_PROPERTIES(rspamd-cdb PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
 INSTALL(TARGETS rspamd-cdb 
     LIBRARY DESTINATION ${LIBDIR} 

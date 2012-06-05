@@ -12,7 +12,7 @@ SET(LUASRC			  lua_common.c
 					  lua_redis.c
 					  lua_upstream.c)
 
-ADD_LIBRARY(rspamd-lua SHARED ${LUASRC})
+ADD_LIBRARY(rspamd-lua ${LINK_TYPE} ${LUASRC})
 TARGET_LINK_LIBRARIES(rspamd-lua ${LUALIB})
 SET_TARGET_PROPERTIES(rspamd-lua PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
 INSTALL(TARGETS rspamd-lua 
