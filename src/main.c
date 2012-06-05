@@ -156,7 +156,7 @@ chldsigcode (gint code) {
 
 /* Prints info about incoming signals by parsing siginfo structures */
 static void
-print_signals_info ()
+print_signals_info (void)
 {
 	siginfo_t *inf;
 

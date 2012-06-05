@@ -251,7 +251,7 @@ typedef struct rspamd_rwlock_s {
  * Create new mutex
  * @return mutex or NULL
  */
-rspamd_mutex_t* rspamd_mutex_new ();
+rspamd_mutex_t* rspamd_mutex_new (void);
 
 /**
  * Lock mutex
@@ -269,7 +269,7 @@ void rspamd_mutex_unlock (rspamd_mutex_t *mtx);
  * Create new rwloc
  * @return
  */
-rspamd_rwlock_t* rspamd_rwlock_new ();
+rspamd_rwlock_t* rspamd_rwlock_new (void);
 
 /**
  * Lock rwlock for writing

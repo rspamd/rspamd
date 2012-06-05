@@ -52,7 +52,7 @@
 static sig_atomic_t                    wanna_die = 0;
 
 /* Init functions */
-gpointer init_smtp_proxy ();
+gpointer init_smtp_proxy (void);
 void start_smtp_proxy (struct rspamd_worker *worker);
 
 worker_t smtp_proxy_worker = {

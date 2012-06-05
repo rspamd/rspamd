@@ -498,7 +498,7 @@ end:
 }
 
 static gboolean
-maybe_init_static ()
+maybe_init_static (void)
 {
 	if (!binlog_opened) {
 		binlog_opened = g_hash_table_new (g_direct_hash, g_direct_equal);

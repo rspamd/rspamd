@@ -30,7 +30,7 @@
 static void                    *radix_alloc (radix_tree_t * tree);
 
 radix_tree_t                   *
-radix_tree_create ()
+radix_tree_create (void)
 {
 	radix_tree_t                   *tree;
 

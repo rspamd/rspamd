@@ -206,7 +206,7 @@ gboolean kv_elt_compare_func (gconstpointer e1, gconstpointer e2);
 /**
  * LRU expire
  */
-struct rspamd_kv_expire* rspamd_lru_expire_new ();
+struct rspamd_kv_expire* rspamd_lru_expire_new (void);
 
 /**
  * Ordinary hash

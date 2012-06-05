@@ -660,7 +660,7 @@ memory_pool_stat (memory_pool_stat_t * st)
 /* By default allocate 8Kb chunks of memory */
 #define FIXED_POOL_SIZE 8192
 gsize
-memory_pool_get_size ()
+memory_pool_get_size (void)
 {
 #ifdef HAVE_GETPAGESIZE
 	return MAX (getpagesize (), FIXED_POOL_SIZE);

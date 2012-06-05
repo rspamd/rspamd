@@ -1351,7 +1351,7 @@ rspamd_fallocate (gint fd, off_t offset, off_t len)
  * @return mutex or NULL
  */
 inline rspamd_mutex_t*
-rspamd_mutex_new ()
+rspamd_mutex_new (void)
 {
 	rspamd_mutex_t					*new;
 
@@ -1398,7 +1398,7 @@ rspamd_mutex_unlock (rspamd_mutex_t *mtx)
  * @return
  */
 rspamd_rwlock_t*
-rspamd_rwlock_new ()
+rspamd_rwlock_new (void)
 {
 	rspamd_rwlock_t					*new;
 

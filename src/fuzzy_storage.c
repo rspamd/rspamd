@@ -63,7 +63,7 @@
 #define CURRENT_FUZZY_VERSION 1
 
 /* Init functions */
-gpointer init_fuzzy ();
+gpointer init_fuzzy (void);
 void start_fuzzy (struct rspamd_worker *worker);
 
 worker_t fuzzy_worker = {

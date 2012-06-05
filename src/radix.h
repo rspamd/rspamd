@@ -28,7 +28,7 @@ typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask, uintptr_
 /**
  * Create new radix tree
  */
-radix_tree_t *radix_tree_create ();
+radix_tree_t *radix_tree_create (void);
 
 /**
  * Insert value to radix tree

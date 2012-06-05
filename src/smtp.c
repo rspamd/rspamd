@@ -50,7 +50,7 @@ static gboolean smtp_write_socket (void *arg);
 static sig_atomic_t                    wanna_die = 0;
 
 /* Init functions */
-gpointer init_smtp ();
+gpointer init_smtp (void);
 void start_smtp (struct rspamd_worker *worker);
 
 worker_t smtp_worker = {

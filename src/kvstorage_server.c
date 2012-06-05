@@ -64,7 +64,7 @@ static sig_atomic_t soft_wanna_die = 0;
 } while (0)
 
 /* Init functions */
-gpointer init_keystorage ();
+gpointer init_keystorage (void);
 void start_keystorage (struct rspamd_worker *worker);
 
 worker_t keystorage_worker = {

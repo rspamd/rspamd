@@ -44,7 +44,7 @@
 #define CONTROLLER_IO_TIMEOUT 120
 
 /* Init functions */
-gpointer init_controller ();
+gpointer init_controller (void);
 void start_controller (struct rspamd_worker *worker);
 
 worker_t controller_worker = {
@@ -1241,7 +1241,7 @@ accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_controller ()
+init_controller (void)
 {
 	struct rspamd_controller_ctx       *ctx;
 	GQuark								type;

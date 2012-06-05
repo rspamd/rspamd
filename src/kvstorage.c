@@ -690,7 +690,7 @@ rspamd_lru_destroy (struct rspamd_kv_expire *e)
  * Create new LRU cache
  */
 struct rspamd_kv_expire*
-rspamd_lru_expire_new ()
+rspamd_lru_expire_new (void)
 {
 	struct rspamd_kv_lru_expire			*new;
 

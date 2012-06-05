@@ -330,7 +330,7 @@ add_options (GHashTable *opts)
  * Scan STDIN
  */
 static void
-scan_rspamd_stdin ()
+scan_rspamd_stdin (void)
 {
 	gchar                           *in_buf;
 
@@ -577,7 +577,7 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 }
 
 static void
-rspamd_do_stat ()
+rspamd_do_stat (void)
 {
 	GError                          *err = NULL;
 	GString                         *res;
@@ -607,7 +607,7 @@ rspamd_do_stat ()
 }
 
 static void
-rspamd_do_uptime ()
+rspamd_do_uptime (void)
 {
 	GError                          *err = NULL;
 	GString                         *res;

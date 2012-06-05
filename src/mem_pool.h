@@ -276,7 +276,7 @@ void memory_pool_stat (memory_pool_stat_t *st);
  * Get optimal pool size based on page size for this system
  * @return size of memory page in system
  */
-gsize memory_pool_get_size ();
+gsize memory_pool_get_size (void);
 
 /**
  * Set memory pool variable
