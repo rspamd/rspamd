@@ -1185,34 +1185,43 @@ rspamd_controller_auth (struct rspamd_connection *c, const gchar *password, GErr
 static gboolean
 rspamd_read_controller_greeting (struct rspamd_connection *c, GError **err)
 {
-	gchar                           inbuf[BUFSIZ];
-	gint                            r;
+	gchar                           inbuf[BUFSIZ], *pos;
+	gint                            r, got_greeting = FALSE;
 	static const gchar              greeting_str[] = "Rspamd";
 
-	if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLL_IN)) <= 0) {
-		if (*err == NULL) {
-			if (r == 0) {
-				errno = ETIMEDOUT;
+	pos = inbuf;
+
+	while (pos - inbuf < (gint)sizeof (inbuf)) {
+		if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLL_IN)) <= 0) {
+			if (*err == NULL) {
+				if (r == 0) {
+					errno = ETIMEDOUT;
+				}
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+						c->server->name, strerror (errno));
 			}
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
-					c->server->name, strerror (errno));
+			upstream_fail (&c->server->up, c->connection_time);
+			return FALSE;
 		}
-		upstream_fail (&c->server->up, c->connection_time);
-		return FALSE;
-	}
-	if ((r = read (c->socket, inbuf, sizeof (inbuf))) > 0) {
-		if (r >= (gint)sizeof (greeting_str) - 1 &&
-				memcmp (inbuf, greeting_str, sizeof (greeting_str) - 1) == 0) {
+		if ((r = read (c->socket, pos, sizeof (inbuf) - (pos - inbuf))) > 0) {
+			if (r >= (gint)sizeof (greeting_str) - 1 &&
+					memcmp (inbuf, greeting_str, sizeof (greeting_str) - 1) == 0) {
+				got_greeting = TRUE;
+			}
+		}
+		else {
+			if (*err == NULL) {
+				*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+						c->server->name, strerror (errno));
+			}
+			upstream_fail (&c->server->up, c->connection_time);
+			return FALSE;
+		}
+		pos += r;
+		if (got_greeting && *(pos - 1) == '\n') {
+			/* Got the complete greeting */
 			return TRUE;
 		}
-	}
-	else {
-		if (*err == NULL) {
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
-					c->server->name, strerror (errno));
-		}
-		upstream_fail (&c->server->up, c->connection_time);
-		return FALSE;
 	}
 
 	return FALSE;
