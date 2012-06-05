@@ -251,6 +251,27 @@ construct_task (struct rspamd_worker *worker)
 	return new_task;
 }
 
+/**
+ * Return worker's control structure by its type
+ * @param type
+ * @return worker's control structure or NULL
+ */
+worker_t*
+get_worker_by_type (GQuark type)
+{
+	worker_t						**cur;
+
+	cur = &workers[0];
+	while (*cur) {
+		if (g_quark_from_string ((*cur)->name) == type) {
+			return *cur;
+		}
+		cur ++;
+	}
+
+	return NULL;
+}
+
 
 /*
  * Free all structures of worker_task

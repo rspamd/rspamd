@@ -225,7 +225,7 @@ gint rspamd_fallocate (gint fd, off_t offset, off_t len);
  * @param type
  * @return worker's control structure or NULL
  */
-worker_t* get_worker_by_type (GQuark type);
+extern worker_t* get_worker_by_type (GQuark type);
 
 /**
  * Utils for working with threads to be compatible with all glib versions

@@ -1125,31 +1125,19 @@ rspamd_send_controller_command (struct rspamd_connection *c, const gchar *line, 
 		if ((r = read (c->socket, tmpbuf, sizeof (tmpbuf) - 1)) > 0) {
 			/* Check the end of the buffer for END marker */
 			tmpbuf[r] = '\0';
-			if (r >= (gint)sizeof (end_marker) - 1 &&
-					(p = strstr (tmpbuf, end_marker)) != NULL) {
-				*p = '\0';
-				/* Copy the rest to the result string */
-				if (res == NULL) {
-					res = g_string_new (tmpbuf);
-					return res;
-				}
-				else {
-					/* Append data to string */
-					if (r > 0) {
-						res = g_string_append (res, tmpbuf);
-					}
-					return res;
-				}
+			/* Store data inside res */
+			if (res == NULL) {
+				res = g_string_new_len (tmpbuf, r);
 			}
 			else {
-				/* Store data inside res */
-				if (res == NULL) {
-					res = g_string_new_len (tmpbuf, r);
-				}
-				else {
-					/* Append data to string */
-					res = g_string_append_len (res, tmpbuf, r);
-				}
+				/* Append data to string */
+				res = g_string_append_len (res, tmpbuf, r);
+			}
+			/* Check for END marker */
+			if (res->len > sizeof (end_marker) - 1 && (p = strstr (res->str, end_marker)) != NULL) {
+				*p = '\0';
+				res->len = p - res->str;
+				return res;
 			}
 		}
 	} while (r > 0);
