@@ -115,7 +115,6 @@ static time_t                   start_time;
 
 static gchar                    greetingbuf[1024];
 static sig_atomic_t             wanna_die = 0;
-extern rspamd_hash_t           *counters;
 
 static gboolean                 controller_write_socket (void *arg);
 
@@ -793,7 +792,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		}
 		break;
 	case COMMAND_COUNTERS:
-		rspamd_hash_foreach (counters, counter_write_callback, session);
+		rspamd_hash_foreach (rspamd_main->counters, counter_write_callback, session);
 		break;
 	}
 	return TRUE;

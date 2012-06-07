@@ -98,6 +98,8 @@ IF(CMAKE_INSTALL_PREFIX)
     SET(PREFIX ${CMAKE_INSTALL_PREFIX})
 ENDIF(CMAKE_INSTALL_PREFIX)
 
+LIST(APPEND CMAKE_REQUIRED_LIBRARIES m)
+
 # Try to detect platform for further configuration
 CHECK_C_SOURCE_COMPILES ("#if !defined(__x86_64) && !defined(__amd64) && !defined(_M_X64)
 					#error assume 32 bit arch
@@ -934,11 +936,12 @@ IF(NOT HIREDIS_FOUND)
     INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/hiredis")
 ENDIF(NOT HIREDIS_FOUND)
 
+
 ADD_SUBDIRECTORY(src/lua)
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
-
 ADD_SUBDIRECTORY(lib)
+
 ADD_SUBDIRECTORY(src/client)
 
 ADD_SUBDIRECTORY(utils)
@@ -1011,7 +1014,6 @@ TARGET_LINK_LIBRARIES(rspamd hiredis)
 IF(GLIB_COMPAT)
 	TARGET_LINK_LIBRARIES(rspamd glibadditions)
 ENDIF(GLIB_COMPAT)
-TARGET_LINK_LIBRARIES(rspamd m)
 
 ##################### INSTALLATION ##########################################
 

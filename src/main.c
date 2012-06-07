@@ -41,8 +41,6 @@
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
 #define HARD_TERMINATION_TIME 10
 
-extern rspamd_hash_t           *counters;
-
 static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
 static gboolean                 load_rspamd_config (struct config_file *cfg, gboolean init_modules);
 static void                     init_cfg_cache (struct config_file *cfg);
@@ -921,7 +919,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Init counters */
-	counters = rspamd_hash_new_shared (rspamd_main->server_pool, g_str_hash, g_str_equal, 64);
+	rspamd_main->counters = rspamd_hash_new_shared (rspamd_main->server_pool, g_str_hash, g_str_equal, 64);
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 

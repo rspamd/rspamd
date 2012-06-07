@@ -39,7 +39,6 @@ SET(LIBRSPAMDSERVERSRC
 				../src/proxy.c
 				../src/settings.c
 				../src/spf.c
-				../src/smtp_proto.c
 				../src/statfile.c
 				../src/statfile_sync.c
 				../src/symbols_cache.c
@@ -53,7 +52,9 @@ SET(LIBRSPAMDMIMESRC
 				../src/images.c
 				../src/message.c
 				../src/protocol.c
-				../src/smtp_utils.c)
+				../src/smtp_utils.c
+				../src/smtp_proto.c
+				../src/worker_util.c)
 # Add targets
 
 # Rspamdutil

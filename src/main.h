@@ -99,6 +99,7 @@ struct rspamd_main {
 	memory_pool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
+	rspamd_hash_t *counters;									/**< symbol cache counters							*/
 	rspamd_logger_t *logger;
 	uid_t workers_uid;											/**< worker's uid running to 						*/
 	gid_t workers_gid;											/**< worker's gid running to						*/
