@@ -8,6 +8,8 @@ SET(LIBRSPAMDUTILSRC		  	../src/aio_event.c
 								../src/fstring.c
 								../src/fuzzy.c
 								../src/hash.c
+								../src/logger.c
+								../src/map.c
 								../src/memcached.c
 								../src/mem_pool.c
 								../src/printf.c
@@ -34,8 +36,6 @@ SET(LIBRSPAMDSERVERSRC
 				../src/kvstorage_config.c
 				../src/kvstorage_file.c
 				../src/lmtp_proto.c
-				../src/logger.c
-				../src/map.c
 				../src/proxy.c
 				../src/settings.c
 				../src/spf.c
