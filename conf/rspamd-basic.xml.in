@@ -10,7 +10,7 @@
   <!-- Path to pid file -->
   <pidfile>@LOCALSTATES_PREFIX@/rspamd.pid</pidfile>
   <!-- Turned on C filters -->
-  <filters>regexp,surbl,chartable,fuzzy_check,spf</filters>
+  <filters>regexp,surbl,chartable,fuzzy_check,spf,dkim</filters>
   <!-- Maximum size of statistics mapped in memory -->
   <statfile_pool_size>250M</statfile_pool_size>
   <!-- Raw mode is non-utf mode. In utf mode all messages are converted to utf8 (if possible) -->
@@ -225,6 +225,11 @@
  <symbol weight="1.00" description="">R_FUZZY1</symbol>
  <symbol weight="1.00" description="">R_FUZZY2</symbol>
  <symbol weight="1.00" description="">R_FUZZY3</symbol>
+
+ <!-- DKIM rules -->
+ <symbol weight="1.0" description="DKIM policy reject">R_DKIM_REJECT</symbol>
+ <symbol weight="0.0" description="DKIM policy temporary fail">R_DKIM_TEMPFAIL</symbol>
+ <symbol weight="-0.5" description="DKIM policy allow">R_DKIM_ALLOW</symbol>
 
  <!-- SPF rules -->
  <symbol weight="3.00" description="SPF verification failed">R_SPF_FAIL</symbol>
@@ -441,6 +446,60 @@
  <!-- Cache setup for spf records to accelerate spf checks -->
  <spf_cache_size>2048</spf_cache_size>
  <spf_cache_expire>1d</spf_cache_expire>
+</module>
+
+<!-- DKIM module setup -->
+<module name="dkim">
+ <!-- Cache setup for dkim records to accelerate dkim checks -->
+ <dkim_cache_size>2048</dkim_cache_size>
+ <dkim_cache_expire>1d</dkim_cache_expire>
+ <!-- Domains list can be added, each domain file entry can be in format:
+	  <domain_name> [<score_reject>:<score_allow>]
+	  where scores are multiplier for this domain, if scores are skipped
+	  normal multiplier is used -->
+ <!-- <domains>file:///some/path</domains> -->
+
+ <!-- Whitelist is ip/mask list of whitelisted ips to skip dkim check -->
+ <!-- <whitelist>file:///some/path</whitelist> -->
+
+ <!-- Time jitter is value in seconds to ignore comparing timestamp of signatures -->
+ <time_jitter>1m</time_jitter>
+
+ <!-- Check only trusted domains from 'domains' list -->
+ <trusted_only>no</trusted_only>
+
+ <!-- Skip mails with several DKIM signatures -->
+ <skip_multi>no</skip_multi>
+</module>
+
+<!-- Rstelimit module setup -->
+<!-- Disabled by default till servers option is properly set -->
+<module name="ratelimit">
+  <!-- List of servers to store limits in format: host1[:port][,host2[:port]]
+  	 port 6379 is used by default, if no servers defined, this module is not enabled -->
+  <!-- <servers>localhost</servers> -->
+
+  <!-- limits description, type:burst:leak_rate -->
+  <!-- per rcpt limit, 100 messages burst, 2 messages per minute leak rate -->
+  <limit>to:100:0.033333333</limit>
+  <!-- per rcpt/ip limit, 30 messages burst, 1.5 messages per minute leak rate -->
+  <limit>to_ip:30:0.025</limit>
+  <!-- per rcpt/ip/from limit, 20 messages burst, 1 messages per minute leak rate -->
+  <limit>to_ip_from:20:0.01666666667</limit>
+
+  <!-- per rcpt bounce limit, 10 messages burst, 2 messages per hour leak rate -->
+  <limit>bounce_to:10:0.000555556</limit>
+  <!-- per rcpt/ip bounce limit, 5 messages burst, 1 messages per hour leak rate -->
+  <limit>bounce_to_ip:5:0.000277778</limit>
+
+  <!-- Whitelist map -->
+  <!-- <whitelisted_ip>file:///some/path</whitelisted_ip> -->
+
+  <!-- List of whitelisted recipients -->
+  <whitelisted_rcpt>postmaster,mailer-daemon</whitelisted_rcpt>
+
+  <!-- Limit if recipients to check -->
+  <max_rcpt>5</max_rcpt>
 </module>
 
 <!-- Regexp module configuration -->
