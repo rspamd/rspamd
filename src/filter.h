@@ -81,6 +81,14 @@ struct metric_result {
 };
 
 /**
+ * Composite structure
+ */
+struct rspamd_composite {
+	struct expression *expr;
+	gint id;
+};
+
+/**
  * Process all filters
  * @param task worker's task that present message from user
  * @return 0 - if there is non-finished tasks and 1 if processing is completed

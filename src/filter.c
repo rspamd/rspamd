@@ -43,6 +43,19 @@
 
 #define COMMON_PART_FACTOR 95
 
+#ifndef PARAM_H_HAS_BITSET
+/* Bit map related macros. */
+#define NBBY    8               /* number of bits in a byte */
+#define setbit(a,i)     (((unsigned char *)(a))[(i)/NBBY] |= 1<<((i)%NBBY))
+#define clrbit(a,i)     (((unsigned char *)(a))[(i)/NBBY] &= ~(1<<((i)%NBBY)))
+#define isset(a,i)                                                      \
+        (((const unsigned char *)(a))[(i)/NBBY] & (1<<((i)%NBBY)))
+#define isclr(a,i)                                                      \
+        ((((const unsigned char *)(a))[(i)/NBBY] & (1<<((i)%NBBY))) == 0)
+#endif
+#define BITSPERBYTE	(8*sizeof (gchar))
+#define NBYTES(nbits)	(((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
+
 static inline                   GQuark
 filter_error_quark (void)
 {
@@ -286,10 +299,12 @@ process_filters (struct worker_task *task)
 	return 1;
 }
 
+
 struct composites_data {
 	struct worker_task             *task;
 	struct metric_result           *metric_res;
 	GTree                          *symbols_to_remove;
+	guint8						   *checked;
 };
 
 struct symbol_remove_data {
@@ -310,14 +325,22 @@ static void
 composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
 	struct composites_data         *cd = (struct composites_data *)data;
-	struct expression              *expr = (struct expression *)value;
+	struct rspamd_composite        *composite = value, *ncomp;
+	struct expression              *expr;
 	GQueue                         *stack;
 	GList                          *symbols = NULL, *s;
 	gsize                           cur, op1, op2;
-	gchar                           logbuf[256], *sym;
+	gchar                           logbuf[256], *sym, *check_sym;
 	gint                            r;
 	struct symbol                  *ms;
 	struct symbol_remove_data      *rd;
+
+
+	expr = composite->expr;
+	if (isset (cd->checked, composite->id)) {
+		/* Symbol was already checked */
+		return;
+	}
 
 	stack = g_queue_new ();
 
@@ -330,6 +353,16 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			}
 			if (g_hash_table_lookup (cd->metric_res->symbols, sym) == NULL) {
 				cur = 0;
+				if ((ncomp = g_hash_table_lookup (cd->task->cfg->composite_symbols, sym)) != NULL) {
+					/* Set checked for this symbol to avoid cyclic references */
+					if (isclr (cd->checked, ncomp->id)) {
+						setbit (cd->checked, composite->id);
+						composites_foreach_callback (sym, ncomp, cd);
+						if (g_hash_table_lookup (cd->metric_res->symbols, sym) != NULL) {
+							cur = 1;
+						}
+					}
+				}
 			}
 			else {
 				cur = 1;
@@ -342,6 +375,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				/* Queue has no operands for operation, exiting */
 				g_list_free (symbols);
 				g_queue_free (stack);
+				setbit (cd->checked, composite->id);
 				return;
 			}
 			switch (expr->content.operation) {
@@ -376,10 +410,23 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			while (s) {
 				sym = s->data;
 				if (*sym == '~' || *sym == '-') {
-					ms = g_hash_table_lookup (cd->metric_res->symbols, sym + 1);
+					check_sym = sym + 1;
 				}
 				else {
-					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+					check_sym = sym;
+				}
+				ms = g_hash_table_lookup (cd->metric_res->symbols, check_sym);
+
+				if (ms == NULL) {
+					/* Try to process other composites */
+					if ((ncomp = g_hash_table_lookup (cd->task->cfg->composite_symbols, check_sym)) != NULL) {
+						/* Set checked for this symbol to avoid cyclic references */
+						if (isclr (cd->checked, ncomp->id)) {
+							setbit (cd->checked, composite->id);
+							composites_foreach_callback (check_sym, ncomp, cd);
+							ms = g_hash_table_lookup (cd->metric_res->symbols, check_sym);
+						}
+					}
 				}
 
 				if (ms != NULL) {
@@ -401,6 +448,9 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 						g_tree_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
 					}
 				}
+				else {
+
+				}
 
 				if (s->next) {
 					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s, ", s->data);
@@ -416,6 +466,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 		}
 	}
 
+	setbit (cd->checked, composite->id);
 	g_queue_free (stack);
 	g_list_free (symbols);
 
@@ -517,6 +568,7 @@ composites_metric_callback (gpointer key, gpointer value, gpointer data)
 	cd->task = task;
 	cd->metric_res = (struct metric_result *)metric_res;
 	cd->symbols_to_remove = g_tree_new (remove_compare_data);
+	cd->checked = memory_pool_alloc0 (task->task_pool, NBYTES (g_hash_table_size (task->cfg->composite_symbols)));
 
 	/* Process hash table */
 	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);

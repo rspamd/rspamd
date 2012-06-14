@@ -191,6 +191,7 @@
 #cmakedefine GLIB_RE_COMPAT		 1
 #cmakedefine GLIB_UNISCRIPT_COMPAT		 1
 #cmakedefine GLIB_HASH_COMPAT		 1
+#cmakedefine PARAM_H_HAS_BITSET  1
 
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RID               "${ID}"

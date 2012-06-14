@@ -1276,6 +1276,7 @@ handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 {
 	gchar                        *val;
 	struct expression            *expr;
+	struct rspamd_composite      *composite;
 	
 	if (attrs == NULL || (val = g_hash_table_lookup (attrs, "name")) == NULL) {
 		msg_err ("'name' attribute is required for tag 'composite'");
@@ -1286,7 +1287,10 @@ handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 		msg_err ("cannot parse composite expression: %s", data);
 		return FALSE;
 	}
-	g_hash_table_insert (cfg->composite_symbols, val, expr);
+	composite = memory_pool_alloc (cfg->cfg_pool, sizeof (struct rspamd_composite));
+	composite->expr = expr;
+	composite->id = g_hash_table_size (cfg->composite_symbols) + 1;
+	g_hash_table_insert (cfg->composite_symbols, val, composite);
 	register_virtual_symbol (&cfg->cache, val, 1);
 
 	return TRUE;
