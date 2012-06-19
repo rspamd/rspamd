@@ -694,7 +694,8 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 
 	if (cb->task->cfg->log_urls) {
 		msg_info ("<%s> URL: %s - %s: %s", cb->task->message_id, cb->task->user ?
-				cb->task->user : "unknown", inet_ntoa (cb->task->client_addr), struri (url));
+				cb->task->user : (cb->task->from ? cb->task->from : "unknown"),
+				inet_ntoa (cb->task->client_addr), struri (url));
 	}
 
 	return FALSE;
