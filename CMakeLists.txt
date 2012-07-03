@@ -466,7 +466,10 @@ ENDIF(HIREDIS_FOUND)
 
 # Try to link with gmime24
 IF(NOT GMIME2_FOUND OR FORCE_GMIME24)
-	pkg_check_modules(GMIME24 REQUIRED gmime-2.4)
+	pkg_check_modules(GMIME24 gmime-2.4)
+	IF(NOT GMIME24_FOUND)
+		pkg_check_modules(GMIME24 REQUIRED gmime-2.6)
+	ENDIF(NOT GMIME24_FOUND)
 	SET(GMIME24 "yes")
 	# Gmime2
 	FOREACH(arg ${GMIME24_CFLAGS})
