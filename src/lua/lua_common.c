@@ -252,7 +252,9 @@ init_lua (struct config_file *cfg)
 
 	(void)luaopen_rspamd (L);
 	(void)luaopen_logger (L);
+	(void)luaopen_mempool (L);
 	(void)luaopen_config (L);
+	(void)luaopen_session (L);
 	(void)luaopen_radix (L);
 	(void)luaopen_hash_table (L);
 	(void)luaopen_trie (L);

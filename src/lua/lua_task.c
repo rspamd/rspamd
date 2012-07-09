@@ -44,6 +44,7 @@ extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classi
 
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
+LUA_FUNCTION_DEF (task, get_mempool);
 LUA_FUNCTION_DEF (task, insert_result);
 LUA_FUNCTION_DEF (task, set_pre_result);
 LUA_FUNCTION_DEF (task, get_urls);
@@ -77,6 +78,7 @@ LUA_FUNCTION_DEF (task, learn_statfile);
 
 static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
+	LUA_INTERFACE_DEF (task, get_mempool),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, get_urls),
@@ -207,10 +209,23 @@ lua_task_get_message (lua_State * L)
 	struct worker_task             *task = lua_check_task (L);
 
 	if (task != NULL) {
-		/* XXX write handler for message object */
 		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
 		lua_setclass (L, "rspamd{message}", -1);
 		*pmsg = task->message;
+	}
+	return 1;
+}
+
+static int
+lua_task_get_mempool (lua_State * L)
+{
+	memory_pool_t                  **ppool;
+	struct worker_task             *task = lua_check_task (L);
+
+	if (task != NULL) {
+		ppool = lua_newuserdata (L, sizeof (memory_pool_t *));
+		lua_setclass (L, "rspamd{mempool}", -1);
+		*ppool = task->task_pool;
 	}
 	return 1;
 }

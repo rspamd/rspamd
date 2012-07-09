@@ -35,6 +35,7 @@
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
 LUA_FUNCTION_DEF (config, get_all_opt);
+LUA_FUNCTION_DEF (config, get_mempool);
 LUA_FUNCTION_DEF (config, register_function);
 LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
@@ -51,6 +52,7 @@ LUA_FUNCTION_DEF (config, get_api_version);
 
 static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
+	LUA_INTERFACE_DEF (config, get_mempool),
 	LUA_INTERFACE_DEF (config, get_all_opt),
 	LUA_INTERFACE_DEF (config, register_function),
 	LUA_INTERFACE_DEF (config, add_radix_map),
@@ -166,6 +168,20 @@ lua_config_get_module_opt (lua_State * L)
 		}
 	}
 	lua_pushnil (L);
+	return 1;
+}
+
+static int
+lua_config_get_mempool (lua_State * L)
+{
+	memory_pool_t                  **ppool;
+	struct config_file             *cfg = lua_check_config (L);
+
+	if (cfg != NULL) {
+		ppool = lua_newuserdata (L, sizeof (memory_pool_t *));
+		lua_setclass (L, "rspamd{mempool}", -1);
+		*ppool = cfg->cfg_pool;
+	}
 	return 1;
 }
 

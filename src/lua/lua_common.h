@@ -62,6 +62,9 @@ gint luaopen_xmlrpc (lua_State * L);
 gint luaopen_http (lua_State * L);
 gint luaopen_redis (lua_State * L);
 gint luaopen_upstream (lua_State * L);
+gint luaopen_mempool (lua_State * L);
+gint luaopen_session (lua_State * L);
+
 void init_lua (struct config_file *cfg);
 gboolean init_lua_filters (struct config_file *cfg);
 
@@ -87,6 +90,8 @@ gboolean lua_handle_param (struct worker_task *task, gchar *mname, gchar *optnam
 							enum lua_var_type expected_type, gpointer *res);
 gboolean lua_check_condition (struct config_file *cfg, const gchar *condition);
 void lua_dumpstack (lua_State *L);
+
+struct memory_pool_s *lua_check_mempool (lua_State * L);
 
 
 #endif /* WITH_LUA */
