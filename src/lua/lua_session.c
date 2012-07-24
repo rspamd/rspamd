@@ -157,6 +157,8 @@ lua_session_cleanup (gpointer ud)
 	}
 }
 
+
+
 static int
 lua_session_create (lua_State *L)
 {
@@ -207,7 +209,7 @@ lua_session_create (lua_State *L)
 	}
 	session = new_async_session (mempool, lua_session_finalizer, lua_session_restore, lua_session_cleanup, cbdata);
 	cbdata->session = session;
-	psession = lua_newuserdata (L, sizeof (struct real_name *));
+	psession = lua_newuserdata (L, sizeof (struct rspamd_async_session *));
 	lua_setclass (L, "rspamd{session}", -1);
 	*psession = session;
 
