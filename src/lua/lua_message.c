@@ -206,5 +206,7 @@ luaopen_message (lua_State * L)
 	lua_newclass (L, "rspamd{message}", msglib_m);
 	luaL_openlib (L, "rspamd_message", null_reg, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	return 1;
 }

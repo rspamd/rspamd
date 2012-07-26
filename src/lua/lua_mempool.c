@@ -239,5 +239,7 @@ luaopen_mempool (lua_State * L)
 	luaL_openlib (L, NULL, mempoollib_m, 0);
 	luaL_openlib(L, "rspamd_mempool", mempoollib_f, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	return 1;	
 }

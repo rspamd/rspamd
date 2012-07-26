@@ -24,7 +24,12 @@ extern GMutex *lua_mtx;
 /**
  * Create and register new class
  */
-void lua_newclass (lua_State *L, const gchar *classname, const struct luaL_reg *func);
+void lua_newclass (lua_State *L, const gchar *classname, const struct luaL_reg *methods);
+
+/**
+ * Create and register new class with static methods
+ */
+void lua_newclass_full (lua_State *L, const gchar *classname, const gchar *static_name, const struct luaL_reg *methods, const struct luaL_reg *func);
 
 /**
  * Set class name for object at @param objidx position
@@ -64,6 +69,7 @@ gint luaopen_redis (lua_State * L);
 gint luaopen_upstream (lua_State * L);
 gint luaopen_mempool (lua_State * L);
 gint luaopen_session (lua_State * L);
+gint luaopen_io_dispatcher (lua_State * L);
 
 void init_lua (struct config_file *cfg);
 gboolean init_lua_filters (struct config_file *cfg);

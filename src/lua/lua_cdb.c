@@ -161,5 +161,7 @@ luaopen_cdb (lua_State * L)
 	luaL_openlib (L, NULL, cdblib_m, 0);
 	luaL_openlib (L, "cdb", cdblib_f, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	return 1;
 }

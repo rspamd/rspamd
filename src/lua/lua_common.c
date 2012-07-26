@@ -42,7 +42,7 @@ LUA_FUNCTION_DEF (logger, warn);
 LUA_FUNCTION_DEF (logger, info);
 LUA_FUNCTION_DEF (logger, debug);
 
-static const struct luaL_reg    loggerlib_m[] = {
+static const struct luaL_reg    loggerlib_f[] = {
 	LUA_INTERFACE_DEF (logger, err),
 	LUA_INTERFACE_DEF (logger, warn),
 	LUA_INTERFACE_DEF (logger, info),
@@ -51,9 +51,159 @@ static const struct luaL_reg    loggerlib_m[] = {
 	{NULL, NULL}
 };
 
+/* util module */
+LUA_FUNCTION_DEF (util, gethostbyname);
+LUA_FUNCTION_DEF (util, strsplit);
+LUA_FUNCTION_DEF (util, close);
+LUA_FUNCTION_DEF (util, ip_to_str);
+LUA_FUNCTION_DEF (util, str_to_ip);
+
+static const struct luaL_reg    utillib_f[] = {
+	LUA_INTERFACE_DEF (util, gethostbyname),
+	LUA_INTERFACE_DEF (util, strsplit),
+	LUA_INTERFACE_DEF (util, close),
+	LUA_INTERFACE_DEF (util, ip_to_str),
+	LUA_INTERFACE_DEF (util, str_to_ip),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
+/**
+ * Get numeric ip presentation of hostname
+ */
+static gint
+lua_util_gethostbyname (lua_State *L)
+{
+	const gchar						*name;
+	struct hostent					*hent;
+	struct in_addr					 ina;
+
+	name = luaL_checkstring (L, 1);
+	if (name) {
+		hent = gethostbyname (name);
+		if (hent) {
+			memcpy (&ina, hent->h_addr, sizeof (struct in_addr));
+			lua_pushinteger (L, ina.s_addr);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
+/**
+ * Close file descriptor
+ */
+static gint
+lua_util_close (lua_State *L)
+{
+	gint							 fd;
+
+	fd = lua_tointeger (L, 1);
+
+	if (fd >= 0) {
+		close (fd);
+	}
+
+	return 0;
+}
+
+/**
+ * Convert numeric ip to string
+ */
+static gint
+lua_util_ip_to_str (lua_State *L)
+{
+	struct in_addr					 ina;
+
+	ina.s_addr = lua_tointeger (L, 1);
+	if (ina.s_addr) {
+		lua_pushstring (L, inet_ntoa (ina));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/**
+ * Convert string ip to numeric
+ */
+static gint
+lua_util_str_to_ip (lua_State *L)
+{
+	struct in_addr					 ina;
+	const gchar						*ip;
+
+	ip = luaL_checkstring (L, 1);
+	if (ip) {
+		if (inet_aton (ip, &ina) != 0) {
+			lua_pushinteger (L, ina.s_addr);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/**
+ * Split string to the portions using separators as the second argument
+ */
+static gint
+lua_util_strsplit (lua_State *L)
+{
+	gchar							**list, **cur;
+	const gchar						*in, *separators = " ;,";
+	gint							 i;
+
+	in = luaL_checkstring (L, 1);
+
+	if (in) {
+		if (lua_gettop (L) > 1) {
+			separators = luaL_checkstring (L, 2);
+		}
+		list = g_strsplit_set (in, separators, -1);
+		if (list) {
+			cur = list;
+			lua_newtable (L);
+			i = 1;
+			while (*cur) {
+				lua_pushstring (L, *cur);
+				lua_rawseti (L, -2, i++);
+				cur ++;
+			}
+			g_strfreev (list);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
 /* Util functions */
+/**
+ * Create new class and store metatable on top of the stack
+ * @param L
+ * @param classname name of class
+ * @param func table of class methods
+ */
 void
-lua_newclass (lua_State * L, const gchar *classname, const struct luaL_reg *func)
+lua_newclass (lua_State * L, const gchar *classname, const struct luaL_reg *methods)
 {
 	luaL_newmetatable (L, classname);	/* mt */
 	lua_pushstring (L, "__index");
@@ -64,7 +214,17 @@ lua_newclass (lua_State * L, const gchar *classname, const struct luaL_reg *func
 	lua_pushstring (L, classname);	/* mt,"__index",it,"class",classname */
 	lua_rawset (L, -3);			/* mt,"__index",it */
 
-	luaL_openlib (L, NULL, func, 0);
+	luaL_openlib (L, NULL, methods, 0);
+}
+
+/**
+ * Create and register new class with static methods and store metatable on top of the stack
+ */
+void
+lua_newclass_full (lua_State *L, const gchar *classname, const gchar *static_name, const struct luaL_reg *methods, const struct luaL_reg *func)
+{
+	lua_newclass (L, classname, methods);
+	luaL_openlib(L, static_name, func, 0);
 }
 
 gint
@@ -210,11 +370,20 @@ luaopen_rspamd (lua_State * L)
 	return 1;
 }
 
-gint
+static gint
 luaopen_logger (lua_State * L)
 {
 
-	luaL_openlib (L, "rspamd_logger", loggerlib_m, 0);
+	luaL_openlib (L, "rspamd_logger", loggerlib_f, 0);
+
+	return 1;
+}
+
+
+static gint
+luaopen_util (lua_State *L)
+{
+	luaL_openlib (L, "rspamd_util", utillib_f, 0);
 
 	return 1;
 }
@@ -252,9 +421,9 @@ init_lua (struct config_file *cfg)
 
 	(void)luaopen_rspamd (L);
 	(void)luaopen_logger (L);
+	(void)luaopen_util (L);
 	(void)luaopen_mempool (L);
 	(void)luaopen_config (L);
-	(void)luaopen_session (L);
 	(void)luaopen_radix (L);
 	(void)luaopen_hash_table (L);
 	(void)luaopen_trie (L);
@@ -272,6 +441,8 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_redis (L);
 	(void)luaopen_upstream (L);
 	(void)lua_add_actions_global (L);
+	(void)luaopen_session (L);
+	(void)luaopen_io_dispatcher (L);
 
 	cfg->lua_state = L;
 	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);

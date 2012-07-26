@@ -42,8 +42,14 @@
 extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
 		const gchar *symbol, struct statfile **st, gboolean try_create);
 
+/* Task creation */
+LUA_FUNCTION_DEF (task, create_empty);
+LUA_FUNCTION_DEF (task, create_from_buffer);
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
+LUA_FUNCTION_DEF (task, process_message);
+LUA_FUNCTION_DEF (task, set_cfg);
+LUA_FUNCTION_DEF (task, destroy);
 LUA_FUNCTION_DEF (task, get_mempool);
 LUA_FUNCTION_DEF (task, get_ev_base);
 LUA_FUNCTION_DEF (task, insert_result);
@@ -77,8 +83,17 @@ LUA_FUNCTION_DEF (task, get_metric_score);
 LUA_FUNCTION_DEF (task, get_metric_action);
 LUA_FUNCTION_DEF (task, learn_statfile);
 
+static const struct luaL_reg    tasklib_f[] = {
+	LUA_INTERFACE_DEF (task, create_empty),
+	LUA_INTERFACE_DEF (task, create_from_buffer),
+	{NULL, NULL}
+};
+
 static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
+	LUA_INTERFACE_DEF (task, destroy),
+	LUA_INTERFACE_DEF (task, process_message),
+	LUA_INTERFACE_DEF (task, set_cfg),
 	LUA_INTERFACE_DEF (task, get_mempool),
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, insert_result),
@@ -204,16 +219,95 @@ lua_check_url (lua_State * L)
 }
 
 /*** Task interface	***/
+
+static int
+lua_task_create_empty (lua_State *L)
+{
+	struct worker_task             **ptask, *task;
+
+	task = construct_task (NULL);
+	ptask = lua_newuserdata (L, sizeof (gpointer));
+	lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+	return 1;
+}
+
+static int
+lua_task_create_from_buffer (lua_State *L)
+{
+	struct worker_task             **ptask, *task;
+	const gchar						*data;
+	size_t							 len;
+
+	data = luaL_checklstring (L, 1, &len);
+	if (data) {
+		task = construct_task (NULL);
+		ptask = lua_newuserdata (L, sizeof (gpointer));
+		lua_setclass (L, "rspamd{task}", -1);
+		*ptask = task;
+		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+		task->msg->begin = memory_pool_alloc (task->task_pool, len);
+		memcpy (task->msg->begin, data, len);
+		task->msg->len = len;
+	}
+	return 1;
+}
+
+static int
+lua_task_process_message (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+
+	if (task != NULL && task->msg != NULL && task->msg->len > 0) {
+		if (process_message (task) == 0) {
+			lua_pushboolean (L, TRUE);
+		}
+		else {
+			lua_pushboolean (L, FALSE);
+		}
+	}
+	else {
+		lua_pushboolean (L, FALSE);
+	}
+
+	return 1;
+}
+static int
+lua_task_set_cfg (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	void                           *ud = luaL_checkudata (L, 2, "rspamd{config}");
+
+	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
+	task->cfg = ud ? *((struct config_file **)ud) : NULL;
+	return 0;
+}
+
+static int
+lua_task_destroy (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+
+	if (task != NULL) {
+		free_task (task, FALSE);
+	}
+
+	return 0;
+}
+
 static int
 lua_task_get_message (lua_State * L)
 {
 	GMimeMessage                  **pmsg;
 	struct worker_task             *task = lua_check_task (L);
 
-	if (task != NULL) {
+	if (task != NULL && task->message != NULL) {
 		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
 		lua_setclass (L, "rspamd{message}", -1);
 		*pmsg = task->message;
+	}
+	else {
+		lua_pushnil (L);
 	}
 	return 1;
 }
@@ -229,6 +323,9 @@ lua_task_get_mempool (lua_State * L)
 		lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = task->task_pool;
 	}
+	else {
+		lua_pushnil (L);
+	}
 	return 1;
 }
 
@@ -242,6 +339,9 @@ lua_task_get_ev_base (lua_State * L)
 		pbase = lua_newuserdata (L, sizeof (struct event_base *));
 		lua_setclass (L, "rspamd{ev_base}", -1);
 		*pbase = task->ev_base;
+	}
+	else {
+		lua_pushnil (L);
 	}
 	return 1;
 }
@@ -267,7 +367,7 @@ lua_task_insert_result (lua_State * L)
 
 		insert_result (task, symbol_name, flag, params);
 	}
-	return 1;
+	return 0;
 }
 
 static gint
@@ -290,7 +390,7 @@ lua_task_set_pre_result (lua_State * L)
 			}
 		}
 	}
-	return 1;
+	return 0;
 }
 
 struct lua_tree_cb_data {
@@ -1740,8 +1840,9 @@ lua_url_get_phished (lua_State *L)
 gint
 luaopen_task (lua_State * L)
 {
-	lua_newclass (L, "rspamd{task}", tasklib_m);
-	luaL_openlib (L, "rspamd_task", null_reg, 0);
+	lua_newclass_full (L, "rspamd{task}", "rspamd_task", tasklib_m, tasklib_f);
+
+	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	return 1;
 }
@@ -1752,6 +1853,8 @@ luaopen_textpart (lua_State * L)
 	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
 	luaL_openlib (L, "rspamd_textpart", null_reg, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	return 1;
 }
 
@@ -1761,6 +1864,8 @@ luaopen_image (lua_State * L)
 	lua_newclass (L, "rspamd{image}", imagelib_m);
 	luaL_openlib (L, "rspamd_image", null_reg, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	return 1;
 }
 
@@ -1769,6 +1874,8 @@ luaopen_url (lua_State * L)
 {
 	lua_newclass (L, "rspamd{url}", urllib_m);
 	luaL_openlib (L, "rspamd_url", null_reg, 0);
+
+	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	return 1;
 }

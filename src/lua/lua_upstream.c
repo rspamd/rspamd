@@ -505,6 +505,8 @@ luaopen_upstream (lua_State * L)
 	luaL_openlib (L, NULL, upstream_list_m, 0);
 	luaL_openlib (L, "upstream_list", upstream_list_f, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	luaL_newmetatable (L, "rspamd{upstream}");
 	lua_pushstring (L, "__index");
 	lua_pushvalue (L, -2);
@@ -516,6 +518,8 @@ luaopen_upstream (lua_State * L)
 
 	luaL_openlib (L, NULL, upstream_m, 0);
 	luaL_openlib (L, "upstream", upstream_f, 0);
+
+	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	return 1;
 }

@@ -371,6 +371,8 @@ luaopen_classifier (lua_State * L)
 	lua_newclass (L, "rspamd{classifier}", classifierlib_m);
 	luaL_openlib (L, "rspamd_classifier", null_reg, 0);
 
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
 	return 1;
 }
 
@@ -379,6 +381,8 @@ luaopen_statfile (lua_State * L)
 {
 	lua_newclass (L, "rspamd{statfile}", statfilelib_m);
 	luaL_openlib (L, "rspamd_statfile", null_reg, 0);
+
+	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	return 1;
 }

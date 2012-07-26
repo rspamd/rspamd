@@ -862,7 +862,27 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 
 	if (!worker_options || (worker_config = g_hash_table_lookup (worker_options, &cd->wrk->type)) == NULL ||
 			(cparam = g_hash_table_lookup (worker_config, k)) == NULL) {
-		msg_warn ("unregistered worker attribute '%s' for worker %s", k, g_quark_to_string (cd->wrk->type));
+		/* Try to use universal handler if there is no specific handler */
+		if ((cparam = g_hash_table_lookup (worker_config, "*")) != NULL) {
+			if (cd->wrk->ctx != NULL) {
+				if (param->is_list) {
+					cur = param->d.list;
+					while (cur) {
+						cparam->handler (cd->cfg, cd->ctx, NULL, cur->data, k, cd->wrk->ctx, cparam->offset);
+						cur = g_list_next (cur);
+					}
+				}
+				else {
+					cparam->handler (cd->cfg, cd->ctx, NULL, param->d.param, k, cd->wrk->ctx, cparam->offset);
+				}
+			}
+			else {
+				msg_err ("Bad error detected: worker %s has not initialized its context", g_quark_to_string (cd->wrk->type));
+			}
+		}
+		else {
+			msg_warn ("unregistered worker attribute '%s' for worker %s", k, g_quark_to_string (cd->wrk->type));
+		}
 	}
 	else {
 

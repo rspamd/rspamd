@@ -34,14 +34,14 @@ LUA_FUNCTION_DEF (io_dispatcher, set_policy);
 LUA_FUNCTION_DEF (io_dispatcher, write);
 LUA_FUNCTION_DEF (io_dispatcher, pause);
 LUA_FUNCTION_DEF (io_dispatcher, restore);
-LUA_FUNCTION_DEF (io_dispatcher, delete);
+LUA_FUNCTION_DEF (io_dispatcher, destroy);
 
 static const struct luaL_reg    io_dispatcherlib_m[] = {
 	LUA_INTERFACE_DEF (io_dispatcher, set_policy),
 	LUA_INTERFACE_DEF (io_dispatcher, write),
 	LUA_INTERFACE_DEF (io_dispatcher, pause),
 	LUA_INTERFACE_DEF (io_dispatcher, restore),
-	{"__gc", lua_io_dispatcher_delete},
+	LUA_INTERFACE_DEF (io_dispatcher, destroy),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -90,12 +90,12 @@ lua_io_read_cb (f_str_t * in, void *arg)
 		need_unlock = TRUE;
 	}
 	/* callback (dispatcher, data) */
+	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 	pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
 	lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
 	lua_pushlstring (cbdata->L, in->begin, in->len);
 
-	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 	if (lua_pcall (cbdata->L, 2, 1, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 	}
@@ -105,16 +105,6 @@ lua_io_read_cb (f_str_t * in, void *arg)
 
 	if (need_unlock) {
 		g_mutex_unlock (lua_mtx);
-	}
-
-	if (!res) {
-		/* Unref callbacks */
-		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
-		if (cbdata->cbref_write) {
-			luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_write);
-		}
-		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_err);
-		g_slice_free1 (sizeof (struct lua_dispatcher_cbdata), cbdata);
 	}
 
 	return res;
@@ -132,12 +122,13 @@ lua_io_write_cb (void *arg)
 		if (g_mutex_trylock (lua_mtx)) {
 			need_unlock = TRUE;
 		}
+		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 		/* callback (dispatcher) */
 		pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
 		lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 		*pdispatcher = cbdata->d;
 
-		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
+
 		if (lua_pcall (cbdata->L, 1, 1, 0) != 0) {
 			msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 		}
@@ -147,14 +138,6 @@ lua_io_write_cb (void *arg)
 
 		if (need_unlock) {
 			g_mutex_unlock (lua_mtx);
-		}
-
-		if (!res) {
-			/* Unref callbacks */
-			luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
-			luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_write);
-			luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_err);
-			g_slice_free1 (sizeof (struct lua_dispatcher_cbdata), cbdata);
 		}
 	}
 
@@ -173,12 +156,12 @@ lua_io_err_cb (GError * err, void *arg)
 		need_unlock = TRUE;
 	}
 	/* callback (dispatcher, err) */
+	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_err);
 	pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
 	lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
 	lua_pushstring (cbdata->L, err->message);
 
-	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 	if (lua_pcall (cbdata->L, 2, 0, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 	}
@@ -234,8 +217,12 @@ lua_io_dispatcher_create (lua_State *L)
 			tv_num = lua_tonumber (L, 6);
 			tv.tv_sec = trunc (tv_num);
 			tv.tv_usec = modf (tv_num, &tmp) * 1000.;
+			io_dispatcher = rspamd_create_dispatcher (cbdata->base, fd, BUFFER_LINE, lua_io_read_cb, lua_io_write_cb, lua_io_err_cb, &tv, cbdata);
 		}
-		io_dispatcher = rspamd_create_dispatcher (cbdata->base, fd, BUFFER_LINE, lua_io_read_cb, lua_io_write_cb, lua_io_err_cb, &tv, cbdata);
+		else {
+			io_dispatcher = rspamd_create_dispatcher (cbdata->base, fd, BUFFER_LINE, lua_io_read_cb, lua_io_write_cb, lua_io_err_cb, NULL, cbdata);
+		}
+
 		cbdata->d = io_dispatcher;
 		/* Push result */
 		pdispatcher = lua_newuserdata (L, sizeof (struct rspamd_io_dispatcher_s *));
@@ -338,7 +325,7 @@ lua_io_dispatcher_restore (lua_State *L)
 }
 
 static int
-lua_io_dispatcher_delete (lua_State *L)
+lua_io_dispatcher_destroy (lua_State *L)
 {
 	struct rspamd_io_dispatcher_s					*io_dispatcher = lua_check_io_dispatcher (L);
 
@@ -369,9 +356,13 @@ luaopen_io_dispatcher (lua_State * L)
 	luaL_openlib (L, NULL, io_dispatcherlib_m, 0);
 	luaL_openlib(L, "rspamd_io_dispatcher", io_dispatcherlib_f, 0);
 
+	lua_pop(L, 1);                      /* remove metatable from stack */
+
 	/* Simple event class */
 	lua_newclass (L, "rspamd{ev_base}", null_reg);
 	luaL_openlib (L, "rspamd_ev_base", null_reg, 0);
+
+	lua_pop(L, 1);                      /* remove metatable from stack */
 
 	/* Set buffer types globals */
 	lua_pushnumber (L, BUFFER_LINE);
