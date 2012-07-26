@@ -104,6 +104,8 @@
 
 #cmakedefine HAVE_PIDFILE        1
 
+#cmakedefine HAVE_PIDFILE_FILENO 1
+
 #cmakedefine HAVE_SETPROCTITLE   1
 
 #cmakedefine HAVE_GETPAGESIZE    1
