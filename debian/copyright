@@ -6,28 +6,16 @@ Files: contrib/lgpl/*
 Copyright: 1999, 2000 Scott Wimer
 Copyright: 2004, Matthias Clasen <mclasen@redhat.com>
 Copyright: 2005 - 2007, Marco Barisione <marco@barisione.org>
-License: LGPL-2+
+License: LGPL
 
+Files: src/json/*
+Copyright: 2009 Petri Lehtinen <petri@digip.org>
+License: Expat
 
 Files: *
-Copyright: 2008-2011 Vsevolod Stakhov <vsevolod@highsecure.ru>
-License: BSD
+Copyright: 2008-2012 Vsevolod Stakhov <vsevolod@highsecure.ru>
+License: BSD-2-clause
 
 Files: debian/*
-Copyright: 2011 Vsevolod Stakhov <vsevolod@highsecure.ru>
-License: GPL-2+
- This package is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; either version 2 of the License, or
- (at your option) any later version.
- .
- This package is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
- .
- You should have received a copy of the GNU General Public License
- along with this program. If not, see <http://www.gnu.org/licenses/>
- .
- On Debian systems, the complete text of the GNU General
- Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
+Copyright: 2011-2012 Vsevolod Stakhov <vsevolod@highsecure.ru>
+License: GPL
