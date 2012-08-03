@@ -1,0 +1,3 @@
+# Actually rspamd does not contain any gpl code except of these package,
+# so ignore unsafe link with openssl
+rspamd: possible-gpl-code-linked-with-openssl
