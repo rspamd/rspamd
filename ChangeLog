@@ -1,0 +1,274 @@
+0.5.1:
+	* Added lua worker type to handle network connections in lua.
+	* Added lua bindings for async_session, IO dispatcher, memory_pool, and
+	worker.
+	* Composites can now uses other composites in expressions.
+	* Fixes for debian package and for FreeBSD >= 9.1
+	* Add support of gmime-2.6 if gmime-2.4 is not found.
+	* Improve url detection and phishing detection.
+	* Add lua mime_part library to get an access to all message part
+	attributes (like filename, length, type).
+
+0.5.0:
+	* Added SMTP lightweight balancing proxy with XCLIENT support.
+	* Added lua bindings for upstreams objects and API.
+	* New pre-filters are implemented to support initial checking for messages.
+	* Added ratelimit plugin that uses redis protocol to store data.
+	* Added ipv6 support to spf and some other modules.
+	* Unbreak spf plugin.
+	* Allow options with the same name be threated as list.
+	* DKIM plugin an parsing code was added.
+	* Separate build system to put logic in several shared libraries.
+	* Many bugfixes.
+
+0.3.2:
+	* Add error handling for regexps
+	* Fix quit command in controller interface
+	* Write symbols weights to rspamc output
+	* Improve logic of selecting rspamc version
+	* Do not try to parse broken DNS replies
+	* Add 'raw' flag to FROM_EXCESS_BASE64 rule (requested by citrin)
+	* Output message id in rspamc reply
+	* Fix inserting composite symbol
+	* Fix output of log line
+	* Document composites
+	* Add logging for fuzzy checks
+	* Add logging for learning
+	* Improve logic of learning messages - do not learn more than specific threshold
+	* Fix inserting results for symbols that were incorrectly (for example more than 1 time) defined in config file
+	* Do not output control characters if output is not terminal
+	* Fix some logic errors in learning
+	* Consider lua plugins errors as fatal configuration errors
+	* Fix wirting message id during fuzzy_add command
+	* Display weight of symbols correctly
+	* Fixes to winnow learning
+	* One more try to improve accuracy of winnow algorithm
+	* Add bayesian classifier (initial version)
+	* Remove normalizer as it is winnow specific thing, so all statistic algorithms now returns value from 0 to 1
+	* Some fixes to fuzzy hashes expiration:
+	* Fix assertion while look up value in NULL hash (found by cirtin)
+	* Fix normalization for systems that have not tanhl function
+	* Ignore rfc822 group addresses
+	* Move images library to core rspamd
+	* Add lua api to access images properties
+	* Add post filters to lua API - filters that would be called after all message's processing
+	* Add ability to check for specified symbol in task results from lua
+	* Add ability to check for metric's results from lua
+	* Add ability to learn specified statfile form lua
+	* Add ability to extract filename and size of images from lua
+	* Fix assertion while extracting internet address
+	* Fix races in fuzzy storage
+	* Make spf parser case insensitive
+	* Add ability to check hashes of selected mime types
+	* Add ability to set minimum size in bytes for mime types
+	* Add ability to set minimum dimensions for images
+	* Assume all text/* content types as text/plain
+	* Fix getting data wrapper for gmime24
+	* Many fixes to statfile syncronization system
+	* Fixed statfile pool initialization and synchronization with disk
+	* Prepare 0.3.2
+	* Fix Mail::Rspamd::Config for new rspamd features
+	* Use Mail::Rspamd::Config in rspamc client
+	* Write user's name to rspamd log
+	* Prepare rspamd build infrastructure for creating rpm and deb packages
+	* Fix depends
+	* Add start script for linux systems
+	* Fix shared usage of statfiles
+	* Add invalidation of statfiles in case of learning, so now statfiles
+	* This should fix shared usage of statfile pool by several processes
+	* Fix misprint (reported by az)
+	* Fix stupid error when all checks can be done in a single pass
+	* New trie based url scanner (based on libcamel)
+	* Small fixes to rspamd perl client
+	* Write fuzzy hashes info to log
+	* Add trie interface to lua api
+	* Explain sample config and cleanup it
+
+0.3.1:
+	* Add modules documentation
+	* Continue implementing smtp proxy
+	* Implement new learning system, now rspamd should be much more intelligent while learning messages
+	* Convert statistic sums to use long double for counters
+	* Use hyperbolic tangent for internal normalizer
+	* In classify normalize result after comparing, not before
+	* New symbols sorter
+	* Fix strict aliasing while compiling with optimization
+	* Fix tanhl detection for platforms that have not implementation of it
+	* Remove several compile warnings
+	* Add experimental support of dynamic rules to regexp module
+	* Document views configuration
+	* Several fixes to documentation
+	* Add more logic for dynamic rules
+	* Add documentation for dynamic rules
+	* Add ability to make negations in networks in dynamic rules
+	* Clean up cache items correctly
+	* Implement basic SMTP dialog:
+	* Implement interaction with smtp upstream (with support of XCLIENT)
+	* Check messages received via smtp proxy
+	* Add support for sendfile in io dispatcher
+	* Fix issues with compatibility of worker_task and smtp proxy
+	* Proxy DATA command
+	* Fix SMTP
+	* Change metric logic
+	* Completely remove lex/yacc readers for config
+	* Make common sense of metric/action and symbols
+	* Sync changes with all plugins
+	* Incorrectly removed in previous commit
+	* Fix misprint (by Andrej Zverev)
+	* announce the "password" keyword in usage list
+	* Implement initial version of greylisting triplets storage
+	* Fix issues with smtp worker
+	* Fix QUIT command in SMTP worker
+	* Some fixes about new metrics system (may be incomplete)
+	* Get weights of symbol from default metric for symbols cache
+	* Fix setting task->from/task->rctp in smtp client
+	* Copy from and rcpt correctly
+	* Some performance improvements to IO dispatcher (do not drain the whole buffer after a single line readed)
+	* Fix smtp data input
+	* Fix misprint
+	* Add limit of maximum allowed smtp session errors
+	* New logic of SURBL module:
+	* Use system mkstemp(3) on systems where it is available as glib implementation
+	* Try to fix memmove issues in io dispatcher
+	* Remove debug from SURBL module
+	* Rewrite buffered input for line policy (again)
+	* Fix issue with links that are ip addresses in numeric form in surbl
+	* On Darwin use BSD style sendfile definition
+	* Reorganize platform specific knobs in CMakeLists
+	* Use gettimeofday on systems that have not clock_getres
+	* Use ftime for dns trans id generation on systems without clock_getres
+	* Darwin sendfile(2) support
+	* TIMEDB->TIMEB
+	* More to previous commit
+	* Pass env from main() arguments instead of platform specific global environ
+	* Fix compatibility issues
+	* Fix -lintl detection
+	* Init some variables to avoid problems
+	* Remove garbadge (gnome terminal sucks)
+	* Add more information about why we drop smtp connection
+	* Fix mkstemp call
+	* Send to upstream QUIT command at the end of session
+	* Check return value of each rspamd_dispatcher_write as in case of write errors sessions can be destroyed early
+	* Fix states in smtp dialog
+	* Use rspamd_snprintf instead of libc one
+	* Fix URLS command
+	* Fix reconfigure process of surbl module
+	* Fix destroying smtp session (unmap memory and do not delete pool early)
+	* Delete pool after using its variables
+	* Delay timer must be registered in async session to correctly handle connection termination
+	* Register dns requests in session too
+	* Make session before registering events
+	* Remove events in handlers
+	* Add ability to set filters for smtp worker for each smtp stage
+	* Add very initial version of DNS resolver (many things to be done)
+	* Announce weights and sync
+	* Fix few typo
+	* Understand short names of facility in logging config
+	* Add ability to make whitelist for spf checks
+	* Misprint != -> ==
+	* Handle lua tag in way that it is not required to write additional text:
+	* Strip all starting whitespace symbols from xml texts
+	* Fix stupid bug in calculating buffer length while reading file maps
+	* Add resolv.conf parsing into dns.c
+	* Fix microseconds<->milliseconds conversions
+	* Take callback argument in Mail::Rspamd::Client for processing files and directories
+	* Print results if rspamc is called for a directory
+	* Fix stupid error with surbl module reconfig (another one, blame me)
+	* Do not show duplicate urls in url header
+	* Fix detection of numeric urls (reported by citrin)
+	* Write real time of message's scan to log (not only virtual)
+	* Fix chartable module in utf mode
+	* Fix parsing of some broken urls
+	* Add ability to test regexp with 'T' flag
+	* Write more code for DNS resolver:
+	* Make DNS resolver working
+	* Many improvements to rspamd test suite: now it CAN be used for testing rspamd functionality
+	* Write DNS resolver tests
+	* Fix issues with memory_pool mutexes and with creating of statfiles
+	* Forgotten in previous commit
+	* Add support for parsing SPF and SRV records
+	* Fix PTR parsing
+	* Add tests
+	* Make SURBL module to use rspamd dns module
+	* Several fixes to DNS logic
+	* Remove evdns and use only rspamd resolver
+	* Very hard to detect problem with race among error in socket and destroying task while we are writing to socket and go through a hash table
+	* Fix resolving in smtp module
+	* Init events before configuring resolver in smtp worker
+	* Set resolver inside task
+	* Fix reload signal (reported by citrin)
+	* Some improvements to redirector
+	* Call has_forked method to inform POE about fork
+	* Fix lua DNS code
+	* Decompress labels in DNS packets more strictly
+	* Fix some problems with TXT records
+	* Try to fix removing of DNS events
+	* Do not insert unparsed RR's into reply
+	* Calling callbacks may cause destroying session from which we are calling callback so we MUST call callback as the latest action
+	* Fix check_smtp_data function
+	* Add ability to make views by recipient
+	* Add ability to set metric's action from config file
+	* Fix bug with writing garbadge if message has no urls or no messages
+	* Fix bug with incorrect behaviour of compare_parts_distance function
+	* Add ability to assign several actions to one metric
+	* Report action in rspamc protocol
+	* Mail::Rspamd::Client and rspamc can now understand Action header too
+	* Write action to log as well
+	* Make valgrind happy about comparing symbols
+	* Add more debug to comparing parts distance function
+	* Write action even if message has no symbols
+	* Make improvements to HTML entites decoder: now it replaces entities with common characters and
+	* Add -d option to force debug output
+	* Assume 7bit as default transfer encoding
+	* Do not overwrite lua plugins and configs if they already exists in target directory
+	* Improve logging
+	* Write queue id to log
+	* Remove test messages from cmake
+	* Reopen log file by USR1 signal
+	* Add reopenlog method to FreeBSD rc script
+	* Adopt foreach for cmake 2.6
+	* Fix to rc script
+	* Do not try to resolve names with several dots in a row
+	* Fix surbl request formatting for ip addresses
+	* Handle cases of broken requests
+	* Fix problems with parsing compressed names
+	* Fix TXT records parsing
+	* Fix expanding spf macros that may fail in rare cases
+	* Fix another error with early task destroying
+	* Handle empty from header
+	* Improve reopenlog command in rc script
+	* Strip trailing whitespace characters in Mail::Rspamd::Client
+	* Use ungreedy match to strip trailing whitespaces
+	* Stupid error in calculation compressed label length
+	* Some optimizations to client library
+	* Do not compare empty parts
+	* Empty and non-empty parts are allways different
+	* Save in regexp cache the whole regexp with header name (if exists) and with flags
+	* Add rspamd_log variable to lua plugins to access logging functions
+	* Each part in rspamd task now can have parent part
+	* Check for parts distance only for multipart/alternative subparts
+	* Do not check attachements even if they are text (but attached as file)
+	* Do not die if write (2) returned ENOSPACE while doing logging, turn on throttling mode instead (1 write try in a second)
+	* Add ability to turn on debug for specific symbols
+	* Add ability to configure dns timeouts and dns retransmits in config file
+	* More debug
+	* Fix extracting arguments in lua logger interface
+	* Turn off debug_ip during reload if it was disabled by new config
+	* Improve lua logging
+	* Pre-init symbols cache when rereading config
+	* Fix lua representing of invalid ip (nil, not 255.255.255.255)
+	* Fix R_TO_SEEMS_AUTO rule (by citrin)
+	* Add multimap lua plugin
+	* Fix some multimap issues
+	* Try to save images hashes to fuzzy storage to stop some annoying spammers
+	* Allocate some more bytes for read buffer to avoid incorrect behavoiur
+	* Add ability to check dns black lists by multimap module
+	* Add multimap documentation
+	* Fix labels parsing
+	* Another try to save regexps in cache correctly
+	* Improve test logs for regexps
+	* Fix parsing txt records to avoid reading of uninitialized data
+	* Fix error with writing symbols cache file
+	* Fix error while working in utf mode when raw regexps was not created properly
+	* Do not add extra byte while converting text to utf
+	* Add error handling for regexps
