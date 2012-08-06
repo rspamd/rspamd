@@ -1203,6 +1203,10 @@ compare_url_func (gconstpointer a, gconstpointer b)
 	}
 	else {
 		r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen);
+		if (r == 0 && u1->is_phished != u2->is_phished) {
+			/* Always insert phished urls to the tree */
+			return -1;
+		}
 	}
 
 	return r;
