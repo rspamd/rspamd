@@ -17,7 +17,7 @@
 extern const luaL_reg null_reg[];
 extern GMutex *lua_mtx;
 
-#define RSPAMD_LUA_API_VERSION 11
+#define RSPAMD_LUA_API_VERSION 12
 
 /* Common utility functions */
 
@@ -57,6 +57,7 @@ gint luaopen_radix (lua_State *L);
 gint luaopen_hash_table (lua_State *L);
 gint luaopen_trie (lua_State * L);
 gint luaopen_textpart (lua_State *L);
+gint luaopen_mimepart (lua_State *L);
 gint luaopen_image (lua_State *L);
 gint luaopen_url (lua_State *L);
 gint luaopen_classifier (lua_State *L);

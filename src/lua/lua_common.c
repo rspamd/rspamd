@@ -429,6 +429,7 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_trie (L);
 	(void)luaopen_task (L);
 	(void)luaopen_textpart (L);
+	(void)luaopen_mimepart (L);
 	(void)luaopen_image (L);
 	(void)luaopen_url (L);
 	(void)luaopen_message (L);

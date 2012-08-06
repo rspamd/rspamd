@@ -57,6 +57,7 @@ LUA_FUNCTION_DEF (task, set_pre_result);
 LUA_FUNCTION_DEF (task, get_urls);
 LUA_FUNCTION_DEF (task, get_emails);
 LUA_FUNCTION_DEF (task, get_text_parts);
+LUA_FUNCTION_DEF (task, get_parts);
 LUA_FUNCTION_DEF (task, get_raw_headers);
 LUA_FUNCTION_DEF (task, get_raw_header);
 LUA_FUNCTION_DEF (task, get_raw_header_strong);
@@ -67,13 +68,17 @@ LUA_FUNCTION_DEF (task, resolve_dns_txt);
 LUA_FUNCTION_DEF (task, call_rspamd_function);
 LUA_FUNCTION_DEF (task, get_recipients);
 LUA_FUNCTION_DEF (task, get_from);
+LUA_FUNCTION_DEF (task, set_from);
 LUA_FUNCTION_DEF (task, get_user);
+LUA_FUNCTION_DEF (task, set_user);
 LUA_FUNCTION_DEF (task, get_recipients_headers);
 LUA_FUNCTION_DEF (task, get_from_headers);
 LUA_FUNCTION_DEF (task, get_from_ip);
+LUA_FUNCTION_DEF (task, set_from_ip);
 LUA_FUNCTION_DEF (task, get_from_ip_num);
 LUA_FUNCTION_DEF (task, get_client_ip_num);
 LUA_FUNCTION_DEF (task, get_helo);
+LUA_FUNCTION_DEF (task, set_helo);
 LUA_FUNCTION_DEF (task, get_images);
 LUA_FUNCTION_DEF (task, get_symbol);
 LUA_FUNCTION_DEF (task, get_date);
@@ -101,6 +106,7 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_urls),
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
+	LUA_INTERFACE_DEF (task, get_parts),
 	LUA_INTERFACE_DEF (task, get_raw_headers),
 	LUA_INTERFACE_DEF (task, get_raw_header),
 	LUA_INTERFACE_DEF (task, get_raw_header_strong),
@@ -111,13 +117,17 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, call_rspamd_function),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, get_from),
+	LUA_INTERFACE_DEF (task, set_from),
 	LUA_INTERFACE_DEF (task, get_user),
+	LUA_INTERFACE_DEF (task, set_user),
 	LUA_INTERFACE_DEF (task, get_recipients_headers),
 	LUA_INTERFACE_DEF (task, get_from_headers),
 	LUA_INTERFACE_DEF (task, get_from_ip),
+	LUA_INTERFACE_DEF (task, set_from_ip),
 	LUA_INTERFACE_DEF (task, get_from_ip_num),
 	LUA_INTERFACE_DEF (task, get_client_ip_num),
 	LUA_INTERFACE_DEF (task, get_helo),
+	LUA_INTERFACE_DEF (task, set_helo),
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
@@ -148,6 +158,22 @@ static const struct luaL_reg    textpartlib_m[] = {
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
+
+/* Mimepart methods */
+LUA_FUNCTION_DEF (mimepart, get_content);
+LUA_FUNCTION_DEF (mimepart, get_length);
+LUA_FUNCTION_DEF (mimepart, get_type);
+LUA_FUNCTION_DEF (mimepart, get_filename);
+
+static const struct luaL_reg    mimepartlib_m[] = {
+	LUA_INTERFACE_DEF (mimepart, get_content),
+	LUA_INTERFACE_DEF (mimepart, get_length),
+	LUA_INTERFACE_DEF (mimepart, get_type),
+	LUA_INTERFACE_DEF (mimepart, get_filename),
+	{"__tostring", lua_class_tostring},
+	{NULL, NULL}
+};
+
 
 /* Image methods */
 LUA_FUNCTION_DEF (image, get_width);
@@ -200,6 +226,14 @@ lua_check_textpart (lua_State * L)
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{textpart}");
 	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
 	return ud ? *((struct mime_text_part **)ud) : NULL;
+}
+
+static struct mime_part   *
+lua_check_mimepart (lua_State * L)
+{
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{mimepart}");
+	luaL_argcheck (L, ud != NULL, 1, "'mimepart' expected");
+	return ud ? *((struct mime_part **)ud) : NULL;
 }
 
 static struct rspamd_image      *
@@ -473,6 +507,33 @@ lua_task_get_text_parts (lua_State * L)
 	lua_pushnil (L);
 	return 1;
 }
+
+static gint
+lua_task_get_parts (lua_State * L)
+{
+	gint                            i = 1;
+	struct worker_task             *task = lua_check_task (L);
+	GList                          *cur;
+	struct mime_part          *part, **ppart;
+
+	if (task != NULL) {
+		lua_newtable (L);
+		cur = task->parts;
+		while (cur) {
+			part = cur->data;
+			ppart = lua_newuserdata (L, sizeof (struct mime_part *));
+			*ppart = part;
+			lua_setclass (L, "rspamd{mimepart}", -1);
+			/* Make it array */
+			lua_rawseti (L, -2, i++);
+			cur = g_list_next (cur);
+		}
+		return 1;
+	}
+	lua_pushnil (L);
+	return 1;
+}
+
 
 static gint
 lua_task_get_raw_headers (lua_State * L)
@@ -1050,6 +1111,22 @@ lua_task_get_from (lua_State *L)
 }
 
 static gint
+lua_task_set_from (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const gchar					   *new_from;
+
+	if (task) {
+		new_from = luaL_checkstring (L, 2);
+		if (new_from) {
+			task->from = memory_pool_strdup (task->task_pool, new_from);
+		}
+	}
+
+	return 0;
+}
+
+static gint
 lua_task_get_user (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
@@ -1061,6 +1138,22 @@ lua_task_get_user (lua_State *L)
 
 	lua_pushnil (L);
 	return 1;
+}
+
+static gint
+lua_task_set_user (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const gchar					   *new_user;
+
+	if (task) {
+		new_user = luaL_checkstring (L, 2);
+		if (new_user) {
+			task->user = memory_pool_strdup (task->task_pool, new_user);
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -1141,6 +1234,31 @@ lua_task_get_from_ip (lua_State *L)
 }
 
 static gint
+lua_task_set_from_ip (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const gchar					   *new_ip_str;
+
+	if (task) {
+		new_ip_str = luaL_checkstring (L, 2);
+#ifdef HAVE_INET_PTON
+		if (inet_pton (AF_INET, new_ip_str, &task->from_addr.d.in4) != 1) {
+			if (inet_pton (AF_INET6, new_ip_str, &task->from_addr.d.in6) != 1) {
+				msg_warn ("cannot convert %s to ip address", new_ip_str);
+			}
+		}
+		return 0;
+#else
+		if (inet_aton (new_ip_str, &task->from_addr) != 0) {
+			msg_warn ("cannot convert %s to ip address", new_ip_str);
+		}
+#endif
+	}
+
+	return 0;
+}
+
+static gint
 lua_task_get_from_ip_num (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
@@ -1195,6 +1313,22 @@ lua_task_get_helo (lua_State *L)
 
 	lua_pushnil (L);
 	return 1;
+}
+
+static gint
+lua_task_set_helo (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const gchar					   *new_helo;
+
+	if (task) {
+		new_helo = luaL_checkstring (L, 2);
+		if (new_helo) {
+			task->helo = memory_pool_strdup (task->task_pool, new_helo);
+		}
+	}
+
+	return 0;
 }
 
 static gint
@@ -1667,6 +1801,74 @@ lua_textpart_compare_distance (lua_State * L)
 	return 1;
 }
 
+/* Mimepart implementation */
+
+static gint
+lua_mimepart_get_content (lua_State * L)
+{
+	struct mime_part          	  *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	lua_pushlstring (L, (const gchar *)part->content->data, part->content->len);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_length (lua_State * L)
+{
+	struct mime_part              *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	lua_pushinteger (L, part->content->len);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_type (lua_State * L)
+{
+	struct mime_part          	  *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		lua_pushnil (L);
+		return 2;
+	}
+#ifndef GMIME24
+	lua_pushstring (L, part->type->type);
+	lua_pushstring (L, part->type->subtype);
+#else
+	lua_pushstring (L, g_mime_content_type_get_media_type (part->type));
+	lua_pushstring (L, g_mime_content_type_get_media_subtype (part->type));
+#endif
+
+	return 2;
+}
+
+static gint
+lua_mimepart_get_filename (lua_State * L)
+{
+	struct mime_part              *part = lua_check_mimepart (L);
+
+	if (part == NULL || part->filename == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	lua_pushstring (L, part->filename);
+
+	return 1;
+}
+
 /* Image functions */
 static gint
 lua_image_get_width (lua_State *L)
@@ -1852,6 +2054,17 @@ luaopen_textpart (lua_State * L)
 {
 	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
 	luaL_openlib (L, "rspamd_textpart", null_reg, 0);
+
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
+	return 1;
+}
+
+gint
+luaopen_mimepart (lua_State * L)
+{
+	lua_newclass (L, "rspamd{mimepart}", mimepartlib_m);
+	luaL_openlib (L, "rspamd_mimepart", null_reg, 0);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
