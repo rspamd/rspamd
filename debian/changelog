@@ -1,35 +1,18 @@
 rspamd (0.5.0-1) unstable; urgency=low
 
   * Upgrade to 0.5.0
-   - Added SMTP lightweight balancing proxy with XCLIENT support.
-   - Added lua bindings for upstreams objects and API.
-   - New pre-filters are implemented to support initial checking for messages.
-   - Added ratelimit plugin that uses redis protocol to store data.
-   - Added ipv6 support to spf and some other modules.
-   - Unbreak spf plugin.
-   - Allow options with the same name be threated as list.
-   - DKIM plugin an parsing code was added.
-   - Separate build system to put logic in several shared libraries.
-   - Many bugfixes.
  
  -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Sat, 9 Jun 2012 15:59:00 +0400
 
 rspamd (0.4.7-1) unstable; urgency=low
 
   * Upgrade to 0.4.7
-   - Rework events system
-   - Add threading support to regexp and classifying
-   - Fix several major bugs
 
  -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Fri, 17 Feb 2012 21:06:01 +0400
 
 rspamd (0.4.6-1) unstable; urgency=low
 
   * Upgrade to 0.4.6
-   - Add keystorage/redis client to lua API
-   - Write plugin for marking ip addresses
-   - Rewrite events system
-   - Fix several bugs
 
  -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Tue, 20 Dec 2011 17:21:33 +0400
 
