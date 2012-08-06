@@ -71,25 +71,302 @@ static gboolean url_file_end (const gchar *begin, const gchar *end, const gchar 
 static gboolean url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
 static gboolean url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
 
+static gboolean url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+static gboolean url_tld_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
+
 static gboolean url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
 static gboolean url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match);
 
 struct url_matcher matchers[] = {
+		/* Common prefixes */
 		{ "file://",		"",			url_file_start, 		url_file_end	},
-		{ "ftp://",			"", 		url_web_start,	 		url_web_end		},
-		{ "sftp://",		"", 		url_web_start,	 		url_web_end		},
-		{ "http://",		"", 		url_web_start,	 		url_web_end		},
-		{ "https://",		"", 		url_web_start,	 		url_web_end		},
-		{ "news://",		"", 		url_web_start,	 		url_web_end		},
-		{ "nntp://",		"", 		url_web_start,	 		url_web_end		},
-		{ "telnet://",		"", 		url_web_start,	 		url_web_end		},
-		{ "webcal://",		"", 		url_web_start,	 		url_web_end		},
-		{ "mailto://",		"", 		url_email_start,	 	url_email_end	},
-		{ "callto://",		"", 		url_web_start,	 		url_web_end		},
-		{ "h323:",			"", 		url_web_start,	 		url_web_end		},
-		{ "sip:",			"", 		url_web_start,	 		url_web_end		},
-		{ "www.",			"http://", 	url_web_start,	 		url_web_end		},
+		{ "ftp://",			"",			url_web_start,	 		url_web_end		},
+		{ "sftp://",		"",			url_web_start,	 		url_web_end		},
+		{ "http://",		"",			url_web_start,	 		url_web_end		},
+		{ "https://",		"",			url_web_start,	 		url_web_end		},
+		{ "news://",		"",			url_web_start,	 		url_web_end		},
+		{ "nntp://",		"",			url_web_start,	 		url_web_end		},
+		{ "telnet://",		"",			url_web_start,	 		url_web_end		},
+		{ "webcal://",		"",			url_web_start,	 		url_web_end		},
+		{ "mailto://",		"",			url_email_start,	 	url_email_end	},
+		{ "callto://",		"",			url_web_start,	 		url_web_end		},
+		{ "h323:",			"",			url_web_start,	 		url_web_end		},
+		{ "sip:",			"",			url_web_start,	 		url_web_end		},
+		{ "www.",			"http://",	url_web_start,			url_web_end		},
 		{ "ftp.",			"ftp://", 	url_web_start,	 		url_web_end		},
+		/* TLD domains parts */
+		{ ".ac",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ad",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ae",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".aero",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".af",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ag",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ai",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".al",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".am",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".an",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ao",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".aq",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ar",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".arpa",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".as",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".asia",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".at",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".au",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".aw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ax",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".az",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ba",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bb",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bd",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".be",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bh",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bi",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".biz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bj",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bo",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".br",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bs",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bv",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".by",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".bz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ca",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cat",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cd",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ch",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ci",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ck",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cl",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".co",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".com",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".coop",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cv",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cx",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cy",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".cz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".de",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".dj",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".dk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".dm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".do",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".dz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ec",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".edu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ee",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".eg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".er",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".es",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".et",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".eu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".fi",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".fj",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".fk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".fm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".fo",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".fr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ga",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gb",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gd",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ge",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gh",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gi",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gl",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gov",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gp",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gq",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gs",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".gy",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".hk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".hm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".hn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".hr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ht",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".hu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".id",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ie",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".il",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".im",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".in",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".info",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".int",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".io",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".iq",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ir",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".is",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".it",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".je",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".jm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".jo",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".jobs",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".jp",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ke",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kh",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ki",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".km",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kp",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ky",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".kz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".la",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lb",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".li",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ls",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".lv",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ly",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ma",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".md",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".me",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mh",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mil",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ml",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mo",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mobi",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mp",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mq",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ms",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".museum",		"http://",	url_tld_start,			url_tld_end		},
+		{ ".mv",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mx",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".my",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".mz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".na",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".name",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".nc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ne",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".net",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".nf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ng",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ni",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".nl",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".no",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".np",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".nr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".nu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".nz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".om",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".org",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pa",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pe",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ph",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pl",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pro",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ps",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".pw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".py",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".qa",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".re",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ro",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".rs",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ru",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".rw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sa",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sb",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sd",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".se",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sh",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".si",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sj",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sl",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".so",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".st",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".su",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sv",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sx",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sy",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".sz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".td",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tel",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".th",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tj",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tl",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".to",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tp",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tr",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".travel",		"http://",	url_tld_start,			url_tld_end		},
+		{ ".tt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tv",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tw",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".tz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ua",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ug",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".uk",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".us",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".uy",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".uz",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".va",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".vc",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ve",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".vg",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".vi",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".vn",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".vu",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".wf",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ws",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".xxx",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".ye",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".yt",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".za",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".zm",			"http://",	url_tld_start,			url_tld_end		},
+		{ ".zw",			"http://",	url_tld_start,			url_tld_end		},
+		/* Likely emails */
 		{ "@",				"mailto://",url_email_start,	 	url_email_end	}
 };
 
@@ -946,6 +1223,48 @@ url_file_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_
 
 }
 
+static gboolean
+url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	const gchar						*p = pos;
+
+	/* Try to find the start of the url by finding any non-urlsafe character or whitespace/punctuation */
+	while (p >= begin) {
+		if (!is_urlsafe (*p) || g_ascii_isspace (*p)) {
+			match->m_begin = p;
+			return TRUE;
+		}
+		p --;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+url_tld_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
+{
+	const gchar						*p;
+
+	/* A url must be finished by tld, so it must be followed by punctuation or by space character */
+	p = pos + strlen (match->pattern);
+	if (p == end || g_ascii_isspace (*(p + 1)) || g_ascii_ispunct (*(p + 1))) {
+		match->m_len = p - match->m_begin;
+		return TRUE;
+	}
+	else if (*(p + 1) == '/' || *(p + 1) == ':') {
+		/* Parse arguments, ports by normal way by url default function */
+		p = match->m_begin;
+		/* Check common prefix */
+		if (g_ascii_strncasecmp (p, "http://", sizeof ("http://") - 1) == 0) {
+			return url_web_end (begin, end, match->m_begin + sizeof ("http://") - 1, match);
+		}
+		else {
+			return url_web_end (begin, end, match->m_begin, match);
+		}
+
+	}
+	return FALSE;
+}
 
 static gboolean
 url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
@@ -960,6 +1279,7 @@ url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 
 	return TRUE;
 }
+
 static gboolean
 url_web_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
 {
