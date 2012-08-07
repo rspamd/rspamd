@@ -6,7 +6,7 @@ include /usr/share/dpkg/buildflags.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/cmake.mk
 
-DEB_CMAKE_NORMAL_ARGS+= -DETC_PREFIX=/etc -DMAN_PREFIX=/usr/share/man -DLOCALSTATES_PREFIX=/var/run -DLIBDIR=/usr/lib -DINCLUDEDIR=/usr/include -DNO_SHARED=ON -DDEBIAN_BUILD=1
+DEB_CMAKE_NORMAL_ARGS+= -DETC_PREFIX=/etc -DMAN_PREFIX=/usr/share/man -DLOCALSTATES_PREFIX=/var/run -DLIBDIR=/usr/lib -DINCLUDEDIR=/usr/include -DNO_SHARED=ON -DDEBIAN_BUILD=1 -DRSPAMD_GROUP=nobody
 clean::
 	rm -f src/modules.c
 
