@@ -3,9 +3,9 @@ Upstream-Name: rspamd
 Source: https://bitbucket.org/vstakhov/rspamd
 
 Files: contrib/lgpl/*
-Copyright: 1999, 2000 Scott Wimer
-Copyright: 2004, Matthias Clasen <mclasen@redhat.com>
-Copyright: 2005 - 2007, Marco Barisione <marco@barisione.org>
+Copyright: 1999, 2000  Scott Wimer,
+           2004        Matthias Clasen <mclasen@redhat.com>,
+           2005 - 2007 Marco Barisione <marco@barisione.org>
 License: LGPL-2+
  This program is free software; you can redistribute it
  and/or modify it under the terms of the GNU Library General Public
@@ -51,9 +51,16 @@ License: Expat
 
 Files: *
 Copyright: 2008-2012 Vsevolod Stakhov <vsevolod@highsecure.ru>
-License: BSD
+License: BSD-2-Clause
  Redistribution and use in source and binary forms, with or without
- modification, are permitted under the terms of the BSD License.
+ modification, are permitted provided that the following conditions are met:
+ .
+ Redistributions of source code must retain the above copyright notice, this
+ list of conditions and the following disclaimer.
+ .
+ Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution.
  .
  THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -66,9 +73,6 @@ License: BSD
  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  SUCH DAMAGE.
- .
- On Debian systems, the complete text of the BSD License can be
- found in `/usr/share/common-licenses/BSD'.
 
 Files: debian/*
 Copyright: 2011-2012 Vsevolod Stakhov <vsevolod@highsecure.ru>
