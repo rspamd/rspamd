@@ -890,6 +890,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 			}
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start + 1));
+				return TRUE;
 			}
 			if (*end != '\n' || *(end - 1) != '\r') {
 				msg_debug ("append CRLF");
