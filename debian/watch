@@ -1,0 +1,2 @@
+version=3
+https://bitbucket.org/vstakhov/rspamd/downloads  .+rspamd-(\d+[\d\.]*).tar.gz
