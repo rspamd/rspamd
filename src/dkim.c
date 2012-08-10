@@ -475,7 +475,7 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_ji
 				}
 				break;
 			default:
-				g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim param lenght: %zd", taglen);
+				g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim param length: %zd", taglen);
 				state = DKIM_STATE_ERROR;
 				break;
 			}

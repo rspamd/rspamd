@@ -343,7 +343,7 @@ lua_redis_make_request (lua_State *L)
 			}
 		}
 		else {
-			msg_info ("function requred as 4-th argument");
+			msg_info ("function required as 4-th argument");
 			lua_pushboolean (L, FALSE);
 		}
 	}

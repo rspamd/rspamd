@@ -1074,14 +1074,14 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 		if (do_terminate) {
 			do_terminate = 0;
-			msg_info ("catch termination signal, waiting for childs");
+			msg_info ("catch termination signal, waiting for children");
 			pass_signal_worker (rspamd_main->workers, SIGTERM);
 			break;
 		}
 		if (child_dead) {
 			child_dead = 0;
 			msg_debug ("catch SIGCHLD signal, finding terminated worker");
-			/* Remove dead child form childs list */
+			/* Remove dead child form children list */
 			wrk = waitpid (0, &res, 0);
 			if ((cur = g_hash_table_lookup (rspamd_main->workers, GSIZE_TO_POINTER (wrk))) != NULL) {
 				/* Unlink dead process from queue and hash table */

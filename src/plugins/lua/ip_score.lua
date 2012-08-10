@@ -171,5 +171,5 @@ if rspamd_config:get_api_version() >= 9 then
 		rspamd_config:register_post_filter(ip_score_set)
 	end
 else
-	rspamd_logger.err('cannot register module ip_score as it requres at least 9 version of lua API and rspamd >= 0.4.6')
+	rspamd_logger.err('cannot register module ip_score as it requires at least 9 version of lua API and rspamd >= 0.4.6')
 end
