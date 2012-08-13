@@ -100,7 +100,7 @@ lua_io_read_cb (f_str_t * in, void *arg)
 		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 	}
 
-	res = lua_toboolean (cbdata->L, 1);
+	res = lua_toboolean (cbdata->L, -1);
 	lua_pop (cbdata->L, 1);
 
 	if (need_unlock) {
@@ -133,7 +133,7 @@ lua_io_write_cb (void *arg)
 			msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 		}
 
-		res = lua_toboolean (cbdata->L, 1);
+		res = lua_toboolean (cbdata->L, -1);
 		lua_pop (cbdata->L, 1);
 
 		if (need_unlock) {

@@ -47,6 +47,11 @@ void lua_set_table_index (lua_State *L, const gchar *index, const gchar *value);
 gint lua_class_tostring (lua_State *L);
 
 /**
+ * Check whether the argument at specified index is of the specified class
+ */
+gpointer lua_check_class (lua_State *L, gint index, const gchar *name);
+
+/**
  * Open libraries functions
  */
 gint luaopen_message (lua_State *L);
@@ -71,11 +76,8 @@ gint luaopen_upstream (lua_State * L);
 gint luaopen_mempool (lua_State * L);
 gint luaopen_session (lua_State * L);
 gint luaopen_io_dispatcher (lua_State * L);
+gint luaopen_dns_resolver (lua_State * L);
 
-void init_lua (struct config_file *cfg);
-gboolean init_lua_filters (struct config_file *cfg);
-
-/* Filters functions */
 gint lua_call_filter (const gchar *function, struct worker_task *task);
 gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number);
 double lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name);

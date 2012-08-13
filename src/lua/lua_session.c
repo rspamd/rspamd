@@ -38,7 +38,7 @@ static const struct luaL_reg    sessionlib_m[] = {
 	LUA_INTERFACE_DEF (session, register_async_event),
 	LUA_INTERFACE_DEF (session, remove_normal_event),
 	LUA_INTERFACE_DEF (session, check_session_pending),
-	{"__gc", lua_session_delete},
+	LUA_INTERFACE_DEF (session, delete),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -89,7 +89,7 @@ static gboolean
 lua_session_finalizer (gpointer ud)
 {
 	struct lua_session_udata					*cbdata = ud;
-	gboolean								 	need_unlock = FALSE;
+	gboolean								 	need_unlock = FALSE, res;
 
 	/* Avoid LOR here as mutex can be acquired before in lua_call */
 	if (g_mutex_trylock (lua_mtx)) {
@@ -98,15 +98,17 @@ lua_session_finalizer (gpointer ud)
 
 	/* Call finalizer function */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
-	if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
+	if (lua_pcall (cbdata->L, 0, 1, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 	}
+	res = lua_toboolean (cbdata->L, -1);
+	lua_pop (cbdata->L, 1);
 	luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
 	if (need_unlock) {
 		g_mutex_unlock (lua_mtx);
 	}
 
-	return TRUE;
+	return res;
 }
 
 static void

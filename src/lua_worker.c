@@ -225,9 +225,12 @@ static int
 lua_worker_get_resolver (lua_State *L)
 {
 	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
+	struct rspamd_dns_resolver						**presolver;
 
 	if (ctx) {
-		/* XXX: implement resolver API */
+		presolver = lua_newuserdata (L, sizeof (gpointer));
+		lua_setclass (L, "rspamd{resolver}", -1);
+		*presolver = ctx->resolver;
 	}
 	else {
 		lua_pushnil (L);
@@ -460,6 +463,8 @@ start_lua_worker (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &worker->bind_ev);
 	event_add (&worker->bind_ev, NULL);
 
+	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+
 	/* Open worker's lib */
 	luaopen_lua_worker (L);
 
@@ -489,7 +494,6 @@ start_lua_worker (struct rspamd_worker *worker)
 
 	/* Maps events */
 	start_map_watch (ctx->ev_base);
-	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
 	event_base_loop (ctx->ev_base, 0);
 	luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_accept);

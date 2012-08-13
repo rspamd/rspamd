@@ -444,6 +444,7 @@ init_lua (struct config_file *cfg)
 	(void)lua_add_actions_global (L);
 	(void)luaopen_session (L);
 	(void)luaopen_io_dispatcher (L);
+	(void)luaopen_dns_resolver (L);
 
 	cfg->lua_state = L;
 	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_close, L);
@@ -788,4 +789,25 @@ lua_dumpstack (lua_State *L)
 		}
 	}
 	msg_info (buf);
+}
+
+gpointer
+lua_check_class (lua_State *L, gint index, const gchar *name)
+{
+	gpointer					p;
+
+	if (lua_type (L, index) == LUA_TUSERDATA) {
+		p = lua_touserdata (L, index);
+		if (p) {
+			if (lua_getmetatable (L, index)) {
+				lua_getfield (L, LUA_REGISTRYINDEX, name);  /* get correct metatable */
+				if (lua_rawequal (L, -1, -2)) {  /* does it have the correct mt? */
+					lua_pop (L, 2);  /* remove both metatables */
+					return p;
+				}
+				lua_pop (L, 2);
+			}
+		}
+	}
+	return NULL;
 }
