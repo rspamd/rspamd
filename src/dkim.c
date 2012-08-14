@@ -854,6 +854,10 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 
 	*start = h;
 
+	if (!finished && *(t - 1) == ' ' && g_ascii_isspace (*h)) {
+		/* Avoid border problems */
+		t --;
+	}
 #if 0
 	msg_debug ("update signature with buffer: %*s", t - buf, buf);
 #endif
@@ -874,6 +878,12 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 		while (end > start + 2) {
 			if (*end == '\n' && *(end - 1) == '\r' && *(end - 2) == '\n') {
 				end -= 2;
+			}
+			else if (*end == '\n' && *(end - 1) == '\n') {
+				end --;
+			}
+			else if (*end == '\r' && *(end - 1) == '\r') {
+				end --;
 			}
 			else {
 				break;
