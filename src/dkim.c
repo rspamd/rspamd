@@ -965,6 +965,40 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 	return FALSE;
 }
 
+/* Update hash converting all CR and LF to CRLF */
+static void
+rspamd_dkim_hash_update (GChecksum *ck, const gchar *begin, gsize len)
+{
+	const gchar									*p, *c, *end;
+
+	end = begin + len;
+	p = begin;
+	c = p;
+	while (p != end) {
+		if (*p == '\r') {
+			g_checksum_update (ck, c, p - c);
+			g_checksum_update (ck, CRLF, sizeof (CRLF) - 1);
+			p ++;
+			if (*p == '\n') {
+				p ++;
+			}
+			c = p;
+		}
+		else if (*p == '\n') {
+			g_checksum_update (ck, c, p - c);
+			g_checksum_update (ck, CRLF, sizeof (CRLF) - 1);
+			p ++;
+			c = p;
+		}
+		else {
+			p ++;
+		}
+	}
+	if (p != c) {
+		g_checksum_update (ck, c, p - c);
+	}
+}
+
 /* Update hash by signature value (ignoring b= tag) */
 static void
 rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, guint len)
@@ -982,7 +1016,7 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 		if (tag && p[0] == 'b' && p[1] == '=') {
 			/* Add to signature */
 			msg_debug ("initial update hash with signature part: %*s", p - c + 2, c);
-			g_checksum_update (ctx->headers_hash, c, p - c + 2);
+			rspamd_dkim_hash_update (ctx->headers_hash, c, p - c + 2);
 			skip = TRUE;
 		}
 		else if (skip && (*p == ';' || p == end - 1)) {
@@ -1006,7 +1040,7 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 
 	if (p - c + 1 > 0) {
 		msg_debug ("final update hash with signature part: %*s", p - c + 1, c);
-		g_checksum_update (ctx->headers_hash, c, p - c + 1);
+		rspamd_dkim_hash_update (ctx->headers_hash, c, p - c + 1);
 	}
 }
 
@@ -1166,12 +1200,11 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 
 				if (!chunk.append_crlf) {
 					msg_debug ("update signature with header: %*s", elt->len, elt->begin);
-					g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+					rspamd_dkim_hash_update (ctx->headers_hash, elt->begin, elt->len);
 				}
 				else {
 					msg_debug ("update signature with header: %*s", elt->len + 1, elt->begin);
-					g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
-					g_checksum_update (ctx->headers_hash, CRLF, sizeof (CRLF) - 1);
+					rspamd_dkim_hash_update (ctx->headers_hash, elt->begin, elt->len + 1);
 				}
 			}
 		}
