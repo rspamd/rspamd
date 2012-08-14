@@ -867,6 +867,62 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 }
 
 static gboolean
+rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
+{
+	const gchar									*h;
+	static gchar								 buf[BUFSIZ];
+	gchar										*t;
+	guint										 len, inlen;
+	gboolean									 finished = FALSE;
+
+	if (remain > sizeof (buf)) {
+		len = sizeof (buf);
+	}
+	else {
+		len = remain;
+		finished = TRUE;
+	}
+	inlen = sizeof (buf) - 1;
+	h = *start;
+	t = &buf[0];
+
+	while (len && inlen) {
+		if (*h == '\r' || *h == '\n') {
+			/* Replace a single \n or \r with \r\n */
+			if (*h == '\n' && *(h - 1) != '\r') {
+				*t ++ = '\r';
+				inlen --;
+			}
+			else if (*h == '\r' && *(h + 1) != '\n') {
+				*t ++ = *h ++;
+				*t ++ = '\n';
+				if (inlen > 1) {
+					inlen -= 2;
+				}
+				else {
+					/* It is safe as inlen = sizeof (buf) - 1 */
+					inlen = 0;
+				}
+				len --;
+				continue;
+			}
+		}
+		*t++ = *h++;
+		inlen --;
+		len --;
+	}
+
+	*start = h;
+
+#if 0
+	msg_debug ("update signature with buffer: %*s", t - buf, buf);
+#endif
+	g_checksum_update (ck, buf, t - buf);
+
+	return !finished;
+}
+
+static gboolean
 rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const gchar *end)
 {
 	if (start == NULL) {
@@ -896,15 +952,10 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 		else {
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
-				g_checksum_update (ctx->body_hash, start, end - start + 1);
+				while (rspamd_dkim_simple_body_step (ctx->body_hash, &start, end - start + 1));
 			}
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start + 1));
-				return TRUE;
-			}
-			if (*end != '\n' || *(end - 1) != '\r') {
-				msg_debug ("append CRLF");
-				g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
 			}
 		}
 		return TRUE;
@@ -1032,6 +1083,7 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 struct rspamd_dkim_sign_chunk {
 	const gchar *begin;
 	gsize len;
+	gboolean append_crlf;
 };
 
 static gboolean
@@ -1087,7 +1139,15 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 			/* c contains the beginning of header */
 			if (*p == '\n' && (!g_ascii_isspace (p[1]) || p[1] == '\0')) {
 				chunk.begin = c;
-				chunk.len = p - c + 1;
+				if (*(p - 1) == '\r') {
+					chunk.len = p - c + 1;
+					chunk.append_crlf = FALSE;
+				}
+				else {
+					/* Need append CRLF as linefeed is not proper */
+					chunk.len = p - c;
+					chunk.append_crlf = TRUE;
+				}
 				g_array_append_val (to_sign, chunk);
 				c = p + 1;
 				state = 0;
@@ -1103,13 +1163,26 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 
 			for (i = to_sign->len - 1; i >= 0 && count > 0; i --, count --) {
 				elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, i);
-				msg_debug ("update signature with header: %*s", elt->len, elt->begin);
-				g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+
+				if (!chunk.append_crlf) {
+					msg_debug ("update signature with header: %*s", elt->len, elt->begin);
+					g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+				}
+				else {
+					msg_debug ("update signature with header: %*s", elt->len + 1, elt->begin);
+					g_checksum_update (ctx->headers_hash, elt->begin, elt->len);
+					g_checksum_update (ctx->headers_hash, CRLF, sizeof (CRLF) - 1);
+				}
 			}
 		}
 		else {
 			elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, 0);
-			rspamd_dkim_signature_update (ctx, elt->begin, elt->len);
+			if (elt->append_crlf) {
+				rspamd_dkim_signature_update (ctx, elt->begin, elt->len + 1);
+			}
+			else {
+				rspamd_dkim_signature_update (ctx, elt->begin, elt->len);
+			}
 		}
 	}
 
