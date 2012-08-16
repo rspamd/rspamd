@@ -496,7 +496,7 @@
   <!-- <whitelisted_ip>file:///some/path</whitelisted_ip> -->
 
   <!-- List of whitelisted recipients -->
-  <whitelisted_rcpt>postmaster,mailer-daemon</whitelisted_rcpt>
+  <whitelisted_rcpts>postmaster,mailer-daemon</whitelisted_rcpts>
 
   <!-- Limit if recipients to check -->
   <max_rcpt>5</max_rcpt>
