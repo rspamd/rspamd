@@ -192,7 +192,7 @@ read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
 	cfg->config_test = config_test;
 	cfg->rspamd_user = rspamd_user;
 	cfg->rspamd_group = rspamd_group;
-	cfg_num = g_strv_length (cfg_names);
+	cfg_num = cfg_names != NULL ? g_strv_length (cfg_names) : 0;
 	if (cfg_num == 0) {
 		cfg->cfg_name = FIXED_CONFIG_FILE;
 	}
