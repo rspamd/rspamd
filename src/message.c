@@ -1116,7 +1116,7 @@ process_message (struct worker_task *task)
 
 		while (p < end) {
 			/* Search to the end of url */
-			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end, &url_str)) {
+			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end, &url_str, FALSE)) {
 				if (url_str != NULL) {
 					subject_url = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
 					if (subject_url != NULL) {

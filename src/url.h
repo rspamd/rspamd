@@ -101,7 +101,7 @@ enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool)
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str);
+gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str, gboolean is_html);
 
 /*
  * Return text representation of url parsing error

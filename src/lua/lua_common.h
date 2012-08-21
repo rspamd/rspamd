@@ -52,6 +52,16 @@ gint lua_class_tostring (lua_State *L);
 gpointer lua_check_class (lua_State *L, gint index, const gchar *name);
 
 /**
+ * Initialize lua and bindings
+ */
+void init_lua (struct config_file *cfg);
+
+/**
+ * Load and initialize lua plugins
+ */
+gboolean init_lua_filters (struct config_file *cfg);
+
+/**
  * Open libraries functions
  */
 gint luaopen_message (lua_State *L);
