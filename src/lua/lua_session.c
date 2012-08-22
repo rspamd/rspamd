@@ -89,12 +89,7 @@ static gboolean
 lua_session_finalizer (gpointer ud)
 {
 	struct lua_session_udata					*cbdata = ud;
-	gboolean								 	need_unlock = FALSE, res;
-
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
+	gboolean								 	 res;
 
 	/* Call finalizer function */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
@@ -104,9 +99,7 @@ lua_session_finalizer (gpointer ud)
 	res = lua_toboolean (cbdata->L, -1);
 	lua_pop (cbdata->L, 1);
 	luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
+
 
 	return res;
 }
@@ -115,13 +108,8 @@ static void
 lua_session_restore (gpointer ud)
 {
 	struct lua_session_udata					*cbdata = ud;
-	gboolean									 need_unlock = FALSE;
 
 	if (cbdata->cbref_restore) {
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-		if (g_mutex_trylock (lua_mtx)) {
-			need_unlock = TRUE;
-		}
 
 		/* Call restorer function */
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_restore);
@@ -129,9 +117,6 @@ lua_session_restore (gpointer ud)
 			msg_info ("call to session restorer failed: %s", lua_tostring (cbdata->L, -1));
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_restore);
-		if (need_unlock) {
-			g_mutex_unlock (lua_mtx);
-		}
 	}
 }
 
@@ -139,13 +124,8 @@ static void
 lua_session_cleanup (gpointer ud)
 {
 	struct lua_session_udata					*cbdata = ud;
-	gboolean								 	 need_unlock = FALSE;
 
 	if (cbdata->cbref_cleanup) {
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-		if (g_mutex_trylock (lua_mtx)) {
-			need_unlock = TRUE;
-		}
 
 		/* Call restorer function */
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_cleanup);
@@ -153,9 +133,6 @@ lua_session_cleanup (gpointer ud)
 			msg_info ("call to session cleanup failed: %s", lua_tostring (cbdata->L, -1));
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_cleanup);
-		if (need_unlock) {
-			g_mutex_unlock (lua_mtx);
-		}
 	}
 }
 
@@ -238,23 +215,14 @@ static void
 lua_event_fin (gpointer ud)
 {
 	struct lua_event_udata						*cbdata = ud;
-	gboolean								 	 need_unlock = FALSE;
 
 	if (cbdata->cbref) {
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-		if (g_mutex_trylock (lua_mtx)) {
-			need_unlock = TRUE;
-		}
-
 		/* Call restorer function */
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
 			msg_info ("call to event finalizer failed: %s", lua_tostring (cbdata->L, -1));
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
-		if (need_unlock) {
-			g_mutex_unlock (lua_mtx);
-		}
 	}
 }
 

@@ -15,9 +15,14 @@
 #define LUA_INTERFACE_DEF(class, name) { #name, lua_##class##_##name }
 
 extern const luaL_reg null_reg[];
-extern GMutex *lua_mtx;
 
 #define RSPAMD_LUA_API_VERSION 12
+
+/* Locked lua state with mutex */
+struct lua_locked_state {
+	lua_State *L;
+	rspamd_mutex_t *m;
+};
 
 /* Common utility functions */
 
@@ -54,12 +59,21 @@ gpointer lua_check_class (lua_State *L, gint index, const gchar *name);
 /**
  * Initialize lua and bindings
  */
-void init_lua (struct config_file *cfg);
+lua_State* init_lua (struct config_file *cfg);
 
 /**
  * Load and initialize lua plugins
  */
 gboolean init_lua_filters (struct config_file *cfg);
+
+/**
+ * Initialize new locked lua_State structure
+ */
+struct lua_locked_state* init_lua_locked (struct config_file *cfg);
+/**
+ * Free locked state structure
+ */
+void free_lua_locked (struct lua_locked_state *st);
 
 /**
  * Open libraries functions
@@ -97,8 +111,8 @@ void lua_call_pre_filters (struct worker_task *task);
 void add_luabuf (const gchar *line);
 
 /* Classify functions */
-GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task, gboolean is_learn, gboolean is_spam);
-double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in);
+GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task, gboolean is_learn, gboolean is_spam, lua_State *L);
+double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in, lua_State *L);
 
 double lua_normalizer_func (struct config_file *cfg, long double score, void *params);
 

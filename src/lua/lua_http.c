@@ -81,12 +81,6 @@ lua_http_push_error (gint code, struct lua_http_ud *ud)
 {
 	struct worker_task            **ptask;
 	gint							num;
-	gboolean						need_unlock = FALSE;
-
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
 
 	/* Push error */
 	if (ud->callback) {
@@ -115,9 +109,7 @@ lua_http_push_error (gint code, struct lua_http_ud *ud)
 		g_list_free (ud->headers);
 		ud->headers = NULL;
 	}
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
+
 	ud->parser_state = 3;
 	remove_normal_event (ud->s, lua_http_fin, ud);
 
@@ -130,12 +122,6 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 	struct lua_http_header         *header;
 	struct worker_task            **ptask;
 	gint							num;
-	gboolean						need_unlock = FALSE;
-
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
 
 	if (ud->callback) {
 		/* Push error */
@@ -175,9 +161,6 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 		ud->headers = NULL;
 	}
 
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
 	remove_normal_event (ud->s, lua_http_fin, ud);
 
 }

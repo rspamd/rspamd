@@ -90,6 +90,8 @@ new_async_session (memory_pool_t * pool, session_finalizer_t fin,
 	g_mutex_init (new->mtx);
 	new->cond = memory_pool_alloc (pool, sizeof (GCond));
 	g_cond_init (new->cond);
+	memory_pool_add_destructor (pool, (pool_destruct_func) g_mutex_clear, new->mtx);
+	memory_pool_add_destructor (pool, (pool_destruct_func) g_cond_clear, new->cond);
 #endif
 	new->threads = 0;
 

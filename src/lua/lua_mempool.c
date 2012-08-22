@@ -93,20 +93,12 @@ static void
 lua_mempool_destructor_func (gpointer p)
 {
 	struct lua_mempool_udata				*ud = p;
-	gboolean								 need_unlock = FALSE;
 
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	if (lua_pcall (ud->L, 0, 0, 0) != 0) {
 		msg_info ("call to destructor failed: %s", lua_tostring (ud->L, -1));
 	}
 	luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
 }
 
 static int

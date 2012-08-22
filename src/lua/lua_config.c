@@ -336,7 +336,6 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 	GList                          *cur;
 	gboolean                        res = FALSE;
 
-	g_mutex_lock (lua_mtx);
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
 	}
@@ -366,7 +365,6 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 		}
 		lua_pop (cd->L, 1);
 	}
-	g_mutex_unlock (lua_mtx);
 
 	return res;
 }
@@ -459,7 +457,6 @@ lua_call_post_filters (struct worker_task *task)
 	struct worker_task            **ptask;
 	GList                          *cur;
 
-	g_mutex_lock (lua_mtx);
 	cur = task->cfg->post_filters;
 	while (cur) {
 		cd = cur->data;
@@ -479,7 +476,6 @@ lua_call_post_filters (struct worker_task *task)
 		}
 		cur = g_list_next (cur);
 	}
-	g_mutex_unlock (lua_mtx);
 }
 
 static gint
@@ -514,7 +510,6 @@ lua_call_pre_filters (struct worker_task *task)
 	struct worker_task            **ptask;
 	GList                          *cur;
 
-	g_mutex_lock (lua_mtx);
 	cur = task->cfg->pre_filters;
 	while (cur) {
 		cd = cur->data;
@@ -534,7 +529,6 @@ lua_call_pre_filters (struct worker_task *task)
 		}
 		cur = g_list_next (cur);
 	}
-	g_mutex_unlock (lua_mtx);
 }
 
 static gint
@@ -660,7 +654,6 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 	struct lua_callback_data       *cd = ud;
 	struct worker_task            **ptask;
 
-	g_mutex_lock (lua_mtx);
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
 	}
@@ -675,7 +668,6 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 		msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
 									cd->callback.name, lua_tostring (cd->L, -1));
 	}
-	g_mutex_unlock (lua_mtx);
 }
 
 static gint

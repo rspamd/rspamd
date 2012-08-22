@@ -1069,13 +1069,11 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 }
 
 static gboolean
-maybe_call_lua_function (const gchar *name, struct worker_task *task)
+maybe_call_lua_function (const gchar *name, struct worker_task *task, lua_State *L)
 {
-	lua_State                      *L = task->cfg->lua_state;
 	struct worker_task            **ptask;
 	gboolean                        res;
 
-	g_mutex_lock (lua_mtx);
 	lua_getglobal (L, name);
 	if (lua_isfunction (L, -1)) {
 		ptask = lua_newuserdata (L, sizeof (struct worker_task *));
@@ -1084,18 +1082,15 @@ maybe_call_lua_function (const gchar *name, struct worker_task *task)
 		/* Call function */
 		if (lua_pcall (L, 1, 1, 0) != 0) {
 			msg_info ("call to %s failed: %s", (gchar *)name, lua_tostring (L, -1));
-			g_mutex_unlock (lua_mtx);
 			return FALSE;
 		}
 		res = lua_toboolean (L, -1);
 		lua_pop (L, 1);
-		g_mutex_unlock (lua_mtx);
 		return res;
 	}
 	else {
 		lua_pop (L, 1);
 	}
-	g_mutex_unlock (lua_mtx);
 	return FALSE;
 }
 
@@ -1156,7 +1151,7 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 }
 
 static                          gboolean
-process_regexp_expression (struct expression *expr, gchar *symbol, struct worker_task *task, const gchar *additional)
+process_regexp_expression (struct expression *expr, gchar *symbol, struct worker_task *task, const gchar *additional, struct lua_locked_state *nL)
 {
 	GQueue                         *stack;
 	gsize                           cur, op1, op2;
@@ -1179,7 +1174,14 @@ process_regexp_expression (struct expression *expr, gchar *symbol, struct worker
 			}
 		}
 		else if (it->type == EXPR_FUNCTION) {
-			cur = (gsize) call_expression_function ((struct expression_function *)it->content.operand, task);
+			if (nL) {
+				rspamd_mutex_lock (nL->m);
+				cur = (gsize) call_expression_function ((struct expression_function *)it->content.operand, task, nL->L);
+				rspamd_mutex_unlock (nL->m);
+			}
+			else {
+				cur = (gsize) call_expression_function ((struct expression_function *)it->content.operand, task, task->cfg->lua_state);
+			}
 			debug_task ("function %s returned %s", ((struct expression_function *)it->content.operand)->name, cur ? "true" : "false");
 			if (try_optimize) {
 				try_optimize = optimize_regexp_expression (&it, stack, cur);
@@ -1191,9 +1193,14 @@ process_regexp_expression (struct expression *expr, gchar *symbol, struct worker
 		else if (it->type == EXPR_STR) {
 			/* This may be lua function, try to call it */
 			if (regexp_module_ctx->workers != NULL) {
-				g_mutex_lock (workers_mtx);
-				cur = maybe_call_lua_function ((const gchar*)it->content.operand, task);
-				g_mutex_unlock (workers_mtx);
+				if (nL) {
+					rspamd_mutex_lock (nL->m);
+					cur = maybe_call_lua_function ((const gchar*)it->content.operand, task, nL->L);
+					rspamd_mutex_unlock (nL->m);
+				}
+				else {
+					cur = maybe_call_lua_function ((const gchar*)it->content.operand, task, task->cfg->lua_state);
+				}
 			}
 			debug_task ("function %s returned %s", (const gchar *)it->content.operand, cur ? "true" : "false");
 			if (try_optimize) {
@@ -1278,9 +1285,10 @@ static void
 process_regexp_item_threaded (gpointer data, gpointer user_data)
 {
 	struct regexp_threaded_ud	   *ud = data;
+	struct lua_locked_state		   *nL = user_data;
 
 	/* Process expression */
-	if (process_regexp_expression (ud->item->expr, ud->item->symbol, ud->task, NULL)) {
+	if (process_regexp_expression (ud->item->expr, ud->item->symbol, ud->task, NULL, nL)) {
 		g_mutex_lock (workers_mtx);
 		insert_result (ud->task, ud->item->symbol, 1, NULL);
 		g_mutex_unlock (workers_mtx);
@@ -1295,6 +1303,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 	gboolean                        res = FALSE;
 	struct regexp_threaded_ud	   *thr_ud;
 	GError						   *err = NULL;
+	struct lua_locked_state		   *nL;
 
 
 	if (!item->lua_function && regexp_module_ctx->max_threads > 1) {
@@ -1308,8 +1317,10 @@ process_regexp_item (struct worker_task *task, void *user_data)
 			workers_mtx = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (GMutex));
 			g_mutex_init (workers_mtx);
 #endif
+			nL = init_lua_locked (task->cfg);
+			luaopen_regexp (nL->L);
 			regexp_module_ctx->workers = g_thread_pool_new (process_regexp_item_threaded,
-					regexp_module_ctx, regexp_module_ctx->max_threads, TRUE, &err);
+					nL, regexp_module_ctx->max_threads, TRUE, &err);
 			if (err != NULL) {
 				msg_err ("thread pool creation failed: %s", err->message);
 				regexp_module_ctx->max_threads = 0;
@@ -1319,6 +1330,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 		thr_ud = memory_pool_alloc (task->task_pool, sizeof (struct regexp_threaded_ud));
 		thr_ud->item = item;
 		thr_ud->task = task;
+
 
 		register_async_thread (task->s);
 		g_thread_pool_push (regexp_module_ctx->workers, thr_ud, &err);
@@ -1337,7 +1349,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 		}
 		else {
 			/* Process expression */
-			if (process_regexp_expression (item->expr, item->symbol, task, NULL)) {
+			if (process_regexp_expression (item->expr, item->symbol, task, NULL, NULL)) {
 				insert_result (task, item->symbol, 1, NULL);
 			}
 		}
@@ -1375,7 +1387,7 @@ rspamd_regexp_match_number (struct worker_task *task, GList * args, void *unused
 			}
 		}
 		else {
-			if (process_regexp_expression (cur->data, "regexp_match_number", task, NULL)) {
+			if (process_regexp_expression (cur->data, "regexp_match_number", task, NULL, NULL)) {
 				res++;
 			}
 			if (res >= param_count) {
@@ -1608,13 +1620,13 @@ rspamd_check_smtp_data (struct worker_task *task, GList * args, void *unused)
 		}
 		else if (arg != NULL) {
 			if (what != NULL) {
-				if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, what)) {
+				if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, what, NULL)) {
 					return TRUE;
 				}
 			}
 			else {
 				while (rcpt_list) {
-					if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, rcpt_list->data)) {
+					if (process_regexp_expression (arg->data, "regexp_check_smtp_data", task, rcpt_list->data, NULL)) {
 						return TRUE;
 					}
 					rcpt_list = g_list_next (rcpt_list);

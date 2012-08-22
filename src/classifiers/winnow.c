@@ -193,7 +193,7 @@ winnow_init (memory_pool_t * pool, struct classifier_config *cfg)
 }
 
 gboolean
-winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
+winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task, lua_State *L)
 {
 	struct winnow_callback_data     data;
 	char                           *sumbuf, *value;
@@ -221,7 +221,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		}
 	}
 
-	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 	}
@@ -261,7 +261,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 
 	if (sel != NULL) {
 #ifdef WITH_LUA
-        max = call_classifier_post_callbacks (ctx->cfg, task, max);
+        max = call_classifier_post_callbacks (ctx->cfg, task, max, L);
 #endif
 #ifdef HAVE_TANHL
         max = tanhl (max);
@@ -593,7 +593,7 @@ end:
 
 gboolean
 winnow_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
-		GTree *input, struct worker_task *task, gboolean is_spam, GError **err)
+		GTree *input, struct worker_task *task, gboolean is_spam, lua_State *L, GError **err)
 {
 	g_set_error (err,
 					winnow_error_quark(),		/* error domain */

@@ -776,6 +776,7 @@ validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean s
 		}
 		cur = g_list_next (cur);
 	}
+	g_list_free (metric_symbols);
 #endif /* GLIB_COMPAT */
 
 	return TRUE;

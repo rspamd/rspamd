@@ -29,7 +29,7 @@
 #include "html.h"
 #include "url.h"
 
-sig_atomic_t                    tags_sorted = 0;
+static sig_atomic_t                    tags_sorted = 0;
 
 static struct html_tag          tag_defs[] = {
 	/* W3C defined elements */
@@ -156,7 +156,7 @@ static struct html_tag          tag_defs[] = {
 	{Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)},
 };
 
-sig_atomic_t                    entities_sorted = 0;
+static sig_atomic_t                    entities_sorted = 0;
 struct _entity;
 typedef struct _entity          entity;
 
@@ -438,7 +438,7 @@ static entity                   entities_defs[] = {
 	{"euro", 8364, "E"},
 };
 
-static entity                  *entities_defs_num = NULL;
+static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
 
 static gint
 tag_cmp (const void *m1, const void *m2)
@@ -881,7 +881,6 @@ add_html_node (struct worker_task *task, memory_pool_t * pool, struct mime_text_
 	}
 	if (!entities_sorted) {
 		qsort (entities_defs, G_N_ELEMENTS (entities_defs), sizeof (entity), entity_cmp);
-		entities_defs_num = g_new (entity, G_N_ELEMENTS (entities_defs));
 		memcpy (entities_defs_num, entities_defs, sizeof (entities_defs));
 		qsort (entities_defs_num, G_N_ELEMENTS (entities_defs), sizeof (entity), entity_cmp_num);
 		entities_sorted = 1;

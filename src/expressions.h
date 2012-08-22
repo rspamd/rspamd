@@ -7,6 +7,7 @@
 #define RSPAMD_EXPRESSIONS_H
 
 #include "config.h"
+#include <lua.h>
 
 struct worker_task;
 struct rspamd_regexp;
@@ -72,9 +73,10 @@ struct expression* parse_expression (memory_pool_t *pool, gchar *line);
  * Call specified fucntion and return boolean result
  * @param func function to call
  * @param task task object
+ * @param L lua specific state
  * @return TRUE or FALSE depending on function result
  */
-gboolean call_expression_function (struct expression_function *func, struct worker_task *task);
+gboolean call_expression_function (struct expression_function *func, struct worker_task *task, lua_State *L);
 
 /**
  * Register specified function to rspamd internal functions list

@@ -82,13 +82,9 @@ static                          gboolean
 lua_io_read_cb (f_str_t * in, void *arg)
 {
 	struct lua_dispatcher_cbdata					*cbdata = arg;
-	gboolean								 		 need_unlock = FALSE, res;
+	gboolean								 		  res;
 	rspamd_io_dispatcher_t							**pdispatcher;
 
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
 	/* callback (dispatcher, data) */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 	pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
@@ -103,10 +99,6 @@ lua_io_read_cb (f_str_t * in, void *arg)
 	res = lua_toboolean (cbdata->L, -1);
 	lua_pop (cbdata->L, 1);
 
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
-
 	return res;
 }
 
@@ -114,14 +106,10 @@ static                          gboolean
 lua_io_write_cb (void *arg)
 {
 	struct lua_dispatcher_cbdata					*cbdata = arg;
-	gboolean								 		 need_unlock = FALSE, res;
+	gboolean								 		  res;
 	rspamd_io_dispatcher_t							**pdispatcher;
 
 	if (cbdata->cbref_write) {
-		/* Avoid LOR here as mutex can be acquired before in lua_call */
-		if (g_mutex_trylock (lua_mtx)) {
-			need_unlock = TRUE;
-		}
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 		/* callback (dispatcher) */
 		pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
@@ -135,10 +123,6 @@ lua_io_write_cb (void *arg)
 
 		res = lua_toboolean (cbdata->L, -1);
 		lua_pop (cbdata->L, 1);
-
-		if (need_unlock) {
-			g_mutex_unlock (lua_mtx);
-		}
 	}
 
 	return res;
@@ -148,13 +132,8 @@ static void
 lua_io_err_cb (GError * err, void *arg)
 {
 	struct lua_dispatcher_cbdata					*cbdata = arg;
-	gboolean								 		 need_unlock = FALSE;
 	rspamd_io_dispatcher_t							**pdispatcher;
 
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
 	/* callback (dispatcher, err) */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_err);
 	pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
@@ -166,9 +145,6 @@ lua_io_err_cb (GError * err, void *arg)
 		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 	}
 
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
 	/* Unref callbacks */
 	luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 	if (cbdata->cbref_write) {

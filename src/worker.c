@@ -782,6 +782,7 @@ start_worker (struct rspamd_worker *worker)
 	gchar                          *is_custom_str;
 	struct rspamd_worker_ctx       *ctx = worker->ctx;
 	GError						   *err = NULL;
+	struct lua_locked_state		   *nL;
 
 #ifdef WITH_PROFILER
 	extern void                     _start (void), etext (void);
@@ -836,7 +837,8 @@ start_worker (struct rspamd_worker *worker)
 	/* Create classify pool */
 	ctx->classify_pool = NULL;
 	if (ctx->classify_threads > 1) {
-		ctx->classify_pool = g_thread_pool_new (process_statfiles_threaded, ctx, ctx->classify_threads, TRUE, &err);
+		nL = init_lua_locked (worker->srv->cfg);
+		ctx->classify_pool = g_thread_pool_new (process_statfiles_threaded, nL, ctx->classify_threads, TRUE, &err);
 		if (err != NULL) {
 			msg_err ("pool create failed: %s", err->message);
 			ctx->classify_pool = NULL;

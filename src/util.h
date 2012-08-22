@@ -266,6 +266,12 @@ void rspamd_mutex_lock (rspamd_mutex_t *mtx);
 void rspamd_mutex_unlock (rspamd_mutex_t *mtx);
 
 /**
+ * Clear rspamd mutex
+ * @param mtx
+ */
+void rspamd_mutex_free (rspamd_mutex_t *mtx);
+
+/**
  * Create new rwloc
  * @return
  */
@@ -294,6 +300,12 @@ void rspamd_rwlock_writer_unlock (rspamd_rwlock_t *mtx);
  * @param mtx
  */
 void rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx);
+
+/**
+ * Free rwlock
+ * @param mtx
+ */
+void rspamd_rwlock_free (rspamd_rwlock_t *mtx);
 
 /**
  * Create new named thread

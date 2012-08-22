@@ -71,12 +71,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	struct rspamd_dns_resolver    **presolver;
 	union rspamd_reply_element     *elt;
 	GList                          *cur;
-	gboolean						need_unlock = FALSE;
-
-	/* Avoid LOR here as mutex can be acquired before in lua_call */
-	if (g_mutex_trylock (lua_mtx)) {
-		need_unlock = TRUE;
-	}
 
 	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
@@ -140,10 +134,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 
 	/* Unref function */
 	luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
-
-	if (need_unlock) {
-		g_mutex_unlock (lua_mtx);
-	}
 }
 
 static int

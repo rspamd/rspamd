@@ -165,16 +165,6 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	return FALSE;
 }
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-static void
-bayes_mutex_free (gpointer data)
-{
-	GMutex						   *mtx = data;
-
-	g_mutex_free (mtx);
-}
-#endif
-
 struct classifier_ctx*
 bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
 {
@@ -183,19 +173,12 @@ bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
 	ctx->pool = pool;
 	ctx->cfg = cfg;
 	ctx->debug = FALSE;
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	ctx->mtx = g_mutex_new ();
-	memory_pool_add_destructor (pool, (pool_destruct_func) bayes_mutex_free, ctx->mtx);
-#else
-	ctx->mtx = memory_pool_alloc (pool, sizeof (GMutex));
-	g_mutex_init (ctx->mtx);
-#endif
 
 	return ctx;
 }
 
 gboolean
-bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task)
+bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task, lua_State *L)
 {
 	struct bayes_callback_data      data;
 	gchar                          *value;
@@ -222,16 +205,13 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		}
 	}
 
-	/* Critical section as here can be lua callbacks calling */
-	g_mutex_lock (ctx->mtx);
-	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 	}
 	else {
 		cur = ctx->cfg->statfiles;
 	}
-	g_mutex_unlock (ctx->mtx);
 
 	data.statfiles_num = g_list_length (cur);
 	data.statfiles = g_new0 (struct bayes_statfile_data, data.statfiles_num);
@@ -402,7 +382,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 
 gboolean
 bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
-		GTree *input, struct worker_task *task, gboolean is_spam, GError **err)
+		GTree *input, struct worker_task *task, gboolean is_spam, lua_State *L, GError **err)
 {
 	struct bayes_callback_data      data;
 	gchar                          *value;
@@ -431,7 +411,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 		}
 	}
 
-	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE);
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 	}

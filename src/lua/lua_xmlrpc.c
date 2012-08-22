@@ -353,11 +353,11 @@ xmlrpc_text (GMarkupParseContext *context, const gchar *text, gsize text_len, gp
 	gdouble                         dnum;
 
 	/* Strip line */
-	while (g_ascii_isspace (*text) && text_len > 0) {
+	while (text_len > 0 && g_ascii_isspace (*text)) {
 		text ++;
 		text_len --;
 	}
-	while (g_ascii_isspace (text[text_len - 1]) && text_len > 0) {
+	while (text_len > 0 && g_ascii_isspace (text[text_len - 1])) {
 		text_len --;
 	}
 
@@ -417,12 +417,16 @@ lua_xmlrpc_parse_reply (lua_State *L)
 				G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
 		res = g_markup_parse_context_parse (ctx, data, s, &err);
 
+		g_markup_parse_context_free (ctx);
 		if (! res) {
-			lua_pushnil (L);
+			lua_pushboolean (L, FALSE);
+		}
+		else {
+			lua_pushboolean (L, TRUE);
 		}
 	}
 	else {
-		lua_pushnil (L);
+		lua_pushboolean (L, FALSE);
 	}
 
 	return 1;

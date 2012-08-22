@@ -294,7 +294,17 @@ dkim_module_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_conte
 	else {
 		/* Insert tempfail symbol */
 		msg_info ("cannot get key for domain %s", ctx->dns_key);
-		insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
+		if (err != NULL) {
+			insert_result (task, dkim_module_ctx->symbol_tempfail, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, err->message)));
+
+		}
+		else {
+			insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
+		}
+	}
+
+	if (err) {
+		g_error_free (err);
 	}
 }
 

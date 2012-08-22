@@ -689,7 +689,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	union rspamd_reply_element     *elt;
 	GList                          *cur;
 
-	g_mutex_lock (lua_mtx);
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
 	}
@@ -775,7 +774,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	if (cd->cb_is_ref) {
 		luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
 	}
-	g_mutex_unlock (lua_mtx);
 }
 
 static gint
@@ -955,7 +953,7 @@ lua_task_call_rspamd_function (lua_State * L)
 					f.args = g_list_prepend (f.args, arg);
 				}
 			}
-			res = call_expression_function (&f, task);
+			res = call_expression_function (&f, task, L);
 			lua_pushboolean (L, res);
 			if (f.args) {
 				g_list_free (f.args);

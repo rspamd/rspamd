@@ -317,7 +317,8 @@ reread_config (struct rspamd_main *rspamd)
 		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
-		init_lua (tmp_cfg);
+		tmp_cfg->lua_state = init_lua (tmp_cfg);
+		memory_pool_add_destructor (tmp_cfg->cfg_pool, (pool_destruct_func)lua_close, tmp_cfg->lua_state);
 
 		if (! load_rspamd_config (tmp_cfg, FALSE)) {
 			msg_err ("cannot parse new config file, revert to old one");
@@ -909,7 +910,8 @@ main (gint argc, gchar **argv, gchar **env)
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	detect_priv (rspamd_main);
-	init_lua (rspamd_main->cfg);
+	rspamd_main->cfg->lua_state = init_lua (rspamd_main->cfg);
+	memory_pool_add_destructor (rspamd_main->cfg->cfg_pool, (pool_destruct_func)lua_close, rspamd_main->cfg->lua_state);
 
 	pworker = &workers[0];
 	while (*pworker) {

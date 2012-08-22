@@ -585,10 +585,16 @@ make_composites (struct worker_task *task)
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
 
+struct classifiers_cbdata {
+	struct worker_task *task;
+	struct lua_locked_state *nL;
+};
+
 static void
 classifiers_callback (gpointer value, void *arg)
 {
-	struct worker_task             *task = arg;
+	struct classifiers_cbdata	   *cbdata = arg;
+	struct worker_task             *task;
 	struct classifier_config       *cl = value;
 	struct classifier_ctx          *ctx;
 	struct mime_text_part          *text_part, *p1, *p2;
@@ -600,6 +606,8 @@ classifiers_callback (gpointer value, void *arg)
 	gint                           *dist = NULL, diff;
 	gboolean                        is_twopart = FALSE;
 	
+	task = cbdata->task;
+
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur = message_get_header (task->task_pool, task->message, header, FALSE);
 		if (cur) {
@@ -675,7 +683,15 @@ classifiers_callback (gpointer value, void *arg)
 
 	/* Take care of subject */
 	tokenize_subject (task, &tokens);
-	cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task);
+	if (cbdata->nL != NULL) {
+		rspamd_mutex_lock (cbdata->nL->m);
+		cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task, cbdata->nL->L);
+		rspamd_mutex_unlock (cbdata->nL->m);
+	}
+	else {
+		/* Non-threaded case */
+		cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task, task->cfg->lua_state);
+	}
 
 	/* Autolearning */
 	cur = g_list_first (cl->statfiles);
@@ -695,6 +711,7 @@ classifiers_callback (gpointer value, void *arg)
 void
 process_statfiles (struct worker_task *task)
 {
+	struct classifiers_cbdata		cbdata;
 
 	if (task->is_skipped) {
 		return;
@@ -704,8 +721,9 @@ process_statfiles (struct worker_task *task)
 		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref, task->tokens);
 	}
-
-	g_list_foreach (task->cfg->classifiers, classifiers_callback, task);
+	cbdata.task = task;
+	cbdata.nL = NULL;
+	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cbdata);
 
 	/* Process results */
 	make_composites (task);
@@ -715,6 +733,8 @@ void
 process_statfiles_threaded (gpointer data, gpointer user_data)
 {
 	struct worker_task             *task = (struct worker_task *)data;
+	struct lua_locked_state 	   *nL = user_data;
+	struct classifiers_cbdata		cbdata;
 
 	if (task->is_skipped) {
 		return;
@@ -725,7 +745,9 @@ process_statfiles_threaded (gpointer data, gpointer user_data)
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref, task->tokens);
 	}
 
-	g_list_foreach (task->cfg->classifiers, classifiers_callback, task);
+	cbdata.task = task;
+	cbdata.nL = nL;
+	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cbdata);
 	remove_async_thread (task->s);
 }
 
@@ -1054,7 +1076,7 @@ learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolea
 	/* Learn */
 	if (!cl->classifier->learn_spam_func (
 			cls_ctx, task->worker->srv->statfile_pool,
-			tokens, task, is_spam, err)) {
+			tokens, task, is_spam, task->cfg->lua_state, err)) {
 		if (*err) {
 			msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, (*err)->message);
 			return FALSE;

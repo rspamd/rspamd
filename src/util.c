@@ -1363,7 +1363,7 @@ rspamd_mutex_new (void)
 {
 	rspamd_mutex_t					*new;
 
-	new = g_malloc (sizeof (rspamd_mutex_t));
+	new = g_slice_alloc (sizeof (rspamd_mutex_t));
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
 	g_mutex_init (&new->mtx);
 #else
@@ -1399,6 +1399,15 @@ rspamd_mutex_unlock (rspamd_mutex_t *mtx)
 #else
 	g_static_mutex_unlock (&mtx->mtx);
 #endif
+}
+
+void
+rspamd_mutex_free (rspamd_mutex_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_mutex_clear (&mtx->mtx);
+#endif
+	g_slice_free1 (sizeof (rspamd_mutex_t), mtx);
 }
 
 /**
@@ -1476,6 +1485,14 @@ rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx)
 #endif
 }
 
+void
+rspamd_rwlock_free (rspamd_rwlock_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_rw_lock_clear (&mtx->rwlock);
+#endif
+	g_slice_free1 (sizeof (rspamd_rwlock_t), mtx);
+}
 
 struct rspamd_thread_data {
 	gchar *name;

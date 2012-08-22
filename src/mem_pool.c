@@ -620,6 +620,9 @@ memory_pool_delete (memory_pool_t * pool)
 
 	mem_pool_stat->pools_freed++;
 	POOL_MTX_UNLOCK ();
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_mutex_clear (&pool->mtx);
+#endif
 	g_slice_free (memory_pool_t, pool);
 }
 

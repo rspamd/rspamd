@@ -117,27 +117,24 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 /* Return list of statfiles that should be checked for this message */
 GList *
 call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task,
-		gboolean is_learn, gboolean is_spam)
+		gboolean is_learn, gboolean is_spam, lua_State *L)
 {
 	GList                           *res = NULL, *cur;
 	struct classifier_callback_data *cd;
-	lua_State                       *L;
 
 
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
 	while (cur) {
 		cd = cur->data;
-		lua_getglobal (cd->L, cd->name);
+		lua_getglobal (L, cd->name);
 
-		res = g_list_concat (res, call_classifier_pre_callback (ccf, task, cd->L, is_learn, is_spam));
+		res = g_list_concat (res, call_classifier_pre_callback (ccf, task, L, is_learn, is_spam));
 
 		cur = g_list_next (cur);
 	}
-	
-	g_mutex_lock (lua_mtx);
+
 	if (res == NULL) {
-		L = task->cfg->lua_state;
 		/* Check function from global table 'classifiers' */
 		lua_getglobal (L, "classifiers");
 		if (lua_istable (L, -1)) {
@@ -151,14 +148,13 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 		}
 		lua_pop (L, 1);
 	}
-	g_mutex_unlock (lua_mtx);
 
 	return res;
 }
 
 /* Return result mark for statfile */
 double
-call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in)
+call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in, lua_State *L)
 {
 	struct classifier_callback_data *cd;
 	struct classifier_config      **pccf;
@@ -166,36 +162,34 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 	double                          out = in;
 	GList                          *cur;
 
-	g_mutex_lock (lua_mtx);
 	/* Go throught all callbacks and call them, appending results to list */
 	cur = g_list_first (ccf->pre_callbacks);
 	while (cur) {
 		cd = cur->data;
-		lua_getglobal (cd->L, cd->name);
+		lua_getglobal (L, cd->name);
 
-		pccf = lua_newuserdata (cd->L, sizeof (struct classifier_config *));
-		lua_setclass (cd->L, "rspamd{classifier}", -1);
+		pccf = lua_newuserdata (L, sizeof (struct classifier_config *));
+		lua_setclass (L, "rspamd{classifier}", -1);
 		*pccf = ccf;
 
-		ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
-		lua_setclass (cd->L, "rspamd{task}", -1);
+		ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+		lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
 
-		lua_pushnumber (cd->L, out);
+		lua_pushnumber (L, out);
 
-		if (lua_pcall (cd->L, 3, 1, 0) != 0) {
-			msg_warn ("error running function %s: %s", cd->name, lua_tostring (cd->L, -1));
+		if (lua_pcall (L, 3, 1, 0) != 0) {
+			msg_warn ("error running function %s: %s", cd->name, lua_tostring (L, -1));
 		}
 		else {
-			if (lua_isnumber (cd->L, 1)) {
-				out = lua_tonumber (cd->L, 1);
+			if (lua_isnumber (L, 1)) {
+				out = lua_tonumber (L, 1);
 			}
-			lua_pop (cd->L, 1);
+			lua_pop (L, 1);
 		}
 
 		cur = g_list_next (cur);
 	}
-	g_mutex_unlock (lua_mtx);
 
 	return out;
 
