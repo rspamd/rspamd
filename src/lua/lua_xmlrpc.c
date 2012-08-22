@@ -419,16 +419,14 @@ lua_xmlrpc_parse_reply (lua_State *L)
 
 		g_markup_parse_context_free (ctx);
 		if (! res) {
-			lua_pushboolean (L, FALSE);
-		}
-		else {
-			lua_pushboolean (L, TRUE);
+			lua_pushnil (L);
 		}
 	}
 	else {
-		lua_pushboolean (L, FALSE);
+		lua_pushnil (L);
 	}
 
+	/* Return table or nil */
 	return 1;
 }
 
