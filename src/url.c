@@ -1232,7 +1232,12 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 
 	/* Try to find the start of the url by finding any non-urlsafe character or whitespace/punctuation */
 	while (p >= begin) {
-		if (!is_urlsafe (*p) || g_ascii_isspace (*p)) {
+		if ((!is_domain (*p) && *p != '.') || g_ascii_isspace (*p)) {
+			p ++;
+			if (*p == '.') {
+				/* Urls cannot start with . */
+				return FALSE;
+			}
 			match->m_begin = p;
 			return TRUE;
 		}
@@ -1276,6 +1281,10 @@ url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 		if (!is_open_brace (*(pos - 1)) && !g_ascii_isspace (*(pos - 1))) {
 			return FALSE;
 		}
+	}
+	if (*pos == '.') {
+		/* Urls cannot start with . */
+		return FALSE;
 	}
 	match->m_begin = pos;
 
