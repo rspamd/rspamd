@@ -115,12 +115,12 @@ lua_http_push_error (gint code, struct lua_http_ud *ud)
 		g_list_free (ud->headers);
 		ud->headers = NULL;
 	}
-
-	ud->parser_state = 3;
-	remove_normal_event (ud->s, lua_http_fin, ud);
 	if (need_unlock) {
 		g_mutex_unlock (lua_mtx);
 	}
+	ud->parser_state = 3;
+	remove_normal_event (ud->s, lua_http_fin, ud);
+
 }
 
 static void
@@ -175,10 +175,11 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 		ud->headers = NULL;
 	}
 
-	remove_normal_event (ud->s, lua_http_fin, ud);
 	if (need_unlock) {
 		g_mutex_unlock (lua_mtx);
 	}
+	remove_normal_event (ud->s, lua_http_fin, ud);
+
 }
 
 /*
