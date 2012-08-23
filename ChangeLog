@@ -1,3 +1,14 @@
+0.5.2:
+	* Added lua bindings for:
+	 - basic mime parts, that allows checkign attachements for example;
+	 - DNS resolver;
+	* Existing lua bindings now works without task object allowing to use them
+	in custom code.
+	* Threads system was reworked to avoid global lua interpreter lock.
+	* DKIM module now converts all line endings to CRLF how opendkim does.
+	* URL detector is now more accurate for text parts.
+	* Several critical bugs and memory leaks were fixed.
+
 0.5.1:
 	* Added lua worker type to handle network connections in lua.
 	* Added lua bindings for async_session, IO dispatcher, memory_pool, and
