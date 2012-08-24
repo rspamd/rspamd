@@ -299,18 +299,18 @@ lua_common_log (GLogLevelFlags level, lua_State *L, const gchar *msg)
 		}
 		rspamd_snprintf (func_buf, sizeof (func_buf), "%s:%d", p, d.currentline);
 		if (level == G_LOG_LEVEL_DEBUG) {
-			rspamd_conditional_debug(rspamd_main->logger, -1, func_buf, msg);
+			rspamd_conditional_debug (rspamd_main->logger, -1, func_buf, "%s", msg);
 		}
 		else {
-			rspamd_common_log_function(rspamd_main->logger, level, func_buf, msg);
+			rspamd_common_log_function (rspamd_main->logger, level, func_buf, "%s", msg);
 		}
 	}
 	else {
 		if (level == G_LOG_LEVEL_DEBUG) {
-			rspamd_conditional_debug(rspamd_main->logger, -1, __FUNCTION__, msg);
+			rspamd_conditional_debug (rspamd_main->logger, -1, __FUNCTION__, "%s", msg);
 		}
 		else {
-			rspamd_common_log_function(rspamd_main->logger, level, __FUNCTION__, msg);
+			rspamd_common_log_function (rspamd_main->logger, level, __FUNCTION__, "%s", msg);
 		}
 	}
 }
