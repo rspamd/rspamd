@@ -42,6 +42,6 @@ rspamd (0.4.4-1) unstable; urgency=low
 
 rspamd (0.4.3-1) unstable; urgency=low
 
-  * Initial release
+  * Initial release. (Closes: Bug#683746)
 
  -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Tue, 16 Aug 2011 17:54:33 +0400
