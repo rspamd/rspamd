@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2012, Vsevolod Stakhov
  * Copyright (c) 2008, 2009, 2010  William Ahern
  *
  * All rights reserved.
