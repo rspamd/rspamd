@@ -58,6 +58,14 @@ struct custom_command {
 };
 
 /**
+ * Find a character in command in and return pointer to the first part of the string, in is modified to point to the second part of string
+ * @param in f_str_t input
+ * @param c separator character
+ * @return pointer to the first part of string or NULL if there is no separator found
+ */
+gchar* separate_command (f_str_t * in, gchar c);
+
+/**
  * Read one line of user's input for specified task
  * @param task task object
  * @param line line of user's input

@@ -70,7 +70,9 @@ enum command_type {
 	COMMAND_HELP,
 	COMMAND_COUNTERS,
 	COMMAND_SYNC,
-	COMMAND_WEIGHTS
+	COMMAND_WEIGHTS,
+	COMMAND_GET,
+	COMMAND_POST
 };
 
 struct controller_command {
@@ -106,7 +108,9 @@ static struct controller_command commands[] = {
 	{"counters", FALSE, COMMAND_COUNTERS},
 	{"sync", FALSE, COMMAND_SYNC},
 	{"learn_spam", TRUE, COMMAND_LEARN_SPAM},
-	{"learn_ham", TRUE, COMMAND_LEARN_HAM}
+	{"learn_ham", TRUE, COMMAND_LEARN_HAM},
+	{"get", FALSE, COMMAND_GET},
+	{"post", FALSE, COMMAND_POST}
 };
 
 static GList                   *custom_commands = NULL;
@@ -189,6 +193,10 @@ free_session (void *ud)
 		g_list_free_1 (part);
 	}
 	rspamd_remove_dispatcher (session->dispatcher);
+
+	if (session->kwargs) {
+		g_hash_table_destroy (session->kwargs);
+	}
 
 	close (session->sock);
 
@@ -467,6 +475,12 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 	struct rspamd_controller_ctx   *ctx = session->worker->ctx;
 
 	switch (cmd->type) {
+	case COMMAND_GET:
+	case COMMAND_POST:
+		session->restful = TRUE;
+		session->state = STATE_HEADER;
+		session->kwargs = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		break;
 	case COMMAND_PASSWORD:
 		arg = *cmd_args;
 		if (!arg || *arg == '\0') {
@@ -553,34 +567,65 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		break;
 	case COMMAND_LEARN_SPAM:
 		if (check_auth (cmd, session)) {
-			arg = *cmd_args;
-			if (!arg || *arg == '\0') {
-				msg_debug ("no statfile specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
+			if (!session->restful) {
+				arg = *cmd_args;
+				if (!arg || *arg == '\0') {
+					msg_debug ("no statfile specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
 				}
-				return TRUE;
-			}
-			arg = *(cmd_args + 1);
-			if (arg == NULL || *arg == '\0') {
-				msg_debug ("no message size specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: symbol and message size" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
+				arg = *(cmd_args + 1);
+				if (arg == NULL || *arg == '\0') {
+					msg_debug ("no message size specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
 				}
-				return TRUE;
-			}
-			size = strtoul (arg, &err_str, 10);
-			if (err_str && *err_str != '\0') {
-				msg_debug ("message size is invalid: %s", arg);
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
+				size = strtoul (arg, &err_str, 10);
+				if (err_str && *err_str != '\0') {
+					msg_debug ("message size is invalid: %s", arg);
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
 				}
-				return TRUE;
+				cl = find_classifier_conf (session->cfg, *cmd_args);
 			}
-			cl = find_classifier_conf (session->cfg, *cmd_args);
+			else {
+				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
+					msg_debug ("no classifier specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
+				}
+				else {
+					cl = find_classifier_conf (session->cfg, arg);
+				}
+				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
+					msg_debug ("no size specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+				}
+				else {
+					size = strtoul (arg, &err_str, 10);
+					if (err_str && *err_str != '\0') {
+						msg_debug ("message size is invalid: %s", arg);
+						r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+						if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+							return FALSE;
+						}
+						return TRUE;
+					}
+				}
+			}
 
 			session->learn_classifier = cl;
 
@@ -592,34 +637,65 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		break;
 	case COMMAND_LEARN_HAM:
 		if (check_auth (cmd, session)) {
-			arg = *cmd_args;
-			if (!arg || *arg == '\0') {
-				msg_debug ("no statfile specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
+			if (!session->restful) {
+				arg = *cmd_args;
+				if (!arg || *arg == '\0') {
+					msg_debug ("no statfile specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
 				}
-				return TRUE;
-			}
-			arg = *(cmd_args + 1);
-			if (arg == NULL || *arg == '\0') {
-				msg_debug ("no message size specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: symbol and message size" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
+				arg = *(cmd_args + 1);
+				if (arg == NULL || *arg == '\0') {
+					msg_debug ("no message size specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
 				}
-				return TRUE;
-			}
-			size = strtoul (arg, &err_str, 10);
-			if (err_str && *err_str != '\0') {
-				msg_debug ("message size is invalid: %s", arg);
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
+				size = strtoul (arg, &err_str, 10);
+				if (err_str && *err_str != '\0') {
+					msg_debug ("message size is invalid: %s", arg);
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
 				}
-				return TRUE;
+				cl = find_classifier_conf (session->cfg, *cmd_args);
 			}
-			cl = find_classifier_conf (session->cfg, *cmd_args);
+			else {
+				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
+					msg_debug ("no classifier specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+					return TRUE;
+				}
+				else {
+					cl = find_classifier_conf (session->cfg, arg);
+				}
+				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
+					msg_debug ("no size specified in learn command");
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
+					return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+				}
+				else {
+					size = strtoul (arg, &err_str, 10);
+					if (err_str && *err_str != '\0') {
+						msg_debug ("message size is invalid: %s", arg);
+						r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+						if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+							return FALSE;
+						}
+						return TRUE;
+					}
+				}
+			}
 
 			session->learn_classifier = cl;
 
@@ -631,6 +707,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		break;
 	case COMMAND_LEARN:
 		if (check_auth (cmd, session)) {
+			/* TODO: remove this command as currenly it should not be used anywhere */
 			arg = *cmd_args;
 			if (!arg || *arg == '\0') {
 				msg_debug ("no statfile specified in learn command");
@@ -722,6 +799,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		break;
 
 	case COMMAND_WEIGHTS:
+		/* TODO: remove this command as currenly it should not be used anywhere */
 		arg = *cmd_args;
 		if (!arg || *arg == '\0') {
 			msg_debug ("no statfile specified in weights command");
@@ -798,40 +876,96 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 	return TRUE;
 }
 
-static                          gboolean
-process_custom_command (gchar *line, gchar **cmd_args, struct controller_session *session)
+static controller_func_t
+parse_custom_command (gchar *line, gchar **cmd_args, struct controller_session *session, gsize len)
 {
 	GList                          *cur;
 	struct custom_controller_command *cmd;
 
+	if (len == 0) {
+		len = strlen (line);
+	}
 	cur = custom_commands;
 	while (cur) {
 		cmd = cur->data;
-		if (g_ascii_strcasecmp (cmd->command, line) == 0) {
-			/* Call handler */
-			cmd->handler (cmd_args, session);
-			return TRUE;
+		if (g_ascii_strncasecmp (cmd->command, line, len) == 0) {
+			return cmd->handler;
 		}
 		cur = g_list_next (cur);
 	}
 
-	return FALSE;
+	return NULL;
 }
 
 static struct controller_command *
-process_normal_command (const gchar *line)
+parse_normal_command (const gchar *line, gsize len)
 {
 	guint                           i;
 	struct controller_command      *c;
 
+	if (len == 0) {
+		len = strlen (line);
+	}
 	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
 		c = &commands[i];
-		if (g_ascii_strcasecmp (line, c->command) == 0) {
+		if (g_ascii_strncasecmp (line, c->command, len) == 0) {
 			return c;
 		}
 	}
 
 	return NULL;
+}
+
+static gboolean
+process_header (f_str_t *line, struct controller_session *session)
+{
+	gchar							*headern;
+	struct controller_command		*command;
+	struct rspamd_controller_ctx	*ctx = session->worker->ctx;
+	controller_func_t				 custom_handler;
+
+	headern = separate_command (line, ':');
+
+	if (line == NULL || headern == NULL) {
+		return FALSE;
+	}
+	/* Eat whitespaces */
+	g_strstrip (headern);
+	fstrstrip (line);
+
+	if (*headern == 'c' || *headern == 'C') {
+		if (g_ascii_strcasecmp (headern, "command") == 0) {
+			/* This header is actually command */
+			command = parse_normal_command (line->begin, line->len);
+			if (command == NULL) {
+				if ((custom_handler = parse_custom_command (line->begin, NULL, session, line->len)) == NULL) {
+					msg_info ("bad command header: %V", line);
+					return FALSE;
+				}
+				else {
+					session->custom_handler = custom_handler;
+				}
+			}
+			session->cmd = command;
+			return TRUE;
+		}
+	}
+	else if (*headern == 'p' || *headern == 'P') {
+		/* Password header */
+		if (g_ascii_strcasecmp (headern, "password") == 0) {
+			if (line->len == strlen (ctx->password) && memcmp (line->begin, ctx->password, line->len) == 0) {
+				session->authorized = TRUE;
+			}
+			else {
+				msg_info ("wrong password in controller command");
+			}
+			return TRUE;
+		}
+	}
+
+	g_hash_table_insert (session->kwargs, headern, fstrcstr (line, session->session_pool));
+
+	return TRUE;
 }
 
 /*
@@ -889,6 +1023,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	GTree                          *tokens = NULL;
 	GError                         *err = NULL;
 	f_str_t                         c;
+	controller_func_t				custom_handler;
 
 	switch (session->state) {
 	case STATE_COMMAND:
@@ -901,24 +1036,27 @@ controller_read_socket (f_str_t * in, void *arg)
 		if (len > 0) {
 			cmd = g_strstrip (params[0]);
 
-			command = process_normal_command (cmd);
+			command = parse_normal_command (cmd, 0);
 			if (command != NULL) {
 				if (! process_command (command, &params[1], session)) {
 					return FALSE;
 				}
 			}
 			else {
-				if (!process_custom_command (cmd, &params[1], session)) {
+				if ((custom_handler = parse_custom_command (cmd, &params[1], session, 0)) == NULL) {
 					msg_debug ("'%s'", cmd);
 					i = rspamd_snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
 					if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 						return FALSE;
 					}
 				}
+				else {
+					custom_handler (&params[1], session);
+				}
 			}
 		}
 		if (session->state != STATE_LEARN && session->state != STATE_LEARN_SPAM_PRE
-				&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER) {
+				&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER && session->state != STATE_HEADER) {
 			if (!rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE, TRUE)) {
 				return FALSE;
 			}
@@ -928,6 +1066,43 @@ controller_read_socket (f_str_t * in, void *arg)
 			}
 		}
 
+		break;
+	case STATE_HEADER:
+		if (in->len == 0) {
+			/* End of headers */
+			if (session->cmd == NULL && session->custom_handler == NULL) {
+				i = rspamd_snprintf (out_buf, sizeof (out_buf), "500 Bad command" CRLF);
+				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+					return FALSE;
+				}
+				destroy_session (session->s);
+				return FALSE;
+			}
+			/* Perform command */
+			else if (session->cmd != NULL) {
+				if (! process_command (session->cmd, NULL, session)) {
+					destroy_session (session->s);
+					return FALSE;
+				}
+			}
+			else {
+				session->custom_handler (NULL, session);
+			}
+			if (session->state != STATE_LEARN && session->state != STATE_LEARN_SPAM_PRE
+					&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER) {
+				destroy_session (session->s);
+				return FALSE;
+			}
+		}
+		if (!process_header (in, session)) {
+			msg_debug ("'%V'", in);
+			i = rspamd_snprintf (out_buf, sizeof (out_buf), "500 Bad header" CRLF);
+			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+				return FALSE;
+			}
+			destroy_session (session->s);
+			return FALSE;
+		}
 		break;
 	case STATE_LEARN:
 		session->learn_buf = in;
@@ -1159,8 +1334,14 @@ controller_write_socket (void *arg)
 		return TRUE;
 	}
 	else if (session->state == STATE_REPLY) {
-		session->state = STATE_COMMAND;
-		rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, BUFSIZ);
+		if (session->restful) {
+			destroy_session (session->s);
+			return FALSE;
+		}
+		else {
+			session->state = STATE_COMMAND;
+			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, BUFSIZ);
+		}
 	}
 	rspamd_dispatcher_restore (session->dispatcher);
 	return TRUE;

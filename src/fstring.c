@@ -218,7 +218,8 @@ fstrcstr (f_str_t * str, memory_pool_t * pool)
 	gchar                           *res;
 	res = memory_pool_alloc (pool, str->len + 1);
 
-	memcpy (res, str->begin, str->len);
+	/* Do not allow multiply \0 characters */
+	memccpy (res, str->begin, '\0', str->len);
 	res[str->len] = 0;
 
 	return res;

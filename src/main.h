@@ -131,10 +131,15 @@ union sa_union {
 /**
  * Control session object
  */
+struct controller_command;
+struct controller_session;
+typedef void (*controller_func_t)(gchar **args, struct controller_session *session);
+
 struct controller_session {
 	struct rspamd_worker *worker;								/**< pointer to worker structure (controller in fact) */
 	enum {
 		STATE_COMMAND,
+		STATE_HEADER,
 		STATE_LEARN,
 		STATE_LEARN_SPAM_PRE,
 		STATE_LEARN_SPAM,
@@ -146,7 +151,10 @@ struct controller_session {
 	} state;													/**< current session state							*/
 	gint sock;													/**< socket descriptor								*/
 	/* Access to authorized commands */
-	gint authorized;												/**< whether this session is authorized				*/
+	gboolean authorized;										/**< whether this session is authorized				*/
+	gboolean restful;											/**< whether this session is a restful session		*/
+	GHashTable *kwargs;											/**< keyword arguments for restful command			*/
+	struct controller_command *cmd;								/**< real command									*/
 	memory_pool_t *session_pool;								/**< memory pool for session 						*/
 	struct config_file *cfg;									/**< pointer to config file							*/
 	gchar *learn_rcpt;											/**< recipient for learning							*/
@@ -161,13 +169,12 @@ struct controller_session {
 	void (*other_handler)(struct controller_session *session, 
 			f_str_t *in);					/**< other command handler to execute at the end of processing */
 	void *other_data;											/**< and its data 									*/
+	controller_func_t custom_handler;							/**< custom command handler							*/
 	struct rspamd_async_session* s;								/**< async session object							*/
 	struct worker_task *learn_task;
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 	struct event_base *ev_base;									/**< Event base										*/
 };
-
-typedef void (*controller_func_t)(gchar **args, struct controller_session *session);
 
 /**
  * Worker task structure

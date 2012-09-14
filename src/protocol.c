@@ -123,7 +123,7 @@ rspamc_proto_str (guint ver)
 	}
 }
 
-static gchar                    *
+gchar                    *
 separate_command (f_str_t * in, gchar c)
 {
 	guint                            r = 0;
@@ -136,6 +136,11 @@ separate_command (f_str_t * in, gchar c)
 			in->begin = p + 1;
 			in->len -= r + 1;
 			return b;
+		}
+		else if (*p == '\0') {
+			/* Actually we cannot allow several \0 characters in string, so write to the log about it */
+			msg_warn ("cannot separate command with \0 character, this can be an attack attempt");
+			return NULL;
 		}
 		p++;
 		r++;

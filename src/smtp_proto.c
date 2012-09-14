@@ -394,6 +394,7 @@ smtp_upstream_read_socket (f_str_t * in, void *arg)
 	gchar                           outbuf[BUFSIZ];
 	gint                            r;
 	
+	msg_debug ("in: %V, state: %d", in, session->upstream_state);
 	switch (session->upstream_state) {
 		case SMTP_STATE_GREETING:
 			r = check_smtp_ustream_reply (in, '2');

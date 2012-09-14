@@ -34,6 +34,7 @@
 #include "message.h"
 #include "settings.h"
 #include "dns.h"
+#include "lua/lua_common.h"
 
 /* Max line size as it is defined in rfc2822 */
 #define OUTBUFSIZ 1000
@@ -309,6 +310,7 @@ process_smtp_data (struct smtp_session *session)
 		session->task->fin_callback = smtp_write_socket;
 		session->task->fin_arg = session;
 		session->task->msg = memory_pool_alloc (session->pool, sizeof (f_str_t));
+		session->task->s = session->s;
 #ifdef HAVE_MMAP_NOCORE
 		if ((session->task->msg->begin = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED | MAP_NOCORE, session->temp_fd, 0)) == MAP_FAILED) {
 #else
@@ -346,23 +348,22 @@ process_smtp_data (struct smtp_session *session)
 		if (process_message (session->task) == -1) {
 			msg_err ("cannot process message");
 			munmap (session->task->msg->begin, st.st_size);
-			msg_err ("process message failed: %s", strerror (errno));
 			goto err;
 		}
-		r = process_filters (session->task);
-		if (r == -1) {
-			munmap (session->task->msg->begin, st.st_size);
-			msg_err ("cannot process filters");
-			goto err;
-		}
-		else if (r == 0) {
-			session->state = SMTP_STATE_END;
-			rspamd_dispatcher_pause (session->dispatcher);
+		if (session->task->cfg->pre_filters == NULL) {
+			r = process_filters (session->task);
+			if (r == -1) {
+				msg_err ("cannot process message");
+				munmap (session->task->msg->begin, st.st_size);
+				goto err;
+			}
 		}
 		else {
-			process_statfiles (session->task);
-			session->state = SMTP_STATE_END;
-			return smtp_write_socket (session);
+			lua_call_pre_filters (session->task);
+			/* We want fin_task after pre filters are processed */
+			session->task->s->wanna_die = TRUE;
+			session->task->state = WAIT_PRE_FILTER;
+			check_session_pending (session->task->s);
 		}
 	}
 	else {
