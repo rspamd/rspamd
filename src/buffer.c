@@ -688,14 +688,14 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d, enum io_policy policy,
 }
 
 gboolean
-rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gboolean delayed, gboolean allocated)
+rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, const void *data, size_t len, gboolean delayed, gboolean allocated)
 {
 	rspamd_buffer_t                *newbuf;
 
 	newbuf = memory_pool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
 	if (len == 0) {
 		/* Assume NULL terminated */
-		len = strlen ((gchar *)data);
+		len = strlen ((const gchar *)data);
 	}
 
 	if (!allocated) {
@@ -709,7 +709,7 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d, void *data, size_t len, gbo
 	}
 	else {
 		newbuf->data = memory_pool_alloc_tmp (d->pool, sizeof (f_str_t));
-		newbuf->data->begin = data;
+		newbuf->data->begin = (gchar *)data;
 		newbuf->data->size = len;
 	}
 

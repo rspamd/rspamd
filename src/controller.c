@@ -204,6 +204,35 @@ free_session (void *ud)
 	g_slice_free1 (sizeof (struct controller_session), session);
 }
 
+static gboolean
+restful_write_reply (gint error_code, const gchar *err_message, const gchar *buf, gsize buflen, rspamd_io_dispatcher_t *d)
+{
+	static gchar					 hbuf[256];
+	gint							 r;
+
+	r = rspamd_snprintf (hbuf, sizeof (hbuf),
+			"HTTP/1.0 %d %s" CRLF "Version: " RVERSION CRLF,
+			error_code, err_message ? err_message : "OK");
+	if (buflen > 0) {
+		r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, "Content-Length: %z" CRLF, buflen);
+	}
+	r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, CRLF);
+
+	if (buf != NULL) {
+		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, FALSE)) {
+			return FALSE;
+		}
+		return rspamd_dispatcher_write (d, buf, buflen, FALSE, FALSE);
+	}
+	else {
+		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, TRUE)) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
 static gint
 check_auth (struct controller_command *cmd, struct controller_session *session)
 {
@@ -211,9 +240,14 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 	gint                            r;
 
 	if (cmd->privilleged && !session->authorized) {
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-			return 0;
+		if (!session->restful) {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return 0;
+			}
+		}
+		else {
+			(void)restful_write_reply (403, "Not authorized", NULL, 0, session->dispatcher);
 		}
 		return 0;
 	}
@@ -461,7 +495,12 @@ process_stat_command (struct controller_session *session)
 		cur_cl = g_list_next (cur_cl);
 	}
 
-	return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+	if (!session->restful) {
+		return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+	}
+	else {
+		return restful_write_reply (200, NULL, out_buf, r, session->dispatcher);
+	}
 }
 
 static gboolean
@@ -519,8 +558,15 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 	case COMMAND_RELOAD:
 		if (check_auth (cmd, session)) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "reload request sent" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
+			if (!session->restful) {
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+			}
+			else {
+				if (! restful_write_reply (200, out_buf, NULL, 0, session->dispatcher)) {
+					return FALSE;
+				}
 			}
 			kill (getppid (), SIGHUP);
 		}
@@ -533,8 +579,15 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 	case COMMAND_SHUTDOWN:
 		if (check_auth (cmd, session)) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "shutdown request sent" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
+			if (!session->restful) {
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+			}
+			else {
+				if (! restful_write_reply (200, out_buf, NULL, 0, session->dispatcher)) {
+					return FALSE;
+				}
 			}
 			kill (getppid (), SIGTERM);
 		}
@@ -560,8 +613,15 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				uptime -= hours * 3600 + minutes * 60;
 				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (gint)uptime, uptime > 1 ? "s" : " ");
 			}
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
+			if (!session->restful) {
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+			}
+			else {
+				if (! restful_write_reply (200, NULL, out_buf, r, session->dispatcher)) {
+					return FALSE;
+				}
 			}
 		}
 		break;
@@ -601,7 +661,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
 					msg_debug ("no classifier specified in learn command");
 					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
 						return FALSE;
 					}
 					return TRUE;
@@ -612,14 +672,16 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
 					msg_debug ("no size specified in learn command");
 					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+						return FALSE;
+					}
 				}
 				else {
 					size = strtoul (arg, &err_str, 10);
 					if (err_str && *err_str != '\0') {
 						msg_debug ("message size is invalid: %s", arg);
 						r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-						if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
 							return FALSE;
 						}
 						return TRUE;
@@ -671,7 +733,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
 					msg_debug ("no classifier specified in learn command");
 					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
 						return FALSE;
 					}
 					return TRUE;
@@ -682,14 +744,16 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
 					msg_debug ("no size specified in learn command");
 					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+						return FALSE;
+					}
 				}
 				else {
 					size = strtoul (arg, &err_str, 10);
 					if (err_str && *err_str != '\0') {
 						msg_debug ("message size is invalid: %s", arg);
 						r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-						if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
 							return FALSE;
 						}
 						return TRUE;
@@ -865,8 +929,15 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 			"    counters - show rspamd counters" CRLF 
 			"    uptime - rspamd uptime" CRLF
 			"    weights <statfile> <size> - weight of message in all statfiles" CRLF);
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-			return FALSE;
+		if (!session->restful) {
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return FALSE;
+			}
+		}
+		else {
+			if (! restful_write_reply (200, NULL, out_buf, r, session->dispatcher)) {
+				return FALSE;
+			}
 		}
 		break;
 	case COMMAND_COUNTERS:
@@ -1164,8 +1235,15 @@ controller_read_socket (f_str_t * in, void *arg)
 			msg_warn ("processing of message failed");
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
+			if (!session->restful) {
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+			}
+			else {
+				if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+					return FALSE;
+				}
 			}
 			return FALSE;
 		}
@@ -1176,8 +1254,15 @@ controller_read_socket (f_str_t * in, void *arg)
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
 			destroy_session (task->s);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
+			if (!session->restful) {
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+			}
+			else {
+				if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+					return FALSE;
+				}
 			}
 		}
 		else {
@@ -1202,8 +1287,15 @@ controller_read_socket (f_str_t * in, void *arg)
 			free_task (task, FALSE);
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF END);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
+			if (!session->restful) {
+				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+					return FALSE;
+				}
+			}
+			else {
+				if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+					return FALSE;
+				}
 			}
 			return FALSE;
 		}
@@ -1222,8 +1314,15 @@ controller_read_socket (f_str_t * in, void *arg)
 					session->session_pool, &c, &tokens, FALSE, part->is_utf, part->urls_offset)) {
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF END);
 				free_task (task, FALSE);
-				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-					return FALSE;
+				if (!session->restful) {
+					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+						return FALSE;
+					}
+				}
+				else {
+					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+						return FALSE;
+					}
 				}
 				session->state = STATE_REPLY;
 				return TRUE;
@@ -1328,8 +1427,15 @@ controller_write_socket (void *arg)
 		session->learn_task->dispatcher = NULL;
 		destroy_session (session->learn_task->s);
 		session->state = STATE_REPLY;
-		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-			return FALSE;
+		if (!session->restful) {
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
+				return FALSE;
+			}
+		}
+		else {
+			if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
+				return FALSE;
+			}
 		}
 		return TRUE;
 	}
@@ -1415,9 +1521,12 @@ accept_socket (gint fd, short what, void *arg)
 		memcpy (&new_session->dispatcher->peer_addr, &su.s4.sin_addr,
 				sizeof (guint32));
 	}
+#if 0
+	/* As we support now restful HTTP like connections, this should not be printed anymore */
 	if (! rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
 		msg_warn ("cannot write greeting");
 	}
+#endif
 }
 
 gpointer
