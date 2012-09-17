@@ -52,7 +52,6 @@ static GOptionEntry entries[] =
 {
 		{ "connect", 'h', 0, G_OPTION_ARG_STRING, &connect_str, "Specify host and port", NULL },
 		{ "password", 'P', 0, G_OPTION_ARG_STRING, &password, "Specify control password", NULL },
-		{ "statfile", 's', 0, G_OPTION_ARG_STRING, &statfile, "Statfile to learn (symbol name)", NULL },
 		{ "classifier", 'c', 0, G_OPTION_ARG_STRING, &classifier, "Classifier to learn spam or ham", NULL },
 		{ "weight", 'w', 0, G_OPTION_ARG_INT, &weight, "Weight for fuzzy operations", NULL },
 		{ "flag", 'f', 0, G_OPTION_ARG_INT, &flag, "Flag for fuzzy operations", NULL },
@@ -71,7 +70,6 @@ static GOptionEntry entries[] =
 enum rspamc_command {
 	RSPAMC_COMMAND_UNKNOWN = 0,
 	RSPAMC_COMMAND_SYMBOLS,
-	RSPAMC_COMMAND_LEARN,
 	RSPAMC_COMMAND_LEARN_SPAM,
 	RSPAMC_COMMAND_LEARN_HAM,
 	RSPAMC_COMMAND_FUZZY_ADD,
@@ -114,9 +112,6 @@ check_rspamc_command (const gchar *cmd)
 		g_ascii_strcasecmp (cmd, "REPORT") == 0) {
 		/* These all are symbols, don't use other commands */
 		return RSPAMC_COMMAND_SYMBOLS;
-	}
-	else if (g_ascii_strcasecmp (cmd, "LEARN") == 0) {
-		return RSPAMC_COMMAND_LEARN;
 	}
 	else if (g_ascii_strcasecmp (cmd, "LEARN_SPAM") == 0) {
 		return RSPAMC_COMMAND_LEARN_SPAM;
@@ -396,8 +391,11 @@ learn_rspamd_stdin (gboolean is_spam)
 	gchar                           *in_buf;
 	gint                             r = 0, len;
 	GError                          *err = NULL;
+	GHashTable						*params;
+	GList							*results, *cur;
+	struct rspamd_controller_result	*res;
 
-	if ((statfile == NULL && classifier == NULL)) {
+	if (classifier == NULL) {
 		fprintf (stderr, "cannot learn message without password and symbol/classifier name\n");
 		exit (EXIT_FAILURE);
 	}
@@ -417,45 +415,36 @@ learn_rspamd_stdin (gboolean is_spam)
 			in_buf = g_realloc (in_buf, len);
 		}
 	}
-	if (statfile != NULL) {
-		if (!rspamd_learn_memory (client, in_buf, r, statfile, password, &err)) {
-			if (err != NULL) {
-				fprintf (stderr, "cannot learn message: %s\n", err->message);
-			}
-			else {
-				fprintf (stderr, "cannot learn message\n");
-			}
-			exit (EXIT_FAILURE);
+
+	params = g_hash_table_new (g_str_hash, g_str_equal);
+	g_hash_table_insert (params, "Classifier", classifier);
+
+	results = rspamd_controller_command_memory (client, is_spam ? "learn_spam" : "learn_ham", password, params, in_buf, r, &err);
+	g_hash_table_destroy (params);
+	if (results == NULL) {
+		if (err != NULL) {
+			fprintf (stderr, "cannot learn message: %s\n", err->message);
 		}
 		else {
-			if (tty) {
-				printf ("\033[1m");
-			}
-			PRINT_FUNC ("Results for host: %s: learn ok\n", connect_str);
-			if (tty) {
-				printf ("\033[0m");
-			}
+			fprintf (stderr, "cannot learn message\n");
 		}
+		exit (EXIT_FAILURE);
 	}
-	else if (classifier != NULL) {
-		if (!rspamd_learn_spam_memory (client, in_buf, r, classifier, is_spam, password, &err)) {
-			if (err != NULL) {
-				fprintf (stderr, "cannot learn message: %s\n", err->message);
-			}
-			else {
-				fprintf (stderr, "cannot learn message\n");
-			}
-			exit (EXIT_FAILURE);
-		}
-		else {
+	else {
+		cur = results;
+		while (cur) {
+			res = cur->data;
 			if (tty) {
 				printf ("\033[1m");
 			}
-			PRINT_FUNC ("Results for host: %s: learn ok\n", connect_str);
+			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
 			if (tty) {
 				printf ("\033[0m");
 			}
+			rspamd_free_controller_result (res);
+			cur = g_list_next (cur);
 		}
+		g_list_free (results);
 	}
 }
 
@@ -463,49 +452,44 @@ static void
 learn_rspamd_file (gboolean is_spam, const gchar *file)
 {
 	GError                          *err = NULL;
+	GHashTable						*params;
+	GList							*results, *cur;
+	struct rspamd_controller_result	*res;
 
-	if ((statfile == NULL && classifier == NULL)) {
+	if (classifier == NULL) {
 		fprintf (stderr, "cannot learn message without password and symbol/classifier name\n");
 		exit (EXIT_FAILURE);
 	}
 
-	if (statfile != NULL) {
-		if (!rspamd_learn_file (client, file, statfile, password, &err)) {
-			if (err != NULL) {
-				fprintf (stderr, "cannot learn message: %s\n", err->message);
-			}
-			else {
-				fprintf (stderr, "cannot learn message\n");
-			}
+	params = g_hash_table_new (g_str_hash, g_str_equal);
+	g_hash_table_insert (params, "Classifier", classifier);
+
+	results = rspamd_controller_command_file (client, is_spam ? "learn_spam" : "learn_ham", password, params, file, &err);
+	g_hash_table_destroy (params);
+	if (results == NULL) {
+		if (err != NULL) {
+			fprintf (stderr, "cannot learn message: %s\n", err->message);
 		}
 		else {
-			if (tty) {
-				printf ("\033[1m");
-			}
-			PRINT_FUNC ("learn ok\n");
-			if (tty) {
-				printf ("\033[0m");
-			}
+			fprintf (stderr, "cannot learn message\n");
 		}
+		exit (EXIT_FAILURE);
 	}
-	else if (classifier != NULL) {
-		if (!rspamd_learn_spam_file (client, file, classifier, is_spam, password, &err)) {
-			if (err != NULL) {
-				fprintf (stderr, "cannot learn message: %s\n", err->message);
-			}
-			else {
-				fprintf (stderr, "cannot learn message\n");
-			}
-		}
-		else {
+	else {
+		cur = results;
+		while (cur) {
+			res = cur->data;
 			if (tty) {
 				printf ("\033[1m");
 			}
-			PRINT_FUNC ("learn ok\n");
+			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
 			if (tty) {
 				printf ("\033[0m");
 			}
+			rspamd_free_controller_result (res);
+			cur = g_list_next (cur);
 		}
+		g_list_free (results);
 	}
 }
 
@@ -532,31 +516,15 @@ fuzzy_rspamd_stdin (gboolean delete)
 			in_buf = g_realloc (in_buf, len);
 		}
 	}
-	if (!rspamd_fuzzy_memory (client, in_buf, r, password, weight, flag, delete, &err)) {
-		if (err != NULL) {
-			fprintf (stderr, "cannot learn message: %s\n", err->message);
-		}
-		else {
-			fprintf (stderr, "cannot learn message\n");
-		}
-		exit (EXIT_FAILURE);
-	}
-	else {
-		if (tty) {
-			printf ("\033[1m");
-		}
-		PRINT_FUNC ("Results for host: %s: learn ok\n", connect_str);
-		if (tty) {
-			printf ("\033[0m");
-		}
-	}
+	/* TODO: write this function */
 }
 
 static void
 fuzzy_rspamd_file (const gchar *file, gboolean delete)
 {
 	GError                          *err = NULL;
-
+	/* TODO: write this function */
+#if 0
 	if (!rspamd_fuzzy_file (client, file, password, weight, flag, delete, &err)) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot learn message: %s\n", err->message);
@@ -574,67 +542,48 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 			printf ("\033[0m");
 		}
 	}
+#endif
 }
 
 static void
-rspamd_do_stat (void)
+rspamd_do_controller_simple_command (gchar *command)
 {
 	GError                          *err = NULL;
-	GString                         *res;
+	GList							*results, *cur;
+	struct rspamd_controller_result	*res;
 
 	/* Add server */
 	add_rspamd_server (TRUE);
 
-	res = rspamd_get_stat (client, &err);
-	if (res == NULL) {
+	results = rspamd_controller_command_simple (client, command, password, NULL, &err);
+	if (results == NULL) {
 		if (err != NULL) {
-			fprintf (stderr, "cannot stat: %s\n", err->message);
+			fprintf (stderr, "cannot perform command: %s\n", err->message);
 		}
 		else {
-			fprintf (stderr, "cannot stat\n");
+			fprintf (stderr, "cannot perform command:\n");
 		}
 		exit (EXIT_FAILURE);
 	}
-	if (tty) {
-		printf ("\033[1m");
+	else {
+		cur = results;
+		while (cur) {
+			res = cur->data;
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
+			if (tty) {
+				printf ("\033[0m");
+			}
+			PRINT_FUNC ("%*s\n", (gint)res->data->len, res->data->str);
+			rspamd_free_controller_result (res);
+			cur = g_list_next (cur);
+		}
+		g_list_free (results);
 	}
-	PRINT_FUNC ("Results for host: %s\n\n", connect_str);
-	if (tty) {
-		printf ("\033[0m");
-	}
-	res = g_string_append_c (res, '\0');
-	printf ("%s\n", res->str);
 }
 
-static void
-rspamd_do_uptime (void)
-{
-	GError                          *err = NULL;
-	GString                         *res;
-
-	/* Add server */
-	add_rspamd_server (TRUE);
-
-	res = rspamd_get_uptime (client, &err);
-	if (res == NULL) {
-		if (err != NULL) {
-			fprintf (stderr, "cannot uptime: %s\n", err->message);
-		}
-		else {
-			fprintf (stderr, "cannot uptime\n");
-		}
-		exit (EXIT_FAILURE);
-	}
-	if (tty) {
-		printf ("\033[1m");
-	}
-	PRINT_FUNC ("Results for host: %s\n\n", connect_str);
-	if (tty) {
-		printf ("\033[0m");
-	}
-	res = g_string_append_c (res, '\0');
-	printf ("%s\n", res->str);
-}
 
 gint
 main (gint argc, gchar **argv, gchar **env)
@@ -674,9 +623,6 @@ main (gint argc, gchar **argv, gchar **env)
 			case RSPAMC_COMMAND_SYMBOLS:
 				scan_rspamd_stdin ();
 				break;
-			case RSPAMC_COMMAND_LEARN:
-				learn_rspamd_stdin (TRUE);
-				break;
 			case RSPAMC_COMMAND_LEARN_SPAM:
 				if (classifier != NULL) {
 					learn_rspamd_stdin (TRUE);
@@ -702,10 +648,10 @@ main (gint argc, gchar **argv, gchar **env)
 				fuzzy_rspamd_stdin (TRUE);
 				break;
 			case RSPAMC_COMMAND_STAT:
-				rspamd_do_stat ();
+				rspamd_do_controller_simple_command ("stat");
 				break;
 			case RSPAMC_COMMAND_UPTIME:
-				rspamd_do_uptime ();
+				rspamd_do_controller_simple_command ("uptime");
 				break;
 			default:
 				fprintf (stderr, "invalid arguments\n");
@@ -740,9 +686,6 @@ main (gint argc, gchar **argv, gchar **env)
 				switch (cmd) {
 				case RSPAMC_COMMAND_SYMBOLS:
 					scan_rspamd_file (argv[i]);
-					break;
-				case RSPAMC_COMMAND_LEARN:
-					learn_rspamd_file (TRUE, argv[i]);
 					break;
 				case RSPAMC_COMMAND_LEARN_SPAM:
 					if (classifier != NULL) {
