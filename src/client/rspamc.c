@@ -430,7 +430,7 @@ learn_rspamd_stdin (gboolean is_spam)
 
 	results = rspamd_controller_command_memory (client, is_spam ? "learn_spam" : "learn_ham", password, params, in_buf, r, &err);
 	g_hash_table_destroy (params);
-	if (results == NULL) {
+	if (results == NULL || err != NULL) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot learn message: %s\n", err->message);
 		}
@@ -475,7 +475,7 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 
 	results = rspamd_controller_command_file (client, is_spam ? "learn_spam" : "learn_ham", password, params, file, &err);
 	g_hash_table_destroy (params);
-	if (results == NULL) {
+	if (results == NULL || err != NULL) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot learn message: %s\n", err->message);
 		}
@@ -565,7 +565,7 @@ rspamd_do_controller_simple_command (gchar *command)
 	add_rspamd_server (TRUE);
 
 	results = rspamd_controller_command_simple (client, command, password, NULL, &err);
-	if (results == NULL) {
+	if (results == NULL || err != NULL) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot perform command: %s\n", err->message);
 		}

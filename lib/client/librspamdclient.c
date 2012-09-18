@@ -1523,7 +1523,9 @@ rspamd_free_result (struct rspamd_result *result)
 
 	g_hash_table_destroy (result->headers);
 	g_hash_table_destroy (result->metrics);
-	rspamd_free_connection (result->conn);
+	if (result->conn) {
+		rspamd_free_connection (result->conn);
+	}
 }
 
 void
@@ -1536,7 +1538,9 @@ rspamd_free_controller_result (struct rspamd_controller_result *result)
 	if (result->data) {
 		g_string_free (result->data, TRUE);
 	}
-	rspamd_free_connection (result->conn);
+	if (result->conn) {
+		rspamd_free_connection (result->conn);
+	}
 }
 
 /*
