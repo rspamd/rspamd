@@ -1,5 +1,5 @@
 # Librspamdclient
-SET(LIBRSPAMDCLIENTSRC			  client/librspamdclient.c )
+SET(LIBRSPAMDCLIENTSRC			  client/librspamdclient.c)
 
 # Librspamd-util
 SET(LIBRSPAMDUTILSRC		  	../src/aio_event.c

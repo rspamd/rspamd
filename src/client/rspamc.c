@@ -149,27 +149,36 @@ add_rspamd_server (gboolean is_control)
 		fprintf (stderr, "cannot connect to rspamd server - empty string\n");
 		exit (EXIT_FAILURE);
 	}
-	vec = g_strsplit_set (connect_str, ":", 2);
-	if (vec == NULL || *vec == NULL) {
-		fprintf (stderr, "cannot connect to rspamd server: %s\n", connect_str);
-		exit (EXIT_FAILURE);
-	}
+	if (*connect_str != '/') {
+		vec = g_strsplit_set (connect_str, ":", 2);
+		if (vec == NULL || *vec == NULL) {
+			fprintf (stderr, "cannot connect to rspamd server: %s\n", connect_str);
+			exit (EXIT_FAILURE);
+		}
 
-	if (vec[1] == NULL) {
-		port = is_control ? DEFAULT_CONTROL_PORT : DEFAULT_PORT;
+		if (vec[1] == NULL) {
+			port = is_control ? DEFAULT_CONTROL_PORT : DEFAULT_PORT;
+		}
+		else {
+			port = strtoul (vec[1], &err_str, 10);
+			if (*err_str != '\0') {
+				fprintf (stderr, "cannot connect to rspamd server: %s, at pos %s\n", connect_str, err_str);
+				exit (EXIT_FAILURE);
+			}
+		}
+		if (! rspamd_add_server (client, vec[0], port, port, &err)) {
+			fprintf (stderr, "cannot connect to rspamd server: %s, error: %s\n", connect_str, err->message);
+			exit (EXIT_FAILURE);
+		}
 	}
 	else {
-		port = strtoul (vec[1], &err_str, 10);
-		if (*err_str != '\0') {
-			fprintf (stderr, "cannot connect to rspamd server: %s, at pos %s\n", connect_str, err_str);
+		/* Unix socket version */
+		if (! rspamd_add_server (client, connect_str, 0, 0, &err)) {
+			fprintf (stderr, "cannot connect to rspamd server: %s, error: %s\n", connect_str, err->message);
 			exit (EXIT_FAILURE);
 		}
 	}
 
-	if (! rspamd_add_server (client, vec[0], port, port, &err)) {
-		fprintf (stderr, "cannot connect to rspamd server: %s, error: %s\n", connect_str, err->message);
-		exit (EXIT_FAILURE);
-	}
 }
 
 static void

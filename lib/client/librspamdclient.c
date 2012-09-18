@@ -47,6 +47,7 @@ struct rspamd_server {
 	guint16 controller_port;
 	gchar *name;
 	gchar *controller_name;
+	gchar *host;
 };
 
 struct rspamd_client {
@@ -80,151 +81,6 @@ struct rspamd_connection {
 	GString *in_buf;
 	gint version;
 };
-
-/** Util functions **/
-gint
-make_socket_nonblocking (gint fd)
-{
-	gint                            ofl;
-
-	ofl = fcntl (fd, F_GETFL, 0);
-
-	if (fcntl (fd, F_SETFL, ofl | O_NONBLOCK) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
-		return -1;
-	}
-	return 0;
-}
-
-gint
-make_socket_blocking (gint fd)
-{
-	gint                            ofl;
-
-	ofl = fcntl (fd, F_GETFL, 0);
-
-	if (fcntl (fd, F_SETFL, ofl & (~O_NONBLOCK)) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
-		return -1;
-	}
-	return 0;
-}
-
-gint
-poll_sync_socket (gint fd, gint timeout, short events)
-{
-	gint                            r;
-	struct pollfd                   fds[1];
-
-	fds->fd = fd;
-	fds->events = events;
-	fds->revents = 0;
-	while ((r = poll (fds, 1, timeout)) < 0) {
-		if (errno != EINTR) {
-			break;
-		}
-	}
-
-	return r;
-}
-
-static gint
-lib_make_inet_socket (gint family, struct in_addr *addr, struct in_addr *local_addr,
-		u_short port, gboolean is_server, gboolean async)
-{
-	gint                            fd, r, optlen, on = 1, s_error;
-	gint                            serrno;
-	struct sockaddr_in              sin, local;
-
-	/* Create socket */
-	fd = socket (AF_INET, family, 0);
-	if (fd == -1) {
-		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
-		return -1;
-	}
-
-	if (make_socket_nonblocking (fd) < 0) {
-		goto out;
-	}
-
-	/* Set close on exec */
-	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
-		goto out;
-	}
-
-	memset (&sin, 0, sizeof (sin));
-
-	/* Bind options */
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons (port);
-	sin.sin_addr.s_addr = addr->s_addr;
-
-	if (!is_server && local_addr != NULL) {
-		/* Bind to local addr */
-		memset (&local, 0, sizeof (struct sockaddr_in));
-		memcpy (&local.sin_addr,local_addr, sizeof (struct in_addr));
-		local.sin_family = AF_INET;
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
-		if (bind (fd, (struct sockaddr *)&local, sizeof (local)) == -1) {
-			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
-			goto out;
-		}
-	}
-
-	if (is_server) {
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
-		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
-	}
-	else {
-		r = connect (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
-	}
-
-	if (r == -1) {
-		if (errno != EINPROGRESS) {
-			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
-			goto out;
-		}
-		if (!async) {
-			/* Try to poll */
-			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
-				errno = ETIMEDOUT;
-				msg_warn ("bind/connect failed: timeout");
-				goto out;
-			}
-			else {
-				/* Make synced again */
-				if (make_socket_blocking (fd) < 0) {
-					goto out;
-				}
-			}
-		}
-	}
-	else {
-		/* Still need to check SO_ERROR on socket */
-		optlen = sizeof (s_error);
-		getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
-		if (s_error) {
-			errno = s_error;
-			goto out;
-		}
-	}
-
-
-	return (fd);
-
-  out:
-	serrno = errno;
-	close (fd);
-	errno = serrno;
-	return (-1);
-}
-
-static gint
-lib_make_tcp_socket (struct in_addr *addr, struct in_addr *local_addr, u_short port, gboolean is_server, gboolean async)
-{
-	return lib_make_inet_socket (SOCK_STREAM, addr, local_addr, port, is_server, async);
-}
 
 /** Private functions **/
 static inline                   GQuark
@@ -267,9 +123,7 @@ rspamd_connect_specific_server (struct rspamd_client *client, gboolean is_contro
 	new->connection_time = time (NULL);
 	new->client = client;
 	/* Create socket */
-	new->socket = lib_make_tcp_socket (&serv->addr, client->bind_addr,
-			is_control ? serv->controller_port : serv->client_port,
-					FALSE, TRUE);
+	new->socket = make_universal_stream_socket (serv->host, is_control ? serv->controller_port : serv->client_port, TRUE, FALSE, TRUE);
 	if (new->socket == -1) {
 		goto err;
 	}
@@ -871,7 +725,6 @@ parse_rspamd_header_line (struct rspamd_connection *conn, guint len, GError **er
 
 err:
 	if (*err == NULL) {
-		g_assert (0);
 		*err = g_error_new (G_RSPAMD_ERROR, errno, "Invalid header line: %*s at pos: %d",
 				remain, b, (int)(p - b));
 	}
@@ -1333,26 +1186,36 @@ rspamd_add_server (struct rspamd_client *client, const gchar *host, guint16 port
 	}
 	new = &client->servers[client->servers_num];
 
-	if (!inet_aton (host, &new->addr)) {
-		/* Try to call gethostbyname */
-		hent = gethostbyname (host);
-		if (hent == NULL) {
-			if (*err == NULL) {
-				*err = g_error_new (G_RSPAMD_ERROR, 1, "Cannot resolve: %s", host);
+	if (*host != '/') {
+		/* Try to resolve */
+		if (!inet_aton (host, &new->addr)) {
+			/* Try to call gethostbyname */
+			hent = gethostbyname (host);
+			if (hent == NULL) {
+				if (*err == NULL) {
+					*err = g_error_new (G_RSPAMD_ERROR, 1, "Cannot resolve: %s", host);
+				}
+				return FALSE;
 			}
-			return FALSE;
-		}
-		else {
-			memcpy (&new->addr, hent->h_addr, sizeof (struct in_addr));
+			else {
+				memcpy (&new->addr, hent->h_addr, sizeof (struct in_addr));
+			}
 		}
 	}
 	new->client_port = port;
 	new->controller_port = controller_port;
+	new->host = g_strdup (host);
 	nlen = strlen (host) + sizeof ("65535") + 1;
 	new->name = g_malloc (nlen);
 	new->controller_name = g_malloc (nlen);
-	rspamd_snprintf (new->name, nlen, "%s:%d", host, (gint)port);
-	rspamd_snprintf (new->controller_name, nlen, "%s:%d", host, (gint)controller_port);
+	if (*host != '/') {
+		rspamd_snprintf (new->name, nlen, "%s:%d", host, (gint)port);
+		rspamd_snprintf (new->controller_name, nlen, "%s:%d", host, (gint)controller_port);
+	}
+	else {
+		rspamd_snprintf (new->name, nlen, "unix:%s", host);
+		rspamd_snprintf (new->controller_name, nlen, "unix:%s", host);
+	}
 
 	client->servers_num ++;
 	return TRUE;
@@ -1692,6 +1555,7 @@ rspamd_client_close (struct rspamd_client *client)
 	/* Cleanup servers */
 	for (i = 0; i < client->servers_num; i ++) {
 		serv = &client->servers[i];
+		g_free (serv->host);
 		g_free (serv->name);
 		g_free (serv->controller_name);
 	}
