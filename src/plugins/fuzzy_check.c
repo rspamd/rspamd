@@ -110,7 +110,8 @@ struct fuzzy_learn_session {
 	gint                            cmd;
 	gint                            value;
 	gint                            flag;
-	gint                            *saved;
+	gint                           *saved;
+	GError						  **err;
 	struct timeval                  tv;
 	struct controller_session      *session;
 	struct storage_server          *server;
@@ -550,7 +551,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_learn_session     *session = arg;
 	struct fuzzy_cmd                cmd;
-	gchar                           buf[64];
+	gchar                           buf[512];
 	gint                            r;
 
 	if (what == EV_WRITE) {
@@ -561,6 +562,9 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		cmd.value = session->value;
 		cmd.flag = session->flag;
 		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
+			if (*(session->err) == NULL) {
+				g_set_error (session->err, g_quark_from_static_string ("fuzzy check"), 404, "write socket error: %s", strerror (errno));
+			}
 			goto err;
 		}
 		else {
@@ -571,22 +575,21 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
 	else if (what == EV_READ) {
 		if (read (fd, buf, sizeof (buf)) == -1) {
+			msg_info ("cannot add fuzzy hash for message <%s>", session->task->message_id);
+			if (*(session->err) == NULL) {
+				g_set_error (session->err, g_quark_from_static_string ("fuzzy check"), 404, "read socket error: %s", strerror (errno));
+			}
 			goto err;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
 			msg_info ("added fuzzy hash '%s' to list: %d for message <%s>",
 					fuzzy_to_string (session->h), session->flag, session->task->message_id);
-			r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF "END" CRLF);
-			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
-				return;
-			}
 			goto ok;
 		}
 		else {
 			msg_info ("cannot add fuzzy hash for message <%s>", session->task->message_id);
-			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF "END" CRLF);
-			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
-				return;
+			if (*(session->err) == NULL) {
+				g_set_error (session->err, g_quark_from_static_string ("fuzzy check"), 500, "add fuzzy error");
 			}
 			goto ok;
 		}
@@ -598,13 +601,37 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 
 	return;
 
-  err:
+err:
 	msg_err ("got error in IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
-	r = rspamd_snprintf (buf, sizeof (buf), "Error" CRLF "END" CRLF);
-	if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
-		return;
+ok:
+	if (--(*(session->saved)) == 0) {
+		session->session->state = STATE_REPLY;
+		if (*(session->err) != NULL) {
+			if (session->session->restful) {
+				r = rspamd_snprintf (buf, sizeof (buf), "HTTP/1.0 %d Write hash error: %s" CRLF CRLF, (*session->err)->code, (*session->err)->message);
+			}
+			else {
+				r = rspamd_snprintf (buf, sizeof (buf), "write error: %s" CRLF "END" CRLF, (*session->err)->message);
+			}
+			g_error_free (*session->err);
+			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
+				return;
+			}
+		}
+		else {
+			if (session->session->restful) {
+				r = rspamd_snprintf (buf, sizeof (buf), "HTTP/1.0 200 OK" CRLF CRLF);
+			}
+			else {
+				r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF "END" CRLF);
+			}
+			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
+				return;
+			}
+		}
+		rspamd_dispatcher_restore (session->session->dispatcher);
+
 	}
-  ok:
 	remove_normal_event (session->session->s, fuzzy_learn_fin, session);
 }
 
@@ -736,7 +763,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 
 static inline gboolean
 register_fuzzy_controller_call (struct controller_session *session, struct worker_task *task, fuzzy_hash_t *h,
-		gint                            cmd, gint value, gint flag, gint *saved)
+		gint                            cmd, gint value, gint flag, gint *saved, GError **err)
 {
 	struct fuzzy_learn_session     *s;
 	struct storage_server          *selected;
@@ -758,11 +785,17 @@ register_fuzzy_controller_call (struct controller_session *session, struct worke
 		if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
 			msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 			session->state = STATE_REPLY;
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF "END" CRLF);
+			if (session->restful) {
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 404 No hashes have been written" CRLF CRLF);
+			}
+			else {
+				r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes have been written" CRLF "END" CRLF);
+			}
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 				return FALSE;
 			}
 			free_task (task, FALSE);
+			rspamd_dispatcher_restore (session->dispatcher);
 			return FALSE;
 		}
 		else {
@@ -780,6 +813,7 @@ register_fuzzy_controller_call (struct controller_session *session, struct worke
 			s->flag = flag;
 			s->saved = saved;
 			s->fd = sock;
+			s->err = err;
 			event_add (&s->ev, &s->tv);
 			(*saved)++;
 			register_async_event (session->s, fuzzy_learn_fin, s, g_quark_from_static_string ("fuzzy check"));
@@ -797,6 +831,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	struct mime_part               *mime_part;
 	struct rspamd_image            *image;
 	GList                          *cur;
+	GError						  **err;
 	gint                            r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
 	gchar                           out_buf[BUFSIZ], *checksum;
 	fuzzy_hash_t                    fake_fuzzy;
@@ -821,15 +856,22 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	
 
 	saved = memory_pool_alloc0 (session->session_pool, sizeof (gint));
+	err = memory_pool_alloc0 (session->session_pool, sizeof (GError **));
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");
 		free_task (task, FALSE);
 		session->state = STATE_REPLY;
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF "END" CRLF);
+		if (session->restful) {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
+		}
+		else {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF "END" CRLF);
+		}
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			msg_warn ("write error");
 		}
+		rspamd_dispatcher_restore (session->dispatcher);
 		return;
 	}
 	else {
@@ -842,24 +884,36 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 				cur = g_list_next (cur);
 				continue;
 			}
-			if (! register_fuzzy_controller_call (session, task, part->fuzzy, cmd, value, flag, saved)) {
+			if (! register_fuzzy_controller_call (session, task, part->fuzzy, cmd, value, flag, saved, err)) {
 				/* Cannot write hash */
 				session->state = STATE_REPLY;
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+				if (session->restful) {
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot write fuzzy hash" CRLF CRLF);
+				}
+				else {
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+				}
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return;
 				}
+				rspamd_dispatcher_restore (session->dispatcher);
 				free_task (task, FALSE);
 				return;
 			}
-			if (! register_fuzzy_controller_call (session, task, part->double_fuzzy, cmd, value, flag, saved)) {
+			if (! register_fuzzy_controller_call (session, task, part->double_fuzzy, cmd, value, flag, saved, err)) {
 				/* Cannot write hash */
 				session->state = STATE_REPLY;
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+				if (session->restful) {
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot write fuzzy hash" CRLF CRLF);
+				}
+				else {
+					r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+				}
 				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 					return;
 				}
 				free_task (task, FALSE);
+				rspamd_dispatcher_restore (session->dispatcher);
 				return;
 			}
 			cur = g_list_next (cur);
@@ -876,15 +930,21 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 						fake_fuzzy.block_size = 0;
 						bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
 						rspamd_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
-						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
+						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved, err)) {
 							/* Cannot write hash */
 							session->state = STATE_REPLY;
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+							if (session->restful) {
+								r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot write fuzzy hash" CRLF CRLF);
+							}
+							else {
+								r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+							}
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return;
 							}
 							g_free (checksum);
 							free_task (task, FALSE);
+							rspamd_dispatcher_restore (session->dispatcher);
 							return;
 						}
 
@@ -906,15 +966,21 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 						fake_fuzzy.block_size = 0;
 						bzero (fake_fuzzy.hash_pipe, sizeof (fake_fuzzy.hash_pipe));
 						rspamd_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
-						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved)) {
+						if (! register_fuzzy_controller_call (session, task, &fake_fuzzy, cmd, value, flag, saved, err)) {
 							/* Cannot write hash */
 							session->state = STATE_REPLY;
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+							if (session->restful) {
+								r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot write fuzzy hash" CRLF CRLF);
+							}
+							else {
+								r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
+							}
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return;
 							}
 							g_free (checksum);
 							free_task (task, FALSE);
+							rspamd_dispatcher_restore (session->dispatcher);
 							return;
 						}
 						msg_info ("save hash of part of type: %s/%s: [%s] to list %d",
@@ -931,10 +997,16 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 
 	if (*saved == 0) {
 		session->state = STATE_REPLY;
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes written" CRLF "END" CRLF);
+		if (session->restful) {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 404 No hashes have been written" CRLF CRLF);
+		}
+		else {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes have been written" CRLF "END" CRLF);
+		}
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return;
 		}
+		rspamd_dispatcher_restore (session->dispatcher);
 	}
 }
 
@@ -945,45 +1017,90 @@ fuzzy_controller_handler (gchar **args, struct controller_session *session, gint
 	guint32                         size;
 	gint                            r, value = 1, flag = 0, *sargs;
 
-	/* Process size */
-	arg = args[0];
-	if (!arg || *arg == '\0') {
-		msg_info ("empty content length");
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF "END" CRLF);
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+	if (session->restful) {
+		/* Get size */
+		arg = g_hash_table_lookup (session->kwargs, "content-length");
+		if (!arg || *arg == '\0') {
+			msg_info ("empty content length");
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Fuzzy command requires Content-Length" CRLF CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return;
+			}
+			session->state = STATE_REPLY;
+			rspamd_dispatcher_restore (session->dispatcher);
 			return;
 		}
-		session->state = STATE_REPLY;
-		return;
-	}
-	errno = 0;
-	size = strtoul (arg, &err_str, 10);
-	if (errno != 0 || (err_str && *err_str != '\0')) {
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+		errno = 0;
+		size = strtoul (arg, &err_str, 10);
+		if (errno != 0 || (err_str && *err_str != '\0')) {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn size is invalid" CRLF CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return;
+			}
+			session->state = STATE_REPLY;
+			rspamd_dispatcher_restore (session->dispatcher);
 			return;
 		}
-		session->state = STATE_REPLY;
-		return;
-	}
-	/* Process value */
-	arg = args[1];
-	if (arg && *arg != '\0') {
-		errno = 0;
-		value = strtol (arg, &err_str, 10);
-		if (errno != 0 || *err_str != '\0') {
-			msg_info ("error converting numeric argument %s", arg);
-			value = 0;
+		arg = g_hash_table_lookup (session->kwargs, "value");
+		if (arg) {
+			errno = 0;
+			value = strtol (arg, &err_str, 10);
+			if (errno != 0 || *err_str != '\0') {
+				msg_info ("error converting numeric argument %s", arg);
+				value = 0;
+			}
+		}
+		arg = g_hash_table_lookup (session->kwargs, "flag");
+		if (arg) {
+			errno = 0;
+			flag = strtol (arg, &err_str, 10);
+			if (errno != 0 || *err_str != '\0') {
+				msg_info ("error converting numeric argument %s", arg);
+				flag = 0;
+			}
 		}
 	}
-	/* Process flag */
-	arg = args[2];
-	if (arg && *arg != '\0') {
+	else {
+		/* Process size */
+		arg = args[0];
+		if (!arg || *arg == '\0') {
+			msg_info ("empty content length");
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF "END" CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return;
+			}
+			session->state = STATE_REPLY;
+			return;
+		}
 		errno = 0;
-		flag = strtol (arg, &err_str, 10);
-		if (errno != 0 || *err_str != '\0') {
-			msg_info ("error converting numeric argument %s", arg);
-			flag = 0;
+		size = strtoul (arg, &err_str, 10);
+		if (errno != 0 || (err_str && *err_str != '\0')) {
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
+			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
+				return;
+			}
+			session->state = STATE_REPLY;
+			return;
+		}
+		/* Process value */
+		arg = args[1];
+		if (arg && *arg != '\0') {
+			errno = 0;
+			value = strtol (arg, &err_str, 10);
+			if (errno != 0 || *err_str != '\0') {
+				msg_info ("error converting numeric argument %s", arg);
+				value = 0;
+			}
+		}
+		/* Process flag */
+		arg = args[2];
+		if (arg && *arg != '\0') {
+			errno = 0;
+			flag = strtol (arg, &err_str, 10);
+			if (errno != 0 || *err_str != '\0') {
+				msg_info ("error converting numeric argument %s", arg);
+				flag = 0;
+			}
 		}
 	}
 

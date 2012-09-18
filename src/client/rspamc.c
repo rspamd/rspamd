@@ -23,6 +23,7 @@
  */
 
 #include "config.h"
+#include "util.h"
 #include "../../lib/client/librspamdclient.h"
 
 #define PRINT_FUNC printf
@@ -32,7 +33,6 @@
 
 static gchar                   *connect_str = "localhost";
 static gchar                   *password = NULL;
-static gchar                   *statfile = NULL;
 static gchar                   *ip = NULL;
 static gchar                   *from = NULL;
 static gchar                   *deliver_to = NULL;
@@ -508,6 +508,16 @@ fuzzy_rspamd_stdin (gboolean delete)
 	gchar                           *in_buf;
 	gint                             r = 0, len;
 	GError                          *err = NULL;
+	GHashTable						*params;
+	GList							*results, *cur;
+	gchar							 valuebuf[sizeof("65535")], flagbuf[sizeof("65535")];
+	struct rspamd_controller_result	*res;
+
+	params = g_hash_table_new (g_str_hash, g_str_equal);
+	rspamd_snprintf (valuebuf, sizeof (valuebuf), "%d", weight);
+	rspamd_snprintf (flagbuf, sizeof (flagbuf), "%d", flag);
+	g_hash_table_insert (params, "Value", valuebuf);
+	g_hash_table_insert (params, "Flag", flagbuf);
 
 	/* Add server */
 	add_rspamd_server (TRUE);
@@ -525,33 +535,77 @@ fuzzy_rspamd_stdin (gboolean delete)
 			in_buf = g_realloc (in_buf, len);
 		}
 	}
-	/* TODO: write this function */
+	results = rspamd_controller_command_memory (client, delete ? "fuzzy_del" : "fuzzy_add", password, params, in_buf, r, &err);
+	g_hash_table_destroy (params);
+	if (results == NULL || err != NULL) {
+		if (err != NULL) {
+			fprintf (stderr, "cannot process fuzzy for message: %s\n", err->message);
+		}
+		else {
+			fprintf (stderr, "cannot process fuzzy for message\n");
+		}
+		exit (EXIT_FAILURE);
+	}
+	else {
+		cur = results;
+		while (cur) {
+			res = cur->data;
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
+			if (tty) {
+				printf ("\033[0m");
+			}
+			rspamd_free_controller_result (res);
+			cur = g_list_next (cur);
+		}
+		g_list_free (results);
+	}
 }
 
 static void
 fuzzy_rspamd_file (const gchar *file, gboolean delete)
 {
 	GError                          *err = NULL;
-	/* TODO: write this function */
-#if 0
-	if (!rspamd_fuzzy_file (client, file, password, weight, flag, delete, &err)) {
+	GHashTable						*params;
+	GList							*results, *cur;
+	gchar							 valuebuf[sizeof("65535")], flagbuf[sizeof("65535")];
+	struct rspamd_controller_result	*res;
+
+	params = g_hash_table_new (g_str_hash, g_str_equal);
+	rspamd_snprintf (valuebuf, sizeof (valuebuf), "%d", weight);
+	rspamd_snprintf (flagbuf, sizeof (flagbuf), "%d", flag);
+	g_hash_table_insert (params, "Value", valuebuf);
+	g_hash_table_insert (params, "Flag", flagbuf);
+
+	results = rspamd_controller_command_file (client, delete ? "fuzzy_del" : "fuzzy_add", password, params, file, &err);
+	g_hash_table_destroy (params);
+	if (results == NULL || err != NULL) {
 		if (err != NULL) {
-			fprintf (stderr, "cannot learn message: %s\n", err->message);
+			fprintf (stderr, "cannot process fuzzy for message: %s\n", err->message);
 		}
 		else {
-			fprintf (stderr, "cannot learn message\n");
+			fprintf (stderr, "cannot process fuzzy for message\n");
 		}
+		exit (EXIT_FAILURE);
 	}
 	else {
-		if (tty) {
-			printf ("\033[1m");
+		cur = results;
+		while (cur) {
+			res = cur->data;
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
+			if (tty) {
+				printf ("\033[0m");
+			}
+			rspamd_free_controller_result (res);
+			cur = g_list_next (cur);
 		}
-		PRINT_FUNC ("learn ok\n");
-		if (tty) {
-			printf ("\033[0m");
-		}
+		g_list_free (results);
 	}
-#endif
 }
 
 static void
