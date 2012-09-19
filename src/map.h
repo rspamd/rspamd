@@ -58,8 +58,10 @@ typedef void (*map_fin_cb_t)(memory_pool_t *pool, struct map_cb_data *data);
 /**
  * Common map object
  */
+struct config_file;
 struct rspamd_map {
 	memory_pool_t *pool;
+	struct config_file *cfg;
 	enum fetch_proto protocol;
 	map_cb_t read_callback;
 	map_fin_cb_t fin_callback;
@@ -77,19 +79,19 @@ gboolean check_map_proto (const gchar *map_line, gint *res, const gchar **pos);
 /**
  * Add map from line
  */
-gboolean add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
+gboolean add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
 
 /**
  * Start watching of maps by adding events to libevent event loop
  */
-void start_map_watch (struct event_base *ev_base);
+void start_map_watch (struct config_file *cfg, struct event_base *ev_base);
 
 /**
  * Remove all maps watched (remove events)
  */
-void remove_all_maps (void);
+void remove_all_maps (struct config_file *cfg);
 
-typedef void                    (*insert_func) (gpointer st, gconstpointer key, gpointer value);
+typedef void                    (*insert_func) (gpointer st, gconstpointer key, gconstpointer value);
 
 /**
  * Common callbacks for frequent types of lists

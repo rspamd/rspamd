@@ -138,7 +138,7 @@ spf_module_config (struct config_file *cfg)
 		cache_expire = DEFAULT_CACHE_MAXAGE;
 	}
 	if ((value = get_module_opt (cfg, "spf", "whitelist")) != NULL) {
-		if (! add_map (value, read_radix_list, fin_radix_list, (void **)&spf_module_ctx->whitelist_ip)) {
+		if (! add_map (cfg, value, read_radix_list, fin_radix_list, (void **)&spf_module_ctx->whitelist_ip)) {
 			msg_warn ("cannot load whitelist from %s", value);
 		}
 	}

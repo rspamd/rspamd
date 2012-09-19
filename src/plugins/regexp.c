@@ -611,7 +611,7 @@ regexp_module_config (struct config_file *cfg)
 		jb->buf = NULL;
 		jb->cfg = cfg;
 		*pjb = jb;
-		if (!add_map (value, json_regexp_read_cb, json_regexp_fin_cb, (void **)pjb)) {
+		if (!add_map (cfg, value, json_regexp_read_cb, json_regexp_fin_cb, (void **)pjb)) {
 			msg_err ("cannot add map %s", value);
 		}
 	}

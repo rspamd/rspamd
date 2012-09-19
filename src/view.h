@@ -7,7 +7,9 @@
 #include "main.h"
 #include "radix.h"
 
+struct config_file;
 struct rspamd_view {
+	struct config_file *cfg;
 	GList *from_re_list;
 	GHashTable *from_hash;
 
@@ -30,7 +32,7 @@ struct rspamd_view {
  * @param pool pool for view
  * @return
  */
-struct rspamd_view* init_view (memory_pool_t *pool);
+struct rspamd_view* init_view (struct config_file *cfg, memory_pool_t *pool);
 
 /**
  * Add from option for this view

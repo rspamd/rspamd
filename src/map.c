@@ -31,10 +31,7 @@
 #include "util.h"
 #include "mem_pool.h"
 
-static memory_pool_t           *map_pool = NULL;
-
-static GList                   *maps = NULL;
-static gchar                   *hash_fill = "1";
+static const gchar             *hash_fill = "1";
 
 /* Http reply */
 struct http_reply {
@@ -58,7 +55,7 @@ struct http_callback_data {
 };
 
 /* Value in seconds after whitch we would try to do stat on list file */
-#define MON_TIMEOUT 10
+
 /* HTTP timeouts */
 #define HTTP_CONNECT_TIMEOUT 2
 #define HTTP_READ_TIMEOUT 10
@@ -466,6 +463,11 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 			*pos = map_line + sizeof ("file://") - 1;
 		}
 	}
+	else if (*map_line == '/') {
+		/* Trivial file case */
+		*res = PROTO_FILE;
+		*pos = map_line;
+	}
 	else {
 		msg_warn ("invalid map fetching protocol: %s", map_line);
 		return FALSE;
@@ -475,7 +477,7 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 }
 
 gboolean
-add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
+add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
 {
 	struct rspamd_map              *new_map;
 	enum fetch_proto                proto;
@@ -491,10 +493,10 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 		return FALSE;
 	}
 	/* Constant pool */
-	if (map_pool == NULL) {
-		map_pool = memory_pool_new (memory_pool_get_size ());
+	if (cfg->map_pool == NULL) {
+		cfg->map_pool = memory_pool_new (memory_pool_get_size ());
 	}
-	new_map = memory_pool_alloc0 (map_pool, sizeof (struct rspamd_map));
+	new_map = memory_pool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
 	new_map->read_callback = read_callback;
 	new_map->fin_callback = fin_callback;
 	new_map->user_data = user_data;
@@ -506,13 +508,13 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 			msg_warn ("cannot open file '%s': %s", def, strerror (errno));
 			return FALSE;
 		}
-		fdata = memory_pool_alloc0 (map_pool, sizeof (struct file_map_data));
-		fdata->filename = memory_pool_strdup (map_pool, def);
+		fdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
+		fdata->filename = memory_pool_strdup (cfg->map_pool, def);
 		fstat (fd, &fdata->st);
 		new_map->map_data = fdata;
 	}
 	else if (proto == PROTO_HTTP) {
-		hdata = memory_pool_alloc0 (map_pool, sizeof (struct http_map_data));
+		hdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
 		/* Try to search port */
 		if ((p = strchr (def, ':')) != NULL) {
 			hostend = p;
@@ -538,9 +540,9 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 			}
 			hostend = p;
 		}
-		hdata->host = memory_pool_alloc (map_pool, hostend - def + 1);
+		hdata->host = memory_pool_alloc (cfg->map_pool, hostend - def + 1);
 		rspamd_strlcpy (hdata->host, def, hostend - def + 1);
-		hdata->path = memory_pool_strdup (map_pool, p);
+		hdata->path = memory_pool_strdup (cfg->map_pool, p);
 		hdata->rlen = 0;
 		/* Now try to resolve */
 		if (!inet_aton (hdata->host, &hdata->addr)) {
@@ -565,7 +567,7 @@ add_map (const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callbac
 	/* Temp pool */
 	new_map->pool = memory_pool_new (memory_pool_get_size ());
 
-	maps = g_list_prepend (maps, new_map);
+	cfg->maps = g_list_prepend (cfg->maps, new_map);
 
 	return TRUE;
 }
@@ -879,7 +881,7 @@ file_callback (gint fd, short what, void *ud)
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	map->tv.tv_sec = MON_TIMEOUT + MON_TIMEOUT * g_random_double ();
+	map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ()) / 2.;
 	map->tv.tv_usec = 0;
 	evtimer_add (&map->ev, &map->tv);
 
@@ -1000,7 +1002,7 @@ http_callback (gint fd, short what, void *ud)
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	map->tv.tv_sec = MON_TIMEOUT + MON_TIMEOUT * g_random_double ();
+	map->tv.tv_sec = map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ();
 	map->tv.tv_usec = 0;
 	evtimer_add (&map->ev, &map->tv);
 
@@ -1027,9 +1029,9 @@ http_callback (gint fd, short what, void *ud)
 
 /* Start watching event for all maps */
 void
-start_map_watch (struct event_base *ev_base)
+start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 {
-	GList                          *cur = maps;
+	GList                          *cur = cfg->maps;
 	struct rspamd_map              *map;
 
 	/* First of all do synced read of data */
@@ -1042,7 +1044,7 @@ start_map_watch (struct event_base *ev_base)
 			/* Read initial data */
 			read_map_file (map, map->map_data);
 			/* Plan event with jitter */
-			map->tv.tv_sec = MON_TIMEOUT + MON_TIMEOUT * g_random_double ();
+			map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ()) / 2.;
 			map->tv.tv_usec = 0;
 			evtimer_add (&map->ev, &map->tv);
 		}
@@ -1052,7 +1054,7 @@ start_map_watch (struct event_base *ev_base)
 			/* Read initial data */
 			read_http_sync (map, map->map_data);
 			/* Plan event with jitter */
-			map->tv.tv_sec = MON_TIMEOUT + MON_TIMEOUT * g_random_double ();
+			map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ());
 			map->tv.tv_usec = 0;
 			evtimer_add (&map->ev, &map->tv);
 		}
@@ -1061,13 +1063,13 @@ start_map_watch (struct event_base *ev_base)
 }
 
 void 
-remove_all_maps (void)
+remove_all_maps (struct config_file *cfg)
 {
-	g_list_free (maps);
-	maps = NULL;
-	if (map_pool != NULL) {
-		memory_pool_delete (map_pool);
-		map_pool = NULL;
+	g_list_free (cfg->maps);
+	cfg->maps = NULL;
+	if (cfg->map_pool != NULL) {
+		memory_pool_delete (cfg->map_pool);
+		cfg->map_pool = NULL;
 	}
 }
 

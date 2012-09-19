@@ -827,7 +827,7 @@ start_worker (struct rspamd_worker *worker)
 	else {
 #endif
 		/* Maps events */
-		start_map_watch (ctx->ev_base);
+		start_map_watch (worker->srv->cfg, ctx->ev_base);
 #ifndef BUILD_STATIC
 	}
 #endif

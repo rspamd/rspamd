@@ -675,51 +675,6 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 	}
 }
 
-#if 0
-/* XXX: remove this as it is unused now */
-static gboolean
-convert_old_config (struct rspamd_main *rspamd) 
-{
-	FILE *f;
-
-	f = fopen (rspamd->cfg->cfg_name, "r");
-	if (f == NULL) {
-		msg_err ("cannot open file: %s", rspamd->cfg->cfg_name);
-		return EBADF;
-	}
-	yyin = f;
-	
-	yacc_cfg = rspamd->cfg;
-	if (yyparse () != 0 || yynerrs > 0) {
-		msg_err ("cannot parse config file, %d errors", yynerrs);
-		return EBADF;
-	}
-
-	/* Strictly set temp dir */
-	if (!rspamd->cfg->temp_dir) {
-		msg_warn ("tempdir is not set, trying to use $TMPDIR");
-		rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, getenv ("TMPDIR"));
-
-		if (!rspamd->cfg->temp_dir) {
-			msg_warn ("$TMPDIR is empty too, using /tmp as default");
-			rspamd->cfg->temp_dir = memory_pool_strdup (rspamd->cfg->cfg_pool, "/tmp");
-		}
-	}
-
-
-	fclose (f);
-	/* Dump it to xml */
-	if (get_config_checksum (rspamd->cfg)) {
-		if (xml_dump_config (rspamd->cfg, convert_config)) {
-			rspamd->cfg->cfg_name = convert_config;
-			return TRUE;
-		}
-	}
-	
-	return FALSE;
-}
-#endif
-
 static void
 preload_statfiles (struct rspamd_main *rspamd)
 {
@@ -1121,7 +1076,7 @@ main (gint argc, gchar **argv, gchar **env)
 			reopen_log_priv (rspamd_main->logger, rspamd_main->workers_uid, rspamd_main->workers_gid);
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-			remove_all_maps ();
+			remove_all_maps (rspamd_main->cfg);
 			reread_config (rspamd_main);
 			spawn_workers (rspamd_main);
 		}

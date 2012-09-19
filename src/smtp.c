@@ -977,7 +977,7 @@ start_smtp (struct rspamd_worker *worker)
 	event_add (&worker->bind_ev, NULL);
 
 	/* Maps events */
-	start_map_watch (ctx->ev_base);
+	start_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	/* DNS resolver */
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);

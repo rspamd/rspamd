@@ -33,11 +33,13 @@
 #include "cfg_xml.h"
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"
+#include "map.h"
 
 #define DEFAULT_SCORE 10.0
 
 #define DEFAULT_RLIMIT_NOFILE 2048
 #define DEFAULT_RLIMIT_MAXCORE 0
+#define DEFAULT_MAP_TIMEOUT 10
 
 
 gboolean
@@ -221,6 +223,8 @@ init_defaults (struct config_file *cfg)
 	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
 	cfg->metrics_symbols = g_hash_table_new (g_str_hash, g_str_equal);
 
+	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
+
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;
 
@@ -231,6 +235,7 @@ init_defaults (struct config_file *cfg)
 void
 free_config (struct config_file *cfg)
 {
+	remove_all_maps (cfg);
 	g_hash_table_remove_all (cfg->modules_opts);
 	g_hash_table_unref (cfg->modules_opts);
 	g_hash_table_remove_all (cfg->variables);

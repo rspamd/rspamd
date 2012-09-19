@@ -493,7 +493,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	start_map_watch (ctx->ev_base);
+	start_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
 	luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_accept);

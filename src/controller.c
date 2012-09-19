@@ -1642,7 +1642,7 @@ start_controller (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &worker->bind_ev);
 	event_add (&worker->bind_ev, NULL);
 
-	start_map_watch (ctx->ev_base);
+	start_map_watch (worker->srv->cfg, ctx->ev_base);
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
 	gperf_profiler_init (worker->srv->cfg, "controller");

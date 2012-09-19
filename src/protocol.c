@@ -598,7 +598,6 @@ parse_header (struct worker_task *task, f_str_t * line)
 	case 'u':
 	case 'U':
 		if (g_ascii_strncasecmp (headern, USER_HEADER, sizeof (USER_HEADER) - 1) == 0) {
-			/* XXX: use this header somehow */
 			task->user = memory_pool_fstrdup (task->task_pool, line);
 		}
 		else {
@@ -1417,7 +1416,6 @@ write_check_reply (struct worker_task *task)
 			}
 		}
 		else {
-			/* XXX: add this for JSON as well */
 			/* Messages */
 			if (! show_messages (task)) {
 				return FALSE;

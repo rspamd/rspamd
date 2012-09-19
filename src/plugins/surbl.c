@@ -363,7 +363,7 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_hosts_map")) != NULL) {
-		add_map (value, read_redirectors_list, fin_redirectors_list, (void **)&surbl_module_ctx->redirector_hosts);
+		add_map (cfg, value, read_redirectors_list, fin_redirectors_list, (void **)&surbl_module_ctx->redirector_hosts);
 	}
 	else {
 		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;
@@ -375,12 +375,12 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
-		if (add_map (value, read_exceptions_list, fin_exceptions_list, (void **)&surbl_module_ctx->exceptions)) {
+		if (add_map (cfg, value, read_exceptions_list, fin_exceptions_list, (void **)&surbl_module_ctx->exceptions)) {
 			surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
 		}
 	}
 	if ((value = get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
-		if (add_map (value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->whitelist)) {
+		if (add_map (cfg, value, read_host_list, fin_host_list, (void **)&surbl_module_ctx->whitelist)) {
 			surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool, value + sizeof ("file://") - 1);
 		}
 	}

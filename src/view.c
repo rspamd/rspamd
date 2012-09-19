@@ -31,7 +31,7 @@
 #include "map.h"
 
 struct rspamd_view             *
-init_view (memory_pool_t * pool)
+init_view (struct config_file *cfg, memory_pool_t * pool)
 {
 	struct rspamd_view             *new;
 
@@ -43,6 +43,7 @@ init_view (memory_pool_t * pool)
 	new->rcpt_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->ip_tree = radix_tree_create ();
 	new->client_ip_tree = radix_tree_create ();
+	new->cfg = cfg;
 
 	memory_pool_add_destructor (new->pool, (pool_destruct_func) g_hash_table_destroy, new->symbols_hash);
 
@@ -54,7 +55,7 @@ add_view_from (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
-	if (add_map (line, read_host_list, fin_host_list, (void **)&view->from_hash)) {
+	if (add_map (view->cfg, line, read_host_list, fin_host_list, (void **)&view->from_hash)) {
 		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
@@ -70,7 +71,7 @@ add_view_rcpt (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
-	if (add_map (line, read_host_list, fin_host_list, (void **)&view->rcpt_hash)) {
+	if (add_map (view->cfg, line, read_host_list, fin_host_list, (void **)&view->rcpt_hash)) {
 		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
@@ -87,7 +88,7 @@ add_view_symbols (struct rspamd_view * view, gchar *line)
 	struct rspamd_regexp           *re = NULL;
 	GList                          *symbols;
 
-	if (add_map (line, read_host_list, fin_host_list, (void **)&view->symbols_hash)) {
+	if (add_map (view->cfg, line, read_host_list, fin_host_list, (void **)&view->symbols_hash)) {
 		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
@@ -111,7 +112,7 @@ add_view_symbols (struct rspamd_view * view, gchar *line)
 gboolean
 add_view_ip (struct rspamd_view * view, gchar *line)
 {
-	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
+	if (add_map (view->cfg, line, read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
 		return TRUE;
 	}
 
@@ -121,7 +122,7 @@ add_view_ip (struct rspamd_view * view, gchar *line)
 gboolean
 add_view_client_ip (struct rspamd_view * view, gchar *line)
 {
-	if (add_map (line, read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
+	if (add_map (view->cfg, line, read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
 		return TRUE;
 	}
 

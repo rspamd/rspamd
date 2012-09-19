@@ -308,7 +308,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 			radix_tree_free (rspamd->logger->debug_ip);
 		}
 		rspamd->logger->debug_ip = radix_tree_create ();
-		if (!add_map (rspamd->cfg->debug_ip_map, read_radix_list, fin_radix_list, (void **)&rspamd->logger->debug_ip)) {
+		if (!add_map (rspamd->cfg, rspamd->cfg->debug_ip_map, read_radix_list, fin_radix_list, (void **)&rspamd->logger->debug_ip)) {
 			/* Try to parse it as list */
 			strvec = g_strsplit_set (rspamd->cfg->debug_ip_map, ",; ", 0);
 			num = g_strv_length (strvec);

@@ -314,11 +314,16 @@ struct config_file {
 	GList *views;									/**< views												*/
 	GList *pre_filters;								/**< list of pre-processing lua filters					*/
 	GList *post_filters;							/**< list of post-processing lua filters				*/
+	gchar *dynamic_conf;							/**< path to dynamic configuration						*/
 	GHashTable* domain_settings;                    /**< settings per-domains                               */
 	GHashTable* user_settings;                      /**< settings per-user                                  */
 	gchar* domain_settings_str;						/**< string representation of settings					*/
 	gchar* user_settings_str;
 	gint clock_res;									/**< resolution of clock used							*/
+
+	GList *maps;									/**< maps active										*/
+	memory_pool_t *map_pool;						/**< static maps pool									*/
+	gdouble map_timeout;							/**< maps watch timeout									*/
 
 	struct symbols_cache *cache;					/**< symbols cache object								*/ 
 	gchar *cache_filename;							/**< filename of cache file								*/

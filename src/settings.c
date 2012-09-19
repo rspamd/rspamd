@@ -358,7 +358,7 @@ read_settings (const gchar *path, struct config_file *cfg, GHashTable * table)
 	jb->buf = NULL;
 	*pjb = jb;
 
-	if (!add_map (path, json_read_cb, json_fin_cb, (void **)pjb)) {
+	if (!add_map (cfg, path, json_read_cb, json_fin_cb, (void **)pjb)) {
 		msg_err ("cannot add map %s", path);
 		return FALSE;
 	}

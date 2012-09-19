@@ -158,12 +158,12 @@ dkim_module_config (struct config_file *cfg)
 		dkim_module_ctx->time_jitter = DEFAULT_TIME_JITTER;
 	}
 	if ((value = get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
-		if (! add_map (value, read_radix_list, fin_radix_list, (void **)&dkim_module_ctx->whitelist_ip)) {
+		if (! add_map (cfg, value, read_radix_list, fin_radix_list, (void **)&dkim_module_ctx->whitelist_ip)) {
 			msg_warn ("cannot load whitelist from %s", value);
 		}
 	}
 	if ((value = get_module_opt (cfg, "dkim", "domains")) != NULL) {
-		if (! add_map (value, read_kv_list, fin_kv_list, (void **)&dkim_module_ctx->dkim_domains)) {
+		if (! add_map (cfg, value, read_kv_list, fin_kv_list, (void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn ("cannot load dkim domains list from %s", value);
 		}
 		else {

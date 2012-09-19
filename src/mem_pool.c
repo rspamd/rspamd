@@ -613,6 +613,7 @@ memory_pool_delete (memory_pool_t * pool)
 	mem_pool_stat->pools_freed++;
 	POOL_MTX_UNLOCK ();
 	rspamd_mutex_free (pool->mtx);
+	g_slice_free (memory_pool_t, pool);
 }
 
 void

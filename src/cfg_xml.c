@@ -1799,7 +1799,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			else if (g_ascii_strcasecmp (element_name, "view") == 0) {
 				ud->state = XML_READ_VIEW;
 				/* Create object */
-				ud->section_pointer = init_view (ud->cfg->cfg_pool);
+				ud->section_pointer = init_view (ud->cfg, ud->cfg->cfg_pool);
 			}
 #if GLIB_MINOR_VERSION >= 18
 			else if (subparsers != NULL && (subparser = g_hash_table_lookup (subparsers, element_name)) != NULL) {
