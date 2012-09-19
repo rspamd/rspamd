@@ -306,6 +306,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, max_diff),
 				NULL
 			},
+			{
+				"map_watch_interval",
+				xml_handle_double,
+				G_STRUCT_OFFSET (struct config_file, map_timeout),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR
@@ -1604,12 +1610,23 @@ xml_handle_seconds (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	guint32                      *dest;
 
 	dest = (guint32 *)G_STRUCT_MEMBER_P (dest_struct, offset);
-	*dest = cfg_parse_time (data, TIME_SECONDS);
+	*dest = rint (cfg_parse_time (data, TIME_SECONDS));
 	
 	return TRUE;
 }
 
 gboolean 
+xml_handle_seconds_double (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	gdouble                      *dest;
+
+	dest = (gdouble *)G_STRUCT_MEMBER_P (dest_struct, offset);
+	*dest = cfg_parse_time (data, TIME_SECONDS);
+
+	return TRUE;
+}
+
+gboolean
 xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
 	gboolean                    *dest;

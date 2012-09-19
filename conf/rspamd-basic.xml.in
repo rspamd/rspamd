@@ -25,13 +25,15 @@
   <dns_retransmits>5</dns_retransmits>
   <!-- File for saving settings of symbols cache -->
   <cache_file>@LOCALSTATES_PREFIX@/symbols.cache</cache_file>
+  <!-- Maps watch timeout (floating point number in seconds, for file maps this timeout is reduced by two) -->
+  <map_watch_interval>10.0s</map_watch_interval>
 </options>
 <!-- End of options section -->
 
 <!-- Logging section -->
 <logging>
  <level>info</level>
- <log_urls>yes</log_urls>
+ <log_urls>no</log_urls>
  <type>console</type>
 <!-- Other types
  <type filename="/var/log/rspamd/rspamd.log">file</type>

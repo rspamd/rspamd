@@ -448,130 +448,6 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	*map->user_data = cbdata.cur_data;
 }
 
-gboolean
-check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
-{
-	if (g_ascii_strncasecmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
-		if (res && pos) {
-			*res = PROTO_HTTP;
-			*pos = map_line + sizeof ("http://") - 1;
-		}
-	}
-	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
-		if (res && pos) {
-			*res = PROTO_FILE;
-			*pos = map_line + sizeof ("file://") - 1;
-		}
-	}
-	else if (*map_line == '/') {
-		/* Trivial file case */
-		*res = PROTO_FILE;
-		*pos = map_line;
-	}
-	else {
-		msg_warn ("invalid map fetching protocol: %s", map_line);
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-gboolean
-add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
-{
-	struct rspamd_map              *new_map;
-	enum fetch_proto                proto;
-	const gchar                     *def, *p, *hostend;
-	struct file_map_data           *fdata;
-	struct http_map_data           *hdata;
-	gchar                           portbuf[6];
-	gint                            i, s, fd;
-	struct hostent                 *hent;
-
-	/* First of all detect protocol line */
-	if (!check_map_proto (map_line, (int *)&proto, &def)) {
-		return FALSE;
-	}
-	/* Constant pool */
-	if (cfg->map_pool == NULL) {
-		cfg->map_pool = memory_pool_new (memory_pool_get_size ());
-	}
-	new_map = memory_pool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
-	new_map->read_callback = read_callback;
-	new_map->fin_callback = fin_callback;
-	new_map->user_data = user_data;
-	new_map->protocol = proto;
-
-	/* Now check for each proto separately */
-	if (proto == PROTO_FILE) {
-		if ((fd = open (def, O_RDONLY)) == -1) {
-			msg_warn ("cannot open file '%s': %s", def, strerror (errno));
-			return FALSE;
-		}
-		fdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
-		fdata->filename = memory_pool_strdup (cfg->map_pool, def);
-		fstat (fd, &fdata->st);
-		new_map->map_data = fdata;
-	}
-	else if (proto == PROTO_HTTP) {
-		hdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
-		/* Try to search port */
-		if ((p = strchr (def, ':')) != NULL) {
-			hostend = p;
-			i = 0;
-			p++;
-			while (g_ascii_isdigit (*p) && i < (gint)sizeof (portbuf) - 1) {
-				portbuf[i++] = *p++;
-			}
-			if (*p != '/') {
-				msg_info ("bad http map definition: %s", def);
-				return FALSE;
-			}
-			portbuf[i] = '\0';
-			hdata->port = atoi (portbuf);
-		}
-		else {
-			/* Default http port */
-			hdata->port = 80;
-			/* Now separate host from path */
-			if ((p = strchr (def, '/')) == NULL) {
-				msg_info ("bad http map definition: %s", def);
-				return FALSE;
-			}
-			hostend = p;
-		}
-		hdata->host = memory_pool_alloc (cfg->map_pool, hostend - def + 1);
-		rspamd_strlcpy (hdata->host, def, hostend - def + 1);
-		hdata->path = memory_pool_strdup (cfg->map_pool, p);
-		hdata->rlen = 0;
-		/* Now try to resolve */
-		if (!inet_aton (hdata->host, &hdata->addr)) {
-			/* Resolve using dns */
-			hent = gethostbyname (hdata->host);
-			if (hent == NULL) {
-				msg_info ("cannot resolve: %s", hdata->host);
-				return FALSE;
-			}
-			else {
-				memcpy (&hdata->addr, hent->h_addr, sizeof (struct in_addr));
-			}
-		}
-		/* Now try to connect */
-		if ((s = make_tcp_socket (&hdata->addr, hdata->port, FALSE, FALSE)) == -1) {
-			msg_info ("cannot connect to http server %s: %d, %s", hdata->host, errno, strerror (errno));
-			return FALSE;
-		}
-		close (s);
-		new_map->map_data = hdata;
-	}
-	/* Temp pool */
-	new_map->pool = memory_pool_new (memory_pool_get_size ());
-
-	cfg->maps = g_list_prepend (cfg->maps, new_map);
-
-	return TRUE;
-}
-
 /**
  * FSM for parsing lists
  */
@@ -1073,3 +949,127 @@ remove_all_maps (struct config_file *cfg)
 	}
 }
 
+gboolean
+check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
+{
+	if (g_ascii_strncasecmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
+		if (res && pos) {
+			*res = PROTO_HTTP;
+			*pos = map_line + sizeof ("http://") - 1;
+		}
+	}
+	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
+		if (res && pos) {
+			*res = PROTO_FILE;
+			*pos = map_line + sizeof ("file://") - 1;
+		}
+	}
+	else if (*map_line == '/') {
+		/* Trivial file case */
+		*res = PROTO_FILE;
+		*pos = map_line;
+	}
+	else {
+		msg_warn ("invalid map fetching protocol: %s", map_line);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
+{
+	struct rspamd_map              *new_map;
+	enum fetch_proto                proto;
+	const gchar                     *def, *p, *hostend;
+	struct file_map_data           *fdata;
+	struct http_map_data           *hdata;
+	gchar                           portbuf[6];
+	gint                            i, s, fd;
+	struct hostent                 *hent;
+
+	/* First of all detect protocol line */
+	if (!check_map_proto (map_line, (int *)&proto, &def)) {
+		return FALSE;
+	}
+	/* Constant pool */
+	if (cfg->map_pool == NULL) {
+		cfg->map_pool = memory_pool_new (memory_pool_get_size ());
+	}
+	new_map = memory_pool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
+	new_map->read_callback = read_callback;
+	new_map->fin_callback = fin_callback;
+	new_map->user_data = user_data;
+	new_map->protocol = proto;
+	new_map->cfg = cfg;
+
+	/* Now check for each proto separately */
+	if (proto == PROTO_FILE) {
+		if ((fd = open (def, O_RDONLY)) == -1) {
+			msg_warn ("cannot open file '%s': %s", def, strerror (errno));
+			return FALSE;
+		}
+		fdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
+		fdata->filename = memory_pool_strdup (cfg->map_pool, def);
+		fstat (fd, &fdata->st);
+		new_map->map_data = fdata;
+	}
+	else if (proto == PROTO_HTTP) {
+		hdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
+		/* Try to search port */
+		if ((p = strchr (def, ':')) != NULL) {
+			hostend = p;
+			i = 0;
+			p++;
+			while (g_ascii_isdigit (*p) && i < (gint)sizeof (portbuf) - 1) {
+				portbuf[i++] = *p++;
+			}
+			if (*p != '/') {
+				msg_info ("bad http map definition: %s", def);
+				return FALSE;
+			}
+			portbuf[i] = '\0';
+			hdata->port = atoi (portbuf);
+		}
+		else {
+			/* Default http port */
+			hdata->port = 80;
+			/* Now separate host from path */
+			if ((p = strchr (def, '/')) == NULL) {
+				msg_info ("bad http map definition: %s", def);
+				return FALSE;
+			}
+			hostend = p;
+		}
+		hdata->host = memory_pool_alloc (cfg->map_pool, hostend - def + 1);
+		rspamd_strlcpy (hdata->host, def, hostend - def + 1);
+		hdata->path = memory_pool_strdup (cfg->map_pool, p);
+		hdata->rlen = 0;
+		/* Now try to resolve */
+		if (!inet_aton (hdata->host, &hdata->addr)) {
+			/* Resolve using dns */
+			hent = gethostbyname (hdata->host);
+			if (hent == NULL) {
+				msg_info ("cannot resolve: %s", hdata->host);
+				return FALSE;
+			}
+			else {
+				memcpy (&hdata->addr, hent->h_addr, sizeof (struct in_addr));
+			}
+		}
+		/* Now try to connect */
+		if ((s = make_tcp_socket (&hdata->addr, hdata->port, FALSE, FALSE)) == -1) {
+			msg_info ("cannot connect to http server %s: %d, %s", hdata->host, errno, strerror (errno));
+			return FALSE;
+		}
+		close (s);
+		new_map->map_data = hdata;
+	}
+	/* Temp pool */
+	new_map->pool = memory_pool_new (memory_pool_get_size ());
+
+	cfg->maps = g_list_prepend (cfg->maps, new_map);
+
+	return TRUE;
+}

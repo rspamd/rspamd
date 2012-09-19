@@ -340,7 +340,7 @@ parse_limit (const gchar *limit, guint len)
 	return result;
 }
 
-guint
+gdouble
 cfg_parse_time (const gchar *t, enum time_type default_type)
 {
 	union {
@@ -444,10 +444,10 @@ cfg_parse_time (const gchar *t, enum time_type default_type)
 		}
 	}
 	if (use_double) {
-		return rint (result.d);
+		return result.d;
 	}
 	else {
-		return result.i;
+		return (gdouble)result.i;
 	}
 }
 
