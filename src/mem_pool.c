@@ -26,6 +26,7 @@
 #include "mem_pool.h"
 #include "fstring.h"
 #include "logger.h"
+#include "util.h"
 #include "main.h"
 
 /* Sleep time for spin lock in nanoseconds */
@@ -41,13 +42,8 @@ pthread_mutex_t                 stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 #   define STAT_UNLOCK() do {} while (0)
 #endif
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-#	define POOL_MTX_LOCK()	do { g_static_mutex_lock (&pool->mtx); } while (0)
-#	define POOL_MTX_UNLOCK()	do { g_static_mutex_unlock (&pool->mtx); } while (0)
-#else
-#	define POOL_MTX_LOCK()	do { g_mutex_lock (&pool->mtx); } while (0)
-#	define POOL_MTX_UNLOCK()	do { g_mutex_unlock (&pool->mtx); } while (0)
-#endif
+#define POOL_MTX_LOCK()	do { rspamd_mutex_lock (pool->mtx); } while (0)
+#define POOL_MTX_UNLOCK()	do { rspamd_mutex_unlock (pool->mtx); } while (0)
 
 /* 
  * This define specify whether we should check all pools for free space for new object
@@ -200,11 +196,7 @@ memory_pool_new (gsize size)
 	new->destructors = NULL;
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_static_mutex_init (&new->mtx);
-#else
-	g_mutex_init (&new->mtx);
-#endif
+	new->mtx = rspamd_mutex_new ();
 
 	mem_pool_stat->pools_allocated++;
 
@@ -620,10 +612,7 @@ memory_pool_delete (memory_pool_t * pool)
 
 	mem_pool_stat->pools_freed++;
 	POOL_MTX_UNLOCK ();
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
-	g_mutex_clear (&pool->mtx);
-#endif
-	g_slice_free (memory_pool_t, pool);
+	rspamd_mutex_free (pool->mtx);
 }
 
 void
