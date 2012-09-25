@@ -30,6 +30,7 @@ SET(LIBRSPAMDSERVERSRC
 				../src/cfg_xml.c
 				../src/dkim.c
 				../src/dns.c
+				../src/dynamic_cfg.c
 				../src/events.c
 				../src/html.c
 				../src/kvstorage.c
