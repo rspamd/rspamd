@@ -182,6 +182,7 @@ typedef double (*statfile_normalize_func)(struct config_file *cfg, long double s
 struct statfile {
 	gchar *symbol;									/**< symbol of statfile									*/
 	gchar *path; 									/**< filesystem pattern (with %r or %f)					*/
+	gchar *label;									/**< label of this statfile								*/
 	gsize size;										/**< size of statfile									*/
 	GList *sections;								/**< list of sections in statfile						*/
 	struct statfile_autolearn_params *autolearn;	/**< autolearn params									*/
@@ -198,6 +199,7 @@ struct statfile {
  */
 struct classifier_config {
     GList *statfiles;                               /**< statfiles list                                     */
+    GHashTable *labels;								/**< statfiles with labels								*/
     gchar *metric;                                  /**< metric of this classifier                          */
     struct classifier *classifier;                  /**< classifier interface                               */
 	struct tokenizer *tokenizer;					/**< tokenizer used for classifier						*/
@@ -315,6 +317,7 @@ struct config_file {
 	GList *pre_filters;								/**< list of pre-processing lua filters					*/
 	GList *post_filters;							/**< list of post-processing lua filters				*/
 	gchar *dynamic_conf;							/**< path to dynamic configuration						*/
+	GList *current_dynamic_conf;					/**< currently loaded dynamic configuration				*/
 	GHashTable* domain_settings;                    /**< settings per-domains                               */
 	GHashTable* user_settings;                      /**< settings per-user                                  */
 	gchar* domain_settings_str;						/**< string representation of settings					*/

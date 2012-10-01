@@ -484,6 +484,12 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 			},
 			{
+				"label",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct statfile, label),
+				NULL
+			},
+			{
 				"size",
 				xml_handle_size,
 				G_STRUCT_OFFSET (struct statfile, size),
@@ -1955,6 +1961,14 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 				ccf->statfiles = g_list_prepend (ccf->statfiles, st);
 				ud->cfg->statfiles = g_list_prepend (ud->cfg->statfiles, st);
 				g_hash_table_insert (ud->cfg->classifiers_symbols, st->symbol, ccf);
+				if (st->label) {
+					if (g_hash_table_lookup (ccf->labels, st->label)) {
+						msg_warn ("duplicate statfile label %s with symbol %s, ignoring", st->label, st->symbol);
+					}
+					else {
+						g_hash_table_insert (ccf->labels, st->label, st);
+					}
+				}
 				ud->section_pointer = ccf;
 				ud->parent_pointer = NULL;
 				ud->state = XML_READ_CLASSIFIER;

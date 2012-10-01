@@ -34,5 +34,12 @@
  */
 void init_dynamic_config (struct config_file *cfg);
 
+/**
+ * Dump dynamic configuration to the disk
+ * @param cfg
+ * @return
+ */
+gboolean dump_dynamic_config (struct config_file *cfg);
+
 
 #endif /* DYNAMIC_CFG_H_ */

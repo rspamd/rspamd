@@ -31,17 +31,20 @@
 LUA_FUNCTION_DEF (classifier, register_pre_callback);
 LUA_FUNCTION_DEF (classifier, register_post_callback);
 LUA_FUNCTION_DEF (classifier, get_statfiles);
+LUA_FUNCTION_DEF (classifier, get_statfile_by_label);
 
 static const struct luaL_reg    classifierlib_m[] = {
 	LUA_INTERFACE_DEF (classifier, register_pre_callback),
 	LUA_INTERFACE_DEF (classifier, register_post_callback),
 	LUA_INTERFACE_DEF (classifier, get_statfiles),
+	LUA_INTERFACE_DEF (classifier, get_statfile_by_label),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
 
 
 LUA_FUNCTION_DEF (statfile, get_symbol);
+LUA_FUNCTION_DEF (statfile, get_label);
 LUA_FUNCTION_DEF (statfile, get_path);
 LUA_FUNCTION_DEF (statfile, get_size);
 LUA_FUNCTION_DEF (statfile, is_spam);
@@ -49,6 +52,7 @@ LUA_FUNCTION_DEF (statfile, get_param);
 
 static const struct luaL_reg    statfilelib_m[] = {
 	LUA_INTERFACE_DEF (statfile, get_symbol),
+	LUA_INTERFACE_DEF (statfile, get_label),
 	LUA_INTERFACE_DEF (statfile, get_path),
 	LUA_INTERFACE_DEF (statfile, get_size),
 	LUA_INTERFACE_DEF (statfile, is_spam),
@@ -236,7 +240,7 @@ lua_classifier_register_post_callback (lua_State *L)
 	return 0;
 }
 
-/* Return table of statfiles indexed by theirs name */
+/* Return table of statfiles indexed by name */
 static gint
 lua_classifier_get_statfiles (lua_State *L)
 {
@@ -267,6 +271,28 @@ lua_classifier_get_statfiles (lua_State *L)
 	return 1;
 }
 
+/* Get statfile with specified label */
+static gint
+lua_classifier_get_statfile_by_label (lua_State *L)
+{
+	struct classifier_config       *ccf = lua_check_classifier (L);
+	struct statfile                *st, **pst;
+	const gchar					   *label;
+
+	label = luaL_checkstring (L, 2);
+	if (ccf && label) {
+		st = g_hash_table_lookup (ccf->labels, label);
+		if (st) {
+			pst = lua_newuserdata (L, sizeof (struct statfile *));
+			lua_setclass (L, "rspamd{statfile}", -1);
+			*pst = st;
+			return 1;
+		}
+	}
+	lua_pushnil (L);
+	return 1;
+}
+
 /* Statfile functions */
 static gint
 lua_statfile_get_symbol (lua_State *L)
@@ -275,6 +301,21 @@ lua_statfile_get_symbol (lua_State *L)
 
 	if (st != NULL) {
 		lua_pushstring (L, st->symbol);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_statfile_get_label (lua_State *L)
+{
+	struct statfile                *st = lua_check_statfile (L);
+
+	if (st != NULL && st->label != NULL) {
+		lua_pushstring (L, st->label);
 	}
 	else {
 		lua_pushnil (L);

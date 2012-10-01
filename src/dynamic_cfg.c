@@ -233,6 +233,7 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		return;
 	}
 
+	jb->cfg->current_dynamic_conf = NULL;
 	dynamic_cfg_free (jb->config_metrics);
 	jb->config_metrics = NULL;
 
@@ -301,6 +302,8 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	 */
 	apply_dynamic_conf (jb->config_metrics, jb->cfg);
 
+	jb->cfg->current_dynamic_conf = jb->config_metrics;
+
 	json_decref (js);
 }
 
@@ -339,3 +342,152 @@ init_dynamic_config (struct config_file *cfg)
 	}
 }
 
+static gboolean
+dump_dynamic_list (gint fd, GList *rules)
+{
+	GList								*cur, *cur_elt;
+	struct dynamic_cfg_metric			*metric;
+	struct dynamic_cfg_symbol			*sym;
+	struct dynamic_cfg_action			*act;
+	FILE								*f;
+
+	/* Open buffered stream for the descriptor */
+	if ((f = fdopen (fd, "a+")) == NULL) {
+		msg_err ("fdopen failed: %s", strerror (errno));
+		return FALSE;
+	}
+
+
+	if (rules) {
+		fprintf (f, "[\n");
+		cur = rules;
+		while (cur) {
+			metric = cur->data;
+			fprintf (f, "{\n\"metric\": \"%s\"\n", metric->name);
+			if (metric->symbols) {
+				fprintf (f, "  \"symbols\": [\n");
+				cur_elt = metric->symbols;
+				while (cur_elt) {
+					sym = cur_elt->data;
+					cur_elt = g_list_next (cur_elt);
+					if (cur_elt) {
+						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f},\n", sym->name, sym->value);
+					}
+					else {
+						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f}\n", sym->name, sym->value);
+					}
+				}
+				if (metric->actions) {
+					fprintf (f, "  ],\n");
+				}
+				else {
+					fprintf (f, "  ]\n");
+				}
+			}
+
+			if (metric->actions) {
+				cur_elt = metric->actions;
+				fprintf (f, "  \"actions\": [\n");
+				while (cur_elt) {
+					act = cur_elt->data;
+					cur_elt = g_list_next (cur_elt);
+					if (cur_elt) {
+						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f},\n", str_action_metric (act->action), act->value);
+					}
+					else {
+						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f}\n", str_action_metric (act->action), act->value);
+					}
+				}
+				fprintf (f, "  ]\n");
+			}
+			cur = g_list_next (cur);
+			if (cur) {
+				fprintf (f, "},\n");
+			}
+			else {
+				fprintf (f, "}\n]\n");
+			}
+		}
+	}
+	fclose (f);
+
+	return TRUE;
+}
+
+/**
+ * Dump dynamic configuration to the disk
+ * @param cfg
+ * @return
+ */
+gboolean
+dump_dynamic_config (struct config_file *cfg)
+{
+	struct stat							 st;
+	gchar								*dir, pathbuf[PATH_MAX];
+	gint								 fd;
+
+	if (cfg->dynamic_conf == NULL || cfg->current_dynamic_conf == NULL) {
+		/* No dynamic conf has been specified, so do not try to dump it */
+		return FALSE;
+	}
+
+	if (stat (cfg->dynamic_conf, &st) == -1) {
+		msg_warn ("%s is unavailable: %s", cfg->dynamic_conf, strerror (errno));
+		return FALSE;
+	}
+	if (access (cfg->dynamic_conf, W_OK | R_OK) == -1) {
+		msg_warn ("%s is inaccessible: %s", cfg->dynamic_conf, strerror (errno));
+		return FALSE;
+	}
+
+	dir = g_path_get_dirname (cfg->dynamic_conf);
+	if (dir == NULL) {
+		/* Inaccessible path */
+		if (dir != NULL) {
+			g_free (dir);
+		}
+		msg_err ("invalid file: %s", cfg->dynamic_conf);
+		return FALSE;
+	}
+
+	rspamd_snprintf (pathbuf, sizeof (pathbuf), "%s%crconf-XXXXXX", dir, G_DIR_SEPARATOR);
+#ifdef HAVE_MKSTEMP
+	/* Umask is set before */
+	fd = mkstemp (pathbuf);
+#else
+	fd = g_mkstemp_full (pathbuf, O_RDWR, S_IWUSR | S_IRUSR);
+#endif
+	if (fd == -1) {
+		msg_err ("mkstemp error: %s", strerror (errno));
+
+		return FALSE;
+	}
+
+	if (!dump_dynamic_list (fd, cfg->current_dynamic_conf)) {
+		close (fd);
+		unlink (pathbuf);
+		return FALSE;
+	}
+
+	if (unlink (cfg->dynamic_conf) == -1) {
+		msg_err ("unlink error: %s", strerror (errno));
+		close (fd);
+		unlink (pathbuf);
+		return FALSE;
+	}
+
+	/* Rename old config */
+	if (rename (pathbuf, cfg->dynamic_conf) == -1) {
+		msg_err ("unlink error: %s", strerror (errno));
+		close (fd);
+		unlink (pathbuf);
+		return FALSE;
+	}
+	/* Set permissions */
+	if (chmod (cfg->dynamic_conf, st.st_mode) == -1) {
+		msg_warn ("chmod failed: %s", strerror (errno));
+	}
+
+	close (fd);
+	return TRUE;
+}
