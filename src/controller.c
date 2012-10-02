@@ -37,6 +37,7 @@
 #include "binlog.h"
 #include "statfile_sync.h"
 #include "lua/lua_common.h"
+#include "dynamic_cfg.h"
 
 #define END "END" CRLF
 
@@ -72,7 +73,9 @@ enum command_type {
 	COMMAND_SYNC,
 	COMMAND_WEIGHTS,
 	COMMAND_GET,
-	COMMAND_POST
+	COMMAND_POST,
+	COMMAND_ADD_SYMBOL,
+	COMMAND_ADD_ACTION
 };
 
 struct controller_command {
@@ -110,7 +113,9 @@ static struct controller_command commands[] = {
 	{"learn_spam", TRUE, COMMAND_LEARN_SPAM},
 	{"learn_ham", TRUE, COMMAND_LEARN_HAM},
 	{"get", FALSE, COMMAND_GET},
-	{"post", FALSE, COMMAND_POST}
+	{"post", FALSE, COMMAND_POST},
+	{"add_symbol", TRUE, COMMAND_ADD_SYMBOL},
+	{"add_action", TRUE, COMMAND_ADD_ACTION}
 };
 
 static GList                   *custom_commands = NULL;
@@ -500,6 +505,114 @@ process_stat_command (struct controller_session *session)
 	}
 	else {
 		return restful_write_reply (200, NULL, out_buf, r, session->dispatcher);
+	}
+}
+
+static gboolean
+process_dynamic_conf_command (gchar **cmd_args, struct controller_session *session, gboolean is_action)
+{
+	struct config_file			   *cfg = session->cfg;
+	gchar						   *arg, *metric, *name, *err_str;
+	gdouble						    value;
+	gboolean						res;
+
+	if (cfg->dynamic_conf == NULL) {
+		if (!session->restful) {
+			return rspamd_dispatcher_write (session->dispatcher, "dynamic config is not specified" CRLF, 0, FALSE, TRUE);
+		}
+		else {
+			return restful_write_reply (500, "dynamic config is not specified", NULL, 0, session->dispatcher);
+		}
+	}
+
+	if (session->restful) {
+		if ((arg = g_hash_table_lookup (session->kwargs, "metric")) == NULL) {
+			metric = DEFAULT_METRIC;
+		}
+		else {
+			metric = arg;
+		}
+		if ((arg = g_hash_table_lookup (session->kwargs, "name")) == NULL) {
+			goto invalid_arguments;
+		}
+		name = arg;
+		if ((arg = g_hash_table_lookup (session->kwargs, "value")) == NULL) {
+			goto invalid_arguments;
+		}
+		value = strtod (arg, &err_str);
+		if (err_str && *err_str != '\0') {
+			msg_info ("double value is invalid: %s", arg);
+			goto invalid_arguments;
+		}
+	}
+	else {
+		if (cmd_args[0] == NULL || cmd_args[1] == NULL) {
+			goto invalid_arguments;
+		}
+		if (cmd_args[2] == NULL) {
+			metric = DEFAULT_METRIC;
+			name = cmd_args[0];
+			arg = cmd_args[1];
+			value = strtod (arg, &err_str);
+			if (err_str && *err_str != '\0') {
+				msg_info ("double value is invalid: %s", arg);
+				goto invalid_arguments;
+			}
+		}
+		else {
+			metric = cmd_args[0];
+			name = cmd_args[1];
+			arg = cmd_args[2];
+			value = strtod (arg, &err_str);
+			if (err_str && *err_str != '\0') {
+				msg_info ("double value is invalid: %s", arg);
+				goto invalid_arguments;
+			}
+		}
+	}
+
+	if (is_action) {
+		res = add_dynamic_action (cfg, metric, name, value);
+	}
+	else {
+		res = add_dynamic_symbol (cfg, metric, name, value);
+	}
+
+	if (res) {
+
+		res = dump_dynamic_config (cfg);
+		if (res) {
+			if (!session->restful) {
+				return rspamd_dispatcher_write (session->dispatcher, "OK" CRLF, 0, FALSE, TRUE);
+			}
+			else {
+				return restful_write_reply (200, "OK", NULL, 0, session->dispatcher);
+			}
+		}
+		else {
+			if (!session->restful) {
+				return rspamd_dispatcher_write (session->dispatcher, "Error dumping dynamic config" CRLF, 0, FALSE, TRUE);
+			}
+			else {
+				return restful_write_reply (500, "Error dumping dynamic config", NULL, 0, session->dispatcher);
+			}
+		}
+	}
+	else {
+		if (!session->restful) {
+			return rspamd_dispatcher_write (session->dispatcher, "Cannot add dynamic rule" CRLF, 0, FALSE, TRUE);
+		}
+		else {
+			return restful_write_reply (500, "Cannot add dynamic rule", NULL, 0, session->dispatcher);
+		}
+	}
+
+invalid_arguments:
+	if (!session->restful) {
+		return rspamd_dispatcher_write (session->dispatcher, "Invalid arguments" CRLF, 0, FALSE, TRUE);
+	}
+	else {
+		return restful_write_reply (500, "Invalid arguments", NULL, 0, session->dispatcher);
 	}
 }
 
@@ -942,6 +1055,16 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		break;
 	case COMMAND_COUNTERS:
 		rspamd_hash_foreach (rspamd_main->counters, counter_write_callback, session);
+		break;
+	case COMMAND_ADD_ACTION:
+		if (check_auth (cmd, session)) {
+			return process_dynamic_conf_command (cmd_args, session, TRUE);
+		}
+		break;
+	case COMMAND_ADD_SYMBOL:
+		if (check_auth (cmd, session)) {
+			return process_dynamic_conf_command (cmd_args, session, FALSE);
+		}
 		break;
 	}
 	return TRUE;

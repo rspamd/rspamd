@@ -761,7 +761,7 @@ file_callback (gint fd, short what, void *ud)
 	map->tv.tv_usec = 0;
 	evtimer_add (&map->ev, &map->tv);
 
-	if (stat (data->filename, &st) != -1 && st.st_mtime > data->st.st_mtime) {
+	if (stat (data->filename, &st) != -1 && (st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
 		/* File was modified since last check */
 		memcpy (&data->st, &st, sizeof (struct stat));
 	}
@@ -909,6 +909,7 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 {
 	GList                          *cur = cfg->maps;
 	struct rspamd_map              *map;
+	struct file_map_data           *fdata;
 
 	/* First of all do synced read of data */
 	while (cur) {
@@ -918,7 +919,11 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 			evtimer_set (&map->ev, file_callback, map);
 			event_base_set (map->ev_base, &map->ev);
 			/* Read initial data */
-			read_map_file (map, map->map_data);
+			fdata = map->map_data;
+			if (fdata->st.st_mtime != -1) {
+				/* Do not try to read non-existent file */
+				read_map_file (map, map->map_data);
+			}
 			/* Plan event with jitter */
 			map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ()) / 2.;
 			map->tv.tv_usec = 0;
@@ -986,7 +991,7 @@ add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback,
 	struct file_map_data           *fdata;
 	struct http_map_data           *hdata;
 	gchar                           portbuf[6];
-	gint                            i, s, fd;
+	gint                            i, s;
 	struct hostent                 *hent;
 
 	/* First of all detect protocol line */
@@ -1006,13 +1011,21 @@ add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback,
 
 	/* Now check for each proto separately */
 	if (proto == PROTO_FILE) {
-		if ((fd = open (def, O_RDONLY)) == -1) {
-			msg_warn ("cannot open file '%s': %s", def, strerror (errno));
-			return FALSE;
-		}
 		fdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
+		if (access (def, R_OK) == -1) {
+			if (errno != ENOENT) {
+				msg_err ("cannot open file '%s': %s", def, strerror (errno));
+				return FALSE;
+
+			}
+			msg_info ("map '%s' is not found, but it can be loaded automatically later", def);
+			/* We still can add this file */
+			fdata->st.st_mtime = -1;
+		}
+		else {
+			stat (def, &fdata->st);
+		}
 		fdata->filename = memory_pool_strdup (cfg->map_pool, def);
-		fstat (fd, &fdata->st);
 		new_map->map_data = fdata;
 	}
 	else if (proto == PROTO_HTTP) {

@@ -156,6 +156,7 @@ json_config_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_c
 		jb->cfg = ((struct config_json_buf *)data->prev_data)->cfg;
 		jb->buf = NULL;
 		jb->pos = NULL;
+		jb->config_metrics = NULL;
 		data->cur_data = jb;
 	}
 	else {
@@ -246,9 +247,9 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			continue;
 		}
 
-		cur_nm = json_object_get (cur_elt, "name");
+		cur_nm = json_object_get (cur_elt, "metric");
 		if (!cur_nm || !json_is_string (cur_nm)) {
-			msg_err ("loaded json array element has no 'name' attribute");
+			msg_err ("loaded json metric object element has no 'metric' attribute");
 			continue;
 		}
 		cur_metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
@@ -266,6 +267,9 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 						cur_symbol->value = json_number_value (json_object_get (it_val, "value"));
 						/* Insert symbol */
 						cur_metric->symbols = g_list_prepend (cur_metric->symbols, cur_symbol);
+					}
+					else {
+						msg_info ("json symbol object has no mandatory 'name' and 'value' attributes");
 					}
 				}
 			}
@@ -289,6 +293,9 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 						cur_action->value = json_number_value (json_object_get (it_val, "value"));
 						/* Insert action */
 						cur_metric->actions = g_list_prepend (cur_metric->actions, cur_action);
+					}
+					else {
+						msg_info ("json symbol object has no mandatory 'name' and 'value' attributes");
 					}
 				}
 			}
@@ -314,7 +321,6 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 void
 init_dynamic_config (struct config_file *cfg)
 {
-	struct stat							 st;
 	struct config_json_buf				*jb, **pjb;
 
 	if (cfg->dynamic_conf == NULL) {
@@ -322,17 +328,8 @@ init_dynamic_config (struct config_file *cfg)
 		return;
 	}
 
-	if (stat (cfg->dynamic_conf, &st) == -1) {
-		msg_warn ("%s is unavailable: %s", cfg->dynamic_conf, strerror (errno));
-		return;
-	}
-	if (access (cfg->dynamic_conf, W_OK | R_OK) == -1) {
-		msg_warn ("%s is inaccessible: %s", cfg->dynamic_conf, strerror (errno));
-		return;
-	}
-
 	/* Now try to add map with json data */
-	jb = g_malloc (sizeof (struct config_json_buf));
+	jb = g_malloc0 (sizeof (struct config_json_buf));
 	pjb = g_malloc (sizeof (struct config_json_buf *));
 	jb->buf = NULL;
 	jb->cfg = cfg;
@@ -363,7 +360,7 @@ dump_dynamic_list (gint fd, GList *rules)
 		cur = rules;
 		while (cur) {
 			metric = cur->data;
-			fprintf (f, "{\n\"metric\": \"%s\"\n", metric->name);
+			fprintf (f, "{\n  \"metric\": \"%s\",\n", metric->name);
 			if (metric->symbols) {
 				fprintf (f, "  \"symbols\": [\n");
 				cur_elt = metric->symbols;
@@ -371,10 +368,10 @@ dump_dynamic_list (gint fd, GList *rules)
 					sym = cur_elt->data;
 					cur_elt = g_list_next (cur_elt);
 					if (cur_elt) {
-						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f},\n", sym->name, sym->value);
+						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f},\n", sym->name, sym->value);
 					}
 					else {
-						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f}\n", sym->name, sym->value);
+						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f}\n", sym->name, sym->value);
 					}
 				}
 				if (metric->actions) {
@@ -392,10 +389,10 @@ dump_dynamic_list (gint fd, GList *rules)
 					act = cur_elt->data;
 					cur_elt = g_list_next (cur_elt);
 					if (cur_elt) {
-						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f},\n", str_action_metric (act->action), act->value);
+						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f},\n", str_action_metric (act->action), act->value);
 					}
 					else {
-						fprintf (f, "    {\"name\": \"%s\",\n\"value\": %.2f}\n", str_action_metric (act->action), act->value);
+						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f}\n", str_action_metric (act->action), act->value);
 					}
 				}
 				fprintf (f, "  ]\n");
@@ -431,15 +428,6 @@ dump_dynamic_config (struct config_file *cfg)
 		return FALSE;
 	}
 
-	if (stat (cfg->dynamic_conf, &st) == -1) {
-		msg_warn ("%s is unavailable: %s", cfg->dynamic_conf, strerror (errno));
-		return FALSE;
-	}
-	if (access (cfg->dynamic_conf, W_OK | R_OK) == -1) {
-		msg_warn ("%s is inaccessible: %s", cfg->dynamic_conf, strerror (errno));
-		return FALSE;
-	}
-
 	dir = g_path_get_dirname (cfg->dynamic_conf);
 	if (dir == NULL) {
 		/* Inaccessible path */
@@ -450,7 +438,17 @@ dump_dynamic_config (struct config_file *cfg)
 		return FALSE;
 	}
 
+	if (stat (cfg->dynamic_conf, &st) == -1) {
+		msg_debug ("%s is unavailable: %s", cfg->dynamic_conf, strerror (errno));
+		st.st_mode = S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH;
+	}
+	if (access (dir, W_OK | R_OK) == -1) {
+		msg_warn ("%s is inaccessible: %s", dir, strerror (errno));
+		g_free (dir);
+		return FALSE;
+	}
 	rspamd_snprintf (pathbuf, sizeof (pathbuf), "%s%crconf-XXXXXX", dir, G_DIR_SEPARATOR);
+	g_free (dir);
 #ifdef HAVE_MKSTEMP
 	/* Umask is set before */
 	fd = mkstemp (pathbuf);
@@ -469,25 +467,160 @@ dump_dynamic_config (struct config_file *cfg)
 		return FALSE;
 	}
 
-	if (unlink (cfg->dynamic_conf) == -1) {
-		msg_err ("unlink error: %s", strerror (errno));
-		close (fd);
-		unlink (pathbuf);
-		return FALSE;
-	}
+	(void)unlink (cfg->dynamic_conf);
 
 	/* Rename old config */
 	if (rename (pathbuf, cfg->dynamic_conf) == -1) {
-		msg_err ("unlink error: %s", strerror (errno));
+		msg_err ("rename error: %s", strerror (errno));
 		close (fd);
 		unlink (pathbuf);
 		return FALSE;
 	}
 	/* Set permissions */
+
 	if (chmod (cfg->dynamic_conf, st.st_mode) == -1) {
 		msg_warn ("chmod failed: %s", strerror (errno));
 	}
 
 	close (fd);
+	return TRUE;
+}
+
+/**
+ * Add symbol for specified metric
+ * @param cfg config file object
+ * @param metric metric's name
+ * @param symbol symbol's name
+ * @param value value of symbol
+ * @return
+ */
+gboolean
+add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gchar *symbol, gdouble value)
+{
+	GList								*cur;
+	struct dynamic_cfg_metric			*metric = NULL;
+	struct dynamic_cfg_symbol			*sym;
+
+	if (cfg->dynamic_conf == NULL) {
+		msg_info ("dynamic conf is disabled");
+		return FALSE;
+	}
+
+	cur = cfg->current_dynamic_conf;
+	while (cur) {
+		metric = cur->data;
+		if (g_ascii_strcasecmp (metric->name, metric_name) == 0) {
+			break;
+		}
+		metric = NULL;
+		cur = g_list_next (cur);
+	}
+
+	if (metric != NULL) {
+		/* Search for a symbol */
+		cur = metric->symbols;
+		while (cur) {
+			sym = cur->data;
+			if (g_ascii_strcasecmp (sym->name, symbol) == 0) {
+				sym->value = value;
+				break;
+			}
+			sym = NULL;
+			cur = g_list_next (cur);
+		}
+		if (sym == NULL) {
+			/* Symbol not found, insert it */
+			sym = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
+			sym->name = g_strdup (symbol);
+			sym->value = value;
+			metric->symbols = g_list_prepend (metric->symbols, sym);
+		}
+	}
+	else {
+		/* Metric not found, create it */
+		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
+		sym = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
+		sym->name = g_strdup (symbol);
+		sym->value = value;
+		metric->symbols = g_list_prepend (metric->symbols, sym);
+		metric->name = g_strdup (metric_name);
+		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
+	}
+
+	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
+
+	return TRUE;
+}
+
+
+/**
+ * Add action for specified metric
+ * @param cfg config file object
+ * @param metric metric's name
+ * @param action action's name
+ * @param value value of symbol
+ * @return
+ */
+gboolean
+add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gchar *action, gdouble value)
+{
+	GList								*cur;
+	struct dynamic_cfg_metric			*metric = NULL;
+	struct dynamic_cfg_action			*act;
+	gint								 real_act;
+
+	if (cfg->dynamic_conf == NULL) {
+		msg_info ("dynamic conf is disabled");
+		return FALSE;
+	}
+
+	if (!check_action_str (action, &real_act)) {
+		msg_info ("invalid action string: %s", action);
+		return FALSE;
+	}
+
+	cur = cfg->current_dynamic_conf;
+	while (cur) {
+		metric = cur->data;
+		if (g_ascii_strcasecmp (metric->name, metric_name) == 0) {
+			break;
+		}
+		metric = NULL;
+		cur = g_list_next (cur);
+	}
+
+	if (metric != NULL) {
+		/* Search for a symbol */
+		cur = metric->symbols;
+		while (cur) {
+			act = cur->data;
+			if ((gint)act->action == real_act) {
+				act->value = value;
+				break;
+			}
+			act = NULL;
+			cur = g_list_next (cur);
+		}
+		if (act == NULL) {
+			/* Action not found, insert it */
+			act = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
+			act->action = real_act;
+			act->value = value;
+			metric->actions = g_list_prepend (metric->symbols, act);
+		}
+	}
+	else {
+		/* Metric not found, create it */
+		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
+		act = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
+		act->action = real_act;
+		act->value = value;
+		metric->actions = g_list_prepend (metric->symbols, act);
+		metric->name = g_strdup (metric_name);
+		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
+	}
+
+	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
+
 	return TRUE;
 }

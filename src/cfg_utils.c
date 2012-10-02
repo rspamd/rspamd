@@ -34,6 +34,7 @@
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"
 #include "map.h"
+#include "dynamic_cfg.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -733,6 +734,7 @@ post_load_config (struct config_file *cfg)
 
 	/* Lua options */
 	(void)lua_post_load_config (cfg);
+	init_dynamic_config (cfg);
 }
 
 #if 0

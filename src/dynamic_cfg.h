@@ -41,5 +41,26 @@ void init_dynamic_config (struct config_file *cfg);
  */
 gboolean dump_dynamic_config (struct config_file *cfg);
 
+/**
+ * Add symbol for specified metric
+ * @param cfg config file object
+ * @param metric metric's name
+ * @param symbol symbol's name
+ * @param value value of symbol
+ * @return
+ */
+gboolean add_dynamic_symbol (struct config_file *cfg, const gchar *metric, const gchar *symbol, gdouble value);
+
+
+/**
+ * Add action for specified metric
+ * @param cfg config file object
+ * @param metric metric's name
+ * @param action action's name
+ * @param value value of symbol
+ * @return
+ */
+gboolean add_dynamic_action (struct config_file *cfg, const gchar *metric, const gchar *action, gdouble value);
+
 
 #endif /* DYNAMIC_CFG_H_ */

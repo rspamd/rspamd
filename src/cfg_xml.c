@@ -312,6 +312,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, map_timeout),
 				NULL
 			},
+			{
+				"dynamic_conf",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, dynamic_conf),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR
