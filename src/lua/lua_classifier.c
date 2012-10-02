@@ -278,14 +278,23 @@ lua_classifier_get_statfile_by_label (lua_State *L)
 	struct classifier_config       *ccf = lua_check_classifier (L);
 	struct statfile                *st, **pst;
 	const gchar					   *label;
+	GList						   *cur;
+	gint							i;
 
 	label = luaL_checkstring (L, 2);
 	if (ccf && label) {
-		st = g_hash_table_lookup (ccf->labels, label);
-		if (st) {
-			pst = lua_newuserdata (L, sizeof (struct statfile *));
-			lua_setclass (L, "rspamd{statfile}", -1);
-			*pst = st;
+		cur = g_hash_table_lookup (ccf->labels, label);
+		if (cur) {
+			lua_newtable (L);
+			i = 1;
+			while (cur) {
+				st = cur->data;
+				pst = lua_newuserdata (L, sizeof (struct statfile *));
+				lua_setclass (L, "rspamd{statfile}", -1);
+				*pst = st;
+				lua_rawseti (L, -2, i++);
+				cur = g_list_next (cur);
+			}
 			return 1;
 		}
 	}

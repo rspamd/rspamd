@@ -1907,6 +1907,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 	gpointer                    tptr;
 	struct wrk_cbdata           wcd;
 	struct xml_subparser       *subparser;
+	GList					   *labels;
 	
 	if (g_ascii_strcasecmp (element_name, "if") == 0) {
 		tptr = g_queue_pop_head (ud->if_stack);
@@ -1962,11 +1963,11 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 				ud->cfg->statfiles = g_list_prepend (ud->cfg->statfiles, st);
 				g_hash_table_insert (ud->cfg->classifiers_symbols, st->symbol, ccf);
 				if (st->label) {
-					if (g_hash_table_lookup (ccf->labels, st->label)) {
-						msg_warn ("duplicate statfile label %s with symbol %s, ignoring", st->label, st->symbol);
+					if ((labels = g_hash_table_lookup (ccf->labels, st->label))) {
+						labels = g_list_append (labels, st);
 					}
 					else {
-						g_hash_table_insert (ccf->labels, st->label, st);
+						g_hash_table_insert (ccf->labels, st->label, g_list_prepend (NULL, st));
 					}
 				}
 				ud->section_pointer = ccf;

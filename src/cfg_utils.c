@@ -827,7 +827,7 @@ check_classifier_conf (struct config_file *cfg, struct classifier_config *c)
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
 	}
 	if (c->labels == NULL) {
-		c->labels = g_hash_table_new (g_str_hash, g_str_equal);
+		c->labels = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)g_list_free);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->labels);
 	}
 
