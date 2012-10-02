@@ -4,8 +4,9 @@ rspamc - a simple client for rspamd spam filtering system
 
 =head1 SYNOPSIS
 
-rspamc [B<-h> I<host[:port]>] [B<-p>] [B<-v>]
-[B<-i> I<ip>] [B<-s> I<statfile>] [B<-w> I<weight>]
+rspamc [B<-h> I<host[:port]>] [B<-p>] [B<-v>] [B<-b> I<bind_address>] [B<-u> I<user>]
+[B<-F> I<from>] [B<-r> I<rcpt>] [B<-d> I<deliver-to>]
+[B<-i> I<ip>] [B<-c> I<classifier>] [B<-w> I<weight>]
 [B<-P> I<password>] [B<-f> I<flag>] [B<-t> I<timeout>] [command] [file [file ...]] 
 
 rspamc [B<--help>]
@@ -23,6 +24,28 @@ B<Rspamc> has several mandatory options for learning: I<password> and I<statfile
 
 Specify host and port for connecting to rspamd server. Default host is I<localhost> and
 default port is I<11333> for checking messages and I<11334> for learning and statistic. 
+Also it is possible to specify a unix socket for all operations (for example:
+B<rspamc> B<-h> /path/to/soket)
+
+=item B<-b> I<local_ip>, B<--bind> I<local_ip>
+
+Specify explicit IP address to bind a client for operations.
+
+=item B<-u> I<user>, B<--user> I<user>
+
+Specify username for connection with rspamd server.
+
+=item B<-F> I<from_addr>, B<--from> I<from_addr>
+
+Specify SMTP FROM address for connection with rspamd server.
+
+=item B<-r> I<rcpt_addr>, B<--rcpt> I<rcpt_addr>
+
+Specify SMTP RCPT TO address for connection with rspamd server.
+
+=item B<-d> I<deliver_addr>, B<--deliver> I<deliver_addr>
+
+Specify real delivery address for connection with rspamd server.
 
 =item B<-p>, B<--pass-all>
 
@@ -36,9 +59,9 @@ Be more verbose while displaying results. For example show descriptions of symbo
 
 Specify controller's password. Mandatory option for learning.
 
-=item B<-s> I<statfile>, B<--statfile> I<statfile>
+=item B<-c> I<classifier>, B<--classifier> I<classifier>
 
-Specify statfile's symbol to learn message. Mandatory option for learning.
+Specify classifier to learn message. Mandatory option for learning. Bayes classifier is used by default if this option is omitted.
 
 =item B<-i> I<ip>, B<--ip> I<ip>
 
@@ -75,7 +98,7 @@ Check files:
 	
 Learn files:
 
-	rspamc -P pass -s BAYES_SPAM file1 file2 file3
+	rspamc -P pass learn_spam file1 file2 file3
 
 Add fuzzy hash to set 2:
 	
@@ -93,13 +116,21 @@ Get uptime:
 	
 	rspamc uptime
 
+Add custom rule's weight:
+
+	rspamc add_symbol test 1.5
+	
+Add custom action's weight:
+
+    rspamc add_action reject 7.1
+
 =head1 AUTHOR
 
 Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2011 by Vsevolod Stakhov <vsevolod@highsecure.ru>.
+Copyright 2011-2012 by Vsevolod Stakhov <vsevolod@highsecure.ru>.
 
 This program is free software; you may redistribute it and/or modify it
 under the terms of BSD license.

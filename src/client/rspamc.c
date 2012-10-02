@@ -38,7 +38,7 @@ static gchar                   *from = NULL;
 static gchar                   *deliver_to = NULL;
 static gchar                   *rcpt = NULL;
 static gchar                   *user = NULL;
-static gchar                   *classifier = NULL;
+static gchar                   *classifier = "bayes";
 static gchar                   *local_addr = NULL;
 static gint                     weight = 1;
 static gint                     flag;
@@ -75,7 +75,9 @@ enum rspamc_command {
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_STAT,
-	RSPAMC_COMMAND_UPTIME
+	RSPAMC_COMMAND_UPTIME,
+	RSPAMC_COMMAND_ADD_SYMBOL,
+	RSPAMC_COMMAND_ADD_ACTION
 };
 
 /*
@@ -130,6 +132,12 @@ check_rspamc_command (const gchar *cmd)
 	}
 	else if (g_ascii_strcasecmp (cmd, "UPTIME") == 0) {
 		return RSPAMC_COMMAND_UPTIME;
+	}
+	else if (g_ascii_strcasecmp (cmd, "ADD_SYMBOL") == 0) {
+		return RSPAMC_COMMAND_ADD_SYMBOL;
+	}
+	else if (g_ascii_strcasecmp (cmd, "ADD_ACTION") == 0) {
+		return RSPAMC_COMMAND_ADD_ACTION;
 	}
 
 	return RSPAMC_COMMAND_UNKNOWN;
@@ -379,6 +387,8 @@ scan_rspamd_file (const gchar *file)
 	struct rspamd_result            *res;
 	GHashTable                      *opts;
 
+	/* Add server */
+	add_rspamd_server (FALSE);
 	/* Init options hash */
 	opts = g_hash_table_new (g_str_hash, g_str_equal);
 	add_options (opts);
@@ -470,6 +480,8 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 		exit (EXIT_FAILURE);
 	}
 
+	/* Add server */
+	add_rspamd_server (TRUE);
 	params = g_hash_table_new (g_str_hash, g_str_equal);
 	g_hash_table_insert (params, "Classifier", classifier);
 
@@ -573,6 +585,9 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 	gchar							 valuebuf[sizeof("65535")], flagbuf[sizeof("65535")];
 	struct rspamd_controller_result	*res;
 
+	/* Add server */
+	add_rspamd_server (TRUE);
+
 	params = g_hash_table_new (g_str_hash, g_str_equal);
 	rspamd_snprintf (valuebuf, sizeof (valuebuf), "%d", weight);
 	rspamd_snprintf (flagbuf, sizeof (flagbuf), "%d", flag);
@@ -609,16 +624,15 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 }
 
 static void
-rspamd_do_controller_simple_command (gchar *command)
+rspamd_do_controller_simple_command (gchar *command, GHashTable *kwattrs)
 {
 	GError                          *err = NULL;
 	GList							*results, *cur;
 	struct rspamd_controller_result	*res;
-
 	/* Add server */
 	add_rspamd_server (TRUE);
 
-	results = rspamd_controller_command_simple (client, command, password, NULL, &err);
+	results = rspamd_controller_command_simple (client, command, password, kwattrs, &err);
 	if (results == NULL || err != NULL) {
 		if (err != NULL) {
 			fprintf (stderr, "cannot perform command: %s\n", err->message);
@@ -651,10 +665,13 @@ rspamd_do_controller_simple_command (gchar *command)
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	enum rspamc_command             cmd;
-	gint                            i;
-	struct in_addr					ina;
+	enum rspamc_command              cmd;
+	gint                             i;
+	struct in_addr					 ina;
+	GHashTable						*kwattrs;
 
+
+	kwattrs = g_hash_table_new (g_str_hash, g_str_equal);
 
 	read_cmd_line (&argc, &argv);
 
@@ -711,10 +728,10 @@ main (gint argc, gchar **argv, gchar **env)
 				fuzzy_rspamd_stdin (TRUE);
 				break;
 			case RSPAMC_COMMAND_STAT:
-				rspamd_do_controller_simple_command ("stat");
+				rspamd_do_controller_simple_command ("stat", NULL);
 				break;
 			case RSPAMC_COMMAND_UPTIME:
-				rspamd_do_controller_simple_command ("uptime");
+				rspamd_do_controller_simple_command ("uptime", NULL);
 				break;
 			default:
 				fprintf (stderr, "invalid arguments\n");
@@ -722,61 +739,69 @@ main (gint argc, gchar **argv, gchar **env)
 			}
 		}
 		else {
-			add_rspamd_server (FALSE);
 			scan_rspamd_file (argv[1]);
 		}
 	}
 	else {
 		if ((cmd = check_rspamc_command (argv[1])) != RSPAMC_COMMAND_UNKNOWN) {
 			/* In case of command read arguments starting from 2 */
-			switch (cmd) {
-			case RSPAMC_COMMAND_SYMBOLS:
-				/* Add server */
-				add_rspamd_server (FALSE);
-				break;
-			default:
-				add_rspamd_server (TRUE);
-				break;
-			}
-			for (i = 2; i < argc; i ++) {
-				if (tty) {
-					printf ("\033[1m");
-				}
-				PRINT_FUNC ("Results for file: %s\n\n", argv[i]);
-				if (tty) {
-					printf ("\033[0m");
-				}
-				switch (cmd) {
-				case RSPAMC_COMMAND_SYMBOLS:
-					scan_rspamd_file (argv[i]);
-					break;
-				case RSPAMC_COMMAND_LEARN_SPAM:
-					if (classifier != NULL) {
-						learn_rspamd_file (TRUE, argv[i]);
-					}
-					else {
-						fprintf (stderr, "no classifier specified\n");
-						exit (EXIT_FAILURE);
-					}
-					break;
-				case RSPAMC_COMMAND_LEARN_HAM:
-					if (classifier != NULL) {
-						learn_rspamd_file (FALSE, argv[i]);
-					}
-					else {
-						fprintf (stderr, "no classifier specified\n");
-						exit (EXIT_FAILURE);
-					}
-					break;
-				case RSPAMC_COMMAND_FUZZY_ADD:
-					fuzzy_rspamd_file (argv[i], FALSE);
-					break;
-				case RSPAMC_COMMAND_FUZZY_DEL:
-					fuzzy_rspamd_file (argv[i], TRUE);
-					break;
-				default:
+			if (cmd == RSPAMC_COMMAND_ADD_SYMBOL || cmd == RSPAMC_COMMAND_ADD_ACTION) {
+				if (argc < 4 || argc > 5) {
 					fprintf (stderr, "invalid arguments\n");
 					exit (EXIT_FAILURE);
+				}
+				if (argc == 5) {
+					g_hash_table_insert (kwattrs, "metric", argv[2]);
+					g_hash_table_insert (kwattrs, "name", argv[3]);
+					g_hash_table_insert (kwattrs, "value", argv[4]);
+				}
+				else {
+					g_hash_table_insert (kwattrs, "name", argv[2]);
+					g_hash_table_insert (kwattrs, "value", argv[3]);
+				}
+				rspamd_do_controller_simple_command (cmd == RSPAMC_COMMAND_ADD_SYMBOL ? "add_symbol" : "add_action", kwattrs);
+			}
+			else {
+				for (i = 2; i < argc; i ++) {
+					if (tty) {
+						printf ("\033[1m");
+					}
+					PRINT_FUNC ("Results for file: %s\n\n", argv[i]);
+					if (tty) {
+						printf ("\033[0m");
+					}
+					switch (cmd) {
+					case RSPAMC_COMMAND_SYMBOLS:
+						scan_rspamd_file (argv[i]);
+						break;
+					case RSPAMC_COMMAND_LEARN_SPAM:
+						if (classifier != NULL) {
+							learn_rspamd_file (TRUE, argv[i]);
+						}
+						else {
+							fprintf (stderr, "no classifier specified\n");
+							exit (EXIT_FAILURE);
+						}
+						break;
+					case RSPAMC_COMMAND_LEARN_HAM:
+						if (classifier != NULL) {
+							learn_rspamd_file (FALSE, argv[i]);
+						}
+						else {
+							fprintf (stderr, "no classifier specified\n");
+							exit (EXIT_FAILURE);
+						}
+						break;
+					case RSPAMC_COMMAND_FUZZY_ADD:
+						fuzzy_rspamd_file (argv[i], FALSE);
+						break;
+					case RSPAMC_COMMAND_FUZZY_DEL:
+						fuzzy_rspamd_file (argv[i], TRUE);
+						break;
+					default:
+						fprintf (stderr, "invalid arguments\n");
+						exit (EXIT_FAILURE);
+					}
 				}
 			}
 		}
@@ -788,6 +813,8 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_client_close (client);
+
+	g_hash_table_destroy (kwattrs);
 
 	return 0;
 }

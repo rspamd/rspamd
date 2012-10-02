@@ -499,7 +499,7 @@ add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gch
 {
 	GList								*cur;
 	struct dynamic_cfg_metric			*metric = NULL;
-	struct dynamic_cfg_symbol			*sym;
+	struct dynamic_cfg_symbol			*sym = NULL;
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
@@ -523,6 +523,7 @@ add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gch
 			sym = cur->data;
 			if (g_ascii_strcasecmp (sym->name, symbol) == 0) {
 				sym->value = value;
+				msg_debug ("change value of action %s to %.2f", symbol, value);
 				break;
 			}
 			sym = NULL;
@@ -534,6 +535,7 @@ add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gch
 			sym->name = g_strdup (symbol);
 			sym->value = value;
 			metric->symbols = g_list_prepend (metric->symbols, sym);
+			msg_debug ("create symbol %s in metric %s", symbol, metric_name);
 		}
 	}
 	else {
@@ -545,6 +547,7 @@ add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gch
 		metric->symbols = g_list_prepend (metric->symbols, sym);
 		metric->name = g_strdup (metric_name);
 		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
+		msg_debug ("create metric %s for symbol %s", metric_name, symbol);
 	}
 
 	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
@@ -566,7 +569,7 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gch
 {
 	GList								*cur;
 	struct dynamic_cfg_metric			*metric = NULL;
-	struct dynamic_cfg_action			*act;
+	struct dynamic_cfg_action			*act = NULL;
 	gint								 real_act;
 
 	if (cfg->dynamic_conf == NULL) {
@@ -590,12 +593,13 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gch
 	}
 
 	if (metric != NULL) {
-		/* Search for a symbol */
-		cur = metric->symbols;
+		/* Search for an action */
+		cur = metric->actions;
 		while (cur) {
 			act = cur->data;
 			if ((gint)act->action == real_act) {
 				act->value = value;
+				msg_debug ("change value of action %s to %.2f", action, value);
 				break;
 			}
 			act = NULL;
@@ -603,21 +607,23 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gch
 		}
 		if (act == NULL) {
 			/* Action not found, insert it */
-			act = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
+			act = g_slice_alloc (sizeof (struct dynamic_cfg_action));
 			act->action = real_act;
 			act->value = value;
-			metric->actions = g_list_prepend (metric->symbols, act);
+			metric->actions = g_list_prepend (metric->actions, act);
+			msg_debug ("create action %s in metric %s", action, metric_name);
 		}
 	}
 	else {
 		/* Metric not found, create it */
 		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		act = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
+		act = g_slice_alloc (sizeof (struct dynamic_cfg_action));
 		act->action = real_act;
 		act->value = value;
-		metric->actions = g_list_prepend (metric->symbols, act);
+		metric->actions = g_list_prepend (metric->actions, act);
 		metric->name = g_strdup (metric_name);
 		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
+		msg_debug ("create metric %s for action %s", metric_name, action);
 	}
 
 	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
