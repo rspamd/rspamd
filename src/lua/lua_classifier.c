@@ -247,19 +247,18 @@ lua_classifier_get_statfiles (lua_State *L)
 	struct classifier_config       *ccf = lua_check_classifier (L);
 	GList                          *cur;
 	struct statfile                *st, **pst;
+	gint							i;
 
 	if (ccf) {
 		lua_newtable (L);
 		cur = g_list_first (ccf->statfiles);
+		i = 1;
 		while (cur) {
 			st = cur->data;
-			/* t['statfile_name'] = statfile */
-			lua_pushstring (L, st->symbol);
 			pst = lua_newuserdata (L, sizeof (struct statfile *));
 			lua_setclass (L, "rspamd{statfile}", -1);
 			*pst = st;
-
-			lua_settable (L, -3);
+			lua_rawseti (L, -2, i++);
 
 			cur = g_list_next (cur);
 		}
@@ -388,7 +387,7 @@ lua_statfile_get_param (lua_State *L)
 
 	if (st != NULL && param != NULL) {
 		value = g_hash_table_lookup (st->opts, param);
-		if (param != NULL) {
+		if (value != NULL) {
 			lua_pushstring (L, value);
 			return 1;
 		}

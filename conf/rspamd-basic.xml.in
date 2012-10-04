@@ -603,6 +603,132 @@
  </statfile>
 </classifier>
 
+<!-- Advanced meta-classification statistic -->
+<!--
+<classifier type="bayes">
+ <tokenizer>osb-text</tokenizer>
+ <metric>default</metric>
+ <min_tokens>6</min_tokens>
+ <max_tokens>5000</max_tokens>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>50M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes.ham</path>
+  <spam>no</spam>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>50M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes.spam</path>
+  <spam>yes</spam>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM_RU</symbol>
+  <size>50M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_ru.ham</path>
+  <language>ru</language>
+  <spam>no</spam>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_SPAM_RU</symbol>
+  <size>50M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_ru.spam</path>
+  <language>ru</language>
+  <spam>yes</spam>
+ </statfile>
+
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_manyrcpt.spam</path>
+  <spam>yes</spam>
+  <label>many recipients</label>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_manyrcpt.ham</path>
+  <spam>no</spam>
+  <label>many recipients</label>
+ </statfile>
+
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_undisclosedrcpt.spam</path>
+  <spam>yes</spam>
+  <label>undisclosed recipients</label>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_undisclosedrcpt.ham</path>
+  <spam>no</spam>
+  <label>undisclosed recipients</label>
+ </statfile>
+
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_maillist.spam</path>
+  <spam>yes</spam>
+  <label>maillist</label>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_maillist.ham</path>
+  <spam>no</spam>
+  <label>maillist</label>
+ </statfile>
+
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_longsubject.spam</path>
+  <spam>yes</spam>
+  <label>long subject</label>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_longsubject.ham</path>
+  <spam>no</spam>
+  <label>long subject</label>
+ </statfile>
+
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_replyto.spam</path>
+  <spam>yes</spam>
+  <label>different reply to</label>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_replyto.ham</path>
+  <spam>no</spam>
+  <label>different reply to</label>
+ </statfile>
+
+ <statfile>
+  <symbol>BAYES_SPAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_replymessage.spam</path>
+  <spam>yes</spam>
+  <label>reply message</label>
+ </statfile>
+ <statfile>
+  <symbol>BAYES_HAM</symbol>
+  <size>10M</size>
+  <path>@LOCALSTATES_PREFIX@/bayes_replymessage.ham</path>
+  <spam>no</spam>
+  <label>reply message</label>
+ </statfile>
+</classifier>
+-->
+
 <!-- End of classifiers section -->
 
 <!-- Modules section -->

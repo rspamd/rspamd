@@ -415,7 +415,7 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 
 	if (file->map) {
 		msg_info ("syncing statfile %s", file->filename);
-		msync (file->map, file->len, MS_INVALIDATE | MS_SYNC);
+		msync (file->map, file->len, MS_ASYNC);
 		munmap (file->map, file->len);
 	}
 	if (file->fd != -1) {
@@ -606,7 +606,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guin
 	for (i = 0; i < CHAIN_LENGTH; i++) {
 		if (i + blocknum >= file->cur_section.length) {
 			/* Need to expire some block in chain */
-			msg_debug ("chain %u is full, starting expire", blocknum);
+			msg_info ("chain %ud is full in statfile %s, starting expire", blocknum, file->filename);
 			break;
 		}
 		/* First try to find block in chain */
@@ -617,7 +617,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guin
 		/* Check whether we have a free block in chain */
 		if (block->hash1 == 0 && block->hash2 == 0) {
 			/* Write new block here */
-			msg_debug ("found free block %u in chain %u, set h1=%u, h2=%u", i, blocknum, h1, h2);
+			msg_debug ("found free block %ud in chain %ud, set h1=%ud, h2=%ud", i, blocknum, h1, h2);
 			block->hash1 = h1;
 			block->hash2 = h2;
 			block->value = value;
@@ -880,12 +880,20 @@ statfile_pool_invalidate_callback (gint fd, short what, void *ud)
 void
 statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jitter)
 {
+	gboolean                        pending;
 
-	if (pool->invalidate_event == NULL || ! evtimer_pending (pool->invalidate_event, NULL)) {
 
-		if (pool->invalidate_event == NULL) {
-			pool->invalidate_event = memory_pool_alloc (pool->pool, sizeof (struct event));
+	if (pool->invalidate_event != NULL) {
+		pending = evtimer_pending (pool->invalidate_event, NULL);
+		if (pending) {
+			/* Replan event */
+			pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
+			pool->invalidate_tv.tv_usec = 0;
+			evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
 		}
+	}
+	else {
+		pool->invalidate_event = memory_pool_alloc (pool->pool, sizeof (struct event));
 		pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
 		pool->invalidate_tv.tv_usec = 0;
 		evtimer_set (pool->invalidate_event, statfile_pool_invalidate_callback, pool);

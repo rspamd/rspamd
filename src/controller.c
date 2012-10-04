@@ -488,11 +488,20 @@ process_stat_command (struct controller_session *session)
 				total = statfile_get_total_blocks (statfile);
 				statfile_get_revision (statfile, &rev, &ti);
 				if (total != (guint64)-1 && used != (guint64)-1) {
-					r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, 
-							"Statfile: %s (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
-							st->symbol, rev, st->size,
-							(total - used), total,
-							(double)((double)(total - used) / (double)total) * 100.);
+					if (st->label) {
+						r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r,
+								"Statfile: %s <%s> (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
+								st->symbol, st->label, rev, st->size,
+								(total - used), total,
+								(double)((double)(total - used) / (double)total) * 100.);
+					}
+					else {
+						r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r,
+								"Statfile: %s (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
+								st->symbol, rev, st->size,
+								(total - used), total,
+								(double)((double)(total - used) / (double)total) * 100.);
+					}
 				}
 			}
 			cur_st = g_list_next (cur_st);
@@ -1173,8 +1182,6 @@ fin_learn_task (void *arg)
 
 	if (task->state != WRITING_REPLY) {
 		task->state = WRITE_REPLY;
-		/* Process all statfiles */
-		process_statfiles (task);
 	}
 
 	/* Check if we have all events finished */

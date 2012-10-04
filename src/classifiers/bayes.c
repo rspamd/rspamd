@@ -391,6 +391,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	struct statfile                *st;
 	stat_file_t                    *file;
 	GList                          *cur;
+	gboolean						skip_labels;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -411,11 +412,14 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 		}
 	}
 
-	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
+	cur = call_classifier_pre_callbacks (ctx->cfg, task, TRUE, is_spam, L);
 	if (cur) {
+		skip_labels = FALSE;
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
 	}
 	else {
+		/* Do not try to learn specific statfiles if pre callback returned nil */
+		skip_labels = TRUE;
 		cur = ctx->cfg->statfiles;
 	}
 
@@ -435,7 +439,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	while (cur) {
 		/* Select statfiles to learn */
 		st = cur->data;
-		if (st->is_spam != is_spam) {
+		if (st->is_spam != is_spam || (skip_labels && st->label)) {
 			cur = g_list_next (cur);
 			continue;
 		}
@@ -460,8 +464,6 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 					msg_err ("cannot open statfile %s after creation", st->path);
 					return FALSE;
 				}
-				cur = g_list_next (cur);
-				continue;
 			}
 		}
 		data.file = file;
@@ -470,6 +472,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 		statfile_inc_revision (file);
 		statfile_pool_unlock_file (pool, data.file);
 		maybe_write_binlog (ctx->cfg, st, file, input);
+		msg_info ("increase revision for %s", st->path);
 
 		cur = g_list_next (cur);
 	}

@@ -1175,9 +1175,19 @@ rspamd_add_server (struct rspamd_client *client, const gchar *host, guint16 port
 {
 	struct rspamd_server           *new;
 	struct hostent                 *hent;
-	gint							nlen;
+	gint							nlen, i;
 
 	g_assert (client != NULL);
+
+	/* Avoid duplicates */
+	for (i = 0; i < (gint)client->servers_num; i ++) {
+		new = &client->servers[i];
+		if (new->client_port == port && new->controller_port == controller_port && strcmp (host, new->host) == 0) {
+			/* Duplicate */
+			return TRUE;
+		}
+	}
+
 	if (client->servers_num >= MAX_RSPAMD_SERVERS) {
 		if (*err == NULL) {
 			*err = g_error_new (G_RSPAMD_ERROR, 1, "Maximum number of servers reached: %d", MAX_RSPAMD_SERVERS);
