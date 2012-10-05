@@ -214,6 +214,7 @@ statfile_pool_new (memory_pool_t *pool, size_t max_size)
 	new->max = max_size;
 	new->files = memory_pool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = memory_pool_get_mutex (new->pool);
+	new->mlock_ok = TRUE;
 
 	return new;
 }
@@ -375,7 +376,14 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 
 	rspamd_strlcpy (new_file->filename, filename, sizeof (new_file->filename));
 	new_file->len = st.st_size;
-	/* Aqquire lock for this operation */
+	/* Try to lock pages in RAM */
+	if (pool->mlock_ok) {
+		if (mlock (new_file->map, new_file->len) == -1) {
+			msg_warn ("mlock of statfile failed, maybe you need to increase RLIMIT_MEMLOCK limit for a process: %s", strerror (errno));
+			pool->mlock_ok = FALSE;
+		}
+	}
+	/* Acquire lock for this operation */
 	lock_file (new_file->fd, FALSE);
 	if (statfile_pool_check (new_file) == -1) {
 		pool->opened--;
@@ -948,4 +956,22 @@ get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
     return res;
 }
 
+void
+statfile_pool_lockall (statfile_pool_t *pool)
+{
+	stat_file_t *file;
+	gint i;
+
+	if (pool->mlock_ok) {
+		for (i = 0; i < pool->opened; i ++) {
+			file = &pool->files[i];
+			if (mlock (file->map, file->len) == -1) {
+				msg_warn ("mlock of statfile failed, maybe you need to increase RLIMIT_MEMLOCK limit for a process: %s", strerror (errno));
+				pool->mlock_ok = FALSE;
+				return;
+			}
+		}
+	}
+	/* Do not try to lock if mlock failed */
+}
 

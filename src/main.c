@@ -401,6 +401,8 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		case 0:
 			/* Update pid for logging */
 			update_log_pid (cf->type, rspamd->logger);
+			/* Lock statfile pool if possible */
+			statfile_pool_lockall (rspamd->statfile_pool);
 			/* Drop privilleges */
 			drop_priv (rspamd);
 			/* Set limits */

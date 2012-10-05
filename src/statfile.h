@@ -94,6 +94,7 @@ typedef struct statfile_pool_s {
 	memory_pool_mutex_t *lock;				/**< mutex								*/
 	struct event  *invalidate_event;        /**< event for pool invalidation        */
 	struct timeval invalidate_tv;
+	gboolean mlock_ok;						/**< whether it is possible to use mlock (2) to avoid statfiles unloading */
 } statfile_pool_t;
 
 /* Forwarded declarations */
@@ -138,6 +139,12 @@ gint statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean kee
  * @param pool statfile pool object
  */
 void statfile_pool_delete (statfile_pool_t *pool);
+
+/**
+ * Try to lock all statfiles in memory
+ * @param pool statfile pool object
+ */
+void statfile_pool_lockall (statfile_pool_t *pool);
 
 /**
  * Lock specified file for exclusive use (eg. learning)
