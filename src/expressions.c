@@ -87,7 +87,7 @@ re_cache_check (const gchar *line, memory_pool_t *pool)
 	re_cache = memory_pool_get_variable (pool, "re_cache");
 
 	if (re_cache == NULL) {
-		re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+		re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
 		return NULL;
 	}
@@ -102,7 +102,7 @@ re_cache_add (const gchar *line, void *pointer, memory_pool_t *pool)
 	re_cache = memory_pool_get_variable (pool, "re_cache");
 
 	if (re_cache == NULL) {
-		re_cache = g_hash_table_new (g_str_hash, g_str_equal);
+		re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
 	}
 

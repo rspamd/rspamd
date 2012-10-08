@@ -215,14 +215,14 @@ init_defaults (struct config_file *cfg)
 	cfg->max_diff = 20480;
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
-	cfg->modules_opts = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->variables = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->metrics = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->c_modules = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->composite_symbols = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->classifiers_symbols = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->cfg_params = g_hash_table_new (g_str_hash, g_str_equal);
-	cfg->metrics_symbols = g_hash_table_new (g_str_hash, g_str_equal);
+	cfg->modules_opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->variables = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->composite_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 
@@ -825,11 +825,11 @@ check_classifier_conf (struct config_file *cfg, struct classifier_config *c)
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct classifier_config));
 	}
 	if (c->opts == NULL) {
-		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
+		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
 	}
 	if (c->labels == NULL) {
-		c->labels = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)g_list_free);
+		c->labels = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, NULL, (GDestroyNotify)g_list_free);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->labels);
 	}
 
@@ -843,7 +843,7 @@ check_statfile_conf (struct config_file *cfg, struct statfile *c)
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 	}
 	if (c->opts == NULL) {
-		c->opts = g_hash_table_new (g_str_hash, g_str_equal);
+		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
 	}
 
@@ -857,8 +857,8 @@ check_metric_conf (struct config_file *cfg, struct metric *c)
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		c->action = METRIC_ACTION_REJECT;
 		c->grow_factor = 1.0;
-		c->symbols = g_hash_table_new (g_str_hash, g_str_equal);
-		c->descriptions = g_hash_table_new (g_str_hash, g_str_equal);
+		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		c->descriptions = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->symbols);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->descriptions);
 	}
@@ -871,7 +871,7 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 {
 	if (c == NULL) {
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
-		c->params = g_hash_table_new (g_str_hash, g_str_equal);
+		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, c->params);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_queue_free, c->active_workers);

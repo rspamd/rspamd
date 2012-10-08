@@ -2310,10 +2310,10 @@ register_module_opt (const gchar *mname, const gchar *optname, enum module_opt_t
 	GHashTable                       *module;
 
 	if (module_options == NULL) {
-		module_options = g_hash_table_new (g_str_hash, g_str_equal);
+		module_options = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	}
 	if ((module = g_hash_table_lookup (module_options, mname)) == NULL) {
-		module = g_hash_table_new (g_str_hash, g_str_equal);
+		module = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		g_hash_table_insert (module_options, (char *)mname, module);
 	}
 	if ((param = g_hash_table_lookup (module, optname)) == NULL) {
@@ -2348,7 +2348,7 @@ register_worker_opt (gint wtype, const gchar *optname, element_handler_func func
 		worker_options = g_hash_table_new (g_int_hash, g_int_equal);
 	}
 	if ((worker = g_hash_table_lookup (worker_options, &wtype)) == NULL) {
-		worker = g_hash_table_new (g_str_hash, g_str_equal);
+		worker = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		new_key = g_malloc (sizeof (gint));
 		*new_key = wtype;
 		g_hash_table_insert (worker_options, new_key, worker);
@@ -2372,10 +2372,10 @@ register_classifier_opt (const gchar *ctype, const gchar *optname)
 	GHashTable                       *classifier;
 
 	if (classifier_options == NULL) {
-		classifier_options = g_hash_table_new (g_str_hash, g_str_equal);
+		classifier_options = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	}
 	if ((classifier = g_hash_table_lookup (classifier_options, ctype)) == NULL) {
-		classifier = g_hash_table_new (g_str_hash, g_str_equal);
+		classifier = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		g_hash_table_insert (classifier_options, (char *)ctype, classifier);
 	}
 	if ((param = g_hash_table_lookup (classifier, optname)) == NULL) {
@@ -2406,7 +2406,7 @@ register_subparser (const gchar *tag, enum xml_read_state state, const GMarkupPa
 	struct xml_subparser			 *subparser;
 
 	if (subparsers == NULL) {
-		subparsers = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		subparsers = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, g_free);
 	}
 	subparser = g_malloc (sizeof (struct xml_subparser));
 

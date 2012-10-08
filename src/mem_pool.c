@@ -746,7 +746,7 @@ void
 memory_pool_set_variable (memory_pool_t *pool, const gchar *name, gpointer value, pool_destruct_func destructor)
 {
 	if (pool->variables == NULL) {
-		pool->variables = g_hash_table_new (g_str_hash, g_str_equal);
+		pool->variables = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	}
 
 	g_hash_table_insert (pool->variables, memory_pool_strdup (pool, name), value);

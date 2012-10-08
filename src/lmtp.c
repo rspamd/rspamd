@@ -271,7 +271,7 @@ accept_socket (gint fd, short what, void *arg)
 	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) rcpt_destruct, new_task);
-	new_task->results = g_hash_table_new (g_str_hash, g_str_equal);
+	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	new_task->ev_base = worker->ctx;
 	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) g_hash_table_destroy, new_task->results);
 	worker->srv->stat->connections_count++;

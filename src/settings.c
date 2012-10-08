@@ -81,12 +81,12 @@ settings_ref (struct rspamd_settings *s)
 {
 	if (s == NULL) {
 		s = g_slice_alloc (sizeof (struct rspamd_settings));
-		s->metric_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		s->reject_scores = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		s->metric_actions = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, settings_actions_free);
-		s->factors = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		s->whitelist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-		s->blacklist = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+		s->metric_scores = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, g_free);
+		s->reject_scores = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, g_free);
+		s->metric_actions = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, settings_actions_free);
+		s->factors = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, g_free);
+		s->whitelist = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, g_free);
+		s->blacklist = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, g_free);
 		s->statfile_alias = NULL;
 		s->want_spam = FALSE;
 		s->ref_count = 1;

@@ -271,7 +271,7 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 		pcache = g_new0 (struct symbols_cache, 1);
 		*cache = pcache;
 		pcache->static_pool = memory_pool_new (memory_pool_get_size ());
-		pcache->items_by_symbol = g_hash_table_new (g_str_hash, g_str_equal);
+		pcache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	}
 	
 	item = memory_pool_alloc0 (pcache->static_pool, sizeof (struct cache_item));

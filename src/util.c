@@ -947,6 +947,7 @@ calculate_check_time (struct timeval *begin, gint resolution)
 #   define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
 #endif
 
+
 gboolean
 rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 {
@@ -962,14 +963,41 @@ guint
 rspamd_strcase_hash (gconstpointer key)
 {
 	const gchar                     *p = key;
-	guint                           h = 0;
+	gchar							 buf[256];
+	guint                            h = 0, i = 0;
+
 
 	while (*p != '\0') {
-		h = (h << 5) - h + g_tolower (*p);
+		buf[i] = g_ascii_tolower (*p);
+		i++;
 		p++;
+		if (i == sizeof (buf)) {
+			h ^= murmur32_hash (buf, i);
+			i = 0;
+		}
+	}
+
+	if (i > 0) {
+		h ^= murmur32_hash (buf, i);
 	}
 
 	return h;
+}
+
+guint
+rspamd_str_hash (gconstpointer key)
+{
+	gsize							len;
+
+	len = strlen ((const gchar *)key);
+
+	return murmur32_hash (key, len);
+}
+
+gboolean
+rspamd_str_equal (gconstpointer v, gconstpointer v2)
+{
+	return strcmp ((const gchar *)v, (const gchar *)v2) == 0;
 }
 
 gboolean
@@ -987,14 +1015,24 @@ fstr_strcase_equal (gconstpointer v, gconstpointer v2)
 guint
 fstr_strcase_hash (gconstpointer key)
 {
-	const f_str_t                  *f = key;
+	const f_str_t                   *f = key;
 	const gchar                     *p;
-	guint                           h = 0;
+	guint                            h = 0, i = 0;
+	gchar							 buf[256];
 	
 	p = f->begin;
 	while (p - f->begin < (gint)f->len) {
-		h = (h << 5) - h + g_tolower (*p);
+		buf[i] = g_ascii_tolower (*p);
+		i++;
 		p++;
+		if (i == sizeof (buf)) {
+			h ^= murmur32_hash (buf, i);
+			i = 0;
+		}
+	}
+
+	if (i > 0) {
+		h ^= murmur32_hash (buf, i);
 	}
 
 	return h;
@@ -1560,6 +1598,176 @@ rspamd_create_thread (const gchar *name, GThreadFunc func, gpointer data, GError
 	return new;
 }
 
+guint32
+murmur32_hash (const guint8 *in, gsize len)
+{
+
+
+	const guint32 			 c1 = 0xcc9e2d51;
+	const guint32 			 c2 = 0x1b873593;
+
+	const int				 nblocks = len / 4;
+	const guint32 			*blocks = (const guint32 *)(in);
+	const guint8 			*tail;
+	guint32 				 h = 0;
+	gint 					 i;
+	guint32 				 k;
+
+	if (in == NULL || len == 0) {
+		return 0;
+	}
+
+	tail = (const guint8 *)(in + (nblocks * 4));
+
+	for (i = 0; i < nblocks; i++) {
+		k = blocks[i];
+
+		k *= c1;
+		k = (k << 15) | (k >> (32 - 15));
+		k *= c2;
+
+		h ^= k;
+		h = (h << 13) | (h >> (32 - 13));
+		h = (h * 5) + 0xe6546b64;
+	}
+
+	k = 0;
+	switch (len & 3) {
+	case 3:
+		k ^= tail[2] << 16;
+	case 2:
+		k ^= tail[1] << 8;
+	case 1:
+		k ^= tail[0];
+		k *= c1;
+		k = (k << 13) | (k >> (32 - 15));
+		k *= c2;
+		h ^= k;
+	};
+
+	h ^= len;
+
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+
+	return h;
+}
+
+void
+murmur128_hash (const guint8 *in, gsize len, guint64 out[])
+{
+	const guint64 			 c1 = 0x87c37b91114253d5ULL;
+	const guint64 			 c2 = 0x4cf5ad432745937fULL;
+	const gint 				 nblocks = len / 16;
+	const guint64 			*blocks = (const guint64 *)(in);
+	const guint8 			*tail;
+	guint64 				 h1 = 0;
+	guint64 				 h2 = 0;
+	int 					 i;
+	guint64 				 k1, k2;
+
+	if (in == NULL || len == 0 || out == NULL) {
+		return;
+	}
+
+	tail = (const guint8 *)(in + (nblocks * 16));
+
+	for (i = 0; i < nblocks; i++) {
+		k1 = blocks[i*2+0];
+		k2 = blocks[i*2+1];
+
+		k1 *= c1;
+		k1  = (k1 << 31) | (k1 >> (64 - 31));
+		k1 *= c2;
+		h1 ^= k1;
+
+		h1 = (h1 << 27) | (h1 >> (64 - 27));
+		h1 += h2;
+		h1 = h1*5+0x52dce729;
+
+		k2 *= c2;
+		k2  = (k2 << 33) | (k2 >> (64 - 33));
+		k2 *= c1;
+		h2 ^= k2;
+
+		h2 = (h2 << 31) | (h2 >> (64 - 31));
+		h2 += h1;
+		h2 = h2*5+0x38495ab5;
+	}
+
+	k1 = k2 = 0;
+	switch (len & 15) {
+	case 15:
+		k2 ^= (guint64)(tail[14]) << 48;
+	case 14:
+		k2 ^= (guint64)(tail[13]) << 40;
+	case 13:
+		k2 ^= (guint64)(tail[12]) << 32;
+	case 12:
+		k2 ^= (guint64)(tail[11]) << 24;
+	case 11:
+		k2 ^= (guint64)(tail[10]) << 16;
+	case 10:
+		k2 ^= (guint64)(tail[ 9]) << 8;
+	case  9:
+		k2 ^= (guint64)(tail[ 8]) << 0;
+		k2 *= c2;
+		k2  = (k2 << 33) | (k2 >> (64 - 33));
+		k2 *= c1;
+		h2 ^= k2;
+
+	case  8:
+		k1 ^= (guint64)(tail[ 7]) << 56;
+	case  7:
+		k1 ^= (guint64)(tail[ 6]) << 48;
+	case  6:
+		k1 ^= (guint64)(tail[ 5]) << 40;
+	case  5:
+		k1 ^= (guint64)(tail[ 4]) << 32;
+	case  4:
+		k1 ^= (guint64)(tail[ 3]) << 24;
+	case  3:
+		k1 ^= (guint64)(tail[ 2]) << 16;
+	case  2:
+		k1 ^= (guint64)(tail[ 1]) << 8;
+	case  1:
+		k1 ^= (guint64)(tail[ 0]) << 0;
+		k1 *= c1;
+		k1  = (k1 << 31) | (k1 >> (64 - 31));
+		k1 *= c2;
+		h1 ^= k1;
+	};
+
+	//----------
+	// finalization
+
+	h1 ^= len;
+	h2 ^= len;
+
+	h1 += h2;
+	h2 += h1;
+
+	h1 ^= h1 >> 33;
+	h1 *= 0xff51afd7ed558ccdULL;
+	h1 ^= h1 >> 33;
+	h1 *= 0xc4ceb9fe1a85ec53ULL;
+	h1 ^= h1 >> 33;
+
+	h2 ^= h2 >> 33;
+	h2 *= 0xff51afd7ed558ccdULL;
+	h2 ^= h2 >> 33;
+	h2 *= 0xc4ceb9fe1a85ec53ULL;
+	h2 ^= h2 >> 33;
+
+	h1 += h2;
+	h2 += h1;
+
+	out[0] = h1;
+	out[1] = h2;
+}
 
 /*
  * vi:ts=4

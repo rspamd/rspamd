@@ -352,7 +352,7 @@ scan_rspamd_stdin (void)
 	GHashTable                      *opts;
 
 	/* Init options hash */
-	opts = g_hash_table_new (g_str_hash, g_str_equal);
+	opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	add_options (opts);
 	/* Add server */
 	add_rspamd_server (FALSE);
@@ -390,7 +390,7 @@ scan_rspamd_file (const gchar *file)
 	/* Add server */
 	add_rspamd_server (FALSE);
 	/* Init options hash */
-	opts = g_hash_table_new (g_str_hash, g_str_equal);
+	opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	add_options (opts);
 	res = rspamd_scan_file (client, file, opts, &err);
 	g_hash_table_destroy (opts);
@@ -435,7 +435,7 @@ learn_rspamd_stdin (gboolean is_spam)
 		}
 	}
 
-	params = g_hash_table_new (g_str_hash, g_str_equal);
+	params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	g_hash_table_insert (params, "Classifier", classifier);
 
 	results = rspamd_controller_command_memory (client, is_spam ? "learn_spam" : "learn_ham", password, params, in_buf, r, &err);
@@ -482,7 +482,7 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 
 	/* Add server */
 	add_rspamd_server (TRUE);
-	params = g_hash_table_new (g_str_hash, g_str_equal);
+	params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	g_hash_table_insert (params, "Classifier", classifier);
 
 	results = rspamd_controller_command_file (client, is_spam ? "learn_spam" : "learn_ham", password, params, file, &err);
@@ -525,7 +525,7 @@ fuzzy_rspamd_stdin (gboolean delete)
 	gchar							 valuebuf[sizeof("65535")], flagbuf[sizeof("65535")];
 	struct rspamd_controller_result	*res;
 
-	params = g_hash_table_new (g_str_hash, g_str_equal);
+	params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_snprintf (valuebuf, sizeof (valuebuf), "%d", weight);
 	rspamd_snprintf (flagbuf, sizeof (flagbuf), "%d", flag);
 	g_hash_table_insert (params, "Value", valuebuf);
@@ -588,7 +588,7 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 	/* Add server */
 	add_rspamd_server (TRUE);
 
-	params = g_hash_table_new (g_str_hash, g_str_equal);
+	params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_snprintf (valuebuf, sizeof (valuebuf), "%d", weight);
 	rspamd_snprintf (flagbuf, sizeof (flagbuf), "%d", flag);
 	g_hash_table_insert (params, "Value", valuebuf);
@@ -671,7 +671,7 @@ main (gint argc, gchar **argv, gchar **env)
 	GHashTable						*kwattrs;
 
 
-	kwattrs = g_hash_table_new (g_str_hash, g_str_equal);
+	kwattrs = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	read_cmd_line (&argc, &argv);
 

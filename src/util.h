@@ -146,6 +146,13 @@ guint rspamd_strcase_hash (gconstpointer key);
 gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
 
 /*
+ * Hash table utility functions for case sensitive hashing
+ */
+guint rspamd_str_hash (gconstpointer key);
+gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
+
+
+/*
  * Hash table utility functions for hashing fixed strings
  */
 guint fstr_strcase_hash (gconstpointer key);
@@ -316,5 +323,40 @@ void rspamd_rwlock_free (rspamd_rwlock_t *mtx);
  * @return new thread object that can be joined
  */
 GThread* rspamd_create_thread (const gchar *name, GThreadFunc func, gpointer data, GError **err);
+
+/**
+ * Return 32bit murmur hash value for specified input
+ * @param in input data
+ * @param len length of the input data
+ * @code
+ *  MurmurHash3 was created by Austin Appleby  in 2008. The cannonical
+ *  implementations are in C++ and placed in the public.
+ *
+ *    https://sites.google.com/site/murmurhash/
+ *
+ *  Seungyoung Kim has ported it's cannonical implementation to C language
+ *  in 2012 and published it as a part of qLibc component.
+ * @endcode
+ * @return
+ */
+guint32 murmur32_hash (const guint8 *in, gsize len);
+
+/**
+ * Return 32bit murmur hash value for specified input
+ * @param in input data
+ * @param len length of the input data
+ * @param out array of 2 guint64 variables
+ * @code
+ *  MurmurHash3 was created by Austin Appleby  in 2008. The cannonical
+ *  implementations are in C++ and placed in the public.
+ *
+ *    https://sites.google.com/site/murmurhash/
+ *
+ *  Seungyoung Kim has ported it's cannonical implementation to C language
+ *  in 2012 and published it as a part of qLibc component.
+ * @endcode
+ * @return
+ */
+void murmur128_hash (const guint8 *in, gsize len, guint64 out[]);
 
 #endif

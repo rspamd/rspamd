@@ -410,7 +410,7 @@ init_lua_worker (void)
 	type = g_quark_try_string ("lua");
 
 	ctx = g_malloc0 (sizeof (struct rspamd_lua_worker_ctx));
-	ctx->params = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_list_free);
+	ctx->params = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, (GDestroyNotify)g_list_free);
 
 
 	register_worker_opt (type, "file", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file));

@@ -75,7 +75,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	if (metric_res == NULL) {
 		/* Create new metric chain */
 		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
-		metric_res->symbols = g_hash_table_new (g_str_hash, g_str_equal);
+		metric_res->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		metric_res->checked = FALSE;
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_unref, metric_res->symbols);
 		metric_res->metric = metric;

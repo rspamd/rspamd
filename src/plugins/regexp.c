@@ -514,7 +514,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	regexp_module_ctx->filter = regexp_common_filter;
 	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
 	regexp_module_ctx->dynamic_pool = NULL;
-	regexp_module_ctx->autolearn_symbols = g_hash_table_new (g_str_hash, g_str_equal);
+	regexp_module_ctx->autolearn_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	regexp_module_ctx->workers = NULL;
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
