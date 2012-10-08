@@ -106,7 +106,7 @@ struct statfile;
  * @param max_size maximum size
  * @return statfile pool object
  */
-statfile_pool_t* statfile_pool_new (memory_pool_t *pool, size_t max_size);
+statfile_pool_t* statfile_pool_new (memory_pool_t *pool, size_t max_size, gboolean use_mlock);
 
 /**
  * Open statfile and attach it to pool

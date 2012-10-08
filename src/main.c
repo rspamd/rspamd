@@ -977,7 +977,7 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("main process");
 
 	/* Init statfile pool */
-	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool, rspamd_main->cfg->max_statfile_size);
+	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool, rspamd_main->cfg->max_statfile_size, rspamd_main->cfg->mlock_statfile_pool);
 
 	event_init ();
 	g_mime_init (0);

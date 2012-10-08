@@ -205,7 +205,7 @@ statfile_pool_expire (statfile_pool_t * pool)
 }
 
 statfile_pool_t                *
-statfile_pool_new (memory_pool_t *pool, size_t max_size)
+statfile_pool_new (memory_pool_t *pool, size_t max_size, gboolean use_mlock)
 {
 	statfile_pool_t                *new;
 
@@ -214,7 +214,7 @@ statfile_pool_new (memory_pool_t *pool, size_t max_size)
 	new->max = max_size;
 	new->files = memory_pool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = memory_pool_get_mutex (new->pool);
-	new->mlock_ok = TRUE;
+	new->mlock_ok = use_mlock;
 
 	return new;
 }

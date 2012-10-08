@@ -318,6 +318,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, dynamic_conf),
 				NULL
 			},
+			{
+				"use_mlock",
+				xml_handle_boolean,
+				G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR
