@@ -355,8 +355,8 @@ rspamd_diff(const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
 	return d;
 }
 
-guint32
-compare_diff_distance (f_str_t *s1, f_str_t *s2)
+static guint32
+compare_diff_distance_unnormalized (f_str_t *s1, f_str_t *s2)
 {
 	GArray *ses;
 	struct diff_edit *e;
@@ -366,7 +366,7 @@ compare_diff_distance (f_str_t *s1, f_str_t *s2)
 	ses = g_array_sized_new (FALSE, TRUE, sizeof (struct diff_edit), MAX_DIFF);
 
 	if (rspamd_diff (s1->begin, 0, s1->len,
-				s2->begin, 0, s2->len, MAX_DIFF, ses, NULL) == -1) {
+			s2->begin, 0, s2->len, MAX_DIFF, ses, NULL) == -1) {
 		/* Diff failed, strings are different */
 		g_array_free (ses, TRUE);
 		return 0;
@@ -380,5 +380,87 @@ compare_diff_distance (f_str_t *s1, f_str_t *s2)
 	}
 
 	g_array_free (ses, TRUE);
-	return 100 - (2 * distance * 100) / (s1->len + s2->len);
+
+	return distance;
+}
+
+guint32
+compare_diff_distance (f_str_t *s1, f_str_t *s2)
+{
+
+	return 100 - (2 * compare_diff_distance_unnormalized (s1, s2) * 100) / (s1->len + s2->len);
+}
+
+
+guint32
+compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
+{
+	gchar b1[BUFSIZ], b2[BUFSIZ], *t, *h, *p1, *p2;
+	gsize r1, r2;
+	f_str_t t1, t2;
+	guint32 cur_diff = 0;
+
+	r1 = s1->len;
+	r2 = s2->len;
+	p1 = s1->begin;
+	p2 = s2->begin;
+
+	while (r1 > 0 && r2 > 0) {
+		/* Copy strings to the buffer normalized */
+		h = p1;
+		t = b1;
+
+		/* The first string */
+		while (r1 > 0 && h - b1 < (gint)sizeof (b1)) {
+			if (!g_ascii_isspace (*h)) {
+				*t++ = g_ascii_tolower (*h);
+			}
+			h ++;
+			p1 ++;
+			r1 --;
+		}
+
+		t1.begin = b1;
+		t1.len = h - b1;
+
+		/* The second string */
+		h = p2;
+		t = b2;
+		while (r2 > 0 && h - b2 < (gint)sizeof (b2)) {
+			if (!g_ascii_isspace (*h)) {
+				*t++ = g_ascii_tolower (*h);
+			}
+			h ++;
+			p2 ++;
+			r2 --;
+		}
+
+		t2.begin = b2;
+		t2.len = h - b2;
+
+		cur_diff += compare_diff_distance_unnormalized (&t1, &t2);
+	}
+
+	if (r1 > 0) {
+		h = p1;
+		while (r1 > 0) {
+			if (!g_ascii_isspace (*h)) {
+				cur_diff ++;
+			}
+			r1 --;
+			h ++;
+		}
+	}
+	else if (r2 > 0) {
+		h = p2;
+		while (r2 > 0) {
+			if (!g_ascii_isspace (*h)) {
+				cur_diff ++;
+			}
+			r1 --;
+			h ++;
+		}
+	}
+
+	return 100 - (2 * cur_diff * 100) / (s1->len + s2->len);
 }
