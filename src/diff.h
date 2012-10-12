@@ -64,4 +64,11 @@ gint rspamd_diff(const void *a, gint aoff, gint n, const void *b, gint boff, gin
  */
 guint32 compare_diff_distance (f_str_t *s1, f_str_t *s2);
 
+/*
+ * Calculate distance between two strings (in percentage) using diff algorithm. Strings are normalized before:
+ * all spaces are removed and all characters are lowercased.
+ * @return 100 in case of identical strings and 0 in case of totally different strings.
+*/
+guint32 compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2);
+
 #endif /* DIFF_H_ */

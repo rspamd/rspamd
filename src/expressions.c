@@ -1051,7 +1051,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		}
 		if (!p1->is_empty && !p2->is_empty) {
 			if (p1->diff_str != NULL && p2->diff_str != NULL) {
-				diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+				diff = compare_diff_distance_normalized (p1->diff_str, p2->diff_str);
 			}
 			else {
 				diff = fuzzy_compare_parts (p1, p2);
