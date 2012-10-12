@@ -1277,7 +1277,7 @@ static gboolean
 url_web_start (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
 {
 	/* Check what we have found */
-	if (pos > begin && *pos == 'w' && *(pos + 1) == 'w' && *(pos + 2) == 'w') {
+	if (pos > begin && (g_ascii_strncasecmp (pos, "www", 3) == 0 || g_ascii_strncasecmp (pos, "ftp", 3) == 0)) {
 		if (!is_open_brace (*(pos - 1)) && !g_ascii_isspace (*(pos - 1))) {
 			return FALSE;
 		}
