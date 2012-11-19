@@ -274,9 +274,7 @@ show_metric_result (gpointer key, gpointer value, gpointer ud)
 			if (metric->action) {
 				PRINT_FUNC ("Action: %s\n", metric->action);
 			}
-			else {
-				PRINT_FUNC ("Symbols: ");
-			}
+			PRINT_FUNC ("Symbols: ");
 		}
 		if (metric->symbols) {
 			g_hash_table_foreach (metric->symbols, show_symbol_result, NULL);
