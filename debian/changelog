@@ -1,3 +1,9 @@
+rspamd (0.5.3-1) unstable; urgency=low
+
+  * Upgrade to 0.5.3
+ 
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Thu, 21 Nov 2012 16:57:00 +0400
+
 rspamd (0.5.2-1) unstable; urgency=low
 
   * Upgrade to 0.5.2
