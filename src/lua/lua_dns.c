@@ -198,6 +198,7 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 		cbdata = memory_pool_alloc (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
+		cbdata->to_resolve = memory_pool_strdup (pool, to_resolve);
 		lua_pushvalue (L, 5);
 		cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		if (type == DNS_REQUEST_PTR) {
