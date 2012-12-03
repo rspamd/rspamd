@@ -68,8 +68,9 @@ struct redirector_param {
 	struct redirector_upstream *redirector;
 	enum {
 		STATE_CONNECT,
-		STATE_READ,
+		STATE_READ
 	} state;
+	GString *buf;
 	struct event ev;
 	gint sock;
 	GTree *tree;

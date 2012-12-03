@@ -820,6 +820,7 @@ free_redirector_session (void *ud)
 	struct redirector_param        *param = (struct redirector_param *)ud;
 
 	event_del (&param->ev);
+	g_string_free (param->buf, TRUE);
 	close (param->sock);
 }
 
@@ -828,10 +829,11 @@ redirector_callback (gint fd, short what, void *arg)
 {
 	struct redirector_param        *param = (struct redirector_param *)arg;
 	struct worker_task             *task = param->task;
-	gchar                           url_buf[1024];
+	gchar                           url_buf[512];
 	gint                            r;
 	struct timeval                 *timeout;
 	gchar                           *p, *c;
+	gboolean						 found = FALSE;
 
 	switch (param->state) {
 	case STATE_CONNECT:
@@ -872,20 +874,22 @@ redirector_callback (gint fd, short what, void *arg)
 				return;
 			}
 
-			url_buf[r - 1] = '\0';
+			g_string_append_len (param->buf, url_buf, r);
 
-			if ((p = strstr (url_buf, "Uri: ")) != NULL) {
+			if ((p = strstr (param->buf->str, "Uri: ")) != NULL) {
 				p += sizeof ("Uri: ") - 1;
 				c = p;
-				while (p++ < url_buf + sizeof (url_buf) - 1) {
+				while (p++ < param->buf->str + param->buf->len - 1) {
 					if (*p == '\r' || *p == '\n') {
 						*p = '\0';
+						found = TRUE;
 						break;
 					}
 				}
-				if (*p == '\0') {
+				if (found) {
 					debug_task ("<%s> got reply from redirector: '%s' -> '%s'", param->task->message_id, struri (param->url), c);
 					parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
+					make_surbl_requests (param->url, param->task, param->suffix, FALSE);
 				}
 			}
 			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);
@@ -934,6 +938,7 @@ register_redirector_call (struct uri *url, struct worker_task *task,
 	param->sock = s;
 	param->suffix = suffix;
 	param->redirector = selected;
+	param->buf = g_string_sized_new (1024);
 	timeout = memory_pool_alloc (task->task_pool, sizeof (struct timeval));
 	timeout->tv_sec = surbl_module_ctx->connect_timeout / 1000;
 	timeout->tv_usec = (surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000) * 1000;

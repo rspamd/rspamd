@@ -411,7 +411,7 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 		t = b1;
 
 		/* The first string */
-		while (r1 > 0 && h - b1 < (gint)sizeof (b1)) {
+		while (r1 > 0 && t - b1 < (gint)sizeof (b1)) {
 			if (!g_ascii_isspace (*h)) {
 				*t++ = g_ascii_tolower (*h);
 			}
@@ -421,12 +421,12 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 		}
 
 		t1.begin = b1;
-		t1.len = h - b1;
+		t1.len = t - b1;
 
 		/* The second string */
 		h = p2;
 		t = b2;
-		while (r2 > 0 && h - b2 < (gint)sizeof (b2)) {
+		while (r2 > 0 && t - b2 < (gint)sizeof (b2)) {
 			if (!g_ascii_isspace (*h)) {
 				*t++ = g_ascii_tolower (*h);
 			}
@@ -436,7 +436,7 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 		}
 
 		t2.begin = b2;
-		t2.len = h - b2;
+		t2.len = t - b2;
 
 		cur_diff += compare_diff_distance_unnormalized (&t1, &t2);
 	}
