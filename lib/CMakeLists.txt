@@ -14,6 +14,7 @@ SET(LIBRSPAMDUTILSRC		  	../src/aio_event.c
 								../src/mem_pool.c
 								../src/printf.c
 								../src/radix.c
+								../src/rrd.c
 								../src/trie.c
 								../src/upstream.c
 								../src/util.c)
