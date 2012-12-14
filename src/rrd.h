@@ -260,15 +260,20 @@ struct rrd_rra_ptr {
 
 /* Final rrd file structure */
 struct rspamd_rrd_file {
-    struct rrd_file_head *stat_head; /* the static header */
-    struct rrd_ds_def *ds_def;   /* list of data source definitions */
-    struct rrd_rra_def *rra_def; /* list of round robin archive def */
-    struct rrd_live_head *live_head; /* rrd v >= 3 last_up with us */
-    struct rrd_pdp_prep *pdp_prep;   /* pdp data prep area */
-    struct rrd_cdp_prep *cdp_prep;   /* cdp prep area */
-    struct rrd_rra_ptr *rra_ptr; /* list of rra pointers */
-    rrd_value_t *rrd_value; /* list of rrd values */
-} rrd_t;
+	struct rrd_file_head *stat_head; /* the static header */
+	struct rrd_ds_def *ds_def;   /* list of data source definitions */
+	struct rrd_rra_def *rra_def; /* list of round robin archive def */
+	struct rrd_live_head *live_head; /* rrd v >= 3 last_up with us */
+	struct rrd_pdp_prep *pdp_prep;   /* pdp data prep area */
+	struct rrd_cdp_prep *cdp_prep;   /* cdp prep area */
+	struct rrd_rra_ptr *rra_ptr; /* list of rra pointers */
+	gdouble *rrd_value; /* list of rrd values */
+
+	gchar *filename;
+	guint8* map; /* mmapped area */
+	gsize size; /* its size */
+	gboolean finalized;
+};
 
 
 /* Public API */
@@ -290,7 +295,7 @@ struct rspamd_rrd_file* rspamd_rrd_open (const gchar *filename, GError **err);
  * @param err error pointer
  * @return TRUE if file has been created
  */
-gboolean rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gulong pdp_step, GError **err);
+struct rspamd_rrd_file* rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gulong pdp_step, GError **err);
 
 /**
  * Add data sources to rrd file
@@ -299,7 +304,7 @@ gboolean rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_c
  * @param err error pointer
  * @return TRUE if data sources were added
  */
-gboolean rspamd_rrd_add_ds (const gchar *filename, GArray *ds, GError **err);
+gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file* file, GArray *ds, GError **err);
 
 /**
  * Add round robin archives to rrd file
@@ -308,7 +313,7 @@ gboolean rspamd_rrd_add_ds (const gchar *filename, GArray *ds, GError **err);
  * @param err error pointer
  * @return TRUE if archives were added
  */
-gboolean rspamd_rrd_add_rra (const gchar *filename, GArray *rra, GError **err);
+gboolean rspamd_rrd_add_rra (struct rspamd_rrd_file *file, GArray *rra, GError **err);
 
 /**
  * Finalize rrd file header and initialize all RRA in the file
@@ -316,7 +321,7 @@ gboolean rspamd_rrd_add_rra (const gchar *filename, GArray *rra, GError **err);
  * @param err error pointer
  * @return TRUE if rrd file is ready for use
  */
-gboolean rspamd_rrd_finalize (const gchar *filename, GError **err);
+gboolean rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err);
 
 /**
  * Add record to rrd file
@@ -327,5 +332,12 @@ gboolean rspamd_rrd_finalize (const gchar *filename, GError **err);
  * @return TRUE if a row has been added
  */
 gboolean rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GArray *points, GError **err);
+
+/**
+ * Close rrd file
+ * @param file
+ * @return
+ */
+gint rspamd_rrd_close (struct rspamd_rrd_file* file);
 
 #endif /* RRD_H_ */
