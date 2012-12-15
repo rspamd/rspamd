@@ -57,6 +57,13 @@ SET(LIBRSPAMDMIMESRC
 				../src/smtp_utils.c
 				../src/smtp_proto.c
 				../src/worker_util.c)
+				
+SET(TOKENIZERSSRC  ../src/tokenizers/tokenizers.c
+				../src/tokenizers/osb.c)
+
+SET(CLASSIFIERSSRC ../src/classifiers/classifiers.c
+                ../src/classifiers/bayes.c
+				../src/classifiers/winnow.c)
 # Add targets
 
 # Rspamdutil
@@ -134,7 +141,7 @@ IF(WITH_SQLITE)
 	LIST(APPEND LIBRSPAMDSERVERSRC ../src/kvstorage_sqlite.c)
 ENDIF(WITH_SQLITE)
 				
-ADD_LIBRARY(rspamd-server ${LINK_TYPE} ${LIBRSPAMDSERVERSRC})
+ADD_LIBRARY(rspamd-server ${LINK_TYPE} ${LIBRSPAMDSERVERSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC})
 IF(NOT DEBIAN_BUILD)
 SET_TARGET_PROPERTIES(rspamd-server PROPERTIES VERSION ${RSPAMD_VERSION})
 ENDIF(NOT DEBIAN_BUILD)

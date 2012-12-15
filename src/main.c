@@ -301,6 +301,56 @@ config_logger (struct rspamd_main *rspamd, GQuark type, gboolean is_fatal)
 }
 
 static void
+parse_filters_str (struct config_file *cfg, const gchar *str)
+{
+	gchar                         **strvec, **p;
+	struct filter                  *cur;
+	module_t					  **pmodule;
+
+	if (str == NULL) {
+		return;
+	}
+
+	strvec = g_strsplit_set (str, ",", 0);
+	if (strvec == NULL) {
+		return;
+	}
+
+	p = strvec;
+	while (*p) {
+		cur = NULL;
+		/* Search modules from known C modules */
+		pmodule = &modules[0];
+		while (*pmodule) {
+			g_strstrip (*p);
+			if ((*pmodule)->name != NULL && g_ascii_strcasecmp ((*pmodule)->name, *p) == 0) {
+				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
+				cur->type = C_FILTER;
+				msg_debug ("found C filter %s", *p);
+				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
+				cur->module = (*pmodule);
+				cfg->filters = g_list_prepend (cfg->filters, cur);
+
+				break;
+			}
+			pmodule ++;
+		}
+		if (cur != NULL) {
+			/* Go to next iteration */
+			p++;
+			continue;
+		}
+		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
+		cur->type = PERL_FILTER;
+		cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
+		cfg->filters = g_list_prepend (cfg->filters, cur);
+		p++;
+	}
+
+	g_strfreev (strvec);
+}
+
+static void
 reread_config (struct rspamd_main *rspamd)
 {
 	struct config_file             *tmp_cfg;
@@ -728,6 +778,7 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 
 	/* Do post-load actions */
 	post_load_config (cfg);
+	parse_filters_str (cfg, cfg->filters_str);
 	
 	if (init_modules) {
 		/* Init C modules */

@@ -937,13 +937,6 @@ SET(RSPAMDSRC	src/modules.c
 				src/smtp_proxy.c
 				src/worker.c)
 
-SET(TOKENIZERSSRC  src/tokenizers/tokenizers.c
-				src/tokenizers/osb.c)
-
-SET(CLASSIFIERSSRC src/classifiers/classifiers.c
-                src/classifiers/bayes.c
-				src/classifiers/winnow.c)
-
 SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/regexp.c
 				src/plugins/chartable.c
@@ -990,8 +983,7 @@ CONFIGURE_FILE(conf/rspamd-basic.xml.in conf/rspamd.xml.sample @ONLY)
 
 ######################### LINK SECTION ###############################
 
-ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${TOKENIZERSSRC} 
-					  ${CLASSIFIERSSRC} ${PLUGINSSRC})
+ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${PLUGINSSRC})
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
 IF(NOT DEBIAN_BUILD)
