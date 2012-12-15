@@ -340,4 +340,25 @@ gboolean rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GAr
  */
 gint rspamd_rrd_close (struct rspamd_rrd_file* file);
 
+/*
+ * Conversion functions
+ */
+
+/**
+ * Convert rrd dst type from string to numeric value
+ */
+enum rrd_dst_type rrd_dst_from_string (const gchar *str);
+/**
+ * Convert numeric presentation of dst to string
+ */
+const gchar* rrd_dst_to_string (enum rrd_dst_type type);
+/**
+ * Convert rrd consolidation function type from string to numeric value
+ */
+enum rrd_cf_type rrd_cf_from_string (const gchar *str);
+/**
+ * Convert numeric presentation of cf to string
+ */
+const gchar* rrd_cf_to_string (enum rrd_cf_type type);
+
 #endif /* RRD_H_ */

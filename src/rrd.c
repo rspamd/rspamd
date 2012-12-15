@@ -31,6 +31,100 @@ rrd_error_quark (void)
 }
 
 /**
+ * Convert rrd dst type from string to numeric value
+ */
+enum rrd_dst_type
+rrd_dst_from_string (const gchar *str)
+{
+	if (g_ascii_strcasecmp (str, "counter") == 0) {
+		return RRD_DST_COUNTER;
+	}
+	else if (g_ascii_strcasecmp (str, "absolute") == 0) {
+		return RRD_DST_ABSOLUTE;
+	}
+	else if (g_ascii_strcasecmp (str, "gauge") == 0) {
+		return RRD_DST_GAUGE;
+	}
+	else if (g_ascii_strcasecmp (str, "cdef") == 0) {
+		return RRD_DST_CDEF;
+	}
+	else if (g_ascii_strcasecmp (str, "derive") == 0) {
+		return RRD_DST_DERIVE;
+	}
+	return -1;
+}
+
+/**
+ * Convert numeric presentation of dst to string
+ */
+const gchar*
+rrd_dst_to_string (enum rrd_dst_type type)
+{
+	switch (type) {
+	case RRD_DST_COUNTER:
+		return "COUNTER";
+	case RRD_DST_ABSOLUTE:
+		return "ABSOLUTE";
+	case RRD_DST_GAUGE:
+		return "GAUGE";
+	case RRD_DST_CDEF:
+		return "CDEF";
+	case RRD_DST_DERIVE:
+		return "DERIVE";
+	default:
+		return "U";
+	}
+
+	return "U";
+}
+
+/**
+ * Convert rrd consolidation function type from string to numeric value
+ */
+enum rrd_cf_type
+rrd_cf_from_string (const gchar *str)
+{
+	if (g_ascii_strcasecmp (str, "average") == 0) {
+		return RRD_CF_AVERAGE;
+	}
+	else if (g_ascii_strcasecmp (str, "minimum") == 0) {
+		return RRD_CF_MINIMUM;
+	}
+	else if (g_ascii_strcasecmp (str, "maximum") == 0) {
+		return RRD_CF_MAXIMUM;
+	}
+	else if (g_ascii_strcasecmp (str, "last") == 0) {
+		return RRD_CF_LAST;
+	}
+	/* XXX: add other CF functions supported by rrd */
+	return -1;
+}
+
+/**
+ * Convert numeric presentation of cf to string
+ */
+const gchar*
+rrd_cf_to_string (enum rrd_cf_type type)
+{
+	switch (type) {
+	case RRD_CF_AVERAGE:
+		return "AVERAGE";
+	case RRD_CF_MINIMUM:
+		return "MINIMUM";
+	case RRD_CF_MAXIMUM:
+		return "MAXIMUM";
+	case RRD_CF_LAST:
+		return "LAST";
+	default:
+		return "U";
+	}
+
+	/* XXX: add other CF functions supported by rrd */
+
+	return "U";
+}
+
+/**
  * Check rrd file for correctness (size, cookies, etc)
  */
 static gboolean
@@ -107,7 +201,7 @@ rspamd_rrd_check_file (const gchar *filename, gboolean need_data, GError **err)
 				close (fd);
 				return FALSE;
 			}
-			head_size += rra.row_cnt * head.ds_cnt;
+			head_size += rra.row_cnt * head.ds_cnt * sizeof (gdouble);
 		}
 
 		if (st.st_size != head_size) {
@@ -357,7 +451,7 @@ gboolean
 rspamd_rrd_add_ds (struct rspamd_rrd_file *file, GArray *ds, GError **err)
 {
 
-	if (file == NULL || file->stat_head->ds_cnt != ds->len * sizeof (struct rrd_ds_def)) {
+	if (file == NULL || file->stat_head->ds_cnt * sizeof (struct rrd_ds_def) != ds->len) {
 		g_set_error (err, rrd_error_quark (), EINVAL, "rrd add ds failed: wrong arguments");
 		return FALSE;
 	}
@@ -378,7 +472,7 @@ rspamd_rrd_add_ds (struct rspamd_rrd_file *file, GArray *ds, GError **err)
 gboolean
 rspamd_rrd_add_rra (struct rspamd_rrd_file *file, GArray *rra, GError **err)
 {
-	if (file == NULL || file->stat_head->rra_cnt != rra->len * sizeof (struct rrd_rra_def)) {
+	if (file == NULL || file->stat_head->rra_cnt * sizeof (struct rrd_rra_def) != rra->len) {
 		g_set_error (err, rrd_error_quark (), EINVAL, "rrd add rra failed: wrong arguments");
 		return FALSE;
 	}
@@ -399,7 +493,8 @@ gboolean
 rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 {
 	gint										 fd;
-	guint										 i, count = 0;
+	guint										 i;
+	gint										 count = 0;
 	gdouble										 vbuf[1024];
 	struct stat									 st;
 
@@ -439,7 +534,7 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 
 	while (count > 0) {
 		/* Write values in buffered matter */
-		if (write (fd, vbuf, MIN (G_N_ELEMENTS (vbuf), count) * sizeof (gdouble)) == -1) {
+		if (write (fd, vbuf, MIN ((gint)G_N_ELEMENTS (vbuf), count) * sizeof (gdouble)) == -1) {
 			g_set_error (err, rrd_error_quark (), errno, "rrd write error: %s", strerror (errno));
 			close (fd);
 			return FALSE;
@@ -465,6 +560,8 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 	/* Adjust pointers */
 	rspamd_rrd_adjust_pointers (file, TRUE);
 
+	file->finalized = TRUE;
+
 	return TRUE;
 }
 
@@ -482,7 +579,7 @@ rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GArray *poin
 	gdouble									*row;
 	guint									 i;
 
-	if (file == NULL || file->stat_head->ds_cnt != points->len * sizeof (gdouble) || rra_idx >= file->stat_head->rra_cnt) {
+	if (file == NULL || file->stat_head->ds_cnt * sizeof (gdouble) != points->len || rra_idx >= file->stat_head->rra_cnt) {
 		g_set_error (err, rrd_error_quark (), EINVAL, "rrd add points failed: wrong arguments");
 		return FALSE;
 	}
@@ -502,7 +599,7 @@ rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GArray *poin
 	}
 
 	/* Write data */
-	memcpy (row, points, points->len);
+	memcpy (row, points->data, points->len);
 
 	return TRUE;
 }

@@ -17,7 +17,7 @@ rspamd_statfile_test_func ()
 	
 	p = memory_pool_new (memory_pool_get_size ());
 	umask (S_IWGRP | S_IWOTH);
-	pool = statfile_pool_new (p, 10 * 1024 * 1024);
+	pool = statfile_pool_new (p, 10 * 1024 * 1024, TRUE);
 
 	now = time (NULL);
 	/* Fill random array */
