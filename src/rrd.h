@@ -361,4 +361,15 @@ enum rrd_cf_type rrd_cf_from_string (const gchar *str);
  */
 const gchar* rrd_cf_to_string (enum rrd_cf_type type);
 
+/* Default RRA and DS */
+
+/**
+ * Create default RRA
+ */
+void rrd_make_default_rra (const gchar *cf_name, gulong pdp_cnt, gulong rows, struct rrd_rra_def *rra);
+
+/**
+ * Create default DS
+ */
+void rrd_make_default_ds (const gchar *name, gulong pdp_step, struct rrd_ds_def *ds);
 #endif /* RRD_H_ */
