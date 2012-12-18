@@ -32,7 +32,7 @@
  */
 
 #define RRD_COOKIE    "RRD"
-#define RRD_VERSION   "0004"
+#define RRD_VERSION   "0003"
 #define RRD_FLOAT_COOKIE  ((double)8.642135E130)
 
 typedef union {
@@ -326,12 +326,11 @@ gboolean rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err);
 /**
  * Add record to rrd file
  * @param file rrd file object
- * @param rra_idx index of rra being added
  * @param points points (must be row suitable for this RRA, depending on ds count)
  * @param err error pointer
  * @return TRUE if a row has been added
  */
-gboolean rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GArray *points, GError **err);
+gboolean rspamd_rrd_add_record (struct rspamd_rrd_file* file, GArray *points, GError **err);
 
 /**
  * Close rrd file

@@ -139,7 +139,7 @@ void
 rrd_make_default_ds (const gchar *name, gulong pdp_step, struct rrd_ds_def *ds)
 {
 	rspamd_strlcpy (ds->ds_nam, name, sizeof (ds->ds_nam));
-	rspamd_strlcpy (ds->dst, "AVERAGE", sizeof (ds->dst));
+	rspamd_strlcpy (ds->dst, "COUNTER", sizeof (ds->dst));
 	memset (ds->par, 0, sizeof (ds->par));
 	ds->par[RRD_DS_mrhb_cnt].lv = pdp_step * 2;
 	ds->par[RRD_DS_min_val].dv = NAN;
@@ -838,28 +838,60 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file, gdouble pdp_steps, gdouble 
 }
 
 /**
+ * Update RRA in a file
+ * @param file rrd file
+ * @param rra_steps steps for each rra
+ * @param now current time
+ */
+void
+rspamd_rrd_write_rra (struct rspamd_rrd_file *file, gulong *rra_steps)
+{
+	guint									 i, j, scratch_idx, cdp_idx, k;
+	struct rrd_rra_def						*rra;
+	gdouble									*rra_row;
+
+	/* Iterate over all RRA */
+	for (i = 0; i < file->stat_head->rra_cnt; i ++) {
+		rra = &file->rra_def[i];
+		/* How much steps need to be updated */
+		for (j = 0, scratch_idx = CDP_primary_val; j < rra_steps[i]; j ++, scratch_idx = CDP_secondary_val) {
+			/* Move row ptr */
+			if (++file->rra_ptr[i].cur_row >= rra->row_cnt) {
+				file->rra_ptr[i].cur_row = 0;
+			}
+			/* Calculate seek */
+			rra_row = file->rrd_value + (file->stat_head->ds_cnt * i + file->rra_ptr[i].cur_row);
+			/* Iterate over DS */
+			for (k = 0; k < file->stat_head->ds_cnt; k ++) {
+				cdp_idx = i * file->stat_head->ds_cnt + k;
+				memcpy (rra_row, &file->cdp_prep[cdp_idx].scratch[scratch_idx].dv, sizeof (gdouble));
+				rra_row ++;
+			}
+		}
+	}
+}
+
+/**
  * Add record to rrd file
  * @param file rrd file object
- * @param rra_idx index of rra being added
  * @param points points (must be row suitable for this RRA, depending on ds count)
  * @param err error pointer
  * @return TRUE if a row has been added
  */
 gboolean
-rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GArray *points, GError **err)
+rspamd_rrd_add_record (struct rspamd_rrd_file* file, GArray *points, GError **err)
 {
-	gdouble									*row, interval, *pdp_new, *pdp_temp, pre_int, post_int;
+	gdouble									 interval, *pdp_new, *pdp_temp, pre_int, post_int;
 	guint									 i;
 	gulong									 pdp_steps, cur_pdp_count, prev_pdp_step, cur_pdp_step,
 											 prev_pdp_age, cur_pdp_age, *rra_steps, pdp_offset;
 	struct timeval							 tv;
 
-	if (file == NULL || file->stat_head->ds_cnt * sizeof (gdouble) != points->len || rra_idx >= file->stat_head->rra_cnt) {
+	if (file == NULL || file->stat_head->ds_cnt * sizeof (gdouble) != points->len) {
 		g_set_error (err, rrd_error_quark (), EINVAL, "rrd add points failed: wrong arguments");
 		return FALSE;
 	}
 
-	row = file->rrd_value;
 	/* Get interval */
 	gettimeofday (&tv, NULL);
 	interval = (gdouble)(tv.tv_sec - file->live_head->last_up) +
@@ -937,24 +969,15 @@ rspamd_rrd_add_record (struct rspamd_rrd_file* file, guint rra_idx, GArray *poin
 			}
 			/* Update this specific CDP */
 			rspamd_rrd_update_cdp (file, pdp_steps, pdp_offset, rra_steps, i, pdp_temp);
+			/* Write RRA */
+			rspamd_rrd_write_rra (file, rra_steps);
 		}
 	}
+	file->live_head->last_up = tv.tv_sec;
+	file->live_head->last_up_usec = tv.tv_usec;
 
-	/* Skip unaffected rra */
-	for (i = 0; i < rra_idx; i ++) {
-		row += file->rra_def[i].row_cnt * file->stat_head->ds_cnt;
-	}
-
-	row += file->rra_ptr[rra_idx].cur_row * file->stat_head->ds_cnt;
-
-	/* Increase row index */
-	file->rra_ptr[rra_idx].cur_row ++;
-	if (file->rra_ptr[rra_idx].cur_row >= file->rra_def[rra_idx].row_cnt) {
-		file->rra_ptr[rra_idx].cur_row = 0;
-	}
-
-	/* Write data */
-	memcpy (row, points->data, points->len);
+	/* Sync and invalidate */
+	msync (file->map, file->size, MS_ASYNC | MS_INVALIDATE);
 
 	g_free (pdp_new);
 	g_free (pdp_temp);
