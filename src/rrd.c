@@ -98,6 +98,7 @@ rrd_cf_from_string (const gchar *str)
 		return RRD_CF_LAST;
 	}
 	/* XXX: add other CF functions supported by rrd */
+
 	return -1;
 }
 
@@ -362,6 +363,7 @@ rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gul
 	struct rrd_rra_ptr							 rra_ptr;
 	gint										 fd;
 	guint										 i, j;
+	struct timeval								 tv;
 
 	/* Open file */
 	fd = open (filename, O_RDWR | O_CREAT | O_TRUNC, 0644);
@@ -410,8 +412,9 @@ rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gul
 	}
 
 	/* Fill live header */
-	lh.last_up = time (NULL) - 10;
-	lh.last_up_usec = 0;
+	gettimeofday (&tv, NULL);
+	lh.last_up = tv.tv_sec;
+	lh.last_up_usec = tv.tv_usec;
 
 	if (write (fd, &lh, sizeof (lh)) != sizeof (lh)) {
 		close (fd);
@@ -423,7 +426,7 @@ rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gul
 	memcpy (&pdp.last_ds, "U", sizeof ("U"));
 	memset (&pdp.scratch, 0, sizeof (pdp.scratch));
 	pdp.scratch[PDP_val].dv = 0.;
-	pdp.scratch[PDP_unkn_sec_cnt].lv = lh.last_up % pdp_step;
+	pdp.scratch[PDP_unkn_sec_cnt].lv = 0;
 	for (i = 0; i < ds_count; i ++) {
 		if (write (fd, &pdp, sizeof (pdp)) != sizeof (pdp)) {
 			close (fd);
@@ -436,7 +439,7 @@ rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gul
 	memset (&cdp.scratch, 0, sizeof (cdp.scratch));
 	cdp.scratch[CDP_val].dv = NAN;
 	for (i = 0; i < rra_count; i ++) {
-		cdp.scratch[CDP_unkn_pdp_cnt].lv = ((lh.last_up - pdp.scratch[PDP_unkn_sec_cnt].lv) % (pdp_step * rra.pdp_cnt)) / pdp_step;
+		cdp.scratch[CDP_unkn_pdp_cnt].lv = 0;
 		for (j = 0; j < ds_count; j ++) {
 			if (write (fd, &cdp, sizeof (cdp)) != sizeof (cdp)) {
 				close (fd);
@@ -539,9 +542,7 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 
 	/* Adjust CDP */
 	for (i = 0; i < file->stat_head->rra_cnt; i ++) {
-		file->cdp_prep->scratch[CDP_unkn_pdp_cnt].lv =
-				((file->live_head->last_up - file->pdp_prep->scratch[PDP_unkn_sec_cnt].lv) % (file->stat_head->pdp_step *
-						file->rra_def[i].pdp_cnt)) / file->stat_head->pdp_step;
+		file->cdp_prep->scratch[CDP_unkn_pdp_cnt].lv = 0;
 		/* Randomize row pointer */
 		file->rra_ptr->cur_row = g_random_int () % file->rra_def[i].row_cnt;
 		/* Calculate values count */
@@ -602,7 +603,7 @@ rspamd_rrd_update_pdp_prep (struct rspamd_rrd_file *file, gdouble *vals, gdouble
 	enum rrd_dst_type						 type;
 
 	for (i = 0; i < file->stat_head->ds_cnt; i ++) {
-		type = rrd_dst_from_string (file->ds_def[i].ds_nam);
+		type = rrd_dst_from_string (file->ds_def[i].dst);
 
 		if (file->ds_def[i].par[RRD_DS_mrhb_cnt].lv < interval) {
 			rspamd_strlcpy (file->pdp_prep[i].last_ds, "U", sizeof (file->pdp_prep[i].last_ds));
@@ -673,6 +674,7 @@ rspamd_rrd_update_pdp_step (struct rspamd_rrd_file *file, gdouble *pdp_new, gdou
 				scratch[PDP_val].dv = 0;
 			}
 			scratch[PDP_val].dv += pdp_new[i] / interval * pre_int;
+			pre_int = 0.0;
 		}
 		/* Check interval value for heartbeat for this DS */
 		if ((interval > heartbeat) || (file->stat_head->pdp_step / 2.0 < scratch[PDP_unkn_sec_cnt].lv)) {
@@ -912,15 +914,18 @@ rspamd_rrd_add_record (struct rspamd_rrd_file* file, GArray *points, GError **er
 	}
 
 	/* Calculate elapsed steps */
+	/* Age in seconds for previous pdp store */
 	prev_pdp_age =  file->live_head->last_up % file->stat_head->pdp_step;
+	/* Time in seconds for last pdp update */
 	prev_pdp_step = file->live_head->last_up - prev_pdp_age;
+	/* Age in seconds from current time to required pdp time */
 	cur_pdp_age = tv.tv_sec % file->stat_head->pdp_step;
+	/* Time of desired pdp step */
 	cur_pdp_step = tv.tv_sec - cur_pdp_age;
 
 	if (cur_pdp_step > prev_pdp_step) {
-		pre_int = (cur_pdp_step - file->live_head->last_up) - ((double)file->live_head->last_up_usec) / 1e6f;
-		post_int = cur_pdp_age + ((double)tv.tv_usec) / 1e6f;
-
+		pre_int = (gdouble)(cur_pdp_step - file->live_head->last_up) - ((double)file->live_head->last_up_usec) / 1e6f;
+		post_int = (gdouble)cur_pdp_age + ((double)tv.tv_usec) / 1e6f;
 	}
 	else {
 		pre_int = interval;
@@ -954,6 +959,7 @@ rspamd_rrd_add_record (struct rspamd_rrd_file* file, GArray *points, GError **er
 
 		/* Update PDP for this step */
 		rspamd_rrd_update_pdp_step (file, pdp_new, pdp_temp, interval, pre_int, post_int, pdp_steps * file->stat_head->pdp_step);
+
 
 		/* Update CDP points for each RRA*/
 		for (i = 0; i < file->stat_head->rra_cnt; i ++) {

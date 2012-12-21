@@ -35,15 +35,15 @@ rspamd_rrd_test_func ()
 	GArray ar;
 	GError *err = NULL;
 	struct rspamd_rrd_file *rrd;
-	gint fd, i;
+	gint i;
 	gdouble t;
 
 	rspamd_snprintf (tmpfile, sizeof (tmpfile), "/tmp/rspamd_rrd.rrd");
 
 	/* Create sample rrd */
-	g_assert ((rrd = rspamd_rrd_create (tmpfile, 1, 1, 5, &err)) != NULL);
+	g_assert ((rrd = rspamd_rrd_create (tmpfile, 1, 1, 1, &err)) != NULL);
 	/* Add RRA */
-	rrd_make_default_rra ("AVERAGE", 2, 100, &rra);
+	rrd_make_default_rra ("AVERAGE", 2, 4, &rra);
 	ar.data = &rra;
 	ar.len = sizeof (rra);
 	g_assert (rspamd_rrd_add_rra (rrd, &ar, &err));
@@ -59,16 +59,15 @@ rspamd_rrd_test_func ()
 
 	/* Reopen */
 	g_assert ((rrd = rspamd_rrd_open (tmpfile, &err)) != NULL);
-#if 0
 	/* Add some points */
-	for (i = 0; i < 10; i ++) {
+	for (i = 0; i < 100; i += 10) {
+		sleep (1);
 		t = i;
 		ar.data = &t;
 		ar.len = sizeof (gdouble);
 		g_assert (rspamd_rrd_add_record (rrd, &ar, &err));
-		sleep (1);
+
 	}
-#endif
 	/* Finish */
 	rspamd_rrd_close (rrd);
 	/* unlink (tmpfile); */
