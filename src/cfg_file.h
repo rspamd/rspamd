@@ -130,7 +130,9 @@ enum lua_var_type {
  */
 struct module_opt {
 	gchar *param;									/**< parameter name										*/
-	gchar *value;									/**< paramater value									*/
+	gchar *value;									/**< parameter value									*/
+	gchar *description;								/**< parameter description								*/
+	gchar *group;									/**< parameter group									*/
 	gpointer actual_data;							/**< parsed data										*/
 	gboolean is_lua;								/**< actually this is lua variable						*/
 	enum lua_var_type lua_type;						/**< type of lua variable								*/
@@ -336,6 +338,8 @@ struct config_file {
 	gchar* checksum;								/**< real checksum of config file						*/ 
 	gchar* dump_checksum;							/**< dump checksum of config file						*/ 
 	gpointer lua_state;								/**< pointer to lua state								*/
+
+	gchar* rrd_file;								/**< rrd file to store statistics						*/
 
 	guint32 dns_timeout;							/**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;						/**< maximum retransmits count							*/

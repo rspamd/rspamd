@@ -38,11 +38,16 @@
 #include "statfile_sync.h"
 #include "lua/lua_common.h"
 #include "dynamic_cfg.h"
+#include "rrd.h"
 
 #define END "END" CRLF
 
 /* 120 seconds for controller's IO */
 #define CONTROLLER_IO_TIMEOUT 120
+
+/* RRD macroes */
+/* Write data each minute */
+#define CONTROLLER_RRD_STEP 60
 
 /* Init functions */
 gpointer init_controller (void);
@@ -96,6 +101,9 @@ struct rspamd_controller_ctx {
 	guint32							timeout;
 	struct rspamd_dns_resolver     *resolver;
 	struct event_base              *ev_base;
+	struct event				    rrd_event;
+	struct rspamd_rrd_file         *rrd_file;
+	struct rspamd_main			   *srv;
 };
 
 static struct controller_command commands[] = {
@@ -1709,6 +1717,114 @@ accept_socket (gint fd, short what, void *arg)
 #endif
 }
 
+static gboolean
+create_rrd_file (const gchar *filename, struct rspamd_controller_ctx *ctx)
+{
+	GError								*err = NULL;
+	GArray								 ar;
+	struct rrd_rra_def					 rra[5];
+	struct rrd_ds_def					 ds[4];
+
+	/*
+	 * DS:
+	 * 1) reject as spam
+	 * 2) mark as spam
+	 * 3) greylist
+	 * 4) pass
+	 */
+	/*
+	 * RRA:
+	 * 1) per minute AVERAGE
+	 * 2) per 5 minutes AVERAGE
+	 * 3) per 30 minutes AVERAGE
+	 * 4) per 2 hours AVERAGE
+	 * 5) per day AVERAGE
+	 */
+	ctx->rrd_file = rspamd_rrd_create (filename, 4, 5, CONTROLLER_RRD_STEP, &err);
+	if (ctx->rrd_file == NULL) {
+		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
+		g_error_free (err);
+		return FALSE;
+	}
+
+	/* Add all ds and rra */
+	rrd_make_default_ds ("spam", CONTROLLER_RRD_STEP, &ds[0]);
+	rrd_make_default_ds ("possible spam", CONTROLLER_RRD_STEP, &ds[1]);
+	rrd_make_default_ds ("greylist", CONTROLLER_RRD_STEP, &ds[2]);
+	rrd_make_default_ds ("ham", CONTROLLER_RRD_STEP, &ds[3]);
+
+	rrd_make_default_rra ("AVERAGE", 1, 600, &rra[0]);
+	rrd_make_default_rra ("AVERAGE", 5, 600, &rra[1]);
+	rrd_make_default_rra ("AVERAGE", 30, 700, &rra[2]);
+	rrd_make_default_rra ("AVERAGE", 120, 775, &rra[3]);
+	rrd_make_default_rra ("AVERAGE", 1440, 797, &rra[4]);
+
+	ar.data = (gchar *)ds;
+	ar.len = sizeof (ds);
+	if (!rspamd_rrd_add_ds (ctx->rrd_file, &ar, &err)) {
+		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
+		g_error_free (err);
+		rspamd_rrd_close (ctx->rrd_file);
+		return FALSE;
+	}
+
+	ar.data = (gchar *)rra;
+	ar.len = sizeof (rra);
+	if (!rspamd_rrd_add_rra (ctx->rrd_file, &ar, &err)) {
+		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
+		g_error_free (err);
+		rspamd_rrd_close (ctx->rrd_file);
+		return FALSE;
+	}
+
+	/* Finalize */
+	if (!rspamd_rrd_finalize (ctx->rrd_file, &err)) {
+		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
+		g_error_free (err);
+		rspamd_rrd_close (ctx->rrd_file);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void
+controller_update_rrd (gint fd, short what, void *arg)
+{
+	struct rspamd_controller_ctx       *ctx = arg;
+	struct timeval                      tv;
+	GArray                              ar;
+	gdouble                             data[4];
+	GError                             *err = NULL;
+
+	/*
+	 * Data:
+	 * 1) reject as spam
+	 * 2) mark as spam
+	 * 3) greylist
+	 * 4) pass
+	 */
+
+	tv.tv_sec = CONTROLLER_RRD_STEP;
+	tv.tv_usec = 0;
+
+	/* Fill data */
+	data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT];
+	data[1] = ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] + ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+	data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST];
+	data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION];
+
+	ar.data = (gchar *)data;
+	ar.len = sizeof (data);
+	if (!rspamd_rrd_add_record (ctx->rrd_file, &ar, &err)) {
+		msg_err ("cannot add record to rrd database: %s, stop rrd update", err->message);
+		g_error_free (err);
+	}
+	else {
+		evtimer_add (&ctx->rrd_event, &tv);
+	}
+}
+
 gpointer
 init_controller (void)
 {
@@ -1733,6 +1849,8 @@ start_controller (struct rspamd_worker *worker)
 	gchar                          *hostbuf;
 	gsize                           hostmax;
 	struct rspamd_controller_ctx   *ctx;
+	GError                         *err = NULL;
+	struct timeval                  tv;
 
 	worker->srv->pid = getpid ();
 	ctx = worker->ctx;
@@ -1761,6 +1879,29 @@ start_controller (struct rspamd_worker *worker)
 		msg_info ("cannot start statfile synchronization, statfiles would not be synchronized");
 	}
 
+	/* Check for rrd */
+	tv.tv_sec = CONTROLLER_RRD_STEP;
+	tv.tv_usec = 0;
+	ctx->srv = worker->srv;
+	if (worker->srv->cfg->rrd_file) {
+		ctx->rrd_file = rspamd_rrd_open (worker->srv->cfg->rrd_file, &err);
+		if (ctx->rrd_file == NULL) {
+			msg_info ("cannot open rrd file: %s, error: %s, trying to create", worker->srv->cfg->rrd_file, err->message);
+			g_error_free (err);
+			/* Try to create rrd file */
+			if (create_rrd_file (worker->srv->cfg->rrd_file, ctx)) {
+				evtimer_set (&ctx->rrd_event, controller_update_rrd, ctx);
+				event_base_set (ctx->ev_base, &ctx->rrd_event);
+				evtimer_add (&ctx->rrd_event, &tv);
+			}
+		}
+		else {
+			evtimer_set (&ctx->rrd_event, controller_update_rrd, ctx);
+			event_base_set (ctx->ev_base, &ctx->rrd_event);
+			evtimer_add (&ctx->rrd_event, &tv);
+		}
+	}
+
 	/* Fill hostname buf */
 	hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
 	hostbuf = alloca (hostmax);
@@ -1780,6 +1921,9 @@ start_controller (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 
 	close_log (worker->srv->logger);
+	if (ctx->rrd_file) {
+		rspamd_rrd_close (ctx->rrd_file);
+	}
 
 	exit (EXIT_SUCCESS);
 }

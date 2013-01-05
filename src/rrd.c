@@ -903,7 +903,7 @@ rspamd_rrd_add_record (struct rspamd_rrd_file* file, GArray *points, GError **er
 	pdp_new = g_malloc (sizeof (gdouble) * file->stat_head->ds_cnt);
 	pdp_temp = g_malloc (sizeof (gdouble) * file->stat_head->ds_cnt);
 	/* How much steps need to be updated in each RRA */
-	rra_steps = g_malloc (sizeof (gulong) * file->stat_head->rra_cnt);
+	rra_steps = g_malloc0 (sizeof (gulong) * file->stat_head->rra_cnt);
 
 	if (!rspamd_rrd_update_pdp_prep (file, (gdouble *)points->data, pdp_new, interval)) {
 		g_set_error (err, rrd_error_quark (), EINVAL, "rrd update pdp failed: wrong arguments");

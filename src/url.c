@@ -1234,8 +1234,8 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 	while (p >= begin) {
 		if ((!is_domain (*p) && *p != '.') || g_ascii_isspace (*p)) {
 			p ++;
-			if (*p == '.') {
-				/* Urls cannot start with . */
+			if (!g_ascii_isalnum (*p)) {
+				/* Urls cannot start with strange symbols */
 				return FALSE;
 			}
 			match->m_begin = p;

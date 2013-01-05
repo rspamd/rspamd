@@ -935,6 +935,7 @@ SET(RSPAMDSRC	src/modules.c
 				src/map.c
 				src/smtp.c
 				src/smtp_proxy.c
+				src/webui.c
 				src/worker.c)
 
 SET(PLUGINSSRC	src/plugins/surbl.c
@@ -945,7 +946,7 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/dkim_check.c)
 				
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
-SET(WORKERS_LIST normal controller smtp smtp_proxy lmtp fuzzy keystorage lua)
+SET(WORKERS_LIST normal controller smtp smtp_proxy lmtp fuzzy keystorage lua webui)
 
 AddModules(MODULES_LIST WORKERS_LIST)
 

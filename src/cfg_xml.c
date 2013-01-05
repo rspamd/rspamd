@@ -324,6 +324,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool),
 				NULL
 			},
+			{
+				"rrd",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, rrd_file),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR
@@ -1109,10 +1115,17 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 		name = memory_pool_strdup (cfg->cfg_pool, tag);
 	}
 
-	/* Check for lua */
-	if (attrs != NULL && (val = g_hash_table_lookup (attrs, "lua")) != NULL) {
-		if (g_ascii_strcasecmp (val, "yes") == 0) {
+	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
+	/* Check for options */
+	if (attrs != NULL) {
+		if ((val = g_hash_table_lookup (attrs, "lua")) != NULL && g_ascii_strcasecmp (val, "yes") == 0) {
 			is_lua = TRUE;
+		}
+		if ((val = g_hash_table_lookup (attrs, "description")) != NULL) {
+			cur->description = memory_pool_strdup (cfg->cfg_pool, val);
+		}
+		if ((val = g_hash_table_lookup (attrs, "group")) != NULL) {
+			cur->group = memory_pool_strdup (cfg->cfg_pool, val);
 		}
 	}
 	/*
@@ -1121,7 +1134,6 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 	 */
 
 	/* Insert option */
-	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
 	cur->param = (char *)name;
 	cur->value = data;
 	cur->is_lua = is_lua;
