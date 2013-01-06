@@ -67,6 +67,13 @@
 #define PATH_GET_MAP "/getmap"
 #define PATH_GRAPH "/graph"
 
+/* Graph colors */
+#define COLOR_CLEAN "#58A458"
+#define COLOR_PROBABLE_SPAM "#D67E7E"
+#define COLOR_GREYLIST "#A0A0A0"
+#define COLOR_REJECT "#CB4B4B"
+#define COLOR_TOTAL "#9440ED"
+
 gpointer init_webui_worker (void);
 void start_webui_worker (struct rspamd_worker *worker);
 
@@ -565,12 +572,12 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	}
 
 	/* Trailer */
-	evbuffer_add (evb, "[", 1);
+	evbuffer_add_printf (evb, "{\"series\": [");
 
 	/* XXX: simple and stupid set */
 	seed = g_random_int ();
 	for (i = 0; i < 100; i ++, seed ++) {
-		vals[0][i] = (sin (seed * 0.1 * M_PI_2) + 1) * 40.;
+		vals[0][i] = fabs ((sin (seed * 0.1 * M_PI_2) + 1) * 40. + ((gint)(g_random_int () % 2) - 1));
 		vals[1][i] = vals[0][i] * 0.5;
 		vals[2][i] = vals[0][i] * 0.1;
 		vals[3][i] = vals[0][i] * 0.3;
@@ -617,9 +624,10 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	for (i = 0; i < 100; i ++, t += 60) {
 		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[4][i], i == 99 ? "]" : "],");
 	}
-	evbuffer_add (evb, "]}", 2);
+	evbuffer_add (evb, "]},", 2);
 
-	evbuffer_add (evb, "]" CRLF, 3);
+	evbuffer_add_printf (evb, "],\"colors\":[\"" COLOR_CLEAN "\", \"" COLOR_PROBABLE_SPAM "\", \""
+			COLOR_GREYLIST "\", \"" COLOR_REJECT "\", \"" COLOR_TOTAL "\"]}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
 
