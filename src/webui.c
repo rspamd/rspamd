@@ -572,7 +572,7 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	}
 
 	/* Trailer */
-	evbuffer_add_printf (evb, "{\"series\": [");
+	evbuffer_add (evb, "[", 1);
 
 	/* XXX: simple and stupid set */
 	seed = g_random_int ();
@@ -588,7 +588,8 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* Ham label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_CLEAN "\", \"data\":[");
 	for (i = 0; i < 100; i ++, t += 60) {
 		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[0][i], i == 99 ? "]" : "],");
 	}
@@ -596,7 +597,8 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* Probable spam label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_PROBABLE_SPAM "\", \"data\":[");
 	for (i = 0; i < 100; i ++, t += 60) {
 		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[1][i], i == 99 ? "]" : "],");
 	}
@@ -604,7 +606,8 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* Greylist label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_GREYLIST "\", \"data\":[");
 	for (i = 0; i < 100; i ++, t += 60) {
 		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[2][i], i == 99 ? "]" : "],");
 	}
@@ -612,7 +615,8 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* Reject label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_REJECT "\", \"data\":[");
 	for (i = 0; i < 100; i ++, t += 60) {
 		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[3][i], i == 99 ? "]" : "],");
 	}
@@ -620,14 +624,15 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* Total label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_TOTAL "\", \"data\":[");
 	for (i = 0; i < 100; i ++, t += 60) {
 		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[4][i], i == 99 ? "]" : "],");
 	}
-	evbuffer_add (evb, "]},", 2);
+	evbuffer_add (evb, "]}", 2);
 
-	evbuffer_add_printf (evb, "],\"colors\":[\"" COLOR_CLEAN "\", \"" COLOR_PROBABLE_SPAM "\", \""
-			COLOR_GREYLIST "\", \"" COLOR_REJECT "\", \"" COLOR_TOTAL "\"]}" CRLF);
+	evbuffer_add (evb, "]" CRLF, 3);
+
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
 
