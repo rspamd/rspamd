@@ -393,6 +393,7 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 	GList									*cur;
 	struct rspamd_map						*map, *next;
 	gboolean								 editable;
+	gchar									*comma;
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -413,13 +414,20 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 				editable = access (map->uri, W_OK) == 0;
 				if (cur->next) {
 					next = cur->next->data;
+					if (next->protocol == MAP_PROTO_FILE && next->description != NULL &&
+							access (next->uri, R_OK) == 0) {
+						comma = "},";
+					}
+					else {
+						comma = "}";
+					}
 				}
 				else {
-					next = NULL;
+					comma = "}";
 				}
 				evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
 						map->id, map->description, editable ? "true" : "false",
-						(next && next->protocol == MAP_PROTO_FILE && next->description)  ? "}," : "}");
+						comma);
 			}
 		}
 		cur = g_list_next (cur);
