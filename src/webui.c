@@ -570,7 +570,7 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	/* XXX: simple and stupid set */
 	seed = g_random_int ();
 	for (i = 0; i < 100; i ++, seed ++) {
-		vals[0][i] = (sin (seed) + 1) * 40.;
+		vals[0][i] = (sin (seed * 0.1 * M_PI_2) + 1) * 40.;
 		vals[1][i] = vals[0][i] * 0.5;
 		vals[2][i] = vals[0][i] * 0.1;
 		vals[3][i] = vals[0][i] * 0.3;
@@ -580,42 +580,42 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	now = time (NULL);
 
 	/* Ham label */
-	t = now;
-	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"data\":[");
-	for (i = 0; i < 100; i ++, t -= 60) {
-		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[0][i], i == 99 ? "]" : "],");
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[0][i], i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Probable spam label */
-	t = now;
-	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"data\":[");
-	for (i = 0; i < 100; i ++, t -= 60) {
-		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[1][i], i == 99 ? "]" : "],");
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[1][i], i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Greylist label */
-	t = now;
-	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"data\":[");
-	for (i = 0; i < 100; i ++, t -= 60) {
-		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[2][i], i == 99 ? "]" : "],");
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[2][i], i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Reject label */
-	t = now;
-	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"data\":[");
-	for (i = 0; i < 100; i ++, t -= 60) {
-		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[3][i], i == 99 ? "]" : "],");
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[3][i], i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Total label */
-	t = now;
-	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"data\":[");
-	for (i = 0; i < 100; i ++, t -= 60) {
-		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[4][i], i == 99 ? "]" : "],");
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[4][i], i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]}", 2);
 
