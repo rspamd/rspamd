@@ -139,6 +139,23 @@ struct module_opt {
 };
 
 /**
+ * Symbol definition
+ */
+struct symbol_def {
+	gchar *name;
+	gchar *description;
+	gdouble weight;
+};
+
+/**
+ * Symbols group
+ */
+struct symbols_group {
+	gchar *name;
+	GList *symbols;
+};
+
+/**
  * Statfile section definition
  */
 struct statfile_section {
@@ -308,6 +325,7 @@ struct config_file {
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
+	GList* symbols_groups;							/**< groups of symbols									*/
 	GList* metrics_list;	 						/**< linked list of metrics								*/
 	GHashTable* metrics_symbols;					/**< hash table of metrics indexed by symbol			*/
 	GHashTable* c_modules;							/**< hash of c modules indexed by module name			*/

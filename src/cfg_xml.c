@@ -1050,15 +1050,28 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 	return TRUE;
 }
 
+static gint
+symbols_group_find_func (gconstpointer a, gconstpointer b)
+{
+	const struct symbols_group		*gr = a;
+	const gchar						*uv = b;
+
+	return g_ascii_strcasecmp (gr->name, uv);
+}
+
 gboolean
 handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	gchar                          *strval, *err, *desc;
+	gchar                          *strval, *err, *desc, *group;
 	double                         *value;
-	GList                          *metric_list;
+	GList                          *metric_list, *group_list;
 	struct metric                  *metric = ctx->section_pointer;
+	struct symbols_group		   *sym_group;
+	struct symbol_def			   *sym_def;
 
+	sym_def = memory_pool_alloc (cfg->cfg_pool, sizeof (struct symbol_def));
 	value = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+
 	if (attrs == NULL || (strval = g_hash_table_lookup (attrs, "weight")) == NULL) {
 		msg_info ("symbol tag should have \"weight\" attribute, assume weight 1.0");
 		*value = 1.0;
@@ -1072,19 +1085,30 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 		}
 	}
 	
+	sym_def->weight = *value;
+	sym_def->name = memory_pool_strdup (cfg->cfg_pool, data);
+
 	if (attrs != NULL) {
 		desc = g_hash_table_lookup (attrs, "description");
 		if (desc) {
-			g_hash_table_insert (metric->descriptions, data, memory_pool_strdup (cfg->cfg_pool, desc));
+			sym_def->description = memory_pool_strdup (cfg->cfg_pool, desc);
+			g_hash_table_insert (metric->descriptions, data, sym_def->description);
+		}
+		else {
+			sym_def->description = NULL;
+		}
+		group = g_hash_table_lookup (attrs, "group");
+		if (group == NULL) {
+			group = "ungrouped";
 		}
 	}
 
-	g_hash_table_insert (metric->symbols, data, value);
+	g_hash_table_insert (metric->symbols, sym_def->name, value);
 
-	if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, data)) == NULL) {
+	if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
 		metric_list = g_list_prepend (NULL, metric);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, metric_list);
-		g_hash_table_insert (cfg->metrics_symbols, data, metric_list);
+		g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
 	}
 	else {
 		/* Slow but keep start element of list in safe */
@@ -1092,6 +1116,21 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 			metric_list = g_list_append (metric_list, metric);
 		}
 	}
+
+	/* Search for symbol group */
+	group_list = g_list_find_custom (cfg->symbols_groups, group, symbols_group_find_func);
+	if (group_list == NULL) {
+		/* Create new group */
+		sym_group = memory_pool_alloc (cfg->cfg_pool, sizeof (struct symbols_group));
+		sym_group->name = memory_pool_strdup (cfg->cfg_pool, group);
+		sym_group->symbols = NULL;
+		cfg->symbols_groups = g_list_prepend (cfg->symbols_groups, sym_group);
+	}
+	else {
+		sym_group = group_list->data;
+	}
+	/* Insert symbol */
+	sym_group->symbols = g_list_prepend (sym_group->symbols, sym_def);
 
 	return TRUE;
 }

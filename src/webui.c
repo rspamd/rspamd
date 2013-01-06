@@ -57,6 +57,7 @@
 
 /* HTTP paths */
 #define PATH_AUTH "/login"
+#define PATH_SYMBOLS "/symbols"
 
 gpointer init_webui_worker (void);
 void start_webui_worker (struct rspamd_worker *worker);
@@ -218,6 +219,16 @@ webui_ssl_init (struct rspamd_webui_worker_ctx *ctx)
 }
 #endif
 
+/* Calculate and set content-length header */
+static void
+http_calculate_content_length (struct evbuffer *evb, struct evhttp_request *req)
+{
+	gchar									 numbuf[64];
+
+	rspamd_snprintf (numbuf, sizeof (numbuf), "%z", evbuffer_get_length (evb));
+	evhttp_add_header(req->output_headers, "Content-Length", numbuf);
+}
+
 /* Command handlers */
 
 /*
@@ -266,15 +277,86 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
 		hours = uptime / 3600;
 		minutes = uptime / 60 - hours * 60;
 		uptime -= hours * 3600 + minutes * 60;
-		rspamd_snprintf (uptime_buf, sizeof (uptime_buf), "%d hour%s %d minute%s %d second%s", hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (gint)uptime, uptime > 1 ? "s" : " ");
+		rspamd_snprintf (uptime_buf, sizeof (uptime_buf), "%d hour%s %d minute%s %d second%s", hours, hours != 1 ? "s" : " ", minutes, minutes != 1 ? "s" : " ", (gint)uptime, uptime != 1 ? "s" : " ");
 	}
 
 	evbuffer_add_printf (evb, "{\"auth\": \"%s\", \"version\": \"%s\", \"uptime\": \"%s\", \"error\": \"%s\"}" CRLF,
 			auth, RVERSION, uptime_buf, error);
-	evhttp_add_header(req->output_headers, "Connection", "close");
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
 
-	evhttp_send_reply(req, HTTP_OK, "OK", evb);
-	evbuffer_free(evb);
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
+/*
+ * Symbols command handler:
+ * request: /symbols
+ * reply: json [{
+ * 	"name": "group_name",
+ * 	"symbols": [
+ * 		{
+ * 		"name": "name",
+ * 		"weight": 0.1,
+ * 		"description": "description of symbol"
+ * 		},
+ * 		{...}
+ * },
+ * {...}]
+ */
+static void
+http_handle_symbols (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	GList									*cur_gr, *cur_sym;
+	struct symbols_group					*gr;
+	struct symbol_def						*sym;
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		return;
+	}
+
+	/* Trailer */
+	evbuffer_add (evb, "[", 1);
+
+	/* Go throught all symbols groups */
+	cur_gr = ctx->cfg->symbols_groups;
+	while (cur_gr) {
+		gr = cur_gr->data;
+		evbuffer_add_printf (evb, "{\"group\":\"%s\",\"rules\":[", gr->name);
+		/* Iterate throught all symbols */
+		cur_sym = gr->symbols;
+		while (cur_sym) {
+			sym = cur_sym->data;
+
+			if (sym->description) {
+				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f,\"description\":\"%s\"%s", sym->name, sym->weight,
+						sym->description, g_list_next (cur_sym) ? "}," : "}");
+			}
+			else {
+				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f%s", sym->name, sym->weight,
+										g_list_next (cur_sym) ? "}," : "}");
+			}
+
+			cur_sym = g_list_next (cur_sym);
+		}
+		if (g_list_next (cur_gr)) {
+			evbuffer_add (evb, "]},", 3);
+		}
+		else {
+			evbuffer_add (evb, "]},", 2);
+		}
+		cur_gr = g_list_next (cur_gr);
+	}
+	evbuffer_add (evb, "]" CRLF, 3);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
 }
 
 gpointer
@@ -351,6 +433,7 @@ start_webui_worker (struct rspamd_worker *worker)
 
 	/* Add callbacks for different methods */
 	evhttp_set_cb (ctx->http, PATH_AUTH, http_handle_auth, ctx);
+	evhttp_set_cb (ctx->http, PATH_SYMBOLS, http_handle_symbols, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 

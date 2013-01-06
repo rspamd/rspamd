@@ -236,6 +236,9 @@ init_defaults (struct config_file *cfg)
 void
 free_config (struct config_file *cfg)
 {
+	GList							*cur;
+	struct symbols_group			*gr;
+
 	remove_all_maps (cfg);
 	g_hash_table_remove_all (cfg->modules_opts);
 	g_hash_table_unref (cfg->modules_opts);
@@ -251,6 +254,19 @@ free_config (struct config_file *cfg)
 	g_hash_table_unref (cfg->cfg_params);
 	g_hash_table_destroy (cfg->metrics_symbols);
 	g_hash_table_destroy (cfg->classifiers_symbols);
+	/* Free symbols groups */
+	cur = cfg->symbols_groups;
+	while (cur) {
+		gr = cur->data;
+		if (gr->symbols) {
+			g_list_free (gr->symbols);
+		}
+		cur = g_list_next (cur);
+	}
+	if (cfg->symbols_groups) {
+		g_list_free (cfg->symbols_groups);
+	}
+
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
 	}
