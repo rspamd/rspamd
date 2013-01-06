@@ -48,6 +48,11 @@
 #include <event2/bufferevent_ssl.h>
 #endif
 
+/* Another workaround for old libevent */
+#ifndef HTTP_INTERNAL
+#define HTTP_INTERNAL 500
+#endif
+
 #ifdef WITH_GPERF_TOOLS
 #   include <glib/gprintf.h>
 #endif
