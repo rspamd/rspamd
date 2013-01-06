@@ -560,14 +560,15 @@ static gint
 lua_config_add_radix_map (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const gchar                     *map_line;
+	const gchar                     *map_line, *description;
 	radix_tree_t                   **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
+		description = lua_tostring (L, 3);
 		r = memory_pool_alloc (cfg->cfg_pool, sizeof (radix_tree_t *));
 		*r = radix_tree_create ();
-		if (!add_map (cfg, map_line, read_radix_list, fin_radix_list, (void **)r)) {
+		if (!add_map (cfg, map_line, description, read_radix_list, fin_radix_list, (void **)r)) {
 			msg_warn ("invalid radix map %s", map_line);
 			radix_tree_free (*r);
 			lua_pushnil (L);
@@ -589,14 +590,15 @@ static gint
 lua_config_add_hash_map (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const gchar                     *map_line;
+	const gchar                     *map_line, *description;
 	GHashTable                    **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
+		description = lua_tostring (L, 3);
 		r = memory_pool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		if (!add_map (cfg, map_line, read_host_list, fin_host_list, (void **)r)) {
+		if (!add_map (cfg, map_line, description, read_host_list, fin_host_list, (void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
 			lua_pushnil (L);
@@ -619,14 +621,15 @@ static gint
 lua_config_add_kv_map (lua_State *L)
 {
 	struct config_file             *cfg = lua_check_config (L);
-	const gchar                     *map_line;
+	const gchar                     *map_line, *description;
 	GHashTable                    **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
+		description = lua_tostring (L, 3);
 		r = memory_pool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		if (!add_map (cfg, map_line, read_kv_list, fin_kv_list, (void **)r)) {
+		if (!add_map (cfg, map_line, description, read_kv_list, fin_kv_list, (void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
 			lua_pushnil (L);

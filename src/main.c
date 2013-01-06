@@ -34,6 +34,10 @@
 #include "cfg_xml.h"
 #include "symbols_cache.h"
 #include "lua/lua_common.h"
+#ifdef HAVE_OPENSSL
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#endif
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
@@ -861,6 +865,10 @@ main (gint argc, gchar **argv, gchar **env)
 	GList                          *l;
 	worker_t                      **pworker;
 	GQuark							type;
+#ifdef HAVE_OPENSSL
+	gchar							rand_bytes[sizeof (guint32)];
+	guint32							rand_seed;
+#endif
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
@@ -910,6 +918,18 @@ main (gint argc, gchar **argv, gchar **env)
 	setlocale (LC_CTYPE, "C");
 	setlocale (LC_MESSAGES, "C");
 	setlocale (LC_TIME, "C");
+#endif
+
+	/* Init random generator */
+#ifdef HAVE_OPENSSL
+	if (RAND_bytes (rand_bytes, sizeof (rand_bytes)) != 1) {
+		msg_err ("cannot seed random generator using openssl: %s, using time", ERR_error_string (ERR_get_error (), NULL));
+		g_random_set_seed (time (NULL));
+	}
+	else {
+		memcpy (&rand_seed, rand_bytes, sizeof (guint32));
+		g_random_set_seed (rand_seed);
+	}
 #endif
 
 	/* First set logger to console logger */

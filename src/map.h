@@ -12,8 +12,8 @@
  */
 
 enum fetch_proto {
-	PROTO_FILE,
-	PROTO_HTTP,
+	MAP_PROTO_FILE,
+	MAP_PROTO_HTTP,
 };
 
 /**
@@ -70,6 +70,9 @@ struct rspamd_map {
 	struct timeval tv;
 	struct event_base *ev_base;
 	void *map_data;
+	gchar *uri;
+	gchar *description;
+	guint32 id;
 };
 
 /**
@@ -79,7 +82,8 @@ gboolean check_map_proto (const gchar *map_line, gint *res, const gchar **pos);
 /**
  * Add map from line
  */
-gboolean add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
+gboolean add_map (struct config_file *cfg, const gchar *map_line, const gchar *description,
+		map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
 
 /**
  * Start watching of maps by adding events to libevent event loop

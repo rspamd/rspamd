@@ -1458,7 +1458,7 @@ handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, G
 gboolean 
 handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	if (!read_settings (data, cfg, cfg->user_settings)) {
+	if (!read_settings (data, "Users' settings", cfg, cfg->user_settings)) {
 		msg_err ("cannot read settings %s", data);
 		return FALSE;
 	}
@@ -1469,7 +1469,7 @@ handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 gboolean 
 handle_domain_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	if (!read_settings (data, cfg, cfg->domain_settings)) {
+	if (!read_settings (data, "Domains' settings", cfg, cfg->domain_settings)) {
 		msg_err ("cannot read settings %s", data);
 		return FALSE;
 	}

@@ -494,10 +494,16 @@ parse_flag (const gchar *str)
 		if (g_ascii_strncasecmp (str, "no", len) == 0) {
 			return 0;
 		}
+		else if (g_ascii_strncasecmp (str, "on", len) == 0) {
+			return 1;
+		}
 		break;
 	case 3:
 		if (g_ascii_strncasecmp (str, "yes", len) == 0) {
 			return 1;
+		}
+		else if (g_ascii_strncasecmp (str, "off", len) == 0) {
+			return 0;
 		}
 		break;
 	case 4:

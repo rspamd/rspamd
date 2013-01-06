@@ -348,7 +348,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 gboolean
-read_settings (const gchar *path, struct config_file *cfg, GHashTable * table)
+read_settings (const gchar *path, const gchar *description, struct config_file *cfg, GHashTable * table)
 {
 	struct json_buf                *jb = g_malloc (sizeof (struct json_buf)), **pjb;
 
@@ -358,7 +358,7 @@ read_settings (const gchar *path, struct config_file *cfg, GHashTable * table)
 	jb->buf = NULL;
 	*pjb = jb;
 
-	if (!add_map (cfg, path, json_read_cb, json_fin_cb, (void **)pjb)) {
+	if (!add_map (cfg, path, description, json_read_cb, json_fin_cb, (void **)pjb)) {
 		msg_err ("cannot add map %s", path);
 		return FALSE;
 	}

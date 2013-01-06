@@ -419,7 +419,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "whitelist")) != NULL) {
 		fuzzy_module_ctx->whitelist = radix_tree_create ();
-		if (!add_map (cfg, value, read_radix_list, fin_radix_list, (void **)&fuzzy_module_ctx->whitelist)) {
+		if (!add_map (cfg, value, "Fuzzy whitelist", read_radix_list, fin_radix_list, (void **)&fuzzy_module_ctx->whitelist)) {
 			msg_err ("cannot add whitelist '%s'", value);	
 		}
 	}

@@ -915,7 +915,7 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 	while (cur) {
 		map = cur->data;
 		map->ev_base = ev_base;
-		if (map->protocol == PROTO_FILE) {
+		if (map->protocol == MAP_PROTO_FILE) {
 			evtimer_set (&map->ev, file_callback, map);
 			event_base_set (map->ev_base, &map->ev);
 			/* Read initial data */
@@ -929,7 +929,7 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 			map->tv.tv_usec = 0;
 			evtimer_add (&map->ev, &map->tv);
 		}
-		else if (map->protocol == PROTO_HTTP) {
+		else if (map->protocol == MAP_PROTO_HTTP) {
 			evtimer_set (&map->ev, http_callback, map);
 			event_base_set (map->ev_base, &map->ev);
 			/* Read initial data */
@@ -959,19 +959,19 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 {
 	if (g_ascii_strncasecmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
 		if (res && pos) {
-			*res = PROTO_HTTP;
+			*res = MAP_PROTO_HTTP;
 			*pos = map_line + sizeof ("http://") - 1;
 		}
 	}
 	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
 		if (res && pos) {
-			*res = PROTO_FILE;
+			*res = MAP_PROTO_FILE;
 			*pos = map_line + sizeof ("file://") - 1;
 		}
 	}
 	else if (*map_line == '/') {
 		/* Trivial file case */
-		*res = PROTO_FILE;
+		*res = MAP_PROTO_FILE;
 		*pos = map_line;
 	}
 	else {
@@ -983,11 +983,12 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 }
 
 gboolean
-add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
+add_map (struct config_file *cfg, const gchar *map_line, const gchar *description,
+		map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
 {
 	struct rspamd_map              *new_map;
 	enum fetch_proto                proto;
-	const gchar                     *def, *p, *hostend;
+	const gchar                    *def, *p, *hostend;
 	struct file_map_data           *fdata;
 	struct http_map_data           *hdata;
 	gchar                           portbuf[6];
@@ -1008,9 +1009,14 @@ add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback,
 	new_map->user_data = user_data;
 	new_map->protocol = proto;
 	new_map->cfg = cfg;
+	new_map->uri = memory_pool_strdup (cfg->cfg_pool, proto == MAP_PROTO_FILE ? def : map_line);
+	new_map->id = g_random_int ();
+	if (description != NULL) {
+		new_map->description = memory_pool_strdup (cfg->cfg_pool, description);
+	}
 
 	/* Now check for each proto separately */
-	if (proto == PROTO_FILE) {
+	if (proto == MAP_PROTO_FILE) {
 		fdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
 		if (access (def, R_OK) == -1) {
 			if (errno != ENOENT) {
@@ -1028,7 +1034,7 @@ add_map (struct config_file *cfg, const gchar *map_line, map_cb_t read_callback,
 		fdata->filename = memory_pool_strdup (cfg->map_pool, def);
 		new_map->map_data = fdata;
 	}
-	else if (proto == PROTO_HTTP) {
+	else if (proto == MAP_PROTO_HTTP) {
 		hdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
 		/* Try to search port */
 		if ((p = strchr (def, ':')) != NULL) {

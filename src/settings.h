@@ -20,7 +20,7 @@ struct rspamd_settings {
 /*
  * Read settings from specified path
  */
-gboolean read_settings (const gchar *path, struct config_file *cfg, GHashTable *table);
+gboolean read_settings (const gchar *path, const gchar *description, struct config_file *cfg, GHashTable *table);
 
 /*
  * Init configuration structures for settings

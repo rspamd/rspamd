@@ -58,6 +58,8 @@
 /* HTTP paths */
 #define PATH_AUTH "/login"
 #define PATH_SYMBOLS "/symbols"
+#define PATH_MAPS "/maps"
+#define PATH_GET_MAP "/getmap"
 
 gpointer init_webui_worker (void);
 void start_webui_worker (struct rspamd_worker *worker);
@@ -253,6 +255,7 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
 	evb = evbuffer_new ();
 	if (!evb) {
 		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
 		return;
 	}
 
@@ -320,6 +323,7 @@ http_handle_symbols (struct evhttp_request *req, gpointer arg)
 	evb = evbuffer_new ();
 	if (!evb) {
 		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500", NULL);
 		return;
 	}
 
@@ -362,6 +366,157 @@ http_handle_symbols (struct evhttp_request *req, gpointer arg)
 	evhttp_send_reply (req, HTTP_OK, "OK", evb);
 	evbuffer_free (evb);
 }
+
+/*
+ * Maps command handler:
+ * request: /maps
+ * headers: Password
+ * reply: json [
+ * 		{
+ * 		"map": "name",
+ * 		"description": "description",
+ * 		"editable": true
+ * 		},
+ * 		{...}
+ * ]
+ */
+static void
+http_handle_maps (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	GList									*cur;
+	struct rspamd_map						*map;
+	gboolean								 editable;
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* Trailer */
+	evbuffer_add (evb, "[", 1);
+
+	/* Iterate over all maps */
+	cur = ctx->cfg->maps;
+	while (cur) {
+		map = cur->data;
+		if (map->protocol == MAP_PROTO_FILE && map->description != NULL) {
+			if (access (map->uri, R_OK) == 0) {
+				editable = access (map->uri, W_OK) == 0;
+				evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
+						map->id, map->description, editable ? "true" : "false",
+						g_list_next (cur) ? "}," : "}");
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	evbuffer_add (evb, "]" CRLF, 3);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
+/*
+ * Get map command handler:
+ * request: /getmap
+ * headers: Password, Map
+ * reply: plain-text
+ */
+static void
+http_handle_get_map (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	GList									*cur;
+	struct rspamd_map						*map;
+	const gchar								*idstr;
+	gchar									*errstr;
+	struct stat								 st;
+	gint									 fd;
+	guint32									 id;
+	gboolean								 found = FALSE;
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	idstr = evhttp_find_header (req->input_headers, "Map");
+
+	if (idstr == NULL) {
+		msg_info ("absent map id");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
+		return;
+	}
+
+	id = strtoul (idstr, &errstr, 10);
+	if (*errstr != '\0') {
+		msg_info ("invalid map id");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
+		return;
+	}
+
+	/* Now let's be sure that we have map defined in configuration */
+	cur = ctx->cfg->maps;
+	while (cur) {
+		map = cur->data;
+		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
+			found = TRUE;
+			break;
+		}
+		cur = g_list_next (cur);
+	}
+
+	if (!found) {
+		msg_info ("map not found");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map not found", NULL);
+		return;
+	}
+
+	if (stat (map->uri, &st) == -1 || (fd = open (map->uri, O_RDONLY)) == -1) {
+		msg_err ("cannot open map %s: %s", map->uri, strerror (errno));
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
+		return;
+	}
+	/* Set buffer size */
+	if (evbuffer_expand (evb, st.st_size) != 0) {
+		msg_err ("cannot allocate buffer for map %s: %s", map->uri, strerror (errno));
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		close (fd);
+		return;
+	}
+
+	/* Read the whole buffer */
+	if (evbuffer_read (evb, fd, st.st_size) == -1) {
+		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map read error", NULL);
+		close (fd);
+		return;
+	}
+
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	close (fd);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
 
 gpointer
 init_webui_worker (void)
@@ -438,6 +593,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	/* Add callbacks for different methods */
 	evhttp_set_cb (ctx->http, PATH_AUTH, http_handle_auth, ctx);
 	evhttp_set_cb (ctx->http, PATH_SYMBOLS, http_handle_symbols, ctx);
+	evhttp_set_cb (ctx->http, PATH_MAPS, http_handle_maps, ctx);
+	evhttp_set_cb (ctx->http, PATH_GET_MAP, http_handle_get_map, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 

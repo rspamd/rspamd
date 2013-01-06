@@ -55,7 +55,7 @@ add_view_from (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
-	if (add_map (view->cfg, line, read_host_list, fin_host_list, (void **)&view->from_hash)) {
+	if (add_map (view->cfg, line, "SMTP From view", read_host_list, fin_host_list, (void **)&view->from_hash)) {
 		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
@@ -71,7 +71,7 @@ add_view_rcpt (struct rspamd_view * view, gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
-	if (add_map (view->cfg, line, read_host_list, fin_host_list, (void **)&view->rcpt_hash)) {
+	if (add_map (view->cfg, line, "Recipients view", read_host_list, fin_host_list, (void **)&view->rcpt_hash)) {
 		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
@@ -88,7 +88,7 @@ add_view_symbols (struct rspamd_view * view, gchar *line)
 	struct rspamd_regexp           *re = NULL;
 	GList                          *symbols;
 
-	if (add_map (view->cfg, line, read_host_list, fin_host_list, (void **)&view->symbols_hash)) {
+	if (add_map (view->cfg, line, "Symbols view", read_host_list, fin_host_list, (void **)&view->symbols_hash)) {
 		return TRUE;
 	}
 	else if ((re = parse_regexp (view->pool, line, TRUE)) != NULL) {
@@ -112,7 +112,7 @@ add_view_symbols (struct rspamd_view * view, gchar *line)
 gboolean
 add_view_ip (struct rspamd_view * view, gchar *line)
 {
-	if (add_map (view->cfg, line, read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
+	if (add_map (view->cfg, line, "IP view", read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
 		return TRUE;
 	}
 
@@ -122,7 +122,7 @@ add_view_ip (struct rspamd_view * view, gchar *line)
 gboolean
 add_view_client_ip (struct rspamd_view * view, gchar *line)
 {
-	if (add_map (view->cfg, line, read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
+	if (add_map (view->cfg, line, "Client IP view", read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
 		return TRUE;
 	}
 
