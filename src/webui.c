@@ -391,7 +391,7 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
 	GList									*cur;
-	struct rspamd_map						*map;
+	struct rspamd_map						*map, *next;
 	gboolean								 editable;
 
 	evb = evbuffer_new ();
@@ -411,9 +411,12 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 		if (map->protocol == MAP_PROTO_FILE && map->description != NULL) {
 			if (access (map->uri, R_OK) == 0) {
 				editable = access (map->uri, W_OK) == 0;
+				if (cur->next) {
+					next = cur->next->data;
+				}
 				evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
 						map->id, map->description, editable ? "true" : "false",
-						g_list_next (cur) ? "}," : "}");
+						(next->protocol == MAP_PROTO_FILE && next->description)  ? "}," : "}");
 			}
 		}
 		cur = g_list_next (cur);
