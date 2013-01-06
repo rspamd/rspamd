@@ -65,6 +65,7 @@
 #define PATH_SYMBOLS "/symbols"
 #define PATH_MAPS "/maps"
 #define PATH_GET_MAP "/getmap"
+#define PATH_GRAPH "/graph"
 
 gpointer init_webui_worker (void);
 void start_webui_worker (struct rspamd_worker *worker);
@@ -536,6 +537,96 @@ http_handle_get_map (struct evhttp_request *req, gpointer arg)
 	evbuffer_free (evb);
 }
 
+/*
+ * Graph command handler:
+ * request: /graph
+ * headers: Password
+ * reply: json [
+ * 		{ label: "Foo", data: [ [10, 1], [17, -14], [30, 5] ] },
+ * 		{ label: "Bar", data: [ [10, 1], [17, -14], [30, 5] ] },
+ * 		{...}
+ * ]
+ */
+/* XXX: now this function returns only random data */
+static void
+http_handle_graph (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	gint									 i, seed;
+	time_t									 now, t;
+	double									 vals[5][100];
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* Trailer */
+	evbuffer_add (evb, "[", 1);
+
+	/* XXX: simple and stupid set */
+	seed = g_random_int ();
+	for (i = 0; i < 100; i ++, seed ++) {
+		vals[0][i] = (sin (seed) + 1) * 40.;
+		vals[1][i] = vals[0][i] * 0.5;
+		vals[2][i] = vals[0][i] * 0.1;
+		vals[3][i] = vals[0][i] * 0.3;
+		vals[4][i] = vals[0][i] * 1.9;
+	}
+
+	now = time (NULL);
+
+	/* Ham label */
+	t = now;
+	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"data\":[");
+	for (i = 0; i < 100; i ++, t -= 60) {
+		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[0][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Probable spam label */
+	t = now;
+	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"data\":[");
+	for (i = 0; i < 100; i ++, t -= 60) {
+		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[1][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Greylist label */
+	t = now;
+	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"data\":[");
+	for (i = 0; i < 100; i ++, t -= 60) {
+		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[2][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Reject label */
+	t = now;
+	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"data\":[");
+	for (i = 0; i < 100; i ++, t -= 60) {
+		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[3][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Total label */
+	t = now;
+	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"data\":[");
+	for (i = 0; i < 100; i ++, t -= 60) {
+		evbuffer_add_printf (evb, "[%lu,%.2f%s", (long unsigned)t, vals[4][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]}", 2);
+
+	evbuffer_add (evb, "]" CRLF, 3);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
 
 gpointer
 init_webui_worker (void)
@@ -614,6 +705,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	evhttp_set_cb (ctx->http, PATH_SYMBOLS, http_handle_symbols, ctx);
 	evhttp_set_cb (ctx->http, PATH_MAPS, http_handle_maps, ctx);
 	evhttp_set_cb (ctx->http, PATH_GET_MAP, http_handle_get_map, ctx);
+	evhttp_set_cb (ctx->http, PATH_GRAPH, http_handle_graph, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
