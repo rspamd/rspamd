@@ -414,9 +414,12 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 				if (cur->next) {
 					next = cur->next->data;
 				}
+				else {
+					next = NULL;
+				}
 				evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
 						map->id, map->description, editable ? "true" : "false",
-						(next->protocol == MAP_PROTO_FILE && next->description)  ? "}," : "}");
+						(next && next->protocol == MAP_PROTO_FILE && next->description)  ? "}," : "}");
 			}
 		}
 		cur = g_list_next (cur);
