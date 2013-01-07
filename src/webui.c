@@ -785,7 +785,7 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
  * request: /learnspam
  * headers: Password
  * input: plaintext data
- * reply: plaintext reply
+ * reply: json {"success":true} or {"error":"error message"}
  */
 static void
 http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
@@ -803,7 +803,7 @@ http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
 
 	/* XXX: Add real learning here */
 
-	evbuffer_add (evb, "OK" CRLF, 5);
+	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
 
@@ -816,7 +816,7 @@ http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
  * request: /learnham
  * headers: Password
  * input: plaintext data
- * reply: plaintext reply
+ * reply: json {"success":true} or {"error":"error message"}
  */
 static void
 http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
@@ -834,7 +834,7 @@ http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
 
 	/* XXX: Add real learning here */
 
-	evbuffer_add (evb, "OK" CRLF, 5);
+	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
 
