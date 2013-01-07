@@ -19,6 +19,7 @@
 #include "events.h"
 #include "util.h"
 #include "logger.h"
+#include "roll_history.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE ETC_PREFIX "/rspamd.xml"
@@ -104,6 +105,7 @@ struct rspamd_main {
 	uid_t workers_uid;											/**< worker's uid running to 						*/
 	gid_t workers_gid;											/**< worker's gid running to						*/
 	gboolean is_privilleged;									/**< true if run in privilleged mode 				*/
+	struct roll_history *history;								/**< rolling history								*/
 };
 
 struct counter_data {
@@ -258,6 +260,7 @@ struct worker_task {
 #endif
 	struct timeval tv;											/**< time of connection								*/
 	struct rspamd_view *view;									/**< matching view									*/
+	guint32 scan_milliseconds;									/**< how much milliseconds passed					*/
 	gboolean view_checked;
 	gboolean pass_all_filters;									/**< pass task throught every rule					*/
 	guint32 parser_recursion;									/**< for avoiding recursion stack overflow			*/

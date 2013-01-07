@@ -66,6 +66,8 @@
 #define PATH_MAPS "/maps"
 #define PATH_GET_MAP "/getmap"
 #define PATH_GRAPH "/graph"
+#define PATH_PIE_CHART "/pie"
+#define PATH_HISTORY "/history"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -640,6 +642,141 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	evbuffer_free (evb);
 }
 
+/*
+ * Pie chart command handler:
+ * request: /pie
+ * headers: Password
+ * reply: json [
+ * 		{ label: "Foo", data: 11 },
+ * 		{ label: "Bar", data: 20 },
+ * 		{...}
+ * ]
+ */
+static void
+http_handle_pie_chart (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	gdouble                             	 data[4], total;
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	total = ctx->srv->stat->messages_scanned;
+	if (total != 0) {
+		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total * 100.;
+		data[1] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] + ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) / total * 100.;
+		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total * 100.;
+		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total * 100.;
+
+		evbuffer_add_printf (evb, "[{\"label\": \"Clean messages\", \"color\": \""
+				COLOR_CLEAN "\", \"data\":%.2f},", data[0]);
+		evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"color\": \""
+				COLOR_PROBABLE_SPAM "\", \"data\":%.2f},", data[1]);
+		evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"color\": \""
+				COLOR_GREYLIST "\", \"data\":%.2f},", data[2]);
+		evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"color\": \""
+				COLOR_REJECT "\", \"data\":%.2f}]" CRLF, data[3]);
+	}
+	else {
+		evbuffer_add_printf (evb, "[{\"label\": \"Not scanned messages\", \"data\": 0}]" CRLF);
+	}
+
+
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
+/*
+ * History command handler:
+ * request: /history
+ * headers: Password
+ * reply: json [
+ * 		{ label: "Foo", data: 11 },
+ * 		{ label: "Bar", data: 20 },
+ * 		{...}
+ * ]
+ */
+static void
+http_handle_history (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	struct roll_history_row					*row;
+	struct roll_history						 copied_history;
+	gint									 i, row_num;
+	struct tm								*tm;
+	gchar									 timebuf[32];
+	gchar									 ip_buf[INET6_ADDRSTRLEN];
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* Set lock on history */
+	memory_pool_lock_mutex (ctx->srv->history->mtx);
+	ctx->srv->history->need_lock = TRUE;
+	/* Copy locked */
+	memcpy (&copied_history, ctx->srv->history, sizeof (copied_history));
+	memory_pool_unlock_mutex (ctx->srv->history->mtx);
+
+	/* Trailer */
+	evbuffer_add (evb, "[", 1);
+
+	/* Go throught all rows */
+	row_num = copied_history.cur_row;
+	for (i = 0; i < HISTORY_MAX_ROWS; i ++, row_num ++) {
+		if (row_num == HISTORY_MAX_ROWS) {
+			row_num = 0;
+		}
+		row = &copied_history.rows[row_num];
+		/* Get only completed rows */
+		if (row->completed) {
+			tm = localtime (&row->tv.tv_sec);
+			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tm);
+#ifdef HAVE_INET_PTON
+			if (row->from_addr.ipv6) {
+				inet_ntop (AF_INET6, &row->from_addr.d.in6, ip_buf, sizeof (ip_buf));
+			}
+			else {
+				inet_ntop (AF_INET, &row->from_addr.d.in4, ip_buf, sizeof (ip_buf));
+			}
+#else
+			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr), sizeof (ip_buf));
+#endif
+			if (row->user[0] != '\0') {
+				evbuffer_add_printf (evb, "{\"time\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"action\":\"%s\","
+					"\"score\":%.2f,\"required_score\": %.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u,"
+					"\"user\":\"%s\"}%s", timebuf, row->message_id, ip_buf, str_action_metric (row->action),
+					row->score, row->required_score, row->symbols, row->len, row->scan_time, row->user, i == HISTORY_MAX_ROWS - 1 ? "" : ",");
+			}
+			else {
+				evbuffer_add_printf (evb, "{\"time\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"action\":\"%s\","
+					"\"score\": %.2f,\"required_score\":%.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u}%s",
+					timebuf, row->message_id, ip_buf, str_action_metric (row->action),
+					row->score, row->required_score, row->symbols, row->len, row->scan_time, i == HISTORY_MAX_ROWS - 1 ? "" : ",");
+			}
+		}
+	}
+
+	evbuffer_add (evb, "]" CRLF, 3);
+
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
 
 gpointer
 init_webui_worker (void)
@@ -719,6 +856,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	evhttp_set_cb (ctx->http, PATH_MAPS, http_handle_maps, ctx);
 	evhttp_set_cb (ctx->http, PATH_GET_MAP, http_handle_get_map, ctx);
 	evhttp_set_cb (ctx->http, PATH_GRAPH, http_handle_graph, ctx);
+	evhttp_set_cb (ctx->http, PATH_PIE_CHART, http_handle_pie_chart, ctx);
+	evhttp_set_cb (ctx->http, PATH_HISTORY, http_handle_history, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 

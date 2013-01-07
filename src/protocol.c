@@ -1291,11 +1291,11 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 			cd->log_size - cd->log_offset, "]), len: %z, time: %s, dns req: %d,",
 			task->msg->len, calculate_check_time (&task->tv, &task->ts,
-					task->cfg->clock_res), task->dns_requests);
+					task->cfg->clock_res, &task->scan_milliseconds), task->dns_requests);
 #else
 		cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset,
 			"]), len: %z, time: %s, dns req: %d,",
-			task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res), task->dns_requests);
+			task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res, &task->scan_milliseconds), task->dns_requests);
 #endif
 	}
 }
@@ -1362,6 +1362,7 @@ write_check_reply (struct worker_task *task)
 	}
 	cd.alive = TRUE;
 
+
 	if (task->proto == SPAMC_PROTO && !task->is_http) {
 		/* Ignore metrics, just write report for 'default' metric */
 
@@ -1379,6 +1380,8 @@ write_check_reply (struct worker_task *task)
 				return FALSE;
 			}
 		}
+		/* Update history */
+		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
 	else {
 		/* Show default metric first */
@@ -1401,6 +1404,8 @@ write_check_reply (struct worker_task *task)
 				return FALSE;
 			}
 		}
+		/* Update history */
+		rspamd_roll_history_update (task->worker->srv->history, task);
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */
@@ -1433,6 +1438,7 @@ write_check_reply (struct worker_task *task)
 	
 	write_hashes_to_log (task, logbuf, cd.log_offset, cd.log_size);
 	msg_info ("%s", logbuf);
+
 	if (!task->is_json) {
 		/* Write message id */
 		if (task->proto == RSPAMC_PROTO && task->proto_ver >= 12) {
@@ -1518,6 +1524,7 @@ write_process_reply (struct worker_task *task)
 	cd.log_size = sizeof (logbuf);
 	cd.alive = TRUE;
 
+
 	if (task->proto == SPAMC_PROTO) {
 		/* Ignore metrics, just write report for 'default' metric */
 		metric_res = g_hash_table_lookup (task->results, "default");
@@ -1534,6 +1541,8 @@ write_process_reply (struct worker_task *task)
 				return FALSE;
 			}
 		}
+		/* Update history */
+		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
 	else {
 		/* Show default metric first */
@@ -1551,6 +1560,8 @@ write_process_reply (struct worker_task *task)
 				return FALSE;
 			}
 		}
+		/* Update history */
+		rspamd_roll_history_update (task->worker->srv->history, task);
 		g_hash_table_remove (task->results, "default");
 
 		/* Write result for each metric separately */

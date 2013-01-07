@@ -128,9 +128,9 @@ gchar* resolve_stat_filename (memory_pool_t *pool, gchar *pattern, gchar *rcpt, 
 /*
  * Calculate check time with specified resolution of timer
  */
-const gchar* calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution);
+const gchar* calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution, guint32 *scan_ms);
 #else
-const gchar* calculate_check_time (struct timeval *begin, gint resolution);
+const gchar* calculate_check_time (struct timeval *begin, gint resolution, guint32 *scan_ms);
 #endif
 
 /*

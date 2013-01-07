@@ -39,6 +39,7 @@ SET(LIBRSPAMDSERVERSRC
 				../src/kvstorage_file.c
 				../src/lmtp_proto.c
 				../src/proxy.c
+				../src/roll_history.c
 				../src/settings.c
 				../src/spf.c
 				../src/statfile.c

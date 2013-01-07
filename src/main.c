@@ -1022,6 +1022,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	config_logger (rspamd_main, type, TRUE);
 
+	/* Create rolling history */
+	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
+
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd_main->cfg->cfg_name = memory_pool_strdup (rspamd_main->cfg->cfg_pool, rspamd_main->cfg->cfg_name);
 

@@ -184,10 +184,10 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 
 #ifdef HAVE_CLOCK_GETTIME
 	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
-		task->msg->len, calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res));
+		task->msg->len, calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res, &task->scan_milliseconds));
 #else
 	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset, cd->log_size - cd->log_offset, "]), len: %z, time: %s,",
-		task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res));
+		task->msg->len, calculate_check_time (&task->tv, task->cfg->clock_res, &task->scan_milliseconds));
 #endif
 }
 

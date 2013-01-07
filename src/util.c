@@ -902,16 +902,17 @@ resolve_stat_filename (memory_pool_t * pool, gchar *pattern, gchar *rcpt, gchar 
 
 #ifdef HAVE_CLOCK_GETTIME
 const gchar                     *
-calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution)
+calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution, guint32 *scan_time)
 #else
 const gchar                     *
-calculate_check_time (struct timeval *begin, gint resolution)
+calculate_check_time (struct timeval *begin, gint resolution, guint32 *scan_time)
 #endif
 {
 	double                          vdiff, diff;
 	static gchar                     res[64];
 	static gchar                     fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
 	struct timeval                  tv_now;
+
 	if (gettimeofday (&tv_now, NULL) == -1) {
 		msg_warn ("gettimeofday failed: %s", strerror (errno));
 	}
@@ -936,6 +937,8 @@ calculate_check_time (struct timeval *begin, gint resolution)
 
 	vdiff = diff;
 #endif
+
+	*scan_time = diff;
 
 	sprintf (fmt, "%%.%dfms real, %%.%dfms virtual", resolution, resolution);
 	snprintf (res, sizeof (res), fmt, diff, vdiff);
