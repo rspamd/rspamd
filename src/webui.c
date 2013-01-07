@@ -63,6 +63,7 @@
 /* HTTP paths */
 #define PATH_AUTH "/login"
 #define PATH_SYMBOLS "/symbols"
+#define PATH_ACTIONS "/actions"
 #define PATH_MAPS "/maps"
 #define PATH_GET_MAP "/getmap"
 #define PATH_GRAPH "/graph"
@@ -252,6 +253,33 @@ http_calculate_content_length (struct evbuffer *evb, struct evhttp_request *req)
 	evhttp_add_header(req->output_headers, "Content-Length", numbuf);
 }
 
+/* Check for password if it is required by configuration */
+static gboolean
+http_check_password (struct rspamd_webui_worker_ctx *ctx, struct evhttp_request *req)
+{
+	const gchar								*password;
+	struct evbuffer							*evb;
+
+	if (ctx->password) {
+		password = evhttp_find_header (req->input_headers, "Password");
+		if (password == NULL || strcmp (password, ctx->password) != 0) {
+			msg_info ("incorrect or absent password was specified");
+			evb = evbuffer_new ();
+			if (!evb) {
+				msg_err ("cannot allocate evbuffer for reply");
+				evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+				return FALSE;
+			}
+			evbuffer_add (evb, "{\"error\":\"unauthorized\"}" CRLF, sizeof ("{\"error\":\"unauthorized\"}" CRLF));
+			evhttp_send_reply (req, 403, "403 access denied", evb);
+			evbuffer_free (evb);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
 /* Command handlers */
 
 /*
@@ -265,9 +293,12 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
-	const gchar								*password;
 	gchar									*auth = "ok", *error = "none", uptime_buf[128];
 	time_t									 uptime, days, hours, minutes;
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -276,13 +307,6 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
 		return;
 	}
 
-	if (ctx->password) {
-		password = evhttp_find_header (req->input_headers, "Password");
-		if (password == NULL || strcmp (password, ctx->password) != 0) {
-			auth = "failed";
-			error = "unauthorized";
-		}
-	}
 	/* Print uptime */
 	uptime = time (NULL) - ctx->start_time;
 	/* If uptime more than 2 hours, print as a number of days. */
@@ -337,6 +361,10 @@ http_handle_symbols (struct evhttp_request *req, gpointer arg)
 	struct symbols_group					*gr;
 	struct symbol_def						*sym;
 
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
 	evb = evbuffer_new ();
 	if (!evb) {
 		msg_err ("cannot allocate evbuffer for reply");
@@ -385,6 +413,59 @@ http_handle_symbols (struct evhttp_request *req, gpointer arg)
 }
 
 /*
+ * Actions command handler:
+ * request: /actions
+ * reply: json [{
+ * 	"action": "no action",
+ * 	"value": 1.1
+ * },
+ * {...}]
+ */
+static void
+http_handle_actions (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	struct metric							*metric;
+	GList									*cur;
+	struct metric_action					*act;
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500", NULL);
+		return;
+	}
+
+	/* Trailer */
+	evbuffer_add (evb, "[", 1);
+
+	/* Get actions for default metric */
+	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric != NULL) {
+
+		cur = metric->actions;
+		while (cur) {
+			act = cur->data;
+			cur = g_list_next (cur);
+			evbuffer_add_printf (evb, "{\"action\":\"%s\",\"value\":%.2f},", str_action_metric (act->action), act->score);
+		}
+		/* Print default action */
+		evbuffer_add_printf (evb, "{\"action\":\"%s\",\"value\":%.2f}", str_action_metric (metric->action), metric->required_score);
+	}
+
+	evbuffer_add (evb, "]" CRLF, 3);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+/*
  * Maps command handler:
  * request: /maps
  * headers: Password
@@ -406,6 +487,11 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 	struct rspamd_map						*map, *next;
 	gboolean								 editable;
 	gchar									*comma;
+
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -472,6 +558,11 @@ http_handle_get_map (struct evhttp_request *req, gpointer arg)
 	gint									 fd;
 	guint32									 id;
 	gboolean								 found = FALSE;
+
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -568,6 +659,10 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
 	time_t									 now, t;
 	double									 vals[5][100];
 
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
 	evb = evbuffer_new ();
 	if (!evb) {
 		msg_err ("cannot allocate evbuffer for reply");
@@ -661,6 +756,10 @@ http_handle_pie_chart (struct evhttp_request *req, gpointer arg)
 	struct evbuffer							*evb;
 	gdouble                             	 data[4], total;
 
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
 	evb = evbuffer_new ();
 	if (!evb) {
 		msg_err ("cannot allocate evbuffer for reply");
@@ -717,6 +816,10 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 	struct tm								*tm;
 	gchar									 timebuf[32];
 	gchar									 ip_buf[INET6_ADDRSTRLEN];
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -793,6 +896,10 @@ http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
 
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
 	inb = req->input_buffer;
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -823,6 +930,10 @@ http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
 
 	inb = req->input_buffer;
 	evb = evbuffer_new ();
@@ -917,6 +1028,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	/* Add callbacks for different methods */
 	evhttp_set_cb (ctx->http, PATH_AUTH, http_handle_auth, ctx);
 	evhttp_set_cb (ctx->http, PATH_SYMBOLS, http_handle_symbols, ctx);
+	evhttp_set_cb (ctx->http, PATH_ACTIONS, http_handle_actions, ctx);
 	evhttp_set_cb (ctx->http, PATH_MAPS, http_handle_maps, ctx);
 	evhttp_set_cb (ctx->http, PATH_GET_MAP, http_handle_get_map, ctx);
 	evhttp_set_cb (ctx->http, PATH_GRAPH, http_handle_graph, ctx);
