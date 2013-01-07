@@ -68,6 +68,8 @@
 #define PATH_GRAPH "/graph"
 #define PATH_PIE_CHART "/pie"
 #define PATH_HISTORY "/history"
+#define PATH_LEARN_SPAM "/learnspam"
+#define PATH_LEARN_HAM "/learnham"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -778,6 +780,68 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 	evbuffer_free (evb);
 }
 
+/*
+ * Learn spam command handler:
+ * request: /learnspam
+ * headers: Password
+ * input: plaintext data
+ * reply: plaintext reply
+ */
+static void
+http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb, *inb;
+
+	inb = req->input_buffer;
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* XXX: Add real learning here */
+
+	evbuffer_add (evb, "OK" CRLF, 5);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
+/*
+ * Learn ham command handler:
+ * request: /learnham
+ * headers: Password
+ * input: plaintext data
+ * reply: plaintext reply
+ */
+static void
+http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb, *inb;
+
+	inb = req->input_buffer;
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* XXX: Add real learning here */
+
+	evbuffer_add (evb, "OK" CRLF, 5);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
 gpointer
 init_webui_worker (void)
 {
@@ -858,6 +922,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	evhttp_set_cb (ctx->http, PATH_GRAPH, http_handle_graph, ctx);
 	evhttp_set_cb (ctx->http, PATH_PIE_CHART, http_handle_pie_chart, ctx);
 	evhttp_set_cb (ctx->http, PATH_HISTORY, http_handle_history, ctx);
+	evhttp_set_cb (ctx->http, PATH_LEARN_SPAM, http_handle_learn_spam, ctx);
+	evhttp_set_cb (ctx->http, PATH_LEARN_HAM, http_handle_learn_ham, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
