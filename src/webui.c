@@ -73,6 +73,7 @@
 #define PATH_LEARN_HAM "/learnham"
 #define PATH_SAVE_ACTIONS "/saveactions"
 #define PATH_SAVE_SYMBOLS "/savesymbols"
+#define PATH_SAVE_MAP "/savemap"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -330,7 +331,6 @@ http_learn_task_free (gpointer arg)
 
 		evhttp_send_reply (cbdata->req, HTTP_OK, "OK", evb);
 		evbuffer_free (evb);
-		g_error_free (err);
 		free_task_hard (cbdata->task);
 	}
 	/* If task is not processed, just do nothing */
@@ -344,8 +344,6 @@ static void
 http_learn_task_event_helper (int fd, short what, gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
-
-	msg_info ("hui");
 
 	destroy_session (cbdata->task->s);
 }
@@ -467,9 +465,11 @@ static void
 http_handle_auth (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct rspamd_stat						*st;
 	struct evbuffer							*evb;
-	gchar									*auth = "ok", *error = "none", uptime_buf[128];
-	time_t									 uptime, days, hours, minutes;
+	gchar									*auth = "ok", *error = "none";
+	time_t									 uptime;
+	gulong									 data[4];
 
 	if (!http_check_password (ctx, req)) {
 		return;
@@ -482,29 +482,20 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
 		return;
 	}
 
-	/* Print uptime */
-	uptime = time (NULL) - ctx->start_time;
-	/* If uptime more than 2 hours, print as a number of days. */
-	if (uptime >= 2 * 3600) {
-		days = uptime / 86400;
-		hours = uptime / 3600 - days * 24;
-		minutes = uptime / 60 - hours * 60 - days * 1440;
-		rspamd_snprintf (uptime_buf, sizeof (uptime_buf), "%d day%s %d hour%s %d minute%s", days, days != 1 ? "s" : " ", hours, hours != 1 ? "s" : " ", minutes, minutes != 1 ? "s" : " ");
-	}
-	/* If uptime is less than 1 minute print only seconds */
-	else if (uptime / 60 == 0) {
-		rspamd_snprintf (uptime_buf, sizeof (uptime_buf), "%d second%s", (gint)uptime, (gint)uptime != 1 ? "s" : " ");
-	}
-	/* Else print the minutes and seconds. */
-	else {
-		hours = uptime / 3600;
-		minutes = uptime / 60 - hours * 60;
-		uptime -= hours * 3600 + minutes * 60;
-		rspamd_snprintf (uptime_buf, sizeof (uptime_buf), "%d hour%s %d minute%s %d second%s", hours, hours != 1 ? "s" : " ", minutes, minutes != 1 ? "s" : " ", (gint)uptime, uptime != 1 ? "s" : " ");
-	}
+	st = ctx->srv->stat;
+	data[0] = st->actions_stat[METRIC_ACTION_NOACTION];
+	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] + st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+	data[2] = st->actions_stat[METRIC_ACTION_GREYLIST];
+	data[3] = st->actions_stat[METRIC_ACTION_REJECT];
 
-	evbuffer_add_printf (evb, "{\"auth\": \"%s\", \"version\": \"%s\", \"uptime\": \"%s\", \"error\": \"%s\"}" CRLF,
-			auth, RVERSION, uptime_buf, error);
+	/* Get uptime */
+	uptime = time (NULL) - ctx->start_time;
+
+	evbuffer_add_printf (evb, "{\"auth\": \"%s\",\"version\":\"%s\",\"uptime\": %lu,\"error\":\"%s\", "
+			"\"clean\":%lu,\"probable\":%lu,\"greylist\":%lu,\"reject\":%lu,"
+			"\"scanned\":%u,\"learned\":%u}" CRLF,
+			auth, RVERSION, (long unsigned)uptime, error, data[0], data[1], data[2], data[3],
+			st->messages_scanned, st->messages_learned);
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
 
@@ -1201,6 +1192,81 @@ http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
 	evbuffer_free (evb);
 }
 
+/*
+ * Save symbols command handler:
+ * request: /savesymbols
+ * headers: Password, Map
+ * input: plaintext data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static void
+http_handle_save_map (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	GList									*cur;
+	struct rspamd_map						*map;
+	const gchar								*idstr;
+	gchar									*errstr;
+	guint32									 id;
+	gboolean								 found = FALSE;
+
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	idstr = evhttp_find_header (req->input_headers, "Map");
+
+	if (idstr == NULL) {
+		msg_info ("absent map id");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
+		return;
+	}
+
+	id = strtoul (idstr, &errstr, 10);
+	if (*errstr != '\0') {
+		msg_info ("invalid map id");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
+		return;
+	}
+
+	/* Now let's be sure that we have map defined in configuration */
+	cur = ctx->cfg->maps;
+	while (cur) {
+		map = cur->data;
+		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
+			found = TRUE;
+			break;
+		}
+		cur = g_list_next (cur);
+	}
+
+	if (!found) {
+		msg_info ("map not found");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map not found", NULL);
+		return;
+	}
+
+	/* XXX: add real saving */
+
+	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+
 gpointer
 init_webui_worker (void)
 {
@@ -1287,6 +1353,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	evhttp_set_cb (ctx->http, PATH_LEARN_HAM, http_handle_learn_ham, ctx);
 	evhttp_set_cb (ctx->http, PATH_SAVE_ACTIONS, http_handle_save_actions, ctx);
 	evhttp_set_cb (ctx->http, PATH_SAVE_SYMBOLS, http_handle_save_symbols, ctx);
+	evhttp_set_cb (ctx->http, PATH_SAVE_MAP, http_handle_save_map, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
