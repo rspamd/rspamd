@@ -847,6 +847,9 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 		row = &copied_history.rows[row_num];
 		/* Get only completed rows */
 		if (row->completed) {
+			if (i != 0) {
+				evbuffer_add (evb, ",", 1);
+			}
 			tm = localtime (&row->tv.tv_sec);
 			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tm);
 #ifdef HAVE_INET_PTON
@@ -862,14 +865,14 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 			if (row->user[0] != '\0') {
 				evbuffer_add_printf (evb, "{\"time\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"action\":\"%s\","
 					"\"score\":%.2f,\"required_score\": %.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u,"
-					"\"user\":\"%s\"}%s", timebuf, row->message_id, ip_buf, str_action_metric (row->action),
-					row->score, row->required_score, row->symbols, row->len, row->scan_time, row->user, i == HISTORY_MAX_ROWS - 1 ? "" : ",");
+					"\"user\":\"%s\"}", timebuf, row->message_id, ip_buf, str_action_metric (row->action),
+					row->score, row->required_score, row->symbols, row->len, row->scan_time, row->user);
 			}
 			else {
 				evbuffer_add_printf (evb, "{\"time\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"action\":\"%s\","
-					"\"score\": %.2f,\"required_score\":%.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u}%s",
+					"\"score\": %.2f,\"required_score\":%.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u}",
 					timebuf, row->message_id, ip_buf, str_action_metric (row->action),
-					row->score, row->required_score, row->symbols, row->len, row->scan_time, i == HISTORY_MAX_ROWS - 1 ? "" : ",");
+					row->score, row->required_score, row->symbols, row->len, row->scan_time);
 			}
 		}
 	}
