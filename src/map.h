@@ -73,6 +73,8 @@ struct rspamd_map {
 	gchar *uri;
 	gchar *description;
 	guint32 id;
+	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
+	gint *locked;
 };
 
 /**

@@ -1093,6 +1093,11 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Preload all statfiles */
 	preload_statfiles (rspamd_main);
 
+	/* Maybe read roll history */
+	if (rspamd_main->cfg->history_file) {
+		rspamd_roll_history_load (rspamd_main->history, rspamd_main->cfg->history_file);
+	}
+
 	/* Spawn workers */
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 	spawn_workers (rspamd_main);
@@ -1180,6 +1185,11 @@ main (gint argc, gchar **argv, gchar **env)
 	set_alarm (HARD_TERMINATION_TIME);
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
+
+	/* Maybe save roll history */
+	if (rspamd_main->cfg->history_file) {
+		rspamd_roll_history_save (rspamd_main->history, rspamd_main->cfg->history_file);
+	}
 
 	msg_info ("terminating...");
 

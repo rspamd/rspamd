@@ -761,6 +761,11 @@ file_callback (gint fd, short what, void *ud)
 	map->tv.tv_usec = 0;
 	evtimer_add (&map->ev, &map->tv);
 
+	if (g_atomic_int_get (map->locked)) {
+		msg_info ("don't try to reread map as it is locked by other process, will reread it later");
+		return;
+	}
+
 	if (stat (data->filename, &st) != -1 && (st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
 		/* File was modified since last check */
 		memcpy (&data->st, &st, sizeof (struct stat));
@@ -882,6 +887,10 @@ http_callback (gint fd, short what, void *ud)
 	map->tv.tv_usec = 0;
 	evtimer_add (&map->ev, &map->tv);
 
+	if (g_atomic_int_get (map->locked)) {
+		msg_info ("don't try to reread map as it is locked by other process, will reread it later");
+		return;
+	}
 	/* Connect asynced */
 	if ((sock = connect_http (map, data, TRUE)) == -1) {
 		return;
@@ -1011,6 +1020,7 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 	new_map->cfg = cfg;
 	new_map->uri = memory_pool_strdup (cfg->cfg_pool, proto == MAP_PROTO_FILE ? def : map_line);
 	new_map->id = g_random_int ();
+	new_map->locked = memory_pool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	if (description != NULL) {
 		new_map->description = memory_pool_strdup (cfg->cfg_pool, description);
 	}

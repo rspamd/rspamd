@@ -330,6 +330,12 @@ static struct xml_parser_rule grammar[] = {
 				G_STRUCT_OFFSET (struct config_file, rrd_file),
 				NULL
 			},
+			{
+				"history_file",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct config_file, history_file),
+				NULL
+			},
 			NULL_ATTR
 		},
 		NULL_DEF_ATTR

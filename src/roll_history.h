@@ -87,4 +87,20 @@ struct roll_history* rspamd_roll_history_new (memory_pool_t *pool);
  */
 void rspamd_roll_history_update (struct roll_history *history, struct worker_task *task);
 
+/**
+ * Load previously saved history from file
+ * @param history roll history object
+ * @param filename filename to load from
+ * @return TRUE if history has been loaded
+ */
+gboolean rspamd_roll_history_load (struct roll_history *history, const gchar *filename);
+
+/**
+ * Save history to file
+ * @param history roll history object
+ * @param filename filename to load from
+ * @return TRUE if history has been saved
+ */
+gboolean rspamd_roll_history_save (struct roll_history *history, const gchar *filename);
+
 #endif /* ROLL_HISTORY_H_ */

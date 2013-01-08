@@ -143,3 +143,68 @@ rspamd_roll_history_update (struct roll_history *history, struct worker_task *ta
 	row->len = task->msg->len;
 	row->completed = TRUE;
 }
+
+/**
+ * Load previously saved history from file
+ * @param history roll history object
+ * @param filename filename to load from
+ * @return TRUE if history has been loaded
+ */
+gboolean
+rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
+{
+	gint									 fd;
+	struct stat								 st;
+
+	if (stat (filename, &st) == -1) {
+		msg_info ("cannot load history from %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	if (st.st_size != sizeof (history->rows)) {
+		msg_info ("cannot load history from %s: size mismatch", filename);
+		return FALSE;
+	}
+
+	if ((fd = open (filename, O_RDONLY)) == -1) {
+		msg_info ("cannot load history from %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	if (read (fd, history->rows, sizeof (history->rows)) == -1) {
+		close (fd);
+		msg_info ("cannot read history from %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	close (fd);
+
+	return TRUE;
+}
+
+/**
+ * Save history to file
+ * @param history roll history object
+ * @param filename filename to load from
+ * @return TRUE if history has been saved
+ */
+gboolean
+rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
+{
+	gint									 fd;
+
+	if ((fd = open (filename, O_WRONLY | O_CREAT | O_TRUNC, 00600)) == -1) {
+		msg_info ("cannot save history to %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	if (write (fd, history->rows, sizeof (history->rows)) == -1) {
+		close (fd);
+		msg_info ("cannot write history to %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	close (fd);
+
+	return TRUE;
+}
