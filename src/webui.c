@@ -71,6 +71,8 @@
 #define PATH_HISTORY "/history"
 #define PATH_LEARN_SPAM "/learnspam"
 #define PATH_LEARN_HAM "/learnham"
+#define PATH_SAVE_ACTIONS "/saveactions"
+#define PATH_SAVE_SYMBOLS "/savesymbols"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -116,6 +118,8 @@ struct rspamd_webui_worker_ctx {
 	gchar *ssl_cert;
 	/* SSL private key */
 	gchar *ssl_key;
+	/* Worker */
+	struct rspamd_worker *worker;
 };
 
 static sig_atomic_t             wanna_die = 0;
@@ -278,6 +282,177 @@ http_check_password (struct rspamd_webui_worker_ctx *ctx, struct evhttp_request 
 	}
 
 	return TRUE;
+}
+
+struct learn_callback_data {
+	struct worker_task *task;
+	struct evhttp_request *req;
+	struct classifier_config *classifier;
+	struct rspamd_webui_worker_ctx *ctx;
+	gboolean is_spam;
+	gboolean processed;
+};
+
+/*
+ * Called before destroying of task's session, here we can perform learning
+ */
+static void
+http_learn_task_free (gpointer arg)
+{
+	struct learn_callback_data				*cbdata = arg;
+	GError									*err = NULL;
+	struct evbuffer							*evb;
+
+	if (cbdata->processed) {
+		evb = evbuffer_new ();
+		if (!evb) {
+			msg_err ("cannot allocate evbuffer for reply");
+			evhttp_send_reply (cbdata->req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+			free_task_hard (cbdata->task);
+			return;
+		}
+
+		if (!learn_task_spam (cbdata->classifier, cbdata->task, cbdata->is_spam, &err)) {
+			evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
+			evhttp_add_header (cbdata->req->output_headers, "Connection", "close");
+			http_calculate_content_length (evb, cbdata->req);
+
+			evhttp_send_reply (cbdata->req, HTTP_INTERNAL + err->code, err->message, evb);
+			evbuffer_free (evb);
+			g_error_free (err);
+			free_task_hard (cbdata->task);
+			return;
+		}
+		/* Successful learn */
+		evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
+		evhttp_add_header (cbdata->req->output_headers, "Connection", "close");
+		http_calculate_content_length (evb, cbdata->req);
+
+		evhttp_send_reply (cbdata->req, HTTP_OK, "OK", evb);
+		evbuffer_free (evb);
+		g_error_free (err);
+		free_task_hard (cbdata->task);
+	}
+	/* If task is not processed, just do nothing */
+	return;
+}
+
+/*
+ * Handler of session destroying
+ */
+static void
+http_learn_task_event_helper (int fd, short what, gpointer arg)
+{
+	struct learn_callback_data				*cbdata = arg;
+
+	msg_info ("hui");
+
+	destroy_session (cbdata->task->s);
+}
+
+/*
+ * Called if all filters are processed, non-threaded and simple version
+ */
+static gboolean
+http_learn_task_fin (gpointer arg)
+{
+	struct learn_callback_data				*cbdata = arg;
+	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
+
+	if (cbdata->task->state != WRITING_REPLY) {
+		cbdata->task->state = WRITE_REPLY;
+	}
+
+	/* Check if we have all events finished */
+	if (cbdata->task->state != WRITING_REPLY) {
+		if (cbdata->task->fin_callback) {
+			cbdata->task->fin_callback (cbdata->task->fin_arg);
+		}
+		else {
+			/*
+			 * XXX: we cannot call this one directly as session mutex is locked, so we need to plan some event
+			 * unfortunately
+			 * destroy_session (cbdata->task->s);
+			*/
+			event_base_once (cbdata->ctx->ev_base, -1, EV_TIMEOUT, http_learn_task_event_helper, cbdata, &tv);
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * Called if session was restored inside fin callback
+ */
+static void
+http_learn_task_restore (gpointer arg)
+{
+	struct learn_callback_data				*cbdata = arg;
+
+	/* Special state */
+	cbdata->task->state = WRITING_REPLY;
+}
+
+/* Prepare callback data for learn */
+static struct learn_callback_data*
+http_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, gboolean is_spam, GError **err)
+{
+	struct worker_task						*task;
+	struct learn_callback_data				*cbdata;
+	struct classifier_config				*cl;
+
+	/* Check for data */
+	if (EVBUFFER_LENGTH (in) == 0) {
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "no message for learning");
+		return NULL;
+	}
+	/* Check for classifier */
+	cl = find_classifier_conf (ctx->cfg, "bayes");
+	if (cl == NULL) {
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "classifier not found");
+		return NULL;
+	}
+	/* Prepare task */
+	task = construct_task (ctx->worker);
+	if (task == NULL) {
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "task cannot be created");
+		return NULL;
+	}
+
+	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+	task->msg->begin = EVBUFFER_DATA (in);
+	task->msg->len = EVBUFFER_LENGTH (in);
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	cbdata = memory_pool_alloc (task->task_pool, sizeof (struct learn_callback_data));
+	cbdata->task = task;
+	cbdata->req = req;
+	cbdata->classifier = cl;
+	cbdata->ctx = ctx;
+	cbdata->is_spam = is_spam;
+	cbdata->processed = FALSE;
+
+	if (process_message (task) == -1) {
+		msg_warn ("processing of message failed");
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be processed");
+		free_task_hard (task);
+		return NULL;
+	}
+
+	/* Set up async session */
+	task->s = new_async_session (task->task_pool, http_learn_task_fin, http_learn_task_restore, http_learn_task_free, cbdata);
+	if (process_filters (task) == -1) {
+		msg_warn ("filtering of message failed");
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be filtered");
+		free_task_hard (task);
+		return NULL;
+	}
+
+	cbdata->processed = TRUE;
+
+	return cbdata;
 }
 
 /* Command handlers */
@@ -898,27 +1073,33 @@ http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
+	GError									*err = NULL;
+	struct learn_callback_data				*cbdata;
 
 	if (!http_check_password (ctx, req)) {
 		return;
 	}
 
 	inb = req->input_buffer;
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+
+	cbdata = http_prepare_learn (req, ctx, inb, TRUE, &err);
+	if (cbdata == NULL) {
+		/* Handle error */
+		evb = evbuffer_new ();
+		if (!evb) {
+			msg_err ("cannot allocate evbuffer for reply");
+			evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+			return;
+		}
+		evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
+		evhttp_add_header (req->output_headers, "Connection", "close");
+		http_calculate_content_length (evb, req);
+
+		evhttp_send_reply (req, err->code, err->message, evb);
+		evbuffer_free (evb);
+		g_error_free (err);
 		return;
 	}
-
-	/* XXX: Add real learning here */
-
-	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
 }
 
 /*
@@ -933,12 +1114,48 @@ http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
+	GError									*err = NULL;
+	struct learn_callback_data				*cbdata;
 
 	if (!http_check_password (ctx, req)) {
 		return;
 	}
 
 	inb = req->input_buffer;
+
+	cbdata = http_prepare_learn (req, ctx, inb, FALSE, &err);
+	if (cbdata == NULL) {
+		/* Handle error */
+		evb = evbuffer_new ();
+		if (!evb) {
+			msg_err ("cannot allocate evbuffer for reply");
+			evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+			return;
+		}
+		evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
+		evhttp_add_header (req->output_headers, "Connection", "close");
+		http_calculate_content_length (evb, req);
+
+		evhttp_send_reply (req, err->code, err->message, evb);
+		evbuffer_free (evb);
+		g_error_free (err);
+		return;
+	}
+}
+
+/*
+ * Save actions command handler:
+ * request: /saveactions
+ * headers: Password
+ * input: json data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static void
+http_handle_save_actions (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+
 	evb = evbuffer_new ();
 	if (!evb) {
 		msg_err ("cannot allocate evbuffer for reply");
@@ -946,12 +1163,40 @@ http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
 		return;
 	}
 
-	/* XXX: Add real learning here */
+	/* XXX: add real saving */
 
 	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
 
+/*
+ * Save symbols command handler:
+ * request: /savesymbols
+ * headers: Password
+ * input: json data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static void
+http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* XXX: add real saving */
+
+	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
 	evhttp_send_reply (req, HTTP_OK, "OK", evb);
 	evbuffer_free (evb);
 }
@@ -1011,6 +1256,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	signal_add (&worker->sig_ev_usr1, NULL);
 
 	ctx->start_time = time (NULL);
+	ctx->worker = worker;
 	/* Accept event */
 	ctx->http = evhttp_new (ctx->ev_base);
 	evhttp_accept_socket (ctx->http, worker->cf->listen_sock);
@@ -1039,6 +1285,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	evhttp_set_cb (ctx->http, PATH_HISTORY, http_handle_history, ctx);
 	evhttp_set_cb (ctx->http, PATH_LEARN_SPAM, http_handle_learn_spam, ctx);
 	evhttp_set_cb (ctx->http, PATH_LEARN_HAM, http_handle_learn_ham, ctx);
+	evhttp_set_cb (ctx->http, PATH_SAVE_ACTIONS, http_handle_save_actions, ctx);
+	evhttp_set_cb (ctx->http, PATH_SAVE_SYMBOLS, http_handle_save_symbols, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
