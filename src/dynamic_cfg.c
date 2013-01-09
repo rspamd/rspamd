@@ -135,6 +135,10 @@ apply_dynamic_conf (GList *conf_metrics, struct config_file *cfg)
 					if (real_act->action == act->action) {
 						real_act->score = act->value;
 					}
+					/* Update required score accordingly to metric's action */
+					if (act->action == real_metric->action) {
+						real_metric->required_score = act->value;
+					}
 					tmp = g_list_next (tmp);
 				}
 				cur_elt = g_list_next (cur_elt);
