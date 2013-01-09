@@ -144,7 +144,7 @@ struct module_opt {
 struct symbol_def {
 	gchar *name;
 	gchar *description;
-	gdouble weight;
+	gdouble *weight_ptr;
 };
 
 /**

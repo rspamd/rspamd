@@ -589,11 +589,11 @@ http_handle_symbols (struct evhttp_request *req, gpointer arg)
 			sym = cur_sym->data;
 
 			if (sym->description) {
-				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f,\"description\":\"%s\"%s", sym->name, sym->weight,
+				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f,\"description\":\"%s\"%s", sym->name, *sym->weight_ptr,
 						sym->description, g_list_next (cur_sym) ? "}," : "}");
 			}
 			else {
-				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f%s", sym->name, sym->weight,
+				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f%s", sym->name, *sym->weight_ptr,
 										g_list_next (cur_sym) ? "}," : "}");
 			}
 

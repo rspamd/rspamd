@@ -1097,7 +1097,7 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 		}
 	}
 	
-	sym_def->weight = *value;
+	sym_def->weight_ptr = value;
 	sym_def->name = memory_pool_strdup (cfg->cfg_pool, data);
 
 	if (attrs != NULL) {
