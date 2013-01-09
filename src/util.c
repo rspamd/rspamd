@@ -1772,6 +1772,60 @@ murmur128_hash (const guint8 *in, gsize len, guint64 out[])
 	out[1] = h2;
 }
 
+struct hash_copy_callback_data {
+	gpointer (*key_copy_func)(gconstpointer data, gpointer ud);
+	gpointer (*value_copy_func)(gconstpointer data, gpointer ud);
+	gpointer ud;
+	GHashTable *dst;
+};
+
+static void
+copy_foreach_callback (gpointer key, gpointer value, gpointer ud)
+{
+	struct hash_copy_callback_data		*cb = ud;
+	gpointer							 nkey, nvalue;
+
+	nkey = cb->key_copy_func ? cb->key_copy_func (key, cb->ud) : (gpointer)key;
+	nvalue = cb->value_copy_func ? cb->value_copy_func (value, cb->ud) : (gpointer)value;
+	g_hash_table_insert (cb->dst, nkey, nvalue);
+}
+/**
+ * Deep copy of one hash table to another
+ * @param src source hash
+ * @param dst destination hash
+ * @param key_copy_func function called to copy or modify keys (or NULL)
+ * @param value_copy_func function called to copy or modify values (or NULL)
+ * @param ud user data for copy functions
+ */
+void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
+		gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
+		gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
+		gpointer ud)
+{
+	struct hash_copy_callback_data		 cb;
+	if (src != NULL && dst != NULL) {
+		cb.key_copy_func = key_copy_func;
+		cb.value_copy_func = value_copy_func;
+		cb.ud = ud;
+		cb.dst = dst;
+		g_hash_table_foreach (src, copy_foreach_callback, &cb);
+	}
+}
+
+/**
+ * Utility function to provide mem_pool copy for rspamd_hash_table_copy function
+ * @param data string to copy
+ * @param ud memory pool to use
+ * @return
+ */
+gpointer
+rspamd_str_pool_copy (gconstpointer data, gpointer ud)
+{
+	memory_pool_t						*pool = ud;
+
+	return data ? memory_pool_strdup (pool, data) : NULL;
+}
+
 /*
  * vi:ts=4
  */

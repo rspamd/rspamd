@@ -1350,7 +1350,7 @@ http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
 		val = json_number_value (jvalue);
 		sym = g_hash_table_lookup (metric->symbols, json_string_value (jname));
 		if (sym && fabs (sym->score - val) > 0.01) {
-			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC, sym->name, val)) {
+			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC, json_string_value (jname), val)) {
 				evbuffer_free (evb);
 				json_delete (json);
 				evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot write symbol's value", NULL);

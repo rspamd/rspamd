@@ -885,6 +885,7 @@ struct wrk_param {
 		gchar *param;
 		GList *list;
 	} d;
+	GHashTable *attrs;
 };
 
 static void
@@ -904,12 +905,12 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 				if (param->is_list) {
 					cur = param->d.list;
 					while (cur) {
-						cparam->handler (cd->cfg, cd->ctx, NULL, cur->data, k, cd->wrk->ctx, cparam->offset);
+						cparam->handler (cd->cfg, cd->ctx, param->attrs, cur->data, k, cd->wrk->ctx, cparam->offset);
 						cur = g_list_next (cur);
 					}
 				}
 				else {
-					cparam->handler (cd->cfg, cd->ctx, NULL, param->d.param, k, cd->wrk->ctx, cparam->offset);
+					cparam->handler (cd->cfg, cd->ctx, param->attrs, param->d.param, k, cd->wrk->ctx, cparam->offset);
 				}
 			}
 			else {
@@ -926,12 +927,12 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 			if (param->is_list) {
 				cur = param->d.list;
 				while (cur) {
-					cparam->handler (cd->cfg, cd->ctx, NULL, cur->data, NULL, cd->wrk->ctx, cparam->offset);
+					cparam->handler (cd->cfg, cd->ctx, param->attrs, cur->data, NULL, cd->wrk->ctx, cparam->offset);
 					cur = g_list_next (cur);
 				}
 			}
 			else {
-				cparam->handler (cd->cfg, cd->ctx, NULL, param->d.param, NULL, cd->wrk->ctx, cparam->offset);
+				cparam->handler (cd->cfg, cd->ctx, param->attrs, param->d.param, NULL, cd->wrk->ctx, cparam->offset);
 			}
 		}
 		else {
@@ -962,6 +963,10 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, c
 		param->is_list = FALSE;
 		param->d.param = memory_pool_strdup (cfg->cfg_pool, data);
 		g_hash_table_insert (wrk->params, (char *)name, param);
+		/* Copy attributes */
+		param->attrs = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, param->attrs);
+		rspamd_hash_table_copy (attrs, param->attrs, rspamd_str_pool_copy, rspamd_str_pool_copy, cfg->cfg_pool);
 	}
 	else {
 		if (param->is_list) {
@@ -975,6 +980,7 @@ worker_handle_param (struct config_file *cfg, struct rspamd_xml_userdata *ctx, c
 			param->d.list = g_list_append (param->d.list, memory_pool_strdup (cfg->cfg_pool, data));
 			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, param->d.list);
 		}
+		rspamd_hash_table_copy (attrs, param->attrs, rspamd_str_pool_copy, rspamd_str_pool_copy, cfg->cfg_pool);
 	}
 
 	return TRUE;

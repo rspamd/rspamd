@@ -359,4 +359,25 @@ guint32 murmur32_hash (const guint8 *in, gsize len);
  */
 void murmur128_hash (const guint8 *in, gsize len, guint64 out[]);
 
+/**
+ * Deep copy of one hash table to another
+ * @param src source hash
+ * @param dst destination hash
+ * @param key_copy_func function called to copy or modify keys (or NULL)
+ * @param value_copy_func function called to copy or modify values (or NULL)
+ * @param ud user data for copy functions
+ */
+void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
+		gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
+		gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
+		gpointer ud);
+
+/**
+ * Utility function to provide mem_pool copy for rspamd_hash_table_copy function
+ * @param data string to copy
+ * @param ud memory pool to use
+ * @return
+ */
+gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
+
 #endif
