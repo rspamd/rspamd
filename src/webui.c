@@ -686,10 +686,9 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
-	GList									*cur;
-	struct rspamd_map						*map, *next;
+	GList									*cur, *tmp = NULL;
+	struct rspamd_map						*map;
 	gboolean								 editable;
-	gchar									*comma;
 
 
 	if (!http_check_password (ctx, req)) {
@@ -712,26 +711,24 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 		map = cur->data;
 		if (map->protocol == MAP_PROTO_FILE && map->description != NULL) {
 			if (access (map->uri, R_OK) == 0) {
-				editable = access (map->uri, W_OK) == 0;
-				if (cur->next) {
-					next = cur->next->data;
-					if (next->protocol == MAP_PROTO_FILE && next->description != NULL &&
-							access (next->uri, R_OK) == 0) {
-						comma = "},";
-					}
-					else {
-						comma = "}";
-					}
-				}
-				else {
-					comma = "}";
-				}
-				evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
-						map->id, map->description, editable ? "true" : "false",
-						comma);
+				tmp = g_list_prepend (tmp, map);
 			}
 		}
 		cur = g_list_next (cur);
+	}
+	/* Iterate over selected maps */
+	cur = tmp;
+	while (cur) {
+		map = cur->data;
+		editable = access (map->uri, W_OK) == 0;
+		evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
+				map->id, map->description, editable ? "true" : "false",
+						cur->next ? "}," : "}");
+		cur = g_list_next (cur);
+	}
+
+	if (tmp) {
+		g_list_free (tmp);
 	}
 
 	evbuffer_add (evb, "]" CRLF, 3);
