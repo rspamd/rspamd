@@ -532,6 +532,7 @@ process_dynamic_conf_command (gchar **cmd_args, struct controller_session *sessi
 	gchar						   *arg, *metric, *name, *err_str;
 	gdouble						    value;
 	gboolean						res;
+	guint							real_act;
 
 	if (cfg->dynamic_conf == NULL) {
 		if (!session->restful) {
@@ -589,7 +590,13 @@ process_dynamic_conf_command (gchar **cmd_args, struct controller_session *sessi
 	}
 
 	if (is_action) {
-		res = add_dynamic_action (cfg, metric, name, value);
+		if (!check_action_str (name, &real_act)) {
+			msg_info ("invalid action string: %s", name);
+			res = FALSE;
+		}
+		else {
+			res = add_dynamic_action (cfg, metric, real_act, value);
+		}
 	}
 	else {
 		res = add_dynamic_symbol (cfg, metric, name, value);

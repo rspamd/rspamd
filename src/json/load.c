@@ -856,3 +856,61 @@ json_load_file (const char *path, json_error_t * error)
 	fclose (fp);
 	return result;
 }
+
+
+typedef struct evbuffer_data_s {
+	const char *data;
+	gsize len;
+	guint pos;
+} evbuffer_data_t;
+
+
+static int
+evbuffer_get (void *data)
+{
+	evbuffer_data_t                *stream = (evbuffer_data_t *) data;
+
+	if (stream->pos >= stream->len) {
+		return EOF;
+	}
+
+	return *(stream->data + stream->pos++);
+}
+
+static int
+evbuffer_eof (void *data)
+{
+	evbuffer_data_t                 *stream = (evbuffer_data_t *) data;
+
+	return stream->pos >= stream->len;
+}
+
+json_t *
+json_load_evbuffer (struct evbuffer *evb, json_error_t *error)
+{
+	evbuffer_data_t                 stream_data;
+	lex_t                           lex;
+	json_t                         *result;
+
+	stream_data.data = EVBUFFER_DATA (evb);
+	stream_data.pos = 0;
+	stream_data.len = EVBUFFER_LENGTH (evb);
+
+	if (lex_init (&lex, evbuffer_get, evbuffer_eof, (void *)&stream_data))
+		return NULL;
+
+	result = parse_json (&lex, error);
+	if (!result)
+		goto out;
+
+	lex_scan (&lex, error);
+	if (lex.token != TOKEN_EOF) {
+		error_set (error, &lex, "end of file expected");
+		json_decref (result);
+		result = NULL;
+	}
+
+  out:
+	lex_close (&lex);
+	return result;
+}

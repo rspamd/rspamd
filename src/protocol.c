@@ -96,6 +96,28 @@
 
 static GList                   *custom_commands = NULL;
 
+/* XXX: remove this legacy sometimes */
+static const gchar *
+str_action_metric_spamc (enum rspamd_metric_action action)
+{
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		return "reject";
+	case METRIC_ACTION_SOFT_REJECT:
+		return "soft reject";
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		return "rewrite subject";
+	case METRIC_ACTION_ADD_HEADER:
+		return "add header";
+	case METRIC_ACTION_GREYLIST:
+		return "greylist";
+	case METRIC_ACTION_NOACTION:
+		return "no action";
+	}
+
+	return "unknown action";
+}
+
 /* For default metric, dirty hack, but much faster than hash lookup */
 static double default_score, default_required_score;
 
@@ -1040,12 +1062,12 @@ print_metric_data_rspamc (struct worker_task *task, gchar *outbuf, gsize size,
 
 			if (task->pre_result.action == METRIC_ACTION_NOACTION) {
 				r += rspamd_snprintf (outbuf + r, size - r,
-					"Action: %s" CRLF, str_action_metric (
+					"Action: %s" CRLF, str_action_metric_spamc (
 							METRIC_ACTION_NOACTION));
 			}
 			else {
 				r += rspamd_snprintf (outbuf + r, size - r,
-						"Action: %s" CRLF, str_action_metric (
+						"Action: %s" CRLF, str_action_metric_spamc (
 								task->pre_result.action));
 				if (task->pre_result.str != NULL) {
 					r += rspamd_snprintf (outbuf + r, size - r,
@@ -1086,7 +1108,7 @@ print_metric_data_rspamc (struct worker_task *task, gchar *outbuf, gsize size,
 								metric_res->score, ms);
 			}
 			r += rspamd_snprintf (outbuf + r, size - r,
-					"Action: %s" CRLF, str_action_metric (action));
+					"Action: %s" CRLF, str_action_metric_spamc (action));
 		}
 		if (action == METRIC_ACTION_REWRITE_SUBJECT && metric_res->metric->subject != NULL) {
 			r += rspamd_snprintf (outbuf + r, size - r,

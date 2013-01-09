@@ -830,11 +830,11 @@ str_action_metric (enum rspamd_metric_action action)
 	case METRIC_ACTION_REJECT:
 		return "reject";
 	case METRIC_ACTION_SOFT_REJECT:
-		return "soft reject";
+		return "soft_reject";
 	case METRIC_ACTION_REWRITE_SUBJECT:
-		return "rewrite subject";
+		return "rewrite_subject";
 	case METRIC_ACTION_ADD_HEADER:
-		return "add header";
+		return "add_header";
 	case METRIC_ACTION_GREYLIST:
 		return "greylist";
 	case METRIC_ACTION_NOACTION:

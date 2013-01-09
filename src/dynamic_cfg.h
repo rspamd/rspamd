@@ -60,7 +60,7 @@ gboolean add_dynamic_symbol (struct config_file *cfg, const gchar *metric, const
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_action (struct config_file *cfg, const gchar *metric, const gchar *action, gdouble value);
+gboolean add_dynamic_action (struct config_file *cfg, const gchar *metric, guint action, gdouble value);
 
 
 #endif /* DYNAMIC_CFG_H_ */

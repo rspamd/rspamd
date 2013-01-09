@@ -36,6 +36,7 @@
 #include "classifiers/classifiers.h"
 #include "dynamic_cfg.h"
 #include "rrd.h"
+#include "json/jansson.h"
 
 #include <evhttp.h>
 #if (_EVENT_NUMERIC_VERSION > 0x02010000) && defined(HAVE_OPENSSL)
@@ -451,6 +452,42 @@ http_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *
 	cbdata->processed = TRUE;
 
 	return cbdata;
+}
+
+/*
+ * Set metric action
+ */
+static gboolean
+http_set_metric_action (struct config_file *cfg,
+		json_t *jv, struct metric *metric, enum rspamd_metric_action act)
+{
+	gdouble									 actval;
+	GList									*cur;
+	struct metric_action					*act_found;
+
+	if (!json_is_number (jv)) {
+		msg_err ("json element data error");
+		return FALSE;
+	}
+	actval = json_number_value (jv);
+	if (metric->action == act && metric->required_score != actval) {
+		return add_dynamic_action (cfg, DEFAULT_METRIC, act, actval);
+	}
+
+	/* Try to search in all metrics */
+	/* XXX: clarify this code, currently it looks like a crap */
+	cur = metric->actions;
+	while (cur) {
+		act_found = cur->data;
+		if (act_found->action == act) {
+			if (act_found->score != actval) {
+				return add_dynamic_action (cfg, DEFAULT_METRIC, act, actval);
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	return TRUE;
 }
 
 /* Command handlers */
@@ -1138,7 +1175,7 @@ http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
  * Save actions command handler:
  * request: /saveactions
  * headers: Password
- * input: json data
+ * input: json array [<spam>,<probable spam>,<greylist>]
  * reply: json {"success":true} or {"error":"error message"}
  */
 static void
@@ -1146,6 +1183,10 @@ http_handle_save_actions (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
+	struct metric							*metric;
+	json_t									*json, *jv;
+	json_error_t							 je;
+
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -1154,7 +1195,72 @@ http_handle_save_actions (struct evhttp_request *req, gpointer arg)
 		return;
 	}
 
-	/* XXX: add real saving */
+	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric == NULL) {
+		msg_err ("cannot find default metric");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 default metric not defined", NULL);
+		return;
+	}
+
+	/* Now check for dynamic config */
+	if (!ctx->cfg->dynamic_conf) {
+		msg_err ("dynamic conf has not been defined");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "503 dynamic config not found, cannot save", NULL);
+		return;
+	}
+
+	/* Try to load json */
+	json = json_load_evbuffer (req->input_buffer, &je);
+	if (json == NULL) {
+		msg_err ("json load error: %s", je.text);
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "504 json parse error", NULL);
+		return;
+	}
+
+	if (!json_is_array (json) || json_array_size (json) != 3) {
+		msg_err ("json data error");
+		evbuffer_free (evb);
+		json_delete (json);
+		evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
+		return;
+	}
+
+	/* Now try to check what we have */
+
+	/* Spam element */
+	jv = json_array_get (json, 0);
+	if (!http_set_metric_action (ctx->cfg, jv, metric, METRIC_ACTION_REJECT)) {
+		msg_err ("json data error");
+		evbuffer_free (evb);
+		json_delete (json);
+		evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot set action's value", NULL);
+		return;
+	}
+
+	/* Probable spam */
+	jv = json_array_get (json, 1);
+	if (!http_set_metric_action (ctx->cfg, jv, metric, METRIC_ACTION_ADD_HEADER)) {
+		msg_err ("json data error");
+		evbuffer_free (evb);
+		json_delete (json);
+		evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot set action's value", NULL);
+		return;
+	}
+
+	/* Greylist */
+	jv = json_array_get (json, 2);
+	if (!http_set_metric_action (ctx->cfg, jv, metric, METRIC_ACTION_GREYLIST)) {
+		msg_err ("json data error");
+		evbuffer_free (evb);
+		json_delete (json);
+		evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot set action's value", NULL);
+		return;
+	}
+
+	dump_dynamic_config (ctx->cfg);
 
 	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");
@@ -1175,6 +1281,12 @@ http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
+	struct metric							*metric;
+	struct symbol							*sym;
+	json_t									*json, *jv, *jname, *jvalue;
+	json_error_t							 je;
+	guint									 i, len;
+	gdouble									 val;
 
 	evb = evbuffer_new ();
 	if (!evb) {
@@ -1183,7 +1295,69 @@ http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
 		return;
 	}
 
-	/* XXX: add real saving */
+	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric == NULL) {
+		msg_err ("cannot find default metric");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 default metric not defined", NULL);
+		return;
+	}
+
+	/* Now check for dynamic config */
+	if (!ctx->cfg->dynamic_conf) {
+		msg_err ("dynamic conf has not been defined");
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "503 dynamic config not found, cannot save", NULL);
+		return;
+	}
+
+	/* Try to load json */
+	json = json_load_evbuffer (req->input_buffer, &je);
+	if (json == NULL) {
+		msg_err ("json load error: %s", je.text);
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "504 json parse error", NULL);
+		return;
+	}
+
+	if (!json_is_array (json) || (len = json_array_size (json)) == 0) {
+		msg_err ("json data error");
+		evbuffer_free (evb);
+		json_delete (json);
+		evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
+		return;
+	}
+
+	/* Iterate over all elements */
+	for (i = 0; i < len; i ++) {
+		jv = json_array_get (json, i);
+		if (!json_is_object (jv)) {
+			msg_err ("json array data error");
+			evbuffer_free (evb);
+			json_delete (json);
+			evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
+			return;
+		}
+		jname = json_object_get (jv, "name");
+		jvalue = json_object_get (jv, "value");
+		if (!json_is_string (jname) || !json_is_number (jvalue)) {
+			msg_err ("json object data error");
+			evbuffer_free (evb);
+			json_delete (json);
+			evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
+			return;
+		}
+		val = json_number_value (jvalue);
+		sym = g_hash_table_lookup (metric->symbols, json_string_value (jname));
+		if (sym && fabs (sym->score - val) > 0.01) {
+			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC, sym->name, val)) {
+				evbuffer_free (evb);
+				json_delete (json);
+				evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot write symbol's value", NULL);
+				return;
+			}
+		}
+	}
 
 	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");
@@ -1210,6 +1384,7 @@ http_handle_save_map (struct evhttp_request *req, gpointer arg)
 	gchar									*errstr;
 	guint32									 id;
 	gboolean								 found = FALSE;
+	gint									 fd;
 
 
 	if (!http_check_password (ctx, req)) {
@@ -1252,13 +1427,42 @@ http_handle_save_map (struct evhttp_request *req, gpointer arg)
 	}
 
 	if (!found) {
-		msg_info ("map not found");
+		msg_info ("map not found: %d", id);
 		evbuffer_free (evb);
 		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map not found", NULL);
 		return;
 	}
 
-	/* XXX: add real saving */
+	if (g_atomic_int_get (map->locked)) {
+		msg_info ("map locked: %s", map->uri);
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map is locked", NULL);
+		return;
+	}
+
+	/* Set lock */
+	g_atomic_int_set (map->locked, 1);
+	fd = open (map->uri, O_WRONLY | O_TRUNC);
+	if (fd == -1) {
+		g_atomic_int_set (map->locked, 0);
+		msg_info ("map %s open error: %s", map->uri, strerror (errno));
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map open error", NULL);
+		return;
+	}
+
+	if (evbuffer_write (req->input_buffer, fd) == -1) {
+		close (fd);
+		g_atomic_int_set (map->locked, 0);
+		msg_info ("map %s open error: %s", map->uri, strerror (errno));
+		evbuffer_free (evb);
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
+		return;
+	}
+
+	/* Close and unlock */
+	close (fd);
+	g_atomic_int_set (map->locked, 0);
 
 	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
 	evhttp_add_header (req->output_headers, "Connection", "close");

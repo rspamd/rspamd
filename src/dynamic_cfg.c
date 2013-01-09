@@ -565,20 +565,14 @@ add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gch
  * @return
  */
 gboolean
-add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gchar *action, gdouble value)
+add_dynamic_action (struct config_file *cfg, const gchar *metric_name, guint action, gdouble value)
 {
 	GList								*cur;
 	struct dynamic_cfg_metric			*metric = NULL;
 	struct dynamic_cfg_action			*act = NULL;
-	gint								 real_act;
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
-		return FALSE;
-	}
-
-	if (!check_action_str (action, &real_act)) {
-		msg_info ("invalid action string: %s", action);
 		return FALSE;
 	}
 
@@ -597,9 +591,9 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gch
 		cur = metric->actions;
 		while (cur) {
 			act = cur->data;
-			if ((gint)act->action == real_act) {
+			if (act->action == action) {
 				act->value = value;
-				msg_debug ("change value of action %s to %.2f", action, value);
+				msg_debug ("change value of action %d to %.2f", action, value);
 				break;
 			}
 			act = NULL;
@@ -608,22 +602,22 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, const gch
 		if (act == NULL) {
 			/* Action not found, insert it */
 			act = g_slice_alloc (sizeof (struct dynamic_cfg_action));
-			act->action = real_act;
+			act->action = action;
 			act->value = value;
 			metric->actions = g_list_prepend (metric->actions, act);
-			msg_debug ("create action %s in metric %s", action, metric_name);
+			msg_debug ("create action %d in metric %s", action, metric_name);
 		}
 	}
 	else {
 		/* Metric not found, create it */
 		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
 		act = g_slice_alloc (sizeof (struct dynamic_cfg_action));
-		act->action = real_act;
+		act->action = action;
 		act->value = value;
 		metric->actions = g_list_prepend (metric->actions, act);
 		metric->name = g_strdup (metric_name);
 		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
-		msg_debug ("create metric %s for action %s", metric_name, action);
+		msg_debug ("create metric %s for action %d", metric_name, action);
 	}
 
 	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
