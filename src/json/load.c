@@ -795,6 +795,11 @@ json_loads (const char *string, json_error_t * error)
 		.pos = 0
 	};
 
+	if (string == NULL || *string == '\0') {
+		error_set (error, NULL, "empty stream");
+		return NULL;
+	}
+
 	if (lex_init (&lex, string_get, string_eof, (void *)&stream_data))
 		return NULL;
 
@@ -891,6 +896,11 @@ json_load_evbuffer (struct evbuffer *evb, json_error_t *error)
 	evbuffer_data_t                 stream_data;
 	lex_t                           lex;
 	json_t                         *result;
+
+	if (evb == NULL || EVBUFFER_LENGTH (evb) == 0) {
+		error_set (error, NULL, "empty stream");
+		return NULL;
+	}
 
 	stream_data.data = EVBUFFER_DATA (evb);
 	stream_data.pos = 0;
