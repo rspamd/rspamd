@@ -1171,13 +1171,13 @@ http_handle_pie_chart (struct evhttp_request *req, gpointer arg)
 		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total * 100.;
 		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total * 100.;
 
-		evbuffer_add_printf (evb, "[{\"Clean messages\":%.2f},", data[0]);
-		evbuffer_add_printf (evb, "{\"Probable spam messages\":%.2f},", data[1]);
-		evbuffer_add_printf (evb, "{\"Greylisted messages\":%.2f},", data[2]);
-		evbuffer_add_printf (evb, "{\"Rejected messages\":%.2f}]" CRLF, data[3]);
+		evbuffer_add_printf (evb, "[[\"Clean messages\",%.2f],", data[0]);
+		evbuffer_add_printf (evb, "[\"Probable spam messages\",%.2f],", data[1]);
+		evbuffer_add_printf (evb, "[\"Greylisted messages\",%.2f],", data[2]);
+		evbuffer_add_printf (evb, "[\"Rejected messages\",%.2f]]" CRLF, data[3]);
 	}
 	else {
-		evbuffer_add_printf (evb, "[{\"Not scanned messages\": 0}]" CRLF);
+		evbuffer_add_printf (evb, "[[\"Not scanned messages\", 0]]" CRLF);
 	}
 
 
