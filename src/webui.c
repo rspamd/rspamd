@@ -75,6 +75,7 @@
 #define PATH_SAVE_ACTIONS "/saveactions"
 #define PATH_SAVE_SYMBOLS "/savesymbols"
 #define PATH_SAVE_MAP "/savemap"
+#define PATH_SCAN "/scan"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -284,6 +285,202 @@ http_check_password (struct rspamd_webui_worker_ctx *ctx, struct evhttp_request 
 	}
 
 	return TRUE;
+}
+
+struct scan_callback_data {
+	struct worker_task *task;
+	struct evhttp_request *req;
+	struct rspamd_webui_worker_ctx *ctx;
+	gboolean processed;
+	struct evbuffer *out;
+	gboolean first_symbol;
+};
+
+
+/*
+ * Write metric result in json format
+ */
+static void
+http_scan_metric_symbols_callback (gpointer key, gpointer value, gpointer ud)
+{
+	struct scan_callback_data				*cbdata = ud;
+	struct symbol							*s = value;
+	GList									*cur;
+
+	/* Show data for a single symbol */
+	if (cbdata->first_symbol) {
+		cbdata->first_symbol = FALSE;
+		evbuffer_add_printf (cbdata->out, "{\"name\":\"%s\",\"weight\":%.2f", s->name, s->score);
+	}
+	else {
+		evbuffer_add_printf (cbdata->out, ",{\"name\":\"%s\",\"weight\":%.2f", s->name, s->score);
+	}
+	if (s->options) {
+		evbuffer_add_printf (cbdata->out, ",\"options\":[");
+		cur = s->options;
+		while (cur) {
+			evbuffer_add_printf (cbdata->out, "\"%s\"%c", (gchar *)cur->data, g_list_next (cur) ? ',' : ']');
+			cur = g_list_next (cur);
+		}
+	}
+	evbuffer_add (cbdata->out, "}", 1);
+}
+/*
+ * Called before destroying of task's session
+ */
+static void
+http_scan_task_free (gpointer arg)
+{
+	struct scan_callback_data				*cbdata = arg;
+	struct evbuffer							*evb;
+	struct metric_result					*mres;
+
+	if (cbdata->processed) {
+		evb = evbuffer_new ();
+		if (!evb) {
+			msg_err ("cannot allocate evbuffer for reply");
+			evhttp_send_reply (cbdata->req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+			free_task_hard (cbdata->task);
+			return;
+		}
+		cbdata->out = evb;
+		cbdata->first_symbol = TRUE;
+
+		mres = g_hash_table_lookup (cbdata->task->results, DEFAULT_METRIC);
+		if (mres) {
+			evbuffer_add_printf (evb, "{\"is_spam\": %s,"
+					"\"is_skipped\":%s,"
+					"\"score\":%.2f,"
+					"\"required_score\":%.2f,"
+					"\"action\":\"%s\","
+					"\"symbols\":[",
+					mres->score >= mres->metric->required_score ? "true" : "false",
+					cbdata->task->is_skipped ? "true" : "false", mres->score, mres->metric->required_score,
+					str_action_metric (check_metric_action (mres->score, mres->metric->required_score, mres->metric)));
+			/* Iterate all symbols */
+			g_hash_table_foreach (mres->symbols, http_scan_metric_symbols_callback, cbdata);
+			evbuffer_add (evb, "]}" CRLF, 4);
+		}
+		else {
+			evbuffer_add_printf (evb, "{\"success\":false}" CRLF);
+		}
+		evhttp_add_header (cbdata->req->output_headers, "Connection", "close");
+		http_calculate_content_length (evb, cbdata->req);
+
+		evhttp_send_reply (cbdata->req, HTTP_OK, "OK", evb);
+		evbuffer_free (evb);
+		free_task_hard (cbdata->task);
+	}
+	/* If task is not processed, just do nothing */
+	return;
+}
+
+/*
+ * Handler of session destroying
+ */
+static void
+http_scan_task_event_helper (int fd, short what, gpointer arg)
+{
+	struct scan_callback_data				*cbdata = arg;
+
+	destroy_session (cbdata->task->s);
+}
+
+/*
+ * Called if all filters are processed, non-threaded and simple version
+ */
+static gboolean
+http_scan_task_fin (gpointer arg)
+{
+	struct scan_callback_data				*cbdata = arg;
+	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
+
+	if (cbdata->task->state != WRITING_REPLY) {
+		cbdata->task->state = WRITE_REPLY;
+	}
+
+	/* Check if we have all events finished */
+	if (cbdata->task->state != WRITING_REPLY) {
+		if (cbdata->task->fin_callback) {
+			cbdata->task->fin_callback (cbdata->task->fin_arg);
+		}
+		else {
+			/*
+			 * XXX: we cannot call this one directly as session mutex is locked, so we need to plan some event
+			 * unfortunately
+			 * destroy_session (cbdata->task->s);
+			*/
+			event_base_once (cbdata->ctx->ev_base, -1, EV_TIMEOUT, http_scan_task_event_helper, cbdata, &tv);
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+ * Called if session was restored inside fin callback
+ */
+static void
+http_scan_task_restore (gpointer arg)
+{
+	struct scan_callback_data				*cbdata = arg;
+
+	/* Special state */
+	cbdata->task->state = WRITING_REPLY;
+}
+
+/* Prepare callback data for scan */
+static struct scan_callback_data*
+http_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, GError **err)
+{
+	struct worker_task						*task;
+	struct scan_callback_data				*cbdata;
+
+	/* Check for data */
+	if (EVBUFFER_LENGTH (in) == 0) {
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "no message for learning");
+		return NULL;
+	}
+
+	/* Prepare task */
+	task = construct_task (ctx->worker);
+	if (task == NULL) {
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "task cannot be created");
+		return NULL;
+	}
+
+	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
+	task->msg->begin = EVBUFFER_DATA (in);
+	task->msg->len = EVBUFFER_LENGTH (in);
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	cbdata = memory_pool_alloc (task->task_pool, sizeof (struct scan_callback_data));
+	cbdata->task = task;
+	cbdata->req = req;
+	cbdata->ctx = ctx;
+	cbdata->processed = FALSE;
+
+	if (process_message (task) == -1) {
+		msg_warn ("processing of message failed");
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be processed");
+		free_task_hard (task);
+		return NULL;
+	}
+
+	/* Set up async session */
+	task->s = new_async_session (task->task_pool, http_scan_task_fin, http_scan_task_restore, http_scan_task_free, cbdata);
+	if (process_filters (task) == -1) {
+		msg_warn ("filtering of message failed");
+		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be filtered");
+		free_task_hard (task);
+		return NULL;
+	}
+
+	cbdata->processed = TRUE;
+
+	return cbdata;
 }
 
 struct learn_callback_data {
@@ -1464,6 +1661,48 @@ http_handle_save_map (struct evhttp_request *req, gpointer arg)
 	evbuffer_free (evb);
 }
 
+/*
+ * Learn ham command handler:
+ * request: /scan
+ * headers: Password
+ * input: plaintext data
+ * reply: json {scan data} or {"error":"error message"}
+ */
+static void
+http_handle_scan (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb, *inb;
+	GError									*err = NULL;
+	struct scan_callback_data				*cbdata;
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
+	inb = req->input_buffer;
+
+	cbdata = http_prepare_scan (req, ctx, inb, &err);
+	if (cbdata == NULL) {
+		/* Handle error */
+		evb = evbuffer_new ();
+		if (!evb) {
+			msg_err ("cannot allocate evbuffer for reply");
+			evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+			return;
+		}
+		evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
+		evhttp_add_header (req->output_headers, "Connection", "close");
+		http_calculate_content_length (evb, req);
+
+		evhttp_send_reply (req, err->code, err->message, evb);
+		evbuffer_free (evb);
+		g_error_free (err);
+		return;
+	}
+}
+
+
 gpointer
 init_webui_worker (void)
 {
@@ -1551,6 +1790,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	evhttp_set_cb (ctx->http, PATH_SAVE_ACTIONS, http_handle_save_actions, ctx);
 	evhttp_set_cb (ctx->http, PATH_SAVE_SYMBOLS, http_handle_save_symbols, ctx);
 	evhttp_set_cb (ctx->http, PATH_SAVE_MAP, http_handle_save_map, ctx);
+	evhttp_set_cb (ctx->http, PATH_SCAN, http_handle_scan, ctx);
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
@@ -1562,3 +1802,4 @@ start_webui_worker (struct rspamd_worker *worker)
 	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
+
