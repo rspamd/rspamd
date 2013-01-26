@@ -457,7 +457,7 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 			if (!g_ascii_isspace (*h)) {
 				cur_diff ++;
 			}
-			r1 --;
+			r2 --;
 			h ++;
 		}
 	}
