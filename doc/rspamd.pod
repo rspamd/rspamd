@@ -1,4 +1,4 @@
-=head1 RSPAMD
+=head1 NAME
 
 rspamd - main daemon for rspamd spam filtering system
 

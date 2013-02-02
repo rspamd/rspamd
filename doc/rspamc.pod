@@ -1,4 +1,4 @@
-=head1 RSPAMC
+=head1 NAME
 
 rspamc - a simple client for rspamd spam filtering system
 
