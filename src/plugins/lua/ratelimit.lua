@@ -305,7 +305,7 @@ if opts then
 	end
 	
 	if opts['whitelisted_ip'] then
-		whitelisted_ip = rspamd_config:add_hash_map (opts['whitelisted_ip'])
+		whitelisted_ip = rspamd_config:add_hash_map (opts['whitelisted_ip'], 'Ratelimit whitelist ip map')
 	end
 	
 	if opts['max_rcpt'] then
@@ -324,3 +324,4 @@ if opts then
 		end
 	end
 end
+

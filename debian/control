@@ -12,6 +12,6 @@ Package: rspamd
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Fast spam filtering system
- Rspamd is fast, modular and lightweight spam filter. It is designed to work
- with big ammount of mail and can be easily extended with own filters written in
+ Rspamd is rapid, modular and lightweight spam filter. It is designed to work
+ with big amount of mail and can be easily extended with own filters written in
  lua.

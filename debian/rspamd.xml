@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <rspamd>
 <!-- Global section -->
-<lua src="@ETC_PREFIX@/rspamd/lua/rspamd.lua" />
+<lua src="/etc/rspamd/lua/rspamd.lua" />
 
 <!-- Options -->
 <options>
   <!-- Temporary directory -->
   <tempdir>/tmp</tempdir>
   <!-- Path to pid file -->
-  <pidfile>@LOCALSTATES_PREFIX@/rspamd.pid</pidfile>
+  <pidfile>/var/lib/rspamd/rspamd.pid</pidfile>
   <!-- Turned on C filters -->
   <filters>regexp,surbl,chartable,fuzzy_check,spf,dkim</filters>
   <!-- Maximum size of statistics mapped in memory -->
@@ -24,11 +24,11 @@
   <!-- DNS retransmits count -->
   <dns_retransmits>5</dns_retransmits>
   <!-- File for saving settings of symbols cache -->
-  <cache_file>@LOCALSTATES_PREFIX@/symbols.cache</cache_file>
+  <cache_file>/var/lib/rspamd/symbols.cache</cache_file>
   <!-- Maps watch timeout (floating point number in seconds, for file maps this timeout is reduced by two) -->
   <map_watch_interval>10.0s</map_watch_interval>
   <!-- A path to dynamic configuration file, required for webui -->
-  <dynamic_conf>@LOCALSTATES_PREFIX@/rspamd_dynamic</dynamic_conf>
+  <dynamic_conf>/var/lib/rspamd/rspamd_dynamic</dynamic_conf>
   <!-- Use mlock to prevent statistic from getting to swap file, requires either root privileges or specific system configuration -->
   <use_mlock>no</use_mlock>
 </options>
@@ -38,9 +38,9 @@
 <logging>
  <level>info</level>
  <log_urls>no</log_urls>
- <type>console</type>
-<!-- Other types
  <type filename="/var/log/rspamd/rspamd.log">file</type>
+<!-- Other types
+ <type>console</type>
  <type facility="local7">syslog</type>
 -->
 <!-- Selective debug
@@ -316,7 +316,7 @@
   <count>1</count>
   <maxfiles>2048</maxfiles>
 <!-- Other params -->
-    <hashfile>@LOCALSTATES_PREFIX@/fuzzy.db</hashfile>
+    <hashfile>/var/lib/rspamd/fuzzy.db</hashfile>
     <use_judy>yes</use_judy>
 </worker>
 <worker>
@@ -369,8 +369,8 @@
 
 <!-- surbl -->
 <module name="surbl">
-  <whitelist>file://@ETC_PREFIX@/rspamd/surbl-whitelist.inc</whitelist>
-  <exceptions>file://@ETC_PREFIX@/rspamd/2tld.inc</exceptions>
+  <whitelist>file:///etc/rspamd/surbl-whitelist.inc</whitelist>
+  <exceptions>file:///etc/rspamd/2tld.inc</exceptions>
   <bit_64>JP</bit_64>
   <bit_32>AB</bit_32>
   <bit_16>OB</bit_16>
@@ -425,8 +425,8 @@
 <!-- multimap -->
 <module name="multimap">
 <!--
-	<rule>type = header, header = To, pattern = @(.+)>?$, map = file://@ETC_PREFIX@/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST, description = RCPT whitelist</rule>
-	<rule>type = ip, map = file://@ETC_PREFIX@/rspamd/ip_test, symbol = R_IP_WHITELIST, description = IP whitelist</rule>
+	<rule>type = header, header = To, pattern = @(.+)>?$, map = file:///etc/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST, description = RCPT whitelist</rule>
+	<rule>type = ip, map = file:///etc/rspamd/ip_test, symbol = R_IP_WHITELIST, description = IP whitelist</rule>
 -->
 	<rule>type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL, description = PBL dns block list</rule>
 </module>
@@ -446,7 +446,7 @@
 <!-- 
 <module name="trie">
   <rule>TRIE1:bad pattern</rule>
-  <rule>TRIE2:file://@LOCALSTATES_PREFIX@/bad_patterns.list</rule>
+  <rule>TRIE2:file:///var/lib/rspamd/bad_patterns.list</rule>
 </module>
 -->
 
@@ -532,12 +532,12 @@
  <statfile>
   <symbol>WINNOW_HAM</symbol>
   <size>100M</size>
-  <path>@LOCALSTATES_PREFIX@/data.ham</path>
+  <path>/var/lib/rspamd/data.ham</path>
  </statfile>
  <statfile>
   <symbol>WINNOW_SPAM</symbol>
   <size>100M</size>
-  <path>@LOCALSTATES_PREFIX@/data.spam</path>
+  <path>/var/lib/rspamd/data.spam</path>
  </statfile>
 </classifier>
 -->
@@ -550,14 +550,14 @@
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_slave.ham</path>
+  <path>/var/lib/rspamd/bayes_slave.ham</path>
   <binlog_master>localhost:11334</binlog_master>
   <binlog>slave</binlog>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_slave.spam</path>
+  <path>/var/lib/rspamd/bayes_slave.spam</path>
   <binlog>slave</binlog>
   <binlog_master>localhost:11334</binlog_master>
  </statfile>
@@ -575,24 +575,24 @@
  <statfile>
   <symbol>BAYES_HAM_RU</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_ru.ham</path>
+  <path>/var/lib/rspamd/bayes_ru.ham</path>
   <param name="language">ru</param>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM_RU</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_ru.spam</path>
+  <path>/var/lib/rspamd/bayes_ru.spam</path>
   <param name="language">ru</param>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes.ham</path>
+  <path>/var/lib/rspamd/bayes.ham</path>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes.spam</path>
+  <path>/var/lib/rspamd/bayes.spam</path>
  </statfile>
 </classifier>
 -->
@@ -606,12 +606,12 @@
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>20M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes.ham</path>
+  <path>/var/lib/rspamd/bayes.ham</path>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>20M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes.spam</path>
+  <path>/var/lib/rspamd/bayes.spam</path>
  </statfile>
 </classifier>
 
@@ -625,26 +625,26 @@
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes.ham</path>
+  <path>/var/lib/rspamd/bayes.ham</path>
   <spam>no</spam>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes.spam</path>
+  <path>/var/lib/rspamd/bayes.spam</path>
   <spam>yes</spam>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM_RU</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_ru.ham</path>
+  <path>/var/lib/rspamd/bayes_ru.ham</path>
   <language>ru</language>
   <spam>no</spam>
  </statfile>
  <statfile>
   <symbol>BAYES_SPAM_RU</symbol>
   <size>50M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_ru.spam</path>
+  <path>/var/lib/rspamd/bayes_ru.spam</path>
   <language>ru</language>
   <spam>yes</spam>
  </statfile>
@@ -652,14 +652,14 @@
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_manyrcpt.spam</path>
+  <path>/var/lib/rspamd/bayes_manyrcpt.spam</path>
   <spam>yes</spam>
   <label>many recipients</label>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_manyrcpt.ham</path>
+  <path>/var/lib/rspamd/bayes_manyrcpt.ham</path>
   <spam>no</spam>
   <label>many recipients</label>
  </statfile>
@@ -667,14 +667,14 @@
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_undisclosedrcpt.spam</path>
+  <path>/var/lib/rspamd/bayes_undisclosedrcpt.spam</path>
   <spam>yes</spam>
   <label>undisclosed recipients</label>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_undisclosedrcpt.ham</path>
+  <path>/var/lib/rspamd/bayes_undisclosedrcpt.ham</path>
   <spam>no</spam>
   <label>undisclosed recipients</label>
  </statfile>
@@ -682,14 +682,14 @@
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_maillist.spam</path>
+  <path>/var/lib/rspamd/bayes_maillist.spam</path>
   <spam>yes</spam>
   <label>maillist</label>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_maillist.ham</path>
+  <path>/var/lib/rspamd/bayes_maillist.ham</path>
   <spam>no</spam>
   <label>maillist</label>
  </statfile>
@@ -697,14 +697,14 @@
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_longsubject.spam</path>
+  <path>/var/lib/rspamd/bayes_longsubject.spam</path>
   <spam>yes</spam>
   <label>long subject</label>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_longsubject.ham</path>
+  <path>/var/lib/rspamd/bayes_longsubject.ham</path>
   <spam>no</spam>
   <label>long subject</label>
  </statfile>
@@ -712,14 +712,14 @@
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_replyto.spam</path>
+  <path>/var/lib/rspamd/bayes_replyto.spam</path>
   <spam>yes</spam>
   <label>different reply to</label>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_replyto.ham</path>
+  <path>/var/lib/rspamd/bayes_replyto.ham</path>
   <spam>no</spam>
   <label>different reply to</label>
  </statfile>
@@ -727,14 +727,14 @@
  <statfile>
   <symbol>BAYES_SPAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_replymessage.spam</path>
+  <path>/var/lib/rspamd/bayes_replymessage.spam</path>
   <spam>yes</spam>
   <label>reply message</label>
  </statfile>
  <statfile>
   <symbol>BAYES_HAM</symbol>
   <size>10M</size>
-  <path>@LOCALSTATES_PREFIX@/bayes_replymessage.ham</path>
+  <path>/var/lib/rspamd/bayes_replymessage.ham</path>
   <spam>no</spam>
   <label>reply message</label>
  </statfile>
@@ -745,7 +745,7 @@
 
 <!-- Modules section -->
 <modules>
-	<path>@ETC_PREFIX@/rspamd/plugins/lua/</path>
+	<path>/etc/rspamd/plugins/lua/</path>
 </modules>
 <!-- End of modules section -->
 

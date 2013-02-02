@@ -241,7 +241,8 @@ local function add_multimap_rule(params)
 		header = nil,
 		pattern = nil,
 		map = nil,
-		symbol = nil
+		symbol = nil,
+		description = 'undefined multimap map'
 	}
 	for _,param in ipairs(params) do
 		local _,_,name,value = string.find(param, '(%w+)%s*=%s*(.+)')
@@ -272,6 +273,8 @@ local function add_multimap_rule(params)
 			newrule['map'] = value
 		elseif name == 'symbol' then
 			newrule['symbol'] = value
+		elseif name == 'description' then
+			newrule['description'] = value
 		else
 			rspamd_logger.err('invalid rule option: '.. name)
 			return nil
@@ -295,7 +298,7 @@ local function add_multimap_rule(params)
 		end
 	else
 		if newrule['type'] == 'ip' then
-			newrule['ips'] = rspamd_config:add_radix_map (newrule['map'])
+			newrule['ips'] = rspamd_config:add_radix_map (newrule['map'], newrule['description'])
 			if newrule['ips'] then
 				table.insert(rules, newrule)
 				return newrule
@@ -303,7 +306,7 @@ local function add_multimap_rule(params)
 				rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
 			end
 		elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
-			newrule['hash'] = rspamd_config:add_hash_map (newrule['map'])
+			newrule['hash'] = rspamd_config:add_hash_map (newrule['map'], newrule['description'])
 			if newrule['hash'] then
 				table.insert(rules, newrule)
 				return newrule

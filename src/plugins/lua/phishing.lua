@@ -76,7 +76,7 @@ if opts then
 				if type(rspamd_config.get_api_version) ~= 'nil' then
 					rspamd_config:register_virtual_symbol(sym, 1)
 				end
-				local rmap = rspamd_config:add_hash_map (map)
+				local rmap = rspamd_config:add_hash_map (map, 'Phishing strict domains map')
 				if rmap then
 					local rule = {symbol = sym, map = rmap}
 					table.insert(strict_domains, rule)
