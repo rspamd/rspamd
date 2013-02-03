@@ -73,6 +73,10 @@ settings_free (gpointer data)
 	if (s->blacklist) {
 		g_hash_table_destroy (s->blacklist);
 	}
+	if (s->metric_actions) {
+		g_hash_table_destroy (s->metric_actions);
+	}
+
 	g_slice_free1 (sizeof (struct rspamd_settings), s);
 }
 
@@ -285,6 +289,7 @@ json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 					if (cur_act != NULL) {
 						g_hash_table_insert (cur_settings->metric_actions,
 								g_strdup (json_object_iter_key (json_it)), cur_act);
+						cur_act = NULL;
 					}
 				}
 				json_it = json_object_iter_next (cur_nm, json_it);

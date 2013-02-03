@@ -82,12 +82,15 @@ connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_as
 static void
 write_http_request (struct rspamd_map *map, struct http_map_data *data, gint sock)
 {
-	gchar                           outbuf[BUFSIZ];
+	gchar                           outbuf[BUFSIZ], datebuf[128];
 	gint                            r;
+	struct tm			 			*tm;
 
+	tm = gmtime (&data->last_checked);
+	strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
 	r = rspamd_snprintf (outbuf, sizeof (outbuf), "GET %s%s HTTP/1.1" CRLF "Connection: close" CRLF "Host: %s" CRLF, (*data->path == '/') ? "" : "/", data->path, data->host);
 	if (data->last_checked != 0) {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "If-Modified-Since: %s" CRLF, asctime (gmtime (&data->last_checked)));
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "If-Modified-Since: %s" CRLF, datebuf);
 	}
 
 	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
@@ -754,11 +757,13 @@ file_callback (gint fd, short what, void *ud)
 	struct rspamd_map              *map = ud;
 	struct file_map_data           *data = map->map_data;
 	struct stat                     st;
+	gdouble							jittered_msec;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ()) / 2.;
-	map->tv.tv_usec = 0;
+	jittered_msec = (map->cfg->map_timeout + g_random_double ());
+	msec_to_tv (jittered_msec, &map->tv);
+
 	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
@@ -788,6 +793,7 @@ free_http_cbdata (struct http_callback_data *cbd)
 		g_hash_table_destroy (cbd->reply->headers);
 		g_free (cbd->reply);
 	}
+	g_atomic_int_set (cbd->map->locked, 0);
 	event_del (&cbd->ev);
 	close (cbd->fd);
 	g_free (cbd);
@@ -880,19 +886,24 @@ http_callback (gint fd, short what, void *ud)
 	struct http_map_data           *data = map->map_data;
 	gint                            sock;
 	struct http_callback_data      *cbd;
+	gdouble							jittered_msec;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	map->tv.tv_sec = map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ();
-	map->tv.tv_usec = 0;
+	jittered_msec = (map->cfg->map_timeout + g_random_double ());
+	msec_to_tv (jittered_msec, &map->tv);
 	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
 		msg_info ("don't try to reread map as it is locked by other process, will reread it later");
 		return;
 	}
+
+	g_atomic_int_inc (map->locked);
+
 	/* Connect asynced */
 	if ((sock = connect_http (map, data, TRUE)) == -1) {
+		g_atomic_int_set (map->locked, 0);
 		return;
 	}
 	else {
@@ -919,6 +930,7 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 	GList                          *cur = cfg->maps;
 	struct rspamd_map              *map;
 	struct file_map_data           *fdata;
+	gdouble							jittered_msec;
 
 	/* First of all do synced read of data */
 	while (cur) {
@@ -934,8 +946,8 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 				read_map_file (map, map->map_data);
 			}
 			/* Plan event with jitter */
-			map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ()) / 2.;
-			map->tv.tv_usec = 0;
+			jittered_msec = (map->cfg->map_timeout + g_random_double ()) / 2.;
+			msec_to_tv (jittered_msec, &map->tv);
 			evtimer_add (&map->ev, &map->tv);
 		}
 		else if (map->protocol == MAP_PROTO_HTTP) {
@@ -944,8 +956,8 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 			/* Read initial data */
 			read_http_sync (map, map->map_data);
 			/* Plan event with jitter */
-			map->tv.tv_sec = (map->cfg->map_timeout + map->cfg->map_timeout * g_random_double ());
-			map->tv.tv_usec = 0;
+			jittered_msec = (map->cfg->map_timeout + g_random_double ());
+			msec_to_tv (jittered_msec, &map->tv);
 			evtimer_add (&map->ev, &map->tv);
 		}
 		cur = g_list_next (cur);
