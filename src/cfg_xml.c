@@ -308,7 +308,7 @@ static struct xml_parser_rule grammar[] = {
 			},
 			{
 				"map_watch_interval",
-				xml_handle_double,
+				xml_handle_seconds_double,
 				G_STRUCT_OFFSET (struct config_file, map_timeout),
 				NULL
 			},
