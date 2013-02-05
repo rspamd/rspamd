@@ -1,3 +1,11 @@
+0.5.4:
+	* Fixed issues with diff algorithm
+	* Added support of RRD statistics
+	* Add webui worker for interface interaction
+	* Fix a lot of issues with dynamic conf
+	* Fix critical memory leak in settings code
+	* Improve stability of the system
+
 0.5.3:
 	* Added dynamic options
 	* Added advanced metaclassfication
