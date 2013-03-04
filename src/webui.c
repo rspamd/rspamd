@@ -1205,7 +1205,7 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 	struct evbuffer							*evb;
 	struct roll_history_row					*row;
 	struct roll_history						 copied_history;
-	gint									 i, row_num;
+	gint									 i, rows_proc, row_num;
 	struct tm								*tm;
 	gchar									 timebuf[32];
 	gchar									 ip_buf[INET6_ADDRSTRLEN];
@@ -1233,14 +1233,14 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 
 	/* Go throught all rows */
 	row_num = copied_history.cur_row;
-	for (i = 0; i < HISTORY_MAX_ROWS; i ++, row_num ++) {
+	for (i = 0, rows_proc = 0; i < HISTORY_MAX_ROWS; i ++, row_num ++) {
 		if (row_num == HISTORY_MAX_ROWS) {
 			row_num = 0;
 		}
 		row = &copied_history.rows[row_num];
 		/* Get only completed rows */
 		if (row->completed) {
-			if (i != 0) {
+			if (rows_proc != 0) {
 				evbuffer_add (evb, ",", 1);
 			}
 			tm = localtime (&row->tv.tv_sec);
@@ -1267,6 +1267,7 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
 					timebuf, row->message_id, ip_buf, str_action_metric (row->action),
 					row->score, row->required_score, row->symbols, row->len, row->scan_time);
 			}
+			rows_proc ++;
 		}
 	}
 
