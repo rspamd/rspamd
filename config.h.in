@@ -426,6 +426,10 @@
 #include "gchecksum.h"
 #endif
 
+#if (GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14)
+typedef off_t goffset;
+#endif
+
 #ifndef BUILD_STATIC
 #include <gmodule.h>
 #endif

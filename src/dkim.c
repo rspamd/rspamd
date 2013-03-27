@@ -79,7 +79,15 @@ rspamd_dkim_parse_signature (rspamd_dkim_context_t* ctx, const gchar *param, gsi
 {
 	ctx->b = memory_pool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->b, param, len + 1);
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
+	gchar *tmp;
+	gsize tmp_len = len;
+	tmp = g_base64_decode (ctx->b, &tmp_len);
+	rspamd_strlcpy (ctx->b, tmp, len + 1);
+	g_free (tmp);
+#else
 	g_base64_decode_inplace (ctx->b, &len);
+#endif
 	ctx->blen = len;
 	return TRUE;
 }
@@ -322,7 +330,15 @@ rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 {
 	ctx->bh = memory_pool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->bh, param, len + 1);
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
+	gchar *tmp;
+	gsize tmp_len = len;
+	tmp = g_base64_decode (ctx->bh, &tmp_len);
+	rspamd_strlcpy (ctx->bh, tmp, len + 1);
+	g_free (tmp);
+#else
 	g_base64_decode_inplace (ctx->bh, &len);
+#endif
 	ctx->bhlen = len;
 	return TRUE;
 }
@@ -627,7 +643,16 @@ rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError **err)
 	rspamd_strlcpy (key->keydata, keydata, keylen + 1);
 	key->keylen = keylen + 1;
 	key->decoded_len = keylen + 1;
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
+	gchar *tmp;
+	gsize tmp_len = keylen;
+	tmp = g_base64_decode (key->keydata, &tmp_len);
+	rspamd_strlcpy (key->keydata, tmp, keylen + 1);
+	g_free (tmp);
+	key->decoded_len = tmp_len;
+#else
 	g_base64_decode_inplace (key->keydata, &key->decoded_len);
+#endif
 #ifdef HAVE_OPENSSL
 	key->key_bio = BIO_new_mem_buf (key->keydata, key->decoded_len);
 	if (key->key_bio == NULL) {

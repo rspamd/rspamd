@@ -538,6 +538,20 @@ INCLUDE_DIRECTORIES(${GLIB2_INCLUDE_DIRS})
 LINK_DIRECTORIES(${GLIB2_LIBRARY_DIRS})
 
 
+FIND_LIBRARY(LIBZ_LIBRARY NAMES z PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
+                 DOC "Path where the libz library can be found")
+IF(NOT LIBZ_LIBRARY)
+	MESSAGE(FATAL_ERROR "libz is required for libgmime")
+ENDIF(NOT LIBZ_LIBRARY)
 # Check for libevent
 
 FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATH_SUFFIXES lib64 lib
@@ -955,8 +969,8 @@ AddModules(MODULES_LIST WORKERS_LIST)
 
 ################################ SUBDIRS SECTION ###########################
 
+ADD_SUBDIRECTORY(contrib/lgpl)
 IF(GLIB_COMPAT)
-	ADD_SUBDIRECTORY(contrib/lgpl)
 	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/lgpl")
 ENDIF(GLIB_COMPAT)
 

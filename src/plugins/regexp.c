@@ -1309,9 +1309,13 @@ process_regexp_item (struct worker_task *task, void *user_data)
 	if (!item->lua_function && regexp_module_ctx->max_threads > 1) {
 		if (regexp_module_ctx->workers == NULL) {
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+# if GLIB_MINOR_VERSION > 20
 			if (! g_thread_get_initialized ()) {
 				g_thread_init (NULL);
 			}
+# else
+			g_thread_init (NULL);
+# endif
 			workers_mtx = g_mutex_new ();
 #else
 			workers_mtx = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (GMutex));

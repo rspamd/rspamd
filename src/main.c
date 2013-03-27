@@ -467,10 +467,14 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 			close_log (rspamd->logger);
 			open_log (rspamd->logger);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+# if (GLIB_MINOR_VERSION > 20)
 			/* Ugly hack for old glib */
 			if (!g_thread_get_initialized ()) {
 				g_thread_init (NULL);
 			}
+# else
+			g_thread_init (NULL);
+# endif
 #endif
 			msg_info ("starting %s process %P", cf->worker->name, getpid ());
 			cf->worker->worker_start_func (cur);
