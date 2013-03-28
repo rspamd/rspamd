@@ -255,7 +255,7 @@ http_calculate_content_length (struct evbuffer *evb, struct evhttp_request *req)
 #if _EVENT_NUMERIC_VERSION > 0x02000000
 	rspamd_snprintf (numbuf, sizeof (numbuf), "%z", evbuffer_get_length (evb));
 #else
-	rspamd_snprintf (numbuf, sizeof (numbuf), "%z", evb->totallen);
+	rspamd_snprintf (numbuf, sizeof (numbuf), "%z", EVBUFFER_LENGTH (evb));
 #endif
 	evhttp_add_header(req->output_headers, "Content-Length", numbuf);
 }
