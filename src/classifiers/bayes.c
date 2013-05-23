@@ -62,6 +62,7 @@ struct bayes_callback_data {
 	guint64                         processed_tokens;
 	gsize                           max_tokens;
 	double                         spam_probability;
+	double                         ham_probability;
 };
 
 static                          gboolean
@@ -170,6 +171,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		spam_prob = spam_freq / (spam_freq + ham_freq);
 		bayes_spam_prob = (0.5 + spam_prob * total_count) / (double)total_count;
 		cd->spam_probability += log (bayes_spam_prob);
+		cd->ham_probability += log (1. - bayes_spam_prob);
 		cd->processed_tokens ++;
 	}
 
@@ -201,7 +203,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	gint                             nodes, i = 0, selected_st = -1, cnt;
 	gint                             minnodes;
 	guint64                          maxhits = 0;
-	double                          final_prob;
+	double                          final_prob, h, s;
 	struct statfile                *st;
 	stat_file_t                     *file;
 	GList                           *cur;
@@ -237,6 +239,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 
 	data.processed_tokens = 0;
 	data.spam_probability = 0;
+	data.ham_probability = 0;
 	data.total_ham = 0;
 	data.total_spam = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
@@ -279,10 +282,12 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		final_prob = 0;
 	}
 	else {
-		final_prob = inv_chi_square (-2. * data.spam_probability, 2 * data.processed_tokens);
+		h = 1 - inv_chi_square (-2. * data.spam_probability, 2 * data.processed_tokens);
+		s = 1 - inv_chi_square (-2. * data.ham_probability, 2 * data.processed_tokens);
+		final_prob = (s + 1 - h) / 2.;
 	}
 
-	if (final_prob > 0 && fabs (final_prob - 0.5) > 0.0001) {
+	if (final_prob > 0 && fabs (final_prob - 0.5) > 0.1) {
 
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		for (i = 0; i < cnt; i ++) {
