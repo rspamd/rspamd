@@ -12,7 +12,7 @@
 typedef struct token_node_s {
 	guint32 h1;
 	guint32 h2;
-	float value;
+	double value;
 	uintptr_t extra;
 } token_node_t;
 
