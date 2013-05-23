@@ -169,7 +169,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		spam_freq = ((double)spam_count / MAX (1., (double)cd->total_spam));
 		ham_freq = ((double)ham_count / MAX (1., (double)cd->total_ham));
 		spam_prob = spam_freq / (spam_freq + ham_freq);
-		bayes_spam_prob = (0.5 + spam_prob * total_count) / (double)total_count;
+		bayes_spam_prob = (0.5 + spam_prob * total_count) / (1. + total_count);
 		cd->spam_probability += log (bayes_spam_prob);
 		cd->ham_probability += log (1. - bayes_spam_prob);
 		cd->processed_tokens ++;
