@@ -202,7 +202,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	gchar                           *value;
 	gint                             nodes, i = 0, selected_st = -1, cnt;
 	gint                             minnodes;
-	guint64                          maxhits = 0;
+	guint64                          maxhits = 0, rev;
 	double                          final_prob, h, s;
 	struct statfile                *st;
 	stat_file_t                     *file;
@@ -263,11 +263,12 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		}
 		data.statfiles[i].file = file;
 		data.statfiles[i].st = st;
+		statfile_get_revision (file, &rev, NULL);
 		if (st->is_spam) {
-			data.total_spam += statfile_get_revision (file);
+			data.total_spam += rev;
 		}
 		else {
-			data.total_ham += statfile_get_revision (file);
+			data.total_ham += rev;
 		}
 
 		cur = g_list_next (cur);
