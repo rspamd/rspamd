@@ -264,10 +264,10 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		data.statfiles[i].file = file;
 		data.statfiles[i].st = st;
 		if (st->is_spam) {
-			data.total_spam += statfile_get_used_blocks (file);
+			data.total_spam += statfile_get_revision (file);
 		}
 		else {
-			data.total_ham += statfile_get_used_blocks (file);
+			data.total_ham += statfile_get_revision (file);
 		}
 
 		cur = g_list_next (cur);
