@@ -106,7 +106,7 @@ static                          gboolean
 lua_io_write_cb (void *arg)
 {
 	struct lua_dispatcher_cbdata					*cbdata = arg;
-	gboolean								 		  res;
+	gboolean										  res = FALSE;
 	rspamd_io_dispatcher_t							**pdispatcher;
 
 	if (cbdata->cbref_write) {

@@ -97,7 +97,7 @@ void re_cache_add (const gchar *line, void *pointer, memory_pool_t *pool);
  * @param line symbolic representation
  * @return pointer to regexp data or NULL if regexp is not found
  */
-void * re_cache_check (const const gchar *line, memory_pool_t *pool);
+void * re_cache_check (const gchar *line, memory_pool_t *pool);
 
 /**
  * Remove regexp from regexp cache

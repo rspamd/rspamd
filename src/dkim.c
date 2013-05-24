@@ -579,14 +579,14 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_ji
 	}
 	if (new->sig_alg == DKIM_SIGN_RSASHA1) {
 		/* Check bh length */
-		if (new->bhlen != g_checksum_type_get_length (G_CHECKSUM_SHA1)) {
+		if (new->bhlen != (guint)g_checksum_type_get_length (G_CHECKSUM_SHA1)) {
 			g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_BADSIG, "signature has incorrect length: %ud", new->bhlen);
 			return NULL;
 		}
 
 	}
 	else if (new->sig_alg == DKIM_SIGN_RSASHA256) {
-		if (new->bhlen != g_checksum_type_get_length (G_CHECKSUM_SHA256)) {
+		if (new->bhlen != (guint)g_checksum_type_get_length (G_CHECKSUM_SHA256)) {
 			g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_BADSIG, "signature has incorrect length: %ud", new->bhlen);
 			return NULL;
 		}

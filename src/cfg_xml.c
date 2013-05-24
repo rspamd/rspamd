@@ -897,8 +897,10 @@ worker_foreach_callback (gpointer k, gpointer v, gpointer ud)
 	GList                          *cur;
 	GHashTable                     *worker_config;
 
-	if (!worker_options || (worker_config = g_hash_table_lookup (worker_options, &cd->wrk->type)) == NULL ||
-			(cparam = g_hash_table_lookup (worker_config, k)) == NULL) {
+	if (!worker_options || (worker_config = g_hash_table_lookup (worker_options, &cd->wrk->type)) == NULL) {
+		return;
+	}
+	if ((cparam = g_hash_table_lookup (worker_config, k)) == NULL) {
 		/* Try to use universal handler if there is no specific handler */
 		if ((cparam = g_hash_table_lookup (worker_config, "*")) != NULL) {
 			if (cd->wrk->ctx != NULL) {
@@ -1113,6 +1115,10 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 		if (group == NULL) {
 			group = "ungrouped";
 		}
+	}
+	else {
+		group = "ungrouped";
+		sym_def->description = NULL;
 	}
 
 	g_hash_table_insert (metric->symbols, sym_def->name, value);
