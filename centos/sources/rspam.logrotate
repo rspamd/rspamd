@@ -1,0 +1,11 @@
+/var/log/rspamd/*log {
+    daily
+    rotate 10
+    missingok
+    notifempty
+    compress
+    sharedscripts
+    postrotate
+        [ ! -f /var/run/rspamd.pid ] || kill -USR1 `cat /var/run/rspamd.pid`
+    endscript
+}
