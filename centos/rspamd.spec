@@ -4,30 +4,30 @@
 %define rspamd_logdir    %{_localstatedir}/log/rspamd
 %define rspamd_confdir   %{_sysconfdir}/rspamd
 
-Name:		rspamd
-Version:	0.5.5
-Release:	1
-Summary:	Rapid spam filtering system
-Group:		System Environment/Daemons   
+Name:           rspamd
+Version:        0.5.5
+Release:        1
+Summary:        Rapid spam filtering system
+Group:          System Environment/Daemons   
 
 # BSD License (two clause)
 # http://www.freebsd.org/copyright/freebsd-license.html
-License:	BSD
-URL:		https://bitbucket.org/vstakhov/rspamd/ 
-BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}
-BuildRequires:	cmake,glib2-devel,gmime-devel,openssl-devel,lua-devel
-Requires:	glib2,gmime,lua
+License:        BSD
+URL:            https://bitbucket.org/vstakhov/rspamd/ 
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
+BuildRequires:  cmake,glib2-devel,gmime-devel,openssl-devel,lua-devel
+Requires:       glib2,gmime,lua
 # for /user/sbin/useradd
-Requires(pre):	shadow-utils
-Requires(post):	chkconfig
+Requires(pre):  shadow-utils
+Requires(post): chkconfig
 # for /sbin/service
-Requires(preun):	chkconfig, initscripts
-Requires(postun):	initscripts	
+Requires(preun):        chkconfig, initscripts
+Requires(postun):       initscripts
 
-Source0:	http://cdn.bitbucket.org/vstakhov/rspamd/downloads/%{name}-%{version}.tar.gz
-Source1:	%{name}.init
-Source2:	%{name}.logrotate
-Source3:	%{name}.xml
+Source0:        http://cdn.bitbucket.org/vstakhov/rspamd/downloads/%{name}-%{version}.tar.gz
+Source1:        %{name}.init
+Source2:        %{name}.logrotate
+Source3:        %{name}.xml
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -38,25 +38,29 @@ lua.
 %setup -q
 
 %build
-cmake %{_sourcedir} \
-	-DETC_PREFIX=%{_sysconfdir}
-	-DMAN_PREFIX=%{_mandir} \
-	-DLOCALSTATES_PREFIX=%{_localstatedir}/lib \
-	-DLIBDIR=%{_libdir} \
-	-DINCLUDEDIR=%{_includedir} \
-	-DNO_SHARED=ON \
-	-DDEBIAN_BUILD=1 \
-	-DRSPAMD_GROUP=%{rspamd_group} \
-	-DRSPAMD_USER=%{rspamd_user}
+rm -rf %{buildroot}
+%{__cmake} \
+        -DCMAKE_INSTALL_PREFIX=%{_prefix} \
+        -DETC_PREFIX=%{_sysconfdir} \
+        -DMAN_PREFIX=%{_mandir} \
+        -DLOCALSTATES_PREFIX=%{_localstatedir}/lib \
+        -DLIBDIR=%{_libdir} \
+        -DINCLUDEDIR=%{_includedir} \
+        -DNO_SHARED=ON \
+        -DDEBIAN_BUILD=1 \
+        -DRSPAMD_GROUP=%{rspamd_group} \
+        -DRSPAMD_USER=%{rspamd_user}
 
-%{__make} %{?_smp_mflags}
+%{__make} %{?jobs:-j%jobs}
 
 %install
-rm -rf %{buildroot}
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
+%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/%{name}.xml
+%{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
+%{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %clean
 rm -rf %{buildroot}
@@ -85,9 +89,12 @@ fi
 %{_mandir}/man1/rspamc.*
 %{_bindir}/rspamd
 %{_bindir}/rspamc
+%config(noreplace) %{_sysconfdir}/%{name}.xml
+%config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
+%dir %{rspamd_logdir}
 %dir %{rspamd_confdir}
+%attr(755, %{rspamd_user}, %{rspamd_group}) %dir %{rspamd_home}
 %config(noreplace) %{rspamd_confdir}/2tld.inc
-%config(noreplace) %{rspamd_confdir}/2tld.inc.orig
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %config(noreplace) %{rspamd_confdir}/plugins/lua/forged_recipients.lua
 %config(noreplace) %{rspamd_confdir}/plugins/lua/maillist.lua
