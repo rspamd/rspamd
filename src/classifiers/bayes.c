@@ -111,7 +111,7 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 static gdouble
 inv_chi_square (gdouble value, gint freedom_deg)
 {
-	gdouble prob, sum;
+	long double prob, sum;
 	gint i;
 
 	if ((freedom_deg & 1) != 0) {
@@ -121,7 +121,7 @@ inv_chi_square (gdouble value, gint freedom_deg)
 
 	value /= 2.;
 	errno = 0;
-	prob = exp (-value);
+	prob = expl (-value);
 	if (errno == ERANGE) {
 		msg_err ("exp overflow");
 		return 0;
@@ -288,7 +288,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		final_prob = (s + 1 - h) / 2.;
 	}
 
-	if (final_prob > 0 && fabs (final_prob - 0.5) > 0.1) {
+	if (final_prob > 0 && fabs (final_prob - 0.5) > 0.05) {
 
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		for (i = 0; i < cnt; i ++) {
