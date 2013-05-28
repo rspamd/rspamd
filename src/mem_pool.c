@@ -452,7 +452,7 @@ __mutex_spin (memory_pool_mutex_t * mutex)
 			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
 			return 0;
 		}
-		else if (kill (0, mutex->owner) == -1) {
+		else if (kill (mutex->owner, 0) == -1) {
 			/* Owner process was not found, so release lock */
 			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
 			return 0;
