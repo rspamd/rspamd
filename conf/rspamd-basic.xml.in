@@ -12,7 +12,7 @@
   <!-- Turned on C filters -->
   <filters>regexp,surbl,chartable,fuzzy_check,spf,dkim</filters>
   <!-- Maximum size of statistics mapped in memory -->
-  <statfile_pool_size>250M</statfile_pool_size>
+  <statfile_pool_size>1G</statfile_pool_size>
   <!-- Raw mode is non-utf mode. In utf mode all messages are converted to utf8 (if possible) -->
   <raw_mode>no</raw_mode>
   <!-- Check text attachements as ordinary text parts -->
