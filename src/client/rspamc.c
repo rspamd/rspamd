@@ -651,7 +651,12 @@ rspamd_do_controller_simple_command (gchar *command, GHashTable *kwattrs)
 			if (tty) {
 				printf ("\033[0m");
 			}
-			PRINT_FUNC ("%*s\n", (gint)res->data->len, res->data->str);
+			if (res->data) {
+				PRINT_FUNC ("%*s\n", (gint)res->data->len, res->data->str);
+			}
+			else {
+				PRINT_FUNC ("No results\n");
+			}
 			rspamd_free_controller_result (res);
 			cur = g_list_next (cur);
 		}
