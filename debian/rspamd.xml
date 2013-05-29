@@ -263,7 +263,7 @@
  <symbol weight="12.50" description="rambler.ru uribl">RAMBLER_URIBL</symbol>
  
  <!-- DBL uribl -->
- <symbol weight="11.50" description="dbl.spamhaus.org uribl">DBL</symbol>
+ <symbol weight="7.50" description="dbl.spamhaus.org uribl">DBL</symbol>
 
  <!-- rambler.ru emailbl -->
  <symbol weight="9.50" description="rambler.ru emailbl">RAMBLER_EMAILBL</symbol>
@@ -428,7 +428,7 @@
 	<rule>type = header, header = To, pattern = @(.+)>?$, map = file:///etc/rspamd/rcpt_test, symbol = R_RCPT_WHITELIST, description = RCPT whitelist</rule>
 	<rule>type = ip, map = file:///etc/rspamd/ip_test, symbol = R_IP_WHITELIST, description = IP whitelist</rule>
 -->
-	<rule>type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL, description = PBL dns block list</rule>
+	<rule>type = dnsbl, map = pbl.spamhaus.org, symbol = R_IP_PBL, description = PBL dns block list</rule>
 </module>
 
 <!-- phishing -->
