@@ -12,10 +12,13 @@
 #define XML_UNMATCHED_TAG 4
 #define XML_INVALID_ATTR 5
 
+#define MAX_INHERIT 5
+
 enum xml_read_state {
 	XML_READ_START,
 	XML_READ_PARAM,
 	XML_READ_MODULE,
+	XML_READ_MODULE_META,
 	XML_READ_MODULES,
 	XML_READ_CLASSIFIER,
 	XML_READ_STATFILE,
@@ -51,7 +54,7 @@ struct rspamd_xml_userdata {
 	struct config_file *cfg;				/*< configuration object 					*/
 	gchar section_name[MAX_NAME];			/*< current section							*/
 	gpointer section_pointer;				/*< pointer to object related with section	*/
-	gpointer parent_pointer;				/*< parent's section object					*/
+	gpointer parent_pointer[MAX_INHERIT];	/*< parent's section object					*/
 	GHashTable *cur_attrs;					/*< attributes of current tag				*/
 	GQueue *if_stack;						/*< stack of if elements					*/
 };
@@ -126,6 +129,7 @@ gboolean handle_metric_action (struct config_file *cfg, struct rspamd_xml_userda
 
 /* Handle common module option */
 gboolean handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset);
+gboolean handle_module_meta (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset);
 
 /* Handle loging params */
 gboolean handle_log_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset);

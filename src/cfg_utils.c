@@ -216,6 +216,7 @@ init_defaults (struct config_file *cfg)
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->modules_opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->modules_metas = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->variables = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -242,6 +243,7 @@ free_config (struct config_file *cfg)
 	remove_all_maps (cfg);
 	g_hash_table_remove_all (cfg->modules_opts);
 	g_hash_table_unref (cfg->modules_opts);
+	g_hash_table_unref (cfg->modules_metas);
 	g_hash_table_remove_all (cfg->variables);
 	g_hash_table_unref (cfg->variables);
 	g_hash_table_remove_all (cfg->metrics);

@@ -70,6 +70,7 @@ enum xml_config_section {
 	XML_SECTION_CLASSIFIER,
 	XML_SECTION_STATFILE,
 	XML_SECTION_MODULE,
+	XML_SECTION_MODULE_META,
 	XML_SECTION_MODULES,
 	XML_SECTION_VIEW
 };
@@ -558,6 +559,21 @@ static struct xml_parser_rule grammar[] = {
 		}
 	},
 	{ XML_SECTION_MODULE, {
+			{
+				"name",
+				xml_handle_string,
+				G_STRUCT_OFFSET (struct module_meta_opt, name),
+				NULL
+			},
+			NULL_ATTR
+		},
+		{
+			handle_module_meta,
+			0,
+			NULL
+		}
+	},
+	{ XML_SECTION_MODULE, {
 			NULL_ATTR
 		},
 		{
@@ -641,6 +657,8 @@ xml_state_to_string (struct rspamd_xml_userdata *ud)
 			return "read param";
 		case XML_READ_MODULE:
 			return "read module section";
+		case XML_READ_MODULE_META:
+			return "read module meta section";
 		case XML_READ_OPTIONS:
 			return "read options section";
 		case XML_READ_MODULES:
@@ -1195,6 +1213,53 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 	cur->value = data;
 	cur->is_lua = is_lua;
 	ctx->section_pointer = g_list_prepend (ctx->section_pointer, cur);
+
+	return TRUE;
+}
+
+gboolean
+handle_module_meta (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+	gchar                          *val;
+	struct module_opt              *cur;
+	struct module_meta_opt         *meta;
+	gboolean                        is_lua = FALSE;
+	const gchar                    *name;
+
+	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
+		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
+			msg_err ("worker param tag must have \"name\" attribute");
+			return FALSE;
+		}
+	}
+	else {
+		name = memory_pool_strdup (cfg->cfg_pool, tag);
+	}
+
+	meta = ctx->section_pointer;
+	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
+	/* Check for options */
+	if (attrs != NULL) {
+		if ((val = g_hash_table_lookup (attrs, "lua")) != NULL && g_ascii_strcasecmp (val, "yes") == 0) {
+			is_lua = TRUE;
+		}
+		if ((val = g_hash_table_lookup (attrs, "description")) != NULL) {
+			cur->description = memory_pool_strdup (cfg->cfg_pool, val);
+		}
+		if ((val = g_hash_table_lookup (attrs, "group")) != NULL) {
+			cur->group = memory_pool_strdup (cfg->cfg_pool, val);
+		}
+	}
+	/*
+	 * XXX: in fact we cannot check for lua modules and need to do it in post-config procedure
+	 * so just insert any options provided and try to handle them in further process
+	 */
+
+	/* Insert option */
+	cur->param = (char *)name;
+	cur->value = data;
+	cur->is_lua = is_lua;
+	meta->options = g_list_prepend (meta->options, cur);
 
 	return TRUE;
 }
@@ -1842,7 +1907,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			if (g_ascii_strcasecmp (element_name, "module") == 0) {
 				/* Read module data */
 				if (extract_attr ("name", attribute_names, attribute_values, &res)) {
-					ud->parent_pointer = memory_pool_strdup (ud->cfg->cfg_pool, res);
+					ud->parent_pointer[0] = memory_pool_strdup (ud->cfg->cfg_pool, res);
 					/* Empty list */
 					ud->section_pointer = NULL;
 					ud->state = XML_READ_MODULE;
@@ -1924,7 +1989,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->state = XML_READ_STATFILE;
 
 				/* Now section pointer is statfile and parent pointer is classifier */
-				ud->parent_pointer = ud->section_pointer;
+				ud->parent_pointer[0] = ud->section_pointer;
 				ud->section_pointer = check_statfile_conf (ud->cfg, NULL);
 			}
 			else {
@@ -1937,6 +2002,18 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			/* Do nothing */
 			return;
 		case XML_READ_MODULE:
+			if (g_ascii_strcasecmp (element_name, "meta") == 0) {
+				ud->parent_pointer[1] = ud->section_pointer;
+				ud->state = XML_READ_MODULE_META;
+				ud->section_pointer = memory_pool_alloc0 (ud->cfg->cfg_pool, sizeof (struct module_meta_opt));
+			}
+			else {
+				rspamd_strlcpy (ud->section_name, element_name, sizeof (ud->section_name));
+				/* Save attributes */
+				ud->cur_attrs = process_attrs (ud->cfg, attribute_names, attribute_values);
+			}
+			break;
+		case XML_READ_MODULE_META:
 		case XML_READ_METRIC:
 		case XML_READ_MODULES:
 		case XML_READ_STATFILE:
@@ -2007,12 +2084,33 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 	}
 
 	switch (ud->state) {
+		case XML_READ_MODULE_META:
+			CHECK_TAG ("meta", FALSE);
+			if (res) {
+				if (ud->section_pointer != NULL) {
+					struct module_meta_opt *meta = ud->section_pointer;
+					if (meta->name == NULL) {
+						msg_err ("module %s has unnamed meta option, skip it", ud->parent_pointer[0]);
+					}
+					else {
+						g_hash_table_insert (ud->cfg->modules_metas, ud->parent_pointer[0], meta);
+					}
+					if (meta->options != NULL) {
+						memory_pool_add_destructor (ud->cfg->cfg_pool, (pool_destruct_func)g_list_free, meta->options);
+					}
+				}
+				ud->section_pointer = ud->parent_pointer[1];
+				ud->parent_pointer[1] = NULL;
+				ud->state = XML_READ_MODULE;
+			}
+			break;
 		case XML_READ_MODULE:
 			CHECK_TAG ("module", FALSE);
 			if (res) {
 				if (ud->section_pointer != NULL) {
-					g_hash_table_insert (ud->cfg->modules_opts, ud->parent_pointer, ud->section_pointer);
-					ud->parent_pointer = NULL;
+					g_hash_table_insert (ud->cfg->modules_opts, ud->parent_pointer[0], ud->section_pointer);
+					memory_pool_add_destructor (ud->cfg->cfg_pool, (pool_destruct_func)g_list_free, ud->section_pointer);
+					ud->parent_pointer[0] = NULL;
 					ud->section_pointer = NULL;
 				}
 			}
@@ -2032,7 +2130,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		case XML_READ_STATFILE:
 			CHECK_TAG ("statfile", FALSE);
 			if (res) {
-				ccf = ud->parent_pointer;
+				ccf = ud->parent_pointer[0];
 				st = ud->section_pointer;
 				/* Check statfile and insert it into classifier */
 				if (st->path == NULL || st->size == 0 || st->symbol == NULL) {
@@ -2052,7 +2150,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 					}
 				}
 				ud->section_pointer = ccf;
-				ud->parent_pointer = NULL;
+				ud->parent_pointer[0] = NULL;
 				ud->state = XML_READ_CLASSIFIER;
 			}
 			break;
@@ -2157,6 +2255,12 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 	switch (ud->state) {
 		case XML_READ_MODULE:
 			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_MODULE)) {
+				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
+				ud->state = XML_ERROR;
+			}
+			break;
+		case XML_READ_MODULE_META:
+			if (!call_param_handler (ud, ud->section_name, val, ud->section_pointer, XML_SECTION_MODULE_META)) {
 				*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "cannot parse tag '%s' data: %s", ud->section_name, val);
 				ud->state = XML_ERROR;
 			}

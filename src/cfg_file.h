@@ -138,6 +138,11 @@ struct module_opt {
 	enum lua_var_type lua_type;						/**< type of lua variable								*/
 };
 
+struct module_meta_opt {
+	gchar *name;									/**< Name of meta option								*/
+	GList *options;									/**< List of struct module_opt							*/
+};
+
 /**
  * Symbol definition
  */
@@ -323,6 +328,7 @@ struct config_file {
 	GList *workers;									/**< linked list of all workers params					*/
 	gchar *filters_str;								/**< string of filters									*/
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
+	GHashTable* modules_metas;						/**< hash for module meta options indexed by module name*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
 	GList* symbols_groups;							/**< groups of symbols									*/
