@@ -17,11 +17,11 @@ struct classifier_config;
 /*
  * Create socket and bind or connect it to specified address and port
  */
-gint make_tcp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
+gint make_tcp_socket (struct addrinfo *, gboolean is_server, gboolean async);
 /*
  * Create socket and bind or connect it to specified address and port
  */
-gint make_udp_socket (struct in_addr *, u_short, gboolean is_server, gboolean async);
+gint make_udp_socket (struct addrinfo *, gboolean is_server, gboolean async);
 /*
  * Accept from socket
  */

@@ -87,94 +87,88 @@ poll_sync_socket (gint fd, gint timeout, short events)
 }
 
 static gint
-make_inet_socket (gint family, struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+make_inet_socket (gint family, struct addrinfo *addr, gboolean is_server, gboolean async)
 {
 	gint                            fd, r, optlen, on = 1, s_error;
-	gint                            serrno;
-	struct sockaddr_in              sin;
+	struct addrinfo               *cur;
 
-	/* Create socket */
-	fd = socket (AF_INET, family, 0);
-	if (fd == -1) {
-		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
-		return -1;
-	}
-
-	if (make_socket_nonblocking (fd) < 0) {
-		goto out;
-	}
-
-	/* Set close on exec */
-	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
-		goto out;
-	}
-
-	memset (&sin, 0, sizeof (sin));
-
-	/* Bind options */
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons (port);
-	sin.sin_addr.s_addr = addr->s_addr;
-
-	if (is_server) {
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
-		r = bind (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
-	}
-	else {
-		r = connect (fd, (struct sockaddr *)&sin, sizeof (struct sockaddr_in));
-	}
-
-	if (r == -1) {
-		if (errno != EINPROGRESS) {
-			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
+	cur = addr;
+	while (cur) {
+		/* Create socket */
+		fd = socket (cur->ai_protocol, family, 0);
+		if (fd == -1) {
+			msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
-		if (!async) {
-			/* Try to poll */
-			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
-				errno = ETIMEDOUT;
-				msg_warn ("bind/connect failed: timeout");
+
+		if (make_socket_nonblocking (fd) < 0) {
+			goto out;
+		}
+
+		/* Set close on exec */
+		if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+			msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+			goto out;
+		}
+
+		if (is_server) {
+			setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+			r = bind (fd, cur->ai_addr, cur->ai_addrlen);
+		}
+		else {
+			r = connect (fd, cur->ai_addr, cur->ai_addrlen);
+		}
+
+		if (r == -1) {
+			if (errno != EINPROGRESS) {
+				msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
 				goto out;
 			}
-			else {
-				/* Make synced again */
-				if (make_socket_blocking (fd) < 0) {
+			if (!async) {
+				/* Try to poll */
+				if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
+					errno = ETIMEDOUT;
+					msg_warn ("bind/connect failed: timeout");
 					goto out;
+				}
+				else {
+					/* Make synced again */
+					if (make_socket_blocking (fd) < 0) {
+						goto out;
+					}
 				}
 			}
 		}
-	}
-	else {
-		/* Still need to check SO_ERROR on socket */
-		optlen = sizeof (s_error);
-		getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
-		if (s_error) {
-			errno = s_error;
-			goto out;
+		else {
+			/* Still need to check SO_ERROR on socket */
+			optlen = sizeof (s_error);
+			getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
+			if (s_error) {
+				errno = s_error;
+				goto out;
+			}
 		}
+		break;
+out:
+		if (fd != -1) {
+			close (fd);
+		}
+		fd = -1;
+		cur = cur->ai_next;
 	}
-
-
 	return (fd);
-
-  out:
-	serrno = errno;
-	close (fd);
-	errno = serrno;
-	return (-1);
 }
 
 gint
-make_tcp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+make_tcp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_STREAM, addr, port, is_server, async);
+	return make_inet_socket (SOCK_STREAM, addr, is_server, async);
 }
 
 gint
-make_udp_socket (struct in_addr *addr, u_short port, gboolean is_server, gboolean async)
+make_udp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_DGRAM, addr, port, is_server, async);
+	return make_inet_socket (SOCK_DGRAM, addr, is_server, async);
 }
 
 gint
@@ -304,9 +298,9 @@ make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async
 {
 	struct sockaddr_un              un;
 	struct stat                     st;
-	struct in_addr                  in;
-	struct hostent 				   *he;
-	gint                            r;
+	struct addrinfo                 hints, *res;
+	gint                             r;
+	gchar                            portbuf[8];
 
 	if (*credits == '/') {
 		r = stat (credits, &st);
@@ -340,25 +334,28 @@ make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async
 	}
 	else {
 		/* TCP related part */
-		if (inet_aton (credits, &in) == 0) {
-			/* Try to resolve */
-			if (try_resolve) {
-				if ((he = gethostbyname (credits)) == NULL) {
-					errno = ENOENT;
-					return -1;
-				}
-				else {
-					memcpy (&in, he->h_addr, sizeof (struct in_addr));
-					return make_tcp_socket (&in, port, is_server, async);
-				}
-			}
-			else {
-				errno = ENOENT;
-				return -1;
-			}
+		memset (&hints, 0, sizeof (hints));
+		hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
+		hints.ai_socktype = SOCK_STREAM; /* Stream socket */
+		hints.ai_flags = is_server ? AI_PASSIVE : 0;
+		hints.ai_protocol = 0;           /* Any protocol */
+		hints.ai_canonname = NULL;
+		hints.ai_addr = NULL;
+		hints.ai_next = NULL;
+
+		if (!try_resolve) {
+			hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+		}
+
+		rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
+		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
+			r = make_tcp_socket (res, is_server, async);
+			freeaddrinfo (res);
+			return r;
 		}
 		else {
-			return make_tcp_socket (&in, port, is_server, async);
+			msg_err ("address resolution for %s failed: %s", credits, gai_strerror (r));
+			return FALSE;
 		}
 	}
 }

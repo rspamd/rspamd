@@ -302,7 +302,7 @@ lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	elt = reply->elements->data;
 	memcpy (&ina, &elt->a.addr[0], sizeof (struct in_addr));
 
-	ud->fd = make_tcp_socket (&ina, ud->port, FALSE, TRUE);
+	ud->fd = make_universal_stream_socket (inet_ntoa (ina), ud->port, TRUE, FALSE, FALSE);
 
 	if (ud->fd == -1) {
 		lua_http_push_error (450, ud);
@@ -473,7 +473,7 @@ lua_http_make_request_common_new (lua_State *L, struct rspamd_async_session *ses
 		return 1;
 	}
 
-	ud->fd = make_tcp_socket (&ina, ud->port, FALSE, TRUE);
+	ud->fd = make_universal_stream_socket (inet_ntoa (ina), ud->port, TRUE, FALSE, FALSE);
 
 	if (ud->fd == -1) {
 		luaL_unref (L, LUA_REGISTRYINDEX, cbref);

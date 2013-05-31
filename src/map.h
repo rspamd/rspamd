@@ -37,7 +37,7 @@ struct file_map_data {
  * Data specific to HTTP maps
  */
 struct http_map_data {
-	struct in_addr addr;
+	struct addrinfo *addr;
 	guint16 port;
 	gchar *path;
 	gchar *host;

@@ -68,7 +68,7 @@ connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_as
 {
 	gint                            sock;
 
-	if ((sock = make_tcp_socket (&data->addr, data->port, FALSE, is_async)) == -1) {
+	if ((sock = make_tcp_socket (data->addr, FALSE, is_async)) == -1) {
 		msg_info ("cannot connect to http server %s: %d, %s", data->host, errno, strerror (errno));
 		return -1;
 	}
@@ -1013,8 +1013,8 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 	struct file_map_data           *fdata;
 	struct http_map_data           *hdata;
 	gchar                           portbuf[6];
-	gint                            i, s;
-	struct hostent                 *hent;
+	gint                            i, s, r;
+	struct addrinfo                hints, *res;
 
 	/* First of all detect protocol line */
 	if (!check_map_proto (map_line, (int *)&proto, &def)) {
@@ -1075,6 +1075,7 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 		}
 		else {
 			/* Default http port */
+			rspamd_snprintf (portbuf, sizeof (portbuf), "80");
 			hdata->port = 80;
 			/* Now separate host from path */
 			if ((p = strchr (def, '/')) == NULL) {
@@ -1088,19 +1089,25 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 		hdata->path = memory_pool_strdup (cfg->map_pool, p);
 		hdata->rlen = 0;
 		/* Now try to resolve */
-		if (!inet_aton (hdata->host, &hdata->addr)) {
-			/* Resolve using dns */
-			hent = gethostbyname (hdata->host);
-			if (hent == NULL) {
-				msg_info ("cannot resolve: %s", hdata->host);
-				return FALSE;
-			}
-			else {
-				memcpy (&hdata->addr, hent->h_addr, sizeof (struct in_addr));
-			}
+		memset (&hints, 0, sizeof (hints));
+		hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
+		hints.ai_socktype = SOCK_STREAM; /* Stream socket */
+		hints.ai_flags = 0;
+		hints.ai_protocol = 0;           /* Any protocol */
+		hints.ai_canonname = NULL;
+		hints.ai_addr = NULL;
+		hints.ai_next = NULL;
+
+		if ((r = getaddrinfo (hdata->host, portbuf, &hints, &res)) == 0) {
+			hdata->addr = res;
+			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)freeaddrinfo, hdata->addr);
+		}
+		else {
+			msg_err ("address resolution for %s failed: %s", hdata->host, gai_strerror (r));
+			return FALSE;
 		}
 		/* Now try to connect */
-		if ((s = make_tcp_socket (&hdata->addr, hdata->port, FALSE, FALSE)) == -1) {
+		if ((s = make_tcp_socket (hdata->addr, FALSE, FALSE)) == -1) {
 			msg_info ("cannot connect to http server %s: %d, %s", hdata->host, errno, strerror (errno));
 			return FALSE;
 		}
