@@ -22,7 +22,6 @@ typedef void (*dns_callback_type) (struct rspamd_dns_reply *reply, gpointer arg)
  */
 struct rspamd_dns_server {
 	struct upstream up;					/**< upstream structure						*/
-	struct in_addr addr;				/**< address of DNS server					*/
 	gchar *name;							/**< name of DNS server						*/
 	gint sock;							/**< persistent socket						*/
 	struct event ev;

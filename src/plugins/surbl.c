@@ -313,7 +313,8 @@ surbl_module_config (struct config_file *cfg)
 		idx = 0;
 		i --;
 		for (; i >= 0; i --) {
-			if (! parse_host_port (strvec[i], &surbl_module_ctx->redirectors[idx].ina,
+			if (! parse_host_port (surbl_module_ctx->surbl_pool,
+					strvec[i], &surbl_module_ctx->redirectors[idx].addr,
 					&surbl_module_ctx->redirectors[idx].port)) {
 				msg_warn ("invalid redirector definition: %s", strvec[idx]);
 			}
@@ -922,7 +923,7 @@ register_redirector_call (struct uri *url, struct worker_task *task,
 										 DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 
 	if (selected) {
-		s = make_tcp_socket (&selected->ina, selected->port, FALSE, TRUE);
+		s = make_universal_socket (selected->addr, selected->port, SOCK_STREAM, TRUE, FALSE, FALSE);
 	}
 
 	if (s == -1) {

@@ -62,7 +62,7 @@
 struct storage_server {
 	struct upstream                 up;
 	gchar                           *name;
-	struct in_addr                  addr;
+	gchar                          *addr;
 	guint16                        port;
 };
 
@@ -237,10 +237,9 @@ fuzzy_check_content_type (GMimeContentType *type)
 static void
 parse_servers_string (gchar *str)
 {
-	gchar                           **strvec, *p, portbuf[6], *name;
-	gint                            num, i, j, port;
-	struct hostent                 *hent;
-	struct in_addr                  addr;
+	gchar                           **strvec;
+	gint                            i, num;
+	struct storage_server          *cur;
 
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
@@ -250,43 +249,14 @@ parse_servers_string (gchar *str)
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
 
-		if ((p = strchr (strvec[i], ':')) != NULL) {
-			j = 0;
-			p++;
-			while (g_ascii_isdigit (*(p + j)) && j < (gint)sizeof (portbuf) - 1) {
-				portbuf[j] = *(p + j);
-				j++;
+		cur = &fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num];
+		if (parse_host_port (fuzzy_module_ctx->fuzzy_pool, strvec[i], &cur->addr, &cur->port)) {
+			if (cur->port == 0) {
+				cur->port = DEFAULT_PORT;
 			}
-			portbuf[j] = '\0';
-			port = atoi (portbuf);
-		}
-		else {
-			/* Default http port */
-			port = DEFAULT_PORT;
-		}
-		name = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, p - strvec[i]);
-		rspamd_strlcpy (name, strvec[i], p - strvec[i]);
-		if (!inet_aton (name, &addr)) {
-			/* Resolve using dns */
-			hent = gethostbyname (name);
-			if (hent == NULL) {
-				msg_info ("cannot resolve: %s", name);
-				continue;
-			}
-			else {
-				fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;
-				fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;
-				memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, hent->h_addr, sizeof (struct in_addr));
-				fuzzy_module_ctx->servers_num++;
-			}
-		}
-		else {
-			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].port = port;
-			fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].name = name;
-			memcpy (&fuzzy_module_ctx->servers[fuzzy_module_ctx->servers_num].addr, &addr, sizeof (struct in_addr));
+			cur->name = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]);
 			fuzzy_module_ctx->servers_num++;
 		}
-
 	}
 
 	g_strfreev (strvec);
@@ -653,7 +623,7 @@ register_fuzzy_call (struct worker_task *task, fuzzy_hash_t *h)
 			DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS, h->hash_pipe, sizeof (h->hash_pipe));
 #endif
 	if (selected) {
-		if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
+		if ((sock = make_universal_socket (selected->addr, selected->port, SOCK_DGRAM, TRUE, FALSE, FALSE)) == -1) {
 			msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 		}
 		else {
@@ -782,7 +752,7 @@ register_fuzzy_controller_call (struct controller_session *session, struct worke
 #endif
 	if (selected) {
 		/* Create UDP socket */
-		if ((sock = make_udp_socket (&selected->addr, selected->port, FALSE, TRUE)) == -1) {
+		if ((sock = make_universal_socket (selected->addr, selected->port, SOCK_DGRAM, TRUE, FALSE, FALSE)) == -1) {
 			msg_warn ("cannot connect to %s, %d, %s", selected->name, errno, strerror (errno));
 			session->state = STATE_REPLY;
 			if (session->restful) {

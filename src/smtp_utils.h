@@ -14,7 +14,7 @@ struct smtp_upstream {
 	struct upstream up;
 
 	const gchar *name;
-	struct in_addr addr;
+	gchar *addr;
 	guint16 port;
 	gboolean is_unix;
 };

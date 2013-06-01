@@ -194,7 +194,7 @@ enum sync_affinity {
 struct statfile_binlog_params {
 	enum sync_affinity affinity;
 	time_t rotate_time;
-	struct in_addr master_addr;
+	gchar *master_addr;
 	guint16 master_port;
 };
 
@@ -253,7 +253,7 @@ struct worker_conf {
 	worker_t *worker;								/**< pointer to worker type								*/
 	GQuark type;									/**< type of worker										*/
 	gchar *bind_host;								/**< bind line											*/
-	struct in_addr bind_addr;						/**< bind address in case of TCP socket					*/
+	gchar *bind_addr;								/**< bind address in case of TCP socket					*/
 	guint16 bind_port;								/**< bind port in case of TCP socket					*/
 	guint16 bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
 	guint16 count;									/**< number of workers									*/
@@ -382,7 +382,7 @@ struct config_file {
  * @param priority priority
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port_priority (const gchar *str, struct in_addr *ina, guint16 *port, guint *priority);
+gboolean parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority);
 
 /**
  * Parse host:port line
@@ -390,7 +390,7 @@ gboolean parse_host_port_priority (const gchar *str, struct in_addr *ina, guint1
  * @param port port
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port);
+gboolean parse_host_port (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port);
 
 /**
  * Parse host:priority line
@@ -398,7 +398,7 @@ gboolean parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port);
  * @param priority priority
  * @return TRUE if string was parsed
  */
-gboolean parse_host_priority (const gchar *str, struct in_addr *ina, guint *priority);
+gboolean parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint *priority);
 
 /**
  * Parse bind credits

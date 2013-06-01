@@ -86,7 +86,7 @@ struct lua_upstream {
 	struct upstream up;
 	gchar *def;
 	guint16 port;
-	struct in_addr addr;
+	gchar addr[INET6_ADDRSTRLEN];
 };
 
 static struct lua_upstream	*
@@ -113,7 +113,7 @@ lua_upstream_create (lua_State *L)
 	if (def) {
 		new = g_slice_alloc0 (sizeof (struct lua_upstream));
 		new->def = g_strdup (def);
-		if (!parse_host_port_priority (new->def, &new->addr, &new->port, &new->up.priority)) {
+		if (!parse_host_port_priority (NULL, new->def, (gchar **)&new->addr, &new->port, &new->up.priority)) {
 			g_free (new->def);
 			g_slice_free1 (sizeof (struct lua_upstream), new);
 			lua_pushnil (L);
@@ -157,7 +157,7 @@ lua_upstream_get_ip (lua_State *L)
 	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
-		lua_pushinteger (L, up->addr.s_addr);
+		lua_pushstring (L, up->addr);
 	}
 	else {
 		lua_pushnil (L);
@@ -177,7 +177,7 @@ lua_upstream_get_ip_string (lua_State *L)
 	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
-		lua_pushstring (L, inet_ntoa (up->addr));
+		lua_pushstring (L, up->addr);
 	}
 	else {
 		lua_pushnil (L);
@@ -319,7 +319,7 @@ lua_upstream_list_create (lua_State *L)
 
 		for (i = 0; i < new->count; i ++) {
 			cur = &new->upstreams[i];
-			if (!parse_host_port_priority (tokens[i], &cur->addr, &cur->port, &cur->up.priority)) {
+			if (!parse_host_port_priority (NULL, tokens[i], (gchar **)&cur->addr, &cur->port, &cur->up.priority)) {
 				goto err;
 			}
 			if (cur->port == 0) {

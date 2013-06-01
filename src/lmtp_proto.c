@@ -416,6 +416,7 @@ mta_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		cd->state = LMTP_WANT_CLOSING;
+		break;
 	case LMTP_WANT_CLOSING:
 		if (!parse_mta_str (in, cd)) {
 			msg_warn ("message not delivered");
@@ -452,10 +453,11 @@ lmtp_deliver_mta (struct worker_task *task)
 
 	if (task->cfg->deliver_family == AF_UNIX) {
 		un = alloca (sizeof (struct sockaddr_un));
-		sock = make_unix_socket (task->cfg->deliver_host, un, FALSE, TRUE);
+		sock = make_unix_socket (task->cfg->deliver_host, un, SOCK_STREAM, FALSE, TRUE);
 	}
 	else {
-		sock = make_tcp_socket (&task->cfg->deliver_addr, task->cfg->deliver_port, FALSE, TRUE);
+		sock = make_universal_socket (task->cfg->deliver_host, task->cfg->deliver_port,
+				SOCK_STREAM, TRUE, FALSE, TRUE);
 	}
 	if (sock == -1) {
 		msg_warn ("cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));

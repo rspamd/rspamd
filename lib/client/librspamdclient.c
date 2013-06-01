@@ -123,7 +123,8 @@ rspamd_connect_specific_server (struct rspamd_client *client, gboolean is_contro
 	new->connection_time = time (NULL);
 	new->client = client;
 	/* Create socket */
-	new->socket = make_universal_stream_socket (serv->host, is_control ? serv->controller_port : serv->client_port, TRUE, FALSE, TRUE);
+	new->socket = make_universal_socket (serv->host, is_control ? serv->controller_port : serv->client_port,
+			SOCK_STREAM, TRUE, FALSE, TRUE);
 	if (new->socket == -1) {
 		goto err;
 	}

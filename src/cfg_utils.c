@@ -44,11 +44,16 @@
 
 
 gboolean
-parse_host_port_priority (const gchar *str, struct in_addr *ina, guint16 *port, guint *priority)
+parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
 {
 	gchar                          **tokens, *err_str, *cur_tok;
-	struct hostent                 *hent;
+	struct addrinfo                 hints, *res;
 	guint                           port_parsed, priority_parsed, saved_errno = errno;
+	gint							r;
+	union {
+		struct sockaddr_in v4;
+		struct sockaddr_in6 v6;
+	}                               addr_holder;
 
 	tokens = g_strsplit_set (str, ":", 0);
 	if (!tokens || !tokens[0]) {
@@ -56,22 +61,43 @@ parse_host_port_priority (const gchar *str, struct in_addr *ina, guint16 *port, 
 	}
 	
 	/* Now try to parse host and write address to ina */
-	if (!inet_aton (tokens[0], ina)) {
-		if (strcmp (tokens[0], "*") == 0) {
-			/* Special case */
-			ina->s_addr = htonl (INADDR_ANY);
+	memset (&hints, 0, sizeof (hints));
+	hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
+	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
+	hints.ai_flags = 0;
+	hints.ai_protocol = 0;           /* Any protocol */
+	hints.ai_canonname = NULL;
+	hints.ai_addr = NULL;
+	hints.ai_next = NULL;
+
+	if (strcmp (tokens[0], "*") == 0) {
+		cur_tok = NULL;
+		hints.ai_flags |= AI_PASSIVE;
+	}
+	else {
+		cur_tok = tokens[0];
+	}
+
+	if ((r = getaddrinfo (cur_tok, NULL, &hints, &res)) == 0) {
+		*addr = memory_pool_alloc (pool, INET6_ADDRSTRLEN);
+		memcpy (&addr_holder, res->ai_addr, MIN (sizeof (addr_holder), res->ai_addrlen));
+		if (res->ai_family == AF_INET) {
+			if (pool != NULL) {
+				*addr = memory_pool_alloc (pool, INET_ADDRSTRLEN + 1);
+			}
+			inet_ntop (res->ai_family, &addr_holder.v4.sin_addr, *addr, INET_ADDRSTRLEN + 1);
 		}
 		else {
-			/* Try to call gethostbyname */
-			hent = gethostbyname (tokens[0]);
-			if (hent == NULL) {
-				msg_warn ("cannot resolve %s", tokens[0]);
-				goto err;
+			if (pool != NULL) {
+				*addr = memory_pool_alloc (pool, INET6_ADDRSTRLEN + 1);
 			}
-			else {
-				memcpy (ina, hent->h_addr, sizeof (struct in_addr));	
-			}
+			inet_ntop (res->ai_family, &addr_holder.v6.sin6_addr, *addr, INET6_ADDRSTRLEN + 1);
 		}
+		freeaddrinfo (res);
+	}
+	else {
+		msg_err ("address resolution for %s failed: %s", tokens[0], gai_strerror (r));
+		goto err;
 	}
 	if (tokens[1] != NULL) {
 		/* Port part */
@@ -121,15 +147,15 @@ err:
 }
 
 gboolean
-parse_host_port (const gchar *str, struct in_addr *ina, guint16 *port)
+parse_host_port (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port)
 {
-	return parse_host_port_priority (str, ina, port, NULL);
+	return parse_host_port_priority (pool, str, addr, port, NULL);
 }
 
 gboolean
-parse_host_priority (const gchar *str, struct in_addr *ina, guint *priority)
+parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint *priority)
 {
-	return parse_host_port_priority (str, ina, NULL, priority);
+	return parse_host_port_priority (pool, str, addr, NULL, priority);
 }
 
 gint
@@ -137,7 +163,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 {
 	gchar                          **host;
 	guint16                        *family, *port;
-	struct in_addr                 *addr;
+	gchar                          **addr;
 
 	if (str == NULL)
 		return 0;
@@ -182,7 +208,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 		return 1;
 	}
 	else {
-		if (parse_host_port (str, addr, port)) {
+		if (parse_host_port (cfg->cfg_pool, str, addr, port)) {
 			*host = memory_pool_strdup (cfg->cfg_pool, str);
 			*family = AF_INET;
 

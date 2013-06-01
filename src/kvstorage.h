@@ -100,7 +100,7 @@ enum rspamd_kv_flags {
 struct rspamd_kv_element {
 	time_t age;									/*< age of element */
 	guint32 expire;								/*< expire of element */
-	enum rspamd_kv_flags flags;					/*< element flags  */
+	gint flags;									/*< element flags  */
 	gsize size;									/*< size of element */
 	TAILQ_ENTRY (rspamd_kv_element) entry;		/*< list entry */
 	guint keylen;								/*< length of key */

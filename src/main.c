@@ -552,22 +552,11 @@ dump_cfg_vars (struct config_file *cfg)
 }
 
 static gint
-create_listen_socket (struct in_addr *addr, gint port, gint family, gchar *path)
+create_listen_socket (const gchar *addr, gint port, gint family)
 {
 	gint                            listen_sock = -1;
-	struct sockaddr_un             *un_addr;
 	/* Create listen socket */
-	if (family == AF_INET) {
-		if ((listen_sock = make_tcp_socket (addr, port, TRUE, TRUE)) == -1) {
-			msg_err ("cannot create tcp listen socket. %s", strerror (errno));
-		}
-	}
-	else {
-		un_addr = (struct sockaddr_un *)alloca (sizeof (struct sockaddr_un));
-		if (!un_addr || (listen_sock = make_unix_socket (path, un_addr, TRUE, TRUE)) == -1) {
-			msg_err ("cannot create unix listen socket. %s", strerror (errno));
-		}
-	}
+	listen_sock = make_universal_socket (addr, port, SOCK_STREAM, TRUE, TRUE, TRUE);
 
 	if (listen_sock != -1) {
 		if (listen (listen_sock, -1) == -1) {
@@ -595,32 +584,12 @@ fork_delayed (struct rspamd_main *rspamd)
 }
 
 static inline uintptr_t
-make_listen_key (struct in_addr *addr, gint port, gint family, gchar *path)
+make_listen_key (const gchar *addr, gint port, gint family)
 {
 	uintptr_t                       res = 0;
-	gchar                           *key;
 
-	if (family == AF_INET) {
-		/* Make fnv hash from bytes of addr and port */
-		key = (gchar *)&addr->s_addr;
-		while (key - (gchar *)&addr->s_addr < (gint)sizeof (addr->s_addr)) {
-			res ^= (gchar)*key++;
-			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
-		}
-		key = (gchar *)&port;
-		while (key - (gchar *)&port < (gint)sizeof (addr->s_addr)) {
-			res ^= (gchar)*key++;
-			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
-		}
-	}
-	else {
-		/* Make fnv hash from bytes of path */
-		key = path;
-		while (*key) {
-			res ^= (gchar)*key++;
-			res += (res << 1) + (res << 4) + (res << 7) + (res << 8) + (res << 24);
-		}
-	}
+	res = murmur32_hash (addr, strlen (addr));
+	res ^= murmur32_hash ((guchar *)&port, sizeof (gint));
 
 	return res;
 }
@@ -644,14 +613,14 @@ spawn_workers (struct rspamd_main *rspamd)
 		else {
 			if (cf->worker->has_socket) {
 				if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
-						make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)))) == NULL) {
+						make_listen_key (cf->bind_host, cf->bind_port, cf->bind_family)))) == NULL) {
 					/* Create listen socket */
-					listen_sock = create_listen_socket (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host);
+					listen_sock = create_listen_socket (cf->bind_host, cf->bind_port, cf->bind_family);
 					if (listen_sock == -1) {
 						exit (-errno);
 					}
 					g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
-							make_listen_key (&cf->bind_addr, cf->bind_port, cf->bind_family, cf->bind_host)),
+							make_listen_key (cf->bind_host, cf->bind_port, cf->bind_family)),
 							GINT_TO_POINTER (listen_sock));
 				}
 				else {

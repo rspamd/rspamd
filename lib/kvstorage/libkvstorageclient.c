@@ -788,7 +788,7 @@ rspamd_kvstorage_connect_async (const gchar *host,
 	gint									 sock;
 
 	/* Here we do NOT try to resolve hostname */
-	if ((sock = make_universal_stream_socket (host, port, TRUE, FALSE, TRUE)) == -1) {
+	if ((sock = make_universal_socket (host, port, SOCK_STREAM, TRUE, FALSE, TRUE)) == -1) {
 		return KVSTORAGE_ERROR_SERVER_ERROR;
 	}
 
@@ -974,7 +974,7 @@ rspamd_kvstorage_connect_sync (const gchar *host,
 	struct rspamd_kvstorage_connection		*new;
 	gint									 sock;
 
-	if ((sock = make_universal_stream_socket (host, port, FALSE, FALSE, TRUE)) == -1) {
+	if ((sock = make_universal_socket (host, port, SOCK_STREAM, FALSE, FALSE, TRUE)) == -1) {
 		return KVSTORAGE_ERROR_INTERNAL_ERROR;
 	}
 

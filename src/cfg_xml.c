@@ -1655,7 +1655,7 @@ handle_statfile_binlog_master (struct config_file *cfg, struct rspamd_xml_userda
 		st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 	}
 
-	if (!parse_host_port (data, &st->binlog->master_addr, &st->binlog->master_port)) {
+	if (!parse_host_port (cfg->cfg_pool, data, &st->binlog->master_addr, &st->binlog->master_port)) {
 		msg_err ("cannot parse master address: %s", data);
 		return FALSE;
 	}
@@ -2849,7 +2849,7 @@ xml_dump_classifiers (struct config_file *cfg, FILE *f)
 				else if (st->binlog->affinity == AFFINITY_SLAVE) {
 					rspamd_fprintf (f, "  <binlog>slave</binlog>" EOL);
 					rspamd_fprintf (f, "  <binlog_master>%s:%d</binlog_master>" EOL, 
-							inet_ntoa (st->binlog->master_addr), (gint)ntohs (st->binlog->master_port)); 
+							st->binlog->master_addr, (gint)ntohs (st->binlog->master_port));
 				}
 				rspamd_fprintf (f, "  <binlog_rotate>%T</binlog_rotate>" EOL, st->binlog->rotate_time);
 			}

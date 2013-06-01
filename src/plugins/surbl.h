@@ -20,7 +20,7 @@
 
 struct redirector_upstream {
 	struct upstream up;
-	struct in_addr ina;
+	gchar *addr;
 	guint16 port;
 	gchar *name;
 };

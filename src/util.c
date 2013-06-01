@@ -87,7 +87,7 @@ poll_sync_socket (gint fd, gint timeout, short events)
 }
 
 static gint
-make_inet_socket (gint family, struct addrinfo *addr, gboolean is_server, gboolean async)
+make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean async)
 {
 	gint                            fd, r, optlen, on = 1, s_error;
 	struct addrinfo               *cur;
@@ -95,7 +95,7 @@ make_inet_socket (gint family, struct addrinfo *addr, gboolean is_server, gboole
 	cur = addr;
 	while (cur) {
 		/* Create socket */
-		fd = socket (cur->ai_protocol, family, 0);
+		fd = socket (cur->ai_protocol, type, 0);
 		if (fd == -1) {
 			msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
 			goto out;
@@ -207,7 +207,7 @@ accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t * len)
 }
 
 gint
-make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_server, gboolean async)
+make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboolean is_server, gboolean async)
 {
 	gint                            fd, s_error, r, optlen, serrno, on = 1;
 
@@ -221,7 +221,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_serve
 	addr->sun_len = SUN_LEN (addr);
 #endif
 
-	fd = socket (PF_LOCAL, SOCK_STREAM, 0);
+	fd = socket (PF_LOCAL, type, 0);
 
 	if (fd == -1) {
 		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
@@ -294,7 +294,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gboolean is_serve
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 gint
-make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async, gboolean is_server, gboolean try_resolve)
+make_universal_socket (const gchar *credits, guint16 port, gint type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
 	struct sockaddr_un              un;
 	struct stat                     st;
@@ -306,7 +306,7 @@ make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async
 		r = stat (credits, &st);
 		if (is_server) {
 			if (r == -1) {
-				return make_unix_socket (credits, &un, is_server, async);
+				return make_unix_socket (credits, &un, type, is_server, async);
 			}
 			else {
 				/* Unix socket exists, it must be unlinked first */
@@ -327,7 +327,7 @@ make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async
 					return -1;
 				}
 				else {
-					return make_unix_socket (credits, &un, is_server, async);
+					return make_unix_socket (credits, &un, type, is_server, async);
 				}
 			}
 		}
@@ -336,7 +336,7 @@ make_universal_stream_socket (const gchar *credits, guint16 port, gboolean async
 		/* TCP related part */
 		memset (&hints, 0, sizeof (hints));
 		hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
-		hints.ai_socktype = SOCK_STREAM; /* Stream socket */
+		hints.ai_socktype = type; /* Type of the socket */
 		hints.ai_flags = is_server ? AI_PASSIVE : 0;
 		hints.ai_protocol = 0;           /* Any protocol */
 		hints.ai_canonname = NULL;

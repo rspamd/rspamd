@@ -827,7 +827,8 @@ start_fuzzy (struct rspamd_worker *worker)
 	signal_add (&sev, NULL);
 
 	/* Listen event */
-	while ((worker->cf->listen_sock = make_udp_socket (&worker->cf->bind_addr, worker->cf->bind_port, TRUE, TRUE)) == -1) {
+	while ((worker->cf->listen_sock =
+			make_universal_socket (worker->cf->bind_addr, worker->cf->bind_port, SOCK_DGRAM, TRUE, TRUE, FALSE)) == -1) {
 		sleep (1);
 		if (++retries > MAX_RETRIES) {
 			msg_err ("cannot bind to socket, exiting");

@@ -263,8 +263,9 @@ sync_timer_callback (gint fd, short what, void *ud)
 		return;
 	}
 
-	if ((ctx->sock = make_tcp_socket (&ctx->st->binlog->master_addr, ctx->st->binlog->master_port, FALSE, TRUE)) == -1) {
-		msg_info ("cannot connect to %s", inet_ntoa (ctx->st->binlog->master_addr));
+	if ((ctx->sock = make_universal_socket (ctx->st->binlog->master_addr, ctx->st->binlog->master_port,
+			SOCK_STREAM, TRUE, FALSE, TRUE)) == -1) {
+		msg_info ("cannot connect to %s", ctx->st->binlog->master_addr);
 		return;
 	}
 	/* Now create and activate dispatcher */
@@ -284,8 +285,7 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_fi
 	struct rspamd_sync_ctx *ctx;
 	guint32 jittered_interval;
 	
-	if (st->binlog->master_addr.s_addr != INADDR_NONE &&
-			st->binlog->master_addr.s_addr != INADDR_ANY) {
+	if (st->binlog->master_addr != NULL) {
 		ctx = memory_pool_alloc (pool->pool, sizeof (struct rspamd_sync_ctx));
 		ctx->st = st;
 		ctx->timeout = cfg->statfile_sync_timeout;

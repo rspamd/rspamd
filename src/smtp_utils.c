@@ -62,7 +62,6 @@ gboolean
 create_smtp_upstream_connection (struct smtp_session *session)
 {
 	struct smtp_upstream              *selected;
-	struct sockaddr_un                *un;
 
 	/* Try to select upstream */
 	selected = (struct smtp_upstream *)get_upstream_round_robin (session->ctx->upstreams,
@@ -76,13 +75,7 @@ create_smtp_upstream_connection (struct smtp_session *session)
 	session->upstream = selected;
 
 	/* Now try to create socket */
-	if (selected->is_unix) {
-		un = alloca (sizeof (struct sockaddr_un));
-		session->upstream_sock = make_unix_socket (selected->name, un, FALSE, TRUE);
-	}
-	else {
-		session->upstream_sock = make_tcp_socket (&selected->addr, selected->port, FALSE, TRUE);
-	}
+	session->upstream_sock = make_universal_socket (selected->addr, selected->port, SOCK_STREAM, TRUE, FALSE, FALSE);
 	if (session->upstream_sock == -1) {
 		msg_err ("cannot make a connection to %s", selected->name);
 		upstream_fail (&selected->up, session->session_time);
@@ -355,7 +348,7 @@ parse_upstreams_line (memory_pool_t *pool, struct smtp_upstream *upstreams, cons
 			(*count) ++;
 		}
 		else {
-			if (! parse_host_port (p, &cur->addr, &cur->port)) {
+			if (! parse_host_port (pool, p, &cur->addr, &cur->port)) {
 				g_strfreev (strv);
 				return FALSE;
 			}

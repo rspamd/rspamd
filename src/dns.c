@@ -47,6 +47,8 @@ static const unsigned damp         = 700;
 static const unsigned initial_n    = 128;
 static const unsigned initial_bias = 72;
 
+static const gint dns_port = 53;
+
 
 #ifdef HAVE_ARC4RANDOM
 #define DNS_RANDOM arc4random
@@ -1306,7 +1308,7 @@ dns_timer_cb (gint fd, short what, void *arg)
 	}
 	
 	if (req->server->sock == -1) {
-		req->server->sock = make_udp_socket (&req->server->addr, htons (53), FALSE, TRUE);
+		req->server->sock =  make_universal_socket (req->server->name, dns_port, SOCK_DGRAM, TRUE, FALSE, FALSE);
 	}
 	req->sock = req->server->sock;
 
@@ -1467,7 +1469,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	}
 	
 	if (req->server->sock == -1) {
-		req->server->sock = make_udp_socket (&req->server->addr, htons (53), FALSE, TRUE);
+		req->server->sock =  make_universal_socket (req->server->name, dns_port, SOCK_DGRAM, TRUE, FALSE, FALSE);
 	}
 	req->sock = req->server->sock;
 
@@ -1509,10 +1511,9 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 static gboolean
 parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 {
-	FILE *r;
-	gchar                           buf[BUFSIZ], *p;
-	struct rspamd_dns_server *new;
-	struct in_addr addr;
+	FILE                           *r;
+	gchar                           buf[BUFSIZ], *p, addr_holder[16];
+	struct rspamd_dns_server       *new;
 
 	r = fopen (RESOLV_CONF, "r");
 
@@ -1534,10 +1535,10 @@ parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 					continue;
 				}
 				else {
-					if (inet_aton (p, &addr) != 0) {
+					if (inet_pton (AF_INET6, p, addr_holder) == 1 ||
+							inet_pton (AF_INET, p, addr_holder) == 1) {
 						new = &resolver->servers[resolver->servers_num];
 						new->name = memory_pool_strdup (resolver->static_pool, p);
-						memcpy (&new->addr, &addr, sizeof (struct in_addr));
 						resolver->servers_num ++;
 					}
 					else {
@@ -1572,7 +1573,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 {
 	GList                          *cur;
 	struct rspamd_dns_resolver     *new;
-	gchar                          *begin, *p, *err;
+	gchar                          *begin, *p, *err, addr_holder[16];
 	gint                            priority, i;
 	struct rspamd_dns_server       *serv;
 	
@@ -1628,7 +1629,8 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 				priority = 0;
 			}
 			serv = &new->servers[new->servers_num];
-			if (inet_aton (begin, &serv->addr) != 0) {
+			if (inet_pton (AF_INET6, p, addr_holder) == 1 ||
+				inet_pton (AF_INET, p, addr_holder) == 1) {
 				serv->name = memory_pool_strdup (new->static_pool, begin);
 				serv->up.priority = priority;
 				new->servers_num ++;
@@ -1653,7 +1655,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	/* Now init all servers */
 	for (i = 0; i < new->servers_num; i ++) {
 		serv = &new->servers[i];
-		serv->sock = make_udp_socket (&serv->addr, 53, FALSE, TRUE);
+		serv->sock = make_universal_socket (serv->name, dns_port, SOCK_DGRAM, TRUE, FALSE, FALSE);
 		if (serv->sock == -1) {
 			msg_warn ("cannot create socket to server %s", serv->name);
 		}
