@@ -71,8 +71,12 @@ parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, g
 	hints.ai_next = NULL;
 
 	if (strcmp (tokens[0], "*") == 0) {
-		cur_tok = NULL;
-		hints.ai_flags |= AI_PASSIVE;
+		/* XXX: actually we still cannot listen on multiply protocols */
+		if (pool != NULL) {
+			*addr = memory_pool_alloc (pool, INET_ADDRSTRLEN + 1);
+		}
+		rspamd_strlcpy (*addr, "0.0.0.0", INET_ADDRSTRLEN + 1);
+		goto port_parse;
 	}
 	else {
 		cur_tok = tokens[0];
@@ -99,6 +103,8 @@ parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, g
 		msg_err ("address resolution for %s failed: %s", tokens[0], gai_strerror (r));
 		goto err;
 	}
+
+port_parse:
 	if (tokens[1] != NULL) {
 		/* Port part */
 		if (port != NULL) {
