@@ -1141,11 +1141,11 @@ print_metric_data_json (struct worker_task *task, gchar *outbuf, gsize size,
 	gint                            r = 0;
 	gchar							*local_act;
 
-	if (task->pre_result.action == METRIC_ACTION_NOACTION) {
-		local_act = "False";
-	}
-	else if (task->pre_result.action <= METRIC_ACTION_SOFT_REJECT) {
+	if (task->pre_result.action <= METRIC_ACTION_SOFT_REJECT) {
 		local_act = "True";
+	}
+	else {
+		local_act = "False";
 	}
 	if (metric_res == NULL) {
 		/* This is case when we got reject result from pre filters */

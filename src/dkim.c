@@ -367,7 +367,7 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gs
 rspamd_dkim_context_t*
 rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_jitter, GError **err)
 {
-	const gchar						*p, *c, *tag, *end;
+	const gchar						*p, *c, *tag = NULL, *end;
 	gsize							 taglen;
 	gint							 param = DKIM_PARAM_UNKNOWN;
 	time_t							 now;

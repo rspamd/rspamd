@@ -217,7 +217,9 @@ free_smtp_proxy_session (gpointer arg)
 		if (session->state != SMTP_PROXY_STATE_PROXY && session->state != SMTP_PROXY_STATE_REJECT &&
 				session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
 			/* Send 521 fatal error */
-			write (session->sock, fatal_smtp_error, sizeof (fatal_smtp_error));
+			if (write (session->sock, fatal_smtp_error, sizeof (fatal_smtp_error)) == -1) {
+				msg_err ("write error to client failed: %s", strerror (errno));
+			}
 		}
 		else if ((session->state == SMTP_PROXY_STATE_REJECT || session->state == SMTP_PROXY_STATE_REJECT_EMULATE) &&
 				session->from && session->rcpt && session->dnsbl_applied) {

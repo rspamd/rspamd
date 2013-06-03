@@ -381,6 +381,20 @@ lua_accept_socket (gint fd, short what, void *arg)
 				sizeof (struct in_addr));
 		addr_str = g_strdup (inet_ntoa (su.s4.sin_addr));
 	}
+	else if (su.ss.ss_family == AF_INET6) {
+		addr_str = g_malloc0 (INET6_ADDRSTRLEN + 1);
+		/* XXX: support ipv6 addresses here */
+		addr.s_addr = INADDR_NONE;
+		inet_ntop (AF_INET6, &su.s6.sin6_addr, addr_str, INET6_ADDRSTRLEN);
+		msg_info ("accepted connection from [%s] port %d",
+						addr_str, ntohs (su.s6.sin6_port));
+	}
+	else {
+		addr.s_addr = INADDR_NONE;
+		msg_err ("accepted connection from unsupported address family: %d", su.ss.ss_family);
+		close (nfd);
+		return;
+	}
 
 	/* Call finalizer function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_accept);

@@ -1151,7 +1151,8 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 }
 
 static                          gboolean
-process_regexp_expression (struct expression *expr, gchar *symbol, struct worker_task *task, const gchar *additional, struct lua_locked_state *nL)
+process_regexp_expression (struct expression *expr, gchar *symbol, struct worker_task *task,
+		const gchar *additional, struct lua_locked_state *nL)
 {
 	GQueue                         *stack;
 	gsize                           cur, op1, op2;
@@ -1192,15 +1193,13 @@ process_regexp_expression (struct expression *expr, gchar *symbol, struct worker
 		}
 		else if (it->type == EXPR_STR) {
 			/* This may be lua function, try to call it */
-			if (regexp_module_ctx->workers != NULL) {
-				if (nL) {
-					rspamd_mutex_lock (nL->m);
-					cur = maybe_call_lua_function ((const gchar*)it->content.operand, task, nL->L);
-					rspamd_mutex_unlock (nL->m);
-				}
-				else {
-					cur = maybe_call_lua_function ((const gchar*)it->content.operand, task, task->cfg->lua_state);
-				}
+			if (nL) {
+				rspamd_mutex_lock (nL->m);
+				cur = maybe_call_lua_function ((const gchar*)it->content.operand, task, nL->L);
+				rspamd_mutex_unlock (nL->m);
+			}
+			else {
+				cur = maybe_call_lua_function ((const gchar*)it->content.operand, task, task->cfg->lua_state);
 			}
 			debug_task ("function %s returned %s", (const gchar *)it->content.operand, cur ? "true" : "false");
 			if (try_optimize) {
