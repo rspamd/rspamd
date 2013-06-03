@@ -850,7 +850,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 
 		while (cur) {
 			part = cur->data;
-			if (part->is_empty) {
+			if (part->is_empty || part->fuzzy == NULL || part->fuzzy->hash_pipe[0] == '\0') {
+				/* Skip empty parts */
 				cur = g_list_next (cur);
 				continue;
 			}
