@@ -228,9 +228,9 @@
 
  <!-- Fuzzy lists example -->
  <symbol weight="1.00" description="">R_FUZZY</symbol>
- <symbol weight="1.00" description="">R_FUZZY1</symbol>
- <symbol weight="1.00" description="">R_FUZZY2</symbol>
- <symbol weight="1.00" description="">R_FUZZY3</symbol>
+ <symbol weight="1.00" description="">R_FUZZY_DENIED</symbol>
+ <symbol weight="1.00" description="">R_FUZZY_PROB</symbol>
+ <symbol weight="1.00" description="">R_FUZZY_WHITE</symbol>
 
  <!-- DKIM rules -->
  <symbol weight="1.0" description="DKIM policy reject">R_DKIM_REJECT</symbol>
@@ -310,15 +310,16 @@
 <!-- End of composites section -->
 
 <!-- Workers section -->
+<!--
 <worker>
   <type>fuzzy</type>
   <bind_socket>localhost:11335</bind_socket>
   <count>1</count>
   <maxfiles>2048</maxfiles>
-<!-- Other params -->
     <hashfile>@LOCALSTATES_PREFIX@/fuzzy.db</hashfile>
     <use_judy>yes</use_judy>
 </worker>
+-->
 <worker>
   <type>controller</type>
   <bind_socket>localhost:11334</bind_socket>
@@ -347,12 +348,12 @@
 <!-- Modules section -->
 <!-- fuzzy_check -->
 <module name="fuzzy_check">
-  <servers>localhost:11335</servers>
+  <servers>highsecure.ru:11335</servers>
   <symbol>R_FUZZY</symbol>
   <min_bytes>300</min_bytes>
   <max_score>10</max_score>
   <mime_types>application/pdf</mime_types>
-  <fuzzy_map>1:R_FUZZY1:10,2:R_FUZZY2:5,3:R_FUZZY3:-2.1</fuzzy_map>
+  <fuzzy_map>1:R_FUZZY_DENIED:10,2:R_FUZZY_PROB:5,3:R_FUZZY_WHITE:-2.1</fuzzy_map>
 </module>
 
 
