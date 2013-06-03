@@ -295,7 +295,7 @@ show_header_result (gpointer key, gpointer value, gpointer ud)
 }
 
 static void
-print_rspamd_result (struct rspamd_result *res)
+print_rspamd_result (struct rspamd_result *res, const gchar *filename)
 {
 	g_assert (res != 0);
 
@@ -303,6 +303,9 @@ print_rspamd_result (struct rspamd_result *res)
 		printf ("\033[1m");
 	}
 	PRINT_FUNC ("Results for host: %s\n", connect_str);
+	if (filename != NULL) {
+		PRINT_FUNC ("Filename: %s\n", filename);
+	}
 	if (tty) {
 		printf ("\033[0m");
 	}
@@ -374,7 +377,7 @@ scan_rspamd_stdin (void)
 		fprintf (stderr, "cannot scan message: %s\n", err->message);
 		exit (EXIT_FAILURE);
 	}
-	print_rspamd_result (res);
+	print_rspamd_result (res, "stdin");
 	rspamd_free_result (res);
 }
 
@@ -396,7 +399,7 @@ scan_rspamd_file (const gchar *file)
 		fprintf (stderr, "cannot scan message: %s\n", err->message);
 		return;
 	}
-	print_rspamd_result (res);
+	print_rspamd_result (res, file);
 	if (res) {
 		rspamd_free_result (res);
 	}
@@ -501,7 +504,8 @@ learn_rspamd_file (gboolean is_spam, const gchar *file)
 			if (tty) {
 				printf ("\033[1m");
 			}
-			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
+			PRINT_FUNC ("Results for host: %s: %d, %s, file: %s\n",
+					res->server_name, res->code, res->result->str, file);
 			if (tty) {
 				printf ("\033[0m");
 			}
@@ -610,7 +614,8 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 			if (tty) {
 				printf ("\033[1m");
 			}
-			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
+			PRINT_FUNC ("Results for host: %s: %d, %s, file: %s\n",
+					res->server_name, res->code, res->result->str, file);
 			if (tty) {
 				printf ("\033[0m");
 			}
