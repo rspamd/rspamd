@@ -558,7 +558,7 @@ static struct xml_parser_rule grammar[] = {
 				NULL
 		}
 	},
-	{ XML_SECTION_MODULE, {
+	{ XML_SECTION_MODULE_META, {
 			{
 				"name",
 				xml_handle_string,
