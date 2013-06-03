@@ -349,7 +349,7 @@ make_universal_socket (const gchar *credits, guint16 port, gint type, gboolean a
 
 		rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-			r = make_tcp_socket (res, is_server, async);
+			r = make_inet_socket (type, res, is_server, async);
 			freeaddrinfo (res);
 			return r;
 		}
