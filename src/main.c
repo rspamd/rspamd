@@ -613,14 +613,14 @@ spawn_workers (struct rspamd_main *rspamd)
 		else {
 			if (cf->worker->has_socket) {
 				if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
-						make_listen_key (cf->bind_host, cf->bind_port, cf->bind_family)))) == NULL) {
+						make_listen_key (cf->bind_addr, cf->bind_port, cf->bind_family)))) == NULL) {
 					/* Create listen socket */
-					listen_sock = create_listen_socket (cf->bind_host, cf->bind_port, cf->bind_family);
+					listen_sock = create_listen_socket (cf->bind_addr, cf->bind_port, cf->bind_family);
 					if (listen_sock == -1) {
 						exit (-errno);
 					}
 					g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
-							make_listen_key (cf->bind_host, cf->bind_port, cf->bind_family)),
+							make_listen_key (cf->bind_addr, cf->bind_port, cf->bind_family)),
 							GINT_TO_POINTER (listen_sock));
 				}
 				else {
