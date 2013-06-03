@@ -15,8 +15,8 @@ Group:          System Environment/Daemons
 License:        BSD
 URL:            https://bitbucket.org/vstakhov/rspamd/ 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-BuildRequires:  cmake,glib2-devel,gmime-devel,openssl-devel,lua-devel
-Requires:       glib2,gmime,lua
+BuildRequires:  cmake,glib2-devel,gmime-devel,openssl-devel,lua-devel,Judy-devel
+Requires:       glib2,gmime,lua,Judy
 # for /user/sbin/useradd
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
