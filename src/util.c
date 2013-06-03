@@ -95,7 +95,7 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean
 	cur = addr;
 	while (cur) {
 		/* Create socket */
-		fd = socket (cur->ai_protocol, type, 0);
+		fd = socket (cur->ai_family, type, 0);
 		if (fd == -1) {
 			msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
 			goto out;
