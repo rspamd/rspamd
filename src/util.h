@@ -381,4 +381,13 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
  */
 gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
 
+/**
+ * Parse ipv4 address with optional mask in CIDR format
+ * @param line cidr notation of ipv4 address
+ * @param ina destination address
+ * @param mask destination mask
+ * @return
+ */
+gboolean parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask);
+
 #endif

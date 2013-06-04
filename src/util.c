@@ -1823,6 +1823,42 @@ rspamd_str_pool_copy (gconstpointer data, gpointer ud)
 	return data ? memory_pool_strdup (pool, data) : NULL;
 }
 
+gboolean
+parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask)
+{
+	const char *pos;
+	char ip_buf[INET_ADDRSTRLEN + 1], mask_buf[3] = { '\0', '\0', '\0' };
+
+	bzero (ip_buf, sizeof (ip_buf));
+
+	if ((pos = strchr (line, '/')) != NULL) {
+		rspamd_strlcpy (ip_buf, line, MIN ((gsize)(pos - line), sizeof (ip_buf)));
+		rspamd_strlcpy (mask_buf, pos + 1, sizeof (mask_buf));
+	}
+	else {
+		rspamd_strlcpy (ip_buf, line, sizeof (ip_buf));
+	}
+
+	if (!inet_aton (ip_buf, ina)) {
+		return FALSE;
+	}
+
+	if (mask_buf[0] != '\0') {
+		/* Also parse mask */
+		*mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
+		if (*mask > 32) {
+			return FALSE;
+		}
+	}
+	else {
+		*mask = 32;
+	}
+
+	*mask = G_MAXUINT32 << (32 - *mask);
+
+	return TRUE;
+}
+
 /*
  * vi:ts=4
  */

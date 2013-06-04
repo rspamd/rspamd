@@ -87,7 +87,7 @@ parse_ipmask (const char *begin, struct in_addr *ina, int *mask, int *value)
 	const char *pos;
 	char ip_buf[sizeof ("255.255.255.255")], mask_buf[3] = { '\0', '\0', '\0' }, *p;
 	int state = 1, dots = 0;
-	
+
 	bzero (ip_buf, sizeof (ip_buf));
 	bzero (mask_buf, sizeof (mask_buf));
 	pos = begin;
@@ -164,8 +164,8 @@ parse_ipmask (const char *begin, struct in_addr *ina, int *mask, int *value)
 		*mask = 32;
 	}
 
-	*mask = 0xFFFFFFFF << (32 - *mask); 
-	
+	*mask = 0xFFFFFFFF << (32 - *mask);
+
 	return TRUE;
 }
 

@@ -996,7 +996,7 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 		*pos = map_line;
 	}
 	else {
-		msg_warn ("invalid map fetching protocol: %s", map_line);
+		msg_debug ("invalid map fetching protocol: %s", map_line);
 		return FALSE;
 	}
 

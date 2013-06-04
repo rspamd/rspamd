@@ -18,13 +18,4 @@ struct fuzzy_cmd {
 	u_char hash[FUZZY_HASHLEN];
 };
 
-struct fuzzy_session {
-	struct rspamd_worker *worker;
-	struct fuzzy_cmd cmd;
-	gint fd;
-	u_char *pos;
-	socklen_t salen;
-	struct sockaddr_storage sa;
-};
-
 #endif
