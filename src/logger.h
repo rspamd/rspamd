@@ -54,17 +54,26 @@ void flush_log_buf (rspamd_logger_t *logger);
 /**
  * Log function that is compatible for glib messages
  */
-void rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg);
+void rspamd_glib_log_function (const gchar *log_domain,
+		GLogLevelFlags log_level, const gchar *message, gpointer arg);
 
 /**
- * Function with variable number of arguments support 
+ * Function with variable number of arguments support
  */
-void rspamd_common_log_function (rspamd_logger_t *logger, GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...);
+void rspamd_common_log_function (rspamd_logger_t *logger,
+		GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...);
 
 /**
  * Conditional debug function
  */
-void rspamd_conditional_debug (rspamd_logger_t *logger, guint32 addr, const gchar *function, const gchar *fmt, ...) ;
+void rspamd_conditional_debug (rspamd_logger_t *logger,
+		guint32 addr, const gchar *function, const gchar *fmt, ...) ;
+
+/**
+ * Function with variable number of arguments support that uses static default logger
+ */
+void rspamd_default_log_function (GLogLevelFlags log_level, const gchar *function,
+		const gchar *fmt, ...);
 
 /**
  * Temporary turn on debug
@@ -90,11 +99,11 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 # define debug_task(...) rspamd_conditional_debug(rspamd_main->logger, task->from_addr.s_addr, __FUNCTION__, __VA_ARGS__)
 #endif
 #else
-#define msg_err(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
-#define msg_warn(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
-#define msg_info(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
-#define msg_debug(...)	rspamd_log_fprintf(stderr, __VA_ARGS__)
-#define debug_task(...) rspamd_log_fprintf(stderr, __VA_ARGS__)
+#define msg_err(...)	rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
+#define msg_warn(...)	rspamd_default_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
+#define msg_info(...)	rspamd_default_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
+#define msg_debug(...)	do {} while(0)
+#define debug_task(...) do {} while(0)
 #endif
 
 #endif

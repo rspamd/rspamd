@@ -65,6 +65,8 @@ struct rspamd_logger_s {
 
 static const gchar lf_chr = '\n';
 
+static rspamd_logger_t *default_logger = NULL;
+
 
 static void
 syslog_log_function (const gchar * log_domain, const gchar *function, 
@@ -156,13 +158,17 @@ open_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 		rspamd_log->enabled = TRUE;
 		return 0;
 	case RSPAMD_LOG_FILE:
-		rspamd_log->fd = open (rspamd_log->cfg->log_file, O_CREAT | O_WRONLY | O_APPEND, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+		rspamd_log->fd = open (rspamd_log->cfg->log_file, O_CREAT | O_WRONLY | O_APPEND,
+				S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
 		if (rspamd_log->fd == -1) {
-			fprintf (stderr, "open_log: cannot open desired log file: %s, %s", rspamd_log->cfg->log_file, strerror (errno));
+			fprintf (stderr, "open_log: cannot open desired log file: %s, %s",
+					rspamd_log->cfg->log_file, strerror (errno));
 			return -1;
 		}
 		if (fchown (rspamd_log->fd, uid, gid) == -1) {
-			fprintf (stderr, "open_log: cannot chown desired log file: %s, %s", rspamd_log->cfg->log_file, strerror (errno));
+			fprintf (stderr, "open_log: cannot chown desired log file: %s, %s",
+					rspamd_log->cfg->log_file, strerror (errno));
+			close (rspamd_log->fd);
 			return -1;
 		}
 		rspamd_log->enabled = TRUE;
@@ -343,6 +349,8 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 		radix_tree_free (rspamd->logger->debug_ip);
 		rspamd->logger->debug_ip = NULL;
 	}
+
+	default_logger = rspamd->logger;
 }
 
 /**
@@ -371,7 +379,8 @@ flush_log_buf (rspamd_logger_t *rspamd_log)
  * This log functions select real logger and write message if level is less or equal to configured log level
  */
 void
-rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...)
+rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
+		const gchar *function, const gchar *fmt, ...)
 {
 	static gchar                    logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
 	va_list                         vp;
@@ -386,6 +395,37 @@ rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_leve
 		va_end (vp);
 		rspamd_log->log_func (NULL, function, log_level, escaped_logbuf, FALSE, rspamd_log);
 		g_mutex_unlock (rspamd_log->mtx);
+	}
+}
+
+void
+rspamd_default_log_function (GLogLevelFlags log_level,
+		const gchar *function, const gchar *fmt, ...)
+{
+	static gchar                   logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
+	va_list                         vp;
+	u_char                         *end;
+
+	if (default_logger == NULL) {
+		/* Just fprintf message */
+		if (log_level >= G_LOG_LEVEL_INFO) {
+			va_start (vp, fmt);
+			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
+			*end = '\0';
+			(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
+			va_end (vp);
+			fprintf (stderr, "%s\n", escaped_logbuf);
+		}
+	}
+	else if (log_level <= default_logger->cfg->log_level) {
+		g_mutex_lock (default_logger->mtx);
+		va_start (vp, fmt);
+		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
+		*end = '\0';
+		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
+		va_end (vp);
+		default_logger->log_func (NULL, function, log_level, escaped_logbuf, FALSE, default_logger);
+		g_mutex_unlock (default_logger->mtx);
 	}
 }
 
@@ -517,7 +557,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 				got_time = TRUE;
 			}
 			else {
-				/* Do not try to write to file too often while throtling */
+				/* Do not try to write to file too often while throttling */
 				return;
 			}
 		}
@@ -664,7 +704,6 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log, guint32 addr, const gchar
 		g_mutex_unlock (rspamd_log->mtx);
 	}
 } 
-
 /**
  * Wrapper for glib logger
  */
