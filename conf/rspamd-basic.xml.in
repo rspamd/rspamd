@@ -316,8 +316,9 @@
   <bind_socket>localhost:11335</bind_socket>
   <count>1</count>
   <maxfiles>2048</maxfiles>
-    <hashfile>@LOCALSTATES_PREFIX@/fuzzy.db</hashfile>
-    <use_judy>yes</use_judy>
+  <hashfile>@LOCALSTATES_PREFIX@/fuzzy.db</hashfile>
+  <use_judy>yes</use_judy>
+  <allow_update>127.0.0.1</allow_update>
 </worker>
 -->
 <worker>
