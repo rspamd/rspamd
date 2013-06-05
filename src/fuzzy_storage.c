@@ -269,10 +269,13 @@ sigterm_handler (gint fd, short what, void *arg)
 	};
 
 	ctx = worker->ctx;
+	event_del (&worker->sig_ev_usr1);
+	event_del (&worker->sig_ev_usr2);
+	event_del (&worker->bind_ev);
+	close (worker->cf->listen_sock);
 	mods = ctx->max_mods + 1;
 	sync_cache (worker);
-	close (worker->cf->listen_sock);
-	(void)event_loopexit (&tv);
+	(void)event_base_loopexit (ctx->ev_base, &tv);
 }
 
 /*
@@ -287,16 +290,17 @@ sigusr2_handler (gint fd, short what, void *arg)
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
 	ctx = worker->ctx;
-	tv.tv_sec = SOFT_SHUTDOWN_TIME;
+	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev_usr1);
 	event_del (&worker->sig_ev_usr2);
 	event_del (&worker->bind_ev);
 	close (worker->cf->listen_sock);
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
-	event_base_loopexit (ctx->ev_base, &tv);
 	mods = ctx->max_mods + 1;
 	sync_cache (worker);
+
+	event_base_loopexit (ctx->ev_base, &tv);
 	return;
 }
 
@@ -854,6 +858,7 @@ parse_fuzzy_update_list (struct rspamd_fuzzy_storage_ctx *ctx)
 			}
 			radix32tree_add (ctx->update_ips, htonl (ina.s_addr), mask, 1);
 		}
+		cur ++;
 	}
 
 	return (ctx->update_ips != NULL);
