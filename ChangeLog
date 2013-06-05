@@ -1,3 +1,10 @@
+0.5.5:
+	* New bayes normalizator based on inverse chi-square function
+	* Various fixes to fuzzy storage
+	* Allow update fuzzy storage only from specific IP addresses
+	* Better support of IPv6 and address selection algorithms
+	* Add CentOS spec file
+
 0.5.4:
 	* Fixed issues with diff algorithm
 	* Added support of RRD statistics
