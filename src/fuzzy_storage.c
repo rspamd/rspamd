@@ -71,8 +71,8 @@ worker_t fuzzy_worker = {
 	"fuzzy",					/* Name */
 	init_fuzzy,					/* Init function */
 	start_fuzzy,				/* Start function */
-	TRUE,						/* Has socket */
-	TRUE,						/* Non unique */
+	FALSE,						/* No socket */
+	TRUE,						/* Unique */
 	FALSE,						/* Non threaded */
 	FALSE						/* Non killable */
 };
