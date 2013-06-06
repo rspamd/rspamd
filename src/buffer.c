@@ -523,9 +523,16 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 	case BUFFER_ANY:
 		res.begin = d->in_buf->data->begin;
 		res.len = len;
+
 		if (d->read_callback) {
-			if (!d->read_callback (&res, d->user_data)) {
-				return;
+			/*
+			 * Actually we do not want to send zero sized
+			 * buffers to a read callback
+			 */
+			if (! (d->want_read && res.len == 0)) {
+				if (!d->read_callback (&res, d->user_data)) {
+					return;
+				}
 			}
 			if (d->policy != saved_policy) {
 				debug_ip("policy changed during callback, restart buffer's processing");
