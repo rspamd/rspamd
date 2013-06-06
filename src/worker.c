@@ -299,15 +299,23 @@ read_socket (f_str_t * in, void *arg)
 		break;
 	case READ_MESSAGE:
 		/* Allow half-closed connections to be proceed */
-		task->dispatcher->want_read = FALSE;
+
 		if (task->content_length > 0) {
 			task->msg->begin = in->begin;
 			task->msg->len = in->len;
 			debug_task ("got string of length %z", task->msg->len);
 			task->state = WAIT_FILTER;
-
+			task->dispatcher->want_read = FALSE;
 		}
 		else {
+			if (!task->dispatcher->want_read && in->len == 0) {
+				/*
+				 * Skip initial zero length string remain from
+				 * buffer policy switch
+				 */
+				task->dispatcher->want_read = FALSE;
+				return TRUE;
+			}
 			if (in->len > 0) {
 				if (task->msg->begin == NULL) {
 					/* Allocate buf */
