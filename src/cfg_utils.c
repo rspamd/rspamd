@@ -83,7 +83,6 @@ parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, g
 	}
 
 	if ((r = getaddrinfo (cur_tok, NULL, &hints, &res)) == 0) {
-		*addr = memory_pool_alloc (pool, INET6_ADDRSTRLEN);
 		memcpy (&addr_holder, res->ai_addr, MIN (sizeof (addr_holder), res->ai_addrlen));
 		if (res->ai_family == AF_INET) {
 			if (pool != NULL) {
