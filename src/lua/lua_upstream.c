@@ -86,7 +86,7 @@ struct lua_upstream {
 	struct upstream up;
 	gchar *def;
 	guint16 port;
-	gchar addr[INET6_ADDRSTRLEN];
+	gchar *addr;
 };
 
 static struct lua_upstream	*
@@ -113,7 +113,8 @@ lua_upstream_create (lua_State *L)
 	if (def) {
 		new = g_slice_alloc0 (sizeof (struct lua_upstream));
 		new->def = g_strdup (def);
-		if (!parse_host_port_priority (NULL, new->def, (gchar **)&new->addr, &new->port, &new->up.priority)) {
+		new->addr = g_malloc (INET6_ADDRSTRLEN);
+		if (!parse_host_port_priority (NULL, new->def, &new->addr, &new->port, &new->up.priority)) {
 			g_free (new->def);
 			g_slice_free1 (sizeof (struct lua_upstream), new);
 			lua_pushnil (L);
@@ -140,6 +141,7 @@ lua_upstream_destroy (lua_State *L)
 
 	if (up) {
 		g_free (up->def);
+		g_free (up->addr);
 		g_slice_free1 (sizeof (struct lua_upstream), up);
 	}
 
@@ -319,7 +321,8 @@ lua_upstream_list_create (lua_State *L)
 
 		for (i = 0; i < new->count; i ++) {
 			cur = &new->upstreams[i];
-			if (!parse_host_port_priority (NULL, tokens[i], (gchar **)&cur->addr, &cur->port, &cur->up.priority)) {
+			cur->addr = g_malloc (INET6_ADDRSTRLEN);
+			if (!parse_host_port_priority (NULL, tokens[i], &cur->addr, &cur->port, &cur->up.priority)) {
 				goto err;
 			}
 			if (cur->port == 0) {
@@ -337,6 +340,12 @@ err:
 		g_strfreev (tokens);
 	}
 	if (new->upstreams) {
+		for (i = 0; i < new->count; i ++) {
+			cur = &new->upstreams[i];
+			if (cur->addr) {
+				g_free (cur->addr);
+			}
+		}
 		g_slice_free1 (new->count * sizeof (struct lua_upstream), new->upstreams);
 	}
 	g_slice_free1 (sizeof (struct lua_upstream_list), new);
@@ -353,9 +362,17 @@ static gint
 lua_upstream_list_destroy (lua_State *L)
 {
 	struct lua_upstream_list					*upl = lua_check_upstream_list (L);
+	struct lua_upstream							*cur;
+	guint									 	 i;
 
 	if (upl) {
 		if (upl->upstreams) {
+			for (i = 0; i < upl->count; i ++) {
+				cur = &upl->upstreams[i];
+				if (cur->addr) {
+					g_free (cur->addr);
+				}
+			}
 			g_slice_free1 (upl->count * sizeof (struct lua_upstream), upl->upstreams);
 		}
 		g_slice_free1 (sizeof (struct lua_upstream_list), upl);
