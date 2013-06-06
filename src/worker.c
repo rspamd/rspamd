@@ -308,7 +308,7 @@ read_socket (f_str_t * in, void *arg)
 			task->dispatcher->want_read = FALSE;
 		}
 		else {
-			if (!task->dispatcher->want_read && in->len == 0) {
+			if (task->dispatcher->want_read && in->len == 0) {
 				/*
 				 * Skip initial zero length string remain from
 				 * buffer policy switch
