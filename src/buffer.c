@@ -406,7 +406,6 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 					return;
 				}
 			}
-			return;
 		}
 		else if (r == -1 && errno == EAGAIN) {
 			debug_ip("partially read data, retry");
