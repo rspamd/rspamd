@@ -445,7 +445,13 @@ parse_header (struct worker_task *task, f_str_t * line)
 				else {
 					rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_CHARACTER, task->content_length);
 					task->state = READ_MESSAGE;
+					task->msg = memory_pool_alloc0 (task->task_pool, sizeof (f_str_t));
 				}
+			}
+			else if (task->cmd != CMD_LEARN && task->cmd != CMD_OTHER) {
+				rspamd_set_dispatcher_policy (task->dispatcher, BUFFER_ANY, 0);
+				task->state = READ_MESSAGE;
+				task->msg = memory_pool_alloc0 (task->task_pool, sizeof (f_str_t));
 			}
 			else {
 				task->last_error = "Unknown content length";

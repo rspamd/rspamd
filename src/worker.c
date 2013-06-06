@@ -298,13 +298,50 @@ read_socket (f_str_t * in, void *arg)
 		}
 		break;
 	case READ_MESSAGE:
-		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-		task->msg->begin = in->begin;
-		task->msg->len = in->len;
-		debug_task ("got string of length %z", task->msg->len);
-		task->state = WAIT_FILTER;
-		/* No more need of reading allowing half-closed connections to be proceed */
+		/* Allow half-closed connections to be proceed */
 		task->dispatcher->want_read = FALSE;
+		if (task->content_length > 0) {
+			task->msg->begin = in->begin;
+			task->msg->len = in->len;
+			debug_task ("got string of length %z", task->msg->len);
+			task->state = WAIT_FILTER;
+
+		}
+		else {
+			if (in->len > 0) {
+				if (task->msg->begin == NULL) {
+					/* Allocate buf */
+					task->msg->size = MAX (BUFSIZ, in->len);
+					task->msg->begin = g_malloc (task->msg->size);
+					memcpy (task->msg->begin, in->begin, in->len);
+					task->msg->len = in->len;
+				}
+				else if (task->msg->size >= task->msg->len + in->len) {
+					memcpy (task->msg->begin + task->msg->len, in->begin, in->len);
+					task->msg->len += in->len;
+				}
+				else {
+					/* Need to realloc */
+					task->msg->size = MAX (task->msg->size * 2, task->msg->size + in->len);
+					task->msg->begin = g_realloc (task->msg->begin, task->msg->size);
+					memcpy (task->msg->begin + task->msg->len, in->begin, in->len);
+					task->msg->len += in->len;
+				}
+				/* Want more */
+				return TRUE;
+			}
+			else if (task->msg->len > 0) {
+				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, task->msg->begin);
+			}
+			else {
+				msg_warn ("empty message passed");
+				task->last_error = "MIME processing error";
+				task->error_code = RSPAMD_FILTER_ERROR;
+				task->state = WRITE_ERROR;
+				return write_socket (task);
+			}
+		}
+
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");
