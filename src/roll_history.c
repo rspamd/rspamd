@@ -101,7 +101,8 @@ rspamd_roll_history_update (struct roll_history *history, struct worker_task *ta
 		row->completed = FALSE;
 	}
 	else {
-		msg_err ("internal error with history roll occured, row number is invalid: %d", row_num);
+		/* Race condition */
+		history->cur_row = 0;
 		return;
 	}
 
