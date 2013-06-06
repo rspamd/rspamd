@@ -316,6 +316,7 @@ read_socket (f_str_t * in, void *arg)
 				task->dispatcher->want_read = FALSE;
 				return TRUE;
 			}
+			task->dispatcher->want_read = FALSE;
 			if (in->len > 0) {
 				if (task->msg->begin == NULL) {
 					/* Allocate buf */
