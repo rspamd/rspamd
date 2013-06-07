@@ -268,21 +268,6 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 	return 1;
 }
 
-static void
-counter_write_callback (gpointer key, gpointer value, void *data)
-{
-	struct controller_session      *session = data;
-	struct counter_data            *cd = value;
-	gchar                           *name = key;
-	gchar                           out_buf[128];
-	gint                            r;
-
-	r = rspamd_snprintf (out_buf, sizeof (out_buf), "%s: %uD" CRLF, name, (guint32)cd->value);
-	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, TRUE, FALSE)) {
-		msg_warn ("cannot write to socket");
-	}
-}
-
 static gboolean
 write_whole_statfile (struct controller_session *session, gchar *symbol, struct classifier_config *ccf)
 {
@@ -435,6 +420,50 @@ process_sync_command (struct controller_session *session, gchar **args)
 	}
 
 	return TRUE;
+}
+
+static gboolean
+process_counters_command (struct controller_session *session)
+{
+	gchar                           out_buf[BUFSIZ];
+	GList                          *cur;
+	struct cache_item             *item;
+	struct symbols_cache          *cache;
+	gint                            r;
+
+	cache = session->cfg->cache;
+
+	r = rspamd_snprintf (out_buf, sizeof (out_buf), "Rspamd counters." CRLF);
+
+	if (cache != NULL) {
+		cur = cache->negative_items;
+		while (cur) {
+			item = cur->data;
+			if (!item->is_callback) {
+				r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "%s %.2f %d %.3f" CRLF,
+						item->s->symbol, item->s->weight,
+						item->s->frequency, item->s->avg_time);
+			}
+			cur = g_list_next (cur);
+		}
+		cur = cache->static_items;
+		while (cur) {
+			item = cur->data;
+			if (!item->is_callback) {
+				r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "%s %.2f %d %.3f" CRLF,
+						item->s->symbol, item->s->weight,
+						item->s->frequency, item->s->avg_time);
+			}
+			cur = g_list_next (cur);
+		}
+	}
+
+	if (!session->restful) {
+		return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+	}
+	else {
+		return restful_write_reply (200, NULL, out_buf, r, session->dispatcher);
+	}
 }
 
 static gboolean
@@ -1078,7 +1107,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 		}
 		break;
 	case COMMAND_COUNTERS:
-		rspamd_hash_foreach (rspamd_main->counters, counter_write_callback, session);
+		process_counters_command (session);
 		break;
 	case COMMAND_ADD_ACTION:
 		if (check_auth (cmd, session)) {
