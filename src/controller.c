@@ -433,7 +433,12 @@ process_counters_command (struct controller_session *session)
 
 	cache = session->cfg->cache;
 
-	r = rspamd_snprintf (out_buf, sizeof (out_buf), "Rspamd counters." CRLF);
+	if (!session->restful) {
+		r = rspamd_snprintf (out_buf, sizeof (out_buf), "Rspamd counters." CRLF);
+	}
+	else {
+		r = 0;
+	}
 
 	if (cache != NULL) {
 		cur = cache->negative_items;
