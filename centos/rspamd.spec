@@ -4,6 +4,8 @@
 %define rspamd_logdir    %{_localstatedir}/log/rspamd
 %define rspamd_confdir   %{_sysconfdir}/rspamd
 
+%define USE_JUDY         0
+
 Name:           rspamd
 Version:        0.5.5
 Release:        1
@@ -15,8 +17,13 @@ Group:          System Environment/Daemons
 License:        BSD
 URL:            https://bitbucket.org/vstakhov/rspamd/ 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-BuildRequires:  cmake,glib2-devel,gmime-devel,openssl-devel,lua-devel,Judy-devel
-Requires:       glib2,gmime,lua,Judy
+%if USE_JUDY
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel
+Requires:       glib2,gmime,lua,Judy,libevent
+%else
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel
+Requires:       glib2,gmime,lua,libevent
+%endif
 # for /user/sbin/useradd
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
@@ -49,7 +56,12 @@ rm -rf %{buildroot}
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
         -DRSPAMD_GROUP=%{rspamd_group} \
-        -DRSPAMD_USER=%{rspamd_user}
+        -DRSPAMD_USER=%{rspamd_user} \
+%if USE_JUDY
+        -DENABLE_JUDY=ON
+%else
+        -DENABLE_JUDY=OFF
+%endif
 
 %{__make} %{?jobs:-j%jobs}
 

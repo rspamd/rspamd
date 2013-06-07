@@ -33,6 +33,10 @@ OPTION(ENABLE_PROFILING    "Enable profiling [default: OFF]"                    
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: OFF]"                 OFF)
+OPTION(ENABLE_JUDY         "Find and link with Judy library [default: ON]"      ON)
+OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
+OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
+OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: OFF]"  OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: OFF]"          OFF)
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 
@@ -413,17 +417,19 @@ IF(PCRE_LIBRARY_DIRS)
 	LINK_DIRECTORIES("${PCRE_LIBRARY_DIRS}")
 ENDIF(PCRE_LIBRARY_DIRS)
 
-# Find optional sqlite3 support
-pkg_check_modules(SQLITE sqlite3>=3.6.0)
-IF(SQLITE_FOUND)
-	SET(WITH_SQLITE 1)
-ENDIF(SQLITE_FOUND)
-IF(SQLITE_INCLUDE_DIRS)
-	INCLUDE_DIRECTORIES("${SQLITE_INCLUDE_DIRS}")
-ENDIF(SQLITE_INCLUDE_DIRS)
-IF(SQLITE_LIBRARY_DIRS)
-	LINK_DIRECTORIES("${SQLITE_LIBRARY_DIRS}")
-ENDIF(SQLITE_LIBRARY_DIRS)
+IF(ENABLE_SQLITE MATCHES "ON")
+	# Find optional sqlite3 support
+	pkg_check_modules(SQLITE sqlite3>=3.6.0)
+	IF(SQLITE_FOUND)
+		SET(WITH_SQLITE 1)
+	ENDIF(SQLITE_FOUND)
+	IF(SQLITE_INCLUDE_DIRS)
+		INCLUDE_DIRECTORIES("${SQLITE_INCLUDE_DIRS}")
+	ENDIF(SQLITE_INCLUDE_DIRS)
+	IF(SQLITE_LIBRARY_DIRS)
+		LINK_DIRECTORIES("${SQLITE_LIBRARY_DIRS}")
+	ENDIF(SQLITE_LIBRARY_DIRS)
+ENDIF(ENABLE_SQLITE MATCHES "ON")
 
 #Check for openssl (required for dkim)
 IF(OPENSSL_FOUND)
@@ -455,17 +461,19 @@ IF(GLIB2_VERSION VERSION_GREATER "2.30.0")
 ENDIF(GLIB2_VERSION VERSION_GREATER "2.30.0") 
 pkg_check_modules(GMIME2 gmime-2.0)
 
-# Try to find hiredis library
-pkg_check_modules(HIREDIS libhiredis)
-IF(HIREDIS_INCLUDE_DIRS)
-	INCLUDE_DIRECTORIES("${HIREDIS_INCLUDE_DIRS}")
-ENDIF(HIREDIS_INCLUDE_DIRS)
-IF(HIREDIS_LIBRARY_DIRS)
-	LINK_DIRECTORIES("${HIREDIS_LIBRARY_DIRS}")
-ENDIF(HIREDIS_LIBRARY_DIRS)
-IF(HIREDIS_FOUND)
-	SET(WITH_SYSTEM_HIREDIS 1)
-ENDIF(HIREDIS_FOUND)
+IF(ENABLE_HIREDIS MATCHES "ON")
+	# Try to find hiredis library
+	pkg_check_modules(HIREDIS REQUIRED libhiredis)
+	IF(HIREDIS_INCLUDE_DIRS)
+		INCLUDE_DIRECTORIES("${HIREDIS_INCLUDE_DIRS}")
+	ENDIF(HIREDIS_INCLUDE_DIRS)
+	IF(HIREDIS_LIBRARY_DIRS)
+		LINK_DIRECTORIES("${HIREDIS_LIBRARY_DIRS}")
+	ENDIF(HIREDIS_LIBRARY_DIRS)
+	IF(HIREDIS_FOUND)
+		SET(WITH_SYSTEM_HIREDIS 1)
+	ENDIF(HIREDIS_FOUND)
+ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
 # Try to link with gmime24
 IF(NOT GMIME2_FOUND OR FORCE_GMIME24)
@@ -578,53 +586,57 @@ GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
 INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
 LINK_DIRECTORIES("${LIBEVENT_PATH}")
 
-# Find libjudy
-FIND_LIBRARY(LIBJUDY_LIBRARY NAMES Judy PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                 DOC "Path where the libjudy library can be found")
-IF(LIBJUDY_LIBRARY)
-	FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
-											/usr/include
-											/usr/local/include
-											DOC "Path where the judy header files can be found")
-
-	GET_FILENAME_COMPONENT(LIBJUDY_PATH "${LIBJUDY_LIBRARY}" PATH)
-	INCLUDE_DIRECTORIES("${LIBJUDY_INCLUDE}")
-	LINK_DIRECTORIES("${LIBJUDY_PATH}")
-	SET(WITH_JUDY 1)
-ENDIF(LIBJUDY_LIBRARY)
+IF(ENABLE_JUDY MATCHES "ON")
+	# Find libjudy
+	FIND_LIBRARY(LIBJUDY_LIBRARY NAMES Judy PATH_SUFFIXES lib64 lib
+	                  PATHS
+	                      ~/Library/Frameworks
+	                      /Library/Frameworks
+	                      /usr/local
+	                      /usr
+	                      /sw
+	                      /opt/local
+	                      /opt/csw
+	                      /opt
+	                 DOC "Path where the libjudy library can be found")
+	IF(LIBJUDY_LIBRARY)
+		FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
+												/usr/include
+												/usr/local/include
+												DOC "Path where the judy header files can be found")
+	
+		GET_FILENAME_COMPONENT(LIBJUDY_PATH "${LIBJUDY_LIBRARY}" PATH)
+		INCLUDE_DIRECTORIES("${LIBJUDY_INCLUDE}")
+		LINK_DIRECTORIES("${LIBJUDY_PATH}")
+		SET(WITH_JUDY 1)
+	ENDIF(LIBJUDY_LIBRARY)
+ENDIF(ENABLE_JUDY MATCHES "ON")
 
 # Find libbd
-FIND_LIBRARY(LIBDB_LIBRARY NAMES db PATHS PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                 DOC "Path where the libdb library can be found")
-IF(LIBDB_LIBRARY)
-	FIND_PATH(LIBDB_INCLUDE db.h PATHS 	/opt/include
-											/usr/include
-											/usr/local/include
-											DOC "Path where the bdb header files can be found")
-
-	GET_FILENAME_COMPONENT(LIBDB_PATH "${LIBDB_LIBRARY}" PATH)
-	INCLUDE_DIRECTORIES("${LIBDB_INCLUDE}")
-	LINK_DIRECTORIES("${LIBDB_PATH}")
-	SET(WITH_DB 1)
-ENDIF(LIBDB_LIBRARY)
+IF(ENABLE_DB MATCHES "ON")
+	FIND_LIBRARY(LIBDB_LIBRARY NAMES db PATHS PATH_SUFFIXES lib64 lib
+	                  PATHS
+	                      ~/Library/Frameworks
+	                      /Library/Frameworks
+	                      /usr/local
+	                      /usr
+	                      /sw
+	                      /opt/local
+	                      /opt/csw
+	                      /opt
+	                 DOC "Path where the libdb library can be found")
+	IF(LIBDB_LIBRARY)
+		FIND_PATH(LIBDB_INCLUDE db.h PATHS 	/opt/include
+												/usr/include
+												/usr/local/include
+												DOC "Path where the bdb header files can be found")
+	
+		GET_FILENAME_COMPONENT(LIBDB_PATH "${LIBDB_LIBRARY}" PATH)
+		INCLUDE_DIRECTORIES("${LIBDB_INCLUDE}")
+		LINK_DIRECTORIES("${LIBDB_PATH}")
+		SET(WITH_DB 1)
+	ENDIF(LIBDB_LIBRARY)
+ENDIF(ENABLE_DB MATCHES "ON")
 
 IF(ENABLE_PROFILING MATCHES "ON")
 	SET(WITH_PROFILER 1)
