@@ -685,7 +685,7 @@ print_rspamd_counters (struct rspamd_client_counter *counters, gint count)
 {
 	gint                             i, max_len = 24, l;
 	struct rspamd_client_counter   *cur;
-	gchar                            fmt_buf[32], dash_buf[82];
+	gchar                            fmt_buf[64], dash_buf[82];
 
 	/* Find maximum width of symbol's name */
 	for (i = 0; i < count; i ++) {
@@ -696,26 +696,26 @@ print_rspamd_counters (struct rspamd_client_counter *counters, gint count)
 		}
 	}
 
-	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3s | %%%ds | %%6s | %%9s | %%9s |\\n", max_len);
+	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3s | %%%ds | %%6s | %%9s | %%9s |\n", max_len);
 	memset (dash_buf, '-', 40 + max_len);
-	dash_buf[40 + max_len] = '\n';
-	dash_buf[40 + max_len + 1] = '\0';
+	dash_buf[40 + max_len] = '\0';
 
 	PRINT_FUNC ("Symbols cache\n");
+	PRINT_FUNC (" %s \n", dash_buf);
 	if (tty) {
 		printf ("\033[1m");
 	}
-	PRINT_FUNC (dash_buf);
 	PRINT_FUNC (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Avg. time");
 	if (tty) {
 		printf ("\033[0m");
 	}
-	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3d | %%%ds | %%6.1f | %%9d | %%9.3f |\\n", max_len);
+	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3d | %%%ds | %%6.1f | %%9d | %%9.3f |\n", max_len);
 	for (i = 0; i < count; i ++) {
-		PRINT_FUNC (dash_buf);
+		cur = &counters[i];
+		PRINT_FUNC (" %s \n", dash_buf);
 		PRINT_FUNC (fmt_buf, i, cur->name, cur->weight, cur->frequency, cur->time);
 	}
-	PRINT_FUNC (dash_buf);
+	PRINT_FUNC (" %s \n", dash_buf);
 }
 
 static void
@@ -725,7 +725,7 @@ show_rspamd_counters (void)
 	GList							*results, *cur;
 	struct rspamd_controller_result	*res;
 	gchar                          **str_counters, **tmpv;
-	gint                             counters_num, i;
+	gint                             counters_num, i, cnum = 0;
 	struct rspamd_client_counter   *counters = NULL, *cur_counter;
 
 	/* Add server */
@@ -752,26 +752,24 @@ show_rspamd_counters (void)
 			if (tty) {
 				printf ("\033[0m");
 			}
-			str_counters = g_strsplit_set (res->data->str, "\n\r", -1);
+			str_counters = g_strsplit_set (res->data->str, "\n", -1);
 			if (str_counters != NULL) {
 				counters_num = g_strv_length (str_counters);
 				if (counters_num > 0) {
 					counters = g_malloc0 (counters_num * sizeof (struct rspamd_client_counter));
 					for (i = 0; i < counters_num; i ++) {
-						cur_counter = &counters[i];
-						tmpv = g_strsplit_set (str_counters[i], " \t", 4);
+						cur_counter = &counters[cnum];
+						tmpv = g_strsplit_set (str_counters[i], " \t", -1);
 						if (g_strv_length (tmpv) == 4) {
 							rspamd_strlcpy (cur_counter->name, tmpv[0], sizeof (cur_counter->name));
 							cur_counter->weight = strtod (tmpv[1], NULL);
 							cur_counter->frequency = strtoul (tmpv[2], NULL, 10);
 							cur_counter->time = strtod (tmpv[3], NULL);
-						}
-						else {
-							rspamd_strlcpy (cur_counter->name, "Unknown", sizeof (cur_counter->name));
+							cnum ++;
 						}
 						g_strfreev (tmpv);
 					}
-					print_rspamd_counters (counters, counters_num);
+					print_rspamd_counters (counters, cnum);
 				}
 				g_strfreev (str_counters);
 			}

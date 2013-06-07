@@ -300,10 +300,10 @@ read_socket (f_str_t * in, void *arg)
 	case READ_MESSAGE:
 		/* Allow half-closed connections to be proceed */
 
+		debug_task ("got string of length %z", task->msg->len);
 		if (task->content_length > 0) {
 			task->msg->begin = in->begin;
 			task->msg->len = in->len;
-			debug_task ("got string of length %z", task->msg->len);
 			task->state = WAIT_FILTER;
 			task->dispatcher->want_read = FALSE;
 		}
