@@ -75,6 +75,7 @@ enum rspamc_command {
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_STAT,
+	RSPAMC_COMMAND_COUNTERS,
 	RSPAMC_COMMAND_UPTIME,
 	RSPAMC_COMMAND_ADD_SYMBOL,
 	RSPAMC_COMMAND_ADD_ACTION
@@ -129,6 +130,9 @@ check_rspamc_command (const gchar *cmd)
 	}
 	else if (g_ascii_strcasecmp (cmd, "STAT") == 0) {
 		return RSPAMC_COMMAND_STAT;
+	}
+	else if (g_ascii_strcasecmp (cmd, "COUNTERS") == 0) {
+		return RSPAMC_COMMAND_COUNTERS;
 	}
 	else if (g_ascii_strcasecmp (cmd, "UPTIME") == 0) {
 		return RSPAMC_COMMAND_UPTIME;
@@ -627,7 +631,7 @@ fuzzy_rspamd_file (const gchar *file, gboolean delete)
 }
 
 static void
-rspamd_do_controller_simple_command (gchar *command, GHashTable *kwattrs)
+rspamc_do_controller_simple_command (gchar *command, GHashTable *kwattrs)
 {
 	GError                          *err = NULL;
 	GList							*results, *cur;
@@ -661,6 +665,115 @@ rspamd_do_controller_simple_command (gchar *command, GHashTable *kwattrs)
 			}
 			else {
 				PRINT_FUNC ("No results\n");
+			}
+			rspamd_free_controller_result (res);
+			cur = g_list_next (cur);
+		}
+		g_list_free (results);
+	}
+}
+
+struct rspamd_client_counter {
+	gchar name[128];
+	gint frequency;
+	gdouble weight;
+	gdouble time;
+};
+
+static void
+print_rspamd_counters (struct rspamd_client_counter *counters, gint count)
+{
+	gint                             i, max_len = 24, l;
+	struct rspamd_client_counter   *cur;
+	gchar                            fmt_buf[32], dash_buf[82];
+
+	/* Find maximum width of symbol's name */
+	for (i = 0; i < count; i ++) {
+		cur = &counters[i];
+		l = strlen (cur->name);
+		if (l > max_len) {
+			max_len = MIN (40, l);
+		}
+	}
+
+	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3s | %%%ds | %%6s | %%9s | %%9s |\\n", max_len);
+	memset (dash_buf, '-', 40 + max_len);
+	dash_buf[40 + max_len] = '\n';
+	dash_buf[40 + max_len + 1] = '\0';
+
+	PRINT_FUNC ("Symbols cache\n");
+	if (tty) {
+		printf ("\033[1m");
+	}
+	PRINT_FUNC (dash_buf);
+	PRINT_FUNC (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Avg. time");
+	if (tty) {
+		printf ("\033[0m");
+	}
+	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3d | %%%ds | %%6.1f | %%9d | %%9.3f |\\n", max_len);
+	for (i = 0; i < count; i ++) {
+		PRINT_FUNC (dash_buf);
+		PRINT_FUNC (fmt_buf, i, cur->name, cur->weight, cur->frequency, cur->time);
+	}
+	PRINT_FUNC (dash_buf);
+}
+
+static void
+show_rspamd_counters (void)
+{
+	GError                          *err = NULL;
+	GList							*results, *cur;
+	struct rspamd_controller_result	*res;
+	gchar                          **str_counters, **tmpv;
+	gint                             counters_num, i;
+	struct rspamd_client_counter   *counters = NULL, *cur_counter;
+
+	/* Add server */
+	add_rspamd_server (TRUE);
+
+	results = rspamd_controller_command_simple (client, "counters", password, NULL, &err);
+	if (results == NULL || err != NULL) {
+		if (err != NULL) {
+			fprintf (stderr, "cannot perform command: %s\n", err->message);
+		}
+		else {
+			fprintf (stderr, "cannot perform command:\n");
+		}
+		exit (EXIT_FAILURE);
+	}
+	else {
+		cur = results;
+		while (cur) {
+			res = cur->data;
+			if (tty) {
+				printf ("\033[1m");
+			}
+			PRINT_FUNC ("Results for host: %s: %d, %s\n", res->server_name, res->code, res->result->str);
+			if (tty) {
+				printf ("\033[0m");
+			}
+			str_counters = g_strsplit_set (res->data->str, "\n\r", -1);
+			if (str_counters != NULL) {
+				counters_num = g_strv_length (str_counters);
+				if (counters_num > 0) {
+					counters = g_malloc0 (counters_num * sizeof (struct rspamd_client_counter));
+					for (i = 0; i < counters_num; i ++) {
+						cur_counter = &counters[i];
+						tmpv = g_strsplit_set (str_counters[i], " \t", 4);
+						if (g_strv_length (tmpv) == 4) {
+							rspamd_strlcpy (cur_counter->name, tmpv[0], sizeof (cur_counter->name));
+							cur_counter->weight = strtod (tmpv[1], NULL);
+							cur_counter->frequency = strtoul (tmpv[2], NULL, 10);
+							cur_counter->time = strtod (tmpv[3], NULL);
+						}
+						else {
+							rspamd_strlcpy (cur_counter->name, "Unknown", sizeof (cur_counter->name));
+						}
+						g_strfreev (tmpv);
+					}
+					print_rspamd_counters (counters, counters_num);
+				}
+				g_strfreev (str_counters);
 			}
 			rspamd_free_controller_result (res);
 			cur = g_list_next (cur);
@@ -736,10 +849,13 @@ main (gint argc, gchar **argv, gchar **env)
 				fuzzy_rspamd_stdin (TRUE);
 				break;
 			case RSPAMC_COMMAND_STAT:
-				rspamd_do_controller_simple_command ("stat", NULL);
+				rspamc_do_controller_simple_command ("stat", NULL);
+				break;
+			case RSPAMC_COMMAND_COUNTERS:
+				show_rspamd_counters ();
 				break;
 			case RSPAMC_COMMAND_UPTIME:
-				rspamd_do_controller_simple_command ("uptime", NULL);
+				rspamc_do_controller_simple_command ("uptime", NULL);
 				break;
 			default:
 				fprintf (stderr, "invalid arguments\n");
@@ -767,7 +883,7 @@ main (gint argc, gchar **argv, gchar **env)
 					g_hash_table_insert (kwattrs, "name", argv[2]);
 					g_hash_table_insert (kwattrs, "value", argv[3]);
 				}
-				rspamd_do_controller_simple_command (cmd == RSPAMC_COMMAND_ADD_SYMBOL ? "add_symbol" : "add_action", kwattrs);
+				rspamc_do_controller_simple_command (cmd == RSPAMC_COMMAND_ADD_SYMBOL ? "add_symbol" : "add_action", kwattrs);
 			}
 			else {
 				for (i = 2; i < argc; i ++) {
