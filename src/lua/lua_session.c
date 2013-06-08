@@ -301,14 +301,14 @@ luaopen_session (lua_State * L)
 	lua_pushstring (L, "rspamd{session}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, sessionlib_m, 0);
-	luaL_openlib(L, "rspamd_session", sessionlib_f, 0);
+	luaL_register (L, NULL, sessionlib_m);
+	luaL_register (L, "rspamd_session", sessionlib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Simple event class */
 	lua_newclass (L, "rspamd{event}", eventlib_m);
-	luaL_openlib (L, "rspamd_event", null_reg, 0);
+	luaL_register (L, "rspamd_event", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

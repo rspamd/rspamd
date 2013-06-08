@@ -412,7 +412,7 @@ gint
 luaopen_classifier (lua_State * L)
 {
 	lua_newclass (L, "rspamd{classifier}", classifierlib_m);
-	luaL_openlib (L, "rspamd_classifier", null_reg, 0);
+	luaL_register (L, "rspamd_classifier", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -423,7 +423,7 @@ gint
 luaopen_statfile (lua_State * L)
 {
 	lua_newclass (L, "rspamd{statfile}", statfilelib_m);
-	luaL_openlib (L, "rspamd_statfile", null_reg, 0);
+	luaL_register (L, "rspamd_statfile", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

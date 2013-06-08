@@ -960,7 +960,7 @@ gint
 luaopen_config (lua_State * L)
 {
 	lua_newclass (L, "rspamd{config}", configlib_m);
-	luaL_openlib (L, "rspamd_config", null_reg, 0);
+	luaL_register (L, "rspamd_config", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -971,7 +971,7 @@ gint
 luaopen_radix (lua_State * L)
 {
 	lua_newclass (L, "rspamd{radix}", radixlib_m);
-	luaL_openlib (L, "rspamd_radix", null_reg, 0);
+	luaL_register (L, "rspamd_radix", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -982,7 +982,7 @@ gint
 luaopen_hash_table (lua_State * L)
 {
 	lua_newclass (L, "rspamd{hash_table}", hashlib_m);
-	luaL_openlib (L, "rspamd_hash_table", null_reg, 0);
+	luaL_register (L, "rspamd_hash_table", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -1001,8 +1001,8 @@ luaopen_trie (lua_State * L)
 	lua_pushstring (L, "rspamd{trie}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, trielib_m, 0);
-	luaL_openlib(L, "rspamd_trie", trielib_f, 0);
+	luaL_register (L, NULL, trielib_m);
+	luaL_register (L, "rspamd_trie", trielib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

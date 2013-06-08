@@ -210,8 +210,7 @@ lua_newclass (lua_State * L, const gchar *classname, const struct luaL_reg *meth
 	lua_pushstring (L, "class");	/* mt,"__index",it,"class" */
 	lua_pushstring (L, classname);	/* mt,"__index",it,"class",classname */
 	lua_rawset (L, -3);			/* mt,"__index",it */
-
-	luaL_openlib (L, NULL, methods, 0);
+	luaL_register (L, NULL, methods);
 }
 
 /**
@@ -221,7 +220,7 @@ void
 lua_newclass_full (lua_State *L, const gchar *classname, const gchar *static_name, const struct luaL_reg *methods, const struct luaL_reg *func)
 {
 	lua_newclass (L, classname, methods);
-	luaL_openlib(L, static_name, func, 0);
+	luaL_register (L, static_name, func);
 }
 
 gint
@@ -358,7 +357,7 @@ lua_logger_debug (lua_State * L)
 gint
 luaopen_rspamd (lua_State * L)
 {
-	luaL_openlib (L, "rspamd", null_reg, 0);
+	luaL_register (L, "rspamd", null_reg);
 	/* make version string available to scripts */
 	lua_pushstring (L, "_VERSION");
 	lua_pushstring (L, RVERSION);
@@ -371,8 +370,7 @@ static gint
 luaopen_logger (lua_State * L)
 {
 
-	luaL_openlib (L, "rspamd_logger", loggerlib_f, 0);
-
+	luaL_register (L, "rspamd_logger", loggerlib_f);
 	return 1;
 }
 
@@ -380,7 +378,7 @@ luaopen_logger (lua_State * L)
 static gint
 luaopen_util (lua_State *L)
 {
-	luaL_openlib (L, "rspamd_util", utillib_f, 0);
+	luaL_register (L, "rspamd_util", utillib_f);
 
 	return 1;
 }
@@ -406,7 +404,7 @@ init_lua (struct config_file *cfg)
 {
 	lua_State                      *L;
 
-	L = lua_open ();
+	L = luaL_newstate ();
 	luaL_openlibs (L);
 
 	(void)luaopen_rspamd (L);

@@ -266,8 +266,8 @@ luaopen_glib_regexp (lua_State * L)
 	lua_pushstring (L, "rspamd{regexp}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, regexplib_m, 0);
-	luaL_openlib(L, "regexp", regexplib_f, 0);
+	luaL_register (L, NULL, regexplib_m);
+	luaL_register (L, "regexp", regexplib_f);
 
 	regexp_static_pool = memory_pool_new (memory_pool_get_size ());
 

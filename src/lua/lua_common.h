@@ -10,6 +10,27 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+#ifndef lua_open
+#define lua_open()	luaL_newstate()
+#endif
+
+#ifndef luaL_reg
+#define luaL_reg	luaL_Reg
+#endif
+
+#if LUA_VERSION_NUM > 501
+static inline void
+luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
+{
+    lua_newtable (L);
+    luaL_setfuncs (L, methods, 0);
+    if (name != NULL) {
+    	lua_pushvalue (L, -1);
+    	lua_setglobal (L, name);
+    }
+}
+#endif
+
 /* Interface definitions */
 #define LUA_FUNCTION_DEF(class, name) static gint lua_##class##_##name(lua_State *L)
 #define LUA_INTERFACE_DEF(class, name) { #name, lua_##class##_##name }

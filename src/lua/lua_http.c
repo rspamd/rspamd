@@ -622,7 +622,7 @@ gint
 luaopen_http (lua_State * L)
 {
 
-	luaL_openlib (L, "rspamd_http", httplib_m, 0);
+	luaL_register (L, "rspamd_http", httplib_m);
 
 	return 1;
 }

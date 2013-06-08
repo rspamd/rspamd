@@ -104,7 +104,7 @@ static gint
 luaopen_lua_worker (lua_State * L)
 {
 	lua_newclass (L, "rspamd{worker}", lua_workerlib_m);
-	luaL_openlib (L, "rspamd_worker", null_reg, 0);
+	luaL_register (L, "rspamd_worker", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

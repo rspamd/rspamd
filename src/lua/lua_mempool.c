@@ -228,8 +228,8 @@ luaopen_mempool (lua_State * L)
 	lua_pushstring (L, "rspamd{mempool}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, mempoollib_m, 0);
-	luaL_openlib(L, "rspamd_mempool", mempoollib_f, 0);
+	luaL_register (L, NULL, mempoollib_m);
+	luaL_register (L, "rspamd_mempool", mempoollib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

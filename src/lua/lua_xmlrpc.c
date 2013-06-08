@@ -552,7 +552,7 @@ gint
 luaopen_xmlrpc (lua_State * L)
 {
 
-	luaL_openlib (L, "rspamd_xmlrpc", xmlrpclib_m, 0);
+	luaL_register (L, "rspamd_xmlrpc", xmlrpclib_m);
 
 	return 1;
 }

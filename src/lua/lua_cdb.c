@@ -158,8 +158,8 @@ luaopen_cdb (lua_State * L)
 	lua_pushstring (L, "rspamd{cdb}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, cdblib_m, 0);
-	luaL_openlib (L, "cdb", cdblib_f, 0);
+	luaL_register (L, NULL, cdblib_m);
+	luaL_register (L, "cdb", cdblib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

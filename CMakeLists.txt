@@ -373,10 +373,60 @@ ENDIF(NOT LOCALSTATES_PREFIX)
 
 # Now find libraries and headers
 
-INCLUDE(FindLua51)
+# Find lua libraries
+IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
+	SET(LUA_VERSION_MAJOR "5")
+	SET(LUA_VERSION_MINOR "1")
+ENDIF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
+
+FIND_PATH(LUA_INCLUDE_DIR lua.h
+  HINTS
+  $ENV{LUA_DIR}
+  PATH_SUFFIXES "include/lua${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}" 
+  				"include/lua${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}" 
+  				include/lua include
+  PATHS
+  /usr/local
+  /usr
+  ~/Library/Frameworks
+  /Library/Frameworks
+  /sw # Fink
+  /opt/local # DarwinPorts
+  /opt/csw # Blastwave
+  /opt
+)
+
+FIND_LIBRARY(LUA_LIBRARY 
+  NAMES lua 
+  		"lua${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}"
+  		"lua${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}" 
+  		"lua-${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
+  HINTS
+  $ENV{LUA_DIR}
+  PATH_SUFFIXES lib64 lib
+  PATHS
+  /usr/local
+  /usr
+  ~/Library/Frameworks
+  /Library/Frameworks
+  /sw
+  /opt/local
+  /opt/csw
+  /opt
+  DOC "Lua library"
+)
+
+IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
+	SET(LUA_FOUND 1)
+ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
+
 # Check for luajit
 IF(ENABLE_LUAJIT MATCHES "ON")
-    FIND_LIBRARY(LUAJIT_LIBRARY NAMES luajit51 luajit5.1 luajit-5.1 luajit
+    FIND_LIBRARY(LUAJIT_LIBRARY NAMES
+    			"luajit${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}"
+    			"luajit${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
+    			"luajit-${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
+    			 luajit
                   HINTS
                   $ENV{LUA_DIR}
                   PATH_SUFFIXES lib64 lib
@@ -396,13 +446,7 @@ IF(ENABLE_LUAJIT MATCHES "ON")
 ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
 IF(NOT LUA_FOUND)
-    # Automatic check failed, check passed variable
-    IF(LUA_INCLUDE_DIR)
-        INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
-        SET(WITH_LUA 1)
-    ELSE(LUA_INCLUDE_DIR)
-        MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
-    ENDIF(LUA_INCLUDE_DIR)
+	MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
 ELSE(NOT LUA_FOUND)
     SET(WITH_LUA 1)
     INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")

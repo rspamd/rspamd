@@ -2051,7 +2051,7 @@ gint
 luaopen_textpart (lua_State * L)
 {
 	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
-	luaL_openlib (L, "rspamd_textpart", null_reg, 0);
+	luaL_register (L, "rspamd_textpart", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -2062,7 +2062,7 @@ gint
 luaopen_mimepart (lua_State * L)
 {
 	lua_newclass (L, "rspamd{mimepart}", mimepartlib_m);
-	luaL_openlib (L, "rspamd_mimepart", null_reg, 0);
+	luaL_register (L, "rspamd_mimepart", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -2073,7 +2073,7 @@ gint
 luaopen_image (lua_State * L)
 {
 	lua_newclass (L, "rspamd{image}", imagelib_m);
-	luaL_openlib (L, "rspamd_image", null_reg, 0);
+	luaL_register (L, "rspamd_image", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -2084,7 +2084,7 @@ gint
 luaopen_url (lua_State * L)
 {
 	lua_newclass (L, "rspamd{url}", urllib_m);
-	luaL_openlib (L, "rspamd_url", null_reg, 0);
+	luaL_register (L, "rspamd_url", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

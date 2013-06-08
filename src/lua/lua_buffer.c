@@ -329,14 +329,14 @@ luaopen_io_dispatcher (lua_State * L)
 	lua_pushstring (L, "rspamd{io_dispatcher}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, io_dispatcherlib_m, 0);
-	luaL_openlib(L, "rspamd_io_dispatcher", io_dispatcherlib_f, 0);
+	luaL_register (L, NULL, io_dispatcherlib_m);
+	luaL_register (L, "rspamd_io_dispatcher", io_dispatcherlib_f);
 
 	lua_pop(L, 1);                      /* remove metatable from stack */
 
 	/* Simple event class */
 	lua_newclass (L, "rspamd{ev_base}", null_reg);
-	luaL_openlib (L, "rspamd_ev_base", null_reg, 0);
+	luaL_register (L, "rspamd_ev_base", null_reg);
 
 	lua_pop(L, 1);                      /* remove metatable from stack */
 

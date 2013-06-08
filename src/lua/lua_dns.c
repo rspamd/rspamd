@@ -275,8 +275,8 @@ luaopen_dns_resolver (lua_State * L)
 	lua_pushstring (L, "rspamd{resolver}");
 	lua_rawset (L, -3);
 
-	luaL_openlib (L, NULL, dns_resolverlib_m, 0);
-	luaL_openlib(L, "rspamd_resolver", dns_resolverlib_f, 0);
+	luaL_register (L, NULL, dns_resolverlib_m);
+	luaL_register (L, "rspamd_resolver", dns_resolverlib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 	return 1;	

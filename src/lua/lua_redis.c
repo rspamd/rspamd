@@ -343,7 +343,7 @@ gint
 luaopen_redis (lua_State * L)
 {
 
-	luaL_openlib (L, "rspamd_redis", redislib_m, 0);
+	luaL_register (L, "rspamd_redis", redislib_m);
 
 	return 1;
 }

@@ -204,7 +204,7 @@ gint
 luaopen_message (lua_State * L)
 {
 	lua_newclass (L, "rspamd{message}", msglib_m);
-	luaL_openlib (L, "rspamd_message", null_reg, 0);
+	luaL_register (L, "rspamd_message", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 

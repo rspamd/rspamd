@@ -175,7 +175,7 @@ task_cache_check (struct worker_task *task, struct rspamd_regexp *re)
 static gint
 luaopen_regexp (lua_State * L)
 {
-	luaL_openlib (L, "rspamd_regexp", regexplib_m, 0);
+	luaL_register (L, "rspamd_regexp", regexplib_m);
 
 	return 1;
 }
