@@ -121,7 +121,11 @@ inv_chi_square (gdouble value, gint freedom_deg)
 
 	value /= 2.;
 	errno = 0;
+#ifdef HAVE_EXPL
 	prob = expl (-value);
+#else
+	prob = exp (-value);
+#endif
 	if (errno == ERANGE) {
 		msg_err ("exp overflow");
 		return 0;
