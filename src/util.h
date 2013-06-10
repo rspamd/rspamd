@@ -315,6 +315,16 @@ void rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx);
  */
 void rspamd_rwlock_free (rspamd_rwlock_t *mtx);
 
+static inline void
+rspamd_cond_wait (GCond *cond, rspamd_mutex_t *mtx)
+{
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	g_cond_wait (cond, &mtx->mtx);
+#else
+	g_cond_wait (cond, g_static_mutex_get_mutex (&mtx->mtx));
+#endif
+}
+
 /**
  * Create new named thread
  * @param name name pattern
