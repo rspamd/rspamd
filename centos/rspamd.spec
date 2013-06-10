@@ -7,7 +7,7 @@
 %define USE_JUDY         0
 
 Name:           rspamd
-Version:        0.5.5
+Version:        0.5.6
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
@@ -127,5 +127,8 @@ fi
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
 
 %changelog
+* Mon June 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.6-1
+- Update to 0.5.6.
+
 * Sat May 25 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.5-1
 - Initial spec version.
