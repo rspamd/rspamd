@@ -1,3 +1,10 @@
+0.5.6:
+	* Fix bug with counters incrementing in rolling history
+	* Detect expl and exp2l as some systems do not have it
+	* Support input streams without Content-Length
+	* Implement counters output via rspamc and controller interface
+	* Fix bug with udp sockets in fuzzy storage
+
 0.5.5:
 	* New bayes normalizator based on inverse chi-square function
 	* Various fixes to fuzzy storage

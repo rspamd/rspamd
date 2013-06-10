@@ -123,6 +123,8 @@ inv_chi_square (gdouble value, gint freedom_deg)
 	errno = 0;
 #ifdef HAVE_EXPL
 	prob = expl (-value);
+#elif defined(HAVE_EXP2L)
+	prob = exp2l (-value);
 #else
 	prob = exp (-value);
 #endif
