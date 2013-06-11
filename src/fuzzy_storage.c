@@ -154,19 +154,73 @@ compare_nodes (gconstpointer a, gconstpointer b, gpointer unused)
 	return n1->value - n2->value;
 }
 
+/**
+ * Expire nodes from list (need to be called in tree write lock)
+ * @param to_expire nodes that should be removed (if judy it is an array of nodes,
+ * and it is array of GList * otherwise)
+ * @param expired_num number of elements to expire
+ * @param ctx context
+ */
+static void
+expire_nodes (gpointer *to_expire, gint expired_num,
+		struct rspamd_fuzzy_storage_ctx *ctx)
+{
+	gint                            i;
+	struct rspamd_fuzzy_node      *node;
+	GList                          *cur;
+	GQueue                         *head;
+
+	for (i = 0; i < expired_num; i ++) {
+#ifdef WITH_JUDY
+		PPvoid_t                        pvalue;
+		gpointer                        data;
+
+		if (ctx->use_judy) {
+			node = (struct rspamd_fuzzy_node *)to_expire[i];
+			JudySLDel (&jtree, node->h.hash_pipe, PJE0);
+			bloom_del (bf, node->h.hash_pipe);
+			g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
+
+			pvalue = JudySLGet (jtree, node->h.hash_pipe, PJE0);
+			if (pvalue) {
+				data = *pvalue;
+				JudySLDel (&jtree, node->h.hash_pipe, PJE0);
+				g_slice_free1 (sizeof (struct rspamd_fuzzy_node), data);
+				server_stat->fuzzy_hashes_expired ++;
+				server_stat->fuzzy_hashes --;
+			}
+		}
+		else {
+#endif
+		cur = (GList *)to_expire[i];
+		node = (struct rspamd_fuzzy_node *)cur->data;
+		head = hashes[node->h.block_size % BUCKETS];
+		g_queue_delete_link (head, cur);
+		bloom_del (bf, node->h.hash_pipe);
+		server_stat->fuzzy_hashes_expired++;
+		server_stat->fuzzy_hashes--;
+		g_slice_free1 (sizeof(struct rspamd_fuzzy_node), node);
+#ifdef WITH_JUDY
+		}
+#endif
+	}
+}
+
 static gpointer
 sync_cache (gpointer ud)
 {
-	struct rspamd_worker           *wrk = ud;
-	gint                            fd, i;
-	gchar                           *filename, header[4];
-	GList                          *cur, *tmp;
-	struct rspamd_fuzzy_node       *node;
+	static const int              max_expired = 8192;
+	struct rspamd_worker          *wrk = ud;
+	gint                            fd, i, expired_num = 0;
+	gchar                          *filename, header[4];
+	GList                          *cur;
+	struct rspamd_fuzzy_node      *node;
+	gpointer                       *nodes_expired = NULL;
 	guint64                         expire, now;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 #ifdef WITH_JUDY
 	PPvoid_t                        pvalue;
-	gchar                           indexbuf[1024], tmpindex[1024];
+	gchar                           indexbuf[1024];
 #endif
 
 	ctx = wrk->ctx;
@@ -217,17 +271,14 @@ sync_cache (gpointer ud)
 			while (pvalue) {
 				node = *((struct rspamd_fuzzy_node **)pvalue);
 				if (now - node->time > expire) {
-#if 0
-					/* Remove expired item */
-					rspamd_strlcpy (tmpindex, indexbuf, sizeof (tmpindex));
-					pvalue = JudySLNext (jtree, tmpindex, PJE0);
-					JudySLDel (&jtree, indexbuf, PJE0);
-					rspamd_strlcpy (indexbuf, tmpindex, sizeof (indexbuf));
-					bloom_del (bf, node->h.hash_pipe);
-					server_stat->fuzzy_hashes_expired ++;
-					server_stat->fuzzy_hashes --;
-					g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
-#endif
+					if (nodes_expired == NULL) {
+						nodes_expired = g_malloc (max_expired * sizeof (gpointer));
+					}
+
+					if (expired_num < max_expired) {
+						nodes_expired[expired_num ++] = node;
+					}
+					pvalue = JudySLNext (jtree, indexbuf, PJE0);
 					continue;
 				}
 				if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
@@ -254,16 +305,14 @@ sync_cache (gpointer ud)
 			while (cur) {
 				node = cur->data;
 				if (now - node->time > expire) {
-#if 0
-					/* Remove expired item */
-					tmp = cur;
+					if (nodes_expired == NULL) {
+						nodes_expired = g_malloc (max_expired * sizeof (gpointer));
+					}
+
+					if (expired_num < max_expired) {
+						nodes_expired[expired_num ++] = cur;
+					}
 					cur = g_list_next (cur);
-					g_queue_delete_link (hashes[i], tmp);
-					bloom_del (bf, node->h.hash_pipe);
-					server_stat->fuzzy_hashes_expired++;
-					server_stat->fuzzy_hashes--;
-					g_slice_free1 (sizeof(struct rspamd_fuzzy_node), node);
-#endif
 					continue;
 				}
 				if (write (fd, node, sizeof(struct rspamd_fuzzy_node)) == -1) {
@@ -279,7 +328,16 @@ sync_cache (gpointer ud)
 	}
 #endif
 
+		/* Now try to expire some nodes */
+		if (expired_num > 0) {
+			rspamd_rwlock_writer_lock (ctx->tree_lock);
+			expire_nodes (nodes_expired, expired_num, ctx);
+			rspamd_rwlock_writer_unlock (ctx->tree_lock);
+		}
 end:
+		if (nodes_expired != NULL) {
+			g_free (nodes_expired);
+		}
 		(void) unlock_file (fd, FALSE);
 		close (fd);
 
