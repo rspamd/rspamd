@@ -334,6 +334,7 @@ sync_cache (gpointer ud)
 			expire_nodes (nodes_expired, expired_num, ctx);
 			rspamd_rwlock_writer_unlock (ctx->tree_lock);
 		}
+		mods = 0;
 end:
 		if (nodes_expired != NULL) {
 			g_free (nodes_expired);
