@@ -198,6 +198,10 @@
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine PARAM_H_HAS_BITSET  1
 
+#define ETC_PREFIX        "${ETC_PREFIX}"
+#define LOCALSTATES_PREFIX "${LOCALSTATES_PREFIX}"
+#define CMAKE_PREFIX "${CMAKE_INSTALL_PREFIX}"
+
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RID               "${ID}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
@@ -440,9 +444,6 @@ typedef off_t goffset;
 #ifndef NO_GMIME
 #include <gmime/gmime.h>
 #endif
-
-#define CMAKE_PREFIX "${CMAKE_INSTALL_PREFIX}"
-#define ETC_PREFIX "${ETC_PREFIX}"
 
 /* Forwarded declaration */
 struct module_ctx;

@@ -481,6 +481,14 @@ lua_check_condition (struct config_file *cfg, const gchar *condition)
 	lua_pushstring (L, "");
 	lua_setglobal (L, "osrelease");
 #endif
+
+	/* Rspamd paths */
+	lua_newtable (L);
+	lua_set_table_index (L, "etcdir", ETC_PREFIX);
+	lua_set_table_index (L, "prefix", CMAKE_PREFIX);
+	lua_set_table_index (L, "localstatesdir", LOCALSTATES_PREFIX);
+	lua_setglobal (L, "rspamd_paths");
+
 	/* Make fake string */
 	hostlen = sizeof (FAKE_RES_VAR "=") + strlen (condition);
 	condbuf = g_malloc (hostlen);
