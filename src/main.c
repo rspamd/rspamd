@@ -37,6 +37,7 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #endif
 
 /* 2 seconds to fork new process in place of dead one */
@@ -893,8 +894,10 @@ main (gint argc, gchar **argv, gchar **env)
 	setlocale (LC_TIME, "C");
 #endif
 
-	/* Init random generator */
 #ifdef HAVE_OPENSSL
+	ERR_load_crypto_strings ();
+
+	/* Init random generator */
 	if (RAND_bytes (rand_bytes, sizeof (rand_bytes)) != 1) {
 		msg_err ("cannot seed random generator using openssl: %s, using time", ERR_error_string (ERR_get_error (), NULL));
 		g_random_set_seed (time (NULL));
@@ -903,6 +906,9 @@ main (gint argc, gchar **argv, gchar **env)
 		memcpy (&rand_seed, rand_bytes, sizeof (guint32));
 		g_random_set_seed (rand_seed);
 	}
+
+	OpenSSL_add_all_algorithms ();
+	OpenSSL_add_all_ciphers ();
 #endif
 
 	/* First set logger to console logger */
@@ -1173,6 +1179,11 @@ main (gint argc, gchar **argv, gchar **env)
 	free_config (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);
 	g_free (rspamd_main);
+
+#ifdef HAVE_OPENSSL
+	EVP_cleanup ();
+	ERR_free_strings ();
+#endif
 
 	return (res);
 }

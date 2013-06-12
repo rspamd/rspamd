@@ -14,7 +14,8 @@ SET(LUASRC			  lua_common.c
 					  lua_mempool.c
 					  lua_session.c
 					  lua_buffer.c
-					  lua_dns.c)
+					  lua_dns.c
+					  lua_rsa.c)
 
 ADD_LIBRARY(rspamd-lua ${LINK_TYPE} ${LUASRC})
 SET_TARGET_PROPERTIES(rspamd-lua PROPERTIES VERSION ${RSPAMD_VERSION})
