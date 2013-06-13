@@ -122,6 +122,7 @@ gint luaopen_mempool (lua_State * L);
 gint luaopen_session (lua_State * L);
 gint luaopen_io_dispatcher (lua_State * L);
 gint luaopen_dns_resolver (lua_State * L);
+gint luaopen_rsa (lua_State * L);
 
 gint lua_call_filter (const gchar *function, struct worker_task *task);
 gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number);

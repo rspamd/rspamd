@@ -63,6 +63,7 @@ GQueue                         *signals_info = NULL;
 static gboolean                 config_test = FALSE;
 static gboolean                 no_fork = FALSE;
 static gchar                  **cfg_names = NULL;
+static gchar                  **lua_tests = NULL;
 static gchar                   *rspamd_user = NULL;
 static gchar                   *rspamd_group = NULL;
 static gchar                   *rspamd_pidfile = NULL;
@@ -95,6 +96,7 @@ static GOptionEntry entries[] =
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
   { "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure, "Ignore running workers as privileged users (insecure)", NULL },
+  { "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &cfg_names, "Specify lua file(s) to test", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -826,22 +828,55 @@ print_symbols_cache (struct config_file *cfg)
 	}
 }
 
+static gint
+perform_lua_tests (struct config_file *cfg)
+{
+	gint                            i, tests_num, res = EXIT_SUCCESS;
+	lua_State                      *L = cfg->lua_state;
+
+	tests_num = g_strv_length (lua_tests);
+
+	for (i = 0; i < tests_num; i ++) {
+		if (luaL_loadfile (L, lua_tests[i]) != 0) {
+			msg_err ("load of %s failed: %s", lua_tests[i], lua_tostring (L, -1));
+			res = EXIT_FAILURE;
+			continue;
+		}
+		/* do the call (0 arguments, N result) */
+		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
+			msg_info ("init of %s failed: %s", lua_tests[i], lua_tostring (L, -1));
+			res = EXIT_FAILURE;
+			continue;
+		}
+		if (lua_gettop (L) != 0) {
+			if (lua_tonumber (L, -1) == -1) {
+				msg_info ("%s returned -1 that indicates configuration error", lua_tests[i]);
+				res = EXIT_FAILURE;
+				continue;
+			}
+			lua_pop (L, lua_gettop (L));
+		}
+	}
+
+	return res;
+}
 
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint                            res = 0, i;
+	gint                             res = 0, i;
 	struct sigaction                signals;
 	struct rspamd_worker           *cur;
 	struct rlimit                   rlim;
 	struct filter                  *filt;
-	pid_t                           wrk;
-	GList                          *l;
-	worker_t                      **pworker;
-	GQuark							type;
+	pid_t                            wrk;
+	GList                           *l;
+	worker_t                       **pworker;
+	GQuark                           type;
+	gboolean                         lua_test;
 #ifdef HAVE_OPENSSL
-	gchar							rand_bytes[sizeof (guint32)];
-	guint32							rand_seed;
+	gchar                            rand_bytes[sizeof (guint32)];
+	guint32                          rand_seed;
 #endif
 
 #ifdef HAVE_SA_SIGINFO
@@ -955,7 +990,9 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 
-	if (rspamd_main->cfg->config_test || dump_vars || dump_cache) {
+	lua_test = (lua_tests != NULL && lua_tests[0] != NULL);
+
+	if (rspamd_main->cfg->config_test || dump_vars || dump_cache || lua_test) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
@@ -989,6 +1026,9 @@ main (gint argc, gchar **argv, gchar **env)
 		if (dump_cache) {
 			print_symbols_cache (rspamd_main->cfg);
 			exit (EXIT_SUCCESS);
+		}
+		if (lua_test) {
+			exit (perform_lua_tests (rspamd_main->cfg));
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
