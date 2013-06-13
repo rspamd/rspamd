@@ -96,7 +96,7 @@ static GOptionEntry entries[] =
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
   { "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure, "Ignore running workers as privileged users (insecure)", NULL },
-  { "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &cfg_names, "Specify lua file(s) to test", NULL },
+  { "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_tests, "Specify lua file(s) to test", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -832,16 +832,26 @@ static gint
 perform_lua_tests (struct config_file *cfg)
 {
 	gint                            i, tests_num, res = EXIT_SUCCESS;
+	gchar                          *cur_script;
 	lua_State                      *L = cfg->lua_state;
 
 	tests_num = g_strv_length (lua_tests);
 
 	for (i = 0; i < tests_num; i ++) {
+
 		if (luaL_loadfile (L, lua_tests[i]) != 0) {
 			msg_err ("load of %s failed: %s", lua_tests[i], lua_tostring (L, -1));
 			res = EXIT_FAILURE;
 			continue;
 		}
+
+		cur_script = g_strdup (lua_tests[i]);
+		lua_pushstring (L, cur_script);
+		lua_setglobal (L, "test_script");
+		lua_pushstring (L, dirname (cur_script));
+		lua_setglobal (L, "test_dir");
+		g_free (cur_script);
+
 		/* do the call (0 arguments, N result) */
 		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
 			msg_info ("init of %s failed: %s", lua_tests[i], lua_tostring (L, -1));
@@ -873,7 +883,6 @@ main (gint argc, gchar **argv, gchar **env)
 	GList                           *l;
 	worker_t                       **pworker;
 	GQuark                           type;
-	gboolean                         lua_test;
 #ifdef HAVE_OPENSSL
 	gchar                            rand_bytes[sizeof (guint32)];
 	guint32                          rand_seed;
@@ -980,6 +989,11 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->cfg->cache->cfg = rspamd_main->cfg;
 	rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
+	/* If we want to test lua skip everything except it */
+	if (lua_tests != NULL && lua_tests[0] != NULL) {
+		exit (perform_lua_tests (rspamd_main->cfg));
+	}
+
 	/* Load config */
 	if (! load_rspamd_config (rspamd_main->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
@@ -990,9 +1004,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 
-	lua_test = (lua_tests != NULL && lua_tests[0] != NULL);
-
-	if (rspamd_main->cfg->config_test || dump_vars || dump_cache || lua_test) {
+	if (rspamd_main->cfg->config_test || dump_vars || dump_cache) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
@@ -1026,9 +1038,6 @@ main (gint argc, gchar **argv, gchar **env)
 		if (dump_cache) {
 			print_symbols_cache (rspamd_main->cfg);
 			exit (EXIT_SUCCESS);
-		}
-		if (lua_test) {
-			exit (perform_lua_tests (rspamd_main->cfg));
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
