@@ -84,13 +84,13 @@ lua_check_rsa_key (lua_State * L, int pos)
 	return ud ? *((RSA **)ud) : NULL;
 }
 
-static gpointer
+static f_str_t *
 lua_check_rsa_sign (lua_State * L, int pos)
 {
 	void                           *ud = luaL_checkudata (L, pos, "rspamd{rsa_signature}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'rsa_signature' expected");
-	return ud ? *((gpointer *)ud) : NULL;
+	return ud ? *((f_str_t **)ud) : NULL;
 }
 
 static gint
@@ -171,33 +171,37 @@ lua_rsa_key_gc (lua_State *L)
 static gint
 lua_rsa_signature_load (lua_State *L)
 {
-	gchar *sig, **psig;
+	f_str_t *sig, **psig;
 	const gchar *filename;
-	FILE *f;
-	gint siglen;
+	gpointer data;
+	int fd;
+	struct stat st;
 
-	siglen = g_checksum_type_get_length (G_CHECKSUM_SHA256);
 	filename = luaL_checkstring (L, 1);
 	if (filename != NULL) {
-		f = fopen (filename, "r");
-		if (f == NULL) {
+		fd = open (filename, O_RDONLY);
+		if (fd == -1) {
 			msg_err ("cannot open signature file: %s, %s", filename, strerror (errno));
 			lua_pushnil (L);
 		}
 		else {
-			sig = g_malloc (siglen * 2 + 1);
-			if (fread (sig, siglen * 2, 1, f) == 1) {
-				sig[siglen * 2] = '\0';
-				psig = lua_newuserdata (L, sizeof (gchar *));
-				lua_setclass (L, "rspamd{rsa_signature}", -1);
-				*psig = sig;
-			}
-			else {
-				msg_err ("cannot read signature file: %s, %s", filename, strerror (errno));
-				g_free (sig);
+			sig = g_malloc (sizeof (f_str_t));
+			if (fstat (fd, &st) == -1 ||
+					(data = mmap (NULL,  st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+				msg_err ("cannot mmap file %s: %s", filename, strerror (errno));
 				lua_pushnil (L);
 			}
-			fclose (f);
+			else {
+				sig->size = st.st_size;
+				sig->len = sig->size;
+				sig->begin = g_malloc (sig->len);
+				memcpy (sig->begin, data, sig->len);
+				psig = lua_newuserdata (L, sizeof (f_str_t *));
+				lua_setclass (L, "rspamd{rsa_signature}", -1);
+				*psig = sig;
+				munmap (data, st.st_size);
+			}
+			close (fd);
 		}
 	}
 	else {
@@ -209,26 +213,19 @@ lua_rsa_signature_load (lua_State *L)
 static gint
 lua_rsa_signature_create (lua_State *L)
 {
-	gchar *sig, **psig;
+	f_str_t *sig, **psig;
 	const gchar *data;
-	guint siglen;
 
-	siglen = g_checksum_type_get_length (G_CHECKSUM_SHA256);
 	data = luaL_checkstring (L, 1);
 	if (data != NULL) {
-		sig = g_malloc (siglen * 2 + 1);
-		if (strlen (data) == siglen * 2) {
-			memcpy (sig, data, siglen * 2);
-			sig[siglen * 2] = '\0';
-			psig = lua_newuserdata (L, sizeof (gchar *));
-			lua_setclass (L, "rspamd{rsa_signature}", -1);
-			*psig = sig;
-		}
-		else {
-			msg_err ("cannot read signature string: %s", data);
-			g_free (sig);
-			lua_pushnil (L);
-		}
+		sig = g_malloc (sizeof (f_str_t));
+		sig->len = strlen (data);
+		sig->size = sig->len;
+		sig->begin = g_malloc (sig->len);
+		memcpy (sig->begin, data, sig->len);
+		psig = lua_newuserdata (L, sizeof (f_str_t *));
+		lua_setclass (L, "rspamd{rsa_signature}", -1);
+		*psig = sig;
 	}
 
 	return 1;
@@ -237,9 +234,12 @@ lua_rsa_signature_create (lua_State *L)
 static gint
 lua_rsa_signature_gc (lua_State *L)
 {
-	gpointer sig = lua_check_rsa_sign (L, 1);
+	f_str_t *sig = lua_check_rsa_sign (L, 1);
 
 	if (sig != NULL) {
+		if (sig->begin != NULL) {
+			g_free (sig->begin);
+		}
 		g_free (sig);
 	}
 
@@ -260,12 +260,10 @@ static gint
 lua_rsa_check_memory (lua_State *L)
 {
 	RSA *rsa;
-	gpointer signature;
+	f_str_t *signature;
 	const gchar *data;
 	gchar *data_sig;
-	gint ret, siglen;
-
-	siglen = g_checksum_type_get_length (G_CHECKSUM_SHA256);
+	gint ret;
 
 	rsa = lua_check_rsa_key (L, 1);
 	signature = lua_check_rsa_sign (L, 2);
@@ -273,7 +271,7 @@ lua_rsa_check_memory (lua_State *L)
 
 	if (rsa != NULL && signature != NULL && data != NULL) {
 		data_sig = g_compute_checksum_for_string (G_CHECKSUM_SHA256, data, -1);
-		ret = RSA_verify (NID_sha1, signature, siglen * 2, data_sig, strlen (data_sig), rsa);
+		ret = RSA_verify (NID_sha1, signature->begin, signature->len, data_sig, strlen (data_sig), rsa);
 		if (ret == 0) {
 			lua_pushboolean (L, FALSE);
 		}
@@ -302,14 +300,11 @@ static gint
 lua_rsa_check_file (lua_State *L)
 {
 	RSA *rsa;
-	gpointer signature;
+	f_str_t *signature;
 	const gchar *filename;
 	gchar *data = NULL, *data_sig;
-	gint ret, siglen;
-	gint fd;
+	gint ret, fd;
 	struct stat st;
-
-	siglen = g_checksum_type_get_length (G_CHECKSUM_SHA256);
 
 	rsa = lua_check_rsa_key (L, 1);
 	signature = lua_check_rsa_sign (L, 2);
@@ -329,7 +324,8 @@ lua_rsa_check_file (lua_State *L)
 			}
 			else {
 				data_sig = g_compute_checksum_for_data (G_CHECKSUM_SHA256, data, st.st_size);
-				ret = RSA_verify (NID_sha1, signature, siglen * 2, data_sig, strlen (data_sig), rsa);
+				ret = RSA_verify (NID_sha1, signature->begin, signature->len,
+						data_sig, strlen (data_sig), rsa);
 				if (ret == 0) {
 					lua_pushboolean (L, FALSE);
 				}
