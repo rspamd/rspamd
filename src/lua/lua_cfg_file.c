@@ -81,13 +81,13 @@ lua_process_module (lua_State *L, const gchar *param, struct config_file *cfg)
 		new_module = TRUE;
 	}
 
-	/* Now iterate throught module table */
+	/* Now iterate through module table */
 	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 		/* key - -2, value - -1 */
 		name = luaL_checkstring (L, -2);
 		if (name != NULL) {
 			lua_check_element (cfg->cfg_pool, name, &cur_opt, &cur);
-			lua_process_element (cfg, name, cur, -1);
+			lua_process_element (cfg, name, param, cur, -1, TRUE);
 			g_hash_table_insert (cfg->modules_opts, (gpointer)param, cur_opt);
 		}
 	}
@@ -184,12 +184,17 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 
 /* Process single element */
 void
-lua_process_element (struct config_file *cfg, const gchar *name, struct module_opt *opt, gint idx) 
+lua_process_element (struct config_file *cfg, const gchar *name,
+		const gchar *module_name, struct module_opt *opt, gint idx, gboolean allow_meta)
 {
 	lua_State                            *L = cfg->lua_state;
-	gint                            t;
-	double                               *num;
+	gint                                  t;
+	double                              *num;
 	gboolean                             *flag;
+	GList                                *module_metas, *cur_meta;
+	struct module_meta_opt              *meta_opt, *new = NULL;
+	const gchar                         *meta_name;
+	struct module_opt                   *new_opt;
 	
 	t = lua_type (L, idx);
 	/* Handle type */
@@ -214,8 +219,47 @@ lua_process_element (struct config_file *cfg, const gchar *name, struct module_o
 			opt->actual_data = memory_pool_strdup (cfg->cfg_pool, name);
 			opt->lua_type = LUA_VAR_FUNCTION;
 			break;
+		case LUA_TTABLE:
+			/* Handle meta option if possible */
+			if (!allow_meta) {
+				msg_warn ("meta options cannot be nested");
+				return;
+			}
+			meta_name = lua_get_table_index_str (L, "name");
+			/* Meta option should not be handled by a normal option */
+			opt->lua_type = LUA_VAR_UNKNOWN;
+			if (meta_name == NULL) {
+				msg_warn ("table parameters must have 'name' attribute to be defined");
+			}
+			else {
+				module_metas = g_hash_table_lookup (cfg->modules_metas, module_name);
+				cur_meta = module_metas;
+				while (cur_meta) {
+					meta_opt = cur_meta->data;
+					if (g_ascii_strcasecmp (meta_opt->name, module_name) == 0) {
+						new = meta_opt;
+						break;
+					}
+					cur_meta = g_list_next (cur_meta);
+				}
+				if (new == NULL) {
+					new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_meta_opt));
+					module_metas = g_list_prepend (module_metas, new);
+					g_hash_table_insert (cfg->modules_metas, (gpointer)module_name, module_metas);
+				}
+				/* Now iterate through the table */
+				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+					/* 'key' is at index -2 and 'value' is at index -1 */
+					/* Key must be a string and value must be a table */
+					name = luaL_checkstring (L, -2);
+					if (name != NULL) {
+						lua_check_element (cfg->cfg_pool, name, &new->options, &new_opt);
+						lua_process_element (cfg, name, module_name, new_opt, -1, FALSE);
+					}
+				}
+			}
+			break;
 		case LUA_TNIL:
-		case LUA_TTABLE: 
 		case LUA_TUSERDATA:
 		case LUA_TTHREAD:
 		case LUA_TLIGHTUSERDATA:
@@ -252,7 +296,7 @@ lua_module_callback (gpointer key, gpointer value, gpointer ud)
 				/* Try to get global variable */
 				lua_getglobal (L, opt->param);
 			}
-			lua_process_element (cfg, opt->param, opt, -1);
+			lua_process_element (cfg, opt->param, key, opt, -1, TRUE);
 		}
 		cur = g_list_next (cur);
 	}

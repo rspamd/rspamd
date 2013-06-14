@@ -282,6 +282,21 @@ lua_set_table_index (lua_State * L, const gchar *index, const gchar *value)
 	lua_settable (L, -3);
 }
 
+const gchar *
+lua_get_table_index_str (lua_State *L, const gchar *index)
+{
+	const gchar *result;
+
+	lua_pushstring (L, index);
+	lua_gettable (L, -2);
+	if (!lua_isstring (L, -1)) {
+		return NULL;
+	}
+	result = lua_tostring (L, -1);
+	lua_pop (L, 1);
+	return result;
+}
+
 static void
 lua_common_log (GLogLevelFlags level, lua_State *L, const gchar *msg)
 {

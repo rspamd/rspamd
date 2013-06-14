@@ -68,6 +68,11 @@ void lua_setclass (lua_State *L, const gchar *classname, gint objidx);
 void lua_set_table_index (lua_State *L, const gchar *index, const gchar *value);
 
 /**
+ * Get string value of index in a table (return t['index'])
+ */
+const gchar * lua_get_table_index_str (lua_State *L, const gchar *index);
+
+/**
  * Convert classname to string
  */
 gint lua_class_tostring (lua_State *L);
@@ -140,7 +145,8 @@ double lua_normalizer_func (struct config_file *cfg, long double score, void *pa
 
 /* Config file functions */
 void lua_post_load_config (struct config_file *cfg);
-void lua_process_element (struct config_file *cfg, const gchar *name, struct module_opt *opt, gint idx);
+void lua_process_element (struct config_file *cfg, const gchar *name,
+		const gchar *module_name, struct module_opt *opt, gint idx, gboolean allow_meta);
 gboolean lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, 
 							enum lua_var_type expected_type, gpointer *res);
 gboolean lua_check_condition (struct config_file *cfg, const gchar *condition);

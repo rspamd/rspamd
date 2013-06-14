@@ -92,7 +92,7 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 {
 	GHashTable                    **t = st;
 	gint                            level = 0;
-	const gchar                     *p = key;
+	const gchar                   *p = key;
 	f_str_t                        *val;
 	
 

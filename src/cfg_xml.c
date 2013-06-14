@@ -2470,6 +2470,9 @@ check_module_option (const gchar *mname, const gchar *optname, const gchar *data
 			return FALSE;
 		}
 		break;
+	case MODULE_OPT_TYPE_META:
+		msg_warn ("option %s should be meta option for module %s not an ordinary one", optname, mname);
+		return FALSE;
 	}
 
 	return TRUE;
