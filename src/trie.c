@@ -21,15 +21,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * XXX: This code was derived from CamelTrie implementation (lgpl code) and
- * is subject to be rewritten completely from scratch (or from bsd grep)
- */
-
 #include "config.h"
 #include "mem_pool.h"
 #include "trie.h"
-
 
 rspamd_trie_t*
 rspamd_trie_create (gboolean icase)
@@ -51,85 +45,88 @@ rspamd_trie_create (gboolean icase)
 }
 
 /*
- * Insert a single character as level of binary trie
+ * Insert a single character as the specified level of the suffix tree
  */
 static struct rspamd_trie_state *
-rspamd_trie_insert_char (rspamd_trie_t *trie, guint depth, struct rspamd_trie_state *q, gchar c)
+rspamd_trie_insert_char (rspamd_trie_t *trie, guint depth, struct rspamd_trie_state *pos, gchar c)
 {
-	struct rspamd_trie_match     *m;
+	struct rspamd_trie_match     *new_match;
+	struct rspamd_trie_state     *new_pos;
 
-	/* Insert new match into a chain */
-	m = memory_pool_alloc (trie->pool, sizeof (struct rspamd_trie_match));
-	m->next = q->match;
-	m->c = c;
+	/* New match is inserted before pos */
+	new_match = memory_pool_alloc (trie->pool, sizeof (struct rspamd_trie_match));
+	new_match->next = pos->match;
+	new_match->c = c;
 
-	q->match = m;
-	m->state = memory_pool_alloc (trie->pool, sizeof (struct rspamd_trie_state));
-	q = m->state;
-	q->match = NULL;
-	q->fail = &trie->root;
-	q->final = 0;
-	q->id = -1;
+	/* Now set match link */
+	pos->match = new_match;
+
+	new_match->state = memory_pool_alloc (trie->pool, sizeof (struct rspamd_trie_state));
+	new_pos = new_match->state;
+	new_pos->match = NULL;
+	new_pos->fail = &trie->root;
+	new_pos->final = 0;
+	new_pos->id = -1;
 
 	if (trie->fail_states->len < depth + 1) {
-		/* Grow fail states array */
+		/* Grow fail states array if depth is more than its size */
 		guint size = trie->fail_states->len;
 
-		size = MAX (size + 64, depth + 1);
+		size = MAX (size * 2, depth + 1);
 		g_ptr_array_set_size (trie->fail_states, size);
 	}
 
-	q->next = trie->fail_states->pdata[depth];
-	trie->fail_states->pdata[depth] = q;
+	new_pos->next = trie->fail_states->pdata[depth];
+	trie->fail_states->pdata[depth] = new_pos;
 
-	return q;
+	return new_pos;
 }
 
+/* Traverse the specified node to find corresponding match */
 static inline struct rspamd_trie_match *
 check_match (struct rspamd_trie_state *s, gchar c)
 {
-	struct rspamd_trie_match         *m = s->match;
+	struct rspamd_trie_match         *match = s->match;
 
-	while (m && m->c != c) {
-		m = m->next;
+	while (match && match->c != c) {
+		match = match->next;
 	}
 
-	return m;
+	return match;
 }
 
 void
 rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 {
 	const guchar               *p =  pattern;
-	struct rspamd_trie_state   *q, *q1, *r;
+	struct rspamd_trie_state   *q, *q1, *r, *cur_node;
 	struct rspamd_trie_match   *m, *n;
 	guint                       i, depth = 0;
 	gchar                       c;
 
 	/* Insert pattern to the trie */
 
-	q = &trie->root;
+	cur_node = &trie->root;
 
 	while (*p) {
 		c = trie->icase ? g_ascii_tolower (*p) : *p;
-		m = check_match (q, c);
+		m = check_match (cur_node, c);
 		if (m == NULL) {
-			/* Insert gchar at specified level depth */
-			q = rspamd_trie_insert_char (trie, depth, q, c);
+			/* Insert a character at specified level depth */
+			cur_node = rspamd_trie_insert_char (trie, depth, cur_node, c);
 		}
 		else {
-			/* Switch current state to matched state */
-			q = m->state;
+			cur_node = m->state;
 		}
 		p ++;
 		depth ++;
 	}
 
-	q->final = depth;
-	q->id = pattern_id;
+	cur_node->final = depth;
+	cur_node->id = pattern_id;
 
 	/* Update fail states and build fail states graph */
-	/* Go throught the whole depth of prefixes */
+	/* Go through the whole depth of prefixes */
 	for (i = 0; i < trie->fail_states->len; i++) {
 		q = trie->fail_states->pdata[i];
 		while (q) {
@@ -171,39 +168,49 @@ rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 const gchar*
 rspamd_trie_lookup (rspamd_trie_t *trie, const gchar *buffer, gsize buflen, gint *matched_id)
 {
-	const guchar               *p = buffer, *prev, *pat;
-	struct rspamd_trie_state   *q;
+	const guchar               *p = buffer, *prev, *ret;
+	struct rspamd_trie_state   *cur_node;
 	struct rspamd_trie_match   *m = NULL;
 	gchar                       c;
 
 
-	q = &trie->root;
+	cur_node = &trie->root;
 	prev = p;
-	pat = p;
+	ret = p;
 
 	while (buflen) {
 		c = trie->icase ? g_ascii_tolower (*p) : *p;
 
-		while (q != NULL && (m = check_match (q, c)) == NULL) {
-			q = q->fail;
+		/* Match pattern or use fail-path to restore state */
+		while (cur_node != NULL && (m = check_match (cur_node, c)) == NULL) {
+			cur_node = cur_node->fail;
 		}
 
-		if (q == &trie->root) {
-			pat = prev;
+		/* Shift left in the text */
+		if (cur_node == &trie->root) {
+			/* 1 character pattern found */
+			ret = prev;
+		}
+		else if (cur_node == NULL) {
+			/* We have tried the pattern but eventually it was not found */
+			cur_node = &trie->root;
+			ret = p;
+			p ++;
+			prev = p;
+			buflen --;
+			continue;
 		}
 
-		if (q == NULL) {
-			q = &trie->root;
-			pat = p;
-		}
-		else if (m != NULL) {
-			q = m->state;
+		if (m != NULL) {
+			/* Match found */
+			cur_node = m->state;
 
-			if (q->final) {
-				if (matched_id) {
-					*matched_id = q->id;
+			if (cur_node->final) {
+				/* The complete pattern found */
+				if (matched_id != NULL) {
+					*matched_id = cur_node->id;
 				}
-				return (const gchar *) pat;
+				return (const gchar *) ret;
 			}
 		}
 		p ++;
