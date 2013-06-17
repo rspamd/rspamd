@@ -1230,11 +1230,11 @@ url_tld_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 
 	/* A url must be finished by tld, so it must be followed by punctuation or by space character */
 	p = pos + strlen (match->pattern);
-	if (p == end || g_ascii_isspace (*(p + 1)) || g_ascii_ispunct (*(p + 1))) {
+	if (p == end || g_ascii_isspace (*p) || g_ascii_ispunct (*p)) {
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
-	else if (*(p + 1) == '/' || *(p + 1) == ':') {
+	else if (*p == '/' || *p == ':') {
 		/* Parse arguments, ports by normal way by url default function */
 		p = match->m_begin;
 		/* Check common prefix */
