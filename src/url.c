@@ -59,6 +59,8 @@ typedef struct url_match_s {
 } url_match_t;
 
 #define URL_FLAG_NOHTML 0x1
+#define URL_FLAG_STRICT_MATCH 0x2
+
 struct url_matcher {
 	const gchar *pattern;
 	const gchar *prefix;
@@ -97,277 +99,277 @@ struct url_matcher matchers[] = {
 		{ "www.",			"http://",	url_web_start,			url_web_end,	0					},
 		{ "ftp.",			"ftp://", 	url_web_start,	 		url_web_end,	URL_FLAG_NOHTML		},
 		/* TLD domains parts */
-		{ ".ac",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ad",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ae",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".aero",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".af",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ag",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ai",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".al",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".am",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".an",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ao",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".aq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ar",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".arpa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".as",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".asia",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".at",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".au",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".aw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ax",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".az",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ba",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".be",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".biz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".br",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".by",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".bz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ca",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cat",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ch",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ci",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ck",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".co",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".com",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".coop",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".cz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".de",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".dj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".dk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".dm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".do",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".dz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ec",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".edu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ee",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".eg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".er",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".es",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".et",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".eu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".fi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".fj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".fk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".fm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".fo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".fr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ga",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ge",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gov",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".gy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".hk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".hm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".hn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".hr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ht",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".hu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".id",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ie",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".il",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".im",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".in",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".info",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".int",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".io",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".iq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ir",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".is",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".it",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".je",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".jm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".jo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".jobs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".jp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ke",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ki",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".km",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ky",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".kz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".la",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".li",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ls",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".lv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ly",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ma",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".md",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".me",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mil",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ml",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mobi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ms",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".museum",		"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".my",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".mz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".na",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".name",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".nc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ne",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".net",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".nf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ng",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ni",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".nl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".no",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".np",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".nr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".nu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".nz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".om",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".org",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pe",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ph",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pro",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ps",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".pw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".py",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".qa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".re",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ro",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".rs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ru",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".rw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".se",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".si",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".so",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".st",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".su",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".sz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".td",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tel",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".th",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".to",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".travel",		"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".tz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ua",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ug",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".uk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".us",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".uy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".uz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".va",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".vc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ve",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".vg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".vi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".vn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".vu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".wf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ws",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".xxx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".ye",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".yt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".za",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".zm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
-		{ ".zw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML		},
+		{ ".ac",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH },
+		{ ".ad",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ae",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".aero",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".af",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ag",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ai",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".al",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".am",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".an",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ao",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".aq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ar",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".arpa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".as",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".asia",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".at",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".au",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".aw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ax",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".az",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ba",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".be",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".biz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".br",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".by",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".bz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ca",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cat",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ch",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ci",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ck",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".co",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".com",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".coop",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".cz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".de",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".dj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".dk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".dm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".do",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".dz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ec",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".edu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ee",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".eg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".er",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".es",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".et",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".eu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".fi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".fj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".fk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".fm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".fo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".fr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ga",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ge",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gov",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".gy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".hk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".hm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".hn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".hr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ht",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".hu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".id",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ie",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".il",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".im",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".in",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".info",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".int",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".io",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".iq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ir",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".is",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".it",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".je",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".jm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".jo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".jobs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".jp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ke",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ki",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".km",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ky",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".kz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".la",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".li",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ls",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".lv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ly",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ma",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".md",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".me",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mil",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ml",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mo",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mobi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mq",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ms",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".museum",		"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".my",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".mz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".na",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".name",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".nc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ne",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".net",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".nf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ng",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ni",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".nl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".no",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".np",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".nr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".nu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".nz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".om",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".org",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pe",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ph",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pro",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ps",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".pw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".py",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".qa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".re",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ro",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".rs",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ru",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".rw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sa",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sb",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sd",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".se",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sh",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".si",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".so",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".st",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".su",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".sz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".td",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tel",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".th",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tj",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tl",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".to",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tp",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tr",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".travel",		"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tv",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".tz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ua",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ug",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".uk",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".us",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".uy",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".uz",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".va",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".vc",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ve",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".vg",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".vi",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".vn",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".vu",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".wf",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ws",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".xxx",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".ye",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".yt",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".za",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".zm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
+		{ ".zw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
 		/* Likely emails */
 		{ "@",				"mailto://",url_email_start,	 	url_email_end,	0					}
 };
@@ -422,13 +424,13 @@ static guchar url_scanner_table[256] = {
 
 enum {
 	IS_CTRL		= (1 << 0),
-	IS_ALPHA        = (1 << 1),
-	IS_DIGIT        = (1 << 2),
+	IS_ALPHA		= (1 << 1),
+	IS_DIGIT		= (1 << 2),
 	IS_LWSP		= (1 << 3),
-	IS_SPACE	= (1 << 4),
-	IS_SPECIAL	= (1 << 5),
-	IS_DOMAIN       = (1 << 6),
-	IS_URLSAFE      = (1 << 7)
+	IS_SPACE		= (1 << 4),
+	IS_SPECIAL		= (1 << 5),
+	IS_DOMAIN		= (1 << 6),
+	IS_URLSAFE		= (1 << 7)
 };
 
 #define is_ctrl(x) ((url_scanner_table[(guchar)(x)] & IS_CTRL) != 0)
@@ -472,18 +474,6 @@ url_strerror (enum uri_errno err)
 	return NULL;
 }
 
-static inline gint
-end_of_dir (gchar c)
-{
-	return c == POST_CHAR || c == '#' || c == ';' || c == '?';
-}
-
-static inline gint
-is_uri_dir_sep (struct uri *uri, gchar pos)
-{
-	return (pos == '/');
-}
-
 static gint
 check_uri_file (gchar *name)
 {
@@ -496,13 +486,33 @@ static gint
 url_init (void)
 {
 	guint                            i;
+	gchar                            patbuf[128];
+
 	if (url_scanner == NULL) {
 		url_scanner = g_malloc (sizeof (struct url_match_scanner));
 		url_scanner->matchers = matchers;
 		url_scanner->matchers_count = G_N_ELEMENTS (matchers);
 		url_scanner->patterns = rspamd_trie_create (TRUE);
 		for (i = 0; i < url_scanner->matchers_count; i ++) {
-			rspamd_trie_insert (url_scanner->patterns, matchers[i].pattern, i);
+			if (matchers[i].flags & URL_FLAG_STRICT_MATCH) {
+				/* Insert more specific patterns */
+
+				/* some.tld/ */
+				rspamd_snprintf (patbuf, sizeof (patbuf), "%s/", matchers[i].pattern);
+				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+				/* some.tld  */
+				rspamd_snprintf (patbuf, sizeof (patbuf), "%s ", matchers[i].pattern);
+				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+				/* some.tld: */
+				rspamd_snprintf (patbuf, sizeof (patbuf), "%s:", matchers[i].pattern);
+				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+				/* some.tld./ */
+				rspamd_snprintf (patbuf, sizeof (patbuf), "%s./", matchers[i].pattern);
+				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+			}
+			else {
+				rspamd_trie_insert (url_scanner->patterns, matchers[i].pattern, i);
+			}
 		}
 	}
 
@@ -723,47 +733,31 @@ url_escape (const gchar *s, memory_pool_t * pool)
 	return url_escape_1 (s, 0, pool);
 }
 
-/* URL-escape the unsafe characters (see urlchr_table) in a given
-   string.  If no characters are unsafe, S is returned.  */
-
-static gchar                    *
-url_escape_allow_passthrough (const gchar *s, memory_pool_t * pool)
-{
-	return url_escape_1 (s, 1, pool);
-}
-
 /* Decide whether the gchar at position P needs to be encoded.  (It is
    not enough to pass a single gchar *P because the function may need
    to inspect the surrounding context.)
 
    Return 1 if the gchar should be escaped as %XX, 0 otherwise.  */
 
-static inline gint
+static inline gboolean
 char_needs_escaping (const gchar *p)
 {
 	if (*p == '%') {
-		if (g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2)))
-			return 0;
-		else
-			/* Garbled %.. sequence: encode `%'. */
-			return 1;
+		if (g_ascii_isxdigit (*(p + 1)) && g_ascii_isxdigit (*(p + 2))) {
+			return FALSE;
+		}
+		else {
+			return TRUE;
+		}
 	}
-	else if (! is_urlsafe (*p))
-		return 1;
-	else
-		return 0;
+	else if (! is_urlsafe (*p)) {
+		return TRUE;
+	}
+	return FALSE;
 }
 
 /* Translate a %-escaped (but possibly non-conformant) input string S
-   into a %-escaped (and conformant) output string.  If no characters
-   are encoded or decoded, return the same string S; otherwise, return
-   a freshly allocated string with the new contents.
-
-   After a URL has been run through this function, the protocols that
-   use `%' as the quote character can use the resulting string as-is,
-   while those that don't can use url_unescape to get to the intended
-   data.  This function is stable: once the input is transformed,
-   further transformations of the result yield the same output.
+   into a %-escaped (and conformant) output string.
 */
 
 static gchar                    *
@@ -835,35 +829,13 @@ unescape_single_char (gchar *str, gchar chr)
 	*t = '\0';
 }
 
-/* Escape unsafe and reserved characters, except for the slash
-	 characters.  */
 
-static gchar                    *
-url_escape_dir (const gchar *dir, memory_pool_t * pool)
-{
-	gchar                           *newdir = url_escape_1 (dir, 1, pool);
-	if (newdir == dir)
-		return (gchar *)dir;
+/*
+ * Resolve "." and ".." elements of PATH by destructively modifying
+ * PATH and return non-zero if PATH has been modified, zero otherwise.
+ */
 
-	unescape_single_char (newdir, '/');
-	return newdir;
-}
-
-/* Resolve "." and ".." elements of PATH by destructively modifying
-   PATH and return non-zero if PATH has been modified, zero otherwise.
-
-   The algorithm is in spirit similar to the one described in rfc1808,
-   although implemented differently, in one pass.  To recap, path
-   elements containing only "." are removed, and ".." is taken to mean
-   "back up one element".  Single leading and trailing slashes are
-   preserved.
-
-   For example, "a/b/c/./../d/.." will yield "a/b/".  More exhaustive
-   test examples are provided below.  If you change anything in this
-   function, run test_path_simplify to make sure you haven't broken a
-   test case.  */
-
-static gint
+static gboolean
 path_simplify (gchar *path)
 {
 	gchar                           *h = path;	/* hare */
@@ -879,7 +851,7 @@ path_simplify (gchar *path)
 		}
 		else if (h[0] == '.' && h[1] == '.' && (h[2] == '/' || h[2] == '\0')) {
 			/* Handle "../" by retreating the tortoise by one path
-			   element -- but not past beggining.  */
+			   element -- but not past beginning.  */
 			if (t > beg) {
 				/* Move backwards until T hits the beginning of the
 				   previous path element or the beginning of path. */
@@ -1241,6 +1213,10 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 			match->m_begin = p;
 			return TRUE;
 		}
+		else if (p == begin && p != pos) {
+			match->m_begin = p;
+			return TRUE;
+		}
 		p --;
 	}
 
@@ -1254,11 +1230,11 @@ url_tld_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 
 	/* A url must be finished by tld, so it must be followed by punctuation or by space character */
 	p = pos + strlen (match->pattern);
-	if (p == end || g_ascii_isspace (*(p + 1)) || g_ascii_ispunct (*(p + 1))) {
+	if (p == end || g_ascii_isspace (*p) || g_ascii_ispunct (*p)) {
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
-	else if (*(p + 1) == '/' || *(p + 1) == ':') {
+	else if (*p == '/' || *p == ':') {
 		/* Parse arguments, ports by normal way by url default function */
 		p = match->m_begin;
 		/* Check common prefix */
