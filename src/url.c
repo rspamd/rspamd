@@ -1213,6 +1213,10 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 			match->m_begin = p;
 			return TRUE;
 		}
+		else if (p == begin && p != pos) {
+			match->m_begin = p;
+			return TRUE;
+		}
 		p --;
 	}
 
