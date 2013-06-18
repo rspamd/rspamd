@@ -396,6 +396,7 @@ http_scan_task_fin (gpointer arg)
 	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
 
 	if (cbdata->task->state != WRITING_REPLY) {
+		process_statfiles (cbdata->task);
 		cbdata->task->state = WRITE_REPLY;
 	}
 
