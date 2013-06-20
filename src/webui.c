@@ -38,7 +38,7 @@
 #include "rrd.h"
 #include "json/jansson.h"
 
-#include <evhttp.h>
+
 #if (_EVENT_NUMERIC_VERSION > 0x02010000) && defined(HAVE_OPENSSL)
 #define HAVE_WEBUI_SSL
 #include <openssl/ssl.h>
@@ -47,6 +47,15 @@
 #include <event2/bufferevent.h>
 #include <event2/util.h>
 #include <event2/bufferevent_ssl.h>
+#include <event2/http.h>
+#include <event2/http_struct.h>
+#include <event2/http_compat.h>
+#else
+#ifdef LIBEVENT_EVHTTP
+#  include <evhttp.h>
+#else
+#  warning "Your libevent version is too old for webui work and therefore it will be disabled"
+#endif
 #endif
 
 /* Another workaround for old libevent */
@@ -97,6 +106,7 @@ worker_t webui_worker = {
 	TRUE					/* Killable */
 };
 
+#if defined(LIBEVENT_EVHTTP) || (defined(_EVENT_NUMERIC_VERSION) && (_EVENT_NUMERIC_VERSION > 0x02010000))
 /*
  * Worker's context
  */
@@ -1804,4 +1814,20 @@ start_webui_worker (struct rspamd_worker *worker)
 	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
+#else
 
+gpointer
+init_webui_worker (void)
+{
+	return NULL;
+}
+
+/*
+ * Start worker process
+ */
+void
+start_webui_worker (struct rspamd_worker *worker)
+{
+	exit (EXIT_SUCCESS);
+}
+#endif

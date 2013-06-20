@@ -179,7 +179,7 @@ struct aio_context {
 	aio_context_t io_ctx;
 #elif defined(HAVE_AIO_H)
 	/* POSIX aio */
-	struct event rtsigs[SIGRTMAX - SIGRTMIN];
+	struct event rtsigs[128];
 #endif
 };
 
