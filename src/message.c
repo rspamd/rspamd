@@ -470,15 +470,21 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			/* Got by word */
 		case RSPAMD_RECV_STATE_BY_BLOCK:
 			/* Here can be only hostname */
-			if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+			if ((g_ascii_isalnum (*p) || *p == '.' || *p == '-'
+					|| *p == '_') && p[1] != '\0') {
 				p++;
 			}
 			else {
 				/* We got something like hostname */
-				t = *p;
-				*p = '\0';
-				r->by_hostname = memory_pool_strdup (pool, s);
-				*p = t;
+				if (p[1] != '\0') {
+					t = *p;
+					*p = '\0';
+					r->by_hostname = memory_pool_strdup (pool, s);
+					*p = t;
+				}
+				else {
+					r->by_hostname = memory_pool_strdup (pool, s);
+				}
 				/* Now end of parsing */
 				if (is_exim) {
 					if (r->real_ip == NULL && r->from_ip != NULL) {
