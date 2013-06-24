@@ -506,9 +506,6 @@ url_init (void)
 				/* some.tld: */
 				rspamd_snprintf (patbuf, sizeof (patbuf), "%s:", matchers[i].pattern);
 				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
-				/* some.tld./ */
-				rspamd_snprintf (patbuf, sizeof (patbuf), "%s./", matchers[i].pattern);
-				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
 			}
 			else {
 				rspamd_trie_insert (url_scanner->patterns, matchers[i].pattern, i);
