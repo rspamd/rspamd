@@ -295,7 +295,18 @@ static void
 parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 {
 	gchar                           *p, *s, t, **res = NULL;
-	gint                            state = 0, next_state = 0;
+	enum {
+		RSPAMD_RECV_STATE_INIT = 0,
+		RSPAMD_RECV_STATE_FROM,
+		RSPAMD_RECV_STATE_IP_BLOCK,
+		RSPAMD_RECV_STATE_BRACES_BLOCK,
+		RSPAMD_RECV_STATE_BY_BLOCK,
+		RSPAMD_RECV_STATE_PARSE_IP,
+		RSPAMD_RECV_STATE_SKIP_SPACES,
+		RSPAMD_RECV_STATE_ERROR
+	}                               state = RSPAMD_RECV_STATE_INIT,
+	                                next_state = RSPAMD_RECV_STATE_INIT;
+	gboolean                        is_exim = FALSE;
 
 	g_strstrip (line);
 	p = line;
@@ -304,16 +315,16 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 	while (*p) {
 		switch (state) {
 			/* Initial state, search for from */
-		case 0:
+		case RSPAMD_RECV_STATE_INIT:
 			if (*p == 'f' || *p == 'F') {
 				if (g_ascii_tolower (*++p) == 'r' && g_ascii_tolower (*++p) == 'o' && g_ascii_tolower (*++p) == 'm') {
 					p++;
-					state = 99;
-					next_state = 1;
+					state = RSPAMD_RECV_STATE_SKIP_SPACES;
+					next_state = RSPAMD_RECV_STATE_FROM;
 				}
 			}
 			else if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) == 'y') {
-				state = 3;
+				state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
 			else {
 				/* This can be qmail header, parse it separately */
@@ -322,12 +333,12 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			}
 			break;
 			/* Read hostname */
-		case 1:
+		case RSPAMD_RECV_STATE_FROM:
 			if (*p == '[') {
 				/* This should be IP address */
 				res = &r->from_ip;
-				state = 98;
-				next_state = 3;
+				state = RSPAMD_RECV_STATE_PARSE_IP;
+				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 				s = ++p;
 			}
 			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
@@ -338,61 +349,106 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				*p = '\0';
 				r->from_hostname = memory_pool_strdup (pool, s);
 				*p = t;
-				state = 99;
-				next_state = 3;
+				state = RSPAMD_RECV_STATE_SKIP_SPACES;
+				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
 			break;
 			/* Try to extract additional info */
-		case 3:
+		case RSPAMD_RECV_STATE_IP_BLOCK:
 			/* Try to extract ip or () info or by */
 			if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) == 'y') {
 				p += 2;
 				/* Skip spaces after by */
-				state = 99;
-				next_state = 5;
+				state = RSPAMD_RECV_STATE_SKIP_SPACES;
+				next_state = RSPAMD_RECV_STATE_BY_BLOCK;
 			}
 			else if (*p == '(') {
-				state = 99;
-				next_state = 4;
+				state = RSPAMD_RECV_STATE_SKIP_SPACES;
+				next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
 				p++;
 			}
 			else if (*p == '[') {
 				/* Got ip before '(' so extract it */
 				s = ++p;
 				res = &r->from_ip;
-				state = 98;
-				next_state = 3;
+				state = RSPAMD_RECV_STATE_PARSE_IP;
+				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
 			else {
 				p++;
 			}
 			break;
 			/* We are in () block. Here can be found real hostname and real ip, this is written by some MTA */
-		case 4:
+		case RSPAMD_RECV_STATE_BRACES_BLOCK:
 			/* End of block */
 			if (*p == ')') {
 				p++;
-				state = 3;
+				state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
-			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' ||
+					*p == '_' || *p == ':') {
 				p++;
 			}
 			else if (*p == '[') {
 				s = ++p;
-				state = 98;
+				state = RSPAMD_RECV_STATE_PARSE_IP;
 				res = &r->real_ip;
-				next_state = 3;
+				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
 			else {
-				if (s != p) {
+				if (p > s) {
 					/* Got some real hostname */
 					/* check whether it is helo or p is not space symbol */
 					if (!g_ascii_isspace (*p) || *(p + 1) != '[') {
-						/* skip all  */
-						while (*p++ != ')' && *p != '\0');
-						state = 3;
+						/* Exim style ([ip]:port helo=hostname) */
+						if (*s == ':' && g_ascii_isspace (*p)) {
+							/* Ip ending */
+							is_exim = TRUE;
+							state = RSPAMD_RECV_STATE_SKIP_SPACES;
+							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
+						}
+						else if (p - s == 4 && memcmp (s, "helo=", 5) == 0) {
+							p ++;
+							is_exim = TRUE;
+							/* This is likely exim received */
+							if (r->real_hostname == NULL && r->from_hostname != NULL) {
+								r->real_hostname = r->from_hostname;
+							}
+							s = p;
+							while (*p != ')' && !g_ascii_isspace (*p) && *p != '\0') {
+								p ++;
+							}
+							if (p > s) {
+								r->from_hostname = memory_pool_alloc (pool, p - s + 1);
+								rspamd_strlcpy (r->from_hostname, s, p - s + 1);
+							}
+						}
+						else if (p - s == 4 && memcmp (s, "port=", 5) == 0) {
+							p ++;
+							is_exim = TRUE;
+							while (g_ascii_isdigit (*p)) {
+								p ++;
+							}
+							state = RSPAMD_RECV_STATE_SKIP_SPACES;
+							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
+						}
+						else if (*p == '=' && is_exim) {
+							/* Just skip unknown pairs */
+							p ++;
+							while (!g_ascii_isspace (*p) && *p != ')' && *p != '\0') {
+								p ++;
+							}
+							state = RSPAMD_RECV_STATE_SKIP_SPACES;
+							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
+						}
+						else {
+							/* skip all  */
+							while (*p++ != ')' && *p != '\0');
+							state = RSPAMD_RECV_STATE_IP_BLOCK;
+						}
 					}
 					else {
+						/* Postfix style (hostname [ip]) */
 						t = *p;
 						*p = '\0';
 						r->real_hostname = memory_pool_strdup (pool, s);
@@ -401,8 +457,8 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 						p += 2;
 						s = p;
 						res = &r->real_ip;
-						state = 98;
-						next_state = 4;
+						state = RSPAMD_RECV_STATE_PARSE_IP;
+						next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
 					}
 				}
 				else {
@@ -412,7 +468,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			}
 			break;
 			/* Got by word */
-		case 5:
+		case RSPAMD_RECV_STATE_BY_BLOCK:
 			/* Here can be only hostname */
 			if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
 				p++;
@@ -424,13 +480,21 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				r->by_hostname = memory_pool_strdup (pool, s);
 				*p = t;
 				/* Now end of parsing */
+				if (is_exim) {
+					if (r->real_ip == NULL && r->from_ip != NULL) {
+						r->real_ip = r->from_ip;
+					}
+					else if (r->from_ip == NULL && r->real_ip != NULL) {
+						r->from_ip = r->real_ip;
+					}
+				}
 				return;
 			}
 			break;
 
 			/* Extract ip */
-		case 98:
-			while (g_ascii_isdigit (*++p) || *p == '.');
+		case RSPAMD_RECV_STATE_PARSE_IP:
+			while (g_ascii_isdigit (*++p) || *p == '.' || *p == ':');
 			if (*p != ']') {
 				/* Not an ip in fact */
 				state = next_state;
@@ -446,7 +510,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			break;
 
 			/* Skip spaces */
-		case 99:
+		case RSPAMD_RECV_STATE_SKIP_SPACES:
 			if (!g_ascii_isspace (*p)) {
 				state = next_state;
 				s = p;
@@ -455,7 +519,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				p++;
 			}
 			break;
-		case 100:
+		default:
 			r->is_error = 1;
 			return;
 			break;
