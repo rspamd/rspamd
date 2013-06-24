@@ -381,11 +381,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			/* We are in () block. Here can be found real hostname and real ip, this is written by some MTA */
 		case RSPAMD_RECV_STATE_BRACES_BLOCK:
 			/* End of block */
-			if (*p == ')') {
-				p++;
-				state = RSPAMD_RECV_STATE_IP_BLOCK;
-			}
-			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' ||
+			if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' ||
 					*p == '_' || *p == ':') {
 				p++;
 			}
@@ -401,7 +397,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 					/* check whether it is helo or p is not space symbol */
 					if (!g_ascii_isspace (*p) || *(p + 1) != '[') {
 						/* Exim style ([ip]:port helo=hostname) */
-						if (*s == ':' && g_ascii_isspace (*p)) {
+						if (*s == ':' && (g_ascii_isspace (*p) || *p == ')')) {
 							/* Ip ending */
 							is_exim = TRUE;
 							state = RSPAMD_RECV_STATE_SKIP_SPACES;
@@ -410,7 +406,6 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 						else if (p - s == 4 && memcmp (s, "helo=", 5) == 0) {
 							p ++;
 							is_exim = TRUE;
-							/* This is likely exim received */
 							if (r->real_hostname == NULL && r->from_hostname != NULL) {
 								r->real_hostname = r->from_hostname;
 							}
@@ -459,7 +454,18 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 						res = &r->real_ip;
 						state = RSPAMD_RECV_STATE_PARSE_IP;
 						next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
+						continue;
 					}
+					if (*p == ')') {
+						p ++;
+						state = RSPAMD_RECV_STATE_SKIP_SPACES;
+						next_state = RSPAMD_RECV_STATE_IP_BLOCK;
+					}
+				}
+				else if (*p == ')') {
+					p ++;
+					state = RSPAMD_RECV_STATE_SKIP_SPACES;
+					next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 				}
 				else {
 					r->is_error = 1;
@@ -487,11 +493,15 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				}
 				/* Now end of parsing */
 				if (is_exim) {
+					/* Adjust for exim received */
 					if (r->real_ip == NULL && r->from_ip != NULL) {
 						r->real_ip = r->from_ip;
 					}
 					else if (r->from_ip == NULL && r->real_ip != NULL) {
 						r->from_ip = r->real_ip;
+						if (r->real_hostname == NULL && r->from_hostname != NULL) {
+							r->real_hostname = r->from_hostname;
+						}
 					}
 				}
 				return;
@@ -500,7 +510,9 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 
 			/* Extract ip */
 		case RSPAMD_RECV_STATE_PARSE_IP:
-			while (g_ascii_isdigit (*++p) || *p == '.' || *p == ':');
+			while (g_ascii_isdigit (*p) || *p == '.' || *p == ':') {
+				p ++;
+			}
 			if (*p != ']') {
 				/* Not an ip in fact */
 				state = RSPAMD_RECV_STATE_SKIP_SPACES;
