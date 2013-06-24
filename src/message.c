@@ -393,7 +393,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				s = ++p;
 				state = RSPAMD_RECV_STATE_PARSE_IP;
 				res = &r->real_ip;
-				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
+				next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
 			}
 			else {
 				if (p > s) {
@@ -497,7 +497,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			while (g_ascii_isdigit (*++p) || *p == '.' || *p == ':');
 			if (*p != ']') {
 				/* Not an ip in fact */
-				state = next_state;
+				state = RSPAMD_RECV_STATE_SKIP_SPACES;
 				p++;
 			}
 			else {
@@ -505,7 +505,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				*res = memory_pool_strdup (pool, s);
 				*p = ']';
 				p++;
-				state = next_state;
+				state = RSPAMD_RECV_STATE_SKIP_SPACES;
 			}
 			break;
 
