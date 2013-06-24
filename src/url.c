@@ -1217,6 +1217,16 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 			match->m_begin = p;
 			return TRUE;
 		}
+		else if (*p == '.') {
+			if (p == begin) {
+				/* Urls cannot start with a dot */
+				return FALSE;
+			}
+			if (!g_ascii_isalnum (p[1])) {
+				/* Wrong we have an invalid character after dot */
+				return FALSE;
+			}
+		}
 		p --;
 	}
 
