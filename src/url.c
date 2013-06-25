@@ -371,7 +371,7 @@ struct url_matcher matchers[] = {
 		{ ".zm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
 		{ ".zw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
 		/* Likely emails */
-		{ "@",				"mailto://",url_email_start,	 	url_email_end,	0					}
+		{ "@",				"mailto://",url_email_start,	 	url_email_end,	URL_FLAG_NOHTML	| URL_FLAG_STRICT_MATCH	}
 };
 
 struct url_match_scanner {
