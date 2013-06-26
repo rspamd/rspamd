@@ -225,37 +225,32 @@ lua_process_element (struct config_file *cfg, const gchar *name,
 				msg_warn ("meta options cannot be nested");
 				return;
 			}
-			meta_name = lua_get_table_index_str (L, "name");
 			/* Meta option should not be handled by a normal option */
 			opt->lua_type = LUA_VAR_UNKNOWN;
-			if (meta_name == NULL) {
-				msg_warn ("table parameters must have 'name' attribute to be defined");
+			module_metas = g_hash_table_lookup (cfg->modules_metas, module_name);
+			cur_meta = module_metas;
+			while (cur_meta) {
+				meta_opt = cur_meta->data;
+				if (g_ascii_strcasecmp (meta_opt->name, name) == 0) {
+					new = meta_opt;
+					break;
+				}
+				cur_meta = g_list_next (cur_meta);
 			}
-			else {
-				module_metas = g_hash_table_lookup (cfg->modules_metas, module_name);
-				cur_meta = module_metas;
-				while (cur_meta) {
-					meta_opt = cur_meta->data;
-					if (g_ascii_strcasecmp (meta_opt->name, module_name) == 0) {
-						new = meta_opt;
-						break;
-					}
-					cur_meta = g_list_next (cur_meta);
-				}
-				if (new == NULL) {
-					new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_meta_opt));
-					module_metas = g_list_prepend (module_metas, new);
-					g_hash_table_insert (cfg->modules_metas, (gpointer)module_name, module_metas);
-				}
-				/* Now iterate through the table */
-				for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
-					/* 'key' is at index -2 and 'value' is at index -1 */
-					/* Key must be a string and value must be a table */
-					name = luaL_checkstring (L, -2);
-					if (name != NULL) {
-						lua_check_element (cfg->cfg_pool, name, &new->options, &new_opt);
-						lua_process_element (cfg, name, module_name, new_opt, -1, FALSE);
-					}
+			if (new == NULL) {
+				new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_meta_opt));
+				new->name = memory_pool_strdup (cfg->cfg_pool, name);
+				module_metas = g_list_prepend (module_metas, new);
+				g_hash_table_insert (cfg->modules_metas, (gpointer)module_name, module_metas);
+			}
+			/* Now iterate through the table */
+			for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+				/* 'key' is at index -2 and 'value' is at index -1 */
+				/* Key must be a string and value must be a table */
+				meta_name = luaL_checkstring (L, -2);
+				if (meta_name != NULL) {
+					lua_check_element (cfg->cfg_pool, meta_name, &new->options, &new_opt);
+					lua_process_element (cfg, meta_name, module_name, new_opt, -1, FALSE);
 				}
 			}
 			break;
