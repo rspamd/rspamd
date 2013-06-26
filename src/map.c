@@ -305,7 +305,7 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 {
 	gchar                         *remain, *pos;
 	ssize_t                         r;
-	gchar                           *te;
+	gchar                           *te, *date;
 	
 	if ((r = read (fd, data->read_buf + data->rlen, sizeof (data->read_buf) - data->rlen)) > 0) {
 		r += data->rlen;
@@ -345,6 +345,14 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 				else {
 					data->chunked = -1;
 				}
+			}
+			/* Check for date */
+			date = g_hash_table_lookup (reply->headers, "Date");
+			if (date != NULL) {
+				data->last_checked = parse_http_date (date, -1);
+			}
+			else {
+				data->last_checked = (time_t)-1;
 			}
 
 			if (data->chunked > 0) {
@@ -402,7 +410,9 @@ read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 
 	map->fin_callback (map->pool, &cbdata);
 	*map->user_data = cbdata.cur_data;
-	data->last_checked = time (NULL);
+	if (data->last_checked == (time_t)-1) {
+		data->last_checked = time (NULL);
+	}
 
 	g_hash_table_destroy (repl->headers);
 	g_free (repl);
@@ -846,14 +856,18 @@ http_async_callback (gint fd, short what, void *ud)
 			if (!read_http_common (cbd->map, cbd->data, cbd->reply, &cbd->cbdata, cbd->fd)) {
 				/* Handle Not-Modified in a special way */
 				if (cbd->reply->code == 304) {
-					cbd->data->last_checked = time (NULL);
+					if (cbd->data->last_checked == (time_t)-1) {
+						cbd->data->last_checked = time (NULL);
+					}
 					msg_info ("data is not modified for server %s", cbd->data->host);
 				}
 				else if (cbd->cbdata.cur_data != NULL) {
 					/* Destroy old data and start reading request data */
 					cbd->map->fin_callback (cbd->map->pool, &cbd->cbdata);
 					*cbd->map->user_data = cbd->cbdata.cur_data;
-					cbd->data->last_checked = time (NULL);
+					if (cbd->data->last_checked == (time_t)-1) {
+						cbd->data->last_checked = time (NULL);
+					}
 				}
 				if (cbd->state == 1 && cbd->reply->code == 200) {
 					/* Write to log that data is modified */

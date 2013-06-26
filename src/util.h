@@ -400,4 +400,12 @@ gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
  */
 gboolean parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask);
 
+/**
+ * Parse HTTP date header and return it as time_t
+ * @param header HTTP date header
+ * @param len length of header
+ * @return time_t or (time_t)-1 in case of error
+ */
+time_t parse_http_date (const gchar *header, gsize len);
+
 #endif
