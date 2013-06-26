@@ -60,6 +60,7 @@ struct lua_http_ud {
 	gint fd;
 	rspamd_io_dispatcher_t *io_dispatcher;
 	gint rep_len;
+	time_t date;
 	GList *headers;
 };
 
@@ -152,6 +153,12 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 	/* Reply */
 	lua_pushlstring (ud->L, in->begin, in->len);
 
+	/* Date */
+	if (ud->date != (time_t)-1) {
+		num ++;
+		lua_pushnumber (ud->L, ud->date);
+	}
+
 	if (lua_pcall (ud->L, num, 0, 0) != 0) {
 		msg_info ("call to %s failed: %s", ud->callback ? ud->callback : "local function", lua_tostring (ud->L, -1));
 	}
@@ -218,6 +225,11 @@ lua_http_parse_header_line (struct lua_http_ud *ud, f_str_t *in)
 	/* Check content-length */
 	if (ud->rep_len == 0 && g_ascii_strcasecmp (new->name, "content-length") == 0) {
 		ud->rep_len = strtoul (new->value, NULL, 10);
+	}
+
+	/* Check date */
+	if (g_ascii_strcasecmp (new->name, "date") == 0) {
+		ud->date = parse_http_date (new->value, -1);
 	}
 
 	/* Insert a header to the list */
