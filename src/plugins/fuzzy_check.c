@@ -650,6 +650,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 	struct mime_part               *mime_part;
 	struct rspamd_image            *image;
 	gchar                           *checksum;
+	gsize                            hashlen;
 	GList                          *cur;
 	fuzzy_hash_t                   *fake_fuzzy;
 
@@ -682,8 +683,15 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 		}
 
 		/* Check length of hash */
-		if (fuzzy_module_ctx->min_hash_len != 0 && 
-				strlen (part->fuzzy->hash_pipe) * part->fuzzy->block_size < fuzzy_module_ctx->min_hash_len) {
+		hashlen = strlen (part->fuzzy->hash_pipe);
+		if (hashlen == 0) {
+			msg_info ("<%s>, part hash empty, skip fuzzy check",
+					task->message_id, fuzzy_module_ctx->min_hash_len);
+			cur = g_list_next (cur);
+			continue;
+		}
+		if (fuzzy_module_ctx->min_hash_len != 0 &&
+				hashlen * part->fuzzy->block_size < fuzzy_module_ctx->min_hash_len) {
 			msg_info ("<%s>, part hash is shorter than %d symbols, skip fuzzy check",
 					task->message_id, fuzzy_module_ctx->min_hash_len);
 			cur = g_list_next (cur);
