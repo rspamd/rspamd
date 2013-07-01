@@ -41,7 +41,7 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 	token_node_t                   *new = NULL;
 	f_str_t                         token = { NULL, 0, 0 };
 	guint32                         hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
-	gint                            i, l;
+	gint                            i, l, processed = 0;
 	gchar                          *res;
 
 	if (*tree == NULL) {
@@ -64,13 +64,39 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 			continue;
 		}
 
-		/* Shift hashpipe */
-		for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
-			hashpipe[i] = hashpipe[i - 1];
+		if (processed < FEATURE_WINDOW_SIZE) {
+			/* Just fill a hashpipe */
+			hashpipe[FEATURE_WINDOW_SIZE - ++processed] =
+					fstrhash_lowercase (&token, is_utf);
 		}
-		hashpipe[0] = fstrhash_lowercase (&token, is_utf);
+		else {
+			/* Shift hashpipe */
+			for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
+				hashpipe[i] = hashpipe[i - 1];
+			}
+			hashpipe[0] = fstrhash_lowercase (&token, is_utf);
+			processed ++;
 
-		for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
+			for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
+				h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
+				h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
+				new = memory_pool_alloc0 (pool, sizeof (token_node_t));
+				new->h1 = h1;
+				new->h2 = h2;
+				if (save_token) {
+					new->extra = (uintptr_t)memory_pool_fstrdup (pool, &token);
+				}
+
+				if (g_tree_lookup (*tree, new) == NULL) {
+					g_tree_insert (*tree, new, new);
+				}
+			}
+		}
+		token.begin = res;
+	}
+
+	if (processed <= FEATURE_WINDOW_SIZE) {
+		for (i = 1; i < processed; i++) {
 			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
 			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
 			new = memory_pool_alloc0 (pool, sizeof (token_node_t));
@@ -84,7 +110,6 @@ osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t * pool, f_str_t * 
 				g_tree_insert (*tree, new, new);
 			}
 		}
-		token.begin = res;
 	}
 
 	return TRUE;
