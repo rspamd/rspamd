@@ -2108,6 +2108,8 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			CHECK_TAG ("module", FALSE);
 			if (res) {
 				if (ud->section_pointer != NULL) {
+					/* Reverse options list */
+					ud->section_pointer = g_list_reverse ((GList *)ud->section_pointer);
 					g_hash_table_insert (ud->cfg->modules_opts, ud->parent_pointer[0], ud->section_pointer);
 					memory_pool_add_destructor (ud->cfg->cfg_pool, (pool_destruct_func)g_list_free, ud->section_pointer);
 					ud->parent_pointer[0] = NULL;
