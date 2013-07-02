@@ -33,7 +33,6 @@ struct surbl_ctx {
 	guint max_urls;
 	guint url_expire;
 	GList *suffixes;
-	GList *bits;
 	gchar *metric;
 	const gchar *tld2_file;
 	const gchar *whitelist_file;
@@ -53,6 +52,7 @@ struct suffix_item {
 	const gchar *suffix;
 	const gchar *symbol;
 	guint32 options;
+	GList *bits;
 };
 
 struct dns_param {

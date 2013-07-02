@@ -216,7 +216,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->filter = surbl_filter;
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->bits = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
 
 	surbl_module_ctx->tld2_file = NULL;
@@ -260,35 +259,28 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
  * Register virtual symbols for suffixes with bit wildcard
  */
 static void
-register_bit_symbols (struct config_file *cfg)
+register_bit_symbols (struct config_file *cfg, struct suffix_item *suffix)
 {
 	gchar                          *c, *symbol;
-	GList                          *symit, *cur;
+	GList                           *cur;
 	struct surbl_bit_item          *bit;
-	struct suffix_item             *suffix;
 	gint                            len;
 
-	symit = surbl_module_ctx->suffixes;
-
-	while (symit) {
-		suffix = symit->data;
-		if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
-			cur = g_list_first (surbl_module_ctx->bits);
-			while (cur) {
-				bit = (struct surbl_bit_item *)cur->data;
-				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
-				*c = '\0';
-				symbol = memory_pool_alloc (cfg->cfg_pool, len);
-				rspamd_snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
-				*c = '%';
-				register_virtual_symbol (&cfg->cache, symbol, 1);
-				cur = g_list_next (cur);
-			}
+	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
+		cur = g_list_first (suffix->bits);
+		while (cur) {
+			bit = (struct surbl_bit_item *)cur->data;
+			len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
+			*c = '\0';
+			symbol = memory_pool_alloc (cfg->cfg_pool, len);
+			rspamd_snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
+			*c = '%';
+			register_virtual_symbol (&cfg->cache, symbol, 1);
+			cur = g_list_next (cur);
 		}
-		else {
-			register_virtual_symbol (&cfg->cache, suffix->symbol, 1);
-		}
-		symit = g_list_next (symit);
+	}
+	else {
+		register_virtual_symbol (&cfg->cache, suffix->symbol, 1);
 	}
 }
 
@@ -297,7 +289,7 @@ surbl_module_config (struct config_file *cfg)
 {
 	GList                          *cur_opt;
 	struct module_opt              *cur;
-	struct suffix_item             *new_suffix;
+	struct suffix_item             *new_suffix, *cur_suffix = NULL;
 	struct surbl_bit_item          *new_bit;
 
 	gchar                           *value, *str, **strvec, *optbuf;
@@ -397,6 +389,7 @@ surbl_module_config (struct config_file *cfg)
 				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, str + 1);
 				new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
 				new_suffix->options = 0;
+				new_suffix->bits = NULL;
 				*str = '_';
 				/* Search for options */
 				i = strlen (new_suffix->symbol) + sizeof ("options_");
@@ -412,18 +405,24 @@ surbl_module_config (struct config_file *cfg)
 				msg_debug ("add new surbl suffix: %s with symbol: %s", new_suffix->suffix, new_suffix->symbol);
 				surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 				register_callback_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
+				cur_suffix = new_suffix;
 			}
 		}
 		/* Search for bits */
 		else if (!g_ascii_strncasecmp (cur->param, "bit", sizeof ("bit") - 1)) {
-			if ((str = strchr (cur->param, '_')) != NULL) {
-				bit = strtoul (str + 1, NULL, 10);
-				if (bit != 0) {
-					new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
-					new_bit->bit = bit;
-					new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
-					msg_debug ("add new bit suffix: %d with symbol: %s", (gint)new_bit->bit, new_bit->symbol);
-					surbl_module_ctx->bits = g_list_prepend (surbl_module_ctx->bits, new_bit);
+			if (cur_suffix == NULL) {
+				msg_err ("configuration error, cannot parse bits, please use lua for surbl module configuration");
+			}
+			else {
+				if ((str = strchr (cur->param, '_')) != NULL) {
+					bit = strtoul (str + 1, NULL, 10);
+					if (bit != 0) {
+						new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
+						new_bit->bit = bit;
+						new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->value);
+						msg_debug ("add new bit suffix: %d with symbol: %s", (gint)new_bit->bit, new_bit->symbol);
+						cur_suffix->bits = g_list_prepend (cur_suffix->bits, new_bit);
+					}
 				}
 			}
 		}
@@ -439,15 +438,20 @@ surbl_module_config (struct config_file *cfg)
 		register_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 	}
 
-	register_bit_symbols (cfg);
-
 	if (surbl_module_ctx->suffixes != NULL) {
 		memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
 				surbl_module_ctx->suffixes);
 	}
-	if (surbl_module_ctx->bits != NULL) {
-		memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
-				surbl_module_ctx->bits);
+
+	cur_opt = surbl_module_ctx->suffixes;
+	while (cur_opt) {
+		cur_suffix = cur_opt->data;
+		if (cur_suffix->bits != NULL) {
+			register_bit_symbols (cfg, cur_suffix);
+			memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
+					cur_suffix->bits);
+		}
+		cur_opt = g_list_next (cur_opt);
 	}
 
 	return TRUE;
@@ -462,7 +466,6 @@ surbl_module_reconfig (struct config_file *cfg)
 	surbl_module_ctx->filter = surbl_filter;
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->bits = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
 
 	surbl_module_ctx->tld2_file = NULL;
@@ -479,7 +482,6 @@ surbl_module_reconfig (struct config_file *cfg)
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
 
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->suffixes);
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->bits);
 	
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) rspamd_trie_free, surbl_module_ctx->redirector_trie);
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
@@ -672,7 +674,7 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar
 	gint                            len, found = 0;
 
 	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
-		cur = g_list_first (surbl_module_ctx->bits);
+		cur = g_list_first (suffix->bits);
 
 		while (cur) {
 			bit = (struct surbl_bit_item *)cur->data;
