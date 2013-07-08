@@ -347,10 +347,6 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 			p++;
 			continue;
 		}
-		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
-		cur->type = PERL_FILTER;
-		cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
-		cfg->filters = g_list_prepend (cfg->filters, cur);
 		p++;
 	}
 
