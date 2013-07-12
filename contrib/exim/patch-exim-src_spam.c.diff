@@ -12,10 +12,10 @@ index 3fead17..03fea75 100644
  #define F_FREESP     O_TRUNC
  typedef struct flock flock_t;
 diff --git a/src/src/expand.c b/src/src/expand.c
-index 7803862..888226f 100644
+index 1da2225..7da567a 100644
 --- a/src/src/expand.c
 +++ b/src/src/expand.c
-@@ -608,6 +608,7 @@ static var_entry var_table[] = {
+@@ -618,6 +618,7 @@ static var_entry var_table[] = {
    { "sn8",                 vtype_filter_int,  &filter_sn[8] },
    { "sn9",                 vtype_filter_int,  &filter_sn[9] },
  #ifdef WITH_CONTENT_SCAN
@@ -24,10 +24,10 @@ index 7803862..888226f 100644
    { "spam_report",         vtype_stringptr,   &spam_report },
    { "spam_score",          vtype_stringptr,   &spam_score },
 diff --git a/src/src/globals.c b/src/src/globals.c
-index bcbe12d..6e0d3a4 100644
+index 74b6edb..e6f02fb 100644
 --- a/src/src/globals.c
 +++ b/src/src/globals.c
-@@ -1169,6 +1169,7 @@ BOOL    smtp_use_size          = FALSE;
+@@ -1212,6 +1212,7 @@ BOOL    smtp_use_size          = FALSE;
  uschar *spamd_address          = US"127.0.0.1 783";
  uschar *spam_bar               = NULL;
  uschar *spam_report            = NULL;
@@ -36,10 +36,10 @@ index bcbe12d..6e0d3a4 100644
  uschar *spam_score_int         = NULL;
  #endif
 diff --git a/src/src/globals.h b/src/src/globals.h
-index 16caa41..f26a037 100644
+index db436c0..fc4d9f6 100644
 --- a/src/src/globals.h
 +++ b/src/src/globals.h
-@@ -744,6 +744,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
+@@ -769,6 +769,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
  extern uschar *spamd_address;          /* address for the spamassassin daemon */
  extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
  extern uschar *spam_report;            /* the spamd report (multiline) */
@@ -48,7 +48,7 @@ index 16caa41..f26a037 100644
  extern uschar *spam_score_int;         /* spam_score * 10 (int) */
  #endif
 diff --git a/src/src/spam.c b/src/src/spam.c
-index 63395f2..d284618 100644
+index 63395f2..41fd4ac 100644
 --- a/src/src/spam.c
 +++ b/src/src/spam.c
 @@ -14,12 +14,20 @@
@@ -477,10 +477,14 @@ index 63395f2..d284618 100644
    };
  
    /* remember expanded spamd_address if needed */
-@@ -440,4 +574,122 @@ again:
+@@ -440,4 +574,126 @@ again:
    };
  }
  
++#ifdef __GNUC__
++static int
++spam_push_line(struct iovec *iov, const int i, const char *fmt, ...)  __attribute__ ((format (printf, 3, 4)));
++#endif
 +static int
 +spam_push_line(struct iovec *iov, const int i, const char *fmt, ...)
 +{
