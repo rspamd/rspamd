@@ -42,7 +42,6 @@
 
 struct rspamd_server {
 	struct upstream up;
-	struct in_addr addr;
 	guint16 client_port;
 	guint16 controller_port;
 	gchar *name;
@@ -1175,7 +1174,6 @@ rspamd_add_server (struct rspamd_client *client, const gchar *host, guint16 port
 		guint16 controller_port, GError **err)
 {
 	struct rspamd_server           *new;
-	struct hostent                 *hent;
 	gint							nlen, i;
 
 	g_assert (client != NULL);
@@ -1197,22 +1195,6 @@ rspamd_add_server (struct rspamd_client *client, const gchar *host, guint16 port
 	}
 	new = &client->servers[client->servers_num];
 
-	if (*host != '/') {
-		/* Try to resolve */
-		if (!inet_aton (host, &new->addr)) {
-			/* Try to call gethostbyname */
-			hent = gethostbyname (host);
-			if (hent == NULL) {
-				if (*err == NULL) {
-					*err = g_error_new (G_RSPAMD_ERROR, 1, "Cannot resolve: %s", host);
-				}
-				return FALSE;
-			}
-			else {
-				memcpy (&new->addr, hent->h_addr, sizeof (struct in_addr));
-			}
-		}
-	}
 	new->client_port = port;
 	new->controller_port = controller_port;
 	new->host = g_strdup (host);
