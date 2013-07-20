@@ -74,7 +74,8 @@ worker_t keystorage_worker = {
 	TRUE,						/* Has socket */
 	FALSE,						/* Non unique */
 	TRUE,						/* Non threaded */
-	FALSE						/* Non killable */
+	FALSE,						/* Non killable */
+	SOCK_STREAM					/* TCP socket */
 };
 
 #ifndef HAVE_SA_SIGINFO

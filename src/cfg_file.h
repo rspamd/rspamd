@@ -257,7 +257,7 @@ struct worker_conf {
 	guint16 bind_port;								/**< bind port in case of TCP socket					*/
 	guint16 bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
 	guint16 count;									/**< number of workers									*/
-	gint listen_sock;								/**< listening socket desctiptor						*/
+	GList *listen_socks;							/**< listening sockets desctiptors						*/
 	guint32 rlimit_nofile;							/**< max files limit									*/
 	guint32 rlimit_maxcore;							/**< maximum core file size								*/
 	GHashTable *params;								/**< params for worker									*/

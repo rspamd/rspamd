@@ -85,7 +85,7 @@ poll_sync_socket (gint fd, gint timeout, short events)
 }
 
 static gint
-make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean async)
+make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean async, GList **list)
 {
 	gint                            fd, r, optlen, on = 1, s_error;
 	struct addrinfo               *cur;
@@ -146,7 +146,13 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean
 				goto out;
 			}
 		}
-		break;
+		if (list == NULL) {
+			/* Go out immediately */
+			break;
+		}
+		else if (fd != -1) {
+			*list = g_list_prepend (*list, GINT_TO_POINTER (fd));
+		}
 out:
 		if (fd != -1) {
 			close (fd);
@@ -160,13 +166,13 @@ out:
 gint
 make_tcp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_STREAM, addr, is_server, async);
+	return make_inet_socket (SOCK_STREAM, addr, is_server, async, NULL);
 }
 
 gint
 make_udp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_DGRAM, addr, is_server, async);
+	return make_inet_socket (SOCK_DGRAM, addr, is_server, async, NULL);
 }
 
 gint
@@ -284,7 +290,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 }
 
 /**
- * Make universal stream socket
+ * Make a universal socket
  * @param credits host, ip or path to unix socket
  * @param port port (used for network sockets)
  * @param async make this socket asynced
@@ -292,7 +298,8 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 gint
-make_universal_socket (const gchar *credits, guint16 port, gint type, gboolean async, gboolean is_server, gboolean try_resolve)
+make_universal_socket (const gchar *credits, guint16 port,
+		gint type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
 	struct sockaddr_un              un;
 	struct stat                     st;
@@ -347,7 +354,7 @@ make_universal_socket (const gchar *credits, guint16 port, gint type, gboolean a
 
 		rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-			r = make_inet_socket (type, res, is_server, async);
+			r = make_inet_socket (type, res, is_server, async, NULL);
 			freeaddrinfo (res);
 			return r;
 		}
@@ -356,6 +363,120 @@ make_universal_socket (const gchar *credits, guint16 port, gint type, gboolean a
 			return FALSE;
 		}
 	}
+}
+
+/**
+ * Make universal stream socket
+ * @param credits host, ip or path to unix socket
+ * @param port port (used for network sockets)
+ * @param async make this socket asynced
+ * @param is_server make this socket as server socket
+ * @param try_resolve try name resolution for a socket (BLOCKING)
+ */
+GList*
+make_universal_sockets_list (const gchar *credits, guint16 port,
+		gint type, gboolean async, gboolean is_server, gboolean try_resolve)
+{
+	struct sockaddr_un              un;
+	struct stat                     st;
+	struct addrinfo                 hints, *res;
+	gint                             r, fd, serrno;
+	gchar                            portbuf[8], **strv, **cur;
+	GList                           *result = NULL, *rcur;
+
+	strv = g_strsplit_set (credits, ",", -1);
+	if (strv == NULL) {
+		msg_err ("invalid sockets credentials: %s", credits);
+		return NULL;
+	}
+	cur = strv;
+	while (*cur != NULL) {
+		if (*credits == '/') {
+			r = stat (credits, &st);
+			if (is_server) {
+				if (r == -1) {
+					fd = make_unix_socket (credits, &un, type, is_server, async);
+				}
+				else {
+					/* Unix socket exists, it must be unlinked first */
+					errno = EEXIST;
+					goto err;
+				}
+			}
+			else {
+				if (r == -1) {
+					/* Unix socket doesn't exists it must be created first */
+					errno = ENOENT;
+					goto err;
+				}
+				else {
+					if ((st.st_mode & S_IFSOCK) == 0) {
+						/* Path is not valid socket */
+						errno = EINVAL;
+						goto err;
+					}
+					else {
+						fd = make_unix_socket (credits, &un, type, is_server, async);
+					}
+				}
+			}
+			if (fd != -1) {
+				result = g_list_prepend (result, GINT_TO_POINTER (fd));
+			}
+			else {
+				goto err;
+			}
+		}
+		else {
+			/* TCP related part */
+			memset (&hints, 0, sizeof (hints));
+			hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
+			hints.ai_socktype = type; /* Type of the socket */
+			hints.ai_flags = is_server ? AI_PASSIVE : 0;
+			hints.ai_protocol = 0;           /* Any protocol */
+			hints.ai_canonname = NULL;
+			hints.ai_addr = NULL;
+			hints.ai_next = NULL;
+
+			if (!try_resolve) {
+				hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+			}
+
+			rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
+			if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
+				r = make_inet_socket (type, res, is_server, async, &result);
+				freeaddrinfo (res);
+				if (r == -1) {
+					goto err;
+				}
+			}
+			else {
+				msg_err ("address resolution for %s failed: %s", credits, gai_strerror (r));
+				goto err;
+			}
+		}
+		cur ++;
+	}
+
+	g_strfreev (strv);
+	return result;
+
+err:
+	g_strfreev (strv);
+	serrno = errno;
+	rcur = result;
+	while (rcur != NULL) {
+		fd = GPOINTER_TO_INT (rcur->data);
+		if (fd != -1) {
+			close (fd);
+		}
+	}
+	if (result != NULL) {
+		g_list_free (result);
+	}
+
+	errno = serrno;
+	return NULL;
 }
 
 gint

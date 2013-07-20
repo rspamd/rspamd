@@ -103,7 +103,8 @@ worker_t webui_worker = {
 	TRUE,					/* Has socket */
 	TRUE,					/* Non unique */
 	FALSE,					/* Non threaded */
-	TRUE					/* Killable */
+	TRUE,					/* Killable */
+	SOCK_STREAM				/* TCP socket */
 };
 
 #if defined(LIBEVENT_EVHTTP) || (defined(_EVENT_NUMERIC_VERSION) && (_EVENT_NUMERIC_VERSION > 0x02010000))
@@ -181,7 +182,6 @@ sigusr2_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev_usr1);
 		event_del (&worker->sig_ev_usr2);
-		event_del (&worker->bind_ev);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
@@ -1741,6 +1741,7 @@ start_webui_worker (struct rspamd_worker *worker)
 {
 	struct sigaction                signals;
 	struct rspamd_webui_worker_ctx *ctx = worker->ctx;
+	GList                           *cur;
 
 #ifdef WITH_PROFILER
 	extern void                     _start (void), etext (void);
@@ -1773,7 +1774,12 @@ start_webui_worker (struct rspamd_worker *worker)
 	ctx->worker = worker;
 	/* Accept event */
 	ctx->http = evhttp_new (ctx->ev_base);
-	evhttp_accept_socket (ctx->http, worker->cf->listen_sock);
+
+	cur = worker->cf->listen_socks;
+	while (cur) {
+		evhttp_accept_socket (ctx->http, GPOINTER_TO_INT (cur->data));
+		cur = g_list_next (cur);
+	}
 
 	if (ctx->use_ssl) {
 #ifdef HAVE_WEBUI_SSL

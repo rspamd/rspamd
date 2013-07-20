@@ -32,7 +32,7 @@ gint accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t *len
 gint make_unix_socket (const gchar *, struct sockaddr_un *, gint type, gboolean is_server, gboolean async);
 
 /**
- * Make universal stream socket
+ * Make a universal socket
  * @param credits host, ip or path to unix socket
  * @param port port (used for network sockets)
  * @param type type of socket (SO_STREAM or SO_DGRAM)
@@ -43,6 +43,17 @@ gint make_unix_socket (const gchar *, struct sockaddr_un *, gint type, gboolean 
 gint make_universal_socket (const gchar *credits, guint16 port, gint type,
 		gboolean async, gboolean is_server, gboolean try_resolve);
 
+/**
+ * Make a universal sockets
+ * @param credits host, ip or path to unix socket (several items may be separated by ',')
+ * @param port port (used for network sockets)
+ * @param type type of socket (SO_STREAM or SO_DGRAM)
+ * @param async make this socket asynced
+ * @param is_server make this socket as server socket
+ * @param try_resolve try name resolution for a socket (BLOCKING)
+ */
+GList* make_universal_sockets_list (const gchar *credits, guint16 port, gint type,
+		gboolean async, gboolean is_server, gboolean try_resolve);
 /*
  * Create socketpair
  */

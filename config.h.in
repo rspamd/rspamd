@@ -467,6 +467,7 @@ typedef struct worker_s {
 	gboolean unique;
 	gboolean threaded;
 	gboolean killable;
+	gint listen_type;
 } worker_t;
 
 extern module_t *modules[];

@@ -62,7 +62,8 @@ worker_t smtp_proxy_worker = {
 	TRUE,						/* Has socket */
 	FALSE,						/* Non unique */
 	FALSE,						/* Non threaded */
-	TRUE						/* Killable */
+	TRUE,						/* Killable */
+	SOCK_STREAM					/* TCP socket */
 };
 
 struct smtp_proxy_ctx {
@@ -179,7 +180,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev_usr1);
 		event_del (&worker->sig_ev_usr2);
-		event_del (&worker->bind_ev);
+		worker_stop_accept (worker);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
@@ -1021,13 +1022,9 @@ config_smtp_proxy_worker (struct rspamd_worker *worker)
 void
 start_smtp_proxy (struct rspamd_worker *worker)
 {
-	struct sigaction                signals;
 	struct smtp_proxy_ctx         *ctx = worker->ctx;
 
-	gperf_profiler_init (worker->srv->cfg, "worker");
-
-	worker->srv->pid = getpid ();
-	ctx->ev_base = event_init ();
+	ctx->ev_base = prepare_worker (worker, "smtp_proxy", sig_handler, accept_socket);
 
 	/* Set smtp options */
 	if ( !config_smtp_proxy_worker (worker)) {
@@ -1035,8 +1032,6 @@ start_smtp_proxy (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 
-	init_signals (&signals, sig_handler);
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
@@ -1047,11 +1042,6 @@ start_smtp_proxy (struct rspamd_worker *worker)
 	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
 	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
 	signal_add (&worker->sig_ev_usr1, NULL);
-
-	/* Accept event */
-	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
-	event_base_set (ctx->ev_base, &worker->bind_ev);
-	event_add (&worker->bind_ev, NULL);
 
 	/* DNS resolver */
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);

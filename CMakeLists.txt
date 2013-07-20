@@ -1018,8 +1018,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src")
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
 				src/fuzzy_storage.c
-				src/kvstorage_server.c
-				src/lmtp.c
 				src/lua_worker.c
 				src/main.c
 				src/map.c
@@ -1036,7 +1034,7 @@ SET(PLUGINSSRC	src/plugins/surbl.c
 				src/plugins/dkim_check.c)
 				
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
-SET(WORKERS_LIST normal controller smtp smtp_proxy lmtp fuzzy keystorage lua webui)
+SET(WORKERS_LIST normal controller smtp smtp_proxy fuzzy lua webui)
 
 AddModules(MODULES_LIST WORKERS_LIST)
 

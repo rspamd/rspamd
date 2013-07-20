@@ -71,10 +71,11 @@ worker_t fuzzy_worker = {
 	"fuzzy",					/* Name */
 	init_fuzzy,					/* Init function */
 	start_fuzzy,				/* Start function */
-	FALSE,						/* No socket */
+	TRUE,						/* No socket */
 	TRUE,						/* Unique */
 	TRUE,						/* Threaded */
-	FALSE						/* Non killable */
+	FALSE,						/* Non killable */
+	SOCK_DGRAM					/* UDP socket */
 };
 
 static GQueue                  *hashes[BUCKETS];
@@ -364,8 +365,6 @@ sigterm_handler (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 	event_del (&worker->sig_ev_usr1);
 	event_del (&worker->sig_ev_usr2);
-	event_del (&worker->bind_ev);
-	close (worker->cf->listen_sock);
 
 	rspamd_mutex_lock (ctx->update_mtx);
 	mods = ctx->max_mods + 1;
@@ -392,8 +391,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev_usr1);
 	event_del (&worker->sig_ev_usr2);
-	event_del (&worker->bind_ev);
-	close (worker->cf->listen_sock);
+	worker_stop_accept (worker);
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	rspamd_mutex_lock (ctx->update_mtx);
 	mods = ctx->max_mods + 1;
@@ -1025,20 +1023,13 @@ init_fuzzy (void)
 void
 start_fuzzy (struct rspamd_worker *worker)
 {
-	struct sigaction                 signals;
 	struct event                     sev;
-	gint                              retries = 0;
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError                          *err = NULL;
 
-	worker->srv->pid = getpid ();
-
-	ctx->ev_base = event_init ();
+	ctx->ev_base = prepare_worker (worker, "controller", sig_handler, accept_fuzzy_socket);
 
 	server_stat = worker->srv->stat;
-
-	init_signals (&signals, sig_handler);
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
@@ -1054,16 +1045,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &sev);
 	signal_add (&sev, NULL);
 
-	/* Listen event */
-	while ((worker->cf->listen_sock =
-			make_universal_socket (worker->cf->bind_addr, worker->cf->bind_port, SOCK_DGRAM, TRUE, TRUE, FALSE)) == -1) {
-		sleep (1);
-		if (++retries > MAX_RETRIES) {
-			msg_err ("cannot bind to socket, exiting");
-			exit (0);
-		}
-	}
-
 	/* Init bloom filter */
 	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);
 	/* Try to read hashes from file */
@@ -1078,10 +1059,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	tmv.tv_usec = 0;
 	evtimer_add (&tev, &tmv);
 
-	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_fuzzy_socket, (void *)worker);
-	event_base_set (ctx->ev_base, &worker->bind_ev);
-	event_add (&worker->bind_ev, NULL);
-
 	/* Create radix tree */
 	if (ctx->update_map != NULL) {
 		if (!add_map (worker->srv->cfg, ctx->update_map, "Allow fuzzy updates from specified addresses",
@@ -1094,8 +1071,6 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	/* Maps events */
 	start_map_watch (worker->srv->cfg, ctx->ev_base);
-
-	gperf_profiler_init (worker->srv->cfg, "fuzzy");
 
 	ctx->update_thread = rspamd_create_thread ("fuzzy update", sync_cache, worker, &err);
 	if (ctx->update_thread == NULL) {

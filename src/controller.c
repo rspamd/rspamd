@@ -60,7 +60,8 @@ worker_t controller_worker = {
 	TRUE,						/* Has socket */
 	FALSE,						/* Non unique */
 	FALSE,						/* Non threaded */
-	TRUE						/* Killable */
+	TRUE,						/* Killable */
+	SOCK_STREAM					/* TCP socket */
 };
 
 enum command_type {
@@ -171,7 +172,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev_usr1);
 	event_del (&worker->sig_ev_usr2);
-	event_del (&worker->bind_ev);
+	worker_stop_accept (worker);
 	msg_info ("controller's shutdown is pending in %d sec", 2);
 	event_loopexit (&tv);
 	return;
@@ -1886,21 +1887,14 @@ init_controller (void)
 void
 start_controller (struct rspamd_worker *worker)
 {
-	struct sigaction                signals;
 	gchar                          *hostbuf;
 	gsize                           hostmax;
-	struct rspamd_controller_ctx   *ctx;
+	struct rspamd_controller_ctx   *ctx = worker->ctx;
 	GError                         *err = NULL;
 	struct timeval                  tv;
 
-	worker->srv->pid = getpid ();
-	ctx = worker->ctx;
-
-	ctx->ev_base = event_init ();
+	ctx->ev_base = prepare_worker (worker, "controller", sig_handler, accept_socket);
 	g_mime_init (0);
-
-	init_signals (&signals, sig_handler);
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
@@ -1949,15 +1943,9 @@ start_controller (struct rspamd_worker *worker)
 	gethostname (hostbuf, hostmax);
 	hostbuf[hostmax - 1] = '\0';
 	rspamd_snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
-	/* Accept event */
-	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
-	event_base_set (ctx->ev_base, &worker->bind_ev);
-	event_add (&worker->bind_ev, NULL);
 
 	start_map_watch (worker->srv->cfg, ctx->ev_base);
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
-
-	gperf_profiler_init (worker->srv->cfg, "controller");
 
 	event_base_loop (ctx->ev_base, 0);
 

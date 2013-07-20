@@ -53,7 +53,7 @@ struct rspamd_worker {
 	GQuark type;												/**< process type									*/
 	struct event sig_ev_usr1;									/**< signals event									*/
 	struct event sig_ev_usr2;									/**< signals event									*/
-	struct event bind_ev;										/**< socket events									*/
+	GList *accept_events;										/**< socket events									*/
 	struct worker_conf *cf;										/**< worker config data								*/
 	gpointer ctx;												/**< worker's specific data							*/
 };
@@ -320,6 +320,31 @@ void free_task_soft (gpointer ud);
  * Set counter for a symbol
  */
 double set_counter (const gchar *name, guint32 value);
+
+#ifndef HAVE_SA_SIGINFO
+typedef void (*rspamd_sig_handler_t) (gint);
+#else
+typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
+#endif
+
+/**
+ * Prepare worker's startup
+ * @param worker worker structure
+ * @param name name of the worker
+ * @param sig_handler handler of main signals
+ * @param accept_handler handler of accept event for listen sockets
+ * @return event base suitable for a worker
+ */
+struct event_base *
+prepare_worker (struct rspamd_worker *worker, const char *name,
+		rspamd_sig_handler_t sig_handler,
+		void (*accept_handler)(evutil_socket_t, short, void *));
+
+/**
+ * Stop accepting new connections for a worker
+ * @param worker
+ */
+void worker_stop_accept (struct rspamd_worker *worker);
 
 #endif
 

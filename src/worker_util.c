@@ -213,3 +213,66 @@ set_counter (const gchar *name, guint32 value)
 
 	return cd->value;
 }
+
+struct event_base *
+prepare_worker (struct rspamd_worker *worker, const char *name,
+		rspamd_sig_handler_t sig_handler,
+		void (*accept_handler)(evutil_socket_t, short, void *))
+{
+	struct event_base                *ev_base;
+	struct event                     *accept_event;
+	struct sigaction                  signals;
+	GList                             *cur;
+	gint                               listen_socket;
+
+#ifdef WITH_PROFILER
+	extern void                     _start (void), etext (void);
+	monstartup ((u_long) & _start, (u_long) & etext);
+#endif
+
+	gperf_profiler_init (worker->srv->cfg, "worker");
+
+	worker->srv->pid = getpid ();
+
+	ev_base = event_init ();
+
+	init_signals (&signals, sig_handler);
+	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
+
+	/* Accept all sockets */
+	cur = worker->cf->listen_socks;
+	while (cur) {
+		listen_socket = GPOINTER_TO_INT (cur->data);
+		if (listen_socket != -1) {
+			accept_event = g_slice_alloc0 (sizeof (struct event));
+			event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
+					accept_handler, worker);
+			event_base_set (ev_base, accept_event);
+			event_add (accept_event, NULL);
+			worker->accept_events = g_list_prepend (worker->accept_events, accept_event);
+		}
+		cur = g_list_next (cur);
+	}
+
+	return ev_base;
+}
+
+void
+worker_stop_accept (struct rspamd_worker *worker)
+{
+	GList                             *cur;
+	struct event                     *event;
+
+	/* Remove all events */
+	cur = worker->accept_events;
+	while (cur) {
+		event = cur->data;
+		event_del (event);
+		cur = g_list_next (cur);
+		g_slice_free1 (sizeof (struct event), event);
+	}
+
+	if (worker->accept_events != NULL) {
+		g_list_free (worker->accept_events);
+	}
+}

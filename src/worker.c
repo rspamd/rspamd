@@ -57,7 +57,8 @@ worker_t normal_worker = {
 	TRUE,						/* Has socket */
 	FALSE,						/* Non unique */
 	FALSE,						/* Non threaded */
-	TRUE						/* Killable */
+	TRUE,						/* Killable */
+	SOCK_STREAM					/* TCP socket */
 };
 
 #ifndef BUILD_STATIC
@@ -157,7 +158,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev_usr1);
 		event_del (&worker->sig_ev_usr2);
-		event_del (&worker->bind_ev);
+		worker_stop_accept (worker);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
@@ -816,25 +817,12 @@ init_worker (void)
 void
 start_worker (struct rspamd_worker *worker)
 {
-	struct sigaction                signals;
 	gchar                          *is_custom_str;
 	struct rspamd_worker_ctx       *ctx = worker->ctx;
 	GError						   *err = NULL;
 	struct lua_locked_state		   *nL;
 
-#ifdef WITH_PROFILER
-	extern void                     _start (void), etext (void);
-	monstartup ((u_long) & _start, (u_long) & etext);
-#endif
-
-	gperf_profiler_init (worker->srv->cfg, "worker");
-
-	worker->srv->pid = getpid ();
-
-	ctx->ev_base = event_init ();
-
-	init_signals (&signals, sig_handler);
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
+	ctx->ev_base = prepare_worker (worker, "normal", sig_handler, accept_socket);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
@@ -845,12 +833,6 @@ start_worker (struct rspamd_worker *worker)
 	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
 	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
 	signal_add (&worker->sig_ev_usr1, NULL);
-
-	/* Accept event */
-	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST,
-			accept_socket, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->bind_ev);
-	event_add (&worker->bind_ev, NULL);
 
 
 #ifndef BUILD_STATIC

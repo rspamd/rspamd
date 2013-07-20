@@ -550,20 +550,26 @@ dump_cfg_vars (struct config_file *cfg)
 	g_hash_table_foreach (cfg->variables, dump_all_variables, NULL);
 }
 
-static gint
-create_listen_socket (const gchar *addr, gint port, gint family)
+static GList *
+create_listen_socket (const gchar *addr, gint port, gint family, gint listen_type)
 {
 	gint                            listen_sock = -1;
-	/* Create listen socket */
-	listen_sock = make_universal_socket (addr, port, SOCK_STREAM, TRUE, TRUE, TRUE);
+	GList                          *result, *cur;
+	/* Create listen sockets */
+	result = make_universal_sockets_list (addr, port, listen_type, TRUE, TRUE, TRUE);
 
-	if (listen_sock != -1) {
-		if (listen (listen_sock, -1) == -1) {
-			msg_err ("cannot listen on socket. %s", strerror (errno));
+	cur = result;
+	while (cur != NULL) {
+		listen_sock = GPOINTER_TO_INT (cur->data);
+		if (listen_sock != -1) {
+			if (listen (listen_sock, -1) == -1) {
+				msg_err ("cannot listen on socket. %s", strerror (errno));
+			}
 		}
+		cur = g_list_next (cur);
 	}
 
-	return listen_sock;
+	return result;
 }
 
 static void
@@ -596,9 +602,9 @@ make_listen_key (const gchar *addr, gint port, gint family)
 static void
 spawn_workers (struct rspamd_main *rspamd)
 {
-	GList                          *cur;
+	GList                          *cur, *ls;
 	struct worker_conf             *cf;
-	gint                            i, listen_sock;
+	gint                            i;
 	gpointer                        p;
 
 	cur = rspamd->cfg->workers;
@@ -614,19 +620,20 @@ spawn_workers (struct rspamd_main *rspamd)
 				if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
 						make_listen_key (cf->bind_addr, cf->bind_port, cf->bind_family)))) == NULL) {
 					/* Create listen socket */
-					listen_sock = create_listen_socket (cf->bind_addr, cf->bind_port, cf->bind_family);
-					if (listen_sock == -1) {
+					ls = create_listen_socket (cf->bind_addr, cf->bind_port, cf->bind_family,
+							cf->worker->listen_type);
+					if (ls == NULL) {
 						exit (-errno);
 					}
 					g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
 							make_listen_key (cf->bind_addr, cf->bind_port, cf->bind_family)),
-							GINT_TO_POINTER (listen_sock));
+							ls);
 				}
 				else {
 					/* We had socket for this type of worker */
-					listen_sock = GPOINTER_TO_INT (p);
+					ls = p;
 				}
-				cf->listen_sock = listen_sock;
+				cf->listen_socks = ls;
 			}
 
 			if (cf->worker->unique) {
