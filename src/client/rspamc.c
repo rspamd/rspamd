@@ -75,6 +75,7 @@ enum rspamc_command {
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
 	RSPAMC_COMMAND_STAT,
+	RSPAMC_COMMAND_STAT_RESET,
 	RSPAMC_COMMAND_COUNTERS,
 	RSPAMC_COMMAND_UPTIME,
 	RSPAMC_COMMAND_ADD_SYMBOL,
@@ -130,6 +131,9 @@ check_rspamc_command (const gchar *cmd)
 	}
 	else if (g_ascii_strcasecmp (cmd, "STAT") == 0) {
 		return RSPAMC_COMMAND_STAT;
+	}
+	else if (g_ascii_strcasecmp (cmd, "STAT_RESET") == 0) {
+		return RSPAMC_COMMAND_STAT_RESET;
 	}
 	else if (g_ascii_strcasecmp (cmd, "COUNTERS") == 0) {
 		return RSPAMC_COMMAND_COUNTERS;
@@ -848,6 +852,9 @@ main (gint argc, gchar **argv, gchar **env)
 				break;
 			case RSPAMC_COMMAND_STAT:
 				rspamc_do_controller_simple_command ("stat", NULL);
+				break;
+			case RSPAMC_COMMAND_STAT_RESET:
+				rspamc_do_controller_simple_command ("stat_reset", NULL);
 				break;
 			case RSPAMC_COMMAND_COUNTERS:
 				show_rspamd_counters ();

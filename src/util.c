@@ -152,6 +152,8 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean
 		}
 		else if (fd != -1) {
 			*list = g_list_prepend (*list, GINT_TO_POINTER (fd));
+			cur = cur->ai_next;
+			continue;
 		}
 out:
 		if (fd != -1) {
@@ -470,6 +472,7 @@ err:
 		if (fd != -1) {
 			close (fd);
 		}
+		rcur = g_list_next (rcur);
 	}
 	if (result != NULL) {
 		g_list_free (result);
