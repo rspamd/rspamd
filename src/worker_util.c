@@ -217,7 +217,7 @@ set_counter (const gchar *name, guint32 value)
 struct event_base *
 prepare_worker (struct rspamd_worker *worker, const char *name,
 		rspamd_sig_handler_t sig_handler,
-		void (*accept_handler)(evutil_socket_t, short, void *))
+		void (*accept_handler)(int, short, void *))
 {
 	struct event_base                *ev_base;
 	struct event                     *accept_event;
