@@ -30,7 +30,7 @@ https://launchpad.net/~vsevolod-n/+archive/rspamd
 Users of other OSes should use sources to build and install rspamd. You can
 obtain rspamd sources at the bitbucket download page:
 
-https//:bitbucket.org/vstakhov/rspamd/downloads. 
+https//:bitbucket.org/vstakhov/rspamd/downloads 
 
 There are packages for debian and CentOS/RHEL distribution. Debian users could
 use *debuild* utility to create the binary packages of rspamd. CentOS/RHEL
@@ -107,6 +107,6 @@ guide and reference.
 REFERENCES
 ==========
 
-* *Home site*: https://rspamd.com
+* *Home site*: http://rspamd.com
 * *Downloads*: https://bitbucket.org/vstakhov/rspamd/downloads
 * *Wiki*: https://bitbucket.org/vstakhov/rspamd/wiki/
