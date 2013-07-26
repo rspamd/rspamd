@@ -24,10 +24,12 @@ INSTALLATION
 
 Rspamd runs on a Unix like operational systems. FreeBSD users can use ports
 collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad PPA:
+
 https://launchpad.net/~vsevolod-n/+archive/rspamd
 
 Users of other OSes should use sources to build and install rspamd. You can
 obtain rspamd sources at the bitbucket download page:
+
 https//:bitbucket.org/vstakhov/rspamd/downloads. 
 
 There are packages for debian and CentOS/RHEL distribution. Debian users could
@@ -54,11 +56,11 @@ Build process
 
 Building of rspamd is simple:
 
-`
+
     $ cmake .
     $ make
     # make install
-`
+
 
 After installation binaries, rules, plugins and a sample configuration will be
 installed in the target directories (prefixed by */usr/local* by default). To
@@ -89,10 +91,8 @@ You can improve quality of rspamd by learning its statistic module. The easiest
 way to do it is to use rspamc client (you can setup a custom email alias to
 pipe messages to rspamc)
 
-`
     $ rspamc -P 'q1' -c bayes learn_spam [ file1 [file2 [...]]]
     $ rspamc -P 'q1' -c bayes learn_ham [ file1 [file2 [...]]]
-`
 
 Note: you should consider to change default controller's password 'q1' to yours
 one specified in the controller section of configuration.
@@ -107,6 +107,6 @@ guide and reference.
 REFERENCES
 ==========
 
-Home site: https://rspamd.com
-Downloads: https://bitbucket.org/vstakhov/rspamd/downloads
-Wiki: https://bitbucket.org/vstakhov/rspamd/wiki/
+* *Home site*: https://rspamd.com
+* *Downloads*: https://bitbucket.org/vstakhov/rspamd/downloads
+* *Wiki*: https://bitbucket.org/vstakhov/rspamd/wiki/
