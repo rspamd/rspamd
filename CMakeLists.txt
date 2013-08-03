@@ -1013,7 +1013,7 @@ ENDIF(HG)
 
 ################################ SOURCES SECTION ###########################
 
-INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src")
+INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src" "${CMAKE_SOURCE_DIR}/contrib/uthash")
 
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
