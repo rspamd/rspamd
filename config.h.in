@@ -200,6 +200,12 @@
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine PARAM_H_HAS_BITSET  1
 
+#if (defined(__i386__) || defined(__x86_64__)  || defined(_M_IX86))
+/* Use murmur hash for UTHash for these platforms */
+#define HASH_FUNCTION MUR
+#define HASH_USING_NO_STRICT_ALIASING
+#endif
+
 #define ETC_PREFIX        "${ETC_PREFIX}"
 #define LOCALSTATES_PREFIX "${LOCALSTATES_PREFIX}"
 #define CMAKE_PREFIX "${CMAKE_INSTALL_PREFIX}"
