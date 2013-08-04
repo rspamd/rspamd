@@ -39,8 +39,9 @@ enum rspamd_cl_type {
 	RSPAMD_CL_OBJECT = 0,
 	RSPAMD_CL_ARRAY,
 	RSPAMD_CL_NUMBER,
+	RSPAMD_CL_FLOAT,
 	RSPAMD_CL_STRING,
-	RSPAMD_CL_FLOAT
+	RSPAMD_CL_BOOLEAN
 };
 
 enum rspamd_cl_emitter {
@@ -139,6 +140,43 @@ rspamd_cl_obj_toint (rspamd_cl_object_t *obj)
 }
 
 /**
+ * Converts an object to boolean value
+ * @param obj CL object
+ * @param target target boolean variable
+ * @return TRUE if conversion was successful
+ */
+static inline gboolean
+rspamd_cl_obj_toboolean_safe (rspamd_cl_object_t *obj, gboolean *target)
+{
+	if (obj == NULL) {
+		return FALSE;
+	}
+	switch (obj->type) {
+	case RSPAMD_CL_BOOLEAN:
+		*target = (obj->value.iv == TRUE);
+		break;
+	default:
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/**
+ * Unsafe version of \ref rspamd_cl_obj_toboolean_safe
+ * @param obj CL object
+ * @return boolean value
+ */
+static inline gboolean
+rspamd_cl_obj_toboolean (rspamd_cl_object_t *obj)
+{
+	gboolean result = FALSE;
+
+	rspamd_cl_obj_toboolean_safe (obj, &result);
+	return result;
+}
+
+/**
  * Converts an object to string value
  * @param obj CL object
  * @param target target string variable, no need to free value
@@ -167,7 +205,7 @@ rspamd_cl_obj_tostring_safe (rspamd_cl_object_t *obj, const gchar **target)
  * @return string value
  */
 static inline const gchar *
-rspamd_cl_obj_toint (rspamd_cl_object_t *obj)
+rspamd_cl_obj_tostring (rspamd_cl_object_t *obj)
 {
 	const gchar *result = NULL;
 
