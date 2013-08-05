@@ -202,7 +202,7 @@
 
 #if (defined(__i386__) || defined(__x86_64__)  || defined(_M_IX86))
 /* Use murmur hash for UTHash for these platforms */
-#define HASH_FUNCTION MUR
+#define HASH_FUNCTION HASH_MUR
 #define HASH_USING_NO_STRICT_ALIASING
 #endif
 /* Configure allocator */

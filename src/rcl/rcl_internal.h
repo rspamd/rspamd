@@ -25,10 +25,55 @@
 #define RCL_INTERNAL_H_
 
 #include "rcl.h"
+#include "utlist.h"
 
 /**
  * @file rcl_internal.h
  * Internal structures and functions of RCL library
  */
+
+#define RCL_ERROR rcl_error_quark ()
+static inline GQuark
+rcl_error_quark (void)
+{
+	return g_quark_from_static_string ("rcl-error-quark");
+}
+
+enum rspamd_cl_parser_state {
+	RSPAMD_RCL_STATE_INIT = 0,
+	RSPAMD_RCL_STATE_OBJECT,
+	RSPAMD_RCL_STATE_ARRAY,
+	RSPAMD_RCL_STATE_KEY,
+	RSPAMD_RCL_STATE_VALUE,
+	RSPAMD_RCL_STATE_SCOMMENT,
+	RSPAMD_RCL_STATE_MCOMMENT,
+	RSPAMD_RCL_STATE_MACRO_NAME,
+	RSPAMD_RCL_STATE_MACRO,
+	RSPAMD_RCL_STATE_ERROR
+};
+
+struct rspamd_cl_macro {
+	gchar *name;
+	rspamd_cl_macro_handler handler;
+	gpointer ud;
+	UT_hash_handle hh;
+};
+
+struct rspamd_cl_stack {
+	rspamd_cl_object_t *obj;
+	struct rspamd_cl_stack *next;
+};
+
+struct rspamd_cl_parser {
+	enum rspamd_cl_parser_state state;
+	enum rspamd_cl_parser_state prev_state;
+	gint comments_nested;
+	rspamd_cl_object_t *top_obj;
+	rspamd_cl_object_t *cur_obj;
+	struct rspamd_cl_macro *macroes;
+	struct rspamd_cl_stack *stack;
+	guint line;
+	guint column;
+};
 
 #endif /* RCL_INTERNAL_H_ */
