@@ -25,7 +25,6 @@
 #define RCL_H_
 
 #include "config.h"
-#include "mem_pool.h"
 #include "uthash.h"
 
 /**
@@ -38,10 +37,11 @@
 enum rspamd_cl_type {
 	RSPAMD_CL_OBJECT = 0,
 	RSPAMD_CL_ARRAY,
-	RSPAMD_CL_NUMBER,
+	RSPAMD_CL_INT,
 	RSPAMD_CL_FLOAT,
 	RSPAMD_CL_STRING,
-	RSPAMD_CL_BOOLEAN
+	RSPAMD_CL_BOOLEAN,
+	RSPAMD_CL_TIME
 };
 
 enum rspamd_cl_emitter {
@@ -66,16 +66,17 @@ typedef struct rspamd_cl_object_s {
  * @return TRUE if conversion was successful
  */
 static inline gboolean
-rspamd_cl_obj_tonumber_safe (rspamd_cl_object_t *obj, gdouble *target)
+rspamd_cl_obj_todouble_safe (rspamd_cl_object_t *obj, gdouble *target)
 {
 	if (obj == NULL) {
 		return FALSE;
 	}
 	switch (obj->type) {
-	case RSPAMD_CL_NUMBER:
+	case RSPAMD_CL_INT:
 		*target = obj->value.iv; /* Probaly could cause overflow */
 		break;
 	case RSPAMD_CL_FLOAT:
+	case RSPAMD_CL_TIME:
 		*target = obj->value.dv;
 		break;
 	default:
@@ -86,16 +87,16 @@ rspamd_cl_obj_tonumber_safe (rspamd_cl_object_t *obj, gdouble *target)
 }
 
 /**
- * Unsafe version of \ref rspamd_cl_obj_tonumber_safe
+ * Unsafe version of \ref rspamd_cl_obj_todouble_safe
  * @param obj CL object
  * @return double value
  */
 static inline gdouble
-rspamd_cl_obj_tonumber (rspamd_cl_object_t *obj)
+rspamd_cl_obj_todouble (rspamd_cl_object_t *obj)
 {
 	gdouble result = 0.;
 
-	rspamd_cl_obj_tonumber_safe (obj, &result);
+	rspamd_cl_obj_todouble_safe (obj, &result);
 	return result;
 }
 
@@ -112,10 +113,11 @@ rspamd_cl_obj_toint_safe (rspamd_cl_object_t *obj, gint64 *target)
 		return FALSE;
 	}
 	switch (obj->type) {
-	case RSPAMD_CL_NUMBER:
+	case RSPAMD_CL_INT:
 		*target = obj->value.iv;
 		break;
 	case RSPAMD_CL_FLOAT:
+	case RSPAMD_CL_TIME:
 		*target = obj->value.dv; /* Loosing of decimal points */
 		break;
 	default:
@@ -231,7 +233,7 @@ struct rspamd_cl_parser;
  * @param pool pool to allocate memory from
  * @return new parser object
  */
-struct rspamd_cl_parser* rspamd_cl_parser_new (memory_pool_t *pool);
+struct rspamd_cl_parser* rspamd_cl_parser_new (void);
 
 /**
  * Register new handler for a macro
