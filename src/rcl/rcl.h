@@ -38,7 +38,8 @@ enum rspamd_cl_error {
 	RSPAMD_CL_EOK = 0,
 	RSPAMD_CL_ESYNTAX,
 	RSPAMD_CL_EIO,
-	RSPAMD_CL_ESTATE
+	RSPAMD_CL_ESTATE,
+	RSPAMD_CL_ENESTED
 };
 
 enum rspamd_cl_type {
@@ -57,10 +58,12 @@ enum rspamd_cl_emitter {
 };
 
 typedef struct rspamd_cl_object_s {
+	gchar *key;								/**< the key of an object */
 	union {
 		gint64 iv;							/**< int value of an object */
 		gchar *sv;							/**< string value of an object */
 		gdouble dv;							/**< double value of an object */
+		struct rspamd_cl_object_s *ov;		/**< array or hash 			*/
 	} value;
 	enum rspamd_cl_type type;				/**< real type				*/
 	struct rspamd_cl_object_s *next;		/**< array handle			*/
