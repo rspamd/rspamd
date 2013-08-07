@@ -326,7 +326,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 
 	/* We are now at the end of the key, need to parse the rest */
 	while (p < chunk->end) {
-		if (*p == ' ' || *p == '\t') {
+		if (g_ascii_isspace (*p)) {
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
