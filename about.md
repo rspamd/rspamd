@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Rspamd spam filtering system
+title: About rspamd
 ---
 
 DESCRIPTION
@@ -30,12 +30,12 @@ INSTALLATION
 Rspamd runs on a Unix like operational systems. FreeBSD users can use ports
 collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad PPA:
 
-https://launchpad.net/~vsevolod-n/+archive/rspamd
+<https://launchpad.net/~vsevolod-n/+archive/rspamd>
 
 Users of other OSes should use sources to build and install rspamd. You can
 obtain rspamd sources at the bitbucket download page:
 
-https://bitbucket.org/vstakhov/rspamd/downloads 
+<https://bitbucket.org/vstakhov/rspamd/downloads>
 
 There are packages for debian and CentOS/RHEL distribution. Debian users could
 use *debuild* utility to create the binary packages of rspamd. CentOS/RHEL
@@ -73,12 +73,12 @@ start working with rspamd you should do several steps (please note that this is
 not applicable to an installation based on packages, as such an installation
 have everything ready for using):
 
-1. Copy a sample configuration *$PREFIX/etc/rspamd.xml.sample* to
-*$PREFIX/etc/rspamd.xml*
-2. Edit *rspamd.xml* according to your system (described
+1. Copy a sample configuration $PREFIX/etc/rspamd.xml.sample to
+$PREFIX/etc/rspamd.xml
+2. Edit rspamd.xml according to your system (described
 later). 
-3. Make a directory for rspamd pid file and data (*/var/run/rspamd* by
-default) and make rspamd user (*nobody* by default) as the owner of rspamd data
+3. Make a directory for rspamd pid file and data (/var/run/rspamd by
+default) and make rspamd user (nobody by default) as the owner of rspamd data
 directory. 
 4. Make a directory for rspamd logs (or setup syslog to accept
 rspamd log messages).
@@ -112,6 +112,6 @@ guide and reference.
 REFERENCES
 ==========
 
-* *Home site*: http://rspamd.com
-* *Downloads*: https://bitbucket.org/vstakhov/rspamd/downloads
-* *Wiki*: https://bitbucket.org/vstakhov/rspamd/wiki/
+* Home site: <http://rspamd.com>
+* Downloads: <https://bitbucket.org/vstakhov/rspamd/downloads>
+* Wiki: <https://bitbucket.org/vstakhov/rspamd/wiki/>

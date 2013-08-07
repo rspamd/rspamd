@@ -1,0 +1,38 @@
+---
+layout: default
+title: Rspamd spam filtering system
+---
+
+<div class="row">
+	<div class="col-lg-4">
+	<h2>Performance</h2>
+	<p>Rspamd is optimized to work as fast as possible. There is numerous of optimisations that allow your mail to be processed faster. 
+     Rspamd uses event based processing model and do not block anywhere in the code. Moreover, it is possible to use multiply threads
+     for paralleling complex tasks and multiply processes to serve requests. This allows the processing of hundreds messages per second
+     without a significant CPU load.</p>
+	</div>
+	<div class="col-lg-4">
+	<h2>Features</h2>
+	<p>Rspamd supports various internal and external filters to process messages, such as regular expressions, suffix tries, RBL, URL black lists,
+     IP lists, SPF, DKIM, character maps. For advanced filtering rspamd provides improved statistcs module (based on 
+	<a href="http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf">OSB-Bayes algorithm</a>) and fuzzy hashes database that is generated based on
+     <a href="http://en.wikipedia.org/wiki/Honeypot_%28computing%29">honeypots</a> traffic.</p>
+	</div>
+	<div class="col-lg-4">
+	<h2>Extensions</h2>
+	<p>Rspamd can easily be extended with your own rules and plugins that could be written in <a href="http://lua.org">lua language</a>. Moreover,
+     rspamd ships with numerous of lua plugins and rules. The extensive lua API documentation is also available.</p>
+	</div>
+</div>
+<div class="row">
+	<div class="col-lg-4">
+	<p><a class="btn btn-primary" href="/doc/performance.html">View details &raquo;</a></p>
+	</div>
+	<div class="col-lg-4">
+	<p><a class="btn btn-primary" href="/doc/features.html">View details &raquo;</a></p>
+	</div>
+	<div class="col-lg-4">
+	<p><a class="btn btn-primary" href="/doc/lua/">View details &raquo;</a></p>
+	</div>
+</div>
+

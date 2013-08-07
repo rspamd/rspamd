@@ -1,3 +1,3 @@
 name: Rspamd - rapid spam filtering system.
-markdown: redcarpet
+markdown: kramdown
 pygments: true
