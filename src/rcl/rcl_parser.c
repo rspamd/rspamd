@@ -357,6 +357,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 			if (!rspamd_cl_skip_comments (parser, err)) {
 				return FALSE;
 			}
+			p = chunk->pos;
 		}
 		else {
 			/* Start value */
