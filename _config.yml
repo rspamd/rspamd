@@ -1,3 +1,5 @@
 name: Rspamd - rapid spam filtering system.
 markdown: kramdown
 pygments: true
+paginate: 3
+paginate_path: "blog/page:num"
