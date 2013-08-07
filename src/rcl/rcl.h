@@ -282,6 +282,12 @@ rspamd_cl_object_t* rspamd_cl_parser_get_object (struct rspamd_cl_parser *parser
 void rspamd_cl_parser_free (struct rspamd_cl_parser *parser);
 
 /**
+ * Free cl object
+ * @param obj cl object to free
+ */
+void rspamd_cl_obj_free (rspamd_cl_object_t *obj);
+
+/**
  * Emit object to a string
  * @param obj object
  * @param emit_type if type is RSPAMD_CL_EMIT_JSON then emit json, if type is

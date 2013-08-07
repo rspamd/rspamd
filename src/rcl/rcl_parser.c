@@ -236,96 +236,6 @@ rspamd_cl_lex_json_string (struct rspamd_cl_parser *parser,
 }
 
 /**
- * Unescape json string inplace
- * @param str
- */
-static void
-rspamd_cl_unescape_json_string (gchar *str)
-{
-	gchar *t = str, *h = str;
-	gint i, uval;
-
-	/* t is target (tortoise), h is source (hare) */
-
-	while (*h != '\0') {
-		if (*h == '\\') {
-			h ++;
-			switch (*h) {
-			case 'n':
-				*t++ = '\n';
-				break;
-			case 'r':
-				*t++ = '\r';
-				break;
-			case 'b':
-				*t++ = '\b';
-				break;
-			case 't':
-				*t++ = '\t';
-				break;
-			case 'f':
-				*t++ = '\f';
-				break;
-			case '\\':
-				*t++ = '\\';
-				break;
-			case '"':
-				*t++ = '"';
-				break;
-			case 'u':
-				/* Unicode escape */
-				uval = 0;
-				for (i = 0; i < 4; i++) {
-					uval <<= 4;
-					if (g_ascii_isdigit (h[i])) {
-						uval += h[i] - '0';
-					}
-					else if (h[i] >= 'a' && h[i] <= 'f') {
-						uval += h[i] - 'a' + 10;
-					}
-					else if (h[i] >= 'A' && h[i] <= 'F') {
-						uval += h[i] - 'A' + 10;
-					}
-				}
-				/* Encode */
-				if(uval < 0x80) {
-					t[0] = (char)uval;
-					t ++;
-				}
-				else if(uval < 0x800) {
-					t[0] = 0xC0 + ((uval & 0x7C0) >> 6);
-					t[1] = 0x80 + ((uval & 0x03F));
-					t += 2;
-				}
-				else if(uval < 0x10000) {
-					t[0] = 0xE0 + ((uval & 0xF000) >> 12);
-					t[1] = 0x80 + ((uval & 0x0FC0) >> 6);
-					t[2] = 0x80 + ((uval & 0x003F));
-					t += 3;
-				}
-				else if(uval <= 0x10FFFF) {
-					t[0] = 0xF0 + ((uval & 0x1C0000) >> 18);
-					t[1] = 0x80 + ((uval & 0x03F000) >> 12);
-					t[2] = 0x80 + ((uval & 0x000FC0) >> 6);
-					t[3] = 0x80 + ((uval & 0x00003F));
-					t += 4;
-				}
-				else {
-					*t++ = '?';
-				}
-				break;
-			default:
-				*t++ = '?';
-				break;
-			}
-		}
-		else {
-			*t++ = *h++;
-		}
-	}
-}
-
-/**
  * Parse a key in an object
  * @param parser
  * @param chunk
@@ -338,7 +248,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 {
 	const guchar *p, *c = NULL, *end;
 	gboolean got_quote = FALSE, got_eq = FALSE, got_semicolon = FALSE;
-	rspamd_cl_object_t *nobj;
+	rspamd_cl_object_t *nobj, *tobj;
 
 	p = chunk->pos;
 
@@ -442,6 +352,12 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 				return FALSE;
 			}
 		}
+		else if (*p == '/' || *p == '#') {
+			/* Check for comment */
+			if (!rspamd_cl_skip_comments (parser, err)) {
+				return FALSE;
+			}
+		}
 		else {
 			/* Start value */
 			break;
@@ -460,6 +376,13 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 
 	if (got_quote) {
 		rspamd_cl_unescape_json_string (nobj->key);
+	}
+
+	HASH_FIND_STR (parser->cur_obj->value.ov, nobj->key, tobj);
+	if (tobj != NULL) {
+		/* We are going to replace old key with new one */
+		HASH_DELETE (hh, parser->cur_obj->value.ov, tobj);
+		rspamd_cl_obj_free (tobj);
 	}
 
 	HASH_ADD_KEYPTR (hh, parser->cur_obj->value.ov, nobj->key, strlen (nobj->key), nobj);

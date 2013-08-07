@@ -84,4 +84,10 @@ struct rspamd_cl_parser {
 	struct rspamd_cl_chunk *chunks;
 };
 
+/**
+ * Unescape json string inplace
+ * @param str
+ */
+void rspamd_cl_unescape_json_string (gchar *str);
+
 #endif /* RCL_INTERNAL_H_ */
