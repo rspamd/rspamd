@@ -214,7 +214,7 @@
 #define CMAKE_PREFIX "${CMAKE_INSTALL_PREFIX}"
 
 #define RVERSION          "${RSPAMD_VERSION}"
-#define RID               "${ID}"
+#define RID               "${RSPAMD_ID}"
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
 #define MODULES_NUM        ${RSPAMD_MODULES_NUM}
