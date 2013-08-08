@@ -209,6 +209,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 		}
 #endif
 		*host = memory_pool_strdup (cfg->cfg_pool, str);
+		*addr = *host;
 		*family = AF_UNIX;
 		return 1;
 	}
