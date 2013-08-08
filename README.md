@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/vstakhov/rspamd.png)](https://travis-ci.org/vstakhov/rspamd)
+
 REFERENCES
 ==========
 
