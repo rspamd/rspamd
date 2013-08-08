@@ -36,26 +36,31 @@ rspamd_cl_obj_free (rspamd_cl_object_t *obj)
 {
 	rspamd_cl_object_t *sub, *tmp;
 
-	if (obj->key != NULL) {
-		g_free (obj->key);
-	}
+	while (obj != NULL) {
+		if (obj->key != NULL) {
+			g_free (obj->key);
+		}
 
-	if (obj->type == RSPAMD_CL_STRING) {
-		g_free (obj->value.sv);
-	}
-	else if (obj->type == RSPAMD_CL_ARRAY) {
-		sub = obj->value.ov;
-		while (sub != NULL) {
-			tmp = sub->next;
-			rspamd_cl_obj_free (sub);
-			sub = tmp;
+		if (obj->type == RSPAMD_CL_STRING) {
+			g_free (obj->value.sv);
 		}
-	}
-	else if (obj->type == RSPAMD_CL_OBJECT) {
-		HASH_ITER (hh, obj->value.ov, sub, tmp) {
-			HASH_DELETE (hh, obj->value.ov, sub);
-			rspamd_cl_obj_free (sub);
+		else if (obj->type == RSPAMD_CL_ARRAY) {
+			sub = obj->value.ov;
+			while (sub != NULL) {
+				tmp = sub->next;
+				rspamd_cl_obj_free (sub);
+				sub = tmp;
+			}
 		}
+		else if (obj->type == RSPAMD_CL_OBJECT) {
+			HASH_ITER (hh, obj->value.ov, sub, tmp) {
+				HASH_DELETE (hh, obj->value.ov, sub);
+				rspamd_cl_obj_free (sub);
+			}
+		}
+		tmp = obj->next;
+		g_slice_free1 (sizeof (rspamd_cl_object_t), obj);
+		obj = tmp;
 	}
 }
 

@@ -165,6 +165,246 @@ rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError *
 	return TRUE;
 }
 
+static inline gulong
+rspamd_cl_lex_num_multiplier (const guchar c, gboolean is_bytes) {
+	const struct {
+		char c;
+		glong mult_normal;
+		glong mult_bytes;
+	} multipliers[] = {
+			{'m', 1000 * 1000, 1024 * 1024},
+			{'k', 1000, 1024},
+			{'g', 1000 * 1000 * 1000, 1024 * 1024 * 1024}
+	};
+	gint i;
+
+	for (i = 0; i < 3; i ++) {
+		if (g_ascii_tolower (c) == multipliers[i].c) {
+			if (is_bytes) {
+				return multipliers[i].mult_bytes;
+			}
+			return multipliers[i].mult_normal;
+		}
+	}
+
+	return 1;
+}
+
+static inline gdouble
+rspamd_cl_lex_time_multiplier (const guchar c) {
+	const struct {
+		char c;
+		gdouble mult;
+	} multipliers[] = {
+			{'m', 60},
+			{'h', 60 * 60},
+			{'d', 60 * 60 * 24},
+			{'w', 60 * 60 * 24 * 7},
+			{'y', 60 * 60 * 24 * 7 * 365}
+	};
+	gint i;
+
+	for (i = 0; i < 5; i ++) {
+		if (g_ascii_tolower (c) == multipliers[i].c) {
+			return multipliers[i].mult;
+		}
+	}
+
+	return 1;
+}
+
+/**
+ * Parse possible number
+ * @param parser
+ * @param chunk
+ * @param err
+ * @return TRUE if a number has been parsed
+ */
+static gboolean
+rspamd_cl_lex_json_number (struct rspamd_cl_parser *parser,
+		struct rspamd_cl_chunk *chunk, rspamd_cl_object_t *obj, GError **err)
+{
+	const guchar *p = chunk->pos, *c = chunk->pos;
+	gchar **endptr;
+	gint i;
+	gboolean got_dot = FALSE, got_exp = FALSE, need_double = FALSE, is_date = FALSE;
+	gdouble dv;
+	gint64 lv;
+
+	if (*p == '-') {
+		rspamd_cl_chunk_skipc (chunk, *p);
+		p ++;
+	}
+	while (p < chunk->end) {
+		if (g_ascii_isdigit (*p)) {
+			rspamd_cl_chunk_skipc (chunk, *p);
+			p ++;
+		}
+		else {
+			if (p == c) {
+				/* Empty digits sequence, not a number */
+				return FALSE;
+			}
+			else if (*p == '.') {
+				if (got_dot) {
+					/* Double dots, not a number */
+					return FALSE;
+				}
+				else {
+					got_dot = TRUE;
+					need_double = TRUE;
+				}
+			}
+			else if (*p == 'e' || *p == 'E') {
+				if (got_exp) {
+					/* Double exp, not a number */
+					return FALSE;
+				}
+				else {
+					got_exp = TRUE;
+					need_double = TRUE;
+					rspamd_cl_chunk_skipc (chunk, *p);
+					p ++;
+					if (p >= chunk->end) {
+						return FALSE;
+					}
+					if (!g_ascii_isdigit (*p) && *p != '+' && *p == '-') {
+						/* Wrong exponent sign */
+						return FALSE;
+					}
+				}
+			}
+			else {
+				/* Got the end of the number, need to check */
+				break;
+			}
+		}
+	}
+
+	errno = 0;
+	if (need_double) {
+		dv = strtod (c, &endptr);
+	}
+	else {
+		lv = strtoimax (c, &endptr, 10);
+	}
+	if (errno == ERANGE) {
+		rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "numeric value is out of range", err);
+		parser->state = RSPAMD_RCL_STATE_ERROR;
+		return FALSE;
+	}
+
+	/* Now check endptr */
+	if (endptr == NULL || g_ascii_isspace (*endptr) || *endptr == '\0') {
+		chunk->pos = *endptr;
+		goto set_obj;
+	}
+
+	if (*endptr < chunk->end) {
+		p = *endptr;
+		chunk->pos = p;
+		switch (*p) {
+		case 'm':
+		case 'M':
+		case 'g':
+		case 'G':
+		case 'k':
+		case 'K':
+			if (chunk->end - p > 2) {
+				if (p[1] == 's' || p[1] == 'S') {
+					/* Milliseconds */
+					if (!need_double) {
+						need_double = TRUE;
+						dv = lv;
+					}
+					is_date = TRUE;
+					if (p[0] == 'm' || p[0] == 'M') {
+						dv /= 1000.;
+					}
+					else {
+						dv *= rspamd_cl_lex_num_multiplier (*p, FALSE);
+					}
+					goto set_obj;
+				}
+				else if (p[1] == 'b' || p[1] == 'B') {
+					/* Megabytes */
+					if (need_double) {
+						need_double = FALSE;
+						lv = dv;
+					}
+					lv *= rspamd_cl_lex_num_multiplier (*p, TRUE);
+					goto set_obj;
+				}
+				else if (g_ascii_isspace (p[1]) || p[1] == ',' || p[1] == ';') {
+					if (need_double) {
+						dv *= rspamd_cl_lex_num_multiplier (*p, FALSE);
+					}
+					else {
+						lv *= rspamd_cl_lex_num_multiplier (*p, FALSE);
+					}
+				}
+			}
+			else {
+				if (need_double) {
+					dv *= rspamd_cl_lex_num_multiplier (*p, FALSE);
+				}
+				else {
+					lv *= rspamd_cl_lex_num_multiplier (*p, FALSE);
+				}
+				goto set_obj;
+			}
+			break;
+		case 'S':
+		case 's':
+			if (p == chunk->end - 1 || g_ascii_isspace (p[1]) || p[1] == ',' || p[1] == ';') {
+				if (!need_double) {
+					need_double = TRUE;
+					dv = lv;
+				}
+				is_date = TRUE;
+				goto set_obj;
+			}
+			break;
+		case 'h':
+		case 'H':
+		case 'd':
+		case 'D':
+		case 'w':
+		case 'W':
+		case 'Y':
+		case 'y':
+			if (p == chunk->end - 1 || g_ascii_isspace (p[1]) || p[1] == ',' || p[1] == ';') {
+				if (!need_double) {
+					need_double = TRUE;
+					dv = lv;
+				}
+				is_date = TRUE;
+				dv *= rspamd_cl_lex_time_multiplier (*p);
+				goto set_obj;
+			}
+			break;
+		}
+	}
+
+	return FALSE;
+
+set_obj:
+	if (need_double || is_date) {
+		if (!is_date) {
+			obj->type = RSPAMD_CL_FLOAT;
+		}
+		else {
+			obj->type = RSPAMD_CL_TIME;
+		}
+		obj->value.dv = dv;
+	}
+	else {
+		obj->type = RSPAMD_CL_INT;
+		obj->value.iv = lv;
+	}
+	return TRUE;
+}
+
 /**
  * Parse quoted string with possible escapes
  * @param parser
@@ -381,12 +621,14 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 
 	HASH_FIND_STR (parser->cur_obj->value.ov, nobj->key, tobj);
 	if (tobj != NULL) {
-		/* We are going to replace old key with new one */
-		HASH_DELETE (hh, parser->cur_obj->value.ov, tobj);
-		rspamd_cl_obj_free (tobj);
+		/* Just insert a new object as the next element */
+		tobj->next = nobj;
+	}
+	else {
+		HASH_ADD_KEYPTR (hh, parser->cur_obj->value.ov, nobj->key, strlen (nobj->key), nobj);
 	}
 
-	HASH_ADD_KEYPTR (hh, parser->cur_obj->value.ov, nobj->key, strlen (nobj->key), nobj);
+	parser->cur_obj = nobj;
 
 	return TRUE;
 }
@@ -404,7 +646,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 {
 	rspamd_cl_object_t *obj;
 	struct rspamd_cl_chunk *chunk = parser->chunks;
-	const guchar *p;
+	const guchar *p, *c;
 
 	p = chunk->pos;
 	while (chunk->pos < chunk->end) {
@@ -437,12 +679,72 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				}
 				parser->cur_obj = obj;
 				parser->top_obj = obj;
+				LL_PREPEND (parser->stack, obj);
 			}
 			break;
 		case RSPAMD_RCL_STATE_KEY:
 			if (!rspamd_cl_parse_key (parser, chunk, err)) {
 				parser->state = RSPAMD_RCL_STATE_ERROR;
 				return FALSE;
+			}
+			parser->state = RSPAMD_RCL_STATE_VALUE;
+			p = chunk->pos;
+			break;
+		case RSPAMD_RCL_STATE_VALUE:
+			/* We need to check what we do have */
+			if (parser->stack->obj->type == RSPAMD_CL_ARRAY) {
+				/* Object must be allocated */
+				obj = rspamd_cl_object_new ();
+			}
+			else {
+				/* Object has been already allocated */
+				obj = parser->cur_obj;
+			}
+			c = p;
+			switch (*p) {
+			case '"':
+				if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
+					parser->state = RSPAMD_RCL_STATE_ERROR;
+					return FALSE;
+				}
+				parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
+				p = chunk->pos;
+				break;
+			case '{':
+				/* We have a new object */
+				obj->type = RSPAMD_CL_OBJECT;
+
+				parser->state = RSPAMD_RCL_STATE_KEY;
+				LL_PREPEND (parser->stack, obj);
+				parser->cur_obj = obj;
+
+				rspamd_cl_chunk_skipc (chunk, *p);
+				p ++;
+				break;
+			case '[':
+				/* We have a new array */
+				obj = parser->cur_obj;
+				obj->type = RSPAMD_CL_ARRAY;
+
+				parser->state = RSPAMD_RCL_STATE_VALUE;
+				LL_PREPEND (parser->stack, obj);
+				parser->cur_obj = obj;
+
+				rspamd_cl_chunk_skipc (chunk, *p);
+				p ++;
+				break;
+			default:
+				if (g_ascii_isdigit (*p) || *p == '-') {
+					if (!rspamd_cl_lex_json_number (parser, chunk, obj, err)) {
+						if (parser->state == RSPAMD_RCL_STATE_ERROR) {
+							return FALSE;
+						}
+					}
+				}
+				else {
+
+				}
+				break;
 			}
 			break;
 		default:
