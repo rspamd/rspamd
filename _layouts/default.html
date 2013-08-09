@@ -9,10 +9,12 @@
     <title>{{ page.title }}</title>
 
     <!-- Bootstrap core CSS -->
+	<!--
 	<link href="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/css/bootstrap.min.css" rel="stylesheet">
-	<script src="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/js/bootstrap.min.js"></script>
+	-->
+
+	<link href="/css/bootstrap.min.css" rel="stylesheet">
 	<link href="//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
-	<link href="//netdna.bootstrapcdn.com/bootswatch/2.3.2/united/bootstrap.min.css" rel="stylesheet">
 	<!-- syntax highlighting CSS -->
 	<link rel="stylesheet" href="/css/syntax.css">
 	<link rel="stylesheet" href="/css/main.css">
@@ -22,16 +24,14 @@
   <body style="padding-top: 50px">
 
 	<div class="navbar navbar-fixed-top">
-	 <div class="navbar-inner">
       <div class="container">
-	    <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <a href="/" class="navbar-brand">Rspamd</a>
+		<button class="navbar-toggle" type="button" data-toggle="collapse" data-target="#navbar-main">
           <span class="icon-bar"></span>
           <span class="icon-bar"></span>
           <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-        </a>
-        <a href="/" class="brand">Rspamd</a>
-		<div class="nav-collapse collapse">
+        </button>
+		<div id="navbar-main" class="nav-collapse collapse">
         <ul class="nav navbar-nav">
   			<li>
         		<a href="/about.html">About</a>
@@ -39,9 +39,19 @@
   			<li>
         		<a href="/downloads.html">Downloads</a>
         	</li>
-  			<li>
-        		<a href="/documentation.html">Documentation</a>
-        	</li>
+			<li class="dropdown">
+				<a class="dropdown-toggle" data-toggle="dropdown" href="#">Documentation <b class="caret"></b></a>
+				<ul class="dropdown-menu" role="menu">
+					<li><a href="/doc/features.html">Rspamd features</a></li>
+					<li><a href="/doc/quickstart.html">Quick start</a></li>
+					<li><a href="/doc/integration.html">Integration to MTA</a></li>
+					<li><a href="/doc/admin.html">Administration guide</a></li>
+				    <li class="divider"></li>
+					<li><a href="/doc/architecture.html">Architecture</a></li>
+					<li><a href="/doc/configuration.html">Configuration guide</a></li>
+					<li><a href="/doc/lua.html">Lua API guide</a></li>
+				</ul>
+			</li>
   			<li>
         		<a href="/blog/">News</a>
         	</li>
@@ -54,7 +64,6 @@
         </ul>
 	  	</div>
       </div>
-	 </div>
 	</div>
 	
 	<div class="container">
@@ -90,6 +99,8 @@
 		ga('create', 'ua-5492966-5', 'rspamd.com');
 		ga('send', 'pageview');
 	</script>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+	<script src="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/js/bootstrap.min.js"></script>
 
   </body>
 </html>
