@@ -62,6 +62,7 @@ main (int argc, char **argv)
 #if 0
 	g_test_add_func ("/rspamd/memcached", rspamd_memcached_test_func);
 #endif
+	g_test_add_func ("/rspamd/rcl", rspamd_rcl_test_func);
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);
 	g_test_add_func ("/rspamd/fuzzy", rspamd_fuzzy_test_func);
 	g_test_add_func ("/rspamd/url", rspamd_url_test_func);

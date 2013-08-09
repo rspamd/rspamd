@@ -8,7 +8,8 @@ SET(TESTSRC		rspamd_expression_test.c
 				rspamd_dns_test.c
 				rspamd_async_test.c
 				rspamd_dkim_test.c
-				rspamd_rrd_test.c)
+				rspamd_rrd_test.c
+				rspamd_rcl_test.c)
 
 ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE C)
@@ -21,6 +22,7 @@ TARGET_LINK_LIBRARIES(rspamd-test ${CMAKE_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-mime)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-util)
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-rcl)
 TARGET_LINK_LIBRARIES(rspamd-test hiredis)
 IF(HAVE_LIBEVENT2)
 	TARGET_LINK_LIBRARIES(rspamd-test event_pthreads)

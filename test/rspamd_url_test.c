@@ -1,16 +1,3 @@
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/wait.h>
-#include <sys/param.h>
-
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <syslog.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "../src/config.h"
 #include "../src/main.h"
 #include "../src/cfg_file.h"
