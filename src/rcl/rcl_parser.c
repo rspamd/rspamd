@@ -66,8 +66,8 @@ rspamd_cl_chunk_skipc (struct rspamd_cl_chunk *chunk, guchar c)
 static inline void
 rspamd_cl_set_err (struct rspamd_cl_chunk *chunk, gint code, const char *str, GError **err)
 {
-	g_set_error (err, RCL_ERROR, code, "Error detected on line %d at pos %d: '%s'",
-			chunk->line, chunk->column, str);
+	g_set_error (err, RCL_ERROR, code, "error on line %d at column %d: '%s', character: '%c'",
+			chunk->line, chunk->column, str, *chunk->pos);
 }
 
 static gboolean
@@ -216,7 +216,8 @@ rspamd_cl_lex_time_multiplier (const guchar c) {
 static inline gboolean
 rspamd_cl_lex_is_atom_end (const guchar c)
 {
-	if (g_ascii_isspace (c) || c == ',' || c == ';' || c == '#' || c == '/')  {
+	if (g_ascii_isspace (c) || c == ',' || c == ';' || c == '#' ||
+			c == ']' || c == '}')  {
 		return TRUE;
 	}
 
@@ -304,7 +305,7 @@ rspamd_cl_lex_json_number (struct rspamd_cl_parser *parser,
 	}
 
 	/* Now check endptr */
-	if (endptr == NULL || g_ascii_isspace (*endptr) || *endptr == '\0') {
+	if (endptr == NULL || rspamd_cl_lex_is_atom_end (*endptr) || *endptr == '\0') {
 		chunk->pos = endptr;
 		goto set_obj;
 	}
@@ -510,8 +511,12 @@ rspamd_cl_lex_json_string (struct rspamd_cl_parser *parser,
 			continue;
 		}
 		else if (c == '"') {
+			rspamd_cl_chunk_skipc (chunk, *p);
+			p ++;
 			return TRUE;
 		}
+		rspamd_cl_chunk_skipc (chunk, *p);
+		p ++;
 	}
 
 	return FALSE;
@@ -530,7 +535,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 {
 	const guchar *p, *c = NULL, *end;
 	gboolean got_quote = FALSE, got_eq = FALSE, got_semicolon = FALSE;
-	rspamd_cl_object_t *nobj, *tobj;
+	rspamd_cl_object_t *nobj, *tobj, *container;
 
 	p = chunk->pos;
 
@@ -592,10 +597,8 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 				if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
 					return FALSE;
 				}
-				end = chunk->pos;
-				p = end;
-				rspamd_cl_chunk_skipc (chunk, *p);
-				p ++;
+				end = chunk->pos - 1;
+				p = chunk->pos;
 				break;
 			}
 		}
@@ -634,7 +637,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 				return FALSE;
 			}
 		}
-		else if (*p == '/' || *p == '#') {
+		else if ((p[0] == '/' && p[1] == '/') || *p == '#') {
 			/* Check for comment */
 			if (!rspamd_cl_skip_comments (parser, err)) {
 				return FALSE;
@@ -661,13 +664,14 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 		rspamd_cl_unescape_json_string (nobj->key);
 	}
 
-	HASH_FIND_STR (parser->cur_obj->value.ov, nobj->key, tobj);
+	container = parser->stack->obj->value.ov;
+	HASH_FIND_STR (container, nobj->key, tobj);
 	if (tobj != NULL) {
 		/* Just insert a new object as the next element */
 		tobj->next = nobj;
 	}
 	else {
-		HASH_ADD_KEYPTR (hh, parser->cur_obj->value.ov, nobj->key, strlen (nobj->key), nobj);
+		HASH_ADD_KEYPTR (hh, container, nobj->key, strlen (nobj->key), nobj);
 	}
 
 	parser->cur_obj = nobj;
@@ -752,7 +756,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 						rspamd_cl_chunk_skipc (chunk, *p);
 						p ++;
 					}
-				}
+				};
 				parser->cur_obj = obj;
 				parser->top_obj = obj;
 				st = g_slice_alloc0 (sizeof (struct rspamd_cl_stack));
@@ -761,6 +765,11 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			}
 			break;
 		case RSPAMD_RCL_STATE_KEY:
+			if (*p == '}') {
+				/* We have the end of an object */
+				parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
+				continue;
+			}
 			if (!rspamd_cl_parse_key (parser, chunk, err)) {
 				parser->state = RSPAMD_RCL_STATE_ERROR;
 				return FALSE;
@@ -782,6 +791,8 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			c = p;
 			switch (*p) {
 			case '"':
+				rspamd_cl_chunk_skipc (chunk, *p);
+				p ++;
 				if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
@@ -826,7 +837,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
 				}
-				if (*p == '/' || *p == '#') {
+				if ((p[0] == '/' && p[1] == '/') || *p == '#') {
 					if (!rspamd_cl_skip_comments (parser, err)) {
 						return FALSE;
 					}
@@ -863,6 +874,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 					obj->type = RSPAMD_CL_STRING;
 					parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
 				}
+				p = chunk->pos;
 				break;
 			}
 			break;
@@ -872,7 +884,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
 			}
-			else if (*p == '/' || *p == '#') {
+			else if ((p[0] == '/' && p[1] == '/') || *p == '#') {
 				/* Skip comment */
 				if (!rspamd_cl_skip_comments (parser, err)) {
 					parser->state = RSPAMD_RCL_STATE_ERROR;
@@ -918,6 +930,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				if ((*p == '}' && parser->stack->obj->type == RSPAMD_CL_OBJECT) ||
 					(*p == ']' && parser->stack->obj->type == RSPAMD_CL_ARRAY)) {
 					/* Pop object from a stack */
+
 					st = parser->stack;
 					parser->stack = st->next;
 					g_slice_free1 (sizeof (struct rspamd_cl_stack), st);
@@ -933,18 +946,10 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 					return TRUE;
 				}
 				else {
-					if (parser->stack->obj->type == RSPAMD_CL_OBJECT) {
-						parser->state = RSPAMD_RCL_STATE_KEY;
-						rspamd_cl_chunk_skipc (chunk, *p);
-						p ++;
-					}
-					else {
-						/* Array */
-						parser->state = RSPAMD_RCL_STATE_VALUE;
-						rspamd_cl_chunk_skipc (chunk, *p);
-						p ++;
-					}
+					rspamd_cl_chunk_skipc (chunk, *p);
+					p ++;
 				}
+				got_sep = TRUE;
 			}
 			else {
 				/* Anything else */

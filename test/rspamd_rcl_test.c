@@ -59,11 +59,10 @@ rspamd_rcl_test_func (void)
 	const gchar **cur;
 	GError *err = NULL;
 
-	parser = rspamd_cl_parser_new ();
-	g_assert (parser != NULL);
-
 	cur = rcl_test_valid;
 	while (*cur != NULL) {
+		parser = rspamd_cl_parser_new ();
+		g_assert (parser != NULL);
 		rspamd_cl_parser_add_chunk (parser, *cur, strlen (*cur), &err);
 		g_assert_no_error (err);
 		cur ++;
