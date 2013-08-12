@@ -23,6 +23,7 @@
 
 #include "../src/config.h"
 #include "../src/rcl/rcl.h"
+#include "../src/main.h"
 #include "tests.h"
 
 const gchar *rcl_test_valid[] = {
@@ -33,7 +34,7 @@ const gchar *rcl_test_valid[] = {
 		"\"key1\": \"value;\""
 		"}\n",
 		/* Nginx like */
-		"section1 { param1 = value; param2 = value, param3 = [\"value1\", 100500]}\n"
+		"section1 { param1 = value; param2 = value, param3 = [\"value1\", value2, 100500]}\n"
 		"section2 { param1 = {key = value}, param1 = [\"key\"]}",
 		/* Numbers */
 		"key = 1s\n"
@@ -57,6 +58,7 @@ rspamd_rcl_test_func (void)
 	struct rspamd_cl_parser *parser;
 	rspamd_cl_object_t *obj;
 	const gchar **cur;
+	guchar *emitted;
 	GError *err = NULL;
 
 	cur = rcl_test_valid;
@@ -65,6 +67,13 @@ rspamd_rcl_test_func (void)
 		g_assert (parser != NULL);
 		rspamd_cl_parser_add_chunk (parser, *cur, strlen (*cur), &err);
 		g_assert_no_error (err);
+		obj = rspamd_cl_parser_get_object (parser, &err);
+		g_assert_no_error (err);
+		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON);
+		g_assert (emitted != NULL);
+		msg_info ("got json output: %s", emitted);
+		g_free (emitted);
+		rspamd_cl_parser_free (parser);
 		cur ++;
 	}
 

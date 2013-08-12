@@ -232,7 +232,7 @@ rspamd_cl_lex_is_atom_end (const guchar c)
  * @return TRUE if a number has been parsed
  */
 static gboolean
-rspamd_cl_lex_json_number (struct rspamd_cl_parser *parser,
+rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 		struct rspamd_cl_chunk *chunk, rspamd_cl_object_t *obj, GError **err)
 {
 	const guchar *p = chunk->pos, *c = chunk->pos;
@@ -362,10 +362,10 @@ rspamd_cl_lex_json_number (struct rspamd_cl_parser *parser,
 					p ++;
 					goto set_obj;
 				}
-				else if (chunk->end - p > 3) {
+				else if (chunk->end - p >= 3) {
 					if (g_ascii_tolower (p[0]) == 'm' &&
 							g_ascii_tolower (p[1]) == 'i' &&
-							g_ascii_tolower (p[2]) == 'm') {
+							g_ascii_tolower (p[2]) == 'n') {
 						/* Minutes */
 						if (!need_double) {
 							need_double = TRUE;
@@ -413,14 +413,15 @@ rspamd_cl_lex_json_number (struct rspamd_cl_parser *parser,
 		case 'W':
 		case 'Y':
 		case 'y':
-			if (p == chunk->end - 1 || rspamd_cl_lex_is_atom_end (*++p)) {
+			if (p == chunk->end - 1 || rspamd_cl_lex_is_atom_end (p[1])) {
 				if (!need_double) {
 					need_double = TRUE;
 					dv = lv;
 				}
 				is_date = TRUE;
-				rspamd_cl_chunk_skipc (chunk, *p);
 				dv *= rspamd_cl_lex_time_multiplier (*p);
+				rspamd_cl_chunk_skipc (chunk, *p);
+				p ++;
 				goto set_obj;
 			}
 			break;
@@ -668,11 +669,12 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 	HASH_FIND_STR (container, nobj->key, tobj);
 	if (tobj != NULL) {
 		/* Just insert a new object as the next element */
-		tobj->next = nobj;
+		LL_PREPEND (tobj, nobj);
+		HASH_DELETE (hh, container, tobj);
 	}
-	else {
-		HASH_ADD_KEYPTR (hh, container, nobj->key, strlen (nobj->key), nobj);
-	}
+
+	HASH_ADD_KEYPTR (hh, container, nobj->key, strlen (nobj->key), nobj);
+	parser->stack->obj->value.ov = container;
 
 	parser->cur_obj = nobj;
 
@@ -783,6 +785,8 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			if (parser->stack->obj->type == RSPAMD_CL_ARRAY) {
 				/* Object must be allocated */
 				obj = rspamd_cl_object_new ();
+				parser->cur_obj = obj;
+				LL_PREPEND (parser->stack->obj->value.ov, parser->cur_obj);
 			}
 			else {
 				/* Object has been already allocated */
@@ -797,8 +801,8 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
-				obj->value.sv = g_malloc (chunk->pos - c);
-				rspamd_strlcpy (obj->value.sv, c + 1, chunk->pos - c);
+				obj->value.sv = g_malloc (chunk->pos - c - 1);
+				rspamd_strlcpy (obj->value.sv, c + 1, chunk->pos - c - 1);
 				rspamd_cl_unescape_json_string (obj->value.sv);
 				obj->type = RSPAMD_CL_STRING;
 				parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
@@ -845,7 +849,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				}
 				/* Parse atom */
 				if (g_ascii_isdigit (*p) || *p == '-') {
-					if (!rspamd_cl_lex_json_number (parser, chunk, obj, err)) {
+					if (!rspamd_cl_lex_number (parser, chunk, obj, err)) {
 						if (parser->state == RSPAMD_RCL_STATE_ERROR) {
 							return FALSE;
 						}

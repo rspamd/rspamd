@@ -31,8 +31,8 @@
  */
 
 
-void
-rspamd_cl_obj_free (rspamd_cl_object_t *obj)
+static void
+rspamd_cl_obj_free_internal (rspamd_cl_object_t *obj, gboolean allow_rec)
 {
 	rspamd_cl_object_t *sub, *tmp;
 
@@ -48,20 +48,30 @@ rspamd_cl_obj_free (rspamd_cl_object_t *obj)
 			sub = obj->value.ov;
 			while (sub != NULL) {
 				tmp = sub->next;
-				rspamd_cl_obj_free (sub);
+				rspamd_cl_obj_free_internal (sub, FALSE);
 				sub = tmp;
 			}
 		}
 		else if (obj->type == RSPAMD_CL_OBJECT) {
 			HASH_ITER (hh, obj->value.ov, sub, tmp) {
 				HASH_DELETE (hh, obj->value.ov, sub);
-				rspamd_cl_obj_free (sub);
+				rspamd_cl_obj_free_internal (sub, TRUE);
 			}
 		}
 		tmp = obj->next;
 		g_slice_free1 (sizeof (rspamd_cl_object_t), obj);
 		obj = tmp;
+
+		if (!allow_rec) {
+			break;
+		}
 	}
+}
+
+void
+rspamd_cl_obj_free (rspamd_cl_object_t *obj)
+{
+	rspamd_cl_obj_free_internal (obj, TRUE);
 }
 
 void
@@ -112,6 +122,7 @@ rspamd_cl_unescape_json_string (gchar *str)
 						uval += h[i] - 'A' + 10;
 					}
 				}
+				h += 3;
 				/* Encode */
 				if(uval < 0x80) {
 					t[0] = (char)uval;
@@ -143,9 +154,44 @@ rspamd_cl_unescape_json_string (gchar *str)
 				*t++ = '?';
 				break;
 			}
+			h ++;
 		}
 		else {
 			*t++ = *h++;
 		}
 	}
+}
+
+rspamd_cl_object_t*
+rspamd_cl_parser_get_object (struct rspamd_cl_parser *parser, GError **err)
+{
+	if (parser->state != RSPAMD_RCL_STATE_INIT && parser->state != RSPAMD_RCL_STATE_ERROR) {
+		return parser->top_obj;
+	}
+
+	return NULL;
+}
+
+void
+rspamd_cl_parser_free (struct rspamd_cl_parser *parser)
+{
+	struct rspamd_cl_stack *stack, *stmp;
+	struct rspamd_cl_macro *macro, *mtmp;
+	struct rspamd_cl_chunk *chunk, *ctmp;
+
+	if (parser->top_obj != NULL) {
+		rspamd_cl_obj_free (parser->top_obj);
+	}
+
+	LL_FOREACH_SAFE (parser->stack, stack, stmp) {
+		g_slice_free1 (sizeof (struct rspamd_cl_stack), stack);
+	}
+	HASH_ITER (hh, parser->macroes, macro, mtmp) {
+		g_slice_free1 (sizeof (struct rspamd_cl_macro), macro);
+	}
+	LL_FOREACH_SAFE (parser->chunks, chunk, ctmp) {
+		g_slice_free1 (sizeof (struct rspamd_cl_chunk), chunk);
+	}
+
+	g_slice_free1 (sizeof (struct rspamd_cl_parser), parser);
 }
