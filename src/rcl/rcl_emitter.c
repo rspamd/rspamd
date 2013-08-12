@@ -29,3 +29,194 @@
  * @file rcl_emitter.c
  * Serialise RCL object to the RCL format
  */
+
+
+static void rspamd_cl_elt_write_json (rspamd_cl_object_t *obj, GString *buf);
+static void rspamd_cl_obj_write_json (rspamd_cl_object_t *obj, GString *buf);
+/**
+ * Serialise string
+ * @param str string to emit
+ * @param buf target buffer
+ */
+static void
+rspamd_cl_elt_string_write_json (const gchar *str, GString *buf)
+{
+	const gchar *p = str;
+
+	g_string_append_c (buf, '"');
+	while (*p != '\0') {
+		switch (*p) {
+		case '\n':
+			g_string_append_len (buf, "\\n", 2);
+			break;
+		case '\r':
+			g_string_append_len (buf, "\\r", 2);
+			break;
+		case '\b':
+			g_string_append_len (buf, "\\b", 2);
+			break;
+		case '\t':
+			g_string_append_len (buf, "\\t", 2);
+			break;
+		case '\f':
+			g_string_append_len (buf, "\\f", 2);
+			break;
+		case '\\':
+			g_string_append_len (buf, "\\\\", 2);
+			break;
+		case '"':
+			g_string_append_len (buf, "\\\"", 2);
+			break;
+		default:
+			g_string_append_c (buf, *p);
+			break;
+		}
+		p ++;
+	}
+	g_string_append_c (buf, '"');
+}
+
+/**
+ * Write a single object to the buffer
+ * @param obj object to write
+ * @param buf target buffer
+ */
+static void
+rspamd_cl_elt_obj_write_json (rspamd_cl_object_t *obj, GString *buf)
+{
+	rspamd_cl_object_t *cur, *tmp;
+
+	g_string_append_len (buf, "{\n", 2);
+	HASH_ITER (hh, obj, cur, tmp) {
+		rspamd_cl_elt_string_write_json (cur->key, buf);
+		g_string_append_len (buf, ": ", 2);
+		rspamd_cl_obj_write_json (cur, buf);
+		if (cur->hh.next != NULL) {
+			g_string_append_len (buf, ",\n", 2);
+		}
+		else {
+			g_string_append_c (buf, '\n');
+		}
+	}
+	g_string_append_len (buf, "}\n", 2);
+}
+
+/**
+ * Write a single array to the buffer
+ * @param obj array to write
+ * @param buf target buffer
+ */
+static void
+rspamd_cl_elt_array_write_json (rspamd_cl_object_t *obj, GString *buf)
+{
+	rspamd_cl_object_t *cur = obj;
+
+	g_string_append_len (buf, "[\n", 2);
+	while (cur) {
+		rspamd_cl_elt_write_json (cur, buf);
+		if (cur->next != NULL) {
+			g_string_append_len (buf, ",\n", 2);
+		}
+		else {
+			g_string_append_c (buf, '\n');
+		}
+		cur = cur->next;
+	}
+	g_string_append_len (buf, "]\n", 2);
+}
+
+/**
+ * Emit a single element
+ * @param obj object
+ * @param buf buffer
+ */
+static void
+rspamd_cl_elt_write_json (rspamd_cl_object_t *obj, GString *buf)
+{
+	switch (obj->type) {
+	case RSPAMD_CL_INT:
+		g_string_append_printf (buf, "%ld", (long int)rspamd_cl_obj_toint (obj));
+		break;
+	case RSPAMD_CL_FLOAT:
+		g_string_append_printf (buf, "%lf", rspamd_cl_obj_todouble (obj));
+		break;
+	case RSPAMD_CL_TIME:
+		g_string_append_printf (buf, "%lf", rspamd_cl_obj_todouble (obj));
+		break;
+	case RSPAMD_CL_BOOLEAN:
+		g_string_append_printf (buf, "%s", rspamd_cl_obj_toboolean (obj) ? "true" : "false");
+		break;
+	case RSPAMD_CL_STRING:
+		rspamd_cl_elt_string_write_json (rspamd_cl_obj_tostring (obj), buf);
+		break;
+	case RSPAMD_CL_OBJECT:
+		rspamd_cl_elt_obj_write_json (obj->value.ov, buf);
+		break;
+	case RSPAMD_CL_ARRAY:
+		rspamd_cl_elt_array_write_json (obj->value.ov, buf);
+		break;
+	}
+}
+
+/**
+ * Write a single object to the buffer
+ * @param obj object
+ * @param buf target buffer
+ */
+static void
+rspamd_cl_obj_write_json (rspamd_cl_object_t *obj, GString *buf)
+{
+	rspamd_cl_object_t *cur;
+	gboolean is_array = (obj->next != NULL);
+
+	if (is_array) {
+		/* This is an array actually */
+		g_string_append_c (buf, '[');
+		cur = obj;
+		while (cur != NULL) {
+			rspamd_cl_elt_write_json (cur, buf);
+			if (cur->next) {
+				g_string_append_c (buf, ',');
+			}
+			g_string_append_c (buf, '\n');
+			cur = cur->next;
+		}
+		g_string_append_c (buf, ']');
+	}
+	else {
+		rspamd_cl_elt_write_json (obj, buf);
+	}
+
+}
+
+/**
+ * Emit an object to json
+ * @param obj object
+ * @return json output (should be freed after using)
+ */
+static guchar *
+rspamd_cl_object_emit_json (rspamd_cl_object_t *obj)
+{
+	GString *buf;
+	guchar *res;
+
+	/* Allocate large enough buffer */
+	buf = g_string_sized_new (BUFSIZ);
+
+	rspamd_cl_obj_write_json (obj, buf);
+
+	res = buf->str;
+	g_string_free (buf, FALSE);
+
+	return res;
+}
+
+guchar *
+rspamd_cl_object_emit (rspamd_cl_object_t *obj, enum rspamd_cl_emitter emit_type)
+{
+	if (emit_type == RSPAMD_CL_EMIT_JSON) {
+		return rspamd_cl_object_emit_json (obj);
+	}
+
+	return NULL;
+}
