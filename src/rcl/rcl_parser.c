@@ -300,6 +300,7 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 	}
 	if (errno == ERANGE) {
 		rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "numeric value is out of range", err);
+		parser->prev_state = parser->state;
 		parser->state = RSPAMD_RCL_STATE_ERROR;
 		return FALSE;
 	}
@@ -572,7 +573,6 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 			}
 			else {
 				/* Invalid identifier */
-				parser->state = RSPAMD_RCL_STATE_ERROR;
 				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "key must begin with a letter", err);
 				return FALSE;
 			}
@@ -731,6 +731,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 
 	p = chunk->pos;
 	while (chunk->pos < chunk->end) {
+		parser->prev_state = parser->state;
 		switch (parser->state) {
 		case RSPAMD_RCL_STATE_INIT:
 			/*
@@ -739,6 +740,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			 * a key of newly created object
 			 */
 			if (!rspamd_cl_skip_comments (parser, err)) {
+				parser->prev_state = parser->state;
 				parser->state = RSPAMD_RCL_STATE_ERROR;
 				return FALSE;
 			}
@@ -773,6 +775,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				continue;
 			}
 			if (!rspamd_cl_parse_key (parser, chunk, err)) {
+				parser->prev_state = parser->state;
 				parser->state = RSPAMD_RCL_STATE_ERROR;
 				return FALSE;
 			}
@@ -798,6 +801,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
 				if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
@@ -837,15 +841,17 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				break;
 			default:
 				/* Skip any spaces and comments */
-				while (p < chunk->end && g_ascii_isspace (*p)) {
-					rspamd_cl_chunk_skipc (chunk, *p);
-					p ++;
-				}
-				if ((p[0] == '/' && p[1] == '/') || *p == '#') {
+				if (g_ascii_isspace (*p) ||
+						(p[0] == '/' && p[1] == '/') || *p == '#') {
+					while (p < chunk->end && g_ascii_isspace (*p)) {
+						rspamd_cl_chunk_skipc (chunk, *p);
+						p ++;
+					}
 					if (!rspamd_cl_skip_comments (parser, err)) {
 						return FALSE;
 					}
 					p = chunk->pos;
+					continue;
 				}
 				/* Parse atom */
 				if (g_ascii_isdigit (*p) || *p == '-') {
@@ -869,6 +875,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				}
 				else {
 					if (!rspamd_cl_parse_string_value (parser, chunk, err)) {
+						parser->prev_state = parser->state;
 						parser->state = RSPAMD_RCL_STATE_ERROR;
 						return FALSE;
 					}
@@ -891,6 +898,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			else if ((p[0] == '/' && p[1] == '/') || *p == '#') {
 				/* Skip comment */
 				if (!rspamd_cl_skip_comments (parser, err)) {
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
@@ -900,7 +908,8 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				/* Got a separator */
 				got_sep = TRUE;
 				if (got_comma || got_semicolon) {
-					rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "uexpected comma detected", err);
+					rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "unexpected comma detected", err);
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
@@ -913,6 +922,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				got_sep = TRUE;
 				if (got_comma || got_semicolon) {
 					rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "unexpected semicolon detected", err);
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
@@ -928,6 +938,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			else if (*p == '}' || *p == ']') {
 				if (parser->stack == NULL) {
 					rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "unexpected } detected", err);
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
@@ -941,6 +952,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				}
 				else {
 					rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "unexpected terminating symbol detected", err);
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}
@@ -959,6 +971,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				/* Anything else */
 				if (!got_sep) {
 					rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "delimiter is missing", err);
+					parser->prev_state = parser->state;
 					parser->state = RSPAMD_RCL_STATE_ERROR;
 					return FALSE;
 				}

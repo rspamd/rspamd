@@ -72,7 +72,7 @@ rspamd_rcl_test_func (void)
 		/* Test config emitting */
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_CONFIG);
 		g_assert (emitted != NULL);
-		msg_info ("got config output: %s", emitted);
+		msg_debug ("got config output: %s", emitted);
 		parser2 = rspamd_cl_parser_new ();
 		g_assert (parser2 != NULL);
 		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
@@ -82,7 +82,7 @@ rspamd_rcl_test_func (void)
 		/* Test json emitted */
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON);
 		g_assert (emitted != NULL);
-		msg_info ("got json output: %s", emitted);
+		msg_debug ("got json output: %s", emitted);
 		parser2 = rspamd_cl_parser_new ();
 		g_assert (parser2 != NULL);
 		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
@@ -92,7 +92,7 @@ rspamd_rcl_test_func (void)
 		/* Compact json */
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON_COMPACT);
 		g_assert (emitted != NULL);
-		msg_info ("got json compacted output: %s", emitted);
+		msg_debug ("got json compacted output: %s", emitted);
 		parser2 = rspamd_cl_parser_new ();
 		g_assert (parser2 != NULL);
 		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
