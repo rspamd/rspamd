@@ -54,6 +54,7 @@ enum rspamd_cl_type {
 
 enum rspamd_cl_emitter {
 	RSPAMD_CL_EMIT_JSON = 0,
+	RSPAMD_CL_EMIT_JSON_COMPACT,
 	RSPAMD_CL_EMIT_CONFIG
 };
 
