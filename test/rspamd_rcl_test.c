@@ -55,7 +55,7 @@ const gchar *rcl_test_valid[] = {
 void
 rspamd_rcl_test_func (void)
 {
-	struct rspamd_cl_parser *parser;
+	struct rspamd_cl_parser *parser, *parser2;
 	rspamd_cl_object_t *obj;
 	const gchar **cur;
 	guchar *emitted;
@@ -69,10 +69,38 @@ rspamd_rcl_test_func (void)
 		g_assert_no_error (err);
 		obj = rspamd_cl_parser_get_object (parser, &err);
 		g_assert_no_error (err);
+		/* Test config emitting */
+		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_CONFIG);
+		g_assert (emitted != NULL);
+		msg_info ("got config output: %s", emitted);
+		parser2 = rspamd_cl_parser_new ();
+		g_assert (parser2 != NULL);
+		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
+		g_assert_no_error (err);
+		rspamd_cl_parser_free (parser2);
+		g_free (emitted);
+		/* Test json emitted */
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON);
 		g_assert (emitted != NULL);
 		msg_info ("got json output: %s", emitted);
+		parser2 = rspamd_cl_parser_new ();
+		g_assert (parser2 != NULL);
+		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
+		g_assert_no_error (err);
+		rspamd_cl_parser_free (parser2);
 		g_free (emitted);
+		/* Compact json */
+		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON_COMPACT);
+		g_assert (emitted != NULL);
+		msg_info ("got json compacted output: %s", emitted);
+		parser2 = rspamd_cl_parser_new ();
+		g_assert (parser2 != NULL);
+		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
+		g_assert_no_error (err);
+		rspamd_cl_parser_free (parser2);
+		g_free (emitted);
+
+		/* Cleanup */
 		rspamd_cl_parser_free (parser);
 		cur ++;
 	}
