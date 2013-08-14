@@ -165,6 +165,12 @@ rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError *
 	return TRUE;
 }
 
+/**
+ * Return multiplier for a character
+ * @param c multiplier character
+ * @param is_bytes if TRUE use 1024 multiplier
+ * @return multiplier
+ */
 static inline gulong
 rspamd_cl_lex_num_multiplier (const guchar c, gboolean is_bytes) {
 	const struct {
@@ -190,6 +196,12 @@ rspamd_cl_lex_num_multiplier (const guchar c, gboolean is_bytes) {
 	return 1;
 }
 
+
+/**
+ * Return multiplier for time scaling
+ * @param c
+ * @return
+ */
 static inline gdouble
 rspamd_cl_lex_time_multiplier (const guchar c) {
 	const struct {
@@ -213,6 +225,11 @@ rspamd_cl_lex_time_multiplier (const guchar c) {
 	return 1;
 }
 
+/**
+ * Return TRUE if a character is a end of an atom
+ * @param c
+ * @return
+ */
 static inline gboolean
 rspamd_cl_lex_is_atom_end (const guchar c)
 {
@@ -1070,6 +1087,8 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				}
 				parser->state = RSPAMD_RCL_STATE_MACRO;
 			}
+			break;
+		case RSPAMD_RCL_STATE_MACRO:
 			break;
 		default:
 			/* TODO: add all states */
