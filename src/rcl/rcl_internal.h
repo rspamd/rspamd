@@ -84,6 +84,7 @@ struct rspamd_cl_parser {
 	struct rspamd_cl_macro *macroes;
 	struct rspamd_cl_stack *stack;
 	struct rspamd_cl_chunk *chunks;
+	guint recursion;
 };
 
 /**
