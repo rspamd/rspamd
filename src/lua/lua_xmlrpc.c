@@ -472,7 +472,7 @@ lua_xmlrpc_parse_table (lua_State *L, gint pos, gchar *databuf, gint pr, gsize s
 			break;
 		case LUA_TTABLE:
 			/* Recursive call */
-			r += lua_xmlrpc_parse_table (L, -1, databuf, r, sizeof (databuf));
+			r += lua_xmlrpc_parse_table (L, -1, databuf + r, r, size);
 			break;
 		}
 		r += rspamd_snprintf (databuf + r, size - r, "</value></member>");

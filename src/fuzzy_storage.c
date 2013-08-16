@@ -471,6 +471,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 			version = (gint)header[3];
 			if (version > CURRENT_FUZZY_VERSION) {
 				msg_err ("unsupported version of fuzzy hash file: %d", version);
+				close (fd);
 				return FALSE;
 			}
 			msg_info ("reading fuzzy hashes storage file of version %d of size %d", version, (gint)(st.st_size - sizeof (header)) / sizeof (struct rspamd_fuzzy_node));

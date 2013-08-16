@@ -194,6 +194,10 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 		part->script = sel;
 	}
 
+	if (total == 0) {
+		return 0;
+	}
+
 	return ((double)mark / (double)total) > chartable_module_ctx->threshold;
 }
 

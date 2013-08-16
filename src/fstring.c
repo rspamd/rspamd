@@ -398,7 +398,9 @@ fstrhash_lowercase (f_str_t * str, gboolean is_utf)
 
 	if (is_utf) {
 		while (end < str->begin + str->len) {
-			g_utf8_validate (p, str->len, &end);
+			if (!g_utf8_validate (p, str->len, &end)) {
+				return fstrhash_lowercase (str, FALSE);
+			}
 			while (p < end) {
 				uc = g_unichar_tolower (g_utf8_get_char (p));
 				for (j = 0; j < sizeof (gunichar); j ++) {

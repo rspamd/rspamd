@@ -605,7 +605,7 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 	while (g_ascii_isspace (*line)) {
 		line++;
 	}
-	if (line == '\0') {
+	if (*line == '\0') {
 		msg_warn ("got empty regexp");
 		return NULL;
 	}

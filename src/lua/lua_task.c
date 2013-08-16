@@ -1763,7 +1763,7 @@ lua_textpart_compare_distance (lua_State * L)
 	luaL_argcheck (L, ud != NULL, 2, "'textpart' expected");
 	other = ud ? *((struct mime_text_part **)ud) : NULL;
 
-	if (part->parent && part->parent == other->parent) {
+	if (other != NULL && part->parent && part->parent == other->parent) {
 		parent = part->parent;
 		ct = g_mime_object_get_content_type (parent);
 #ifndef GMIME24

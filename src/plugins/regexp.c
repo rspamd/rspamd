@@ -729,7 +729,6 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 	GError                         *err = NULL;
 	struct url_regexp_param         callback_param = {
 		.task = task,
-		.regexp = re->regexp,
 		.re = re,
 		.found = FALSE
 	};
@@ -741,6 +740,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 		return 0;
 	}
 
+	callback_param.regexp = re->regexp;
 	if ((r = task_cache_check (task, re)) != -1) {
 		debug_task ("regexp /%s/ is found in cache, result: %d", re->regexp_text, r);
 		return r == 1;
@@ -2056,6 +2056,10 @@ compare_subtype (struct worker_task *task, GMimeContentType * ct, gchar *subtype
 	struct rspamd_regexp           *re;
 	gint                            r;
 
+	if (subtype == NULL || ct == NULL) {
+		msg_warn ("invalid parameters passed");
+		return FALSE;
+	}
 	if (*subtype == '/') {
 		/* This is regexp, so compile and create g_regexp object */
 		if ((re = re_cache_check (subtype, task->cfg->cfg_pool)) == NULL) {

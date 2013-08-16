@@ -891,8 +891,10 @@ redirector_callback (gint fd, short what, void *arg)
 				}
 				if (found) {
 					debug_task ("<%s> got reply from redirector: '%s' -> '%s'", param->task->message_id, struri (param->url), c);
-					parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
-					make_surbl_requests (param->url, param->task, param->suffix, FALSE);
+					r = parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
+					if (r == URI_ERRNO_OK || r == URI_ERRNO_NO_SLASHES || r == URI_ERRNO_NO_HOST_SLASH) {
+						make_surbl_requests (param->url, param->task, param->suffix, FALSE);
+					}
 				}
 			}
 			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);

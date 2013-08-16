@@ -584,7 +584,7 @@ ok:
 				r = rspamd_snprintf (buf, sizeof (buf), "write error: %s" CRLF "END" CRLF, (*session->err)->message);
 			}
 			g_error_free (*session->err);
-			if (! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
+			if (r > 0 && ! rspamd_dispatcher_write (session->session->dispatcher, buf, r, FALSE, FALSE)) {
 				return;
 			}
 		}
@@ -834,7 +834,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	
 
 	saved = memory_pool_alloc0 (session->session_pool, sizeof (gint));
-	err = memory_pool_alloc0 (session->session_pool, sizeof (GError **));
+	err = memory_pool_alloc0 (session->session_pool, sizeof (GError *));
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");

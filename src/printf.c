@@ -28,7 +28,7 @@
 /**
  * From FreeBSD libutil code
  */
-static const int maxscale = 7;
+static const int maxscale = 6;
 
 static gchar *
 rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
