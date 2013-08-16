@@ -954,6 +954,92 @@ rspamd_cl_parse_after_value (struct rspamd_cl_parser *parser, struct rspamd_cl_c
 }
 
 /**
+ * Handle macro data
+ * @param parser
+ * @param chunk
+ * @param err
+ * @return
+ */
+static gboolean
+rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
+		struct rspamd_cl_chunk *chunk, struct rspamd_cl_macro *macro, GError **err)
+{
+	const guchar *p, *c;
+
+	p = chunk->pos;
+
+	switch (*p) {
+	case '"':
+		/* We have macro value encoded in quotes */
+		c = p;
+		rspamd_cl_chunk_skipc (chunk, *p);
+		p ++;
+		if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
+			return FALSE;
+		}
+
+		if (!macro->handler (c + 1, chunk->pos - c - 2, macro->ud, err)) {
+			return FALSE;
+		}
+		p = chunk->pos;
+		break;
+	case '{':
+		/* We got a multiline macro body */
+		rspamd_cl_chunk_skipc (chunk, *p);
+		p ++;
+		/* Skip spaces at the beginning */
+		while (p < chunk->end) {
+			if (g_ascii_isspace (*p)) {
+				rspamd_cl_chunk_skipc (chunk, *p);
+				p ++;
+			}
+			else {
+				break;
+			}
+		}
+		c = p;
+		while (p < chunk->end) {
+			if (*p == '}') {
+				break;
+			}
+			rspamd_cl_chunk_skipc (chunk, *p);
+			p ++;
+		}
+		if (!macro->handler (c, p - c, macro->ud, err)) {
+			return FALSE;
+		}
+		rspamd_cl_chunk_skipc (chunk, *p);
+		p ++;
+		break;
+	default:
+		/* Macro is not enclosed in quotes or braces */
+		c = p;
+		while (p < chunk->end) {
+			if (rspamd_cl_lex_is_atom_end (*p)) {
+				break;
+			}
+			rspamd_cl_chunk_skipc (chunk, *p);
+			p ++;
+		}
+		if (!macro->handler (c, p - c, macro->ud, err)) {
+			return FALSE;
+		}
+		break;
+	}
+
+	/* We are at the end of a macro */
+	/* Skip ';' and space characters and return to previous state */
+	while (p < chunk->end) {
+		if (!g_ascii_isspace (*p) && *p != ';') {
+			break;
+		}
+		rspamd_cl_chunk_skipc (chunk, *p);
+		p ++;
+	}
+	return TRUE;
+}
+
+/**
  * Handle the main states of rcl parser
  * @param parser parser structure
  * @param data the pointer to the beginning of a chunk
@@ -1089,6 +1175,12 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			}
 			break;
 		case RSPAMD_RCL_STATE_MACRO:
+			if (!rspamd_cl_parse_macro_value (parser, chunk, macro, err)) {
+				parser->prev_state = parser->state;
+				parser->state = RSPAMD_RCL_STATE_ERROR;
+				return FALSE;
+			}
+			parser->state = parser->prev_state;
 			break;
 		default:
 			/* TODO: add all states */
