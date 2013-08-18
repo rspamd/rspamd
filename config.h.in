@@ -200,6 +200,9 @@
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine PARAM_H_HAS_BITSET  1
 
+#cmakedefine HAVE_FETCH_H        1
+#cmakedefine CURL_FOUND          1
+
 #if (defined(__i386__) || defined(__x86_64__)  || defined(_M_IX86))
 /* Use murmur hash for UTHash for these platforms */
 #define HASH_FUNCTION HASH_MUR
@@ -420,6 +423,12 @@
 
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
+#endif
+
+#ifdef HAVE_FETCH_H
+#include <fetch.h>
+#elif defined(CURL_FOUND)
+#include <curl/curl.h>
 #endif
 
 #include <errno.h>

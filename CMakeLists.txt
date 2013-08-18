@@ -756,6 +756,34 @@ IF(LIBUTIL_LIBRARY)
 				DOC "Path to libutil header")
 ENDIF(LIBUTIL_LIBRARY)
 
+# Find libfetch (for FreeBSD)
+
+FIND_LIBRARY(LIBFETCH_LIBRARY NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
+                  PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /usr
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
+                 DOC "Path where the libfetch library can be found")
+IF(LIBFETCH_LIBRARY)
+	FIND_FILE(HAVE_FETCH_H NAMES fetch.h PATHS /usr/include
+											   /opt/include
+											   /usr/local/include
+				DOC "Path to libfetch header")
+ELSE(LIBFETCH_LIBRARY)
+	# Try to find libcurl
+	INCLUDE(FindCURL)
+	IF(NOT CURL_FOUND)
+		MESSAGE(WARNING "Neither libcurl nor libfetch were found, no support of URL includes in configuration")
+	ELSE(NOT CURL_FOUND)
+		INCLUDE_DIRECTORIES("${CURL_INCLUDE_DIRS}")
+	ENDIF(NOT CURL_FOUND)
+ENDIF(LIBFETCH_LIBRARY)
+
 # Process with warn flags
 SET(CMAKE_C_WARN_FLAGS "")
 CHECK_C_COMPILER_FLAG(-Wall SUPPORT_WALL)
