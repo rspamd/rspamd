@@ -41,7 +41,9 @@ enum rspamd_cl_error {
 	RSPAMD_CL_ESTATE,
 	RSPAMD_CL_ENESTED,
 	RSPAMD_CL_EMACRO,
-	RSPAMD_CL_ERECURSION
+	RSPAMD_CL_ERECURSION,
+	RSPAMD_CL_EINTERNAL,
+	RSPAMD_CL_ESSL
 };
 
 enum rspamd_cl_type {
@@ -298,5 +300,15 @@ void rspamd_cl_obj_free (rspamd_cl_object_t *obj);
  * @return dump of an object (must be freed after using) or NULL in case of error
  */
 guchar *rspamd_cl_object_emit (rspamd_cl_object_t *obj, enum rspamd_cl_emitter emit_type);
+
+/**
+ * Add new public key to parser for signatures check
+ * @param parser parser object
+ * @param key PEM representation of a key
+ * @param len length of the key
+ * @param err if *err is NULL it is set to parser error
+ * @return TRUE if a key has been successfully added
+ */
+gboolean rspamd_cl_pubkey_add (struct rspamd_cl_parser *parser, const guchar *key, gsize len, GError **err);
 
 #endif /* RCL_H_ */

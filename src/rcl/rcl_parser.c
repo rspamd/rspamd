@@ -138,34 +138,6 @@ rspamd_cl_skip_comments (struct rspamd_cl_parser *parser, GError **err)
 }
 
 /**
- * Handle include macro
- * @param data include data
- * @param len length of data
- * @param ud user data
- * @param err error ptr
- * @return
- */
-static gboolean
-rspamd_cl_include_handler (const guchar *data, gsize len, gpointer ud, GError **err)
-{
-	return TRUE;
-}
-
-/**
- * Handle includes macro
- * @param data include data
- * @param len length of data
- * @param ud user data
- * @param err error ptr
- * @return
- */
-static gboolean
-rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError **err)
-{
-	return TRUE;
-}
-
-/**
  * Return multiplier for a character
  * @param c multiplier character
  * @param is_bytes if TRUE use 1024 multiplier

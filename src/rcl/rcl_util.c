@@ -25,6 +25,14 @@
 #include "rcl.h"
 #include "rcl_internal.h"
 
+#ifdef HAVE_OPENSSL
+#include <openssl/err.h>
+#include <openssl/sha.h>
+#include <openssl/rsa.h>
+#include <openssl/ssl.h>
+#include <openssl/evp.h>
+#endif
+
 /**
  * @file rcl_util.c
  * Utilities for rcl parsing
@@ -178,6 +186,7 @@ rspamd_cl_parser_free (struct rspamd_cl_parser *parser)
 	struct rspamd_cl_stack *stack, *stmp;
 	struct rspamd_cl_macro *macro, *mtmp;
 	struct rspamd_cl_chunk *chunk, *ctmp;
+	struct rspamd_cl_pubkey *key, *ktmp;
 
 	if (parser->top_obj != NULL) {
 		rspamd_cl_obj_free (parser->top_obj);
@@ -192,6 +201,66 @@ rspamd_cl_parser_free (struct rspamd_cl_parser *parser)
 	LL_FOREACH_SAFE (parser->chunks, chunk, ctmp) {
 		g_slice_free1 (sizeof (struct rspamd_cl_chunk), chunk);
 	}
+	LL_FOREACH_SAFE (parser->keys, key, ktmp) {
+		g_slice_free1 (sizeof (struct rspamd_cl_pubkey), key);
+	}
 
 	g_slice_free1 (sizeof (struct rspamd_cl_parser), parser);
+}
+
+gboolean
+rspamd_cl_pubkey_add (struct rspamd_cl_parser *parser, const guchar *key, gsize len, GError **err)
+{
+	struct rspamd_cl_pubkey *nkey;
+#ifndef HAVE_OPENSSL
+	g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "cannot check signatures without openssl");
+	return FALSE;
+#else
+	BIO *mem;
+
+	mem = BIO_new_mem_buf ((void *)key, len);
+	nkey = g_slice_alloc0 (sizeof (struct rspamd_cl_pubkey));
+	nkey->key = PEM_read_bio_PUBKEY (mem, &nkey->key, NULL, NULL);
+	BIO_free (mem);
+	if (nkey->key == NULL) {
+		g_slice_free1 (sizeof (struct rspamd_cl_pubkey), nkey);
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_ESSL, "%s",
+				ERR_error_string (ERR_get_error (), NULL));
+		return FALSE;
+	}
+	LL_PREPEND (parser->keys, nkey);
+#endif
+	return TRUE;
+}
+
+/**
+ * Handle include macro
+ * @param data include data
+ * @param len length of data
+ * @param ud user data
+ * @param err error ptr
+ * @return
+ */
+gboolean
+rspamd_cl_include_handler (const guchar *data, gsize len, gpointer ud, GError **err)
+{
+	struct rspamd_cl_parser *parser = ud;
+
+	return TRUE;
+}
+
+/**
+ * Handle includes macro
+ * @param data include data
+ * @param len length of data
+ * @param ud user data
+ * @param err error ptr
+ * @return
+ */
+gboolean
+rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError **err)
+{
+	struct rspamd_cl_parser *parser = ud;
+
+	return TRUE;
 }

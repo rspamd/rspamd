@@ -26,6 +26,9 @@
 
 #include "rcl.h"
 #include "utlist.h"
+#ifdef HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
 
 /**
  * @file rcl_internal.h
@@ -76,6 +79,17 @@ struct rspamd_cl_chunk {
 	struct rspamd_cl_chunk *next;
 };
 
+#ifdef HAVE_OPENSSL
+struct rspamd_cl_pubkey {
+	EVP_PKEY *key;
+	struct rspamd_cl_pubkey *next;
+};
+#else
+struct rspamd_cl_pubkey {
+	struct rspamd_cl_pubkey *next;
+};
+#endif
+
 struct rspamd_cl_parser {
 	enum rspamd_cl_parser_state state;
 	enum rspamd_cl_parser_state prev_state;
@@ -85,6 +99,7 @@ struct rspamd_cl_parser {
 	struct rspamd_cl_stack *stack;
 	struct rspamd_cl_chunk *chunks;
 	guint recursion;
+	struct rspamd_cl_pubkey *keys;
 };
 
 /**
@@ -92,5 +107,25 @@ struct rspamd_cl_parser {
  * @param str
  */
 void rspamd_cl_unescape_json_string (gchar *str);
+
+/**
+ * Handle include macro
+ * @param data include data
+ * @param len length of data
+ * @param ud user data
+ * @param err error ptr
+ * @return
+ */
+gboolean rspamd_cl_include_handler (const guchar *data, gsize len, gpointer ud, GError **err);
+
+/**
+ * Handle includes macro
+ * @param data include data
+ * @param len length of data
+ * @param ud user data
+ * @param err error ptr
+ * @return
+ */
+gboolean rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError **err);
 
 #endif /* RCL_INTERNAL_H_ */
