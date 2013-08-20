@@ -24,6 +24,7 @@
 #include "config.h"
 #include "rcl.h"
 #include "rcl_internal.h"
+#include "util.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
@@ -233,6 +234,189 @@ rspamd_cl_pubkey_add (struct rspamd_cl_parser *parser, const guchar *key, gsize 
 	return TRUE;
 }
 
+#ifdef CURL_FOUND
+struct rspamd_cl_curl_cbdata {
+	guchar *buf;
+	gsize buflen;
+};
+
+static gsize
+rspamd_cl_curl_write_callback (gpointer contents, gsize size, gsize nmemb, gpointer ud)
+{
+	struct rspamd_cl_curl_cbdata *cbdata = ud;
+	gsize realsize = size * nmemb;
+
+	cbdata->buf = g_realloc (cbdata->buf, cbdata->buflen + realsize + 1);
+	if (cbdata->buf == NULL) {
+		return 0;
+	}
+
+	memcpy (&(cbdata->buf[cbdata->buflen]), contents, realsize);
+	cbdata->buflen += realsize;
+	cbdata->buf[cbdata->buflen] = 0;
+
+	return realsize;
+}
+#endif
+
+/**
+ * Include an url to configuration
+ * @param data
+ * @param len
+ * @param parser
+ * @param err
+ * @return
+ */
+static gboolean
+rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
+{
+	char urlbuf[PATH_MAX];
+	gboolean res;
+	guchar *buf = NULL;
+	gsize buflen = 0;
+	struct rspamd_cl_chunk *chunk;
+
+	rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s", len, data);
+
+#ifdef HAVE_FETCH_H
+	struct url *url;
+	struct url_stat us;
+	FILE *in;
+	guchar *buf;
+
+	url = fetchParseURL (urlbuf);
+	if (url == NULL) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "invalid URL %s: %s",
+				urlbuf, strerror (errno));
+		return FALSE;
+	}
+	if ((in = fetchXGet (url, &us, "")) == NULL) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot fetch URL %s: %s",
+				urlbuf, strerror (errno));
+		fetchFreeURL (url);
+		return FALSE;
+	}
+
+	buflen = us.size;
+	buf = g_malloc (buflen);
+	if (buf == NULL) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot allocate buffer for URL %s: %s",
+				urlbuf, strerror (errno));
+		fclose (in);
+		fetchFreeURL (url);
+		return FALSE;
+	}
+
+	if (fread (buf, buflen, 1, in) != 1) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot read URL %s: %s",
+				urlbuf, strerror (errno));
+		fclose (in);
+		fetchFreeURL (url);
+		return FALSE;
+	}
+
+	fetchFreeURL (url);
+#elif defined(CURL_FOUND)
+	CURL *curl;
+	gint r;
+	struct rspamd_cl_curl_cbdata cbdata;
+
+	curl = curl_easy_init ();
+	if (curl == NULL) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "CURL interface is broken");
+		return FALSE;
+	}
+	if ((r = curl_easy_setopt (curl, CURLOPT_URL, urlbuf)) != CURLE_OK) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "invalid URL %s: %s",
+						urlbuf, curl_easy_strerror (r));
+		curl_easy_cleanup (curl);
+		return FALSE;
+	}
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, rspamd_cl_curl_write_callback);
+	cbdata.buf = buf;
+	cbdata.buflen = buflen;
+	curl_easy_setopt (curl, CURLOPT_WRITEDATA, &cbdata);
+
+	if ((r = curl_easy_perform (curl)) != CURLE_OK) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "error fetching URL %s: %s",
+				urlbuf, curl_easy_strerror (r));
+		curl_easy_cleanup (curl);
+		if (buf != NULL) {
+			g_free (buf);
+		}
+		return FALSE;
+	}
+#else
+	g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "URL support is disabled");
+	return FALSE;
+#endif
+
+	res = rspamd_cl_parser_add_chunk (parser, buf, buflen, err);
+	if (res == TRUE) {
+		/* Remove chunk from the stack */
+		chunk = parser->chunks;
+		if (chunk != NULL) {
+			parser->chunks = chunk->next;
+			g_slice_free1 (sizeof (struct rspamd_cl_chunk), chunk);
+		}
+	}
+	g_free (buf);
+
+	return res;
+}
+
+/**
+ * Include a file to configuration
+ * @param data
+ * @param len
+ * @param parser
+ * @param err
+ * @return
+ */
+static gboolean
+rspamd_cl_include_file (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
+{
+	gint fd;
+	struct stat st;
+	char filebuf[PATH_MAX];
+	gpointer map;
+	gboolean res;
+	struct rspamd_cl_chunk *chunk;
+
+	rspamd_snprintf (filebuf, sizeof (filebuf), "%*s", len, data);
+	if (stat (filebuf, &st) == -1) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot stat file %s: %s",
+						filebuf, strerror (errno));
+		return FALSE;
+	}
+	if ((fd = open (filebuf, O_RDONLY)) == -1) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot open file %s: %s",
+				filebuf, strerror (errno));
+		return FALSE;
+	}
+	if ((map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		close (fd);
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot mmap file %s: %s",
+				filebuf, strerror (errno));
+		return FALSE;
+	}
+
+	close (fd);
+
+	res = rspamd_cl_parser_add_chunk (parser, map, st.st_size, err);
+	if (res == TRUE) {
+		/* Remove chunk from the stack */
+		chunk = parser->chunks;
+		if (chunk != NULL) {
+			parser->chunks = chunk->next;
+			g_slice_free1 (sizeof (struct rspamd_cl_chunk), chunk);
+		}
+	}
+	munmap (map, st.st_size);
+
+	return res;
+}
+
 /**
  * Handle include macro
  * @param data include data
@@ -246,7 +430,12 @@ rspamd_cl_include_handler (const guchar *data, gsize len, gpointer ud, GError **
 {
 	struct rspamd_cl_parser *parser = ud;
 
-	return TRUE;
+	if (*data == '/') {
+		/* Try to load a file */
+		return rspamd_cl_include_file (data, len, parser, err);
+	}
+
+	return rspamd_cl_include_url (data, len, parser, err);
 }
 
 /**

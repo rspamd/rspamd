@@ -42,6 +42,8 @@ rcl_error_quark (void)
 	return g_quark_from_static_string ("rcl-error-quark");
 }
 
+#define RCL_MAX_RECURSION 16
+
 enum rspamd_cl_parser_state {
 	RSPAMD_RCL_STATE_INIT = 0,
 	RSPAMD_RCL_STATE_OBJECT,

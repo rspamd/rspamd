@@ -1205,6 +1205,12 @@ rspamd_cl_parser_add_chunk (struct rspamd_cl_parser *parser, const guchar *data,
 		chunk->line = 1;
 		chunk->column = 0;
 		LL_PREPEND (parser->chunks, chunk);
+		parser->recursion ++;
+		if (parser->recursion > RCL_MAX_RECURSION) {
+			g_set_error (err, RCL_ERROR, RSPAMD_CL_ERECURSION, "maximum include nesting limit is reached: %d",
+					parser->recursion);
+			return FALSE;
+		}
 		return rspamd_cl_state_machine (parser, err);
 	}
 
