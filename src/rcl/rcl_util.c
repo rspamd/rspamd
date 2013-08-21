@@ -496,18 +496,24 @@ rspamd_cl_include_file (const guchar *data, gsize len,
 	struct rspamd_cl_chunk *chunk;
 	guchar *buf = NULL, *sigbuf = NULL;
 	gsize buflen, siglen;
-	gchar filebuf[PATH_MAX];
+	gchar filebuf[PATH_MAX], realbuf[PATH_MAX];
 
 	rspamd_snprintf (filebuf, sizeof (filebuf), "%*s", len, data);
+	if (realpath (filebuf, realbuf) == NULL) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot open file %s: %s",
+									filebuf,
+									strerror (errno));
+		return FALSE;
+	}
 
-	if (!rspamd_cl_fetch_file (filebuf, &buf, &buflen, err)) {
+	if (!rspamd_cl_fetch_file (realbuf, &buf, &buflen, err)) {
 		return FALSE;
 	}
 
 	if (check_signature) {
 #ifdef HAVE_OPENSSL
 		/* We need to check signature first */
-		rspamd_snprintf (filebuf, sizeof (filebuf), "%*s.sig", len, data);
+		rspamd_snprintf (filebuf, sizeof (filebuf), "%s.sig", realbuf);
 		if (!rspamd_cl_fetch_file (filebuf, &sigbuf, &siglen, err)) {
 			return FALSE;
 		}
@@ -549,7 +555,7 @@ rspamd_cl_include_handler (const guchar *data, gsize len, gpointer ud, GError **
 {
 	struct rspamd_cl_parser *parser = ud;
 
-	if (*data == '/') {
+	if (*data == '/' || *data == '.') {
 		/* Try to load a file */
 		return rspamd_cl_include_file (data, len, parser, FALSE, err);
 	}
@@ -570,7 +576,7 @@ rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError *
 {
 	struct rspamd_cl_parser *parser = ud;
 
-	if (*data == '/') {
+	if (*data == '/' || *data == '.') {
 		/* Try to load a file */
 		return rspamd_cl_include_file (data, len, parser, TRUE, err);
 	}

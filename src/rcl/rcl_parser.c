@@ -530,12 +530,6 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 
 	p = chunk->pos;
 
-	/* Skip any spaces */
-	while (p < chunk->end && g_ascii_isspace (*p)) {
-		rspamd_cl_chunk_skipc (chunk, *p);
-		p ++;
-	}
-
 	while (p < chunk->end) {
 		/*
 		 * A key must start with alpha and end with space character
@@ -564,6 +558,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 			else {
 				/* Invalid identifier */
 				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "key must begin with a letter", err);
+				assert (0);
 				return FALSE;
 			}
 		}
@@ -934,7 +929,8 @@ rspamd_cl_parse_after_value (struct rspamd_cl_parser *parser, struct rspamd_cl_c
  */
 static gboolean
 rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
-		struct rspamd_cl_chunk *chunk, struct rspamd_cl_macro *macro, GError **err)
+		struct rspamd_cl_chunk *chunk, struct rspamd_cl_macro *macro,
+		guchar const **macro_start, gsize *macro_len, GError **err)
 {
 	const guchar *p, *c;
 
@@ -950,9 +946,8 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 			return FALSE;
 		}
 
-		if (!macro->handler (c + 1, chunk->pos - c - 2, macro->ud, err)) {
-			return FALSE;
-		}
+		*macro_start = c + 1;
+		*macro_len = chunk->pos - c - 2;
 		p = chunk->pos;
 		break;
 	case '{':
@@ -977,9 +972,8 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
-		if (!macro->handler (c, p - c, macro->ud, err)) {
-			return FALSE;
-		}
+		*macro_start = c;
+		*macro_len = p - c;
 		rspamd_cl_chunk_skipc (chunk, *p);
 		p ++;
 		break;
@@ -993,9 +987,8 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
-		if (!macro->handler (c, p - c, macro->ud, err)) {
-			return FALSE;
-		}
+		*macro_start = c;
+		*macro_len = p - c;
 		break;
 	}
 
@@ -1025,12 +1018,12 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 	rspamd_cl_object_t *obj;
 	struct rspamd_cl_chunk *chunk = parser->chunks;
 	struct rspamd_cl_stack *st;
-	const guchar *p, *c;
+	const guchar *p, *c, *macro_start = NULL;
+	gsize macro_len = 0;
 	struct rspamd_cl_macro *macro = NULL;
 
 	p = chunk->pos;
 	while (chunk->pos < chunk->end) {
-		parser->prev_state = parser->state;
 		switch (parser->state) {
 		case RSPAMD_RCL_STATE_INIT:
 			/*
@@ -1068,6 +1061,11 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			}
 			break;
 		case RSPAMD_RCL_STATE_KEY:
+			/* Skip any spaces */
+			while (p < chunk->end && g_ascii_isspace (*p)) {
+				rspamd_cl_chunk_skipc (chunk, *p);
+				p ++;
+			}
 			if (*p == '}') {
 				/* We have the end of an object */
 				parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
@@ -1094,6 +1092,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				return FALSE;
 			}
 			/* State is set in rspamd_cl_parse_value call */
+			p = chunk->pos;
 			break;
 		case RSPAMD_RCL_STATE_AFTER_VALUE:
 			if (!rspamd_cl_parse_after_value (parser, chunk, err)) {
@@ -1114,6 +1113,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				/* Skip everything at the end */
 				return TRUE;
 			}
+			p = chunk->pos;
 			break;
 		case RSPAMD_RCL_STATE_MACRO_NAME:
 			if (!g_ascii_isspace (*p)) {
@@ -1147,12 +1147,17 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			}
 			break;
 		case RSPAMD_RCL_STATE_MACRO:
-			if (!rspamd_cl_parse_macro_value (parser, chunk, macro, err)) {
+			if (!rspamd_cl_parse_macro_value (parser, chunk, macro,
+					&macro_start, &macro_len, err)) {
 				parser->prev_state = parser->state;
 				parser->state = RSPAMD_RCL_STATE_ERROR;
 				return FALSE;
 			}
 			parser->state = parser->prev_state;
+			if (!macro->handler (macro_start, macro_len, macro->ud, err)) {
+				return FALSE;
+			}
+			p = chunk->pos;
 			break;
 		default:
 			/* TODO: add all states */
