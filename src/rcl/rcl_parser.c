@@ -84,48 +84,49 @@ rspamd_cl_skip_comments (struct rspamd_cl_parser *parser, GError **err)
 				parser->state != RSPAMD_RCL_STATE_MCOMMENT) {
 			while (p < chunk->end) {
 				if (*p == '\n') {
-					rspamd_cl_chunk_skipc (chunk, *p);
+					rspamd_cl_chunk_skipc (chunk, *++p);
 					break;
 				}
-				rspamd_cl_chunk_skipc (chunk, *p);
-				p ++;
+				rspamd_cl_chunk_skipc (chunk, *++p);
 			}
 		}
 	}
 	else if (*p == '/' && chunk->remain >= 2) {
-		p ++;
+		rspamd_cl_chunk_skipc (chunk, *++p);
 		if (*p == '/' && parser->state != RSPAMD_RCL_STATE_SCOMMENT &&
 				parser->state != RSPAMD_RCL_STATE_MCOMMENT) {
 			chunk->pos = p;
 			while (p < chunk->end) {
 				if (*p == '\n') {
-					rspamd_cl_chunk_skipc (chunk, *p);
+					rspamd_cl_chunk_skipc (chunk, *++p);
 					break;
 				}
-				rspamd_cl_chunk_skipc (chunk, *p);
-				p ++;
+				rspamd_cl_chunk_skipc (chunk, *++p);
 			}
 		}
 		else if (*p == '*') {
 			comments_nested ++;
-			chunk->pos = p;
+			rspamd_cl_chunk_skipc (chunk, *++p);
 
 			while (p < chunk->end) {
 				if (*p == '*') {
-					rspamd_cl_chunk_skipc (chunk, *p);
-					p ++;
-					rspamd_cl_chunk_skipc (chunk, *p);
+					rspamd_cl_chunk_skipc (chunk, *++p);
 					if (*p == '/') {
 						comments_nested --;
 						if (comments_nested == 0) {
+							rspamd_cl_chunk_skipc (chunk, *++p);
 							break;
 						}
 					}
-					p ++;
-					rspamd_cl_chunk_skipc (chunk, *p);
+					rspamd_cl_chunk_skipc (chunk, *++p);
 				}
-				rspamd_cl_chunk_skipc (chunk, *p);
-				p ++;
+				else if (p[0] == '/' && chunk->remain >= 2 && p[1] == '*') {
+					comments_nested ++;
+					rspamd_cl_chunk_skipc (chunk, *++p);
+					rspamd_cl_chunk_skipc (chunk, *++p);
+					continue;
+				}
+				rspamd_cl_chunk_skipc (chunk, *++p);
 			}
 			if (comments_nested != 0) {
 				rspamd_cl_set_err (chunk, RSPAMD_CL_ENESTED, "comments nesting is invalid", err);
@@ -210,6 +211,20 @@ rspamd_cl_lex_is_atom_end (const guchar c)
 		return TRUE;
 	}
 
+	return FALSE;
+}
+
+static inline gboolean
+rspamd_cl_lex_is_comment (const guchar c1, const guchar c2)
+{
+	if (c1 == '/') {
+		if (c2 == '/' || c2 == '*') {
+			return TRUE;
+		}
+	}
+	else if (c1 == '#') {
+		return TRUE;
+	}
 	return FALSE;
 }
 
@@ -623,7 +638,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 				return FALSE;
 			}
 		}
-		else if ((p[0] == '/' && p[1] == '/') || *p == '#') {
+		else if (rspamd_cl_lex_is_comment (p[0], p[1])) {
 			/* Check for comment */
 			if (!rspamd_cl_skip_comments (parser, err)) {
 				return FALSE;
@@ -772,7 +787,7 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 		default:
 			/* Skip any spaces and comments */
 			if (g_ascii_isspace (*p) ||
-					(p[0] == '/' && p[1] == '/') || *p == '#') {
+					rspamd_cl_lex_is_comment (p[0], p[1])) {
 				while (p < chunk->end && g_ascii_isspace (*p)) {
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
@@ -845,11 +860,13 @@ rspamd_cl_parse_after_value (struct rspamd_cl_parser *parser, struct rspamd_cl_c
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
-		else if ((p[0] == '/' && p[1] == '/') || *p == '#') {
+		else if (rspamd_cl_lex_is_comment (p[0], p[1])) {
 			/* Skip comment */
 			if (!rspamd_cl_skip_comments (parser, err)) {
 				return FALSE;
 			}
+			/* Treat comment as a separator */
+			got_sep = TRUE;
 			p = chunk->pos;
 		}
 		else if (*p == ',') {
@@ -1131,7 +1148,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				/* Now we need to skip all spaces */
 				while (p < chunk->end) {
 					if (!g_ascii_isspace (*p)) {
-						if ((p[0] == '/' && p[1] == '/') || *p == '#') {
+						if (rspamd_cl_lex_is_comment (p[0], p[1])) {
 							/* Skip comment */
 							if (!rspamd_cl_skip_comments (parser, err)) {
 								return FALSE;
