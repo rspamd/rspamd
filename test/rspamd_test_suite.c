@@ -3,35 +3,19 @@
 #include "../src/cfg_file.h"
 #include "tests.h"
 
-static gboolean do_debug;
 struct rspamd_main             *rspamd_main = NULL;
 struct event_base              *base = NULL;
 worker_t *workers[] = { NULL };
 
-static GOptionEntry entries[] =
-{
-  { "debug", 'd', 0, G_OPTION_ARG_NONE, &do_debug, "Turn on debug messages", NULL },
-  { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
-};
 
 int
 main (int argc, char **argv)
 {
 	struct config_file            *cfg;
-	GError                         *error = NULL;
-	GOptionContext                 *context;
-
-	context = g_option_context_new ("- run rspamd test suite");
-	g_option_context_set_summary (context, "Summary:\n  Rspamd test suite version " RVERSION);
-	g_option_context_add_main_entries (context, entries, NULL);
-	if (!g_option_context_parse (context, &argc, &argv, &error)) {
-		fprintf (stderr, "option parsing failed: %s\n", error->message);
-		exit (1);
-	}
-
-	g_mem_set_vtable(glib_mem_profiler_table);
 
 	g_test_init (&argc, &argv, NULL);
+
+	g_mem_set_vtable (glib_mem_profiler_table);
 
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 
@@ -48,7 +32,7 @@ main (int argc, char **argv)
 
 	base = event_init ();
 
-	if (do_debug) {
+	if (g_test_verbose ()) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {

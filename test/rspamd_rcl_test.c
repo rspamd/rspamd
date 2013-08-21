@@ -49,6 +49,8 @@ const gchar *rcl_test_valid[] = {
 		"key3 = 111some,"
 		"key4: s1,"
 		"\"key5\": \"\\n\\r123\"",
+		/* Macros */
+		"section1 {key = value; .include \"./test.cfg\"}",
 		NULL
 };
 
