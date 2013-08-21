@@ -34,7 +34,8 @@ const gchar *rcl_test_valid[] = {
 		"\"key1\": \"value;\""
 		"}\n",
 		/* Nginx like */
-		"section1 { param1 = value; param2 = value, param3 = [\"value1\", value2, 100500]}\n"
+		"section1 { param1 = value; param2 = value, "
+		"section3 {param = value; param2 = value, param3 = [\"value1\", value2, 100500]}}\n"
 		"section2 { param1 = {key = value}, param1 = [\"key\"]}",
 		/* Numbers */
 		"key = 1s\n"
@@ -50,7 +51,11 @@ const gchar *rcl_test_valid[] = {
 		"key4: s1,"
 		"\"key5\": \"\\n\\r123\"",
 		/* Macros */
-		"section1 {key = value; .include \"./test.cfg\"}",
+		"section1 {key = value; section {\n"
+		"param = \"value\";\n"
+        "param2 = value\n"
+        "array = [          1, 1mb, test]}\n"
+        ".include \"./test.cfg\"}",
 		NULL
 };
 

@@ -573,7 +573,6 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 			else {
 				/* Invalid identifier */
 				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "key must begin with a letter", err);
-				assert (0);
 				return FALSE;
 			}
 		}
@@ -724,20 +723,22 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 {
 	const guchar *p, *c;
 	struct rspamd_cl_stack *st;
-	rspamd_cl_object_t *obj;
+	rspamd_cl_object_t *obj = NULL;
 
 	p = chunk->pos;
 
 	while (p < chunk->end) {
-		if (parser->stack->obj->type == RSPAMD_CL_ARRAY) {
-			/* Object must be allocated */
-			obj = rspamd_cl_object_new ();
-			parser->cur_obj = obj;
-			LL_PREPEND (parser->stack->obj->value.ov, parser->cur_obj);
-		}
-		else {
-			/* Object has been already allocated */
-			obj = parser->cur_obj;
+		if (obj == NULL) {
+			if (parser->stack->obj->type == RSPAMD_CL_ARRAY) {
+				/* Object must be allocated */
+				obj = rspamd_cl_object_new ();
+				parser->cur_obj = obj;
+				LL_PREPEND (parser->stack->obj->value.ov, parser->cur_obj);
+			}
+			else {
+				/* Object has been already allocated */
+				obj = parser->cur_obj;
+			}
 		}
 		c = p;
 		switch (*p) {
