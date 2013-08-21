@@ -4,7 +4,7 @@
 #include "../src/memcached.h"
 #include "tests.h"
 
-u_char *buf = "test";
+static const u_char *buf = "test";
 
 static void 
 memcached_callback (memcached_ctx_t *ctx, memc_error_t error, void *data)

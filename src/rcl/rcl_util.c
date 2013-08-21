@@ -260,62 +260,59 @@ rspamd_cl_curl_write_callback (gpointer contents, gsize size, gsize nmemb, gpoin
 #endif
 
 /**
- * Include an url to configuration
- * @param data
- * @param len
- * @param parser
- * @param err
+ * Fetch a url and save results to the memory buffer
+ * @param url url to fetch
+ * @param len length of url
+ * @param buf target buffer
+ * @param buflen target length
  * @return
  */
 static gboolean
-rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
+rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, GError **err)
 {
 	char urlbuf[PATH_MAX];
-	gboolean res;
-	guchar *buf = NULL;
-	gsize buflen = 0;
-	struct rspamd_cl_chunk *chunk;
 
-	rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s", len, data);
+	rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s", len, url);
 
 #ifdef HAVE_FETCH_H
-	struct url *url;
+	struct url *fetch_url;
 	struct url_stat us;
 	FILE *in;
 	guchar *buf;
 
-	url = fetchParseURL (urlbuf);
-	if (url == NULL) {
+	fetch_url = fetchParseURL (urlbuf);
+	if (fetch_url == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "invalid URL %s: %s",
 				urlbuf, strerror (errno));
 		return FALSE;
 	}
-	if ((in = fetchXGet (url, &us, "")) == NULL) {
+	if ((in = fetchXGet (fetch_url, &us, "")) == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot fetch URL %s: %s",
 				urlbuf, strerror (errno));
-		fetchFreeURL (url);
+		fetchFreeURL (fetch_url);
 		return FALSE;
 	}
 
-	buflen = us.size;
-	buf = g_malloc (buflen);
+	*buflen = us.size;
+	*buf = g_malloc (*buflen);
 	if (buf == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot allocate buffer for URL %s: %s",
 				urlbuf, strerror (errno));
 		fclose (in);
-		fetchFreeURL (url);
+		fetchFreeURL (fetch_url);
 		return FALSE;
 	}
 
-	if (fread (buf, buflen, 1, in) != 1) {
+	if (fread (*buf, *buflen, 1, in) != 1) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot read URL %s: %s",
 				urlbuf, strerror (errno));
 		fclose (in);
-		fetchFreeURL (url);
+		fetchFreeURL (fetch_url);
 		return FALSE;
 	}
 
-	fetchFreeURL (url);
+	fetchFreeURL (fetch_url);
+	return TRUE;
 #elif defined(CURL_FOUND)
 	CURL *curl;
 	gint r;
@@ -332,9 +329,9 @@ rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *p
 		curl_easy_cleanup (curl);
 		return FALSE;
 	}
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, rspamd_cl_curl_write_callback);
-	cbdata.buf = buf;
-	cbdata.buflen = buflen;
+	curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, rspamd_cl_curl_write_callback);
+	cbdata.buf = *buf;
+	cbdata.buflen = *buflen;
 	curl_easy_setopt (curl, CURLOPT_WRITEDATA, &cbdata);
 
 	if ((r = curl_easy_perform (curl)) != CURLE_OK) {
@@ -346,10 +343,75 @@ rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *p
 		}
 		return FALSE;
 	}
+	*buf = cbdata.buf;
+	*buflen = cbdata.buflen;
+
+	return TRUE;
 #else
 	g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "URL support is disabled");
 	return FALSE;
 #endif
+}
+
+/**
+ * Fetch a file and save results to the memory buffer
+ * @param filename filename to fetch
+ * @param len length of filename
+ * @param buf target buffer
+ * @param buflen target length
+ * @return
+ */
+static gboolean
+rspamd_cl_fetch_file (const guchar *filename, gsize len, guchar **buf, gsize *buflen, GError **err)
+{
+	gint fd;
+	struct stat st;
+	char filebuf[PATH_MAX];
+
+	rspamd_snprintf (filebuf, sizeof (filebuf), "%*s", len, filename);
+	if (stat (filebuf, &st) == -1) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot stat file %s: %s",
+				filebuf, strerror (errno));
+		return FALSE;
+	}
+	if ((fd = open (filebuf, O_RDONLY)) == -1) {
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot open file %s: %s",
+				filebuf, strerror (errno));
+		return FALSE;
+	}
+	if ((*buf = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		close (fd);
+		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot mmap file %s: %s",
+				filebuf, strerror (errno));
+		return FALSE;
+	}
+	*buflen = st.st_size;
+	close (fd);
+
+	return TRUE;
+}
+
+/**
+ * Include an url to configuration
+ * @param data
+ * @param len
+ * @param parser
+ * @param err
+ * @return
+ */
+static gboolean
+rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
+{
+
+	gboolean res;
+	guchar *buf = NULL;
+	gsize buflen = 0;
+	struct rspamd_cl_chunk *chunk;
+
+
+	if (!rspamd_cl_fetch_url (data, len, &buf, &buflen, err)) {
+		return FALSE;
+	}
 
 	res = rspamd_cl_parser_add_chunk (parser, buf, buflen, err);
 	if (res == TRUE) {
@@ -376,34 +438,16 @@ rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *p
 static gboolean
 rspamd_cl_include_file (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
 {
-	gint fd;
-	struct stat st;
-	char filebuf[PATH_MAX];
-	gpointer map;
 	gboolean res;
 	struct rspamd_cl_chunk *chunk;
+	guchar *buf = NULL;
+	gsize buflen;
 
-	rspamd_snprintf (filebuf, sizeof (filebuf), "%*s", len, data);
-	if (stat (filebuf, &st) == -1) {
-		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot stat file %s: %s",
-						filebuf, strerror (errno));
-		return FALSE;
-	}
-	if ((fd = open (filebuf, O_RDONLY)) == -1) {
-		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot open file %s: %s",
-				filebuf, strerror (errno));
-		return FALSE;
-	}
-	if ((map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		close (fd);
-		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot mmap file %s: %s",
-				filebuf, strerror (errno));
+	if (!rspamd_cl_fetch_file (data, len, &buf, &buflen, err)) {
 		return FALSE;
 	}
 
-	close (fd);
-
-	res = rspamd_cl_parser_add_chunk (parser, map, st.st_size, err);
+	res = rspamd_cl_parser_add_chunk (parser, buf, buflen, err);
 	if (res == TRUE) {
 		/* Remove chunk from the stack */
 		chunk = parser->chunks;
@@ -412,7 +456,7 @@ rspamd_cl_include_file (const guchar *data, gsize len, struct rspamd_cl_parser *
 			g_slice_free1 (sizeof (struct rspamd_cl_chunk), chunk);
 		}
 	}
-	munmap (map, st.st_size);
+	munmap (buf, buflen);
 
 	return res;
 }
