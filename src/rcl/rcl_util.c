@@ -268,11 +268,8 @@ rspamd_cl_curl_write_callback (gpointer contents, gsize size, gsize nmemb, gpoin
  * @return
  */
 static gboolean
-rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, GError **err)
+rspamd_cl_fetch_url (const guchar *url, guchar **buf, gsize *buflen, GError **err)
 {
-	char urlbuf[PATH_MAX];
-
-	rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s", len, url);
 
 #ifdef HAVE_FETCH_H
 	struct url *fetch_url;
@@ -280,15 +277,15 @@ rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, 
 	FILE *in;
 	guchar *buf;
 
-	fetch_url = fetchParseURL (urlbuf);
+	fetch_url = fetchParseURL (url);
 	if (fetch_url == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "invalid URL %s: %s",
-				urlbuf, strerror (errno));
+				url, strerror (errno));
 		return FALSE;
 	}
 	if ((in = fetchXGet (fetch_url, &us, "")) == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot fetch URL %s: %s",
-				urlbuf, strerror (errno));
+				url, strerror (errno));
 		fetchFreeURL (fetch_url);
 		return FALSE;
 	}
@@ -297,7 +294,7 @@ rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, 
 	*buf = g_malloc (*buflen);
 	if (buf == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot allocate buffer for URL %s: %s",
-				urlbuf, strerror (errno));
+				url, strerror (errno));
 		fclose (in);
 		fetchFreeURL (fetch_url);
 		return FALSE;
@@ -305,7 +302,7 @@ rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, 
 
 	if (fread (*buf, *buflen, 1, in) != 1) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot read URL %s: %s",
-				urlbuf, strerror (errno));
+				url, strerror (errno));
 		fclose (in);
 		fetchFreeURL (fetch_url);
 		return FALSE;
@@ -323,9 +320,9 @@ rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, 
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "CURL interface is broken");
 		return FALSE;
 	}
-	if ((r = curl_easy_setopt (curl, CURLOPT_URL, urlbuf)) != CURLE_OK) {
+	if ((r = curl_easy_setopt (curl, CURLOPT_URL, url)) != CURLE_OK) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "invalid URL %s: %s",
-						urlbuf, curl_easy_strerror (r));
+				url, curl_easy_strerror (r));
 		curl_easy_cleanup (curl);
 		return FALSE;
 	}
@@ -336,7 +333,7 @@ rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, 
 
 	if ((r = curl_easy_perform (curl)) != CURLE_OK) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "error fetching URL %s: %s",
-				urlbuf, curl_easy_strerror (r));
+				url, curl_easy_strerror (r));
 		curl_easy_cleanup (curl);
 		if (buf != NULL) {
 			g_free (buf);
@@ -362,27 +359,25 @@ rspamd_cl_fetch_url (const guchar *url, gsize len, guchar **buf, gsize *buflen, 
  * @return
  */
 static gboolean
-rspamd_cl_fetch_file (const guchar *filename, gsize len, guchar **buf, gsize *buflen, GError **err)
+rspamd_cl_fetch_file (const guchar *filename, guchar **buf, gsize *buflen, GError **err)
 {
 	gint fd;
 	struct stat st;
-	char filebuf[PATH_MAX];
 
-	rspamd_snprintf (filebuf, sizeof (filebuf), "%*s", len, filename);
-	if (stat (filebuf, &st) == -1) {
+	if (stat (filename, &st) == -1) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot stat file %s: %s",
-				filebuf, strerror (errno));
+				filename, strerror (errno));
 		return FALSE;
 	}
-	if ((fd = open (filebuf, O_RDONLY)) == -1) {
+	if ((fd = open (filename, O_RDONLY)) == -1) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot open file %s: %s",
-				filebuf, strerror (errno));
+				filename, strerror (errno));
 		return FALSE;
 	}
 	if ((*buf = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
 		close (fd);
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot mmap file %s: %s",
-				filebuf, strerror (errno));
+				filename, strerror (errno));
 		return FALSE;
 	}
 	*buflen = st.st_size;
@@ -390,6 +385,43 @@ rspamd_cl_fetch_file (const guchar *filename, gsize len, guchar **buf, gsize *bu
 
 	return TRUE;
 }
+
+
+#ifdef HAVE_OPENSSL
+static inline gboolean
+rspamd_cl_sig_check (const guchar *data, gsize datalen,
+		const guchar *sig, gsize siglen, struct rspamd_cl_parser *parser)
+{
+	struct rspamd_cl_pubkey *key;
+	EVP_PKEY_CTX *key_ctx;
+
+	LL_FOREACH (parser->keys, key) {
+		key_ctx = EVP_PKEY_CTX_new (key->key, NULL);
+		if (key_ctx != NULL) {
+			if (EVP_PKEY_verify_init (key_ctx) <= 0) {
+				EVP_PKEY_CTX_free (key_ctx);
+				continue;
+			}
+			if (EVP_PKEY_CTX_set_rsa_padding (key_ctx, RSA_PKCS1_PADDING) <= 0) {
+				EVP_PKEY_CTX_free (key_ctx);
+				continue;
+			}
+			if (EVP_PKEY_CTX_set_signature_md (key_ctx, EVP_sha256 ()) <= 0) {
+				EVP_PKEY_CTX_free (key_ctx);
+				continue;
+			}
+			if (EVP_PKEY_verify (key_ctx, sig, siglen, data, datalen) == 1) {
+				EVP_PKEY_CTX_free (key_ctx);
+				return TRUE;
+			}
+
+			EVP_PKEY_CTX_free (key_ctx);
+		}
+	}
+
+	return FALSE;
+}
+#endif
 
 /**
  * Include an url to configuration
@@ -400,17 +432,38 @@ rspamd_cl_fetch_file (const guchar *filename, gsize len, guchar **buf, gsize *bu
  * @return
  */
 static gboolean
-rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
+rspamd_cl_include_url (const guchar *data, gsize len,
+		struct rspamd_cl_parser *parser, gboolean check_signature, GError **err)
 {
 
 	gboolean res;
-	guchar *buf = NULL;
-	gsize buflen = 0;
+	guchar *buf = NULL, *sigbuf = NULL;
+	gsize buflen = 0, siglen = 0;
 	struct rspamd_cl_chunk *chunk;
+	gchar urlbuf[PATH_MAX];
 
+	rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s", len, data);
 
-	if (!rspamd_cl_fetch_url (data, len, &buf, &buflen, err)) {
+	if (!rspamd_cl_fetch_url (urlbuf, &buf, &buflen, err)) {
 		return FALSE;
+	}
+
+	if (check_signature) {
+#ifdef HAVE_OPENSSL
+		/* We need to check signature first */
+		rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s.sig", len, data);
+		if (!rspamd_cl_fetch_file (urlbuf, &sigbuf, &siglen, err)) {
+			return FALSE;
+		}
+		if (!rspamd_cl_sig_check (buf, buflen, sigbuf, siglen, parser)) {
+			g_set_error (err, RCL_ERROR, RSPAMD_CL_ESSL, "cannot verify url %s: %s",
+							urlbuf,
+							ERR_error_string (ERR_get_error (), NULL));
+			munmap (sigbuf, siglen);
+			return FALSE;
+		}
+		munmap (sigbuf, siglen);
+#endif
 	}
 
 	res = rspamd_cl_parser_add_chunk (parser, buf, buflen, err);
@@ -436,15 +489,37 @@ rspamd_cl_include_url (const guchar *data, gsize len, struct rspamd_cl_parser *p
  * @return
  */
 static gboolean
-rspamd_cl_include_file (const guchar *data, gsize len, struct rspamd_cl_parser *parser, GError **err)
+rspamd_cl_include_file (const guchar *data, gsize len,
+		struct rspamd_cl_parser *parser, gboolean check_signature, GError **err)
 {
 	gboolean res;
 	struct rspamd_cl_chunk *chunk;
-	guchar *buf = NULL;
-	gsize buflen;
+	guchar *buf = NULL, *sigbuf = NULL;
+	gsize buflen, siglen;
+	gchar filebuf[PATH_MAX];
 
-	if (!rspamd_cl_fetch_file (data, len, &buf, &buflen, err)) {
+	rspamd_snprintf (filebuf, sizeof (filebuf), "%*s", len, data);
+
+	if (!rspamd_cl_fetch_file (filebuf, &buf, &buflen, err)) {
 		return FALSE;
+	}
+
+	if (check_signature) {
+#ifdef HAVE_OPENSSL
+		/* We need to check signature first */
+		rspamd_snprintf (filebuf, sizeof (filebuf), "%*s.sig", len, data);
+		if (!rspamd_cl_fetch_file (filebuf, &sigbuf, &siglen, err)) {
+			return FALSE;
+		}
+		if (!rspamd_cl_sig_check (buf, buflen, sigbuf, siglen, parser)) {
+			g_set_error (err, RCL_ERROR, RSPAMD_CL_ESSL, "cannot verify file %s: %s",
+							filebuf,
+							ERR_error_string (ERR_get_error (), NULL));
+			munmap (sigbuf, siglen);
+			return FALSE;
+		}
+		munmap (sigbuf, siglen);
+#endif
 	}
 
 	res = rspamd_cl_parser_add_chunk (parser, buf, buflen, err);
@@ -476,10 +551,10 @@ rspamd_cl_include_handler (const guchar *data, gsize len, gpointer ud, GError **
 
 	if (*data == '/') {
 		/* Try to load a file */
-		return rspamd_cl_include_file (data, len, parser, err);
+		return rspamd_cl_include_file (data, len, parser, FALSE, err);
 	}
 
-	return rspamd_cl_include_url (data, len, parser, err);
+	return rspamd_cl_include_url (data, len, parser, FALSE, err);
 }
 
 /**
@@ -495,5 +570,10 @@ rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError *
 {
 	struct rspamd_cl_parser *parser = ud;
 
-	return TRUE;
+	if (*data == '/') {
+		/* Try to load a file */
+		return rspamd_cl_include_file (data, len, parser, TRUE, err);
+	}
+
+	return rspamd_cl_include_url (data, len, parser, TRUE, err);
 }
