@@ -28,6 +28,7 @@ SET(LIBRSPAMDSERVERSRC
 				../src/binlog.c
 				../src/buffer.c
 				../src/cfg_utils.c
+				../src/cfg_rcl.c
 				../src/cfg_xml.c
 				../src/dkim.c
 				../src/dns.c
