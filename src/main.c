@@ -888,13 +888,16 @@ perform_configs_sign (void)
 	return EXIT_FAILURE;
 #else
 	gint                            i, tests_num, res = EXIT_SUCCESS, fd;
-	gchar                          *cur_file, in_file[PATH_MAX], out_file[PATH_MAX];
+	guint                           diglen;
+	gchar                          *cur_file, in_file[PATH_MAX],
+	                                out_file[PATH_MAX], dig[EVP_MAX_MD_SIZE];
 	gsize                           siglen;
 	struct stat                    st;
 	gpointer                        map, sig;
 	EVP_PKEY                       *key = NULL;
 	BIO                            *fbio;
-	EVP_PKEY_CTX                   *key_ctx;
+	EVP_PKEY_CTX                   *key_ctx = NULL;
+	EVP_MD_CTX                     *sign_ctx = NULL;
 
 	/* Load private key */
 	fbio = BIO_new_file (privkey, "r");
@@ -932,6 +935,8 @@ perform_configs_sign (void)
 		return ERR_get_error ();
 	}
 
+	sign_ctx = EVP_MD_CTX_create ();
+
 	tests_num = g_strv_length (sign_configs);
 
 	for (i = 0; i < tests_num; i ++) {
@@ -957,32 +962,37 @@ perform_configs_sign (void)
 
 		close (fd);
 		/* Now try to sign */
-		if (EVP_PKEY_sign (key_ctx, NULL, &siglen, map, st.st_size) <= 0) {
+		EVP_DigestInit (sign_ctx, EVP_sha256 ());
+		EVP_DigestUpdate (sign_ctx, map, st.st_size);
+		EVP_DigestFinal (sign_ctx, dig, &diglen);
+
+		munmap (map, st.st_size);
+
+		if (EVP_PKEY_sign (key_ctx, NULL, &siglen, dig, diglen) <= 0) {
 			msg_err ("cannot sign %s using private key %s, %s", in_file, privkey,
 					ERR_error_string (ERR_get_error (), NULL));
-			munmap (map, st.st_size);
 			continue;
 		}
 
 		sig = OPENSSL_malloc (siglen);
-		if (EVP_PKEY_sign (key_ctx, sig, &siglen, map, st.st_size) <= 0) {
+		if (EVP_PKEY_sign (key_ctx, sig, &siglen, dig, diglen) <= 0) {
 			msg_err ("cannot sign %s using private key %s, %s", in_file, privkey,
 					ERR_error_string (ERR_get_error (), NULL));
-			munmap (map, st.st_size);
+			OPENSSL_free (sig);
 			continue;
 		}
-
-		munmap (map, st.st_size);
 
 		rspamd_snprintf (out_file, sizeof (out_file), "%s.sig", in_file);
 		fd = open (out_file, O_WRONLY | O_CREAT | O_TRUNC, 00644);
 		if (fd == -1) {
 			msg_err ("cannot open output file %s: %s", out_file, strerror (errno));
+			OPENSSL_free (sig);
 			continue;
 		}
 		if (write (fd, sig, siglen) == -1) {
 			msg_err ("cannot write to output file %s: %s", out_file, strerror (errno));
 		}
+		OPENSSL_free (sig);
 		close (fd);
 	}
 
@@ -1076,6 +1086,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	OpenSSL_add_all_algorithms ();
+	OpenSSL_add_all_digests ();
 	OpenSSL_add_all_ciphers ();
 #endif
 
