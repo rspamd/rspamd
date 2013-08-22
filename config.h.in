@@ -203,6 +203,9 @@
 #cmakedefine HAVE_FETCH_H        1
 #cmakedefine CURL_FOUND          1
 
+#cmakedefine HAVE_READPASSPHRASE_H  1
+#cmakedefine HAVE_TERMIOS_H      1
+
 #if (defined(__i386__) || defined(__x86_64__)  || defined(_M_IX86))
 /* Use murmur hash for UTHash for these platforms */
 #define HASH_FUNCTION HASH_MUR
@@ -429,6 +432,18 @@
 #include <fetch.h>
 #elif defined(CURL_FOUND)
 #include <curl/curl.h>
+#endif
+
+#ifdef HAVE_READPASSPHRASE_H
+#include <readpassphrase.h>
+#endif
+
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#endif
+
+#ifdef HAVE_PATHS_H
+#include <paths.h>
 #endif
 
 #include <errno.h>

@@ -419,4 +419,14 @@ gboolean parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask);
  */
 time_t parse_http_date (const gchar *header, gsize len);
 
+/**
+ * Read passphrase from tty
+ * @param buf buffer to fill with a password
+ * @param size size of the buffer
+ * @param rwflag unused flag
+ * @param key unused key
+ * @return size of password read
+ */
+gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
+
 #endif

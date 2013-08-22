@@ -38,6 +38,8 @@
 #include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
 #endif
 
 /* 2 seconds to fork new process in place of dead one */
@@ -64,6 +66,8 @@ static gboolean                 config_test = FALSE;
 static gboolean                 no_fork = FALSE;
 static gchar                  **cfg_names = NULL;
 static gchar                  **lua_tests = NULL;
+static gchar                  **sign_configs = NULL;
+static gchar                   *privkey = NULL;
 static gchar                   *rspamd_user = NULL;
 static gchar                   *rspamd_group = NULL;
 static gchar                   *rspamd_pidfile = NULL;
@@ -97,6 +101,8 @@ static GOptionEntry entries[] =
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
   { "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure, "Ignore running workers as privileged users (insecure)", NULL },
   { "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_tests, "Specify lua file(s) to test", NULL },
+  { "sign-config", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &sign_configs, "Specify config file(s) to sign", NULL },
+  { "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey, "Specify private key to sign", NULL },
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -874,6 +880,121 @@ perform_lua_tests (struct config_file *cfg)
 	return res;
 }
 
+static gint
+perform_configs_sign (void)
+{
+#ifndef HAVE_OPENSSL
+	msg_err ("cannot sign files without openssl support");
+	return EXIT_FAILURE;
+#else
+	gint                            i, tests_num, res = EXIT_SUCCESS, fd;
+	gchar                          *cur_file, in_file[PATH_MAX], out_file[PATH_MAX];
+	gsize                           siglen;
+	struct stat                    st;
+	gpointer                        map, sig;
+	EVP_PKEY                       *key = NULL;
+	BIO                            *fbio;
+	EVP_PKEY_CTX                   *key_ctx;
+
+	/* Load private key */
+	fbio = BIO_new_file (privkey, "r");
+	if (fbio == NULL) {
+		msg_err ("cannot open private key %s, %s", privkey,
+				ERR_error_string (ERR_get_error (), NULL));
+		return ERR_get_error ();
+	}
+	if (!PEM_read_bio_PrivateKey (fbio, &key, rspamd_read_passphrase, NULL)) {
+		msg_err ("cannot read private key %s, %s", privkey,
+				ERR_error_string (ERR_get_error (), NULL));
+		return ERR_get_error ();
+	}
+
+	key_ctx = EVP_PKEY_CTX_new (key, NULL);
+	if (key_ctx == NULL) {
+		msg_err ("cannot parse private key %s, %s", privkey,
+				ERR_error_string (ERR_get_error (), NULL));
+		return ERR_get_error ();
+	}
+
+	if (EVP_PKEY_sign_init (key_ctx) <= 0) {
+		msg_err ("cannot parse private key %s, %s", privkey,
+				ERR_error_string (ERR_get_error (), NULL));
+		return ERR_get_error ();
+	}
+	if (EVP_PKEY_CTX_set_rsa_padding (key_ctx, RSA_PKCS1_PADDING) <= 0) {
+		msg_err ("cannot init private key %s, %s", privkey,
+				ERR_error_string (ERR_get_error (), NULL));
+		return ERR_get_error ();
+	}
+	if (EVP_PKEY_CTX_set_signature_md (key_ctx, EVP_sha256 ()) <= 0) {
+		msg_err ("cannot init signature private key %s, %s", privkey,
+				ERR_error_string (ERR_get_error (), NULL));
+		return ERR_get_error ();
+	}
+
+	tests_num = g_strv_length (sign_configs);
+
+	for (i = 0; i < tests_num; i ++) {
+		cur_file = sign_configs[i];
+		if (realpath (cur_file, in_file) == NULL) {
+			msg_err ("cannot resolve %s: %s", cur_file, strerror (errno));
+			continue;
+		}
+		if (stat (in_file, &st) == -1) {
+			msg_err ("cannot stat %s: %s", in_file, strerror (errno));
+			continue;
+		}
+		if ((fd = open (in_file, O_RDONLY)) == -1) {
+			msg_err ("cannot open %s: %s", in_file, strerror (errno));
+			continue;
+		}
+
+		if ((map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+			close (fd);
+			msg_err ("cannot mmap %s: %s", in_file, strerror (errno));
+			continue;
+		}
+
+		close (fd);
+		/* Now try to sign */
+		if (EVP_PKEY_sign (key_ctx, NULL, &siglen, map, st.st_size) <= 0) {
+			msg_err ("cannot sign %s using private key %s, %s", in_file, privkey,
+					ERR_error_string (ERR_get_error (), NULL));
+			munmap (map, st.st_size);
+			continue;
+		}
+
+		sig = OPENSSL_malloc (siglen);
+		if (EVP_PKEY_sign (key_ctx, sig, &siglen, map, st.st_size) <= 0) {
+			msg_err ("cannot sign %s using private key %s, %s", in_file, privkey,
+					ERR_error_string (ERR_get_error (), NULL));
+			munmap (map, st.st_size);
+			continue;
+		}
+
+		munmap (map, st.st_size);
+
+		rspamd_snprintf (out_file, sizeof (out_file), "%s.sig", in_file);
+		fd = open (out_file, O_WRONLY | O_CREAT | O_TRUNC, 00644);
+		if (fd == -1) {
+			msg_err ("cannot open output file %s: %s", out_file, strerror (errno));
+			continue;
+		}
+		if (write (fd, sig, siglen) == -1) {
+			msg_err ("cannot write to output file %s: %s", out_file, strerror (errno));
+		}
+		close (fd);
+	}
+
+	/* Cleanup */
+	EVP_PKEY_CTX_free (key_ctx);
+	EVP_PKEY_free (key);
+	BIO_free (fbio);
+
+	return res;
+#endif
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -995,6 +1116,11 @@ main (gint argc, gchar **argv, gchar **env)
 	/* If we want to test lua skip everything except it */
 	if (lua_tests != NULL && lua_tests[0] != NULL) {
 		exit (perform_lua_tests (rspamd_main->cfg));
+	}
+
+	/* If we want to sign configs, just do it */
+	if (sign_configs != NULL && privkey != NULL) {
+		exit (perform_configs_sign ());
 	}
 
 	/* Load config */

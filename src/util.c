@@ -2249,6 +2249,118 @@ parse_http_date (const gchar *header, gsize len)
 	return (time_t) time;
 }
 
+static volatile sig_atomic_t saved_signo[NSIG];
+
+static
+void read_pass_tmp_sig_handler (int s)
+{
+
+	saved_signo[s] = 1;
+}
+
+#ifndef _PATH_TTY
+# define _PATH_TTY "/dev/tty"
+#endif
+
+gint
+rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key)
+{
+#ifdef HAVE_PASSPHRASE_H
+	gint len = 0;
+	gchar pass[BUFSIZ];
+
+	if (readpassphrase ("Enter passphrase: ", buf, size, RPP_ECHO_OFF | RPP_REQUIRE_TTY) == NULL) {
+		return 0;
+	}
+
+	return strlen (buf);
+#else
+	struct sigaction sa, savealrm, saveint, savehup, savequit, saveterm;
+	struct sigaction savetstp, savettin, savettou, savepipe;
+	struct termios term, oterm;
+	gint input, output, i;
+	gchar *end, *p, ch;
+
+restart:
+	if ((input = output = open (_PATH_TTY, O_RDWR | O_CLOEXEC)) == -1) {
+		errno = ENOTTY;
+		return 0;
+	}
+
+	/* Turn echo off */
+	if (tcgetattr (input, &oterm) != 0) {
+		errno = ENOTTY;
+		return 0;
+	}
+	memcpy(&term, &oterm, sizeof(term));
+	term.c_lflag &= ~(ECHO | ECHONL);
+	(void)tcsetattr(input, TCSAFLUSH, &term);
+	(void)write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") - 1);
+
+	/* Save the current sighandler */
+	for (i = 0; i < NSIG; i++) {
+		saved_signo[i] = 0;
+	}
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sa.sa_handler = read_pass_tmp_sig_handler;
+	(void)sigaction (SIGALRM, &sa, &savealrm);
+	(void)sigaction (SIGHUP, &sa, &savehup);
+	(void)sigaction (SIGINT, &sa, &saveint);
+	(void)sigaction (SIGPIPE, &sa, &savepipe);
+	(void)sigaction (SIGQUIT, &sa, &savequit);
+	(void)sigaction (SIGTERM, &sa, &saveterm);
+	(void)sigaction (SIGTSTP, &sa, &savetstp);
+	(void)sigaction (SIGTTIN, &sa, &savettin);
+	(void)sigaction (SIGTTOU, &sa, &savettou);
+
+	/* Now read a passphrase */
+	p = buf;
+	end = p + size - 1;
+	while (read (input, &ch, 1) == 1 && ch != '\n' && ch != '\r') {
+		if (p < end) {
+			*p++ = ch;
+		}
+	}
+	*p = '\0';
+	(void)write (output, "\n", 1);
+
+	/* Restore terminal state */
+	if (memcmp (&term, &oterm, sizeof (term)) != 0) {
+		while (tcsetattr (input, TCSAFLUSH, &oterm) == -1 &&
+				errno == EINTR && !saved_signo[SIGTTOU]);
+	}
+
+	/* Restore signal handlers */
+	(void)sigaction (SIGALRM, &savealrm, NULL);
+	(void)sigaction (SIGHUP, &savehup, NULL);
+	(void)sigaction (SIGINT, &saveint, NULL);
+	(void)sigaction (SIGQUIT, &savequit, NULL);
+	(void)sigaction (SIGPIPE, &savepipe, NULL);
+	(void)sigaction (SIGTERM, &saveterm, NULL);
+	(void)sigaction (SIGTSTP, &savetstp, NULL);
+	(void)sigaction (SIGTTIN, &savettin, NULL);
+	(void)sigaction (SIGTTOU, &savettou, NULL);
+
+	close (input);
+
+	/* Send signals pending */
+	for (i = 0; i < NSIG; i++) {
+		if (saved_signo[i]) {
+			kill(getpid(), i);
+			switch (i) {
+			case SIGTSTP:
+			case SIGTTIN:
+			case SIGTTOU:
+				goto restart;
+			}
+		}
+	}
+
+	return p - buf;
+#endif
+}
+
 /*
  * vi:ts=4
  */
