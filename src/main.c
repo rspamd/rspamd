@@ -997,6 +997,7 @@ perform_configs_sign (void)
 	}
 
 	/* Cleanup */
+	EVP_MD_CTX_destroy (sign_ctx);
 	EVP_PKEY_CTX_free (key_ctx);
 	EVP_PKEY_free (key);
 	BIO_free (fbio);

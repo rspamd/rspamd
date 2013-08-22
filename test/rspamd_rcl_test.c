@@ -55,9 +55,17 @@ const gchar *rcl_test_valid[] = {
 		"param = \"value\";\n"
         "param2 = value\n"
         "array = [          1, 1mb, test]}\n"
-        ".include \"./test.cfg\"}",
+        ".includes \"./test.cfg\"}",
 		NULL
 };
+
+static const gchar test_pubkey[] = ""
+"-----BEGIN PUBLIC KEY-----\n"
+"MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDlhk2u5nbTVgEskmS+qZcAj339\n"
+"bLwEK/TXdd0G3d4BVKpF712frw+YwetRdmRRYL5EdjiF01Bv3s6QmsThAJX/li/c\n"
+"Q15YFxhvq9DZ0qJmL7e1NzORo6m/WLRK9wxWA+PXSvSUKrlZ3kt9ygD4z5QZ3/td\n"
+"qil9VM6Mz7P1HJ0KywIDAQAB\n"
+"-----END PUBLIC KEY-----\n";
 
 void
 rspamd_rcl_test_func (void)
@@ -71,6 +79,8 @@ rspamd_rcl_test_func (void)
 	cur = rcl_test_valid;
 	while (*cur != NULL) {
 		parser = rspamd_cl_parser_new ();
+		rspamd_cl_pubkey_add (parser, test_pubkey, sizeof (test_pubkey) - 1, &err);
+		g_assert_no_error (err);
 		g_assert (parser != NULL);
 		rspamd_cl_parser_add_chunk (parser, *cur, strlen (*cur), &err);
 		g_assert_no_error (err);
