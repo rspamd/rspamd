@@ -393,7 +393,12 @@ rspamd_cl_sig_check (const guchar *data, gsize datalen,
 		const guchar *sig, gsize siglen, struct rspamd_cl_parser *parser)
 {
 	struct rspamd_cl_pubkey *key;
+	gchar dig[EVP_MAX_MD_SIZE];
+	guint diglen;
 	EVP_PKEY_CTX *key_ctx;
+	EVP_MD_CTX *sign_ctx = NULL;
+
+	sign_ctx = EVP_MD_CTX_create ();
 
 	LL_FOREACH (parser->keys, key) {
 		key_ctx = EVP_PKEY_CTX_new (key->key, NULL);
@@ -410,7 +415,12 @@ rspamd_cl_sig_check (const guchar *data, gsize datalen,
 				EVP_PKEY_CTX_free (key_ctx);
 				continue;
 			}
-			if (EVP_PKEY_verify (key_ctx, sig, siglen, data, datalen) == 1) {
+			EVP_DigestInit (sign_ctx, EVP_sha256 ());
+			EVP_DigestUpdate (sign_ctx, data, datalen);
+			EVP_DigestFinal (sign_ctx, dig, &diglen);
+
+			if (EVP_PKEY_verify (key_ctx, sig, siglen, dig, diglen) == 1) {
+				EVP_MD_CTX_destroy (sign_ctx);
 				EVP_PKEY_CTX_free (key_ctx);
 				return TRUE;
 			}
@@ -418,6 +428,8 @@ rspamd_cl_sig_check (const guchar *data, gsize datalen,
 			EVP_PKEY_CTX_free (key_ctx);
 		}
 	}
+
+	EVP_MD_CTX_destroy (sign_ctx);
 
 	return FALSE;
 }
