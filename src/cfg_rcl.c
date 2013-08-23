@@ -24,6 +24,152 @@
 #include "cfg_rcl.h"
 #include "main.h"
 
+/*
+ * Common section handlers
+ */
+gboolean rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	rspamd_cl_object_t *val;
+	gchar *filepath;
+	const gchar *facility, *log_type, *log_level;
+
+	obj = obj->value.ov;
+
+	HASH_FIND_STR (obj, "type", val);
+	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &log_type)) {
+		if (g_ascii_strcasecmp (log_type, "file") == 0) {
+			/* Need to get filename */
+			HASH_FIND_STR (obj, "filename", val);
+			if (val == NULL || val->type != RSPAMD_CL_STRING) {
+				g_set_error (err, CFG_RCL_ERROR, ENOENT, "filename attribute must be specified for file logging type");
+				return FALSE;
+			}
+			if ((filepath = realpath (rspamd_cl_obj_tostring (val), NULL)) == NULL ||
+					access (filepath, W_OK) == -1) {
+				g_set_error (err, CFG_RCL_ERROR, errno, "log file is inaccessible");
+				return FALSE;
+			}
+			cfg->log_type = RSPAMD_LOG_FILE;
+			cfg->log_file = memory_pool_strdup (cfg->cfg_pool, filepath);
+		}
+		else if (g_ascii_strcasecmp (log_type, "syslog") == 0) {
+			/* Need to get facility */
+			cfg->log_facility = LOG_DAEMON;
+			cfg->log_type = RSPAMD_LOG_SYSLOG;
+			HASH_FIND_STR (obj, "facility", val);
+			if (val != NULL && rspamd_cl_obj_tostring_safe (val, &facility)) {
+				if (g_ascii_strcasecmp (facility, "LOG_AUTH") == 0 ||
+						g_ascii_strcasecmp (facility, "auth") == 0 ) {
+					cfg->log_facility = LOG_AUTH;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_CRON") == 0 ||
+						g_ascii_strcasecmp (facility, "cron") == 0 ) {
+					cfg->log_facility = LOG_CRON;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_DAEMON") == 0 ||
+						g_ascii_strcasecmp (facility, "daemon") == 0 ) {
+					cfg->log_facility = LOG_DAEMON;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_MAIL") == 0 ||
+						g_ascii_strcasecmp (facility, "mail") == 0) {
+					cfg->log_facility = LOG_MAIL;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_USER") == 0 ||
+						g_ascii_strcasecmp (facility, "user") == 0 ) {
+					cfg->log_facility = LOG_USER;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL0") == 0 ||
+						g_ascii_strcasecmp (facility, "local0") == 0) {
+					cfg->log_facility = LOG_LOCAL0;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL1") == 0 ||
+						g_ascii_strcasecmp (facility, "local1") == 0) {
+					cfg->log_facility = LOG_LOCAL1;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL2") == 0 ||
+						g_ascii_strcasecmp (facility, "local2") == 0) {
+					cfg->log_facility = LOG_LOCAL2;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL3") == 0 ||
+						g_ascii_strcasecmp (facility, "local3") == 0) {
+					cfg->log_facility = LOG_LOCAL3;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL4") == 0 ||
+						g_ascii_strcasecmp (facility, "local4") == 0) {
+					cfg->log_facility = LOG_LOCAL4;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL5") == 0 ||
+						g_ascii_strcasecmp (facility, "local5") == 0) {
+					cfg->log_facility = LOG_LOCAL5;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL6") == 0 ||
+						g_ascii_strcasecmp (facility, "local6") == 0) {
+					cfg->log_facility = LOG_LOCAL6;
+				}
+				else if (g_ascii_strcasecmp (facility, "LOG_LOCAL7") == 0 ||
+						g_ascii_strcasecmp (facility, "local7") == 0) {
+					cfg->log_facility = LOG_LOCAL7;
+				}
+				else {
+					g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid log facility: %s", facility);
+					return FALSE;
+				}
+			}
+		}
+		else if (g_ascii_strcasecmp (log_type, "stderr") == 0 || g_ascii_strcasecmp (log_type, "console") == 0) {
+			cfg->log_type = RSPAMD_LOG_CONSOLE;
+		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid log type: %s", log_type);
+			return FALSE;
+		}
+	}
+	else {
+		/* No type specified */
+		msg_warn ("logging type is not specified correctly, log output to the console");
+	}
+
+	/* Handle log level */
+	HASH_FIND_STR (obj, "level", val);
+	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &log_level)) {
+		if (g_ascii_strcasecmp (log_level, "error") == 0) {
+			cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
+		}
+		else if (g_ascii_strcasecmp (log_level, "warning") == 0) {
+			cfg->log_level = G_LOG_LEVEL_WARNING;
+		}
+		else if (g_ascii_strcasecmp (log_level, "info") == 0) {
+			cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
+		}
+		else if (g_ascii_strcasecmp (log_level, "debug") == 0) {
+			cfg->log_level = G_LOG_LEVEL_DEBUG;
+		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid log level: %s", log_level);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+static inline void
+rspamd_rcl_add_section (struct rspamd_rcl_section *top,
+		const gchar *name, rspamd_rcl_handler_t handler,
+		enum rspamd_cl_type type, gboolean required, gboolean strict_type)
+{
+	struct rspamd_rcl_section *new;
+
+	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
+	new->name = name;
+	new->handler = handler;
+	new->type = type;
+	new->strict_type = strict_type;
+
+	HASH_ADD_KEYPTR (hh, top, new->name, strlen (new->name), new);
+}
+
 struct rspamd_rcl_section*
 rspamd_rcl_config_init (void)
 {
@@ -32,6 +178,8 @@ rspamd_rcl_config_init (void)
 	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
 
 	/* TODO: add all known rspamd sections here */
+	rspamd_rcl_add_section (new, "logging", rspamd_rcl_logging_handler, RSPAMD_CL_OBJECT,
+			FALSE, TRUE);
 
 	return new;
 }
