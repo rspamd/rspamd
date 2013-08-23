@@ -28,12 +28,59 @@
 #include "rcl/rcl.h"
 #include "main.h"
 
+#define CFG_RCL_ERROR cfg_rcl_error_quark ()
+static inline GQuark
+cfg_rcl_error_quark (void)
+{
+	return g_quark_from_static_string ("cfg-rcl-error-quark");
+}
+
+struct rspamd_rcl_section;
+
+/**
+ * Common handler type
+ * @param cfg configuration
+ * @param obj object to parse
+ * @param ud user data (depends on section)
+ * @param err error object
+ * @return TRUE if a section has been parsed
+ */
+typedef gboolean (*rspamd_rcl_handler_t) (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err);
+
+struct rspamd_rcl_section {
+	const gchar *name;					/**< name of section */
+	rspamd_rcl_handler_t handler;		/**< handler of section attributes */
+	enum rspamd_cl_type type;			/**< type of attribute */
+	gboolean required;					/**< whether this param is required */
+	gboolean strict_type;				/**< whether we need strict type */
+	UT_hash_handle hh;					/** hash handle */
+	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
+};
+
+/**
+ * Init common sections known to rspamd
+ * @return top section
+ */
+struct rspamd_rcl_section* rspamd_rcl_config_init (void);
+
+/**
+ * Get a section specified by path, it understand paths separated by '/' character
+ * @param top top section
+ * @param path '/' divided path
+ * @return
+ */
+struct rspamd_rcl_section *rspamd_rcl_config_get_section (struct rspamd_rcl_section *top,
+		const char *path);
+
 /**
  * Read RCL configuration and parse it to a config file
+ * @param top top section
  * @param cfg target configuration
  * @param obj object to handle
  * @return TRUE if an object can be parsed
  */
-gboolean read_rcl_config (struct config_file *cfg, rspamd_cl_object_t *obj, GError **err);
+gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
+		struct config_file *cfg, rspamd_cl_object_t *obj, GError **err);
 
 #endif /* CFG_RCL_H_ */
