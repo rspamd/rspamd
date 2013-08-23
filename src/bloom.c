@@ -204,9 +204,11 @@ bloom_add (bloom_filter_t * bloom, const gchar *s)
 {
 	size_t                          n;
 	u_char                          t;
+	guint                           v;
 
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		INCBIT (bloom->a, bloom->funcs[n] (s) % bloom->asize, t);
+		v = bloom->funcs[n] (s) % bloom->asize;
+		INCBIT (bloom->a, v, t);
 	}
 
 	return TRUE;
@@ -217,9 +219,11 @@ bloom_del (bloom_filter_t * bloom, const gchar *s)
 {
 	size_t                          n;
 	u_char                          t;
+	guint                           v;
 
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		DECBIT (bloom->a, bloom->funcs[n] (s) % bloom->asize, t);
+		v = bloom->funcs[n] (s) % bloom->asize;
+		DECBIT (bloom->a, v, t);
 	}
 
 	return TRUE;
@@ -230,9 +234,11 @@ gboolean
 bloom_check (bloom_filter_t * bloom, const gchar *s)
 {
 	size_t                          n;
+	guint                           v;
 
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		if (!(GETBIT (bloom->a, bloom->funcs[n] (s) % bloom->asize)))
+		v = bloom->funcs[n] (s) % bloom->asize;
+		if (!(GETBIT (bloom->a, v)))
 			return FALSE;
 	}
 
