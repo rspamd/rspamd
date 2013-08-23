@@ -174,7 +174,7 @@ do {                                                                            
 do {                                                                             \
  unsigned _ha_bkt;                                                               \
  (add)->hh.next = NULL;                                                          \
- (add)->hh.key = (char*)keyptr;                                                  \
+ (add)->hh.key = (const char*)keyptr;                                                  \
  (add)->hh.keylen = (unsigned)keylen_in;                                                   \
  if (!(head)) {                                                                  \
     head = (add);                                                                \
@@ -416,7 +416,7 @@ do {                                                                            
 #define HASH_JEN(key,keylen,num_bkts,hashv,bkt)                                  \
 do {                                                                             \
   unsigned _hj_i,_hj_j,_hj_k;                                                    \
-  unsigned char *_hj_key=(unsigned char*)(key);                                  \
+  unsigned const char *_hj_key=(unsigned const char*)(key);                                  \
   hashv = 0xfeedbeef;                                                            \
   _hj_i = _hj_j = 0x9e3779b9;                                                    \
   _hj_k = (unsigned)keylen;                                                      \
@@ -467,7 +467,7 @@ do {                                                                            
 #endif
 #define HASH_SFH(key,keylen,num_bkts,hashv,bkt)                                  \
 do {                                                                             \
-  unsigned char *_sfh_key=(unsigned char*)(key);                                 \
+  unsigned const char *_sfh_key=(unsigned const char*)(key);                                 \
   uint32_t _sfh_tmp, _sfh_len = keylen;                                          \
                                                                                  \
   int _sfh_rem = _sfh_len & 3;                                                   \
@@ -940,7 +940,7 @@ typedef struct UT_hash_handle {
    void *next;                       /* next element in app order      */
    struct UT_hash_handle *hh_prev;   /* previous hh in bucket order    */
    struct UT_hash_handle *hh_next;   /* next hh in bucket order        */
-   void *key;                        /* ptr to enclosing struct's key  */
+   const void *key;                  /* ptr to enclosing struct's key  */
    unsigned keylen;                  /* enclosing struct's key len     */
    unsigned hashv;                   /* result of hash-fcn(key)        */
 } UT_hash_handle;
