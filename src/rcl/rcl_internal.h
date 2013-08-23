@@ -95,12 +95,13 @@ struct rspamd_cl_pubkey {
 struct rspamd_cl_parser {
 	enum rspamd_cl_parser_state state;
 	enum rspamd_cl_parser_state prev_state;
+	guint recursion;
+	gint flags;
 	rspamd_cl_object_t *top_obj;
 	rspamd_cl_object_t *cur_obj;
 	struct rspamd_cl_macro *macroes;
 	struct rspamd_cl_stack *stack;
 	struct rspamd_cl_chunk *chunks;
-	guint recursion;
 	struct rspamd_cl_pubkey *keys;
 };
 

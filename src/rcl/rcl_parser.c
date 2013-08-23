@@ -658,7 +658,12 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 	/* Create a new object */
 	nobj = rspamd_cl_object_new ();
 	nobj->key = g_malloc (end - c + 1);
-	rspamd_strlcpy (nobj->key, c, end - c + 1);
+	if (parser->flags & RSPAMD_CL_FLAG_KEY_LOWERCASE) {
+		rspamd_strlcpy_tolower (nobj->key, c, end - c + 1);
+	}
+	else {
+		rspamd_strlcpy (nobj->key, c, end - c + 1);
+	}
 
 	if (got_quote) {
 		rspamd_cl_unescape_json_string (nobj->key);
@@ -1187,7 +1192,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 }
 
 struct rspamd_cl_parser*
-rspamd_cl_parser_new (void)
+rspamd_cl_parser_new (gint flags)
 {
 	struct rspamd_cl_parser *new;
 
@@ -1195,6 +1200,8 @@ rspamd_cl_parser_new (void)
 
 	rspamd_cl_parser_register_macro (new, "include", rspamd_cl_include_handler, new);
 	rspamd_cl_parser_register_macro (new, "includes", rspamd_cl_includes_handler, new);
+
+	new->flags = flags;
 
 	return new;
 }

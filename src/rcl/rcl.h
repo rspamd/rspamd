@@ -62,6 +62,10 @@ enum rspamd_cl_emitter {
 	RSPAMD_CL_EMIT_CONFIG
 };
 
+enum rspamd_cl_flags {
+	RSPAMD_CL_FLAG_KEY_LOWERCASE = 0x1
+};
+
 typedef struct rspamd_cl_object_s {
 	gchar *key;								/**< the key of an object */
 	union {
@@ -249,7 +253,7 @@ struct rspamd_cl_parser;
  * @param pool pool to allocate memory from
  * @return new parser object
  */
-struct rspamd_cl_parser* rspamd_cl_parser_new (void);
+struct rspamd_cl_parser* rspamd_cl_parser_new (gint flags);
 
 /**
  * Register new handler for a macro
