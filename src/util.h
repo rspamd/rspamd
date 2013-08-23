@@ -186,7 +186,7 @@ void g_queue_clear (GQueue *queue);
 #endif
 
 
-/*
+/**
  * Copy src to dest limited to len, in compare with standart strlcpy(3) rspamd strlcpy does not
  * traverse the whole string and it is possible to use it for non NULL terminated strings. This is
  * more like memccpy(dst, src, size, '\0')
@@ -197,6 +197,15 @@ void g_queue_clear (GQueue *queue);
  * @return bytes copied
  */
 gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
+
+/**
+ * Lowercase strlcpy variant
+ * @param dst
+ * @param src
+ * @param siz
+ * @return
+ */
+gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 
 /*
  * Strip <> from email address

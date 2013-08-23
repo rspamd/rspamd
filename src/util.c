@@ -1325,6 +1325,29 @@ rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
 	return (s - src - 1);    /* count does not include NUL */
 }
 
+gsize
+rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz)
+{
+	gchar *d = dst;
+	const gchar *s = src;
+	gsize n = siz;
+
+	/* Copy as many bytes as will fit */
+	if (n != 0) {
+		while (--n != 0) {
+			if ((*d++ = g_ascii_tolower (*s++)) == '\0') {
+				break;
+			}
+		}
+	}
+
+	if (n == 0 && siz != 0) {
+		*d = '\0';
+	}
+
+	return (s - src - 1);    /* count does not include NUL */
+}
+
 /* Compare two emails for building emails tree */
 gint
 compare_email_func (gconstpointer a, gconstpointer b)
