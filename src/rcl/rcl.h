@@ -75,6 +75,7 @@ typedef struct rspamd_cl_object_s {
 		struct rspamd_cl_object_s *ov;		/**< array or hash 			*/
 	} value;
 	enum rspamd_cl_type type;				/**< real type				*/
+	gint ref;								/**< reference count		*/
 	struct rspamd_cl_object_s *next;		/**< array handle			*/
 	UT_hash_handle hh;						/**< hash handle			*/
 } rspamd_cl_object_t;
@@ -277,6 +278,16 @@ gboolean rspamd_cl_parser_add_chunk (struct rspamd_cl_parser *parser, const guch
 		gsize len, GError **err);
 
 /**
+ * Load and add data from a file
+ * @param parser parser structure
+ * @param filename the name of file
+ * @param err if *err is NULL it is set to parser error
+ * @return TRUE if chunk has been added and FALSE in case of error
+ */
+gboolean rspamd_cl_parser_add_file (struct rspamd_cl_parser *parser, const gchar *filename,
+		GError **err);
+
+/**
  * Get a top object for a parser
  * @param parser parser structure
  * @param err if *err is NULL it is set to parser error
@@ -295,6 +306,27 @@ void rspamd_cl_parser_free (struct rspamd_cl_parser *parser);
  * @param obj cl object to free
  */
 void rspamd_cl_obj_free (rspamd_cl_object_t *obj);
+
+/**
+ * Icrease reference count for an object
+ * @param obj object to ref
+ */
+static inline rspamd_cl_object_t *
+rspamd_cl_obj_ref (rspamd_cl_object_t *obj) {
+	obj->ref ++;
+	return obj;
+}
+
+/**
+ * Decrease reference count for an object
+ * @param obj object to unref
+ */
+static inline void
+rspamd_cl_obj_unref (rspamd_cl_object_t *obj) {
+	if (--obj->ref <= 0) {
+		rspamd_cl_obj_free (obj);
+	}
+}
 
 /**
  * Emit object to a string

@@ -175,7 +175,7 @@ rspamd_cl_object_t*
 rspamd_cl_parser_get_object (struct rspamd_cl_parser *parser, GError **err)
 {
 	if (parser->state != RSPAMD_RCL_STATE_INIT && parser->state != RSPAMD_RCL_STATE_ERROR) {
-		return parser->top_obj;
+		return rspamd_cl_obj_ref (parser->top_obj);
 	}
 
 	return NULL;
@@ -190,7 +190,7 @@ rspamd_cl_parser_free (struct rspamd_cl_parser *parser)
 	struct rspamd_cl_pubkey *key, *ktmp;
 
 	if (parser->top_obj != NULL) {
-		rspamd_cl_obj_free (parser->top_obj);
+		rspamd_cl_obj_unref (parser->top_obj);
 	}
 
 	LL_FOREACH_SAFE (parser->stack, stack, stmp) {
@@ -594,4 +594,23 @@ rspamd_cl_includes_handler (const guchar *data, gsize len, gpointer ud, GError *
 	}
 
 	return rspamd_cl_include_url (data, len, parser, TRUE, err);
+}
+
+gboolean
+rspamd_cl_parser_add_file (struct rspamd_cl_parser *parser, const gchar *filename,
+		GError **err)
+{
+	guchar *buf;
+	gsize len;
+	gboolean ret;
+
+	if (!rspamd_cl_fetch_file (filename, &buf, &len, err)) {
+		return FALSE;
+	}
+
+	ret = rspamd_cl_parser_add_chunk (parser, buf, len, err);
+
+	munmap (buf, len);
+
+	return ret;
 }

@@ -78,7 +78,7 @@ rspamd_rcl_test_func (void)
 
 	cur = rcl_test_valid;
 	while (*cur != NULL) {
-		parser = rspamd_cl_parser_new ();
+		parser = rspamd_cl_parser_new (RSPAMD_CL_FLAG_KEY_LOWERCASE);
 		rspamd_cl_pubkey_add (parser, test_pubkey, sizeof (test_pubkey) - 1, &err);
 		g_assert_no_error (err);
 		g_assert (parser != NULL);
@@ -90,7 +90,7 @@ rspamd_rcl_test_func (void)
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_CONFIG);
 		g_assert (emitted != NULL);
 		msg_debug ("got config output: %s", emitted);
-		parser2 = rspamd_cl_parser_new ();
+		parser2 = rspamd_cl_parser_new (RSPAMD_CL_FLAG_KEY_LOWERCASE);
 		g_assert (parser2 != NULL);
 		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
 		g_assert_no_error (err);
@@ -100,7 +100,7 @@ rspamd_rcl_test_func (void)
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON);
 		g_assert (emitted != NULL);
 		msg_debug ("got json output: %s", emitted);
-		parser2 = rspamd_cl_parser_new ();
+		parser2 = rspamd_cl_parser_new (RSPAMD_CL_FLAG_KEY_LOWERCASE);
 		g_assert (parser2 != NULL);
 		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
 		g_assert_no_error (err);
@@ -110,7 +110,7 @@ rspamd_rcl_test_func (void)
 		emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_JSON_COMPACT);
 		g_assert (emitted != NULL);
 		msg_debug ("got json compacted output: %s", emitted);
-		parser2 = rspamd_cl_parser_new ();
+		parser2 = rspamd_cl_parser_new (RSPAMD_CL_FLAG_KEY_LOWERCASE);
 		g_assert (parser2 != NULL);
 		rspamd_cl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
 		g_assert_no_error (err);
@@ -119,7 +119,13 @@ rspamd_rcl_test_func (void)
 
 		/* Cleanup */
 		rspamd_cl_parser_free (parser);
+		rspamd_cl_obj_unref (obj);
 		cur ++;
 	}
 
+	/* Load a big json */
+	parser = rspamd_cl_parser_new (RSPAMD_CL_FLAG_KEY_LOWERCASE);
+	rspamd_cl_parser_add_file (parser, "./rcl_test.json", &err);
+	g_assert_no_error (err);
+	rspamd_cl_parser_free (parser);
 }
