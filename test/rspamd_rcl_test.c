@@ -75,6 +75,8 @@ rspamd_rcl_test_func (void)
 	const gchar **cur;
 	guchar *emitted;
 	GError *err = NULL;
+	struct timespec start, end;
+	gdouble seconds;
 
 	cur = rcl_test_valid;
 	while (*cur != NULL) {
@@ -125,7 +127,21 @@ rspamd_rcl_test_func (void)
 
 	/* Load a big json */
 	parser = rspamd_cl_parser_new (RSPAMD_CL_FLAG_KEY_LOWERCASE);
+	clock_gettime (CLOCK_MONOTONIC, &start);
 	rspamd_cl_parser_add_file (parser, "./rcl_test.json", &err);
 	g_assert_no_error (err);
+	obj = rspamd_cl_parser_get_object (parser, &err);
+	g_assert_no_error (err);
+	clock_gettime (CLOCK_MONOTONIC, &end);
+	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
+	msg_info ("parsed json in %.4f seconds", seconds);
+	/* Test config emitting */
+	clock_gettime (CLOCK_MONOTONIC, &start);
+	emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_CONFIG);
+	g_assert (emitted != NULL);
+	clock_gettime (CLOCK_MONOTONIC, &end);
+	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
+	msg_info ("emitted object in %.4f seconds", seconds);
 	rspamd_cl_parser_free (parser);
+	rspamd_cl_obj_unref (obj);
 }
