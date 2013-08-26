@@ -720,6 +720,60 @@ rspamd_cl_parse_string_value (struct rspamd_cl_parser *parser,
 }
 
 /**
+ * Check whether a given string contains a boolean value
+ * @param obj object to set
+ * @param start start of a string
+ * @param len length of a string
+ * @return TRUE if a string is a boolean value
+ */
+static inline gboolean
+rspamd_cl_maybe_parse_boolean (rspamd_cl_object_t *obj, const guchar *start, gsize len)
+{
+	const guchar *p = start;
+	gboolean ret = FALSE, val = FALSE;
+
+	if (len == 5) {
+		if (g_ascii_tolower (p[0]) == 'f' && g_ascii_strncasecmp (p, "false", 5) == 0) {
+			ret = TRUE;
+			val = FALSE;
+		}
+	}
+	else if (len == 4) {
+		if (g_ascii_tolower (p[0]) == 't' && g_ascii_strncasecmp (p, "true", 4) == 0) {
+			ret = TRUE;
+			val = TRUE;
+		}
+	}
+	else if (len == 3) {
+		if (g_ascii_tolower (p[0]) == 'y' && g_ascii_strncasecmp (p, "yes", 3) == 0) {
+			ret = TRUE;
+			val = TRUE;
+		}
+		if (g_ascii_tolower (p[0]) == 'o' && g_ascii_strncasecmp (p, "off", 3) == 0) {
+			ret = TRUE;
+			val = FALSE;
+		}
+	}
+	else if (len == 2) {
+		if (g_ascii_tolower (p[0]) == 'n' && g_ascii_strncasecmp (p, "no", 2) == 0) {
+			ret = TRUE;
+			val = FALSE;
+		}
+		else if (g_ascii_tolower (p[0]) == 'o' && g_ascii_strncasecmp (p, "on", 2) == 0) {
+			ret = TRUE;
+			val = TRUE;
+		}
+	}
+
+	if (ret) {
+		obj->type = RSPAMD_CL_BOOLEAN;
+		obj->value.iv = val;
+	}
+
+	return ret;
+}
+
+/**
  * Handle value data
  * @param parser
  * @param chunk
@@ -816,10 +870,12 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 					if (!rspamd_cl_parse_string_value (parser, chunk, err)) {
 						return FALSE;
 					}
-					obj->value.sv = g_malloc (chunk->pos - c + 1);
-					rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1);
-					rspamd_cl_unescape_json_string (obj->value.sv);
-					obj->type = RSPAMD_CL_STRING;
+					if (!rspamd_cl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
+						obj->value.sv = g_malloc (chunk->pos - c + 1);
+						rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1);
+						rspamd_cl_unescape_json_string (obj->value.sv);
+						obj->type = RSPAMD_CL_STRING;
+					}
 					parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
 					return TRUE;
 				}
@@ -832,10 +888,12 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 				if (!rspamd_cl_parse_string_value (parser, chunk, err)) {
 					return FALSE;
 				}
-				obj->value.sv = g_malloc (chunk->pos - c + 1);
-				rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1);
-				rspamd_cl_unescape_json_string (obj->value.sv);
-				obj->type = RSPAMD_CL_STRING;
+				if (!rspamd_cl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
+					obj->value.sv = g_malloc (chunk->pos - c + 1);
+					rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1);
+					rspamd_cl_unescape_json_string (obj->value.sv);
+					obj->type = RSPAMD_CL_STRING;
+				}
 				parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
 				return TRUE;
 			}
