@@ -40,6 +40,7 @@
  *	%[0][width][.width]F	    long double
  *	%[0][width][.width]g	    double
  *	%[0][width][.width]G	    long double
+ *	%b                          boolean (true or false)
  *	%P						    pid_t
  *	%r				            rlim_t
  *	%p						    void *

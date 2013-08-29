@@ -296,6 +296,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 	guint               width, sign, hex, humanize, bytes, frac_width, i;
 	f_str_t			   *v;
 	GString            *gs;
+	gboolean            bv;
 
 	if (max <= 0) {
 		return buf;
@@ -590,6 +591,20 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 				}
 				g_ascii_formatd (buf, last - buf, "%g", (double)f);
 				buf += strlen (buf);
+				fmt++;
+
+				continue;
+
+			case 'b':
+				bv = (gboolean) va_arg (args, double);
+				if (bv) {
+					len = MIN (last - buf, 4);
+					memcpy (buf, "true", len);
+				}
+				else {
+					len = MIN (last - buf, 5);
+					memcpy (buf, "false", len);
+				}
 				fmt++;
 
 				continue;
