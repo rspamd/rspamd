@@ -91,6 +91,7 @@ gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
 	goffset offset;
+	gsize size;
 };
 
 /**
@@ -104,5 +105,18 @@ struct rspamd_rcl_struct_parser {
  */
 gboolean rspamd_rcl_parse_struct_string (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
+
+/**
+ * Parse an integer field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err);
+
 
 #endif /* CFG_RCL_H_ */
