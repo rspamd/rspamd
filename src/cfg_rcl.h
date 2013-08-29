@@ -92,11 +92,12 @@ struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
 	goffset offset;
 	gsize size;
-#define RSPAMD_CL_FLAG_TIME_FLOAT 0x1 << 0
-#define RSPAMD_CL_FLAG_TIME_TIMEVAL 0x1 << 1
-#define RSPAMD_CL_FLAG_TIME_TIMESPEC 0x1 << 2
-#define RSPAMD_CL_FLAG_TIME_INTEGER 0x1 << 3
-	gint flags;
+	enum {
+		RSPAMD_CL_FLAG_TIME_FLOAT = 0x1 << 0,
+		RSPAMD_CL_FLAG_TIME_TIMEVAL = 0x1 << 1,
+		RSPAMD_CL_FLAG_TIME_TIMESPEC = 0x1 << 2,
+		RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3
+	} flags;
 };
 
 /**
@@ -134,6 +135,18 @@ gboolean rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_obj
  * @return TRUE if a value has been successfully parsed
  */
 gboolean rspamd_rcl_parse_struct_double (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err);
+
+/**
+ * Parse a time field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 #endif /* CFG_RCL_H_ */

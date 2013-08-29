@@ -354,6 +354,51 @@ rspamd_rcl_parse_struct_double (struct config_file *cfg, rspamd_cl_object_t *obj
 
 	if (!rspamd_cl_obj_todouble_safe (obj, target)) {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to double");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	union {
+		gint *psec;
+		gdouble *pdv;
+		struct timeval *ptv;
+		struct timespec *pts;
+	} target;
+	gdouble val;
+
+	if (!rspamd_cl_obj_todouble_safe (obj, &val)) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to double");
+		return FALSE;
+	}
+
+	if (pd->flags == RSPAMD_CL_FLAG_TIME_TIMEVAL) {
+		target.ptv = (struct timeval *)(((gchar *)pd->user_struct) + pd->offset);
+		target.ptv->tv_sec = (glong)val;
+		target.ptv->tv_usec = (val - (glong)val) * 1000000;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_TIME_TIMESPEC) {
+		target.pts = (struct timespec *)(((gchar *)pd->user_struct) + pd->offset);
+		target.pts->tv_sec = (glong)val;
+		target.pts->tv_nsec = (val - (glong)val) * 1000000000000LL;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_TIME_FLOAT) {
+		target.pdv = (double *)(((gchar *)pd->user_struct) + pd->offset);
+		*target.pdv = val;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_TIME_INTEGER) {
+		target.psec = (gint *)(((gchar *)pd->user_struct) + pd->offset);
+		*target.psec = val;
+	}
+	else {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid flags to parse time value");
+		return FALSE;
 	}
 
 	return TRUE;
