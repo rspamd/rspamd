@@ -342,3 +342,19 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *ob
 
 	return TRUE;
 }
+
+gboolean
+rspamd_rcl_parse_struct_double (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	gdouble *target;
+
+	target = (gdouble *)(((gchar *)pd->user_struct) + pd->offset);
+
+	if (!rspamd_cl_obj_todouble_safe (obj, target)) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to double");
+	}
+
+	return TRUE;
+}

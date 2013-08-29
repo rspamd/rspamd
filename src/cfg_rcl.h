@@ -92,6 +92,11 @@ struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
 	goffset offset;
 	gsize size;
+#define RSPAMD_CL_FLAG_TIME_FLOAT 0x1 << 0
+#define RSPAMD_CL_FLAG_TIME_TIMEVAL 0x1 << 1
+#define RSPAMD_CL_FLAG_TIME_TIMESPEC 0x1 << 2
+#define RSPAMD_CL_FLAG_TIME_INTEGER 0x1 << 3
+	gint flags;
 };
 
 /**
@@ -118,5 +123,17 @@ gboolean rspamd_rcl_parse_struct_string (struct config_file *cfg, rspamd_cl_obje
 gboolean rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
+
+/**
+ * Parse a float field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_double (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 #endif /* CFG_RCL_H_ */
