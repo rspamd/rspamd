@@ -83,4 +83,26 @@ struct rspamd_rcl_section *rspamd_rcl_config_get_section (struct rspamd_rcl_sect
 gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 		struct config_file *cfg, rspamd_cl_object_t *obj, GError **err);
 
+/**
+ * Here is a section of common handlers that accepts rcl_struct_parser
+ * which itself contains a struct pointer and the offset of a member in a
+ * specific structure
+ */
+struct rspamd_rcl_struct_parser {
+	gpointer user_struct;
+	goffset offset;
+};
+
+/**
+ * Parse a string field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a string value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_string (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err);
+
 #endif /* CFG_RCL_H_ */

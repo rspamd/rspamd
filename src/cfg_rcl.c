@@ -255,3 +255,37 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_rcl_parse_struct_string (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	gchar **target;
+	const gsize num_str_len = 32;
+
+	target = (gchar **)(((gchar *)pd->user_struct) + pd->offset);
+	switch (obj->type) {
+	case RSPAMD_CL_STRING:
+		/* Direct assigning is safe, as object is likely linked to the cfg mem_pool */
+		*target = obj->value.sv;
+		break;
+	case RSPAMD_CL_INT:
+		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+		rspamd_snprintf (*target, num_str_len, "%L", obj->value.iv);
+		break;
+	case RSPAMD_CL_FLOAT:
+		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+		rspamd_snprintf (*target, num_str_len, "%f", obj->value.dv);
+		break;
+	case RSPAMD_CL_BOOLEAN:
+		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+		rspamd_snprintf (*target, num_str_len, "%b", (gboolean)obj->value.iv);
+		break;
+	default:
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert object or array to string");
+		return FALSE;
+	}
+
+	return TRUE;
+}
