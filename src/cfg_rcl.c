@@ -403,3 +403,48 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object_t *obj,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_rcl_parse_struct_string_list (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	GList **target;
+	gchar *val;
+	rspamd_cl_object_t *cur;
+	const gsize num_str_len = 32;
+
+	target = (GList **)(((gchar *)pd->user_struct) + pd->offset);
+
+	if (obj->type != RSPAMD_CL_ARRAY) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "an array of strings is expected");
+		return FALSE;
+	}
+
+	for (cur = obj; cur != NULL; cur = cur->next) {
+		switch (cur->type) {
+		case RSPAMD_CL_STRING:
+			/* Direct assigning is safe, as curect is likely linked to the cfg mem_pool */
+			val = cur->value.sv;
+			break;
+		case RSPAMD_CL_INT:
+			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+			rspamd_snprintf (val, num_str_len, "%L", cur->value.iv);
+			break;
+		case RSPAMD_CL_FLOAT:
+			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+			rspamd_snprintf (val, num_str_len, "%f", cur->value.dv);
+			break;
+		case RSPAMD_CL_BOOLEAN:
+			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+			rspamd_snprintf (val, num_str_len, "%b", (gboolean)cur->value.iv);
+			break;
+		default:
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert an object or array to string");
+			return FALSE;
+		}
+		*target = g_list_prepend (*target, val);
+	}
+
+	return TRUE;
+}
