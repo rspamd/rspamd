@@ -479,5 +479,8 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, rspamd_cl_object_t
 		*target = g_list_prepend (*target, val);
 	}
 
+	/* Add a destructor */
+	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, *target);
+
 	return TRUE;
 }
