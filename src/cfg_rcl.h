@@ -172,4 +172,16 @@ gboolean rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object
 gboolean rspamd_rcl_parse_struct_string_list (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
+/**
+ * Parse a boolean field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_boolean (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err);
+
 #endif /* CFG_RCL_H_ */

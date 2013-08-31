@@ -484,3 +484,26 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, rspamd_cl_object_t
 
 	return TRUE;
 }
+
+gboolean
+rspamd_rcl_parse_struct_boolean (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	gboolean *target;
+
+	target = (gboolean *)(((gchar *)pd->user_struct) + pd->offset);
+
+	if (obj->type == RSPAMD_CL_BOOLEAN) {
+		*target = obj->value.iv;
+	}
+	else if (obj->type == RSPAMD_CL_INT) {
+		*target = obj->value.iv;
+	}
+	else {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert an object to boolean");
+		return FALSE;
+	}
+
+	return TRUE;
+}
