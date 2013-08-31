@@ -40,12 +40,14 @@ struct rspamd_rcl_section;
 struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
 	goffset offset;
-	gsize size;
 	enum {
 		RSPAMD_CL_FLAG_TIME_FLOAT = 0x1 << 0,
 		RSPAMD_CL_FLAG_TIME_TIMEVAL = 0x1 << 1,
 		RSPAMD_CL_FLAG_TIME_TIMESPEC = 0x1 << 2,
-		RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3
+		RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3,
+		RSPAMD_CL_FLAG_INT_16 = 0x1 << 4,
+		RSPAMD_CL_FLAG_INT_32 = 0x1 << 5,
+		RSPAMD_CL_FLAG_INT_64 = 0x1 << 6
 	} flags;
 };
 
