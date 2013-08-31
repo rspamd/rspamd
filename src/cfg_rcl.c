@@ -154,7 +154,17 @@ gboolean rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t
 	return TRUE;
 }
 
-static inline void
+/**
+ * Add new section to the configuration
+ * @param top top section
+ * @param name the name of the section
+ * @param handler handler function for all attributes
+ * @param type type of object handled by a handler
+ * @param required whether at least one of these sections is required
+ * @param strict_type turn on strict check for types for this section
+ * @return newly created structure
+ */
+static inline struct rspamd_rcl_section*
 rspamd_rcl_add_section (struct rspamd_rcl_section *top,
 		const gchar *name, rspamd_rcl_handler_t handler,
 		enum rspamd_cl_type type, gboolean required, gboolean strict_type)
@@ -168,19 +178,46 @@ rspamd_rcl_add_section (struct rspamd_rcl_section *top,
 	new->strict_type = strict_type;
 
 	HASH_ADD_KEYPTR (hh, top, new->name, strlen (new->name), new);
+	return new;
+}
+
+/**
+ * Add a default handler for a section
+ * @param section section pointer
+ * @param name name of param
+ * @param handler handler of param
+ * @param offset offset in a structure
+ * @param flags flags for the parser
+ * @return newly created structure
+ */
+static inline struct rspamd_rcl_default_handler_data *
+rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section, const gchar *name,
+		rspamd_rcl_handler_t handler, gsize offset, gint flags)
+{
+	struct rspamd_rcl_default_handler_data *new;
+
+	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_default_handler_data));
+	new->key = name;
+	new->handler = handler;
+	new->pd.offset = offset;
+	new->pd.flags = flags;
+
+	HASH_ADD_KEYPTR (hh, section->default_parser, new->key, strlen (new->key), new);
+	return new;
 }
 
 struct rspamd_rcl_section*
 rspamd_rcl_config_init (void)
 {
-	struct rspamd_rcl_section *new;
+	struct rspamd_rcl_section *new, *sub;
 
 	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
 
 	/* TODO: add all known rspamd sections here */
-	rspamd_rcl_add_section (new, "logging", rspamd_rcl_logging_handler, RSPAMD_CL_OBJECT,
+	sub = rspamd_rcl_add_section (new, "logging", rspamd_rcl_logging_handler, RSPAMD_CL_OBJECT,
 			FALSE, TRUE);
-
+	rspamd_rcl_add_default_handler (sub, "log_buffer", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct config_file, log_buf_size), 0);
 	return new;
 }
 

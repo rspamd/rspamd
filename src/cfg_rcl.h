@@ -37,6 +37,18 @@ cfg_rcl_error_quark (void)
 
 struct rspamd_rcl_section;
 
+struct rspamd_rcl_struct_parser {
+	gpointer user_struct;
+	goffset offset;
+	gsize size;
+	enum {
+		RSPAMD_CL_FLAG_TIME_FLOAT = 0x1 << 0,
+		RSPAMD_CL_FLAG_TIME_TIMEVAL = 0x1 << 1,
+		RSPAMD_CL_FLAG_TIME_TIMESPEC = 0x1 << 2,
+		RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3
+	} flags;
+};
+
 /**
  * Common handler type
  * @param cfg configuration
@@ -48,6 +60,13 @@ struct rspamd_rcl_section;
 typedef gboolean (*rspamd_rcl_handler_t) (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
+struct rspamd_rcl_default_handler_data {
+	struct rspamd_rcl_struct_parser pd;
+	const gchar *key;
+	rspamd_rcl_handler_t handler;
+	UT_hash_handle hh;
+};
+
 struct rspamd_rcl_section {
 	const gchar *name;					/**< name of section */
 	rspamd_rcl_handler_t handler;		/**< handler of section attributes */
@@ -56,6 +75,7 @@ struct rspamd_rcl_section {
 	gboolean strict_type;				/**< whether we need strict type */
 	UT_hash_handle hh;					/** hash handle */
 	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
+	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
 };
 
 /**
@@ -88,17 +108,6 @@ gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
  * which itself contains a struct pointer and the offset of a member in a
  * specific structure
  */
-struct rspamd_rcl_struct_parser {
-	gpointer user_struct;
-	goffset offset;
-	gsize size;
-	enum {
-		RSPAMD_CL_FLAG_TIME_FLOAT = 0x1 << 0,
-		RSPAMD_CL_FLAG_TIME_TIMEVAL = 0x1 << 1,
-		RSPAMD_CL_FLAG_TIME_TIMESPEC = 0x1 << 2,
-		RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3
-	} flags;
-};
 
 /**
  * Parse a string field of a structure
