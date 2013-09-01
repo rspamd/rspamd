@@ -293,6 +293,31 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 	return TRUE;
 }
 
+gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
+		struct config_file *cfg, rspamd_cl_object_t *obj, gpointer ptr,
+		GError **err)
+{
+	rspamd_cl_object_t *found;
+	struct rspamd_rcl_default_handler_data *cur, *tmp;
+
+	if (obj->type != RSPAMD_CL_OBJECT) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "default configuration must be an object");
+		return FALSE;
+	}
+
+	HASH_ITER (hh, section->default_parser, cur, tmp) {
+		HASH_FIND_STR (obj->value.ov, cur->key, found);
+		if (found != NULL) {
+			cur->pd.user_struct = ptr;
+			if (!cur->handler (cfg, found, &cur->pd, section, err)) {
+				return FALSE;
+			}
+		}
+	}
+
+	return TRUE;
+}
+
 gboolean
 rspamd_rcl_parse_struct_string (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)

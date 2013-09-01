@@ -105,6 +105,19 @@ struct rspamd_rcl_section *rspamd_rcl_config_get_section (struct rspamd_rcl_sect
 gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 		struct config_file *cfg, rspamd_cl_object_t *obj, GError **err);
 
+
+/**
+ * Parse default structure for a section
+ * @param section section
+ * @param cfg config file
+ * @param obj object to parse
+ * @param ptr ptr to pass
+ * @param err error ptr
+ * @return TRUE if the object has been parsed
+ */
+gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
+		struct config_file *cfg, rspamd_cl_object_t *obj, gpointer ptr,
+		GError **err);
 /**
  * Here is a section of common handlers that accepts rcl_struct_parser
  * which itself contains a struct pointer and the offset of a member in a
