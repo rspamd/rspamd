@@ -151,7 +151,7 @@ gboolean rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t
 		}
 	}
 
-	return TRUE;
+	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
 }
 
 /**
@@ -214,10 +214,22 @@ rspamd_rcl_config_init (void)
 	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
 
 	/* TODO: add all known rspamd sections here */
+	/**
+	 * Logging section
+	 */
 	sub = rspamd_rcl_add_section (new, "logging", rspamd_rcl_logging_handler, RSPAMD_CL_OBJECT,
 			FALSE, TRUE);
+	/* Default handlers */
 	rspamd_rcl_add_default_handler (sub, "log_buffer", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct config_file, log_buf_size), 0);
+	rspamd_rcl_add_default_handler (sub, "log_urls", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, log_urls), 0);
+	rspamd_rcl_add_default_handler (sub, "debug_ip", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, debug_ip_map), 0);
+	rspamd_rcl_add_default_handler (sub, "debug_symbols", rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct config_file, debug_symbols), 0);
+	rspamd_rcl_add_default_handler (sub, "log_color", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, log_color), 0);
 	return new;
 }
 
