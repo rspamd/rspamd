@@ -27,7 +27,8 @@
 /*
  * Common section handlers
  */
-gboolean rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
+static gboolean
+rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	rspamd_cl_object_t *val;
@@ -155,6 +156,17 @@ gboolean rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t
 }
 
 /**
+ * Fake handler to parse default options only, uses struct cfg_file as pointer
+ * for default handlers
+ */
+static gboolean
+rspamd_rcl_empty_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
+}
+
+/**
  * Add new section to the configuration
  * @param top top section
  * @param name the name of the section
@@ -230,6 +242,11 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct config_file, debug_symbols), 0);
 	rspamd_rcl_add_default_handler (sub, "log_color", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct config_file, log_color), 0);
+	/**
+	 * Options section
+	 */
+	sub = rspamd_rcl_add_section (new, "options", rspamd_rcl_empty_handler, RSPAMD_CL_OBJECT,
+			FALSE, TRUE);
 	return new;
 }
 
