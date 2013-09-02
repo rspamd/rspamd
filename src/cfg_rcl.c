@@ -247,6 +247,44 @@ rspamd_rcl_config_init (void)
 	 */
 	sub = rspamd_rcl_add_section (new, "options", rspamd_rcl_empty_handler, RSPAMD_CL_OBJECT,
 			FALSE, TRUE);
+	rspamd_rcl_add_default_handler (sub, "statfile_pool_size", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct config_file, max_statfile_size), RSPAMD_CL_FLAG_INT_SIZE);
+	rspamd_rcl_add_default_handler (sub, "cache_file", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, cache_filename), 0);
+	rspamd_rcl_add_default_handler (sub, "dns_timeout", rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct config_file, dns_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+	rspamd_rcl_add_default_handler (sub, "dns_retransmits", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct config_file, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub, "raw_mode", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, raw_mode), 0);
+	rspamd_rcl_add_default_handler (sub, "one_shot", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, one_shot_mode), 0);
+	rspamd_rcl_add_default_handler (sub, "check_attachements", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, check_text_attachements), 0);
+	rspamd_rcl_add_default_handler (sub, "tempdir", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, temp_dir), 0);
+	rspamd_rcl_add_default_handler (sub, "pidfile", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, pid_file), 0);
+	rspamd_rcl_add_default_handler (sub, "filters", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, filters_str), 0);
+	rspamd_rcl_add_default_handler (sub, "sync_interval", rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct config_file, statfile_sync_interval), RSPAMD_CL_FLAG_TIME_INTEGER);
+	rspamd_rcl_add_default_handler (sub, "sync_timeout", rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct config_file, statfile_sync_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+	rspamd_rcl_add_default_handler (sub, "max_diff", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct config_file, max_diff), RSPAMD_CL_FLAG_INT_SIZE);
+	rspamd_rcl_add_default_handler (sub, "map_watch_interval", rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct config_file, map_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+	rspamd_rcl_add_default_handler (sub, "dynamic_conf", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, dynamic_conf), 0);
+	rspamd_rcl_add_default_handler (sub, "rrd", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, rrd_file), 0);
+	rspamd_rcl_add_default_handler (sub, "history_file", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct config_file, history_file), 0);
+	rspamd_rcl_add_default_handler (sub, "use_mlock", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool), 0);
+
+
 	return new;
 }
 
@@ -411,7 +449,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *ob
 		}
 		*target.i64p = val;
 	}
-	else if (pd->flags == RSPAMD_CL_FLAG_SIZE) {
+	else if (pd->flags == RSPAMD_CL_FLAG_INT_SIZE) {
 		target.sp = (gsize *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!rspamd_cl_obj_toint_safe (obj, &val)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
@@ -490,7 +528,7 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object_t *obj,
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_INTEGER) {
 		target.psec = (gint *)(((gchar *)pd->user_struct) + pd->offset);
-		*target.psec = val;
+		*target.psec = val * 1000;
 	}
 	else {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid flags to parse time value");
