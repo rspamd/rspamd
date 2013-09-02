@@ -391,6 +391,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *ob
 		gint32 *i32p;
 		gint16 *i16p;
 		gint64 *i64p;
+		gsize *sp;
 	} target;
 	gint64 val;
 
@@ -402,14 +403,6 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *ob
 		}
 		*target.i32p = val;
 	}
-	else if (pd->flags == RSPAMD_CL_FLAG_INT_16) {
-		target.i16p = (gint16 *)(((gchar *)pd->user_struct) + pd->offset);
-		if (!rspamd_cl_obj_toint_safe (obj, &val)) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
-			return FALSE;
-		}
-		*target.i16p = val;
-	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_64) {
 		target.i64p = (gint64 *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!rspamd_cl_obj_toint_safe (obj, &val)) {
@@ -417,6 +410,22 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, rspamd_cl_object_t *ob
 			return FALSE;
 		}
 		*target.i64p = val;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_SIZE) {
+		target.sp = (gsize *)(((gchar *)pd->user_struct) + pd->offset);
+		if (!rspamd_cl_obj_toint_safe (obj, &val)) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
+			return FALSE;
+		}
+		*target.sp = val;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_INT_16) {
+		target.i16p = (gint16 *)(((gchar *)pd->user_struct) + pd->offset);
+		if (!rspamd_cl_obj_toint_safe (obj, &val)) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
+			return FALSE;
+		}
+		*target.i16p = val;
 	}
 	else {
 		target.ip = (gint *)(((gchar *)pd->user_struct) + pd->offset);
