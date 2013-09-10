@@ -31,17 +31,17 @@ static gboolean
 rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val;
+	rspamd_cl_object_t *val, *lobj;
 	gchar *filepath;
 	const gchar *facility, *log_type, *log_level;
 
-	obj = obj->value.ov;
+	lobj = obj->value.ov;
 
-	HASH_FIND_STR (obj, "type", val);
+	HASH_FIND_STR (lobj, "type", val);
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &log_type)) {
 		if (g_ascii_strcasecmp (log_type, "file") == 0) {
 			/* Need to get filename */
-			HASH_FIND_STR (obj, "filename", val);
+			HASH_FIND_STR (lobj, "filename", val);
 			if (val == NULL || val->type != RSPAMD_CL_STRING) {
 				g_set_error (err, CFG_RCL_ERROR, ENOENT, "filename attribute must be specified for file logging type");
 				return FALSE;
@@ -58,7 +58,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 			/* Need to get facility */
 			cfg->log_facility = LOG_DAEMON;
 			cfg->log_type = RSPAMD_LOG_SYSLOG;
-			HASH_FIND_STR (obj, "facility", val);
+			HASH_FIND_STR (lobj, "facility", val);
 			if (val != NULL && rspamd_cl_obj_tostring_safe (val, &facility)) {
 				if (g_ascii_strcasecmp (facility, "LOG_AUTH") == 0 ||
 						g_ascii_strcasecmp (facility, "auth") == 0 ) {
@@ -132,7 +132,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	}
 
 	/* Handle log level */
-	HASH_FIND_STR (obj, "level", val);
+	HASH_FIND_STR (lobj, "level", val);
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &log_level)) {
 		if (g_ascii_strcasecmp (log_level, "error") == 0) {
 			cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
@@ -150,6 +150,37 @@ rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid log level: %s", log_level);
 			return FALSE;
 		}
+	}
+
+	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
+}
+
+static gboolean
+rspamd_rcl_options_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	rspamd_cl_object_t *val, *lobj;
+	const gchar *user_settings, *domain_settings;
+
+	lobj = obj->value.ov;
+
+	/* Handle user and domain settings */
+	HASH_FIND_STR (lobj, "user_settings", val);
+	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &user_settings)) {
+		if (!read_settings (user_settings, "Users' settings", cfg, cfg->user_settings)) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", user_settings);
+			return FALSE;
+		}
+		cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, user_settings);
+	}
+
+	HASH_FIND_STR (lobj, "domain_settings", val);
+	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &domain_settings)) {
+		if (!read_settings (domain_settings, "Domains settings", cfg, cfg->domain_settings)) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", domain_settings);
+			return FALSE;
+		}
+		cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, domain_settings);
 	}
 
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
@@ -245,12 +276,14 @@ rspamd_rcl_config_init (void)
 	/**
 	 * Options section
 	 */
-	sub = rspamd_rcl_add_section (new, "options", rspamd_rcl_empty_handler, RSPAMD_CL_OBJECT,
+	sub = rspamd_rcl_add_section (new, "options", rspamd_rcl_options_handler, RSPAMD_CL_OBJECT,
 			FALSE, TRUE);
 	rspamd_rcl_add_default_handler (sub, "statfile_pool_size", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct config_file, max_statfile_size), RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (sub, "cache_file", rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct config_file, cache_filename), 0);
+	rspamd_rcl_add_default_handler (sub, "dns_nameserver", rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct config_file, nameservers), 0);
 	rspamd_rcl_add_default_handler (sub, "dns_timeout", rspamd_rcl_parse_struct_time,
 			G_STRUCT_OFFSET (struct config_file, dns_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 	rspamd_rcl_add_default_handler (sub, "dns_retransmits", rspamd_rcl_parse_struct_integer,
