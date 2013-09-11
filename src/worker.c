@@ -381,7 +381,7 @@ read_socket (f_str_t * in, void *arg)
 					return write_socket (task);
 				}
 				/* Add task to classify to classify pool */
-				if (ctx->classify_pool) {
+				if (!task->is_skipped && ctx->classify_pool) {
 					register_async_thread (task->s);
 					g_thread_pool_push (ctx->classify_pool, task, &err);
 					if (err != NULL) {
@@ -527,6 +527,19 @@ fin_task (void *arg)
 
 
 	ctx = task->worker->ctx;
+
+	/* Task is already finished or skipped */
+	if (task->state == WRITE_REPLY) {
+		if (task->fin_callback) {
+			task->fin_callback (task->fin_arg);
+		}
+		else {
+			rspamd_dispatcher_restore (task->dispatcher);
+		}
+		return TRUE;
+	}
+
+	/* We processed all filters and want to process statfiles */
 	if (task->state != WAIT_POST_FILTER && task->state != WAIT_PRE_FILTER) {
 		/* Process all statfiles */
 		if (ctx->classify_pool == NULL) {
@@ -546,6 +559,7 @@ fin_task (void *arg)
 
 	}
 
+	/* We are on post-filter waiting state */
 	if (task->state != WAIT_PRE_FILTER) {
 		/* Check if we have all events finished */
 		task->state = WRITE_REPLY;
@@ -557,6 +571,7 @@ fin_task (void *arg)
 		}
 	}
 	else {
+		/* We were waiting for pre-filter */
 		if (task->pre_result.action != METRIC_ACTION_NOACTION) {
 			/* Write result based on pre filters */
 			task->state = WRITE_REPLY;

@@ -733,6 +733,7 @@ process_statfiles_threaded (gpointer data, gpointer user_data)
 	struct classifiers_cbdata		cbdata;
 
 	if (task->is_skipped) {
+		remove_async_thread (task->s);
 		return;
 	}
 
