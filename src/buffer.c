@@ -633,6 +633,7 @@ rspamd_create_dispatcher (struct event_base *base, gint fd, enum io_policy polic
 	new->strip_eol = TRUE;
 	new->half_closed = FALSE;
 	new->want_read = TRUE;
+	new->is_restored = FALSE;
 
 	new->ev = memory_pool_alloc0 (new->pool, sizeof (struct event));
 	new->fd = fd;

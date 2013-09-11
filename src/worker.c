@@ -389,6 +389,10 @@ read_socket (f_str_t * in, void *arg)
 						remove_async_thread (task->s);
 					}
 				}
+				if (task->is_skipped) {
+					/* Call write_socket to write reply and exit */
+					return write_socket (task);
+				}
 			}
 			else {
 				lua_call_pre_filters (task);
@@ -475,13 +479,17 @@ write_socket (void *arg)
 			return write_socket (task);
 		}
 		/* Add task to classify to classify pool */
-		if (ctx->classify_pool) {
+		if (!task->is_skipped && ctx->classify_pool) {
 			register_async_thread (task->s);
 			g_thread_pool_push (ctx->classify_pool, task, &err);
 			if (err != NULL) {
 				msg_err ("cannot pull task to the pool: %s", err->message);
 				remove_async_thread (task->s);
 			}
+		}
+		if (task->is_skipped) {
+			/* Call write_socket again to write reply and exit */
+			return write_socket (task);
 		}
 		break;
 	default:
