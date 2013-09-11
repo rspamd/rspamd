@@ -23,6 +23,7 @@
 
 #include "cfg_rcl.h"
 #include "main.h"
+#include "settings.h"
 
 /*
  * Common section handlers
@@ -186,6 +187,192 @@ rspamd_rcl_options_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
 }
 
+static gint
+rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
+{
+	const struct symbols_group		*gr = a;
+	const gchar						*uv = b;
+
+	return g_ascii_strcasecmp (gr->name, uv);
+}
+
+/**
+ * Insert a symbol to the metric
+ * @param cfg
+ * @param metric
+ * @param obj symbol rcl object (either float value or an object)
+ * @param err
+ * @return
+ */
+static gboolean
+rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
+		rspamd_cl_object_t *obj, GError **err)
+{
+	const gchar *group = "ungrouped", *description = NULL;
+	gdouble symbol_score, *score_ptr;
+	rspamd_cl_object_t *val;
+	struct symbols_group *sym_group;
+	struct symbol_def *sym_def;
+	GList *metric_list, *group_list;
+
+	/*
+	 * We allow two type of definitions:
+	 * symbol = weight
+	 * or
+	 * symbol {
+	 *	weight = ...;
+	 *	description = ...;
+	 *	group = ...;
+	 * }
+	 */
+	if (rspamd_cl_obj_todouble_safe (obj, &symbol_score)) {
+		description = NULL;
+	}
+	else if (obj->type == RSPAMD_CL_OBJECT) {
+		HASH_FIND_STR (obj, "score", val);
+		if (val == NULL || !rspamd_cl_obj_todouble_safe (val, &symbol_score)) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol score: %s", obj->key);
+			return FALSE;
+		}
+		HASH_FIND_STR (obj, "description", val);
+		if (val != NULL) {
+			description = rspamd_cl_obj_tostring (val);
+		}
+		HASH_FIND_STR (obj, "group", val);
+		if (val != NULL) {
+			rspamd_cl_obj_tostring_safe (val, &group);
+		}
+	}
+	else {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol type: %s", obj->key);
+		return FALSE;
+	}
+
+	sym_def = memory_pool_alloc (cfg->cfg_pool, sizeof (struct symbol_def));
+	score_ptr = memory_pool_alloc (cfg->cfg_pool, sizeof (gdouble));
+
+	*score_ptr = symbol_score;
+	sym_def->weight_ptr = score_ptr;
+	sym_def->name = memory_pool_strdup (cfg->cfg_pool, obj->key);
+	sym_def->description = (gchar *)description;
+
+	g_hash_table_insert (metric->symbols, sym_def->name, score_ptr);
+
+	if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
+		metric_list = g_list_prepend (NULL, metric);
+		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, metric_list);
+		g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
+	}
+	else {
+		/* Slow but keep start element of list in safe */
+		if (!g_list_find (metric_list, metric)) {
+			metric_list = g_list_append (metric_list, metric);
+		}
+	}
+
+	/* Search for symbol group */
+	group_list = g_list_find_custom (cfg->symbols_groups, group, rspamd_symbols_group_find_func);
+	if (group_list == NULL) {
+		/* Create new group */
+		sym_group = memory_pool_alloc (cfg->cfg_pool, sizeof (struct symbols_group));
+		sym_group->name = memory_pool_strdup (cfg->cfg_pool, group);
+		sym_group->symbols = NULL;
+		cfg->symbols_groups = g_list_prepend (cfg->symbols_groups, sym_group);
+	}
+	else {
+		sym_group = group_list->data;
+	}
+	/* Insert symbol */
+	sym_group->symbols = g_list_prepend (sym_group->symbols, sym_def);
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	rspamd_cl_object_t *val, *lobj, *cur, *tmp;
+	const gchar *metric_name, *subject_name;
+	struct metric *metric;
+	struct metric_action *action;
+	gdouble action_score, grow_factor;
+	gint action_value;
+	gboolean new = TRUE;
+
+	lobj = obj->value.ov;
+
+	HASH_FIND_STR (lobj, "name", val);
+	if (val == NULL || !rspamd_cl_obj_tostring_safe (val, &metric_name)) {
+		metric_name = DEFAULT_METRIC;
+	}
+
+	metric = g_hash_table_lookup (cfg->metrics, metric_name);
+	if (metric == NULL) {
+		metric = check_metric_conf (cfg, metric);
+	}
+	else {
+		new = FALSE;
+	}
+
+	/* Handle actions */
+	HASH_FIND_STR (lobj, "actions", val);
+	if (val != NULL) {
+		if (val->type != RSPAMD_CL_OBJECT) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "actions must be an object");
+			return FALSE;
+		}
+		HASH_ITER (hh, val, cur, tmp) {
+			if (!check_action_str (cur->key, &action_value) ||
+					!rspamd_cl_obj_todouble_safe (cur, &action_score)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid action definition: %s", cur->key);
+				return FALSE;
+			}
+			action = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric_action));
+			action->action = action_value;
+			action->score = action_score;
+			metric->actions = g_list_prepend (metric->actions, action);
+		}
+	}
+	else if (new) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "metric %s has no actions", metric_name);
+		return FALSE;
+	}
+
+	/* Handle symbols */
+	HASH_FIND_STR (lobj, "symbols", val);
+	if (val != NULL) {
+		if (val->type == RSPAMD_CL_ARRAY) {
+			val = val->value.ov;
+		}
+		if (val->type != RSPAMD_CL_OBJECT) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "symbols must be an object");
+			return FALSE;
+		}
+		HASH_ITER (hh, val, cur, tmp) {
+			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, err)) {
+				return FALSE;
+			}
+		}
+	}
+
+	HASH_FIND_STR (lobj, "grow_factor", val);
+	if (val && rspamd_cl_obj_todouble_safe (val, &grow_factor)) {
+		metric->grow_factor = grow_factor;
+	}
+
+	HASH_FIND_STR (lobj, "subject", val);
+	if (val && rspamd_cl_obj_tostring_safe (val, &subject_name)) {
+		metric->subject = (gchar *)subject_name;
+	}
+
+	/* Insert the resulting metric */
+	g_hash_table_insert (cfg->metrics, metric->name, metric);
+	cfg->metrics_list = g_list_prepend (cfg->metrics_list, metric);
+
+	return TRUE;
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -317,6 +504,11 @@ rspamd_rcl_config_init (void)
 	rspamd_rcl_add_default_handler (sub, "use_mlock", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool), 0);
 
+	/**
+	 * Metric section
+	 */
+	sub = rspamd_rcl_add_section (new, "metric", rspamd_rcl_metric_handler, RSPAMD_CL_OBJECT,
+			FALSE, TRUE);
 
 	return new;
 }
