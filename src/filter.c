@@ -262,18 +262,14 @@ process_filters (struct worker_task *task)
 	struct metric                  *metric;
 	gpointer                        item = NULL;
 
-	/* Check skip */
-	if (check_skip (task->cfg->views, task)) {
-		task->is_skipped = TRUE;
-		task->state = WRITE_REPLY;
-		msg_info ("disable check for message id <%s>, view wants spam", task->message_id);
-		return 1;
-	}
 	/* Check want spam setting */
-	if (check_want_spam (task)) {
+	if (check_skip (task->cfg->views, task) || check_want_spam (task)) {
 		task->is_skipped = TRUE;
 		task->state = WRITE_REPLY;
 		msg_info ("disable check for message id <%s>, user wants spam", task->message_id);
+		task->s->wanna_die = TRUE;
+		check_session_pending (task->s);
+
 		return 1;
 	}
 
