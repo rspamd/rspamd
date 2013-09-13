@@ -1552,9 +1552,9 @@ lua_task_get_metric_score (lua_State *L)
 			lua_newtable (L);
 			lua_pushnumber (L, metric_res->score);
 			lua_rawseti (L, -2, 1);
-			lua_pushnumber (L, metric_res->metric->required_score);
+			lua_pushnumber (L, metric_res->metric->actions[METRIC_ACTION_REJECT].score);
 			lua_rawseti (L, -2, 2);
-			lua_pushnumber (L, metric_res->metric->reject_score);
+			lua_pushnumber (L, metric_res->metric->actions[METRIC_ACTION_REJECT].score);
 			lua_rawseti (L, -2, 3);
 		}
 		else {
@@ -1578,7 +1578,8 @@ lua_task_get_metric_action (lua_State *L)
 
 	if (task && metric_name) {
 		if ((metric_res = g_hash_table_lookup (task->results, metric_name)) != NULL) {
-			action = check_metric_action (metric_res->score, metric_res->metric->required_score, metric_res->metric);
+			action = check_metric_action (metric_res->score,
+					metric_res->metric->actions[METRIC_ACTION_REJECT].score, metric_res->metric);
 			lua_pushstring (L, str_action_metric (action));
 		}
 		else {

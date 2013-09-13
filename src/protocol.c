@@ -113,6 +113,8 @@ str_action_metric_spamc (enum rspamd_metric_action action)
 		return "greylist";
 	case METRIC_ACTION_NOACTION:
 		return "no action";
+	case METRIC_ACTION_MAX:
+		return "invalid max action";
 	}
 
 	return "unknown action";
@@ -1210,15 +1212,15 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 	}
 	if (metric_name == NULL || metric_value == NULL) {
 		m = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
-		default_required_score = m->required_score;
+		default_required_score = m->actions[METRIC_ACTION_REJECT].score;
 		default_score = 0;
 		if (metric_res != NULL && !check_metric_settings (metric_res, &ms, &rs)) {
-			ms = m->required_score;
-			rs = m->reject_score;
+			ms = m->actions[METRIC_ACTION_REJECT].score;
+			rs = m->actions[METRIC_ACTION_REJECT].score;
 		}
 		else if (metric_res == NULL) {
-			ms = m->required_score;
-			rs = m->reject_score;
+			ms = m->actions[METRIC_ACTION_REJECT].score;
+			rs = m->actions[METRIC_ACTION_REJECT].score;
 		}
 
 		if (!task->is_json) {
@@ -1232,24 +1234,24 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 		if (!task->is_skipped) {
 			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 					cd->log_size - cd->log_offset,
-					"(%s: F (no action): [0.00/%.2f/%.2f] [", "default", ms, rs);
+					"(%s: F (no action): [0.00/%.2f] [", "default", ms);
 		}
 		else {
 			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
-					cd->log_size - cd->log_offset, "(%s: S: [0.00/%.2f/%.2f] [",
-					"default", ms, rs);
+					cd->log_size - cd->log_offset, "(%s: S: [0.00/%.2f] [",
+					"default", ms);
 		}
 	}
 	else {
 		/* XXX: dirty hack */
 		if (strcmp (metric_res->metric->name, DEFAULT_METRIC) == 0) {
-			default_required_score = metric_res->metric->required_score;
+			default_required_score = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
 			default_score = metric_res->score;
 		}
 
 		if (!check_metric_settings (metric_res, &ms, &rs)) {
-			ms = metric_res->metric->required_score;
-			rs = metric_res->metric->reject_score;
+			ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
+			rs = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
 		}
 		if (!check_metric_action_settings (task, metric_res,
 				metric_res->score, &action)) {
@@ -1273,15 +1275,15 @@ show_metric_result (gpointer metric_name, gpointer metric_value, void *user_data
 
 			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 					cd->log_size - cd->log_offset,
-					"(%s: %c (%s): [%.2f/%.2f/%.2f] [", (gchar *) metric_name,
+					"(%s: %c (%s): [%.2f/%.2f] [", (gchar *) metric_name,
 					is_spam ? 'T' : 'F', str_action_metric (action),
-					metric_res->score, ms, rs);
+					metric_res->score, ms);
 		}
 		else {
 			cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 					cd->log_size - cd->log_offset,
-					"(%s: %c (default): [%.2f/%.2f/%.2f] [",
-					(gchar *) metric_name, 'S', metric_res->score, ms, rs);
+					"(%s: %c (default): [%.2f/%.2f] [",
+					(gchar *) metric_name, 'S', metric_res->score, ms);
 
 		}
 	}

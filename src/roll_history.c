@@ -127,8 +127,9 @@ rspamd_roll_history_update (struct roll_history *history, struct worker_task *ta
 	}
 	else {
 		row->score = metric_res->score;
-		row->required_score = metric_res->metric->required_score;
-		row->action = check_metric_action (metric_res->score, metric_res->metric->required_score, metric_res->metric);
+		row->required_score = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
+		row->action = check_metric_action (metric_res->score,
+				metric_res->metric->actions[METRIC_ACTION_REJECT].score, metric_res->metric);
 		cbdata.pos = row->symbols;
 		cbdata.remain = sizeof (row->symbols);
 		g_hash_table_foreach (metric_res->symbols, roll_history_symbols_callback, &cbdata);

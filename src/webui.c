@@ -364,9 +364,11 @@ http_scan_task_free (gpointer arg)
 					"\"required_score\":%.2f,"
 					"\"action\":\"%s\","
 					"\"symbols\":[",
-					mres->score >= mres->metric->required_score ? "true" : "false",
-					cbdata->task->is_skipped ? "true" : "false", mres->score, mres->metric->required_score,
-					str_action_metric (check_metric_action (mres->score, mres->metric->required_score, mres->metric)));
+					mres->score >= mres->metric->actions[METRIC_ACTION_REJECT].score ? "true" : "false",
+					cbdata->task->is_skipped ? "true" : "false", mres->score,
+					mres->metric->actions[METRIC_ACTION_REJECT].score,
+					str_action_metric (
+							check_metric_action (mres->score, mres->metric->actions[METRIC_ACTION_REJECT].score, mres->metric)));
 			/* Iterate all symbols */
 			g_hash_table_foreach (mres->symbols, http_scan_metric_symbols_callback, cbdata);
 			evbuffer_add (evb, "]}" CRLF, 4);
@@ -670,31 +672,15 @@ http_set_metric_action (struct config_file *cfg,
 		json_t *jv, struct metric *metric, enum rspamd_metric_action act)
 {
 	gdouble									 actval;
-	GList									*cur;
-	struct metric_action					*act_found;
 
 	if (!json_is_number (jv)) {
 		msg_err ("json element data error");
 		return FALSE;
 	}
 	actval = json_number_value (jv);
-	if (metric->action == act && metric->required_score != actval) {
+	if (metric->actions[act].score != actval) {
 		return add_dynamic_action (cfg, DEFAULT_METRIC, act, actval);
 	}
-
-	/* Try to search in all metrics */
-	/* XXX: clarify this code, currently it looks like a crap */
-	cur = metric->actions;
-	while (cur) {
-		act_found = cur->data;
-		if (act_found->action == act) {
-			if (act_found->score != actval) {
-				return add_dynamic_action (cfg, DEFAULT_METRIC, act, actval);
-			}
-		}
-		cur = g_list_next (cur);
-	}
-
 	return TRUE;
 }
 
@@ -838,8 +824,9 @@ http_handle_actions (struct evhttp_request *req, gpointer arg)
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
 	struct metric							*metric;
-	GList									*cur;
 	struct metric_action					*act;
+	gboolean								 start = TRUE;
+	gint									 i;
 
 	if (!http_check_password (ctx, req)) {
 		return;
@@ -858,15 +845,16 @@ http_handle_actions (struct evhttp_request *req, gpointer arg)
 	/* Get actions for default metric */
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric != NULL) {
-
-		cur = metric->actions;
-		while (cur) {
-			act = cur->data;
-			cur = g_list_next (cur);
-			evbuffer_add_printf (evb, "{\"action\":\"%s\",\"value\":%.2f},", str_action_metric (act->action), act->score);
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			act = &metric->actions[i];
+			if (act->score > 0) {
+				evbuffer_add_printf (evb, "%s{\"action\":\"%s\",\"value\":%.2f}",
+						(start ? "" : ","), str_action_metric (act->action), act->score);
+				if (start) {
+					start = FALSE;
+				}
+			}
 		}
-		/* Print default action */
-		evbuffer_add_printf (evb, "{\"action\":\"%s\",\"value\":%.2f}", str_action_metric (metric->action), metric->required_score);
 	}
 
 	evbuffer_add (evb, "]" CRLF, 3);

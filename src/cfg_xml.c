@@ -442,14 +442,14 @@ static struct xml_parser_rule grammar[] = {
 			},
 			{
 				"required_score",
-				xml_handle_double,
-				G_STRUCT_OFFSET (struct metric, required_score),
+				xml_handle_deprecated,
+				0,
 				NULL
 			},
 			{
 				"reject_score",
-				xml_handle_double,
-				G_STRUCT_OFFSET (struct metric, reject_score),
+				xml_handle_deprecated,
+				0,
 				NULL
 			},
 			{
@@ -1057,7 +1057,7 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 	/* First of all check whether we have data with weight (reject:50 for example) */
 	if ((p = strchr (data, ':')) == NULL) {
 		if (check_action_str (data, &res)) {
-			metric->action = res;
+			/* XXX: no longer needed */
 			return TRUE;
 		}
 		return FALSE;
@@ -1067,7 +1067,7 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 			return FALSE;
 		}
 		else {
-			action = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric_action));
+			action = &metric->actions[res];
 			action->action = res;
 			errno = 0;
 			action->score = strtod (p + 1, &errstr);
@@ -1075,7 +1075,6 @@ handle_metric_action (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 				msg_err ("invalid double value: %s", data);
 				return FALSE;
 			}
-			metric->actions = g_list_prepend (metric->actions, action);
 		}
 	}
 
@@ -1794,6 +1793,14 @@ xml_handle_boolean (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 		*dest = TRUE;
 	}
 	
+	return TRUE;
+}
+
+gboolean
+xml_handle_deprecated (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
+{
+
+	msg_err ("parameter is depreciated: %s", ctx->section_name);
 	return TRUE;
 }
 

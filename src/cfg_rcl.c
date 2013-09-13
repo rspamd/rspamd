@@ -328,10 +328,9 @@ rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid action definition: %s", cur->key);
 				return FALSE;
 			}
-			action = memory_pool_alloc (cfg->cfg_pool, sizeof (struct metric_action));
+			action = &metric->actions[action_value];
 			action->action = action_value;
 			action->score = action_score;
-			metric->actions = g_list_prepend (metric->actions, action);
 		}
 	}
 	else if (new) {

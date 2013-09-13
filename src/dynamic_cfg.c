@@ -40,7 +40,7 @@ struct dynamic_cfg_action {
 
 struct dynamic_cfg_metric {
 	GList 						   *symbols;
-	GList						   *actions;
+	struct dynamic_cfg_action       actions[METRIC_ACTION_MAX];
 	gchar						   *name;
 };
 
@@ -62,7 +62,6 @@ dynamic_cfg_free (GList *conf_metrics)
 	GList								*cur, *cur_elt;
 	struct dynamic_cfg_metric			*metric;
 	struct dynamic_cfg_symbol			*sym;
-	struct dynamic_cfg_action			*act;
 
 	if (conf_metrics) {
 		cur = conf_metrics;
@@ -78,16 +77,6 @@ dynamic_cfg_free (GList *conf_metrics)
 				}
 				g_list_free (metric->symbols);
 			}
-
-			if (metric->actions) {
-				cur_elt = metric->actions;
-				while (cur_elt) {
-					act = cur_elt->data;
-					g_slice_free1 (sizeof (struct dynamic_cfg_symbol), act);
-					cur_elt = g_list_next (cur_elt);
-				}
-				g_list_free (metric->actions);
-			}
 			g_slice_free1 (sizeof (struct dynamic_cfg_metric), metric);
 			cur = g_list_next (cur);
 		}
@@ -102,13 +91,14 @@ dynamic_cfg_free (GList *conf_metrics)
 static void
 apply_dynamic_conf (GList *conf_metrics, struct config_file *cfg)
 {
-	GList								*cur, *cur_elt, *tmp;
+	GList								*cur, *cur_elt;
 	struct dynamic_cfg_metric			*metric;
 	struct dynamic_cfg_symbol			*sym;
 	struct dynamic_cfg_action			*act;
 	struct metric						*real_metric;
 	struct metric_action				*real_act;
 	gdouble								*w;
+	gint                                 i, j;
 
 	cur = conf_metrics;
 	while (cur) {
@@ -126,22 +116,21 @@ apply_dynamic_conf (GList *conf_metrics, struct config_file *cfg)
 				cur_elt = g_list_next (cur_elt);
 			}
 
-			cur_elt = metric->actions;
-			while (cur_elt) {
-				act = cur_elt->data;
-				tmp = real_metric->actions;
-				while (tmp) {
-					real_act = tmp->data;
+			for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+				act = &metric->actions[i];
+				if (act->value < 0) {
+					continue;
+				}
+				for (j = METRIC_ACTION_REJECT; j < METRIC_ACTION_MAX; j ++) {
+					real_act = &real_metric->actions[j];
 					if (real_act->action == act->action) {
 						real_act->score = act->value;
 					}
 					/* Update required score accordingly to metric's action */
-					if (act->action == real_metric->action) {
-						real_metric->required_score = act->value;
+					if (act->action == METRIC_ACTION_REJECT) {
+						real_metric->actions[METRIC_ACTION_REJECT].score = act->value;
 					}
-					tmp = g_list_next (tmp);
 				}
-				cur_elt = g_list_next (cur_elt);
 			}
 		}
 		cur = g_list_next (cur);
@@ -257,6 +246,9 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			continue;
 		}
 		cur_metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			cur_metric->actions[i].value = -1.0;
+		}
 		cur_metric->name = g_strdup (json_string_value (cur_nm));
 		cur_nm = json_object_get (cur_elt, "symbols");
 		/* Parse symbols */
@@ -286,17 +278,14 @@ json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 				it_val = json_array_get (cur_nm, j);
 				if (it_val && json_is_object (it_val)) {
 					if (json_object_get (it_val, "name") && json_object_get (it_val, "value")) {
-
-						cur_action = g_slice_alloc0 (sizeof (struct dynamic_cfg_action));
 						if (!check_action_str (json_string_value (json_object_get (it_val, "name")), &test_act)) {
 							msg_err ("unknown action: %s", json_string_value (json_object_get (it_val, "name")));
 							g_slice_free1 (sizeof (struct dynamic_cfg_action), cur_action);
 							continue;
 						}
+						cur_action = &cur_metric->actions[test_act];
 						cur_action->action = test_act;
 						cur_action->value = json_number_value (json_object_get (it_val, "value"));
-						/* Insert action */
-						cur_metric->actions = g_list_prepend (cur_metric->actions, cur_action);
 					}
 					else {
 						msg_info ("json symbol object has no mandatory 'name' and 'value' attributes");
@@ -351,6 +340,8 @@ dump_dynamic_list (gint fd, GList *rules)
 	struct dynamic_cfg_symbol			*sym;
 	struct dynamic_cfg_action			*act;
 	FILE								*f;
+	gint                                 i;
+	gboolean                             start = TRUE;
 
 	/* Open buffered stream for the descriptor */
 	if ((f = fdopen (fd, "a+")) == NULL) {
@@ -387,16 +378,16 @@ dump_dynamic_list (gint fd, GList *rules)
 			}
 
 			if (metric->actions) {
-				cur_elt = metric->actions;
 				fprintf (f, "  \"actions\": [\n");
-				while (cur_elt) {
-					act = cur_elt->data;
-					cur_elt = g_list_next (cur_elt);
-					if (cur_elt) {
-						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f},\n", str_action_metric (act->action), act->value);
+				for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+					act = &metric->actions[i];
+					if (act->value < 0) {
+						continue;
 					}
-					else {
-						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f}\n", str_action_metric (act->action), act->value);
+					fprintf (f, "    %s{\"name\": \"%s\",\"value\": %.2f}\n",
+							(start ? "" : ","), str_action_metric (act->action), act->value);
+					if (start) {
+						start = FALSE;
 					}
 				}
 				fprintf (f, "  ]\n");
@@ -573,7 +564,6 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, guint act
 {
 	GList								*cur;
 	struct dynamic_cfg_metric			*metric = NULL;
-	struct dynamic_cfg_action			*act = NULL;
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
@@ -592,33 +582,12 @@ add_dynamic_action (struct config_file *cfg, const gchar *metric_name, guint act
 
 	if (metric != NULL) {
 		/* Search for an action */
-		cur = metric->actions;
-		while (cur) {
-			act = cur->data;
-			if (act->action == action) {
-				act->value = value;
-				msg_debug ("change value of action %d to %.2f", action, value);
-				break;
-			}
-			act = NULL;
-			cur = g_list_next (cur);
-		}
-		if (act == NULL) {
-			/* Action not found, insert it */
-			act = g_slice_alloc (sizeof (struct dynamic_cfg_action));
-			act->action = action;
-			act->value = value;
-			metric->actions = g_list_prepend (metric->actions, act);
-			msg_debug ("create action %d in metric %s", action, metric_name);
-		}
+		metric->actions[action].value = value;
 	}
 	else {
 		/* Metric not found, create it */
 		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		act = g_slice_alloc (sizeof (struct dynamic_cfg_action));
-		act->action = action;
-		act->value = value;
-		metric->actions = g_list_prepend (metric->actions, act);
+		metric->actions[action].value = value;
 		metric->name = g_strdup (metric_name);
 		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
 		msg_debug ("create metric %s for action %d", metric_name, action);

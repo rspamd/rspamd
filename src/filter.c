@@ -227,7 +227,7 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 	struct metric_result           *res;
 	double                          ms, rs;
 
-	/* Avoid concurrenting while checking results */
+	/* Avoid concurrency while checking results */
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_static_mutex_lock (&result_mtx);
 #else
@@ -241,9 +241,9 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 		G_UNLOCK (result_mtx);
 #endif
 		if (!check_metric_settings (res, &ms, &rs)) {
-			ms = metric->required_score;
+			ms = metric->actions[METRIC_ACTION_REJECT].score;
 		}
-		return res->score >= ms;
+		return (ms > 0 && res->score >= ms);
 	}
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
@@ -280,7 +280,7 @@ process_filters (struct worker_task *task)
 		while (cur) {
 			metric = cur->data;
 			if (!task->pass_all_filters &&
-						metric->action == METRIC_ACTION_REJECT && 
+						metric->actions[METRIC_ACTION_REJECT].score > 0 &&
 						check_metric_is_spam (task, metric)) {
 				task->s->wanna_die = TRUE;
 				check_session_pending (task->s);
@@ -763,9 +763,9 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	rspamd_snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
 	if (!check_metric_settings (metric_res, &ms, &rs)) {
-		ms = metric_res->metric->required_score;
+		ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
 	}
-	if (metric_res->score >= ms) {
+	if (ms > 0 && metric_res->score >= ms) {
 		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
 	}
 	else {
@@ -835,7 +835,9 @@ str_action_metric (enum rspamd_metric_action action)
 	case METRIC_ACTION_GREYLIST:
 		return "greylist";
 	case METRIC_ACTION_NOACTION:
-		return "no action";
+		return "no_action";
+	case METRIC_ACTION_MAX:
+		return "invalid max action";
 	}
 
 	return "unknown action";
@@ -844,25 +846,26 @@ str_action_metric (enum rspamd_metric_action action)
 gint
 check_metric_action (double score, double required_score, struct metric *metric)
 {
-	GList                          *cur;
 	struct metric_action           *action, *selected_action = NULL;
 	double                          max_score = 0;
+	int                             i;
 
 	if (score >= required_score) {
-		return metric->action;
+		return METRIC_ACTION_REJECT;
 	}
 	else if (metric->actions == NULL) {
 		return METRIC_ACTION_NOACTION;
 	}
 	else {
-		cur = metric->actions;
-		while (cur) {
-			action = cur->data;
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			action = &metric->actions[i];
+			if (action->score < 0) {
+				continue;
+			}
 			if (score >= action->score && action->score > max_score) {
 				selected_action = action;
 				max_score = action->score;
 			}
-			cur = g_list_next (cur);
 		}
 		if (selected_action) {
 			return selected_action->action;

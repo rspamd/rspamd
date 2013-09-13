@@ -42,7 +42,8 @@ enum rspamd_metric_action {
 	METRIC_ACTION_REWRITE_SUBJECT,
 	METRIC_ACTION_ADD_HEADER,
 	METRIC_ACTION_GREYLIST,
-	METRIC_ACTION_NOACTION
+	METRIC_ACTION_NOACTION,
+	METRIC_ACTION_MAX
 };
 
 struct metric_action {
@@ -58,12 +59,9 @@ struct metric {
 	gchar *func_name;								/**< name of consolidation function					*/
 	metric_cons_func func;							/**< c consolidation function						*/
 	double grow_factor;								/**< grow factor for metric							*/
-	double required_score;							/**< required score for this metric					*/
-	double reject_score;							/**< reject score for this metric					*/
 	GHashTable *symbols;							/**< weights of symbols in metric					*/
 	GHashTable *descriptions;						/**< descriptions of symbols in metric				*/
-	enum rspamd_metric_action action;				/**< action to do by this metric by default		  	*/
-	GList *actions;									/**< actions that can be performed by this metric 	*/
+	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric					*/
 	gchar *subject;									/**< subject rewrite string							*/
 };
 

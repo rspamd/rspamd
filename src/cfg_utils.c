@@ -729,8 +729,7 @@ post_load_config (struct config_file *cfg)
 	if ((def_metric = g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
 		def_metric = check_metric_conf (cfg, NULL);
 		def_metric->name = DEFAULT_METRIC;
-		def_metric->required_score = DEFAULT_SCORE;
-		def_metric->reject_score = DEFAULT_REJECT_SCORE;
+		def_metric->actions[METRIC_ACTION_REJECT].score = DEFAULT_SCORE;
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
 		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);
 	}
@@ -858,12 +857,15 @@ check_statfile_conf (struct config_file *cfg, struct statfile *c)
 struct metric *
 check_metric_conf (struct config_file *cfg, struct metric *c)
 {
+	int i;
 	if (c == NULL) {
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
-		c->action = METRIC_ACTION_REJECT;
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->descriptions = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			c->actions[i].score = -1.0;
+		}
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->symbols);
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->descriptions);
 	}
