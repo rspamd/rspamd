@@ -372,6 +372,41 @@ rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	return TRUE;
 }
 
+static gboolean
+rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	rspamd_cl_object_t *val, *lobj;
+	const gchar *worker_type;
+	GQuark qtype;
+	struct worker_conf *wrk;
+
+	lobj = obj->value.ov;
+
+	HASH_FIND_STR (lobj, "type", val);
+	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &worker_type)) {
+		qtype = g_quark_try_string (worker_type);
+		if (qtype != 0) {
+			wrk = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+			wrk->worker = get_worker_by_type (qtype);
+			if (wrk->worker == NULL) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "unknown worker type: %s", worker_type);
+				return FALSE;
+			}
+			wrk->type = qtype;
+			if (wrk->worker->worker_init_func) {
+				wrk->ctx = wrk->worker->worker_init_func ();
+			}
+		}
+	}
+	else {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "undefined worker type");
+		return FALSE;
+	}
+
+	return rspamd_rcl_section_parse_defaults (section, cfg, obj, wrk, err);
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -508,6 +543,18 @@ rspamd_rcl_config_init (void)
 	 */
 	sub = rspamd_rcl_add_section (new, "metric", rspamd_rcl_metric_handler, RSPAMD_CL_OBJECT,
 			FALSE, TRUE);
+
+	/**
+	 * Worker section
+	 */
+	sub = rspamd_rcl_add_section (new, "worker", rspamd_rcl_worker_handler, RSPAMD_CL_OBJECT,
+			FALSE, TRUE);
+	rspamd_rcl_add_default_handler (sub, "count", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct worker_conf, count), RSPAMD_CL_FLAG_INT_16);
+	rspamd_rcl_add_default_handler (sub, "max_files", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct worker_conf, rlimit_nofile), RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub, "max_core", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct worker_conf, rlimit_maxcore), RSPAMD_CL_FLAG_INT_32);
 
 	return new;
 }
