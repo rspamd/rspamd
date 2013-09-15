@@ -11,6 +11,7 @@
 #include "upstream.h"
 #include "memcached.h"
 #include "symbols_cache.h"
+#include "utlist.h"
 
 #define DEFAULT_BIND_PORT 768
 #define DEFAULT_CONTROL_PORT 7608
@@ -245,6 +246,12 @@ struct config_scalar {
     } type;											/**< type of data										*/
 };
 
+struct rspamd_worker_bind_conf {
+	gchar *bind_host;
+	guint16 bind_port;
+	gboolean is_unix;
+	struct rspamd_worker_bind_conf *next;
+};
 
 /**
  * Config params for rspamd worker
@@ -252,10 +259,7 @@ struct config_scalar {
 struct worker_conf {
 	worker_t *worker;								/**< pointer to worker type								*/
 	GQuark type;									/**< type of worker										*/
-	gchar *bind_host;								/**< bind line											*/
-	gchar *bind_addr;								/**< bind address in case of TCP socket					*/
-	guint16 bind_port;								/**< bind port in case of TCP socket					*/
-	guint16 bind_family;							/**< bind type (AF_UNIX or AF_INET)						*/
+	struct rspamd_worker_bind_conf *bind_conf;		/**< bind configuration									*/
 	guint16 count;									/**< number of workers									*/
 	GList *listen_socks;							/**< listening sockets desctiptors						*/
 	guint32 rlimit_nofile;							/**< max files limit									*/
@@ -407,7 +411,7 @@ gboolean parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **add
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-gint parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
+gboolean parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
 
 /**
  * Init default values

@@ -163,21 +163,16 @@ parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint 
 	return parse_host_port_priority (pool, str, addr, NULL, priority);
 }
 
-gint
+gboolean
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 {
-	gchar                          **host;
-	guint16                        *family, *port;
-	gchar                          **addr;
+	struct rspamd_worker_bind_conf *cnf;
 
 	if (str == NULL)
 		return 0;
 
-	host = &cf->bind_host;
-	port = &cf->bind_port;
-	*port = DEFAULT_BIND_PORT;
-	family = &cf->bind_family;
-	addr = &cf->bind_addr;
+	cnf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
+	cnf->bind_port = DEFAULT_BIND_PORT;
 
 	if (str[0] == '/' || str[0] == '.') {
 #ifdef HAVE_DIRNAME
@@ -189,7 +184,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 			if (errno == ENOENT) {
 				if ((fd = open (str, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 					msg_err ("cannot open path %s for making socket, %s", str, strerror (errno));
-					return 0;
+					return FALSE;
 				}
 				else {
 					close (fd);
@@ -208,21 +203,20 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 			}
 		}
 #endif
-		*host = memory_pool_strdup (cfg->cfg_pool, str);
-		*addr = *host;
-		*family = AF_UNIX;
-		return 1;
+		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+		cnf->is_unix = TRUE;
+		LL_PREPEND (cf->bind_conf, cnf);
+		return TRUE;
 	}
 	else {
-		if (parse_host_port (cfg->cfg_pool, str, addr, port)) {
-			*host = memory_pool_strdup (cfg->cfg_pool, str);
-			*family = AF_INET;
-
-			return 1;
+		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+		if (parse_host_port (cfg->cfg_pool, str, &cnf->bind_host, &cnf->bind_port)) {
+			LL_PREPEND (cf->bind_conf, cnf);
+			return TRUE;
 		}
 	}
 
-	return 0;
+	return FALSE;
 }
 
 void

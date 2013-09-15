@@ -612,6 +612,7 @@ spawn_workers (struct rspamd_main *rspamd)
 	struct worker_conf             *cf;
 	gint                            i;
 	gpointer                        p;
+	struct rspamd_worker_bind_conf *bcf;
 
 	cur = rspamd->cfg->workers;
 
@@ -623,23 +624,26 @@ spawn_workers (struct rspamd_main *rspamd)
 		}
 		else {
 			if (cf->worker->has_socket) {
-				if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
-						make_listen_key (cf->bind_addr, cf->bind_port, cf->bind_family)))) == NULL) {
-					/* Create listen socket */
-					ls = create_listen_socket (cf->bind_addr, cf->bind_port, cf->bind_family,
-							cf->worker->listen_type);
-					if (ls == NULL) {
-						exit (-errno);
+				LL_FOREACH (cf->bind_conf, bcf) {
+					if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
+							make_listen_key (bcf->bind_host, bcf->bind_port, bcf->is_unix)))) == NULL) {
+						/* Create listen socket */
+						ls = create_listen_socket (bcf->bind_host, bcf->bind_port,
+								bcf->is_unix ? AF_UNIX : AF_INET,
+								cf->worker->listen_type);
+						if (ls == NULL) {
+							exit (-errno);
+						}
+						g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
+								make_listen_key (bcf->bind_host, bcf->bind_port, bcf->is_unix)),
+								ls);
 					}
-					g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
-							make_listen_key (cf->bind_addr, cf->bind_port, cf->bind_family)),
-							ls);
+					else {
+						/* We had socket for this type of worker */
+						ls = p;
+					}
+					cf->listen_socks = g_list_prepend (cf->listen_socks, ls);
 				}
-				else {
-					/* We had socket for this type of worker */
-					ls = p;
-				}
-				cf->listen_socks = ls;
 			}
 
 			if (cf->worker->unique) {

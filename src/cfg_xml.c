@@ -2748,9 +2748,6 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 		rspamd_fprintf (f, "<worker>" EOL);
 
 		rspamd_fprintf (f, "  <type>%s</type>" EOL, g_quark_to_string (wrk->type));
-		escaped_str = g_markup_escape_text (wrk->bind_host, -1); 
-		rspamd_fprintf (f, "  <bind_socket>%s</bind_socket>" EOL, escaped_str);
-		g_free (escaped_str);
 
 		rspamd_fprintf (f, "  <count>%ud</count>" EOL, wrk->count);
 		rspamd_fprintf (f, "  <maxfiles>%ud</maxfiles>" EOL, wrk->rlimit_nofile);
