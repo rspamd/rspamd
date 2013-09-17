@@ -33,6 +33,9 @@
 #include "config.h"
 #include "dns.h"
 #include "main.h"
+#ifdef HAVE_OPENSSL
+#include <openssl/rand.h>
+#endif
 
 /* Upstream timeouts */
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
@@ -288,10 +291,17 @@ dns_k_permutor_init (struct dns_k_permutor *p, guint low, guint high)
 	p->mask		= (1U << p->shift) - 1;
 	p->rounds	= DNS_K_PERMUTOR_ROUNDS;
 
+#ifndef HAVE_OPENSSL
 	for (i = 0; i < G_N_ELEMENTS (key); i++) {
 		key[i]	= DNS_RANDOM ();
 	}
-
+#else
+	if (RAND_bytes ((unsigned char *)key, sizeof (key)) != 1) {
+		for (i = 0; i < G_N_ELEMENTS (key); i++) {
+			key[i]	= DNS_RANDOM ();
+		}
+	}
+#endif
 	dns_k_tea_init (&p->tea, key, 0);
 
 } /* dns_k_permutor_init() */
