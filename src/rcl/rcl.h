@@ -237,6 +237,28 @@ rspamd_cl_obj_tostring (rspamd_cl_object_t *obj)
 }
 
 /**
+ * Return object identified by a key in the specified object
+ * @param obj object to get a key from (must be of type RSPAMD_CL_OBJECT)
+ * @param key key to search
+ * @return object matched the specified key or NULL if key is not found
+ */
+static inline rspamd_cl_object_t *
+rspamd_cl_obj_get_key (rspamd_cl_object_t *obj, const gchar *key)
+{
+	gsize keylen;
+	rspamd_cl_object_t *ret;
+
+	if (obj == NULL || obj->type != RSPAMD_CL_OBJECT || key == NULL) {
+		return NULL;
+	}
+
+	keylen = strlen (key);
+	HASH_FIND(hh, obj->value.ov, key, keylen, ret);
+
+	return ret;
+}
+
+/**
  * Macro handler for a parser
  * @param data the content of macro
  * @param len the length of content

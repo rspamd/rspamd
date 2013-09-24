@@ -32,17 +32,15 @@ static gboolean
 rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val, *lobj;
+	rspamd_cl_object_t *val;
 	gchar *filepath;
 	const gchar *facility, *log_type, *log_level;
 
-	lobj = obj->value.ov;
-
-	HASH_FIND_STR (lobj, "type", val);
+	val = rspamd_cl_obj_get_key (obj, "type");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &log_type)) {
 		if (g_ascii_strcasecmp (log_type, "file") == 0) {
 			/* Need to get filename */
-			HASH_FIND_STR (lobj, "filename", val);
+			val = rspamd_cl_obj_get_key (obj, "filename");
 			if (val == NULL || val->type != RSPAMD_CL_STRING) {
 				g_set_error (err, CFG_RCL_ERROR, ENOENT, "filename attribute must be specified for file logging type");
 				return FALSE;
@@ -59,7 +57,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 			/* Need to get facility */
 			cfg->log_facility = LOG_DAEMON;
 			cfg->log_type = RSPAMD_LOG_SYSLOG;
-			HASH_FIND_STR (lobj, "facility", val);
+			val = rspamd_cl_obj_get_key (obj, "facility");
 			if (val != NULL && rspamd_cl_obj_tostring_safe (val, &facility)) {
 				if (g_ascii_strcasecmp (facility, "LOG_AUTH") == 0 ||
 						g_ascii_strcasecmp (facility, "auth") == 0 ) {
@@ -133,7 +131,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	}
 
 	/* Handle log level */
-	HASH_FIND_STR (lobj, "level", val);
+	val = rspamd_cl_obj_get_key (obj, "level");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &log_level)) {
 		if (g_ascii_strcasecmp (log_level, "error") == 0) {
 			cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
@@ -160,13 +158,11 @@ static gboolean
 rspamd_rcl_options_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val, *lobj;
+	rspamd_cl_object_t *val;
 	const gchar *user_settings, *domain_settings;
 
-	lobj = obj->value.ov;
-
 	/* Handle user and domain settings */
-	HASH_FIND_STR (lobj, "user_settings", val);
+	val = rspamd_cl_obj_get_key (obj, "user_settings");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &user_settings)) {
 		if (!read_settings (user_settings, "Users' settings", cfg, cfg->user_settings)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", user_settings);
@@ -175,7 +171,7 @@ rspamd_rcl_options_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, user_settings);
 	}
 
-	HASH_FIND_STR (lobj, "domain_settings", val);
+	val = rspamd_cl_obj_get_key (obj, "domain_settings");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &domain_settings)) {
 		if (!read_settings (domain_settings, "Domains settings", cfg, cfg->domain_settings)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", domain_settings);
@@ -229,16 +225,16 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 		description = NULL;
 	}
 	else if (obj->type == RSPAMD_CL_OBJECT) {
-		HASH_FIND_STR (obj, "score", val);
+		val = rspamd_cl_obj_get_key (obj, "score");
 		if (val == NULL || !rspamd_cl_obj_todouble_safe (val, &symbol_score)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol score: %s", obj->key);
 			return FALSE;
 		}
-		HASH_FIND_STR (obj, "description", val);
+		val = rspamd_cl_obj_get_key (obj, "description");
 		if (val != NULL) {
 			description = rspamd_cl_obj_tostring (val);
 		}
-		HASH_FIND_STR (obj, "group", val);
+		val = rspamd_cl_obj_get_key (obj, "group");
 		if (val != NULL) {
 			rspamd_cl_obj_tostring_safe (val, &group);
 		}
@@ -292,7 +288,7 @@ static gboolean
 rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val, *lobj, *cur, *tmp;
+	rspamd_cl_object_t *val, *cur, *tmp;
 	const gchar *metric_name, *subject_name;
 	struct metric *metric;
 	struct metric_action *action;
@@ -300,9 +296,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	gint action_value;
 	gboolean new = TRUE;
 
-	lobj = obj->value.ov;
-
-	HASH_FIND_STR (lobj, "name", val);
+	val = rspamd_cl_obj_get_key (obj, "name");
 	if (val == NULL || !rspamd_cl_obj_tostring_safe (val, &metric_name)) {
 		metric_name = DEFAULT_METRIC;
 	}
@@ -316,7 +310,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	}
 
 	/* Handle actions */
-	HASH_FIND_STR (lobj, "actions", val);
+	val = rspamd_cl_obj_get_key (obj, "actions");
 	if (val != NULL) {
 		if (val->type != RSPAMD_CL_OBJECT) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "actions must be an object");
@@ -339,7 +333,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 	}
 
 	/* Handle symbols */
-	HASH_FIND_STR (lobj, "symbols", val);
+	val = rspamd_cl_obj_get_key (obj, "symbols");
 	if (val != NULL) {
 		if (val->type == RSPAMD_CL_ARRAY) {
 			val = val->value.ov;
@@ -355,12 +349,12 @@ rspamd_rcl_metric_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		}
 	}
 
-	HASH_FIND_STR (lobj, "grow_factor", val);
+	val = rspamd_cl_obj_get_key (obj, "grow_factor");
 	if (val && rspamd_cl_obj_todouble_safe (val, &grow_factor)) {
 		metric->grow_factor = grow_factor;
 	}
 
-	HASH_FIND_STR (lobj, "subject", val);
+	val = rspamd_cl_obj_get_key (obj, "subject");
 	if (val && rspamd_cl_obj_tostring_safe (val, &subject_name)) {
 		metric->subject = (gchar *)subject_name;
 	}
@@ -376,14 +370,12 @@ static gboolean
 rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val, *lobj;
+	rspamd_cl_object_t *val;
 	const gchar *worker_type;
 	GQuark qtype;
 	struct worker_conf *wrk;
 
-	lobj = obj->value.ov;
-
-	HASH_FIND_STR (lobj, "type", val);
+	val = rspamd_cl_obj_get_key (obj, "type");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &worker_type)) {
 		qtype = g_quark_try_string (worker_type);
 		if (qtype != 0) {
@@ -607,7 +599,7 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 
 	/* Iterate over known sections and ignore unknown ones */
 	HASH_ITER (hh, top, cur, tmp) {
-		HASH_FIND_STR (obj->value.ov, cur->name, found);
+		found = rspamd_cl_obj_get_key (obj, cur->name);
 		if (found == NULL) {
 			if (cur->required) {
 				g_set_error (err, CFG_RCL_ERROR, ENOENT, "required section %s is missing", cur->name);
@@ -644,7 +636,7 @@ gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 	}
 
 	HASH_ITER (hh, section->default_parser, cur, tmp) {
-		HASH_FIND_STR (obj->value.ov, cur->key, found);
+		found = rspamd_cl_obj_get_key (obj, cur->key);
 		if (found != NULL) {
 			cur->pd.user_struct = ptr;
 			if (!cur->handler (cfg, found, &cur->pd, section, err)) {
