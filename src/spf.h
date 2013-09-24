@@ -6,7 +6,7 @@
 struct worker_task;
 struct spf_record;
 
-typedef void (*spf_cb_t)(struct spf_record *record, struct worker_task *task);
+typedef void (*spf_cb_t)(struct spf_record *record, struct worker_task *task, GError *err);
 
 typedef enum spf_mech_e {
 	SPF_FAIL,
@@ -63,6 +63,7 @@ struct spf_record {
 	gchar *local_part;
 	struct worker_task *task;
 	spf_cb_t callback;
+	GError *err;
 
 	gboolean in_include;
 };
