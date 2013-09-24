@@ -82,6 +82,9 @@ struct spf_dns_cb {
 do {														\
 	if ((rec)->nested > SPF_MAX_NESTING ||					\
 		(rec)->dns_requests > SPF_MAX_DNS_REQUESTS) {		\
+		msg_info ("<%s> spf recursion limit %d is reached, domain: %s",	\
+			(rec)->task->message_id, (rec)->dns_requests,	\
+			(rec)->sender_domain);							\
 		return FALSE;										\
 	}														\
 } while (0)													\
@@ -216,7 +219,7 @@ spf_record_destructor (gpointer r)
 }
 
 static gboolean
-parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
+parse_spf_ipmask (const gchar *begin, struct spf_addr *addr, struct spf_record *rec)
 {
 	const gchar                    *pos;
 	gchar                           mask_buf[5] = {'\0'}, *p;
@@ -237,6 +240,8 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 			case 0:
 				/* Require ':' */
 				if (*pos != ':') {
+					msg_info ("<%s>: spf error for domain %s: semicolon missing",
+							rec->task->message_id, rec->sender_domain);
 					return FALSE;
 				}
 				state = 1;
@@ -276,12 +281,16 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 				}
 				else {
 					/* Invalid character */
+					msg_info ("<%s>: spf error for domain %s: invalid ip address",
+						rec->task->message_id, rec->sender_domain);
 					return FALSE;
 				}
 				break;
 			case 2:
 				/* Parse mask */
 				if (p - mask_buf >= (gint)sizeof (mask_buf)) {
+					msg_info ("<%s>: spf error for domain %s: too long mask",
+							rec->task->message_id, rec->sender_domain);
 					return FALSE;
 				}
 				if (g_ascii_isdigit (*pos)) {
@@ -300,6 +309,8 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 			addr->data.normal.ipv6 = TRUE;
 		}
 		else {
+			msg_info ("<%s>: spf error for domain %s: invalid ip address",
+					rec->task->message_id, rec->sender_domain);
 			return FALSE;
 		}
 	}
@@ -316,14 +327,16 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 		if (!addr->data.normal.ipv6) {
 			addr->data.normal.mask = strtoul (mask_buf, NULL, 10);
 			if (addr->data.normal.mask > 32) {
-				msg_info ("bad ipmask value: '%s'", begin);
+				msg_info ("<%s>: spf error for domain %s: bad ipmask value: '%s'",
+						rec->task->message_id, rec->sender_domain, begin);
 				return FALSE;
 			}
 		}
 		else {
 			addr->data.normal.mask = strtoul (mask_buf, NULL, 10);
 			if (addr->data.normal.mask > 128) {
-				msg_info ("bad ipmask value: '%s'", begin);
+				msg_info ("<%s>: spf error for domain %s: bad ipmask value: '%s'",
+						rec->task->message_id, rec->sender_domain, begin);
 				return FALSE;
 			}
 		}
@@ -353,6 +366,8 @@ parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_add
 		rspamd_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
 		addr->data.normal.mask = mask_buf[0] * 10 + mask_buf[1];
 		if (addr->data.normal.mask > 32) {
+			msg_info ("<%s>: spf error for domain %s: too long mask",
+					rec->task->message_id, rec->sender_domain);
 			return FALSE;
 		}
 		if (host == NULL) {
@@ -417,7 +432,8 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 								cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
 							}
 							else {
-								msg_info ("wrong address list");
+								msg_info ("<%s>: spf error for domain %s: addresses mismatch",
+										task->message_id, cb->rec->sender_domain);
 							}
 						}
 
@@ -442,7 +458,8 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 								cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
 							}
 							else {
-								msg_info ("wrong address list");
+								msg_info ("<%s>: spf error for domain %s: addresses mismatch",
+										task->message_id, cb->rec->sender_domain);
 							}
 						}
 
@@ -536,12 +553,14 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 		switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
 					if (reply->type == DNS_REQUEST_MX) {
-						msg_info ("cannot find MX record for %s", cb->rec->cur_domain);
+						msg_info ("<%s>: spf error for domain %s: cannot find MX record for %s",
+								task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 						cb->addr->data.normal.mask = 32;
 					}
 					else if (reply->type != DNS_REQUEST_MX) {
-						msg_info ("cannot resolve MX record for %s", cb->rec->cur_domain);
+						msg_info ("<%s>: spf error for domain %s: cannot resolve MX record for %s",
+								task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 						cb->addr->data.normal.mask = 32;
 					}
@@ -565,10 +584,12 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 				case SPF_RESOLVE_PTR:
 					break;
 				case SPF_RESOLVE_REDIRECT:
-					msg_info ("cannot resolve TXT record for redirect action");
+					msg_info ("<%s>: spf error for domain %s: cannot resolve TXT record for %s",
+							task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 					break;
 				case SPF_RESOLVE_INCLUDE:
-					msg_info ("cannot resolve TXT record for include action");
+					msg_info ("<%s>: spf error for domain %s: cannot resolve TXT record for %s",
+							task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 					break;
 				case SPF_RESOLVE_EXP:
 					break;
@@ -608,7 +629,8 @@ parse_spf_a (struct worker_task *task, const gchar *begin, struct spf_record *re
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_A;
 	cb->in_include = rec->in_include;
-	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
 		task->dns_requests ++;
 		rec->requests_inflight ++;
 		return TRUE;
@@ -623,7 +645,8 @@ parse_spf_ptr (struct worker_task *task, const gchar *begin, struct spf_record *
 {
 	CHECK_REC (rec);
 	
-	msg_info ("ptr parsing is unimplemented");
+	msg_info ("<%s>: spf error for domain %s: ptr elements are not implemented",
+			rec->task->message_id, rec->sender_domain);
 	return FALSE;
 }
 
@@ -654,7 +677,8 @@ parse_spf_mx (struct worker_task *task, const gchar *begin, struct spf_record *r
 	memset (&addr->data.normal, 0, sizeof (addr->data.normal));
 	cb->cur_action = SPF_RESOLVE_MX;
 	cb->in_include = rec->in_include;
-	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_MX, host)) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_record_dns_callback, (void *)cb, DNS_REQUEST_MX, host)) {
 		task->dns_requests ++;
 		rec->requests_inflight ++;
 		
@@ -687,7 +711,7 @@ parse_spf_ip4 (struct worker_task *task, const gchar *begin, struct spf_record *
 	/* ip4:addr[/mask] */
 
 	CHECK_REC (rec);
-	return parse_spf_ipmask (begin, addr);
+	return parse_spf_ipmask (begin, addr, rec);
 }
 
 #ifdef HAVE_INET_PTON
@@ -697,7 +721,7 @@ parse_spf_ip6 (struct worker_task *task, const gchar *begin, struct spf_record *
 	/* ip6:addr[/mask] */
 
 	CHECK_REC (rec);
-	return parse_spf_ipmask (begin, addr);
+	return parse_spf_ipmask (begin, addr, rec);
 }
 #endif
 
@@ -723,7 +747,8 @@ parse_spf_include (struct worker_task *task, const gchar *begin, struct spf_reco
 	addr->is_list = TRUE;
 	addr->data.list = NULL;
 	domain = memory_pool_strdup (task->task_pool, begin);
-	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
 		task->dns_requests ++;
 		rec->requests_inflight ++;
 
@@ -763,7 +788,8 @@ parse_spf_redirect (struct worker_task *task, const gchar *begin, struct spf_rec
 	cb->cur_action = SPF_RESOLVE_REDIRECT;
 	cb->in_include = rec->in_include;
 	domain = memory_pool_strdup (task->task_pool, begin);
-	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_record_dns_callback, (void *)cb, DNS_REQUEST_TXT, domain)) {
 		task->dns_requests ++;
 		rec->requests_inflight ++;
 		
@@ -795,7 +821,8 @@ parse_spf_exists (struct worker_task *task, const gchar *begin, struct spf_recor
 	cb->in_include = rec->in_include;
 	host = memory_pool_strdup (task->task_pool, begin);
 
-	if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, host)) {
 		task->dns_requests ++;
 		rec->requests_inflight ++;
 		
@@ -878,7 +905,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 				}
 				else {
 					/* Something unknown */
-					msg_info ("bad spf element: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: unknown spf element",
+							task->message_id, rec->sender_domain);
 					return begin;
 				}
 				p ++;
@@ -915,7 +943,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 						}
 						break;
 					default:
-						msg_info ("unknown or unsupported spf macro %c in %s", *p, begin);
+						msg_info ("<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
+								task->message_id, rec->sender_domain, *p, begin);
 						return begin;
 				}
 				p ++;
@@ -929,7 +958,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 					need_expand = TRUE;
 				}
 				else if (*p != 'r' && !g_ascii_isdigit (*p)) {
-					msg_info ("unknown or unsupported spf modifier %c in %s", *p, begin);
+					msg_info ("<%s>: spf error for domain %s: unknown or unsupported spf modifier %c in %s",
+							task->message_id, rec->sender_domain, *p, begin);
 					return begin;
 				} 
 				p ++;
@@ -984,7 +1014,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 				}
 				else {
 					/* Something unknown */
-					msg_info ("bad spf element: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: unknown spf element",
+						task->message_id, rec->sender_domain);
 					return begin;
 				}
 				p ++;
@@ -1045,7 +1076,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 						}
 						break;
 					default:
-						msg_info ("unknown or unsupported spf macro %c in %s", *p, begin);
+						msg_info ("<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
+							task->message_id, rec->sender_domain, *p, begin);
 						return begin;
 				}
 				p ++;
@@ -1064,7 +1096,8 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 					/*XXX: try to implement domain strimming */
 				}
 				else {
-					msg_info ("unknown or unsupported spf modifier %c in %s", *p, begin);
+					msg_info ("<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
+						task->message_id, rec->sender_domain, *p, begin);
 					return begin;
 				} 
 				p ++;
@@ -1073,7 +1106,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 	}
 	/* Null terminate */
 	*c = '\0';
-	msg_info ("%s", new);
+
 	return new;
 	
 }
@@ -1126,7 +1159,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_a (task, begin, rec, new);
 				}
 				else {
-					msg_info ("bad spf command: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+							task->message_id, rec->sender_domain, begin);
 				}
 				break;
 			case 'i':
@@ -1154,7 +1188,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 #endif
 				}
 				else {
-					msg_info ("bad spf command: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+							task->message_id, rec->sender_domain, begin);
 				}
 				break;
 			case 'm':
@@ -1165,7 +1200,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_mx (task, begin, rec, new);
 				}
 				else {
-					msg_info ("bad spf command: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+							task->message_id, rec->sender_domain, begin);
 				}
 				break;
 			case 'p':
@@ -1176,7 +1212,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_ptr (task, begin, rec, new);
 				}
 				else {
-					msg_info ("bad spf command: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+							task->message_id, rec->sender_domain, begin);
 				}
 				break;
 			case 'e':
@@ -1191,7 +1228,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_exists (task, begin, rec, new);
 				}
 				else {
-					msg_info ("bad spf command: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+							task->message_id, rec->sender_domain, begin);
 				}
 				break;
 			case 'r':
@@ -1201,7 +1239,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 					res = parse_spf_redirect (task, begin, rec, NULL);
 				}
 				else {
-					msg_info ("bad spf command: %s", begin);
+					msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+							task->message_id, rec->sender_domain, begin);
 				}
 				break;
 			case 'v':
@@ -1213,7 +1252,8 @@ parse_spf_record (struct worker_task *task, struct spf_record *rec)
 				}
 				break;
 			default:
-				msg_info ("bad spf command: %s", begin);
+				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+						task->message_id, rec->sender_domain, begin);
 				break;
 		}
 		if (res) {
@@ -1275,7 +1315,8 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 		/* Skip one number of record, so no we are here spf2.0/ */
 		begin += sizeof (SPF_VER2_STR);
 		if (*begin != '/') {
-			msg_info ("sender id string has invalid scope");
+			msg_info ("<%s>: spf error for domain %s: sender id is invalid",
+					rec->task->message_id, rec->sender_domain);
 		}
 		else {
 			begin ++;
@@ -1294,7 +1335,8 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 		}
 	}
 	else {
-		msg_info ("bad spf record version: %*s", sizeof (SPF_VER1_STR) - 1, begin);
+		msg_info ("<%s>: spf error for domain %s: bad spf record version: %*s",
+				rec->task->message_id, rec->sender_domain, sizeof (SPF_VER1_STR) - 1, begin);
 	}
 }
 
@@ -1383,7 +1425,8 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 		}
 		rec->sender_domain = rec->cur_domain;
 
-		if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
+		if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback,
+				(void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
 			task->dns_requests ++;
 			rec->requests_inflight ++;
 			return TRUE;
@@ -1413,7 +1456,8 @@ resolve_spf (struct worker_task *task, spf_cb_t callback)
 				*domain = '\0';
 			}
 			rec->sender_domain = rec->cur_domain;
-			if (make_dns_request (task->resolver, task->s, task->task_pool, spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
+			if (make_dns_request (task->resolver, task->s, task->task_pool,
+					spf_dns_callback, (void *)rec, DNS_REQUEST_TXT, rec->cur_domain)) {
 				task->dns_requests ++;
 				rec->requests_inflight ++;
 				return TRUE;
