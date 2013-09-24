@@ -364,7 +364,7 @@ parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_add
 	if (p != NULL) {
 		/* Extract mask */
 		rspamd_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
-		addr->data.normal.mask = mask_buf[0] * 10 + mask_buf[1];
+		addr->data.normal.mask = strtoul (mask_buf, NULL, 10);
 		if (addr->data.normal.mask > 32) {
 			msg_info ("<%s>: spf error for domain %s: too long mask",
 					rec->task->message_id, rec->sender_domain);
@@ -410,7 +410,8 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 				case SPF_RESOLVE_MX:
 					if (reply->type == DNS_REQUEST_MX) {
 						/* Now resolve A record for this MX */
-						if (make_dns_request (task->resolver, task->s, task->task_pool, spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, elt_data->mx.name)) {
+						if (make_dns_request (task->resolver, task->s, task->task_pool,
+								spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, elt_data->mx.name)) {
 							task->dns_requests ++;
 							cb->rec->requests_inflight ++;
 						}
@@ -1335,7 +1336,7 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 		}
 	}
 	else {
-		msg_info ("<%s>: spf error for domain %s: bad spf record version: %*s",
+		msg_debug ("<%s>: spf error for domain %s: bad spf record version: %*s",
 				rec->task->message_id, rec->sender_domain, sizeof (SPF_VER1_STR) - 1, begin);
 	}
 }
