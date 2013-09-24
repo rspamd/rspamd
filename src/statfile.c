@@ -421,9 +421,6 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	}
 
 	memory_pool_lock_mutex (pool->lock);
-	if (file->lock) {
-		memory_pool_lock_mutex (file->lock);
-	}
 
 	if (file->map) {
 		msg_info ("syncing statfile %s", file->filename);
