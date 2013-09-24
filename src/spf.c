@@ -314,7 +314,7 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr)
 	if (state == 2) {
 		/* Also parse mask */
 		if (!addr->data.normal.ipv6) {
-			addr->data.normal.mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
+			addr->data.normal.mask = strtoul (mask_buf, NULL, 10);
 			if (addr->data.normal.mask > 32) {
 				msg_info ("bad ipmask value: '%s'", begin);
 				return FALSE;
