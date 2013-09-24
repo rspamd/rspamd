@@ -111,6 +111,82 @@ MACRO(AddModules MLIST WLIST)
 	#ENDIF(NOT EXISTS "src/modules.c")
 ENDMACRO(AddModules MLIST WLIST)
 
+MACRO(FindLua _major _minor)
+	# Find lua libraries
+	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
+	
+	FIND_PATH(LUA_INCLUDE_DIR lua.h
+	  HINTS
+	  $ENV{LUA_DIR}
+	  PATH_SUFFIXES "include/lua${_major}${_minor}" 
+	  				"include/lua${_major}.${_minor}" 
+	  				include/lua include
+	  PATHS
+	  /usr/local
+	  /usr
+	  ~/Library/Frameworks
+	  /Library/Frameworks
+	  /sw # Fink
+	  /opt/local # DarwinPorts
+	  /opt/csw # Blastwave
+	  /opt
+	)
+	
+	FIND_LIBRARY(LUA_LIBRARY 
+	  NAMES lua 
+	  		"lua${_major}${_minor}"
+	  		"lua${_major}.${_minor}" 
+	  		"lua-${_major}.${_minor}"
+	  HINTS
+	  $ENV{LUA_DIR}
+	  PATH_SUFFIXES lib64 lib
+	  PATHS
+	  /usr/local
+	  /usr
+	  ~/Library/Frameworks
+	  /Library/Frameworks
+	  /sw
+	  /opt/local
+	  /opt/csw
+	  /opt
+	  DOC "Lua library"
+	)
+	
+	IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
+		SET(LUA_FOUND 1)
+		IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
+			SET(LUA_VERSION_MAJOR ${_major})
+			SET(LUA_VERSION_MINOR ${_minor})
+		ENDIF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
+		MESSAGE(STATUS "Found lua ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
+	ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
+	
+	# Check for luajit
+	IF(ENABLE_LUAJIT MATCHES "ON")
+	    FIND_LIBRARY(LUAJIT_LIBRARY NAMES
+	    			"luajit${_major}${_minor}"
+	    			"luajit${_major}.${_minor}"
+	    			"luajit-${_major}.${_minor}"
+	    			 luajit
+	                  HINTS
+	                  $ENV{LUA_DIR}
+	                  PATH_SUFFIXES lib64 lib
+	                  PATHS
+	                      ~/Library/Frameworks
+	                      /Library/Frameworks
+	                      /usr/local
+	                      /usr
+	                      /sw
+	                      /opt/local
+	                      /opt/csw
+	                      /opt
+	                )
+	     IF(NOT LUAJIT_LIBRARY)
+	         MESSAGE(FATAL_ERROR "Luajit not found but enabled in configuration")
+	     ENDIF(NOT LUAJIT_LIBRARY)
+	ENDIF(ENABLE_LUAJIT MATCHES "ON")
+ENDMACRO(FindLua _major _minor)
+
 ############################# CONFIG SECTION #############################################
 # Initial set
 
@@ -377,76 +453,10 @@ ENDIF(NOT LOCALSTATES_PREFIX)
 # Now find libraries and headers
 
 # Find lua libraries
-IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
-	SET(LUA_VERSION_MAJOR "5")
-	SET(LUA_VERSION_MINOR "1")
-ENDIF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
-
-FIND_PATH(LUA_INCLUDE_DIR lua.h
-  HINTS
-  $ENV{LUA_DIR}
-  PATH_SUFFIXES "include/lua${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}" 
-  				"include/lua${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}" 
-  				include/lua include
-  PATHS
-  /usr/local
-  /usr
-  ~/Library/Frameworks
-  /Library/Frameworks
-  /sw # Fink
-  /opt/local # DarwinPorts
-  /opt/csw # Blastwave
-  /opt
-)
-
-FIND_LIBRARY(LUA_LIBRARY 
-  NAMES lua 
-  		"lua${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}"
-  		"lua${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}" 
-  		"lua-${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
-  HINTS
-  $ENV{LUA_DIR}
-  PATH_SUFFIXES lib64 lib
-  PATHS
-  /usr/local
-  /usr
-  ~/Library/Frameworks
-  /Library/Frameworks
-  /sw
-  /opt/local
-  /opt/csw
-  /opt
-  DOC "Lua library"
-)
-
-IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
-	SET(LUA_FOUND 1)
-ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
-
-# Check for luajit
-IF(ENABLE_LUAJIT MATCHES "ON")
-    FIND_LIBRARY(LUAJIT_LIBRARY NAMES
-    			"luajit${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}"
-    			"luajit${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
-    			"luajit-${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
-    			 luajit
-                  HINTS
-                  $ENV{LUA_DIR}
-                  PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                )
-     IF(NOT LUAJIT_LIBRARY)
-         MESSAGE(FATAL_ERROR "Luajit not found but enabled in configuration")
-     ENDIF(NOT LUAJIT_LIBRARY)
-ENDIF(ENABLE_LUAJIT MATCHES "ON")
+FindLua(5 1)
+IF(NOT LUA_FOUND)
+	FindLua(5 2)
+ENDIF(NOT LUA_FOUND)
 
 IF(NOT LUA_FOUND)
 	MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
