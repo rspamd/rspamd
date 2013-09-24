@@ -217,6 +217,10 @@ rspamd_cl_pubkey_add (struct rspamd_cl_parser *parser, const guchar *key, gsize 
 	g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "cannot check signatures without openssl");
 	return FALSE;
 #else
+# if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+	g_set_error (err, RCL_ERROR, RSPAMD_CL_EINTERNAL, "cannot check signatures, openssl version is unsupported");
+	return EXIT_FAILURE;
+# else
 	BIO *mem;
 
 	mem = BIO_new_mem_buf ((void *)key, len);
@@ -230,6 +234,7 @@ rspamd_cl_pubkey_add (struct rspamd_cl_parser *parser, const guchar *key, gsize 
 		return FALSE;
 	}
 	LL_PREPEND (parser->keys, nkey);
+# endif
 #endif
 	return TRUE;
 }
@@ -387,7 +392,7 @@ rspamd_cl_fetch_file (const guchar *filename, guchar **buf, gsize *buflen, GErro
 }
 
 
-#ifdef HAVE_OPENSSL
+#if (defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x10000000L)
 static inline gboolean
 rspamd_cl_sig_check (const guchar *data, gsize datalen,
 		const guchar *sig, gsize siglen, struct rspamd_cl_parser *parser)
@@ -461,7 +466,7 @@ rspamd_cl_include_url (const guchar *data, gsize len,
 	}
 
 	if (check_signature) {
-#ifdef HAVE_OPENSSL
+#if (defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x10000000L)
 		/* We need to check signature first */
 		rspamd_snprintf (urlbuf, sizeof (urlbuf), "%*s.sig", len, data);
 		if (!rspamd_cl_fetch_file (urlbuf, &sigbuf, &siglen, err)) {
@@ -523,7 +528,7 @@ rspamd_cl_include_file (const guchar *data, gsize len,
 	}
 
 	if (check_signature) {
-#ifdef HAVE_OPENSSL
+#if (defined(HAVE_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x10000000L)
 		/* We need to check signature first */
 		rspamd_snprintf (filebuf, sizeof (filebuf), "%s.sig", realbuf);
 		if (!rspamd_cl_fetch_file (filebuf, &sigbuf, &siglen, err)) {

@@ -891,6 +891,10 @@ perform_configs_sign (void)
 	msg_err ("cannot sign files without openssl support");
 	return EXIT_FAILURE;
 #else
+# if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+	msg_err ("must have openssl at least 1.0.0 to perform this action");
+	return EXIT_FAILURE;
+# else
 	gint                            i, tests_num, res = EXIT_SUCCESS, fd;
 	guint                           diglen;
 	gchar                          *cur_file, in_file[PATH_MAX],
@@ -1007,6 +1011,7 @@ perform_configs_sign (void)
 	BIO_free (fbio);
 
 	return res;
+# endif
 #endif
 }
 
