@@ -642,7 +642,7 @@ spawn_workers (struct rspamd_main *rspamd)
 						/* We had socket for this type of worker */
 						ls = p;
 					}
-					cf->listen_socks = g_list_prepend (cf->listen_socks, ls);
+					cf->listen_socks = ls;
 				}
 			}
 
