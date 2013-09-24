@@ -390,6 +390,10 @@ rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 				wrk->ctx = wrk->worker->worker_init_func ();
 			}
 		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "unknown worker type: %s", worker_type);
+			return FALSE;
+		}
 	}
 	else {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "undefined worker type");
