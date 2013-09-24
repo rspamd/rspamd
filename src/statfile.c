@@ -227,6 +227,7 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 	stat_file_t                    *new;
 	u_char                         *map, *pos;
 	struct stat_file_block         *block;
+	struct stat_file_header        *header;
 
 	/* First of all rename old file */
 	memory_pool_lock_mutex (pool->lock);
@@ -273,6 +274,9 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 		}
 		pos += sizeof (block);
 	}
+
+	header = (struct stat_file_header *)map;
+	statfile_set_revision (new, header->revision, header->rev_time);
 	
 	munmap (map, old_size);
 	close (fd);
