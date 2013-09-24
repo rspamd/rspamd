@@ -280,7 +280,6 @@ rspamd_cl_fetch_url (const guchar *url, guchar **buf, gsize *buflen, GError **er
 	struct url *fetch_url;
 	struct url_stat us;
 	FILE *in;
-	guchar *buf;
 
 	fetch_url = fetchParseURL (url);
 	if (fetch_url == NULL) {
@@ -297,7 +296,7 @@ rspamd_cl_fetch_url (const guchar *url, guchar **buf, gsize *buflen, GError **er
 
 	*buflen = us.size;
 	*buf = g_malloc (*buflen);
-	if (buf == NULL) {
+	if (*buf == NULL) {
 		g_set_error (err, RCL_ERROR, RSPAMD_CL_EIO, "cannot allocate buffer for URL %s: %s",
 				url, strerror (errno));
 		fclose (in);
