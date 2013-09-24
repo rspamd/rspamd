@@ -284,25 +284,18 @@ spf_check_list (GList *list, struct worker_task *task)
 }
 
 static void 
-spf_plugin_callback (struct spf_record *record, struct worker_task *task, GError *err)
+spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 {
 	GList                           *l;
 
-	if (err == NULL) {
-		if (record && record->addrs && record->sender_domain) {
+	if (record && record->addrs && record->sender_domain) {
 
-			if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, record->sender_domain, task->tv.tv_sec)) == NULL) {
-				l = spf_record_copy (record->addrs);
-				rspamd_lru_hash_insert (spf_module_ctx->spf_hash, g_strdup (record->sender_domain),
-						l, task->tv.tv_sec);
-			}
-			spf_check_list (l, task);
+		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, record->sender_domain, task->tv.tv_sec)) == NULL) {
+			l = spf_record_copy (record->addrs);
+			rspamd_lru_hash_insert (spf_module_ctx->spf_hash, g_strdup (record->sender_domain),
+				l, task->tv.tv_sec);
 		}
-	}
-	else {
-		msg_info ("<%s> cannot check SPF record for domain %s: %s",
-				task->message_id, record ? "null" : record->sender_domain,
-				err->message);
+		spf_check_list (l, task);
 	}
 }
 
