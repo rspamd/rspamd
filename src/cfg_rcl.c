@@ -370,11 +370,13 @@ static gboolean
 rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val, *cur;
+	rspamd_cl_object_t *val, *cur, *tmp;
 	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
 	struct worker_conf *wrk;
 	struct rspamd_worker_bind_conf *bcf;
+	struct rspamd_worker_cfg_parser *wparser;
+	struct rspamd_worker_param_parser *whandler;
 
 	val = rspamd_cl_obj_get_key (obj, "type");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &worker_type)) {
@@ -422,7 +424,24 @@ rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 
 	wrk->options = obj;
 
-	return rspamd_rcl_section_parse_defaults (section, cfg, obj, wrk, err);
+	if (!rspamd_rcl_section_parse_defaults (section, cfg, obj, wrk, err)) {
+		return FALSE;
+	}
+
+	/* Parse other attributes */
+	HASH_FIND_INT (cfg->wrk_parsers, (gint *)&qtype, wparser);
+	if (wparser != NULL && obj->type == RSPAMD_CL_OBJECT) {
+		HASH_ITER (hh, obj->value.ov, cur, tmp) {
+			HASH_FIND_STR (wparser->parsers, cur->key, whandler);
+			if (whandler != NULL) {
+				if (!whandler->handler (cfg, cur, &whandler->parser, section, err)) {
+					return FALSE;
+				}
+			}
+		}
+	}
+
+	return TRUE;
 }
 
 /**
