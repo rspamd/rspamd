@@ -582,6 +582,7 @@ do {                                                                   \
     _mur_k1 = MUR_ROTL32(_mur_k1,15);                                  \
     _mur_k1 *= _mur_c2;                                                \
     _mur_h1 ^= _mur_k1;                                                \
+    case 0: break;	                                                   \
   }                                                                    \
   _mur_h1 ^= (keylen);                                                 \
   MUR_FMIX(_mur_h1);                                                   \
