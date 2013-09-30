@@ -43,7 +43,7 @@
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
-gpointer init_lua_worker (void);
+gpointer init_lua_worker (struct config_file *cfg);
 void start_lua_worker (struct rspamd_worker *worker);
 
 worker_t lua_worker = {
@@ -184,6 +184,8 @@ lua_worker_register_exit_callback (lua_State *L)
 	return 1;
 }
 
+/* XXX: This fucntions should be rewritten completely */
+#warning "lua_worker_get_option is broken"
 static int
 lua_worker_get_option (lua_State *L)
 {
@@ -323,25 +325,6 @@ sigusr1_handler (gint fd, short what, void *arg)
 	return;
 }
 
-static gboolean
-handle_lua_param (struct config_file *cfg, struct rspamd_xml_userdata *unused, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct rspamd_lua_worker_ctx       *ctx = dest_struct;
-	GList							   *val;
-	gchar							   *tag = user_data;
-
-	val = g_hash_table_lookup (ctx->params, tag);
-	if (val == NULL) {
-		g_hash_table_insert (ctx->params, g_strdup (tag), g_list_prepend (NULL, data));
-	}
-	else {
-		val = g_list_append (val, data);
-	}
-
-	return TRUE;
-}
-
-
 /*
  * Accept new connection and construct task
  */
@@ -417,7 +400,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_lua_worker (void)
+init_lua_worker (struct config_file *cfg)
 {
 	struct rspamd_lua_worker_ctx       *ctx;
 	GQuark								type;
@@ -428,8 +411,9 @@ init_lua_worker (void)
 	ctx->params = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, (GDestroyNotify)g_list_free);
 
 
-	register_worker_opt (type, "file", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file));
-	register_worker_opt (type, "*", handle_lua_param, ctx, 0);
+	rspamd_rcl_register_worker_option (cfg, type, "file",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file), 0);
 
 	return ctx;
 }
