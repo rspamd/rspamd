@@ -47,7 +47,7 @@
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
-gpointer init_worker (void);
+gpointer init_worker (struct config_file *cfg);
 void start_worker (struct rspamd_worker *worker);
 
 worker_t normal_worker = {
@@ -810,7 +810,7 @@ unload_custom_filters (struct rspamd_worker_ctx *ctx)
 #endif
 
 gpointer
-init_worker (void)
+init_worker (struct config_file *cfg)
 {
 	struct rspamd_worker_ctx       *ctx;
 	GQuark								type;
@@ -823,13 +823,33 @@ init_worker (void)
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 	ctx->classify_threads = 1;
 
-	register_worker_opt (type, "mime", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime));
-	register_worker_opt (type, "http", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http));
-	register_worker_opt (type, "json", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json));
-	register_worker_opt (type, "allow_learn", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn));
-	register_worker_opt (type, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout));
-	register_worker_opt (type, "max_tasks", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, max_tasks));
-	register_worker_opt (type, "classify_threads", xml_handle_uint32, ctx, G_STRUCT_OFFSET (struct rspamd_worker_ctx, classify_threads));
+	rspamd_rcl_register_worker_option (cfg, type, "mime",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "http",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "json",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "allow_learn",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "timeout",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+
+	rspamd_rcl_register_worker_option (cfg, type, "max_tasks",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, max_tasks), RSPAMD_CL_FLAG_INT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "classify_threads",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, classify_threads), RSPAMD_CL_FLAG_INT_32);
 
 	return ctx;
 }
