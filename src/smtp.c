@@ -51,7 +51,7 @@ static gboolean smtp_write_socket (void *arg);
 static sig_atomic_t                    wanna_die = 0;
 
 /* Init functions */
-gpointer init_smtp (void);
+gpointer init_smtp (struct config_file *cfg);
 void start_smtp (struct rspamd_worker *worker);
 
 worker_t smtp_worker = {
@@ -863,7 +863,7 @@ make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 }
 
 gpointer
-init_smtp (void)
+init_smtp (struct config_file *cfg)
 {
 	struct smtp_worker_ctx         		*ctx;
 	GQuark								type;
@@ -881,26 +881,45 @@ init_smtp (void)
 	ctx->max_errors = DEFAULT_MAX_ERRORS;
 	ctx->reject_message = DEFAULT_REJECT_MESSAGE;
 
-	register_worker_opt (type, "upstreams", xml_handle_string, ctx,
-				G_STRUCT_OFFSET (struct smtp_worker_ctx, upstreams_str));
-	register_worker_opt (type, "banner", xml_handle_string, ctx,
-					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_banner_str));
-	register_worker_opt (type, "timeout", xml_handle_seconds, ctx,
-					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_timeout_raw));
-	register_worker_opt (type, "delay", xml_handle_seconds, ctx,
-					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_delay));
-	register_worker_opt (type, "jitter", xml_handle_seconds, ctx,
-						G_STRUCT_OFFSET (struct smtp_worker_ctx, delay_jitter));
-	register_worker_opt (type, "capabilities", xml_handle_string, ctx,
-					G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_capabilities_str));
-	register_worker_opt (type, "xclient", xml_handle_boolean, ctx,
-					G_STRUCT_OFFSET (struct smtp_worker_ctx, use_xclient));
-	register_worker_opt (type, "reject_message", xml_handle_string, ctx,
-						G_STRUCT_OFFSET (struct smtp_worker_ctx, reject_message));
-	register_worker_opt (type, "max_errors", xml_handle_uint32, ctx,
-						G_STRUCT_OFFSET (struct smtp_worker_ctx, max_errors));
-	register_worker_opt (type, "max_size", xml_handle_size, ctx,
-						G_STRUCT_OFFSET (struct smtp_worker_ctx, max_size));
+	rspamd_rcl_register_worker_option (cfg, type, "upstreams",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, upstreams_str), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "banner",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_banner_str), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "timeout",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_timeout_raw), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "delay",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_delay), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "jitter",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, delay_jitter), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "capabilities",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, smtp_capabilities_str), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "xclient",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, use_xclient), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "reject_message",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, reject_message), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "max_errors",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, max_errors), RSPAMD_CL_FLAG_INT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "max_size",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct smtp_worker_ctx, max_size), RSPAMD_CL_FLAG_INT_SIZE);
 
 	return ctx;
 }

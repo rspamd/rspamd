@@ -52,7 +52,7 @@
 static sig_atomic_t                    wanna_die = 0;
 
 /* Init functions */
-gpointer init_smtp_proxy (void);
+gpointer init_smtp_proxy (struct config_file *cfg);
 void start_smtp_proxy (struct rspamd_worker *worker);
 
 worker_t smtp_proxy_worker = {
@@ -953,7 +953,7 @@ accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_smtp_proxy (void)
+init_smtp_proxy (struct config_file *cfg)
 {
 	struct smtp_proxy_ctx         		*ctx;
 	GQuark								type;
@@ -968,22 +968,37 @@ init_smtp_proxy (void)
 	ctx->smtp_delay = 0;
 	ctx->instant_reject = TRUE;
 
-	register_worker_opt (type, "upstreams", xml_handle_string, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str));
-	register_worker_opt (type, "timeout", xml_handle_seconds, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_timeout_raw));
-	register_worker_opt (type, "delay", xml_handle_seconds, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_delay));
-	register_worker_opt (type, "jitter", xml_handle_seconds, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter));
-	register_worker_opt (type, "xclient", xml_handle_boolean, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient));
-	register_worker_opt (type, "instant_reject", xml_handle_boolean, ctx,
-					G_STRUCT_OFFSET (struct smtp_proxy_ctx, instant_reject));
-	register_worker_opt (type, "proxy_buffer", xml_handle_size, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len));
-	register_worker_opt (type, "dnsbl", xml_handle_list, ctx,
-				G_STRUCT_OFFSET (struct smtp_proxy_ctx, rbls));
+	rspamd_rcl_register_worker_option (cfg, type, "upstreams",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "timeout",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_timeout_raw), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "delay",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_delay), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "jitter",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "xclient",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "instant_reject",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, instant_reject), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "proxy_buffer",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len), RSPAMD_CL_FLAG_INT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "dnsbl",
+			rspamd_rcl_parse_struct_string_list, ctx,
+			G_STRUCT_OFFSET (struct smtp_proxy_ctx, rbls), 0);
 
 	return ctx;
 }
