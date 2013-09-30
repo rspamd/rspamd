@@ -494,7 +494,7 @@ typedef struct module_s {
 
 typedef struct worker_s {
 	const gchar *name;
-	gpointer (*worker_init_func)(void);
+	gpointer (*worker_init_func)(struct config_file *cfg);
 	void (*worker_start_func)(struct rspamd_worker *worker);
 	gboolean has_socket;
 	gboolean unique;

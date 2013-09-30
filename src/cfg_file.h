@@ -11,7 +11,9 @@
 #include "upstream.h"
 #include "memcached.h"
 #include "symbols_cache.h"
+#include "cfg_rcl.h"
 #include "utlist.h"
+#include "rcl/rcl.h"
 
 #define DEFAULT_BIND_PORT 768
 #define DEFAULT_CONTROL_PORT 7608
@@ -253,6 +255,19 @@ struct rspamd_worker_bind_conf {
 	struct rspamd_worker_bind_conf *next;
 };
 
+struct rspamd_worker_param_parser {
+	rspamd_rcl_handler_t handler;					/**< handler function									*/
+	struct rspamd_rcl_struct_parser parser;			/**< parser attributes									*/
+	const gchar *name;								/**< parameter's name									*/
+	UT_hash_handle hh;								/**< hash by name										*/
+};
+
+struct rspamd_worker_cfg_parser {
+	struct rspamd_worker_param_parser *parsers;		/**< parsers hash										*/
+	gint type;										/**< workers quark										*/
+	UT_hash_handle hh;								/**< hash by type										*/
+};
+
 /**
  * Config params for rspamd worker
  */
@@ -268,6 +283,7 @@ struct worker_conf {
 	GQueue *active_workers;							/**< linked list of spawned workers						*/
 	gboolean has_socket;							/**< whether we should make listening socket in main process */
 	gpointer *ctx;									/**< worker's context									*/
+	rspamd_cl_object_t *options;					/**< other worker's options								*/
 };
 
 /**
@@ -330,6 +346,7 @@ struct config_file {
 
 	GList *filters;									/**< linked list of all filters							*/
 	GList *workers;									/**< linked list of all workers params					*/
+	struct rspamd_worker_cfg_parser *wrk_parsers;	/**< hash for worker config parsers, indexed by worker quarks */
 	gchar *filters_str;								/**< string of filters									*/
 	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
 	GHashTable* modules_metas;						/**< hash for module meta options indexed by module name*/

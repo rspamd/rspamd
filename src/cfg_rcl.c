@@ -388,7 +388,7 @@ rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 			}
 			wrk->type = qtype;
 			if (wrk->worker->worker_init_func) {
-				wrk->ctx = wrk->worker->worker_init_func ();
+				wrk->ctx = wrk->worker->worker_init_func (cfg);
 			}
 		}
 		else {
@@ -896,4 +896,34 @@ rspamd_rcl_parse_struct_boolean (struct config_file *cfg, rspamd_cl_object_t *ob
 	}
 
 	return TRUE;
+}
+
+void
+rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gchar *name,
+		rspamd_rcl_handler_t handler, gpointer target, gsize offset, gint flags)
+{
+	struct rspamd_worker_param_parser *nhandler;
+	struct rspamd_worker_cfg_parser *nparser;
+
+	HASH_FIND_INT (cfg->wrk_parsers, &type, nparser);
+	if (nparser == NULL) {
+		/* Allocate new parser for this worker */
+		nparser = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_cfg_parser));
+		nparser->type = type;
+		HASH_ADD_INT (cfg->wrk_parsers, type, nparser);
+	}
+
+	HASH_FIND_STR (nparser->parsers, name, nhandler);
+	if (nhandler != NULL) {
+		msg_warn ("handler for parameter %s is already registered for worker type %s",
+				name, g_quark_to_string (type));
+		return;
+	}
+	nhandler = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_param_parser));
+	nhandler->name = name;
+	nhandler->parser.flags = flags;
+	nhandler->parser.offset = offset;
+	nhandler->parser.user_struct = target;
+	nhandler->handler = handler;
+	HASH_ADD_STR (nparser->parsers, name, nhandler);
 }

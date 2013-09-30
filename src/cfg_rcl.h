@@ -26,7 +26,6 @@
 
 #include "config.h"
 #include "rcl/rcl.h"
-#include "main.h"
 
 #define CFG_RCL_ERROR cfg_rcl_error_quark ()
 static inline GQuark
@@ -36,6 +35,7 @@ cfg_rcl_error_quark (void)
 }
 
 struct rspamd_rcl_section;
+struct config_file;
 
 struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
@@ -198,4 +198,19 @@ gboolean rspamd_rcl_parse_struct_string_list (struct config_file *cfg, rspamd_cl
 gboolean rspamd_rcl_parse_struct_boolean (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
+/**
+ * Utility functions
+ */
+
+/**
+ * Register new parser for a worker type of an option with the specified name
+ * @param cfg config structure
+ * @param type type of worker (GQuark)
+ * @param name name of option
+ * @param handler handler of option
+ * @param target opaque target structure
+ * @param offset offset inside a structure
+ */
+void rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gchar *name,
+		rspamd_rcl_handler_t handler, gpointer target, gsize offset, gint flags);
 #endif /* CFG_RCL_H_ */

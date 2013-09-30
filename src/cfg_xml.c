@@ -1022,7 +1022,7 @@ worker_handle_type (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 		 }
 		 wrk->type = type;
 		 if (wrk->worker->worker_init_func) {
-			 wrk->ctx = wrk->worker->worker_init_func ();
+			 wrk->ctx = wrk->worker->worker_init_func (cfg);
 		 }
 	}
 	else {
@@ -2525,28 +2525,7 @@ register_module_opt (const gchar *mname, const gchar *optname, enum module_opt_t
 void
 register_worker_opt (gint wtype, const gchar *optname, element_handler_func func, gpointer dest_struct, gint offset)
 {
-	struct xml_config_param          *param;
-	GHashTable                       *worker;
-	gint                             *new_key;
-
-	if (worker_options == NULL) {
-		worker_options = g_hash_table_new (g_int_hash, g_int_equal);
-	}
-	if ((worker = g_hash_table_lookup (worker_options, &wtype)) == NULL) {
-		worker = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		new_key = g_malloc (sizeof (gint));
-		*new_key = wtype;
-		g_hash_table_insert (worker_options, new_key, worker);
-	}
-	if ((param = g_hash_table_lookup (worker, optname)) == NULL) {
-		/* Register new param */
-		param = g_malloc (sizeof (struct xml_config_param));
-		param->handler = func;
-		param->user_data = dest_struct;
-		param->offset = offset;
-		param->name = optname;
-		g_hash_table_insert (worker, (char *)optname, param);
-	}
+	msg_err ("this function is depreciated and must not be used");
 }
 
 /* Register new classifier option */
