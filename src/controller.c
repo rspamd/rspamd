@@ -50,7 +50,7 @@
 #define CONTROLLER_RRD_STEP 60
 
 /* Init functions */
-gpointer init_controller (void);
+gpointer init_controller (struct config_file *cfg);
 void start_controller (struct rspamd_worker *worker);
 
 worker_t controller_worker = {
@@ -1887,7 +1887,7 @@ controller_update_rrd (gint fd, short what, void *arg)
 }
 
 gpointer
-init_controller (void)
+init_controller (struct config_file *cfg)
 {
 	struct rspamd_controller_ctx       *ctx;
 	GQuark								type;
@@ -1897,8 +1897,13 @@ init_controller (void)
 
 	ctx->timeout = CONTROLLER_IO_TIMEOUT * 1000;
 
-	register_worker_opt (type, "password", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, password));
-	register_worker_opt (type, "timeout", xml_handle_seconds, ctx, G_STRUCT_OFFSET (struct rspamd_controller_ctx, timeout));
+	rspamd_rcl_register_worker_option (cfg, type, "password",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_ctx, password), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "timeout",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_ctx, timeout), RSPAMD_CL_FLAG_TIME_UINT_32);
 
 	return ctx;
 }

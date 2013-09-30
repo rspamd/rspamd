@@ -64,7 +64,7 @@
 #define CURRENT_FUZZY_VERSION 1
 
 /* Init functions */
-gpointer init_fuzzy (void);
+gpointer init_fuzzy (struct config_file *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
 
 worker_t fuzzy_worker = {
@@ -981,7 +981,7 @@ parse_fuzzy_update_list (struct rspamd_fuzzy_storage_ctx *ctx)
 }
 
 gpointer
-init_fuzzy (void)
+init_fuzzy (struct config_file *cfg)
 {
 	struct rspamd_fuzzy_storage_ctx       *ctx;
 	GQuark							       type;
@@ -1002,18 +1002,30 @@ init_fuzzy (void)
 	ctx->update_cond = g_cond_new ();
 #endif
 
-	register_worker_opt (type, "hashfile", xml_handle_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile));
-	register_worker_opt (type, "max_mods", xml_handle_uint32, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, max_mods));
-	register_worker_opt (type, "frequent_score", xml_handle_uint32, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, frequent_score));
-	register_worker_opt (type, "expire", xml_handle_seconds, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, expire));
-	register_worker_opt (type, "use_judy", xml_handle_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, use_judy));
-	register_worker_opt (type, "allow_update", xml_handle_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map));
+	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "max_mods",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, max_mods), RSPAMD_CL_FLAG_INT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "frequent_score",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, frequent_score), RSPAMD_CL_FLAG_INT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "expire",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, expire), RSPAMD_CL_FLAG_TIME_UINT_32);
+
+	rspamd_rcl_register_worker_option (cfg, type, "use_judy",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, use_judy), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "allow_update",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map), 0);
+
 
 	return ctx;
 }
