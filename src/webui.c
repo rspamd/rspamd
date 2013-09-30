@@ -93,7 +93,7 @@
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-gpointer init_webui_worker (void);
+gpointer init_webui_worker (struct config_file *cfg);
 void start_webui_worker (struct rspamd_worker *worker);
 
 worker_t webui_worker = {
@@ -1704,7 +1704,7 @@ http_handle_scan (struct evhttp_request *req, gpointer arg)
 
 
 gpointer
-init_webui_worker (void)
+init_webui_worker (struct config_file *cfg)
 {
 	struct rspamd_webui_worker_ctx     *ctx;
 	GQuark								type;
@@ -1713,10 +1713,22 @@ init_webui_worker (void)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_webui_worker_ctx));
 
-	register_worker_opt (type, "password", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password));
-	register_worker_opt (type, "ssl", xml_handle_boolean, ctx, G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, use_ssl));
-	register_worker_opt (type, "ssl_cert", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_cert));
-	register_worker_opt (type, "ssl_key", xml_handle_string, ctx, G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_key));
+	rspamd_rcl_register_worker_option (cfg, type, "password",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "ssl",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, use_ssl), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "ssl_cert",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_cert), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "ssl_key",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_key), 0);
+
 
 	return ctx;
 }
