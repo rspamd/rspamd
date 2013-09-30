@@ -1124,7 +1124,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				p = chunk->pos;
 				obj = rspamd_cl_object_new ();
 				if (*p == '[') {
-					parser->state = RSPAMD_RCL_STATE_ARRAY;
+					parser->state = RSPAMD_RCL_STATE_VALUE;
 					obj->type = RSPAMD_CL_ARRAY;
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
