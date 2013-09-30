@@ -809,6 +809,7 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object_t *obj,
 	struct rspamd_rcl_struct_parser *pd = ud;
 	union {
 		gint *psec;
+		guint32 *pu32;
 		gdouble *pdv;
 		struct timeval *ptv;
 		struct timespec *pts;
@@ -837,6 +838,10 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, rspamd_cl_object_t *obj,
 	else if (pd->flags == RSPAMD_CL_FLAG_TIME_INTEGER) {
 		target.psec = (gint *)(((gchar *)pd->user_struct) + pd->offset);
 		*target.psec = val * 1000;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_TIME_UINT_32) {
+		target.pu32 = (guint32 *)(((gchar *)pd->user_struct) + pd->offset);
+		*target.pu32 = val * 1000;
 	}
 	else {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid flags to parse time value");
