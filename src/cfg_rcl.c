@@ -370,10 +370,11 @@ static gboolean
 rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	rspamd_cl_object_t *val;
-	const gchar *worker_type;
+	rspamd_cl_object_t *val, *cur;
+	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
 	struct worker_conf *wrk;
+	struct rspamd_worker_bind_conf *bcf;
 
 	val = rspamd_cl_obj_get_key (obj, "type");
 	if (val != NULL && rspamd_cl_obj_tostring_safe (val, &worker_type)) {
@@ -399,6 +400,27 @@ rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "undefined worker type");
 		return FALSE;
 	}
+
+	val = rspamd_cl_obj_get_key (obj, "bind_socket");
+	if (val != NULL) {
+		if (val->type == RSPAMD_CL_ARRAY) {
+			val = val->value.ov;
+		}
+		LL_FOREACH (val, cur) {
+			if (!rspamd_cl_obj_tostring_safe (cur, &worker_bind)) {
+				continue;
+			}
+			bcf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
+			if (!parse_host_port_priority (cfg->cfg_pool, worker_bind, &bcf->bind_host,
+					&bcf->bind_port, NULL)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse bind line: %s", worker_bind);
+				return FALSE;
+			}
+			LL_PREPEND (wrk->bind_conf, bcf);
+		}
+	}
+
+	wrk->options = obj;
 
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, wrk, err);
 }
