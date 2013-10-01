@@ -441,6 +441,8 @@ rspamd_rcl_worker_handler (struct config_file *cfg, rspamd_cl_object_t *obj,
 		}
 	}
 
+	cfg->workers = g_list_prepend (cfg->workers, wrk);
+
 	return TRUE;
 }
 
