@@ -667,7 +667,7 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 		}
 	}
 
-	cfg->rcl_obj = top;
+	cfg->rcl_obj = obj;
 
 	return TRUE;
 }
