@@ -114,7 +114,7 @@ gint lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj);
  * @param L
  * @return
  */
-rspamd_cl_object_t * lua_rcl_obj_get (lua_State *L);
+rspamd_cl_object_t * lua_rcl_obj_get (lua_State *L, gint idx);
 
 /**
  * Open libraries functions

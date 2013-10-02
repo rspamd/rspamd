@@ -30,6 +30,8 @@
 
 static gint lua_rcl_obj_push_array (lua_State *L, rspamd_cl_object_t *obj);
 static gint lua_rcl_obj_push_simple (lua_State *L, rspamd_cl_object_t *obj);
+static void lua_rcl_table_get (lua_State *L, rspamd_cl_object_t *top, gint idx);
+static void lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *top, gint idx);
 
 /**
  * Push a single element of an object to lua
@@ -148,12 +150,84 @@ lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj)
 }
 
 /**
+ * Parse lua table into object top
+ * @param L
+ * @param top
+ * @param idx
+ */
+static void
+lua_rcl_table_get (lua_State *L, rspamd_cl_object_t *top, gint idx)
+{
+	rspamd_cl_object_t *obj;
+	gsize keylen;
+	const gchar *k;
+
+	/* Table iterate */
+	lua_pushvalue (L, idx);
+	lua_pushnil (L);
+	while (lua_next (L, -2) != 0) {
+		/* copy key to avoid modifications */
+		lua_pushvalue (L, -2);
+		obj = rspamd_cl_object_new ();
+		if (obj != NULL) {
+			k = lua_tolstring (L, -1, &keylen);
+			obj->key = g_malloc (keylen + 1);
+			memcpy (obj->key, k, keylen);
+			obj->key[keylen] = '\0';
+			HASH_ADD_KEYPTR (hh, top->value.ov, obj->key, keylen, obj);
+			lua_rcl_elt_get (L, obj, -2);
+		}
+
+		lua_pop (L, 2);
+	}
+	lua_pop (L, 1);
+}
+
+/**
+ * Get a single element from lua to object obj
+ * @param L
+ * @param obj
+ * @param idx
+ */
+static void
+lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *obj, gint idx)
+{
+	gint type;
+
+	type = lua_type (L, idx);
+
+	switch (type) {
+	case LUA_TFUNCTION:
+		lua_pushvalue (L, idx);
+		obj->type = RSPAMD_CL_USERDATA;
+		obj->value.ud = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
+		break;
+	case LUA_TSTRING:
+		obj->type = RSPAMD_CL_STRING;
+		obj->value.sv = g_strdup (lua_tostring (L, idx));
+		break;
+	case LUA_TNUMBER:
+		obj->type = RSPAMD_CL_FLOAT;
+		obj->value.dv = lua_tonumber (L, idx);
+		break;
+	case LUA_TBOOLEAN:
+		obj->type = RSPAMD_CL_BOOLEAN;
+		obj->value.iv = lua_toboolean (L, idx);
+		break;
+	case LUA_TTABLE:
+		obj->type = RSPAMD_CL_OBJECT;
+		lua_rcl_table_get (L, obj, idx);
+		break;
+	}
+}
+
+/**
  * Extract rcl object from lua object
  * @param L
  * @return
  */
 rspamd_cl_object_t *
-lua_rcl_obj_get (lua_State *L)
+lua_rcl_obj_get (lua_State *L, gint idx)
 {
 	rspamd_cl_object_t *obj;
 	gint t;
@@ -161,7 +235,16 @@ lua_rcl_obj_get (lua_State *L)
 	obj = rspamd_cl_object_new ();
 
 	if (obj != NULL) {
-		t = lua_type (L, 1);
+		t = lua_type (L, idx);
+		switch (t) {
+		case LUA_TTABLE:
+			/* We assume all tables as objects, not arrays */
+			lua_rcl_table_get (L, obj, idx);
+			break;
+		default:
+			lua_rcl_elt_get (L, obj, idx);
+			break;
+		}
 	}
 
 	return obj;
