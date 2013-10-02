@@ -219,6 +219,8 @@ rspamd_cl_elt_write_json (rspamd_cl_object_t *obj, GString *buf, guint tabs, gbo
 	case RSPAMD_CL_ARRAY:
 		rspamd_cl_elt_array_write_json (obj->value.ov, buf, tabs, start_tabs, compact);
 		break;
+	case RSPAMD_CL_USERDATA:
+		break;
 	}
 }
 
@@ -398,6 +400,8 @@ rspamd_cl_elt_write_rcl (rspamd_cl_object_t *obj, GString *buf, guint tabs, gboo
 		break;
 	case RSPAMD_CL_ARRAY:
 		rspamd_cl_elt_array_write_rcl (obj->value.ov, buf, tabs, start_tabs, is_top);
+		break;
+	case RSPAMD_CL_USERDATA:
 		break;
 	}
 }

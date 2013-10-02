@@ -53,7 +53,8 @@ enum rspamd_cl_type {
 	RSPAMD_CL_FLOAT,
 	RSPAMD_CL_STRING,
 	RSPAMD_CL_BOOLEAN,
-	RSPAMD_CL_TIME
+	RSPAMD_CL_TIME,
+	RSPAMD_CL_USERDATA
 };
 
 enum rspamd_cl_emitter {
@@ -73,6 +74,7 @@ typedef struct rspamd_cl_object_s {
 		gchar *sv;							/**< string value of an object */
 		gdouble dv;							/**< double value of an object */
 		struct rspamd_cl_object_s *ov;		/**< array or hash 			*/
+		gpointer ud;						/**< opaque user data		*/
 	} value;
 	enum rspamd_cl_type type;				/**< real type				*/
 	gint ref;								/**< reference count		*/
