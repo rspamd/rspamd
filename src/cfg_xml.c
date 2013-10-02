@@ -1174,44 +1174,7 @@ handle_metric_symbol (struct config_file *cfg, struct rspamd_xml_userdata *ctx, 
 gboolean 
 handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	gchar                          *val;
-	struct module_opt              *cur;
-	gboolean                        is_lua = FALSE;
-	const gchar                    *name;
-
-	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
-		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
-			msg_err ("worker param tag must have \"name\" attribute");
-			return FALSE;
-		}
-	}
-	else {
-		name = memory_pool_strdup (cfg->cfg_pool, tag);
-	}
-
-	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
-	/* Check for options */
-	if (attrs != NULL) {
-		if ((val = g_hash_table_lookup (attrs, "lua")) != NULL && g_ascii_strcasecmp (val, "yes") == 0) {
-			is_lua = TRUE;
-		}
-		if ((val = g_hash_table_lookup (attrs, "description")) != NULL) {
-			cur->description = memory_pool_strdup (cfg->cfg_pool, val);
-		}
-		if ((val = g_hash_table_lookup (attrs, "group")) != NULL) {
-			cur->group = memory_pool_strdup (cfg->cfg_pool, val);
-		}
-	}
-	/*
-	 * XXX: in fact we cannot check for lua modules and need to do it in post-config procedure
-	 * so just insert any options provided and try to handle them in further process
-	 */
-
-	/* Insert option */
-	cur->param = (char *)name;
-	cur->value = data;
-	cur->is_lua = is_lua;
-	ctx->section_pointer = g_list_prepend (ctx->section_pointer, cur);
+	/* XXX: convert to RCL */
 
 	return TRUE;
 }
@@ -1219,46 +1182,7 @@ handle_module_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, con
 gboolean
 handle_module_meta (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
-	gchar                          *val;
-	struct module_opt              *cur;
-	struct module_meta_opt         *meta;
-	gboolean                        is_lua = FALSE;
-	const gchar                    *name;
-
-	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
-		if ((name = g_hash_table_lookup (attrs, "name")) == NULL) {
-			msg_err ("worker param tag must have \"name\" attribute");
-			return FALSE;
-		}
-	}
-	else {
-		name = memory_pool_strdup (cfg->cfg_pool, tag);
-	}
-
-	meta = ctx->section_pointer;
-	cur = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct module_opt));
-	/* Check for options */
-	if (attrs != NULL) {
-		if ((val = g_hash_table_lookup (attrs, "lua")) != NULL && g_ascii_strcasecmp (val, "yes") == 0) {
-			is_lua = TRUE;
-		}
-		if ((val = g_hash_table_lookup (attrs, "description")) != NULL) {
-			cur->description = memory_pool_strdup (cfg->cfg_pool, val);
-		}
-		if ((val = g_hash_table_lookup (attrs, "group")) != NULL) {
-			cur->group = memory_pool_strdup (cfg->cfg_pool, val);
-		}
-	}
-	/*
-	 * XXX: in fact we cannot check for lua modules and need to do it in post-config procedure
-	 * so just insert any options provided and try to handle them in further process
-	 */
-
-	/* Insert option */
-	cur->param = (char *)name;
-	cur->value = data;
-	cur->is_lua = is_lua;
-	meta->options = g_list_prepend (meta->options, cur);
+	/* XXX: Remove, unneeded and never used */
 
 	return TRUE;
 }
@@ -2094,18 +2018,6 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		case XML_READ_MODULE_META:
 			CHECK_TAG ("meta", FALSE);
 			if (res) {
-				if (ud->section_pointer != NULL) {
-					struct module_meta_opt *meta = ud->section_pointer;
-					if (meta->name == NULL) {
-						msg_err ("module %s has unnamed meta option, skip it", ud->parent_pointer[0]);
-					}
-					else {
-						g_hash_table_insert (ud->cfg->modules_metas, ud->parent_pointer[0], meta);
-					}
-					if (meta->options != NULL) {
-						memory_pool_add_destructor (ud->cfg->cfg_pool, (pool_destruct_func)g_list_free, meta->options);
-					}
-				}
 				ud->section_pointer = ud->parent_pointer[1];
 				ud->parent_pointer[1] = NULL;
 				ud->state = XML_READ_MODULE;
@@ -2116,9 +2028,6 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 			if (res) {
 				if (ud->section_pointer != NULL) {
 					/* Reverse options list */
-					ud->section_pointer = g_list_reverse ((GList *)ud->section_pointer);
-					g_hash_table_insert (ud->cfg->modules_opts, ud->parent_pointer[0], ud->section_pointer);
-					memory_pool_add_destructor (ud->cfg->cfg_pool, (pool_destruct_func)g_list_free, ud->section_pointer);
 					ud->parent_pointer[0] = NULL;
 					ud->section_pointer = NULL;
 				}
@@ -2747,47 +2656,6 @@ xml_dump_workers (struct config_file *cfg, FILE *f)
 	return TRUE;
 }
 
-/* Modules dump */
-static void
-xml_module_callback (gpointer key, gpointer value, gpointer user_data)
-{
-	FILE *f = user_data;
-	gchar                           *escaped_key, *escaped_value;
-	GList *cur;
-	struct module_opt *opt;
-	
-	escaped_key = g_markup_escape_text (key, -1); 
-	rspamd_fprintf (f, "<!-- %s -->" EOL, escaped_key);
-	rspamd_fprintf (f, "<module name=\"%s\">" EOL, escaped_key);
-	g_free (escaped_key);
-
-	cur = g_list_first (value);
-	while (cur) {
-		opt = cur->data;
-		escaped_key = g_markup_escape_text (opt->param, -1); 
-		escaped_value = g_markup_escape_text (opt->value, -1);
-		rspamd_fprintf (f,  "  <option name=\"%s\">%s</option>" EOL, escaped_key, escaped_value);
-		g_free (escaped_key);
-		g_free (escaped_value);
-		cur = g_list_next (cur);
-	}
-	rspamd_fprintf (f, "</module>" EOL EOL);
-}
-
-static gboolean
-xml_dump_modules (struct config_file *cfg, FILE *f)
-{
-	/* Print header comment */
-	rspamd_fprintf (f, "<!-- Modules section -->" EOL);
-
-	/* Iterate through variables */
-	g_hash_table_foreach (cfg->modules_opts, xml_module_callback, (gpointer)f);
-
-	/* Print footer comment */
-	rspamd_fprintf (f, "<!-- End of modules section -->" EOL EOL);
-
-	return TRUE;
-}
 
 /* Classifiers dump */
 static void
@@ -3006,8 +2874,6 @@ xml_dump_config (struct config_file *cfg, const gchar *filename)
 	res = xml_dump_composites (cfg, f);
 	CHECK_RES;
 	res = xml_dump_workers (cfg, f);
-	CHECK_RES;
-	res = xml_dump_modules (cfg, f);
 	CHECK_RES;
 	res = xml_dump_classifiers (cfg, f);
 	CHECK_RES;
