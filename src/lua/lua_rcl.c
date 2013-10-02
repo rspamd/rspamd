@@ -41,7 +41,7 @@ static void
 lua_rcl_obj_push_elt (lua_State *L, const char *key, rspamd_cl_object_t *obj)
 {
 	lua_pushstring (L, key);
-	lua_push_obj_simple (L, obj);
+	lua_rcl_obj_push (L, obj);
 	lua_settable (L, -3);
 }
 
@@ -145,4 +145,24 @@ lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj)
 	default:
 		return lua_rcl_obj_push_simple (L, obj);
 	}
+}
+
+/**
+ * Extract rcl object from lua object
+ * @param L
+ * @return
+ */
+rspamd_cl_object_t *
+lua_rcl_obj_get (lua_State *L)
+{
+	rspamd_cl_object_t *obj;
+	gint t;
+
+	obj = rspamd_cl_object_new ();
+
+	if (obj != NULL) {
+		t = lua_type (L, 1);
+	}
+
+	return obj;
 }

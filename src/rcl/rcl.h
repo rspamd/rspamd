@@ -80,6 +80,23 @@ typedef struct rspamd_cl_object_s {
 	UT_hash_handle hh;						/**< hash handle			*/
 } rspamd_cl_object_t;
 
+
+/**
+ * Creates a new object
+ * @return new object
+ */
+static inline rspamd_cl_object_t *
+rspamd_cl_object_new (void)
+{
+	rspamd_cl_object_t *new;
+	new = g_slice_alloc0 (sizeof (rspamd_cl_object_t));
+	if (new != NULL) {
+		new->ref = 1;
+	}
+	return new;
+}
+
+
 /**
  * Converts an object to double value
  * @param obj CL object

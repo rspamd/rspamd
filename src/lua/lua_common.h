@@ -110,6 +110,13 @@ void free_lua_locked (struct lua_locked_state *st);
 gint lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj);
 
 /**
+ * Extract rcl object from lua object
+ * @param L
+ * @return
+ */
+rspamd_cl_object_t * lua_rcl_obj_get (lua_State *L);
+
+/**
  * Open libraries functions
  */
 gint luaopen_message (lua_State *L);

@@ -32,19 +32,6 @@
  */
 
 /**
- * Create a new object
- * @return new object
- */
-static inline rspamd_cl_object_t *
-rspamd_cl_object_new (void)
-{
-	rspamd_cl_object_t *new;
-	new = g_slice_alloc0 (sizeof (rspamd_cl_object_t));
-	new->ref = 1;
-	return new;
-}
-
-/**
  * Move up to len characters
  * @param parser
  * @param begin
