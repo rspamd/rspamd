@@ -348,8 +348,7 @@ struct config_file {
 	GList *workers;									/**< linked list of all workers params					*/
 	struct rspamd_worker_cfg_parser *wrk_parsers;	/**< hash for worker config parsers, indexed by worker quarks */
 	gchar *filters_str;								/**< string of filters									*/
-	GHashTable* modules_opts;						/**< hash for module options indexed by module name		*/
-	GHashTable* modules_metas;						/**< hash for module meta options indexed by module name*/
+	rspamd_cl_object_t *rcl_obj;					/**< rcl object											*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
 	GList* symbols_groups;							/**< groups of symbols									*/
@@ -449,7 +448,8 @@ void free_config (struct config_file *cfg);
  * @param opt_name name of option to get
  * @return module value or NULL if option does not defined
  */
-gchar* get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name);
+rspamd_cl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
+		const gchar *opt_name);
 
 /**
  * Parse limit
@@ -533,11 +533,6 @@ gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const g
  * Read XML configuration file
  */
 gboolean read_xml_config (struct config_file *cfg, const gchar *filename);
-
-/*
- * Check modules configuration for semantic validity
- */
-gboolean check_modules_config (struct config_file *cfg);
 
 /*
  * Register symbols of classifiers inside metrics

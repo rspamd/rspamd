@@ -6,6 +6,7 @@
 
 #include "main.h"
 #include "cfg_file.h"
+#include "rcl/rcl.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -100,6 +101,13 @@ struct lua_locked_state* init_lua_locked (struct config_file *cfg);
  * Free locked state structure
  */
 void free_lua_locked (struct lua_locked_state *st);
+
+/**
+ * Push an rcl object to lua
+ * @param L lua state
+ * @param obj object to push
+ */
+gint lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj);
 
 /**
  * Open libraries functions

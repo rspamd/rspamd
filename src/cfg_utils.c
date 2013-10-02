@@ -241,8 +241,6 @@ init_defaults (struct config_file *cfg)
 	cfg->max_diff = 20480;
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
-	cfg->modules_opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	cfg->modules_metas = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->variables = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -267,9 +265,7 @@ free_config (struct config_file *cfg)
 	struct symbols_group			*gr;
 
 	remove_all_maps (cfg);
-	g_hash_table_remove_all (cfg->modules_opts);
-	g_hash_table_unref (cfg->modules_opts);
-	g_hash_table_unref (cfg->modules_metas);
+	rspamd_cl_obj_unref (cfg->rcl_obj);
 	g_hash_table_remove_all (cfg->variables);
 	g_hash_table_unref (cfg->variables);
 	g_hash_table_remove_all (cfg->metrics);
@@ -303,51 +299,17 @@ free_config (struct config_file *cfg)
 	memory_pool_delete (cfg->cfg_pool);
 }
 
-gchar                           *
-get_module_opt (struct config_file *cfg, gchar *module_name, gchar *opt_name)
+rspamd_cl_object_t        *
+get_module_opt (struct config_file *cfg, const gchar *module_name, const gchar *opt_name)
 {
-	GList                          *cur_opt;
-	struct module_opt              *cur;
-	static gchar                     numbuf[64];
+	rspamd_cl_object_t *res = NULL, *sec;
 
-	cur_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
-	if (cur_opt == NULL) {
-		return NULL;
+	sec = rspamd_cl_obj_get_key (cfg->rcl_obj, module_name);
+	if (sec != NULL) {
+		res = rspamd_cl_obj_get_key (cfg->rcl_obj, opt_name);
 	}
 
-	while (cur_opt) {
-		cur = cur_opt->data;
-		if (strcmp (cur->param, opt_name) == 0) {
-			/* Check if it is lua variable */
-			if (! cur->is_lua) {
-				/* Plain variable */
-				return cur->value;
-			}
-			else {
-				/* Check type */
-				switch (cur->lua_type) {
-					case LUA_VAR_NUM:
-						/* numbuf is static, so it is safe to return it "as is" */
-						snprintf (numbuf, sizeof (numbuf), "%f", *(double *)cur->actual_data);
-						return numbuf;
-					case LUA_VAR_BOOLEAN:
-						snprintf (numbuf, sizeof (numbuf), "%s", *(gboolean *)cur->actual_data ? "yes" : "no");
-						return numbuf;
-					case LUA_VAR_STRING:
-						return (gchar *)cur->actual_data;
-					case LUA_VAR_FUNCTION:
-						msg_info ("option %s is dynamic, so it cannot be aqquired statically", opt_name);
-						return NULL;
-					case LUA_VAR_UNKNOWN:
-						msg_info ("option %s has unknown type, maybe there is error in LUA code", opt_name);
-						return NULL;
-				}
-			}
-		}
-		cur_opt = g_list_next (cur_opt);
-	}
-
-	return NULL;
+	return res;
 }
 
 guint64
@@ -696,7 +658,6 @@ post_load_config (struct config_file *cfg)
 	struct metric                  *def_metric;
 
 	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
-	g_hash_table_foreach (cfg->modules_opts, substitute_module_variables, cfg);
 	fill_cfg_params (cfg);
 
 #ifdef HAVE_CLOCK_GETTIME
@@ -1039,44 +1000,6 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 
 	munmap (data, st.st_size);
 
-	return res;
-}
-
-static void
-modules_config_callback (gpointer key, gpointer value, gpointer ud)
-{
-	extern GHashTable              *module_options;
-	GHashTable                     *cur_module;
-	GList                          *cur;
-	struct module_opt              *opt;
-	const gchar                    *mname = key;
-	gboolean                       *res = ud;
-
-	if ((cur_module = g_hash_table_lookup (module_options, mname)) == NULL) {
-		msg_warn ("module %s has not registered any options but is presented in configuration", mname);
-		*res = FALSE;
-		return;
-	}
-
-	cur = value;
-	while (cur) {
-		opt = cur->data;
-
-		if (!opt->is_lua && !check_module_option (mname, opt->param, opt->value)) {
-			*res = FALSE;
-			return;
-		}
-
-		cur = g_list_next (cur);
-	}
-}
-
-gboolean
-check_modules_config (struct config_file *cfg)
-{
-	gboolean                        res = TRUE;
-
-	g_hash_table_foreach (cfg->modules_opts, modules_config_callback, &res);
 	return res;
 }
 
