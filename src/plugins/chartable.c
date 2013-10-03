@@ -86,20 +86,18 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 chartable_module_config (struct config_file *cfg)
 {
-	gchar                           *value;
+	rspamd_cl_object_t             *value;
 	gint                            res = TRUE;
 
 	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {
-		chartable_module_ctx->symbol = memory_pool_strdup (chartable_module_ctx->chartable_pool, value);
+		chartable_module_ctx->symbol = rspamd_cl_obj_tostring (value);
 	}
 	else {
 		chartable_module_ctx->symbol = DEFAULT_SYMBOL;
 	} 
 	if ((value = get_module_opt (cfg, "chartable", "threshold")) != NULL) {
-		errno = 0;
-		chartable_module_ctx->threshold = strtod (value, NULL);
-		if (errno != 0) {
-			msg_warn ("invalid numeric value '%s': %s", value, strerror (errno));
+		if (!rspamd_cl_obj_todouble_safe (value, &chartable_module_ctx->threshold)) {
+			msg_warn ("invalid numeric value");
 			chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 		}
 	}
