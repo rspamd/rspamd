@@ -67,7 +67,7 @@ struct storage_server {
 };
 
 struct fuzzy_mapping {
-	guint32                         fuzzy_flag;
+	guint64                         fuzzy_flag;
 	gchar                           *symbol;
 	double weight;
 };
@@ -141,7 +141,7 @@ module_t fuzzy_check_module = {
 
 /* Flags string is in format <numeric_flag>:<SYMBOL>:weight[, <numeric_flag>:<SYMBOL>:weight...] */
 static void
-parse_flags_string (struct config_file *cfg, gchar *str)
+parse_flags_string_old (struct config_file *cfg, const gchar *str)
 {
 	gchar                           **strvec, *item, *err_str, **map_str;
 	gint                            num, i, t;
@@ -183,6 +183,46 @@ parse_flags_string (struct config_file *cfg, gchar *str)
 	}
 
 	g_strfreev (strvec);
+}
+
+static void
+parse_flags_string (struct config_file *cfg, rspamd_cl_object_t *val)
+{
+	rspamd_cl_object_t *elt;
+	struct fuzzy_mapping *map;
+
+	if (val->type == RSPAMD_CL_STRING) {
+		parse_flags_string_old (cfg, rspamd_cl_obj_tostring (val));
+	}
+	else if (val->type == RSPAMD_CL_OBJECT) {
+		elt = rspamd_cl_obj_get_key (val, "symbol");
+		if (elt != NULL) {
+			map =  memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mapping));
+			map->symbol = rspamd_cl_obj_tostring (elt);
+			elt = rspamd_cl_obj_get_key (val, "flag");
+			if (elt != NULL && rspamd_cl_obj_toint_safe (elt, &map->fuzzy_flag)) {
+				elt = rspamd_cl_obj_get_key (val, "weight");
+				if (elt != NULL) {
+					map->weight = rspamd_cl_obj_todouble (elt);
+				}
+				else {
+					map->weight = fuzzy_module_ctx->max_score;
+				}
+				/* Add flag to hash table */
+				g_hash_table_insert (fuzzy_module_ctx->mappings, GINT_TO_POINTER (map->fuzzy_flag), map);
+				register_virtual_symbol (&cfg->cache, map->symbol, map->weight);
+			}
+			else {
+				msg_err ("fuzzy_map parameter has no flag definition");
+			}
+		}
+		else {
+			msg_err ("fuzzy_map parameter has no symbol definition");
+		}
+	}
+	else {
+		msg_err ("fuzzy_map parameter is of an unsupported type");
+	}
 }
 
 static GList *
@@ -337,60 +377,64 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 fuzzy_check_module_config (struct config_file *cfg)
 {
-	gchar                           *value;
+	rspamd_cl_object_t             *value, *cur;
 	gint                            res = TRUE;
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
-		fuzzy_module_ctx->symbol = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, value);
+		fuzzy_module_ctx->symbol = rspamd_cl_obj_tostring (value);
 	}
 	else {
 		fuzzy_module_ctx->symbol = DEFAULT_SYMBOL;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "max_score")) != NULL) {
-		fuzzy_module_ctx->max_score = strtod (value, NULL);
+		fuzzy_module_ctx->max_score = rspamd_cl_obj_todouble (value);
 	}
 	else {
 		fuzzy_module_ctx->max_score = 0.;
 	}
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "min_length")) != NULL) {
-		fuzzy_module_ctx->min_hash_len = strtoul (value, NULL, 10);
+		fuzzy_module_ctx->min_hash_len = rspamd_cl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_hash_len = 0;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "min_bytes")) != NULL) {
-		fuzzy_module_ctx->min_bytes = strtoul (value, NULL, 10);
+		fuzzy_module_ctx->min_bytes = rspamd_cl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_bytes = 0;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "min_height")) != NULL) {
-		fuzzy_module_ctx->min_height = strtoul (value, NULL, 10);
+		fuzzy_module_ctx->min_height = rspamd_cl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_height = 0;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "min_width")) != NULL) {
-		fuzzy_module_ctx->min_width = strtoul (value, NULL, 10);
+		fuzzy_module_ctx->min_width = rspamd_cl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_width = 0;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "timeout")) != NULL) {
-		fuzzy_module_ctx->io_timeout = cfg_parse_time (value, TIME_SECONDS);
+		fuzzy_module_ctx->io_timeout = rspamd_cl_obj_todouble (value) * 1000;
 	}
 	else {
 		fuzzy_module_ctx->io_timeout = DEFAULT_IO_TIMEOUT;
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "mime_types")) != NULL) {
-		fuzzy_module_ctx->mime_types = parse_mime_types (value);
+		LL_FOREACH (value, cur) {
+			fuzzy_module_ctx->mime_types = parse_mime_types (rspamd_cl_obj_tostring (cur));
+		}
 	}
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "whitelist")) != NULL) {
 		fuzzy_module_ctx->whitelist = radix_tree_create ();
-		if (!add_map (cfg, value, "Fuzzy whitelist", read_radix_list, fin_radix_list, (void **)&fuzzy_module_ctx->whitelist)) {
-			msg_err ("cannot add whitelist '%s'", value);	
+		if (!add_map (cfg, rspamd_cl_obj_tostring (value),
+				"Fuzzy whitelist", read_radix_list, fin_radix_list,
+				(void **)&fuzzy_module_ctx->whitelist)) {
+			msg_err ("cannot add whitelist '%s'", rspamd_cl_obj_tostring (value));
 		}
 	}
 	else {
@@ -398,10 +442,14 @@ fuzzy_check_module_config (struct config_file *cfg)
 	}
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "servers")) != NULL) {
-		parse_servers_string (value);
+		LL_FOREACH (value, cur) {
+			parse_servers_string (rspamd_cl_obj_tostring (cur));
+		}
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "fuzzy_map")) != NULL) {
-		parse_flags_string (cfg, value);
+		LL_FOREACH (value, cur) {
+			parse_flags_string (cfg, cur);
+		}
 	}
 
 	register_symbol (&cfg->cache, fuzzy_module_ctx->symbol, fuzzy_module_ctx->max_score, fuzzy_symbol_callback, NULL);
