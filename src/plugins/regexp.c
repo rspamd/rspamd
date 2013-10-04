@@ -306,11 +306,12 @@ parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
 
 /* Process regexp expression */
 static                          gboolean
-read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain, gchar *symbol, gchar *line, gboolean raw_mode)
+read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain,
+		const gchar *symbol, const gchar *line, gboolean raw_mode)
 {
 	struct expression              *e, *cur;
 
-	e = parse_expression (pool, line);
+	e = parse_expression (pool, (gchar *)line);
 	if (e == NULL) {
 		msg_warn ("%s = \"%s\" is invalid regexp expression", symbol, line);
 		return FALSE;
@@ -573,102 +574,63 @@ parse_autolearn_param (const gchar *param, const gchar *value, struct config_fil
 gint
 regexp_module_config (struct config_file *cfg)
 {
-	GList                          *cur_opt = NULL;
-	struct module_opt              *cur;
 	struct regexp_module_item      *cur_item;
-	gchar                          *value;
+	rspamd_cl_object_t              *sec, *value, *tmp;
 	gint                            res = TRUE;
 	struct regexp_json_buf         *jb, **pjb;
 
-	if ((value = get_module_opt (cfg, "regexp", "statfile_prefix")) != NULL) {
-		regexp_module_ctx->statfile_prefix = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
-	}
-	else {
-		regexp_module_ctx->statfile_prefix = DEFAULT_STATFILE_PREFIX;
-	}
-	if ((value = get_module_opt (cfg, "regexp", "max_size")) != NULL) {
-		regexp_module_ctx->max_size = parse_limit (value, -1);
-	}
-	else {
-		regexp_module_ctx->max_size = 0;
-	}
-	if ((value = get_module_opt (cfg, "regexp", "max_threads")) != NULL) {
-		if (g_thread_supported ()) {
-			regexp_module_ctx->max_threads = parse_limit (value, -1);
-		}
-		else {
-			regexp_module_ctx->max_threads = 0;
-		}
-		regexp_module_ctx->workers = NULL;
-	}
-	else {
-		regexp_module_ctx->max_threads = 0;
-		regexp_module_ctx->workers = NULL;
-	}
-	if ((value = get_module_opt (cfg, "regexp", "dynamic_rules")) != NULL) {
-		jb = g_malloc (sizeof (struct regexp_json_buf));
-		pjb = g_malloc (sizeof (struct regexp_json_buf *));
-		jb->buf = NULL;
-		jb->cfg = cfg;
-		*pjb = jb;
-		if (!add_map (cfg, value, "Dynamic regexp rules", json_regexp_read_cb, json_regexp_fin_cb, (void **)pjb)) {
-			msg_err ("cannot add map %s", value);
-		}
+
+	HASH_FIND_STR (cfg->rcl_obj, "regexp", sec);
+	if (sec == NULL) {
+		msg_err ("regexp module enabled, but no rules are defined");
+		return TRUE;
 	}
 
+	regexp_module_ctx->max_size = 0;
+	regexp_module_ctx->max_threads = 0;
+	regexp_module_ctx->workers = NULL;
 
-	cur_opt = g_hash_table_lookup (cfg->modules_opts, "regexp");
-	while (cur_opt) {
-		cur = cur_opt->data;
-		/* Skip several options that are not regexp */
-		if (g_ascii_strncasecmp (cur->param, "autolearn", sizeof ("autolearn") - 1) == 0) {
-			parse_autolearn_param (cur->param, cur->value, cfg);
-			cur_opt = g_list_next (cur_opt);
-			continue;
+	HASH_ITER (hh, sec, value, tmp) {
+		if (g_ascii_strncasecmp (value->key, "autolearn", sizeof ("autolearn") - 1) == 0) {
+			parse_autolearn_param (value->key, rspamd_cl_obj_tostring (value), cfg);
 		}
-		else if (g_ascii_strncasecmp (cur->param, "dynamic_rules", sizeof ("dynamic_rules") - 1) == 0) {
-			cur_opt = g_list_next (cur_opt);
-			continue;
-		}
-		else if (g_ascii_strncasecmp (cur->param, "max_size", sizeof ("max_size") - 1) == 0) {
-			cur_opt = g_list_next (cur_opt);
-			continue;
-		}
-		else if (g_ascii_strncasecmp (cur->param, "max_threads", sizeof ("max_threads") - 1) == 0) {
-			cur_opt = g_list_next (cur_opt);
-			continue;
-		}
-		/* Handle regexps */
-		cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
-		cur_item->symbol = cur->param;
-		if (cur->is_lua && cur->lua_type == LUA_VAR_STRING) {
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->actual_data, cfg->raw_mode)) {
-				res = FALSE;
+		else if (g_ascii_strncasecmp (value->key, "dynamic_rules", sizeof ("dynamic_rules") - 1) == 0) {
+			jb = g_malloc (sizeof (struct regexp_json_buf));
+			pjb = g_malloc (sizeof (struct regexp_json_buf *));
+			jb->buf = NULL;
+			jb->cfg = cfg;
+			*pjb = jb;
+			if (!add_map (cfg, rspamd_cl_obj_tostring (value),
+					"Dynamic regexp rules", json_regexp_read_cb, json_regexp_fin_cb,
+					(void **)pjb)) {
+				msg_err ("cannot add map %s", rspamd_cl_obj_tostring (value));
 			}
 		}
-		else if (cur->is_lua && cur->lua_type == LUA_VAR_FUNCTION) {
-			cur_item->lua_function = cur->actual_data;
+		else if (g_ascii_strncasecmp (value->key, "max_size", sizeof ("max_size") - 1) == 0) {
+			regexp_module_ctx->max_size = rspamd_cl_obj_toint (value);
 		}
-		else if (! cur->is_lua) {
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, cur->param, cur->value, cfg->raw_mode)) {
+		else if (g_ascii_strncasecmp (value->key, "max_threads", sizeof ("max_threads") - 1) == 0) {
+			regexp_module_ctx->max_threads = rspamd_cl_obj_toint (value);
+		}
+		else if (value->type == RSPAMD_CL_STRING) {
+			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
+			cur_item->symbol = value->key;
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, value->key,
+					rspamd_cl_obj_tostring (value), cfg->raw_mode)) {
 				res = FALSE;
 			}
+			register_symbol (&cfg->cache, cur_item->symbol, 1, process_regexp_item, cur_item);
+		}
+		else if (value->type == RSPAMD_CL_USERDATA) {
+			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
+			cur_item->symbol = value->key;
+			cur_item->lua_function = value->value.ud;
+			register_symbol (&cfg->cache, cur_item->symbol, 1, process_regexp_item, cur_item);
 		}
 		else {
-			msg_err ("unknown variable type for %s", cur->param);
-			res = FALSE;
+			msg_warn ("unknown type of attribute %s for regexp module", value->key);
 		}
-		
-		if ( !res) {
-			/* Stop on errors */
-			break;
-		}
-		
-		register_symbol (&cfg->cache, cur->param, 1, process_regexp_item, cur_item);
-
-		cur_opt = g_list_next (cur_opt);
 	}
-
 
 	return res;
 }
