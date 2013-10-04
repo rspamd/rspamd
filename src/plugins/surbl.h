@@ -36,7 +36,7 @@ struct surbl_ctx {
 	gchar *metric;
 	const gchar *tld2_file;
 	const gchar *whitelist_file;
-	gchar *redirector_symbol;
+	const gchar *redirector_symbol;
 	GHashTable **exceptions;
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;

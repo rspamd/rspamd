@@ -1161,9 +1161,6 @@ main (gint argc, gchar **argv, gchar **env)
 		if (! init_lua_filters (rspamd_main->cfg)) {
 			res = FALSE;
 		}
-		if (!check_modules_config (rspamd_main->cfg)) {
-			res = FALSE;
-		}
 		/* Perform modules configuring */
 		l = g_list_first (rspamd_main->cfg->filters);
 
@@ -1240,8 +1237,6 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (EXIT_FAILURE);
 	}
 
-	/* Check configuration for modules */
-	(void)check_modules_config (rspamd_main->cfg);
 
 	/* Insert classifiers symbols */
 	(void)insert_classifier_symbols (rspamd_main->cfg);
