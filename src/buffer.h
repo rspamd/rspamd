@@ -31,9 +31,18 @@ typedef struct rspamd_buffer_s {
 	gchar *pos;														/**< current position		*/
 } rspamd_buffer_t;
 
+struct rspamd_out_buffer_s {
+	GString *data;
+	gboolean allocated;
+	struct rspamd_out_buffer_s *prev, *next;
+};
+
 typedef struct rspamd_io_dispatcher_s {
 	rspamd_buffer_t *in_buf;										/**< input buffer			*/
-	GQueue *out_buffers;											/**< out buffers chain		*/
+	struct {
+		guint pending;
+		struct rspamd_out_buffer_s *buffers;
+	} out_buffers;													/**< output buffers chain	*/
 	struct timeval *tv;												/**< io timeout				*/
 	struct event *ev;												/**< libevent io event		*/
 	memory_pool_t *pool;											/**< where to store data	*/
@@ -46,6 +55,7 @@ typedef struct rspamd_io_dispatcher_s {
 	dispatcher_write_callback_t write_callback;						/**< write callback			*/
 	dispatcher_err_callback_t err_callback;							/**< error callback			*/
 	void *user_data;												/**< user's data for callbacks */
+	gulong default_buf_size;										/**< default size for buffering */
 	off_t offset;													/**< for sendfile use		*/
 	size_t file_size;
 	gint sendfile_fd;
@@ -97,7 +107,21 @@ void rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t *d,
  */
 gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 												  const void *data,
-												  size_t len, gboolean delayed, gboolean allocated) G_GNUC_WARN_UNUSED_RESULT;
+												  size_t len, gboolean delayed,
+												  gboolean allocated) G_GNUC_WARN_UNUSED_RESULT;
+
+/**
+ * Write a GString to dispatcher
+ * @param d dipatcher object
+ * @param str string to write
+ * @param delayed delay write
+ * @param free_on_write free string after writing to a socket
+ * @return TRUE if write has been queued successfully
+ */
+gboolean rspamd_dispatcher_write_string (rspamd_io_dispatcher_t *d,
+												  GString *str,
+												  gboolean delayed,
+												  gboolean free_on_write) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Send specified descriptor to dispatcher
