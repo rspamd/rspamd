@@ -512,7 +512,6 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
 
-	regexp_module_ctx->filter = regexp_common_filter;
 	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
 	regexp_module_ctx->dynamic_pool = NULL;
 	regexp_module_ctx->autolearn_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -1308,7 +1307,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 		/* Non-threaded version */
 		if (item->lua_function) {
 			/* Just call function */
-			if (lua_call_expression_func ("regexp", item->lua_function, task, NULL, &res) && res) {
+			if (lua_call_expression_func (item->lua_function, task, NULL, &res) && res) {
 				insert_result (task, item->symbol, 1, NULL);
 			}
 		}
@@ -1319,13 +1318,6 @@ process_regexp_item (struct worker_task *task, void *user_data)
 			}
 		}
 	}
-}
-
-static gint
-regexp_common_filter (struct worker_task *task)
-{
-	/* XXX: remove this shit too */
-	return 0;
 }
 
 static                          gboolean
