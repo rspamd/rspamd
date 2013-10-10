@@ -68,7 +68,7 @@ struct storage_server {
 
 struct fuzzy_mapping {
 	guint64                         fuzzy_flag;
-	gchar                           *symbol;
+	const gchar                    *symbol;
 	double weight;
 };
 
@@ -79,7 +79,7 @@ struct fuzzy_mime_type {
 
 struct fuzzy_ctx {
 	gint                            (*filter) (struct worker_task * task);
-	gchar                           *symbol;
+	const gchar                    *symbol;
 	struct storage_server          *servers;
 	gint                            servers_num;
 	memory_pool_t                  *fuzzy_pool;
@@ -275,7 +275,7 @@ fuzzy_check_content_type (GMimeContentType *type)
 }
 
 static void
-parse_servers_string (gchar *str)
+parse_servers_string (const gchar *str)
 {
 	gchar                           **strvec;
 	gint                            i, num;
@@ -489,7 +489,8 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	struct fuzzy_client_session    *session = arg;
 	struct fuzzy_cmd                cmd;
 	struct fuzzy_mapping           *map;
-	gchar                           buf[62], *err_str, *symbol;
+	gchar                           buf[62], *err_str;
+	const gchar                    *symbol;
 	gint                            value = 0, flag = 0, r;
 	double                          nval;
 

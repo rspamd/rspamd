@@ -56,7 +56,7 @@ module_t chartable_module = {
 
 struct chartable_ctx {
 	gint                            (*filter) (struct worker_task * task);
-	gchar                           *symbol;
+	const gchar                    *symbol;
 	double                          threshold;
 
 	memory_pool_t                  *chartable_pool;

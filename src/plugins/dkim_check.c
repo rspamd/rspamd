@@ -58,9 +58,9 @@
 
 struct dkim_ctx {
 	gint                            (*filter) (struct worker_task * task);
-	gchar                           *symbol_reject;
-	gchar                           *symbol_tempfail;
-	gchar                           *symbol_allow;
+	const gchar                    *symbol_reject;
+	const gchar                    *symbol_tempfail;
+	const gchar                    *symbol_allow;
 
 	memory_pool_t                   *dkim_pool;
 	radix_tree_t                    *whitelist_ip;

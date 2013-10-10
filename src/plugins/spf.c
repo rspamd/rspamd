@@ -52,9 +52,9 @@
 
 struct spf_ctx {
 	gint                            (*filter) (struct worker_task * task);
-	gchar                           *symbol_fail;
-	gchar                           *symbol_softfail;
-	gchar                           *symbol_allow;
+	const gchar                    *symbol_fail;
+	const gchar                    *symbol_softfail;
+	const gchar                    *symbol_allow;
 
 	memory_pool_t                   *spf_pool;
 	radix_tree_t                    *whitelist_ip;
