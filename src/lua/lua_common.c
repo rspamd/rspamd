@@ -604,7 +604,7 @@ lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *ma
 
 /* Call custom lua function in rspamd expression */
 gboolean 
-lua_call_expression_func (const gchar *module, const gchar *function,
+lua_call_expression_func (gpointer lua_data,
 		struct worker_task *task, GList *args, gboolean *res)
 {
 	lua_State                      *L = task->cfg->lua_state;
@@ -613,39 +613,7 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	struct expression_argument     *arg;
 	int                             nargs = 1, pop = 0;
 
-	/* Call specified function and expect result of given expected_type */
-	/* First check function in config table */
-	lua_getglobal (L, "config");
-	if (module != NULL && lua_istable (L, -1)) {
-		lua_pushstring (L, module);
-		lua_gettable (L, -2);
-		if (lua_isnil (L, -1)) {
-			/* Try to get global variable */
-			lua_pop (L, 1);
-			lua_getglobal (L, function);
-		}
-		else if (lua_istable (L, -1)) {
-			/* Call local function in table */
-			lua_pushstring (L, function);
-			lua_gettable (L, -2);
-			pop += 2;
-		}
-		else {
-			msg_err ("Bad type: %s for function: %s for module: %s", lua_typename (L, lua_type (L, -1)), function, module);
-		}
-	}
-	else {
-		/* Try to get global variable */
-		lua_pop (L, 1);
-		lua_getglobal (L, function);
-	}
-	if (lua_isnil (L, -1)) {
-		if (pop > 0) {
-			lua_pop (L, pop);
-		}
-		msg_err ("function with name %s is not defined", function);
-		return FALSE;
-	}
+	lua_rawgeti (L, LUA_REGISTRYINDEX, GPOINTER_TO_INT (lua_data));
 	/* Now we got function in top of stack */
 	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
 	lua_setclass (L, "rspamd{task}", -1);
@@ -673,14 +641,14 @@ lua_call_expression_func (const gchar *module, const gchar *function,
 	}
 
 	if (lua_pcall (L, nargs, 1, 0) != 0) {
-		msg_info ("call to %s failed: %s", function, lua_tostring (L, -1));
+		msg_info ("call to lua function failed: %s", lua_tostring (L, -1));
 		return FALSE;
 	}
 	pop ++;
 
 	if (!lua_isboolean (L, -1)) {
 		lua_pop (L, pop);
-		msg_info ("function %s must return a boolean", function);
+		msg_info ("lua function must return a boolean");
 		return FALSE;
 	}
 	*res = lua_toboolean (L, -1);
