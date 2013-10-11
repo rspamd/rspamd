@@ -76,32 +76,35 @@ rspamd_cl_skip_comments (struct rspamd_cl_parser *parser, GError **err)
 
 	p = chunk->pos;
 
+start:
 	if (*p == '#') {
 		if (parser->state != RSPAMD_RCL_STATE_SCOMMENT &&
 				parser->state != RSPAMD_RCL_STATE_MCOMMENT) {
 			while (p < chunk->end) {
 				if (*p == '\n') {
 					rspamd_cl_chunk_skipc (chunk, *++p);
-					break;
+					/* Check comments again */
+					goto start;
 				}
 				rspamd_cl_chunk_skipc (chunk, *++p);
 			}
 		}
 	}
 	else if (*p == '/' && chunk->remain >= 2) {
-		rspamd_cl_chunk_skipc (chunk, *++p);
-		if (*p == '/' && parser->state != RSPAMD_RCL_STATE_SCOMMENT &&
+		if (p[1] == '/' && parser->state != RSPAMD_RCL_STATE_SCOMMENT &&
 				parser->state != RSPAMD_RCL_STATE_MCOMMENT) {
+			rspamd_cl_chunk_skipc (chunk, *++p);
 			chunk->pos = p;
 			while (p < chunk->end) {
 				if (*p == '\n') {
 					rspamd_cl_chunk_skipc (chunk, *++p);
-					break;
+					goto start;
 				}
 				rspamd_cl_chunk_skipc (chunk, *++p);
 			}
 		}
-		else if (*p == '*') {
+		else if (p[1] == '*') {
+			rspamd_cl_chunk_skipc (chunk, *++p);
 			comments_nested ++;
 			rspamd_cl_chunk_skipc (chunk, *++p);
 
@@ -112,7 +115,7 @@ rspamd_cl_skip_comments (struct rspamd_cl_parser *parser, GError **err)
 						comments_nested --;
 						if (comments_nested == 0) {
 							rspamd_cl_chunk_skipc (chunk, *++p);
-							break;
+							goto start;
 						}
 					}
 					rspamd_cl_chunk_skipc (chunk, *++p);
@@ -693,7 +696,7 @@ rspamd_cl_parse_string_value (struct rspamd_cl_parser *parser,
 	p = chunk->pos;
 
 	while (p < chunk->end) {
-		if (rspamd_cl_lex_is_atom_end (*p)) {
+		if (rspamd_cl_lex_is_atom_end (*p) || rspamd_cl_lex_is_comment (p[0], p[1])) {
 			break;
 		}
 		rspamd_cl_chunk_skipc (chunk, *p);
@@ -775,6 +778,7 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 	const guchar *p, *c;
 	struct rspamd_cl_stack *st;
 	rspamd_cl_object_t *obj = NULL;
+	guint stripped_spaces;
 
 	p = chunk->pos;
 
@@ -860,8 +864,13 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 						return FALSE;
 					}
 					if (!rspamd_cl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
-						obj->value.sv = g_malloc (chunk->pos - c + 1);
-						rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1);
+						/* Cut trailing spaces */
+						stripped_spaces = 0;
+						while (g_ascii_isspace (*(chunk->pos - 1 - stripped_spaces))) {
+							stripped_spaces ++;
+						}
+						obj->value.sv = g_malloc (chunk->pos - c + 1 - stripped_spaces);
+						rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1 - stripped_spaces);
 						rspamd_cl_unescape_json_string (obj->value.sv);
 						obj->type = RSPAMD_CL_STRING;
 					}
