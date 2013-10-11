@@ -24,6 +24,7 @@
 #include "config.h"
 #include "rcl.h"
 #include "rcl_internal.h"
+#include "rcl_chartable.h"
 #include "util.h"
 
 /**
@@ -51,6 +52,12 @@ rspamd_cl_chunk_skipc (struct rspamd_cl_chunk *chunk, guchar c)
 
 	chunk->pos ++;
 	chunk->remain --;
+}
+
+static inline gboolean
+rcl_test_character (guchar c, gint type_flags)
+{
+	return (rcl_chartable[c] & type_flags) != 0;
 }
 
 static inline void
@@ -196,12 +203,7 @@ rspamd_cl_lex_time_multiplier (const guchar c) {
 static inline gboolean
 rspamd_cl_lex_is_atom_end (const guchar c)
 {
-	if (g_ascii_isspace (c) || c == ',' || c == ';' || c == '#' ||
-			c == ']' || c == '}')  {
-		return TRUE;
-	}
-
-	return FALSE;
+	return rcl_test_character (c, RCL_CHARACTER_VALUE_END);
 }
 
 static inline gboolean
@@ -547,7 +549,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 			return TRUE;
 		}
 		else if (c == NULL) {
-			if (g_ascii_isalpha (*p)) {
+			if (rcl_test_character (*p, RCL_CHARACTER_KEY_START)) {
 				/* The first symbol */
 				c = p;
 				rspamd_cl_chunk_skipc (chunk, *p);
@@ -569,7 +571,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 		else {
 			/* Parse the body of a key */
 			if (!got_quote) {
-				if (g_ascii_isalnum (*p)) {
+				if (rcl_test_character (*p, RCL_CHARACTER_KEY)) {
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
 				}
@@ -849,7 +851,7 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 				continue;
 			}
 			/* Parse atom */
-			if (g_ascii_isdigit (*p) || *p == '-') {
+			if (rcl_test_character (*p, RCL_CHARACTER_VALUE_DIGIT_START)) {
 				if (!rspamd_cl_lex_number (parser, chunk, obj, err)) {
 					if (parser->state == RSPAMD_RCL_STATE_ERROR) {
 						return FALSE;
