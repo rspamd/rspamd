@@ -53,6 +53,7 @@ const gchar *rcl_test_valid[] = {
 		""
 		"#packagesite http//pkg.freebsd.org/freebsd-9-amd64/latest\n"
 		"#packagesite http//pkg.freebsd.org/freebsd-9-amd64/latest\n"
+		"packagesite: http//pkg.freebsd.org/freebsd-9-amd64/latest\n"
 		"ALIAS             : {\n"
 		"  all-depends: query %dn-%dv,\n"
 		"  annotations: info -A,\n"

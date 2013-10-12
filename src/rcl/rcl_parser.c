@@ -91,19 +91,7 @@ start:
 		}
 	}
 	else if (*p == '/' && chunk->remain >= 2) {
-		if (p[1] == '/' && parser->state != RSPAMD_RCL_STATE_SCOMMENT &&
-				parser->state != RSPAMD_RCL_STATE_MCOMMENT) {
-			rspamd_cl_chunk_skipc (chunk, *++p);
-			chunk->pos = p;
-			while (p < chunk->end) {
-				if (*p == '\n') {
-					rspamd_cl_chunk_skipc (chunk, *++p);
-					goto start;
-				}
-				rspamd_cl_chunk_skipc (chunk, *++p);
-			}
-		}
-		else if (p[1] == '*') {
+		if (p[1] == '*') {
 			rspamd_cl_chunk_skipc (chunk, *++p);
 			comments_nested ++;
 			rspamd_cl_chunk_skipc (chunk, *++p);
@@ -213,7 +201,7 @@ static inline gboolean
 rspamd_cl_lex_is_comment (const guchar c1, const guchar c2)
 {
 	if (c1 == '/') {
-		if (c2 == '/' || c2 == '*') {
+		if (c2 == '*') {
 			return TRUE;
 		}
 	}
