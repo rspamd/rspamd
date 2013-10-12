@@ -594,7 +594,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 
 	/* We are now at the end of the key, need to parse the rest */
 	while (p < chunk->end) {
-		if (g_ascii_isspace (*p)) {
+		if (rcl_test_character (*p, RCL_CHARACTER_WHITESPACE)) {
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
@@ -641,6 +641,10 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 	/* Create a new object */
 	nobj = rspamd_cl_object_new ();
 	nobj->key = g_malloc (end - c + 1);
+	if (nobj->key == NULL) {
+		rspamd_cl_set_err (chunk, RSPAMD_CL_EINTERNAL, "cannot allocate memory for a key", err);
+		return FALSE;
+	}
 	if (parser->flags & RSPAMD_CL_FLAG_KEY_LOWERCASE) {
 		rspamd_strlcpy_tolower (nobj->key, c, end - c + 1);
 	}
@@ -767,6 +771,7 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 	struct rspamd_cl_stack *st;
 	rspamd_cl_object_t *obj = NULL;
 	guint stripped_spaces;
+	gint str_len;
 
 	p = chunk->pos;
 
@@ -792,6 +797,10 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 				return FALSE;
 			}
 			obj->value.sv = g_malloc (chunk->pos - c - 1);
+			if (obj->value.sv == NULL) {
+				rspamd_cl_set_err (chunk, RSPAMD_CL_EINTERNAL, "cannot allocate memory for a string", err);
+				return FALSE;
+			}
 			rspamd_strlcpy (obj->value.sv, c + 1, chunk->pos - c - 1);
 			rspamd_cl_unescape_json_string (obj->value.sv);
 			obj->type = RSPAMD_CL_STRING;
@@ -830,9 +839,9 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 			break;
 		default:
 			/* Skip any spaces and comments */
-			if (g_ascii_isspace (*p) ||
+			if (rcl_test_character (*p, RCL_CHARACTER_WHITESPACE) ||
 					rspamd_cl_lex_is_comment (p[0], p[1])) {
-				while (p < chunk->end && g_ascii_isspace (*p)) {
+				while (p < chunk->end && rcl_test_character (*p, RCL_CHARACTER_WHITESPACE)) {
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
 				}
@@ -854,12 +863,21 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 					if (!rspamd_cl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
 						/* Cut trailing spaces */
 						stripped_spaces = 0;
-						while (g_ascii_isspace (*(chunk->pos - 1 - stripped_spaces))) {
+						while (rcl_test_character (*(chunk->pos - 1 - stripped_spaces),
+								RCL_CHARACTER_WHITESPACE)) {
 							stripped_spaces ++;
 						}
-						obj->value.sv = g_malloc (chunk->pos - c + 1 - stripped_spaces);
-						rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1 - stripped_spaces);
-						rspamd_cl_unescape_json_string (obj->value.sv);
+						str_len = chunk->pos - c + 1 - stripped_spaces;
+						if (str_len <= 0) {
+							rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "string value must not be empty", err);
+							return FALSE;
+						}
+						obj->value.sv = g_malloc (str_len);
+						if (obj->value.sv == NULL) {
+							rspamd_cl_set_err (chunk, RSPAMD_CL_EINTERNAL, "cannot allocate memory for a string", err);
+							return FALSE;
+						}
+						rspamd_strlcpy (obj->value.sv, c, str_len);
 						obj->type = RSPAMD_CL_STRING;
 					}
 					parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
@@ -875,9 +893,23 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 					return FALSE;
 				}
 				if (!rspamd_cl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
-					obj->value.sv = g_malloc (chunk->pos - c + 1);
-					rspamd_strlcpy (obj->value.sv, c, chunk->pos - c + 1);
-					rspamd_cl_unescape_json_string (obj->value.sv);
+					/* Cut trailing spaces */
+					stripped_spaces = 0;
+					while (rcl_test_character (*(chunk->pos - 1 - stripped_spaces),
+							RCL_CHARACTER_WHITESPACE)) {
+						stripped_spaces ++;
+					}
+					str_len = chunk->pos - c + 1 - stripped_spaces;
+					if (str_len <= 0) {
+						rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "string value must not be empty", err);
+						return FALSE;
+					}
+					obj->value.sv = g_malloc (str_len);
+					if (obj->value.sv == NULL) {
+						rspamd_cl_set_err (chunk, RSPAMD_CL_EINTERNAL, "cannot allocate memory for a string", err);
+						return FALSE;
+					}
+					rspamd_strlcpy (obj->value.sv, c, str_len);
 					obj->type = RSPAMD_CL_STRING;
 				}
 				parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
@@ -908,7 +940,7 @@ rspamd_cl_parse_after_value (struct rspamd_cl_parser *parser, struct rspamd_cl_c
 	p = chunk->pos;
 
 	while (p < chunk->end) {
-		if (*p == ' ' || *p == '\t') {
+		if (rcl_test_character (*p, RCL_CHARACTER_WHITESPACE)) {
 			/* Skip whitespaces */
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
@@ -1026,7 +1058,7 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 		p ++;
 		/* Skip spaces at the beginning */
 		while (p < chunk->end) {
-			if (g_ascii_isspace (*p)) {
+			if (rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE)) {
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
 			}
@@ -1065,7 +1097,7 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 	/* We are at the end of a macro */
 	/* Skip ';' and space characters and return to previous state */
 	while (p < chunk->end) {
-		if (!g_ascii_isspace (*p) && *p != ';') {
+		if (!rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE) && *p != ';') {
 			break;
 		}
 		rspamd_cl_chunk_skipc (chunk, *p);
@@ -1132,7 +1164,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			break;
 		case RSPAMD_RCL_STATE_KEY:
 			/* Skip any spaces */
-			while (p < chunk->end && g_ascii_isspace (*p)) {
+			while (p < chunk->end && rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE)) {
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
 			}
@@ -1186,7 +1218,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 			p = chunk->pos;
 			break;
 		case RSPAMD_RCL_STATE_MACRO_NAME:
-			if (!g_ascii_isspace (*p)) {
+			if (!rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE)) {
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
 			}
@@ -1200,7 +1232,7 @@ rspamd_cl_state_machine (struct rspamd_cl_parser *parser, GError **err)
 				}
 				/* Now we need to skip all spaces */
 				while (p < chunk->end) {
-					if (!g_ascii_isspace (*p)) {
+					if (!rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE)) {
 						if (rspamd_cl_lex_is_comment (p[0], p[1])) {
 							/* Skip comment */
 							if (!rspamd_cl_skip_comments (parser, err)) {
