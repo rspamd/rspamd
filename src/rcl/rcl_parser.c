@@ -446,7 +446,7 @@ set_obj:
  */
 static gboolean
 rspamd_cl_lex_json_string (struct rspamd_cl_parser *parser,
-		struct rspamd_cl_chunk *chunk, GError **err)
+		struct rspamd_cl_chunk *chunk, gboolean *need_unescape, GError **err)
 {
 	const guchar *p = chunk->pos;
 	guchar c;
@@ -497,6 +497,7 @@ rspamd_cl_lex_json_string (struct rspamd_cl_parser *parser,
 				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "invalid escape character", err);
 				return FALSE;
 			}
+			*need_unescape = TRUE;
 			continue;
 		}
 		else if (c == '"') {
@@ -523,7 +524,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 		struct rspamd_cl_chunk *chunk, GError **err)
 {
 	const guchar *p, *c = NULL, *end;
-	gboolean got_quote = FALSE, got_eq = FALSE, got_semicolon = FALSE;
+	gboolean got_quote = FALSE, got_eq = FALSE, got_semicolon = FALSE, need_unescape = FALSE;
 	rspamd_cl_object_t *nobj, *tobj, *container;
 
 	p = chunk->pos;
@@ -577,7 +578,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 			}
 			else {
 				/* We need to parse json like quoted string */
-				if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
+				if (!rspamd_cl_lex_json_string (parser, chunk, &need_unescape, err)) {
 					return FALSE;
 				}
 				end = chunk->pos - 1;
@@ -652,7 +653,7 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 		rspamd_strlcpy (nobj->key, c, end - c + 1);
 	}
 
-	if (got_quote) {
+	if (need_unescape) {
 		rspamd_cl_unescape_json_string (nobj->key);
 	}
 
@@ -772,6 +773,7 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 	rspamd_cl_object_t *obj = NULL;
 	guint stripped_spaces;
 	gint str_len;
+	gboolean need_unescape = FALSE;
 
 	p = chunk->pos;
 
@@ -793,7 +795,7 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 		case '"':
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
-			if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
+			if (!rspamd_cl_lex_json_string (parser, chunk, &need_unescape, err)) {
 				return FALSE;
 			}
 			obj->value.sv = g_malloc (chunk->pos - c - 1);
@@ -802,7 +804,9 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 				return FALSE;
 			}
 			rspamd_strlcpy (obj->value.sv, c + 1, chunk->pos - c - 1);
-			rspamd_cl_unescape_json_string (obj->value.sv);
+			if (need_unescape) {
+				rspamd_cl_unescape_json_string (obj->value.sv);
+			}
 			obj->type = RSPAMD_CL_STRING;
 			parser->state = RSPAMD_RCL_STATE_AFTER_VALUE;
 			p = chunk->pos;
@@ -1035,6 +1039,7 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 		guchar const **macro_start, gsize *macro_len, GError **err)
 {
 	const guchar *p, *c;
+	gboolean need_unescape = FALSE;
 
 	p = chunk->pos;
 
@@ -1044,7 +1049,7 @@ rspamd_cl_parse_macro_value (struct rspamd_cl_parser *parser,
 		c = p;
 		rspamd_cl_chunk_skipc (chunk, *p);
 		p ++;
-		if (!rspamd_cl_lex_json_string (parser, chunk, err)) {
+		if (!rspamd_cl_lex_json_string (parser, chunk, &need_unescape, err)) {
 			return FALSE;
 		}
 
