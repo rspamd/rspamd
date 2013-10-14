@@ -529,19 +529,25 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 
 	p = chunk->pos;
 
+	if (*p == '.') {
+		/* It is macro actually */
+		rspamd_cl_chunk_skipc (chunk, *p);
+		parser->prev_state = parser->state;
+		parser->state = RSPAMD_RCL_STATE_MACRO_NAME;
+		return TRUE;
+	}
 	while (p < chunk->end) {
 		/*
-		 * A key must start with alpha and end with space character
+		 * A key must start with alpha, number, '/' or '_' and end with space character
 		 */
-		if (*p == '.') {
-			/* It is macro actually */
-			rspamd_cl_chunk_skipc (chunk, *p);
-			parser->prev_state = parser->state;
-			parser->state = RSPAMD_RCL_STATE_MACRO_NAME;
-			return TRUE;
-		}
-		else if (c == NULL) {
-			if (rcl_test_character (*p, RCL_CHARACTER_KEY_START)) {
+		if (c == NULL) {
+			if (rspamd_cl_lex_is_comment (p[0], p[1])) {
+				if (!rspamd_cl_skip_comments (parser, err)) {
+					return FALSE;
+				}
+				p = chunk->pos;
+			}
+			else if (rcl_test_character (*p, RCL_CHARACTER_KEY_START)) {
 				/* The first symbol */
 				c = p;
 				rspamd_cl_chunk_skipc (chunk, *p);
@@ -553,12 +559,6 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 				got_quote = TRUE;
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
-			}
-			else if (rspamd_cl_lex_is_comment (p[0], p[1])) {
-				if (!rspamd_cl_skip_comments (parser, err)) {
-					return FALSE;
-				}
-				p = chunk->pos;
 			}
 			else {
 				/* Invalid identifier */
