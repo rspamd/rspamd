@@ -554,6 +554,12 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 				rspamd_cl_chunk_skipc (chunk, *p);
 				p ++;
 			}
+			else if (rspamd_cl_lex_is_comment (p[0], p[1])) {
+				if (!rspamd_cl_skip_comments (parser, err)) {
+					return FALSE;
+				}
+				p = chunk->pos;
+			}
 			else {
 				/* Invalid identifier */
 				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "key must begin with a letter", err);
@@ -661,8 +667,8 @@ rspamd_cl_parse_key (struct rspamd_cl_parser *parser,
 	HASH_FIND_STR (container, nobj->key, tobj);
 	if (tobj != NULL) {
 		/* Just insert a new object as the next element */
-		LL_PREPEND (tobj, nobj);
 		HASH_DELETE (hh, container, tobj);
+		LL_PREPEND (tobj, nobj);
 	}
 
 	HASH_ADD_KEYPTR (hh, container, nobj->key, strlen (nobj->key), nobj);
@@ -843,9 +849,9 @@ rspamd_cl_parse_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *
 			break;
 		default:
 			/* Skip any spaces and comments */
-			if (rcl_test_character (*p, RCL_CHARACTER_WHITESPACE) ||
+			if (rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE) ||
 					rspamd_cl_lex_is_comment (p[0], p[1])) {
-				while (p < chunk->end && rcl_test_character (*p, RCL_CHARACTER_WHITESPACE)) {
+				while (p < chunk->end && rcl_test_character (*p, RCL_CHARACTER_WHITESPACE_UNSAFE)) {
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
 				}

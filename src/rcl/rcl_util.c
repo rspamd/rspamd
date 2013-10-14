@@ -197,6 +197,8 @@ rspamd_cl_parser_free (struct rspamd_cl_parser *parser)
 		g_slice_free1 (sizeof (struct rspamd_cl_stack), stack);
 	}
 	HASH_ITER (hh, parser->macroes, macro, mtmp) {
+		g_free (macro->name);
+		HASH_DEL (parser->macroes, macro);
 		g_slice_free1 (sizeof (struct rspamd_cl_macro), macro);
 	}
 	LL_FOREACH_SAFE (parser->chunks, chunk, ctmp) {
