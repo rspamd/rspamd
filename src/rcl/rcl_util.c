@@ -169,6 +169,7 @@ rspamd_cl_unescape_json_string (gchar *str)
 			*t++ = *h++;
 		}
 	}
+	*t = '\0';
 }
 
 rspamd_cl_object_t*
