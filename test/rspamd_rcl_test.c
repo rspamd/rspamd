@@ -21,9 +21,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "../src/config.h"
-#include "../src/rcl/rcl.h"
-#include "../src/main.h"
+#include "config.h"
+#include "rcl/rcl.h"
+#include "main.h"
+#include "json/jansson.h"
 #include "tests.h"
 
 const gchar *rcl_test_valid[] = {
@@ -105,6 +106,8 @@ rspamd_rcl_test_func (void)
 	GError *err = NULL;
 	struct timespec start, end;
 	gdouble seconds;
+	json_t *json;
+	json_error_t jerr;
 
 	cur = rcl_test_valid;
 	while (*cur != NULL) {
@@ -162,14 +165,32 @@ rspamd_rcl_test_func (void)
 	g_assert_no_error (err);
 	clock_gettime (CLOCK_MONOTONIC, &end);
 	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
-	msg_info ("parsed json in %.4f seconds", seconds);
+	msg_info ("rcl: parsed json in %.4f seconds", seconds);
 	/* Test config emitting */
 	clock_gettime (CLOCK_MONOTONIC, &start);
 	emitted = rspamd_cl_object_emit (obj, RSPAMD_CL_EMIT_CONFIG);
 	g_assert (emitted != NULL);
 	clock_gettime (CLOCK_MONOTONIC, &end);
 	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
-	msg_info ("emitted object in %.4f seconds", seconds);
+	msg_info ("rcl: emitted object in %.4f seconds", seconds);
 	rspamd_cl_parser_free (parser);
 	rspamd_cl_obj_unref (obj);
+	g_free (emitted);
+
+	clock_gettime (CLOCK_MONOTONIC, &start);
+	json = json_load_file ("./rcl_test.json", &jerr);
+	g_assert (json != NULL);
+	clock_gettime (CLOCK_MONOTONIC, &end);
+	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
+	msg_info ("jansson: parsed json in %.4f seconds", seconds);
+
+	clock_gettime (CLOCK_MONOTONIC, &start);
+	emitted = json_dumps (json, 0);
+	g_assert (emitted != NULL);
+	clock_gettime (CLOCK_MONOTONIC, &end);
+	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
+	msg_info ("jansson: emitted object in %.4f seconds", seconds);
+
+	//json_decref (json);
+	g_free (emitted);
 }

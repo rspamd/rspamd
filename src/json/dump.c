@@ -143,7 +143,7 @@ do_dump (const json_t * json, uint32_t flags, int depth, dump_func dump, void *d
 				return -1;
 
 			ret = dump (buffer, size, data);
-			g_free (buffer);
+			free (buffer);
 			return ret;
 		}
 
@@ -157,7 +157,7 @@ do_dump (const json_t * json, uint32_t flags, int depth, dump_func dump, void *d
 				return -1;
 
 			ret = dump (buffer, size, data);
-			g_free (buffer);
+			free (buffer);
 			return ret;
 		}
 

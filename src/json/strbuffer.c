@@ -75,7 +75,7 @@ strbuffer_append_bytes (strbuffer_t * strbuff, const char *data, int size)
 	if (strbuff->length + size >= strbuff->size) {
 		strbuff->size = max (strbuff->size * STRBUFFER_FACTOR, strbuff->length + size + 1);
 
-		strbuff->value = realloc (strbuff->value, strbuff->size);
+		strbuff->value = g_realloc (strbuff->value, strbuff->size);
 		if (!strbuff->value)
 			return -1;
 	}
