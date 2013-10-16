@@ -250,6 +250,8 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 				else {
 					got_dot = TRUE;
 					need_double = TRUE;
+					rspamd_cl_chunk_skipc (chunk, *p);
+					p ++;
 				}
 			}
 			else if (*p == 'e' || *p == 'E') {
@@ -265,9 +267,13 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 					if (p >= chunk->end) {
 						return FALSE;
 					}
-					if (!g_ascii_isdigit (*p) && *p != '+' && *p == '-') {
+					if (!g_ascii_isdigit (*p) && *p != '+' && *p != '-') {
 						/* Wrong exponent sign */
 						return FALSE;
+					}
+					else {
+						rspamd_cl_chunk_skipc (chunk, *p);
+						p ++;
 					}
 				}
 			}
