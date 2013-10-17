@@ -32,6 +32,13 @@
  * The implementation of rcl parser
  */
 
+struct rspamd_cl_parser_saved_state {
+	guint line;
+	guint column;
+	gsize remain;
+	const guchar *pos;
+};
+
 /**
  * Move up to len characters
  * @param parser
@@ -52,6 +59,34 @@ rspamd_cl_chunk_skipc (struct rspamd_cl_chunk *chunk, guchar c)
 
 	chunk->pos ++;
 	chunk->remain --;
+}
+
+/**
+ * Save parser state
+ * @param chunk
+ * @param s
+ */
+static inline void
+rspamd_cl_chunk_save_state (struct rspamd_cl_chunk *chunk, struct rspamd_cl_parser_saved_state *s)
+{
+	s->column = chunk->column;
+	s->pos = chunk->pos;
+	s->line = chunk->line;
+	s->remain = chunk->remain;
+}
+
+/**
+ * Restore parser state
+ * @param chunk
+ * @param s
+ */
+static inline void
+rspamd_cl_chunk_restore_state (struct rspamd_cl_chunk *chunk, struct rspamd_cl_parser_saved_state *s)
+{
+	chunk->column = s->column;
+	chunk->pos = s->pos;
+	chunk->line = s->line;
+	chunk->remain = s->remain;
 }
 
 static inline gboolean
@@ -227,6 +262,9 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 	gboolean got_dot = FALSE, got_exp = FALSE, need_double = FALSE, is_date = FALSE;
 	gdouble dv;
 	gint64 lv;
+	struct rspamd_cl_parser_saved_state s;
+
+	rspamd_cl_chunk_save_state (chunk, &s);
 
 	if (*p == '-') {
 		rspamd_cl_chunk_skipc (chunk, *p);
@@ -240,11 +278,13 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 		else {
 			if (p == c) {
 				/* Empty digits sequence, not a number */
+				rspamd_cl_chunk_restore_state (chunk, &s);
 				return FALSE;
 			}
 			else if (*p == '.') {
 				if (got_dot) {
 					/* Double dots, not a number */
+					rspamd_cl_chunk_restore_state (chunk, &s);
 					return FALSE;
 				}
 				else {
@@ -257,6 +297,7 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 			else if (*p == 'e' || *p == 'E') {
 				if (got_exp) {
 					/* Double exp, not a number */
+					rspamd_cl_chunk_restore_state (chunk, &s);
 					return FALSE;
 				}
 				else {
@@ -265,10 +306,12 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 					rspamd_cl_chunk_skipc (chunk, *p);
 					p ++;
 					if (p >= chunk->end) {
+						rspamd_cl_chunk_restore_state (chunk, &s);
 						return FALSE;
 					}
 					if (!g_ascii_isdigit (*p) && *p != '+' && *p != '-') {
 						/* Wrong exponent sign */
+						rspamd_cl_chunk_restore_state (chunk, &s);
 						return FALSE;
 					}
 					else {
@@ -295,6 +338,7 @@ rspamd_cl_lex_number (struct rspamd_cl_parser *parser,
 		rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "numeric value is out of range", err);
 		parser->prev_state = parser->state;
 		parser->state = RSPAMD_RCL_STATE_ERROR;
+		rspamd_cl_chunk_restore_state (chunk, &s);
 		return FALSE;
 	}
 
@@ -950,7 +994,7 @@ static gboolean
 rspamd_cl_parse_after_value (struct rspamd_cl_parser *parser, struct rspamd_cl_chunk *chunk, GError **err)
 {
 	const guchar *p;
-	gboolean got_sep = FALSE, got_comma = FALSE, got_semicolon = FALSE;
+	gboolean got_sep = FALSE;
 	struct rspamd_cl_stack *st;
 
 	p = chunk->pos;
@@ -973,22 +1017,12 @@ rspamd_cl_parse_after_value (struct rspamd_cl_parser *parser, struct rspamd_cl_c
 		else if (*p == ',') {
 			/* Got a separator */
 			got_sep = TRUE;
-			if (got_comma || got_semicolon) {
-				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "unexpected comma detected", err);
-				return FALSE;
-			}
-			got_comma = TRUE;
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
 		else if (*p == ';') {
 			/* Got a separator */
 			got_sep = TRUE;
-			if (got_comma || got_semicolon) {
-				rspamd_cl_set_err (chunk, RSPAMD_CL_ESYNTAX, "unexpected semicolon detected", err);
-				return FALSE;
-			}
-			got_semicolon = TRUE;
 			rspamd_cl_chunk_skipc (chunk, *p);
 			p ++;
 		}
