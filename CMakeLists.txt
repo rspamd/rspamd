@@ -1032,7 +1032,10 @@ ENDIF(HG)
 
 ################################ SOURCES SECTION ###########################
 
-INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src" "${CMAKE_SOURCE_DIR}/contrib/uthash")
+INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" 
+					"${CMAKE_BINARY_DIR}/src" 
+					"${CMAKE_SOURCE_DIR}/src/ucl/include"
+					"${CMAKE_SOURCE_DIR}/contrib/uthash")
 
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
@@ -1073,7 +1076,7 @@ ENDIF(NOT HIREDIS_FOUND)
 ADD_SUBDIRECTORY(src/lua)
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
-ADD_SUBDIRECTORY(src/rcl)
+ADD_SUBDIRECTORY(src/ucl)
 ADD_SUBDIRECTORY(lib)
 
 ADD_SUBDIRECTORY(src/client)

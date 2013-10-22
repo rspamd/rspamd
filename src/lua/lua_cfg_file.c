@@ -125,7 +125,7 @@ lua_post_load_config (struct config_file *cfg)
 	const gchar                          *name, *val;
 	gchar                                *sym;
 	struct expression                    *expr, *old_expr;
-	rspamd_cl_object_t                   *obj;
+	ucl_object_t                   *obj;
 	gsize                                 keylen;
 
 	/* First check all module options that may be overriden in 'config' global */
@@ -140,10 +140,7 @@ lua_post_load_config (struct config_file *cfg)
 			if (name != NULL && lua_istable (L, -1)) {
 				obj = lua_rcl_obj_get (L, -1);
 				if (obj != NULL) {
-					obj->key = memory_pool_alloc (cfg->cfg_pool, keylen + 1);
-					memcpy (obj->key, name, keylen);
-					obj->key[keylen] = '\0';
-					HASH_ADD_KEYPTR (hh, cfg->rcl_obj->value.ov, obj->key, keylen, obj);
+					cfg->rcl_obj = ucl_object_insert_key (cfg->rcl_obj, obj, name, keylen, true);
 				}
 			}
 		}

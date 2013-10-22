@@ -22,16 +22,15 @@
  */
 
 #include "lua_common.h"
-#include "rcl/rcl.h"
 
 /**
  * @file lua rcl bindings
  */
 
-static gint lua_rcl_obj_push_array (lua_State *L, rspamd_cl_object_t *obj);
-static gint lua_rcl_obj_push_simple (lua_State *L, rspamd_cl_object_t *obj);
-static void lua_rcl_table_get (lua_State *L, rspamd_cl_object_t *top, gint idx);
-static void lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *top, gint idx);
+static gint lua_rcl_obj_push_array (lua_State *L, ucl_object_t *obj);
+static gint lua_rcl_obj_push_simple (lua_State *L, ucl_object_t *obj);
+static void lua_rcl_table_get (lua_State *L, ucl_object_t *top, gint idx);
+static void lua_rcl_elt_get (lua_State *L, ucl_object_t *top, gint idx);
 
 /**
  * Push a single element of an object to lua
@@ -40,7 +39,7 @@ static void lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *top, gint idx);
  * @param obj
  */
 static void
-lua_rcl_obj_push_elt (lua_State *L, const char *key, rspamd_cl_object_t *obj)
+lua_rcl_obj_push_elt (lua_State *L, const char *key, ucl_object_t *obj)
 {
 	lua_pushstring (L, key);
 	lua_rcl_obj_push (L, obj);
@@ -54,9 +53,9 @@ lua_rcl_obj_push_elt (lua_State *L, const char *key, rspamd_cl_object_t *obj)
  * @return
  */
 static gint
-lua_rcl_obj_push_obj (lua_State *L, rspamd_cl_object_t *obj)
+lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj)
 {
-	rspamd_cl_object_t *cur, *tmp;
+	ucl_object_t *cur, *tmp;
 
 	if (obj->next != NULL) {
 		/* Actually we need to push this as an array */
@@ -65,7 +64,7 @@ lua_rcl_obj_push_obj (lua_State *L, rspamd_cl_object_t *obj)
 
 	lua_newtable (L);
 	HASH_ITER (hh, obj, cur, tmp) {
-		lua_rcl_obj_push_elt (L, obj->key, obj);
+		lua_rcl_obj_push_elt (L, ucl_object_key (obj), obj);
 	}
 
 	return 1;
@@ -78,9 +77,9 @@ lua_rcl_obj_push_obj (lua_State *L, rspamd_cl_object_t *obj)
  * @return
  */
 static gint
-lua_rcl_obj_push_array (lua_State *L, rspamd_cl_object_t *obj)
+lua_rcl_obj_push_array (lua_State *L, ucl_object_t *obj)
 {
-	rspamd_cl_object_t *cur;
+	ucl_object_t *cur;
 	gint i = 1;
 
 	lua_newtable (L);
@@ -98,7 +97,7 @@ lua_rcl_obj_push_array (lua_State *L, rspamd_cl_object_t *obj)
  * Push a simple object to lua depending on its actual type
  */
 static gint
-lua_rcl_obj_push_simple (lua_State *L, rspamd_cl_object_t *obj)
+lua_rcl_obj_push_simple (lua_State *L, ucl_object_t *obj)
 {
 	if (obj->next != NULL) {
 		/* Actually we need to push this as an array */
@@ -106,22 +105,22 @@ lua_rcl_obj_push_simple (lua_State *L, rspamd_cl_object_t *obj)
 	}
 
 	switch (obj->type) {
-	case RSPAMD_CL_BOOLEAN:
-		lua_pushboolean (L, rspamd_cl_obj_toboolean (obj));
+	case UCL_BOOLEAN:
+		lua_pushboolean (L, ucl_obj_toboolean (obj));
 		break;
-	case RSPAMD_CL_STRING:
-		lua_pushstring (L, rspamd_cl_obj_tostring (obj));
+	case UCL_STRING:
+		lua_pushstring (L, ucl_obj_tostring (obj));
 		break;
-	case RSPAMD_CL_INT:
+	case UCL_INT:
 #if LUA_VERSION_NUM >= 501
-		lua_pushinteger (L, rspamd_cl_obj_toint (obj));
+		lua_pushinteger (L, ucl_obj_toint (obj));
 #else
-		lua_pushnumber (L, rspamd_cl_obj_toint (obj));
+		lua_pushnumber (L, ucl_obj_toint (obj));
 #endif
 		break;
-	case RSPAMD_CL_FLOAT:
-	case RSPAMD_CL_TIME:
-		lua_pushnumber (L, rspamd_cl_obj_todouble (obj));
+	case UCL_FLOAT:
+	case UCL_TIME:
+		lua_pushnumber (L, ucl_obj_todouble (obj));
 		break;
 	default:
 		lua_pushnil (L);
@@ -137,12 +136,12 @@ lua_rcl_obj_push_simple (lua_State *L, rspamd_cl_object_t *obj)
  * @param obj object to push
  */
 gint
-lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj)
+lua_rcl_obj_push (lua_State *L, ucl_object_t *obj)
 {
 	switch (obj->type) {
-	case RSPAMD_CL_OBJECT:
+	case UCL_OBJECT:
 		return lua_rcl_obj_push_obj (L, obj->value.ov);
-	case RSPAMD_CL_ARRAY:
+	case UCL_ARRAY:
 		return lua_rcl_obj_push_array (L, obj->value.ov);
 	default:
 		return lua_rcl_obj_push_simple (L, obj);
@@ -156,9 +155,9 @@ lua_rcl_obj_push (lua_State *L, rspamd_cl_object_t *obj)
  * @param idx
  */
 static void
-lua_rcl_table_get (lua_State *L, rspamd_cl_object_t *top, gint idx)
+lua_rcl_table_get (lua_State *L, ucl_object_t *top, gint idx)
 {
-	rspamd_cl_object_t *obj;
+	ucl_object_t *obj;
 	gsize keylen;
 	const gchar *k;
 
@@ -168,13 +167,10 @@ lua_rcl_table_get (lua_State *L, rspamd_cl_object_t *top, gint idx)
 	while (lua_next (L, -2) != 0) {
 		/* copy key to avoid modifications */
 		lua_pushvalue (L, -2);
-		obj = rspamd_cl_object_new ();
+		obj = ucl_object_new ();
 		if (obj != NULL) {
 			k = lua_tolstring (L, -1, &keylen);
-			obj->key = g_malloc (keylen + 1);
-			memcpy (obj->key, k, keylen);
-			obj->key[keylen] = '\0';
-			HASH_ADD_KEYPTR (hh, top->value.ov, obj->key, keylen, obj);
+			ucl_object_insert_key (top, obj, k, keylen, true);
 			lua_rcl_elt_get (L, obj, -2);
 		}
 
@@ -190,7 +186,7 @@ lua_rcl_table_get (lua_State *L, rspamd_cl_object_t *top, gint idx)
  * @param idx
  */
 static void
-lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *obj, gint idx)
+lua_rcl_elt_get (lua_State *L, ucl_object_t *obj, gint idx)
 {
 	gint type;
 
@@ -199,23 +195,23 @@ lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *obj, gint idx)
 	switch (type) {
 	case LUA_TFUNCTION:
 		lua_pushvalue (L, idx);
-		obj->type = RSPAMD_CL_USERDATA;
+		obj->type = UCL_USERDATA;
 		obj->value.ud = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
 		break;
 	case LUA_TSTRING:
-		obj->type = RSPAMD_CL_STRING;
+		obj->type = UCL_STRING;
 		obj->value.sv = g_strdup (lua_tostring (L, idx));
 		break;
 	case LUA_TNUMBER:
-		obj->type = RSPAMD_CL_FLOAT;
+		obj->type = UCL_FLOAT;
 		obj->value.dv = lua_tonumber (L, idx);
 		break;
 	case LUA_TBOOLEAN:
-		obj->type = RSPAMD_CL_BOOLEAN;
+		obj->type = UCL_BOOLEAN;
 		obj->value.iv = lua_toboolean (L, idx);
 		break;
 	case LUA_TTABLE:
-		obj->type = RSPAMD_CL_OBJECT;
+		obj->type = UCL_OBJECT;
 		lua_rcl_table_get (L, obj, idx);
 		break;
 	}
@@ -226,13 +222,13 @@ lua_rcl_elt_get (lua_State *L, rspamd_cl_object_t *obj, gint idx)
  * @param L
  * @return
  */
-rspamd_cl_object_t *
+ucl_object_t *
 lua_rcl_obj_get (lua_State *L, gint idx)
 {
-	rspamd_cl_object_t *obj;
+	ucl_object_t *obj;
 	gint t;
 
-	obj = rspamd_cl_object_new ();
+	obj = ucl_object_new ();
 
 	if (obj != NULL) {
 		t = lua_type (L, idx);

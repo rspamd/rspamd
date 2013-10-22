@@ -101,44 +101,44 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 spf_module_config (struct config_file *cfg)
 {
-	rspamd_cl_object_t             *value;
+	ucl_object_t             *value;
 	gint                            res = TRUE;
 	guint                           cache_size, cache_expire;
 
 	spf_module_ctx->whitelist_ip = radix_tree_create ();
 	
 	if ((value = get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
-		spf_module_ctx->symbol_fail = rspamd_cl_obj_tostring (value);
+		spf_module_ctx->symbol_fail = ucl_obj_tostring (value);
 	}
 	else {
 		spf_module_ctx->symbol_fail = DEFAULT_SYMBOL_FAIL;
 	}
 	if ((value = get_module_opt (cfg, "spf", "symbol_softfail")) != NULL) {
-		spf_module_ctx->symbol_softfail = rspamd_cl_obj_tostring (value);
+		spf_module_ctx->symbol_softfail = ucl_obj_tostring (value);
 	}
 	else {
 		spf_module_ctx->symbol_softfail = DEFAULT_SYMBOL_SOFTFAIL;
 	}
 	if ((value = get_module_opt (cfg, "spf", "symbol_allow")) != NULL) {
-		spf_module_ctx->symbol_allow = rspamd_cl_obj_tostring (value);
+		spf_module_ctx->symbol_allow = ucl_obj_tostring (value);
 	}
 	else {
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
 	if ((value = get_module_opt (cfg, "spf", "spf_cache_size")) != NULL) {
-		cache_size = rspamd_cl_obj_toint (value);
+		cache_size = ucl_obj_toint (value);
 	}
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
 	if ((value = get_module_opt (cfg, "spf", "spf_cache_expire")) != NULL) {
-		cache_expire = rspamd_cl_obj_toint (value);
+		cache_expire = ucl_obj_toint (value);
 	}
 	else {
 		cache_expire = DEFAULT_CACHE_MAXAGE;
 	}
 	if ((value = get_module_opt (cfg, "spf", "whitelist")) != NULL) {
-		if (! add_map (cfg, rspamd_cl_obj_tostring (value),
+		if (! add_map (cfg, ucl_obj_tostring (value),
 				"SPF whitelist", read_radix_list, fin_radix_list,
 				(void **)&spf_module_ctx->whitelist_ip)) {
 			msg_warn ("cannot load whitelist from %s", value);

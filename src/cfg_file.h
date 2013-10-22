@@ -13,7 +13,7 @@
 #include "symbols_cache.h"
 #include "cfg_rcl.h"
 #include "utlist.h"
-#include "rcl/rcl.h"
+#include "ucl.h"
 
 #define DEFAULT_BIND_PORT 768
 #define DEFAULT_CONTROL_PORT 7608
@@ -283,7 +283,7 @@ struct worker_conf {
 	GQueue *active_workers;							/**< linked list of spawned workers						*/
 	gboolean has_socket;							/**< whether we should make listening socket in main process */
 	gpointer *ctx;									/**< worker's context									*/
-	rspamd_cl_object_t *options;					/**< other worker's options								*/
+	ucl_object_t *options;					/**< other worker's options								*/
 };
 
 /**
@@ -348,7 +348,7 @@ struct config_file {
 	GList *workers;									/**< linked list of all workers params					*/
 	struct rspamd_worker_cfg_parser *wrk_parsers;	/**< hash for worker config parsers, indexed by worker quarks */
 	gchar *filters_str;								/**< string of filters									*/
-	rspamd_cl_object_t *rcl_obj;					/**< rcl object											*/
+	ucl_object_t *rcl_obj;					/**< rcl object											*/
 	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
 	GList* symbols_groups;							/**< groups of symbols									*/
@@ -448,7 +448,7 @@ void free_config (struct config_file *cfg);
  * @param opt_name name of option to get
  * @return module value or NULL if option does not defined
  */
-rspamd_cl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
+ucl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
 		const gchar *opt_name);
 
 /**

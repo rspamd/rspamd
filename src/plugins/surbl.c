@@ -303,7 +303,7 @@ surbl_module_config (struct config_file *cfg)
 	struct suffix_item             *new_suffix, *cur_suffix = NULL;
 	struct surbl_bit_item          *new_bit;
 
-	rspamd_cl_object_t              *value, *cur, *cur_rule, *tmp, *cur_bit;
+	ucl_object_t              *value, *cur, *cur_rule, *tmp, *cur_bit;
 	const gchar                    *redir_val;
 	guint32                         bit;
 	gint                            i, idx;
@@ -318,7 +318,7 @@ surbl_module_config (struct config_file *cfg)
 								i * sizeof (struct redirector_upstream));
 		idx = 0;
 		LL_FOREACH (value, cur) {
-			redir_val = rspamd_cl_obj_tostring (cur);
+			redir_val = ucl_obj_tostring (cur);
 			surbl_module_ctx->redirectors[idx].up.priority = 100;
 			if (! parse_host_port_priority (surbl_module_ctx->surbl_pool,
 					redir_val, &surbl_module_ctx->redirectors[idx].addr,
@@ -340,100 +340,100 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->use_redirector = (surbl_module_ctx->redirectors_number != 0);
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_symbol")) != NULL) {
-		surbl_module_ctx->redirector_symbol = rspamd_cl_obj_tostring (value);
+		surbl_module_ctx->redirector_symbol = ucl_obj_tostring (value);
 		register_virtual_symbol (&cfg->cache, surbl_module_ctx->redirector_symbol, 1.0);
 	}
 	else {
 		surbl_module_ctx->redirector_symbol = NULL;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "weight")) != NULL) {
-		surbl_module_ctx->weight = rspamd_cl_obj_toint (value);
+		surbl_module_ctx->weight = ucl_obj_toint (value);
 	}
 	else {
 		surbl_module_ctx->weight = DEFAULT_SURBL_WEIGHT;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "url_expire")) != NULL) {
-		surbl_module_ctx->url_expire = rspamd_cl_obj_todouble (value);
+		surbl_module_ctx->url_expire = ucl_obj_todouble (value);
 	}
 	else {
 		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_connect_timeout")) != NULL) {
-		surbl_module_ctx->connect_timeout = rspamd_cl_obj_todouble (value);
+		surbl_module_ctx->connect_timeout = ucl_obj_todouble (value);
 	}
 	else {
 		surbl_module_ctx->connect_timeout = DEFAULT_REDIRECTOR_CONNECT_TIMEOUT;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_read_timeout")) != NULL) {
-		surbl_module_ctx->read_timeout = rspamd_cl_obj_todouble (value);
+		surbl_module_ctx->read_timeout = ucl_obj_todouble (value);
 	}
 	else {
 		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "redirector_hosts_map")) != NULL) {
-		add_map (cfg, rspamd_cl_obj_tostring (value),
+		add_map (cfg, ucl_obj_tostring (value),
 				"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
 				(void **)&surbl_module_ctx->redirector_hosts);
 	}
 
 	if ((value = get_module_opt (cfg, "surbl", "max_urls")) != NULL) {
-		surbl_module_ctx->max_urls = rspamd_cl_obj_toint (value);
+		surbl_module_ctx->max_urls = ucl_obj_toint (value);
 	}
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
 	if ((value = get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
-		if (add_map (cfg, rspamd_cl_obj_tostring (value),
+		if (add_map (cfg, ucl_obj_tostring (value),
 				"SURBL exceptions list", read_exceptions_list, fin_exceptions_list,
 				(void **)&surbl_module_ctx->exceptions)) {
 			surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool,
-					rspamd_cl_obj_tostring (value) + sizeof ("file://") - 1);
+					ucl_obj_tostring (value) + sizeof ("file://") - 1);
 		}
 	}
 	if ((value = get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
-		if (add_map (cfg, rspamd_cl_obj_tostring (value),
+		if (add_map (cfg, ucl_obj_tostring (value),
 				"SURBL whitelist", read_host_list, fin_host_list,
 				(void **)&surbl_module_ctx->whitelist)) {
 			surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool,
-					rspamd_cl_obj_tostring (value) + sizeof ("file://") - 1);
+					ucl_obj_tostring (value) + sizeof ("file://") - 1);
 		}
 	}
 
 	value = get_module_opt (cfg, "surbl", "rule");
-	if (value != NULL && value->type == RSPAMD_CL_OBJECT) {
+	if (value != NULL && value->type == UCL_OBJECT) {
 		LL_FOREACH (value, cur_rule) {
-			cur = rspamd_cl_obj_get_key (cur_rule, "suffix");
+			cur = ucl_obj_get_key (cur_rule, "suffix");
 			if (cur == NULL) {
 				msg_err ("surbl rule must have explicit symbol definition");
 				continue;
 			}
 			new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
 			new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool,
-					rspamd_cl_obj_tostring (cur));
+					ucl_obj_tostring (cur));
 			new_suffix->options = 0;
 			new_suffix->bits = NULL;
 
-			cur = rspamd_cl_obj_get_key (cur_rule, "symbol");
+			cur = ucl_obj_get_key (cur_rule, "symbol");
 			if (cur == NULL) {
 				msg_warn ("surbl rule for suffix %s lacks symbol, using %s as symbol", new_suffix->suffix,
 						DEFAULT_SURBL_SYMBOL);
 				new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool,
 						DEFAULT_SURBL_SYMBOL);
 			}
-			cur = rspamd_cl_obj_get_key (cur_rule, "options");
-			if (cur != NULL && cur->type == RSPAMD_CL_STRING) {
-				if (strstr (rspamd_cl_obj_tostring (cur), "noip") != NULL) {
+			cur = ucl_obj_get_key (cur_rule, "options");
+			if (cur != NULL && cur->type == UCL_STRING) {
+				if (strstr (ucl_obj_tostring (cur), "noip") != NULL) {
 					new_suffix->options |= SURBL_OPTION_NOIP;
 				}
 			}
-			cur = rspamd_cl_obj_get_key (cur_rule, "bits");
-			if (cur != NULL && cur->type == RSPAMD_CL_OBJECT) {
+			cur = ucl_obj_get_key (cur_rule, "bits");
+			if (cur != NULL && cur->type == UCL_OBJECT) {
 				HASH_ITER (hh, cur->value.ov, cur_bit, tmp) {
-					if (cur_bit->key != NULL && cur_bit->type == RSPAMD_CL_INT) {
-						bit = rspamd_cl_obj_toint (cur_bit);
+					if (ucl_object_key (cur_bit) != NULL && cur_bit->type == UCL_INT) {
+						bit = ucl_obj_toint (cur_bit);
 						new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
 						new_bit->bit = bit;
-						new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, cur->key);
+						new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, ucl_object_key (cur_bit));
 						msg_debug ("add new bit suffix: %d with symbol: %s", (gint)new_bit->bit, new_bit->symbol);
 						new_suffix->bits = g_list_prepend (new_suffix->bits, new_bit);
 					}

@@ -154,7 +154,7 @@ lua_config_get_module_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
 	const gchar                     *mname, *optname;
-	rspamd_cl_object_t              *obj;
+	ucl_object_t              *obj;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -190,13 +190,13 @@ lua_config_get_all_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
 	const gchar                     *mname;
-	rspamd_cl_object_t              *obj;
+	ucl_object_t              *obj;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
 
 		if (mname) {
-			obj = rspamd_cl_obj_get_key (cfg->rcl_obj, mname);
+			obj = ucl_obj_get_key (cfg->rcl_obj, mname);
 			if (obj != NULL) {
 				return lua_rcl_obj_push (L, obj);
 			}

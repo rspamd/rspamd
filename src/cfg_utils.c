@@ -265,7 +265,7 @@ free_config (struct config_file *cfg)
 	struct symbols_group			*gr;
 
 	remove_all_maps (cfg);
-	rspamd_cl_obj_unref (cfg->rcl_obj);
+	ucl_obj_unref (cfg->rcl_obj);
 	g_hash_table_remove_all (cfg->variables);
 	g_hash_table_unref (cfg->variables);
 	g_hash_table_remove_all (cfg->metrics);
@@ -299,14 +299,14 @@ free_config (struct config_file *cfg)
 	memory_pool_delete (cfg->cfg_pool);
 }
 
-rspamd_cl_object_t        *
+ucl_object_t        *
 get_module_opt (struct config_file *cfg, const gchar *module_name, const gchar *opt_name)
 {
-	rspamd_cl_object_t *res = NULL, *sec;
+	ucl_object_t *res = NULL, *sec;
 
-	sec = rspamd_cl_obj_get_key (cfg->rcl_obj, module_name);
+	sec = ucl_obj_get_key (cfg->rcl_obj, module_name);
 	if (sec != NULL) {
-		res = rspamd_cl_obj_get_key (cfg->rcl_obj, opt_name);
+		res = ucl_obj_get_key (cfg->rcl_obj, opt_name);
 	}
 
 	return res;

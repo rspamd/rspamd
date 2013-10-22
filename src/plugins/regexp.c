@@ -44,7 +44,7 @@
 
 struct regexp_module_item {
 	struct expression               *expr;
-	gchar                           *symbol;
+	const gchar                           *symbol;
 	guint32                         avg_time;
 	gpointer                        lua_function;
 };
@@ -574,12 +574,12 @@ gint
 regexp_module_config (struct config_file *cfg)
 {
 	struct regexp_module_item      *cur_item;
-	rspamd_cl_object_t              *sec, *value, *tmp;
+	ucl_object_t              *sec, *value, *tmp;
 	gint                            res = TRUE;
 	struct regexp_json_buf         *jb, **pjb;
 
 
-	HASH_FIND_STR (cfg->rcl_obj, "regexp", sec);
+	sec = ucl_object_find_key (cfg->rcl_obj, "regexp");
 	if (sec == NULL) {
 		msg_err ("regexp module enabled, but no rules are defined");
 		return TRUE;
@@ -590,44 +590,44 @@ regexp_module_config (struct config_file *cfg)
 	regexp_module_ctx->workers = NULL;
 
 	HASH_ITER (hh, sec, value, tmp) {
-		if (g_ascii_strncasecmp (value->key, "autolearn", sizeof ("autolearn") - 1) == 0) {
-			parse_autolearn_param (value->key, rspamd_cl_obj_tostring (value), cfg);
+		if (g_ascii_strncasecmp (ucl_object_key (value), "autolearn", sizeof ("autolearn") - 1) == 0) {
+			parse_autolearn_param (ucl_object_key (value), ucl_obj_tostring (value), cfg);
 		}
-		else if (g_ascii_strncasecmp (value->key, "dynamic_rules", sizeof ("dynamic_rules") - 1) == 0) {
+		else if (g_ascii_strncasecmp (ucl_object_key (value), "dynamic_rules", sizeof ("dynamic_rules") - 1) == 0) {
 			jb = g_malloc (sizeof (struct regexp_json_buf));
 			pjb = g_malloc (sizeof (struct regexp_json_buf *));
 			jb->buf = NULL;
 			jb->cfg = cfg;
 			*pjb = jb;
-			if (!add_map (cfg, rspamd_cl_obj_tostring (value),
+			if (!add_map (cfg, ucl_obj_tostring (value),
 					"Dynamic regexp rules", json_regexp_read_cb, json_regexp_fin_cb,
 					(void **)pjb)) {
-				msg_err ("cannot add map %s", rspamd_cl_obj_tostring (value));
+				msg_err ("cannot add map %s", ucl_obj_tostring (value));
 			}
 		}
-		else if (g_ascii_strncasecmp (value->key, "max_size", sizeof ("max_size") - 1) == 0) {
-			regexp_module_ctx->max_size = rspamd_cl_obj_toint (value);
+		else if (g_ascii_strncasecmp (ucl_object_key (value), "max_size", sizeof ("max_size") - 1) == 0) {
+			regexp_module_ctx->max_size = ucl_obj_toint (value);
 		}
-		else if (g_ascii_strncasecmp (value->key, "max_threads", sizeof ("max_threads") - 1) == 0) {
-			regexp_module_ctx->max_threads = rspamd_cl_obj_toint (value);
+		else if (g_ascii_strncasecmp (ucl_object_key (value), "max_threads", sizeof ("max_threads") - 1) == 0) {
+			regexp_module_ctx->max_threads = ucl_obj_toint (value);
 		}
-		else if (value->type == RSPAMD_CL_STRING) {
+		else if (value->type == UCL_STRING) {
 			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
-			cur_item->symbol = value->key;
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, value->key,
-					rspamd_cl_obj_tostring (value), cfg->raw_mode)) {
+			cur_item->symbol = ucl_object_key (value);
+			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, ucl_object_key (value),
+					ucl_obj_tostring (value), cfg->raw_mode)) {
 				res = FALSE;
 			}
 			register_symbol (&cfg->cache, cur_item->symbol, 1, process_regexp_item, cur_item);
 		}
-		else if (value->type == RSPAMD_CL_USERDATA) {
+		else if (value->type == UCL_USERDATA) {
 			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
-			cur_item->symbol = value->key;
+			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = value->value.ud;
 			register_symbol (&cfg->cache, cur_item->symbol, 1, process_regexp_item, cur_item);
 		}
 		else {
-			msg_warn ("unknown type of attribute %s for regexp module", value->key);
+			msg_warn ("unknown type of attribute %s for regexp module", ucl_object_key (value));
 		}
 	}
 
@@ -1112,7 +1112,7 @@ optimize_regexp_expression (struct expression **e, GQueue * stack, gboolean res)
 }
 
 static                          gboolean
-process_regexp_expression (struct expression *expr, gchar *symbol, struct worker_task *task,
+process_regexp_expression (struct expression *expr, const gchar *symbol, struct worker_task *task,
 		const gchar *additional, struct lua_locked_state *nL)
 {
 	GQueue                         *stack;
