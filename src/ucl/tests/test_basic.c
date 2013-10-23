@@ -32,7 +32,6 @@ main (int argc, char **argv)
 	struct ucl_parser *parser, *parser2;
 	ucl_object_t *obj;
 	FILE *in, *out;
-	UT_string *err = NULL;
 	unsigned char *emitted;
 	const char *fname_in = NULL, *fname_out = NULL;
 	int ret = 0;
@@ -56,11 +55,11 @@ main (int argc, char **argv)
 	else {
 		in = stdin;
 	}
-	parser = ucl_parser_new (UCL_FLAG_KEY_LOWERCASE);
+	parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
 
 	while (!feof (in)) {
 		fread (inbuf, sizeof (inbuf), 1, in);
-		ucl_parser_add_chunk (parser, inbuf, strlen (inbuf), &err);
+		ucl_parser_add_chunk (parser, inbuf, strlen (inbuf));
 	}
 	fclose (in);
 
@@ -73,20 +72,20 @@ main (int argc, char **argv)
 	else {
 		out = stdout;
 	}
-	if (err != NULL) {
-		fprintf (out, "Error occurred: %s\n", err->d);
+	if (ucl_parser_get_error(parser) != NULL) {
+		fprintf (out, "Error occurred: %s\n", ucl_parser_get_error(parser));
 		ret = 1;
 		goto end;
 	}
-	obj = ucl_parser_get_object (parser, &err);
+	obj = ucl_parser_get_object (parser);
 	emitted = ucl_object_emit (obj, UCL_EMIT_CONFIG);
 	ucl_parser_free (parser);
 	ucl_object_unref (obj);
-	parser2 = ucl_parser_new (UCL_FLAG_KEY_LOWERCASE);
-	ucl_parser_add_chunk (parser2, emitted, strlen (emitted), &err);
+	parser2 = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+	ucl_parser_add_chunk (parser2, emitted, strlen (emitted));
 
-	if (err != NULL) {
-		fprintf (out, "Error occurred: %s\n", err->d);
+	if (ucl_parser_get_error(parser2) != NULL) {
+		fprintf (out, "Error occurred: %s\n", ucl_parser_get_error(parser2));
 		fprintf (out, "%s\n", emitted);
 		ret = 1;
 		goto end;
@@ -94,7 +93,7 @@ main (int argc, char **argv)
 	if (emitted != NULL) {
 		free (emitted);
 	}
-	obj = ucl_parser_get_object (parser2, &err);
+	obj = ucl_parser_get_object (parser2);
 	emitted = ucl_object_emit (obj, UCL_EMIT_CONFIG);
 
 	fprintf (out, "%s\n", emitted);
@@ -107,6 +106,7 @@ end:
 	if (parser2 != NULL) {
 		ucl_parser_free (parser2);
 	}
+
 	fclose (out);
 
 	return ret;

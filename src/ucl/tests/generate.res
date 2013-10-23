@@ -15,4 +15,7 @@ key8 = 1048576;
 key9 = 3.140000;
 key10 = true;
 key11 = false;
+key12 = "gslin@gslin.org";
+key13 = "#test";
+"k=3" = true;
 

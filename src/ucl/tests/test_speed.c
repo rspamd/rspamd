@@ -40,7 +40,6 @@ main (int argc, char **argv)
 	struct ucl_parser *parser;
 	ucl_object_t *obj;
 	int fin;
-	UT_string *err = NULL;
 	unsigned char *emitted;
 	struct stat st;
 	const char *fname_in = NULL;
@@ -59,7 +58,7 @@ main (int argc, char **argv)
 		perror ("open failed");
 		exit (EXIT_FAILURE);
 	}
-	parser = ucl_parser_new (UCL_FLAG_ZEROCOPY);
+	parser = ucl_parser_new (UCL_PARSER_ZEROCOPY);
 
 	(void)fstat (fin, &st);
 	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fin, 0);
@@ -71,15 +70,15 @@ main (int argc, char **argv)
 	close (fin);
 
 	clock_gettime (CLOCK_MONOTONIC, &start);
-	ucl_parser_add_chunk (parser, map, st.st_size, &err);
+	ucl_parser_add_chunk (parser, map, st.st_size);
 
-	obj = ucl_parser_get_object (parser, &err);
+	obj = ucl_parser_get_object (parser);
 	clock_gettime (CLOCK_MONOTONIC, &end);
 
 	seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.;
 	printf ("ucl: parsed input in %.4f seconds\n", seconds);
-	if (err != NULL) {
-		printf ("Error occurred: %s\n", err->d);
+	if (ucl_parser_get_error(parser)) {
+		printf ("Error occurred: %s\n", ucl_parser_get_error(parser));
 		ret = 1;
 	}
 
