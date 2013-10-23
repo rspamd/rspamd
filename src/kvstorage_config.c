@@ -516,7 +516,7 @@ init_kvstorage_config (void)
 	kv_parser->state = KVSTORAGE_STATE_PARAM;
 	kv_parser->pool = memory_pool_new (memory_pool_get_size ());
 
-	register_subparser ("keystorage", XML_READ_START, parser, kvstorage_cleanup, kv_parser);
+	register_subparser ("keystorage", 0, parser, kvstorage_cleanup, kv_parser);
 }
 
 /* Get configuration for kvstorage with specified ID */

@@ -4,7 +4,7 @@
 #include "config.h"
 #include "cfg_file.h"
 
-#define MAX_NAME 8192
+#define MAX_NAME 128
 
 #define XML_START_MISSING 1
 #define XML_PARAM_MISSING 2
@@ -13,26 +13,6 @@
 #define XML_INVALID_ATTR 5
 
 #define MAX_INHERIT 5
-
-enum xml_read_state {
-	XML_READ_START,
-	XML_READ_PARAM,
-	XML_READ_MODULE,
-	XML_READ_MODULE_META,
-	XML_READ_MODULES,
-	XML_READ_CLASSIFIER,
-	XML_READ_STATFILE,
-	XML_READ_METRIC,
-	XML_READ_WORKER,
-	XML_READ_VIEW,
-	XML_READ_LOGGING,
-	XML_READ_OPTIONS,
-	XML_READ_VALUE,
-	XML_SKIP_ELEMENTS,
-	XML_ERROR,
-	XML_SUBPARSER,
-	XML_END
-};
 
 enum module_opt_type {
 	MODULE_OPT_TYPE_STRING = 0,
@@ -51,13 +31,13 @@ enum module_opt_type {
  * Structure that is used for semantic resolution of configuration
  */
 struct rspamd_xml_userdata {
-	enum xml_read_state state;				/*< state of parser							*/
+	int state;				/*< state of parser							*/
 	struct config_file *cfg;				/*< configuration object 					*/
-	gchar section_name[MAX_NAME];			/*< current section							*/
+	gchar section_name[MAX_INHERIT][MAX_NAME];			/*< current section							*/
 	gpointer section_pointer;				/*< pointer to object related with section	*/
 	gpointer parent_pointer[MAX_INHERIT];	/*< parent's section object					*/
 	GHashTable *cur_attrs;					/*< attributes of current tag				*/
-	GQueue *if_stack;						/*< stack of if elements					*/
+	gint nested;
 };
 
 /* Text is NULL terminated here */
@@ -181,7 +161,7 @@ void register_worker_opt (gint wtype, const gchar *optname, element_handler_func
 void register_classifier_opt (const gchar *ctype, const gchar *optname);
 
 /* Register new xml subparser */
-void register_subparser (const gchar *tag, enum xml_read_state state,
+void register_subparser (const gchar *tag, int state,
 		const GMarkupParser *parser, void (*fin_func)(gpointer ud), gpointer user_data);
 
 /* Check validity of module option */
