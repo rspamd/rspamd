@@ -961,10 +961,10 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 	struct stat                     st;
 	gint                            fd;
 	gchar                          *data, *rcl;
-	gboolean                        res;
 	GMarkupParseContext            *ctx;
 	GError                         *err = NULL;
 	struct rspamd_rcl_section     *top;
+	gboolean res;
 
 	struct rspamd_xml_userdata ud;
 
@@ -996,7 +996,13 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 
 	top = rspamd_rcl_config_init ();
 
-	return rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err);
+	err = NULL;
+	if (!res || !rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
+		msg_err ("rcl parse error: %s", err->message);
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static void

@@ -36,16 +36,16 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 	gchar *filepath;
 	const gchar *facility, *log_type, *log_level;
 
-	val = ucl_obj_get_key (obj, "type");
-	if (val != NULL && ucl_obj_tostring_safe (val, &log_type)) {
+	val = ucl_object_find_key (obj, "type");
+	if (val != NULL && ucl_object_tostring_safe (val, &log_type)) {
 		if (g_ascii_strcasecmp (log_type, "file") == 0) {
 			/* Need to get filename */
-			val = ucl_obj_get_key (obj, "filename");
+			val = ucl_object_find_key (obj, "filename");
 			if (val == NULL || val->type != UCL_STRING) {
 				g_set_error (err, CFG_RCL_ERROR, ENOENT, "filename attribute must be specified for file logging type");
 				return FALSE;
 			}
-			if ((filepath = realpath (ucl_obj_tostring (val), NULL)) == NULL ||
+			if ((filepath = realpath (ucl_object_tostring (val), NULL)) == NULL ||
 					access (filepath, W_OK) == -1) {
 				g_set_error (err, CFG_RCL_ERROR, errno, "log file is inaccessible");
 				return FALSE;
@@ -57,8 +57,8 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 			/* Need to get facility */
 			cfg->log_facility = LOG_DAEMON;
 			cfg->log_type = RSPAMD_LOG_SYSLOG;
-			val = ucl_obj_get_key (obj, "facility");
-			if (val != NULL && ucl_obj_tostring_safe (val, &facility)) {
+			val = ucl_object_find_key (obj, "facility");
+			if (val != NULL && ucl_object_tostring_safe (val, &facility)) {
 				if (g_ascii_strcasecmp (facility, "LOG_AUTH") == 0 ||
 						g_ascii_strcasecmp (facility, "auth") == 0 ) {
 					cfg->log_facility = LOG_AUTH;
@@ -131,8 +131,8 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 	}
 
 	/* Handle log level */
-	val = ucl_obj_get_key (obj, "level");
-	if (val != NULL && ucl_obj_tostring_safe (val, &log_level)) {
+	val = ucl_object_find_key (obj, "level");
+	if (val != NULL && ucl_object_tostring_safe (val, &log_level)) {
 		if (g_ascii_strcasecmp (log_level, "error") == 0) {
 			cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
 		}
@@ -162,8 +162,8 @@ rspamd_rcl_options_handler (struct config_file *cfg, ucl_object_t *obj,
 	const gchar *user_settings, *domain_settings;
 
 	/* Handle user and domain settings */
-	val = ucl_obj_get_key (obj, "user_settings");
-	if (val != NULL && ucl_obj_tostring_safe (val, &user_settings)) {
+	val = ucl_object_find_key (obj, "user_settings");
+	if (val != NULL && ucl_object_tostring_safe (val, &user_settings)) {
 		if (!read_settings (user_settings, "Users' settings", cfg, cfg->user_settings)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", user_settings);
 			return FALSE;
@@ -171,8 +171,8 @@ rspamd_rcl_options_handler (struct config_file *cfg, ucl_object_t *obj,
 		cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, user_settings);
 	}
 
-	val = ucl_obj_get_key (obj, "domain_settings");
-	if (val != NULL && ucl_obj_tostring_safe (val, &domain_settings)) {
+	val = ucl_object_find_key (obj, "domain_settings");
+	if (val != NULL && ucl_object_tostring_safe (val, &domain_settings)) {
 		if (!read_settings (domain_settings, "Domains settings", cfg, cfg->domain_settings)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", domain_settings);
 			return FALSE;
@@ -202,9 +202,9 @@ rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
  */
 static gboolean
 rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
-		ucl_object_t *obj, GError **err)
+		ucl_object_t *obj, gboolean is_legacy, GError **err)
 {
-	const gchar *group = "ungrouped", *description = NULL;
+	const gchar *group = "ungrouped", *description = NULL, *sym_name;
 	gdouble symbol_score, *score_ptr;
 	ucl_object_t *val;
 	struct symbols_group *sym_group;
@@ -221,26 +221,37 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 	 *	group = ...;
 	 * }
 	 */
-	if (ucl_obj_todouble_safe (obj, &symbol_score)) {
+	if (is_legacy) {
+		val = ucl_object_find_key (obj, "name");
+		if (val == NULL) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "symbol name is missing");
+			return FALSE;
+		}
+		sym_name = ucl_object_tostring (val);
+	}
+	else {
+		sym_name = ucl_object_key (obj);
+	}
+	if (ucl_object_todouble_safe (obj, &symbol_score)) {
 		description = NULL;
 	}
 	else if (obj->type == UCL_OBJECT) {
-		val = ucl_obj_get_key (obj, "score");
-		if (val == NULL || !ucl_obj_todouble_safe (val, &symbol_score)) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol score: %s", ucl_object_key (obj));
+		val = ucl_object_find_key (obj, "weight");
+		if (val == NULL || !ucl_object_todouble_safe (val, &symbol_score)) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol score: %s", sym_name);
 			return FALSE;
 		}
-		val = ucl_obj_get_key (obj, "description");
+		val = ucl_object_find_key (obj, "description");
 		if (val != NULL) {
-			description = ucl_obj_tostring (val);
+			description = ucl_object_tostring (val);
 		}
-		val = ucl_obj_get_key (obj, "group");
+		val = ucl_object_find_key (obj, "group");
 		if (val != NULL) {
-			ucl_obj_tostring_safe (val, &group);
+			ucl_object_tostring_safe (val, &group);
 		}
 	}
 	else {
-		g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol type: %s", ucl_object_key (obj));
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid symbol type: %s", sym_name);
 		return FALSE;
 	}
 
@@ -249,7 +260,7 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 
 	*score_ptr = symbol_score;
 	sym_def->weight_ptr = score_ptr;
-	sym_def->name = memory_pool_strdup (cfg->cfg_pool, ucl_object_key (obj));
+	sym_def->name = memory_pool_strdup (cfg->cfg_pool, sym_name);
 	sym_def->description = (gchar *)description;
 
 	g_hash_table_insert (metric->symbols, sym_def->name, score_ptr);
@@ -289,28 +300,29 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	ucl_object_t *val, *cur, *tmp;
-	const gchar *metric_name, *subject_name;
+	const gchar *metric_name, *subject_name, *semicolon, *act_str;
 	struct metric *metric;
 	struct metric_action *action;
 	gdouble action_score, grow_factor;
 	gint action_value;
-	gboolean new = TRUE;
+	gboolean new = TRUE, have_actions = FALSE;
 
-	val = ucl_obj_get_key (obj, "name");
-	if (val == NULL || !ucl_obj_tostring_safe (val, &metric_name)) {
+	val = ucl_object_find_key (obj, "name");
+	if (val == NULL || !ucl_object_tostring_safe (val, &metric_name)) {
 		metric_name = DEFAULT_METRIC;
 	}
 
 	metric = g_hash_table_lookup (cfg->metrics, metric_name);
 	if (metric == NULL) {
 		metric = check_metric_conf (cfg, metric);
+		metric->name = metric_name;
 	}
 	else {
 		new = FALSE;
 	}
 
 	/* Handle actions */
-	val = ucl_obj_get_key (obj, "actions");
+	val = ucl_object_find_key (obj, "actions");
 	if (val != NULL) {
 		if (val->type != UCL_OBJECT) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "actions must be an object");
@@ -318,7 +330,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 		}
 		HASH_ITER (hh, val, cur, tmp) {
 			if (!check_action_str (ucl_object_key (cur), &action_value) ||
-					!ucl_obj_todouble_safe (cur, &action_score)) {
+					!ucl_object_todouble_safe (cur, &action_score)) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid action definition: %s", ucl_object_key (cur));
 				return FALSE;
 			}
@@ -328,12 +340,38 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 		}
 	}
 	else if (new) {
-		g_set_error (err, CFG_RCL_ERROR, EINVAL, "metric %s has no actions", metric_name);
-		return FALSE;
+		/* Switch to legacy mode */
+		val = ucl_object_find_key (obj, "required_score");
+		if (val != NULL && ucl_object_todouble_safe (val, &action_score)) {
+			action = &metric->actions[METRIC_ACTION_REJECT];
+			action->action = METRIC_ACTION_REJECT;
+			action->score = action_score;
+			have_actions = TRUE;
+		}
+		val = ucl_object_find_key (obj, "action");
+		LL_FOREACH (val, cur) {
+			if (cur->type == UCL_STRING) {
+				act_str = ucl_object_tostring (cur);
+				semicolon = strchr (act_str, ':');
+				if (semicolon != NULL) {
+					if (check_action_str (act_str, &action_value)) {
+						action_score = strtod (semicolon + 1, NULL);
+						action = &metric->actions[action_value];
+						action->action = action_value;
+						action->score = action_score;
+						have_actions = TRUE;
+					}
+				}
+			}
+		}
+		if (!have_actions) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "metric %s has no actions", metric_name);
+			return FALSE;
+		}
 	}
 
 	/* Handle symbols */
-	val = ucl_obj_get_key (obj, "symbols");
+	val = ucl_object_find_key (obj, "symbols");
 	if (val != NULL) {
 		if (val->type == UCL_ARRAY) {
 			val = val->value.ov;
@@ -342,20 +380,42 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "symbols must be an object");
 			return FALSE;
 		}
-		HASH_ITER (hh, val, cur, tmp) {
-			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, err)) {
+		HASH_ITER (hh, val->value.ov, cur, tmp) {
+			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, FALSE, err)) {
 				return FALSE;
 			}
 		}
 	}
+	else {
+		/* Legacy variant */
+		val = ucl_object_find_key (obj, "symbol");
+		if (val != NULL) {
+			if (val->type == UCL_ARRAY) {
+				val = val->value.ov;
+			}
+			if (val->type != UCL_OBJECT) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "symbols must be an object");
+				return FALSE;
+			}
+			LL_FOREACH (val, cur) {
+				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, TRUE, err)) {
+					return FALSE;
+				}
+			}
+		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "metric %s has no symbols", metric_name);
+			return FALSE;
+		}
+	}
 
-	val = ucl_obj_get_key (obj, "grow_factor");
-	if (val && ucl_obj_todouble_safe (val, &grow_factor)) {
+	val = ucl_object_find_key (obj, "grow_factor");
+	if (val && ucl_object_todouble_safe (val, &grow_factor)) {
 		metric->grow_factor = grow_factor;
 	}
 
-	val = ucl_obj_get_key (obj, "subject");
-	if (val && ucl_obj_tostring_safe (val, &subject_name)) {
+	val = ucl_object_find_key (obj, "subject");
+	if (val && ucl_object_tostring_safe (val, &subject_name)) {
 		metric->subject = (gchar *)subject_name;
 	}
 
@@ -378,8 +438,8 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 	struct rspamd_worker_cfg_parser *wparser;
 	struct rspamd_worker_param_parser *whandler;
 
-	val = ucl_obj_get_key (obj, "type");
-	if (val != NULL && ucl_obj_tostring_safe (val, &worker_type)) {
+	val = ucl_object_find_key (obj, "type");
+	if (val != NULL && ucl_object_tostring_safe (val, &worker_type)) {
 		qtype = g_quark_try_string (worker_type);
 		if (qtype != 0) {
 			wrk = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
@@ -403,13 +463,13 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 		return FALSE;
 	}
 
-	val = ucl_obj_get_key (obj, "bind_socket");
+	val = ucl_object_find_key (obj, "bind_socket");
 	if (val != NULL) {
 		if (val->type == UCL_ARRAY) {
 			val = val->value.ov;
 		}
 		LL_FOREACH (val, cur) {
-			if (!ucl_obj_tostring_safe (cur, &worker_bind)) {
+			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
 			}
 			bcf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
@@ -468,7 +528,7 @@ rspamd_rcl_empty_handler (struct config_file *cfg, ucl_object_t *obj,
  * @return newly created structure
  */
 static inline struct rspamd_rcl_section*
-rspamd_rcl_add_section (struct rspamd_rcl_section *top,
+rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 		const gchar *name, rspamd_rcl_handler_t handler,
 		enum ucl_type type, gboolean required, gboolean strict_type)
 {
@@ -480,7 +540,7 @@ rspamd_rcl_add_section (struct rspamd_rcl_section *top,
 	new->type = type;
 	new->strict_type = strict_type;
 
-	HASH_ADD_KEYPTR (hh, top, new->name, strlen (new->name), new);
+	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
 	return new;
 }
 
@@ -512,15 +572,13 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section, const gchar 
 struct rspamd_rcl_section*
 rspamd_rcl_config_init (void)
 {
-	struct rspamd_rcl_section *new, *sub;
-
-	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
+	struct rspamd_rcl_section *new = NULL, *sub;
 
 	/* TODO: add all known rspamd sections here */
 	/**
 	 * Logging section
 	 */
-	sub = rspamd_rcl_add_section (new, "logging", rspamd_rcl_logging_handler, UCL_OBJECT,
+	sub = rspamd_rcl_add_section (&new, "logging", rspamd_rcl_logging_handler, UCL_OBJECT,
 			FALSE, TRUE);
 	/* Default handlers */
 	rspamd_rcl_add_default_handler (sub, "log_buffer", rspamd_rcl_parse_struct_integer,
@@ -536,7 +594,7 @@ rspamd_rcl_config_init (void)
 	/**
 	 * Options section
 	 */
-	sub = rspamd_rcl_add_section (new, "options", rspamd_rcl_options_handler, UCL_OBJECT,
+	sub = rspamd_rcl_add_section (&new, "options", rspamd_rcl_options_handler, UCL_OBJECT,
 			FALSE, TRUE);
 	rspamd_rcl_add_default_handler (sub, "statfile_pool_size", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct config_file, max_statfile_size), RSPAMD_CL_FLAG_INT_SIZE);
@@ -580,13 +638,13 @@ rspamd_rcl_config_init (void)
 	/**
 	 * Metric section
 	 */
-	sub = rspamd_rcl_add_section (new, "metric", rspamd_rcl_metric_handler, UCL_OBJECT,
+	sub = rspamd_rcl_add_section (&new, "metric", rspamd_rcl_metric_handler, UCL_OBJECT,
 			FALSE, TRUE);
 
 	/**
 	 * Worker section
 	 */
-	sub = rspamd_rcl_add_section (new, "worker", rspamd_rcl_worker_handler, UCL_OBJECT,
+	sub = rspamd_rcl_add_section (&new, "worker", rspamd_rcl_worker_handler, UCL_OBJECT,
 			FALSE, TRUE);
 	rspamd_rcl_add_default_handler (sub, "count", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct worker_conf, count), RSPAMD_CL_FLAG_INT_16);
@@ -646,7 +704,7 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 
 	/* Iterate over known sections and ignore unknown ones */
 	HASH_ITER (hh, top, cur, tmp) {
-		found = ucl_obj_get_key (obj, cur->name);
+		found = ucl_object_find_key (obj, cur->name);
 		if (found == NULL) {
 			if (cur->required) {
 				g_set_error (err, CFG_RCL_ERROR, ENOENT, "required section %s is missing", cur->name);
@@ -685,7 +743,7 @@ gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 	}
 
 	HASH_ITER (hh, section->default_parser, cur, tmp) {
-		found = ucl_obj_get_key (obj, cur->key);
+		found = ucl_object_find_key (obj, cur->key);
 		if (found != NULL) {
 			cur->pd.user_struct = ptr;
 			if (!cur->handler (cfg, found, &cur->pd, section, err)) {
@@ -747,7 +805,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
 
 	if (pd->flags == RSPAMD_CL_FLAG_INT_32) {
 		target.i32p = (gint32 *)(((gchar *)pd->user_struct) + pd->offset);
-		if (!ucl_obj_toint_safe (obj, &val)) {
+		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
 			return FALSE;
 		}
@@ -755,7 +813,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_64) {
 		target.i64p = (gint64 *)(((gchar *)pd->user_struct) + pd->offset);
-		if (!ucl_obj_toint_safe (obj, &val)) {
+		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
 			return FALSE;
 		}
@@ -763,7 +821,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_SIZE) {
 		target.sp = (gsize *)(((gchar *)pd->user_struct) + pd->offset);
-		if (!ucl_obj_toint_safe (obj, &val)) {
+		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
 			return FALSE;
 		}
@@ -771,7 +829,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
 	}
 	else if (pd->flags == RSPAMD_CL_FLAG_INT_16) {
 		target.i16p = (gint16 *)(((gchar *)pd->user_struct) + pd->offset);
-		if (!ucl_obj_toint_safe (obj, &val)) {
+		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
 			return FALSE;
 		}
@@ -779,7 +837,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
 	}
 	else {
 		target.ip = (gint *)(((gchar *)pd->user_struct) + pd->offset);
-		if (!ucl_obj_toint_safe (obj, &val)) {
+		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to integer");
 			return FALSE;
 		}
@@ -798,7 +856,7 @@ rspamd_rcl_parse_struct_double (struct config_file *cfg, ucl_object_t *obj,
 
 	target = (gdouble *)(((gchar *)pd->user_struct) + pd->offset);
 
-	if (!ucl_obj_todouble_safe (obj, target)) {
+	if (!ucl_object_todouble_safe (obj, target)) {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to double");
 		return FALSE;
 	}
@@ -820,7 +878,7 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, ucl_object_t *obj,
 	} target;
 	gdouble val;
 
-	if (!ucl_obj_todouble_safe (obj, &val)) {
+	if (!ucl_object_todouble_safe (obj, &val)) {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert param to double");
 		return FALSE;
 	}
