@@ -420,7 +420,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 	}
 
 	/* Insert the resulting metric */
-	g_hash_table_insert (cfg->metrics, metric->name, metric);
+	g_hash_table_insert (cfg->metrics, (void *)metric->name, metric);
 	cfg->metrics_list = g_list_prepend (cfg->metrics_list, metric);
 
 	return TRUE;
@@ -694,7 +694,7 @@ gboolean
 rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 		struct config_file *cfg, ucl_object_t *obj, GError **err)
 {
-	ucl_object_t *found;
+	ucl_object_t *found, *cur_obj;
 	struct rspamd_rcl_section *cur, *tmp;
 
 	if (obj->type != UCL_OBJECT) {
@@ -719,8 +719,10 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 					return FALSE;
 				}
 			}
-			if (!cur->handler (cfg, found, NULL, cur, err)) {
-				return FALSE;
+			LL_FOREACH (found, cur_obj) {
+				if (!cur->handler (cfg, cur_obj, NULL, cur, err)) {
+					return FALSE;
+				}
 			}
 		}
 	}

@@ -55,7 +55,7 @@ struct metric_action {
  * Common definition of metric
  */
 struct metric {
-	gchar *name;									/**< name of metric									*/
+	const gchar *name;								/**< name of metric									*/
 	gchar *func_name;								/**< name of consolidation function					*/
 	metric_cons_func func;							/**< c consolidation function						*/
 	double grow_factor;								/**< grow factor for metric							*/
