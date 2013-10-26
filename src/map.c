@@ -767,12 +767,12 @@ file_callback (gint fd, short what, void *ud)
 	struct rspamd_map              *map = ud;
 	struct file_map_data           *data = map->map_data;
 	struct stat                     st;
-	gdouble							jittered_msec;
+	gdouble							jittered_sec;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_msec = (map->cfg->map_timeout + g_random_double ());
-	msec_to_tv (jittered_msec, &map->tv);
+	jittered_sec = (map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
+	double_to_tv (jittered_sec, &map->tv);
 
 	evtimer_add (&map->ev, &map->tv);
 
@@ -900,12 +900,12 @@ http_callback (gint fd, short what, void *ud)
 	struct http_map_data           *data = map->map_data;
 	gint                            sock;
 	struct http_callback_data      *cbd;
-	gdouble							jittered_msec;
+	gdouble							jittered_sec;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_msec = (map->cfg->map_timeout + g_random_double ());
-	msec_to_tv (jittered_msec, &map->tv);
+	jittered_sec = (map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
+	double_to_tv (jittered_sec, &map->tv);
 	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
@@ -944,7 +944,7 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 	GList                          *cur = cfg->maps;
 	struct rspamd_map              *map;
 	struct file_map_data           *fdata;
-	gdouble							jittered_msec;
+	gdouble							jittered_sec;
 
 	/* First of all do synced read of data */
 	while (cur) {
@@ -960,8 +960,8 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 				read_map_file (map, map->map_data);
 			}
 			/* Plan event with jitter */
-			jittered_msec = (map->cfg->map_timeout + g_random_double ()) / 2.;
-			msec_to_tv (jittered_msec, &map->tv);
+			jittered_sec = (map->cfg->map_timeout + g_random_double ()  * map->cfg->map_timeout) / 2.;
+			double_to_tv (jittered_sec, &map->tv);
 			evtimer_add (&map->ev, &map->tv);
 		}
 		else if (map->protocol == MAP_PROTO_HTTP) {
@@ -970,8 +970,8 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 			/* Read initial data */
 			read_http_sync (map, map->map_data);
 			/* Plan event with jitter */
-			jittered_msec = (map->cfg->map_timeout + g_random_double ());
-			msec_to_tv (jittered_msec, &map->tv);
+			jittered_sec = (map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
+			double_to_tv (jittered_sec, &map->tv);
 			evtimer_add (&map->ev, &map->tv);
 		}
 		cur = g_list_next (cur);

@@ -216,6 +216,7 @@ gchar * escape_braces_addr_fstr (memory_pool_t *pool, f_str_t *in);
  * Convert milliseconds to timeval fields
  */
 #define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = ((msec) - (tv)->tv_sec * 1000) * 1000; } while(0)
+#define double_to_tv(dbl, tv) do { (tv)->tv_sec = (int)(dbl); (tv)->tv_usec = ((dbl) - (int)(dbl))*1000*1000; } while(0)
 #define tv_to_msec(tv) (tv)->tv_sec * 1000 + (tv)->tv_usec / 1000
 
 /* Compare two emails for building emails tree */
