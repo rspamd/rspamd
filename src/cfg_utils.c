@@ -960,7 +960,7 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 {
 	struct stat                     st;
 	gint                            fd;
-	gchar                          *data;
+	gchar                          *data, *rcl;
 	gboolean                        res;
 	GMarkupParseContext            *ctx;
 	GError                         *err = NULL;
@@ -994,7 +994,10 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 
 	munmap (data, st.st_size);
 
-	return res;
+	rcl = ucl_object_emit (cfg->rcl_obj, UCL_EMIT_CONFIG);
+	printf ("%s", rcl);
+
+	return FALSE;
 }
 
 static void

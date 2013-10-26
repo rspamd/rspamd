@@ -1173,9 +1173,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 								const gchar **attribute_values, gpointer user_data, GError **error)
 {
 	struct rspamd_xml_userdata *ud = user_data;
-	struct xml_subparser       *subparser;
-	struct classifier_config   *ccf;
-	gchar                      *res, *condition;
+	gchar                      *res;
 	ucl_object_t                *obj;
 
 
@@ -1192,51 +1190,27 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			break;
 		case XML_READ_PARAM:
 			/* Read parameter name and try to find among list of known parameters */
-			if (g_ascii_strcasecmp (element_name, "classifier") == 0) {
-				if (extract_attr ("type", attribute_names, attribute_values, &res)) {
-					ud->state = XML_READ_CLASSIFIER;
+			/* Legacy XML support */
+			if (g_ascii_strcasecmp (element_name, "param") == 0) {
+				if (extract_attr ("value", attribute_names, attribute_values, &res)) {
+					element_name = res;
 				}
 				else {
-					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'type' is required for tag 'classifier'");
+					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'value' is required for tag 'param'");
 					ud->state = XML_ERROR;
 				}
 			}
-			else {
-				/* Legacy XML support */
-				if (g_ascii_strcasecmp (element_name, "param") == 0) {
-					if (extract_attr ("value", attribute_names, attribute_values, &res)) {
-						element_name = res;
-					}
-					else {
-						*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'value' is required for tag 'param'");
-						ud->state = XML_ERROR;
-					}
-				}
 
-				if (ud->nested == 0) {
-					/* Top object */
-					obj = ucl_object_new ();
-					obj->type = UCL_OBJECT;
-					ud->parent_pointer[0] = obj;
-					ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
-					process_attrs (attribute_names, attribute_values, obj);
-				}
-				rspamd_strlcpy (ud->section_name[ud->nested], element_name, MAX_NAME);
-				ud->nested ++;
+			if (ud->nested == 0) {
+				/* Top object */
+				obj = ucl_object_new ();
+				obj->type = UCL_OBJECT;
+				ud->parent_pointer[0] = obj;
+				ud->cfg->rcl_obj = ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
+				process_attrs (attribute_names, attribute_values, obj);
 			}
-			break;
-		case XML_READ_CLASSIFIER:
-			if (g_ascii_strcasecmp (element_name, "statfile") == 0) {
-				ud->state = XML_READ_STATFILE;
-
-				/* Now section pointer is statfile and parent pointer is classifier */
-				ud->parent_pointer[0] = ud->section_pointer;
-				ud->section_pointer = check_statfile_conf (ud->cfg, NULL);
-			}
-			else {
-				rspamd_strlcpy (ud->section_name[ud->nested], element_name, MAX_NAME);
-				/* Save attributes */
-			}
+			rspamd_strlcpy (ud->section_name[ud->nested], element_name, MAX_NAME);
+			ud->nested ++;
 			break;
 		default:
 			if (*error == NULL) {
@@ -1254,11 +1228,17 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 
 	struct rspamd_xml_userdata *ud = user_data;
 
-	if (g_ascii_strcasecmp (ud->section_name[ud->nested - 1], element_name) == 0) {
-		ud->nested --;
+	if (ud->nested > 0) {
+		if (g_ascii_strcasecmp (ud->section_name[ud->nested - 1], element_name) == 0) {
+			ud->nested --;
+		}
+		else {
+			*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched", element_name);
+			ud->state = XML_ERROR;
+		}
 	}
-	else {
-		*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched", element_name);
+	else if (g_ascii_strcasecmp ("rspamd", element_name) != 0) {
+		*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched on the top level", element_name);
 		ud->state = XML_ERROR;
 	}
 }
@@ -1279,9 +1259,10 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 		return;
 	}
 
-	top = ud->parent_pointer[ud->nested - 1];
-	ucl_object_insert_key (top, ucl_object_fromstring_common (text, text_len, UCL_STRING_PARSE),
-			ud->section_name[ud->nested], 0, true);
+	top = ud->parent_pointer[0];
+	ud->parent_pointer[0] =
+			ucl_object_insert_key (top, ucl_object_fromstring_common (text, text_len, UCL_STRING_PARSE),
+			ud->section_name[ud->nested - 1], 0, true);
 }
 
 void 
