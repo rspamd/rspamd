@@ -95,7 +95,6 @@ main(int argc, char **argv)
 	const char *fn = NULL;
 	char inbuf[8192];
 	struct ucl_parser *parser;
-	UT_string *err = NULL;
 	int k, ret = 0;
 	ucl_object_t *obj = NULL;
 	ucl_object_t *par;
@@ -118,18 +117,18 @@ main(int argc, char **argv)
 	parser = ucl_parser_new (0);
 	while (!feof (in)) {
 		fread (inbuf, sizeof (inbuf), 1, in);
-		ucl_parser_add_chunk (parser, inbuf, strlen (inbuf), &err);
+		ucl_parser_add_chunk (parser, inbuf, strlen (inbuf));
 	}
 	fclose (in);
-	if (err != NULL ) {
-		printf ("Error occured: %s\n", err->d);
+	if (ucl_parser_get_error(parser) ) {
+		printf ("Error occured: %s\n", ucl_parser_get_error(parser));
 		ret = 1;
 		goto end;
 	}
 
-	obj = ucl_parser_get_object (parser, &err);
-	if (err != NULL ) {
-		printf ("Error occured: %s\n", err->d);
+	obj = ucl_parser_get_object (parser);
+	if (ucl_parser_get_error(parser)) {
+		printf ("Error occured: %s\n", ucl_parser_get_error(parser));
 		ret = 1;
 		goto end;
 	}

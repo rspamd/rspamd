@@ -31,8 +31,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include "config.h"
 
+#include "config.h"
 #include "uthash.h"
 #include "utlist.h"
 

@@ -98,6 +98,10 @@ main (int argc, char **argv)
 				i == '"' || i == '\f') {
 			r += print_flag ("UCL_CHARACTER_JSON_UNSAFE", &need_or, valbuf + r);
 		}
+		if (i == '\n' || i == '\r' || i == '\\' || i == '\b' || i == '\t' ||
+				i == '"' || i == '\f' || i == '=' || i == ':' || i == '{' || i == '[' || i == ' ') {
+			r += print_flag ("UCL_CHARACTER_UCL_UNSAFE", &need_or, valbuf + r);
+		}
 
 		if (!need_or) {
 			r += print_flag ("UCL_CHARACTER_DENIED", &need_or, valbuf + r);
