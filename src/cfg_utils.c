@@ -985,6 +985,7 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 	close (fd);
 	
 	/* Prepare xml parser */
+	memset (&ud, 0, sizeof (ud));
 	ud.cfg = cfg;
 	ud.state = 0;
 	ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
