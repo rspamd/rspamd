@@ -734,11 +734,11 @@ extract_attr (const gchar *attr, const gchar **attribute_names, const gchar **at
 
 
 /* Find among attributes required ones and form new array of pairs attribute-value */
-static void
+static gboolean
 process_attrs (const gchar **attribute_names, const gchar **attribute_values, ucl_object_t *top)
 {
 	const gchar                         **attr, **value;
-	GHashTable                     *res;
+	gboolean res = FALSE;
 
 	attr = attribute_names;
 	value = attribute_values;
@@ -747,7 +747,9 @@ process_attrs (const gchar **attribute_names, const gchar **attribute_values, uc
 		ucl_object_insert_key (top, ucl_object_fromstring_common (*value, 0, UCL_STRING_PARSE), *attr, 0, TRUE);
 		attr ++;
 		value ++;
+		res = TRUE;
 	}
+	return res;
 }
 
 
@@ -923,21 +925,6 @@ handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GH
 	return TRUE;
 }
 
-/* Variables and composites */
-gboolean 
-handle_variable (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	gchar                        *val;
-	
-	if (attrs == NULL || (val = g_hash_table_lookup (attrs, "name")) == NULL) {
-		msg_err ("'name' attribute is required for tag 'variable'");
-		return FALSE;
-	}
-
-	g_hash_table_insert (cfg->variables, val, memory_pool_strdup (cfg->cfg_pool, data));
-	return TRUE;
-}
-
 gboolean 
 handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
@@ -964,90 +951,6 @@ handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHas
 }
 
 /* View section */
-gboolean 
-handle_view_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct rspamd_view          *view = ctx->section_pointer;
-
-	if (!add_view_ip (view, data)) {
-		msg_err ("invalid ip line in view definition: ip = '%s'", data);
-		return FALSE;
-	}
-	
-	return TRUE;
-}
-gboolean 
-handle_view_client_ip (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct rspamd_view          *view = ctx->section_pointer;
-
-	if (!add_view_client_ip (view, data)) {
-		msg_err ("invalid ip line in view definition: ip = '%s'", data);
-		return FALSE;
-	}
-	
-	return TRUE;
-}
-gboolean 
-handle_view_from (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct rspamd_view          *view = ctx->section_pointer;
-
-	if (!add_view_from (view, data)) {
-		msg_err ("invalid from line in view definition: from = '%s'", data);
-		return FALSE;
-	}
-	
-	return TRUE;
-}
-gboolean 
-handle_view_rcpt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct rspamd_view          *view = ctx->section_pointer;
-
-	if (!add_view_rcpt (view, data)) {
-		msg_err ("invalid from line in view definition: rcpt = '%s'", data);
-		return FALSE;
-	}
-
-	return TRUE;
-}
-gboolean
-handle_view_symbols (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct rspamd_view          *view = ctx->section_pointer;
-
-	if (!add_view_symbols (view, data)) {
-		msg_err ("invalid symbols line in view definition: symbols = '%s'", data);
-		return FALSE;
-	}
-	cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, data);
-
-	return TRUE;
-}
-
-/* Settings */
-gboolean 
-handle_user_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	if (!read_settings (data, "Users' settings", cfg, cfg->user_settings)) {
-		msg_err ("cannot read settings %s", data);
-		return FALSE;
-	}
-	cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, data);
-
-	return TRUE;
-}
-gboolean 
-handle_domain_settings (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	if (!read_settings (data, "Domains' settings", cfg, cfg->domain_settings)) {
-		msg_err ("cannot read settings %s", data);
-		return FALSE;
-	}
-
-	return TRUE;
-}
 
 /* Classifier */
 gboolean 
@@ -1059,31 +962,6 @@ handle_classifier_tokenizer (struct config_file *cfg, struct rspamd_xml_userdata
 		msg_err ("unknown tokenizer %s", data);
 		return FALSE;
 	}
-
-	return TRUE;
-}
-
-gboolean 
-handle_classifier_opt (struct config_file *cfg, struct rspamd_xml_userdata *ctx, const gchar *tag, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct classifier_config       *ccf = ctx->section_pointer;
-	const gchar                    *name;
-	struct xml_config_param        *cparam;
-	GHashTable                     *classifier_config;
-
-	if (g_ascii_strcasecmp (tag, "option") == 0 || g_ascii_strcasecmp (tag, "param") == 0) {
-		if (attrs == NULL || (name = g_hash_table_lookup (attrs, "name")) == NULL) {
-			msg_err ("worker param tag must have \"name\" attribute");
-			return FALSE;
-		}
-	}
-	else {
-		name = memory_pool_strdup (cfg->cfg_pool, tag);
-	}
-
-
-	g_hash_table_insert (ccf->opts, (char *)name, memory_pool_strdup (cfg->cfg_pool, data));
-
 
 	return TRUE;
 }
@@ -1174,7 +1052,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 {
 	struct rspamd_xml_userdata *ud = user_data;
 	gchar                      *res;
-	ucl_object_t                *obj;
+	ucl_object_t                *obj, *tobj;
 
 
 	switch (ud->state) {
@@ -1201,6 +1079,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				}
 			}
 
+			rspamd_strlcpy (ud->section_name[ud->nested], element_name, MAX_NAME);
 			if (ud->nested == 0) {
 				/* Top object */
 				obj = ucl_object_new ();
@@ -1208,9 +1087,31 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				ud->parent_pointer[0] = obj;
 				ud->cfg->rcl_obj = ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
 				process_attrs (attribute_names, attribute_values, obj);
+				ud->nested ++;
 			}
-			rspamd_strlcpy (ud->section_name[ud->nested], element_name, MAX_NAME);
-			ud->nested ++;
+			else {
+				tobj = ucl_object_new ();
+				if (process_attrs (attribute_names, attribute_values, tobj)) {
+					ud->parent_pointer[ud->nested] = tobj;
+					tobj->type = UCL_OBJECT;
+					ud->parent_pointer[ud->nested - 1] =
+							ucl_object_insert_key (ud->parent_pointer[ud->nested - 1], tobj, element_name, 0, true);
+					ud->nested ++;
+					/* XXX: very ugly */
+					rspamd_strlcpy (ud->section_name[ud->nested], "name", MAX_NAME);
+				}
+				else if (g_ascii_strcasecmp (element_name, "statfile") == 0) {
+					/* XXX: ugly as well */
+					ud->parent_pointer[ud->nested] = tobj;
+					tobj->type = UCL_OBJECT;
+					ud->parent_pointer[ud->nested - 1] =
+							ucl_object_insert_key (ud->parent_pointer[ud->nested - 1], tobj, element_name, 0, true);
+					ud->nested ++;
+				}
+				else {
+					ucl_object_unref (tobj);
+				}
+			}
 			break;
 		default:
 			if (*error == NULL) {
@@ -1232,7 +1133,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		if (g_ascii_strcasecmp (ud->section_name[ud->nested - 1], element_name) == 0) {
 			ud->nested --;
 		}
-		else {
+		else if (g_ascii_strcasecmp (ud->section_name[ud->nested], element_name) != 0) {
 			*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched", element_name);
 			ud->state = XML_ERROR;
 		}
@@ -1262,7 +1163,7 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 	top = ud->parent_pointer[ud->nested - 1];
 	ud->parent_pointer[ud->nested - 1] =
 			ucl_object_insert_key (top, ucl_object_fromstring_common (text, text_len, UCL_STRING_PARSE),
-			ud->section_name[ud->nested - 1], 0, true);
+			ud->section_name[ud->nested], 0, true);
 }
 
 void 

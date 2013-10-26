@@ -964,6 +964,7 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 	gboolean                        res;
 	GMarkupParseContext            *ctx;
 	GError                         *err = NULL;
+	struct rspamd_rcl_section     *top;
 
 	struct rspamd_xml_userdata ud;
 
@@ -993,10 +994,9 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 
 	munmap (data, st.st_size);
 
-	rcl = ucl_object_emit (cfg->rcl_obj, UCL_EMIT_CONFIG);
-	printf ("%s", rcl);
+	top = rspamd_rcl_config_init ();
 
-	return FALSE;
+	return rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err);
 }
 
 static void
