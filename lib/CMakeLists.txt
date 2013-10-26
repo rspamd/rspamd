@@ -35,10 +35,6 @@ SET(LIBRSPAMDSERVERSRC
 				../src/dynamic_cfg.c
 				../src/events.c
 				../src/html.c
-				../src/kvstorage.c
-				../src/kvstorage_config.c
-				../src/kvstorage_file.c
-				../src/lmtp_proto.c
 				../src/proxy.c
 				../src/roll_history.c
 				../src/settings.c

@@ -1259,8 +1259,8 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 		return;
 	}
 
-	top = ud->parent_pointer[0];
-	ud->parent_pointer[0] =
+	top = ud->parent_pointer[ud->nested - 1];
+	ud->parent_pointer[ud->nested - 1] =
 			ucl_object_insert_key (top, ucl_object_fromstring_common (text, text_len, UCL_STRING_PARSE),
 			ud->section_name[ud->nested - 1], 0, true);
 }

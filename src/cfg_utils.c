@@ -989,7 +989,6 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 	ud.cfg = cfg;
 	ud.state = 0;
 	ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
-	init_kvstorage_config ();
 	res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
 
 	munmap (data, st.st_size);
