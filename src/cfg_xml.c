@@ -1254,7 +1254,7 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 
 	struct rspamd_xml_userdata *ud = user_data;
 
-	if (g_ascii_strcasecmp (ud->section_name[ud->nested], element_name) == 0) {
+	if (g_ascii_strcasecmp (ud->section_name[ud->nested - 1], element_name) == 0) {
 		ud->nested --;
 	}
 	else {
