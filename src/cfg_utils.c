@@ -955,18 +955,31 @@ static GMarkupParser xml_parser = {
 	.error = rspamd_xml_error,
 };
 
+static const char*
+get_filename_extension (const char *filename)
+{
+	const char *dot_pos = strrchr (filename, '.');
+
+	if (dot_pos != NULL) {
+		return (dot_pos + 1);
+	}
+
+	return NULL;
+}
+
 gboolean
-read_xml_config (struct config_file *cfg, const gchar *filename)
+read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar *convert_to)
 {
 	struct stat                     st;
 	gint                            fd;
 	gchar                          *data, *rcl;
+	const gchar                    *ext;
 	GMarkupParseContext            *ctx;
 	GError                         *err = NULL;
 	struct rspamd_rcl_section     *top;
-	gboolean res;
-
+	gboolean res, is_xml = FALSE;
 	struct rspamd_xml_userdata ud;
+	struct ucl_parser *parser;
 
 	if (stat (filename, &st) == -1) {
 		msg_err ("cannot stat %s: %s", filename, strerror (errno));
@@ -985,21 +998,56 @@ read_xml_config (struct config_file *cfg, const gchar *filename)
 	}
 	close (fd);
 	
-	/* Prepare xml parser */
-	memset (&ud, 0, sizeof (ud));
-	ud.cfg = cfg;
-	ud.state = 0;
-	ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
-	res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
+	ext = get_filename_extension (filename);
+	if (ext != NULL && strcmp (ext, "xml") == 0) {
+		is_xml = TRUE;
+	}
 
-	munmap (data, st.st_size);
+	if (is_xml) {
+		/* Prepare xml parser */
+		memset (&ud, 0, sizeof (ud));
+		ud.cfg = cfg;
+		ud.state = 0;
+		ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
+		res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
 
-	top = rspamd_rcl_config_init ();
+		munmap (data, st.st_size);
 
-	err = NULL;
+		top = rspamd_rcl_config_init ();
+
+		err = NULL;
+	}
+	else {
+		parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+		if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
+			msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
+			munmap (data, st.st_size);
+			return FALSE;
+		}
+		munmap (data, st.st_size);
+		cfg->rcl_obj = ucl_parser_get_object (parser);
+	}
+
+
 	if (!res || !rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
 		msg_err ("rcl parse error: %s", err->message);
 		return FALSE;
+	}
+
+	if (is_xml && convert_to != NULL) {
+		/* Convert XML config to UCL */
+		rcl = ucl_object_emit (cfg->rcl_obj, UCL_EMIT_CONFIG);
+		if (rcl != NULL) {
+			fd = open (convert_to, O_CREAT|O_TRUNC|O_WRONLY, 00644);
+			if (fd == -1) {
+				msg_err ("cannot open %s: %s", convert_to, strerror (errno));
+			}
+			else if (write (fd, rcl, strlen (rcl)) == -1) {
+				msg_err ("cannot write rcl %s: %s", convert_to, strerror (errno));
+			}
+			close (fd);
+			free (rcl);
+		}
 	}
 
 	return TRUE;

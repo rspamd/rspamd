@@ -22,7 +22,7 @@
 #include "roll_history.h"
 
 /* Default values */
-#define FIXED_CONFIG_FILE ETC_PREFIX "/rspamd.xml"
+#define FIXED_CONFIG_FILE ETC_PREFIX "/rspamd.conf"
 /* Time in seconds to exit for old worker */
 #define SOFT_SHUTDOWN_TIME 10
 /* Default metric name */
