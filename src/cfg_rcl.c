@@ -24,6 +24,7 @@
 #include "cfg_rcl.h"
 #include "main.h"
 #include "settings.h"
+#include "lua/lua_common.h"
 
 /*
  * Common section handlers
@@ -506,6 +507,115 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 	return TRUE;
 }
 
+static void
+rspamd_rcl_set_lua_globals (struct config_file *cfg, lua_State *L)
+{
+	struct config_file           **pcfg;
+
+	/* First check for global variable 'config' */
+	lua_getglobal (L, "config");
+	if (lua_isnil (L, -1)) {
+		/* Assign global table to set up attributes */
+		lua_newtable (L);
+		lua_setglobal (L, "config");
+	}
+
+	lua_getglobal (L, "metrics");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "metrics");
+	}
+
+	lua_getglobal (L, "composites");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "composites");
+	}
+
+	lua_getglobal (L, "classifiers");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "classifiers");
+	}
+
+	pcfg = lua_newuserdata (L, sizeof (struct config_file *));
+	lua_setclass (L, "rspamd{config}", -1);
+	*pcfg = cfg;
+	lua_setglobal (L, "rspamd_config");
+
+	/* Clear stack from globals */
+	lua_pop (L, 4);
+}
+
+static gboolean
+rspamd_rcl_lua_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	const gchar *lua_src = ucl_object_tostring (obj);
+	gchar *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
+	lua_State *L = cfg->lua_state;
+
+	tmp1 = g_strdup (lua_src);
+	tmp2 = g_strdup (lua_src);
+	lua_dir = dirname (tmp1);
+	lua_file = basename (tmp2);
+	if (lua_dir && lua_file) {
+		cur_dir = g_malloc (PATH_MAX);
+		if (getcwd (cur_dir, PATH_MAX) != NULL && chdir (lua_dir) != -1) {
+			/* Load file */
+			if (luaL_loadfile (L, lua_file) != 0) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot load lua file %s: %s",
+						lua_src, lua_tostring (L, -1));
+				if (chdir (cur_dir) == -1) {
+					msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+				}
+				g_free (cur_dir);
+				g_free (tmp1);
+				g_free (tmp2);
+				return FALSE;
+			}
+			rspamd_rcl_set_lua_globals (cfg, L);
+			/* Now do it */
+			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot init lua file %s: %s",
+						lua_src, lua_tostring (L, -1));
+				if (chdir (cur_dir) == -1) {
+					msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+				}
+				g_free (cur_dir);
+				g_free (tmp1);
+				g_free (tmp2);
+				return FALSE;
+			}
+		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
+					lua_src, strerror (errno));
+			if (chdir (cur_dir) == -1) {
+				msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+			}
+			g_free (cur_dir);
+			g_free (tmp1);
+			g_free (tmp2);
+			return FALSE;
+
+		}
+		if (chdir (cur_dir) == -1) {
+			msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+		}
+		g_free (cur_dir);
+		g_free (tmp1);
+		g_free (tmp2);
+	}
+	else {
+		g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot find to %s: %s",
+							lua_src, strerror (errno));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -652,6 +762,12 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct worker_conf, rlimit_nofile), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "max_core", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct worker_conf, rlimit_maxcore), RSPAMD_CL_FLAG_INT_32);
+
+	/**
+	 * Lua handler
+	 */
+	sub = rspamd_rcl_add_section (&new, "lua", rspamd_rcl_lua_handler, UCL_STRING,
+			FALSE, TRUE);
 
 	return new;
 }

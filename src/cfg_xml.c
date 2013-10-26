@@ -755,126 +755,6 @@ process_attrs (const gchar **attribute_names, const gchar **attribute_values, uc
 
 /* Handlers */
 
-static void
-set_lua_globals (struct config_file *cfg, lua_State *L)
-{
-	struct config_file           **pcfg;
-
-	/* First check for global variable 'config' */
-	lua_getglobal (L, "config");
-	if (lua_isnil (L, -1)) {
-		/* Assign global table to set up attributes */
-		lua_newtable (L);
-		lua_setglobal (L, "config");
-	}
-
-	lua_getglobal (L, "metrics");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "metrics");
-	}
-
-	lua_getglobal (L, "composites");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "composites");
-	}
-
-	lua_getglobal (L, "classifiers");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "classifiers");
-	}
-
-	pcfg = lua_newuserdata (L, sizeof (struct config_file *));
-	lua_setclass (L, "rspamd{config}", -1);
-	*pcfg = cfg;
-	lua_setglobal (L, "rspamd_config");
-
-	/* Clear stack from globals */
-	lua_pop (L, 4);
-}
-
-/* Handle lua tag */
-gboolean
-handle_lua (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	gchar                        *val, *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
-	lua_State                    *L = cfg->lua_state;
-
-	/* Now config tables can be used for configuring rspamd */
-	/* First check "src" attribute */
-	if (attrs != NULL && (val = g_hash_table_lookup (attrs, "src")) != NULL) {
-		/* Chdir */
-		tmp1 = g_strdup (val);
-		tmp2 = g_strdup (val);
-		lua_dir = dirname (tmp1);
-		lua_file = basename (tmp2);
-		if (lua_dir && lua_file) {
-			cur_dir = g_malloc (PATH_MAX);
-			if (getcwd (cur_dir, PATH_MAX) != NULL && chdir (lua_dir) != -1) {
-				/* Load file */
-				if (luaL_loadfile (L, lua_file) != 0) {
-					msg_err ("cannot load lua file %s: %s", val, lua_tostring (L, -1));
-					if (chdir (cur_dir) == -1) {
-						msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
-					}
-					g_free (cur_dir);
-					g_free (tmp1);
-					g_free (tmp2);
-					return FALSE;
-				}
-				set_lua_globals (cfg, L);
-				/* Now do it */
-				if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-					msg_err ("init of %s failed: %s", val, lua_tostring (L, -1));
-					if (chdir (cur_dir) == -1) {
-						msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
-					}
-					g_free (cur_dir);
-					g_free (tmp1);
-					g_free (tmp2);
-					return FALSE;
-				}
-			}
-			else {
-				msg_err ("cannot chdir to %s: %s", lua_dir, strerror (errno));;
-				if (chdir (cur_dir) == -1) {
-					msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
-				}
-				g_free (cur_dir);
-				g_free (tmp1);
-				g_free (tmp2);
-				return FALSE;
-			
-			}
-			if (chdir (cur_dir) == -1) {
-				msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
-			}
-			g_free (cur_dir);
-			g_free (tmp1);
-			g_free (tmp2);
-		}
-		else {
-			msg_err ("directory for file %s does not exists", val);
-		}
-	}
-	else if (data != NULL && *data != '\0') {
-		/* Try to load a string */
-		if (luaL_loadstring (L, data) != 0) {
-			msg_err ("cannot load lua chunk: %s", lua_tostring (L, -1));
-			return FALSE;
-		}
-		set_lua_globals (cfg, L);
-		/* Now do it */
-		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-			msg_err ("init of lua chunk failed: %s", lua_tostring (L, -1));
-			return FALSE;
-		}
-
-	}
-	return TRUE;
-}
 
 /* Modules section */
 gboolean 
@@ -1082,12 +962,23 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			rspamd_strlcpy (ud->section_name[ud->nested], element_name, MAX_NAME);
 			if (ud->nested == 0) {
 				/* Top object */
-				obj = ucl_object_new ();
-				obj->type = UCL_OBJECT;
-				ud->parent_pointer[0] = obj;
-				ud->cfg->rcl_obj = ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
-				process_attrs (attribute_names, attribute_values, obj);
-				ud->nested ++;
+
+				if (g_ascii_strcasecmp (element_name, "lua") == 0 &&
+						extract_attr ("src", attribute_names, attribute_values, &res)) {
+					/* Lua is 'special' tag */
+					obj = ucl_object_fromstring (res);
+					ud->cfg->rcl_obj = ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
+					ud->parent_pointer[0] = obj;
+					ud->nested ++;
+				}
+				else {
+					obj = ucl_object_new ();
+					obj->type = UCL_OBJECT;
+					ud->parent_pointer[0] = obj;
+					ud->cfg->rcl_obj = ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
+					process_attrs (attribute_names, attribute_values, obj);
+					ud->nested ++;
+				}
 			}
 			else {
 				tobj = ucl_object_new ();
@@ -1160,10 +1051,11 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 		return;
 	}
 
+
 	top = ud->parent_pointer[ud->nested - 1];
 	ud->parent_pointer[ud->nested - 1] =
 			ucl_object_insert_key (top, ucl_object_fromstring_common (text, text_len, UCL_STRING_PARSE),
-			ud->section_name[ud->nested], 0, true);
+					ud->section_name[ud->nested], 0, true);
 }
 
 void 
