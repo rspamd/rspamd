@@ -1270,6 +1270,15 @@ rspamd_xml_text (GMarkupParseContext *context, const gchar *text, gsize text_len
 	struct rspamd_xml_userdata *ud = user_data;
 	ucl_object_t *top;
 	
+	while (text_len > 0 && g_ascii_isspace (*text)) {
+		text_len --;
+		text ++;
+	}
+
+	if (text_len == 0) {
+		return;
+	}
+
 	top = ud->parent_pointer[ud->nested - 1];
 	ucl_object_insert_key (top, ucl_object_fromstring_common (text, text_len, UCL_STRING_PARSE),
 			ud->section_name[ud->nested], 0, true);
