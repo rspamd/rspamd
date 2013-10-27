@@ -616,6 +616,62 @@ rspamd_rcl_lua_handler (struct config_file *cfg, ucl_object_t *obj,
 	return TRUE;
 }
 
+static gboolean
+rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	ucl_object_t *val, *cur;
+	struct stat st;
+	struct script_module *cur_mod;
+	glob_t globbuf;
+	gchar *pattern;
+	const gchar *data;
+	size_t len;
+	guint i;
+
+	val = ucl_object_find_key (obj, "path");
+
+	LL_FOREACH (val, cur) {
+		if (ucl_object_tostring_safe (cur, &data)) {
+			if (stat (data, &st) == -1) {
+				g_set_error (err, CFG_RCL_ERROR, errno, "cannot stat path %s, %s", data, strerror (errno));
+				return FALSE;
+			}
+
+			/* Handle directory */
+			if (S_ISDIR (st.st_mode)) {
+				globbuf.gl_offs = 0;
+				len = strlen (data) + sizeof ("*.lua");
+				pattern = g_malloc (len);
+				snprintf (pattern, len, "%s%s", data, "*.lua");
+
+				if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+					for (i = 0; i < globbuf.gl_pathc; i ++) {
+						cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+						cur_mod->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
+						cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
+					}
+					globfree (&globbuf);
+					g_free (pattern);
+				}
+				else {
+					g_set_error (err, CFG_RCL_ERROR, errno, "glob failed for %s, %s", pattern, strerror (errno));
+					g_free (pattern);
+					return FALSE;
+				}
+			}
+			else {
+				/* Handle single file */
+				cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+				cur_mod->path = memory_pool_strdup (cfg->cfg_pool, data);
+				cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
+			}
+		}
+	}
+
+	return TRUE;
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -767,6 +823,12 @@ rspamd_rcl_config_init (void)
 	 * Lua handler
 	 */
 	sub = rspamd_rcl_add_section (&new, "lua", rspamd_rcl_lua_handler, UCL_STRING,
+			FALSE, TRUE);
+
+	/**
+	 * Modules handler
+	 */
+	sub = rspamd_rcl_add_section (&new, "modules", rspamd_rcl_modules_handler, UCL_OBJECT,
 			FALSE, TRUE);
 
 	return new;

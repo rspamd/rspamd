@@ -754,57 +754,6 @@ process_attrs (const gchar **attribute_names, const gchar **attribute_values, uc
 
 
 /* Handlers */
-
-
-/* Modules section */
-gboolean 
-handle_module_path (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
-{
-	struct stat st;
-	struct script_module *cur;
-	glob_t globbuf;
-	gchar                           *pattern;
-	size_t len;
-	guint                           i;
-
-	if (stat (data, &st) == -1) {
-		msg_err ("cannot stat path %s, %s", data, strerror (errno));
-		return FALSE;
-	}
-	
-	/* Handle directory */
-	if (S_ISDIR (st.st_mode)) {
-		globbuf.gl_offs = 0;
-		len = strlen (data) + sizeof ("*.lua");
-		pattern = g_malloc (len);
-		snprintf (pattern, len, "%s%s", data, "*.lua");
-
-		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-			for (i = 0; i < globbuf.gl_pathc; i ++) {
-				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-				cur->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
-				cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
-			}
-			globfree (&globbuf);
-			g_free (pattern);
-		}
-		else {
-			msg_err ("glob failed: %s", strerror (errno));
-			g_free (pattern);
-			return FALSE;
-		}
-	}
-	else {
-		/* Handle single file */
-		cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-		cur->path = memory_pool_strdup (cfg->cfg_pool, data);
-		cfg->script_modules = g_list_prepend (cfg->script_modules, cur);
-	}
-
-	
-	return TRUE;
-}
-
 gboolean 
 handle_composite (struct config_file *cfg, struct rspamd_xml_userdata *ctx, GHashTable *attrs, gchar *data, gpointer user_data, gpointer dest_struct, gint offset)
 {
