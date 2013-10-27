@@ -107,7 +107,7 @@ void free_lua_locked (struct lua_locked_state *st);
  * @param L lua state
  * @param obj object to push
  */
-gint lua_rcl_obj_push (lua_State *L, ucl_object_t *obj);
+gint lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array);
 
 /**
  * Extract rcl object from lua object

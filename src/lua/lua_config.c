@@ -163,7 +163,7 @@ lua_config_get_module_opt (lua_State * L)
 		if (mname && optname) {
 			obj = get_module_opt (cfg, mname, optname);
 			if (obj) {
-				return lua_rcl_obj_push (L, obj);
+				return lua_rcl_obj_push (L, obj, TRUE);
 			}
 		}
 	}
@@ -198,7 +198,7 @@ lua_config_get_all_opt (lua_State * L)
 		if (mname) {
 			obj = ucl_obj_get_key (cfg->rcl_obj, mname);
 			if (obj != NULL) {
-				return lua_rcl_obj_push (L, obj);
+				return lua_rcl_obj_push (L, obj, TRUE);
 			}
 		}
 	}
