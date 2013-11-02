@@ -61,7 +61,9 @@ ucl_object_free_internal (ucl_object_t *obj, bool allow_rec)
 			}
 		}
 		else if (obj->type == UCL_OBJECT) {
-			ucl_hash_destroy (obj->value.ov, (ucl_hash_free_func *)ucl_obj_free);
+			if (obj->value.ov != NULL) {
+				ucl_hash_destroy (obj->value.ov, (ucl_hash_free_func *)ucl_obj_free);
+			}
 		}
 		tmp = obj->next;
 		UCL_FREE (sizeof (ucl_object_t), obj);
