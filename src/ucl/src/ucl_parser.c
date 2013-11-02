@@ -233,13 +233,13 @@ ucl_lex_is_comment (const unsigned char c1, const unsigned char c2)
 	return false;
 }
 
-static inline size_t
+static inline ssize_t
 ucl_copy_or_store_ptr (struct ucl_parser *parser,
 		const unsigned char *src, unsigned char **dst,
 		const char **dst_const, size_t in_len,
 		bool need_unescape, bool need_lowercase)
 {
-	size_t ret = 0;
+	ssize_t ret = -1;
 
 	if (need_unescape || need_lowercase || !(parser->flags & UCL_PARSER_ZEROCOPY)) {
 		/* Copy string */
@@ -275,8 +275,8 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 	const char *p = start, *c = start;
 	char *endptr;
 	bool got_dot = false, got_exp = false, need_double = false, is_date = false, valid_start = false;
-	double dv;
-	int64_t lv;
+	double dv = 0;
+	int64_t lv = 0;
 
 	if (*p == '-') {
 		p ++;
@@ -604,8 +604,9 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk)
 	const char *key;
 	bool got_quote = false, got_eq = false, got_semicolon = false,
 			need_unescape = false, ucl_escape = false;
-	ucl_object_t *nobj, *tobj, *container;
-	size_t keylen;
+	ucl_object_t *nobj, *tobj;
+	ucl_hash_t *container;
+	ssize_t keylen;
 
 	p = chunk->pos;
 
@@ -724,15 +725,22 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk)
 	nobj = ucl_object_new ();
 	keylen = ucl_copy_or_store_ptr (parser, c, &nobj->trash_stack[UCL_TRASH_KEY],
 			&key, end - c, need_unescape, parser->flags & UCL_PARSER_KEY_LOWERCASE);
-	if (keylen == 0) {
+	if (keylen == -1) {
+		return false;
+	}
+	else if (keylen == 0) {
+		ucl_set_err (chunk, UCL_ESYNTAX, "empty keys are not allowed", &parser->err);
 		return false;
 	}
 
 	container = parser->stack->obj->value.ov;
-	HASH_FIND (hh, container, key, keylen, tobj);
+	nobj->key = key;
+	nobj->keylen = keylen;
+	tobj = ucl_hash_search_obj (container, nobj);
 	if (tobj == NULL) {
-		DL_APPEND (tobj, nobj);
-		HASH_ADD_KEYPTR (hh, container, key, keylen, nobj);
+		container = ucl_hash_insert_object (container, nobj);
+		nobj->prev = nobj;
+		nobj->next = NULL;
 	}
 	else {
 		DL_APPEND (tobj, nobj);
@@ -879,10 +887,10 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			if (parser->stack->obj->type == UCL_ARRAY) {
 				/* Object must be allocated */
 				obj = ucl_object_new ();
-				t = parser->stack->obj->value.ov;
+				t = parser->stack->obj->value.av;
 				DL_APPEND (t, obj);
 				parser->cur_obj = obj;
-				parser->stack->obj->value.ov = t;
+				parser->stack->obj->value.av = t;
 			}
 			else {
 				/* Object has been already allocated */
@@ -899,7 +907,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			str_len = chunk->pos - c - 2;
 			obj->type = UCL_STRING;
 			if ((str_len = ucl_copy_or_store_ptr (parser, c + 1, &obj->trash_stack[UCL_TRASH_VALUE],
-					&obj->value.sv, str_len, need_unescape, false)) == 0) {
+					&obj->value.sv, str_len, need_unescape, false)) == -1) {
 				return false;
 			}
 			obj->len = str_len;
@@ -910,7 +918,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 		case '{':
 			/* We have a new object */
 			obj->type = UCL_OBJECT;
-
+			obj->value.ov = ucl_hash_create ();
 			parser->state = UCL_STATE_KEY;
 			st = UCL_ALLOC (sizeof (struct ucl_stack));
 			st->obj = obj;
@@ -957,7 +965,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 						}
 						obj->type = UCL_STRING;
 						if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-							&obj->value.sv, str_len - 1, false, false)) == 0) {
+							&obj->value.sv, str_len - 1, false, false)) == -1) {
 							return false;
 						}
 						obj->len = str_len;
@@ -1003,7 +1011,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 						}
 						obj->type = UCL_STRING;
 						if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-								&obj->value.sv, str_len, false, false)) == 0) {
+								&obj->value.sv, str_len, false, false)) == -1) {
 							return false;
 						}
 						obj->len = str_len;
@@ -1035,7 +1043,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 					}
 					obj->type = UCL_STRING;
 					if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-							&obj->value.sv, str_len, false, false)) == 0) {
+							&obj->value.sv, str_len, false, false)) == -1) {
 						return false;
 					}
 					obj->len = str_len;
@@ -1217,7 +1225,7 @@ ucl_state_machine (struct ucl_parser *parser)
 	ucl_object_t *obj;
 	struct ucl_chunk *chunk = parser->chunks;
 	struct ucl_stack *st;
-	const unsigned char *p, *c, *macro_start = NULL;
+	const unsigned char *p, *c = NULL, *macro_start = NULL;
 	size_t macro_len = 0;
 	struct ucl_macro *macro = NULL;
 
@@ -1246,6 +1254,7 @@ ucl_state_machine (struct ucl_parser *parser)
 				else {
 					parser->state = UCL_STATE_KEY;
 					obj->type = UCL_OBJECT;
+					obj->value.ov = ucl_hash_create ();
 					if (*p == '{') {
 						ucl_chunk_skipc (chunk, p);
 					}

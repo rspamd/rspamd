@@ -37,7 +37,10 @@
 
 #include "utlist.h"
 #include "utstring.h"
+#include "uthash.h"
 #include "ucl.h"
+#include "ucl_hash.h"
+#include "xxhash.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/evp.h>
@@ -248,5 +251,27 @@ ucl_maybe_parse_boolean (ucl_object_t *obj, const unsigned char *start, size_t l
  */
 int ucl_maybe_parse_number (ucl_object_t *obj,
 		const char *start, const char *end, const char **pos, bool allow_double);
+
+
+static inline ucl_object_t *
+ucl_hash_search_obj (ucl_hash_t* hashlin, ucl_object_t *obj)
+{
+	return (ucl_object_t *)ucl_hash_search (hashlin, obj->key, obj->keylen);
+}
+
+static inline ucl_hash_t *
+ucl_hash_insert_object (ucl_hash_t *hashlin, ucl_object_t *obj) UCL_WARN_UNUSED_RESULT;
+
+static inline ucl_hash_t *
+ucl_hash_insert_object (ucl_hash_t *hashlin, ucl_object_t *obj)
+{
+	if (hashlin == NULL) {
+		hashlin = ucl_hash_create ();
+	}
+	ucl_hash_insert (hashlin, obj, obj->key, obj->keylen);
+
+	return hashlin;
+}
+
 
 #endif /* UCL_INTERNAL_H_ */

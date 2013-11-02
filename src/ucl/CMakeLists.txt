@@ -1,6 +1,8 @@
 SET(UCLSRC            src/ucl_util.c
                       src/ucl_parser.c
-                      src/ucl_emitter.c)
+                      src/ucl_emitter.c
+                      src/ucl_hash.c
+                      src/xxhash.c)
 
 ADD_LIBRARY(rspamd-ucl ${LINK_TYPE} ${UCLSRC})
 SET_TARGET_PROPERTIES(rspamd-ucl PROPERTIES VERSION ${RSPAMD_VERSION})

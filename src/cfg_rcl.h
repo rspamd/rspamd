@@ -26,6 +26,7 @@
 
 #include "config.h"
 #include "ucl/include/ucl.h"
+#include "uthash.h"
 
 #define CFG_RCL_ERROR cfg_rcl_error_quark ()
 static inline GQuark

@@ -303,7 +303,8 @@ surbl_module_config (struct config_file *cfg)
 	struct suffix_item             *new_suffix, *cur_suffix = NULL;
 	struct surbl_bit_item          *new_bit;
 
-	ucl_object_t              *value, *cur, *cur_rule, *tmp, *cur_bit;
+	ucl_object_t                   *value, *cur, *cur_rule, *cur_bit;
+	ucl_object_iter_t               it = NULL;
 	const gchar                    *redir_val;
 	guint32                         bit;
 	gint                            i, idx;
@@ -428,7 +429,7 @@ surbl_module_config (struct config_file *cfg)
 			}
 			cur = ucl_obj_get_key (cur_rule, "bits");
 			if (cur != NULL && cur->type == UCL_OBJECT) {
-				HASH_ITER (hh, cur->value.ov, cur_bit, tmp) {
+				while ((cur_bit = ucl_iterate_object (cur, &it, true)) != NULL) {
 					if (ucl_object_key (cur_bit) != NULL && cur_bit->type == UCL_INT) {
 						bit = ucl_obj_toint (cur_bit);
 						new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));

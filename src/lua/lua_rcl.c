@@ -29,8 +29,8 @@
 
 static gint lua_rcl_obj_push_array (lua_State *L, ucl_object_t *obj);
 static gint lua_rcl_obj_push_simple (lua_State *L, ucl_object_t *obj, gboolean allow_array);
-static void lua_rcl_table_get (lua_State *L, ucl_object_t *top, gint idx);
-static void lua_rcl_elt_get (lua_State *L, ucl_object_t *top, gint idx);
+static ucl_object_t* lua_rcl_table_get (lua_State *L, gint idx);
+static ucl_object_t* lua_rcl_elt_get (lua_State *L, gint idx);
 
 /**
  * Push a single element of an object to lua
@@ -55,7 +55,8 @@ lua_rcl_obj_push_elt (lua_State *L, const char *key, ucl_object_t *obj)
 static gint
 lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj)
 {
-	ucl_object_t *cur, *tmp;
+	ucl_object_t *cur;
+	ucl_object_iter_t it = NULL;
 
 	if (obj->next != NULL) {
 		/* Actually we need to push this as an array */
@@ -63,8 +64,8 @@ lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj)
 	}
 
 	lua_newtable (L);
-	HASH_ITER (hh, obj, cur, tmp) {
-		lua_rcl_obj_push_elt (L, ucl_object_key (obj), obj);
+	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		lua_rcl_obj_push_elt (L, ucl_object_key (cur), cur);
 	}
 
 	return 1;
@@ -140,9 +141,9 @@ lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array)
 {
 	switch (obj->type) {
 	case UCL_OBJECT:
-		return lua_rcl_obj_push_obj (L, obj->value.ov);
+		return lua_rcl_obj_push_obj (L, obj);
 	case UCL_ARRAY:
-		return lua_rcl_obj_push_array (L, obj->value.ov);
+		return lua_rcl_obj_push_array (L, obj->value.av);
 	default:
 		return lua_rcl_obj_push_simple (L, obj, allow_array);
 	}
@@ -154,10 +155,10 @@ lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array)
  * @param top
  * @param idx
  */
-static void
-lua_rcl_table_get (lua_State *L, ucl_object_t *top, gint idx)
+static ucl_object_t *
+lua_rcl_table_get (lua_State *L, gint idx)
 {
-	ucl_object_t *obj;
+	ucl_object_t *obj, *top = NULL;
 	gsize keylen;
 	const gchar *k;
 
@@ -167,16 +168,14 @@ lua_rcl_table_get (lua_State *L, ucl_object_t *top, gint idx)
 	while (lua_next (L, -2) != 0) {
 		/* copy key to avoid modifications */
 		lua_pushvalue (L, -2);
-		obj = ucl_object_new ();
-		if (obj != NULL) {
-			k = lua_tolstring (L, -1, &keylen);
-			ucl_object_insert_key (top, obj, k, keylen, true);
-			lua_rcl_elt_get (L, obj, -2);
-		}
-
+		k = lua_tolstring (L, -1, &keylen);
+		obj = lua_rcl_elt_get (L, -2);
+		top = ucl_object_insert_key (top, obj, k, keylen, true);
 		lua_pop (L, 2);
 	}
 	lua_pop (L, 1);
+
+	return top;
 }
 
 /**
@@ -185,36 +184,36 @@ lua_rcl_table_get (lua_State *L, ucl_object_t *top, gint idx)
  * @param obj
  * @param idx
  */
-static void
-lua_rcl_elt_get (lua_State *L, ucl_object_t *obj, gint idx)
+static ucl_object_t *
+lua_rcl_elt_get (lua_State *L, gint idx)
 {
 	gint type;
+	ucl_object_t *obj;
 
 	type = lua_type (L, idx);
 
 	switch (type) {
 	case LUA_TFUNCTION:
 		lua_pushvalue (L, idx);
+		obj = ucl_object_new ();
 		obj->type = UCL_USERDATA;
 		obj->value.ud = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
 		break;
 	case LUA_TSTRING:
-		obj->type = UCL_STRING;
-		obj->value.sv = g_strdup (lua_tostring (L, idx));
+		obj = ucl_object_fromstring (lua_tostring (L, idx));
 		break;
 	case LUA_TNUMBER:
-		obj->type = UCL_FLOAT;
-		obj->value.dv = lua_tonumber (L, idx);
+		obj = ucl_object_fromdouble (lua_tonumber (L, idx));
 		break;
 	case LUA_TBOOLEAN:
-		obj->type = UCL_BOOLEAN;
-		obj->value.iv = lua_toboolean (L, idx);
+		obj = ucl_object_frombool (lua_toboolean (L, idx));
 		break;
 	case LUA_TTABLE:
-		obj->type = UCL_OBJECT;
-		lua_rcl_table_get (L, obj, idx);
+		obj = lua_rcl_table_get (L, idx);
 		break;
 	}
+
+	return obj;
 }
 
 /**
@@ -228,19 +227,15 @@ lua_rcl_obj_get (lua_State *L, gint idx)
 	ucl_object_t *obj;
 	gint t;
 
-	obj = ucl_object_new ();
-
-	if (obj != NULL) {
-		t = lua_type (L, idx);
-		switch (t) {
-		case LUA_TTABLE:
-			/* We assume all tables as objects, not arrays */
-			lua_rcl_table_get (L, obj, idx);
-			break;
-		default:
-			lua_rcl_elt_get (L, obj, idx);
-			break;
-		}
+	t = lua_type (L, idx);
+	switch (t) {
+	case LUA_TTABLE:
+		/* We assume all tables as objects, not arrays */
+		obj = lua_rcl_table_get (L, idx);
+		break;
+	default:
+		obj = lua_rcl_elt_get (L, idx);
+		break;
 	}
 
 	return obj;

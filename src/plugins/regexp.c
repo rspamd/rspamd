@@ -574,7 +574,8 @@ gint
 regexp_module_config (struct config_file *cfg)
 {
 	struct regexp_module_item      *cur_item;
-	ucl_object_t              *sec, *value, *tmp;
+	ucl_object_t                   *sec, *value;
+	ucl_object_iter_t               it = NULL;
 	gint                            res = TRUE;
 	struct regexp_json_buf         *jb, **pjb;
 
@@ -589,7 +590,7 @@ regexp_module_config (struct config_file *cfg)
 	regexp_module_ctx->max_threads = 0;
 	regexp_module_ctx->workers = NULL;
 
-	HASH_ITER (hh, sec, value, tmp) {
+	while ((value = ucl_iterate_object (sec, &it, true)) != NULL) {
 		if (g_ascii_strncasecmp (ucl_object_key (value), "autolearn", sizeof ("autolearn") - 1) == 0) {
 			parse_autolearn_param (ucl_object_key (value), ucl_obj_tostring (value), cfg);
 		}

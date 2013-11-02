@@ -744,7 +744,7 @@ process_attrs (const gchar **attribute_names, const gchar **attribute_values, uc
 	value = attribute_values;
 	while (*attr) {
 		/* Copy attributes to pool */
-		ucl_object_insert_key (top, ucl_object_fromstring_common (*value, 0, UCL_STRING_PARSE), *attr, 0, TRUE);
+		top = ucl_object_insert_key (top, ucl_object_fromstring_common (*value, 0, UCL_STRING_PARSE), *attr, 0, TRUE);
 		attr ++;
 		value ++;
 		res = TRUE;

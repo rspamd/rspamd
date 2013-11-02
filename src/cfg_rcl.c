@@ -300,13 +300,14 @@ static gboolean
 rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur, *tmp;
+	ucl_object_t *val, *cur;
 	const gchar *metric_name, *subject_name, *semicolon, *act_str;
 	struct metric *metric;
 	struct metric_action *action;
 	gdouble action_score, grow_factor;
 	gint action_value;
 	gboolean new = TRUE, have_actions = FALSE;
+	ucl_object_iter_t it = NULL;
 
 	val = ucl_object_find_key (obj, "name");
 	if (val == NULL || !ucl_object_tostring_safe (val, &metric_name)) {
@@ -329,7 +330,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "actions must be an object");
 			return FALSE;
 		}
-		HASH_ITER (hh, val, cur, tmp) {
+		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
 			if (!check_action_str (ucl_object_key (cur), &action_value) ||
 					!ucl_object_todouble_safe (cur, &action_score)) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "invalid action definition: %s", ucl_object_key (cur));
@@ -381,7 +382,8 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "symbols must be an object");
 			return FALSE;
 		}
-		HASH_ITER (hh, val->value.ov, cur, tmp) {
+		it = NULL;
+		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
 			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, FALSE, err)) {
 				return FALSE;
 			}
@@ -431,7 +433,8 @@ static gboolean
 rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur, *tmp;
+	ucl_object_t *val, *cur;
+	ucl_object_iter_t it = NULL;
 	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
 	struct worker_conf *wrk;
@@ -492,7 +495,7 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 	/* Parse other attributes */
 	HASH_FIND_INT (cfg->wrk_parsers, (gint *)&qtype, wparser);
 	if (wparser != NULL && obj->type == UCL_OBJECT) {
-		HASH_ITER (hh, obj->value.ov, cur, tmp) {
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			HASH_FIND_STR (wparser->parsers, ucl_object_key (cur), whandler);
 			if (whandler != NULL) {
 				if (!whandler->handler (cfg, cur, &whandler->parser, section, err)) {
