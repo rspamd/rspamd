@@ -306,7 +306,7 @@ get_module_opt (struct config_file *cfg, const gchar *module_name, const gchar *
 
 	sec = ucl_obj_get_key (cfg->rcl_obj, module_name);
 	if (sec != NULL) {
-		res = ucl_obj_get_key (cfg->rcl_obj, opt_name);
+		res = ucl_obj_get_key (sec, opt_name);
 	}
 
 	return res;
@@ -1012,10 +1012,6 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 		res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
 
 		munmap (data, st.st_size);
-
-		top = rspamd_rcl_config_init ();
-
-		err = NULL;
 	}
 	else {
 		parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
@@ -1026,8 +1022,11 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 		}
 		munmap (data, st.st_size);
 		cfg->rcl_obj = ucl_parser_get_object (parser);
+		res = TRUE;
 	}
 
+	top = rspamd_rcl_config_init ();
+	err = NULL;
 
 	if (!res || !rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
 		msg_err ("rcl parse error: %s", err->message);
