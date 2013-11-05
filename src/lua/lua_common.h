@@ -23,7 +23,9 @@
 static inline void
 luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 {
-    lua_newtable (L);
+	if (name != NULL) {
+		lua_newtable (L);
+	}
     luaL_setfuncs (L, methods, 0);
     if (name != NULL) {
     	lua_pushvalue (L, -1);

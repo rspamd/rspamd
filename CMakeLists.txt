@@ -453,9 +453,9 @@ ENDIF(NOT LOCALSTATES_PREFIX)
 # Now find libraries and headers
 
 # Find lua libraries
-FindLua(5 1)
+FindLua(5 2)
 IF(NOT LUA_FOUND)
-	FindLua(5 2)
+	FindLua(5 1)
 ENDIF(NOT LUA_FOUND)
 
 IF(NOT LUA_FOUND)

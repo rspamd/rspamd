@@ -14,7 +14,7 @@ function phishing_cb (task)
 				local found = false
 				local purl = url:get_phished()
 				if table.maxn(strict_domains) > 0 then
-					local _,_,tld = string.find(purl:get_host(), '([a-zA-Z0-9%-]+\.[a-zA-Z0-9%-]+)$')
+					local _,_,tld = string.find(purl:get_host(), '([a-zA-Z0-9%-]+%.[a-zA-Z0-9%-]+)$')
 					if tld then
 						for _,rule in ipairs(strict_domains) do
 							if rule['map']:get_key(tld) then
@@ -26,7 +26,7 @@ function phishing_cb (task)
 				end
 				if not found then
 					if domains then
-						local _,_,tld = string.find(purl:get_host(), '([a-zA-Z0-9%-]+\.[a-zA-Z0-9%-]+)$')
+						local _,_,tld = string.find(purl:get_host(), '([a-zA-Z0-9%-]+%.[a-zA-Z0-9%-]+)$')
 						if tld then
 							if domains:get_key(tld) then
 								task:insert_result(symbol, 1, purl:get_host())
