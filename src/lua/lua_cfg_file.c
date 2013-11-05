@@ -140,7 +140,7 @@ lua_post_load_config (struct config_file *cfg)
 			if (name != NULL && lua_istable (L, -1)) {
 				obj = lua_rcl_obj_get (L, -1);
 				if (obj != NULL) {
-					cfg->rcl_obj = ucl_object_insert_key (cfg->rcl_obj, obj, name, keylen, true);
+					cfg->rcl_obj = ucl_object_insert_key_merged (cfg->rcl_obj, obj, name, keylen, true);
 				}
 			}
 		}

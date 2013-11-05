@@ -65,6 +65,11 @@ void ucl_hash_destroy (ucl_hash_t* hashlin, ucl_hash_free_func *func);
 void ucl_hash_insert (ucl_hash_t* hashlin, ucl_object_t *obj, const char *key, unsigned keylen);
 
 /**
+ * Delete an element from the the hashtable.
+ */
+void ucl_hash_delete (ucl_hash_t* hashlin, ucl_object_t *obj);
+
+/**
  * Searches an element in the hashtable.
  */
 ucl_object_t* ucl_hash_search (ucl_hash_t* hashlin, const char *key, unsigned keylen);

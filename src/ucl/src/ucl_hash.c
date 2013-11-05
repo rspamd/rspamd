@@ -66,7 +66,7 @@ ucl_hash_iterate (ucl_hash_t *hashlin, ucl_hash_iter_t *iter)
 	ucl_hash_node_t *elt = *iter;
 
 	if (elt == NULL) {
-		if (hashlin->buckets == NULL) {
+		if (hashlin == NULL || hashlin->buckets == NULL) {
 			return NULL;
 		}
 		elt = hashlin->buckets;
@@ -102,4 +102,16 @@ ucl_hash_search (ucl_hash_t* hashlin, const char *key, unsigned keylen)
 		return found->data;
 	}
 	return NULL;
+}
+
+void
+ucl_hash_delete (ucl_hash_t* hashlin, ucl_object_t *obj)
+{
+	ucl_hash_node_t *found;
+
+	HASH_FIND (hh, hashlin->buckets, obj->key, obj->keylen, found);
+
+	if (found) {
+		HASH_DELETE (hh, hashlin->buckets, found);
+	}
 }
