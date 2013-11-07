@@ -921,6 +921,16 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 					ud->parent_pointer[0] = obj;
 					ud->nested ++;
 				}
+				else if (g_ascii_strcasecmp (element_name, "composite") == 0) {
+					/* Composite is 'special' tag */
+					obj = ucl_object_new ();
+					obj->type = UCL_OBJECT;
+					ud->parent_pointer[0] = obj;
+					ud->cfg->rcl_obj = ucl_object_insert_key (ud->cfg->rcl_obj, obj, element_name, 0, true);
+					process_attrs (attribute_names, attribute_values, obj);
+					ud->nested ++;
+					rspamd_strlcpy (ud->section_name[ud->nested], "expression", MAX_NAME);
+				}
 				else if (g_ascii_strcasecmp (element_name, "module") == 0 &&
 						extract_attr ("name", attribute_names, attribute_values, &res)) {
 					obj = ucl_object_new ();
