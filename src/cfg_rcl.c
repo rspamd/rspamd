@@ -26,6 +26,7 @@
 #include "settings.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
+#include "expressions.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -812,6 +813,41 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
 	return res;
 }
 
+static gboolean
+rspamd_rcl_composite_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	ucl_object_t *val;
+	struct expression *expr;
+	struct rspamd_composite *composite;
+	const gchar *composite_name, *composite_expression;
+
+	val = ucl_object_find_key (obj, "name");
+	if (val == NULL || !ucl_object_tostring_safe (val, &composite_name)) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "composite must have a name defined");
+		return FALSE;
+	}
+
+	val = ucl_object_find_key (obj, "expression");
+	if (val == NULL || !ucl_object_tostring_safe (val, &composite_expression)) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "composite must have an expression defined");
+		return FALSE;
+	}
+
+	if ((expr = parse_expression (cfg->cfg_pool, (gchar *)composite_expression)) == NULL) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse composite expression: %s", composite_expression);
+		return FALSE;
+	}
+
+	composite = memory_pool_alloc (cfg->cfg_pool, sizeof (struct rspamd_composite));
+	composite->expr = expr;
+	composite->id = g_hash_table_size (cfg->composite_symbols) + 1;
+	g_hash_table_insert (cfg->composite_symbols, (gpointer)composite_name, composite);
+	register_virtual_symbol (&cfg->cache, composite_name, 1);
+
+	return TRUE;
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -988,6 +1024,12 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct statfile, size), RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (ssub, "spam", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct statfile, is_spam), 0);
+
+	/**
+	 * Composites handler
+	 */
+	sub = rspamd_rcl_add_section (&new, "composite", rspamd_rcl_composite_handler, UCL_OBJECT,
+				FALSE, TRUE);
 
 	return new;
 }
