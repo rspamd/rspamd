@@ -623,56 +623,78 @@ rspamd_rcl_lua_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
-		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+rspamd_rcl_add_module_path (struct config_file *cfg, const gchar *path, GError **err)
 {
-	ucl_object_t *val, *cur;
 	struct stat st;
 	struct script_module *cur_mod;
 	glob_t globbuf;
 	gchar *pattern;
-	const gchar *data;
 	size_t len;
 	guint i;
 
-	val = ucl_object_find_key (obj, "path");
+	if (stat (path, &st) == -1) {
+		g_set_error (err, CFG_RCL_ERROR, errno, "cannot stat path %s, %s", path, strerror (errno));
+		return FALSE;
+	}
 
-	LL_FOREACH (val, cur) {
-		if (ucl_object_tostring_safe (cur, &data)) {
-			if (stat (data, &st) == -1) {
-				g_set_error (err, CFG_RCL_ERROR, errno, "cannot stat path %s, %s", data, strerror (errno));
-				return FALSE;
+	/* Handle directory */
+	if (S_ISDIR (st.st_mode)) {
+		globbuf.gl_offs = 0;
+		len = strlen (path) + sizeof ("*.lua");
+		pattern = g_malloc (len);
+		snprintf (pattern, len, "%s%s", path, "*.lua");
+
+		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+			for (i = 0; i < globbuf.gl_pathc; i ++) {
+				cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+				cur_mod->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
+				cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
 			}
+			globfree (&globbuf);
+			g_free (pattern);
+		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, errno, "glob failed for %s, %s", pattern, strerror (errno));
+			g_free (pattern);
+			return FALSE;
+		}
+	}
+	else {
+		/* Handle single file */
+		cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+		cur_mod->path = memory_pool_strdup (cfg->cfg_pool, path);
+		cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
+	}
 
-			/* Handle directory */
-			if (S_ISDIR (st.st_mode)) {
-				globbuf.gl_offs = 0;
-				len = strlen (data) + sizeof ("*.lua");
-				pattern = g_malloc (len);
-				snprintf (pattern, len, "%s%s", data, "*.lua");
+	return TRUE;
+}
 
-				if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-					for (i = 0; i < globbuf.gl_pathc; i ++) {
-						cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-						cur_mod->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
-						cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
-					}
-					globfree (&globbuf);
-					g_free (pattern);
-				}
-				else {
-					g_set_error (err, CFG_RCL_ERROR, errno, "glob failed for %s, %s", pattern, strerror (errno));
-					g_free (pattern);
+static gboolean
+rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	ucl_object_t *val, *cur;
+	const gchar *data;
+
+	if (obj->type == UCL_OBJECT) {
+		val = ucl_object_find_key (obj, "path");
+
+		LL_FOREACH (val, cur) {
+			if (ucl_object_tostring_safe (cur, &data)) {
+				if (!rspamd_rcl_add_module_path (cfg, data, err)) {
 					return FALSE;
 				}
 			}
-			else {
-				/* Handle single file */
-				cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-				cur_mod->path = memory_pool_strdup (cfg->cfg_pool, data);
-				cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
-			}
 		}
+	}
+	else if (ucl_object_tostring_safe (obj, &data)) {
+		if (!rspamd_rcl_add_module_path (cfg, data, err)) {
+			return FALSE;
+		}
+	}
+	else {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "module parameter has wrong type (must be an object or a string)");
+		return FALSE;
 	}
 
 	return TRUE;
@@ -947,7 +969,7 @@ rspamd_rcl_config_init (void)
 	 * Modules handler
 	 */
 	sub = rspamd_rcl_add_section (&new, "modules", rspamd_rcl_modules_handler, UCL_OBJECT,
-			FALSE, TRUE);
+			FALSE, FALSE);
 
 	/**
 	 * Classifiers handler
