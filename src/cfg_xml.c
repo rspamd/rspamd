@@ -33,6 +33,7 @@
 #include "util.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
+#include "cfg_file.h"
 
 #include "view.h"
 #include "map.h"

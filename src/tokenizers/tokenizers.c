@@ -77,7 +77,7 @@ const gchar t_delimiters[255] = {
 };
 
 struct tokenizer               *
-get_tokenizer (char *name)
+get_tokenizer (const char *name)
 {
 	guint                            i;
 

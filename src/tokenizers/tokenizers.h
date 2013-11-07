@@ -27,7 +27,7 @@ struct tokenizer {
 /* Compare two token nodes */
 int token_node_compare_func (gconstpointer a, gconstpointer b);
 /* Get tokenizer structure by name or return NULL if this name is not found */
-struct tokenizer* get_tokenizer (char *name);
+struct tokenizer* get_tokenizer (const char *name);
 /* Get next word from specified f_str_t buf */
 gchar* get_next_word (f_str_t *buf, f_str_t *token, GList **exceptions);
 /* OSB tokenize function */

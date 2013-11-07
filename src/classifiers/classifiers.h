@@ -39,7 +39,7 @@ struct classifier {
 };
 
 /* Get classifier structure by name or return NULL if this name is not found */
-struct classifier* get_classifier (char *name);
+struct classifier* get_classifier (const char *name);
 
 /* Winnow algorithm */
 struct classifier_ctx* winnow_init (memory_pool_t *pool, struct classifier_config *cf);

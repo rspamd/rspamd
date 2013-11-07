@@ -48,7 +48,7 @@ struct classifier               classifiers[] = {
 };
 
 struct classifier              *
-get_classifier (char *name)
+get_classifier (const char *name)
 {
 	guint                             i;
 

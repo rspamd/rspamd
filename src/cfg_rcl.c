@@ -24,7 +24,10 @@
 #include "cfg_rcl.h"
 #include "main.h"
 #include "settings.h"
+#include "cfg_file.h"
 #include "lua/lua_common.h"
+#include "classifiers/classifiers.h"
+#include "tokenizers/tokenizers.h"
 
 /*
  * Common section handlers
@@ -675,6 +678,118 @@ rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
 	return TRUE;
 }
 
+static gboolean
+rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	struct classifier_config *ccf = ud;
+	ucl_object_t *val;
+	struct statfile *st;
+	const gchar *data;
+	gdouble binlog_rotate;
+	GList *labels;
+
+	st = check_statfile_conf (cfg, NULL);
+
+	val = ucl_object_find_key (obj, "binlog");
+	if (val != NULL && ucl_object_tostring_safe (val, &data)) {
+		if (st->binlog == NULL) {
+			st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+		}
+		if (g_ascii_strcasecmp (data, "master") == 0) {
+			st->binlog->affinity = AFFINITY_MASTER;
+		}
+		else if (g_ascii_strcasecmp (data, "slave") == 0) {
+			st->binlog->affinity = AFFINITY_SLAVE;
+		}
+		else {
+			st->binlog->affinity = AFFINITY_NONE;
+		}
+		/* Parse remaining binlog attributes */
+		val = ucl_object_find_key (obj, "binlog_rotate");
+		if (val != NULL && ucl_object_todouble_safe (val, &binlog_rotate)) {
+			st->binlog->rotate_time = binlog_rotate;
+		}
+		val = ucl_object_find_key (obj, "binlog_master");
+		if (val != NULL && ucl_object_tostring_safe (val, &data)) {
+			if (!parse_host_port (cfg->cfg_pool, data, &st->binlog->master_addr, &st->binlog->master_port)) {
+				msg_err ("cannot parse master address: %s", data);
+				return FALSE;
+			}
+		}
+	}
+
+	if (rspamd_rcl_section_parse_defaults (section, cfg, obj, st, err)) {
+		ccf->statfiles = g_list_prepend (ccf->statfiles, st);
+		if (st->label != NULL) {
+			labels = g_hash_table_lookup (ccf->labels, st->label);
+			if (labels != NULL) {
+				labels = g_list_append (labels, st);
+			}
+			else {
+				g_hash_table_insert (ccf->labels, st->label, g_list_prepend (NULL, st));
+			}
+		}
+		if (st->symbol != NULL) {
+			g_hash_table_insert (cfg->classifiers_symbols, st->symbol, st);
+		}
+		else {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "statfile must have a symbol defined");
+			return FALSE;
+		}
+
+		if (st->path == NULL) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL, "statfile must have a path defined");
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	ucl_object_t *val, *cur;
+	ucl_object_iter_t it = NULL;
+	const gchar *key;
+	struct classifier_config *ccf;
+	gboolean res = TRUE;
+	struct rspamd_rcl_section *stat_section;
+
+	ccf = check_classifier_conf (cfg, NULL);
+	HASH_FIND_STR (section->subsections, "statfile", stat_section);
+
+	while ((val = ucl_iterate_object (obj, &it, true)) != NULL && res) {
+		key = ucl_object_key (val);
+		if (key != NULL) {
+			if (g_ascii_strcasecmp (key, "statfile") == 0) {
+				LL_FOREACH (val, cur) {
+					res = rspamd_rcl_statfile_handler (cfg, cur, ccf, stat_section, err);
+				}
+			}
+			else if (g_ascii_strcasecmp (key, "type") == 0 && val->type == UCL_STRING) {
+				ccf->classifier = get_classifier (ucl_object_tostring (val));
+			}
+			else if (g_ascii_strcasecmp (key, "tokenizer") == 0 && val->type == UCL_STRING) {
+				ccf->tokenizer = get_tokenizer (ucl_object_tostring (val));
+			}
+			else {
+				/* Just insert a value of option to the hash */
+				g_hash_table_insert (ccf->opts, (gpointer)key, (gpointer)ucl_object_tostring_forced (val));
+			}
+		}
+	}
+
+	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
+
+
+	return res;
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -741,7 +856,7 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section, const gchar 
 struct rspamd_rcl_section*
 rspamd_rcl_config_init (void)
 {
-	struct rspamd_rcl_section *new = NULL, *sub;
+	struct rspamd_rcl_section *new = NULL, *sub, *ssub;
 
 	/* TODO: add all known rspamd sections here */
 	/**
@@ -833,6 +948,24 @@ rspamd_rcl_config_init (void)
 	 */
 	sub = rspamd_rcl_add_section (&new, "modules", rspamd_rcl_modules_handler, UCL_OBJECT,
 			FALSE, TRUE);
+
+	/**
+	 * Classifiers handler
+	 */
+	sub = rspamd_rcl_add_section (&new, "classifier", rspamd_rcl_classifier_handler, UCL_OBJECT,
+			FALSE, TRUE);
+	ssub = rspamd_rcl_add_section (&sub->subsections, "statfile", rspamd_rcl_statfile_handler,
+			UCL_OBJECT, TRUE, TRUE);
+	rspamd_rcl_add_default_handler (ssub, "symbol", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct statfile, symbol), 0);
+	rspamd_rcl_add_default_handler (ssub, "path", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct statfile, path), 0);
+	rspamd_rcl_add_default_handler (ssub, "label", rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct statfile, label), 0);
+	rspamd_rcl_add_default_handler (ssub, "size", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct statfile, size), RSPAMD_CL_FLAG_INT_SIZE);
+	rspamd_rcl_add_default_handler (ssub, "spam", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct statfile, is_spam), 0);
 
 	return new;
 }
