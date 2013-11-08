@@ -258,6 +258,7 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 			event_add (d->ev, d->tv);
 			return TRUE;
 		}
+		len = d->out_buffers.pending;
 	}
 
 	if (d->out_buffers.pending == 0) {

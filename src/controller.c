@@ -235,7 +235,7 @@ restful_write_reply (gint error_code, const gchar *err_message, const gchar *buf
 	r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, CRLF);
 
 	if (buf != NULL) {
-		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, FALSE)) {
+		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, TRUE)) {
 			return FALSE;
 		}
 		return rspamd_dispatcher_write (d, buf, buflen, FALSE, FALSE);
@@ -1353,7 +1353,6 @@ controller_read_socket (f_str_t * in, void *arg)
 			else if (session->cmd != NULL) {
 				if (! process_command (session->cmd, NULL, session)) {
 					msg_debug ("process command failed");
-					destroy_session (session->s);
 					return FALSE;
 				}
 			}
