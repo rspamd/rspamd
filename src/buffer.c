@@ -564,7 +564,7 @@ rspamd_create_dispatcher (struct event_base *base, gint fd, enum io_policy polic
 		return NULL;
 	}
 
-	new = g_slice_alloc (sizeof (rspamd_io_dispatcher_t));
+	new = g_slice_alloc0 (sizeof (rspamd_io_dispatcher_t));
 
 	new->pool = memory_pool_new (memory_pool_get_size ());
 	if (tv != NULL) {
