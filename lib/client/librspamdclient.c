@@ -922,7 +922,7 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 			if (r == 0) {
 				errno = ETIMEDOUT;
 			}
-			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from controller %s: %s",
+			*err = g_error_new (G_RSPAMD_ERROR, errno, "Cannot read reply from rspamd server %s: %s",
 					c->server->name, strerror (errno));
 		}
 		upstream_fail (&c->server->up, c->connection_time);
