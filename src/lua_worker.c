@@ -77,6 +77,8 @@ struct rspamd_lua_worker_ctx {
 	gint							cbref_fin;
 	/* Config file */
 	struct config_file 			   *cfg;
+	/* The rest options */
+	ucl_object_t				   *opts;
 };
 
 /* Lua bindings */
@@ -185,13 +187,11 @@ lua_worker_register_exit_callback (lua_State *L)
 }
 
 /* XXX: This fucntions should be rewritten completely */
-#warning "lua_worker_get_option is broken"
 static int
 lua_worker_get_option (lua_State *L)
 {
 	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
-	GList											*val;
-	gint											 i;
+	ucl_object_t									*val;
 	const gchar										*name;
 
 	if (ctx) {
@@ -201,19 +201,12 @@ lua_worker_get_option (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			val = g_hash_table_lookup (ctx->params, name);
+			val = ucl_object_find_key (ctx->opts, name);
 			if (val == NULL) {
 				lua_pushnil (L);
 			}
 			else {
-				/* Push the array */
-				i = 1;
-				lua_newtable (L);
-				while (val) {
-					lua_pushstring (L, val->data);
-					lua_rawseti (L, -2, i++);
-					val = g_list_next (val);
-				}
+				lua_rcl_obj_push (L, val, TRUE);
 			}
 		}
 	}
@@ -399,6 +392,16 @@ lua_accept_socket (gint fd, short what, void *arg)
 	}
 }
 
+static gboolean
+rspamd_lua_worker_parser (ucl_object_t *obj, gpointer ud)
+{
+	struct rspamd_lua_worker_ctx       *ctx = ud;
+
+	ctx->opts = obj;
+
+	return TRUE;
+}
+
 gpointer
 init_lua_worker (struct config_file *cfg)
 {
@@ -414,6 +417,8 @@ init_lua_worker (struct config_file *cfg)
 	rspamd_rcl_register_worker_option (cfg, type, "file",
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file), 0);
+
+	rspamd_rcl_register_worker_parser (cfg, type, rspamd_lua_worker_parser, ctx);
 
 	return ctx;
 }

@@ -265,6 +265,8 @@ struct rspamd_worker_param_parser {
 struct rspamd_worker_cfg_parser {
 	struct rspamd_worker_param_parser *parsers;		/**< parsers hash										*/
 	gint type;										/**< workers quark										*/
+	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud);	/**< default object parser								*/
+	gpointer def_ud;
 	UT_hash_handle hh;								/**< hash by type										*/
 };
 

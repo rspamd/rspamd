@@ -215,4 +215,14 @@ gboolean rspamd_rcl_parse_struct_boolean (struct config_file *cfg, ucl_object_t 
  */
 void rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gchar *name,
 		rspamd_rcl_handler_t handler, gpointer target, gsize offset, gint flags);
+
+/**
+ * Regiester a default parser for a worker
+ * @param cfg config structure
+ * @param type type of worker (GQuark)
+ * @param func handler function
+ * @param ud userdata for handler function
+ */
+void rspamd_rcl_register_worker_parser (struct config_file *cfg, gint type,
+		gboolean (*func)(ucl_object_t *, gpointer), gpointer ud);
 #endif /* CFG_RCL_H_ */

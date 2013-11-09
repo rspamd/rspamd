@@ -507,6 +507,11 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 				}
 			}
 		}
+		if (wparser->def_obj_parser != NULL) {
+			if (! wparser->def_obj_parser (obj, wparser->def_ud)) {
+				return FALSE;
+			}
+		}
 	}
 
 	cfg->workers = g_list_prepend (cfg->workers, wrk);
@@ -1392,4 +1397,22 @@ rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gch
 	nhandler->parser.user_struct = target;
 	nhandler->handler = handler;
 	HASH_ADD_STR (nparser->parsers, name, nhandler);
+}
+
+
+void
+rspamd_rcl_register_worker_parser (struct config_file *cfg, gint type,
+		gboolean (*func)(ucl_object_t *, gpointer), gpointer ud)
+{
+	struct rspamd_worker_cfg_parser *nparser;
+	HASH_FIND_INT (cfg->wrk_parsers, &type, nparser);
+	if (nparser == NULL) {
+		/* Allocate new parser for this worker */
+		nparser = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_cfg_parser));
+		nparser->type = type;
+		HASH_ADD_INT (cfg->wrk_parsers, type, nparser);
+	}
+
+	nparser->def_obj_parser = func;
+	nparser->def_ud = ud;
 }
