@@ -239,6 +239,9 @@ sync_cache (gpointer ud)
 		filename = ctx->hashfile;
 		if (filename == NULL ) {
 			rspamd_mutex_unlock (ctx->update_mtx);
+			if (wanna_die) {
+				return NULL;
+			}
 			continue;
 		}
 		expire = ctx->expire;
@@ -248,6 +251,9 @@ sync_cache (gpointer ud)
 			msg_err(
 					"cannot create hash file %s: %s", filename, strerror (errno));
 			rspamd_mutex_unlock (ctx->update_mtx);
+			if (wanna_die) {
+				return NULL;
+			}
 			continue;
 		}
 
