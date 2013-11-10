@@ -569,7 +569,7 @@ create_listen_socket (const gchar *addr, gint port, gint family, gint listen_typ
 	cur = result;
 	while (cur != NULL) {
 		listen_sock = GPOINTER_TO_INT (cur->data);
-		if (listen_sock != -1) {
+		if (listen_sock != -1 && listen_type != SOCK_DGRAM) {
 			if (listen (listen_sock, -1) == -1) {
 				msg_err ("cannot listen on socket. %s", strerror (errno));
 			}
