@@ -1025,10 +1025,14 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 		res = TRUE;
 	}
 
+	if (!res) {
+		return FALSE;
+	}
+
 	top = rspamd_rcl_config_init ();
 	err = NULL;
 
-	if (!res || !rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
+	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
 		msg_err ("rcl parse error: %s", err->message);
 		return FALSE;
 	}
