@@ -200,7 +200,7 @@ lua_rcl_elt_get (lua_State *L, gint idx)
 		obj->value.ud = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
 		break;
 	case LUA_TSTRING:
-		obj = ucl_object_fromstring (lua_tostring (L, idx));
+		obj = ucl_object_fromstring_common (lua_tostring (L, idx), 0, 0);
 		break;
 	case LUA_TNUMBER:
 		obj = ucl_object_fromdouble (lua_tonumber (L, idx));
