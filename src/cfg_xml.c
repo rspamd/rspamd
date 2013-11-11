@@ -784,8 +784,11 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				if (extract_attr ("value", attribute_names, attribute_values, &res)) {
 					element_name = res;
 				}
+				else if (extract_attr ("name", attribute_names, attribute_values, &res)) {
+					element_name = res;
+				}
 				else {
-					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "param 'value' is required for tag 'param'");
+					*error = g_error_new (xml_error_quark (), XML_PARAM_MISSING, "attribute 'value' or 'name' are required for tag 'param'");
 					ud->state = XML_ERROR;
 				}
 			}
