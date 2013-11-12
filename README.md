@@ -1,13 +1,13 @@
 [![Build Status](https://travis-ci.org/vstakhov/rspamd.png)](https://travis-ci.org/vstakhov/rspamd)
 
-REFERENCES
+References
 ==========
 
 * Home site: <http://rspamd.com>
 * Downloads: <https://bitbucket.org/vstakhov/rspamd/downloads>
 * Wiki: <https://bitbucket.org/vstakhov/rspamd/wiki/>
 
-DESCRIPTION
+Description
 ===========
 
 Rspamd is a complex spam filter that allows to estimate messages by a number of
@@ -28,7 +28,7 @@ header. Rspamd has own unique features among spam filters:
 All these features allow rspamd to process messages fast and demonstrate a
 suitable spam filtering. 
 
-INSTALLATION
+Installation
 ============
 
 Rspamd runs on a Unix like operational systems. FreeBSD users can use ports
@@ -93,7 +93,7 @@ If start script is not suitable for your system (now rspamd shipped with start
 script for FreeBSD, Debian and RedHat like operational systems) you should
 write a start script suitable for your system.
 
-FURTHER ACTIONS
+Further Actions
 ===============
 
 You can improve quality of rspamd by learning its statistic module. The easiest
