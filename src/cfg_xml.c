@@ -876,13 +876,17 @@ rspamd_xml_end_element (GMarkupParseContext	*context, const gchar *element_name,
 		if (g_ascii_strcasecmp (ud->section_name[ud->nested - 1], element_name) == 0) {
 			ud->nested --;
 		}
+		else if (g_ascii_strcasecmp (element_name, "param") == 0) {
+			/* Another ugly hack */
+			ud->nested --;
+		}
 		else if (g_ascii_strcasecmp (ud->section_name[ud->nested], element_name) != 0) {
-			*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched", element_name);
+			*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is unmatched", element_name);
 			ud->state = XML_ERROR;
 		}
 	}
 	else if (g_ascii_strcasecmp ("rspamd", element_name) != 0) {
-		*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is umatched on the top level", element_name);
+		*error = g_error_new (xml_error_quark (), XML_EXTRA_ELEMENT, "element %s is unmatched on the top level", element_name);
 		ud->state = XML_ERROR;
 	}
 }
