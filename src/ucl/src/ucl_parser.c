@@ -994,64 +994,41 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 					if (parser->state == UCL_STATE_ERROR) {
 						return false;
 					}
-					if (!ucl_parse_string_value (parser, chunk)) {
-						return false;
-					}
-					if (!ucl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
-						/* Cut trailing spaces */
-						stripped_spaces = 0;
-						while (ucl_test_character (*(chunk->pos - 1 - stripped_spaces),
-								UCL_CHARACTER_WHITESPACE)) {
-							stripped_spaces ++;
-						}
-						str_len = chunk->pos - c - stripped_spaces;
-						if (str_len <= 0) {
-							ucl_set_err (chunk, 0, "string value must not be empty", &parser->err);
-							return false;
-						}
-						obj->type = UCL_STRING;
-						if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-								&obj->value.sv, str_len, false, false)) == -1) {
-							return false;
-						}
-						obj->len = str_len;
-					}
-					parser->state = UCL_STATE_AFTER_VALUE;
-					return true;
 				}
 				else {
 					parser->state = UCL_STATE_AFTER_VALUE;
 					return true;
 				}
+				/* Fallback to normal string */
 			}
-			else {
-				if (!ucl_parse_string_value (parser, chunk)) {
+
+			if (!ucl_parse_string_value (parser, chunk)) {
+				return false;
+			}
+			/* Cut trailing spaces */
+			stripped_spaces = 0;
+			while (ucl_test_character (*(chunk->pos - 1 - stripped_spaces),
+					UCL_CHARACTER_WHITESPACE)) {
+				stripped_spaces ++;
+			}
+			str_len = chunk->pos - c - stripped_spaces;
+			if (str_len <= 0) {
+				ucl_set_err (chunk, 0, "string value must not be empty", &parser->err);
+				return false;
+			}
+
+			if (!ucl_maybe_parse_boolean (obj, c, str_len)) {
+				obj->type = UCL_STRING;
+				if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
+						&obj->value.sv, str_len, false, false)) == -1) {
 					return false;
 				}
-				if (!ucl_maybe_parse_boolean (obj, c, chunk->pos - c)) {
-					/* TODO: remove cut&paste */
-					/* Cut trailing spaces */
-					stripped_spaces = 0;
-					while (ucl_test_character (*(chunk->pos - 1 - stripped_spaces),
-							UCL_CHARACTER_WHITESPACE)) {
-						stripped_spaces ++;
-					}
-					str_len = chunk->pos - c - stripped_spaces;
-					if (str_len <= 0) {
-						ucl_set_err (chunk, 0, "string value must not be empty", &parser->err);
-						return false;
-					}
-					obj->type = UCL_STRING;
-					if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-							&obj->value.sv, str_len, false, false)) == -1) {
-						return false;
-					}
-					obj->len = str_len;
-				}
-				parser->state = UCL_STATE_AFTER_VALUE;
-				return true;
+				obj->len = str_len;
 			}
+			parser->state = UCL_STATE_AFTER_VALUE;
 			p = chunk->pos;
+
+			return true;
 			break;
 		}
 	}
