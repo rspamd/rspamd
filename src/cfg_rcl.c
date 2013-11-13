@@ -1151,8 +1151,12 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
 	target = (gchar **)(((gchar *)pd->user_struct) + pd->offset);
 	switch (obj->type) {
 	case UCL_STRING:
-		/* Direct assigning is safe, as object is likely linked to the cfg mem_pool */
-		*target = ucl_copy_value_trash (obj);
+		if (pd->flags & RSPAMD_CL_FLAG_STRING_PATH) {
+			*target = rspamd_expand_path (cfg->cfg_pool, ucl_copy_value_trash (obj));
+		}
+		else {
+			*target = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
+		}
 		break;
 	case UCL_INT:
 		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
@@ -1169,10 +1173,6 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
 	default:
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert object or array to string");
 		return FALSE;
-	}
-
-	if (pd->flags & RSPAMD_CL_FLAG_STRING_PATH) {
-		*target = (gchar *)rspamd_expand_path (cfg->cfg_pool, *target);
 	}
 
 	return TRUE;
@@ -1322,8 +1322,12 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
 	for (cur = obj; cur != NULL; cur = cur->next) {
 		switch (cur->type) {
 		case UCL_STRING:
-			/* Direct assigning is safe, as curect is likely linked to the cfg mem_pool */
-			val = ucl_copy_value_trash (obj);
+			if (pd->flags & RSPAMD_CL_FLAG_STRING_PATH) {
+				val = rspamd_expand_path (cfg->cfg_pool, ucl_copy_value_trash (obj));
+			}
+			else {
+				val = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
+			}
 			break;
 		case UCL_INT:
 			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);

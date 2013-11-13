@@ -2385,5 +2385,138 @@ restart:
 }
 
 /*
+ * Variables:
+ * $CONFDIR - configuration directory
+ * $LOCALSTATESDIR - local states directory
+ * $INSTALLPREFIX - installation prefix
+ * $VERSION - rspamd version
+ */
+
+#define RSPAMD_CONFDIR_MACRO "CONFDIR"
+#define RSPAMD_LOCALSTATESDIR_MACRO "LOCALSTATESDIR"
+#define RSPAMD_INSTALLPREFIX_MACRO "INSTALLPREFIX"
+#define RSPAMD_VERSION_MACRO "VERSION"
+
+static const gchar *
+rspamd_check_path_variable (const gchar *in, gsize *len)
+{
+	switch (*in) {
+	case 'C':
+		if (strncmp (in, RSPAMD_CONFDIR_MACRO, sizeof (RSPAMD_CONFDIR_MACRO) - 1) == 0) {
+			*len += sizeof (ETC_PREFIX) - 1;
+			in += sizeof (RSPAMD_CONFDIR_MACRO) - 1;
+		}
+		break;
+	case 'L':
+		if (strncmp (in, RSPAMD_LOCALSTATESDIR_MACRO, sizeof (RSPAMD_LOCALSTATESDIR_MACRO) - 1) == 0) {
+			*len += sizeof (LOCALSTATES_PREFIX) - 1;
+			in += sizeof (RSPAMD_LOCALSTATESDIR_MACRO) - 1;
+		}
+		break;
+	case 'I':
+		if (strncmp (in, RSPAMD_INSTALLPREFIX_MACRO, sizeof (RSPAMD_INSTALLPREFIX_MACRO) - 1) == 0) {
+			*len += sizeof (CMAKE_PREFIX) - 1;
+			in += sizeof (RSPAMD_INSTALLPREFIX_MACRO) - 1;
+		}
+		break;
+	case 'V':
+		if (strncmp (in, RSPAMD_VERSION_MACRO, sizeof (RSPAMD_VERSION_MACRO) - 1) == 0) {
+			*len += sizeof (RVERSION) - 1;
+			in += sizeof (RSPAMD_VERSION_MACRO) - 1;
+		}
+		break;
+	}
+
+	return in;
+}
+
+static const gchar *
+rspamd_expand_path_variable (const gchar *in, gchar **dest)
+{
+	gchar *d = *dest;
+	const gchar *v = in + 1;
+
+	*d = *v;
+	in ++;
+
+	switch (*v) {
+	case 'C':
+		if (strncmp (v, RSPAMD_CONFDIR_MACRO, sizeof (RSPAMD_CONFDIR_MACRO) - 1) == 0) {
+			memcpy (d, ETC_PREFIX, sizeof (ETC_PREFIX) - 1);
+			d += sizeof (ETC_PREFIX) - 1;
+			in += sizeof (RSPAMD_CONFDIR_MACRO) - 1;
+		}
+		break;
+	case 'L':
+		if (strncmp (v, RSPAMD_LOCALSTATESDIR_MACRO, sizeof (RSPAMD_LOCALSTATESDIR_MACRO) - 1) == 0) {
+			memcpy (d, LOCALSTATES_PREFIX, sizeof (LOCALSTATES_PREFIX) - 1);
+			d += sizeof (LOCALSTATES_PREFIX) - 1;
+			in += sizeof (RSPAMD_LOCALSTATESDIR_MACRO) - 1;
+		}
+		break;
+	case 'I':
+		if (strncmp (v, RSPAMD_INSTALLPREFIX_MACRO, sizeof (RSPAMD_INSTALLPREFIX_MACRO) - 1) == 0) {
+			memcpy (d, CMAKE_PREFIX, sizeof (CMAKE_PREFIX) - 1);
+			d += sizeof (CMAKE_PREFIX) - 1;
+			in += sizeof (RSPAMD_INSTALLPREFIX_MACRO) - 1;
+		}
+		break;
+	case 'V':
+		if (strncmp (v, RSPAMD_VERSION_MACRO, sizeof (RSPAMD_VERSION_MACRO) - 1) == 0) {
+			memcpy (d, RVERSION, sizeof (RVERSION) - 1);
+			d += sizeof (RVERSION) - 1;
+			in += sizeof (RSPAMD_VERSION_MACRO) - 1;
+		}
+		break;
+	}
+
+	*dest = d;
+	return in;
+}
+
+gchar*
+rspamd_expand_path (memory_pool_t *pool, const gchar *path)
+{
+	const gchar *p = path;
+	gchar *dest, *d;
+	gsize len = 0, orig_len = 0;
+
+	while (*p != '\0') {
+		if (*p == '$') {
+			len ++;
+			p = rspamd_check_path_variable (p + 1, &len);
+		}
+		else {
+			len ++;
+		}
+		orig_len ++;
+		p ++;
+	}
+
+	if (len == orig_len) {
+		return memory_pool_strdup (pool, path);
+	}
+
+	dest = memory_pool_alloc (pool, len + 1);
+	p = path;
+	d = dest;
+
+	while (*p != '\0') {
+		if (*p == '$') {
+			p = rspamd_expand_path_variable (p, &d);
+		}
+		else {
+			*d++ = *p++;
+		}
+	}
+
+	*d = '\0';
+
+	msg_debug ("expanded %s to %s", path, dest);
+
+	return dest;
+}
+
+/*
  * vi:ts=4
  */

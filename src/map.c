@@ -1044,9 +1044,16 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 	new_map->user_data = user_data;
 	new_map->protocol = proto;
 	new_map->cfg = cfg;
-	new_map->uri = memory_pool_strdup (cfg->cfg_pool, proto == MAP_PROTO_FILE ? def : map_line);
 	new_map->id = g_random_int ();
 	new_map->locked = memory_pool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+
+	if (proto == MAP_PROTO_FILE) {
+		new_map->uri = rspamd_expand_path (cfg->cfg_pool, def);
+		def = new_map->uri;
+	}
+	else {
+		new_map->uri = memory_pool_strdup (cfg->cfg_pool, map_line);
+	}
 	if (description != NULL) {
 		new_map->description = memory_pool_strdup (cfg->cfg_pool, description);
 	}
