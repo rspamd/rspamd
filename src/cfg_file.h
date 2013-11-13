@@ -551,6 +551,15 @@ gboolean check_classifier_statfiles (struct classifier_config *cf);
  */
 struct classifier_config* find_classifier_conf (struct config_file *cfg, const gchar *name);
 
+/*
+ * Expand path that may contain configuration variables:
+ * $CONFDIR - configuration directory
+ * $LOCALSTATESDIR - local states directory
+ * $INSTALLPREFIX - installation prefix
+ * $VERSION - rspamd version
+ */
+const gchar* rspamd_expand_path (memory_pool_t *pool, const gchar *path);
+
 #endif /* ifdef CFG_FILE_H */
 /* 
  * vi:ts=4 

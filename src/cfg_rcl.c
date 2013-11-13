@@ -563,7 +563,7 @@ static gboolean
 rspamd_rcl_lua_handler (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	const gchar *lua_src = ucl_object_tostring (obj);
+	const gchar *lua_src = rspamd_expand_path (cfg->cfg_pool, ucl_object_tostring (obj));
 	gchar *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State *L = cfg->lua_state;
 
@@ -687,14 +687,14 @@ rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
 
 		LL_FOREACH (val, cur) {
 			if (ucl_object_tostring_safe (cur, &data)) {
-				if (!rspamd_rcl_add_module_path (cfg, data, err)) {
+				if (!rspamd_rcl_add_module_path (cfg, rspamd_expand_path (cfg->cfg_pool, data), err)) {
 					return FALSE;
 				}
 			}
 		}
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
-		if (!rspamd_rcl_add_module_path (cfg, data, err)) {
+		if (!rspamd_rcl_add_module_path (cfg, rspamd_expand_path (cfg->cfg_pool, data), err)) {
 			return FALSE;
 		}
 	}
@@ -946,7 +946,7 @@ rspamd_rcl_config_init (void)
 	rspamd_rcl_add_default_handler (sub, "statfile_pool_size", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct config_file, max_statfile_size), RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (sub, "cache_file", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, cache_filename), 0);
+			G_STRUCT_OFFSET (struct config_file, cache_filename), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "dns_nameserver", rspamd_rcl_parse_struct_string_list,
 			G_STRUCT_OFFSET (struct config_file, nameservers), 0);
 	rspamd_rcl_add_default_handler (sub, "dns_timeout", rspamd_rcl_parse_struct_time,
@@ -960,9 +960,9 @@ rspamd_rcl_config_init (void)
 	rspamd_rcl_add_default_handler (sub, "check_attachements", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct config_file, check_text_attachements), 0);
 	rspamd_rcl_add_default_handler (sub, "tempdir", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, temp_dir), 0);
+			G_STRUCT_OFFSET (struct config_file, temp_dir), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "pidfile", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, pid_file), 0);
+			G_STRUCT_OFFSET (struct config_file, pid_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "filters", rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct config_file, filters_str), 0);
 	rspamd_rcl_add_default_handler (sub, "sync_interval", rspamd_rcl_parse_struct_time,
@@ -976,9 +976,9 @@ rspamd_rcl_config_init (void)
 	rspamd_rcl_add_default_handler (sub, "dynamic_conf", rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct config_file, dynamic_conf), 0);
 	rspamd_rcl_add_default_handler (sub, "rrd", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, rrd_file), 0);
+			G_STRUCT_OFFSET (struct config_file, rrd_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "history_file", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, history_file), 0);
+			G_STRUCT_OFFSET (struct config_file, history_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "use_mlock", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool), 0);
 
@@ -1022,7 +1022,7 @@ rspamd_rcl_config_init (void)
 	rspamd_rcl_add_default_handler (ssub, "symbol", rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct statfile, symbol), 0);
 	rspamd_rcl_add_default_handler (ssub, "path", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct statfile, path), 0);
+			G_STRUCT_OFFSET (struct statfile, path), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (ssub, "label", rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct statfile, label), 0);
 	rspamd_rcl_add_default_handler (ssub, "size", rspamd_rcl_parse_struct_integer,
@@ -1169,6 +1169,10 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
 	default:
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot convert object or array to string");
 		return FALSE;
+	}
+
+	if (pd->flags & RSPAMD_CL_FLAG_STRING_PATH) {
+		*target = (gchar *)rspamd_expand_path (cfg->cfg_pool, *target);
 	}
 
 	return TRUE;
