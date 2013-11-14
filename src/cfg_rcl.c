@@ -27,6 +27,7 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expressions.h"
+#include "view.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 
@@ -853,6 +854,73 @@ rspamd_rcl_composite_handler (struct config_file *cfg, ucl_object_t *obj,
 	return TRUE;
 }
 
+static gboolean
+rspamd_rcl_view_handler (struct config_file *cfg, ucl_object_t *obj,
+		gpointer ud, struct rspamd_rcl_section *section, GError **err)
+{
+	ucl_object_t *val, *cur;
+	struct rspamd_view *view;
+	const gchar *view_ip, *view_client_ip, *view_symbols,
+				*view_rcpt, *view_from;
+	bool skip_check = false;
+
+	view = init_view (cfg, cfg->cfg_pool);
+
+	val = ucl_object_find_key (obj, "ip");
+	LL_FOREACH (val, cur) {
+		if (cur != NULL && ucl_object_tostring_safe (cur, &view_ip)) {
+			if (!add_view_ip (view, view_ip)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse view ip: %s", view_ip);
+				return FALSE;
+			}
+		}
+	}
+	val = ucl_object_find_key (obj, "client_ip");
+	LL_FOREACH (val, cur) {
+		if (cur != NULL && ucl_object_tostring_safe (cur, &view_client_ip)) {
+			if (!add_view_client_ip (view, view_client_ip)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse view client ip: %s", view_client_ip);
+				return FALSE;
+			}
+		}
+	}
+	val = ucl_object_find_key (obj, "symbols");
+	LL_FOREACH (val, cur) {
+		if (cur != NULL && ucl_object_tostring_safe (cur, &view_symbols)) {
+			if (!add_view_symbols (view, view_symbols)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse view client symbols: %s", view_symbols);
+				return FALSE;
+			}
+		}
+	}
+	val = ucl_object_find_key (obj, "rcpt");
+	LL_FOREACH (val, cur) {
+		if (cur != NULL && ucl_object_tostring_safe (cur, &view_rcpt)) {
+			if (!add_view_rcpt (view, view_rcpt)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse view recipient: %s", view_rcpt);
+				return FALSE;
+			}
+		}
+	}
+	val = ucl_object_find_key (obj, "from");
+	LL_FOREACH (val, cur) {
+		if (cur != NULL && ucl_object_tostring_safe (cur, &view_from)) {
+			if (!add_view_from (view, view_from)) {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse view from: %s", view_from);
+				return FALSE;
+			}
+		}
+	}
+	val = ucl_object_find_key (obj, "skip_check");
+	if (val != NULL && ucl_object_toboolean_safe (val, &skip_check)) {
+		view->skip_check = skip_check;
+	}
+
+	cfg->views = g_list_prepend (cfg->views, view);
+
+	return TRUE;
+}
+
 /**
  * Fake handler to parse default options only, uses struct cfg_file as pointer
  * for default handlers
@@ -1034,7 +1102,13 @@ rspamd_rcl_config_init (void)
 	 * Composites handler
 	 */
 	sub = rspamd_rcl_add_section (&new, "composite", rspamd_rcl_composite_handler, UCL_OBJECT,
-				FALSE, TRUE);
+			FALSE, TRUE);
+
+	/**
+	 * Views handler
+	 */
+	sub = rspamd_rcl_add_section (&new, "view", rspamd_rcl_view_handler, UCL_OBJECT,
+			FALSE, TRUE);
 
 	return new;
 }

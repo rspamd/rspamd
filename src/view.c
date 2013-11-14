@@ -51,7 +51,7 @@ init_view (struct config_file *cfg, memory_pool_t * pool)
 }
 
 gboolean
-add_view_from (struct rspamd_view * view, gchar *line)
+add_view_from (struct rspamd_view * view, const gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
@@ -67,7 +67,7 @@ add_view_from (struct rspamd_view * view, gchar *line)
 }
 
 gboolean
-add_view_rcpt (struct rspamd_view * view, gchar *line)
+add_view_rcpt (struct rspamd_view * view, const gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 
@@ -83,7 +83,7 @@ add_view_rcpt (struct rspamd_view * view, gchar *line)
 }
 
 gboolean
-add_view_symbols (struct rspamd_view * view, gchar *line)
+add_view_symbols (struct rspamd_view * view, const gchar *line)
 {
 	struct rspamd_regexp           *re = NULL;
 	GList                          *symbols;
@@ -110,7 +110,7 @@ add_view_symbols (struct rspamd_view * view, gchar *line)
 }
 
 gboolean
-add_view_ip (struct rspamd_view * view, gchar *line)
+add_view_ip (struct rspamd_view * view, const gchar *line)
 {
 	if (add_map (view->cfg, line, "IP view", read_radix_list, fin_radix_list, (void **)&view->ip_tree)) {
 		return TRUE;
@@ -120,7 +120,7 @@ add_view_ip (struct rspamd_view * view, gchar *line)
 }
 
 gboolean
-add_view_client_ip (struct rspamd_view * view, gchar *line)
+add_view_client_ip (struct rspamd_view * view, const gchar *line)
 {
 	if (add_map (view->cfg, line, "Client IP view", read_radix_list, fin_radix_list, (void **)&view->client_ip_tree)) {
 		return TRUE;

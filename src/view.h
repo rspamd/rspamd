@@ -40,7 +40,7 @@ struct rspamd_view* init_view (struct config_file *cfg, memory_pool_t *pool);
  * @param line from line for this view
  * @return
  */
-gboolean add_view_from (struct rspamd_view *view, gchar *line);
+gboolean add_view_from (struct rspamd_view *view, const gchar *line);
 
 
 /**
@@ -49,7 +49,7 @@ gboolean add_view_from (struct rspamd_view *view, gchar *line);
  * @param line recipient description
  * @return
  */
-gboolean add_view_rcpt (struct rspamd_view *view, gchar *line);
+gboolean add_view_rcpt (struct rspamd_view *view, const gchar *line);
 
 /**
  * Add ip option for this view
@@ -57,7 +57,7 @@ gboolean add_view_rcpt (struct rspamd_view *view, gchar *line);
  * @param line ip description
  * @return
  */
-gboolean add_view_ip (struct rspamd_view *view, gchar *line);
+gboolean add_view_ip (struct rspamd_view *view, const gchar *line);
 
 /**
  * Add client ip option for this view
@@ -65,7 +65,7 @@ gboolean add_view_ip (struct rspamd_view *view, gchar *line);
  * @param line ip description
  * @return
  */
-gboolean add_view_client_ip (struct rspamd_view *view, gchar *line);
+gboolean add_view_client_ip (struct rspamd_view *view, const gchar *line);
 
 /**
  * Add symbols option for this view
@@ -73,7 +73,7 @@ gboolean add_view_client_ip (struct rspamd_view *view, gchar *line);
  * @param line symbols description
  * @return
  */
-gboolean add_view_symbols (struct rspamd_view *view, gchar *line);
+gboolean add_view_symbols (struct rspamd_view *view, const gchar *line);
 
 /**
  * Check view for this task for specified symbol

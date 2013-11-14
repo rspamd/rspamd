@@ -750,10 +750,11 @@ unescape_quotes (gchar *line)
 }
 
 GList                          *
-parse_comma_list (memory_pool_t * pool, gchar *line)
+parse_comma_list (memory_pool_t * pool, const gchar *line)
 {
 	GList                          *res = NULL;
-	gchar                           *c, *p, *str;
+	const gchar                    *c, *p;
+	gchar                          *str;
 
 	c = line;
 	p = c;

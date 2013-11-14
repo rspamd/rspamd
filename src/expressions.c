@@ -587,9 +587,10 @@ parse_expression (memory_pool_t * pool, gchar *line)
  * Rspamd regexp utility functions
  */
 struct rspamd_regexp           *
-parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
+parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 {
-	gchar                           *begin, *end, *p, *src, *start;
+	const gchar                    *begin, *end, *p, *src, *start;
+	gchar                          *dbegin, *dend;
 	struct rspamd_regexp           *result, *check;
 	gint                            regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
 	GError                         *err = NULL;
@@ -613,14 +614,11 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 	/* First try to find header name */
 	begin = strchr (line, '/');
 	if (begin != NULL) {
-		*begin = '\0';
-		end = strchr (line, '=');
-		*begin = '/';
+		end = strrchr (begin, '=');
 		if (end) {
-			*end = '\0';
-			result->header = memory_pool_strdup (pool, line);
+			result->header = memory_pool_alloc (pool, end - line + 1);
+			rspamd_strlcpy (result->header, line, end - line + 1);
 			result->type = REGEXP_HEADER;
-			*end = '=';
 			line = end;
 		}
 	}
@@ -735,14 +733,17 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 		}
 	}
 
-	*end = '\0';
+	result->regexp_text = memory_pool_strdup (pool, start);
+	dbegin = result->regexp_text + (begin - start);
+	dend = result->regexp_text + (end - start);
+	*dend = '\0';
 
 	if (raw_mode) {
 		regexp_flags |= G_REGEX_RAW;
 	}
 
 	/* Avoid multiply regexp structures for similar regexps */
-	if ((check = (struct rspamd_regexp *)re_cache_check (begin, pool)) != NULL) {
+	if ((check = (struct rspamd_regexp *)re_cache_check (result->regexp_text, pool)) != NULL) {
 		/* Additional check for headers */
 		if (result->type == REGEXP_HEADER || result->type == REGEXP_RAW_HEADER) {
 			if (result->header && check->header) {
@@ -755,24 +756,22 @@ parse_regexp (memory_pool_t * pool, gchar *line, gboolean raw_mode)
 			return check;
 		}
 	}
-	result->regexp = g_regex_new (begin, regexp_flags, 0, &err);
+	result->regexp = g_regex_new (dbegin, regexp_flags, 0, &err);
 	if ((regexp_flags & G_REGEX_RAW) != 0) {
 		result->raw_regexp = result->regexp;
 	}
 	else {
-		result->raw_regexp = g_regex_new (begin, regexp_flags | G_REGEX_RAW, 0, &err);
+		result->raw_regexp = g_regex_new (dbegin, regexp_flags | G_REGEX_RAW, 0, &err);
 		memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->raw_regexp);
 	}
-	*end = '/';
-	result->regexp_text = memory_pool_strdup (pool, start);
 	memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->regexp);
 
+	*dend = '/';
+
 	if (result->regexp == NULL || err != NULL) {
-		*end = '/';
 		msg_warn ("could not read regexp: %s while reading regexp %s", err->message, src);
 		return NULL;
 	}
-
 
 	if (result->raw_regexp == NULL || err != NULL) {
 		msg_warn ("could not read raw regexp: %s while reading regexp %s", err->message, src);

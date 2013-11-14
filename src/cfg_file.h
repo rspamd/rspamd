@@ -507,7 +507,7 @@ void unescape_quotes (gchar *line);
 /*
  * Convert comma separated string to a list of strings
  */
-GList* parse_comma_list (memory_pool_t *pool, gchar *line);
+GList* parse_comma_list (memory_pool_t *pool, const gchar *line);
 
 /*
  * Return a new classifier_config structure, setting default and non-conflicting attributes
