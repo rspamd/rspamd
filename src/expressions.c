@@ -614,7 +614,15 @@ parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 	/* First try to find header name */
 	begin = strchr (line, '/');
 	if (begin != NULL) {
-		end = strrchr (begin, '=');
+		p = begin;
+		end = NULL;
+		while (p != line) {
+			if (*p == '=') {
+				end = p;
+				break;
+			}
+			p --;
+		}
 		if (end) {
 			result->header = memory_pool_alloc (pool, end - line + 1);
 			rspamd_strlcpy (result->header, line, end - line + 1);

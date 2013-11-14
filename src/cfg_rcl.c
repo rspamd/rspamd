@@ -451,7 +451,7 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 	if (val != NULL && ucl_object_tostring_safe (val, &worker_type)) {
 		qtype = g_quark_try_string (worker_type);
 		if (qtype != 0) {
-			wrk = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+			wrk = check_worker_conf (cfg, NULL);
 			wrk->worker = get_worker_by_type (qtype);
 			if (wrk->worker == NULL) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "unknown worker type: %s", worker_type);
