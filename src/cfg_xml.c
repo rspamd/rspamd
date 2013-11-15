@@ -834,7 +834,8 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 			}
 			else {
 				tobj = ucl_object_new ();
-				if (process_attrs (attribute_names, attribute_values, tobj)) {
+				if (g_ascii_strcasecmp (element_name, "symbol") == 0 &&
+						process_attrs (attribute_names, attribute_values, tobj)) {
 					ud->parent_pointer[ud->nested] = tobj;
 					tobj->type = UCL_OBJECT;
 					ud->parent_pointer[ud->nested - 1] =
@@ -853,6 +854,7 @@ rspamd_xml_start_element (GMarkupParseContext *context, const gchar *element_nam
 				}
 				else {
 					ucl_object_unref (tobj);
+					process_attrs (attribute_names, attribute_values, ud->parent_pointer[ud->nested - 1]);
 				}
 			}
 			break;

@@ -39,7 +39,6 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	ucl_object_t *val;
-	gchar *filepath;
 	const gchar *facility, *log_type, *log_level;
 
 	val = ucl_object_find_key (obj, "type");
@@ -51,13 +50,8 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 				g_set_error (err, CFG_RCL_ERROR, ENOENT, "filename attribute must be specified for file logging type");
 				return FALSE;
 			}
-			if ((filepath = realpath (ucl_object_tostring (val), NULL)) == NULL ||
-					access (filepath, W_OK) == -1) {
-				g_set_error (err, CFG_RCL_ERROR, errno, "log file is inaccessible");
-				return FALSE;
-			}
 			cfg->log_type = RSPAMD_LOG_FILE;
-			cfg->log_file = memory_pool_strdup (cfg->cfg_pool, filepath);
+			cfg->log_file = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (val));
 		}
 		else if (g_ascii_strcasecmp (log_type, "syslog") == 0) {
 			/* Need to get facility */
