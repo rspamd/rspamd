@@ -88,8 +88,6 @@ typedef struct statfile_pool_s {
 	stat_file_t *files;						/**< hash table of opened files indexed by name	*/
 	void **maps;							/**< shared hash table of mmaped areas indexed by name	*/
 	gint opened;								/**< number of opened files				*/
-	size_t max;								/**< maximum size						*/
-	size_t occupied;						/**< current size						*/
 	memory_pool_t *pool;					/**< memory pool object					*/
 	memory_pool_mutex_t *lock;				/**< mutex								*/
 	struct event  *invalidate_event;        /**< event for pool invalidation        */
@@ -106,7 +104,7 @@ struct statfile;
  * @param max_size maximum size
  * @return statfile pool object
  */
-statfile_pool_t* statfile_pool_new (memory_pool_t *pool, size_t max_size, gboolean use_mlock);
+statfile_pool_t* statfile_pool_new (memory_pool_t *pool, gboolean use_mlock);
 
 /**
  * Open statfile and attach it to pool

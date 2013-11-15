@@ -167,51 +167,13 @@ statfile_pool_check (stat_file_t * file)
 }
 
 
-struct expiration_data {
-	statfile_pool_t                *pool;
-	guint64                         oldest;
-	gchar                           *filename;
-};
-
-
-static gint
-statfile_pool_expire (statfile_pool_t * pool)
-{
-	struct expiration_data          exp;
-	stat_file_t                    *file;
-	gint                            i;
-
-	if (pool->opened == 0) {
-		return -1;
-	}
-
-	exp.pool = pool;
-	exp.oldest = ULLONG_MAX;
-	exp.filename = NULL;
-
-	for (i = 0; i < pool->opened; i++) {
-		file = &pool->files[i];
-		if ((guint64) file->access_time < exp.oldest) {
-			exp.oldest = file->access_time;
-			exp.filename = file->filename;
-		}
-	}
-
-	if (exp.filename) {
-		statfile_pool_close (pool, file, TRUE);
-	}
-
-	return 0;
-}
-
 statfile_pool_t                *
-statfile_pool_new (memory_pool_t *pool, size_t max_size, gboolean use_mlock)
+statfile_pool_new (memory_pool_t *pool, gboolean use_mlock)
 {
 	statfile_pool_t                *new;
 
 	new = memory_pool_alloc0 (pool, sizeof (statfile_pool_t));
 	new->pool = memory_pool_new (memory_pool_get_size ());
-	new->max = max_size;
 	new->files = memory_pool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = memory_pool_get_mutex (new->pool);
 	new->mlock_ok = use_mlock;
@@ -344,28 +306,13 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 		return NULL;
 	}
 
-	if (!forced && (gsize)st.st_size > pool->max) {
-		msg_info ("cannot attach file to pool, too large: %Hz", (size_t) st.st_size);
-		return NULL;
-	}
-
 	memory_pool_lock_mutex (pool->lock);
 	if (!forced && abs (st.st_size - size) > (gint)sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
 		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
 	}
-	memory_pool_unlock_mutex (pool->lock);
 
-	while (!forced && (pool->max + pool->opened * sizeof (struct stat_file) * 2 < pool->occupied + st.st_size)) {
-		if (statfile_pool_expire (pool) == -1) {
-			/* Failed to find any more free space in pool */
-			msg_info ("expiration for pool failed, opening file %s failed", filename);
-			return NULL;
-		}
-	}
-
-	memory_pool_lock_mutex (pool->lock);
 	new_file = &pool->files[pool->opened++];
 	bzero (new_file, sizeof (stat_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1) {
@@ -404,7 +351,6 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	}
 	unlock_file (new_file->fd, FALSE);
 
-	pool->occupied += st.st_size;
 	new_file->open_time = time (NULL);
 	new_file->access_time = new_file->open_time;
 	new_file->lock = memory_pool_get_mutex (pool->pool);
@@ -439,7 +385,6 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	/* Move the remain statfiles */
 	memmove (pos, ((guint8 *)pos) + sizeof (stat_file_t),
 			(--pool->opened - (pos - pool->files)) * sizeof (stat_file_t));
-	pool->occupied -= file->len;
 
 	memory_pool_unlock_mutex (pool->lock);
 
@@ -753,18 +698,6 @@ statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, guint32 c
 	fsync (file->fd);
 	file->len += length;
 
-	if (file->len > pool->max) {
-		msg_info ("cannot attach file to pool, too large: %z", file->len);
-		return FALSE;
-	}
-
-	while (pool->max <= pool->occupied + file->len) {
-		if (statfile_pool_expire (pool) == -1) {
-			/* Failed to find any more free space in pool */
-			msg_info ("expiration for pool failed, opening file %s failed", file->filename);
-			return FALSE;
-		}
-	}
 	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == NULL) {
 		msg_info ("cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
