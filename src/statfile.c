@@ -229,6 +229,12 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 	struct stat_file_block         *block;
 	struct stat_file_header        *header;
 
+	if (size <
+			sizeof (struct stat_file_header) + sizeof (struct stat_file_section) + sizeof (block)) {
+		msg_err ("file %s is too small to carry any statistic: %z", filename, size);
+		return NULL;
+	}
+
 	/* First of all rename old file */
 	memory_pool_lock_mutex (pool->lock);
 
@@ -462,6 +468,12 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 	if (statfile_pool_is_open (pool, filename) != NULL) {
 		msg_info ("file %s is already opened", filename);
 		return 0;
+	}
+
+	if (size <
+			sizeof (struct stat_file_header) + sizeof (struct stat_file_section) + sizeof (block)) {
+		msg_err ("file %s is too small to carry any statistic: %z", filename, size);
+		return -1;
 	}
 
 	memory_pool_lock_mutex (pool->lock);
