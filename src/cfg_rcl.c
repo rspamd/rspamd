@@ -772,6 +772,8 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
 			return FALSE;
 		}
 
+		st->opts = obj;
+
 		return TRUE;
 	}
 

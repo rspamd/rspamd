@@ -802,10 +802,6 @@ check_statfile_conf (struct config_file *cfg, struct statfile *c)
 	if (c == NULL) {
 		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 	}
-	if (c->opts == NULL) {
-		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
-	}
 
 	return c;
 }

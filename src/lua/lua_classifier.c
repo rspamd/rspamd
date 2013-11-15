@@ -381,14 +381,15 @@ static gint
 lua_statfile_get_param (lua_State *L)
 {
 	struct statfile                *st = lua_check_statfile (L);
-	const gchar                    *param, *value;
+	const gchar                    *param;
+	ucl_object_t                    *value;
 
 	param = luaL_checkstring (L, 2);
 
 	if (st != NULL && param != NULL) {
-		value = g_hash_table_lookup (st->opts, param);
+		value = ucl_object_find_key (st->opts, param);
 		if (value != NULL) {
-			lua_pushstring (L, value);
+			lua_pushstring (L, ucl_object_tostring_forced (value));
 			return 1;
 		}
 	}
