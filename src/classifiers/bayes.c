@@ -161,12 +161,12 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		if (cur->value > 0) {
 			cur->total_hits += cur->value;
 			if (cur->st->is_spam) {
-				spam_count ++;
+				spam_count += cur->value;
 			}
 			else {
-				ham_count ++;
+				ham_count += cur->value;
 			}
-			total_count ++;
+			total_count += cur->value;
 		}
 	}
 
@@ -294,7 +294,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 		final_prob = (s + 1 - h) / 2.;
 	}
 
-	if (final_prob > 0 && fabs (final_prob - 0.5) > 0.05) {
+	if (data.processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
 
 		sumbuf = memory_pool_alloc (task->task_pool, 32);
 		for (i = 0; i < cnt; i ++) {
