@@ -1475,6 +1475,8 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 		/* Set up async session */
 		task->s = new_async_session (task->task_pool, fin_learn_task, restore_learn_task, free_task_hard, task);
+		task->dispatcher = session->dispatcher;
+		session->learn_task = task;
 		r = process_filters (task);
 		if (r == -1) {
 			session->state = STATE_REPLY;
@@ -1498,8 +1500,6 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 		else {
 			session->state = STATE_LEARN_SPAM;
-			task->dispatcher = session->dispatcher;
-			session->learn_task = task;
 			rspamd_dispatcher_pause (session->dispatcher);
 		}
 		break;
