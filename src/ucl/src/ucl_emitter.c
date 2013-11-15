@@ -537,7 +537,7 @@ ucl_elt_array_write_yaml (ucl_object_t *obj, UT_string *buf, unsigned int tabs, 
 		ucl_add_tabs (buf, tabs, false);
 	}
 
-	utstring_append_len (buf, ": [\n", 4);
+	utstring_append_len (buf, "[\n", 2);
 	while (cur) {
 		ucl_elt_write_yaml (cur, buf, tabs + 1, true, false, false);
 		utstring_append_len (buf, ",\n", 2);

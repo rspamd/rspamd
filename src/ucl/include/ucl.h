@@ -136,8 +136,9 @@ enum ucl_string_flags {
 	UCL_STRING_PARSE_DOUBLE = 0x10,    /**< UCL_STRING_PARSE_DOUBLE parse passed string and detect integer or float number */
 	UCL_STRING_PARSE_NUMBER =  UCL_STRING_PARSE_INT|UCL_STRING_PARSE_DOUBLE ,  /**<
 									UCL_STRING_PARSE_NUMBER parse passed string and detect number */
-	UCL_STRING_PARSE =  UCL_STRING_PARSE_BOOLEAN|UCL_STRING_PARSE_NUMBER   /**<
+	UCL_STRING_PARSE =  UCL_STRING_PARSE_BOOLEAN|UCL_STRING_PARSE_NUMBER,   /**<
 									UCL_STRING_PARSE parse passed string (and detect booleans and numbers) */
+	UCL_STRING_PARSE_BYTES = 0x20  /**< Treat numbers as bytes */
 };
 
 /**

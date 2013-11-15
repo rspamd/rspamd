@@ -250,7 +250,7 @@ ucl_maybe_parse_boolean (ucl_object_t *obj, const unsigned char *start, size_t l
  * @return 0 if string is numeric and error code (EINVAL or ERANGE) in case of conversion error
  */
 int ucl_maybe_parse_number (ucl_object_t *obj,
-		const char *start, const char *end, const char **pos, bool allow_double);
+		const char *start, const char *end, const char **pos, bool allow_double, bool number_bytes);
 
 
 static inline ucl_object_t *

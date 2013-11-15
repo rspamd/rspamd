@@ -270,7 +270,7 @@ ucl_copy_or_store_ptr (struct ucl_parser *parser,
 
 int
 ucl_maybe_parse_number (ucl_object_t *obj,
-		const char *start, const char *end, const char **pos, bool allow_double)
+		const char *start, const char *end, const char **pos, bool allow_double, bool number_bytes)
 {
 	const char *p = start, *c = start;
 	char *endptr;
@@ -387,8 +387,8 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 					p += 2;
 					goto set_obj;
 				}
-				else if (p[1] == 'b' || p[1] == 'B') {
-					/* Megabytes */
+				else if (number_bytes || (p[1] == 'b' || p[1] == 'B')) {
+					/* Bytes */
 					if (need_double) {
 						need_double = false;
 						lv = dv;
@@ -402,7 +402,7 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 						dv *= ucl_lex_num_multiplier (*p, false);
 					}
 					else {
-						lv *= ucl_lex_num_multiplier (*p, false);
+						lv *= ucl_lex_num_multiplier (*p, number_bytes);
 					}
 					p ++;
 					goto set_obj;
@@ -428,7 +428,7 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 					dv *= ucl_lex_num_multiplier (*p, false);
 				}
 				else {
-					lv *= ucl_lex_num_multiplier (*p, false);
+					lv *= ucl_lex_num_multiplier (*p, number_bytes);
 				}
 				p ++;
 				goto set_obj;
@@ -502,7 +502,7 @@ ucl_lex_number (struct ucl_parser *parser,
 	const unsigned char *pos;
 	int ret;
 
-	ret = ucl_maybe_parse_number (obj, chunk->pos, chunk->end, (const char **)&pos, true);
+	ret = ucl_maybe_parse_number (obj, chunk->pos, chunk->end, (const char **)&pos, true, false);
 
 	if (ret == 0) {
 		chunk->remain -= pos - chunk->pos;
