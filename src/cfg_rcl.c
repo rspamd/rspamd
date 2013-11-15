@@ -1474,7 +1474,7 @@ rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gch
 	nhandler->parser.offset = offset;
 	nhandler->parser.user_struct = target;
 	nhandler->handler = handler;
-	HASH_ADD_STR (nparser->parsers, name, nhandler);
+	HASH_ADD_KEYPTR (hh, nparser->parsers, name, strlen (name), nhandler);
 }
 
 
