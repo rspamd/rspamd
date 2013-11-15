@@ -1477,8 +1477,11 @@ controller_read_socket (f_str_t * in, void *arg)
 		task->s = new_async_session (task->task_pool, fin_learn_task, restore_learn_task, free_task_hard, task);
 		task->dispatcher = session->dispatcher;
 		session->learn_task = task;
+		session->state = STATE_LEARN_SPAM;
+		rspamd_dispatcher_pause (session->dispatcher);
 		r = process_filters (task);
 		if (r == -1) {
+			rspamd_dispatcher_restore (session->dispatcher);
 			session->state = STATE_REPLY;
 			if (session->restful) {
 				r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
@@ -1497,10 +1500,6 @@ controller_read_socket (f_str_t * in, void *arg)
 					return FALSE;
 				}
 			}
-		}
-		else {
-			session->state = STATE_LEARN_SPAM;
-			rspamd_dispatcher_pause (session->dispatcher);
 		}
 		break;
 	case STATE_WEIGHTS:
