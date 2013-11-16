@@ -87,12 +87,6 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	spf_module_ctx->spf_pool = memory_pool_new (memory_pool_get_size ());
 
 	*ctx = (struct module_ctx *)spf_module_ctx;
-	register_module_opt ("spf", "symbol_fail", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("spf", "symbol_softfail", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("spf", "symbol_allow", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("spf", "spf_cache_size", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("spf", "spf_cache_expire", MODULE_OPT_TYPE_TIME);
-	register_module_opt ("spf", "whitelist", MODULE_OPT_TYPE_MAP);
 
 	return 0;
 }

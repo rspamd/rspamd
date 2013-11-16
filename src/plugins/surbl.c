@@ -238,19 +238,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
 	register_protocol_command ("urls", urls_command_handler);
-	/* Register module options */
-	register_module_opt ("surbl", "redirector", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "redirector_symbol", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "url_expire", MODULE_OPT_TYPE_TIME);
-	register_module_opt ("surbl", "redirector_connect_timeout", MODULE_OPT_TYPE_TIME);
-	register_module_opt ("surbl", "redirector_read_timeout", MODULE_OPT_TYPE_TIME);
-	register_module_opt ("surbl", "max_urls", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("surbl", "redirector_hosts_map", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "exceptions", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "whitelist", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "/^suffix_.*$/", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "/^options_.*$/", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("surbl", "/^bit_.*$/", MODULE_OPT_TYPE_STRING);
 
 	return 0;
 }

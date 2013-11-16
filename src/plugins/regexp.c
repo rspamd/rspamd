@@ -530,10 +530,6 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	register_expression_function ("has_content_part_len", rspamd_has_content_part_len, NULL);
 
 	(void)luaopen_regexp (cfg->lua_state);
-	register_module_opt ("regexp", "dynamic_rules", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("regexp", "max_size", MODULE_OPT_TYPE_SIZE);
-	register_module_opt ("regexp", "max_threads", MODULE_OPT_TYPE_SIZE);
-	register_module_opt ("regexp", "/^\\S+$/", MODULE_OPT_TYPE_STRING);
 
 	return 0;
 }

@@ -96,17 +96,6 @@ dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	dkim_module_ctx->dkim_pool = memory_pool_new (memory_pool_get_size ());
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
-	register_module_opt ("dkim", "symbol_reject", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("dkim", "symbol_tempfail", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("dkim", "symbol_allow", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("dkim", "dkim_cache_size", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("dkim", "dkim_cache_expire", MODULE_OPT_TYPE_TIME);
-	register_module_opt ("dkim", "whitelist", MODULE_OPT_TYPE_MAP);
-	register_module_opt ("dkim", "domains", MODULE_OPT_TYPE_MAP);
-	register_module_opt ("dkim", "strict_multiplier", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("dkim", "time_jitter", MODULE_OPT_TYPE_TIME);
-	register_module_opt ("dkim", "trusted_only", MODULE_OPT_TYPE_FLAG);
-	register_module_opt ("dkim", "skip_multi", MODULE_OPT_TYPE_FLAG);
 
 	return 0;
 }

@@ -1123,13 +1123,6 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 
-	/* Init classifiers options */
-	register_classifier_opt ("bayes", "min_tokens");
-	register_classifier_opt ("winnow", "min_tokens");
-	register_classifier_opt ("bayes", "max_tokens");
-	register_classifier_opt ("winnow", "max_tokens");
-	register_classifier_opt ("winnow", "learn_threshold");
-
 	/* Pre-init of cache */
 	rspamd_main->cfg->cache = g_new0 (struct symbols_cache, 1);
 	rspamd_main->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());

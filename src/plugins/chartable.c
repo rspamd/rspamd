@@ -76,8 +76,6 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	chartable_module_ctx->chartable_pool = memory_pool_new (memory_pool_get_size ());
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
-	register_module_opt ("chartable", "symbol", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("chartable", "threshold", MODULE_OPT_TYPE_STRING);
 
 	return 0;
 }

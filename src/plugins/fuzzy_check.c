@@ -357,19 +357,6 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->mappings = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
-	/* Register module options */
-	register_module_opt ("fuzzy_check", "symbol", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("fuzzy_check", "max_score", MODULE_OPT_TYPE_DOUBLE);
-	register_module_opt ("fuzzy_check", "servers", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("fuzzy_check", "fuzzy_map", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("fuzzy_check", "whitelist", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("fuzzy_check", "mime_types", MODULE_OPT_TYPE_STRING);
-	register_module_opt ("fuzzy_check", "min_length", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("fuzzy_check", "min_bytes", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("fuzzy_check", "min_height", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("fuzzy_check", "min_width", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("fuzzy_check", "min_symbols", MODULE_OPT_TYPE_UINT);
-	register_module_opt ("fuzzy_check", "timeout", MODULE_OPT_TYPE_TIME);
 
 	return 0;
 }
