@@ -718,6 +718,13 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 			continue;
 		}
 
+		/* Check length of part */
+		if (fuzzy_module_ctx->min_bytes > part->content->len) {
+			msg_info ("<%s>, part is shorter than %d symbols, skip fuzzy check",
+					task->message_id, fuzzy_module_ctx->min_bytes);
+			cur = g_list_next (cur);
+			continue;
+		}
 		/* Check length of hash */
 		hashlen = strlen (part->fuzzy->hash_pipe);
 		if (hashlen == 0) {
