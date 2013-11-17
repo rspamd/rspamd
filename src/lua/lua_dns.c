@@ -67,7 +67,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct lua_dns_cbdata   	   *cd = arg;
 	gint                            i = 0;
-	struct in_addr                  ina;
 	struct rspamd_dns_resolver    **presolver;
 	union rspamd_reply_element     *elt;
 	GList                          *cur;
@@ -86,9 +85,19 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			cur = reply->elements;
 			while (cur) {
 				elt = cur->data;
-				memcpy (&ina, &elt->a.addr[0], sizeof (struct in_addr));
-				/* Actually this copy memory, so using of inet_ntoa is valid */
-				lua_pushstring (cd->L, inet_ntoa (ina));
+				lua_ip_push (cd->L, AF_INET, &elt->a.addr);
+				lua_rawseti (cd->L, -2, ++i);
+				cur = g_list_next (cur);
+			}
+			lua_pushnil (cd->L);
+		}
+		if (reply->type == DNS_REQUEST_AAA) {
+
+			lua_newtable (cd->L);
+			cur = reply->elements;
+			while (cur) {
+				elt = cur->data;
+				lua_ip_push (cd->L, AF_INET6, &elt->aaa.addr);
 				lua_rawseti (cd->L, -2, ++i);
 				cur = g_list_next (cur);
 			}

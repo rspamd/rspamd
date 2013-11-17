@@ -647,9 +647,13 @@ lua_task_get_received_headers (lua_State * L)
 			}
 			lua_newtable (L);
 			lua_set_table_index (L, "from_hostname", rh->from_hostname);
-			lua_set_table_index (L, "from_ip", rh->from_ip);
+			lua_pushstring (L, "from_ip");
+			lua_ip_push_fromstring (L, rh->from_ip);
+			lua_settable (L, -3);
 			lua_set_table_index (L, "real_hostname", rh->real_hostname);
-			lua_set_table_index (L, "real_ip", rh->real_ip);
+			lua_pushstring (L, "real_ip");
+			lua_ip_push_fromstring (L, rh->real_ip);
+			lua_settable (L, -3);
 			lua_set_table_index (L, "by_hostname", rh->by_hostname);
 			lua_rawseti (L, -2, i++);
 			cur = g_list_next (cur);
@@ -684,7 +688,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct lua_dns_callback_data   *cd = arg;
 	gint                            i = 0;
-	struct in_addr                  ina;
 	struct worker_task            **ptask;
 	union rspamd_reply_element     *elt;
 	GList                          *cur;
@@ -708,9 +711,19 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			cur = reply->elements;
 			while (cur) {
 				elt = cur->data;
-				memcpy (&ina, &elt->a.addr[0], sizeof (struct in_addr));
-				/* Actually this copy memory, so using of inet_ntoa is valid */
-				lua_pushstring (cd->L, inet_ntoa (ina));
+				lua_ip_push (cd->L, AF_INET, &elt->a.addr);
+				lua_rawseti (cd->L, -2, ++i);
+				cur = g_list_next (cur);
+			}
+			lua_pushnil (cd->L);
+		}
+		if (reply->type == DNS_REQUEST_AAA) {
+
+			lua_newtable (cd->L);
+			cur = reply->elements;
+			while (cur) {
+				elt = cur->data;
+				lua_ip_push (cd->L, AF_INET6, &elt->aaa.addr);
 				lua_rawseti (cd->L, -2, ++i);
 				cur = g_list_next (cur);
 			}
@@ -1205,78 +1218,28 @@ static gint
 lua_task_get_from_ip (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
-#ifdef HAVE_INET_PTON
-	gchar							ipbuf[INET6_ADDRSTRLEN];
-#endif
 	
 	if (task) {
-#ifdef HAVE_INET_PTON
-		if (task->from_addr.ipv6) {
-			inet_ntop (AF_INET6, &task->from_addr.d.in6, ipbuf, sizeof (ipbuf));
-		}
-		else {
-			inet_ntop (AF_INET, &task->from_addr.d.in4, ipbuf, sizeof (ipbuf));
-		}
-		lua_pushstring (L, ipbuf);
-		return 1;
-#else
-		if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
-			lua_pushstring (L, inet_ntoa (task->from_addr));
-			return 1;
-		}
-#endif
+		lua_ip_push (L, task->from_addr.ipv6 ? AF_INET6 : AF_INET, &task->from_addr.d);
 	}
-
-	lua_pushnil (L);
+	else {
+		lua_pushnil (L);
+	}
 	return 1;
 }
 
 static gint
 lua_task_set_from_ip (lua_State *L)
 {
-	struct worker_task             *task = lua_check_task (L);
-	const gchar					   *new_ip_str;
 
-	if (task) {
-		new_ip_str = luaL_checkstring (L, 2);
-#ifdef HAVE_INET_PTON
-		if (inet_pton (AF_INET, new_ip_str, &task->from_addr.d.in4) != 1) {
-			if (inet_pton (AF_INET6, new_ip_str, &task->from_addr.d.in6) != 1) {
-				msg_warn ("cannot convert %s to ip address", new_ip_str);
-			}
-		}
-		return 0;
-#else
-		if (inet_aton (new_ip_str, &task->from_addr) != 0) {
-			msg_warn ("cannot convert %s to ip address", new_ip_str);
-		}
-#endif
-	}
-
+	msg_err ("this function is deprecated and should no longer be used");
 	return 0;
 }
 
 static gint
 lua_task_get_from_ip_num (lua_State *L)
 {
-	struct worker_task             *task = lua_check_task (L);
-	
-	if (task) {
-#ifdef HAVE_INET_PTON
-		if (!task->from_addr.ipv6 && task->from_addr.d.in4.s_addr != INADDR_NONE) {
-			lua_pushinteger (L, ntohl (task->from_addr.d.in4.s_addr));
-			return 1;
-		}
-		/* TODO: do something with ipv6 numeric representation */
-#else
-		if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
-			lua_pushinteger (L, ntohl (task->from_addr.s_addr));
-			return 1;
-		}
-
-#endif
-	}
-
+	msg_err ("this function is deprecated and should no longer be used");
 	lua_pushnil (L);
 	return 1;
 }
@@ -1287,13 +1250,12 @@ lua_task_get_client_ip_num (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	
 	if (task) {
-		if (task->client_addr.s_addr != INADDR_NONE && task->client_addr.s_addr != INADDR_ANY) {
-			lua_pushinteger (L, ntohl (task->client_addr.s_addr));
-			return 1;
-		}
+		lua_ip_push (L, AF_INET, &task->client_addr);
+	}
+	else {
+		lua_pushnil (L);
 	}
 
-	lua_pushnil (L);
 	return 1;
 }
 

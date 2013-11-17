@@ -73,7 +73,7 @@ lua_ip_to_table (lua_State *L)
 		for (i = 1; i <= max; i ++, ptr ++) {
 			lua_pushnumber (L, i);
 			lua_pushnumber (L, *ptr);
-			lua_settable (L, -2);
+			lua_settable (L, -3);
 		}
 	}
 	else {
@@ -104,7 +104,7 @@ lua_ip_str_octets (lua_State *L)
 			rspamd_snprintf (numbuf, sizeof (numbuf), "%d", *ptr);
 			lua_pushnumber (L, i);
 			lua_pushstring (L, numbuf);
-			lua_settable (L, -2);
+			lua_settable (L, -3);
 		}
 	}
 	else {
@@ -136,7 +136,7 @@ lua_ip_inversed_str_octets (lua_State *L)
 			rspamd_snprintf (numbuf, sizeof (numbuf), "%d", *ptr);
 			lua_pushnumber (L, i);
 			lua_pushstring (L, numbuf);
-			lua_settable (L, -2);
+			lua_settable (L, -3);
 		}
 	}
 	else {
@@ -203,6 +203,48 @@ lua_ip_destroy (lua_State *L)
 	}
 
 	return 0;
+}
+
+void
+lua_ip_push (lua_State *L, int af, gpointer data)
+{
+	struct rspamd_lua_ip *ip, **pip;
+
+	ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+
+	ip->af = af;
+	if (af == AF_INET6) {
+		memcpy (&ip->data, data, sizeof (struct in6_addr));
+	}
+	else {
+		memcpy (&ip->data, data, sizeof (struct in_addr));
+	}
+	pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
+	lua_setclass (L, "rspamd{ip}", -1);
+	*pip = ip;
+}
+
+void
+lua_ip_push_fromstring (lua_State *L, const gchar *ip_str)
+{
+	struct rspamd_lua_ip *ip, **pip;
+
+	ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+	if (inet_pton (AF_INET, ip_str, &ip->data.ip4) == 1) {
+		ip->af = AF_INET;
+	}
+	else if (inet_pton (AF_INET6, ip_str, &ip->data.ip6) == 1) {
+		ip->af = AF_INET6;
+	}
+	else {
+		g_slice_free1 (sizeof (struct rspamd_lua_ip), ip);
+		lua_pushnil (L);
+		return;
+	}
+
+	pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
+	lua_setclass (L, "rspamd{ip}", -1);
+	*pip = ip;
 }
 
 gint

@@ -119,6 +119,16 @@ gint lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array);
 ucl_object_t * lua_rcl_obj_get (lua_State *L, gint idx);
 
 /**
+ * Push lua ip address
+ */
+void lua_ip_push (lua_State *L, int af, gpointer data);
+
+/**
+ * Push ip address from a string (nil is pushed if a string cannot be converted)
+ */
+void lua_ip_push_fromstring (lua_State *L, const gchar *ip_str);
+
+/**
  * Lua IP address structure
  */
 struct rspamd_lua_ip {
