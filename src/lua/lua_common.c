@@ -449,6 +449,7 @@ init_lua (struct config_file *cfg)
 	(void)luaopen_io_dispatcher (L);
 	(void)luaopen_dns_resolver (L);
 	(void)luaopen_rsa (L);
+	(void)luaopen_ip (L);
 
 	return L;
 }

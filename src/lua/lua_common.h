@@ -119,6 +119,17 @@ gint lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array);
 ucl_object_t * lua_rcl_obj_get (lua_State *L, gint idx);
 
 /**
+ * Lua IP address structure
+ */
+struct rspamd_lua_ip {
+	union {
+		struct in6_addr ip6;
+		struct in_addr ip4;
+	} data;
+	int af;
+};
+
+/**
  * Open libraries functions
  */
 gint luaopen_message (lua_State *L);
@@ -145,6 +156,7 @@ gint luaopen_session (lua_State * L);
 gint luaopen_io_dispatcher (lua_State * L);
 gint luaopen_dns_resolver (lua_State * L);
 gint luaopen_rsa (lua_State * L);
+gint luaopen_ip (lua_State * L);
 
 gint lua_call_filter (const gchar *function, struct worker_task *task);
 gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number);
