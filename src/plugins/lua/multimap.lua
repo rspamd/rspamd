@@ -70,10 +70,9 @@ end
 
 function multimap_rbl_cb(task, to_resolve, results, err)
 	if results then
-		local _,_,o4,o3,o2,o1,in_rbl = string.find(to_resolve, '(%d+)%.(%d+)%.(%d+)%.(%d+)%.(.+)')
 		-- Get corresponding rule by rbl name
 		for _,rule in pairs(rules) do
-			if string.ends(in_rbl, rule['map']) then
+			if string.ends(to_resolve, rule['map']) then
 				task:insert_result(rule['symbol'], 1, rule['map'])
 				return
 			end
