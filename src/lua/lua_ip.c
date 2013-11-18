@@ -229,22 +229,27 @@ lua_ip_push_fromstring (lua_State *L, const gchar *ip_str)
 {
 	struct rspamd_lua_ip *ip, **pip;
 
-	ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
-	if (inet_pton (AF_INET, ip_str, &ip->data.ip4) == 1) {
-		ip->af = AF_INET;
-	}
-	else if (inet_pton (AF_INET6, ip_str, &ip->data.ip6) == 1) {
-		ip->af = AF_INET6;
+	if (ip_str == NULL) {
+		lua_pushnil (L);
 	}
 	else {
-		g_slice_free1 (sizeof (struct rspamd_lua_ip), ip);
-		lua_pushnil (L);
-		return;
-	}
+		ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+		if (inet_pton (AF_INET, ip_str, &ip->data.ip4) == 1) {
+			ip->af = AF_INET;
+		}
+		else if (inet_pton (AF_INET6, ip_str, &ip->data.ip6) == 1) {
+			ip->af = AF_INET6;
+		}
+		else {
+			g_slice_free1 (sizeof (struct rspamd_lua_ip), ip);
+			lua_pushnil (L);
+			return;
+		}
 
-	pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-	lua_setclass (L, "rspamd{ip}", -1);
-	*pip = ip;
+		pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
+		lua_setclass (L, "rspamd{ip}", -1);
+		*pip = ip;
+	}
 }
 
 gint
