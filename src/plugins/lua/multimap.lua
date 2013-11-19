@@ -2,44 +2,18 @@
 
 local rules = {}
 
-function revipv6(ip)
-	local c = 0
-	local i = 1
-	local t = {}
-	for o in string.gmatch(ip, "%p-%x+%p-") do
-		o = string.gsub(o, ":", "")
-		while(#o < 4) do
-			o = "0" .. o
-		end
-		t[i] = o
-		i = i+1
+local function ip_to_rbl(ip, rbl)
+	octets = ip:inversed_str_octets()
+	local str = ''
+	for _,o in ipairs(octets) do
+		str = str .. o .. '.'
 	end
-	if #t < 8 then
-		for i=1,8 do
-			if(t[i] == nil) then
-				c = c+1
-			end
-		end
-		for i=(8-c),#t do
-			t[i+c] = t[i]
-			t[i] = "0000"
-		end
-		for i=1,8 do
-			if(t[i] == nil) then
-				t[i] = "0000"
-			end
-		end
-	end
-	x=table.concat(t,"")
-	x=string.reverse(x)
-	rbl_str = ""
-	for i in string.gmatch(x, "%x") do
-		rbl_str = rbl_str .. i .. "."
-	end
-	return rbl_str
+	str = str .. rbl
+
+	return str
 end
 
-function split(str, delim, maxNb)
+local function split(str, delim, maxNb)
 	-- Eliminate bad cases...
 	if string.find(str, delim) == nil then
 		return { str }
@@ -64,15 +38,15 @@ function split(str, delim, maxNb)
 	return result
 end
 
-function string.ends(String,End)
-	return End=='' or string.sub(String,-string.len(End))==End
+local function is_rbl(str,tail)
+	return tail == '' or string.sub(str,-string.len(tail))==tail
 end
 
-function multimap_rbl_cb(task, to_resolve, results, err)
+local function multimap_rbl_cb(task, to_resolve, results, err)
 	if results then
 		-- Get corresponding rule by rbl name
 		for _,rule in pairs(rules) do
-			if string.ends(to_resolve, rule['map']) then
+			if is_rbl(to_resolve, rule['map']) then
 				task:insert_result(rule['symbol'], 1, rule['map'])
 				return
 			end
@@ -128,16 +102,7 @@ function check_multimap(task)
 		elseif rule['type'] == 'dnsbl' then
 			local ip = task:get_from_ip()
 			if ip then
-				if not string.match(ip, ":") and rule['ipv4'] then
-					local _,_,o1,o2,o3,o4 = string.find(ip, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
-			        	if o1 and o2 and o3 and o4 then
-						local rbl_str = o4 .. '.' .. o3 .. '.' .. o2 .. '.' .. o1 .. '.' .. rule['map']
-						task:resolve_dns_a(rbl_str, 'multimap_rbl_cb')
-					end
-				elseif rule['ipv6'] then
-					local rbl_str = revipv6(ip) .. rule['map']
-					task:resolve_dns_a(rbl_str, 'multimap_rbl_cb')
-				end
+				task:resolve_dns_a(ip_to_rbl(ip, rule['map']), multimap_rbl_cb)
 			end
 		elseif rule['type'] == 'rcpt' then
 			-- First try to get rcpt field
@@ -279,8 +244,14 @@ function check_multimap(task)
 	end
 end
 
-local function add_multimap_rule(newrule)
-	if not newrule['symbol'] or not newrule['map'] then
+local function add_multimap_rule(key, newrule)
+	if not newrule['map'] then
+		rspamd_logger.err('incomplete rule')
+		return nil
+	end
+	if not newrule['symbol'] and key then
+		newrule['symbol'] = key
+	elseif not newrule['symbol'] then
 		rspamd_logger.err('incomplete rule')
 		return nil
 	end
@@ -336,19 +307,11 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 end
 
 local opts =  rspamd_config:get_all_opt('multimap')
-if opts then
-	for _,m in pairs(opts) do
-		if(m['type'] == "dnsbl") then
-			if(m['ipv6'] == nil) then
-				m['ipv6'] = false
-			end
-			if(m['ipv4'] == nil) then
-				m['ipv4'] = true
-			end
-		end
-		local rule = add_multimap_rule (m)
+if opts and type(opts) == 'table' then
+	for k,m in pairs(opts) do
+		local rule = add_multimap_rule(k, m)
 		if not rule then
-			rspamd_logger.err('cannot add rule: "'..value..'"')
+			rspamd_logger.err('cannot add rule: "'..k..'"')
 		else
 			if type(rspamd_config.get_api_version) ~= 'nil' then
 				rspamd_config:register_virtual_symbol(m['symbol'], 1.0)
