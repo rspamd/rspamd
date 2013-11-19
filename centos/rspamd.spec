@@ -3,11 +3,12 @@
 %define rspamd_home      %{_localstatedir}/lib/rspamd
 %define rspamd_logdir    %{_localstatedir}/log/rspamd
 %define rspamd_confdir   %{_sysconfdir}/rspamd
+%define rspamd_pluginsdir   %{_datadir}/rspamd
 
 %define USE_JUDY         0
 
 Name:           rspamd
-Version:        0.5.6
+Version:        0.6.0
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
@@ -34,7 +35,6 @@ Requires(postun):       initscripts
 Source0:        http://cdn.bitbucket.org/vstakhov/rspamd/downloads/%{name}-%{version}.tar.gz
 Source1:        %{name}.init
 Source2:        %{name}.logrotate
-Source3:        %{name}.xml
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -48,9 +48,13 @@ lua.
 rm -rf %{buildroot}
 %{__cmake} \
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
-        -DETC_PREFIX=%{_sysconfdir} \
-        -DMAN_PREFIX=%{_mandir} \
-        -DLOCALSTATES_PREFIX=%{_localstatedir}/lib \
+        -DCONFDIR=%{_sysconfdir}/rspamd \
+        -DMANDIR=%{_mandir} \
+        -DDBDIR=%{_localstatedir}/lib/rspamd \
+        -DRUNDIR=%{_localstatedir}/run/rspamd \
+        -DLOGDIR=%{_localstatedir}/log/rspamd \
+        -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
+        -DPLUGINSDIR=%{_datadir}/rspamd \
         -DLIBDIR=%{_libdir} \
         -DINCLUDEDIR=%{_includedir} \
         -DNO_SHARED=ON \
@@ -101,24 +105,24 @@ fi
 %{_mandir}/man1/rspamc.*
 %{_bindir}/rspamd
 %{_bindir}/rspamc
-%config(noreplace) %{_sysconfdir}/%{name}.xml
+%config(noreplace) %{rspamd_confdir}/%{name}.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
 %dir %{rspamd_confdir}
 %attr(755, %{rspamd_user}, %{rspamd_group}) %dir %{rspamd_home}
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
-%config(noreplace) %{rspamd_confdir}/plugins/lua/forged_recipients.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/maillist.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/multimap.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/once_received.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/received_rbl.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/ratelimit.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/whitelist.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/phishing.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/trie.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/emails.lua
-%config(noreplace) %{rspamd_confdir}/plugins/lua/ip_score.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/forged_recipients.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/maillist.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/multimap.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/once_received.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/rbl.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/ratelimit.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/whitelist.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/phishing.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/trie.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/emails.lua
+%config(noreplace) %{rspamd_pluginsdir}/lua/ip_score.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/drugs.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/fraud.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/headers.lua
@@ -127,6 +131,9 @@ fi
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
 
 %changelog
+* Tue November 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
+- Update to 0.6.0.
+
 * Mon June 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.6-1
 - Update to 0.5.6.
 
