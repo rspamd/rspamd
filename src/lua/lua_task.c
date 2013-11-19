@@ -51,6 +51,7 @@ LUA_FUNCTION_DEF (task, process_message);
 LUA_FUNCTION_DEF (task, set_cfg);
 LUA_FUNCTION_DEF (task, destroy);
 LUA_FUNCTION_DEF (task, get_mempool);
+LUA_FUNCTION_DEF (task, get_session);
 LUA_FUNCTION_DEF (task, get_ev_base);
 LUA_FUNCTION_DEF (task, insert_result);
 LUA_FUNCTION_DEF (task, set_pre_result);
@@ -62,9 +63,8 @@ LUA_FUNCTION_DEF (task, get_raw_headers);
 LUA_FUNCTION_DEF (task, get_raw_header);
 LUA_FUNCTION_DEF (task, get_raw_header_strong);
 LUA_FUNCTION_DEF (task, get_received_headers);
-LUA_FUNCTION_DEF (task, resolve_dns_a);
-LUA_FUNCTION_DEF (task, resolve_dns_ptr);
-LUA_FUNCTION_DEF (task, resolve_dns_txt);
+LUA_FUNCTION_DEF (task, get_resolver);
+LUA_FUNCTION_DEF (task, inc_dns_req);
 LUA_FUNCTION_DEF (task, call_rspamd_function);
 LUA_FUNCTION_DEF (task, get_recipients);
 LUA_FUNCTION_DEF (task, get_from);
@@ -100,6 +100,7 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, process_message),
 	LUA_INTERFACE_DEF (task, set_cfg),
 	LUA_INTERFACE_DEF (task, get_mempool),
+	LUA_INTERFACE_DEF (task, get_session),
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
@@ -111,9 +112,8 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_raw_header),
 	LUA_INTERFACE_DEF (task, get_raw_header_strong),
 	LUA_INTERFACE_DEF (task, get_received_headers),
-	LUA_INTERFACE_DEF (task, resolve_dns_a),
-	LUA_INTERFACE_DEF (task, resolve_dns_ptr),
-	LUA_INTERFACE_DEF (task, resolve_dns_txt),
+	LUA_INTERFACE_DEF (task, get_resolver),
+	LUA_INTERFACE_DEF (task, inc_dns_req),
 	LUA_INTERFACE_DEF (task, call_rspamd_function),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, get_from),
@@ -356,6 +356,23 @@ lua_task_get_mempool (lua_State * L)
 		ppool = lua_newuserdata (L, sizeof (memory_pool_t *));
 		lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = task->task_pool;
+	}
+	else {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
+static int
+lua_task_get_session (lua_State * L)
+{
+	struct rspamd_async_session   **psession;
+	struct worker_task             *task = lua_check_task (L);
+
+	if (task != NULL) {
+		psession = lua_newuserdata (L, sizeof (void *));
+		lua_setclass (L, "rspamd{session}", -1);
+		*psession = task->s;
 	}
 	else {
 		lua_pushnil (L);
@@ -666,282 +683,33 @@ lua_task_get_received_headers (lua_State * L)
 	return 1;
 }
 
-struct lua_dns_callback_data {
-	lua_State                      *L;
-	struct worker_task             *task;
-	union {
-		const gchar                *cbname;
-		gint 						ref;
-	} callback;
-	gboolean						cb_is_ref;
-	const gchar                    *to_resolve;
-	gint                            cbtype;
-	union {
-		gpointer                    string;
-		gboolean                    boolean;
-		gdouble                     number;
-	}                               cbdata;
-};
-
-static void
-lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+static gint
+lua_task_get_resolver (lua_State *L)
 {
-	struct lua_dns_callback_data   *cd = arg;
-	gint                            i = 0;
-	struct worker_task            **ptask;
-	union rspamd_reply_element     *elt;
-	GList                          *cur;
+	struct worker_task             *task = lua_check_task (L);
+	struct rspamd_dns_resolver    **presolver;
 
-	if (cd->cb_is_ref) {
-		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
+	if (task != NULL && task->resolver != NULL) {
+		presolver = lua_newuserdata (L, sizeof (void *));
+		lua_setclass (L, "rspamd{resolver}", -1);
+		*presolver = task->resolver;
 	}
 	else {
-		lua_getglobal (cd->L, cd->callback.cbname);
-	}
-	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
-	lua_setclass (cd->L, "rspamd{task}", -1);
-
-	*ptask = cd->task;
-	lua_pushstring (cd->L, cd->to_resolve);
-
-	if (reply->code == DNS_RC_NOERROR) {
-		if (reply->type == DNS_REQUEST_A) {
-
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_ip_push (cd->L, AF_INET, &elt->a.addr);
-				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-		}
-		if (reply->type == DNS_REQUEST_AAA) {
-
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_ip_push (cd->L, AF_INET6, &elt->aaa.addr);
-				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-		}
-		else if (reply->type == DNS_REQUEST_PTR) {
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_pushstring (cd->L, elt->ptr.name);
-				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-
-		}
-		else if (reply->type == DNS_REQUEST_TXT) {
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_pushstring (cd->L, elt->txt.data);
-				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-
-		}
-		else {
-			lua_pushnil (cd->L);
-			lua_pushstring (cd->L, "Unknown reply type");
-		}
-	}
-	else {
-		lua_pushnil (cd->L);
-		lua_pushstring (cd->L, dns_strerror (reply->code));
+		lua_pushnil (L);
 	}
 
-	switch (cd->cbtype) {
-	case LUA_TBOOLEAN:
-		lua_pushboolean (cd->L, cd->cbdata.boolean);
-		break;
-	case LUA_TNUMBER:
-		lua_pushnumber (cd->L, cd->cbdata.number);
-		break;
-	case LUA_TSTRING:
-		lua_pushstring (cd->L, cd->cbdata.string);
-		break;
-	default:
-		lua_pushnil (cd->L);
-		break;
-	}
-
-	if (lua_pcall (cd->L, 5, 0, 0) != 0) {
-		msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
-				cd->callback.cbname, lua_tostring (cd->L, -1));
-	}
-
-	/* Unref function */
-	if (cd->cb_is_ref) {
-		luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
-	}
+	return 1;
 }
 
 static gint
-lua_task_resolve_dns_a (lua_State * L)
+lua_task_inc_dns_req (lua_State *L)
 {
 	struct worker_task             *task = lua_check_task (L);
-	struct lua_dns_callback_data   *cd;
 
-	if (task) {
-		cd = memory_pool_alloc (task->task_pool, sizeof (struct lua_dns_callback_data));
-		cd->task = task;
-		cd->L = L;
-		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
-
-		/* Check what type we have */
-		if (lua_type (L, 3) == LUA_TSTRING) {
-			cd->cb_is_ref = FALSE;
-			cd->callback.cbname = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
-		}
-		else {
-			lua_pushvalue (L, 3);
-			cd->cb_is_ref = TRUE;
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-		}
-
-		cd->cbtype = lua_type (L, 4);
-		if (cd->cbtype != LUA_TNONE && cd->cbtype != LUA_TNIL) {
-			switch (cd->cbtype) {
-			case LUA_TBOOLEAN:
-				cd->cbdata.boolean = lua_toboolean (L, 4);
-				break;
-			case LUA_TNUMBER:
-				cd->cbdata.number = lua_tonumber (L, 4);
-				break;
-			case LUA_TSTRING:
-				cd->cbdata.string = memory_pool_strdup (task->task_pool, lua_tostring (L, 4));
-				break;
-			default:
-				msg_warn ("cannot handle type %s as callback data, try using closures", lua_typename (L, cd->cbtype));
-				cd->cbtype = LUA_TNONE;
-				break;
-			}
-		}
-
-		if (!cd->to_resolve) {
-			msg_info ("invalid parameters passed to function");
-			return 0;
-		}
-		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_A, cd->to_resolve)) {
-			task->dns_requests ++;
-		}
+	if (task != NULL) {
+		task->dns_requests ++;
 	}
-	return 0;
-}
 
-static gint
-lua_task_resolve_dns_txt (lua_State * L)
-{
-	struct worker_task             *task = lua_check_task (L);
-	struct lua_dns_callback_data   *cd;
-
-	if (task) {
-		cd = memory_pool_alloc (task->task_pool, sizeof (struct lua_dns_callback_data));
-		cd->task = task;
-		cd->L = L;
-		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
-		/* Check what type we have */
-		if (lua_type (L, 3) == LUA_TSTRING) {
-			cd->cb_is_ref = FALSE;
-			cd->callback.cbname = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
-		}
-		else {
-			lua_pushvalue (L, 3);
-			cd->cb_is_ref = TRUE;
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-		}
-		cd->cbtype = lua_type (L, 4);
-		if (cd->cbtype != LUA_TNONE && cd->cbtype != LUA_TNIL) {
-			switch (cd->cbtype) {
-			case LUA_TBOOLEAN:
-				cd->cbdata.boolean = lua_toboolean (L, 4);
-				break;
-			case LUA_TNUMBER:
-				cd->cbdata.number = lua_tonumber (L, 4);
-				break;
-			case LUA_TSTRING:
-				cd->cbdata.string = memory_pool_strdup (task->task_pool, lua_tostring (L, 4));
-				break;
-			default:
-				msg_warn ("cannot handle type %s as callback data", lua_typename (L, cd->cbtype));
-				cd->cbtype = LUA_TNONE;
-				break;
-			}
-		}
-		if (!cd->to_resolve) {
-			msg_info ("invalid parameters passed to function");
-			return 0;
-		}
-		if (make_dns_request (task->resolver, task->s, task->task_pool, lua_dns_callback, (void *)cd, DNS_REQUEST_TXT, cd->to_resolve)) {
-			task->dns_requests ++;
-		}
-	}
-	return 0;
-}
-
-static gint
-lua_task_resolve_dns_ptr (lua_State * L)
-{
-	struct worker_task             *task = lua_check_task (L);
-	struct lua_dns_callback_data   *cd;
-	struct in_addr                 *ina;
-
-	if (task) {
-		cd = memory_pool_alloc (task->task_pool, sizeof (struct lua_dns_callback_data));
-		cd->task = task;
-		cd->L = L;
-		cd->to_resolve = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
-		/* Check what type we have */
-		if (lua_type (L, 3) == LUA_TSTRING) {
-			cd->cb_is_ref = FALSE;
-			cd->callback.cbname = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
-		}
-		else {
-			lua_pushvalue (L, 3);
-			cd->cb_is_ref = TRUE;
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-		}
-		cd->cbtype = lua_type (L, 4);
-		if (cd->cbtype != LUA_TNONE && cd->cbtype != LUA_TNIL) {
-			switch (cd->cbtype) {
-			case LUA_TBOOLEAN:
-				cd->cbdata.boolean = lua_toboolean (L, 4);
-				break;
-			case LUA_TNUMBER:
-				cd->cbdata.number = lua_tonumber (L, 4);
-				break;
-			case LUA_TSTRING:
-				cd->cbdata.string = memory_pool_strdup (task->task_pool, lua_tostring (L, 4));
-				break;
-			default:
-				msg_warn ("cannot handle type %s as callback data", lua_typename (L, cd->cbtype));
-				cd->cbtype = LUA_TNONE;
-				break;
-			}
-		}
-		ina = memory_pool_alloc (task->task_pool, sizeof (struct in_addr));
-		if (!cd->to_resolve || !inet_aton (cd->to_resolve, ina)) {
-			msg_info ("invalid parameters passed to function");
-			return 0;
-		}
-		if (make_dns_request (task->resolver, task->s, task->task_pool,
-				lua_dns_callback, (void *)cd, DNS_REQUEST_PTR, ina)) {
-			task->dns_requests ++;
-		}
-	}
 	return 0;
 }
 

@@ -118,11 +118,11 @@ end
 --- Make rate key
 local function make_rate_key(from, to, ip)
 	if from and ip then
-		return string.format('%s:%s:%s', from, to, ip)
+		return string.format('%s:%s:%s', from, to, ip:to_string())
 	elseif from then
 		return string.format('%s:%s', from, to)
 	elseif ip then
-		return string.format('%s:%s', to, ip)
+		return string.format('%s:%s', to, ip:to_string())
 	elseif to then
 		return to
 	else

@@ -38,23 +38,21 @@ local function split(str, delim, maxNb)
 	return result
 end
 
-local function is_rbl(str,tail)
-	return tail == '' or string.sub(str,-string.len(tail))==tail
-end
 
-local function multimap_rbl_cb(task, to_resolve, results, err)
-	if results then
-		-- Get corresponding rule by rbl name
-		for _,rule in pairs(rules) do
-			if is_rbl(to_resolve, rule['map']) then
-				task:insert_result(rule['symbol'], 1, rule['map'])
-				return
+local function check_multimap(task)
+	local function multimap_rbl_cb(resolver, to_resolve, results, err, rbl)
+		task:inc_dns_req()
+		if results then
+			-- Get corresponding rule by rbl name
+			for _,rule in pairs(rules) do
+				if rule == rbl then
+					task:insert_result(rule['symbol'], 1, rule['map'])
+					return
+				end
 			end
 		end
 	end
-end
 
-local function check_multimap(task)
 	for _,rule in pairs(rules) do
 		if rule['type'] == 'ip' then
 			if rule['cdb'] then
@@ -102,7 +100,8 @@ local function check_multimap(task)
 		elseif rule['type'] == 'dnsbl' then
 			local ip = task:get_from_ip()
 			if ip then
-				task:resolve_dns_a(ip_to_rbl(ip, rule['map']), multimap_rbl_cb)
+				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+					ip_to_rbl(ip, rule['map']), multimap_rbl_cb, rule['map'])
 			end
 		elseif rule['type'] == 'rcpt' then
 			-- First try to get rcpt field

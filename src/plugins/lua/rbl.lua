@@ -27,27 +27,30 @@ local function ip_to_rbl(ip, rbl)
 	return str
 end
 
-local function rbl_dns_cb(task, to_resolve, results, err, sym)
-	if results then
-		task:insert_result(sym, 1)
-	end
-end
-
 local function rbl_cb (task)
+	local function rbl_dns_cb(resolver, to_resolve, results, err, sym)
+		if results then
+			task:insert_result(sym, 1)
+		end
+		task:inc_dns_req()
+	end
+
 	local rip = task:get_from_ip()
 	if(rip ~= nil) then
 		for _,rbl in pairs(rbls) do
-			task:resolve_dns_a(ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+			task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
+				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
 		end
 	end
 	local recvh = task:get_received_headers()
 	for _,rh in ipairs(recvh) do
 		if rh['real_ip'] then
 			for _,rbl in pairs(rbls) do
-				task:resolve_dns_a(ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
+					ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
 			end
-       		end
     	end
+	end
 end
 
 -- Registration

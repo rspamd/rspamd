@@ -60,6 +60,7 @@ struct lua_dns_cbdata {
 	struct rspamd_dns_resolver	   *resolver;
 	gint							cbref;
 	const gchar                    *to_resolve;
+	const gchar                    *user_str;
 };
 
 static void
@@ -137,7 +138,14 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 		lua_pushstring (cd->L, dns_strerror (reply->code));
 	}
 
-	if (lua_pcall (cd->L, 4, 0, 0) != 0) {
+	if (cd->user_str != NULL) {
+		lua_pushstring (cd->L, cd->user_str);
+	}
+	else {
+		lua_pushnil (cd->L);
+	}
+
+	if (lua_pcall (cd->L, 5, 0, 0) != 0) {
 		msg_info ("call to dns_callback failed: %s", lua_tostring (cd->L, -1));
 	}
 
@@ -210,6 +218,14 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 		cbdata->to_resolve = memory_pool_strdup (pool, to_resolve);
 		lua_pushvalue (L, 5);
 		cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+		if (lua_gettop (L) > 5) {
+			cbdata->user_str = lua_tostring (L, 6);
+		}
+		else {
+			cbdata->user_str = NULL;
+		}
+
 		if (type == DNS_REQUEST_PTR) {
 			make_dns_request (resolver, session, pool, lua_dns_callback, cbdata, type, &ina);
 		}
