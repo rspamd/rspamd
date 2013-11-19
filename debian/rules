@@ -11,7 +11,7 @@ DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc \
 						-DRUNDIR=/var/run/rspamd \
 						-DDBDIR=/var/lib/rspamd \
 						-DLOGDIR=/var/log/rspamd \
-						-DPLUGINSDIR=/usr/share/rspamd \ 
+						-DPLUGINSDIR=/usr/share/rspamd \
 						-DLIBDIR=/usr/lib \
 						-DINCLUDEDIR=/usr/include \
 						-DNO_SHARED=ON \
