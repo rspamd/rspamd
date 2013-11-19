@@ -29,12 +29,14 @@ LUA_FUNCTION_DEF (ip, str_octets);
 LUA_FUNCTION_DEF (ip, inversed_str_octets);
 LUA_FUNCTION_DEF (ip, from_string);
 LUA_FUNCTION_DEF (ip, destroy);
+LUA_FUNCTION_DEF (ip, get_version);
 
 static const struct luaL_reg    iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, to_string),
 	LUA_INTERFACE_DEF (ip, to_table),
 	LUA_INTERFACE_DEF (ip, str_octets),
 	LUA_INTERFACE_DEF (ip, inversed_str_octets),
+	LUA_INTERFACE_DEF (ip, get_version),
 	{"__tostring", lua_ip_to_string},
 	{"__gc", lua_ip_destroy},
 	{NULL, NULL}
@@ -220,6 +222,21 @@ lua_ip_destroy (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_ip_get_version (lua_State *L)
+{
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
+
+	if (ip) {
+		lua_pushnumber (L, ip->af == AF_INET6 ? 6 : 4);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
 }
 
 void
