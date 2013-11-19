@@ -215,9 +215,13 @@
 #define uthash_malloc(sz) g_slice_alloc(sz)
 #define uthash_free(ptr,sz) g_slice_free1(sz, ptr)
 
-#define ETC_PREFIX        "${ETC_PREFIX}"
-#define LOCALSTATES_PREFIX "${LOCALSTATES_PREFIX}"
-#define CMAKE_PREFIX "${CMAKE_INSTALL_PREFIX}"
+#define RSPAMD_CONFDIR "${CONFDIR}"
+#define RSPAMD_RUNDIR "${RUNDIR}"
+#define RSPAMD_LOGDIR "${LOGDIR}"
+#define RSPAMD_DBDIR "${DBDIR}"
+#define RSPAMD_EXAMPLESDIR "${EXAMPLESDIR}"
+#define RSPAMD_PLUGINSDIR "${PLUGINSDIR}"
+#define RSPAMD_PREFIX "${CMAKE_INSTALL_PREFIX}"
 
 #define RVERSION          "${RSPAMD_VERSION}"
 #define RID               "${RSPAMD_ID}"

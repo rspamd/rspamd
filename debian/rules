@@ -6,6 +6,17 @@ include /usr/share/dpkg/buildflags.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/cmake.mk
 
-DEB_CMAKE_NORMAL_ARGS+= -DETC_PREFIX=/etc -DMAN_PREFIX=/usr/share/man -DLOCALSTATES_PREFIX=/var/lib -DLIBDIR=/usr/lib -DINCLUDEDIR=/usr/include -DNO_SHARED=ON -DDEBIAN_BUILD=1 -DRSPAMD_GROUP=rspamd -DRSPAMD_USER=rspamd
+DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc \
+						-DMANDIR=/usr/share/man \
+						-DRUNDIR=/var/run/rspamd \
+						-DDBDIR=/var/lib/rspamd \
+						-DLOGDIR=/var/log/rspamd \
+						-DPLUGINSDIR=/usr/share/rspamd \ 
+						-DLIBDIR=/usr/lib \
+						-DINCLUDEDIR=/usr/include \
+						-DNO_SHARED=ON \
+						-DDEBIAN_BUILD=1 \
+						-DRSPAMD_GROUP=rspamd \
+						-DRSPAMD_USER=rspamd
 clean::
 	rm -f src/modules.c

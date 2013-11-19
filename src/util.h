@@ -442,8 +442,11 @@ gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 /**
  * Expand path that may contain configuration variables:
  * $CONFDIR - configuration directory
- * $LOCALSTATESDIR - local states directory
- * $INSTALLPREFIX - installation prefix
+ * $RUNDIR - local states directory
+ * $DBDIR - databases dir
+ * $LOGDIR - logs dir
+ * $PLUGINSDIR - plugins dir
+ * $PREFIX - installation prefix
  * $VERSION - rspamd version
  * @param pool to use
  * @param path path to expand

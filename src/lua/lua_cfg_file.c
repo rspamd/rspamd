@@ -250,9 +250,12 @@ lua_check_condition (struct config_file *cfg, const gchar *condition)
 
 	/* Rspamd paths */
 	lua_newtable (L);
-	lua_set_table_index (L, "etcdir", ETC_PREFIX);
-	lua_set_table_index (L, "prefix", CMAKE_PREFIX);
-	lua_set_table_index (L, "localstatesdir", LOCALSTATES_PREFIX);
+	lua_set_table_index (L, "confdir", RSPAMD_CONFDIR);
+	lua_set_table_index (L, "rundir", RSPAMD_RUNDIR);
+	lua_set_table_index (L, "dbdir", RSPAMD_DBDIR);
+	lua_set_table_index (L, "logdir", RSPAMD_LOGDIR);
+	lua_set_table_index (L, "pluginsdir", RSPAMD_PLUGINSDIR);
+	lua_set_table_index (L, "prefix", RSPAMD_PREFIX);
 	lua_setglobal (L, "rspamd_paths");
 
 	/* Make fake string */
