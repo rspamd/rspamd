@@ -54,7 +54,7 @@ local function multimap_rbl_cb(task, to_resolve, results, err)
 	end
 end
 
-function check_multimap(task)
+local function check_multimap(task)
 	for _,rule in pairs(rules) do
 		if rule['type'] == 'ip' then
 			if rule['cdb'] then
@@ -321,10 +321,10 @@ if opts and type(opts) == 'table' then
 	-- add fake symbol to check all maps inside a single callback
 	if type(rspamd_config.get_api_version) ~= 'nil' then
 		if rspamd_config.get_api_version() >= 4 then
-			rspamd_config:register_callback_symbol_priority('MULTIMAP', 1.0, -1, 'check_multimap')
+			rspamd_config:register_callback_symbol_priority('MULTIMAP', 1.0, -1, check_multimap)
 		else
-			rspamd_config:register_callback_symbol('MULTIMAP', 1.0, 'check_multimap')
+			rspamd_config:register_callback_symbol('MULTIMAP', 1.0, check_multimap)
 		end
 	end
-	rspamd_config:register_symbol('MULTIMAP', 1.0, 'check_multimap')
+	rspamd_config:register_symbol('MULTIMAP', 1.0, check_multimap)
 end
