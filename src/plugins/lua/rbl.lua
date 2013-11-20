@@ -47,7 +47,7 @@ local function rbl_cb (task)
 		if rh['real_ip'] then
 			for _,rbl in pairs(rbls) do
 				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-					ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+					ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, rbl['symbol'])
 			end
     	end
 	end
