@@ -31,7 +31,7 @@
 #include "cfg_file.h"
 
 #define WEIGHT_MULT 2.0
-#define FREQUENCY_MULT 100.0
+#define FREQUENCY_MULT 10.0
 #define TIME_MULT -1.0
 
 /* After which number of messages try to resort cache */
@@ -81,12 +81,14 @@ static GChecksum               *
 get_mem_cksum (struct symbols_cache *cache)
 {
 	GChecksum                      *result;
-	GList                          *cur;
+	GList                          *cur, *l;
 	struct cache_item              *item;
 
 	result = g_checksum_new (G_CHECKSUM_SHA1);
 
-	cur = g_list_first (cache->negative_items);
+	l = g_list_copy (cache->negative_items);
+	l = g_list_sort (l, cache_cmp);
+	cur = g_list_first (l);
 	while (cur) {
 		item = cur->data;
 		if (item->s->symbol[0] != '\0') {
@@ -94,7 +96,12 @@ get_mem_cksum (struct symbols_cache *cache)
 		}
 		cur = g_list_next (cur);
 	}
-	cur = g_list_first (cache->static_items);
+	g_list_free (l);
+
+
+	l = g_list_copy (cache->static_items);
+	l = g_list_sort (l, cache_cmp);
+	cur = g_list_first (l);
 	while (cur) {
 		item = cur->data;
 		if (item->s->symbol[0] != '\0') {
@@ -103,6 +110,7 @@ get_mem_cksum (struct symbols_cache *cache)
 		total_frequency += item->s->frequency;
 		cur = g_list_next (cur);
 	}
+	g_list_free (l);
 
 	return result;
 }
