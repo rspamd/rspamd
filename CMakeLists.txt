@@ -662,14 +662,15 @@ FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	PATH_SUFFIXES lib64 lib
                       /opt
                  DOC "Path where the libutil library can be found")
 IF(LIBUTIL_LIBRARY)
-	LIST(APPEND CMAKE_REQUIRED_LIBRARIES util)
-	CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
-	CHECK_FUNCTION_EXISTS(pidfile_fileno HAVE_PIDFILE_FILENO)
-
 	FIND_FILE(HAVE_LIBUTIL_H NAMES libutil.h PATHS /usr/include
 											   /opt/include
 											   /usr/local/include
 				DOC "Path to libutil header")
+	IF(HAVE_LIBUTIL_H)
+		LIST(APPEND CMAKE_REQUIRED_LIBRARIES util)
+		CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
+		CHECK_FUNCTION_EXISTS(pidfile_fileno HAVE_PIDFILE_FILENO)
+	ENDIF(HAVE_LIBUTIL_H)
 ENDIF(LIBUTIL_LIBRARY)
 
 # Find libfetch (for FreeBSD)

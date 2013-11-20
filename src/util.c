@@ -2305,9 +2305,12 @@ rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key)
 	gchar *end, *p, ch;
 
 restart:
-	if ((input = output = open (_PATH_TTY, O_RDWR | O_CLOEXEC)) == -1) {
+	if ((input = output = open (_PATH_TTY, O_RDWR)) == -1) {
 		errno = ENOTTY;
 		return 0;
+	}
+	if (fcntl (input, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 	}
 
 	/* Turn echo off */
