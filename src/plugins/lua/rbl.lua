@@ -36,7 +36,7 @@ local function rbl_cb (task)
 	end
 
 	local rip = task:get_from_ip()
-	if(rip ~= nil) then
+	if(rip ~= "0.0.0.0") then
 		for _,rbl in pairs(rbls) do
 			task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
 				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
