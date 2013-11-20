@@ -288,7 +288,7 @@ if opts and type(opts) == 'table' then
 				rspamd_logger.err('cannot add rule: "'..k..'"')
 			else
 				if type(rspamd_config.get_api_version) ~= 'nil' then
-					rspamd_config:register_virtual_symbol(m['symbol'], 1.0)
+					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
 				end
 			end
 		else
@@ -303,5 +303,4 @@ if opts and type(opts) == 'table' then
 			rspamd_config:register_callback_symbol('MULTIMAP', 1.0, check_multimap)
 		end
 	end
-	rspamd_config:register_symbol('MULTIMAP', 1.0, check_multimap)
 end

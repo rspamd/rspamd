@@ -88,7 +88,7 @@ local function add_emails_rule(key, obj)
 		dnsbl = nil,
 		map = nil,
 		domain_only = false,
-		symbol = k
+		symbol = key
 	}
 	for name,value in pairs(obj) do
 		if name == 'dnsbl' then
@@ -100,9 +100,7 @@ local function add_emails_rule(key, obj)
 		elseif name == 'symbol' then
 			newrule['symbol'] = value
 		elseif name == 'domain_only' then
-			if value == 'yes' or value == 'true' or value == '1' then
-				newrule['domain_only'] = true
-			end
+			newrule['domain_only'] = value
 		else	
 			rspamd_logger.err('invalid rule option: '.. name)
 			return nil
@@ -138,7 +136,7 @@ if opts then
 				rspamd_logger.err('cannot add rule: "'..k..'"')
 			else
 				if type(rspamd_config.get_api_version) ~= 'nil' then
-					rspamd_config:register_virtual_symbol(m['symbol'], 1.0)
+					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
 				end
 			end
 		end
