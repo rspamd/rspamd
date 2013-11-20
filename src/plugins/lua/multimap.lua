@@ -282,13 +282,17 @@ end
 local opts =  rspamd_config:get_all_opt('multimap')
 if opts and type(opts) == 'table' then
 	for k,m in pairs(opts) do
-		local rule = add_multimap_rule(k, m)
-		if not rule then
-			rspamd_logger.err('cannot add rule: "'..k..'"')
-		else
-			if type(rspamd_config.get_api_version) ~= 'nil' then
-				rspamd_config:register_virtual_symbol(m['symbol'], 1.0)
+		if type(m) == 'table' then
+			local rule = add_multimap_rule(k, m)
+			if not rule then
+				rspamd_logger.err('cannot add rule: "'..k..'"')
+			else
+				if type(rspamd_config.get_api_version) ~= 'nil' then
+					rspamd_config:register_virtual_symbol(m['symbol'], 1.0)
+				end
 			end
+		else
+			rspamd_logger.err('parameter ' .. k .. ' is invalid, must be an object')
 		end
 	end
 	-- add fake symbol to check all maps inside a single callback
