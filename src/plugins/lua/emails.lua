@@ -82,20 +82,15 @@ function check_emails(task)
 end
 
 -- Add rule to ruleset
-local function add_emails_rule(params)
+local function add_emails_rule(key, obj)
 	local newrule = {
 		name = nil,
 		dnsbl = nil,
 		map = nil,
 		domain_only = false,
-		symbol = nil
+		symbol = k
 	}
-	for _,param in ipairs(params) do
-		local _,_,name,value = string.find(param, '([a-zA-Z_0-9]+)%s*=%s*(.+)')
-		if not name or not value then
-			rspamd_logger.err('invalid rule: '..param)
-			return nil
-		end
+	for name,value in pairs(obj) do
 		if name == 'dnsbl' then
 			newrule['dnsbl'] = value
 			newrule['name'] = value
@@ -134,28 +129,16 @@ end
 
 local opts =  rspamd_config:get_all_opt('emails')
 if opts then
-	local strrules = opts['rule']
-	if strrules then
-		if type(strrules) == 'table' then 
-			for _,value in ipairs(strrules) do
-				local params = split(value, ',')
-				local rule = add_emails_rule (params)
-				if not rule then
-					rspamd_logger.err('cannot add rule: "'..value..'"')
-				else
-					if type(rspamd_config.get_api_version) ~= 'nil' then
-						rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
-					end
-				end
-			end
-		elseif type(strrules) == 'string' then
-			local params = split(strrules, ',')
-			local rule = add_emails_rule (params)
+	for k,m in pairs(opts) do
+		if type(m) ~= 'table' then
+			rspamd_logger.err('parameter ' .. k .. ' is invalid, must be an object')
+		else
+			local rule = add_emails_rule(k, m)
 			if not rule then
-				rspamd_logger.err('cannot add rule: "'..strrules..'"')
+				rspamd_logger.err('cannot add rule: "'..k..'"')
 			else
 				if type(rspamd_config.get_api_version) ~= 'nil' then
-					rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
+					rspamd_config:register_virtual_symbol(m['symbol'], 1.0)
 				end
 			end
 		end
