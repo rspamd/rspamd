@@ -88,7 +88,7 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 /* Typical functions */
 
 /* Logging in postfix style */
-#if (defined(RSPAMD_MAIN) || defined(RSPAMD_LIB) || defined(RSPAMD_TEST))
+#if defined(RSPAMD_MAIN)
 #define msg_err(...)	rspamd_common_log_function(rspamd_main->logger, G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
 #define msg_warn(...)	rspamd_common_log_function(rspamd_main->logger, G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
 #define msg_info(...)	rspamd_common_log_function(rspamd_main->logger, G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
