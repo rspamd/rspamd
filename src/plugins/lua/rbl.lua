@@ -17,14 +17,7 @@
 local rbls = {}
 
 local function ip_to_rbl(ip, rbl)
-	octets = ip:inversed_str_octets()
-	local str = ''
-	for _,o in ipairs(octets) do
-		str = str .. o .. '.'
-	end
-	str = str .. rbl
-
-	return str
+	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
 local function rbl_cb (task)
