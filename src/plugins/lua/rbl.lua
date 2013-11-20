@@ -17,14 +17,7 @@
 local rbls = {}
 
 local function ip_to_rbl(ip, rbl)
-	octets = ip:inversed_str_octets()
-	local str = ''
-	for _,o in ipairs(octets) do
-		str = str .. o .. '.'
-	end
-	str = str .. rbl
-
-	return str
+	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
 local function rbl_cb (task)
@@ -36,18 +29,24 @@ local function rbl_cb (task)
 	end
 
 	local rip = task:get_from_ip()
-	if(rip ~= nil) then
+	if(rip ~= "0.0.0.0") then
 		for _,rbl in pairs(rbls) do
+			if (rip:get_version() == 6 and rbl['ipv6'] and rbl['from']) or 
+				(rip:get_version() == 4 and rbl['ipv4'] and rbl['from']) then
 			task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
 				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+			end
 		end
 	end
 	local recvh = task:get_received_headers()
 	for _,rh in ipairs(recvh) do
 		if rh['real_ip'] then
 			for _,rbl in pairs(rbls) do
+				if (rh['real_ip']:get_version() == 6 and rbl['ipv6'] and rbl['received']) or
+					(rh['real_ip']:get_version() == 4 and rbl['ipv4'] and rbl['received']) then
 				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-					ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+					ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+				end
 			end
     	end
 	end
