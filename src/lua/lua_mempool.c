@@ -43,7 +43,7 @@ static const struct luaL_reg    mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, memory_pool_get_size),
 	LUA_INTERFACE_DEF (mempool, memory_pool_set_variable),
 	LUA_INTERFACE_DEF (mempool, memory_pool_get_variable),
-	{"__gc", lua_mempool_memory_pool_delete},
+	{"destroy", lua_mempool_memory_pool_delete},
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
