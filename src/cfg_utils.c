@@ -1011,7 +1011,7 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 		munmap (data, st.st_size);
 	}
 	else {
-		parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+		parser = ucl_parser_new (0);
 		if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 			msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
 			munmap (data, st.st_size);
