@@ -3,14 +3,7 @@
 local rules = {}
 
 local function ip_to_rbl(ip, rbl)
-	octets = ip:inversed_str_octets()
-	local str = ''
-	for _,o in ipairs(octets) do
-		str = str .. o .. '.'
-	end
-	str = str .. rbl
-
-	return str
+	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
 local function check_multimap(task)
@@ -73,9 +66,14 @@ local function check_multimap(task)
 			end
 		elseif rule['type'] == 'dnsbl' then
 			local ip = task:get_from_ip()
-			if ip then
-				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-					ip_to_rbl(ip, rule['map']), multimap_rbl_cb, rule['map'])
+			if ip and ip ~= "0.0.0.0" then
+				if ip:get_version() == 6 and rule['ipv6'] then
+					task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+						ip_to_rbl(ip, rule['map']), multimap_rbl_cb, rule['map'])
+				elseif ip:get_version() == 4 then
+					task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+						ip_to_rbl(ip, rule['map']), multimap_rbl_cb, rule['map'])
+				end
 			end
 		elseif rule['type'] == 'rcpt' then
 			-- First try to get rcpt field

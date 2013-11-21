@@ -27,7 +27,7 @@ local function rbl_cb (task)
 		end
 		task:inc_dns_req()
 	end
-
+	
 	local rip = task:get_from_ip()
 	if(rip ~= "0.0.0.0") then
 		for _,rbl in pairs(rbls) do
@@ -93,6 +93,6 @@ for key,rbl in pairs(opts['rbls']) do
 	if type(rspamd_config.get_api_version) ~= 'nil' then
 		rspamd_config:register_virtual_symbol(rbl['symbol'], 1)
 	end
-	table.insert(rbls, {symbol = rbl['symbol'], rbl = rbl['rbl'], ipv6 = rbl['ipv6'], ipv4 = rbl['ipv4'], received = rbl['received'], from = rbl['from']})
-	rspamd_config:register_symbol(rbl['symbol'], 1.0, rbl_cb)
+	table.insert(rbls, rbl)
 end
+rspamd_config:register_callback_symbol_priority('RBL', 1.0, -1, rbl_cb)
