@@ -5,11 +5,19 @@
 --    default_received = true;
 --    default_from = false;
 --    rbls {
---	xbl {
---	   rbl = "xbl.spamhaus.org";
---         symbol = "RBL_SPAMHAUSXBL";
+--	spamhaus {
+--	   rbl = "zen.spamhaus.org";
+--         symbol = "RBL_ZEN";
 --         ipv4 = true;
 --         ipv6 = false;
+--         unknown = false;
+--         returncodes {
+--            RBL_ZEN_SBL = "127.0.0.2";
+--            RBL_ZEN_SBL = "127.0.0.3";
+--            RBL_ZEN_XBL = "127.0.0.4";
+--            RBL_ZEN_PBL = "127.0.0.10";
+--            RBL_ZEN_PBL = "127.0.0.11";
+--         }
 --	}
 --    }
 -- }
@@ -20,10 +28,54 @@ local function ip_to_rbl(ip, rbl)
 	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
+function string.ends(String,End)
+	return End=='' or string.sub(String,-string.len(End))==End
+end
+
 local function rbl_cb (task)
-	local function rbl_dns_cb(resolver, to_resolve, results, err, sym)
+	local function rbl_dns_cb(resolver, to_resolve, results, err)
 		if results then
-			task:insert_result(sym, 1)
+			local ipstr = results[1]:to_string()
+			local thisrbl = nil
+			for _,r in pairs(rbls) do
+				if string.ends(to_resolve, r['rbl']) then
+					thisrbl = r
+					break
+				end
+			end
+			if thisrbl ~= nil then
+				if thisrbl['returncodes'] == nil then
+					if thisrbl['symbol'] ~= nil then
+						task:insert_result(thisrbl['symbol'], 1)
+					end
+				else
+					local foundrc = false
+					for s,i in pairs(thisrbl['returncodes']) do
+						if type(i) == 'string' then
+							if i == ipstr then
+								foundrc = true
+								task:insert_result(s, 1)
+								break
+							end
+						elseif type(i) == 'table' then
+							for _,v in pairs(i) do
+								if v == ipstr then
+									foundrc = true
+									task:insert_result(s, 1)
+									break
+								end
+							end
+						end
+					end
+					if not foundrc then
+						if thisrbl['unknown'] and thisrbl['symbol'] then
+							task:insert_result(thisrbl['symbol'], 1)
+						else
+							rspamd_logger.err('RBL ' .. thisrbl['rbl'] .. ' returned unknown result ' .. ipstr)
+						end
+					end
+				end
+			end
 		end
 		task:inc_dns_req()
 	end
@@ -34,7 +86,7 @@ local function rbl_cb (task)
 			if (rip:get_version() == 6 and rbl['ipv6'] and rbl['from']) or 
 				(rip:get_version() == 4 and rbl['ipv4'] and rbl['from']) then
 			task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb)
 			end
 		end
 	end
@@ -45,7 +97,7 @@ local function rbl_cb (task)
 				if (rh['real_ip']:get_version() == 6 and rbl['ipv6'] and rbl['received']) or
 					(rh['real_ip']:get_version() == 4 and rbl['ipv4'] and rbl['received']) then
 				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-					ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, rbl['symbol'])
+					ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb)
 				end
 			end
     	end
@@ -80,11 +132,21 @@ end
 if(opts['default_from'] == nil) then
 	opts['default_from'] = false
 end
+if(opts['default_unknown'] == nil) then
+	opts['default_unknown'] = false
+end
 for key,rbl in pairs(opts['rbls']) do
-	local o = { "ipv4", "ipv6", "from", "received" }
+	local o = { "ipv4", "ipv6", "from", "received", "unknown" }
 	for i=1,table.maxn(o) do
 		if(rbl[o[i]] == nil) then
 			rbl[o[i]] = opts['default_' .. o[i]]
+		end
+	end
+	if type(rbl['returncodes']) == 'table' then
+		for s,_ in pairs(rbl['returncodes']) do
+			if type(rspamd_config.get_api_version) ~= 'nil' then
+				rspamd_config:register_virtual_symbol(s, 1)
+			end
 		end
 	end
 	if not rbl['symbol'] then
