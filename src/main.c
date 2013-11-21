@@ -1038,7 +1038,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
-		rspamd_main->cfg->log_level = G_LOG_LEVEL_CRITICAL;
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_INFO;
 	}
 
 	type = g_quark_from_static_string ("main");

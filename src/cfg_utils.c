@@ -774,9 +774,14 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 	}
 	close (fd);
 	
-	ext = get_filename_extension (filename);
-	if (ext != NULL && strcmp (ext, "xml") == 0) {
+	if (convert_to != NULL) {
 		is_xml = TRUE;
+	}
+	else {
+		ext = get_filename_extension (filename);
+		if (ext != NULL && strcmp (ext, "xml") == 0) {
+			is_xml = TRUE;
+		}
 	}
 
 	if (is_xml) {
@@ -805,14 +810,6 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 		return FALSE;
 	}
 
-	top = rspamd_rcl_config_init ();
-	err = NULL;
-
-	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
-		msg_err ("rcl parse error: %s", err->message);
-		return FALSE;
-	}
-
 	if (is_xml && convert_to != NULL) {
 		/* Convert XML config to UCL */
 		rcl = ucl_object_emit (cfg->rcl_obj, UCL_EMIT_CONFIG);
@@ -824,9 +821,21 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 			else if (write (fd, rcl, strlen (rcl)) == -1) {
 				msg_err ("cannot write rcl %s: %s", convert_to, strerror (errno));
 			}
+			else {
+				msg_info ("dumped xml configuration %s to ucl configuration %s",
+						filename, convert_to);
+			}
 			close (fd);
 			free (rcl);
 		}
+	}
+
+	top = rspamd_rcl_config_init ();
+	err = NULL;
+
+	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
+		msg_err ("rcl parse error: %s", err->message);
+		return FALSE;
 	}
 
 	return TRUE;
