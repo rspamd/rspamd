@@ -95,4 +95,4 @@ for key,rbl in pairs(opts['rbls']) do
 	end
 	table.insert(rbls, rbl)
 end
-rspamd_config:register_callback_symbol_priority('RBL', 1.0, -1, rbl_cb)
+rspamd_config:register_callback_symbol_priority('RBL', 1.0, 0, rbl_cb)
