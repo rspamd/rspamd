@@ -241,7 +241,6 @@ init_defaults (struct config_file *cfg)
 	cfg->max_diff = 20480;
 
 	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
-	cfg->variables = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->composite_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -266,8 +265,6 @@ free_config (struct config_file *cfg)
 
 	remove_all_maps (cfg);
 	ucl_obj_unref (cfg->rcl_obj);
-	g_hash_table_remove_all (cfg->variables);
-	g_hash_table_unref (cfg->variables);
 	g_hash_table_remove_all (cfg->metrics);
 	g_hash_table_unref (cfg->metrics);
 	g_hash_table_remove_all (cfg->c_modules);
@@ -347,117 +344,6 @@ parse_limit (const gchar *limit, guint len)
 	return result;
 }
 
-gdouble
-cfg_parse_time (const gchar *t, enum time_type default_type)
-{
-	union {
-		guint                       i;
-		double                      d;
-	}                               result;
-	gboolean                        use_double = FALSE;
-	gchar                           *err_str;
-
-	if (!t || *t == '\0')
-		return 0;
-
-	errno = 0;
-	result.i = strtoul (t, &err_str, 10);
-
-	if (*err_str != '\0') {
-		if (*err_str == '.') {
-			/* Try to handle decimal point */
-			errno = 0;
-			result.d = strtod (t, &err_str);
-			use_double = TRUE;
-		}
-		/* Seconds */
-		if (*err_str == 's' || *err_str == 'S') {
-			if (use_double) {
-				result.d *= 1000.;
-			}
-			else {
-				result.i *= 1000;
-			}
-		}
-		/* Minutes */
-		else if (*err_str == 'm' || *err_str == 'M') {
-			/* Handle ms correctly */
-			if (*(err_str + 1) != 's' && *(err_str + 1) != 'S') {
-				if (use_double) {
-					result.d *= 60. * 1000.;
-				}
-				else {
-					result.i *= 60 * 1000;
-				}
-			}
-		}
-		/* Hours */
-		else if (*err_str == 'h' || *err_str == 'H') {
-			if (use_double) {
-				result.d *= 60. * 60. * 1000.;
-			}
-			else {
-				result.i *= 60 * 60 * 1000;
-			}
-		}
-		/* Days */
-		else if (*err_str == 'd' || *err_str == 'D') {
-			if (use_double) {
-				result.d *= 24. * 60. * 60. * 1000.;
-			}
-			else {
-				result.i *= 24 * 60 * 60 * 1000;
-			}
-		}
-		else {
-			msg_warn ("invalid time value '%s' at position '%s'", t, err_str);
-			if (use_double) {
-				result.d = 0.;
-			}
-			else {
-				result.i = 0;
-			}
-		}
-	}
-	else {
-		/* Switch to default time multiplier */
-		switch (default_type) {
-		case TIME_HOURS:
-			if (use_double) {
-				result.d *= 60. * 60. * 1000.;
-			}
-			else {
-				result.i *= 60 * 60 * 1000;
-			}
-			break;
-		case TIME_MINUTES:
-			if (use_double) {
-				result.d *= 60. * 1000.;
-			}
-			else {
-				result.i *= 60 * 1000;
-			}
-			break;
-		case TIME_SECONDS:
-			if (use_double) {
-				result.d *= 1000.;
-			}
-			else {
-				result.i *= 1000;
-			}
-			break;
-		case TIME_MILLISECONDS:
-			break;
-		}
-	}
-	if (use_double) {
-		return result.d;
-	}
-	else {
-		return (gdouble)result.i;
-	}
-}
-
 gchar
 parse_flag (const gchar *str)
 {
@@ -511,110 +397,6 @@ parse_flag (const gchar *str)
 	return -1;
 }
 
-/*
- * Try to substitute all variables in given string
- * Return: newly allocated string with substituted variables (original string may be freed if variables are found)
- */
-gchar                           *
-substitute_variable (struct config_file *cfg, gchar *name, gchar *str, guchar recursive)
-{
-	gchar                           *var, *new, *v_begin, *v_end, *p, t;
-	gsize                          len;
-	gboolean                        changed = FALSE;
-
-	if (str == NULL) {
-		msg_warn ("trying to substitute variable in NULL string");
-		return NULL;
-	}
-
-	p = str;
-	while ((v_begin = strstr (p, "${")) != NULL) {
-		len = strlen (str);
-		*v_begin = '\0';
-		v_begin += 2;
-		if ((v_end = strstr (v_begin, "}")) == NULL) {
-			/* Not a variable, skip */
-			p = v_begin;
-			continue;
-		}
-		t = *v_end;
-		*v_end = '\0';
-		var = g_hash_table_lookup (cfg->variables, v_begin);
-		if (var == NULL) {
-			msg_warn ("variable %s is not defined", v_begin);
-			*v_end = t;
-			p = v_end + 1;
-			continue;
-		}
-		else if (recursive) {
-			var = substitute_variable (cfg, v_begin, var, recursive);
-		}
-		/* Allocate new string */
-		new = memory_pool_alloc (cfg->cfg_pool, len - strlen (v_begin) + strlen (var) + 3);
-
-		snprintf (new, len - strlen (v_begin) + strlen (var) + 3, "%s(%s)%s", str, var, v_end + 1);
-		p = new;
-		str = new;
-		changed = TRUE;
-	}
-
-	if (changed && name != NULL) {
-		g_hash_table_insert (cfg->variables, name, str);
-	}
-
-	return str;
-}
-
-static void
-substitute_module_variables (gpointer key, gpointer value, gpointer data)
-{
-	struct config_file             *cfg = (struct config_file *)data;
-	GList                          *cur_opt = (GList *) value;
-	struct module_opt              *cur;
-
-	while (cur_opt) {
-		cur = cur_opt->data;
-		if (cur->value) {
-			cur->value = substitute_variable (cfg, NULL, cur->value, 1);
-		}
-		cur_opt = g_list_next (cur_opt);
-	}
-}
-
-static void
-substitute_all_variables (gpointer key, gpointer value, gpointer data)
-{
-	struct config_file             *cfg = (struct config_file *)data;
-
-	/* Do recursive substitution */
-	(void)substitute_variable (cfg, (gchar *)key, (gchar *)value, 1);
-}
-
-/*
- * Place pointers to cfg_file structure to hash cfg_params
- */
-static void
-fill_cfg_params (struct config_file *cfg)
-{
-	struct config_scalar           *scalars;
-
-	scalars = memory_pool_alloc (cfg->cfg_pool, 10 * sizeof (struct config_scalar));
-
-	scalars[0].type = SCALAR_TYPE_STR;
-	scalars[0].pointer = &cfg->cfg_name;
-	g_hash_table_insert (cfg->cfg_params, "cfg_name", &scalars[0]);
-	scalars[1].type = SCALAR_TYPE_STR;
-	scalars[1].pointer = &cfg->pid_file;
-	g_hash_table_insert (cfg->cfg_params, "pid_file", &scalars[1]);
-	scalars[2].type = SCALAR_TYPE_STR;
-	scalars[2].pointer = &cfg->temp_dir;
-	g_hash_table_insert (cfg->cfg_params, "temp_dir", &scalars[2]);
-	scalars[3].type = SCALAR_TYPE_SIZE;
-	scalars[3].pointer = &cfg->max_statfile_size;
-	g_hash_table_insert (cfg->cfg_params, "max_statfile_size", &scalars[3]);
-
-}
-
 gboolean
 get_config_checksum (struct config_file *cfg) 
 {
@@ -656,9 +438,6 @@ post_load_config (struct config_file *cfg)
 	struct timespec                 ts;
 #endif
 	struct metric                  *def_metric;
-
-	g_hash_table_foreach (cfg->variables, substitute_all_variables, cfg);
-	fill_cfg_params (cfg);
 
 #ifdef HAVE_CLOCK_GETTIME
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID

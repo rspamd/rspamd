@@ -71,7 +71,6 @@ static gchar                   *privkey = NULL;
 static gchar                   *rspamd_user = NULL;
 static gchar                   *rspamd_group = NULL;
 static gchar                   *rspamd_pidfile = NULL;
-static gboolean                 dump_vars = FALSE;
 static gboolean                 dump_cache = FALSE;
 static gboolean                 is_debug = FALSE;
 static gboolean                 is_insecure = FALSE;
@@ -97,7 +96,6 @@ static GOptionEntry entries[] =
   { "user", 'u', 0, G_OPTION_ARG_STRING, &rspamd_user, "User to run rspamd as", NULL },
   { "group", 'g', 0, G_OPTION_ARG_STRING, &rspamd_group, "Group to run rspamd as", NULL },
   { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
-  { "dump-vars", 'V', 0, G_OPTION_ARG_NONE, &dump_vars, "Print all rspamd variables and exit", NULL },
   { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
   { "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure, "Ignore running workers as privileged users (insecure)", NULL },
@@ -525,37 +523,6 @@ delay_fork (struct worker_conf *cf)
 {
 	workers_pending = g_list_prepend (workers_pending, cf);
 	set_alarm (SOFT_FORK_TIME);
-}
-
-
-static void
-dump_module_variables (gpointer key, gpointer value, gpointer data)
-{
-	GList                          *cur_opt;
-	struct module_opt              *cur;
-
-	cur_opt = (GList *) value;
-
-	while (cur_opt) {
-		cur = cur_opt->data;
-		if (cur->value) {
-			printf ("$%s = \"%s\"\n", cur->param, cur->value);
-		}
-		cur_opt = g_list_next (cur_opt);
-	}
-}
-
-static void
-dump_all_variables (gpointer key, gpointer value, gpointer data)
-{
-	printf ("$%s = \"%s\"\n", (gchar *)key, (gchar *)value);
-}
-
-
-static void
-dump_cfg_vars (struct config_file *cfg)
-{
-	g_hash_table_foreach (cfg->variables, dump_all_variables, NULL);
 }
 
 static GList *
@@ -1149,7 +1116,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 
-	if (rspamd_main->cfg->config_test || dump_vars || dump_cache) {
+	if (rspamd_main->cfg->config_test || dump_cache) {
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
@@ -1173,9 +1140,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 		if (! validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE)) {
 			res = FALSE;
-		}
-		if (dump_vars) {
-			dump_cfg_vars (rspamd_main->cfg);
 		}
 		if (dump_cache) {
 			print_symbols_cache (rspamd_main->cfg);

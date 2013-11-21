@@ -235,19 +235,6 @@ struct classifier_config {
 	GList *post_callbacks;							/**< list of callbacks that are called after classification */
 };
 
-/**
- * Config option for importing to script module
- */
-struct config_scalar {
-    void *pointer;									/**< pointer to data									*/
-    enum {
-        SCALAR_TYPE_INT,
-        SCALAR_TYPE_UINT,
-        SCALAR_TYPE_STR,
-        SCALAR_TYPE_SIZE
-    } type;											/**< type of data										*/
-};
-
 struct rspamd_worker_bind_conf {
 	gchar *bind_host;
 	guint16 bind_port;
@@ -351,7 +338,6 @@ struct config_file {
 	struct rspamd_worker_cfg_parser *wrk_parsers;	/**< hash for worker config parsers, indexed by worker quarks */
 	gchar *filters_str;								/**< string of filters									*/
 	ucl_object_t *rcl_obj;					/**< rcl object											*/
-	GHashTable* variables;							/**< hash of $variables defined in config, indexed by variable name */
 	GHashTable* metrics;							/**< hash of metrics indexed by metric name				*/
 	GList* symbols_groups;							/**< groups of symbols									*/
 	GList* metrics_list;	 						/**< linked list of metrics								*/
@@ -461,29 +447,11 @@ ucl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
 guint64 parse_limit (const gchar *limit, guint len);
 
 /**
- * Parse time
- * @param t string representation of seconds (eg. 1D)
- * @param default_type dimension of time if no suffix is specified
- * @return value of time in milliseconds
- */
-gdouble cfg_parse_time (const gchar *t, enum time_type default_type);
-
-/**
  * Parse flag
  * @param str string representation of flag (eg. 'on')
  * @return numeric value of flag (0 or 1)
  */
 gchar parse_flag (const gchar *str);
-
-/**
- * Substitutes variable in specified string, may be recursive (eg. ${var1${var2}})
- * @param cfg config file
- * @param name variable's name
- * @param str incoming string
- * @param recursive whether do recursive scanning
- * @return new string with substituted variables (uses cfg memory pool for allocating)
- */
-gchar* substitute_variable (struct config_file *cfg, gchar *name, gchar *str, guchar recursive);
 
 /**
  * Do post load actions for config
