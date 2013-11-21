@@ -92,7 +92,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			}
 			lua_pushnil (cd->L);
 		}
-		if (reply->type == DNS_REQUEST_AAA) {
+		else if (reply->type == DNS_REQUEST_AAA) {
 
 			lua_newtable (cd->L);
 			cur = reply->elements;
