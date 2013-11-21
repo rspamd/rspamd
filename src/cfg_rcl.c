@@ -51,7 +51,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 				return FALSE;
 			}
 			cfg->log_type = RSPAMD_LOG_FILE;
-			cfg->log_file = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (val));
+			cfg->log_file = rspamd_expand_path (cfg->cfg_pool, ucl_object_tostring (val));
 		}
 		else if (g_ascii_strcasecmp (log_type, "syslog") == 0) {
 			/* Need to get facility */
