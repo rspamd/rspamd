@@ -35,7 +35,6 @@ end
 local function rbl_cb (task)
 	local function rbl_dns_cb(resolver, to_resolve, results, err)
 		if results then
-			local ipstr = results[1]:to_string()
 			local thisrbl = nil
 			for _,r in pairs(rbls) do
 				if string.ends(to_resolve, r['rbl']) then
@@ -49,29 +48,32 @@ local function rbl_cb (task)
 						task:insert_result(thisrbl['symbol'], 1)
 					end
 				else
-					local foundrc = false
-					for s,i in pairs(thisrbl['returncodes']) do
-						if type(i) == 'string' then
-							if i == ipstr then
-								foundrc = true
-								task:insert_result(s, 1)
-								break
-							end
-						elseif type(i) == 'table' then
-							for _,v in pairs(i) do
-								if v == ipstr then
+					for _,result in pairs(results) do 
+						local ipstr = result:to_string()
+						local foundrc = false
+						for s,i in pairs(thisrbl['returncodes']) do
+							if type(i) == 'string' then
+								if i == ipstr then
 									foundrc = true
 									task:insert_result(s, 1)
 									break
 								end
+							elseif type(i) == 'table' then
+								for _,v in pairs(i) do
+									if v == ipstr then
+										foundrc = true
+										task:insert_result(s, 1)
+										break
+									end
+								end
 							end
 						end
-					end
-					if not foundrc then
-						if thisrbl['unknown'] and thisrbl['symbol'] then
-							task:insert_result(thisrbl['symbol'], 1)
-						else
-							rspamd_logger.err('RBL ' .. thisrbl['rbl'] .. ' returned unknown result ' .. ipstr)
+						if not foundrc then
+							if thisrbl['unknown'] and thisrbl['symbol'] then
+								task:insert_result(thisrbl['symbol'], 1)
+							else
+								rspamd_logger.err('RBL ' .. thisrbl['rbl'] .. ' returned unknown result ' .. ipstr)
+							end
 						end
 					end
 				end
