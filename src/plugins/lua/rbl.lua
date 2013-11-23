@@ -28,16 +28,12 @@ local function ip_to_rbl(ip, rbl)
 	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
-function string.ends(String,End)
-	return End=='' or string.sub(String,-string.len(End))==End
-end
-
 local function rbl_cb (task)
-	local function rbl_dns_cb(resolver, to_resolve, results, err)
+	local function rbl_dns_cb(resolver, to_resolve, results, err, key)
 		if results then
 			local thisrbl = nil
-			for _,r in pairs(rbls) do
-				if string.ends(to_resolve, r['rbl']) then
+			for k,r in pairs(rbls) do
+				if k == key then
 					thisrbl = r
 					break
 				end
@@ -84,22 +80,22 @@ local function rbl_cb (task)
 	
 	local rip = task:get_from_ip()
 	if(rip ~= "0.0.0.0") then
-		for _,rbl in pairs(rbls) do
+		for k,rbl in pairs(rbls) do
 			if (rip:get_version() == 6 and rbl['ipv6'] and rbl['from']) or 
 				(rip:get_version() == 4 and rbl['ipv4'] and rbl['from']) then
 			task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb)
+				ip_to_rbl(rip, rbl['rbl']), rbl_dns_cb, k)
 			end
 		end
 	end
 	local recvh = task:get_received_headers()
 	for _,rh in ipairs(recvh) do
 		if rh['real_ip'] then
-			for _,rbl in pairs(rbls) do
+			for k,rbl in pairs(rbls) do
 				if (rh['real_ip']:get_version() == 6 and rbl['ipv6'] and rbl['received']) or
 					(rh['real_ip']:get_version() == 4 and rbl['ipv4'] and rbl['received']) then
 				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-					ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb)
+					ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
 				end
 			end
     	end
@@ -157,6 +153,6 @@ for key,rbl in pairs(opts['rbls']) do
 	if type(rspamd_config.get_api_version) ~= 'nil' then
 		rspamd_config:register_virtual_symbol(rbl['symbol'], 1)
 	end
-	table.insert(rbls, rbl)
+	rbls[key] = rbl
 end
 rspamd_config:register_callback_symbol_priority('RBL', 1.0, 0, rbl_cb)
