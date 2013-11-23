@@ -7,7 +7,6 @@
 --    rbls {
 --	spamhaus {
 --	   rbl = "zen.spamhaus.org";
---         symbol = "RBL_ZEN";
 --         ipv4 = true;
 --         ipv6 = false;
 --         unknown = false;
@@ -147,7 +146,7 @@ for key,rbl in pairs(opts['rbls']) do
 			end
 		end
 	end
-	if not rbl['symbol'] then
+	if not rbl['symbol'] and type(rbl['returncodes']) ~= 'nil' and not rbl['unknown'] then
 		rbl['symbol'] = key
 	end
 	if type(rspamd_config.get_api_version) ~= 'nil' then
