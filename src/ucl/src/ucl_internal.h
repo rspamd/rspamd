@@ -119,6 +119,14 @@ struct ucl_pubkey {
 };
 #endif
 
+struct ucl_variable {
+	char *var;
+	char *value;
+	size_t var_len;
+	size_t value_len;
+	struct ucl_variable *next;
+};
+
 struct ucl_parser {
 	enum ucl_parser_state state;
 	enum ucl_parser_state prev_state;
@@ -130,6 +138,7 @@ struct ucl_parser {
 	struct ucl_stack *stack;
 	struct ucl_chunk *chunks;
 	struct ucl_pubkey *keys;
+	struct ucl_variable *variables;
 	UT_string *err;
 };
 

@@ -662,6 +662,15 @@ void ucl_parser_register_macro (struct ucl_parser *parser, const char *macro,
 		ucl_macro_handler handler, void* ud);
 
 /**
+ * Register new parser variable
+ * @param parser parser object
+ * @param var variable name
+ * @param value variable value
+ */
+void ucl_parser_register_variable (struct ucl_parser *parser, const char *var,
+		const char *value);
+
+/**
  * Load new chunk to a parser
  * @param parser parser structure
  * @param data the pointer to the beginning of a chunk
