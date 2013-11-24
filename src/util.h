@@ -451,6 +451,5 @@ gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
  * @param pool to use
  * @param path path to expand
  */
-gchar* rspamd_expand_path (memory_pool_t *pool, const gchar *path);
 
 #endif

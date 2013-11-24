@@ -51,7 +51,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 				return FALSE;
 			}
 			cfg->log_type = RSPAMD_LOG_FILE;
-			cfg->log_file = rspamd_expand_path (cfg->cfg_pool, ucl_object_tostring (val));
+			cfg->log_file = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (val));
 		}
 		else if (g_ascii_strcasecmp (log_type, "syslog") == 0) {
 			/* Need to get facility */
@@ -558,7 +558,7 @@ static gboolean
 rspamd_rcl_lua_handler (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	const gchar *lua_src = rspamd_expand_path (cfg->cfg_pool, ucl_object_tostring (obj));
+	const gchar *lua_src = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (obj));
 	gchar *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State *L = cfg->lua_state;
 
@@ -682,14 +682,14 @@ rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
 
 		LL_FOREACH (val, cur) {
 			if (ucl_object_tostring_safe (cur, &data)) {
-				if (!rspamd_rcl_add_module_path (cfg, rspamd_expand_path (cfg->cfg_pool, data), err)) {
+				if (!rspamd_rcl_add_module_path (cfg, memory_pool_strdup (cfg->cfg_pool, data), err)) {
 					return FALSE;
 				}
 			}
 		}
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
-		if (!rspamd_rcl_add_module_path (cfg, rspamd_expand_path (cfg->cfg_pool, data), err)) {
+		if (!rspamd_rcl_add_module_path (cfg, memory_pool_strdup (cfg->cfg_pool, data), err)) {
 			return FALSE;
 		}
 	}
@@ -1241,12 +1241,7 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
 	target = (gchar **)(((gchar *)pd->user_struct) + pd->offset);
 	switch (obj->type) {
 	case UCL_STRING:
-		if (pd->flags & RSPAMD_CL_FLAG_STRING_PATH) {
-			*target = rspamd_expand_path (cfg->cfg_pool, ucl_copy_value_trash (obj));
-		}
-		else {
-			*target = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
-		}
+		*target = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
 		break;
 	case UCL_INT:
 		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
@@ -1412,12 +1407,7 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
 	for (cur = obj; cur != NULL; cur = cur->next) {
 		switch (cur->type) {
 		case UCL_STRING:
-			if (pd->flags & RSPAMD_CL_FLAG_STRING_PATH) {
-				val = rspamd_expand_path (cfg->cfg_pool, ucl_copy_value_trash (obj));
-			}
-			else {
-				val = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
-			}
+			val = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
 			break;
 		case UCL_INT:
 			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);

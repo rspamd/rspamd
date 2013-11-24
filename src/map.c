@@ -1048,7 +1048,7 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 	new_map->locked = memory_pool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 
 	if (proto == MAP_PROTO_FILE) {
-		new_map->uri = rspamd_expand_path (cfg->cfg_pool, def);
+		new_map->uri = memory_pool_strdup (cfg->cfg_pool, def);
 		def = new_map->uri;
 	}
 	else {

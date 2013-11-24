@@ -743,6 +743,38 @@ get_filename_extension (const char *filename)
 	return NULL;
 }
 
+
+/*
+ * Variables:
+ * $CONFDIR - configuration directory
+ * $RUNDIR - local states directory
+ * $DBDIR - databases dir
+ * $LOGDIR - logs dir
+ * $PLUGINSDIR - pluggins dir
+ * $PREFIX - installation prefix
+ * $VERSION - rspamd version
+ */
+
+#define RSPAMD_CONFDIR_MACRO "CONFDIR"
+#define RSPAMD_RUNDIR_MACRO "RUNDIR"
+#define RSPAMD_DBDIR_MACRO "DBDIR"
+#define RSPAMD_LOGDIR_MACRO "LOGDIR"
+#define RSPAMD_PLUGINSDIR_MACRO "PLUGINSDIR"
+#define RSPAMD_PREFIX_MACRO "PREFIX"
+#define RSPAMD_VERSION_MACRO "VERSION"
+
+static void
+rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
+{
+	ucl_parser_register_variable (parser, RSPAMD_CONFDIR_MACRO, RSPAMD_CONFDIR);
+	ucl_parser_register_variable (parser, RSPAMD_RUNDIR_MACRO, RSPAMD_RUNDIR);
+	ucl_parser_register_variable (parser, RSPAMD_DBDIR_MACRO, RSPAMD_DBDIR);
+	ucl_parser_register_variable (parser, RSPAMD_LOGDIR_MACRO, RSPAMD_LOGDIR);
+	ucl_parser_register_variable (parser, RSPAMD_PLUGINSDIR_MACRO, RSPAMD_PLUGINSDIR);
+	ucl_parser_register_variable (parser, RSPAMD_PREFIX_MACRO, RSPAMD_PREFIX);
+	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
+}
+
 gboolean
 read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar *convert_to)
 {
@@ -796,6 +828,7 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 	}
 	else {
 		parser = ucl_parser_new (0);
+		rspamd_ucl_add_conf_variables (parser);
 		if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 			msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
 			munmap (data, st.st_size);
