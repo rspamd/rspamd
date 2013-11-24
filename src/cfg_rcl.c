@@ -742,6 +742,7 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
 		}
 	}
 
+
 	if (rspamd_rcl_section_parse_defaults (section, cfg, obj, st, err)) {
 		ccf->statfiles = g_list_prepend (ccf->statfiles, st);
 		if (st->label != NULL) {
@@ -768,6 +769,22 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
 
 		st->opts = obj;
 
+		val = ucl_object_find_key (obj, "spam");
+		if (val == NULL) {
+			msg_info ("statfile %s has no explicit 'spam' setting, trying to guess by symbol", st->symbol);
+			if (rspamd_strncasestr (st->symbol, "spam", strlen (st->symbol)) != NULL) {
+				st->is_spam = TRUE;
+			}
+			else if (rspamd_strncasestr (st->symbol, "ham", strlen (st->symbol)) != NULL) {
+				st->is_spam = FALSE;
+			}
+			else {
+				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot guess spam setting from %s", st->symbol);
+				return FALSE;
+			}
+			msg_info ("guessed that statfile with symbol %s is %s", st->symbol, st->is_spam ?
+					"spam" : "ham");
+		}
 		return TRUE;
 	}
 
@@ -794,6 +811,9 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
 			if (g_ascii_strcasecmp (key, "statfile") == 0) {
 				LL_FOREACH (val, cur) {
 					res = rspamd_rcl_statfile_handler (cfg, cur, ccf, stat_section, err);
+					if (!res) {
+						return FALSE;
+					}
 				}
 			}
 			else if (g_ascii_strcasecmp (key, "type") == 0 && val->type == UCL_STRING) {
