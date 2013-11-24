@@ -1393,6 +1393,7 @@ ucl_state_machine (struct ucl_parser *parser)
 	struct ucl_chunk *chunk = parser->chunks;
 	struct ucl_stack *st;
 	const unsigned char *p, *c = NULL, *macro_start = NULL;
+	unsigned char *macro_escaped;
 	size_t macro_len = 0;
 	struct ucl_macro *macro = NULL;
 
@@ -1495,7 +1496,8 @@ ucl_state_machine (struct ucl_parser *parser)
 				/* We got macro name */
 				HASH_FIND (hh, parser->macroes, c, (p - c), macro);
 				if (macro == NULL) {
-					ucl_set_err (chunk, UCL_EMACRO, "unknown macro", &parser->err);
+					ucl_create_err (&parser->err, "error on line %d at column %d: unknown macro: '%.*s', character: '%c'",
+								chunk->line, chunk->column, (int)(p - c), c, *chunk->pos);
 					parser->state = UCL_STATE_ERROR;
 					return false;
 				}
@@ -1523,9 +1525,19 @@ ucl_state_machine (struct ucl_parser *parser)
 				parser->state = UCL_STATE_ERROR;
 				return false;
 			}
-			parser->state = parser->prev_state;
-			if (!macro->handler (macro_start, macro_len, macro->ud)) {
-				return false;
+			macro_len = ucl_expand_variable (parser, &macro_escaped, macro_start, macro_len);
+			parser->state = UCL_STATE_AFTER_VALUE;
+			if (macro_escaped == macro_start) {
+				if (!macro->handler (macro_start, macro_len, macro->ud)) {
+					return false;
+				}
+			}
+			else {
+				if (!macro->handler (macro_escaped, macro_len, macro->ud)) {
+					UCL_FREE (macro_len + 1, macro_escaped);
+					return false;
+				}
+				UCL_FREE (macro_len + 1, macro_escaped);
 			}
 			p = chunk->pos;
 			break;
