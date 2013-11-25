@@ -106,6 +106,13 @@ fi
 %{_bindir}/rspamd
 %{_bindir}/rspamc
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
+%config(noreplace) %{rspamd_confdir}/composites.conf
+%config(noreplace) %{rspamd_confdir}/logging.conf
+%config(noreplace) %{rspamd_confdir}/metrics.conf
+%config(noreplace) %{rspamd_confdir}/modules.conf
+%config(noreplace) %{rspamd_confdir}/options.conf
+%config(noreplace) %{rspamd_confdir}/statistic.conf
+%config(noreplace) %{rspamd_confdir}/workers.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
 %dir %{rspamd_confdir}
