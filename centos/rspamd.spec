@@ -74,7 +74,6 @@ rm -rf %{buildroot}
 
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
-%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/%{name}.xml
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
 %{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
