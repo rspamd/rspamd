@@ -248,33 +248,15 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 static void
 register_bit_symbols (struct config_file *cfg, struct suffix_item *suffix)
 {
-	gchar                          *c, *symbol;
 	GList                           *cur;
 	struct surbl_bit_item          *bit;
-	gint                            len;
 
-	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
-		cur = g_list_first (suffix->bits);
-		while (cur) {
-			bit = (struct surbl_bit_item *)cur->data;
-			len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
-			*c = '\0';
-			symbol = memory_pool_alloc (cfg->cfg_pool, len);
-			rspamd_snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
-			*c = '%';
-			register_virtual_symbol (&cfg->cache, symbol, 1);
-			cur = g_list_next (cur);
-		}
-	}
-	else if (suffix->bits != NULL) {
+	if (suffix->bits != NULL) {
 		/* Prepend bit to symbol */
 		cur = g_list_first (suffix->bits);
 		while (cur) {
 			bit = (struct surbl_bit_item *)cur->data;
-			len = strlen (suffix->symbol) + strlen (bit->symbol) + 1;
-			symbol = memory_pool_alloc (cfg->cfg_pool, len);
-			rspamd_snprintf (symbol, len, "%s%s", bit->symbol, suffix->symbol, len);
-			register_virtual_symbol (&cfg->cache, symbol, 1);
+			register_virtual_symbol (&cfg->cache, bit->symbol, 1);
 			cur = g_list_next (cur);
 		}
 	}
@@ -405,8 +387,12 @@ surbl_module_config (struct config_file *cfg)
 			if (cur == NULL) {
 				msg_warn ("surbl rule for suffix %s lacks symbol, using %s as symbol", new_suffix->suffix,
 						DEFAULT_SURBL_SYMBOL);
-				new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool,
 						DEFAULT_SURBL_SYMBOL);
+			}
+			else {
+				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+						ucl_obj_tostring (cur));
 			}
 			cur = ucl_obj_get_key (cur_rule, "options");
 			if (cur != NULL && cur->type == UCL_STRING) {
@@ -427,6 +413,7 @@ surbl_module_config (struct config_file *cfg)
 					}
 				}
 			}
+			surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
 		}
 	}
 	/* Add default suffix */
@@ -664,24 +651,18 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 static void
 process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr)
 {
-	gchar                           *c, *symbol;
-	GList                          *cur;
+	GList                           *cur;
 	struct surbl_bit_item          *bit;
-	gint                            len, found = 0;
+	gint                             found = 0;
 
-	if ((c = strchr (suffix->symbol, '%')) != NULL && *(c + 1) == 'b') {
+	if (suffix->bits != NULL) {
 		cur = g_list_first (suffix->bits);
 
 		while (cur) {
 			bit = (struct surbl_bit_item *)cur->data;
 			debug_task ("got result(%d) AND bit(%d): %d", (gint)addr, (gint)ntohl (bit->bit), (gint)bit->bit & (gint)ntohl (addr));
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
-				len = strlen (suffix->symbol) - 2 + strlen (bit->symbol) + 1;
-				*c = '\0';
-				symbol = memory_pool_alloc (task->task_pool, len);
-				rspamd_snprintf (symbol, len, "%s%s%s", suffix->symbol, bit->symbol, c + 2);
-				*c = '%';
-				insert_result (task, symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+				insert_result (task, bit->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 				found = 1;
 			}
 			cur = g_list_next (cur);
