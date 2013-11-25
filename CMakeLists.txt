@@ -999,6 +999,16 @@ LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
 
+SET(CONFFILES 
+	conf/composites.conf
+	conf/logging.conf
+	conf/metrics.conf
+	conf/modules.conf
+	conf/options.conf
+	conf/rspamd.conf
+	conf/statistic.conf
+	conf/workers.conf)
+
 ######################### LINK SECTION ###############################
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CONTRIBSRC} ${PLUGINSSRC})
@@ -1079,6 +1089,8 @@ INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${PLUGINSDIR}/lua)")
 INSTALL(FILES conf/2tld.inc RENAME 2tld.inc DESTINATION ${CONFDIR})
 
 INSTALL(FILES conf/surbl-whitelist.inc RENAME surbl-whitelist.inc DESTINATION ${CONFDIR})
+
+INSTALL(FILES ${CONFFILES} DESTINATION ${CONFDIR})
 
 # Lua plugins
 
