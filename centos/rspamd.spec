@@ -131,10 +131,10 @@ fi
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
 
 %changelog
-* Tue November 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
+* Tue Nov 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
 - Update to 0.6.0.
 
-* Mon June 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.6-1
+* Mon Jun 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.6-1
 - Update to 0.5.6.
 
 * Sat May 25 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.5-1
