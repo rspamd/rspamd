@@ -74,7 +74,6 @@ rm -rf %{buildroot}
 
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
-%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/%{name}.xml
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
 %{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
@@ -106,6 +105,13 @@ fi
 %{_bindir}/rspamd
 %{_bindir}/rspamc
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
+%config(noreplace) %{rspamd_confdir}/composites.conf
+%config(noreplace) %{rspamd_confdir}/logging.conf
+%config(noreplace) %{rspamd_confdir}/metrics.conf
+%config(noreplace) %{rspamd_confdir}/modules.conf
+%config(noreplace) %{rspamd_confdir}/options.conf
+%config(noreplace) %{rspamd_confdir}/statistic.conf
+%config(noreplace) %{rspamd_confdir}/workers.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
 %dir %{rspamd_confdir}
@@ -131,10 +137,10 @@ fi
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
 
 %changelog
-* Tue November 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
+* Tue Nov 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
 - Update to 0.6.0.
 
-* Mon June 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.6-1
+* Mon Jun 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.6-1
 - Update to 0.5.6.
 
 * Sat May 25 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.5.5-1
