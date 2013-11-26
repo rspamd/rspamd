@@ -1097,6 +1097,10 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 
 	/* Value part */
 	h = header;
+	/* Skip spaces at the beginning */
+	while (g_ascii_isspace (*h)) {
+		h ++;
+	}
 	got_sp = FALSE;
 
 	while (*h) {
