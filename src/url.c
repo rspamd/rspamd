@@ -1201,7 +1201,7 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 
 	/* Try to find the start of the url by finding any non-urlsafe character or whitespace/punctuation */
 	while (p >= begin) {
-		if ((!is_domain (*p) && *p != '.') || g_ascii_isspace (*p)) {
+		if ((!is_domain (*p) && *p != '.' && *p != '/') || g_ascii_isspace (*p)) {
 			p ++;
 			if (!g_ascii_isalnum (*p)) {
 				/* Urls cannot start with strange symbols */
@@ -1224,6 +1224,10 @@ url_tld_start (const gchar *begin, const gchar *end, const gchar *pos, url_match
 				return FALSE;
 			}
 		}
+		else if (*p == '/') {
+			/* Urls cannot contain '/' in their body */
+			return FALSE;
+		}
 		p --;
 	}
 
@@ -1235,9 +1239,9 @@ url_tld_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t
 {
 	const gchar						*p;
 
-	/* A url must be finished by tld, so it must be followed by punctuation or by space character */
+	/* A url must be finished by tld, so it must be followed by space character */
 	p = pos + strlen (match->pattern);
-	if (p == end || g_ascii_isspace (*p) || g_ascii_ispunct (*p)) {
+	if (p == end || g_ascii_isspace (*p) || *p == ',') {
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
@@ -1356,9 +1360,12 @@ domain:
 				}
 
 				if (!passwd && (port >= 65536 || *p == '@')) {
-					if (p < end) {
+					if (p < end && *p == '@') {
 						/* this must be a password? */
 						goto passwd;
+					}
+					else if (p < end) {
+						return FALSE;
 					}
 
 					p--;
