@@ -149,7 +149,7 @@ for key,rbl in pairs(opts['rbls']) do
 	if not rbl['symbol'] and type(rbl['returncodes']) ~= 'nil' and not rbl['unknown'] then
 		rbl['symbol'] = key
 	end
-	if type(rspamd_config.get_api_version) ~= 'nil' then
+	if type(rspamd_config.get_api_version) ~= 'nil' and rbl['symbol'] then
 		rspamd_config:register_virtual_symbol(rbl['symbol'], 1)
 	end
 	rbls[key] = rbl
