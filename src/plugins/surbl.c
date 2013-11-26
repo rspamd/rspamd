@@ -402,6 +402,7 @@ surbl_module_config (struct config_file *cfg)
 			}
 			cur = ucl_obj_get_key (cur_rule, "bits");
 			if (cur != NULL && cur->type == UCL_OBJECT) {
+				it = NULL;
 				while ((cur_bit = ucl_iterate_object (cur, &it, true)) != NULL) {
 					if (ucl_object_key (cur_bit) != NULL && cur_bit->type == UCL_INT) {
 						bit = ucl_obj_toint (cur_bit);
@@ -414,11 +415,13 @@ surbl_module_config (struct config_file *cfg)
 				}
 			}
 			surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes, new_suffix);
+			register_callback_symbol (&cfg->cache, new_suffix->symbol, 1, surbl_test_url, new_suffix);
 		}
 	}
 	/* Add default suffix */
 	if (surbl_module_ctx->suffixes == NULL) {
 		msg_err ("surbl module loaded but no suffixes defined, skip checks");
+		return TRUE;
 	}
 
 	if (surbl_module_ctx->suffixes != NULL) {
@@ -653,7 +656,6 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar
 {
 	GList                           *cur;
 	struct surbl_bit_item          *bit;
-	gint                             found = 0;
 
 	if (suffix->bits != NULL) {
 		cur = g_list_first (suffix->bits);
@@ -663,13 +665,8 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar
 			debug_task ("got result(%d) AND bit(%d): %d", (gint)addr, (gint)ntohl (bit->bit), (gint)bit->bit & (gint)ntohl (addr));
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
 				insert_result (task, bit->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
-				found = 1;
 			}
 			cur = g_list_next (cur);
-		}
-
-		if (!found) {
-			insert_result (task, suffix->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
 		}
 	}
 	else {
