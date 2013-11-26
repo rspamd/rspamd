@@ -1444,7 +1444,7 @@ url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_mat
 		while (p > begin && (is_domain (*p) || *p == '.' || *p == '_')) {
 			p --;
 		}
-		if (!is_domain (*p)) {
+		if (!is_domain (*p) && p != pos - 1) {
 			match->m_begin = p + 1;
 			return TRUE;
 		}
