@@ -53,12 +53,12 @@ lua_rcl_obj_push_elt (lua_State *L, const char *key, ucl_object_t *obj)
  * @return
  */
 static gint
-lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj)
+lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj, gboolean allow_array)
 {
 	ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 
-	if (obj->next != NULL) {
+	if (allow_array && obj->next != NULL) {
 		/* Actually we need to push this as an array */
 		return lua_rcl_obj_push_array (L, obj);
 	}
@@ -141,7 +141,7 @@ lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array)
 {
 	switch (obj->type) {
 	case UCL_OBJECT:
-		return lua_rcl_obj_push_obj (L, obj);
+		return lua_rcl_obj_push_obj (L, obj, allow_array);
 	case UCL_ARRAY:
 		return lua_rcl_obj_push_array (L, obj->value.av);
 	default:
