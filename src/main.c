@@ -1110,6 +1110,11 @@ main (gint argc, gchar **argv, gchar **env)
 	if (! load_rspamd_config (rspamd_main->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
+
+	/* Override pidfile from configuration by command line argument */
+	if (rspamd_pidfile != NULL) {
+		cfg->pid_file = rspamd_pidfile;
+	}
 	
 	/* Force debug log */
 	if (is_debug) {
