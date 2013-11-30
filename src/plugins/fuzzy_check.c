@@ -190,15 +190,19 @@ parse_flags_string (struct config_file *cfg, ucl_object_t *val)
 {
 	ucl_object_t *elt;
 	struct fuzzy_mapping *map;
+	const gchar *sym = NULL;
 
 	if (val->type == UCL_STRING) {
 		parse_flags_string_old (cfg, ucl_obj_tostring (val));
 	}
 	else if (val->type == UCL_OBJECT) {
 		elt = ucl_obj_get_key (val, "symbol");
-		if (elt != NULL) {
+		if (elt == NULL || !ucl_object_tostring_safe (elt, &sym)) {
+			sym = ucl_object_key (val);
+		}
+		if (sym != NULL) {
 			map =  memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mapping));
-			map->symbol = ucl_obj_tostring (elt);
+			map->symbol = sym;
 			elt = ucl_obj_get_key (val, "flag");
 			if (elt != NULL && ucl_obj_toint_safe (elt, &map->fuzzy_flag)) {
 				elt = ucl_obj_get_key (val, "weight");
@@ -365,6 +369,7 @@ gint
 fuzzy_check_module_config (struct config_file *cfg)
 {
 	ucl_object_t             *value, *cur;
+	ucl_object_iter_t         it = NULL;
 	gint                            res = TRUE;
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
@@ -434,7 +439,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 		}
 	}
 	if ((value = get_module_opt (cfg, "fuzzy_check", "fuzzy_map")) != NULL) {
-		LL_FOREACH (value, cur) {
+		while ((cur = ucl_iterate_object (value, &it, true)) != NULL) {
 			parse_flags_string (cfg, cur);
 		}
 	}
