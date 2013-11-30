@@ -6,7 +6,7 @@ include /usr/share/dpkg/buildflags.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/cmake.mk
 
-DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc \
+DEB_CMAKE_NORMAL_ARGS+= 			-DCONFDIR=/etc/rspamd \
 						-DMANDIR=/usr/share/man \
 						-DRUNDIR=/var/run/rspamd \
 						-DDBDIR=/var/lib/rspamd \

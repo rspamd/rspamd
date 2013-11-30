@@ -17,6 +17,7 @@ set -e
 case "$1" in
     install)
        SERVER_HOME=/var/lib/rspamd
+       SERVER_RUN=/var/run/rspamd
        SERVER_LOG=/var/log/rspamd
        SERVER_USER=rspamd
        SERVER_NAME="Rspamd spam filtering system"
@@ -31,6 +32,7 @@ case "$1" in
        fi
        # 2. create homedir if not existing
        test -d $SERVER_HOME || mkdir $SERVER_HOME
+       test -d $SERVER_RUN || mkdir $SERVER_RUN
        test -d $SERVER_LOG || mkdir $SERVER_LOG
        # 3. create user if not existing
        if ! getent passwd | grep -q "^$SERVER_USER:"; then
@@ -51,8 +53,9 @@ case "$1" in
        # 5. adjust file and directory permissions
        if ! dpkg-statoverride --list $SERVER_HOME >/dev/null
        then
-           chown -R $SERVER_USER:$SERVER_GROUP $SERVER_HOME $SERVER_LOG
+           chown -R $SERVER_USER:$SERVER_GROUP $SERVER_HOME $SERVER_LOG $SERVER_RUN
            chmod u=rwx,g=rx,o= $SERVER_HOME
+           chmod u=rwx,g=rx,o=rx $SERVER_RUN
            chmod u=rwx,g=rx,o=rx $SERVER_LOG
        fi
        # 6. Add the user to the ADDGROUP group
