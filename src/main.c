@@ -1113,7 +1113,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Override pidfile from configuration by command line argument */
 	if (rspamd_pidfile != NULL) {
-		cfg->pid_file = rspamd_pidfile;
+		rspamd_main->cfg->pid_file = rspamd_pidfile;
 	}
 	
 	/* Force debug log */
