@@ -1,3 +1,19 @@
+0.6.0:
+	* Use UCL instead xml for configuration (https://github.com/vstakhov/libucl)
+	* Fix statistics module normalization
+	* Rework the many modules for the new configuration:
+	 - surbl has incompatible configuration;
+	 - fuzzy_check has incompatible configuration;
+	 - multimap has now new configuration;
+	 - received_rbl is removed and replaced by rbl module.
+	* Removed deprecated options:
+	 - statfile_pool_size;
+	 - action and required/reject score for a metric.
+	* Simplify build system and unify configuration for all platforms.
+	* Improved URL detector (reduced false positive rate).
+	* Lua 5.2 is now the default and fully supported version.
+	* Tons of bugfixes and minor improvements.	
+
 0.5.6:
 	* Fix bug with counters incrementing in rolling history
 	* Detect expl and exp2l as some systems do not have it
