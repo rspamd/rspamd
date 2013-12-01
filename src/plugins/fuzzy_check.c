@@ -488,6 +488,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
+		memset (&cmd, 0, sizeof (cmd));
 		cmd.blocksize = session->h->block_size;
 		cmd.value = 0;
 		memcpy (cmd.hash, session->h->hash_pipe, sizeof (cmd.hash));
