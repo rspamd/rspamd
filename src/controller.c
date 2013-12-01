@@ -1226,7 +1226,9 @@ process_header (f_str_t *line, struct controller_session *session)
 	else if (*headern == 'p' || *headern == 'P') {
 		/* Password header */
 		if (g_ascii_strcasecmp (headern, "password") == 0) {
-			if (line->len == strlen (ctx->password) && memcmp (line->begin, ctx->password, line->len) == 0) {
+			if (ctx->password == NULL ||
+					(line->len == strlen (ctx->password)
+					&& memcmp (line->begin, ctx->password, line->len) == 0)) {
 				session->authorized = TRUE;
 			}
 			else {
