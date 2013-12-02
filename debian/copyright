@@ -89,7 +89,7 @@ License: BSD-3-CLAUSE
 
 Files: contrib/uthash/*
 Copyright: 2003-2013 Troy D. Hanson http://troydhanson.github.com/uthash/
-License: BSD-1-CLAUSE
+License: BSD-2-CLAUSE
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
  are met:
@@ -163,7 +163,7 @@ License: Apache 2.0
  Apache-2.0 license in `/usr/share/common-licenses/Apache-2.0'
 
 Files: *
-Copyright: 2008-2012 Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright: 2008-2013 Vsevolod Stakhov <vsevolod@highsecure.ru>
 License: BSD-2-Clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are met:
