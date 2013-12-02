@@ -9,14 +9,17 @@ collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad
 
 <https://launchpad.net/~vsevolod-n/+archive/rspamd>
 
-Users of other OSes should use sources to build and install rspamd. You can
-obtain rspamd sources at the bitbucket download page:
+Users of other OSes should use sources to build and install rspamd. The recent version of rspamd is
+0.6.1.
 
-<https://bitbucket.org/vstakhov/rspamd/downloads>
+<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.1.tar.gz">Download rspamd-0.6.1</a></p>
+
+[Signature](/downloads/rspamd-0.6.1.tar.gz.sig)
+[My GPG key](https://rspamd.com/vsevolod.pubkey)
 
 There are packages for debian and CentOS/RHEL distribution. Debian users could
-use *debuild* utility to create the binary packages of rspamd. CentOS/RHEL
-users could use spec file and other RedHat specific stuff from **centos**
+use `debuild` utility to create the binary packages of rspamd. CentOS/RHEL
+users could use spec file and other RedHat specific stuff from `centos`
 folder.  The users of other systems could try to adopt some package or just to
 build from sources.
 
@@ -50,16 +53,14 @@ start working with rspamd you should do several steps (please note that this is
 not applicable to an installation based on packages, as such an installation
 have everything ready for using):
 
-1. Copy a sample configuration $PREFIX/etc/rspamd.xml.sample to
-$PREFIX/etc/rspamd.xml
-2. Edit rspamd.xml according to your system (described
+1. Edit rspamd.conf according to your system (described
 later). 
-3. Make a directory for rspamd pid file and data (/var/run/rspamd by
+2. Make a directory for rspamd pid file and data (/var/run/rspamd by
 default) and make rspamd user (nobody by default) as the owner of rspamd data
 directory. 
-4. Make a directory for rspamd logs (or setup syslog to accept
+3. Make a directory for rspamd logs (or setup syslog to accept
 rspamd log messages).
-5. Install start script to a proper place.
+4. Install start script to a proper place.
 6. Start rspamd using start script.
 
 If start script is not suitable for your system (now rspamd shipped with start
