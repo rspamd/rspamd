@@ -235,7 +235,7 @@ MACRO(FindLua _major _minor)
 	ENDIF(ENABLE_LUAJIT MATCHES "ON")
 ENDMACRO(FindLua _major _minor)
 
-FUNCTION(INSTALL_IF_NOT_EXISTS src dest)
+FUNCTION(INSTALL_IF_NOT_EXISTS src dest suffix)
   IF(NOT IS_ABSOLUTE "${src}")
     SET(src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
   ENDIF()
@@ -244,18 +244,18 @@ FUNCTION(INSTALL_IF_NOT_EXISTS src dest)
     SET(dest "${CMAKE_INSTALL_PREFIX}/${dest}")
   ENDIF()
   INSTALL(CODE "
-    IF(NOT EXISTS \"\$ENV{DESTDIR}${dest}/${src_name}\")
+    IF(NOT EXISTS \"\$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
       #FILE(INSTALL \"${src}\" DESTINATION \"${dest}\")
-      MESSAGE(STATUS \"Installing: \$ENV{DESTDIR}${dest}/${src_name}\")
+      MESSAGE(STATUS \"Installing: \$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
       EXECUTE_PROCESS(COMMAND \${CMAKE_COMMAND} -E copy \"${src}\"
-                      \"\$ENV{DESTDIR}${dest}/${src_name}\"
+                      \"\$ENV{DESTDIR}${dest}/${src_name}${suffix}\"
                       RESULT_VARIABLE copy_result
                       ERROR_VARIABLE error_output)
       IF(copy_result)
         MESSAGE(FATAL_ERROR \${error_output})
       ENDIF()
     ELSE()
-      MESSAGE(STATUS \"Skipping  : \$ENV{DESTDIR}${dest}/${src_name}\")
+      MESSAGE(STATUS \"Skipping  : \$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
     ENDIF()
   ")
 ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
@@ -1119,7 +1119,11 @@ MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
 	
 FOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 	LIST(GET CONFFILES ${CONF_IDX} CONF_FILE)
-	INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR})
+	IF(BUILD_PORT)
+		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ".sample")
+	ELSE(BUILD_PORT)
+		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} "")
+	ENDIF(BUILD_PORT)
 ENDFOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 
 # Lua plugins
