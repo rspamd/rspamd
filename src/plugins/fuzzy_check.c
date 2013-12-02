@@ -907,7 +907,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 
 		while (cur) {
 			part = cur->data;
-			if (part->is_empty || part->fuzzy == NULL || part->fuzzy->hash_pipe[0] == '\0') {
+			if (part->is_empty || part->fuzzy == NULL || part->fuzzy->hash_pipe[0] == '\0' ||
+				(fuzzy_module_ctx->min_bytes > 0 && part->content->len < fuzzy_module_ctx->min_bytes)) {
 				/* Skip empty parts */
 				cur = g_list_next (cur);
 				continue;
@@ -967,11 +968,11 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 							else {
 								r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
 							}
+							g_free (checksum);
+							free_task (task, FALSE);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return;
 							}
-							g_free (checksum);
-							free_task (task, FALSE);
 							rspamd_dispatcher_restore (session->dispatcher);
 							return;
 						}
@@ -1003,11 +1004,11 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 							else {
 								r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write fuzzy hash" CRLF "END" CRLF);
 							}
+							g_free (checksum);
+							free_task (task, FALSE);
 							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 								return;
 							}
-							g_free (checksum);
-							free_task (task, FALSE);
 							rspamd_dispatcher_restore (session->dispatcher);
 							return;
 						}
