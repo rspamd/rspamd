@@ -8,7 +8,7 @@
 %define USE_JUDY         0
 
 Name:           rspamd
-Version:        0.6.0
+Version:        0.6.1
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   

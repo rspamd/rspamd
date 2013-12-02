@@ -472,6 +472,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
+	data.in_class = TRUE;
 
 	data.processed_tokens = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {

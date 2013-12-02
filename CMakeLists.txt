@@ -10,8 +10,7 @@ PROJECT(rspamd C)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 6)
-SET(RSPAMD_VERSION_PATCH 0)
-
+SET(RSPAMD_VERSION_PATCH 1)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "http://bitbucket.org/vstakhov/rspamd")
@@ -235,6 +234,32 @@ MACRO(FindLua _major _minor)
 	     ENDIF(NOT LUAJIT_LIBRARY)
 	ENDIF(ENABLE_LUAJIT MATCHES "ON")
 ENDMACRO(FindLua _major _minor)
+
+FUNCTION(INSTALL_IF_NOT_EXISTS src dest suffix)
+  IF(NOT IS_ABSOLUTE "${src}")
+    SET(src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
+  ENDIF()
+  GET_FILENAME_COMPONENT(src_name "${src}" NAME)
+  IF(NOT IS_ABSOLUTE "${dest}")
+    SET(dest "${CMAKE_INSTALL_PREFIX}/${dest}")
+  ENDIF()
+  INSTALL(CODE "
+    IF(NOT EXISTS \"\$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
+      #FILE(INSTALL \"${src}\" DESTINATION \"${dest}\")
+      MESSAGE(STATUS \"Installing: \$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
+      EXECUTE_PROCESS(COMMAND \${CMAKE_COMMAND} -E copy \"${src}\"
+                      \"\$ENV{DESTDIR}${dest}/${src_name}${suffix}\"
+                      RESULT_VARIABLE copy_result
+                      ERROR_VARIABLE error_output)
+      IF(copy_result)
+        MESSAGE(FATAL_ERROR \${error_output})
+      ENDIF()
+    ELSE()
+      MESSAGE(STATUS \"Skipping  : \$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
+    ENDIF()
+  ")
+ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
+
 
 ############################# CONFIG SECTION #############################################
 # Initial set
@@ -1007,7 +1032,9 @@ SET(CONFFILES
 	conf/options.conf
 	conf/rspamd.conf
 	conf/statistic.conf
-	conf/workers.conf)
+	conf/workers.conf
+	conf/2tld.inc
+	conf/surbl-whitelist.inc)
 
 ######################### LINK SECTION ###############################
 
@@ -1086,11 +1113,18 @@ INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR})")
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${EXAMPLESDIR})")
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${PLUGINSDIR}/lua)")
 
-INSTALL(FILES conf/2tld.inc RENAME 2tld.inc DESTINATION ${CONFDIR})
-
-INSTALL(FILES conf/surbl-whitelist.inc RENAME surbl-whitelist.inc DESTINATION ${CONFDIR})
-
-INSTALL(FILES ${CONFFILES} DESTINATION ${CONFDIR})
+# Install configs only if they are unchanged
+LIST(LENGTH CONFFILES CONFLIST_COUNT)
+MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
+	
+FOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
+	LIST(GET CONFFILES ${CONF_IDX} CONF_FILE)
+	IF(BUILD_PORT)
+		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ".sample")
+	ELSE(BUILD_PORT)
+		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} "")
+	ENDIF(BUILD_PORT)
+ENDFOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 
 # Lua plugins
 
