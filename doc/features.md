@@ -6,7 +6,7 @@ title: Rspamd features
 # Rspamd features
 
 Rspamd is a complex spam filter that allows to estimate messages by many rules, statistical data and custom services like URL black lists. 
-Each message is estimated by rspamd and got so called *spam score*. 
+Each message is estimated by rspamd and got so called `spam score`. 
 According to spam score and a user`s settings rspamd send recommended action for this message to MTA.
 
 Rspamd has own unique features among spam filters:

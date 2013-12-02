@@ -5,8 +5,7 @@ title: About rspamd
 
 Rspamd is a complex spam filter that allows to estimate messages by a number of
 rules including regular expression, statistical analysis and custom services,
-such as URL black lists. Each message is analysed by rspamd and got a *spam
-score*. 
+such as URL black lists. Each message is analysed by rspamd and got a `spam score`. 
 
 According to this spam score and user's settings rspamd recommends to apply an
 action for this message to MTA, for example to pass, to reject or to add spam
@@ -25,6 +24,5 @@ suitable spam filtering.
 
 ## References
 
-* Home site: <http://rspamd.com>
-* Downloads: <https://bitbucket.org/vstakhov/rspamd/downloads>
+* Home site: <https://rspamd.com>
 * Wiki: <https://bitbucket.org/vstakhov/rspamd/wiki/>

@@ -15,6 +15,7 @@ Users of other OSes should use sources to build and install rspamd. The recent v
 <p><a class="btn btn-primary" href="/downloads/rspamd-0.6.1.tar.gz">Download rspamd-0.6.1</a></p>
 
 [Signature](/downloads/rspamd-0.6.1.tar.gz.sig)
+
 [My GPG key](https://rspamd.com/vsevolod.pubkey)
 
 There are packages for debian and CentOS/RHEL distribution. Debian users could
