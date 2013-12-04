@@ -485,6 +485,16 @@ typedef off_t goffset;
 #include <gmime/gmime.h>
 #endif
 
+/* Some fixes for broken glib */
+#if defined(INT64_MAX) && INT64_MAX!= G_MAXINT64
+#undef int64_t
+#define int64_t gint64
+#endif
+#if defined(UINT64_MAX) && UINT64_MAX!= G_MAXUINT64
+#undef uint64_t
+#define uint64_t guint64
+#endif
+
 /* Forwarded declaration */
 struct module_ctx;
 struct config_file;
