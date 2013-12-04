@@ -313,7 +313,7 @@ fuzzy_rule_new (const char *default_symbol, memory_pool_t *pool)
 	rule->mappings = g_hash_table_new (g_direct_hash, g_direct_equal);
 	rule->symbol = default_symbol;
 	memory_pool_add_destructor (pool, (pool_destruct_func)g_hash_table_unref, rule->mappings);
-	rule->read_only = TRUE;
+	rule->read_only = FALSE;
 
 	return rule;
 }
