@@ -22,10 +22,14 @@ function check_whitelist (task)
 		-- check client's from domain
 		local from = task:get_from()
 		if from then
-			local _,_,domain = string.find(from, '@(.+)>?$')
-			local key = h:get_key(domain)
-			if key then
-				task:insert_result(symbol_from, 1)
+			local from_addr = from[1]['addr']
+
+			if from_addr then
+				local _,_,domain = string.find(from_addr, '@(.+)>?$')
+				local key = h:get_key(domain)
+				if key then
+					task:insert_result(symbol_from, 1)
+				end
 			end
 		end
 	end
