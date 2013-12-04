@@ -96,6 +96,9 @@ ucl_hash_search (ucl_hash_t* hashlin, const char *key, unsigned keylen)
 {
 	ucl_hash_node_t *found;
 
+	if (hashlin == NULL) {
+		return NULL;
+	}
 	HASH_FIND (hh, hashlin->buckets, key, keylen, found);
 
 	if (found) {

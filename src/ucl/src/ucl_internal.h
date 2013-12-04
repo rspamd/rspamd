@@ -96,6 +96,7 @@ struct ucl_macro {
 struct ucl_stack {
 	ucl_object_t *obj;
 	struct ucl_stack *next;
+	int level;
 };
 
 struct ucl_chunk {
@@ -209,33 +210,33 @@ ucl_maybe_parse_boolean (ucl_object_t *obj, const unsigned char *start, size_t l
 	bool ret = false, val = false;
 
 	if (len == 5) {
-		if (tolower (p[0]) == 'f' && strncasecmp (p, "false", 5) == 0) {
+		if ((p[0] == 'f' || p[0] == 'F') && strncasecmp (p, "false", 5) == 0) {
 			ret = true;
 			val = false;
 		}
 	}
 	else if (len == 4) {
-		if (tolower (p[0]) == 't' && strncasecmp (p, "true", 4) == 0) {
+		if ((p[0] == 't' || p[0] == 'T') && strncasecmp (p, "true", 4) == 0) {
 			ret = true;
 			val = true;
 		}
 	}
 	else if (len == 3) {
-		if (tolower (p[0]) == 'y' && strncasecmp (p, "yes", 3) == 0) {
+		if ((p[0] == 'y' || p[0] == 'Y') && strncasecmp (p, "yes", 3) == 0) {
 			ret = true;
 			val = true;
 		}
-		if (tolower (p[0]) == 'o' && strncasecmp (p, "off", 3) == 0) {
+		else if ((p[0] == 'o' || p[0] == 'O') && strncasecmp (p, "off", 3) == 0) {
 			ret = true;
 			val = false;
 		}
 	}
 	else if (len == 2) {
-		if (tolower (p[0]) == 'n' && strncasecmp (p, "no", 2) == 0) {
+		if ((p[0] == 'n' || p[0] == 'N') && strncasecmp (p, "no", 2) == 0) {
 			ret = true;
 			val = false;
 		}
-		else if (tolower (p[0]) == 'o' && strncasecmp (p, "on", 2) == 0) {
+		else if ((p[0] == 'o' || p[0] == 'O') && strncasecmp (p, "on", 2) == 0) {
 			ret = true;
 			val = true;
 		}
