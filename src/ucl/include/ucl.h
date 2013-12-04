@@ -104,7 +104,8 @@ enum ucl_type {
 	UCL_STRING,    //!< UCL_STRING
 	UCL_BOOLEAN,   //!< UCL_BOOLEAN
 	UCL_TIME,      //!< UCL_TIME
-	UCL_USERDATA   //!< UCL_USERDATA
+	UCL_USERDATA,  //!< UCL_USERDATA
+	UCL_NULL       //!< UCL_NULL
 };
 
 /**
@@ -201,6 +202,26 @@ ucl_object_new (void)
 	if (new != NULL) {
 		memset (new, 0, sizeof (ucl_object_t));
 		new->ref = 1;
+		new->type = UCL_NULL;
+	}
+	return new;
+}
+
+/**
+ * Create new object with type specified
+ * @param type type of a new object
+ * @return new object
+ */
+static inline ucl_object_t* ucl_object_typed_new (unsigned int type) UCL_WARN_UNUSED_RESULT;
+static inline ucl_object_t *
+ucl_object_typed_new (unsigned int type)
+{
+	ucl_object_t *new;
+	new = malloc (sizeof (ucl_object_t));
+	if (new != NULL) {
+		memset (new, 0, sizeof (ucl_object_t));
+		new->ref = 1;
+		new->type = (type <= UCL_NULL ? type : UCL_NULL);
 	}
 	return new;
 }
