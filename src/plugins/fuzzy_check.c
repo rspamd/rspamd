@@ -167,7 +167,7 @@ parse_flags_string (struct fuzzy_rule *rule, struct config_file *cfg, ucl_object
 			map->symbol = sym;
 			elt = ucl_object_find_key (val, "flag");
 			if (elt != NULL && ucl_obj_toint_safe (elt, &map->fuzzy_flag)) {
-				elt = ucl_object_find_key (val, "weight");
+				elt = ucl_object_find_key (val, "max_score");
 				if (elt != NULL) {
 					map->weight = ucl_obj_todouble (elt);
 				}
