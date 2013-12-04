@@ -38,6 +38,7 @@ OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  
 OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: OFF]"  OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: OFF]"          OFF)
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
+OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -1125,6 +1126,9 @@ FOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 	ELSE(BUILD_PORT)
 		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} "")
 	ENDIF(BUILD_PORT)
+	IF(INSTALL_EXAMPLES MATCHES "ON")
+		INSTALL(FILES ${CONF_FILE} DESTINATION ${EXAMPLESDIR})
+	ENDIF(INSTALL_EXAMPLES MATCHES "ON")
 ENDFOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 
 # Lua plugins

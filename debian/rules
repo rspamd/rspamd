@@ -6,16 +6,20 @@ include /usr/share/dpkg/buildflags.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/cmake.mk
 
-DEB_CMAKE_NORMAL_ARGS+= 			-DCONFDIR=/etc/rspamd \
+DEB_CMAKE_NORMAL_ARGS+= \			
+						-DCONFDIR=/etc/rspamd \
 						-DMANDIR=/usr/share/man \
 						-DRUNDIR=/var/lib/rspamd \
 						-DDBDIR=/var/lib/rspamd \
 						-DLOGDIR=/var/log/rspamd \
 						-DPLUGINSDIR=/usr/share/rspamd \
+						-DEXAMPLESDIR=/usr/share/examples/rspamd \
 						-DLIBDIR=/usr/lib \
 						-DINCLUDEDIR=/usr/include \
 						-DNO_SHARED=ON \
 						-DDEBIAN_BUILD=1 \
+						-DINSTALL_EXAMPLES=ON \
+						-DFORCE_GMIME24=ON \
 						-DRSPAMD_GROUP=rspamd \
 						-DRSPAMD_USER=rspamd
 clean::
