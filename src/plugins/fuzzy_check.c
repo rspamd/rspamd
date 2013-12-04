@@ -131,8 +131,8 @@ static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
 static const gchar hex_digits[] = "0123456789abcdef";
 
 static void fuzzy_symbol_callback (struct worker_task *task, void *unused);
-static void fuzzy_add_handler (gchar **args, struct controller_session *session);
-static void fuzzy_delete_handler (gchar **args,
+static gboolean fuzzy_add_handler (gchar **args, struct controller_session *session);
+static gboolean fuzzy_delete_handler (gchar **args,
 		struct controller_session *session);
 
 /* Initialization */
@@ -148,7 +148,7 @@ module_t fuzzy_check_module = {
 };
 
 static void
-parse_flags_string (struct fuzzy_rule *rule, struct config_file *cfg, ucl_object_t *val)
+parse_flags (struct fuzzy_rule *rule, struct config_file *cfg, ucl_object_t *val)
 {
 	ucl_object_t *elt;
 	struct fuzzy_mapping *map;
@@ -176,7 +176,7 @@ parse_flags_string (struct fuzzy_rule *rule, struct config_file *cfg, ucl_object
 				}
 				/* Add flag to hash table */
 				g_hash_table_insert (rule->mappings, GINT_TO_POINTER (map->fuzzy_flag), map);
-				register_virtual_symbol (&cfg->cache, map->symbol, map->weight);
+				register_virtual_symbol (&cfg->cache, map->symbol, 1.0);
 			}
 			else {
 				msg_err ("fuzzy_map parameter has no flag definition");
@@ -352,7 +352,7 @@ fuzzy_parse_rule (struct config_file *cfg, ucl_object_t *obj)
 	}
 	if ((value = ucl_object_find_key (obj, "fuzzy_map")) != NULL) {
 		while ((cur = ucl_iterate_object (value, &it, true)) != NULL) {
-			parse_flags_string (rule, cfg, cur);
+			parse_flags (rule, cfg, cur);
 		}
 	}
 
@@ -557,7 +557,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	return;
 
   err:
-	msg_err ("got error on IO with server %s:%d, %d, %s", session->server->name, session->server->port, errno, strerror (errno));
+	msg_err ("got error on IO with server %s, %d, %s", session->server->name, errno, strerror (errno));
   ok:
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
 }
@@ -969,7 +969,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 	return TRUE;
 }
 
-static void
+static gboolean
 fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 {
 	struct fuzzy_rule *rule;
@@ -1016,7 +1016,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			msg_warn ("write error");
 		}
 		rspamd_dispatcher_restore (session->dispatcher);
-		return;
+		return FALSE;
 	}
 	cur = fuzzy_module_ctx->fuzzy_rules;
 	while (cur && res) {
@@ -1049,9 +1049,9 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes have been written" CRLF "END" CRLF);
 		}
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-			return;
+			return FALSE;
 		}
-		rspamd_dispatcher_restore (session->dispatcher);
+		return FALSE;
 	}
 	else if (!processed) {
 		session->state = STATE_REPLY;
@@ -1062,13 +1062,15 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no fuzzy rules matched" CRLF "END" CRLF);
 		}
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-			return;
+			return FALSE;
 		}
-		rspamd_dispatcher_restore (session->dispatcher);
+		return FALSE;
 	}
+
+	return TRUE;
 }
 
-static void
+static gboolean
 fuzzy_controller_handler (gchar **args, struct controller_session *session, gint cmd)
 {
 	gchar                           *arg, out_buf[BUFSIZ], *err_str;
@@ -1082,22 +1084,22 @@ fuzzy_controller_handler (gchar **args, struct controller_session *session, gint
 			msg_info ("empty content length");
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Fuzzy command requires Content-Length" CRLF CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return;
+				return FALSE;
 			}
 			session->state = STATE_REPLY;
 			rspamd_dispatcher_restore (session->dispatcher);
-			return;
+			return FALSE;
 		}
 		errno = 0;
 		size = strtoul (arg, &err_str, 10);
 		if (errno != 0 || (err_str && *err_str != '\0')) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn size is invalid" CRLF CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return;
+				return FALSE;
 			}
 			session->state = STATE_REPLY;
 			rspamd_dispatcher_restore (session->dispatcher);
-			return;
+			return FALSE;
 		}
 		arg = g_hash_table_lookup (session->kwargs, "value");
 		if (arg) {
@@ -1125,20 +1127,20 @@ fuzzy_controller_handler (gchar **args, struct controller_session *session, gint
 			msg_info ("empty content length");
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "fuzzy command requires length as argument" CRLF "END" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return;
+				return FALSE;
 			}
 			session->state = STATE_REPLY;
-			return;
+			return FALSE;
 		}
 		errno = 0;
 		size = strtoul (arg, &err_str, 10);
 		if (errno != 0 || (err_str && *err_str != '\0')) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
 			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return;
+				return FALSE;
 			}
 			session->state = STATE_REPLY;
-			return;
+			return FALSE;
 		}
 		/* Process value */
 		arg = args[1];
@@ -1171,16 +1173,18 @@ fuzzy_controller_handler (gchar **args, struct controller_session *session, gint
 	sargs[1] = value;
 	sargs[2] = flag;
 	session->other_data = sargs;
+
+	return TRUE;
 }
 
-static void
+static gboolean
 fuzzy_add_handler (gchar **args, struct controller_session *session)
 {
-	fuzzy_controller_handler (args, session, FUZZY_WRITE);
+	return fuzzy_controller_handler (args, session, FUZZY_WRITE);
 }
 
-static void
+static gboolean
 fuzzy_delete_handler (gchar **args, struct controller_session *session)
 {
-	fuzzy_controller_handler (args, session, FUZZY_DEL);
+	return fuzzy_controller_handler (args, session, FUZZY_DEL);
 }

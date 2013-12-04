@@ -1604,10 +1604,12 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->state = STATE_REPLY;
 		break;
 	case STATE_OTHER:
-		if (session->other_handler) {
-			session->other_handler (session, in);
-		}
 		rspamd_dispatcher_pause (session->dispatcher);
+		if (session->other_handler) {
+			if (!session->other_handler (session, in)) {
+				return FALSE;
+			}
+		}
 		break;
 	case STATE_WAIT:
 		rspamd_dispatcher_pause (session->dispatcher);
@@ -1618,9 +1620,14 @@ controller_read_socket (f_str_t * in, void *arg)
 	}
 
 	if (session->state == STATE_REPLY || session->state == STATE_QUIT) {
-		rspamd_dispatcher_restore (session->dispatcher);
+		/* In case of normal session we restore read state, for restful session we need to terminate immediately */
+		if (!session->restful) {
+			rspamd_dispatcher_restore (session->dispatcher);
+		}
+		else {
+			return FALSE;
+		}
 	}
-
 	return TRUE;
 }
 

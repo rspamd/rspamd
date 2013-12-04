@@ -135,7 +135,7 @@ union sa_union {
  */
 struct controller_command;
 struct controller_session;
-typedef void (*controller_func_t)(gchar **args, struct controller_session *session);
+typedef gboolean (*controller_func_t)(gchar **args, struct controller_session *session);
 
 struct controller_session {
 	struct rspamd_worker *worker;								/**< pointer to worker structure (controller in fact) */
@@ -168,7 +168,7 @@ struct controller_session {
 	f_str_t *learn_buf;											/**< learn input									*/
 	GList *parts;												/**< extracted mime parts							*/
 	gint in_class;												/**< positive or negative learn						*/
-	void (*other_handler)(struct controller_session *session, 
+	gboolean (*other_handler)(struct controller_session *session,
 			f_str_t *in);					/**< other command handler to execute at the end of processing */
 	void *other_data;											/**< and its data 									*/
 	controller_func_t custom_handler;							/**< custom command handler							*/
