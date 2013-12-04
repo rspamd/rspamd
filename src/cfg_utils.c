@@ -778,7 +778,9 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 }
 
 gboolean
-read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar *convert_to)
+read_rspamd_config (struct config_file *cfg, const gchar *filename,
+		const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
+		gpointer logger_ud)
 {
 	struct stat                     st;
 	gint                            fd;
@@ -786,7 +788,7 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 	const gchar                    *ext;
 	GMarkupParseContext            *ctx;
 	GError                         *err = NULL;
-	struct rspamd_rcl_section     *top;
+	struct rspamd_rcl_section     *top, *logger;
 	gboolean res, is_xml = FALSE;
 	struct rspamd_xml_userdata ud;
 	struct ucl_parser *parser;
@@ -867,6 +869,12 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 
 	top = rspamd_rcl_config_init ();
 	err = NULL;
+
+	HASH_FIND_STR(top, "log", logger);
+	if (logger != NULL) {
+		logger->fin = logger_fin;
+		logger->fin_ud = logger_ud;
+	}
 
 	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
 		msg_err ("rcl parse error: %s", err->message);

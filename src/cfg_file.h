@@ -502,7 +502,9 @@ gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const g
 /*
  * Read XML configuration file
  */
-gboolean read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar *convert_to);
+gboolean read_rspamd_config (struct config_file *cfg,
+		const gchar *filename, const gchar *convert_to,
+		rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud);
 
 /*
  * Register symbols of classifiers inside metrics

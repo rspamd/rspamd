@@ -299,17 +299,14 @@ drop_priv (struct rspamd_main *rspamd)
 }
 
 static void
-config_logger (struct rspamd_main *rspamd, GQuark type, gboolean is_fatal)
+config_logger (struct config_file *cfg, gpointer ud)
 {
-	rspamd_set_logger (rspamd->cfg->log_type, type, rspamd);
-	if (open_log_priv (rspamd->logger, rspamd->workers_uid, rspamd->workers_gid) == -1) {
-		if (is_fatal) {
-			fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
-			exit (EXIT_FAILURE);
-		}
-		else {
-			msg_err ("cannot log to file, logfile unaccessable");
-		}
+	struct rspamd_main *rm = ud;
+
+	rspamd_set_logger (cfg->log_type, g_quark_try_string ("main"), rm);
+	if (open_log_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
+		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
+		exit (EXIT_FAILURE);
 	}
 }
 
@@ -366,7 +363,6 @@ reread_config (struct rspamd_main *rspamd)
 	gchar                           *cfg_file;
 	GList                          *l;
 	struct filter                  *filt;
-	GQuark							type;
 
 	tmp_cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	if (tmp_cfg) {
@@ -393,8 +389,6 @@ reread_config (struct rspamd_main *rspamd)
 			if (is_debug) {
 				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 			}
-			type = g_quark_try_string ("main");
-			config_logger (rspamd, type, FALSE);
 			/* Pre-init of cache */
 			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
 			rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
@@ -723,7 +717,8 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 	struct filter                  *filt;
 	struct module_ctx              *cur_module = NULL;
 
-	if (! read_rspamd_config (cfg, cfg->cfg_name, convert_config)) {
+	if (! read_rspamd_config (cfg, cfg->cfg_name, convert_config,
+			config_logger, rspamd_main)) {
 		return FALSE;
 	}
 
@@ -1158,8 +1153,6 @@ main (gint argc, gchar **argv, gchar **env)
 	getrlimit (RLIMIT_STACK, &rlim);
 	rlim.rlim_cur = 100 * 1024 * 1024;
 	setrlimit (RLIMIT_STACK, &rlim);
-
-	config_logger (rspamd_main, type, TRUE);
 
 	/* Create rolling history */
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);

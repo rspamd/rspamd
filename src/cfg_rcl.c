@@ -1198,6 +1198,9 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 				}
 			}
 		}
+		if (cur->fin) {
+			cur->fin (cfg, cur->fin_ud);
+		}
 	}
 
 	cfg->rcl_obj = obj;

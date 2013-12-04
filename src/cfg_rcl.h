@@ -66,6 +66,13 @@ struct rspamd_rcl_struct_parser {
 typedef gboolean (*rspamd_rcl_handler_t) (struct config_file *cfg, ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
+/**
+ * A handler type that is called at the end of section parsing
+ * @param cfg configuration
+ * @param ud user data
+ */
+typedef void (*rspamd_rcl_section_fin_t)(struct config_file *cfg, gpointer ud);
+
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;
 	const gchar *key;
@@ -82,6 +89,8 @@ struct rspamd_rcl_section {
 	UT_hash_handle hh;					/** hash handle */
 	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
 	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
+	rspamd_rcl_section_fin_t fin; /** called at the end of section parsing */
+	gpointer fin_ud;
 };
 
 /**
