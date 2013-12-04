@@ -870,7 +870,7 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename,
 	top = rspamd_rcl_config_init ();
 	err = NULL;
 
-	HASH_FIND_STR(top, "log", logger);
+	HASH_FIND_STR(top, "logging", logger);
 	if (logger != NULL) {
 		logger->fin = logger_fin;
 		logger->fin_ud = logger_ud;
