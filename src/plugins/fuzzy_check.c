@@ -85,6 +85,7 @@ struct fuzzy_rule {
 	GList *mime_types;
 	double max_score;
 	gboolean read_only;
+	gboolean skip_unknown;
 };
 
 struct fuzzy_ctx {
@@ -345,8 +346,14 @@ fuzzy_parse_rule (struct config_file *cfg, ucl_object_t *obj)
 	if ((value = ucl_object_find_key (obj, "max_score")) != NULL) {
 		rule->max_score = ucl_obj_todouble (value);
 	}
+	if ((value = ucl_object_find_key (obj,  "symbol")) != NULL) {
+		rule->symbol = ucl_obj_tostring (value);
+	}
 	if ((value = ucl_object_find_key (obj, "read_only")) != NULL) {
 		rule->read_only = ucl_obj_toboolean (value);
+	}
+	if ((value = ucl_object_find_key (obj, "skip_unknown")) != NULL) {
+		rule->skip_unknown = ucl_obj_toboolean (value);
 	}
 
 	if ((value = ucl_object_find_key (obj, "servers")) != NULL) {
@@ -541,11 +548,14 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 				symbol = map->symbol;
 				nval = fuzzy_normalize (value, map->weight);
 			}
-			msg_info ("<%s>, found fuzzy hash '%s' with weight: %.2f, in list: %s:%d",
-					session->task->message_id, fuzzy_to_string (session->h), nval, symbol, flag);
-			rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
-			insert_result (session->task, symbol, nval, g_list_prepend (NULL, 
+			msg_info ("<%s>, found fuzzy hash '%s' with weight: %.2f, in list: %s:%d%s",
+					session->task->message_id, fuzzy_to_string (session->h), nval, symbol,
+					flag, map == NULL ? "(unknown)" : "");
+			if (map != NULL || !session->rule->skip_unknown) {
+				rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
+				insert_result (session->task, symbol, nval, g_list_prepend (NULL,
 						memory_pool_strdup (session->task->task_pool, buf)));
+			}
 		}
 		goto ok;
 	}
