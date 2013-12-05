@@ -415,7 +415,7 @@ gboolean parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **add
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-gboolean parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
+gboolean parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str);
 
 /**
  * Init default values

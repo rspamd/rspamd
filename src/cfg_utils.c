@@ -164,7 +164,7 @@ parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint 
 }
 
 gboolean
-parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
+parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
 

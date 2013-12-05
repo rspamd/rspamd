@@ -437,7 +437,6 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
 	struct worker_conf *wrk;
-	struct rspamd_worker_bind_conf *bcf;
 	struct rspamd_worker_cfg_parser *wparser;
 	struct rspamd_worker_param_parser *whandler;
 
@@ -475,13 +474,10 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
 			}
-			bcf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
-			if (!parse_host_port_priority (cfg->cfg_pool, worker_bind, &bcf->bind_host,
-					&bcf->bind_port, NULL)) {
+			if (!parse_bind_line (cfg, wrk, worker_bind)) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse bind line: %s", worker_bind);
 				return FALSE;
 			}
-			LL_PREPEND (wrk->bind_conf, bcf);
 		}
 	}
 
