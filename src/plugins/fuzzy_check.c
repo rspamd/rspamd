@@ -342,6 +342,13 @@ fuzzy_parse_rule (struct config_file *cfg, ucl_object_t *obj)
 		}
 	}
 
+	if ((value = ucl_object_find_key (obj, "max_score")) != NULL) {
+		rule->max_score = ucl_obj_todouble (value);
+	}
+	if ((value = ucl_object_find_key (obj, "read_only")) != NULL) {
+		rule->read_only = ucl_obj_toboolean (value);
+	}
+
 	if ((value = ucl_object_find_key (obj, "servers")) != NULL) {
 		if (value->type == UCL_ARRAY) {
 			value = value->value.av;
@@ -365,13 +372,6 @@ fuzzy_parse_rule (struct config_file *cfg, ucl_object_t *obj)
 		if (rule->symbol != fuzzy_module_ctx->default_symbol) {
 			register_virtual_symbol (&cfg->cache, rule->symbol, 1.0);
 		}
-	}
-
-	if ((value = ucl_object_find_key (obj, "max_score")) != NULL) {
-		rule->max_score = ucl_obj_todouble (value);
-	}
-	if ((value = ucl_object_find_key (obj, "read_only")) != NULL) {
-		rule->read_only = ucl_obj_toboolean (value);
 	}
 
 	return 0;
