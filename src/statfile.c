@@ -310,7 +310,7 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	if (!forced && labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
 			&& size > sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
-		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", st.st_size, size);
+		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", (size_t)st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
 	}
 	else if (size < sizeof (struct stat_file)) {
