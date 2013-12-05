@@ -307,10 +307,13 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	}
 
 	memory_pool_lock_mutex (pool->lock);
-	if (!forced && abs (st.st_size - size) > (gint)sizeof (struct stat_file)) {
+	if (!forced && size > sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
 		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
+	}
+	else if (size < sizeof (struct stat_file)) {
+		msg_err ("requested to shrink statfile to %Hz but it is too small", size);
 	}
 
 	new_file = &pool->files[pool->opened++];
