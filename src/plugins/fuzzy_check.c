@@ -595,6 +595,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	const gchar                     *cmd_name;
 	gint                            r;
 
+	cmd_name = (session->cmd == FUZZY_WRITE ? "add" : "delete");
 	if (what == EV_WRITE) {
 		/* Send command to storage */
 		cmd.blocksize = session->h->block_size;
@@ -617,7 +618,6 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		}
 	}
 	else if (what == EV_READ) {
-		cmd_name = (session->cmd == FUZZY_WRITE ? "add" : "delete");
 		if (read (fd, buf, sizeof (buf)) == -1) {
 			msg_info ("cannot %s fuzzy hash for message <%s>, list %s:%d", cmd_name,
 					session->task->message_id, session->rule->symbol, session->flag);
@@ -647,6 +647,10 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
 	else {
 		errno = ETIMEDOUT;
+		if (*(session->err) == NULL) {
+			g_set_error (session->err,
+					g_quark_from_static_string ("fuzzy check"), EINVAL, "%s fuzzy, IO timeout", cmd_name);
+		}
 		goto err;	
 	}
 
