@@ -8,7 +8,7 @@
 %define USE_JUDY         0
 
 Name:           rspamd
-Version:        0.6.1
+Version:        0.6.2
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
@@ -16,7 +16,7 @@ Group:          System Environment/Daemons
 # BSD License (two clause)
 # http://www.freebsd.org/copyright/freebsd-license.html
 License:        BSD
-URL:            https://bitbucket.org/vstakhov/rspamd/ 
+URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 %if USE_JUDY
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel
@@ -137,6 +137,9 @@ fi
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
 
 %changelog
+* Tue Dec 06 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.2-1
+- Update to 0.6.2.
+
 * Tue Nov 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
 - Update to 0.6.0.
 

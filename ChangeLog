@@ -1,3 +1,22 @@
+0.6.2:
+	* Fuzzy check module has been reworked:
+	 - now fuzzy_check operates with a group of rules, that define which
+	 servers sre to be checked;
+	 - it is possible to specify read_only groups to avoid learning errors;
+	 - turn fuzzy_check to one_shot mode permanently;
+	 - fuzzy_check module configuration is now incompatible with the previous
+	 versions.
+	* Imported bugfixes from libucl.
+	* Fixed whitelist plugin.
+	* Fixed statfiles resizing.
+	* Improved logging initialization order.
+	* Fixed race condition in the controller worker.
+
+0.6.1:
+	* Critical bugfixes:
+	 - fixed build system;
+	 - fixed in_class setting in bayes learning;
+
 0.6.0:
 	* Use UCL instead xml for configuration (https://github.com/vstakhov/libucl)
 	* Fix statistics module normalization
