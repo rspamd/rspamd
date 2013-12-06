@@ -553,7 +553,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 					flag, map == NULL ? "(unknown)" : "");
 			if (map != NULL || !session->rule->skip_unknown) {
 				rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
-				insert_result (session->task, symbol, nval, g_list_prepend (NULL,
+				insert_result_single (session->task, symbol, nval, g_list_prepend (NULL,
 						memory_pool_strdup (session->task->task_pool, buf)));
 			}
 		}
