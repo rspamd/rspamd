@@ -116,11 +116,15 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 				w *= metric_res->grow_factor;
 				metric_res->grow_factor *= metric->grow_factor;
 			}
-			else if (w > 0) {
-				metric_res->grow_factor = metric->grow_factor;
-			}
 			s->score += w;
 			metric_res->score += w;
+		}
+		else {
+			if (fabs (s->score) < fabs (w)) {
+				/* Replace less weight with a bigger one */
+				metric_res->score = metric_res->score - s->score + w;
+				s->score = w;
+			}
 		}
 	}
 	else {

@@ -277,7 +277,7 @@ fuzzy_normalize (gint32 in, double weight)
 		return 0;
 	}
 #ifdef HAVE_TANH
-	return tanh ((double)in / weight);
+	return tanh (G_E * (double)in / weight);
 #else
 	return (in < weight ? in / weight : weight);
 #endif
@@ -287,10 +287,11 @@ static const gchar *
 fuzzy_to_string (fuzzy_hash_t *h)
 {
 	static gchar strbuf [FUZZY_HASHLEN * 2 + 1];
+	const int max_print = 5;
 	gint                            i;
 	guint8 byte;
 
-	for (i = 0; i < FUZZY_HASHLEN; i ++) {
+	for (i = 0; i < max_print; i ++) {
 		byte = h->hash_pipe[i];
 		if (byte == '\0') {
 			break;
@@ -298,8 +299,12 @@ fuzzy_to_string (fuzzy_hash_t *h)
 		strbuf[i * 2] = hex_digits[byte >> 4];
 		strbuf[i * 2 + 1] = hex_digits[byte & 0xf];
 	}
-
-	strbuf[i * 2] = '\0';
+	if (i == max_print) {
+		memcpy (&strbuf[i * 2], "...", 4);
+	}
+	else {
+		strbuf[i * 2] = '\0';
+	}
 
 	return strbuf;
 }
@@ -587,6 +592,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	struct fuzzy_learn_session     *session = arg;
 	struct fuzzy_cmd                cmd;
 	gchar                           buf[512];
+	const gchar                     *cmd_name;
 	gint                            r;
 
 	if (what == EV_WRITE) {
@@ -611,9 +617,10 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		}
 	}
 	else if (what == EV_READ) {
+		cmd_name = (session->cmd == FUZZY_WRITE ? "add" : "delete");
 		if (read (fd, buf, sizeof (buf)) == -1) {
-			msg_info ("cannot add fuzzy hash for message <%s> to list %s:%d", session->task->message_id,
-					session->rule->symbol, session->flag);
+			msg_info ("cannot %s fuzzy hash for message <%s>, list %s:%d", cmd_name,
+					session->task->message_id, session->rule->symbol, session->flag);
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
 						g_quark_from_static_string ("fuzzy check"),
@@ -622,17 +629,18 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 			goto err;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
-			msg_info ("added fuzzy hash '%s' to list: %s:%d for message <%s>",
+			msg_info ("%s fuzzy hash '%s', list: %s:%d for message <%s>", cmd_name,
 					fuzzy_to_string (session->h), session->rule->symbol,
 					session->flag, session->task->message_id);
 			goto ok;
 		}
 		else {
-			msg_info ("cannot add fuzzy hash for message <%s> to list %s:%d", session->task->message_id,
+			msg_info ("cannot %s fuzzy hash '%s' for message <%s>, list %s:%d", cmd_name,
+					fuzzy_to_string (session->h), session->task->message_id,
 					session->rule->symbol, session->flag);
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
-						g_quark_from_static_string ("fuzzy check"), EINVAL, "add fuzzy error");
+						g_quark_from_static_string ("fuzzy check"), EINVAL, "%s fuzzy error", cmd_name);
 			}
 			goto ok;
 		}
