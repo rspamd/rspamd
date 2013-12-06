@@ -235,7 +235,7 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 	}
 
 	pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
-	while (old_size - (pos - map) >= sizeof (block)) {
+	while (old_size - (pos - map) >= sizeof (struct stat_file_block)) {
 		block = (struct stat_file_block *)pos;
 		if (block->hash1 != 0 && block->value != 0) {
 			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, 0, block->value, FALSE);
