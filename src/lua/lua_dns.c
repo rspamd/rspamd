@@ -33,6 +33,7 @@ LUA_FUNCTION_DEF (dns_resolver, init);
 LUA_FUNCTION_DEF (dns_resolver, resolve_a);
 LUA_FUNCTION_DEF (dns_resolver, resolve_ptr);
 LUA_FUNCTION_DEF (dns_resolver, resolve_txt);
+LUA_FUNCTION_DEF (dns_resolver, resolve_mx);
 
 static const struct luaL_reg    dns_resolverlib_f[] = {
 	LUA_INTERFACE_DEF (dns_resolver, init),
@@ -43,6 +44,7 @@ static const struct luaL_reg    dns_resolverlib_m[] = {
 	LUA_INTERFACE_DEF (dns_resolver, resolve_a),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_ptr),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_txt),
+	LUA_INTERFACE_DEF (dns_resolver, resolve_mx),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -122,6 +124,24 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 			while (cur) {
 				elt = cur->data;
 				lua_pushstring (cd->L, elt->txt.data);
+				lua_rawseti (cd->L, -2, ++i);
+				cur = g_list_next (cur);
+			}
+			lua_pushnil (cd->L);
+
+		}
+		else if (reply->type == DNS_REQUEST_MX) {
+			lua_newtable (cd->L);
+			cur = reply->elements;
+			while (cur) {
+				elt = cur->data;
+				/* mx['name'], mx['priority'] */
+				lua_newtable (cd->L);
+				lua_set_table_index (cd->L, "name", elt->mx.name);
+				lua_pushstring (cd->L, "priority");
+				lua_pushnumber (cd->L, elt->mx.priority);
+				lua_settable (cd->L, -3);
+
 				lua_rawseti (cd->L, -2, ++i);
 				cur = g_list_next (cur);
 			}
@@ -280,6 +300,21 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 
 	if (dns_resolver) {
 		return lua_dns_resolver_resolve_common (L, dns_resolver, DNS_REQUEST_TXT);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static int
+lua_dns_resolver_resolve_mx (lua_State *L)
+{
+	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
+
+	if (dns_resolver) {
+		return lua_dns_resolver_resolve_common (L, dns_resolver, DNS_REQUEST_MX);
 	}
 	else {
 		lua_pushnil (L);
