@@ -31,6 +31,11 @@
 #include "filter.h"
 #include "message.h"
 
+#ifdef HAVE_OPENSSL
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#endif
+
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
 /* More than 2 log messages per second */
@@ -2386,6 +2391,30 @@ restart:
 	return p - buf;
 #endif
 }
+
+void
+rspamd_prng_seed (void)
+{
+	guint32                          rand_seed = 0;
+#ifdef HAVE_OPENSSL
+	gchar                            rand_bytes[sizeof (guint32)];
+
+	/* Init random generator */
+	if (RAND_bytes (rand_bytes, sizeof (rand_bytes)) != 1) {
+		msg_err ("cannot seed random generator using openssl: %s, using time",
+				ERR_error_string (ERR_get_error (), NULL));
+		rand_seed = time (NULL);
+	}
+	else {
+		memcpy (&rand_seed, rand_bytes, sizeof (guint32));
+	}
+#else
+	rand_seed = time (NULL);
+#endif
+
+	g_random_set_seed (rand_seed);
+}
+
 /*
  * vi:ts=4
  */

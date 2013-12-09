@@ -440,16 +440,8 @@ time_t parse_http_date (const gchar *header, gsize len);
 gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 
 /**
- * Expand path that may contain configuration variables:
- * $CONFDIR - configuration directory
- * $RUNDIR - local states directory
- * $DBDIR - databases dir
- * $LOGDIR - logs dir
- * $PLUGINSDIR - plugins dir
- * $PREFIX - installation prefix
- * $VERSION - rspamd version
- * @param pool to use
- * @param path path to expand
+ * Seed glib prng using openssl if possible
  */
+void rspamd_prng_seed (void);
 
 #endif

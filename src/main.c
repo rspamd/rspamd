@@ -991,10 +991,6 @@ main (gint argc, gchar **argv, gchar **env)
 	GList                           *l;
 	worker_t                       **pworker;
 	GQuark                           type;
-#ifdef HAVE_OPENSSL
-	gchar                            rand_bytes[sizeof (guint32)];
-	guint32                          rand_seed;
-#endif
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
@@ -1049,20 +1045,12 @@ main (gint argc, gchar **argv, gchar **env)
 #ifdef HAVE_OPENSSL
 	ERR_load_crypto_strings ();
 
-	/* Init random generator */
-	if (RAND_bytes (rand_bytes, sizeof (rand_bytes)) != 1) {
-		msg_err ("cannot seed random generator using openssl: %s, using time", ERR_error_string (ERR_get_error (), NULL));
-		g_random_set_seed (time (NULL));
-	}
-	else {
-		memcpy (&rand_seed, rand_bytes, sizeof (guint32));
-		g_random_set_seed (rand_seed);
-	}
-
 	OpenSSL_add_all_algorithms ();
 	OpenSSL_add_all_digests ();
 	OpenSSL_add_all_ciphers ();
 #endif
+
+	rspamd_prng_seed ();
 
 	/* First set logger to console logger */
 	rspamd_set_logger (RSPAMD_LOG_CONSOLE, type, rspamd_main);
