@@ -82,6 +82,8 @@ struct rspamd_dns_request {
 	struct timeval tv;
 	guint retransmits;
 	guint16 id;
+	guint16 port;
+	guint32 key;
 	struct rspamd_async_session *session;
 	struct rspamd_dns_reply *reply;
 	guint8 *packet;

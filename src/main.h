@@ -126,6 +126,7 @@ struct process_exception {
  */
 union sa_union {
 	struct sockaddr_storage ss;
+	struct sockaddr sa;
 	struct sockaddr_in s4;
 	struct sockaddr_in6 s6;
 };
