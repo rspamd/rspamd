@@ -806,15 +806,17 @@ dns_fin_cb (gpointer arg)
 static guint8 *
 decompress_label (guint8 *begin, guint16 *len, guint16 max)
 {
-	guint16 offset = DNS_COMPRESSION_BITS;
-	offset = (*len) ^ (offset << 8);
+	guint16 offset = (*len);
 
 	if (offset > max) {
+		msg_info ("invalid DNS compression pointer: %d max is %d", (gint)offset, (gint)max);
 		return NULL;
 	}
 	*len = *(begin + offset);
 	return begin + offset;
 }
+
+#define UNCOMPRESS_DNS_OFFSET(p) (((*(p)) ^ DNS_COMPRESSION_BITS) << 8) + *((p) + 1)
 
 static guint8 *
 dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
@@ -844,10 +846,9 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
 		}
 		/* This may be compressed, so we need to decompress it */
 		if (len1 & DNS_COMPRESSION_BITS) {
-			len1 = ((*p) << 8) + *(p + 1);
+			len1 = UNCOMPRESS_DNS_OFFSET(p);
 			l1 = decompress_label (in, &len1, len);
 			if (l1 == NULL) {
-				msg_info ("invalid DNS pointer");
 				return NULL;
 			}
 			decompressed ++;
@@ -859,7 +860,7 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
 			p += len1;
 		}
 		if (len2 & DNS_COMPRESSION_BITS) {
-			len2 = ((*p) << 8) + *(p + 1);
+			len2 = UNCOMPRESS_DNS_OFFSET(p);
 			l2 = decompress_label (req->packet, &len2, len);
 			if (l2 == NULL) {
 				msg_info ("invalid DNS pointer");
@@ -899,14 +900,15 @@ dns_request_reply_cmp (struct rspamd_dns_request *req, guint8 *in, gint len)
 #define MAX_RECURSION_LEVEL 10
 
 static gboolean
-dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_reply *rep, gint *remain, gboolean make_name)
+dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_reply *rep,
+		gint *remain, gboolean make_name)
 {
 	guint16 namelen = 0;
-	guint8 *p = *pos, *begin = *pos, *l, *t, *end = *pos + *remain;
+	guint8 *p = *pos, *begin = *pos, *l, *t, *end = *pos + *remain, *new_pos = *pos;
 	guint16 llen;
-	gint offset = -1;
-	gint length = *remain;
+	gint length = *remain, new_remain = *remain;
 	gint ptrs = 0, labels = 0;
+	gboolean got_compression = FALSE;
 
 	/* First go through labels and calculate name length */
 	while (p - begin < length) {
@@ -916,34 +918,52 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 		}
 		llen = *p;
 		if (llen == 0) {
+			if (!got_compression) {
+				/* In case of compression we have already decremented the processing position */
+				new_remain -= sizeof (guint8);
+				new_pos += sizeof (guint8);
+			}
 			break;
 		}
-		else if (llen & DNS_COMPRESSION_BITS) {
-			ptrs ++;
-			llen = ((*p) << 8) + *(p + 1);
-			l = decompress_label (in, &llen, end - in);
-			if (l == NULL) {
-				msg_info ("invalid DNS pointer");
+		else if ((llen & DNS_COMPRESSION_BITS)) {
+			if (end - p > 1) {
+				ptrs ++;
+				llen = UNCOMPRESS_DNS_OFFSET(p);
+				l = decompress_label (in, &llen, end - in);
+				if (l == NULL) {
+					msg_info ("invalid DNS pointer");
+					return FALSE;
+				}
+				if (!got_compression) {
+					/* Our label processing is finished actually */
+					new_remain -= sizeof (guint16);
+					new_pos += sizeof (guint16);
+					got_compression = TRUE;
+				}
+				if (l < in || l > begin + length) {
+					msg_warn  ("invalid pointer in DNS packet");
+					return FALSE;
+				}
+				begin = l;
+				length = end - begin;
+				p = l + *l + 1;
+				namelen += *l;
+				labels ++;
+			}
+			else {
+				msg_warn ("DNS packet has incomplete compressed label, input length: %d bytes, remain: %d",
+						*remain, new_remain);
 				return FALSE;
 			}
-			if (offset < 0) {
-				/* Set offset strictly */
-				offset = p - begin + 2;
-			}
-			if (l < in || l > begin + length) {
-				msg_warn  ("invalid pointer in DNS packet");
-				return FALSE;
-			}
-			begin = l;
-			length = end - begin;
-			p = l + *l + 1;
-			namelen += *l;
-			labels ++;
 		}
 		else {
-			namelen += *p;
-			p += *p + 1;
+			namelen += llen;
+			p += llen + 1;
 			labels ++;
+			if (!got_compression) {
+				new_remain -= llen + 1;
+				new_pos += llen + 1;
+			}
 		}
 	}
 
@@ -962,7 +982,7 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 			break;
 		}
 		else if (llen & DNS_COMPRESSION_BITS) {
-			llen = ((*p) << 8) + *(p + 1);
+			llen = UNCOMPRESS_DNS_OFFSET(p);
 			l = decompress_label (in, &llen, end - in);
 			begin = l;
 			length = end - begin;
@@ -980,11 +1000,8 @@ dns_parse_labels (guint8 *in, gchar **target, guint8 **pos, struct rspamd_dns_re
 	}
 	*(t - 1) = '\0';
 end:
-	if (offset < 0) {
-		offset = p - begin + 1;
-	}
-	*remain -= offset;
-	*pos += offset;
+	*remain = new_remain;
+	*pos = new_pos;
 
 	return TRUE;
 }
@@ -1004,8 +1021,8 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		msg_info ("bad RR name");
 		return -1;
 	}
-	if ((gint)(p - *pos) >= (gint)(*remain - sizeof (guint16) * 5) || *remain <= 0) {
-		msg_info ("stripped dns reply");
+	if (*remain < (gint)sizeof (guint16) * 6) {
+		msg_info ("stripped dns reply: %d bytes remain", *remain);
 		return -1;
 	}
 	GET16 (type);
@@ -1023,6 +1040,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 			if (!(datalen & 0x3) && datalen <= *remain) {
 				memcpy (&elt->a.addr[0], p, sizeof (struct in_addr));
 				p += datalen;
+				*remain -= datalen;
 				parsed = TRUE;
 			}
 			else {
@@ -1035,11 +1053,13 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_AAAA:
 		if (rep->request->type != DNS_REQUEST_AAA) {
 			p += datalen;
+			*remain -= datalen;
 		}
 		else {
 			if (datalen == sizeof (struct in6_addr) && datalen <= *remain) {
 				memcpy (&elt->aaa.addr, p, sizeof (struct in6_addr));
 				p += datalen;
+				*remain -= datalen;
 				parsed = TRUE;
 			}
 			else {
@@ -1052,6 +1072,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_PTR:
 		if (rep->request->type != DNS_REQUEST_PTR) {
 			p += datalen;
+			*remain -= datalen;
 		}
 		else {
 			if (! dns_parse_labels (in, &elt->ptr.name, &p, rep, remain, TRUE)) {
@@ -1064,10 +1085,10 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_MX:
 		if (rep->request->type != DNS_REQUEST_MX) {
 			p += datalen;
+			*remain -= datalen;
 		}
 		else {
 			GET16 (elt->mx.priority);
-			datalen -= sizeof (guint16);
 			if (! dns_parse_labels (in, &elt->mx.name, &p, rep, remain, TRUE)) {
 				msg_info ("invalid labels in MX record");
 				return -1;
@@ -1078,6 +1099,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_TXT:
 		if (rep->request->type != DNS_REQUEST_TXT) {
 			p += datalen;
+			*remain -= datalen;
 		}
 		else {
 			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
@@ -1091,6 +1113,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 					memcpy (elt->txt.data + copied, p + 1, txtlen);
 					copied += txtlen;
 					p += txtlen + 1;
+					*remain -= txtlen + 1;
 				}
 				else {
 					break;
@@ -1103,6 +1126,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_SPF:
 		if (rep->request->type != DNS_REQUEST_SPF) {
 			p += datalen;
+			*remain -= datalen;
 		}
 		else {
 			copied = 0;
@@ -1113,6 +1137,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 					memcpy (elt->txt.data + copied, p + 1, txtlen);
 					copied += txtlen;
 					p += txtlen + 1;
+					*remain -= txtlen + 1;
 				}
 				else {
 					break;
@@ -1125,6 +1150,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_SRV:
 		if (rep->request->type != DNS_REQUEST_SRV) {
 			p += datalen;
+			*remain -= datalen;
 		}
 		else {
 			if (p - *pos > (gint)(*remain - sizeof (guint16) * 3)) {
@@ -1144,13 +1170,14 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	case DNS_T_CNAME:
 		/* Skip cname records */
 		p += datalen;
+		*remain -= datalen;
 		break;
 	default:
 		msg_debug ("unexpected RR type: %d", type);
 		p += datalen;
+		*remain -= datalen;
 		break;
 	}
-	*remain -= datalen;
 	*pos = p;
 
 	if (parsed) {
