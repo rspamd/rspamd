@@ -912,6 +912,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 	GList                           *cur;
 	gchar                           *checksum;
 	fuzzy_hash_t                    fake_fuzzy;
+	gboolean                        processed = FALSE;
 
 	/* Plan new event for writing */
 	cur = task->text_parts;
@@ -933,6 +934,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 			/* Cannot write hash */
 			return FALSE;
 		}
+		processed = TRUE;
 		cur = g_list_next (cur);
 	}
 
@@ -956,6 +958,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 
 					msg_info ("save hash of image: [%s] to list: %d", checksum, flag);
 					g_free (checksum);
+					processed = TRUE;
 				}
 			}
 		}
@@ -981,6 +984,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 						mime_part->type->type, mime_part->type->subtype,
 						checksum, flag);
 				g_free (checksum);
+				processed = TRUE;
 			}
 		}
 		cur = g_list_next (cur);
@@ -988,7 +992,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 
 	memory_pool_add_destructor (session->session_pool, (pool_destruct_func)free_task_soft, task);
 
-	return TRUE;
+	return processed;
 }
 
 static gboolean
@@ -1055,9 +1059,11 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 			continue;
 		}
 
-		processed = TRUE;
-
 		res = fuzzy_process_rule (session, rule, task, err, cmd, flag, value, saved);
+
+		if (res) {
+			processed = TRUE;
+		}
 
 		cur = g_list_next (cur);
 	}
