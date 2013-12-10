@@ -10,11 +10,11 @@ collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad
 <https://launchpad.net/~vsevolod-n/+archive/rspamd>
 
 Users of other OSes should use sources to build and install rspamd. The recent version of rspamd is
-0.6.2.
+0.6.3.
 
-<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.2.tar.gz">Download rspamd-0.6.2</a></p>
+<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.3.tar.gz">Download rspamd-0.6.3</a></p>
 
-[Signature](/downloads/rspamd-0.6.2.tar.gz.asc)
+[Signature](/downloads/rspamd-0.6.3.tar.gz.asc)
 
 [My GPG key](https://rspamd.com/vsevolod.pubkey)
 
