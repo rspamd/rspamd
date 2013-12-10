@@ -1,3 +1,13 @@
+0.6.3:
+	* Fixed issues with DNS:
+	 - labels decompression algorithm was fixed;
+	 - added resolve_mx to lua API;
+	 - fixed modules that use DNS.
+	* Lua modules once_received and emails reworked for new resolver API and UCL.
+	* Debian package was polished.
+	* Fixed a bug in fuzzy_check module that prevents correct processing messages 
+	  without valid parts.
+
 0.6.2:
 	* Fuzzy check module has been reworked:
 	 - now fuzzy_check operates with a group of rules, that define which
