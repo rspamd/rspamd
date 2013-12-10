@@ -5,6 +5,7 @@
 #include "mem_pool.h"
 #include "events.h"
 #include "upstream.h"
+#include "util.h"
 
 #define MAX_SERVERS 16
 
@@ -23,7 +24,7 @@ typedef void (*dns_callback_type) (struct rspamd_dns_reply *reply, gpointer arg)
 struct rspamd_dns_server {
 	struct upstream up;					/**< upstream structure						*/
 	gchar *name;							/**< name of DNS server						*/
-	gint sock;							/**< persistent socket						*/
+	union sa_union addr;				/**< address storage						*/
 	struct event ev;
 };
 

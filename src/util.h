@@ -14,6 +14,17 @@ struct workq;
 struct statfile;
 struct classifier_config;
 
+/**
+ * Union that is used for storing sockaddrs
+ */
+union sa_union {
+	struct sockaddr_storage ss;
+	struct sockaddr sa;
+	struct sockaddr_in s4;
+	struct sockaddr_in6 s6;
+	struct sockaddr_un su;
+};
+
 /*
  * Create socket and bind or connect it to specified address and port
  */
