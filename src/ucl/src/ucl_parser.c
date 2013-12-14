@@ -899,7 +899,7 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
 		 * A key must start with alpha, number, '/' or '_' and end with space character
 		 */
 		if (c == NULL) {
-			if (ucl_lex_is_comment (p[0], p[1])) {
+			if (chunk->remain >= 2 && ucl_lex_is_comment (p[0], p[1])) {
 				if (!ucl_skip_comments (parser)) {
 					return false;
 				}
@@ -994,7 +994,7 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
 				return false;
 			}
 		}
-		else if (ucl_lex_is_comment (p[0], p[1])) {
+		else if (chunk->remain >= 2 && ucl_lex_is_comment (p[0], p[1])) {
 			/* Check for comment */
 			if (!ucl_skip_comments (parser)) {
 				return false;
@@ -1127,7 +1127,7 @@ ucl_parse_string_value (struct ucl_parser *parser,
 			*var_expand = true;
 		}
 
-		if (ucl_lex_is_atom_end (*p) || ucl_lex_is_comment (p[0], p[1])) {
+		if (ucl_lex_is_atom_end (*p) || (chunk->remain >= 2 && ucl_lex_is_comment (p[0], p[1]))) {
 			break;
 		}
 		ucl_chunk_skipc (chunk, p);
@@ -1292,7 +1292,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 		default:
 			/* Skip any spaces and comments */
 			if (ucl_test_character (*p, UCL_CHARACTER_WHITESPACE_UNSAFE) ||
-					ucl_lex_is_comment (p[0], p[1])) {
+					(chunk->remain >= 2 && ucl_lex_is_comment (p[0], p[1]))) {
 				while (p < chunk->end && ucl_test_character (*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 					ucl_chunk_skipc (chunk, p);
 				}
@@ -1374,7 +1374,7 @@ ucl_parse_after_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			/* Skip whitespaces */
 			ucl_chunk_skipc (chunk, p);
 		}
-		else if (ucl_lex_is_comment (p[0], p[1])) {
+		else if (chunk->remain >= 2 && ucl_lex_is_comment (p[0], p[1])) {
 			/* Skip comment */
 			if (!ucl_skip_comments (parser)) {
 				return false;
@@ -1653,7 +1653,7 @@ ucl_state_machine (struct ucl_parser *parser)
 				/* Now we need to skip all spaces */
 				while (p < chunk->end) {
 					if (!ucl_test_character (*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
-						if (ucl_lex_is_comment (p[0], p[1])) {
+						if (chunk->remain >= 2 && ucl_lex_is_comment (p[0], p[1])) {
 							/* Skip comment */
 							if (!ucl_skip_comments (parser)) {
 								return false;
@@ -1675,7 +1675,7 @@ ucl_state_machine (struct ucl_parser *parser)
 				return false;
 			}
 			macro_len = ucl_expand_variable (parser, &macro_escaped, macro_start, macro_len);
-			parser->state = UCL_STATE_AFTER_VALUE;
+			parser->state = UCL_STATE_KEY;
 			if (macro_escaped == NULL) {
 				if (!macro->handler (macro_start, macro_len, macro->ud)) {
 					return false;
