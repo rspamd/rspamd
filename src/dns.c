@@ -1435,6 +1435,10 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	gint r;
 	struct dns_header *header;
 
+	/* If no DNS servers defined silently return FALSE */
+	if (resolver->servers_num == 0) {
+		return FALSE;
+	}
 	/* Check throttling */
 	if (resolver->throttling) {
 		return FALSE;
@@ -1629,7 +1633,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 		/* Parse resolv.conf */
 		if (! parse_resolv_conf (new) || new->servers_num == 0) {
 			msg_err ("cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
-			return NULL;
+			return new;
 		}
 	}
 	else {
@@ -1684,7 +1688,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 			msg_err ("no valid nameservers defined, try to parse resolv.conf");
 			if (! parse_resolv_conf (new) || new->servers_num == 0) {
 				msg_err ("cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
-				return NULL;
+				return new;
 			}
 		}
 
