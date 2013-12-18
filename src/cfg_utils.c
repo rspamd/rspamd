@@ -233,6 +233,8 @@ init_defaults (struct config_file *cfg)
 	/* After 20 errors do throttling for 10 seconds */
 	cfg->dns_throttling_errors = 20;
 	cfg->dns_throttling_time = 10000;
+	/* 16 sockets per DNS server */
+	cfg->dns_io_per_server = 16;
 
 	cfg->statfile_sync_interval = 60000;
 	cfg->statfile_sync_timeout = 20000;

@@ -36,9 +36,6 @@
 #define DEFAULT_SCORE 10.0
 #define DEFAULT_REJECT_SCORE 999.0
 
-#define yyerror parse_err
-#define yywarn parse_warn
-
 struct expression;
 struct tokenizer;
 struct classifier;
@@ -379,6 +376,7 @@ struct config_file {
 	guint32 dns_retransmits;						/**< maximum retransmits count							*/
 	guint32 dns_throttling_errors;					/**< maximum errors for starting resolver throttling	*/
 	guint32 dns_throttling_time;					/**< time in seconds for DNS throttling					*/
+	guint32 dns_io_per_server;						/**< number of sockets per DNS server					*/
 	GList *nameservers;								/**< list of nameservers or NULL to parse resolv.conf	*/
 };
 
