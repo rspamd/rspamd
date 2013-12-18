@@ -1,3 +1,15 @@
+0.6.4:
+	* Added io channels for DNS request to balance load and reduce id
+	collisions chance
+	* Fixed a bug in SPF filter that may cause core dump in specific
+	circumstances
+	* FIxed default config for rbl module
+	* It is possible to get a list of rspamc commands with their descriptions
+	* Added SORBS bl to the default config
+	* 2tld file for surbl module has been significantly extended
+	* Perl modules has been removed from the code.
+	* Fixed an issue in libucl when parsing macros
+
 0.6.3:
 	* Fixed issues with DNS:
 	 - labels decompression algorithm was fixed;
