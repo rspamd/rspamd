@@ -1,5 +1,6 @@
 #!/bin/sh
 # preinst script for rspamd
+#DEBHELPER#
 
 set -e
 

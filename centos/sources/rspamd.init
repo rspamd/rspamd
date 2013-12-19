@@ -1,6 +1,15 @@
 #!/bin/sh
 #
 # rspamd - this script starts and stops the rspamd daemon
+### BEGIN INIT INFO
+# Provides:          rspamd
+# Required-Start:    $remote_fs $network
+# Required-Stop:     $network $remote_fs
+# Default-Start:     5
+# Default-Stop:
+# Short-Description: Rspamd daemon
+# Description:       Rspamd spam filtering daemon process
+### END INIT INFO
 #
 # chkconfig:   - 85 15 
 # description:  rspamd is a spam filtering system

@@ -7,6 +7,12 @@
 
 %define USE_JUDY         0
 
+%if 0%{?suse_version}
+%define __cmake cmake
+%define __install install
+%define __make make
+%endif
+
 Name:           rspamd
 Version:        0.6.4
 Release:        1
@@ -18,19 +24,23 @@ Group:          System Environment/Daemons
 License:        BSD
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-%if USE_JUDY
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel
+%if "%{USE_JUDY}" == "1"
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel,pcre-devel
 Requires:       glib2,gmime,lua,Judy,libevent
 %else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel
 Requires:       glib2,gmime,lua,libevent
 %endif
 # for /user/sbin/useradd
+%if 0%{?suse_version}
+Requires(pre):  shadow
+%else
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
 # for /sbin/service
 Requires(preun):        chkconfig, initscripts
 Requires(postun):       initscripts
+%endif
 
 Source0:        http://cdn.bitbucket.org/vstakhov/rspamd/downloads/%{name}-%{version}.tar.gz
 Source1:        %{name}.init
@@ -61,7 +71,7 @@ rm -rf %{buildroot}
         -DDEBIAN_BUILD=1 \
         -DRSPAMD_GROUP=%{rspamd_group} \
         -DRSPAMD_USER=%{rspamd_user} \
-%if USE_JUDY
+%if "%{USE_JUDY}" == "1"
         -DENABLE_JUDY=ON
 %else
         -DENABLE_JUDY=OFF
@@ -75,13 +85,14 @@ rm -rf %{buildroot}
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
-%{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %clean
 rm -rf %{buildroot}
 
 %pre
-%{_sbindir}/useradd -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
+%{_sbindir}/groupadd -r %{rspamd_group} 2>/dev/null || :
+%{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -N -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
+%{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %post
 /sbin/chkconfig --add %{name}
@@ -114,8 +125,11 @@ fi
 %config(noreplace) %{rspamd_confdir}/workers.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
+%dir %{rspamd_confdir}/lua/regexp
+%dir %{rspamd_confdir}/lua
 %dir %{rspamd_confdir}
-%attr(755, %{rspamd_user}, %{rspamd_group}) %dir %{rspamd_home}
+%dir %{rspamd_pluginsdir}/lua
+%dir %{rspamd_pluginsdir}
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %config(noreplace) %{rspamd_pluginsdir}/lua/forged_recipients.lua
