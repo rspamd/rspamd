@@ -86,8 +86,14 @@ ucl_chunk_restore_state (struct ucl_chunk *chunk, struct ucl_parser_saved_state 
 static inline void
 ucl_set_err (struct ucl_chunk *chunk, int code, const char *str, UT_string **err)
 {
-	ucl_create_err (err, "error on line %d at column %d: '%s', character: '%c'",
-			chunk->line, chunk->column, str, *chunk->pos);
+	if (isgraph (*chunk->pos)) {
+		ucl_create_err (err, "error on line %d at column %d: '%s', character: '%c'",
+				chunk->line, chunk->column, str, *chunk->pos);
+	}
+	else {
+		ucl_create_err (err, "error on line %d at column %d: '%s', character: '0x%02x'",
+				chunk->line, chunk->column, str, (int)*chunk->pos);
+	}
 }
 
 /**
@@ -926,6 +932,12 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
 				*end_of_object = true;
 				return true;
 			}
+			else if (*p == '.') {
+				ucl_chunk_skipc (chunk, p);
+				parser->prev_state = parser->state;
+				parser->state = UCL_STATE_MACRO_NAME;
+				return true;
+			}
 			else {
 				/* Invalid identifier */
 				ucl_set_err (chunk, UCL_ESYNTAX, "key must begin with a letter", &parser->err);
@@ -1534,8 +1546,14 @@ ucl_state_machine (struct ucl_parser *parser)
 	bool next_key = false, end_of_object = false;
 
 	if (parser->top_obj == NULL) {
-		obj = ucl_add_parser_stack (NULL, parser, false, 0);
+		if (*chunk->pos == '[') {
+			obj = ucl_add_parser_stack (NULL, parser, true, 0);
+		}
+		else {
+			obj = ucl_add_parser_stack (NULL, parser, false, 0);
+		}
 		parser->top_obj = obj;
+		parser->cur_obj = obj;
 		parser->state = UCL_STATE_INIT;
 	}
 
@@ -1548,7 +1566,7 @@ ucl_state_machine (struct ucl_parser *parser)
 			 * if we got [ or { correspondingly or can just treat new data as
 			 * a key of newly created object
 			 */
-			obj = parser->top_obj;
+			obj = parser->cur_obj;
 			if (!ucl_skip_comments (parser)) {
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_ERROR;
@@ -1558,14 +1576,10 @@ ucl_state_machine (struct ucl_parser *parser)
 				p = chunk->pos;
 				if (*p == '[') {
 					parser->state = UCL_STATE_VALUE;
-					obj->type = UCL_ARRAY;
-					ucl_hash_destroy (obj->value.ov, NULL);
-					obj->value.av = NULL;
 					ucl_chunk_skipc (chunk, p);
 				}
 				else {
 					parser->state = UCL_STATE_KEY;
-					obj->type = UCL_OBJECT;
 					if (*p == '{') {
 						ucl_chunk_skipc (chunk, p);
 					}
@@ -1675,7 +1689,7 @@ ucl_state_machine (struct ucl_parser *parser)
 				return false;
 			}
 			macro_len = ucl_expand_variable (parser, &macro_escaped, macro_start, macro_len);
-			parser->state = UCL_STATE_KEY;
+			parser->state = parser->prev_state;
 			if (macro_escaped == NULL) {
 				if (!macro->handler (macro_start, macro_len, macro->ud)) {
 					return false;
@@ -1714,6 +1728,9 @@ ucl_parser_new (int flags)
 
 	new->flags = flags;
 
+	/* Initial assumption about filevars */
+	ucl_parser_set_filevars (new, NULL, false);
+
 	return new;
 }
 
@@ -1736,16 +1753,51 @@ void
 ucl_parser_register_variable (struct ucl_parser *parser, const char *var,
 		const char *value)
 {
-	struct ucl_variable *new;
+	struct ucl_variable *new = NULL, *cur;
 
-	new = UCL_ALLOC (sizeof (struct ucl_variable));
-	memset (new, 0, sizeof (struct ucl_variable));
-	new->var = strdup (var);
-	new->var_len = strlen (var);
-	new->value = strdup (value);
-	new->value_len = strlen (value);
+	if (var == NULL) {
+		return;
+	}
 
-	LL_PREPEND (parser->variables, new);
+	/* Find whether a variable already exists */
+	LL_FOREACH (parser->variables, cur) {
+		if (strcmp (cur->var, var) == 0) {
+			new = cur;
+			break;
+		}
+	}
+
+	if (value == NULL) {
+
+		if (new != NULL) {
+			/* Remove variable */
+			LL_DELETE (parser->variables, new);
+			free (new->var);
+			free (new->value);
+			UCL_FREE (sizeof (struct ucl_variable), new);
+		}
+		else {
+			/* Do nothing */
+			return;
+		}
+	}
+	else {
+		if (new == NULL) {
+			new = UCL_ALLOC (sizeof (struct ucl_variable));
+			memset (new, 0, sizeof (struct ucl_variable));
+			new->var = strdup (var);
+			new->var_len = strlen (var);
+			new->value = strdup (value);
+			new->value_len = strlen (value);
+
+			LL_PREPEND (parser->variables, new);
+		}
+		else {
+			free (new->value);
+			new->value = strdup (value);
+			new->value_len = strlen (value);
+		}
+	}
 }
 
 bool

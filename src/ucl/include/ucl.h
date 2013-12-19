@@ -775,6 +775,16 @@ unsigned char *ucl_object_emit (ucl_object_t *obj, enum ucl_emitter emit_type);
  */
 bool ucl_pubkey_add (struct ucl_parser *parser, const unsigned char *key, size_t len);
 
+/**
+ * Set FILENAME and CURDIR variables in parser
+ * @param parser parser object
+ * @param filename filename to set or NULL to set FILENAME to "undef" and CURDIR to getcwd()
+ * @param need_expand perform realpath() if this variable is true and filename is not NULL
+ * @return true if variables has been set
+ */
+bool ucl_parser_set_filevars (struct ucl_parser *parser, const char *filename,
+		bool need_expand);
+
 typedef void* ucl_object_iter_t;
 
 /**

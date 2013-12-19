@@ -25,6 +25,8 @@
 #include "ucl_internal.h"
 #include "ucl_chartable.h"
 
+#include <libgen.h> /* For dirname */
+
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/sha.h>
@@ -439,7 +441,7 @@ ucl_fetch_file (const unsigned char *filename, unsigned char **buf, size_t *bufl
 	int fd;
 	struct stat st;
 
-	if (stat (filename, &st) == -1) {
+	if (stat (filename, &st) == -1 || !S_ISREG (st.st_mode)) {
 		ucl_create_err (err, "cannot stat file %s: %s",
 				filename, strerror (errno));
 		return false;
@@ -535,6 +537,7 @@ ucl_include_url (const unsigned char *data, size_t len,
 	size_t buflen = 0;
 	struct ucl_chunk *chunk;
 	char urlbuf[PATH_MAX];
+	int prev_state;
 
 	snprintf (urlbuf, sizeof (urlbuf), "%.*s", (int)len, data);
 
@@ -566,6 +569,9 @@ ucl_include_url (const unsigned char *data, size_t len,
 #endif
 	}
 
+	prev_state = parser->state;
+	parser->state = UCL_STATE_INIT;
+
 	res = ucl_parser_add_chunk (parser, buf, buflen);
 	if (res == true) {
 		/* Remove chunk from the stack */
@@ -575,6 +581,8 @@ ucl_include_url (const unsigned char *data, size_t len,
 			UCL_FREE (sizeof (struct ucl_chunk), chunk);
 		}
 	}
+
+	parser->state = prev_state;
 	free (buf);
 
 	return res;
@@ -597,6 +605,7 @@ ucl_include_file (const unsigned char *data, size_t len,
 	unsigned char *buf = NULL;
 	size_t buflen;
 	char filebuf[PATH_MAX], realbuf[PATH_MAX];
+	int prev_state;
 
 	snprintf (filebuf, sizeof (filebuf), "%.*s", (int)len, data);
 	if (realpath (filebuf, realbuf) == NULL) {
@@ -634,6 +643,11 @@ ucl_include_file (const unsigned char *data, size_t len,
 #endif
 	}
 
+	ucl_parser_set_filevars (parser, realbuf, false);
+
+	prev_state = parser->state;
+	parser->state = UCL_STATE_INIT;
+
 	res = ucl_parser_add_chunk (parser, buf, buflen);
 	if (res == true) {
 		/* Remove chunk from the stack */
@@ -643,6 +657,9 @@ ucl_include_file (const unsigned char *data, size_t len,
 			UCL_FREE (sizeof (struct ucl_chunk), chunk);
 		}
 	}
+
+	parser->state = prev_state;
+
 	if (buflen > 0) {
 		munmap (buf, buflen);
 	}
@@ -693,16 +710,55 @@ ucl_includes_handler (const unsigned char *data, size_t len, void* ud)
 }
 
 bool
+ucl_parser_set_filevars (struct ucl_parser *parser, const char *filename, bool need_expand)
+{
+	char realbuf[PATH_MAX], *curdir;
+
+	if (filename != NULL) {
+		if (need_expand) {
+			if (realpath (filename, realbuf) == NULL) {
+				return false;
+			}
+		}
+		else {
+			ucl_strlcpy (realbuf, filename, sizeof (realbuf));
+		}
+
+		/* Define variables */
+		ucl_parser_register_variable (parser, "FILENAME", realbuf);
+		curdir = dirname (realbuf);
+		ucl_parser_register_variable (parser, "CURDIR", curdir);
+	}
+	else {
+		/* Set everything from the current dir */
+		curdir = getcwd (realbuf, sizeof (realbuf));
+		ucl_parser_register_variable (parser, "FILENAME", "undef");
+		ucl_parser_register_variable (parser, "CURDIR", curdir);
+	}
+
+	return true;
+}
+
+bool
 ucl_parser_add_file (struct ucl_parser *parser, const char *filename)
 {
 	unsigned char *buf;
 	size_t len;
 	bool ret;
+	char realbuf[PATH_MAX];
 
-	if (!ucl_fetch_file (filename, &buf, &len, &parser->err)) {
+	if (realpath (filename, realbuf) == NULL) {
+		ucl_create_err (&parser->err, "cannot open file %s: %s",
+				filename,
+				strerror (errno));
 		return false;
 	}
 
+	if (!ucl_fetch_file (realbuf, &buf, &len, &parser->err)) {
+		return false;
+	}
+
+	ucl_parser_set_filevars (parser, realbuf, false);
 	ret = ucl_parser_add_chunk (parser, buf, len);
 
 	if (len > 0) {
