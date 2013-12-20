@@ -9,7 +9,12 @@ collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad
 
 <https://launchpad.net/~vsevolod-n/+archive/rspamd>
 
-Users of other OSes should use sources to build and install rspamd. The recent version of rspamd is
+Also there are pre-built packages at the OpenSUSE build service for debian, fedora, opensuse and
+various versions of ubuntu:
+
+<http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
+
+Users of other OSes can use sources to build and install rspamd. The recent version of rspamd is
 0.6.5.
 
 <p><a class="btn btn-primary" href="/downloads/rspamd-0.6.5.tar.gz">Download rspamd-0.6.5</a></p>
