@@ -11,6 +11,7 @@
 %define __cmake cmake
 %define __install install
 %define __make make
+%define __chown chown
 %endif
 
 Name:           rspamd
@@ -21,19 +22,19 @@ Group:          System Environment/Daemons
 
 # BSD License (two clause)
 # http://www.freebsd.org/copyright/freebsd-license.html
-License:        BSD
+License:        BSD2c
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 %if "%{USE_JUDY}" == "1"
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel,pcre-devel
-Requires:       glib2,gmime,lua,Judy,libevent
+Requires:       lua, logrotate
 %else
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel
-Requires:       glib2,gmime,lua,libevent
+Requires:       lua, logrotate
 %endif
 # for /user/sbin/useradd
 %if 0%{?suse_version}
-Requires(pre):  shadow
+Requires(pre):  shadow, %insserv_prereq, %fillup_prereq
 %else
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
@@ -42,7 +43,7 @@ Requires(preun):        chkconfig, initscripts
 Requires(postun):       initscripts
 %endif
 
-Source0:        http://cdn.bitbucket.org/vstakhov/rspamd/downloads/%{name}-%{version}.tar.gz
+Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.gz
 Source1:        %{name}.init
 Source2:        %{name}.logrotate
 
@@ -55,7 +56,6 @@ lua.
 %setup -q
 
 %build
-rm -rf %{buildroot}
 %{__cmake} \
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
         -DCONFDIR=%{_sysconfdir}/rspamd \
@@ -83,16 +83,36 @@ rm -rf %{buildroot}
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+
+%if 0%{?suse_version}
+mkdir -p %{buildroot}%{_sbindir}
+ln -sf %{_initrddir}/rspamd %{buildroot}%{_sbindir}/rcrspamd
+%endif
+
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
+%{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %clean
 rm -rf %{buildroot}
 
 %pre
 %{_sbindir}/groupadd -r %{rspamd_group} 2>/dev/null || :
-%{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -N -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
-%{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
+%{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
+
+%if 0%{?suse_version}
+
+%post
+%fillup_and_insserv rspamd
+
+%preun
+%stop_on_removal rspamd
+
+%postun
+%restart_on_update rspamd
+%insserv_cleanup
+
+%else
 
 %post
 /sbin/chkconfig --add %{name}
@@ -107,6 +127,8 @@ fi
 if [ $1 -ge 1 ]; then
     /sbin/service %{name} condrestart > /dev/null 2>&1 || :
 fi
+
+%endif
 
 %files
 %defattr(-,root,root,-)
@@ -125,6 +147,7 @@ fi
 %config(noreplace) %{rspamd_confdir}/workers.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
+%dir %{rspamd_home}
 %dir %{rspamd_confdir}/lua/regexp
 %dir %{rspamd_confdir}/lua
 %dir %{rspamd_confdir}
@@ -132,23 +155,26 @@ fi
 %dir %{rspamd_pluginsdir}
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
-%config(noreplace) %{rspamd_pluginsdir}/lua/forged_recipients.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/maillist.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/multimap.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/once_received.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/rbl.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/ratelimit.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/whitelist.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/phishing.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/trie.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/emails.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/ip_score.lua
+%{rspamd_pluginsdir}/lua/forged_recipients.lua
+%{rspamd_pluginsdir}/lua/maillist.lua
+%{rspamd_pluginsdir}/lua/multimap.lua
+%{rspamd_pluginsdir}/lua/once_received.lua
+%{rspamd_pluginsdir}/lua/rbl.lua
+%{rspamd_pluginsdir}/lua/ratelimit.lua
+%{rspamd_pluginsdir}/lua/whitelist.lua
+%{rspamd_pluginsdir}/lua/phishing.lua
+%{rspamd_pluginsdir}/lua/trie.lua
+%{rspamd_pluginsdir}/lua/emails.lua
+%{rspamd_pluginsdir}/lua/ip_score.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/drugs.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/fraud.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/headers.lua
 %config(noreplace) %{rspamd_confdir}/lua/regexp/lotto.lua
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.lua
 %config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
+%if 0%{?suse_version}
+%{_sbindir}/rcrspamd
+%endif
 
 %changelog
 * Wed Dec 18 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.4-1
