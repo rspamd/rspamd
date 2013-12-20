@@ -12,7 +12,7 @@ collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad
 Users of other OSes should use sources to build and install rspamd. The recent version of rspamd is
 0.6.4.
 
-<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.4.tar.gz">Download rspamd-0.6.3</a></p>
+<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.4.tar.gz">Download rspamd-0.6.4</a></p>
 
 [Signature](/downloads/rspamd-0.6.4.tar.gz.asc)
 
