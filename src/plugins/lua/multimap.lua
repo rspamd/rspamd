@@ -66,7 +66,7 @@ local function check_multimap(task)
 			end
 		elseif rule['type'] == 'dnsbl' then
 			local ip = task:get_from_ip()
-			if ip and ip ~= "0.0.0.0" then
+			if ip and ip:to_string() ~= "0.0.0.0" then
 				if ip:get_version() == 6 and rule['ipv6'] then
 					task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
 						ip_to_rbl(ip, rule['map']), multimap_rbl_cb, rule['map'])

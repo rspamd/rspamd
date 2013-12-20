@@ -78,7 +78,7 @@ local function rbl_cb (task)
 	end
 	
 	local rip = task:get_from_ip()
-	if(rip:to_string() ~= "0.0.0.0") then
+	if rip and (rip:to_string() ~= '0.0.0.0') then
 		for k,rbl in pairs(rbls) do
 			if (rip:get_version() == 6 and rbl['ipv6'] and rbl['from']) or 
 				(rip:get_version() == 4 and rbl['ipv4'] and rbl['from']) then
@@ -89,7 +89,7 @@ local function rbl_cb (task)
 	end
 	local recvh = task:get_received_headers()
 	for _,rh in ipairs(recvh) do
-		if rh['real_ip'] then
+		if rh['real_ip'] and rh['real_ip']:to_string() ~= '0.0.0.0' then
 			for k,rbl in pairs(rbls) do
 				if (rh['real_ip']:get_version() == 6 and rbl['ipv6'] and rbl['received']) or
 					(rh['real_ip']:get_version() == 4 and rbl['ipv4'] and rbl['received']) then
