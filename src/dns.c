@@ -787,6 +787,7 @@ send_dns_request (struct rspamd_dns_request *req)
 		}
 	}
 	else if (r < req->pos) {
+		msg_err ("incomplete send over UDP socket, seems to be internal bug");
 		event_set (&req->io_event, req->sock, EV_WRITE, dns_retransmit_handler, req);
 		event_base_set (req->resolver->ev_base, &req->io_event);
 		event_add (&req->io_event, &req->tv);
@@ -1219,6 +1220,7 @@ dns_parse_reply (gint sock, guint8 *in, gint r, struct rspamd_dns_resolver *reso
 	id = header->qid;
 	if ((req = g_hash_table_lookup (ioc->requests, &id)) == NULL) {
 		/* No such requests found */
+		msg_debug ("DNS request with id %d has not been found for IO channel", (gint)id);
 		return FALSE;
 	}
 	*req_out = req;
@@ -1228,6 +1230,7 @@ dns_parse_reply (gint sock, guint8 *in, gint r, struct rspamd_dns_resolver *reso
 	 */
 	if ((pos = dns_request_reply_cmp (req, in + sizeof (struct dns_header),
 			r - sizeof (struct dns_header))) == NULL) {
+		msg_debug ("DNS request with id %d is for different query, ignoring", (gint)id);
 		return FALSE;
 	}
 	/*
@@ -1324,37 +1327,12 @@ dns_timer_cb (gint fd, short what, void *arg)
 	req->retransmits ++;
 	serv = req->io->srv;
 	if (req->retransmits >= req->resolver->max_retransmits) {
-		msg_err ("maximum number of retransmits expired for resolving %s of type %s", req->requested_name, dns_strtype (req->type));
+		msg_err ("maximum number of retransmits expired for resolving %s of type %s",
+				req->requested_name, dns_strtype (req->type));
 		dns_check_throttling (req->resolver);
 		req->resolver->errors ++;
 		goto err;
 	}
-	/* Select other server */
-	if (req->resolver->is_master_slave) {
-		serv = (struct rspamd_dns_server *)get_upstream_master_slave (req->resolver->servers,
-					req->resolver->servers_num, sizeof (struct rspamd_dns_server),
-					req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
-	}
-	else {
-		serv = (struct rspamd_dns_server *)get_upstream_round_robin (req->resolver->servers,
-			req->resolver->servers_num, sizeof (struct rspamd_dns_server),
-			req->time, DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
-	}
-	if (serv == NULL) {
-		goto err;
-	}
-
-	req->io = serv->cur_io_channel;
-	if (req->io == NULL) {
-		msg_err ("cannot find suitable io channel for the server %s", serv->name);
-		goto err;
-	}
-	serv->cur_io_channel = serv->cur_io_channel->next;
-	
-	if (req->io->sock == -1) {
-		req->io->sock =  make_universal_socket (serv->name, dns_port, SOCK_DGRAM, TRUE, FALSE, FALSE);
-	}
-	req->sock = req->io->sock;
 
 	if (req->sock == -1) {
 		goto err;
@@ -1364,10 +1342,13 @@ dns_timer_cb (gint fd, short what, void *arg)
 	if (r == -1) {
 		goto err;
 	}
+
+	msg_debug ("retransmit DNS request with ID %d", (int)req->id);
 	evtimer_add (&req->timer_event, &req->tv);
 
 	return;
 err:
+	msg_debug ("error on retransmitting DNS request with ID %d", (int)req->id);
 	rep = memory_pool_alloc0 (req->pool, sizeof (struct rspamd_dns_reply));
 	rep->request = req;
 	rep->code = DNS_RC_SERVFAIL;
@@ -1542,9 +1523,6 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	r = send_dns_request (req);
 
 	if (r == 1) {
-		/* Add timer event */
-		evtimer_add (&req->timer_event, &req->tv);
-
 		/* Add request to hash table */
 		r = 0;
 		while (g_hash_table_lookup (req->io->requests, &req->id)) {
@@ -1557,6 +1535,8 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 				return FALSE;
 			}
 		}
+		/* Add timer event */
+		evtimer_add (&req->timer_event, &req->tv);
 		g_hash_table_insert (req->io->requests, &req->id, req);
 		register_async_event (session, (event_finalizer_t)dns_fin_cb, req,
 				g_quark_from_static_string ("dns resolver"));
