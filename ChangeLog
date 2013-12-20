@@ -1,3 +1,9 @@
+0.6.5:
+	* Fixed critical bug in DNS resolver, introduced in 0.6.4
+	* Improved multimap and rbl plugins to skip
+	* Add dns_sockets option for tuning sockets per server in DNS resolver
+	* Improved packages for rspamd
+
 0.6.4:
 	* Added io channels for DNS request to balance load and reduce id
 	collisions chance
