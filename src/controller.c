@@ -221,7 +221,8 @@ free_session (void *ud)
 }
 
 static gboolean
-restful_write_reply (gint error_code, const gchar *err_message, const gchar *buf, gsize buflen, rspamd_io_dispatcher_t *d)
+restful_write_reply (gint error_code, const gchar *err_message,
+		const gchar *buf, gsize buflen, rspamd_io_dispatcher_t *d)
 {
 	static gchar					 hbuf[256];
 	gint							 r;
@@ -239,6 +240,36 @@ restful_write_reply (gint error_code, const gchar *err_message, const gchar *buf
 			return FALSE;
 		}
 		return rspamd_dispatcher_write (d, buf, buflen, FALSE, FALSE);
+	}
+	else {
+		if (!rspamd_dispatcher_write (d, hbuf, r, FALSE, TRUE)) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+static gboolean
+restful_write_reply_string (gint error_code, const gchar *err_message,
+		GString *buf, rspamd_io_dispatcher_t *d)
+{
+	static gchar					 hbuf[256];
+	gint							 r;
+
+	r = rspamd_snprintf (hbuf, sizeof (hbuf),
+			"HTTP/1.0 %d %s" CRLF "Version: " RVERSION CRLF,
+			error_code, err_message ? err_message : "OK");
+	if (buf->len > 0) {
+		r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, "Content-Length: %z" CRLF, buf->len);
+	}
+	r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, CRLF);
+
+	if (buf != NULL) {
+		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, TRUE)) {
+			return FALSE;
+		}
+		return rspamd_dispatcher_write_string (d, buf, FALSE, TRUE);
 	}
 	else {
 		if (!rspamd_dispatcher_write (d, hbuf, r, FALSE, TRUE)) {
@@ -428,19 +459,16 @@ process_sync_command (struct controller_session *session, gchar **args)
 static gboolean
 process_counters_command (struct controller_session *session)
 {
-	gchar                           out_buf[BUFSIZ];
 	GList                          *cur;
 	struct cache_item             *item;
 	struct symbols_cache          *cache;
-	gint                            r;
+	GString                        *out;
 
 	cache = session->cfg->cache;
+	out = g_string_sized_new (BUFSIZ);
 
 	if (!session->restful) {
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "Rspamd counters." CRLF);
-	}
-	else {
-		r = 0;
+		rspamd_printf_gstring (out, "Rspamd counters:" CRLF);
 	}
 
 	if (cache != NULL) {
@@ -448,7 +476,7 @@ process_counters_command (struct controller_session *session)
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "%s %.2f %d %.3f" CRLF,
+				rspamd_printf_gstring (out, "%s %.2f %d %.3f" CRLF,
 						item->s->symbol, item->s->weight,
 						item->s->frequency, item->s->avg_time);
 			}
@@ -458,7 +486,7 @@ process_counters_command (struct controller_session *session)
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "%s %.2f %d %.3f" CRLF,
+				rspamd_printf_gstring (out, "%s %.2f %d %.3f" CRLF,
 						item->s->symbol, item->s->weight,
 						item->s->frequency, item->s->avg_time);
 			}
@@ -467,18 +495,18 @@ process_counters_command (struct controller_session *session)
 	}
 
 	if (!session->restful) {
-		return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+		return rspamd_dispatcher_write_string (session->dispatcher, out, FALSE, TRUE);
 	}
 	else {
-		return restful_write_reply (200, NULL, out_buf, r, session->dispatcher);
+		return restful_write_reply_string (200, NULL, out, session->dispatcher);
 	}
 }
 
 static gboolean
 process_stat_command (struct controller_session *session, gboolean do_reset)
 {
-	gchar                           out_buf[BUFSIZ];
-	gint                            r, i;
+	GString                        *out;
+	gint                            i;
 	guint64                         used, total, rev, ham = 0, spam = 0;
 	time_t                          ti;
 	memory_pool_stat_t              mem_st;
@@ -486,14 +514,16 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 	stat_file_t                    *statfile;
 	struct statfile                *st;
 	GList                          *cur_cl, *cur_st;
-	struct rspamd_stat            *stat;
+	struct rspamd_stat            *stat, stat_copy;
 
 	memory_pool_stat (&mem_st);
-	stat = session->worker->srv->stat;
-	r = rspamd_snprintf (out_buf, sizeof (out_buf), "Messages scanned: %ud" CRLF, stat->messages_scanned);
-	if (session->worker->srv->stat->messages_scanned > 0) {
+	memcpy (&stat_copy, session->worker->srv->stat, sizeof (stat_copy));
+	stat = &stat_copy;
+	out = g_string_sized_new (BUFSIZ);
+	rspamd_printf_gstring (out, "Messages scanned: %ud" CRLF, stat->messages_scanned);
+	if (stat->messages_scanned > 0) {
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
-			r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages with action %s: %ud, %.2f%%" CRLF,
+			rspamd_printf_gstring (out, "Messages with action %s: %ud, %.2f%%" CRLF,
 					str_action_metric (i), stat->actions_stat[i],
 					(double)stat->actions_stat[i] / (double)stat->messages_scanned * 100.);
 			if (i < METRIC_ACTION_GREYLIST) {
@@ -503,26 +533,26 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 				ham += stat->actions_stat[i];
 			}
 			if (do_reset) {
-				stat->actions_stat[i] = 0;
+				session->worker->srv->stat->actions_stat[i] = 0;
 			}
 		}
-		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as spam: %ud, %.2f%%" CRLF, spam,
+		rspamd_printf_gstring (out, "Messages treated as spam: %ud, %.2f%%" CRLF, spam,
 								(double)spam / (double)stat->messages_scanned * 100.);
-		r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages treated as ham: %ud, %.2f%%" CRLF, ham,
+		rspamd_printf_gstring (out, "Messages treated as ham: %ud, %.2f%%" CRLF, ham,
 								(double)ham / (double)stat->messages_scanned * 100.);
 	}
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Messages learned: %ud" CRLF, stat->messages_learned);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Connections count: %ud" CRLF, stat->connections_count);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Control connections count: %ud" CRLF, stat->control_connections_count);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools allocated: %z" CRLF, mem_st.pools_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Pools freed: %z" CRLF, mem_st.pools_freed);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Bytes allocated: %z" CRLF, mem_st.bytes_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Memory chunks allocated: %z" CRLF, mem_st.chunks_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Shared chunks allocated: %z" CRLF, mem_st.shared_chunks_allocated);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Chunks freed: %z" CRLF, mem_st.chunks_freed);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Oversized chunks: %z" CRLF, mem_st.oversized_chunks);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes stored: %ud" CRLF, stat->fuzzy_hashes);
-	r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r, "Fuzzy hashes expired: %ud" CRLF, stat->fuzzy_hashes_expired);
+	rspamd_printf_gstring (out, "Messages learned: %ud" CRLF, stat->messages_learned);
+	rspamd_printf_gstring (out, "Connections count: %ud" CRLF, stat->connections_count);
+	rspamd_printf_gstring (out, "Control connections count: %ud" CRLF, stat->control_connections_count);
+	rspamd_printf_gstring (out, "Pools allocated: %z" CRLF, mem_st.pools_allocated);
+	rspamd_printf_gstring (out, "Pools freed: %z" CRLF, mem_st.pools_freed);
+	rspamd_printf_gstring (out, "Bytes allocated: %z" CRLF, mem_st.bytes_allocated);
+	rspamd_printf_gstring (out, "Memory chunks allocated: %z" CRLF, mem_st.chunks_allocated);
+	rspamd_printf_gstring (out, "Shared chunks allocated: %z" CRLF, mem_st.shared_chunks_allocated);
+	rspamd_printf_gstring (out, "Chunks freed: %z" CRLF, mem_st.chunks_freed);
+	rspamd_printf_gstring (out, "Oversized chunks: %z" CRLF, mem_st.oversized_chunks);
+	rspamd_printf_gstring (out, "Fuzzy hashes stored: %ud" CRLF, stat->fuzzy_hashes);
+	rspamd_printf_gstring (out, "Fuzzy hashes expired: %ud" CRLF, stat->fuzzy_hashes_expired);
 	/* Now write statistics for each statfile */
 	cur_cl = g_list_first (session->cfg->classifiers);
 	while (cur_cl) {
@@ -539,14 +569,14 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 				statfile_get_revision (statfile, &rev, &ti);
 				if (total != (guint64)-1 && used != (guint64)-1) {
 					if (st->label) {
-						r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r,
+						rspamd_printf_gstring (out,
 								"Statfile: %s <%s> (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
 								st->symbol, st->label, rev, st->size,
 								(total - used), total,
 								(double)((double)(total - used) / (double)total) * 100.);
 					}
 					else {
-						r += rspamd_snprintf (out_buf + r, sizeof (out_buf) - r,
+						rspamd_printf_gstring (out,
 								"Statfile: %s (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
 								st->symbol, rev, st->size,
 								(total - used), total,
@@ -560,17 +590,17 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 	}
 
 	if (do_reset) {
-		stat->messages_scanned = 0;
-		stat->messages_learned = 0;
-		stat->connections_count = 0;
-		stat->control_connections_count = 0;
+		session->worker->srv->stat->messages_scanned = 0;
+		session->worker->srv->stat->messages_learned = 0;
+		session->worker->srv->stat->connections_count = 0;
+		session->worker->srv->stat->control_connections_count = 0;
 	}
 
 	if (!session->restful) {
-		return rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE);
+		return rspamd_dispatcher_write_string (session->dispatcher, out, FALSE, TRUE);
 	}
 	else {
-		return restful_write_reply (200, NULL, out_buf, r, session->dispatcher);
+		return restful_write_reply_string (200, NULL, out, session->dispatcher);
 	}
 }
 
