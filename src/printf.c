@@ -280,60 +280,6 @@ rspamd_printf_gstring (GString *s, const gchar *fmt, ...)
 	return r;
 }
 
-gchar *
-rspamd_escape_string (gchar *dst, const gchar *src, glong len)
-{
-	gchar              *buf = dst, *last = dst + len;
-	guint8              c;
-	const gchar        *p = src;
-	gunichar            uc;
-
-	if (len <= 0) {
-		return dst;
-	}
-
-	while (*p && buf < last) {
-		/* Detect utf8 */
-		uc = g_utf8_get_char_validated (p, last - buf);
-		if (uc > 0) {
-			c = g_unichar_to_utf8 (uc, buf);
-			buf += c;
-			p += c;
-		}
-		else {
-			c = *p ++;
-			if (G_UNLIKELY ((c & 0x80))) {
-				c &= 0x7F;
-				if (last - buf >= 3) {
-					*buf++ = 'M';
-					*buf++ = '-';
-				}
-			}
-			if (G_UNLIKELY ( g_ascii_iscntrl (c))) {
-				if (c == '\n') {
-					*buf++ = ' ';
-				}
-				else if (c == '\t') {
-					*buf++ = '\t';
-				}
-				else {
-					*buf++ = '^';
-					if (buf != last) {
-						*buf++ = c ^ 0100;
-					}
-				}
-			}
-			else {
-				*buf++ = c;
-			}
-		}
-	}
-
-	*buf = '\0';
-
-	return buf;
-}
-
 #define RSPAMD_PRINTF_APPEND(buf, len)											\
     do {																		\
     wr = func ((buf), (len), apd);												\

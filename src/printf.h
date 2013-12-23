@@ -72,14 +72,4 @@ glong rspamd_printf_gstring (GString *s, const gchar *fmt, ...);
 
 glong rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar *fmt, va_list args);
 
-/**
- * Escape rspamd string to write it to log file or other 7 bit prefferable places
- *
- * @param dst destination string
- * @param src source string
- * @param len length of destination buffer
- * @return pointer to end of buffer
- */
-gchar * rspamd_escape_string (gchar *dst, const gchar *src, glong len);
-
 #endif /* PRINTF_H_ */
