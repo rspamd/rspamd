@@ -68,25 +68,6 @@ reconf['DATE_IN_PAST'] = function(task)
 	return false
 end
 
-reconf['HELO_NOT_FQDN'] = function(task)
-local helo = task:get_helo()
-
-local function check_regexp(str, regexp_text)
-    local re = regexp.get_cached(regexp_text)
-    if not re then re = regexp.create(regexp_text, 'i') end
-    if re:match(str) then return true end
-    return false
-end
-
-if helo then
-    if not check_regexp(helo, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then
-        return true
-    end
-end
-
-return false
-end
-
 local function file_exists(filename)
 	local file = io.open(filename)
 	if file then
