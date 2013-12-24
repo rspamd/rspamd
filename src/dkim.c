@@ -950,37 +950,51 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 static gboolean
 rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const gchar *end)
 {
+	const gchar *p;
+
 	if (start == NULL) {
 		/* Empty body */
-		g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
+		if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
+			g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
+		}
+		else {
+			g_checksum_update (ctx->body_hash, "", 0);
+		}
 	}
 	else {
-		end --;
-		while (end > start + 2) {
-			if (*end == '\n' && *(end - 1) == '\r' && *(end - 2) == '\n') {
-				end -= 2;
+		/* Strip extra ending CRLF */
+		p = end - 1;
+		while (p >= start + 2) {
+			if (*p == '\n' && *(p - 1) == '\r' && *(p - 2) == '\n') {
+				p -= 2;
 			}
-			else if (*end == '\n' && *(end - 1) == '\n') {
-				end --;
+			else if (*p == '\n' && *(p - 1) == '\n') {
+				p --;
 			}
-			else if (*end == '\r' && *(end - 1) == '\r') {
-				end --;
+			else if (*p == '\r' && *(p - 1) == '\r') {
+				p --;
 			}
 			else {
 				break;
 			}
 		}
+		end = p + 1;
 		if (end == start || end == start + 2) {
 			/* Empty body */
-			g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
+			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
+				g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
+			}
+			else {
+				g_checksum_update (ctx->body_hash, "", 0);
+			}
 		}
 		else {
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
-				while (rspamd_dkim_simple_body_step (ctx->body_hash, &start, end - start + 1));
+				while (rspamd_dkim_simple_body_step (ctx->body_hash, &start, end - start));
 			}
 			else {
-				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start + 1));
+				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start));
 			}
 		}
 		return TRUE;
