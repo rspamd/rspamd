@@ -303,7 +303,7 @@ config_logger (struct config_file *cfg, gpointer ud)
 {
 	struct rspamd_main *rm = ud;
 
-	rspamd_set_logger (cfg->log_type, g_quark_try_string ("main"), rm);
+	rspamd_set_logger (cfg, g_quark_try_string ("main"), rm);
 	if (open_log_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 		exit (EXIT_FAILURE);
@@ -376,6 +376,7 @@ reread_config (struct rspamd_main *rspamd)
 		memory_pool_add_destructor (tmp_cfg->cfg_pool, (pool_destruct_func)lua_close, tmp_cfg->lua_state);
 
 		if (! load_rspamd_config (tmp_cfg, FALSE)) {
+			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"), rspamd_main);
 			msg_err ("cannot parse new config file, revert to old one");
 			free_config (tmp_cfg);
 		}
@@ -393,6 +394,7 @@ reread_config (struct rspamd_main *rspamd)
 			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
 			rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
 			rspamd->cfg->cache->cfg = rspamd->cfg;
+			rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
 
@@ -1053,7 +1055,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_prng_seed ();
 
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, type, rspamd_main);
+	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
+	rspamd_set_logger (rspamd_main->cfg, type, rspamd_main);
 	(void)open_log (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 

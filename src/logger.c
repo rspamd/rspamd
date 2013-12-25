@@ -275,7 +275,7 @@ reopen_log (rspamd_logger_t *logger)
  * Setup logger
  */
 void
-rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *rspamd)
+rspamd_set_logger (struct config_file *cfg, GQuark ptype, struct rspamd_main *rspamd)
 {
 	gchar                           **strvec, *p, *err;
 	gint                            num, i, k;
@@ -287,7 +287,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 		memset (rspamd->logger, 0, sizeof (rspamd_logger_t));
 	}
 
-	rspamd->logger->type = type;
+	rspamd->logger->type = cfg->log_type;
 	rspamd->logger->pid = getpid ();
 	rspamd->logger->process_type = ptype;
 
@@ -298,7 +298,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 	g_mutex_init (rspamd->logger->mtx);
 #endif
 
-	switch (type) {
+	switch (cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			rspamd->logger->log_func = file_log_function;
 			rspamd->logger->fd = STDERR_FILENO;
@@ -311,7 +311,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 			break;
 	}
 
-	rspamd->logger->cfg = rspamd->cfg;
+	rspamd->logger->cfg = cfg;
 	/* Set up buffer */
 	if (rspamd->cfg->log_buffered) {
 		if (rspamd->cfg->log_buf_size != 0) {

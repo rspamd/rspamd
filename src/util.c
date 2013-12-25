@@ -221,6 +221,7 @@ gint
 make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboolean is_server, gboolean async)
 {
 	gint                            fd, s_error, r, optlen, serrno, on = 1;
+	struct stat                    st;
 
 	if (path == NULL)
 		return -1;
@@ -232,10 +233,25 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 	addr->sun_len = SUN_LEN (addr);
 #endif
 
+	if (is_server) {
+		/* Unlink socket if it exists already */
+		if (lstat (addr->sun_path, &st) != -1) {
+			if (S_ISSOCK (st.st_mode)) {
+				if (unlink (addr->sun_path) == -1) {
+					msg_warn ("unlink %s failed: %d, '%s'", addr->sun_path, errno, strerror (errno));
+					goto out;
+				}
+			}
+			else {
+				msg_warn ("%s is not a socket", addr->sun_path);
+				goto out;
+			}
+		}
+	}
 	fd = socket (PF_LOCAL, type, 0);
 
 	if (fd == -1) {
-		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("socket failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
 		return -1;
 	}
 
@@ -245,7 +261,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
 		goto out;
 	}
 	if (is_server) {
@@ -258,14 +274,14 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
-			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
+			msg_warn ("bind/connect failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
 			goto out;
 		}
 		if (!async) {
 			/* Try to poll */
 			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
 				errno = ETIMEDOUT;
-				msg_warn ("bind/connect failed: timeout");
+				msg_warn ("bind/connect failed %s: timeout", addr->sun_path);
 				goto out;
 			}
 			else {
@@ -315,18 +331,11 @@ make_universal_socket (const gchar *credits, guint16 port,
 	gchar                            portbuf[8];
 
 	if (*credits == '/') {
-		r = stat (credits, &st);
 		if (is_server) {
-			if (r == -1) {
-				return make_unix_socket (credits, &un, type, is_server, async);
-			}
-			else {
-				/* Unix socket exists, it must be unlinked first */
-				errno = EEXIST;
-				return -1;
-			}
+			return make_unix_socket (credits, &un, type, is_server, async);
 		}
 		else {
+			r = stat (credits, &st);
 			if (r == -1) {
 				/* Unix socket doesn't exists it must be created first */
 				errno = ENOENT;
@@ -399,18 +408,11 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 	cur = strv;
 	while (*cur != NULL) {
 		if (*credits == '/') {
-			r = stat (credits, &st);
 			if (is_server) {
-				if (r == -1) {
-					fd = make_unix_socket (credits, &un, type, is_server, async);
-				}
-				else {
-					/* Unix socket exists, it must be unlinked first */
-					errno = EEXIST;
-					goto err;
-				}
+				fd = make_unix_socket (credits, &un, type, is_server, async);
 			}
 			else {
+				r = stat (credits, &st);
 				if (r == -1) {
 					/* Unix socket doesn't exists it must be created first */
 					errno = ENOENT;

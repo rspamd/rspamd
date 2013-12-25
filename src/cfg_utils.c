@@ -175,34 +175,6 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 	cnf->bind_port = DEFAULT_BIND_PORT;
 
 	if (str[0] == '/' || str[0] == '.') {
-#ifdef HAVE_DIRNAME
-		/* Try to check path of bind credit */
-		struct stat                     st;
-		gint                            fd;
-		gchar                           *copy = memory_pool_strdup (cfg->cfg_pool, str);
-		if (stat (copy, &st) == -1) {
-			if (errno == ENOENT) {
-				if ((fd = open (str, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-					msg_err ("cannot open path %s for making socket, %s", str, strerror (errno));
-					return FALSE;
-				}
-				else {
-					close (fd);
-					unlink (str);
-				}
-			}
-			else {
-				msg_err ("cannot stat path %s for making socket, %s", str, strerror (errno));
-				return 0;
-			}
-		}
-		else {
-			if (unlink (str) == -1) {
-				msg_err ("cannot remove path %s for making socket, %s", str, strerror (errno));
-				return 0;
-			}
-		}
-#endif
 		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
 		cnf->is_unix = TRUE;
 		LL_PREPEND (cf->bind_conf, cnf);
