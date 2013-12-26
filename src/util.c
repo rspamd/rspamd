@@ -220,8 +220,8 @@ accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t * len)
 gint
 make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboolean is_server, gboolean async)
 {
-	gint                            fd, s_error, r, optlen, serrno, on = 1;
-	struct stat                    st;
+	gint                            fd = -1, s_error, r, optlen, serrno, on = 1;
+	struct stat                     st;
 
 	if (path == NULL)
 		return -1;
@@ -307,7 +307,9 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
   out:
 	serrno = errno;
-	close (fd);
+	if (fd != -1) {
+		close (fd);
+	}
 	errno = serrno;
 	return (-1);
 }
