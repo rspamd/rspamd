@@ -43,6 +43,7 @@ struct cache_item {
 
 	/* Priority */
 	gint priority;
+	gdouble metric_weight;
 };
 
 
