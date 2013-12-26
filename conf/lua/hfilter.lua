@@ -1,64 +1,145 @@
---[[
-Rating for checks_hellohost and checks_hello:
-5 - very hard
-4 - hard
-3 - meduim
-2 - low
-1 - very low
---]]
+--
+-- Copyright (c) 2013, Alexey Savelyev
+-- E-mail: info@homeweb.ru
+-- WWW: http://homeweb.ru
+--
 
---Checks for HELO and Hostname
+--Rating for checks_hellohost and checks_hello: 5 - very hard, 4 - hard, 3 - meduim, 2 - low, 1 - very low
 local checks_hellohost = {
-['[.-]dynamic[.-]'] = 4, ['dynamic[.-][0-9]'] = 4, ['[0-9][.-]?dynamic'] = 4, 
-['[.-]dyn[.-]'] = 4, ['dyn[.-][0-9]'] = 4, ['[0-9][.-]?dyn'] = 4, 
-['[.-]clients?[.-]'] = 4, ['clients?[.-][0-9]'] = 4, ['[0-9][.-]?clients?'] = 4, 
-['[.-]dynip[.-]'] = 4, ['dynip[.-][0-9]'] = 4, ['[0-9][.-]?dynip'] = 4, 
-['[.-]broadband[.-]'] = 4, ['broadband[.-][0-9]'] = 4, ['[0-9][.-]?broadband'] = 4, 
-['[.-]broad[.-]'] = 4, ['broad[.-][0-9]'] = 4, ['[0-9][.-]?broad'] = 4, 
-['[.-]bredband[.-]'] = 4, ['bredband[.-][0-9]'] = 4, ['[0-9][.-]?bredband'] = 4, 
-['[.-]nat[.-]'] = 4, ['nat[.-][0-9]'] = 4, ['[0-9][.-]?nat'] = 4, 
-['[.-]pptp[.-]'] = 4, ['pptp[.-][0-9]'] = 4, ['[0-9][.-]?pptp'] = 4, 
-['[.-]pppoe[.-]'] = 4, ['pppoe[.-][0-9]'] = 4, ['[0-9][.-]?pppoe'] = 4, 
-['[.-]ppp[.-]'] = 4, ['ppp[.-][0-9]'] = 4, ['[0-9][.-]?ppp'] = 4, 
-['[.-][a|x]?dsl[.-]'] = 3, ['[a|x]?dsl[.-]?[0-9]'] = 3, ['[0-9][.-]?[a|x]?dsl'] = 3, 
-['[.-][a|x]?dsl-dynamic[.-]'] = 4, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 4, 
-['[.-][a|x]?dsl-line[.-]'] = 3, ['[a|x]?dsl-line[.-]?[0-9]'] = 3, ['[0-9][.-]?[a|x]?dsl-line'] = 3, 
-['[.-]dhcp[.-]'] = 4, ['dhcp[.-][0-9]'] = 4, ['[0-9][.-]?dhcp'] = 4, 
-['[.-]catv[.-]'] = 4, ['catv[.-][0-9]'] = 4, ['[0-9][.-]?catv'] = 4, 
-['[.-]wifi[.-]'] = 4, ['wifi[.-][0-9]'] = 4, ['[0-9][.-]?wifi'] = 4, 
-['[.-]unused-addr[.-]'] = 5, ['unused-addr[.-][0-9]'] = 5, ['[0-9][.-]?unused-addr'] = 5, 
-['[.-]dial-?up[.-]'] = 4, ['dial-?up[.-][0-9]'] = 4, ['[0-9][.-]?dial-?up'] = 4, 
-['[.-]gprs[.-]'] = 4, ['gprs[.-][0-9]'] = 4, ['[0-9][.-]?gprs'] = 4, 
-['[.-]cdma[.-]'] = 4, ['cdma[.-][0-9]'] = 4, ['[0-9][.-]?cdma'] = 4, 
-['[.-]homeuser[.-]'] = 4, ['homeuser[.-][0-9]'] = 4, ['[0-9][.-]?homeuser'] = 4, 
-['[.-]in-?addr[.-]'] = 3, ['in-?addr[.-][0-9]'] = 3, ['[0-9][.-]?in-?addr'] = 3, 
-['[.-]pool[.-]'] = 3, ['pool[.-][0-9]'] = 3, ['[0-9][.-]?pool'] = 3, 
-['[.-]cable[.-]'] = 5, ['cable[.-][0-9]'] = 5, ['[0-9][.-]?cable'] = 5,
-['[.-]host[.-]'] = 3, ['host[.-][0-9]'] = 3, ['[0-9][.-]?host'] = 3,
-['[.-]customers[.-]'] = 2, ['customers[.-][0-9]'] = 2, ['[0-9][.-]?customers'] = 2
+['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5, 
+['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5, 
+['[.-]clients?[.-]'] = 5, ['clients?[.-][0-9]'] = 5, ['[0-9][.-]?clients?'] = 5, 
+['[.-]dynip[.-]'] = 5, ['dynip[.-][0-9]'] = 5, ['[0-9][.-]?dynip'] = 5, 
+['[.-]broadband[.-]'] = 5, ['broadband[.-][0-9]'] = 5, ['[0-9][.-]?broadband'] = 5, 
+['[.-]broad[.-]'] = 5, ['broad[.-][0-9]'] = 5, ['[0-9][.-]?broad'] = 5, 
+['[.-]bredband[.-]'] = 5, ['bredband[.-][0-9]'] = 5, ['[0-9][.-]?bredband'] = 5, 
+['[.-]nat[.-]'] = 5, ['nat[.-][0-9]'] = 5, ['[0-9][.-]?nat'] = 5, 
+['[.-]pptp[.-]'] = 5, ['pptp[.-][0-9]'] = 5, ['[0-9][.-]?pptp'] = 5, 
+['[.-]pppoe[.-]'] = 5, ['pppoe[.-][0-9]'] = 5, ['[0-9][.-]?pppoe'] = 5, 
+['[.-]ppp[.-]'] = 5, ['ppp[.-][0-9]'] = 5, ['[0-9][.-]?ppp'] = 5, 
+['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4, 
+['[.-][a|x]?dsl-dynamic[.-]'] = 5, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 5, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 5, 
+['[.-][a|x]?dsl-line[.-]'] = 4, ['[a|x]?dsl-line[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-line'] = 4, 
+['[.-]dhcp[.-]'] = 5, ['dhcp[.-][0-9]'] = 5, ['[0-9][.-]?dhcp'] = 5, 
+['[.-]catv[.-]'] = 5, ['catv[.-][0-9]'] = 5, ['[0-9][.-]?catv'] = 5, 
+['[.-]wifi[.-]'] = 5, ['wifi[.-][0-9]'] = 5, ['[0-9][.-]?wifi'] = 5, 
+['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3, 
+['[.-]dial-?up[.-]'] = 5, ['dial-?up[.-][0-9]'] = 5, ['[0-9][.-]?dial-?up'] = 5, 
+['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
+['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5, 
+['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5, 
+['[.-]in-?addr[.-]'] = 4, ['in-?addr[.-][0-9]'] = 4, ['[0-9][.-]?in-?addr'] = 4, 
+['[.-]pool[.-]'] = 4, ['pool[.-][0-9]'] = 4, ['[0-9][.-]?pool'] = 4, 
+['[.-]cable[.-]'] = 3, ['cable[.-][0-9]'] = 3, ['[0-9][.-]?cable'] = 3,
+['[.-]host[.-]'] = 2, ['host[.-][0-9]'] = 2, ['[0-9][.-]?host'] = 2,
+['[.-]customers[.-]'] = 1, ['customers[.-][0-9]'] = 1, ['[0-9][.-]?customers'] = 1
 }
 
---Checks for HELO only
 local checks_hello = {
-['localhost$'] = 5, 
+['localhost$'] = 5, ['\\.hfilter\\.ru'] = 5, ['^\\[*84\\.47\\.176\\.(70|71)'] = 5, ['^\\[*81\\.26\\.148\\.(66|67|68|69|70|71|72|73|74|75|76|77|79)'] = 5,
 ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
 ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5,
 ['^\\[*127\\.'] = 5, ['^\\[*10\\.'] = 5, ['^\\[*172\\.16\\.'] = 5, ['^\\[*192\\.168\\.'] = 5,
 --bareip
-['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 5
+['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4
 }
 
---
 local function trim1(s)
   return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
---
 local function check_regexp(str, regexp_text)
     local re = regexp.get_cached(regexp_text)
     if not re then re = regexp.create(regexp_text, 'i') end
     if re:match(str) then return true end
 return false
+end
+
+local function split(str, delim, maxNb)
+    -- Eliminate bad cases...
+    if string.find(str, delim) == nil then
+        return { str }
+    end
+    if maxNb == nil or maxNb < 1 then
+        maxNb = 0    -- No limit
+    end
+    local result = {}
+    local pat = "(.-)" .. delim .. "()"
+    local nb = 0
+    local lastPos
+    for part, pos in string.gmatch(str, pat) do
+        nb = nb + 1
+        result[nb] = part
+        lastPos = pos
+        if nb == maxNb then break end
+    end
+    -- Handle the last field
+    if nb ~= maxNb then
+        result[nb + 1] = string.sub(str, lastPos)
+    end
+    return result
+end
+
+-- host: host for check
+-- symbol_suffix: suffix for symbol
+-- eq_ip: ip for comparing or empty string
+-- eq_host: host for comparing or empty string
+local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
+
+    local function check_host_cb_mx_a(resolver, to_resolve, results, err)
+        task:inc_dns_req()
+        if not results then
+            task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX', 1.0)
+        end
+    end
+    local function check_host_cb_mx(resolver, to_resolve, results, err)
+        task:inc_dns_req()
+        if not results then
+            task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0)
+        else
+            for _,mx in pairs(results) do
+                if mx['name'] then
+                    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), mx['name'], check_host_cb_mx_a)
+                end
+            end
+        end
+    end
+    local function check_host_cb_a(resolver, to_resolve, results, err)
+        task:inc_dns_req()
+        
+        if not results then
+            task:get_resolver():resolve_mx(task:get_session(), task:get_mempool(), host, check_host_cb_mx)
+        elseif eq_ip ~= '' then
+            for _,result in pairs(results) do 
+                if result:to_string() == eq_ip then
+                    --task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_TRUE_A', 0.0)
+                    return true
+                end
+            end
+            task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0)
+        end
+    end
+
+    if host then
+        host = string.lower(host)
+    else
+        return false
+    end
+    if eq_host then
+        eq_host = string.lower(eq_host)
+    else
+        eq_host = ''
+    end
+
+    if check_regexp(host, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then --FQDN check
+        if eq_host == '' or eq_host ~= host then
+            task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), host, check_host_cb_a)
+        end
+    else
+        task:insert_result('HFILTER_' .. symbol_suffix .. '_NOT_FQDN', 1.0)
+    end
+    
+return true
 end
 
 --
@@ -98,83 +179,34 @@ local function hfilter(task)
             helo_lower = false
         end
     
+    --MESSAGE--
+    local message = task:get_message()
+    
+    --RULES--RULES--RULES--
+
     -- Check's HELO
     local checks_hello_found = false
-    if helo then
+    if helo    then
         -- Regexp check HELO
         for regexp,weight in pairs(checks_hello) do
             if check_regexp(helo_lower, regexp) then
-                task:insert_result('HFILTER_HELO' .. weight, 1.0)
+                task:insert_result('HFILTER_HELO_' .. weight, 1.0)
                 checks_hello_found = true
                 break
             end
         end
         if not checks_hello_found then
-            local checks_hello_found = false
             for regexp,weight in pairs(checks_hellohost) do
                 if check_regexp(helo_lower, regexp) then
-                    task:insert_result('HFILTER_HELO' .. weight, 1.0)
+                    task:insert_result('HFILTER_HELO_' .. weight, 1.0)
+                    checks_hello_found = true
                     break
                 end
             end
         end
         
-        --------
-        local function hfilter_heloip_cb_mx_a(resolver, to_resolve, results, err)
-            task:inc_dns_req()
-            if not results then
-                task:insert_result('HFILTER_HELO_NORESOLVE_MX', 1.0)
-            elseif ip then
-                for _,result in pairs(results) do 
-                    local helo_ip = result:to_string()
-                    if helo_ip == ip then
-                        --task:insert_result('HFILTER_CHECK_HELO_IP_TRUE_MX', 0.0)
-                        return true
-                    end
-                end
-                task:insert_result('HFILTER_CHECK_HELO_IP_MX', 1.0)
-            end
-        end
-        --
-        local function hfilter_heloip_cb_mx(resolver, to_resolve, results, err)
-            task:inc_dns_req()
-            if not results then
-                task:insert_result('HFILTER_HELO_NORESOLVE_A_OR_MX', 1.0)
-            else
-                for _,mx in pairs(results) do
-                    if mx['name'] then
-                        task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), mx['name'], hfilter_heloip_cb_mx_a)
-                    end
-                end
-            end
-        end
-        --
-        local function hfilter_heloip_cb_a(resolver, to_resolve, results, err)
-            task:inc_dns_req()
-            if not results then
-                task:get_resolver():resolve_mx(task:get_session(), task:get_mempool(), helo_lower, hfilter_heloip_cb_mx)
-            elseif ip then
-                for _,result in pairs(results) do 
-                    local helo_ip = result:to_string()
-                    if helo_ip == ip then
-                        --task:insert_result('HFILTER_CHECK_HELO_IP_TRUE_A', 0.0)
-                        return true
-                    end
-                end
-                task:insert_result('HFILTER_CHECK_HELO_IP_A', 1.0)
-            end
-        end
-        --------
-
         --FQDN check HELO
-        if check_regexp(helo, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then
-            --Resolve and check's HELO ip--
-            if not hostname or hostname_lower ~= helo_lower then
-                task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), helo_lower, hfilter_heloip_cb_a)
-            end
-        else
-            task:insert_result('HFILTER_HELO_NOT_FQDN', 1.0)
-        end
+        check_host(task, helo, 'HELO', ip, hostname)
     end
     
     --
@@ -182,25 +214,48 @@ local function hfilter(task)
         -- Check regexp HOSTNAME
         for regexp,weight in pairs(checks_hellohost) do
             if check_regexp(hostname_res, regexp) then
-                task:insert_result('HFILTER_HOSTNAME' .. weight, 1.0)
+                task:insert_result('HFILTER_HOSTNAME_' .. weight, 1.0)
                 break
             end
         end
     end
-    --
     local function hfilter_hostname_ptr(resolver, to_resolve, results, err)
         task:inc_dns_req()
         if results then
             check_hostname(results[1])
         end
     end
+    
     -- Check's HOSTNAME
-    if not checks_hello_found then
-        if hostname then
+    if hostname then
+        if not checks_hello_found then
             check_hostname(hostname)
-        else
-            task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
-            task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), ip, hfilter_hostname_ptr)
+        end
+    else
+        task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
+		if not checks_hello_found then
+			task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), ip, hfilter_hostname_ptr)
+		end
+    end
+
+    -- MAILFROM checks --
+    local from = task:get_from()
+    if from then
+        --FROM host check
+        for _,fr in ipairs(from) do
+            local fr_split = split(fr['addr'], '@', 0)
+            if table.maxn(fr_split) == 2 then
+                check_host(task, fr_split[2], 'FROMHOST', '', '')
+            end
+        end
+    end
+    
+    --Message ID host check
+    local message_id = task:get_message_id()
+    if message_id then
+        local mid_split = split(message_id, '@', 0)
+        if table.maxn(mid_split) == 2 and not string.find(mid_split[2], "local") then
+            check_host(task, mid_split[2], 'MID', '', '')
         end
     end
     
@@ -218,7 +273,6 @@ local function hfilter(task)
                     for _,url in ipairs(urls) do
                         total_url_len = total_url_len + string.len(url:get_text())
                     end
-
                     if total_url_len > 0 then
                         if total_url_len + 7 > total_part_len then
                             task:insert_result('HFILTER_URL_ONLY', 1.00)
@@ -237,10 +291,9 @@ local function hfilter(task)
 end
 
 rspamd_config:register_symbols(hfilter, 1.0, 
-'HFILTER_HELO_1', 'HFILTER_HELO_2', 'HFILTER_HELO_3', 'HFILTER_HELO_4', 'HFILTER_HELO_5',
-'HFILTER_HELO_NORESOLVE_MX', 'HFILTER_CHECK_HELO_IP_MX', 'HFILTER_HELO_NORESOLVE_A_OR_MX',
-'HFILTER_CHECK_HELO_IP_A', 'HFILTER_HELO_NOT_FQDN',
-'HFILTER_HOSTNAME_1', 'HFILTER_HOSTNAME_2', 'HFILTER_HOSTNAME_3', 'HFILTER_HOSTNAME_4', 'HFILTER_HOSTNAME_5',
-'HFILTER_HOSTNAME_NOPTR',
-'HFILTER_URL_ONLY',
-'HFILTER_URL_ONELINE');
+"HFILTER_HELO_1", "HFILTER_HELO_2", "HFILTER_HELO_3", "HFILTER_HELO_4", "HFILTER_HELO_5", 
+"HFILTER_HOSTNAME_1", "HFILTER_HOSTNAME_2", "HFILTER_HOSTNAME_3", "HFILTER_HOSTNAME_4", "HFILTER_HOSTNAME_5", 
+"HFILTER_HELO_NORESOLVE_MX", "HFILTER_HELO_NORES_A_OR_MX", "HFILTER_HELO_IP_A", "HFILTER_HELO_NOT_FQDN", 
+"HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN", "HFILTER_MID_NORESOLVE_MX", 
+"HFILTER_MID_NORES_A_OR_MX", "HFILTER_MID_NOT_FQDN", "HFILTER_HOSTNAME_NOPTR",
+"HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
