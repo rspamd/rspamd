@@ -63,6 +63,8 @@
 /* Current version of fuzzy hash file format */
 #define CURRENT_FUZZY_VERSION 1
 
+#define INVALID_NODE_TIME (guint64)-1
+
 /* Init functions */
 gpointer init_fuzzy (struct config_file *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
@@ -121,6 +123,7 @@ struct fuzzy_session {
 	gint fd;
 	u_char *pos;
 	socklen_t salen;
+	guint64 time;
 	union {
 		struct sockaddr ss;
 		struct sockaddr_storage sa;
@@ -173,23 +176,15 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 
 	for (i = 0; i < expired_num; i ++) {
 #ifdef WITH_JUDY
-		PPvoid_t                        pvalue;
-		gpointer                        data;
-
 		if (ctx->use_judy) {
 			node = (struct rspamd_fuzzy_node *)to_expire[i];
+			if (node->time != INVALID_NODE_TIME) {
+				server_stat->fuzzy_hashes_expired ++;
+			}
+			server_stat->fuzzy_hashes --;
 			JudySLDel (&jtree, node->h.hash_pipe, PJE0);
 			bloom_del (bf, node->h.hash_pipe);
 			g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
-
-			pvalue = JudySLGet (jtree, node->h.hash_pipe, PJE0);
-			if (pvalue) {
-				data = *pvalue;
-				JudySLDel (&jtree, node->h.hash_pipe, PJE0);
-				g_slice_free1 (sizeof (struct rspamd_fuzzy_node), data);
-				server_stat->fuzzy_hashes_expired ++;
-				server_stat->fuzzy_hashes --;
-			}
 		}
 		else {
 #endif
@@ -198,7 +193,9 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 		head = hashes[node->h.block_size % BUCKETS];
 		g_queue_delete_link (head, cur);
 		bloom_del (bf, node->h.hash_pipe);
-		server_stat->fuzzy_hashes_expired++;
+		if (node->time != INVALID_NODE_TIME) {
+			server_stat->fuzzy_hashes_expired ++;
+		}
 		server_stat->fuzzy_hashes--;
 		g_slice_free1 (sizeof(struct rspamd_fuzzy_node), node);
 #ifdef WITH_JUDY
@@ -277,7 +274,7 @@ sync_cache (gpointer ud)
 			pvalue = JudySLFirst (jtree, indexbuf, PJE0);
 			while (pvalue) {
 				node = *((struct rspamd_fuzzy_node **)pvalue);
-				if (now - node->time > expire) {
+				if (node->time == INVALID_NODE_TIME || now - node->time > expire) {
 					if (nodes_expired == NULL) {
 						nodes_expired = g_malloc (max_expired * sizeof (gpointer));
 					}
@@ -558,7 +555,8 @@ read_hashes_file (struct rspamd_worker *wrk)
 }
 
 static inline struct rspamd_fuzzy_node *
-check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd_fuzzy_storage_ctx *ctx)
+check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value,
+		guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	GList                          *cur;
 	struct rspamd_fuzzy_node       *h;
@@ -571,8 +569,17 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd
 		pvalue = JudySLGet (jtree, s->hash_pipe, PJE0);
 		if (pvalue != NULL) {
 			h = *((struct rspamd_fuzzy_node **)pvalue);
-			/* Also check block size */
-			if (h->h.block_size== s->block_size) {
+
+			if (h->time == INVALID_NODE_TIME) {
+				/* Node is expired */
+				return NULL;
+			}
+			else if (update_value == 0 && time - h->time > ctx->expire) {
+				h->time = INVALID_NODE_TIME;
+				server_stat->fuzzy_hashes_expired ++;
+				return NULL;
+			}
+			else if (h->h.block_size== s->block_size) {
 				msg_info ("fuzzy hash was found in judy tree");
 				if (update_value) {
 					h->value += update_value;
@@ -588,9 +595,17 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd
 		h = cur->data;
 		if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
 			msg_info ("fuzzy hash was found, probability %d%%", prob);
-			if (update_value) {
+			if (h->time == INVALID_NODE_TIME) {
+				return NULL;
+			}
+			else if (update_value) {
 				msg_info ("new hash weight: %d", h->value);
 				h->value += update_value;
+			}
+			else if (time - h->time > ctx->expire) {
+				h->time = INVALID_NODE_TIME;
+				server_stat->fuzzy_hashes_expired ++;
+				return NULL;
 			}
 			return h;
 		}
@@ -602,9 +617,17 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd
 		h = cur->data;
 		if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
 			msg_info ("fuzzy hash was found, probability %d%%", prob);
-			if (update_value) {
-				h->value += update_value;
+			if (h->time == INVALID_NODE_TIME) {
+				return NULL;
+			}
+			else if (update_value) {
 				msg_info ("new hash weight: %d", h->value);
+				h->value += update_value;
+			}
+			else if (time - h->time > ctx->expire) {
+				h->time = INVALID_NODE_TIME;
+				server_stat->fuzzy_hashes_expired ++;
+				return NULL;
 			}
 			if (h->value > (gint)ctx->frequent_score) {
 				g_queue_unlink (hash, cur);
@@ -623,7 +646,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value, struct rspamd
 }
 
 static                          gint
-process_check_command (struct fuzzy_cmd *cmd, gint *flag, struct rspamd_fuzzy_storage_ctx *ctx)
+process_check_command (struct fuzzy_cmd *cmd, gint *flag, guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	fuzzy_hash_t                    s;
 	struct rspamd_fuzzy_node       *h;
@@ -637,7 +660,7 @@ process_check_command (struct fuzzy_cmd *cmd, gint *flag, struct rspamd_fuzzy_st
 	s.block_size = cmd->blocksize;
 
 	rspamd_rwlock_reader_lock (ctx->tree_lock);
-	h = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0, ctx);
+	h = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, 0, time, ctx);
 	rspamd_rwlock_reader_unlock (ctx->tree_lock);
 
 	if (h == NULL) {
@@ -650,24 +673,28 @@ process_check_command (struct fuzzy_cmd *cmd, gint *flag, struct rspamd_fuzzy_st
 }
 
 static                          gboolean
-update_hash (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *ctx)
+update_hash (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	fuzzy_hash_t                    s;
-	gboolean                        r;
+	struct rspamd_fuzzy_node      *n;
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 	mods ++;
 
 	rspamd_rwlock_writer_lock (ctx->tree_lock);
-	r = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value, ctx) != NULL;
+	n = check_hash_node (hashes[cmd->blocksize % BUCKETS], &s, cmd->value, time, ctx);
 	rspamd_rwlock_writer_unlock (ctx->tree_lock);
 
-	return r;
+	if (n != NULL) {
+		n->time = time;
+		return TRUE;
+	}
+	return FALSE;
 }
 
 static                          gboolean
-process_write_command (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *ctx)
+process_write_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	struct rspamd_fuzzy_node       *h;
 #ifdef WITH_JUDY
@@ -675,7 +702,7 @@ process_write_command (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *c
 #endif
 
 	if (bloom_check (bf, cmd->hash)) {
-		if (update_hash (cmd, ctx)) {
+		if (update_hash (cmd, time, ctx)) {
 			return TRUE;
 		}
 	}
@@ -684,7 +711,7 @@ process_write_command (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *c
 	h = g_slice_alloc (sizeof (struct rspamd_fuzzy_node));
 	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
 	h->h.block_size = cmd->blocksize;
-	h->time = (guint64) time (NULL);
+	h->time = time;
 	h->value = cmd->value;
 	h->flag = cmd->flag;
 #ifdef WITH_JUDY
@@ -764,7 +791,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s, struct rspamd_fuzzy_storage_ctx *ctx
 }
 
 static                          gboolean
-process_delete_command (struct fuzzy_cmd *cmd, struct rspamd_fuzzy_storage_ctx *ctx)
+process_delete_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	fuzzy_hash_t                    s;
 	gboolean                        res = FALSE;
@@ -817,7 +844,7 @@ check_fuzzy_client (struct fuzzy_session *session)
 
 #define CMD_PROCESS(x)																			\
 do {																							\
-if (process_##x##_command (&session->cmd, session->worker->ctx)) {													\
+if (process_##x##_command (&session->cmd, session->time, session->worker->ctx)) {				\
 	if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0, &session->client_addr.ss, session->salen) == -1) {							\
 		msg_err ("error while writing reply: %s", strerror (errno));		\
 	}																							\
@@ -837,7 +864,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
-		r = process_check_command (&session->cmd, &flag, session->worker->ctx);
+		r = process_check_command (&session->cmd, &flag, session->time, session->worker->ctx);
 		if (r != 0) {
 			r = rspamd_snprintf (buf, sizeof (buf), "OK %d %d" CRLF, r, flag);
 			if (sendto (session->fd, buf, r, 0,
@@ -910,6 +937,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	session.pos = (u_char *) & session.cmd;
 	session.salen = sizeof (session.client_addr);
 	session.ctx = worker->ctx;
+	session.time = (guint64)time (NULL);
 
 	/* Got some data */
 	if (what == EV_READ) {
