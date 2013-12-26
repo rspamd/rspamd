@@ -286,7 +286,7 @@ MACRO(ProcessPackage var _name0)
         FOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
             SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
         ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
-        LIST(APPEND CMAKE_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
+        LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
     ENDIF(${var}_FOUND)
 ENDMACRO(ProcessPackage name)
 
@@ -325,7 +325,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
                                                /usr/lib
                                                /usr/local/lib
                  DOC "Path where the libintl library can be found")
-    LIST(APPEND CMAKE_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
+    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
 	MESSAGE(STATUS "Configuring for FreeBSD")
  
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -338,7 +338,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
                                                /usr/lib
                                                /usr/local/lib
                  DOC "Path where the libintl library can be found")
-    LIST(APPEND CMAKE_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
+    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
 	MESSAGE(STATUS "Configuring for Darwin")
 
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -583,7 +583,7 @@ IF(LIBUTIL_LIBRARY)
 											   /usr/local/include
 				DOC "Path to libutil header")
 	IF(HAVE_LIBUTIL_H)
-		LIST(APPEND CMAKE_REQUIRED_LIBRARIES util)
+		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES util)
 		CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
 		CHECK_FUNCTION_EXISTS(pidfile_fileno HAVE_PIDFILE_FILENO)
 	ENDIF(HAVE_LIBUTIL_H)
@@ -632,6 +632,8 @@ ELSE(ENABLE_STATIC MATCHES "ON")
         SET(LINK_TYPE "STATIC")
     ENDIF(NO_SHARED MATCHES "OFF")
 ENDIF(ENABLE_STATIC MATCHES "ON")
+
+LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
 
 # Process with warn flags
 SET(CMAKE_C_WARN_FLAGS "")
@@ -973,7 +975,7 @@ ENDIF(OPENSSL_FOUND)
 IF(HAVE_FETCH_H)
 	TARGET_LINK_LIBRARIES(rspamd fetch)
 ENDIF(HAVE_FETCH_H)
-TARGET_LINK_LIBRARIES(rspamd ${CMAKE_REQUIRED_LIBRARIES})
+TARGET_LINK_LIBRARIES(rspamd ${RSPAMD_REQUIRED_LIBRARIES})
 
 IF(ENABLE_LUAJIT MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamd "${LUAJIT_LIBRARY}")
