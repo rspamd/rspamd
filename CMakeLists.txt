@@ -28,7 +28,6 @@ OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  
 OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
-OPTION(ENABLE_PROFILING    "Enable profiling [default: OFF]"                    OFF)
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: OFF]"                 OFF)
@@ -36,6 +35,7 @@ OPTION(ENABLE_JUDY         "Find and link with Judy library [default: ON]"      
 OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
 OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
 OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: OFF]"  OFF)
+OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: OFF]"          OFF)
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
@@ -160,6 +160,7 @@ MACRO(AddModules MLIST WLIST)
 	#ENDIF(NOT EXISTS "src/modules.c")
 ENDMACRO(AddModules MLIST WLIST)
 
+# Find lua installation
 MACRO(FindLua _major _minor)
 	# Find lua libraries
 	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
@@ -261,6 +262,33 @@ FUNCTION(INSTALL_IF_NOT_EXISTS src dest suffix)
   ")
 ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
 
+# Process required package by using FindPackage and calling for INCLUDE_DIRECTORIES and
+# setting list of required libraries
+MACRO(ProcessPackage var _name0)
+    PKG_SEARCH_MODULE(${var} REQUIRED "${_name0}" ${ARGN})
+    IF(${var}_FOUND)
+        SET(WITH_${var} 1)
+        IF(ENABLE_STATIC MATCHES "ON")
+            SET(_XPREFIX "${var}_STATIC")
+        ELSE(ENABLE_STATIC MATCHES "ON")
+            SET(_XPREFIX "${var}")
+        ENDIF(ENABLE_STATIC MATCHES "ON")
+        FOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
+            INCLUDE_DIRECTORIES("${_arg}")
+        ENDFOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
+        FOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
+            LINK_DIRECTORIES("${_arg}")
+        ENDFOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
+        # Handle other CFLAGS and LDFLAGS
+        FOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
+            SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_arg}")
+        ENDFOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
+        FOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
+            SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
+        ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
+        LIST(APPEND CMAKE_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
+    ENDIF(${var}_FOUND)
+ENDMACRO(ProcessPackage name)
 
 ############################# CONFIG SECTION #############################################
 # Initial set
@@ -328,13 +356,16 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)
+	#XXX: gio bug workaround
+	IF(ENABLE_STATIC MATCHES "ON")
+	    LIST(APPEND CMAKE_REQUIRED_LIBRARIES selinux)
+	ENDIF(ENABLE_STATIC MATCHES "ON")
 	MESSAGE(STATUS "Configuring for Linux")
 	IF(EXISTS "/etc/debian_version")
 		SET(LINUX_START_SCRIPT "rspamd_debian.in")
 	ELSE(EXISTS "/etc/debian_version")
 		SET(LINUX_START_SCRIPT "rspamd_rh.in")
 	ENDIF(EXISTS "/etc/debian_version")
-	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--as-needed")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
@@ -398,27 +429,9 @@ ELSE(NOT LUA_FOUND)
     INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
 ENDIF(NOT LUA_FOUND)
 
-# Check and link to pcre
-pkg_check_modules(PCRE REQUIRED libpcre)
-IF(PCRE_INCLUDE_DIRS)
-	INCLUDE_DIRECTORIES("${PCRE_INCLUDE_DIRS}")
-ENDIF(PCRE_INCLUDE_DIRS)
-IF(PCRE_LIBRARY_DIRS)
-	LINK_DIRECTORIES("${PCRE_LIBRARY_DIRS}")
-ENDIF(PCRE_LIBRARY_DIRS)
-
 IF(ENABLE_SQLITE MATCHES "ON")
 	# Find optional sqlite3 support
-	pkg_check_modules(SQLITE sqlite3>=3.6.0)
-	IF(SQLITE_FOUND)
-		SET(WITH_SQLITE 1)
-	ENDIF(SQLITE_FOUND)
-	IF(SQLITE_INCLUDE_DIRS)
-		INCLUDE_DIRECTORIES("${SQLITE_INCLUDE_DIRS}")
-	ENDIF(SQLITE_INCLUDE_DIRS)
-	IF(SQLITE_LIBRARY_DIRS)
-		LINK_DIRECTORIES("${SQLITE_LIBRARY_DIRS}")
-	ENDIF(SQLITE_LIBRARY_DIRS)
+	ProcessPackage(SQLITE sqlite3>=3.6.0)
 ENDIF(ENABLE_SQLITE MATCHES "ON")
 
 #Check for openssl (required for dkim)
@@ -427,129 +440,19 @@ IF(OPENSSL_FOUND)
 	INCLUDE_DIRECTORIES("${OPENSSL_INCLUDE_DIR}")
 ENDIF(OPENSSL_FOUND)
 
-IF(ENABLE_STATIC MATCHES "ON")
-	pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.12 gthread-2.0 gmodule-2.0)
-	SET(LINK_TYPE "STATIC")
-ELSE(ENABLE_STATIC MATCHES "ON")
-	pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.12 gthread-2.0 gmodule-2.0)
-	IF(NO_SHARED MATCHES "OFF")
-		SET(LINK_TYPE "SHARED")
-	ELSE(NO_SHARED MATCHES "OFF")
-		SET(LINK_TYPE "STATIC")
-	ENDIF(NO_SHARED MATCHES "OFF")
-ENDIF(ENABLE_STATIC MATCHES "ON")
-SET(GLIB2_VERSION "${GLIB2_glib-2.0_VERSION}")
-
-IF(GLIB2_VERSION VERSION_GREATER "2.30.0")
-	pkg_check_modules(LIBFFI libffi)
-	IF(LIBFFI_FOUND)
-		SET(GLIB2_LDFLAGS "${GLIB2_LDFLAGS};${LIBFFI_LDFLAGS}")
-		SET(GLIB2_LIBRARIES "${GLIB2_LIBRARIES};${LIBFFI_LIBRARIES}")
-		SET(GLIB2_STATIC_LDFLAGS "${GLIB2_STATIC_LDFLAGS};${LIBFFI_STATIC_LDFLAGS}")
-		SET(GLIB2_CFLAGS "${GLIB2_CFLAGS};${LIBFFI_CFLAGS}")
-	ENDIF(LIBFFI_FOUND)
-ENDIF(GLIB2_VERSION VERSION_GREATER "2.30.0") 
-pkg_check_modules(GMIME2 gmime-2.0)
+ProcessPackage(GLIB2 glib-2.0>=2.12)
+ProcessPackage(GTHREAD gthread-2.0)
 
 IF(ENABLE_HIREDIS MATCHES "ON")
 	# Try to find hiredis library
-	pkg_check_modules(HIREDIS REQUIRED libhiredis)
-	IF(HIREDIS_INCLUDE_DIRS)
-		INCLUDE_DIRECTORIES("${HIREDIS_INCLUDE_DIRS}")
-	ENDIF(HIREDIS_INCLUDE_DIRS)
-	IF(HIREDIS_LIBRARY_DIRS)
-		LINK_DIRECTORIES("${HIREDIS_LIBRARY_DIRS}")
-	ENDIF(HIREDIS_LIBRARY_DIRS)
-	IF(HIREDIS_FOUND)
-		SET(WITH_SYSTEM_HIREDIS 1)
-	ENDIF(HIREDIS_FOUND)
+	ProcessPackage(HIREDIS libhiredis)
 ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
-# Try to link with gmime24
-IF(NOT GMIME2_FOUND OR FORCE_GMIME24)
-	pkg_check_modules(GMIME24 gmime-2.4)
-	IF(NOT GMIME24_FOUND)
-		pkg_check_modules(GMIME24 REQUIRED gmime-2.6)
-	ENDIF(NOT GMIME24_FOUND)
-	SET(GMIME24 "yes")
-	# Gmime2
-	FOREACH(arg ${GMIME24_CFLAGS})
-		SET(GMIME_CFLAGS "${GMIME_CFLAGS} ${arg}")
-	ENDFOREACH(arg ${GMIME24_CFLAGS})
+ProcessPackage(GMIME2 gmime-2.6 gmime-2.4 gmime-2.0)
+IF(GMIME2_VERSION VERSION_GREATER "2.4.0")
+    SET(GMIME24 1)
+ENDIF(GMIME2_VERSION VERSION_GREATER "2.4.0")
 
-	IF(ENABLE_STATIC MATCHES "ON")
-		FOREACH(arg ${GMIME24_STATIC_LDFLAGS})
-			SET(GMIME_LDFLAGS "${GMIME_LDFLAGS} ${arg}")
-		ENDFOREACH(arg ${GMIME24_LDFLAGS})
-	ELSE(ENABLE_STATIC MATCHES "ON")
-		FOREACH(arg ${GMIME24_LDFLAGS})
-			SET(GMIME_LDFLAGS "${GMIME_LDFLAGS} ${arg}")
-		ENDFOREACH(arg ${GMIME24_LDFLAGS})
-	ENDIF(ENABLE_STATIC MATCHES "ON")
-	IF(GMIME24_INCLUDE_DIRS)
-		INCLUDE_DIRECTORIES(${GMIME24_INCLUDE_DIRS})
-	ENDIF(GMIME24_INCLUDE_DIRS)
-	IF(GMIME24_LIBRARY_DIRS)
-		LINK_DIRECTORIES(${GMIME24_LIBRARY_DIRS})
-	ENDIF(GMIME24_LIBRARY_DIRS)
-ELSE(NOT GMIME2_FOUND OR FORCE_GMIME24)
-	# Gmime2
-	FOREACH(arg ${GMIME2_CFLAGS})
-		SET(GMIME_CFLAGS "${GMIME_CFLAGS} ${arg}")
-	ENDFOREACH(arg ${GMIME2_CFLAGS})
-
-	IF(ENABLE_STATIC MATCHES "ON")
-		FOREACH(arg ${GMIME2_STATIC_LDFLAGS})
-			SET(GMIME_LDFLAGS "${GMIME_LDFLAGS} ${arg}")
-		ENDFOREACH(arg ${GMIME2_LDFLAGS})
-	ELSE(ENABLE_STATIC MATCHES "ON")
-		FOREACH(arg ${GMIME2_LDFLAGS})
-			SET(GMIME_LDFLAGS "${GMIME_LDFLAGS} ${arg}")
-		ENDFOREACH(arg ${GMIME2_LDFLAGS})
-	ENDIF(ENABLE_STATIC MATCHES "ON")
-	IF(GMIME2_INCLUDE_DIRS)
-		INCLUDE_DIRECTORIES(${GMIME2_INCLUDE_DIRS})
-	ENDIF(GMIME2_INCLUDE_DIRS)
-	IF(GMIME2_LIBRARY_DIRS)
-		LINK_DIRECTORIES(${GMIME2_LIBRARY_DIRS})
-	ENDIF(GMIME2_LIBRARY_DIRS)
-ENDIF(NOT GMIME2_FOUND OR FORCE_GMIME24)
-
-# Make from ; separated list normal space separated list
-# Glib2
-FOREACH(arg ${GLIB2_CFLAGS})
-	SET(GLIB_CFLAGS "${GLIB_CFLAGS} ${arg}")
-ENDFOREACH(arg ${GLIB2_CFLAGS})
-
-IF(ENABLE_STATIC MATCHES "ON")
-	FOREACH(arg ${GLIB2_STATIC_LDFLAGS})
-		SET(GLIB_LDFLAGS "${GLIB_LDFLAGS} ${arg}")
-	ENDFOREACH(arg ${GLIB2_LDFLAGS})
-ELSE(ENABLE_STATIC MATCHES "ON")
-	FOREACH(arg ${GLIB2_LDFLAGS})
-		SET(GLIB_LDFLAGS "${GLIB_LDFLAGS} ${arg}")
-	ENDFOREACH(arg ${GLIB2_LDFLAGS})
-ENDIF(ENABLE_STATIC MATCHES "ON")
-
-
-INCLUDE_DIRECTORIES(${GLIB2_INCLUDE_DIRS})
-LINK_DIRECTORIES(${GLIB2_LIBRARY_DIRS})
-
-
-FIND_LIBRARY(LIBZ_LIBRARY NAMES z PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                 DOC "Path where the libz library can be found")
-IF(NOT LIBZ_LIBRARY)
-	MESSAGE(FATAL_ERROR "libz is required for libgmime")
-ENDIF(NOT LIBZ_LIBRARY)
 # Check for libevent
 
 FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATH_SUFFIXES lib64 lib
@@ -633,20 +536,6 @@ IF(ENABLE_DB MATCHES "ON")
 	ENDIF(LIBDB_LIBRARY)
 ENDIF(ENABLE_DB MATCHES "ON")
 
-IF(ENABLE_PROFILING MATCHES "ON")
-	SET(WITH_PROFILER 1)
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg")
-	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
-ENDIF(ENABLE_PROFILING MATCHES "ON")
-
-# Static build
-
-IF(ENABLE_STATIC MATCHES "ON")
-	SET(BUILD_STATIC 1)
-	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -pthread")
-	MESSAGE(STATUS "Static build of rspamd, no custom plugins support")
-ENDIF(ENABLE_STATIC MATCHES "ON")
-
 # Google performance tools
 
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
@@ -702,31 +591,47 @@ ENDIF(LIBUTIL_LIBRARY)
 
 # Find libfetch (for FreeBSD)
 
-FIND_LIBRARY(LIBFETCH_LIBRARY NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                 DOC "Path where the libfetch library can be found")
-IF(LIBFETCH_LIBRARY)
-	FIND_FILE(HAVE_FETCH_H NAMES fetch.h PATHS /usr/include
-											   /opt/include
-											   /usr/local/include
-				DOC "Path to libfetch header")
-ELSE(LIBFETCH_LIBRARY)
-	# Try to find libcurl
-	INCLUDE(FindCURL)
-	IF(NOT CURL_FOUND)
-		MESSAGE(WARNING "Neither libcurl nor libfetch were found, no support of URL includes in configuration")
-	ELSE(NOT CURL_FOUND)
-		INCLUDE_DIRECTORIES("${CURL_INCLUDE_DIRS}")
-	ENDIF(NOT CURL_FOUND)
-ENDIF(LIBFETCH_LIBRARY)
+IF(ENABLE_URL_INCLUDE MATCHES "ON")
+    FIND_LIBRARY(LIBFETCH_LIBRARY NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
+                      PATHS
+                          ~/Library/Frameworks
+                          /Library/Frameworks
+                          /usr/local
+                          /usr
+                          /sw
+                          /opt/local
+                          /opt/csw
+                          /opt
+                     DOC "Path where the libfetch library can be found")
+    IF(LIBFETCH_LIBRARY)
+    	FIND_FILE(HAVE_FETCH_H NAMES fetch.h PATHS /usr/include
+    											   /opt/include
+    											   /usr/local/include
+    				DOC "Path to libfetch header")
+    ELSE(LIBFETCH_LIBRARY)
+    	# Try to find libcurl
+    	ProcessPackage(CURL libcurl)
+    	IF(NOT CURL_FOUND)
+    		MESSAGE(WARNING "Neither libcurl nor libfetch were found, no support of URL includes in configuration")
+    	ENDIF(NOT CURL_FOUND)
+    ENDIF(LIBFETCH_LIBRARY)
+ENDIF(ENABLE_URL_INCLUDE MATCHES "ON")
+
+# Static build
+
+IF(ENABLE_STATIC MATCHES "ON")
+	SET(BUILD_STATIC 1)
+	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -pthread")
+	MESSAGE(STATUS "Static build of rspamd, no custom plugins support")
+	SET(LINK_TYPE "STATIC")
+	SET(NO_SHARED "ON")
+ELSE(ENABLE_STATIC MATCHES "ON")
+    IF(NO_SHARED MATCHES "OFF")
+        SET(LINK_TYPE "SHARED")
+    ELSE(NO_SHARED MATCHES "OFF")
+        SET(LINK_TYPE "STATIC")
+    ENDIF(NO_SHARED MATCHES "OFF")
+ENDIF(ENABLE_STATIC MATCHES "ON")
 
 # Process with warn flags
 SET(CMAKE_C_WARN_FLAGS "")
@@ -1061,33 +966,14 @@ ENDIF(HAVE_LIBEVENT2)
 IF(WITH_DB)
 	TARGET_LINK_LIBRARIES(rspamd db)
 ENDIF(WITH_DB)
-IF(SQLITE_LIBRARIES)
-	TARGET_LINK_LIBRARIES(rspamd ${SQLITE_LIBRARIES})
-ENDIF(SQLITE_LIBRARIES)
 
 IF(OPENSSL_FOUND)
 	TARGET_LINK_LIBRARIES(rspamd ${OPENSSL_LIBRARIES})
 ENDIF(OPENSSL_FOUND)
-TARGET_LINK_LIBRARIES(rspamd ${PCRE_LIBRARIES})
-IF(GMIME24)
-	TARGET_LINK_LIBRARIES(rspamd ${GMIME24_LIBRARIES})
-ELSE(GMIME24)
-	TARGET_LINK_LIBRARIES(rspamd ${GMIME2_LIBRARIES})
-ENDIF(GMIME24)
-TARGET_LINK_LIBRARIES(rspamd ${GLIB2_LIBRARIES})
 IF(HAVE_FETCH_H)
 	TARGET_LINK_LIBRARIES(rspamd fetch)
-ELSE(HAVE_FETCH_H)
-	IF(CURL_FOUND)
-		TARGET_LINK_LIBRARIES(rspamd ${CURL_LIBRARIES})
-	ENDIF(CURL_FOUND)
 ENDIF(HAVE_FETCH_H)
 TARGET_LINK_LIBRARIES(rspamd ${CMAKE_REQUIRED_LIBRARIES})
-
-IF(ENABLE_STATIC MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd ${PCRE_LIBRARIES})
-	TARGET_LINK_LIBRARIES(rspamd "z")
-ENDIF(ENABLE_STATIC MATCHES "ON")
 
 IF(ENABLE_LUAJIT MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamd "${LUAJIT_LIBRARY}")
