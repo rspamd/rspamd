@@ -1,3 +1,15 @@
+0.6.6:
+	* Removed issue with BUFSIZ limitation in the controller output
+	* Simplify logging symbols escaping
+	* Adjusted weights for several rules
+	* Improve spamhaus rbl support
+	* Removed PBL for received headers checks
+	* Added hfilter module that performs various HELO and IP checks.
+	* Rspamd can now be reloaded by HUP signal
+	* Fuzzy storage should expire hashes properly
+	* Build system has been reworked for better supportof pkg-config
+	* Various minor bugfixes
+
 0.6.5:
 	* Fixed critical bug in DNS resolver, introduced in 0.6.4
 	* Improved multimap and rbl plugins to skip
