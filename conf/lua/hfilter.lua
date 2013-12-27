@@ -192,7 +192,7 @@ local function hfilter(task)
 
     -- Check's HELO
     local checks_hello_found = false
-    if helo    then
+    if helo then
         -- Regexp check HELO
         for regexp,weight in pairs(checks_hello) do
             if check_regexp(helo_lower, regexp) then
@@ -212,7 +212,9 @@ local function hfilter(task)
         end
         
         --FQDN check HELO
-        check_host(task, helo, 'HELO', ip, hostname)
+        if ip then
+            check_host(task, helo, 'HELO', ip, hostname)
+        end
     end
     
     --
@@ -239,7 +241,7 @@ local function hfilter(task)
         end
     else
         task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
-        if not checks_hello_found then
+        if ip and not checks_hello_found then
             task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), ip, hfilter_hostname_ptr)
         end
     end
