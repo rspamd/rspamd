@@ -166,12 +166,13 @@ fi
 %{rspamd_pluginsdir}/lua/trie.lua
 %{rspamd_pluginsdir}/lua/emails.lua
 %{rspamd_pluginsdir}/lua/ip_score.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/drugs.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/fraud.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/headers.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/lotto.lua
-%config(noreplace) %{rspamd_confdir}/lua/rspamd.lua
-%config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
+%{rspamd_confdir}/lua/regexp/drugs.lua
+%{rspamd_confdir}/lua/regexp/fraud.lua
+%{rspamd_confdir}/lua/regexp/headers.lua
+%{rspamd_confdir}/lua/regexp/lotto.lua
+%{rspamd_confdir}/lua/rspamd.lua
+%{rspamd_confdir}/lua/hfilter.lua
+%{rspamd_confdir}/lua/rspamd.classifiers.lua
 %if 0%{?suse_version}
 %{_sbindir}/rcrspamd
 %endif
@@ -180,7 +181,7 @@ fi
 * Fri Dec 27 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.6-1
 - Update to 0.6.6.
 
-* Wed Dec 20 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.5-1
+* Fri Dec 20 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.5-1
 - Update to 0.6.5.
 
 * Wed Dec 18 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.4-1
@@ -189,7 +190,7 @@ fi
 * Tue Dec 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.3-1
 - Update to 0.6.3.
 
-* Tue Dec 06 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.2-1
+* Fri Dec 06 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.2-1
 - Update to 0.6.2.
 
 * Tue Nov 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
