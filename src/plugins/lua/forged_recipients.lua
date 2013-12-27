@@ -37,7 +37,7 @@ function check_forged_headers(task)
 	end
 	-- Check sender
 	local smtp_from = task:get_from()
-	if smtp_form then
+	if smtp_from then
 		local mime_from = task:get_from_headers()
 		if not mime_from or not (string.lower(mime_from[1]['addr']) == string.lower(smtp_from[1]['addr'])) then
 			task:insert_result(symbol_sender, 1)
