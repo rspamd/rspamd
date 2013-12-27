@@ -80,6 +80,13 @@ local function split(str, delim, maxNb)
     return result
 end
 
+local function check_fqdn(domain)
+    if check_regexp(domain, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then
+        return true
+    end
+return false
+end
+
 -- host: host for check
 -- symbol_suffix: suffix for symbol
 -- eq_ip: ip for comparing or empty string
@@ -112,7 +119,6 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
         elseif eq_ip ~= '' then
             for _,result in pairs(results) do 
                 if result:to_string() == eq_ip then
-                    --task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_TRUE_A', 0.0)
                     return true
                 end
             end
@@ -131,7 +137,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
         eq_host = ''
     end
 
-    if check_regexp(host, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then --FQDN check
+    if check_fqdn(host) then
         if eq_host == '' or eq_host ~= host then
             task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), host, check_host_cb_a)
         end
@@ -233,9 +239,9 @@ local function hfilter(task)
         end
     else
         task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
-		if not checks_hello_found then
-			task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), ip, hfilter_hostname_ptr)
-		end
+        if not checks_hello_found then
+            task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), ip, hfilter_hostname_ptr)
+        end
     end
 
     -- MAILFROM checks --
@@ -255,7 +261,9 @@ local function hfilter(task)
     if message_id then
         local mid_split = split(message_id, '@', 0)
         if table.maxn(mid_split) == 2 and not string.find(mid_split[2], "local") then
-            check_host(task, mid_split[2], 'MID', '', '')
+            if not check_fqdn(mid_split[2]) then
+                task:insert_result('HFILTER_MID_NOT_FQDN', 1.00)
+            end
         end
     end
     
@@ -294,6 +302,7 @@ rspamd_config:register_symbols(hfilter, 1.0,
 "HFILTER_HELO_1", "HFILTER_HELO_2", "HFILTER_HELO_3", "HFILTER_HELO_4", "HFILTER_HELO_5", 
 "HFILTER_HOSTNAME_1", "HFILTER_HOSTNAME_2", "HFILTER_HOSTNAME_3", "HFILTER_HOSTNAME_4", "HFILTER_HOSTNAME_5", 
 "HFILTER_HELO_NORESOLVE_MX", "HFILTER_HELO_NORES_A_OR_MX", "HFILTER_HELO_IP_A", "HFILTER_HELO_NOT_FQDN", 
-"HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN", "HFILTER_MID_NORESOLVE_MX", 
-"HFILTER_MID_NORES_A_OR_MX", "HFILTER_MID_NOT_FQDN", "HFILTER_HOSTNAME_NOPTR",
+"HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN",  
+"HFILTER_MID_NOT_FQDN",
+"HFILTER_HOSTNAME_NOPTR",
 "HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
