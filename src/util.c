@@ -2401,7 +2401,6 @@ rspamd_random_bytes (gchar *buf, gsize buflen)
 {
 	gint fd;
 	gsize i;
-	time_t t;
 #ifdef HAVE_OPENSSL
 
 	/* Init random generator */
@@ -2426,12 +2425,9 @@ fallback:
 		close (fd);
 	}
 	/* No /dev/random */
-	for (i = 0; i < buflen;) {
-		/* Place least significant byte to the beginning */
-		t = time (NULL);
-		t = GLONG_TO_BE (t);
-		memcpy (&buf[i], &t, MIN (sizeof (t), buflen - i));
-		i += sizeof (t);
+	g_random_set_seed (time (NULL));
+	for (i = 0; i < buflen; i ++) {
+		buf[i] = g_random_int () & 0xff;
 	}
 }
 
