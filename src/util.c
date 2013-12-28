@@ -2397,25 +2397,50 @@ restart:
 }
 
 void
+rspamd_random_bytes (gchar *buf, gsize buflen)
+{
+	gint fd;
+	gsize i;
+	time_t t;
+#ifdef HAVE_OPENSSL
+
+	/* Init random generator */
+	if (RAND_bytes (buf, buflen) != 1) {
+		msg_err ("cannot seed random generator using openssl: %s, using time",
+				ERR_error_string (ERR_get_error (), NULL));
+		goto fallback;
+	}
+#else
+	goto fallback;
+#endif
+	return;
+
+fallback:
+	/* Try to use /dev/random if no openssl is found */
+	fd = open ("/dev/random", O_RDONLY);
+	if (fd != -1) {
+		if (read (fd, buf, buflen) == (gssize)buflen) {
+			close (fd);
+			return;
+		}
+		close (fd);
+	}
+	/* No /dev/random */
+	for (i = 0; i < buflen;) {
+		/* Place least significant byte to the beginning */
+		t = time (NULL);
+		t = GLONG_TO_BE (t);
+		memcpy (&buf[i], &t, MIN (sizeof (t), buflen - i));
+		i += sizeof (t);
+	}
+}
+
+void
 rspamd_prng_seed (void)
 {
 	guint32                          rand_seed = 0;
-#ifdef HAVE_OPENSSL
-	gchar                            rand_bytes[sizeof (guint32)];
 
-	/* Init random generator */
-	if (RAND_bytes (rand_bytes, sizeof (rand_bytes)) != 1) {
-		msg_err ("cannot seed random generator using openssl: %s, using time",
-				ERR_error_string (ERR_get_error (), NULL));
-		rand_seed = time (NULL);
-	}
-	else {
-		memcpy (&rand_seed, rand_bytes, sizeof (guint32));
-	}
-#else
-	rand_seed = time (NULL);
-#endif
-
+	rspamd_random_bytes ((gchar *)&rand_seed, sizeof (rand_seed));
 	g_random_set_seed (rand_seed);
 }
 

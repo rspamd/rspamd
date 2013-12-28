@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
- * Copyright (c) 2008, 2009, 2010  William Ahern
+ * Copyright (c) 2009-2013, Vsevolod Stakhov
  *
  * All rights reserved.
  *
@@ -24,16 +23,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* 
- * Rspamd resolver library is based on code written by William Ahern.
- *
- * The original library can be found at: http://25thandclement.com/~william/projects/dns.c.html
- */
-
 #include "config.h"
 #include "dns.h"
 #include "main.h"
 #include "utlist.h"
+#include "chacha_private.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #endif
@@ -53,18 +47,69 @@ static const unsigned initial_bias = 72;
 
 static const gint dns_port = 53;
 
-
-#ifdef HAVE_ARC4RANDOM
-#define DNS_RANDOM arc4random
-#elif defined HAVE_RANDOM
-#define DNS_RANDOM random
-#else
-#define DNS_RANDOM rand
-#endif
-
 #define UDP_PACKET_SIZE 4096
 
 #define DNS_COMPRESSION_BITS 0xC0
+
+static void dns_retransmit_handler (gint fd, short what, void *arg);
+
+/*
+ * DNS permutor utilities
+ */
+
+#define PERMUTOR_BUF_SIZE 32768
+#define PERMUTOR_KSIZE 32
+#define PERMUTOR_IVSIZE 8
+
+struct dns_permutor {
+	chacha_ctx ctx;
+	guchar perm_buf[PERMUTOR_BUF_SIZE];
+	guint pos;
+};
+
+/**
+ * Init chacha20 context
+ * @param p
+ */
+static void
+dns_permutor_init (struct dns_permutor *p)
+{
+	/* Init random key and IV */
+	rspamd_random_bytes (p->perm_buf, sizeof (p->perm_buf));
+
+	/* Setup ctx */
+	chacha_keysetup (&p->ctx, p->perm_buf, PERMUTOR_KSIZE * 8, 0);
+	chacha_ivsetup (&p->ctx, p->perm_buf + PERMUTOR_KSIZE);
+
+	chacha_encrypt_bytes (&p->ctx, p->perm_buf, p->perm_buf, sizeof (p->perm_buf));
+
+	p->pos = 0;
+}
+
+static struct dns_permutor *
+dns_permutor_new (memory_pool_t *pool)
+{
+	struct dns_permutor *new;
+
+	new = memory_pool_alloc0 (pool, sizeof (struct dns_permutor));
+	dns_permutor_init (new);
+
+	return new;
+}
+
+static guint16
+dns_permutor_generate_id (struct dns_permutor *p)
+{
+	guint16 id;
+	if (p->pos + sizeof (guint16) >= sizeof (p->perm_buf)) {
+		dns_permutor_init (p);
+	}
+
+	memcpy (&id, &p->perm_buf[p->pos], sizeof (guint16));
+	p->pos += sizeof (guint16);
+
+	return id;
+}
 
 /* Punycode utility */
 static guint digit(unsigned n)
@@ -201,240 +246,6 @@ punycode_label_toascii(const gunichar *in, gsize in_len, gchar *out,
 	return TRUE;
 }
 
-
-/*
- * P E R M U T A T I O N  G E N E R A T O R
- */
-
-#define DNS_K_TEA_BLOCK_SIZE	8
-#define DNS_K_TEA_CYCLES	32
-#define DNS_K_TEA_MAGIC		0x9E3779B9U
-
-static void dns_retransmit_handler (gint fd, short what, void *arg);
-
-
-static void 
-dns_k_tea_init(struct dns_k_tea *tea, guint32 key[], guint cycles) 
-{
-	memcpy(tea->key, key, sizeof tea->key);
-
-	tea->cycles	= (cycles)? cycles : DNS_K_TEA_CYCLES;
-} /* dns_k_tea_init() */
-
-
-static void 
-dns_k_tea_encrypt (struct dns_k_tea *tea, guint32 v[], guint32 *w) 
-{
-	guint32 y, z, sum, n;
-
-	y	= v[0];
-	z	= v[1];
-	sum	= 0;
-
-	for (n = 0; n < tea->cycles; n++) {
-		sum	+= DNS_K_TEA_MAGIC;
-		y	+= ((z << 4) + tea->key[0]) ^ (z + sum) ^ ((z >> 5) + tea->key[1]);
-		z	+= ((y << 4) + tea->key[2]) ^ (y + sum) ^ ((y >> 5) + tea->key[3]);
-	}
-
-	w[0]	= y;
-	w[1]	= z;
-
-} /* dns_k_tea_encrypt() */
-
-
-/*
- * Permutation generator, based on a Luby-Rackoff Feistel construction.
- *
- * Specifically, this is a generic balanced Feistel block cipher using TEA
- * (another block cipher) as the pseudo-random function, F. At best it's as
- * strong as F (TEA), notwithstanding the seeding. F could be AES, SHA-1, or
- * perhaps Bernstein's Salsa20 core; I am naively trying to keep things
- * simple.
- *
- * The generator can create a permutation of any set of numbers, as long as
- * the size of the set is an even power of 2. This limitation arises either
- * out of an inherent property of balanced Feistel constructions, or by my
- * own ignorance. I'll tackle an unbalanced construction after I wrap my
- * head around Schneier and Kelsey's paper.
- *
- * CAVEAT EMPTOR. IANAC.
- */
-#define DNS_K_PERMUTOR_ROUNDS	8
-
-
-
-static inline guint
-dns_k_permutor_powof (guint n) 
-{
-	guint                           m, i = 0;
-
-	for (m = 1; m < n; m <<= 1, i++);
-
-	return i;
-} /* dns_k_permutor_powof() */
-
-static void 
-dns_k_permutor_init (struct dns_k_permutor *p, guint low, guint high) 
-{
-	guint32                         key[DNS_K_TEA_KEY_SIZE / sizeof (guint32)];
-	guint width, i;
-
-	p->stepi	= 0;
-
-	p->length	= (high - low) + 1;
-	p->limit	= high;
-
-	width		= dns_k_permutor_powof (p->length);
-	width		+= width % 2;
-
-	p->shift	= width / 2;
-	p->mask		= (1U << p->shift) - 1;
-	p->rounds	= DNS_K_PERMUTOR_ROUNDS;
-
-#ifndef HAVE_OPENSSL
-	for (i = 0; i < G_N_ELEMENTS (key); i++) {
-		key[i]	= DNS_RANDOM ();
-	}
-#else
-	if (RAND_bytes ((unsigned char *)key, sizeof (key)) != 1) {
-		for (i = 0; i < G_N_ELEMENTS (key); i++) {
-			key[i]	= DNS_RANDOM ();
-		}
-	}
-#endif
-	dns_k_tea_init (&p->tea, key, 0);
-
-} /* dns_k_permutor_init() */
-
-
-static guint 
-dns_k_permutor_F (struct dns_k_permutor *p, guint k, guint x) 
-{
-	guint32                         in[DNS_K_TEA_BLOCK_SIZE / sizeof (guint32)], out[DNS_K_TEA_BLOCK_SIZE / sizeof (guint32)];
-
-	memset(in, '\0', sizeof in);
-
-	in[0]	= k;
-	in[1]	= x;
-
-	dns_k_tea_encrypt (&p->tea, in, out);
-
-	return p->mask & out[0];
-} /* dns_k_permutor_F() */
-
-
-static guint 
-dns_k_permutor_E (struct dns_k_permutor *p, guint n) 
-{
-	guint l[2], r[2];
-	guint i;
-
-	i	= 0;
-	l[i]	= p->mask & (n >> p->shift);
-	r[i]	= p->mask & (n >> 0);
-
-	do {
-		l[(i + 1) % 2]	= r[i % 2];
-		r[(i + 1) % 2]	= l[i % 2] ^ dns_k_permutor_F(p, i, r[i % 2]);
-
-		i++;
-	} while (i < p->rounds - 1);
-
-	return ((l[i % 2] & p->mask) << p->shift) | ((r[i % 2] & p->mask) << 0);
-} /* dns_k_permutor_E() */
-
-
-static guint 
-dns_k_permutor_D (struct dns_k_permutor *p, guint n) 
-{
-	guint l[2], r[2];
-	guint i;
-
-	i		= p->rounds - 1;
-	l[i % 2]	= p->mask & (n >> p->shift);
-	r[i % 2]	= p->mask & (n >> 0);
-
-	do {
-		i--;
-
-		r[i % 2]	= l[(i + 1) % 2];
-		l[i % 2]	= r[(i + 1) % 2] ^ dns_k_permutor_F(p, i, l[(i + 1) % 2]);
-	} while (i > 0);
-
-	return ((l[i % 2] & p->mask) << p->shift) | ((r[i % 2] & p->mask) << 0);
-} /* dns_k_permutor_D() */
-
-
-static guint 
-dns_k_permutor_step(struct dns_k_permutor *p) 
-{
-	guint n;
-
-	do {
-		n	= dns_k_permutor_E(p, p->stepi++);
-	} while (n >= p->length);
-
-	return n + (p->limit + 1 - p->length);
-} /* dns_k_permutor_step() */
-
-
-/*
- * Simple permutation box. Useful for shuffling rrsets from an iterator.
- * Uses AES s-box to provide good diffusion.
- */
-static guint16 
-dns_k_shuffle16 (guint16 n, guint s) 
-{
-	static const guint8 sbox[256] =
-	{ 0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
-	  0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
-	  0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
-	  0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
-	  0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc,
-	  0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
-	  0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a,
-	  0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
-	  0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0,
-	  0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
-	  0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b,
-	  0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
-	  0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85,
-	  0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
-	  0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5,
-	  0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
-	  0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17,
-	  0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
-	  0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88,
-	  0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
-	  0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c,
-	  0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
-	  0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9,
-	  0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
-	  0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6,
-	  0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
-	  0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e,
-	  0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
-	  0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94,
-	  0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
-	  0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68,
-	  0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
-	guchar                          a, b;
-	guint                           i;
-
-	a = 0xff & (n >> 0);
-	b = 0xff & (n >> 8);
-
-	for (i = 0; i < 4; i++) {
-		a ^= 0xff & s;
-		a = sbox[a] ^ b;
-		b = sbox[b] ^ a;
-		s >>= 8;
-	}
-
-	return ((0xff00 & (a << 8)) | (0x00ff & (b << 0)));
-} /* dns_k_shuffle16() */
-
 struct dns_request_key {
 	guint16 id;
 	guint16 port;
@@ -497,7 +308,7 @@ make_dns_header (struct rspamd_dns_request *req)
 	/* Set DNS header values */
 	header = (struct dns_header *)req->packet;
 	memset (header, 0 , sizeof (struct dns_header));
-	header->qid = dns_k_permutor_step (req->resolver->permutor);
+	header->qid = dns_permutor_generate_id (req->resolver->permutor);
 	header->rd = 1;
 	header->qdcount = htons (1);
 	req->pos += sizeof (struct dns_header);
@@ -1528,7 +1339,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		while (g_hash_table_lookup (req->io->requests, &req->id)) {
 			/* Check for unique id */
 			header = (struct dns_header *)req->packet;
-			header->qid = dns_k_permutor_step (resolver->permutor);
+			header->qid = dns_permutor_generate_id (resolver->permutor);
 			req->id = header->qid;
 			if (++r > max_id_cycles) {
 				msg_err ("cannot generate new id for server %s", serv->name);
@@ -1622,8 +1433,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	
 	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
 	new->ev_base = ev_base;
-	new->permutor = memory_pool_alloc (cfg->cfg_pool, sizeof (struct dns_k_permutor));
-	dns_k_permutor_init (new->permutor, 0, G_MAXUINT16);
+	new->permutor = dns_permutor_new (cfg->cfg_pool);
 	new->io_channels = g_hash_table_new (g_direct_hash, g_direct_equal);
 	new->static_pool = cfg->cfg_pool;
 	new->request_timeout = cfg->dns_timeout;

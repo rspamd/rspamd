@@ -455,4 +455,11 @@ gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
  */
 void rspamd_prng_seed (void);
 
+/**
+ * Generate random bytes using the most suitable generator
+ * @param buf
+ * @param buflen
+ */
+void rspamd_random_bytes (gchar *buf, gsize buflen);
+
 #endif
