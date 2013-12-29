@@ -15,8 +15,8 @@ statistics module.
 This document contains the basic documentation for rspamd spam filtering system. It is divided into the following
 parts:
 
-- [Architecture](/architecture/) presents the architecture of rspamd and how spam filtering is performed
-- [Rspamd configuration](/configuration/) describes principles of rspamd configuration
-- [Modules](/modules/) chapter lists rspamd modules and defines their configuration attributes
-- [Workers](/workers/) section describes workers that are implemented in the rspamd
-- [Lua API](/lua/) explains how to extend rspamd with own lua modules
+- [Architecture](architecture/) presents the architecture of rspamd and how spam filtering is performed
+- [Rspamd configuration](configuration/) describes principles of rspamd configuration
+- [Modules](modules/) chapter lists rspamd modules and defines their configuration attributes
+- [Workers](workers/) section describes workers that are implemented in the rspamd
+- [Lua API](lua/) explains how to extend rspamd with own lua modules
