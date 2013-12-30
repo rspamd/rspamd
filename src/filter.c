@@ -89,7 +89,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 	
 	weight = g_hash_table_lookup (metric->symbols, symbol);
 	if (weight == NULL) {
-		w = 1.0 * flag;
+		w = 0.0;
 	}
 	else {
 		w = (*weight) * flag;
