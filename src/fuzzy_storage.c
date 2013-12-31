@@ -98,7 +98,7 @@ static sig_atomic_t             wanna_die = 0;
 struct rspamd_fuzzy_storage_ctx {
 	gboolean                        use_judy;
 	char                           *hashfile;
-	guint32                         expire;
+	gdouble                         expire;
 	guint32                         frequent_score;
 	guint32                         max_mods;
 	radix_tree_t                   *update_ips;
@@ -1050,7 +1050,7 @@ init_fuzzy (struct config_file *cfg)
 
 	rspamd_rcl_register_worker_option (cfg, type, "expire",
 			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, expire), RSPAMD_CL_FLAG_TIME_UINT_32);
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, expire), RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	rspamd_rcl_register_worker_option (cfg, type, "use_judy",
 			rspamd_rcl_parse_struct_boolean, ctx,
