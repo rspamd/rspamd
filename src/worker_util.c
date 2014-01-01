@@ -152,7 +152,6 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->received) {
 			g_list_free (task->received);
 		}
-		memory_pool_delete (task->task_pool);
 		if (task->dispatcher) {
 			if (is_soft) {
 				/* Plan dispatcher shutdown */
@@ -165,6 +164,7 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->sock != -1) {
 			close (task->sock);
 		}
+		memory_pool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct worker_task), task);
 	}
 }

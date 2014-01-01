@@ -6,33 +6,34 @@ local symbol_strict = nil
 local bad_hosts = {}
 local good_hosts = {}
 
-function recv_dns_cb(task, to_resolve, results, err)
-	if not results then
-		task:insert_result(symbol_strict, 1)
-	else
-		rspamd_logger.info(string.format('SMTP resolver failed to resolve: %s is %s', to_resolve, results[1]))
-		local i = true
-		for _,h in ipairs(bad_hosts) do
-			if string.find(results[1], h) then
-				-- Check for good hostname
-				if good_hosts then
-					for _,gh in ipairs(good_hosts) do
-						if string.find(results[1], gh) then
-							i = false
-							break
+local function check_quantity_received (task)
+	local function recv_dns_cb(resolver, to_resolve, results, err)
+		task:inc_dns_req()
+		if not results then
+			task:insert_result(symbol_strict, 1)
+		else
+			rspamd_logger.info(string.format('SMTP resolver failed to resolve: %s is %s', to_resolve, results[1]))
+			local i = true
+			for _,h in ipairs(bad_hosts) do
+				if string.find(results[1], h) then
+					-- Check for good hostname
+					if good_hosts then
+						for _,gh in ipairs(good_hosts) do
+							if string.find(results[1], gh) then
+								i = false
+								break
+							end
 						end
 					end
-				end
-				if i then
-					task:insert_result(symbol_strict, 1, h)
-					return
+					if i then
+						task:insert_result(symbol_strict, 1, h)
+						return
+					end
 				end
 			end
 		end
 	end
-end
 
-function check_quantity_received (task)
 	local recvh = task:get_received_headers()
 	if table.maxn(recvh) <= 1 then
 		task:insert_result(symbol, 1)
@@ -43,10 +44,13 @@ function check_quantity_received (task)
                 return
             end
 			-- Unresolved host
-			if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
+			if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or 
+				string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
+				
 				if r['real_ip'] then
 					-- Try to resolve it again
-					task:resolve_dns_ptr(r['real_ip'], 'recv_dns_cb')
+					task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), 
+						tostring(r['real_ip']), recv_dns_cb)
 				else
 					task:insert_result(symbol_strict, 1)
 				end
@@ -91,7 +95,7 @@ end
 local opts =  rspamd_config:get_all_opt('once_received')
 if opts then
     if opts['symbol'] then
-        symbol = opts['symbol']
+        local symbol = opts['symbol']
 
 	    for n,v in pairs(opts) do
 			if n == 'symbol_strict' then
@@ -115,6 +119,6 @@ if opts then
 	    end
 
 		-- Register symbol's callback
-		rspamd_config:register_symbol(symbol, 1.0, 'check_quantity_received')
+		rspamd_config:register_symbol(symbol, 1.0, check_quantity_received)
 	end
 end

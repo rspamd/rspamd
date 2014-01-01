@@ -437,7 +437,6 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
 	struct worker_conf *wrk;
-	struct rspamd_worker_bind_conf *bcf;
 	struct rspamd_worker_cfg_parser *wparser;
 	struct rspamd_worker_param_parser *whandler;
 
@@ -475,13 +474,10 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
 			}
-			bcf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
-			if (!parse_host_port_priority (cfg->cfg_pool, worker_bind, &bcf->bind_host,
-					&bcf->bind_port, NULL)) {
+			if (!parse_bind_line (cfg, wrk, worker_bind)) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse bind line: %s", worker_bind);
 				return FALSE;
 			}
-			LL_PREPEND (wrk->bind_conf, bcf);
 		}
 	}
 
@@ -1037,6 +1033,8 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct config_file, dns_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 	rspamd_rcl_add_default_handler (sub, "dns_retransmits", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct config_file, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub, "dns_sockets", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct config_file, dns_io_per_server), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "raw_mode", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct config_file, raw_mode), 0);
 	rspamd_rcl_add_default_handler (sub, "one_shot", rspamd_rcl_parse_struct_boolean,
@@ -1197,6 +1195,9 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 					return FALSE;
 				}
 			}
+		}
+		if (cur->fin) {
+			cur->fin (cfg, cur->fin_ud);
 		}
 	}
 

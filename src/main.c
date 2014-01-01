@@ -299,17 +299,14 @@ drop_priv (struct rspamd_main *rspamd)
 }
 
 static void
-config_logger (struct rspamd_main *rspamd, GQuark type, gboolean is_fatal)
+config_logger (struct config_file *cfg, gpointer ud)
 {
-	rspamd_set_logger (rspamd->cfg->log_type, type, rspamd);
-	if (open_log_priv (rspamd->logger, rspamd->workers_uid, rspamd->workers_gid) == -1) {
-		if (is_fatal) {
-			fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
-			exit (EXIT_FAILURE);
-		}
-		else {
-			msg_err ("cannot log to file, logfile unaccessable");
-		}
+	struct rspamd_main *rm = ud;
+
+	rspamd_set_logger (cfg, g_quark_try_string ("main"), rm);
+	if (open_log_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
+		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
+		exit (EXIT_FAILURE);
 	}
 }
 
@@ -366,7 +363,6 @@ reread_config (struct rspamd_main *rspamd)
 	gchar                           *cfg_file;
 	GList                          *l;
 	struct filter                  *filt;
-	GQuark							type;
 
 	tmp_cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	if (tmp_cfg) {
@@ -380,6 +376,7 @@ reread_config (struct rspamd_main *rspamd)
 		memory_pool_add_destructor (tmp_cfg->cfg_pool, (pool_destruct_func)lua_close, tmp_cfg->lua_state);
 
 		if (! load_rspamd_config (tmp_cfg, FALSE)) {
+			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"), rspamd_main);
 			msg_err ("cannot parse new config file, revert to old one");
 			free_config (tmp_cfg);
 		}
@@ -393,12 +390,11 @@ reread_config (struct rspamd_main *rspamd)
 			if (is_debug) {
 				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 			}
-			type = g_quark_try_string ("main");
-			config_logger (rspamd, type, FALSE);
 			/* Pre-init of cache */
 			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
 			rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
 			rspamd->cfg->cache->cfg = rspamd->cfg;
+			rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
 
@@ -723,7 +719,8 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 	struct filter                  *filt;
 	struct module_ctx              *cur_module = NULL;
 
-	if (! read_rspamd_config (cfg, cfg->cfg_name, convert_config)) {
+	if (! read_rspamd_config (cfg, cfg->cfg_name, convert_config,
+			config_logger, rspamd_main)) {
 		return FALSE;
 	}
 
@@ -996,10 +993,6 @@ main (gint argc, gchar **argv, gchar **env)
 	GList                           *l;
 	worker_t                       **pworker;
 	GQuark                           type;
-#ifdef HAVE_OPENSSL
-	gchar                            rand_bytes[sizeof (guint32)];
-	guint32                          rand_seed;
-#endif
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
@@ -1038,7 +1031,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
-		rspamd_main->cfg->log_level = G_LOG_LEVEL_INFO;
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_WARNING;
 	}
 
 	type = g_quark_from_static_string ("main");
@@ -1054,23 +1047,16 @@ main (gint argc, gchar **argv, gchar **env)
 #ifdef HAVE_OPENSSL
 	ERR_load_crypto_strings ();
 
-	/* Init random generator */
-	if (RAND_bytes (rand_bytes, sizeof (rand_bytes)) != 1) {
-		msg_err ("cannot seed random generator using openssl: %s, using time", ERR_error_string (ERR_get_error (), NULL));
-		g_random_set_seed (time (NULL));
-	}
-	else {
-		memcpy (&rand_seed, rand_bytes, sizeof (guint32));
-		g_random_set_seed (rand_seed);
-	}
-
 	OpenSSL_add_all_algorithms ();
 	OpenSSL_add_all_digests ();
 	OpenSSL_add_all_ciphers ();
 #endif
 
+	rspamd_prng_seed ();
+
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, type, rspamd_main);
+	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
+	rspamd_set_logger (rspamd_main->cfg, type, rspamd_main);
 	(void)open_log (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
@@ -1158,8 +1144,6 @@ main (gint argc, gchar **argv, gchar **env)
 	getrlimit (RLIMIT_STACK, &rlim);
 	rlim.rlim_cur = 100 * 1024 * 1024;
 	setrlimit (RLIMIT_STACK, &rlim);
-
-	config_logger (rspamd_main, type, TRUE);
 
 	/* Create rolling history */
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);

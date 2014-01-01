@@ -47,7 +47,6 @@
  *	%V						    f_str_t *
  *	%v                          GString *
  *	%s						    null-terminated string
- *	%S						    ascii null-terminated string
  *	%*s					        length and string
  *	%Z						    '\0'
  *	%N						    '\n'
@@ -55,20 +54,22 @@
  *	%%						    %
  *
  */
-gint rspamd_sprintf (gchar *buf, const gchar *fmt, ...);
-gint rspamd_fprintf (FILE *f, const gchar *fmt, ...);
-gint rspamd_log_fprintf (FILE *f, const gchar *fmt, ...);
-gint rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...);
-gchar *rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args);
 
-/*
- * Escape rspamd string to write it to log file or other 7 bit prefferable places
- *
- * @param dst destination string
- * @param src source string
- * @param len length of destination buffer
- * @return pointer to end of buffer
+/**
+ * Callback used for common printf operations
+ * @param buf buffer to append
+ * @param buflen lenght of the buffer
+ * @param ud opaque pointer
+ * @return number of characters written
  */
-gchar * rspamd_escape_string (gchar *dst, const gchar *src, glong len);
+typedef glong (*rspamd_printf_append_func)(const gchar *buf, glong buflen, gpointer ud);
+
+glong rspamd_fprintf (FILE *f, const gchar *fmt, ...);
+glong rspamd_log_fprintf (FILE *f, const gchar *fmt, ...);
+glong rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...);
+gchar *rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args);
+glong rspamd_printf_gstring (GString *s, const gchar *fmt, ...);
+
+glong rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar *fmt, va_list args);
 
 #endif /* PRINTF_H_ */

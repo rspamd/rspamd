@@ -144,6 +144,22 @@ direct_write_log_line (rspamd_logger_t *rspamd_log, void *data, gint count, gboo
 	}
 }
 
+static void
+rspamd_escape_log_string (gchar *str)
+{
+	guchar *p = (guchar *)str;
+
+	while (*p) {
+		if ((*p & 0x80) || !g_ascii_isprint (*p)) {
+			*p = '?';
+		}
+		else if (*p == '\n' || *p == '\r') {
+			*p = ' ';
+		}
+		p ++;
+	}
+}
+
 /* Logging utility functions */
 gint
 open_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
@@ -259,7 +275,7 @@ reopen_log (rspamd_logger_t *logger)
  * Setup logger
  */
 void
-rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *rspamd)
+rspamd_set_logger (struct config_file *cfg, GQuark ptype, struct rspamd_main *rspamd)
 {
 	gchar                           **strvec, *p, *err;
 	gint                            num, i, k;
@@ -271,7 +287,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 		memset (rspamd->logger, 0, sizeof (rspamd_logger_t));
 	}
 
-	rspamd->logger->type = type;
+	rspamd->logger->type = cfg->log_type;
 	rspamd->logger->pid = getpid ();
 	rspamd->logger->process_type = ptype;
 
@@ -282,7 +298,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 	g_mutex_init (rspamd->logger->mtx);
 #endif
 
-	switch (type) {
+	switch (cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			rspamd->logger->log_func = file_log_function;
 			rspamd->logger->fd = STDERR_FILENO;
@@ -295,7 +311,7 @@ rspamd_set_logger (enum rspamd_log_type type, GQuark ptype, struct rspamd_main *
 			break;
 	}
 
-	rspamd->logger->cfg = rspamd->cfg;
+	rspamd->logger->cfg = cfg;
 	/* Set up buffer */
 	if (rspamd->cfg->log_buffered) {
 		if (rspamd->cfg->log_buf_size != 0) {
@@ -382,7 +398,7 @@ void
 rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 		const gchar *function, const gchar *fmt, ...)
 {
-	static gchar                    logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
+	static gchar                    logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 
@@ -391,9 +407,9 @@ rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_leve
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
-		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
+		rspamd_escape_log_string (logbuf);
 		va_end (vp);
-		rspamd_log->log_func (NULL, function, log_level, escaped_logbuf, FALSE, rspamd_log);
+		rspamd_log->log_func (NULL, function, log_level, logbuf, FALSE, rspamd_log);
 		g_mutex_unlock (rspamd_log->mtx);
 	}
 }
@@ -402,7 +418,7 @@ void
 rspamd_default_log_function (GLogLevelFlags log_level,
 		const gchar *function, const gchar *fmt, ...)
 {
-	static gchar                   logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
+	static gchar                   logbuf[BUFSIZ];
 	va_list                         vp;
 	u_char                         *end;
 
@@ -412,9 +428,9 @@ rspamd_default_log_function (GLogLevelFlags log_level,
 			va_start (vp, fmt);
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 			*end = '\0';
-			(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
+			rspamd_escape_log_string (logbuf);
 			va_end (vp);
-			fprintf (stderr, "%s\n", escaped_logbuf);
+			fprintf (stderr, "%s\n", logbuf);
 		}
 	}
 	else if (log_level <= default_logger->cfg->log_level) {
@@ -422,9 +438,9 @@ rspamd_default_log_function (GLogLevelFlags log_level,
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
-		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
+		rspamd_escape_log_string (logbuf);
 		va_end (vp);
-		default_logger->log_func (NULL, function, log_level, escaped_logbuf, FALSE, default_logger);
+		default_logger->log_func (NULL, function, log_level, logbuf, FALSE, default_logger);
 		g_mutex_unlock (default_logger->mtx);
 	}
 }
@@ -687,7 +703,7 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
 void
 rspamd_conditional_debug (rspamd_logger_t *rspamd_log, guint32 addr, const gchar *function, const gchar *fmt, ...)
 {
-	static gchar                     logbuf[BUFSIZ], escaped_logbuf[BUFSIZ];
+	static gchar                     logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 
@@ -698,9 +714,9 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log, guint32 addr, const gchar
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
-		(void)rspamd_escape_string (escaped_logbuf, logbuf, sizeof (escaped_logbuf));
+		rspamd_escape_log_string (logbuf);
 		va_end (vp);
-		rspamd_log->log_func (NULL, function, G_LOG_LEVEL_DEBUG, escaped_logbuf, TRUE, rspamd_log);
+		rspamd_log->log_func (NULL, function, G_LOG_LEVEL_DEBUG, logbuf, TRUE, rspamd_log);
 		g_mutex_unlock (rspamd_log->mtx);
 	}
 } 
@@ -710,13 +726,11 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log, guint32 addr, const gchar
 void
 rspamd_glib_log_function (const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer arg)
 {
-	gchar                         escaped_logbuf[BUFSIZ];
 	rspamd_logger_t              *rspamd_log = arg;
 
 	if (rspamd_log->enabled) {
 		g_mutex_lock (rspamd_log->mtx);
-		(void)rspamd_escape_string (escaped_logbuf, message, sizeof (escaped_logbuf));
-		rspamd_log->log_func (log_domain, NULL, log_level, escaped_logbuf, FALSE, rspamd_log);
+		rspamd_log->log_func (log_domain, NULL, log_level, message, FALSE, rspamd_log);
 		g_mutex_unlock (rspamd_log->mtx);
 	}
 }

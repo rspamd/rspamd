@@ -30,7 +30,7 @@
 #include "view.h"
 #include "cfg_file.h"
 
-#define WEIGHT_MULT 2.0
+#define WEIGHT_MULT 4.0
 #define FREQUENCY_MULT 10.0
 #define TIME_MULT -1.0
 
@@ -58,6 +58,7 @@ cache_logic_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item        *i1 = p1, *i2 = p2;
 	double                          w1, w2;
+	double                          weight1, weight2;
 	double                          f1 = 0, f2 = 0;
 
 	if (i1->priority == 0 && i2->priority == 0) {
@@ -65,8 +66,10 @@ cache_logic_cmp (const void *p1, const void *p2)
 			f1 = ((double)i1->s->frequency * nsymbols) / (double)total_frequency;
 			f2 = ((double)i2->s->frequency * nsymbols) / (double)total_frequency;
 		}
-		w1 = abs (i1->s->weight) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
-		w2 = abs (i2->s->weight) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
+		weight1 = i1->metric_weight == 0 ? i1->s->weight : i1->metric_weight;
+		weight2 = i2->metric_weight == 0 ? i2->s->weight : i2->metric_weight;
+		w1 = abs (weight1) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
+		w2 = abs (weight2) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
 	}
 	else {
 		/* Strict sorting */
@@ -704,6 +707,34 @@ check_debug_symbol (struct config_file *cfg, const gchar *symbol)
 	return FALSE;
 }
 
+static void
+rspamd_symbols_cache_metric_cb (gpointer k, gpointer v, gpointer ud)
+{
+	struct symbols_cache *cache = (struct symbols_cache *)ud;
+	GList *cur;
+	const gchar *sym = k;
+	gdouble weight = *(gdouble *)v;
+	struct cache_item *item;
+
+	cur = cache->negative_items;
+	while (cur) {
+		item = cur->data;
+		if (strcmp (item->s->symbol, sym) == 0) {
+			item->metric_weight = weight;
+			return;
+		}
+		cur = g_list_next (cur);
+	}
+	cur = cache->static_items;
+	while (cur) {
+		item = cur->data;
+		if (strcmp (item->s->symbol, sym) == 0) {
+			item->metric_weight = weight;
+			return;
+		}
+		cur = g_list_next (cur);
+	}
+}
 
 gboolean
 validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean strict)
@@ -786,6 +817,14 @@ validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean s
 	}
 	g_list_free (metric_symbols);
 #endif /* GLIB_COMPAT */
+
+	/* Now adjust symbol weights according to default metric */
+	if (cfg->default_metric != NULL) {
+		g_hash_table_foreach (cfg->default_metric->symbols, rspamd_symbols_cache_metric_cb, cache);
+		/* Resort caches */
+		cache->negative_items = g_list_sort (cache->negative_items, cache_logic_cmp);
+		cache->static_items = g_list_sort (cache->static_items, cache_logic_cmp);
+	}
 
 	return TRUE;
 }

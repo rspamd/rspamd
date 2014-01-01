@@ -169,128 +169,136 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	return ((gchar *)memcpy (buf, p, len)) + len;
 }
 
-gint
+struct rspamd_printf_char_buf {
+	char *begin;
+	char *pos;
+	glong remain;
+};
+
+static glong
+rspamd_printf_append_char (const gchar *buf, glong buflen, gpointer ud)
+{
+	struct rspamd_printf_char_buf *dst = (struct rspamd_printf_char_buf *)ud;
+	glong wr;
+
+	if (dst->remain <= 0) {
+		return dst->remain;
+	}
+
+	wr = MIN (dst->remain, buflen);
+	memcpy (dst->pos, buf, wr);
+	dst->remain -= wr;
+	dst->pos += wr;
+
+	return wr;
+}
+
+static glong
+rspamd_printf_append_file (const gchar *buf, glong buflen, gpointer ud)
+{
+	FILE *dst = (FILE *)ud;
+
+	return fwrite (buf, 1, buflen, dst);
+}
+
+static glong
+rspamd_printf_append_gstring (const gchar *buf, glong buflen, gpointer ud)
+{
+	GString *dst = (GString *)ud;
+
+	g_string_append_len (dst, buf, buflen);
+
+	return buflen;
+}
+
+glong
 rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 {
 	va_list   args;
-    gchar buf[BUFSIZ];
-    gint r;
+	glong r;
 
 	va_start (args, fmt);
-	rspamd_vsnprintf (buf, sizeof (buf), fmt, args);
+	r = rspamd_vprintf_common (rspamd_printf_append_file, f, fmt, args);
 	va_end (args);
 
-    r = fprintf (f, "%s", buf);
-
-    return r;
+	return r;
 }
 
-gint
+glong
 rspamd_log_fprintf (FILE *f, const gchar *fmt, ...)
 {
 	va_list   args;
-    gchar buf[BUFSIZ];
-    gint r;
+	glong r;
 
 	va_start (args, fmt);
-	rspamd_vsnprintf (buf, sizeof (buf), fmt, args);
+	r = rspamd_vprintf_common (rspamd_printf_append_file, f, fmt, args);
 	va_end (args);
 
-    r = fprintf (f, "%s\n", buf);
-    fflush (f);
+	fflush (f);
 
-    return r;
-}
-
-gint
-rspamd_sprintf (gchar *buf, const gchar *fmt, ...)
-{
-	gchar   *p;
-	va_list   args;
-
-	va_start (args, fmt);
-	p = rspamd_vsnprintf (buf, /* STUB */ 65536, fmt, args);
-	va_end (args);
-
-	return p - buf;
+	return r;
 }
 
 
-gint
+glong
 rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...)
 {
-	gchar   *p;
-	va_list   args;
+	gchar *r;
+	va_list args;
 
 	va_start (args, fmt);
-	p = rspamd_vsnprintf (buf, max - 1, fmt, args);
+	r = rspamd_vsnprintf (buf, max, fmt, args);
 	va_end (args);
-	*p = '\0';
 
-	return p - buf;
-}
-
-gchar *
-rspamd_escape_string (gchar *dst, const gchar *src, glong len)
-{
-	gchar              *buf = dst, *last = dst + len;
-	guint8              c;
-	const gchar        *p = src;
-	gunichar            uc;
-
-	if (len <= 0) {
-		return dst;
-	}
-
-	while (*p && buf < last) {
-		/* Detect utf8 */
-		uc = g_utf8_get_char_validated (p, last - buf);
-		if (uc > 0) {
-			c = g_unichar_to_utf8 (uc, buf);
-			buf += c;
-			p += c;
-		}
-		else {
-			c = *p ++;
-			if (G_UNLIKELY ((c & 0x80))) {
-				c &= 0x7F;
-				if (last - buf >= 3) {
-					*buf++ = 'M';
-					*buf++ = '-';
-				}
-			}
-			if (G_UNLIKELY ( g_ascii_iscntrl (c))) {
-				if (c == '\n') {
-					*buf++ = ' ';
-				}
-				else if (c == '\t') {
-					*buf++ = '\t';
-				}
-				else {
-					*buf++ = '^';
-					if (buf != last) {
-						*buf++ = c ^ 0100;
-					}
-				}
-			}
-			else {
-				*buf++ = c;
-			}
-		}
-	}
-
-	*buf = '\0';
-
-	return buf;
+	return (r - buf);
 }
 
 gchar *
 rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 {
-	gchar              *p, zero, *last;
+	struct rspamd_printf_char_buf dst;
+
+	dst.begin = buf;
+	dst.pos = dst.begin;
+	dst.remain = max - 1;
+	(void)rspamd_vprintf_common (rspamd_printf_append_char, &dst, fmt, args);
+	*dst.pos = '\0';
+
+	return dst.pos;
+}
+
+glong
+rspamd_printf_gstring (GString *s, const gchar *fmt, ...)
+{
+	va_list args;
+	glong r;
+
+	va_start (args, fmt);
+	r = rspamd_vprintf_common (rspamd_printf_append_gstring, s, fmt, args);
+	va_end (args);
+
+	return r;
+}
+
+#define RSPAMD_PRINTF_APPEND(buf, len)											\
+    do {																		\
+    wr = func ((buf), (len), apd);												\
+    if (wr <= 0) {																\
+        goto oob;																\
+    }																			\
+    written += wr;																\
+    fmt ++;																		\
+    buf_start = fmt;															\
+    } while(0)
+
+glong
+rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar *fmt, va_list args)
+{
+	gchar               zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], *p, *last, c;
+	const gchar        *buf_start = fmt;
 	gint                d;
 	long double         f, scale;
-	size_t              len, slen;
+	glong               written = 0, wr, slen;
 	gint64              i64;
 	guint64             ui64;
 	guint               width, sign, hex, humanize, bytes, frac_width, i;
@@ -298,13 +306,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 	GString            *gs;
 	gboolean            bv;
 
-	if (max <= 0) {
-		return buf;
-	}
-
-	last = buf + max;
-
-	while (*fmt && buf < last) {
+	while (*fmt) {
 
 		/*
 		 * "buf < last" means that we could copy at least one character:
@@ -312,6 +314,15 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 		 */
 
 		if (*fmt == '%') {
+
+			/* Append what we have in buf */
+			if (fmt > buf_start) {
+				wr = func (buf_start, fmt - buf_start, apd);
+				if (wr <= 0) {
+					goto oob;
+				}
+				written += wr;
+			}
 
 			i64 = 0;
 			ui64 = 0;
@@ -323,7 +334,7 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 			bytes = 0;
 			humanize = 0;
 			frac_width = 0;
-			slen = (size_t) -1;
+			slen = -1;
 
 			while (*fmt >= '0' && *fmt <= '9') {
 				width = width * 10 + *fmt++ - '0';
@@ -376,10 +387,10 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 				case '*':
 					d = (gint)va_arg (args, gint);
 					if (G_UNLIKELY (d < 0)) {
-						msg_err ("crititcal error: size is less than 0");
-						g_assert (0);
+						msg_err ("critical error: size is less than 0");
+						return 0;
 					}
-					slen = (size_t)d;
+					slen = (glong)d;
 					fmt++;
 					continue;
 
@@ -395,61 +406,28 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 
 			case 'V':
 				v = va_arg (args, f_str_t *);
-
-				len = v->len;
-				len = (buf + len < last) ? len : (size_t) (last - buf);
-
-				buf = ((gchar *)memcpy (buf, v->begin, len)) + len;
-				fmt++;
+				RSPAMD_PRINTF_APPEND (v->begin, v->len);
 
 				continue;
 
 			case 'v':
 				gs = va_arg (args, GString *);
-				len = gs->len;
-				len = (buf + len < last) ? len : (size_t) (last - buf);
-
-				buf = ((gchar *)memcpy (buf, gs->str, len)) + len;
-				fmt++;
-				break;
-
-			case 's':
-				p = va_arg(args, gchar *);
-				if (p == NULL) {
-					p = "(NULL)";
-				}
-
-				if (slen == (size_t) -1) {
-					while (*p && buf < last) {
-						*buf++ = *p++;
-					}
-
-				} else {
-					len = (buf + slen < last) ? slen : (size_t) (last - buf);
-
-					buf = ((gchar *)memcpy (buf, p, len)) + len;
-				}
-
-				fmt++;
+				RSPAMD_PRINTF_APPEND (gs->str, gs->len);
 
 				continue;
 
-			case 'S':
-				p = va_arg(args, gchar *);
+			case 's':
+				p = va_arg (args, gchar *);
 				if (p == NULL) {
 					p = "(NULL)";
 				}
 
-				if (slen == (size_t) -1) {
-					buf = rspamd_escape_string (buf, p, last - buf);
-
-				} else {
-					len = (buf + slen < last) ? slen : (size_t) (last - buf);
-
-					buf = rspamd_escape_string (buf, p, len);
+				if (slen == -1) {
+					/* NULL terminated string */
+					slen = strlen (p);
 				}
 
-				fmt++;
+				RSPAMD_PRINTF_APPEND (p, slen);
 
 				continue;
 
@@ -510,57 +488,28 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 
 
 			case 'f':
-				f = (double) va_arg (args, double);
-				if (f < 0) {
-					*buf++ = '-';
-					f = -f;
-				}
-
-				ui64 = (gint64) f;
-
-				buf = rspamd_sprintf_num (buf, last, ui64, zero, 0, width);
-
-				if (frac_width) {
-
-					if (buf < last) {
-						*buf++ = '.';
-					}
-
-					scale = 1.0;
-
-					for (i = 0; i < frac_width; i++) {
-						scale *= 10.0;
-					}
-
-					/*
-					* (gint64) cast is required for msvc6:
-					* it can not convert guint64 to double
-					*/
-					ui64 = (guint64) ((f - (gint64) ui64) * scale);
-
-					buf = rspamd_sprintf_num (buf, last, ui64, '0', 0, frac_width);
-				}
-
-				fmt++;
-
-				continue;
-
 			case 'F':
-				f = (long double) va_arg (args, long double);
-
+				if (*fmt == 'f') {
+					f = (long double) va_arg (args, double);
+				}
+				else {
+					f = (long double) va_arg (args, long double);
+				}
+				p = numbuf;
+				last = p + sizeof (numbuf);
 				if (f < 0) {
-					*buf++ = '-';
+					*p++ = '-';
 					f = -f;
 				}
 
 				ui64 = (gint64) f;
 
-				buf = rspamd_sprintf_num (buf, last, ui64, zero, 0, width);
+				p = rspamd_sprintf_num (p, last, ui64, zero, 0, width);
 
 				if (frac_width) {
 
-					if (buf < last) {
-						*buf++ = '.';
+					if (p < last) {
+						*p++ = '.';
 					}
 
 					scale = 1.0;
@@ -575,50 +524,32 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 					*/
 					ui64 = (guint64) ((f - (gint64) ui64) * scale);
 
-					buf = rspamd_sprintf_num (buf, last, ui64, '0', 0, frac_width);
+					p = rspamd_sprintf_num (p, last, ui64, '0', 0, frac_width);
 				}
 
-				fmt++;
+				slen = p - numbuf;
+				RSPAMD_PRINTF_APPEND (numbuf, slen);
 
 				continue;
 
 			case 'g':
-				f = (long double) va_arg (args, double);
-
-				if (f < 0) {
-					*buf++ = '-';
-					f = -f;
+			case 'G':
+				if (*fmt == 'g') {
+					f = (long double) va_arg (args, double);
 				}
-				g_ascii_formatd (buf, last - buf, "%g", (double)f);
-				buf += strlen (buf);
-				fmt++;
+				else {
+					f = (long double) va_arg (args, long double);
+				}
+
+				g_ascii_formatd (numbuf, sizeof (numbuf), "%g", (double)f);
+				slen = strlen (numbuf);
+				RSPAMD_PRINTF_APPEND (numbuf, slen);
 
 				continue;
 
 			case 'b':
 				bv = (gboolean) va_arg (args, double);
-				if (bv) {
-					len = MIN (last - buf, 4);
-					memcpy (buf, "true", len);
-				}
-				else {
-					len = MIN (last - buf, 5);
-					memcpy (buf, "false", len);
-				}
-				fmt++;
-
-				continue;
-
-			case 'G':
-				f = (long double) va_arg (args, long double);
-
-				if (f < 0) {
-					*buf++ = '-';
-					f = -f;
-				}
-				g_ascii_formatd (buf, last - buf, "%g", (double)f);
-				buf += strlen (buf);
-				fmt++;
+				RSPAMD_PRINTF_APPEND (bv ? "true" : "false", bv ? 4 : 5);
 
 				continue;
 
@@ -631,39 +562,43 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 				break;
 
 			case 'c':
-				d = va_arg (args, gint);
-				*buf++ = (gchar) (d & 0xff);
-				fmt++;
+				c = va_arg (args, gint);
+				c &= 0xff;
+				RSPAMD_PRINTF_APPEND (&c, 1);
 
 				continue;
 
 			case 'Z':
-				*buf++ = '\0';
-				fmt++;
+				c = '\0';
+				RSPAMD_PRINTF_APPEND (&c, 1);
 
 				continue;
 
 			case 'N':
-				*buf++ = LF;
-				fmt++;
+				c = LF;
+				RSPAMD_PRINTF_APPEND (&c, 1);
 
 				continue;
 
 			case '%':
-				*buf++ = '%';
-				fmt++;
+				c = '%';
+				RSPAMD_PRINTF_APPEND (&c, 1);
 
 				continue;
 
 			default:
-				*buf++ = *fmt++;
+				c = *fmt;
+				RSPAMD_PRINTF_APPEND (&c, 1);
 
 				continue;
 			}
 
+			/* Print number */
+			p = numbuf;
+			last = p + sizeof (numbuf);
 			if (sign) {
 				if (i64 < 0) {
-					*buf++ = '-';
+					*p++ = '-';
 					ui64 = (guint64) -i64;
 
 				} else {
@@ -672,19 +607,29 @@ rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args)
 			}
 
 			if (!humanize) {
-				buf = rspamd_sprintf_num (buf, last, ui64, zero, hex, width);
+				p = rspamd_sprintf_num (p, last, ui64, zero, hex, width);
 			}
 			else {
-				buf = rspamd_humanize_number (buf, last, ui64, bytes);
+				p = rspamd_humanize_number (p, last, ui64, bytes);
 			}
-
-			fmt++;
+			slen = p - numbuf;
+			RSPAMD_PRINTF_APPEND (numbuf, slen);
 
 		} else {
-			*buf++ = *fmt++;
+			fmt++;
 		}
 	}
 
-	return buf;
+	/* Finish buffer */
+	if (fmt > buf_start) {
+		wr = func (buf_start, fmt - buf_start, apd);
+		if (wr <= 0) {
+			goto oob;
+		}
+		written += wr;
+	}
+
+oob:
+	return written;
 }
 

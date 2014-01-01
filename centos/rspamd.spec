@@ -7,32 +7,43 @@
 
 %define USE_JUDY         0
 
+%if 0%{?suse_version}
+%define __cmake cmake
+%define __install install
+%define __make make
+%define __chown chown
+%endif
+
 Name:           rspamd
-Version:        0.6.1
+Version:        0.6.6
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
 
 # BSD License (two clause)
 # http://www.freebsd.org/copyright/freebsd-license.html
-License:        BSD
-URL:            https://bitbucket.org/vstakhov/rspamd/ 
+License:        BSD2c
+URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-%if USE_JUDY
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel
-Requires:       glib2,gmime,lua,Judy,libevent
+%if "%{USE_JUDY}" == "1"
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel,pcre-devel
+Requires:       lua, logrotate
 %else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel
-Requires:       glib2,gmime,lua,libevent
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel
+Requires:       lua, logrotate
 %endif
 # for /user/sbin/useradd
+%if 0%{?suse_version}
+Requires(pre):  shadow, %insserv_prereq, %fillup_prereq
+%else
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
 # for /sbin/service
 Requires(preun):        chkconfig, initscripts
 Requires(postun):       initscripts
+%endif
 
-Source0:        http://cdn.bitbucket.org/vstakhov/rspamd/downloads/%{name}-%{version}.tar.gz
+Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.gz
 Source1:        %{name}.init
 Source2:        %{name}.logrotate
 
@@ -45,7 +56,6 @@ lua.
 %setup -q
 
 %build
-rm -rf %{buildroot}
 %{__cmake} \
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
         -DCONFDIR=%{_sysconfdir}/rspamd \
@@ -61,7 +71,7 @@ rm -rf %{buildroot}
         -DDEBIAN_BUILD=1 \
         -DRSPAMD_GROUP=%{rspamd_group} \
         -DRSPAMD_USER=%{rspamd_user} \
-%if USE_JUDY
+%if "%{USE_JUDY}" == "1"
         -DENABLE_JUDY=ON
 %else
         -DENABLE_JUDY=OFF
@@ -73,15 +83,36 @@ rm -rf %{buildroot}
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+
+%if 0%{?suse_version}
+mkdir -p %{buildroot}%{_sbindir}
+ln -sf %{_initrddir}/rspamd %{buildroot}%{_sbindir}/rcrspamd
+%endif
+
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
-%{__install} -o %{rspamd_user} -g %{rspamd_group} -d -p -m 0755 %{buildroot}%{rspamd_home}
+%{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %clean
 rm -rf %{buildroot}
 
 %pre
-%{_sbindir}/useradd -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
+%{_sbindir}/groupadd -r %{rspamd_group} 2>/dev/null || :
+%{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
+
+%if 0%{?suse_version}
+
+%post
+%fillup_and_insserv rspamd
+
+%preun
+%stop_on_removal rspamd
+
+%postun
+%restart_on_update rspamd
+%insserv_cleanup
+
+%else
 
 %post
 /sbin/chkconfig --add %{name}
@@ -96,6 +127,8 @@ fi
 if [ $1 -ge 1 ]; then
     /sbin/service %{name} condrestart > /dev/null 2>&1 || :
 fi
+
+%endif
 
 %files
 %defattr(-,root,root,-)
@@ -114,29 +147,52 @@ fi
 %config(noreplace) %{rspamd_confdir}/workers.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
+%dir %{rspamd_home}
+%dir %{rspamd_confdir}/lua/regexp
+%dir %{rspamd_confdir}/lua
 %dir %{rspamd_confdir}
-%attr(755, %{rspamd_user}, %{rspamd_group}) %dir %{rspamd_home}
+%dir %{rspamd_pluginsdir}/lua
+%dir %{rspamd_pluginsdir}
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
-%config(noreplace) %{rspamd_pluginsdir}/lua/forged_recipients.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/maillist.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/multimap.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/once_received.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/rbl.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/ratelimit.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/whitelist.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/phishing.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/trie.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/emails.lua
-%config(noreplace) %{rspamd_pluginsdir}/lua/ip_score.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/drugs.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/fraud.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/headers.lua
-%config(noreplace) %{rspamd_confdir}/lua/regexp/lotto.lua
-%config(noreplace) %{rspamd_confdir}/lua/rspamd.lua
-%config(noreplace) %{rspamd_confdir}/lua/rspamd.classifiers.lua
+%{rspamd_pluginsdir}/lua/forged_recipients.lua
+%{rspamd_pluginsdir}/lua/maillist.lua
+%{rspamd_pluginsdir}/lua/multimap.lua
+%{rspamd_pluginsdir}/lua/once_received.lua
+%{rspamd_pluginsdir}/lua/rbl.lua
+%{rspamd_pluginsdir}/lua/ratelimit.lua
+%{rspamd_pluginsdir}/lua/whitelist.lua
+%{rspamd_pluginsdir}/lua/phishing.lua
+%{rspamd_pluginsdir}/lua/trie.lua
+%{rspamd_pluginsdir}/lua/emails.lua
+%{rspamd_pluginsdir}/lua/ip_score.lua
+%{rspamd_confdir}/lua/regexp/drugs.lua
+%{rspamd_confdir}/lua/regexp/fraud.lua
+%{rspamd_confdir}/lua/regexp/headers.lua
+%{rspamd_confdir}/lua/regexp/lotto.lua
+%{rspamd_confdir}/lua/rspamd.lua
+%{rspamd_confdir}/lua/hfilter.lua
+%{rspamd_confdir}/lua/rspamd.classifiers.lua
+%if 0%{?suse_version}
+%{_sbindir}/rcrspamd
+%endif
 
 %changelog
+* Fri Dec 27 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.6-1
+- Update to 0.6.6.
+
+* Fri Dec 20 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.5-1
+- Update to 0.6.5.
+
+* Wed Dec 18 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.4-1
+- Update to 0.6.4.
+
+* Tue Dec 10 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.3-1
+- Update to 0.6.3.
+
+* Fri Dec 06 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.2-1
+- Update to 0.6.2.
+
 * Tue Nov 19 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.0-1
 - Update to 0.6.0.
 

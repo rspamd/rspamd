@@ -145,6 +145,7 @@
 #cmakedefine HAVE_FLOCK          1
 
 #cmakedefine HAVE_TANHL          1
+#cmakedefine HAVE_TANH           1
 
 #cmakedefine HAVE_EXPL           1
 #cmakedefine HAVE_EXP2L          1

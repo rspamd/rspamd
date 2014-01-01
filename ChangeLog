@@ -1,3 +1,62 @@
+0.6.6:
+	* Removed issue with BUFSIZ limitation in the controller output
+	* Simplify logging symbols escaping
+	* Adjusted weights for several rules
+	* Improve spamhaus rbl support
+	* Removed PBL for received headers checks
+	* Added hfilter module that performs various HELO and IP checks.
+	* Rspamd can now be reloaded by HUP signal
+	* Fuzzy storage should expire hashes properly
+	* Build system has been reworked for better supportof pkg-config
+	* Various minor bugfixes
+
+0.6.5:
+	* Fixed critical bug in DNS resolver, introduced in 0.6.4
+	* Improved multimap and rbl plugins to skip
+	* Add dns_sockets option for tuning sockets per server in DNS resolver
+	* Improved packages for rspamd
+
+0.6.4:
+	* Added io channels for DNS request to balance load and reduce id
+	collisions chance
+	* Fixed a bug in SPF filter that may cause core dump in specific
+	circumstances
+	* FIxed default config for rbl module
+	* It is possible to get a list of rspamc commands with their descriptions
+	* Added SORBS bl to the default config
+	* 2tld file for surbl module has been significantly extended
+	* Perl modules has been removed from the code.
+	* Fixed an issue in libucl when parsing macros
+
+0.6.3:
+	* Fixed issues with DNS:
+	 - labels decompression algorithm was fixed;
+	 - added resolve_mx to lua API;
+	 - fixed modules that use DNS.
+	* Lua modules once_received and emails reworked for new resolver API and UCL.
+	* Debian package was polished.
+	* Fixed a bug in fuzzy_check module that prevents correct processing messages 
+	  without valid parts.
+
+0.6.2:
+	* Fuzzy check module has been reworked:
+	 - now fuzzy_check operates with a group of rules, that define which
+	 servers sre to be checked;
+	 - it is possible to specify read_only groups to avoid learning errors;
+	 - turn fuzzy_check to one_shot mode permanently;
+	 - fuzzy_check module configuration is now incompatible with the previous
+	 versions.
+	* Imported bugfixes from libucl.
+	* Fixed whitelist plugin.
+	* Fixed statfiles resizing.
+	* Improved logging initialization order.
+	* Fixed race condition in the controller worker.
+
+0.6.1:
+	* Critical bugfixes:
+	 - fixed build system;
+	 - fixed in_class setting in bayes learning;
+
 0.6.0:
 	* Use UCL instead xml for configuration (https://github.com/vstakhov/libucl)
 	* Fix statistics module normalization

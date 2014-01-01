@@ -371,7 +371,7 @@ struct url_matcher matchers[] = {
 		{ ".zm",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
 		{ ".zw",			"http://",	url_tld_start,			url_tld_end,	URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH	},
 		/* Likely emails */
-		{ "@",				"mailto://",url_email_start,	 	url_email_end,	URL_FLAG_NOHTML	| URL_FLAG_STRICT_MATCH	}
+		{ "@",				"mailto://",url_email_start,	 	url_email_end,	URL_FLAG_NOHTML	}
 };
 
 struct url_match_scanner {
@@ -1456,7 +1456,7 @@ url_email_start (const gchar *begin, const gchar *end, const gchar *pos, url_mat
 	else {
 		p = pos + strlen (match->pattern);
 		if (is_domain (*p)) {
-			match->m_begin = p;
+			match->m_begin = pos;
 			return TRUE;
 		}
 	}
@@ -1467,15 +1467,24 @@ static gboolean
 url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match_t *match)
 {
 	const gchar                    *p;
+	gboolean                         got_at = FALSE;
 
 	p = pos + strlen (match->pattern);
+	if (*pos == '@') {
+		got_at = TRUE;
+	}
 
-	while (p < end && (is_domain (*p) || *p == '_' || (*p == '.' && p + 1 < end && is_domain (*(p + 1))))) {
+	while (p < end && (is_domain (*p) || *p == '_'
+			|| (*p == '@' && !got_at) ||
+			(*p == '.' && p + 1 < end && is_domain (*(p + 1))))) {
+		if (*p == '@') {
+			got_at = TRUE;
+		}
 		p ++;
 	}
 	match->m_len = p - match->m_begin;
 	match->add_prefix = TRUE;
-	return TRUE;
+	return got_at;
 }
 
 void

@@ -502,8 +502,9 @@ accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker_ctx       *ctx;
 	union sa_union                  su;
 	struct worker_task             *new_task;
+	char                            ip_str[INET6_ADDRSTRLEN + 1];
 
-	socklen_t                       addrlen = sizeof (su.ss);
+	socklen_t                       addrlen = sizeof (su);
 	gint                            nfd;
 
 	ctx = worker->ctx;
@@ -514,7 +515,7 @@ accept_socket (gint fd, short what, void *arg)
 	}
 
 	if ((nfd =
-			accept_from_socket (fd, (struct sockaddr *) &su.ss, &addrlen)) == -1) {
+			accept_from_socket (fd, &su.sa, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -525,15 +526,20 @@ accept_socket (gint fd, short what, void *arg)
 
 	new_task = construct_task (worker);
 
-	if (su.ss.ss_family == AF_UNIX) {
+	if (su.sa.sa_family == AF_UNIX) {
 		msg_info ("accepted connection from unix socket");
 		new_task->client_addr.s_addr = INADDR_NONE;
 	}
-	else if (su.ss.ss_family == AF_INET) {
+	else if (su.sa.sa_family == AF_INET) {
 		msg_info ("accepted connection from %s port %d",
 				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
 		memcpy (&new_task->client_addr, &su.s4.sin_addr,
 				sizeof (struct in_addr));
+	}
+	else if (su.sa.sa_family == AF_INET6) {
+		msg_info ("accepted connection from %s port %d",
+				inet_ntop (su.sa.sa_family, &su.s6.sin6_addr, ip_str, sizeof (ip_str)),
+				ntohs (su.s6.sin6_port));
 	}
 
 	/* Copy some variables */

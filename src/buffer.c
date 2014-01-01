@@ -690,9 +690,9 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d,
 }
 
 gboolean rspamd_dispatcher_write_string (rspamd_io_dispatcher_t *d,
-												  GString *str,
-												  gboolean delayed,
-												  gboolean free_on_write)
+		GString *str,
+		gboolean delayed,
+		gboolean free_on_write)
 {
 	struct rspamd_out_buffer_s                *newbuf;
 

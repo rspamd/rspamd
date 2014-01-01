@@ -104,7 +104,8 @@ enum ucl_type {
 	UCL_STRING,    //!< UCL_STRING
 	UCL_BOOLEAN,   //!< UCL_BOOLEAN
 	UCL_TIME,      //!< UCL_TIME
-	UCL_USERDATA   //!< UCL_USERDATA
+	UCL_USERDATA,  //!< UCL_USERDATA
+	UCL_NULL       //!< UCL_NULL
 };
 
 /**
@@ -201,6 +202,26 @@ ucl_object_new (void)
 	if (new != NULL) {
 		memset (new, 0, sizeof (ucl_object_t));
 		new->ref = 1;
+		new->type = UCL_NULL;
+	}
+	return new;
+}
+
+/**
+ * Create new object with type specified
+ * @param type type of a new object
+ * @return new object
+ */
+static inline ucl_object_t* ucl_object_typed_new (unsigned int type) UCL_WARN_UNUSED_RESULT;
+static inline ucl_object_t *
+ucl_object_typed_new (unsigned int type)
+{
+	ucl_object_t *new;
+	new = malloc (sizeof (ucl_object_t));
+	if (new != NULL) {
+		memset (new, 0, sizeof (ucl_object_t));
+		new->ref = 1;
+		new->type = (type <= UCL_NULL ? type : UCL_NULL);
 	}
 	return new;
 }
@@ -753,6 +774,16 @@ unsigned char *ucl_object_emit (ucl_object_t *obj, enum ucl_emitter emit_type);
  * @return true if a key has been successfully added
  */
 bool ucl_pubkey_add (struct ucl_parser *parser, const unsigned char *key, size_t len);
+
+/**
+ * Set FILENAME and CURDIR variables in parser
+ * @param parser parser object
+ * @param filename filename to set or NULL to set FILENAME to "undef" and CURDIR to getcwd()
+ * @param need_expand perform realpath() if this variable is true and filename is not NULL
+ * @return true if variables has been set
+ */
+bool ucl_parser_set_filevars (struct ucl_parser *parser, const char *filename,
+		bool need_expand);
 
 typedef void* ucl_object_iter_t;
 

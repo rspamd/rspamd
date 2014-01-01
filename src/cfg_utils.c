@@ -164,7 +164,7 @@ parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint 
 }
 
 gboolean
-parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
+parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
 
@@ -175,34 +175,6 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str)
 	cnf->bind_port = DEFAULT_BIND_PORT;
 
 	if (str[0] == '/' || str[0] == '.') {
-#ifdef HAVE_DIRNAME
-		/* Try to check path of bind credit */
-		struct stat                     st;
-		gint                            fd;
-		gchar                           *copy = memory_pool_strdup (cfg->cfg_pool, str);
-		if (stat (copy, &st) == -1) {
-			if (errno == ENOENT) {
-				if ((fd = open (str, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-					msg_err ("cannot open path %s for making socket, %s", str, strerror (errno));
-					return FALSE;
-				}
-				else {
-					close (fd);
-					unlink (str);
-				}
-			}
-			else {
-				msg_err ("cannot stat path %s for making socket, %s", str, strerror (errno));
-				return 0;
-			}
-		}
-		else {
-			if (unlink (str) == -1) {
-				msg_err ("cannot remove path %s for making socket, %s", str, strerror (errno));
-				return 0;
-			}
-		}
-#endif
 		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
 		cnf->is_unix = TRUE;
 		LL_PREPEND (cf->bind_conf, cnf);
@@ -233,6 +205,8 @@ init_defaults (struct config_file *cfg)
 	/* After 20 errors do throttling for 10 seconds */
 	cfg->dns_throttling_errors = 20;
 	cfg->dns_throttling_time = 10000;
+	/* 16 sockets per DNS server */
+	cfg->dns_io_per_server = 16;
 
 	cfg->statfile_sync_interval = 60000;
 	cfg->statfile_sync_timeout = 20000;
@@ -635,12 +609,14 @@ internal_normalizer_func (struct config_file *cfg, long double score, void *data
     }
 #ifdef HAVE_TANHL
     return max * tanhl (score / max);
-#else
+#elif defined(HAVE_TANHL)
     /*
      * As some implementations of libm does not support tanhl, try to use
      * tanh
      */
     return max * tanh ((double) (score / max));
+#else
+    return score < max ? score / max : max;
 #endif
 }
 
@@ -776,7 +752,9 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 }
 
 gboolean
-read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar *convert_to)
+read_rspamd_config (struct config_file *cfg, const gchar *filename,
+		const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
+		gpointer logger_ud)
 {
 	struct stat                     st;
 	gint                            fd;
@@ -784,7 +762,7 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 	const gchar                    *ext;
 	GMarkupParseContext            *ctx;
 	GError                         *err = NULL;
-	struct rspamd_rcl_section     *top;
+	struct rspamd_rcl_section     *top, *logger;
 	gboolean res, is_xml = FALSE;
 	struct rspamd_xml_userdata ud;
 	struct ucl_parser *parser;
@@ -865,6 +843,12 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar 
 
 	top = rspamd_rcl_config_init ();
 	err = NULL;
+
+	HASH_FIND_STR(top, "logging", logger);
+	if (logger != NULL) {
+		logger->fin = logger_fin;
+		logger->fin_ud = logger_ud;
+	}
 
 	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
 		msg_err ("rcl parse error: %s", err->message);

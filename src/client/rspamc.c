@@ -46,6 +46,7 @@ static gint                     timeout = 5;
 static gboolean                 pass_all;
 static gboolean                 tty = FALSE;
 static gboolean                 verbose = FALSE;
+static gboolean                 print_commands = FALSE;
 static struct rspamd_client    *client = NULL;
 
 static GOptionEntry entries[] =
@@ -64,6 +65,7 @@ static GOptionEntry entries[] =
 		{ "rcpt", 'r', 0, G_OPTION_ARG_STRING, &rcpt, "Emulate that message is for specified user", NULL },
 		{ "timeout", 't', 0, G_OPTION_ARG_INT, &timeout, "Timeout for waiting for a reply", NULL },
 		{ "bind", 'b', 0, G_OPTION_ARG_STRING, &local_addr, "Bind to specified ip address", NULL },
+		{ "commands", 0, 0, G_OPTION_ARG_NONE, &print_commands, "List available commands", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -80,6 +82,92 @@ enum rspamc_command {
 	RSPAMC_COMMAND_UPTIME,
 	RSPAMC_COMMAND_ADD_SYMBOL,
 	RSPAMC_COMMAND_ADD_ACTION
+};
+
+struct {
+	enum rspamc_command cmd;
+	const char *name;
+	const char *description;
+	gboolean is_controller;
+	gboolean is_privileged;
+} rspamc_command_help[] = {
+	{
+		.cmd = RSPAMC_COMMAND_SYMBOLS,
+		.name = "symbols",
+		.description = "scan message and show symbols (default command)",
+		.is_controller = FALSE,
+		.is_privileged = FALSE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_LEARN_SPAM,
+		.name = "learn_spam",
+		.description = "learn message as spam",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_LEARN_HAM,
+		.name = "learn_ham",
+		.description = "learn message as ham",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
+		.name = "fuzzy_add",
+		.description = "add message to fuzzy storage (check -f and -w options for this command)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_FUZZY_DEL,
+		.name = "fuzzy_del",
+		.description = "delete message from fuzzy storage (check -f option for this command)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_STAT,
+		.name = "stat",
+		.description = "show rspamd statistics",
+		.is_controller = TRUE,
+		.is_privileged = FALSE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_STAT_RESET,
+		.name = "stat_reset",
+		.description = "show and reset rspamd statistics (useful for graphs)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_COUNTERS,
+		.name = "counters",
+		.description = "display rspamd symbols statistics",
+		.is_controller = TRUE,
+		.is_privileged = FALSE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_UPTIME,
+		.name = "uptime",
+		.description = "show rspamd uptime",
+		.is_controller = TRUE,
+		.is_privileged = FALSE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
+		.name = "add_symbol",
+		.description = "add or modify symbol settings in rspamd",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	},
+	{
+		.cmd = RSPAMC_COMMAND_ADD_ACTION,
+		.name = "add_action",
+		.description = "add or modify action settings",
+		.is_controller = TRUE,
+		.is_privileged = TRUE
+	}
 };
 
 /*
@@ -149,6 +237,30 @@ check_rspamc_command (const gchar *cmd)
 	}
 
 	return RSPAMC_COMMAND_UNKNOWN;
+}
+
+static void
+print_commands_list (void)
+{
+	guint                            i;
+
+	PRINT_FUNC ("Rspamc commands summary:\n");
+	for (i = 0; i < G_N_ELEMENTS (rspamc_command_help); i ++) {
+		if (tty) {
+			PRINT_FUNC ("  \033[1m%10s\033[0m (%7s%1s)\t%s\n", rspamc_command_help[i].name,
+					rspamc_command_help[i].is_controller ? "control" : "normal",
+					rspamc_command_help[i].is_privileged ? "*" : "",
+					rspamc_command_help[i].description);
+		}
+		else {
+			PRINT_FUNC ("  %10s (%7s%1s)\t%s\n", rspamc_command_help[i].name,
+					rspamc_command_help[i].is_controller ? "control" : "normal",
+					rspamc_command_help[i].is_privileged ? "*" : "",
+					rspamc_command_help[i].description);
+		}
+	}
+	PRINT_FUNC ("\n* is for privileged commands that may need password (see -P option)\n");
+	PRINT_FUNC ("control commands use port 11334 while normal use 11333 by default (see -h option)\n");
 }
 
 /*
@@ -798,6 +910,13 @@ main (gint argc, gchar **argv, gchar **env)
 
 	read_cmd_line (&argc, &argv);
 
+	tty = isatty (STDOUT_FILENO);
+
+	if (print_commands) {
+		print_commands_list ();
+		exit (EXIT_SUCCESS);
+	}
+
 	if (local_addr) {
 		if (inet_aton (local_addr, &ina) != 0) {
 			client = rspamd_client_init_binded (&ina);
@@ -812,7 +931,6 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_set_timeout (client, 1000, timeout * 1000);
-	tty = isatty (STDOUT_FILENO);
 	/* Now read other args from argc and argv */
 	if (argc == 1) {
 		/* No args, just read stdin */

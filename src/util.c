@@ -31,6 +31,11 @@
 #include "filter.h"
 #include "message.h"
 
+#ifdef HAVE_OPENSSL
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#endif
+
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
 /* More than 2 log messages per second */
@@ -215,7 +220,8 @@ accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t * len)
 gint
 make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboolean is_server, gboolean async)
 {
-	gint                            fd, s_error, r, optlen, serrno, on = 1;
+	gint                            fd = -1, s_error, r, optlen, serrno, on = 1;
+	struct stat                     st;
 
 	if (path == NULL)
 		return -1;
@@ -227,10 +233,25 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 	addr->sun_len = SUN_LEN (addr);
 #endif
 
+	if (is_server) {
+		/* Unlink socket if it exists already */
+		if (lstat (addr->sun_path, &st) != -1) {
+			if (S_ISSOCK (st.st_mode)) {
+				if (unlink (addr->sun_path) == -1) {
+					msg_warn ("unlink %s failed: %d, '%s'", addr->sun_path, errno, strerror (errno));
+					goto out;
+				}
+			}
+			else {
+				msg_warn ("%s is not a socket", addr->sun_path);
+				goto out;
+			}
+		}
+	}
 	fd = socket (PF_LOCAL, type, 0);
 
 	if (fd == -1) {
-		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("socket failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
 		return -1;
 	}
 
@@ -240,7 +261,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		msg_warn ("fcntl failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
 		goto out;
 	}
 	if (is_server) {
@@ -253,14 +274,14 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
-			msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
+			msg_warn ("bind/connect failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
 			goto out;
 		}
 		if (!async) {
 			/* Try to poll */
 			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
 				errno = ETIMEDOUT;
-				msg_warn ("bind/connect failed: timeout");
+				msg_warn ("bind/connect failed %s: timeout", addr->sun_path);
 				goto out;
 			}
 			else {
@@ -286,7 +307,9 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
   out:
 	serrno = errno;
-	close (fd);
+	if (fd != -1) {
+		close (fd);
+	}
 	errno = serrno;
 	return (-1);
 }
@@ -310,18 +333,11 @@ make_universal_socket (const gchar *credits, guint16 port,
 	gchar                            portbuf[8];
 
 	if (*credits == '/') {
-		r = stat (credits, &st);
 		if (is_server) {
-			if (r == -1) {
-				return make_unix_socket (credits, &un, type, is_server, async);
-			}
-			else {
-				/* Unix socket exists, it must be unlinked first */
-				errno = EEXIST;
-				return -1;
-			}
+			return make_unix_socket (credits, &un, type, is_server, async);
 		}
 		else {
+			r = stat (credits, &st);
 			if (r == -1) {
 				/* Unix socket doesn't exists it must be created first */
 				errno = ENOENT;
@@ -394,18 +410,11 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 	cur = strv;
 	while (*cur != NULL) {
 		if (*credits == '/') {
-			r = stat (credits, &st);
 			if (is_server) {
-				if (r == -1) {
-					fd = make_unix_socket (credits, &un, type, is_server, async);
-				}
-				else {
-					/* Unix socket exists, it must be unlinked first */
-					errno = EEXIST;
-					goto err;
-				}
+				fd = make_unix_socket (credits, &un, type, is_server, async);
 			}
 			else {
+				r = stat (credits, &st);
 				if (r == -1) {
 					/* Unix socket doesn't exists it must be created first */
 					errno = ENOENT;
@@ -2386,6 +2395,51 @@ restart:
 	return p - buf;
 #endif
 }
+
+void
+rspamd_random_bytes (gchar *buf, gsize buflen)
+{
+	gint fd;
+	gsize i;
+#ifdef HAVE_OPENSSL
+
+	/* Init random generator */
+	if (RAND_bytes (buf, buflen) != 1) {
+		msg_err ("cannot seed random generator using openssl: %s, using time",
+				ERR_error_string (ERR_get_error (), NULL));
+		goto fallback;
+	}
+#else
+	goto fallback;
+#endif
+	return;
+
+fallback:
+	/* Try to use /dev/random if no openssl is found */
+	fd = open ("/dev/random", O_RDONLY);
+	if (fd != -1) {
+		if (read (fd, buf, buflen) == (gssize)buflen) {
+			close (fd);
+			return;
+		}
+		close (fd);
+	}
+	/* No /dev/random */
+	g_random_set_seed (time (NULL));
+	for (i = 0; i < buflen; i ++) {
+		buf[i] = g_random_int () & 0xff;
+	}
+}
+
+void
+rspamd_prng_seed (void)
+{
+	guint32                          rand_seed = 0;
+
+	rspamd_random_bytes ((gchar *)&rand_seed, sizeof (rand_seed));
+	g_random_set_seed (rand_seed);
+}
+
 /*
  * vi:ts=4
  */

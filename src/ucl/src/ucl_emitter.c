@@ -38,6 +38,7 @@ static void ucl_elt_write_rcl (ucl_object_t *obj, UT_string *buf, unsigned int t
 		bool start_tabs, bool is_top, bool expand_array);
 static void ucl_elt_write_yaml (ucl_object_t *obj, UT_string *buf, unsigned int tabs,
 		bool start_tabs, bool compact, bool expand_array);
+static void ucl_elt_array_write_yaml (ucl_object_t *obj, UT_string *buf, unsigned int tabs, bool start_tabs, bool is_top);
 
 /**
  * Add tabulation to the output buffer
@@ -256,6 +257,12 @@ ucl_elt_write_json (ucl_object_t *obj, UT_string *buf, unsigned int tabs, bool s
 		}
 		ucl_elt_string_write_json (obj->value.sv, obj->len, buf);
 		break;
+	case UCL_NULL:
+		if (start_tabs) {
+			ucl_add_tabs (buf, tabs, compact);
+		}
+		utstring_printf (buf, "null");
+		break;
 	case UCL_OBJECT:
 		ucl_elt_obj_write_json (obj, buf, tabs, start_tabs, compact);
 		break;
@@ -440,6 +447,12 @@ ucl_elt_write_rcl (ucl_object_t *obj, UT_string *buf, unsigned int tabs,
 			}
 			ucl_elt_string_write_json (obj->value.sv, obj->len, buf);
 			break;
+		case UCL_NULL:
+			if (start_tabs) {
+				ucl_add_tabs (buf, tabs, false);
+			}
+			utstring_printf (buf, "null");
+			break;
 		case UCL_OBJECT:
 			ucl_elt_obj_write_rcl (obj, buf, tabs, start_tabs, is_top);
 			break;
@@ -471,6 +484,19 @@ ucl_object_emit_rcl (ucl_object_t *obj)
 }
 
 
+static void
+ucl_obj_write_yaml (ucl_object_t *obj, UT_string *buf, unsigned int tabs, bool start_tabs)
+{
+	bool is_array = (obj->next != NULL);
+
+	if (is_array) {
+		ucl_elt_array_write_yaml (obj, buf, tabs, start_tabs, false);
+	}
+	else {
+		ucl_elt_write_yaml(obj, buf, tabs, start_tabs, false, true);
+	}
+}
+
 /**
  * Write a single object to the buffer
  * @param obj object to write
@@ -486,25 +512,20 @@ ucl_elt_obj_write_yaml (ucl_object_t *obj, UT_string *buf, unsigned int tabs, bo
 		ucl_add_tabs (buf, tabs, is_top);
 	}
 	if (!is_top) {
-		utstring_append_len (buf, ": {\n", 4);
+		utstring_append_len (buf, "{\n", 2);
 	}
 
 	while ((cur = ucl_hash_iterate (obj->value.ov, &it))) {
 		ucl_add_tabs (buf, tabs + 1, is_top);
-		if (cur->flags & UCL_OBJECT_NEED_KEY_ESCAPE) {
+		if (cur->keylen > 0) {
 			ucl_elt_string_write_json (cur->key, cur->keylen, buf);
 		}
 		else {
-			utstring_append_len (buf, cur->key, cur->keylen);
+			utstring_append_len (buf, "null", 4);
 		}
-		if (cur->type != UCL_OBJECT && cur->type != UCL_ARRAY) {
-			utstring_append_len (buf, " : ", 3);
-		}
-		else {
-			utstring_append_c (buf, ' ');
-		}
-		ucl_elt_write_yaml (cur, buf, is_top ? tabs : tabs + 1, false, false, true);
-		if (cur->type != UCL_OBJECT && cur->type != UCL_ARRAY) {
+		utstring_append_len(buf, ": ", 2);
+		ucl_obj_write_yaml (cur, buf, is_top ? tabs : tabs + 1, false);
+		if (ucl_hash_iter_has_next(it)) {
 			if (!is_top) {
 				utstring_append_len (buf, ",\n", 2);
 			}
@@ -585,6 +606,12 @@ ucl_elt_write_yaml (ucl_object_t *obj, UT_string *buf, unsigned int tabs,
 				ucl_add_tabs (buf, tabs, false);
 			}
 			ucl_elt_string_write_json (obj->value.sv, obj->len, buf);
+			break;
+		case UCL_NULL:
+			if (start_tabs) {
+				ucl_add_tabs (buf, tabs, false);
+			}
+			utstring_printf (buf, "null");
 			break;
 		case UCL_OBJECT:
 			ucl_elt_obj_write_yaml (obj, buf, tabs, start_tabs, is_top);

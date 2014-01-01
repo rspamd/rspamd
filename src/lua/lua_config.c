@@ -42,6 +42,7 @@ LUA_FUNCTION_DEF (config, add_hash_map);
 LUA_FUNCTION_DEF (config, add_kv_map);
 LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
+LUA_FUNCTION_DEF (config, register_symbols);
 LUA_FUNCTION_DEF (config, register_virtual_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
@@ -60,6 +61,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_kv_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
+	LUA_INTERFACE_DEF (config, register_symbols),
 	LUA_INTERFACE_DEF (config, register_virtual_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
@@ -596,7 +598,52 @@ lua_config_register_symbol (lua_State * L)
 		}
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
 	}
-	return 1;
+	return 0;
+}
+
+static gint
+lua_config_register_symbols (lua_State *L)
+{
+	struct config_file             *cfg = lua_check_config (L);
+	struct lua_callback_data       *cd;
+	gint                             i, top;
+	gchar                           *sym;
+	gdouble                          weight = 1.0;
+
+	if (lua_gettop (L) < 3) {
+		msg_err ("not enough arguments to register a function");
+		return 0;
+	}
+	if (cfg) {
+		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+			cd->cb_is_ref = FALSE;
+		}
+		else {
+			lua_pushvalue (L, 2);
+			/* Get a reference */
+			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
+			cd->cb_is_ref = TRUE;
+		}
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			weight = lua_tonumber (L, 3);
+			top = 4;
+		}
+		else {
+			top = 3;
+		}
+		sym = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
+		cd->symbol = sym;
+		cd->L = L;
+		register_symbol (&cfg->cache, sym, weight, lua_metric_symbol_callback, cd);
+		for (i = top; i < lua_gettop (L); i ++) {
+			sym = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, i + 1));
+			register_virtual_symbol (&cfg->cache, sym, weight);
+		}
+	}
+
+	return 0;
 }
 
 static gint
@@ -613,7 +660,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 			register_virtual_symbol (&cfg->cache, name, weight);
 		}
 	}
-	return 1;
+	return 0;
 }
 
 static gint
@@ -645,7 +692,7 @@ lua_config_register_callback_symbol (lua_State * L)
 		}
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
 	}
-	return 1;
+	return 0;
 }
 
 static gint
@@ -681,7 +728,7 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
 
 	}
-	return 1;
+	return 0;
 }
 
 

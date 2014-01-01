@@ -14,6 +14,17 @@ struct workq;
 struct statfile;
 struct classifier_config;
 
+/**
+ * Union that is used for storing sockaddrs
+ */
+union sa_union {
+	struct sockaddr_storage ss;
+	struct sockaddr sa;
+	struct sockaddr_in s4;
+	struct sockaddr_in6 s6;
+	struct sockaddr_un su;
+};
+
 /*
  * Create socket and bind or connect it to specified address and port
  */
@@ -440,16 +451,15 @@ time_t parse_http_date (const gchar *header, gsize len);
 gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 
 /**
- * Expand path that may contain configuration variables:
- * $CONFDIR - configuration directory
- * $RUNDIR - local states directory
- * $DBDIR - databases dir
- * $LOGDIR - logs dir
- * $PLUGINSDIR - plugins dir
- * $PREFIX - installation prefix
- * $VERSION - rspamd version
- * @param pool to use
- * @param path path to expand
+ * Seed glib prng using openssl if possible
  */
+void rspamd_prng_seed (void);
+
+/**
+ * Generate random bytes using the most suitable generator
+ * @param buf
+ * @param buflen
+ */
+void rspamd_random_bytes (gchar *buf, gsize buflen);
 
 #endif

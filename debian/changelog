@@ -1,3 +1,33 @@
+rspamd (0.6.6-1) unstable; urgency=low
+
+  * Upgrade to 0.6.6
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Fri, 27 Dec 2013 14:55:00 +0000
+
+rspamd (0.6.5-1) unstable; urgency=low
+
+  * Upgrade to 0.6.5
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Wed, 20 Dec 2013 15:50:00 +0000
+
+rspamd (0.6.4-1) unstable; urgency=low
+
+  * Upgrade to 0.6.4
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Wed, 18 Dec 2013 15:24:00 +0000
+
+rspamd (0.6.3-1) unstable; urgency=low
+
+  * Upgrade to 0.6.3
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Tue, 10 Dec 2013 19:17:00 +0000
+
+rspamd (0.6.2-1) unstable; urgency=low
+
+  * Upgrade to 0.6.2
+
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Wed, 4 Dec 2013 16:43:00 +0000
+
 rspamd (0.6.1-1) unstable; urgency=low
 
   * Upgrade to 0.6.1

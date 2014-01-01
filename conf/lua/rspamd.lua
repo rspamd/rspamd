@@ -68,7 +68,6 @@ reconf['DATE_IN_PAST'] = function(task)
 	return false
 end
 
-
 local function file_exists(filename)
 	local file = io.open(filename)
 	if file then
@@ -77,6 +76,10 @@ local function file_exists(filename)
 	else
 		return false
 	end
+end
+
+if file_exists('hfilter.lua') then
+    dofile('hfilter.lua')
 end
 
 if file_exists('rspamd.local.lua') then

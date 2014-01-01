@@ -235,7 +235,7 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 	}
 
 	pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
-	while (pos - map < (gint)old_size) {
+	while (old_size - (pos - map) >= sizeof (struct stat_file_block)) {
 		block = (struct stat_file_block *)pos;
 		if (block->hash1 != 0 && block->value != 0) {
 			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, 0, block->value, FALSE);
@@ -307,10 +307,14 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	}
 
 	memory_pool_lock_mutex (pool->lock);
-	if (!forced && abs (st.st_size - size) > (gint)sizeof (struct stat_file)) {
+	if (!forced && labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
+			&& size > sizeof (struct stat_file)) {
 		memory_pool_unlock_mutex (pool->lock);
-		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", st.st_size, size);
+		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", (size_t)st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
+	}
+	else if (size < sizeof (struct stat_file)) {
+		msg_err ("requested to shrink statfile to %Hz but it is too small", size);
 	}
 
 	new_file = &pool->files[pool->opened++];

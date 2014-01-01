@@ -181,7 +181,7 @@ spf_addr_find (GList *addrs, gpointer to_find)
 		addr = cur->data;
 		if (addr->is_list) {
 			if ((res = spf_addr_find (addr->data.list, to_find)) != NULL) {
-				return res;
+				return cur;
 			}
 		}
 		else {

@@ -36,9 +36,6 @@
 #define DEFAULT_SCORE 10.0
 #define DEFAULT_REJECT_SCORE 999.0
 
-#define yyerror parse_err
-#define yywarn parse_warn
-
 struct expression;
 struct tokenizer;
 struct classifier;
@@ -379,6 +376,7 @@ struct config_file {
 	guint32 dns_retransmits;						/**< maximum retransmits count							*/
 	guint32 dns_throttling_errors;					/**< maximum errors for starting resolver throttling	*/
 	guint32 dns_throttling_time;					/**< time in seconds for DNS throttling					*/
+	guint32 dns_io_per_server;						/**< number of sockets per DNS server					*/
 	GList *nameservers;								/**< list of nameservers or NULL to parse resolv.conf	*/
 };
 
@@ -415,7 +413,7 @@ gboolean parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **add
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-gboolean parse_bind_line (struct config_file *cfg, struct worker_conf *cf, gchar *str);
+gboolean parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str);
 
 /**
  * Init default values
@@ -502,7 +500,9 @@ gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const g
 /*
  * Read XML configuration file
  */
-gboolean read_rspamd_config (struct config_file *cfg, const gchar *filename, const gchar *convert_to);
+gboolean read_rspamd_config (struct config_file *cfg,
+		const gchar *filename, const gchar *convert_to,
+		rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud);
 
 /*
  * Register symbols of classifiers inside metrics
