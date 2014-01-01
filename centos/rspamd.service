@@ -1,0 +1,14 @@
+[Unit]
+Description=rspamd
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+PIDFile=/var/lib/rspamd/rspamd.pid
+ExecStartPre=/usr/bin/rspamd -u rspamd -g rspamd -t
+ExecStart=/usr/bin/rspamd -u rspamd -g rspamd -f
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+
+[Install]
+WantedBy=multi-user.target

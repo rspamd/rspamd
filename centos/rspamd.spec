@@ -26,7 +26,11 @@ License:        BSD2c
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 %if "%{USE_JUDY}" == "1"
+%if 0%{?suse_version}
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,judy-devel,pcre-devel
+%else
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel,pcre-devel
+%endif
 Requires:       lua, logrotate
 %else
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel
@@ -34,7 +38,8 @@ Requires:       lua, logrotate
 %endif
 # for /user/sbin/useradd
 %if 0%{?suse_version}
-Requires(pre):  shadow, %insserv_prereq, %fillup_prereq
+Requires(pre):  shadow
+Requires(pre,post,preun,postun): systemd
 %else
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
@@ -44,7 +49,11 @@ Requires(postun):       initscripts
 %endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.gz
+%if 0%{?suse_version}
+Source1:        %{name}.service
+%else
 Source1:        %{name}.init
+%endif
 Source2:        %{name}.logrotate
 
 %description
@@ -61,7 +70,11 @@ lua.
         -DCONFDIR=%{_sysconfdir}/rspamd \
         -DMANDIR=%{_mandir} \
         -DDBDIR=%{_localstatedir}/lib/rspamd \
+%if 0%{?suse_version}
+        -DRUNDIR=%{_localstatedir}/lib/rspamd \
+%else
         -DRUNDIR=%{_localstatedir}/run/rspamd \
+%endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
         -DPLUGINSDIR=%{_datadir}/rspamd \
@@ -82,11 +95,10 @@ lua.
 %install
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
-%{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
-
 %if 0%{?suse_version}
-mkdir -p %{buildroot}%{_sbindir}
-ln -sf %{_initrddir}/rspamd %{buildroot}%{_sbindir}/rcrspamd
+%{__install} -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/rspamd.service
+%else
+%{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %endif
 
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
@@ -101,29 +113,30 @@ rm -rf %{buildroot}
 %{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
 
 %if 0%{?suse_version}
+%service_add_pre %{name}.service
+%endif
 
 %post
-%fillup_and_insserv rspamd
-
-%preun
-%stop_on_removal rspamd
-
-%postun
-%restart_on_update rspamd
-%insserv_cleanup
-
+%if 0%{?suse_version}
+%service_add_post %{name}.service
 %else
-
-%post
 /sbin/chkconfig --add %{name}
+%endif
 
 %preun
+%if 0%{?suse_version}
+%service_del_preun %{name}.service
+%else
 if [ $1 = 0 ]; then
     /sbin/service %{name} stop >/dev/null 2>&1
     /sbin/chkconfig --del %{name}
 fi
+%endif
 
 %postun
+%if 0%{?suse_version}
+%service_del_postun %{name}.service
+%else
 if [ $1 -ge 1 ]; then
     /sbin/service %{name} condrestart > /dev/null 2>&1 || :
 fi
@@ -132,7 +145,11 @@ fi
 
 %files
 %defattr(-,root,root,-)
+%if 0%{?suse_version}
+%{_unitdir}/%{name}.service
+%else
 %{_initrddir}/%{name}
+%endif
 %{_mandir}/man8/%{name}.*
 %{_mandir}/man1/rspamc.*
 %{_bindir}/rspamd
@@ -173,9 +190,6 @@ fi
 %{rspamd_confdir}/lua/rspamd.lua
 %{rspamd_confdir}/lua/hfilter.lua
 %{rspamd_confdir}/lua/rspamd.classifiers.lua
-%if 0%{?suse_version}
-%{_sbindir}/rcrspamd
-%endif
 
 %changelog
 * Fri Dec 27 2013 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.6-1
