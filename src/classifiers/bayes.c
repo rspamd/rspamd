@@ -315,7 +315,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 			if (final_prob < 0.5) {
 				final_prob = 1. - final_prob;
 			}
-			rspamd_snprintf (sumbuf, 32, "%.2f", final_prob);
+			rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
 			cur = g_list_prepend (NULL, sumbuf);
 			insert_result (task, data.statfiles[selected_st].st->symbol, final_prob, cur);
 		}
