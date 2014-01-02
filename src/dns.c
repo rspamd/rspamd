@@ -294,7 +294,8 @@ allocate_packet (struct rspamd_dns_request *req, guint namelen)
 {
 	namelen += 96 /* header */
 		+ 2 /* Trailing label */
-		+ 4; /* Resource type */
+		+ 4 /* Resource type */
+		+ 11; /* EDNS0 RR */
 	req->packet = memory_pool_alloc (req->pool, namelen);
 	req->pos = 0;
 	req->packet_len = namelen;
@@ -311,6 +312,7 @@ make_dns_header (struct rspamd_dns_request *req)
 	header->qid = dns_permutor_generate_id (req->resolver->permutor);
 	header->rd = 1;
 	header->qdcount = htons (1);
+	header->arcount = htons (1);
 	req->pos += sizeof (struct dns_header);
 	req->id = header->qid;
 }
@@ -573,6 +575,29 @@ make_spf_req (struct rspamd_dns_request *req, const gchar *name)
 	req->pos += sizeof (guint16) * 2;
 	req->type = DNS_REQUEST_SPF;
 	req->requested_name = name;
+}
+
+static void
+rspamd_dns_add_edns0 (struct rspamd_dns_request *req)
+{
+	guint8 *p8;
+	guint16 *p16;
+
+	p8 = (guint8 *)(req->packet + req->pos);
+	*p8 = '\0'; /* Name is root */
+	p16 = (guint16 *)(req->packet + req->pos + 1);
+	*p16++ = htons (DNS_T_OPT);
+	/* UDP packet length */
+	*p16++ = htons (UDP_PACKET_SIZE);
+	/* Extended rcode 00 00 */
+	*p16++ = 0;
+	/* Z 10000000 00000000 to allow dnssec */
+	p8 = (guint8 *)p16++;
+	/* Not a good time for DNSSEC */
+	*p8 = 0x00;
+	/* Length */
+	*p16 = 0;
+	req->pos += sizeof (guint8) + sizeof (guint16) * 5;
 }
 
 static gint
@@ -1293,6 +1318,9 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			break;
 	}
 	va_end (args);
+
+	/* Add EDNS RR */
+	rspamd_dns_add_edns0 (req);
 
 	req->retransmits = 0;
 	req->time = time (NULL);

@@ -36,7 +36,7 @@
 #define DNS_D_MAXLABEL	63	/* + 1 '\0' */
 #define DNS_D_MAXNAME	255	/* + 1 '\0' */
 
-#define MAX_ADDRS 1
+#define MAX_ADDRS 10
 
 struct rspamd_dns_reply;
 struct config_file;
@@ -240,6 +240,7 @@ enum dns_type {
 	DNS_T_TXT	= 16,
 	DNS_T_AAAA	= 28,
 	DNS_T_SRV	= 33,
+	DNS_T_OPT	= 41,
 	DNS_T_SSHFP	= 44,
 	DNS_T_SPF	= 99,
 
