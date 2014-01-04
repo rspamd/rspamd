@@ -22,7 +22,11 @@ Group:          System Environment/Daemons
 
 # BSD License (two clause)
 # http://www.freebsd.org/copyright/freebsd-license.html
+%if 0%{?suse_version}
+License:        BSD-2-Clause
+%else
 License:        BSD2c
+%endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 %if "%{USE_JUDY}" == "1"
@@ -40,7 +44,10 @@ Requires:       lua, logrotate
 %if 0%{?suse_version}
 Requires(pre):  shadow
 %if 0%{?suse_version} >= 1300
-Requires(pre,post,preun,postun): systemd
+Requires(pre): systemd
+Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
 %endif
 %else
 Requires(pre):  shadow-utils
