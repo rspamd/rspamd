@@ -39,7 +39,9 @@ Requires:       lua, logrotate
 # for /user/sbin/useradd
 %if 0%{?suse_version}
 Requires(pre):  shadow
+%if 0%{?suse_version} >= 1300
 Requires(pre,post,preun,postun): systemd
+%endif
 %else
 Requires(pre):  shadow-utils
 Requires(post): chkconfig
@@ -50,7 +52,11 @@ Requires(postun):       initscripts
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.gz
 %if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 Source1:        %{name}.service
+%else
+Source1:        %{name}.init.suse
+%endif
 %else
 Source1:        %{name}.init
 %endif
@@ -96,7 +102,13 @@ lua.
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
 %if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 %{__install} -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/rspamd.service
+%else
+%{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+mkdir -p %{buildroot}%{_sbindir}
+ln -sf %{_initrddir}/rspamd %{buildroot}%{_sbindir}/rcrspamd
+%endif
 %else
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %endif
@@ -112,20 +124,28 @@ rm -rf %{buildroot}
 %{_sbindir}/groupadd -r %{rspamd_group} 2>/dev/null || :
 %{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
 
-%if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 %service_add_pre %{name}.service
 %endif
 
 %post
 %if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 %service_add_post %{name}.service
+%else
+%fillup_and_insserv rspamd
+%endif
 %else
 /sbin/chkconfig --add %{name}
 %endif
 
 %preun
 %if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 %service_del_preun %{name}.service
+%else
+%stop_on_removal rspamd
+%endif
 %else
 if [ $1 = 0 ]; then
     /sbin/service %{name} stop >/dev/null 2>&1
@@ -135,7 +155,12 @@ fi
 
 %postun
 %if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 %service_del_postun %{name}.service
+%else
+%restart_on_update rspamd
+%insserv_cleanup
+%endif
 %else
 if [ $1 -ge 1 ]; then
     /sbin/service %{name} condrestart > /dev/null 2>&1 || :
@@ -146,7 +171,12 @@ fi
 %files
 %defattr(-,root,root,-)
 %if 0%{?suse_version}
+%if 0%{?suse_version} >= 1300
 %{_unitdir}/%{name}.service
+%else
+%{_initrddir}/%{name}
+%{_sbindir}/rcrspamd
+%endif
 %else
 %{_initrddir}/%{name}
 %endif
