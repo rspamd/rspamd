@@ -42,6 +42,12 @@
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 10
 
+struct rspamd_ucl_map_cbdata {
+	struct config_file *cfg;
+	GString *buf;
+};
+static gchar* rspamd_ucl_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data);
+static void rspamd_ucl_fin_cb (memory_pool_t * pool, struct map_cb_data *data);
 
 gboolean
 parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
@@ -719,6 +725,24 @@ get_filename_extension (const char *filename)
 	return NULL;
 }
 
+static bool
+rspamd_include_map_handler (const guchar *data, gsize len, void* ud)
+{
+	struct config_file *cfg = (struct config_file *)ud;
+	struct rspamd_ucl_map_cbdata *cbdata, **pcbdata;
+	gchar *map_line;
+
+	map_line = memory_pool_alloc (cfg->cfg_pool, len + 1);
+	rspamd_strlcpy (map_line, data, len + 1);
+
+	cbdata = g_malloc (sizeof (struct rspamd_ucl_map_cbdata));
+	pcbdata = g_malloc (sizeof (struct rspamd_ucl_map_cbdata *));
+	cbdata->buf = NULL;
+	cbdata->cfg = cfg;
+	*pcbdata = cbdata;
+
+	return add_map (cfg, map_line, "ucl include", rspamd_ucl_read_cb, rspamd_ucl_fin_cb, (void **)pcbdata);
+}
 
 /*
  * Variables:
@@ -749,6 +773,12 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 	ucl_parser_register_variable (parser, RSPAMD_PLUGINSDIR_MACRO, RSPAMD_PLUGINSDIR);
 	ucl_parser_register_variable (parser, RSPAMD_PREFIX_MACRO, RSPAMD_PREFIX);
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
+}
+
+static void
+rspamd_ucl_add_conf_macros (struct ucl_parser *parser, struct config_file *cfg)
+{
+	ucl_parser_register_macro (parser, "include_map", rspamd_include_map_handler, cfg);
 }
 
 gboolean
@@ -807,6 +837,7 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename,
 	else {
 		parser = ucl_parser_new (0);
 		rspamd_ucl_add_conf_variables (parser);
+		rspamd_ucl_add_conf_macros (parser, cfg);
 		if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 			msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
 			munmap (data, st.st_size);
@@ -950,6 +981,65 @@ check_classifier_statfiles (struct classifier_config *cf)
 	}
 
 	return res;
+}
+
+static gchar*
+rspamd_ucl_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+{
+	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev;
+
+	if (cbdata == NULL) {
+		cbdata = g_malloc (sizeof (struct rspamd_ucl_map_cbdata));
+		prev = data->prev_data;
+		cbdata->buf = g_string_sized_new (BUFSIZ);
+		cbdata->cfg = prev->cfg;
+		data->cur_data = cbdata;
+	}
+	g_string_append_len (cbdata->buf, chunk, len);
+
+	/* Say not to copy any part of this buffer */
+	return NULL;
+}
+
+static void
+rspamd_ucl_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
+{
+	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev = data->prev_data;
+	ucl_object_t *obj;
+	struct ucl_parser *parser;
+	guint32 checksum;
+
+	if (prev != NULL) {
+		if (prev->buf != NULL) {
+			g_string_free (prev->buf, TRUE);
+		}
+		g_free (prev);
+	}
+
+	if (cbdata == NULL) {
+		msg_err ("map fin error: new data is NULL");
+		return;
+	}
+
+	checksum = murmur32_hash (cbdata->buf->str, cbdata->buf->len);
+	if (data->map->checksum != checksum) {
+		/* New data available */
+		parser = ucl_parser_new (0);
+		if (!ucl_parser_add_chunk (parser, cbdata->buf->str, cbdata->buf->len)) {
+			msg_err ("cannot parse map %s: %s", data->map->uri, ucl_parser_get_error (parser));
+			ucl_parser_free (parser);
+		}
+		else {
+			obj = ucl_parser_get_object (parser);
+			ucl_parser_free (parser);
+			/* XXX: add replace objects code */
+			ucl_object_unref (obj);
+			data->map->checksum = checksum;
+		}
+	}
+	else {
+		msg_info ("do not reload map %s, checksum is the same: %d", data->map->uri, checksum);
+	}
 }
 
 /*
