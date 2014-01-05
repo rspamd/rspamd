@@ -56,7 +56,7 @@ static GOptionEntry entries[] =
 		{ "classifier", 'c', 0, G_OPTION_ARG_STRING, &classifier, "Classifier to learn spam or ham", NULL },
 		{ "weight", 'w', 0, G_OPTION_ARG_INT, &weight, "Weight for fuzzy operations", NULL },
 		{ "flag", 'f', 0, G_OPTION_ARG_INT, &flag, "Flag for fuzzy operations", NULL },
-		{ "pass", 'p', 0, G_OPTION_ARG_NONE, &pass_all, "Pass all filters", NULL },
+		{ "pass-all", 'p', 0, G_OPTION_ARG_NONE, &pass_all, "Pass all filters", NULL },
 		{ "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "More verbose output", NULL },
 		{ "ip", 'i', 0, G_OPTION_ARG_STRING, &ip, "Emulate that message was received from specified ip address", NULL },
 		{ "user", 'u', 0, G_OPTION_ARG_STRING, &user, "Emulate that message was from specified user", NULL },
