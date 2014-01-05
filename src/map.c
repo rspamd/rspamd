@@ -396,6 +396,7 @@ read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 	write_http_request (map, data, fd);
 
 	cbdata.state = 0;
+	cbdata.map = map;
 	cbdata.prev_data = *map->user_data;
 	cbdata.cur_data = NULL;
 
@@ -442,6 +443,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	cbdata.state = 0;
 	cbdata.prev_data = *map->user_data;
 	cbdata.cur_data = NULL;
+	cbdata.map = map;
 
 	rlen = 0;
 	while ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 1)) > 0) {
@@ -836,6 +838,7 @@ http_async_callback (gint fd, short what, void *ud)
 			cbd->cbdata.state = 0;
 			cbd->cbdata.prev_data = *cbd->map->user_data;
 			cbd->cbdata.cur_data = NULL;
+			cbd->cbdata.map = cbd->map;
 			cbd->data->rlen = 0;
 			cbd->data->chunk = 0;
 			cbd->data->chunk_remain = 0;

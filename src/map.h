@@ -17,15 +17,6 @@ enum fetch_proto {
 };
 
 /**
- * Callback data for async load
- */
-struct map_cb_data {
-	gint state;
-	void *prev_data;
-	void *cur_data;
-};
-
-/**
  * Data specific to file maps
  */
 struct file_map_data {
@@ -48,6 +39,8 @@ struct http_map_data {
 	guint32 chunk;
 	guint32 chunk_remain;
 };
+
+struct map_cb_data;
 
 /**
  * Callback types
@@ -73,9 +66,21 @@ struct rspamd_map {
 	gchar *uri;
 	gchar *description;
 	guint32 id;
+	guint32 checksum;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 };
+
+/**
+ * Callback data for async load
+ */
+struct map_cb_data {
+	struct rspamd_map *map;
+	gint state;
+	void *prev_data;
+	void *cur_data;
+};
+
 
 /**
  * Check map protocol
