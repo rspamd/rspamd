@@ -1401,10 +1401,10 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 				headers_end = p + 1;
 				break;
 			}
-			else if (got_lf && *(p - 1) == '\n') {
-				/* \n\r case */
-				headers_end = p + 1;
-				break;
+			else if (got_lf && *(p - 1) != '\n') {
+				/* Sequence is broken */
+				got_lf = FALSE;
+				got_cr = TRUE;
 			}
 			else {
 				got_cr = TRUE;
