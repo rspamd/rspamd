@@ -1369,6 +1369,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 					headers_end = p + 1;
 					break;
 				}
+				else if (got_lf) {
+					/* \n\r\n */
+					headers_end = p + 1;
+					break;
+				}
 				else {
 					/* Set got crlf flag */
 					got_crlf = TRUE;
