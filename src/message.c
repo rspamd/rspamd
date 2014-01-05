@@ -510,7 +510,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 
 			/* Extract ip */
 		case RSPAMD_RECV_STATE_PARSE_IP:
-			while (g_ascii_isdigit (*p) || *p == '.' || *p == ':') {
+			while (g_ascii_isxdigit (*p) || *p == '.' || *p == ':') {
 				p ++;
 			}
 			if (*p != ']') {
