@@ -303,6 +303,11 @@ config_logger (struct config_file *cfg, gpointer ud)
 {
 	struct rspamd_main *rm = ud;
 
+	if (config_test) {
+		/* Explicitly set logger type to console in case of config testing */
+		cfg->log_type = RSPAMD_LOG_CONSOLE;
+	}
+
 	rspamd_set_logger (cfg, g_quark_try_string ("main"), rm);
 	if (open_log_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
