@@ -2440,6 +2440,29 @@ rspamd_prng_seed (void)
 	g_random_set_seed (rand_seed);
 }
 
+gboolean
+rspamd_ip_is_valid (void *ptr, int af)
+{
+	const struct in_addr ip4_any = { INADDR_ANY }, ip4_none = { INADDR_NONE };
+	const struct in6_addr ip6_any = IN6ADDR_ANY_INIT;
+
+	gboolean ret = FALSE;
+
+	if (G_LIKELY (af == AF_INET)) {
+		if (memcmp (ptr, &ip4_any, sizeof (struct in_addr)) != 0 &&
+				memcmp (ptr, &ip4_none, sizeof (struct in_addr)) != 0) {
+			ret = TRUE;
+		}
+	}
+	else if (G_UNLIKELY (af == AF_INET6)) {
+		if (memcmp (ptr, &ip6_any, sizeof (struct in6_addr)) != 0) {
+			ret = TRUE;
+		}
+	}
+
+	return ret;
+}
+
 /*
  * vi:ts=4
  */

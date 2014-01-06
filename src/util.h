@@ -462,4 +462,12 @@ void rspamd_prng_seed (void);
  */
 void rspamd_random_bytes (gchar *buf, gsize buflen);
 
+/**
+ * Check whether specified ip is valid (not INADDR_ANY or INADDR_NONE) for ipv4 or ipv6
+ * @param ptr pointer to struct in_addr or struct in6_addr
+ * @param af address family (AF_INET or AF_INET6)
+ * @return TRUE if the address is valid
+ */
+gboolean rspamd_ip_is_valid (void *ptr, int af);
+
 #endif

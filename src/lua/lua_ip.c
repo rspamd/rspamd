@@ -244,18 +244,23 @@ lua_ip_push (lua_State *L, int af, gpointer data)
 {
 	struct rspamd_lua_ip *ip, **pip;
 
-	ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
-
-	ip->af = af;
-	if (af == AF_INET6) {
-		memcpy (&ip->data, data, sizeof (struct in6_addr));
+	if (!rspamd_ip_is_valid (data, af)) {
+		lua_pushnil (L);
 	}
 	else {
-		memcpy (&ip->data, data, sizeof (struct in_addr));
+		ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+
+		ip->af = af;
+		if (af == AF_INET6) {
+			memcpy (&ip->data, data, sizeof (struct in6_addr));
+		}
+		else {
+			memcpy (&ip->data, data, sizeof (struct in_addr));
+		}
+		pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
+		lua_setclass (L, "rspamd{ip}", -1);
+		*pip = ip;
 	}
-	pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-	lua_setclass (L, "rspamd{ip}", -1);
-	*pip = ip;
 }
 
 void
