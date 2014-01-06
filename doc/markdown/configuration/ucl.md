@@ -11,7 +11,7 @@ For example, you can write the same configuration in the following ways:
 
 * in nginx like:
 
-```nginx
+~~~nginx
 param = value;
 section {
     param = value;
@@ -31,11 +31,11 @@ section {
         }
     }
 }
-```
+~~~
 
 * or in JSON:
 
-```json
+~~~json
 {
     "param": "value",
     "param1": "value1",
@@ -53,7 +53,7 @@ section {
         ]
     }
 }
-```
+~~~
 
 ## Improvements to the json notation.
 
@@ -63,72 +63,72 @@ There are various things that make ucl configuration more convenient for editing
 
 * Braces are not necessary to enclose a top object: it is automatically treated as an object:
 
-```json
+~~~json
 "key": "value"
-```
+~~~
 is equal to:
-```json
+~~~json
 {"key": "value"}
-```
+~~~
 
 * There is no requirement of quotes for strings and keys, moreover, `:` may be replaced `=` or even be skipped for objects:
 
-```nginx
+~~~nginx
 key = value;
 section {
     key = value;
 }
-```
+~~~
 is equal to:
-```json
+~~~json
 {
     "key": "value",
     "section": {
         "key": "value"
     }
 }
-```
+~~~
 
 * No commas mess: you can safely place a comma or semicolon for the last element in an array or an object:
 
-```json
+~~~json
 {
     "key1": "value",
     "key2": "value",
 }
-```
+~~~
 ### Automatic arrays creation
 
 * Non-unique keys in an object are allowed and are automatically converted to the arrays internally:
 
-```json
+~~~json
 {
     "key": "value1",
     "key": "value2"
 }
-```
+~~~
 is converted to:
-```json
+~~~json
 {
     "key": ["value1", "value2"]
 }
-```
+~~~
 
 ### Named keys hierarchy
 
 UCL accepts named keys and organize them into objects hierarchy internally. Here is an example of this process:
-```nginx
+~~~nginx
 section "blah" {
 	key = value;
 }
 section foo {
 	key = value;
 }
-```
+~~~
 
 is converted to the following object:
 
-```nginx
+~~~nginx
 section {
 	blah {
 			key = value;
@@ -137,19 +137,19 @@ section {
 			key = value;
 	}
 }
-```
+~~~
     
 Plain definitions may be more complex and contain more than a single level of nested objects:
    
-```nginx
+~~~nginx
 section "blah" "foo" {
 	key = value;
 }
-```
+~~~
 
 is presented as:
 
-```nginx    
+~~~nginx    
 section {
 	blah {
 			foo {
@@ -157,7 +157,7 @@ section {
 			}
 	}
 }
-```
+~~~
 
 ### Convenient numbers and booleans
 
@@ -178,25 +178,25 @@ UCL supports different style of comments:
 * multiline: `/* ... */`
 
 Multiline comments may be nested:
-```c
+~~~c
 # Sample single line comment
 /* 
  some comment
  /* nested comment */
  end of comment
 */
-```
+~~~
 
 ### Macros support
 
 UCL supports external macros both multiline and single line ones:
-```nginx
+~~~nginx
 .macro "sometext";
 .macro {
      Some long text
      ....
 };
-```
+~~~
 There are two internal macros provided by UCL:
 
 * `include` - read a file `/path/to/file` or an url `http://example.com/file` and include it to the current place of
@@ -224,13 +224,13 @@ to change in future libucl releases.
 ### Multiline strings
 
 UCL can handle multiline strings as well as single line ones. It uses shell/perl like notation for such objects:
-```
+~~~
 key = <<EOD
 some text
 splitted to
 lines
 EOD
-```
+~~~
 
 In this example `key` will be interpreted as the following string: `some text\nsplitted to\nlines`.
 Here are some rules for this syntax:
@@ -240,14 +240,14 @@ Here are some rules for this syntax:
 * To finish multiline string you need to include a terminator string just after newline and followed by a newline (no spaces or other characters are allowed as well);
 * The initial and the final newlines are not inserted to the resulting string, but you can still specify newlines at the begin and at the end of a value, for example:
 
-```
+~~~
 key <<EOD
 
 some
 text
 
 EOD
-```
+~~~
 
 ## Emitter
 
@@ -265,7 +265,7 @@ I got a 19Mb file that consist of ~700 thousands lines of json (obtained via
 http://www.json-generator.com/). Then I checked jansson library that performs json
 parsing and emitting and compared it with UCL. Here are results:
 
-```
+~~~
 jansson: parsed json in 1.3899 seconds
 jansson: emitted object in 0.2609 seconds
 
@@ -274,17 +274,17 @@ ucl: emitted config in 0.2423 seconds
 ucl: emitted json in 0.2329 seconds
 ucl: emitted compact json in 0.1811 seconds
 ucl: emitted yaml in 0.2489 seconds
-```
+~~~
 
 So far, UCL seems to be significantly faster than jansson on parsing and slightly faster on emitting. Moreover,
 UCL compiled with optimizations (-O3) performs significantly faster:
-```
+~~~
 ucl: parsed input in 0.3002 seconds
 ucl: emitted config in 0.1174 seconds
 ucl: emitted json in 0.1174 seconds
 ucl: emitted compact json in 0.0991 seconds
 ucl: emitted yaml in 0.1354 seconds
-```
+~~~
 
 You can do your own benchmarks by running `make test` in libucl top directory.
 
