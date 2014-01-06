@@ -58,6 +58,7 @@ For the same matches `OR` rule applies. Therefore, if you have multiple `rcpt` m
 these `rcpt` will trigger the rule. If a setting applies no more rules are matched.
 
 Regexp rules are slow and should not be used intensively. All other rules are matched very quickly.
+
 The picture below describes the architecture of settings matching.
 
-[Settings match procedure](settings.png "Settings match procedure")
+![Settings match procedure](settings.png "Settings match procedure")
