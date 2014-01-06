@@ -66,7 +66,9 @@ There are various things that make ucl configuration more convenient for editing
 ~~~json
 "key": "value"
 ~~~
+
 is equal to:
+
 ~~~json
 {"key": "value"}
 ~~~
@@ -79,7 +81,9 @@ section {
     key = value;
 }
 ~~~
+
 is equal to:
+
 ~~~json
 {
     "key": "value",
@@ -97,6 +101,7 @@ is equal to:
     "key2": "value",
 }
 ~~~
+
 ### Automatic arrays creation
 
 * Non-unique keys in an object are allowed and are automatically converted to the arrays internally:
@@ -107,7 +112,9 @@ is equal to:
     "key": "value2"
 }
 ~~~
+
 is converted to:
+
 ~~~json
 {
     "key": ["value1", "value2"]
@@ -116,7 +123,8 @@ is converted to:
 
 ### Named keys hierarchy
 
-UCL accepts named keys and organize them into objects hierarchy internally. Here is an example of this process:
+UCL accepts named keys and organise them into objects hierarchy internally. Here is an example of this process:
+
 ~~~nginx
 section "blah" {
 	key = value;
@@ -178,6 +186,7 @@ UCL supports different style of comments:
 * multiline: `/* ... */`
 
 Multiline comments may be nested:
+
 ~~~c
 # Sample single line comment
 /* 
@@ -190,6 +199,7 @@ Multiline comments may be nested:
 ### Macros support
 
 UCL supports external macros both multiline and single line ones:
+
 ~~~nginx
 .macro "sometext";
 .macro {
@@ -224,6 +234,7 @@ to change in future libucl releases.
 ### Multiline strings
 
 UCL can handle multiline strings as well as single line ones. It uses shell/perl like notation for such objects:
+
 ~~~
 key = <<EOD
 some text
@@ -262,7 +273,7 @@ Each UCL object can be serialized to one of the three supported formats:
 
 Are UCL parser and emitter fast enough? Well, there are some numbers.
 I got a 19Mb file that consist of ~700 thousands lines of json (obtained via
-http://www.json-generator.com/). Then I checked jansson library that performs json
+<http://www.json-generator.com/>). Then I checked jansson library that performs json
 parsing and emitting and compared it with UCL. Here are results:
 
 ~~~
