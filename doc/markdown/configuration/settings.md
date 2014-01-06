@@ -18,7 +18,7 @@ The settings file itself should contain a single section called "settings":
 ~~~nginx
 settings {
 	some_users {
-		priority = 0;
+		priority = high;
 		from = "@example.com";
 		rcpt = "admin";
 		rcpt = "/user.*/";
@@ -33,7 +33,7 @@ settings {
 		}
 	}
 	whitelist {
-		priority = 1;
+		priority = low;
 		rcpt = "postmaster@example.com";
 		want_spam = yes;
 	}
@@ -43,7 +43,7 @@ settings {
 So each setting has the following attributes:
 
 - `name` - section name that identify this specific setting (e.g. `some_users`)
-- `priority` - 0 or 1, 0 is higher priority than 1 and is matched first (default priority is 1)
+- `priority` - high or low, high priority rules are matched first (default priority is low)
 - `match list` - list of rules when this rule matches:
 	+ `from` - match SMTP from
 	+ `rcpt` - match RCPT
