@@ -383,9 +383,6 @@ static void
 err_socket (GError * err, void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
-	struct rspamd_worker_ctx       *ctx;
-
-	ctx = task->worker->ctx;
 
 	msg_info ("abnormally closing connection from: %s, error: %s", inet_ntoa (task->client_addr), err->message);
 	/* Free buffers */

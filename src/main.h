@@ -220,6 +220,7 @@ struct worker_task {
 	gchar *deliver_to;											/**< address to deliver								*/
 	gchar *user;													/**< user to deliver								*/
 	gchar *subject;												/**< subject (for non-mime)							*/
+	gchar *hostname;											/**< hostname reported by MTA						*/
 	gchar *statfile;											/**< statfile for learning							*/
 	f_str_t *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/

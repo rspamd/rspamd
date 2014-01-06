@@ -79,6 +79,8 @@ LUA_FUNCTION_DEF (task, get_from_ip_num);
 LUA_FUNCTION_DEF (task, get_client_ip_num);
 LUA_FUNCTION_DEF (task, get_helo);
 LUA_FUNCTION_DEF (task, set_helo);
+LUA_FUNCTION_DEF (task, get_hostname);
+LUA_FUNCTION_DEF (task, set_hostname);
 LUA_FUNCTION_DEF (task, get_images);
 LUA_FUNCTION_DEF (task, get_symbol);
 LUA_FUNCTION_DEF (task, get_date);
@@ -128,6 +130,8 @@ static const struct luaL_reg    tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_client_ip_num),
 	LUA_INTERFACE_DEF (task, get_helo),
 	LUA_INTERFACE_DEF (task, set_helo),
+	LUA_INTERFACE_DEF (task, get_hostname),
+	LUA_INTERFACE_DEF (task, set_hostname),
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
@@ -1053,6 +1057,38 @@ lua_task_set_helo (lua_State *L)
 		new_helo = luaL_checkstring (L, 2);
 		if (new_helo) {
 			task->helo = memory_pool_strdup (task->task_pool, new_helo);
+		}
+	}
+
+	return 0;
+}
+
+static gint
+lua_task_get_hostname (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+
+	if (task) {
+		if (task->hostname != NULL) {
+			lua_pushstring (L, (gchar *)task->hostname);
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_task_set_hostname (lua_State *L)
+{
+	struct worker_task             *task = lua_check_task (L);
+	const gchar					   *new_hostname;
+
+	if (task) {
+		new_hostname = luaL_checkstring (L, 2);
+		if (new_hostname) {
+			task->hostname = memory_pool_strdup (task->task_pool, new_hostname);
 		}
 	}
 

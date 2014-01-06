@@ -92,6 +92,7 @@
 #define USER_HEADER "User"
 #define PASS_HEADER "Pass"
 #define JSON_HEADER "Json"
+#define HOSTNAME_HEADER "Hostname"
 #define DELIVER_TO_HEADER "Deliver-To"
 
 static GList                   *custom_commands = NULL;
@@ -508,6 +509,10 @@ parse_header (struct worker_task *task, f_str_t * line)
 		if (g_ascii_strncasecmp (headern, HELO_HEADER, sizeof (HELO_HEADER) - 1) == 0) {
 			task->helo = memory_pool_fstrdup (task->task_pool, line);
 			debug_task ("read helo header, value: %s", task->helo);
+		}
+		else if (g_ascii_strncasecmp (headern, HOSTNAME_HEADER, sizeof (HOSTNAME_HEADER) - 1) == 0) {
+			task->hostname = memory_pool_fstrdup (task->task_pool, line);
+			debug_task ("read hostname header, value: %s", task->hostname);
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
