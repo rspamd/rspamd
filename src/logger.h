@@ -103,7 +103,7 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 #define msg_warn(...)	rspamd_default_log_function(G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
 #define msg_info(...)	rspamd_default_log_function(G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
 #define msg_debug(...)	rspamd_default_log_function(G_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__)
-#define debug_task(...) do {} while(0)
+#define debug_task(...) rspamd_default_log_function(G_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__)
 #endif
 
 #endif
