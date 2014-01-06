@@ -4,7 +4,8 @@
 -- WWW: http://homeweb.ru
 --
 
---Rating for checks_hellohost and checks_hello: 5 - very hard, 4 - hard, 3 - meduim, 2 - low, 1 - very low
+-- Weight for checks_hellohost and checks_hello: 5 - very hard, 4 - hard, 3 - meduim, 2 - low, 1 - very low.
+-- From HFILTER_HELO_* and HFILTER_HOSTNAME_* symbols the maximum weight is selected in case of their actuating.
 local checks_hellohost = {
 ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5, 
 ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5, 
@@ -167,23 +168,13 @@ local function hfilter(task)
         end
     
     --HOSTNAME--
-    local r = recvh[1]
-    local hostname = false
-    local hostname_lower = false
-        if r['real_hostname'] and ( r['real_hostname'] ~= 'unknown' or not check_regexp(r['real_hostname'], '^\\d+\\.\\d+\\.\\d+\\.\\d+$') ) then
-            hostname = r['real_hostname']
-            hostname_lower = string.lower(hostname)
+    local hostname = task:get_hostname()
+        if hostname and ip and hostname == '[' .. ip .. ']' then
+            hostname = false
         end
     
     --HELO--
     local helo = task:get_helo()
-    local helo_lower = false
-        if helo then
-            helo_lower = string.lower(helo)
-        else
-            helo = false
-            helo_lower = false
-        end
     
     --MESSAGE--
     local message = task:get_message()
@@ -191,59 +182,51 @@ local function hfilter(task)
     --RULES--RULES--RULES--
 
     -- Check's HELO
-    local checks_hello_found = false
+    local weight_helo = 0
     if helo then
-        -- Regexp check HELO
+        -- Regexp check HELO (checks_hello)
         for regexp,weight in pairs(checks_hello) do
-            if check_regexp(helo_lower, regexp) then
-                task:insert_result('HFILTER_HELO_' .. weight, 1.0)
-                checks_hello_found = true
+            if check_regexp(helo, regexp) then
+                weight_helo = weight
                 break
             end
         end
-        if not checks_hello_found then
-            for regexp,weight in pairs(checks_hellohost) do
-                if check_regexp(helo_lower, regexp) then
-                    task:insert_result('HFILTER_HELO_' .. weight, 1.0)
-                    checks_hello_found = true
-                    break
+        
+        -- Regexp check HELO (checks_hellohost)
+        for regexp,weight in pairs(checks_hellohost) do
+            if check_regexp(helo, regexp) then
+                if weight > weight_helo then
+                    weight_helo = weight
                 end
+                break
             end
         end
         
         --FQDN check HELO
-        if ip then
+        if ip and helo then
             check_host(task, helo, 'HELO', ip, hostname)
         end
     end
     
-    --
-    local function check_hostname(hostname_res)
+    -- Check's HOSTNAME
+    local weight_hostname = 0
+    if hostname then
         -- Check regexp HOSTNAME
         for regexp,weight in pairs(checks_hellohost) do
-            if check_regexp(hostname_res, regexp) then
-                task:insert_result('HFILTER_HOSTNAME_' .. weight, 1.0)
+            if check_regexp(hostname, regexp) then
+                weight_hostname = weight
                 break
             end
         end
-    end
-    local function hfilter_hostname_ptr(resolver, to_resolve, results, err)
-        task:inc_dns_req()
-        if results then
-            check_hostname(results[1])
-        end
-    end
-    
-    -- Check's HOSTNAME
-    if hostname then
-        if not checks_hello_found then
-            check_hostname(hostname)
-        end
     else
         task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
-        if ip and not checks_hello_found then
-            task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), ip, hfilter_hostname_ptr)
-        end
+    end
+    
+    --Insert weight's for HELO or HOSTNAME
+    if weight_helo > 0 and weight_helo >= weight_hostname then
+        task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
+    elseif weight_hostname > 0 and weight_hostname > weight_helo then
+        task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
     end
 
     -- MAILFROM checks --
@@ -262,10 +245,8 @@ local function hfilter(task)
     local message_id = task:get_message_id()
     if message_id then
         local mid_split = split(message_id, '@', 0)
-        if table.maxn(mid_split) == 2 and not string.find(mid_split[2], "local") then
-            if not check_fqdn(mid_split[2]) then
-                task:insert_result('HFILTER_MID_NOT_FQDN', 1.00)
-            end
+        if table.maxn(mid_split) == 2 and not string.find(mid_split[2], "local") and not check_fqdn(mid_split[2]) then
+            task:insert_result('HFILTER_MID_NOT_FQDN', 1.00)
         end
     end
     
