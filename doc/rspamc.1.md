@@ -75,6 +75,12 @@ requires input.
 -r *user@domain*, \--rcpt=*user@domain*
 :	Emulate that message is for specified user
 
+\--helo=*helo_string*
+:	Imitate SMTP HELO passing from MTA
+
+\--hostname=*hostname*
+:	Imitate hostname passing from MTA (rspamd assumes that it is verified by MTA)
+
 -t *seconds*, \--timeout=*seconds*
 :	Timeout for waiting for a reply
 
@@ -131,4 +137,4 @@ Add custom action's weight:
 Rspamd documentation and source codes may be downloaded from
 <https://rspamd.com/>.
 
-[rspamd-workers]: https://rspamd.com/doc/rspamd-workers.html
+[rspamd-workers]: https://rspamd.com/doc/workers/

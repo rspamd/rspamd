@@ -38,6 +38,8 @@ static gchar                   *from = NULL;
 static gchar                   *deliver_to = NULL;
 static gchar                   *rcpt = NULL;
 static gchar                   *user = NULL;
+static gchar                   *helo = NULL;
+static gchar                   *hostname = NULL;
 static gchar                   *classifier = "bayes";
 static gchar                   *local_addr = NULL;
 static gint                     weight = 1;
@@ -63,6 +65,8 @@ static GOptionEntry entries[] =
 		{ "deliver", 'd', 0, G_OPTION_ARG_STRING, &deliver_to, "Emulate that message is delivered to specified user", NULL },
 		{ "from", 'F', 0, G_OPTION_ARG_STRING, &from, "Emulate that message is from specified user", NULL },
 		{ "rcpt", 'r', 0, G_OPTION_ARG_STRING, &rcpt, "Emulate that message is for specified user", NULL },
+		{ "helo", 0, 0, G_OPTION_ARG_STRING, &helo, "Imitate SMTP HELO passing from MTA", NULL },
+		{ "hostname", 0, 0, G_OPTION_ARG_STRING, &hostname, "Imitate hostname passing from MTA", NULL },
 		{ "timeout", 't', 0, G_OPTION_ARG_INT, &timeout, "Timeout for waiting for a reply", NULL },
 		{ "bind", 'b', 0, G_OPTION_ARG_STRING, &local_addr, "Bind to specified ip address", NULL },
 		{ "commands", 0, 0, G_OPTION_ARG_NONE, &print_commands, "List available commands", NULL },
@@ -453,6 +457,12 @@ add_options (GHashTable *opts)
 	}
 	if (deliver_to != NULL) {
 		g_hash_table_insert (opts, "Deliver-To", deliver_to);
+	}
+	if (helo != NULL) {
+		g_hash_table_insert (opts, "Helo", helo);
+	}
+	if (hostname != NULL) {
+		g_hash_table_insert (opts, "Hostname", hostname);
 	}
 	if (pass_all) {
 		g_hash_table_insert (opts, "Pass", "all");
