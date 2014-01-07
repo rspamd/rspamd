@@ -488,7 +488,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		else {
 			msg_info ("wrong header: %s", headern);
-			return FALSE;
+			res = FALSE;
 		}
 		break;
 	case 'd':
@@ -583,7 +583,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 					task->from_addr.ipv6 = TRUE;
 				}
 				else {
-					msg_info ("bad ip header: '%s'", tmp);
+					msg_err ("bad ip header: '%s'", tmp);
 					return FALSE;
 				}
 				task->from_addr.has_addr = TRUE;
@@ -595,7 +595,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 						task->from_addr.ipv6 = TRUE;
 					}
 					else {
-						msg_info ("bad ip header: '%s'", tmp);
+						msg_err ("bad ip header: '%s'", tmp);
 						return FALSE;
 					}
 				}
@@ -606,7 +606,7 @@ parse_header (struct worker_task *task, f_str_t * line)
 			}
 #else
 			if (!inet_aton (tmp, &task->from_addr)) {
-				msg_info ("bad ip header: '%s'", tmp);
+				msg_err ("bad ip header: '%s'", tmp);
 				return FALSE;
 			}
 #endif
@@ -652,13 +652,17 @@ parse_header (struct worker_task *task, f_str_t * line)
 		}
 		break;
 	default:
-		if (!task->is_http) {
-			msg_info ("wrong header: %s", headern);
-			res = FALSE;
-		}
+		msg_info ("wrong header: %s", headern);
+		res = FALSE;
+		break;
 	}
 
-	return res || task->is_http;
+	if (!res && task->cfg->strict_protocol_headers) {
+		msg_err ("deny processing of a request with incorrect or unknown headers");
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 gboolean

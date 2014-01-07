@@ -1063,6 +1063,8 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct config_file, history_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "use_mlock", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool), 0);
+	rspamd_rcl_add_default_handler (sub, "strict_protocol_headers", rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct config_file, strict_protocol_headers), 0);
 
 	/**
 	 * Metric section

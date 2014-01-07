@@ -292,6 +292,7 @@ struct config_file {
 	gboolean one_shot_mode;							/**< rules add only one symbol							*/
 	gboolean check_text_attachements;				/**< check text attachements as text					*/
 	gboolean convert_config;						/**< convert config to XML format						*/
+	gboolean strict_protocol_headers;				/**< strictly check protocol headers					*/
 
 	gsize max_diff;									/**< maximum diff size for text parts					*/
 
