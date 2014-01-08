@@ -27,6 +27,7 @@
  */
 #include "config.h"
 #include "map.h"
+#include "http.h"
 #include "main.h"
 #include "util.h"
 #include "mem_pool.h"
@@ -349,7 +350,7 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 			/* Check for date */
 			date = g_hash_table_lookup (reply->headers, "Date");
 			if (date != NULL) {
-				data->last_checked = parse_http_date (date, -1);
+				data->last_checked = rspamd_http_parse_date (date, -1);
 			}
 			else {
 				data->last_checked = (time_t)-1;

@@ -24,6 +24,7 @@
 #include "lua_common.h"
 #include "buffer.h"
 #include "dns.h"
+#include "http.h"
 
 #define MAX_HEADERS_SIZE 8192
 
@@ -229,7 +230,7 @@ lua_http_parse_header_line (struct lua_http_ud *ud, f_str_t *in)
 
 	/* Check date */
 	if (g_ascii_strcasecmp (new->name, "date") == 0) {
-		ud->date = parse_http_date (new->value, -1);
+		ud->date = rspamd_http_parse_date (new->value, -1);
 	}
 
 	/* Insert a header to the list */

@@ -8,6 +8,7 @@ SET(LIBRSPAMDUTILSRC		  	../src/aio_event.c
 								../src/fstring.c
 								../src/fuzzy.c
 								../src/hash.c
+								../src/http.c
 								../src/logger.c
 								../src/map.c
 								../src/memcached.c
@@ -73,6 +74,7 @@ ENDIF(CMAKE_COMPILER_IS_GNUCC)
 TARGET_LINK_LIBRARIES(rspamd-util ${RSPAMD_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd-util pcre)
 TARGET_LINK_LIBRARIES(rspamd-util rspamd-ucl)
+TARGET_LINK_LIBRARIES(rspamd-util rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-util event)
 
 IF(NOT DEBIAN_BUILD)
