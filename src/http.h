@@ -27,12 +27,17 @@
 /**
  * @file http.h
  *
- * This is an interface for HTTP client and server. This code uses HTTP parser written
+ * This is an interface for HTTP client and conn. This code uses HTTP parser written
  * by Joyent Inc based on nginx code.
  */
 
 #include "config.h"
 #include "http_parser.h"
+
+enum rspamd_http_message_type {
+	RSPAMD_HTTP_REQUEST,
+	RSPAMD_HTTP_REPLY
+};
 
 /**
  * HTTP header structure
@@ -44,48 +49,44 @@ struct rspamd_http_header {
 };
 
 /**
- * HTTP request structure, used for requests
+ * HTTP message structure, used for requests and replies
  */
-struct rspamd_http_request {
+struct rspamd_http_message {
 	GString *url;
 	struct rspamd_http_header *headers;
 	GString *body;
+	enum rspamd_http_message_type type;
 	time_t date;
 	gint code;
 };
 
-struct rspamd_http_reply {
-	struct rspamd_http_header *headers;
-	GString *body;
-	gint code;
-};
 
 /**
- * Options for HTTP client and server
+ * Options for HTTP connection
  */
 enum rspamd_http_options {
 	RSPAMD_HTTP_BODY_PARTIAL = 0x1//!< RSPAMD_HTTP_BODY_PARTIAL
 };
 
-struct rspamd_http_server_private;
-struct rspamd_http_server;
+struct rspamd_http_connection_private;
+struct rspamd_http_connection;
 
-typedef gboolean (*rspamd_http_body_handler) (struct rspamd_http_server *srv,
-		struct rspamd_http_request *req,
+typedef gboolean (*rspamd_http_body_handler) (struct rspamd_http_connection *srv,
+		struct rspamd_http_message *req,
 		const gchar *chunk,
 		gsize len);
 
-typedef void (*rspamd_http_error_handler) (struct rspamd_http_server *srv, GError *err);
+typedef void (*rspamd_http_error_handler) (struct rspamd_http_connection *srv, GError *err);
 
-typedef void (*rspamd_http_reply_handler) (struct rspamd_http_server *srv,
-		struct rspamd_http_reply *reply, GError *err);
+typedef void (*rspamd_http_reply_handler) (struct rspamd_http_connection *srv,
+		struct rspamd_http_message *reply, GError *err);
 
 /**
- * HTTP server structure
+ * HTTP conn structure
  */
-struct rspamd_http_server {
+struct rspamd_http_connection {
 	gint fd;
-	struct rspamd_http_server_private *priv;
+	struct rspamd_http_connection_private *priv;
 	enum rspamd_http_options opts;
 	rspamd_http_body_handler body_handler;
 	rspamd_http_error_handler error_handler;
@@ -93,51 +94,52 @@ struct rspamd_http_server {
 };
 
 /**
- * Create new http server
+ * Create new http conn
  * @param handler handler for body
  * @param opts options
- * @return new server structure
+ * @return new conn structure
  */
-struct rspamd_http_server* rspamd_http_server_new (rspamd_http_body_handler body_handler,
+struct rspamd_http_connection* rspamd_http_connection_new (rspamd_http_body_handler body_handler,
 		rspamd_http_error_handler error_handler,
 		enum rspamd_http_options opts);
 
 /**
  * Handle a request using socket fd and user data ud
- * @param server server structure
+ * @param conn conn structure
  * @param ud opaque user data
  * @param fd fd to read/write
  */
-void rspamd_http_server_handle_request (struct rspamd_http_server *server, gpointer ud, gint fd,
+void rspamd_http_connection_handle_request (struct rspamd_http_connection *conn, gpointer ud, gint fd,
 		struct timeval *timeout, struct event_base *base);
 
 /**
- * Send reply using initialised server
- * @param server server structure
+ * Send reply using initialised conn
+ * @param conn conn structure
  * @param reply HTTP reply
  * @return TRUE if request can be sent
  */
-gboolean rspamd_http_server_write_reply (struct rspamd_http_server *server, struct rspamd_http_reply *reply,
+gboolean rspamd_http_connection_write_reply (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *reply,
 		rspamd_http_reply_handler *handler);
 
 /**
- * Free server structure
- * @param server
+ * Free conn structure
+ * @param conn
  */
-void rspamd_http_server_free (struct rspamd_http_server *server);
+void rspamd_http_connection_free (struct rspamd_http_connection *conn);
 
 /**
- * Reset server for a new request
- * @param server
+ * Reset conn for a new request
+ * @param conn
  */
-void rspamd_http_server_reset (struct rspamd_http_server *server);
+void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
 
 /**
  * Create new HTTP reply
  * @param code code to pass
  * @return new reply object
  */
-struct rspamd_http_reply * rspamd_http_new_reply (gint code);
+struct rspamd_http_message* rspamd_http_new_message (enum rspamd_http_message_type);
 
 /**
  * Append a header to reply
@@ -145,13 +147,13 @@ struct rspamd_http_reply * rspamd_http_new_reply (gint code);
  * @param name
  * @param value
  */
-void rspamd_http_reply_add_header (struct rspamd_http_reply *rep, const gchar *name, const gchar *value);
+void rspamd_http_message_add_header (struct rspamd_http_message *rep, const gchar *name, const gchar *value);
 
 /**
  * Free HTTP reply
  * @param rep
  */
-void rspamd_http_reply_free (struct rspamd_http_reply *rep);
+void rspamd_http_message_free (struct rspamd_http_message *msg);
 
 /**
  * Parse HTTP date header and return it as time_t
