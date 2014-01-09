@@ -48,149 +48,6 @@ static const struct luaL_reg    loggerlib_f[] = {
 	{NULL, NULL}
 };
 
-/* util module */
-LUA_FUNCTION_DEF (util, gethostbyname);
-LUA_FUNCTION_DEF (util, strsplit);
-LUA_FUNCTION_DEF (util, close);
-LUA_FUNCTION_DEF (util, ip_to_str);
-LUA_FUNCTION_DEF (util, str_to_ip);
-
-static const struct luaL_reg    utillib_f[] = {
-	LUA_INTERFACE_DEF (util, gethostbyname),
-	LUA_INTERFACE_DEF (util, strsplit),
-	LUA_INTERFACE_DEF (util, close),
-	LUA_INTERFACE_DEF (util, ip_to_str),
-	LUA_INTERFACE_DEF (util, str_to_ip),
-	{"__tostring", lua_class_tostring},
-	{NULL, NULL}
-};
-
-/**
- * Get numeric ip presentation of hostname
- */
-static gint
-lua_util_gethostbyname (lua_State *L)
-{
-	const gchar						*name;
-	struct hostent					*hent;
-	struct in_addr					 ina;
-
-	name = luaL_checkstring (L, 1);
-	if (name) {
-		hent = gethostbyname (name);
-		if (hent) {
-			memcpy (&ina, hent->h_addr, sizeof (struct in_addr));
-			lua_pushinteger (L, ina.s_addr);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-	return 1;
-}
-
-/**
- * Close file descriptor
- */
-static gint
-lua_util_close (lua_State *L)
-{
-	gint							 fd;
-
-	fd = lua_tointeger (L, 1);
-
-	if (fd >= 0) {
-		close (fd);
-	}
-
-	return 0;
-}
-
-/**
- * Convert numeric ip to string
- */
-static gint
-lua_util_ip_to_str (lua_State *L)
-{
-	struct in_addr					 ina;
-
-	ina.s_addr = lua_tointeger (L, 1);
-	if (ina.s_addr) {
-		lua_pushstring (L, inet_ntoa (ina));
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-/**
- * Convert string ip to numeric
- */
-static gint
-lua_util_str_to_ip (lua_State *L)
-{
-	struct in_addr					 ina;
-	const gchar						*ip;
-
-	ip = luaL_checkstring (L, 1);
-	if (ip) {
-		if (inet_aton (ip, &ina) != 0) {
-			lua_pushinteger (L, ina.s_addr);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-/**
- * Split string to the portions using separators as the second argument
- */
-static gint
-lua_util_strsplit (lua_State *L)
-{
-	gchar							**list, **cur;
-	const gchar						*in, *separators = " ;,";
-	gint							 i;
-
-	in = luaL_checkstring (L, 1);
-
-	if (in) {
-		if (lua_gettop (L) > 1) {
-			separators = luaL_checkstring (L, 2);
-		}
-		list = g_strsplit_set (in, separators, -1);
-		if (list) {
-			cur = list;
-			lua_newtable (L);
-			i = 1;
-			while (*cur) {
-				lua_pushstring (L, *cur);
-				lua_rawseti (L, -2, i++);
-				cur ++;
-			}
-			g_strfreev (list);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
 
 /* Util functions */
 /**
@@ -390,14 +247,6 @@ luaopen_logger (lua_State * L)
 }
 
 
-static gint
-luaopen_util (lua_State *L)
-{
-	luaL_register (L, "rspamd_util", utillib_f);
-
-	return 1;
-}
-
 static void
 lua_add_actions_global (lua_State *L)
 {
@@ -424,7 +273,6 @@ init_lua (struct config_file *cfg)
 
 	(void)luaopen_rspamd (L);
 	(void)luaopen_logger (L);
-	(void)luaopen_util (L);
 	(void)luaopen_mempool (L);
 	(void)luaopen_config (L);
 	(void)luaopen_radix (L);
