@@ -34,9 +34,9 @@
 #include "config.h"
 #include "http_parser.h"
 
-enum rspamd_http_message_type {
-	RSPAMD_HTTP_REQUEST,
-	RSPAMD_HTTP_REPLY
+enum rspamd_http_connection_type {
+	RSPAMD_HTTP_SERVER,
+	RSPAMD_HTTP_CLIENT
 };
 
 /**
@@ -55,9 +55,10 @@ struct rspamd_http_message {
 	GString *url;
 	struct rspamd_http_header *headers;
 	GString *body;
-	enum rspamd_http_message_type type;
+	enum http_parser_type type;
 	time_t date;
 	gint code;
+	enum http_method method;
 };
 
 
@@ -71,65 +72,80 @@ enum rspamd_http_options {
 struct rspamd_http_connection_private;
 struct rspamd_http_connection;
 
-typedef gboolean (*rspamd_http_body_handler) (struct rspamd_http_connection *srv,
-		struct rspamd_http_message *req,
+typedef gboolean (*rspamd_http_body_handler) (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg,
 		const gchar *chunk,
 		gsize len);
 
-typedef void (*rspamd_http_error_handler) (struct rspamd_http_connection *srv, GError *err);
+typedef void (*rspamd_http_error_handler) (struct rspamd_http_connection *conn, GError *err);
 
-typedef void (*rspamd_http_reply_handler) (struct rspamd_http_connection *srv,
-		struct rspamd_http_message *reply, GError *err);
+typedef void (*rspamd_http_finish_handler) (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg);
 
 /**
- * HTTP conn structure
+ * HTTP connection structure
  */
 struct rspamd_http_connection {
-	gint fd;
 	struct rspamd_http_connection_private *priv;
-	enum rspamd_http_options opts;
 	rspamd_http_body_handler body_handler;
 	rspamd_http_error_handler error_handler;
+	rspamd_http_finish_handler finish_handler;
 	gpointer ud;
+	enum rspamd_http_options opts;
+	enum rspamd_http_connection_type type;
+	gint fd;
 };
 
 /**
- * Create new http conn
+ * Create new http connection
  * @param handler handler for body
  * @param opts options
- * @return new conn structure
+ * @return new connection structure
  */
-struct rspamd_http_connection* rspamd_http_connection_new (rspamd_http_body_handler body_handler,
+struct rspamd_http_connection* rspamd_http_connection_new (
+		rspamd_http_body_handler body_handler,
 		rspamd_http_error_handler error_handler,
-		enum rspamd_http_options opts);
+		rspamd_http_finish_handler finish_handler,
+		enum rspamd_http_options opts,
+		enum rspamd_http_connection_type type);
 
 /**
  * Handle a request using socket fd and user data ud
- * @param conn conn structure
+ * @param conn connection structure
  * @param ud opaque user data
  * @param fd fd to read/write
  */
-void rspamd_http_connection_handle_request (struct rspamd_http_connection *conn, gpointer ud, gint fd,
-		struct timeval *timeout, struct event_base *base);
+void rspamd_http_connection_read_message (
+		struct rspamd_http_connection *conn,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
 
 /**
- * Send reply using initialised conn
- * @param conn conn structure
- * @param reply HTTP reply
- * @return TRUE if request can be sent
+ * Send reply using initialised connection
+ * @param conn connection structure
+ * @param msg HTTP message
+ * @param ud opaque user data
+ * @param fd fd to read/write
  */
-gboolean rspamd_http_connection_write_reply (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *reply,
-		rspamd_http_reply_handler *handler);
+void rspamd_http_connection_write_message (
+		struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg,
+		const gchar *host,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
 
 /**
- * Free conn structure
+ * Free connection structure
  * @param conn
  */
 void rspamd_http_connection_free (struct rspamd_http_connection *conn);
 
 /**
- * Reset conn for a new request
+ * Reset connection for a new request
  * @param conn
  */
 void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
@@ -139,7 +155,7 @@ void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
  * @param code code to pass
  * @return new reply object
  */
-struct rspamd_http_message* rspamd_http_new_message (enum rspamd_http_message_type);
+struct rspamd_http_message* rspamd_http_new_message (enum http_parser_type type);
 
 /**
  * Append a header to reply

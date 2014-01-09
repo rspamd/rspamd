@@ -125,7 +125,7 @@ parse_host_port_priority_strv (memory_pool_t *pool, gchar **tokens,
 		}
 	}
 	else if (default_port != 0) {
-		rspamd_snprintf (portbuf, sizeof (portbuf), "%u", default_port);
+		rspamd_snprintf (portbuf, sizeof (portbuf), "%ud", default_port);
 		cur_port = portbuf;
 	}
 	else {
