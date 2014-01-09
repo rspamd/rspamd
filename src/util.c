@@ -116,6 +116,11 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean
 
 		if (is_server) {
 			setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+#ifdef HAVE_IPV6_V6ONLY
+			if (cur->ai_family == AF_INET6) {
+				setsockopt (fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *)&on, sizeof (gint));
+			}
+#endif
 			r = bind (fd, cur->ai_addr, cur->ai_addrlen);
 		}
 		else {

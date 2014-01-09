@@ -15,10 +15,9 @@
 #include "utlist.h"
 #include "ucl.h"
 
-#define DEFAULT_BIND_PORT 768
-#define DEFAULT_CONTROL_PORT 7608
-#define DEFAULT_LMTP_PORT 7609
-#define MAX_MEMCACHED_SERVERS 48
+#define DEFAULT_BIND_PORT 11333
+#define DEFAULT_CONTROL_PORT 11334
+#define MAX_MEMCACHED_SERVERS 4
 #define DEFAULT_MEMCACHED_PORT 11211
 /* Memcached timeouts */
 #define DEFAULT_MEMCACHED_CONNECT_TIMEOUT 1000
@@ -27,14 +26,6 @@
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
 #define DEFAULT_UPSTREAM_DEAD_TIME 300
 #define DEFAULT_UPSTREAM_MAXERRORS 10
-/* Statfile pool size, 50Mb */
-#define DEFAULT_STATFILE_SIZE 52428800L
-
-/* 1 worker by default */
-#define DEFAULT_WORKERS_NUM 1
-
-#define DEFAULT_SCORE 10.0
-#define DEFAULT_REJECT_SCORE 999.0
 
 struct expression;
 struct tokenizer;
@@ -235,7 +226,7 @@ struct classifier_config {
 struct rspamd_worker_bind_conf {
 	gchar *bind_host;
 	guint16 bind_port;
-	gboolean is_unix;
+	gint ai;
 	struct rspamd_worker_bind_conf *next;
 };
 
@@ -308,7 +299,6 @@ struct config_file {
 	gboolean log_color; 							/**< output colors for console output 					*/
 	gboolean log_extended;							/**< log extended information							*/
 
-	gsize max_statfile_size;						/**< maximum size for statfile							*/
 	guint32 statfile_sync_interval;					/**< synchronization interval							*/
 	guint32 statfile_sync_timeout;					/**< synchronization timeout							*/
 	gboolean mlock_statfile_pool;					/**< use mlock (2) for locking statfiles				*/

@@ -474,7 +474,8 @@ check_metric_settings (struct metric_result *res, double *score, double *rscore)
 	double                         *sc, *rs;
 	struct metric                  *metric = res->metric;
 
-	*rscore = DEFAULT_REJECT_SCORE;
+	/* XXX: what the fuck is that? */
+	*rscore = 10.0;
 
 	if (us != NULL) {
 		if ((rs = g_hash_table_lookup (us->reject_scores, metric->name)) != NULL) {

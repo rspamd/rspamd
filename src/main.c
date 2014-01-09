@@ -527,7 +527,7 @@ delay_fork (struct worker_conf *cf)
 }
 
 static GList *
-create_listen_socket (const gchar *addr, gint port, gint family, gint listen_type)
+create_listen_socket (const gchar *addr, gint port, gint listen_type)
 {
 	gint                            listen_sock = -1;
 	GList                          *result, *cur;
@@ -565,12 +565,13 @@ fork_delayed (struct rspamd_main *rspamd)
 }
 
 static inline uintptr_t
-make_listen_key (const gchar *addr, gint port, gint family)
+make_listen_key (gint ai, const gchar *addr, gint port)
 {
 	uintptr_t                       res = 0;
 
 	res = murmur32_hash (addr, strlen (addr));
-	res ^= murmur32_hash ((guchar *)&port, sizeof (gint));
+	res += murmur32_hash ((guchar *)&ai, sizeof (gint));
+	res += murmur32_hash ((guchar *)&port, sizeof (gint));
 
 	return res;
 }
@@ -580,7 +581,7 @@ spawn_workers (struct rspamd_main *rspamd)
 {
 	GList                          *cur, *ls;
 	struct worker_conf             *cf;
-	gint                            i;
+	gint                            i, key;
 	gpointer                        p;
 	struct rspamd_worker_bind_conf *bcf;
 
@@ -595,24 +596,21 @@ spawn_workers (struct rspamd_main *rspamd)
 		else {
 			if (cf->worker->has_socket) {
 				LL_FOREACH (cf->bind_conf, bcf) {
-					if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (
-							make_listen_key (bcf->bind_host, bcf->bind_port, bcf->is_unix)))) == NULL) {
+					key = make_listen_key (bcf->ai, bcf->bind_host, bcf->bind_port);
+					if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (key))) == NULL) {
 						/* Create listen socket */
 						ls = create_listen_socket (bcf->bind_host, bcf->bind_port,
-								bcf->is_unix ? AF_UNIX : AF_INET,
 								cf->worker->listen_type);
 						if (ls == NULL) {
 							exit (-errno);
 						}
-						g_hash_table_insert (listen_sockets, GINT_TO_POINTER (
-								make_listen_key (bcf->bind_host, bcf->bind_port, bcf->is_unix)),
-								ls);
+						g_hash_table_insert (listen_sockets, GINT_TO_POINTER (key), ls);
 					}
 					else {
 						/* We had socket for this type of worker */
 						ls = p;
 					}
-					cf->listen_socks = ls;
+					cf->listen_socks = g_list_concat (cf->listen_socks, ls);
 				}
 			}
 

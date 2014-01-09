@@ -1023,8 +1023,6 @@ rspamd_rcl_config_init (void)
 	 */
 	sub = rspamd_rcl_add_section (&new, "options", rspamd_rcl_options_handler, UCL_OBJECT,
 			FALSE, TRUE);
-	rspamd_rcl_add_default_handler (sub, "statfile_pool_size", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct config_file, max_statfile_size), RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (sub, "cache_file", rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct config_file, cache_filename), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "dns_nameserver", rspamd_rcl_parse_struct_string_list,

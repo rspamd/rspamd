@@ -49,11 +49,13 @@ struct rspamd_ucl_map_cbdata {
 static gchar* rspamd_ucl_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data);
 static void rspamd_ucl_fin_cb (memory_pool_t * pool, struct map_cb_data *data);
 
-gboolean
-parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
+static gboolean
+parse_host_port_priority_strv (memory_pool_t *pool, gchar **tokens,
+		gchar **addr, guint16 *port, guint *priority, guint default_port)
 {
-	gchar                          **tokens, *err_str, *cur_tok;
-	struct addrinfo                 hints, *res;
+	gchar                          *err_str, portbuf[8];
+	const gchar                    *cur_tok, *cur_port;
+	struct addrinfo                hints, *res;
 	guint                           port_parsed, priority_parsed, saved_errno = errno;
 	gint							r;
 	union {
@@ -61,34 +63,76 @@ parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, g
 		struct sockaddr_in6 v6;
 	}                               addr_holder;
 
-	tokens = g_strsplit_set (str, ":", 0);
-	if (!tokens || !tokens[0]) {
-		return FALSE;
-	}
-	
 	/* Now try to parse host and write address to ina */
 	memset (&hints, 0, sizeof (hints));
-	hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
-	hints.ai_flags = 0;
-	hints.ai_protocol = 0;           /* Any protocol */
-	hints.ai_canonname = NULL;
-	hints.ai_addr = NULL;
-	hints.ai_next = NULL;
+	hints.ai_flags = AI_NUMERICSERV;
 
-	if (strcmp (tokens[0], "*") == 0) {
-		/* XXX: actually we still cannot listen on multiply protocols */
-		if (pool != NULL) {
-			*addr = memory_pool_alloc (pool, INET_ADDRSTRLEN + 1);
-		}
-		rspamd_strlcpy (*addr, "0.0.0.0", INET_ADDRSTRLEN + 1);
-		goto port_parse;
+	cur_tok = tokens[0];
+
+	if (strcmp (cur_tok, "*v6") == 0) {
+		hints.ai_family = AF_INET6;
+		hints.ai_flags |= AI_PASSIVE;
+		cur_tok = NULL;
+	}
+	else if (strcmp (cur_tok, "*v4") == 0) {
+		hints.ai_family = AF_INET;
+		hints.ai_flags |= AI_PASSIVE;
+		cur_tok = NULL;
 	}
 	else {
-		cur_tok = tokens[0];
+		hints.ai_family = AF_UNSPEC;
 	}
 
-	if ((r = getaddrinfo (cur_tok, NULL, &hints, &res)) == 0) {
+	if (tokens[1] != NULL) {
+		/* Port part */
+		rspamd_strlcpy (portbuf, tokens[1], sizeof (portbuf));
+		cur_port = portbuf;
+		if (port != NULL) {
+			errno = 0;
+			port_parsed = strtoul (tokens[1], &err_str, 10);
+			if (*err_str != '\0' || errno != 0) {
+				msg_warn ("cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+				hints.ai_flags ^= AI_NUMERICSERV;
+			}
+			else if (port_parsed > G_MAXUINT16) {
+				errno = ERANGE;
+				msg_warn ("cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
+				hints.ai_flags ^= AI_NUMERICSERV;
+			}
+			else {
+				*port = port_parsed;
+			}
+		}
+		if (priority != NULL) {
+			if (port != NULL) {
+				cur_tok = tokens[2];
+			}
+			else {
+				cur_tok = tokens[1];
+			}
+			if (cur_tok != NULL) {
+				/* Priority part */
+				errno = 0;
+				priority_parsed = strtoul (cur_tok, &err_str, 10);
+				if (*err_str != '\0' || errno != 0) {
+					msg_warn ("cannot parse priority: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+				}
+				else {
+					*priority = priority_parsed;
+				}
+			}
+		}
+	}
+	else if (default_port != 0) {
+		rspamd_snprintf (portbuf, sizeof (portbuf), "%u", default_port);
+		cur_port = portbuf;
+	}
+	else {
+		cur_port = NULL;
+	}
+
+	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
 		memcpy (&addr_holder, res->ai_addr, MIN (sizeof (addr_holder), res->ai_addrlen));
 		if (res->ai_family == AF_INET) {
 			if (pool != NULL) {
@@ -109,52 +153,31 @@ parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, g
 		goto err;
 	}
 
-port_parse:
-	if (tokens[1] != NULL) {
-		/* Port part */
-		if (port != NULL) {
-			errno = 0;
-			port_parsed = strtoul (tokens[1], &err_str, 10);
-			if (*err_str != '\0' || errno != 0) {
-				msg_warn ("cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
-				goto err;
-			}
-			if (port_parsed > G_MAXUINT16) {
-				errno = ERANGE;
-				msg_warn ("cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
-				goto err;
-			}
-			*port = port_parsed;
-		}
-		if (priority != NULL) {
-			if (port != NULL) {
-				cur_tok = tokens[2];
-			}
-			else {
-				cur_tok = tokens[1];
-			}
-			if (cur_tok != NULL) {
-				/* Priority part */
-				errno = 0;
-				priority_parsed = strtoul (cur_tok, &err_str, 10);
-				if (*err_str != '\0' || errno != 0) {
-					msg_warn ("cannot parse priority: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
-					goto err;
-				}
-				*priority = priority_parsed;
-			}
-		}
-	}
-	
 	/* Restore errno */
 	errno = saved_errno;
-	g_strfreev (tokens);
 	return TRUE;
 
 err:
 	errno = saved_errno;
-	g_strfreev (tokens);
 	return FALSE;
+}
+
+gboolean
+parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
+{
+	gchar                          **tokens;
+	gboolean                         ret;
+
+	tokens = g_strsplit_set (str, ":", 0);
+	if (!tokens || !tokens[0]) {
+		return FALSE;
+	}
+
+	ret = parse_host_port_priority_strv (pool, tokens, addr, port, priority, 0);
+
+	g_strfreev (tokens);
+
+	return ret;
 }
 
 gboolean
@@ -173,28 +196,58 @@ gboolean
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
+	gchar **tokens, *tmp;
+	gboolean ret;
 
-	if (str == NULL)
-		return 0;
+	if (str == NULL) {
+		return FALSE;
+	}
+
+	tokens = g_strsplit_set (str, ":", 0);
+	if (!tokens || !tokens[0]) {
+		return FALSE;
+	}
 
 	cnf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
 	cnf->bind_port = DEFAULT_BIND_PORT;
+	cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+	cnf->ai = AF_UNSPEC;
 
-	if (str[0] == '/' || str[0] == '.') {
-		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
-		cnf->is_unix = TRUE;
+	if (*tokens[0] == '/' || *tokens[0] == '.') {
+		cnf->ai = AF_UNIX;
 		LL_PREPEND (cf->bind_conf, cnf);
 		return TRUE;
 	}
-	else {
-		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
-		if (parse_host_port (cfg->cfg_pool, str, &cnf->bind_host, &cnf->bind_port)) {
+	else if (strcmp (tokens[0], "*") == 0) {
+		/* We need to add two listen entries: one for ipv4 and one for ipv6 */
+		tmp = tokens[0];
+		tokens[0] = "*v4";
+		cnf->ai = AF_INET;
+		if ((ret = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
+				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
 			LL_PREPEND (cf->bind_conf, cnf);
-			return TRUE;
+		}
+		cnf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
+		cnf->bind_port = DEFAULT_BIND_PORT;
+		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+		cnf->ai = AF_INET6;
+		tokens[0] = "*v6";
+		if ((ret &= parse_host_port_priority_strv (cfg->cfg_pool, tokens,
+				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
+			LL_PREPEND (cf->bind_conf, cnf);
+		}
+		tokens[0] = tmp;
+	}
+	else {
+		if ((ret = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
+				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
+			LL_PREPEND (cf->bind_conf, cnf);
 		}
 	}
 
-	return FALSE;
+	g_strfreev (tokens);
+
+	return ret;
 }
 
 void
@@ -220,7 +273,6 @@ init_defaults (struct config_file *cfg)
 	/* 20 Kb */
 	cfg->max_diff = 20480;
 
-	cfg->max_statfile_size = DEFAULT_STATFILE_SIZE;
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->composite_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
