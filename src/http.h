@@ -45,7 +45,7 @@ enum rspamd_http_connection_type {
 struct rspamd_http_header {
 	GString *name;
 	GString *value;
-	struct rspamd_http_header *next;
+	struct rspamd_http_header *next, *prev;
 };
 
 /**
@@ -133,6 +133,7 @@ void rspamd_http_connection_write_message (
 		struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *host,
+		const gchar *mime_type,
 		gpointer ud,
 		gint fd,
 		struct timeval *timeout,

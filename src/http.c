@@ -42,6 +42,10 @@ struct rspamd_http_connection_private {
 	gsize wr_total;
 };
 
+static gchar  *http_week[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+static gchar  *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+							"Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
 #define HTTP_ERROR http_error_quark ()
 GQuark
 http_error_quark (void)
@@ -378,7 +382,7 @@ rspamd_http_on_header_field (http_parser* parser, const gchar *at, size_t length
 		priv->header->value = g_string_sized_new (32);
 	}
 	else if (priv->new_header) {
-		LL_PREPEND (priv->msg->headers, priv->header);
+		DL_APPEND (priv->msg->headers, priv->header);
 		rspamd_http_check_date (priv);
 		priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
 		priv->header->name = g_string_sized_new (32);
@@ -419,7 +423,7 @@ rspamd_http_on_headers_complete (http_parser* parser)
 	priv = conn->priv;
 
 	if (priv->header != NULL) {
-		LL_PREPEND (priv->msg->headers, priv->header);
+		DL_APPEND (priv->msg->headers, priv->header);
 		rspamd_http_check_date (priv);
 		priv->header = NULL;
 	}
@@ -675,11 +679,13 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 
 void
 rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg, const gchar *host,
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
 		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr;
+	struct tm t, *ptm;
+	gchar datebuf[64];
 	gint i;
 
 	conn->fd = fd;
@@ -694,15 +700,34 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->ptv = &priv->tv;
 	}
 	priv->header = NULL;
-	priv->buf = g_string_sized_new (64);
+	priv->buf = g_string_sized_new (128);
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
+		ptm = gmtime (&msg->date);
+		t = *ptm;
+		rspamd_snprintf (datebuf, sizeof (datebuf), "%s, %02d %s %4d %02d:%02d:%02d GMT",
+				http_week[t.tm_wday],
+				t.tm_mday,
+				http_month[t.tm_mon - 1],
+				t.tm_year,
+				t.tm_hour,
+				t.tm_min,
+				t.tm_sec);
+		if (mime_type == NULL) {
+			mime_type = "text/plain";
+		}
 		rspamd_printf_gstring (priv->buf, "HTTP/1.1 %d %s\r\n"
 				"Connection: close\r\n"
-				"Content-Length: %z\r\n",
+				"Server: %s\r\n"
+				"Date: %s\r\n"
+				"Content-Length: %z\r\n"
+				"Content-Type: %s\r\n",
 				msg->code, rspamd_http_code_to_str (msg->code),
-				msg->body->len);
+				"rspamd/" RVERSION,
+				datebuf,
+				msg->body->len,
+				mime_type);
 	}
 	else {
 		/* Format request */
@@ -724,7 +749,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	/* Allocate iov */
 	priv->outlen = 3;
 	priv->wr_total = msg->body->len + priv->buf->len + 2;
-	LL_FOREACH (msg->headers, hdr) {
+	DL_FOREACH (msg->headers, hdr) {
 		/* <name><: ><value><\r\n> */
 		priv->wr_total += hdr->name->len + hdr->value->len + 4;
 		priv->outlen += 4;
@@ -794,4 +819,18 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 		g_string_free (msg->url, TRUE);
 	}
 	g_slice_free1 (sizeof (struct rspamd_http_message), msg);
+}
+
+void rspamd_http_message_add_header (struct rspamd_http_message *msg,
+		const gchar *name,
+		const gchar *value)
+{
+	struct rspamd_http_header *hdr;
+
+	if (msg != NULL && name != NULL && value != NULL) {
+		hdr = g_slice_alloc (sizeof (struct rspamd_http_header));
+		hdr->name = g_string_new (name);
+		hdr->value = g_string_new (value);
+		DL_APPEND (msg->headers, hdr);
+	}
 }
