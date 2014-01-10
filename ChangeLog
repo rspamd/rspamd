@@ -1,3 +1,17 @@
+0.6.7:
+	* Use ChaCha20 for DNS generator (more secure DNS id)
+	* Unknown symbols now has zero weight and not 1.0
+	* Fix fuzzy hashes expire time
+	* Fix critical issue in statfiles on FreeBSD 9 (and some other platforms)
+	* Add .include_map macro to ucl parser
+	* Update libucl
+	* Fix headers end detection for DKIM module
+	* Fix a bug in received headers parser
+	* Validate IP addresses before pushing them to lua
+	* Start new documentation project
+	* Fixed tonns of other minor bugs
+	* Start to prepare for 0.7 with HTTP protocol and new settings
+
 0.6.6:
 	* Removed issue with BUFSIZ limitation in the controller output
 	* Simplify logging symbols escaping
