@@ -40,12 +40,16 @@ acl_check_spam:
   accept condition = ${if eq {$interface_port}{587} {yes}{no}}
   # skip scanning for authenticated users
   accept authenticated = *
+  warn  spam = nobody:true
   # add spam-score header
-  warn  message = X-Spam-Score: $spam_score ($spam_bar)
-        spam = nobody:true
+  warn  condition = ${if eq{$spam_action}{add header}}
+        message = X-Spam-Score: $spam_score ($spam_bar)
   # add report header
-  warn  message = X-Spam-Report: $spam_report
-        spam = nobody:true
+  warn  condition = ${if eq{$spam_action}{add header}}
+        message = X-Spam-Report: $spam_report
+  # discard high-scoring mail
+  deny  condition = ${if eq{$spam_action}{reject}}
+        message = Message discarded as high-probability spam
 {% endhighlight %}
 
 The other ways for integration with exim are local scan patch and dlfunc.
