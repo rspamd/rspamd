@@ -526,6 +526,10 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	if (priv->wr_pos >= priv->wr_total) {
 		conn->finish_handler (conn, priv->msg);
 	}
+	else {
+		/* Want to write more */
+		event_add (&priv->ev, priv->ptv);
+	}
 }
 
 static void
