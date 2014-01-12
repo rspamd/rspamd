@@ -462,9 +462,7 @@ http_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worker_ctx *c
 		return NULL;
 	}
 
-	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-	task->msg->begin = EVBUFFER_DATA (in);
-	task->msg->len = EVBUFFER_LENGTH (in);
+	task->msg = g_string_new_len (EVBUFFER_DATA (in), EVBUFFER_LENGTH (in));
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -628,9 +626,7 @@ http_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *
 		return NULL;
 	}
 
-	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-	task->msg->begin = EVBUFFER_DATA (in);
-	task->msg->len = EVBUFFER_LENGTH (in);
+	task->msg = g_string_new_len (EVBUFFER_DATA (in), EVBUFFER_LENGTH (in));
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;

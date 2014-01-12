@@ -20,6 +20,7 @@
 #include "util.h"
 #include "logger.h"
 #include "roll_history.h"
+#include "http.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE RSPAMD_CONFDIR "/rspamd.conf"
@@ -222,8 +223,9 @@ struct worker_task {
 	gchar *subject;												/**< subject (for non-mime)							*/
 	gchar *hostname;											/**< hostname reported by MTA						*/
 	gchar *statfile;											/**< statfile for learning							*/
-	f_str_t *msg;												/**< message buffer									*/
+	GString *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
+	struct rspamd_http_connection *http_conn;					/**< HTTP server connection							*/
 	struct rspamd_async_session* s;								/**< async session object							*/
 	gint parts_count;											/**< mime parts count								*/
 	GMimeMessage *message;										/**< message, parsed with GMime						*/

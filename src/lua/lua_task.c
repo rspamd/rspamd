@@ -283,10 +283,7 @@ lua_task_create_from_buffer (lua_State *L)
 		ptask = lua_newuserdata (L, sizeof (gpointer));
 		lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
-		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-		task->msg->begin = memory_pool_alloc (task->task_pool, len);
-		memcpy (task->msg->begin, data, len);
-		task->msg->len = len;
+		task->msg = g_string_new_len (data, len);
 	}
 	return 1;
 }

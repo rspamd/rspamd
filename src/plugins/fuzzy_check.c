@@ -1020,10 +1020,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	session->state = STATE_WAIT;
 
 	/* Allocate message from string */
-	task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-	task->msg->begin = in->begin;
-	task->msg->len = in->len;
-
+	task->msg = g_string_new_len (in->begin, in->len);
 
 	saved = memory_pool_alloc0 (session->session_pool, sizeof (gint));
 	err = memory_pool_alloc0 (session->session_pool, sizeof (GError *));

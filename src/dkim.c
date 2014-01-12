@@ -1356,9 +1356,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct wo
 	g_return_val_if_fail (task->msg != NULL, DKIM_ERROR);
 
 	/* First of all find place of body */
-	p = task->msg->begin;
+	p = task->msg->str;
 
-	end = task->msg->begin + task->msg->len;
+	end = task->msg->str + task->msg->len;
 
 	while (p <= end) {
 		/* Search for \r\n\r\n at the end of headers */

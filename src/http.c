@@ -518,6 +518,7 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 		err = g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (errno));
 		conn->error_handler (conn, err);
 		g_error_free (err);
+		return;
 	}
 	else {
 		priv->wr_pos += r;
@@ -550,6 +551,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			err = g_error_new (HTTP_ERROR, errno, "IO read error: %s", strerror (errno));
 			conn->error_handler (conn, err);
 			g_error_free (err);
+			return;
 		}
 		else {
 			buf->len = r;
@@ -558,6 +560,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 						"HTTP parser error: %s", http_errno_description (priv->parser.http_errno));
 				conn->error_handler (conn, err);
 				g_error_free (err);
+				return;
 			}
 		}
 	}
@@ -566,6 +569,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				"IO timeout");
 		conn->error_handler (conn, err);
 		g_error_free (err);
+		return;
 	}
 	else if (what == EV_WRITE) {
 		rspamd_http_write_helper (conn);

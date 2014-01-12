@@ -310,12 +310,12 @@ process_smtp_data (struct smtp_session *session)
 		session->task->resolver = session->resolver;
 		session->task->fin_callback = smtp_write_socket;
 		session->task->fin_arg = session;
-		session->task->msg = memory_pool_alloc (session->pool, sizeof (f_str_t));
+		session->task->msg = memory_pool_alloc (session->pool, sizeof (GString));
 		session->task->s = session->s;
 #ifdef HAVE_MMAP_NOCORE
-		if ((session->task->msg->begin = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED | MAP_NOCORE, session->temp_fd, 0)) == MAP_FAILED) {
+		if ((session->task->msg->str = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED | MAP_NOCORE, session->temp_fd, 0)) == MAP_FAILED) {
 #else
-		if ((session->task->msg->begin = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, session->temp_fd, 0)) == MAP_FAILED) {
+		if ((session->task->msg->str = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, session->temp_fd, 0)) == MAP_FAILED) {
 #endif
 			msg_err ("mmap failed: %s", strerror (errno));
 			goto err;
@@ -348,14 +348,14 @@ process_smtp_data (struct smtp_session *session)
 
 		if (process_message (session->task) == -1) {
 			msg_err ("cannot process message");
-			munmap (session->task->msg->begin, st.st_size);
+			munmap (session->task->msg->str, st.st_size);
 			goto err;
 		}
 		if (session->task->cfg->pre_filters == NULL) {
 			r = process_filters (session->task);
 			if (r == -1) {
 				msg_err ("cannot process message");
-				munmap (session->task->msg->begin, st.st_size);
+				munmap (session->task->msg->str, st.st_size);
 				goto err;
 			}
 		}

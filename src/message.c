@@ -1048,7 +1048,7 @@ process_message (struct worker_task *task)
 	gint                            rc;
 
 	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
-	tmp->data = task->msg->begin;
+	tmp->data = task->msg->str;
 	tmp->len = task->msg->len;
 
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);

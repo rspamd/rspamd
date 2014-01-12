@@ -1411,9 +1411,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->learn_buf = in;
 		task = construct_task (session->worker);
 
-		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-		task->msg->begin = in->begin;
-		task->msg->len = in->len;
+		task->msg = g_string_new_len (in->begin, in->len);
 		task->ev_base = session->ev_base;
 
 		r = process_message (task);
@@ -1476,9 +1474,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->learn_buf = in;
 		task = construct_task (session->worker);
 
-		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-		task->msg->begin = in->begin;
-		task->msg->len = in->len;
+		task->msg = g_string_new_len (in->begin, in->len);
 
 		task->resolver = session->resolver;
 		task->ev_base = session->ev_base;
@@ -1538,9 +1534,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->learn_buf = in;
 		task = construct_task (session->worker);
 
-		task->msg = memory_pool_alloc (task->task_pool, sizeof (f_str_t));
-		task->msg->begin = in->begin;
-		task->msg->len = in->len;
+		task->msg = g_string_new_len (in->begin, in->len);
 		task->ev_base = session->ev_base;
 
 		r = process_message (task);
