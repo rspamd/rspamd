@@ -200,8 +200,8 @@ check_session_pending (struct rspamd_async_session *session)
 			g_cond_wait (session->cond, session->mtx);
 		}
 		if (session->fin != NULL) {
+			g_mutex_unlock (session->mtx);
 			if (! session->fin (session->user_data)) {
-				g_mutex_unlock (session->mtx);
 				/* Session finished incompletely, perform restoration */
 				if (session->restore != NULL) {
 					session->restore (session->user_data);
@@ -209,6 +209,9 @@ check_session_pending (struct rspamd_async_session *session)
 					return check_session_pending (session);
 				}
 				return TRUE;
+			}
+			else {
+				return FALSE;
 			}
 		}
 		g_mutex_unlock (session->mtx);

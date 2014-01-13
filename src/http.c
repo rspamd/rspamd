@@ -639,11 +639,6 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		g_slice_free1 (sizeof (struct iovec) * priv->outlen, priv->out);
 		priv->out = NULL;
 	}
-
-	/* Clear conn itself */
-	if (conn->fd != -1) {
-		close (conn->fd);
-	}
 }
 
 void
