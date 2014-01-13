@@ -26,8 +26,6 @@
 #include "main.h"
 #include "events.h"
 
-#undef RSPAMD_EVENTS_DEBUG
-
 static gboolean
 rspamd_event_equal (gconstpointer a, gconstpointer b)
 {
@@ -117,10 +115,10 @@ register_async_event (struct rspamd_async_session *session, event_finalizer_t fi
 	new->subsystem = subsystem;
 
 	g_hash_table_insert (session->events, new, new);
-#ifdef RSPAMD_EVENTS_DEBUG
-	msg_info ("added event: %p, pending %d events, subsystem: %s", user_data, g_hash_table_size (session->events),
+
+	msg_debug ("added event: %p, pending %d events, subsystem: %s", user_data, g_hash_table_size (session->events),
 			g_quark_to_string (subsystem));
-#endif
+
 	g_mutex_unlock (session->mtx);
 }
 
@@ -140,10 +138,8 @@ remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin
 	search_ev.user_data = ud;
 	if ((found_ev = g_hash_table_lookup (session->events, &search_ev)) != NULL) {
 		g_hash_table_remove (session->events, found_ev);
-#ifdef RSPAMD_EVENTS_DEBUG
-		msg_info ("removed event: %p, subsystem: %s, pending %d events", ud,
+		msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
 			g_quark_to_string (found_ev->subsystem), g_hash_table_size (session->events));
-#endif
 		/* Remove event */
 		fin (ud);
 	}
@@ -231,9 +227,7 @@ void
 register_async_thread (struct rspamd_async_session *session)
 {
 	g_atomic_int_inc (&session->threads);
-#ifdef RSPAMD_EVENTS_DEBUG
-	msg_info ("added thread: pending %d thread", session->threads);
-#endif
+	msg_debug ("added thread: pending %d thread", session->threads);
 }
 
 /**
@@ -249,7 +243,5 @@ remove_async_thread (struct rspamd_async_session *session)
 		g_cond_signal (session->cond);
 		g_mutex_unlock (session->mtx);
 	}
-#ifdef RSPAMD_EVENTS_DEBUG
-	msg_info ("removed thread: pending %d thread", session->threads);
-#endif
+	msg_debug ("removed thread: pending %d thread", session->threads);
 }
