@@ -174,9 +174,6 @@ size_t ucl_strlcpy_unsafe (char *dst, const char *src, size_t siz);
 size_t ucl_strlcpy_tolower (char *dst, const char *src, size_t siz);
 
 
-void ucl_elt_write_json (ucl_object_t *obj, UT_string *buf, unsigned int tabs,
-		bool start_tabs, bool compact);
-
 #ifdef __GNUC__
 static inline void
 ucl_create_err (UT_string **err, const char *fmt, ...)
