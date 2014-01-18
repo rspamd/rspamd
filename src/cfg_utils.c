@@ -892,11 +892,13 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename,
 		rspamd_ucl_add_conf_macros (parser, cfg);
 		if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 			msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
+			ucl_parser_free (parser);
 			munmap (data, st.st_size);
 			return FALSE;
 		}
 		munmap (data, st.st_size);
 		cfg->rcl_obj = ucl_parser_get_object (parser);
+		ucl_parser_free (parser);
 		res = TRUE;
 	}
 

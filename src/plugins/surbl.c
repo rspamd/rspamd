@@ -57,11 +57,10 @@
 
 static struct surbl_ctx        *surbl_module_ctx = NULL;
 
-static gint                     surbl_filter (struct worker_task *task);
-static void                     surbl_test_url (struct worker_task *task, void *user_data);
-static void                     dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
-static void                     process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr);
-static gint                     urls_command_handler (struct worker_task *task);
+static void surbl_test_url (struct worker_task *task, void *user_data);
+static void dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
+static void process_dns_results (struct worker_task *task,
+		struct suffix_item *suffix, gchar *url, guint32 addr);
 
 
 #define NO_REGEXP (gpointer)-1
@@ -213,7 +212,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	surbl_module_ctx = g_malloc (sizeof (struct surbl_ctx));
 
-	surbl_module_ctx->filter = surbl_filter;
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
@@ -236,8 +234,6 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
-
-	register_protocol_command ("urls", urls_command_handler);
 
 	return 0;
 }
@@ -449,7 +445,6 @@ surbl_module_reconfig (struct config_file *cfg)
 	/* Delete pool and objects */
 	memory_pool_delete (surbl_module_ctx->surbl_pool);
 	/* Reinit module */
-	surbl_module_ctx->filter = surbl_filter;
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
 	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
@@ -996,17 +991,10 @@ surbl_test_url (struct worker_task *task, void *user_data)
 	param.suffix = suffix;
 	g_tree_foreach (task->urls, surbl_tree_url_callback, &param);
 }
-
-static gint
-surbl_filter (struct worker_task *task)
-{
-	/* XXX: remove this shit */
-	return 0;
-}
-
 /*
  * Handlers of URLS command
  */
+#if 0
 struct urls_tree_cb_data {
 	gchar                          *buf;
 	gsize                           len;
@@ -1086,7 +1074,7 @@ urls_command_handler (struct worker_task *task)
 
 	return TRUE;
 }
-
+#endif
 /*
  * vi:ts=4 
  */

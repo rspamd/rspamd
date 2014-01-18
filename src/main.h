@@ -187,15 +187,11 @@ struct worker_task {
 		CLOSING_CONNECTION,
 		WRITING_REPLY
 	} state;													/**< current session state							*/
-	size_t content_length;										/**< length of user's input							*/
-	enum rspamd_protocol proto;									/**< protocol (rspamc or spamc)						*/
-	guint proto_ver;											/**< protocol version								*/
 	enum rspamd_command cmd;									/**< command										*/
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	
 	gint sock;													/**< socket descriptor								*/
 	gboolean is_mime;                                           /**< if this task is mime task                      */
 	gboolean is_json;											/**< output is JSON									*/
-	gboolean is_http;											/**< output is HTTP									*/
 	gboolean allow_learn;										/**< allow learning									*/
 	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
 
@@ -203,7 +199,7 @@ struct worker_task {
 	gchar *from;													/**< from header value								*/
 	gchar *queue_id;												/**< queue id if specified							*/
 	const gchar *message_id;										/**< message id										*/
-	GList *rcpt;												/**< recipients list								*/
+	GList *rcpt;													/**< recipients list								*/
 	guint nrcpt;											/**< number of recipients							*/
 #ifdef HAVE_INET_PTON
 	struct {
@@ -222,7 +218,6 @@ struct worker_task {
 	gchar *user;													/**< user to deliver								*/
 	gchar *subject;												/**< subject (for non-mime)							*/
 	gchar *hostname;											/**< hostname reported by MTA						*/
-	gchar *statfile;											/**< statfile for learning							*/
 	GString *msg;												/**< message buffer									*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
 	struct rspamd_http_connection *http_conn;					/**< HTTP server connection							*/

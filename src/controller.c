@@ -1226,7 +1226,8 @@ process_header (f_str_t *line, struct controller_session *session)
 	struct rspamd_controller_ctx	*ctx = session->worker->ctx;
 	controller_func_t				 custom_handler;
 
-	headern = separate_command (line, ':');
+	/* XXX: temporary workaround */
+	headern = NULL;
 
 	if (line == NULL || headern == NULL) {
 		msg_warn ("bad header: %V", line);
