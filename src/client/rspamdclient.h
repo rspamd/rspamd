@@ -27,6 +27,41 @@
 #include "config.h"
 #include "ucl.h"
 
+/**
+ * Callback is called on client request completed
+ * @param name name of server
+ * @param port port for server
+ * @param result result object
+ * @param ud opaque user data
+ * @param err error pointer (should be freed if not NULL)
+ */
+typedef void (*rspamd_client_callback) (
+		const gchar *name,
+		guint16 port,
+		ucl_object_t *result,
+		gpointer ud,
+		GError *err);
 
+/**
+ * Start rspamd worker or controller command
+ * @param ev_base event base
+ * @param name server name (hostname or unix socket)
+ * @param command command name
+ * @param attrs additional attributes
+ * @param port port number (in host order)
+ * @param timeout timeout in seconds
+ * @param in input file or NULL if no input required
+ * @param ud opaque user data
+ * @return
+ */
+gboolean rspamd_client_command (
+		struct event_base *ev_base,
+		const gchar *name,
+		guint16 port,
+		const gchar *command,
+		GHashTable *attrs,
+		gdouble timeout,
+		FILE *in,
+		gpointer ud);
 
 #endif /* RSPAMDCLIENT_H_ */

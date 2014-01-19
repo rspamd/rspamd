@@ -21,3 +21,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "rspamdclient.h"
+#include "util.h"
+
+gboolean
+rspamd_client_command (struct event_base *ev_base, const gchar *name,
+		guint16 port, const gchar *command, GHashTable *attrs,
+		gdouble timeout, FILE *in, gpointer ud)
+{
+
+}
