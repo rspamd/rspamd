@@ -10,11 +10,12 @@
 #include "filter.h"
 #include "http.h"
 
-#define RSPAMD_FILTER_ERROR 1
-#define RSPAMD_NETWORK_ERROR 2
-#define RSPAMD_PROTOCOL_ERROR 3
-#define RSPAMD_LENGTH_ERROR 4
-#define RSPAMD_STATFILE_ERROR 5
+#define RSPAMD_BASE_ERROR 500
+#define RSPAMD_FILTER_ERROR RSPAMD_BASE_ERROR + 1
+#define RSPAMD_NETWORK_ERROR RSPAMD_BASE_ERROR + 2
+#define RSPAMD_PROTOCOL_ERROR RSPAMD_BASE_ERROR + 3
+#define RSPAMD_LENGTH_ERROR RSPAMD_BASE_ERROR + 4
+#define RSPAMD_STATFILE_ERROR RSPAMD_BASE_ERROR + 5
 
 struct worker_task;
 struct metric;
@@ -52,7 +53,7 @@ gboolean rspamd_protocol_handle_request (struct worker_task *task, struct rspamd
  * @param task task object
  * @return 0 if we wrote reply and -1 if there was some error
  */
-gboolean rspamd_protocol_write_reply (struct worker_task *task);
+void rspamd_protocol_write_reply (struct worker_task *task);
 
 
 /**

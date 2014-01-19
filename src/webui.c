@@ -406,7 +406,7 @@ http_scan_task_fin (gpointer arg)
 {
 	struct scan_callback_data				*cbdata = arg;
 	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
-
+#if 0
 	if (cbdata->task->state != WRITING_REPLY) {
 		process_statfiles (cbdata->task);
 		cbdata->task->state = WRITE_REPLY;
@@ -426,7 +426,7 @@ http_scan_task_fin (gpointer arg)
 			event_base_once (cbdata->ctx->ev_base, -1, EV_TIMEOUT, http_scan_task_event_helper, cbdata, &tv);
 		}
 	}
-
+#endif
 	return TRUE;
 }
 
@@ -439,7 +439,9 @@ http_scan_task_restore (gpointer arg)
 	struct scan_callback_data				*cbdata = arg;
 
 	/* Special state */
+#if 0
 	cbdata->task->state = WRITING_REPLY;
+#endif
 }
 
 /* Prepare callback data for scan */
@@ -565,7 +567,7 @@ http_learn_task_fin (gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
 	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
-
+#if 0
 	if (cbdata->task->state != WRITING_REPLY) {
 		cbdata->task->state = WRITE_REPLY;
 	}
@@ -584,7 +586,7 @@ http_learn_task_fin (gpointer arg)
 			event_base_once (cbdata->ctx->ev_base, -1, EV_TIMEOUT, http_learn_task_event_helper, cbdata, &tv);
 		}
 	}
-
+#endif
 	return TRUE;
 }
 
@@ -595,9 +597,10 @@ static void
 http_learn_task_restore (gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
-
+#if 0
 	/* Special state */
 	cbdata->task->state = WRITING_REPLY;
+#endif
 }
 
 /* Prepare callback data for learn */

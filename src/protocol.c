@@ -687,7 +687,7 @@ rspamd_gstring_append_double (double val, void *ud)
 	return 0;
 }
 
-static gboolean
+static void
 write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 {
 	GString                         *logbuf;
@@ -743,28 +743,23 @@ write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 
 	/* Increase counters */
 	task->worker->srv->stat->messages_scanned++;
-
-	rspamd_http_connection_write_message (task->http_conn, msg, NULL,
-			"application/json", task, task->sock, &task->tv, task->ev_base);
-	return TRUE;
 }
 
-gboolean
+void
 rspamd_protocol_write_reply (struct worker_task *task)
 {
 	struct rspamd_http_message    *msg;
+	const gchar                   *ctype = "text/plain";
 
-	rspamd_http_connection_reset (task->http_conn);
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
+
+	task->state = CLOSING_CONNECTION;
 
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {
 		msg->code = task->error_code;
-		rspamd_http_connection_write_message (task->http_conn, msg, NULL,
-				"text/plain", task, task->sock, &task->tv, task->ev_base);
-		task->state = CLOSING_CONNECTION;
-		return TRUE;
+		msg->body = g_string_new (task->last_error);
 	}
 	else {
 		switch (task->cmd) {
@@ -774,21 +769,21 @@ rspamd_protocol_write_reply (struct worker_task *task)
 		case CMD_SYMBOLS:
 		case CMD_PROCESS:
 		case CMD_SKIP:
-			task->state = CLOSING_CONNECTION;
-			return write_check_reply (msg, task);
+			ctype = "application/json";
+			write_check_reply (msg, task);
 			break;
 		case CMD_PING:
-			rspamd_http_connection_write_message (task->http_conn, msg, NULL,
-						"text/plain", task, task->sock, &task->tv, task->ev_base);
-			task->state = CLOSING_CONNECTION;
+			msg->body = g_string_new ("pong");
 			break;
 		case CMD_OTHER:
-			task->state = CLOSING_CONNECTION;
-			return task->custom_cmd->func (task);
+			msg_err ("BROKEN");
+			break;
 		}
 	}
 
-	return FALSE;
+	rspamd_http_connection_reset (task->http_conn);
+	rspamd_http_connection_write_message (task->http_conn, msg, NULL,
+					ctype, task, task->sock, &task->tv, task->ev_base);
 }
 
 void

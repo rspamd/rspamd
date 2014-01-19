@@ -51,7 +51,7 @@ construct_task (struct rspamd_worker *worker)
 	new_task = g_slice_alloc0 (sizeof (struct worker_task));
 
 	new_task->worker = worker;
-	new_task->state = READ_COMMAND;
+	new_task->state = READ_MESSAGE;
 	if (worker) {
 		new_task->cfg = worker->srv->cfg;
 	}

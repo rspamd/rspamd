@@ -176,16 +176,12 @@ struct controller_session {
 struct worker_task {
 	struct rspamd_worker *worker;								/**< pointer to worker object						*/
 	enum {
-		READ_COMMAND,
-		READ_HEADER,
 		READ_MESSAGE,
-		WRITE_REPLY,
-		WRITE_ERROR,
 		WAIT_PRE_FILTER,
 		WAIT_FILTER,
 		WAIT_POST_FILTER,
-		CLOSING_CONNECTION,
-		WRITING_REPLY
+		WRITE_REPLY,
+		CLOSING_CONNECTION
 	} state;													/**< current session state							*/
 	enum rspamd_command cmd;									/**< command										*/
 	struct custom_command *custom_cmd;							/**< custom command if any							*/	

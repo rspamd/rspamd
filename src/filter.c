@@ -271,9 +271,6 @@ process_filters (struct worker_task *task)
 		task->is_skipped = TRUE;
 		task->state = WRITE_REPLY;
 		msg_info ("disable check for message id <%s>, user wants spam", task->message_id);
-		task->s->wanna_die = TRUE;
-		check_session_pending (task->s);
-
 		return 1;
 	}
 
@@ -286,15 +283,14 @@ process_filters (struct worker_task *task)
 			if (!task->pass_all_filters &&
 						metric->actions[METRIC_ACTION_REJECT].score > 0 &&
 						check_metric_is_spam (task, metric)) {
-				task->s->wanna_die = TRUE;
-				check_session_pending (task->s);
+				task->state = WRITE_REPLY;
 				return 1;
 			}
 			cur = g_list_next (cur);
 		}
 	}
-	task->s->wanna_die = TRUE;
-	check_session_pending (task->s);
+
+	task->state = WAIT_FILTER;
 
 	return 1;
 }

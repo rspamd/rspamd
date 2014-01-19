@@ -1282,19 +1282,7 @@ fin_learn_task (void *arg)
 {
 	struct worker_task             *task = (struct worker_task *) arg;
 
-	if (task->state != WRITING_REPLY) {
-		task->state = WRITE_REPLY;
-	}
-
-	/* Check if we have all events finished */
-	if (task->state != WRITING_REPLY) {
-		if (task->fin_callback) {
-			task->fin_callback (task->fin_arg);
-		}
-		else {
-			rspamd_dispatcher_restore (task->dispatcher);
-		}
-	}
+	/* XXX: needs to be reworked */
 
 	return TRUE;
 }
@@ -1308,9 +1296,6 @@ restore_learn_task (void *arg)
 	struct worker_task             *task = (struct worker_task *) arg;
 
 	/* Special state */
-	task->state = WRITING_REPLY;
-
-	rspamd_dispatcher_pause (task->dispatcher);
 }
 
 static                          gboolean

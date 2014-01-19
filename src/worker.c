@@ -155,6 +155,7 @@ sigusr1_handler (gint fd, short what, void *arg)
 
 /*
  * Called if all filters are processed
+ * @return TRUE if session should be terminated
  */
 static gboolean
 fin_task (void *arg)
@@ -219,6 +220,7 @@ fin_task (void *arg)
 			else {
 				rspamd_protocol_write_reply (task);
 			}
+			return TRUE;
 		}
 		else {
 			task->state = WAIT_FILTER;
@@ -226,8 +228,9 @@ fin_task (void *arg)
 			if (r == -1) {
 				task->last_error = "Filter processing error";
 				task->error_code = RSPAMD_FILTER_ERROR;
-				task->state = WRITE_ERROR;
+				task->state = WRITE_REPLY;
 				rspamd_protocol_write_reply (task);
+				return TRUE;
 			}
 			/* Add task to classify to classify pool */
 			if (!task->is_skipped && ctx->classify_pool) {
@@ -241,6 +244,9 @@ fin_task (void *arg)
 			}
 			if (task->is_skipped) {
 				rspamd_protocol_write_reply (task);
+			}
+			else {
+				return FALSE;
 			}
 		}
 	}
@@ -257,7 +263,9 @@ restore_task (void *arg)
 	struct worker_task             *task = (struct worker_task *) arg;
 
 	/* Call post filters */
-	lua_call_post_filters (task);
+	if (task->state == WAIT_POST_FILTER) {
+		lua_call_post_filters (task);
+	}
 	task->s->wanna_die = TRUE;
 }
 
@@ -284,13 +292,18 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	ctx = task->worker->ctx;
 
+	if (task->cmd == CMD_PING) {
+		task->state = WRITE_REPLY;
+		return 0;
+	}
+
 	if (msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
 		return 0;
 	}
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
-		task->state = WRITE_ERROR;
+		task->state = WRITE_REPLY;
 		return 0;
 	}
 
@@ -298,12 +311,15 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	debug_task ("got string of length %z", task->msg->len);
 
+	/* We got body, set wanna_die flag */
+	task->s->wanna_die = TRUE;
+
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");
 		task->last_error = "MIME processing error";
 		task->error_code = RSPAMD_FILTER_ERROR;
-		task->state = WRITE_ERROR;
+		task->state = WRITE_REPLY;
 		return 0;
 	}
 	if (task->cmd == CMD_OTHER) {
@@ -317,7 +333,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 			if (r == -1) {
 				task->last_error = "Filter processing error";
 				task->error_code = RSPAMD_FILTER_ERROR;
-				task->state = WRITE_ERROR;
+				task->state = WRITE_REPLY;
 				return 0;
 			}
 			/* Add task to classify to classify pool */
@@ -351,8 +367,19 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct worker_task             *task = (struct worker_task *) conn->ud;
 
-	msg_info ("abnormally closing connection from: %s, error: %s", inet_ntoa (task->client_addr), err->message);
-	destroy_session (task->s);
+	msg_info ("abnormally closing connection from: %s, error: %s",
+			inet_ntoa (task->client_addr), err->message);
+	if (task->state != CLOSING_CONNECTION) {
+		/* We still need to write a reply */
+		task->error_code = err->code;
+		task->last_error = err->message;
+		task->state = WRITE_REPLY;
+		rspamd_protocol_write_reply (task);
+	}
+	else {
+		/* Terminate session immediately */
+		destroy_session (task->s);
+	}
 }
 
 static void
@@ -366,6 +393,11 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		destroy_session (task->s);
 	}
 	else {
+		/*
+		 * If all filters have finished their tasks, this function will trigger
+		 * writing a reply.
+		 */
+		task->s->wanna_die = TRUE;
 		check_session_pending (task->s);
 	}
 }
