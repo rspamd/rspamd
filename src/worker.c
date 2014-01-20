@@ -382,7 +382,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 	}
 }
 
-static void
+static gint
 rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
@@ -400,6 +400,8 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		task->s->wanna_die = TRUE;
 		check_session_pending (task->s);
 	}
+
+	return 0;
 }
 
 /*

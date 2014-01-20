@@ -465,14 +465,21 @@ rspamd_http_on_message_complete (http_parser* parser)
 	priv = conn->priv;
 
 	if (conn->body_handler != NULL) {
+		rspamd_http_connection_ref (conn);
 		if (conn->opts & RSPAMD_HTTP_BODY_PARTIAL) {
 			ret = conn->body_handler (conn, priv->msg, NULL, 0);
 		}
 		else {
 			ret = conn->body_handler (conn, priv->msg, priv->msg->body->str, priv->msg->body->len);
 		}
+		rspamd_http_connection_unref (conn);
 	}
-	conn->finish_handler (conn, priv->msg);
+
+	if (ret == 0) {
+		rspamd_http_connection_ref (conn);
+		ret = conn->finish_handler (conn, priv->msg);
+		rspamd_http_connection_unref (conn);
+	}
 
 	return ret;
 }
@@ -490,7 +497,9 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	priv = conn->priv;
 
 	if (priv->wr_pos == priv->wr_total) {
+		rspamd_http_connection_ref (conn);
 		conn->finish_handler (conn, priv->msg);
+		rspamd_http_connection_unref (conn);
 		return;
 	}
 
@@ -516,7 +525,9 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 
 	if (r == -1) {
 		err = g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (errno));
+		rspamd_http_connection_ref (conn);
 		conn->error_handler (conn, err);
+		rspamd_http_connection_unref (conn);
 		g_error_free (err);
 		return;
 	}
@@ -525,7 +536,9 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	}
 
 	if (priv->wr_pos >= priv->wr_total) {
+		rspamd_http_connection_ref (conn);
 		conn->finish_handler (conn, priv->msg);
+		rspamd_http_connection_unref (conn);
 	}
 	else {
 		/* Want to write more */
@@ -555,19 +568,24 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		}
 		else {
 			buf->len = r;
+			rspamd_http_connection_ref (conn);
 			if (http_parser_execute (&priv->parser, &priv->parser_cb, buf->str, r) != (size_t)r) {
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
 						"HTTP parser error: %s", http_errno_description (priv->parser.http_errno));
 				conn->error_handler (conn, err);
 				g_error_free (err);
+				rspamd_http_connection_unref (conn);
 				return;
 			}
+			rspamd_http_connection_unref (conn);
 		}
 	}
 	else if (what == EV_TIMEOUT) {
 		err = g_error_new (HTTP_ERROR, ETIMEDOUT,
 				"IO timeout");
+		rspamd_http_connection_ref (conn);
 		conn->error_handler (conn, err);
+		rspamd_http_connection_unref (conn);
 		g_error_free (err);
 		return;
 	}
@@ -597,6 +615,7 @@ rspamd_http_connection_new (rspamd_http_body_handler body_handler,
 	new->error_handler = error_handler;
 	new->finish_handler = finish_handler;
 	new->fd = -1;
+	new->ref = 1;
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));

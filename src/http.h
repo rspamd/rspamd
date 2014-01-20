@@ -72,14 +72,14 @@ enum rspamd_http_options {
 struct rspamd_http_connection_private;
 struct rspamd_http_connection;
 
-typedef gboolean (*rspamd_http_body_handler) (struct rspamd_http_connection *conn,
+typedef int (*rspamd_http_body_handler) (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *chunk,
 		gsize len);
 
 typedef void (*rspamd_http_error_handler) (struct rspamd_http_connection *conn, GError *err);
 
-typedef void (*rspamd_http_finish_handler) (struct rspamd_http_connection *conn,
+typedef int (*rspamd_http_finish_handler) (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg);
 
 /**
@@ -94,6 +94,7 @@ struct rspamd_http_connection {
 	enum rspamd_http_options opts;
 	enum rspamd_http_connection_type type;
 	gint fd;
+	gint ref;
 };
 
 /**
@@ -144,6 +145,30 @@ void rspamd_http_connection_write_message (
  * @param conn
  */
 void rspamd_http_connection_free (struct rspamd_http_connection *conn);
+
+/**
+ * Increase refcount for a connection
+ * @param conn
+ * @return
+ */
+static inline struct rspamd_http_connection *
+rspamd_http_connection_ref (struct rspamd_http_connection *conn)
+{
+	conn->ref ++;
+	return conn;
+}
+
+/**
+ * Decrease a refcount for a connection and free it if refcount is equal to zero
+ * @param conn
+ */
+static void
+rspamd_http_connection_unref (struct rspamd_http_connection *conn)
+{
+	if (--conn->ref <= 0) {
+		rspamd_http_connection_free (conn);
+	}
+}
 
 /**
  * Reset connection for a new request

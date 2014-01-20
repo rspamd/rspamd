@@ -162,7 +162,7 @@ free_task (struct worker_task *task, gboolean is_soft)
 			}
 		}
 		if (task->http_conn != NULL) {
-			rspamd_http_connection_free (task->http_conn);
+			rspamd_http_connection_unref (task->http_conn);
 		}
 		if (task->sock != -1) {
 			close (task->sock);

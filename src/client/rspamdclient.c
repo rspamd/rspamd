@@ -73,7 +73,7 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 	req->cb (c, c->server_name->str, NULL, req->ud, err);
 }
 
-static void
+static gint
 rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
@@ -88,13 +88,14 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		c->req_sent = TRUE;
 		rspamd_http_connection_reset (c->http_conn);
 		rspamd_http_connection_read_message (c->http_conn, c->req, c->fd, &c->timeout, c->ev_base);
+		return 0;
 	}
 	else {
 		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error occurred: %d", msg->code);
 			req->cb (c, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
-			return;
+			return -1;
 		}
 
 		parser = ucl_parser_new (0);
@@ -104,12 +105,14 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			ucl_parser_free (parser);
 			req->cb (c, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
-			return;
+			return -1;
 		}
 
 		req->cb (c, c->server_name->str, ucl_parser_get_object (parser), req->ud, NULL);
 		ucl_parser_free (parser);
 	}
+
+	return -1;
 }
 
 struct rspamd_client_connection *
@@ -203,7 +206,7 @@ void
 rspamd_client_destroy (struct rspamd_client_connection *conn)
 {
 	if (conn != NULL) {
-		rspamd_http_connection_free (conn->http_conn);
+		rspamd_http_connection_unref (conn->http_conn);
 		if (conn->req != NULL) {
 			g_slice_free1 (sizeof (struct rspamd_client_request), conn->req);
 		}
