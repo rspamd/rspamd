@@ -202,7 +202,7 @@ read_cmd_line (gint *argc, gchar ***argv)
 static struct rspamc_command *
 check_rspamc_command (const gchar *cmd)
 {
-	enum rspamc_command_type ct;
+	enum rspamc_command_type ct = 0;
 	guint i;
 
 	if (g_ascii_strcasecmp (cmd, "SYMBOLS") == 0 ||
@@ -525,6 +525,8 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	}
 
 	conn = rspamd_client_init (ev_base, connectv[0], port, timeout);
+	g_strfreev (connectv);
+
 	if (conn != NULL) {
 		rspamd_client_command (conn, cmd->name, attrs, in, rspamc_client_cb, cmd, &err);
 	}
