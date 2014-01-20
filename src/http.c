@@ -688,8 +688,9 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr;
 	struct tm t, *ptm;
-	gchar datebuf[64];
+	gchar datebuf[64], *pbody;
 	gint i;
+	gsize bodylen;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -748,10 +749,18 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 				http_method_str (msg->method), msg->url, msg->body->len);
 		}
 	}
-
+	if (msg->body == NULL) {
+		pbody = NULL;
+		bodylen = 0;
+		priv->outlen = 2;
+	}
+	else {
+		pbody = msg->body->str;
+		bodylen = msg->body->len;
+		priv->outlen = 3;
+	}
 	/* Allocate iov */
-	priv->outlen = 3;
-	priv->wr_total = msg->body->len + priv->buf->len + 2;
+	priv->wr_total = bodylen + priv->buf->len + 2;
 	DL_FOREACH (msg->headers, hdr) {
 		/* <name><: ><value><\r\n> */
 		priv->wr_total += hdr->name->len + hdr->value->len + 4;
@@ -776,8 +785,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	priv->out[i].iov_base = "\r\n";
 	priv->out[i++].iov_len = 2;
-	priv->out[i].iov_base = msg->body->str;
-	priv->out[i++].iov_len = msg->body->len;
+	if (msg->body != NULL) {
+		priv->out[i].iov_base = pbody;
+		priv->out[i++].iov_len = bodylen;
+	}
 
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
 	event_base_set (base, &priv->ev);
