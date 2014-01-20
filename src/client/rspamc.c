@@ -24,7 +24,9 @@
 
 #include "config.h"
 #include "util.h"
+#include "http.h"
 #include "rspamdclient.h"
+#include "utlist.h"
 
 #define PRINT_FUNC printf
 
@@ -49,6 +51,8 @@ static gboolean                 pass_all;
 static gboolean                 tty = FALSE;
 static gboolean                 verbose = FALSE;
 static gboolean                 print_commands = FALSE;
+static gboolean                 json = FALSE;
+static gboolean                 headers = FALSE;
 
 static GOptionEntry entries[] =
 {
@@ -69,6 +73,8 @@ static GOptionEntry entries[] =
 		{ "timeout", 't', 0, G_OPTION_ARG_DOUBLE, &timeout, "Time in seconds to wait for a reply", NULL },
 		{ "bind", 'b', 0, G_OPTION_ARG_STRING, &local_addr, "Bind to specified ip address", NULL },
 		{ "commands", 0, 0, G_OPTION_ARG_NONE, &print_commands, "List available commands", NULL },
+		{ "json", 'j', 0, G_OPTION_ARG_NONE, &json, "Output json reply", NULL },
+		{ "headers", 0, 0, G_OPTION_ARG_NONE, &headers, "Output HTTP headers", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -481,14 +487,34 @@ add_options (GHashTable *opts)
 }
 
 static void
+rspamc_output_headers (struct rspamd_http_message *msg)
+{
+	struct rspamd_http_header *h;
+
+	LL_FOREACH (msg->headers, h) {
+		rspamd_fprintf (stdout, "%v: %v\n", h->name, h->value);
+	}
+	rspamd_fprintf (stdout, "\n");
+}
+
+static void
 rspamc_client_cb (struct rspamd_client_connection *conn,
+		struct rspamd_http_message *msg,
 		const gchar *name, ucl_object_t *result,
 		gpointer ud, GError *err)
 {
 	gchar *out;
 
 	if (result != NULL) {
-		out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+		if (headers && msg != NULL) {
+			rspamc_output_headers (msg);
+		}
+		if (json) {
+			out = ucl_object_emit (result, UCL_EMIT_JSON);
+		}
+		else {
+			out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+		}
 		printf ("%s", out);
 		ucl_object_unref (result);
 		free (out);

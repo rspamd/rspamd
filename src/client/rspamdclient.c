@@ -70,7 +70,7 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 	struct rspamd_client_connection *c;
 
 	c = req->conn;
-	req->cb (c, c->server_name->str, NULL, req->ud, err);
+	req->cb (c, NULL, c->server_name->str, NULL, req->ud, err);
 }
 
 static gint
@@ -93,7 +93,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 	else {
 		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error occurred: %d", msg->code);
-			req->cb (c, c->server_name->str, NULL, req->ud, err);
+			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
 			return -1;
 		}
@@ -103,12 +103,12 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 					ucl_parser_get_error (parser));
 			ucl_parser_free (parser);
-			req->cb (c, c->server_name->str, NULL, req->ud, err);
+			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
 			return -1;
 		}
 
-		req->cb (c, c->server_name->str, ucl_parser_get_object (parser), req->ud, NULL);
+		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (parser), req->ud, NULL);
 		ucl_parser_free (parser);
 	}
 

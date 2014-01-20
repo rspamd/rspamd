@@ -28,6 +28,7 @@
 #include "ucl.h"
 
 struct rspamd_client_connection;
+struct rspamd_http_message;
 
 /**
  * Callback is called on client connection completed
@@ -39,6 +40,7 @@ struct rspamd_client_connection;
  */
 typedef void (*rspamd_client_callback) (
 		struct rspamd_client_connection *conn,
+		struct rspamd_http_message *msg,
 		const gchar *name,
 		ucl_object_t *result,
 		gpointer ud,
