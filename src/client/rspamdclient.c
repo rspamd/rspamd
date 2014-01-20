@@ -188,7 +188,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		rspamd_http_message_add_header (req->msg, hn, hv);
 	}
 
-	req->msg->url = g_string_new ("/");
+	g_string_append_c (req->msg->url, '/');
 	g_string_append (req->msg->url, command);
 
 	conn->req = req;
