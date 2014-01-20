@@ -38,6 +38,7 @@ struct rspamd_client_connection;
  * @param err error pointer
  */
 typedef void (*rspamd_client_callback) (
+		struct rspamd_client_connection *conn,
 		const gchar *name,
 		ucl_object_t *result,
 		gpointer ud,

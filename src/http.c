@@ -706,6 +706,19 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->header = NULL;
 	priv->buf = g_string_sized_new (128);
 
+	if (msg->body == NULL || msg->body->len == 0) {
+		pbody = NULL;
+		bodylen = 0;
+		priv->outlen = 2;
+		msg->method = HTTP_GET;
+	}
+	else {
+		pbody = msg->body->str;
+		bodylen = msg->body->len;
+		priv->outlen = 3;
+		msg->method = HTTP_POST;
+	}
+
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
 		ptm = gmtime (&msg->date);
@@ -748,16 +761,6 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					"Content-Length: %z\r\n",
 				http_method_str (msg->method), msg->url, msg->body->len);
 		}
-	}
-	if (msg->body == NULL) {
-		pbody = NULL;
-		bodylen = 0;
-		priv->outlen = 2;
-	}
-	else {
-		pbody = msg->body->str;
-		bodylen = msg->body->len;
-		priv->outlen = 3;
 	}
 	/* Allocate iov */
 	priv->wr_total = bodylen + priv->buf->len + 2;
@@ -812,6 +815,7 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->date = 0;
 	new->body = NULL;
 	new->type = type;
+	new->method = HTTP_GET;
 
 	return new;
 }

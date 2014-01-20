@@ -36,7 +36,7 @@ struct rspamd_client_connection {
 	struct event_base *ev_base;
 	struct timeval timeout;
 	struct rspamd_http_connection *http_conn;
-	gboolean connected;
+	gboolean req_sent;
 	struct rspamd_client_request *req;
 };
 
@@ -70,7 +70,7 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 	struct rspamd_client_connection *c;
 
 	c = req->conn;
-	req->cb (c->server_name->str, NULL, req->ud, err);
+	req->cb (c, c->server_name->str, NULL, req->ud, err);
 }
 
 static void
@@ -83,25 +83,33 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 	GError *err;
 
 	c = req->conn;
-	if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
-		err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error occurred: %d", msg->code);
-		req->cb (c->server_name->str, NULL, req->ud, err);
-		g_error_free (err);
-		return;
-	}
 
-	parser = ucl_parser_new (0);
-	if (!ucl_parser_add_chunk (parser, msg->body->str, msg->body->len)) {
-		err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
-				ucl_parser_get_error (parser));
+	if (!c->req_sent) {
+		c->req_sent = TRUE;
+		rspamd_http_connection_reset (c->http_conn);
+		rspamd_http_connection_read_message (c->http_conn, c->req, c->fd, &c->timeout, c->ev_base);
+	}
+	else {
+		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
+			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error occurred: %d", msg->code);
+			req->cb (c, c->server_name->str, NULL, req->ud, err);
+			g_error_free (err);
+			return;
+		}
+
+		parser = ucl_parser_new (0);
+		if (!ucl_parser_add_chunk (parser, msg->body->str, msg->body->len)) {
+			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
+					ucl_parser_get_error (parser));
+			ucl_parser_free (parser);
+			req->cb (c, c->server_name->str, NULL, req->ud, err);
+			g_error_free (err);
+			return;
+		}
+
+		req->cb (c, c->server_name->str, ucl_parser_get_object (parser), req->ud, NULL);
 		ucl_parser_free (parser);
-		req->cb (c->server_name->str, NULL, req->ud, err);
-		g_error_free (err);
-		return;
 	}
-
-	req->cb (c->server_name->str, ucl_parser_get_object (parser), req->ud, NULL);
-	ucl_parser_free (parser);
 }
 
 struct rspamd_client_connection *
@@ -119,7 +127,7 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 	conn = g_slice_alloc (sizeof (struct rspamd_client_connection));
 	conn->ev_base = ev_base;
 	conn->fd = fd;
-	conn->connected = FALSE;
+	conn->req_sent = FALSE;
 	conn->http_conn = rspamd_http_connection_new (rspamd_client_body_handler,
 			rspamd_client_error_handler, rspamd_client_finish_handler, 0, RSPAMD_HTTP_CLIENT);
 	conn->server_name = g_string_new (name);
@@ -197,7 +205,6 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 	if (conn != NULL) {
 		rspamd_http_connection_free (conn->http_conn);
 		if (conn->req != NULL) {
-			rspamd_http_message_free (conn->req->msg);
 			g_slice_free1 (sizeof (struct rspamd_client_request), conn->req);
 		}
 		close (conn->fd);
