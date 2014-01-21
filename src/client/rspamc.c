@@ -28,8 +28,6 @@
 #include "rspamdclient.h"
 #include "utlist.h"
 
-#define PRINT_FUNC printf
-
 #define DEFAULT_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
 
@@ -53,6 +51,7 @@ static gboolean                 verbose = FALSE;
 static gboolean                 print_commands = FALSE;
 static gboolean                 json = FALSE;
 static gboolean                 headers = FALSE;
+static gboolean                 raw = FALSE;
 
 static GOptionEntry entries[] =
 {
@@ -75,8 +74,11 @@ static GOptionEntry entries[] =
 		{ "commands", 0, 0, G_OPTION_ARG_NONE, &print_commands, "List available commands", NULL },
 		{ "json", 'j', 0, G_OPTION_ARG_NONE, &json, "Output json reply", NULL },
 		{ "headers", 0, 0, G_OPTION_ARG_NONE, &headers, "Output HTTP headers", NULL },
+		{ "raw", 0, 0, G_OPTION_ARG_NONE, &raw, "Output raw reply from rspamd", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
+
+static void rspamc_symbols_output (ucl_object_t *obj);
 
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
@@ -99,83 +101,95 @@ struct rspamc_command {
 	const char *description;
 	gboolean is_controller;
 	gboolean is_privileged;
+	void (*command_output_func)(ucl_object_t *obj);
 } rspamc_commands[] = {
 	{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
 		.name = "symbols",
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
-		.is_privileged = FALSE
+		.is_privileged = FALSE,
+		.command_output_func = rspamc_symbols_output
 	},
 	{
 		.cmd = RSPAMC_COMMAND_LEARN_SPAM,
 		.name = "learn_spam",
 		.description = "learn message as spam",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_LEARN_HAM,
 		.name = "learn_ham",
 		.description = "learn message as ham",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
 		.name = "fuzzy_add",
 		.description = "add message to fuzzy storage (check -f and -w options for this command)",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_FUZZY_DEL,
 		.name = "fuzzy_del",
 		.description = "delete message from fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_STAT,
 		.name = "stat",
 		.description = "show rspamd statistics",
 		.is_controller = TRUE,
-		.is_privileged = FALSE
+		.is_privileged = FALSE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_STAT_RESET,
 		.name = "stat_reset",
 		.description = "show and reset rspamd statistics (useful for graphs)",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_COUNTERS,
 		.name = "counters",
 		.description = "display rspamd symbols statistics",
 		.is_controller = TRUE,
-		.is_privileged = FALSE
+		.is_privileged = FALSE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_UPTIME,
 		.name = "uptime",
 		.description = "show rspamd uptime",
 		.is_controller = TRUE,
-		.is_privileged = FALSE
+		.is_privileged = FALSE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
 		.name = "add_symbol",
 		.description = "add or modify symbol settings in rspamd",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	},
 	{
 		.cmd = RSPAMC_COMMAND_ADD_ACTION,
 		.name = "add_action",
 		.description = "add or modify action settings",
 		.is_controller = TRUE,
-		.is_privileged = TRUE
+		.is_privileged = TRUE,
+		.command_output_func = NULL
 	}
 };
 
@@ -262,153 +276,19 @@ print_commands_list (void)
 {
 	guint                            i;
 
-	PRINT_FUNC ("Rspamc commands summary:\n");
+	rspamd_fprintf (stdout, "Rspamc commands summary:\n");
 	for (i = 0; i < G_N_ELEMENTS (rspamc_commands); i ++) {
-		if (tty) {
-			PRINT_FUNC ("  \033[1m%10s\033[0m (%7s%1s)\t%s\n", rspamc_commands[i].name,
+			rspamd_fprintf (stdout, "  %10s (%7s%1s)\t%s\n", rspamc_commands[i].name,
 					rspamc_commands[i].is_controller ? "control" : "normal",
 					rspamc_commands[i].is_privileged ? "*" : "",
 					rspamc_commands[i].description);
-		}
-		else {
-			PRINT_FUNC ("  %10s (%7s%1s)\t%s\n", rspamc_commands[i].name,
-					rspamc_commands[i].is_controller ? "control" : "normal",
-					rspamc_commands[i].is_privileged ? "*" : "",
-					rspamc_commands[i].description);
-		}
 	}
-	PRINT_FUNC ("\n* is for privileged commands that may need password (see -P option)\n");
-	PRINT_FUNC ("control commands use port 11334 while normal use 11333 by default (see -h option)\n");
+	rspamd_fprintf (stdout, "\n* is for privileged commands that may need password (see -P option)\n");
+	rspamd_fprintf (stdout, "control commands use port 11334 while normal use 11333 by default (see -h option)\n");
 }
 
 
 #if 0
-static void
-show_symbol_result (gpointer key, gpointer value, gpointer ud)
-{
-	struct rspamd_symbol            *s = value;
-	GList                           *cur;
-	static gboolean                  first = TRUE;
-
-	if (verbose) {
-		if (tty) {
-			PRINT_FUNC ("\n\033[1mSymbol\033[0m - %s(%.2f)", s->name, s->weight);
-		}
-		else {
-			PRINT_FUNC ("\nSymbol - %s(%.2f)", s->name, s->weight);
-		}
-		if (s->options) {
-			PRINT_FUNC (": ");
-			cur = g_list_first (s->options);
-			while (cur) {
-				if (cur->next) {
-					PRINT_FUNC ("%s,", (const gchar *)cur->data);
-				}
-				else {
-					PRINT_FUNC ("%s", (const gchar *)cur->data);
-				}
-				cur = g_list_next (cur);
-			}
-		}
-		if (s->description) {
-			PRINT_FUNC (" - \"%s\"", s->description);
-		}
-	}
-	else {
-		if (! first) {
-			PRINT_FUNC (", ");
-		}
-		else {
-			first = FALSE;
-		}
-		PRINT_FUNC ("%s(%.2f)", s->name, s->weight);
-
-		if (s->options) {
-			PRINT_FUNC ("(");
-			cur = g_list_first (s->options);
-			while (cur) {
-				if (cur->next) {
-					PRINT_FUNC ("%s,", (const gchar *)cur->data);
-				}
-				else {
-					PRINT_FUNC ("%s)", (const gchar *)cur->data);
-				}
-				cur = g_list_next (cur);
-			}
-		}
-	}
-}
-
-static void
-show_metric_result (gpointer key, gpointer value, gpointer ud)
-{
-	struct rspamd_metric            *metric = value;
-
-	if (metric->is_skipped) {
-		PRINT_FUNC ("\n%s: Skipped\n", (const gchar *)key);
-	}
-	else {
-		if (tty) {
-			PRINT_FUNC ("\n\033[1m%s:\033[0m %s [ %.2f / %.2f ]\n", (const gchar *)key,
-						metric->score > metric->required_score ? "True" : "False",
-						metric->score, metric->required_score);
-		}
-		else {
-			PRINT_FUNC ("\n%s: %s [ %.2f / %.2f ]\n", (const gchar *)key,
-						metric->score > metric->required_score ? "True" : "False",
-						metric->score, metric->required_score);
-		}
-		if (tty) {
-			if (metric->action) {
-				PRINT_FUNC ("\033[1mAction:\033[0m %s\n", metric->action);
-			}
-			PRINT_FUNC ("\033[1mSymbols: \033[0m");
-		}
-		else {
-			if (metric->action) {
-				PRINT_FUNC ("Action: %s\n", metric->action);
-			}
-			PRINT_FUNC ("Symbols: ");
-		}
-		if (metric->symbols) {
-			g_hash_table_foreach (metric->symbols, show_symbol_result, NULL);
-		}
-		PRINT_FUNC ("\n");
-	}
-}
-
-static void
-show_header_result (gpointer key, gpointer value, gpointer ud)
-{
-	if (tty) {
-		PRINT_FUNC ("\033[1m%s:\033[0m %s\n", (const gchar *)key, (const gchar *)value);
-	}
-	else {
-		PRINT_FUNC ("%s: %s\n", (const gchar *)key, (const gchar *)value);
-	}
-}
-
-static void
-print_rspamd_result (struct rspamd_result *res, const gchar *filename)
-{
-	g_assert (res != 0);
-
-	if (tty) {
-		printf ("\033[1m");
-	}
-	PRINT_FUNC ("Results for host: %s\n", connect_str);
-	if (filename != NULL) {
-		PRINT_FUNC ("Filename: %s\n", filename);
-	}
-	if (tty) {
-		printf ("\033[0m");
-	}
-	g_hash_table_foreach (res->metrics, show_metric_result, NULL);
-	/* Show other headers */
-	PRINT_FUNC ("\n");
-	g_hash_table_foreach (res->headers, show_header_result, NULL);
-	PRINT_FUNC ("\n");
-}
 
 struct rspamd_client_counter {
 	gchar name[128];
@@ -487,6 +367,83 @@ add_options (GHashTable *opts)
 }
 
 static void
+rspamc_symbol_ouptut (ucl_object_t *obj)
+{
+	ucl_object_t *cur, *it;
+
+	rspamd_fprintf (stdout, "Symbol: %s ", ucl_object_key (obj));
+	cur = ucl_object_find_key (obj, "score");
+
+	if (cur != NULL) {
+		rspamd_fprintf (stdout, "(%.2f)", ucl_object_todouble (cur));
+	}
+	cur = ucl_object_find_key (obj, "options");
+	if (cur != NULL && cur->type == UCL_ARRAY) {
+		it = cur->value.av;
+		rspamd_fprintf (stdout, "[");
+		while (it) {
+			if (it->next) {
+				rspamd_fprintf (stdout, "%s, ", ucl_object_tostring (it));
+			}
+			else {
+				rspamd_fprintf (stdout, "%s", ucl_object_tostring (it));
+			}
+			it = it->next;
+		}
+		rspamd_fprintf (stdout, "]");
+	}
+	rspamd_fprintf (stdout, "\n");
+}
+
+static void
+rspamc_metric_output (ucl_object_t *obj)
+{
+	ucl_object_iter_t it = NULL;
+	ucl_object_t *cur;
+
+	rspamd_fprintf (stdout, "%s:\n", ucl_object_key (obj));
+
+	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		if (g_ascii_strcasecmp (ucl_object_key (cur), "is_spam") == 0) {
+			rspamd_fprintf (stdout, "Spam: %s\n", ucl_object_toboolean (cur) ?
+					"true" : "false");
+		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "score") == 0) {
+			rspamd_fprintf (stdout, "Score: %.2f\n", ucl_object_todouble (cur));
+		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "required_score") == 0) {
+			rspamd_fprintf (stdout, "Required score: %.2f\n", ucl_object_todouble (cur));
+		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "action") == 0) {
+			rspamd_fprintf (stdout, "Action: %s\n", ucl_object_tostring(cur));
+		}
+		else if (cur->type == UCL_OBJECT) {
+			rspamc_symbol_ouptut (cur);
+		}
+	}
+}
+
+static void
+rspamc_symbols_output (ucl_object_t *obj)
+{
+	ucl_object_iter_t it = NULL;
+	ucl_object_t *cur;
+
+	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		if (g_ascii_strcasecmp (ucl_object_key (cur), "message-id") == 0) {
+			rspamd_fprintf (stdout, "Message-ID: %s\n", ucl_object_tostring (cur));
+		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "queue-id") == 0) {
+			rspamd_fprintf (stdout, "Queue-ID: %s\n", ucl_object_tostring (cur));
+		}
+		else if (cur->type == UCL_OBJECT) {
+			/* Parse metric */
+			rspamc_metric_output (cur);
+		}
+	}
+}
+
+static void
 rspamc_output_headers (struct rspamd_http_message *msg)
 {
 	struct rspamd_http_header *h;
@@ -504,20 +461,26 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		gpointer ud, GError *err)
 {
 	gchar *out;
+	struct rspamc_command *cmd = (struct rspamc_command *)ud;
 
 	if (result != NULL) {
 		if (headers && msg != NULL) {
 			rspamc_output_headers (msg);
 		}
-		if (json) {
-			out = ucl_object_emit (result, UCL_EMIT_JSON);
+		if (raw || cmd->command_output_func == NULL) {
+			if (json) {
+				out = ucl_object_emit (result, UCL_EMIT_JSON);
+			}
+			else {
+				out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+			}
+			printf ("%s", out);
+			free (out);
 		}
 		else {
-			out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+			cmd->command_output_func (result);
 		}
-		printf ("%s", out);
 		ucl_object_unref (result);
-		free (out);
 	}
 
 	rspamd_client_destroy (conn);
@@ -638,13 +601,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 	else {
 		for (i = start_argc; i < argc; i ++) {
-			if (tty) {
-				printf ("\033[1m");
-			}
-			PRINT_FUNC ("Results for file: %s\n\n", argv[i]);
-			if (tty) {
-				printf ("\033[0m");
-			}
+			rspamd_fprintf (stdout, "Results for file: %s\n", argv[i]);
 			in = fopen (argv[1], "r");
 			if (in == NULL) {
 				fprintf (stderr, "cannot open file %s\n", argv[1]);
