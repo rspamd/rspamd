@@ -193,6 +193,11 @@ struct rspamc_command {
 	}
 };
 
+struct rspamc_callback_data {
+	struct rspamc_command *cmd;
+	const gchar *filename;
+};
+
 /*
  * Parse command line
  */
@@ -400,8 +405,10 @@ rspamc_metric_output (ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL;
 	ucl_object_t *cur;
+	gdouble score, required_score;
+	gint got_scores = 0;
 
-	rspamd_fprintf (stdout, "%s:\n", ucl_object_key (obj));
+	rspamd_fprintf (stdout, "[Metric: %s]\n", ucl_object_key (obj));
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 		if (g_ascii_strcasecmp (ucl_object_key (cur), "is_spam") == 0) {
@@ -409,16 +416,22 @@ rspamc_metric_output (ucl_object_t *obj)
 					"true" : "false");
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "score") == 0) {
-			rspamd_fprintf (stdout, "Score: %.2f\n", ucl_object_todouble (cur));
+			score = ucl_object_todouble (cur);
+			got_scores ++;
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "required_score") == 0) {
-			rspamd_fprintf (stdout, "Required score: %.2f\n", ucl_object_todouble (cur));
+			required_score = ucl_object_todouble (cur);
+			got_scores ++;
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "action") == 0) {
 			rspamd_fprintf (stdout, "Action: %s\n", ucl_object_tostring(cur));
 		}
 		else if (cur->type == UCL_OBJECT) {
 			rspamc_symbol_ouptut (cur);
+		}
+		if (got_scores == 2) {
+			rspamd_fprintf (stdout, "Score: %.2f / %.2f\n", score, required_score);
+			got_scores = 0;
 		}
 	}
 }
@@ -461,8 +474,11 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		gpointer ud, GError *err)
 {
 	gchar *out;
-	struct rspamc_command *cmd = (struct rspamc_command *)ud;
+	struct rspamc_callback_data *cbdata = (struct rspamc_callback_data *)ud;
+	struct rspamc_command *cmd;
 
+	cmd = cbdata->cmd;
+	rspamd_fprintf (stdout, "Results for file: %s\n", cbdata->filename);
 	if (result != NULL) {
 		if (headers && msg != NULL) {
 			rspamc_output_headers (msg);
@@ -483,7 +499,11 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		ucl_object_unref (result);
 	}
 
+	rspamd_fprintf (stdout, "\n");
+	fflush (stdout);
+
 	rspamd_client_destroy (conn);
+	g_slice_free1 (sizeof (struct rspamc_callback_data), cbdata);
 }
 
 static void
@@ -494,6 +514,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	gchar **connectv;
 	guint16 port;
 	GError *err = NULL;
+	struct rspamc_callback_data	 *cbdata;
 
 	connectv = g_strsplit_set (connect_str, ":", -1);
 
@@ -517,7 +538,10 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	g_strfreev (connectv);
 
 	if (conn != NULL) {
-		rspamd_client_command (conn, cmd->name, attrs, in, rspamc_client_cb, cmd, &err);
+		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
+		cbdata->cmd = cmd;
+		cbdata->filename = name;
+		rspamd_client_command (conn, cmd->name, attrs, in, rspamc_client_cb, cbdata, &err);
 	}
 }
 
@@ -601,13 +625,12 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 	else {
 		for (i = start_argc; i < argc; i ++) {
-			rspamd_fprintf (stdout, "Results for file: %s\n", argv[i]);
-			in = fopen (argv[1], "r");
+			in = fopen (argv[i], "r");
 			if (in == NULL) {
-				fprintf (stderr, "cannot open file %s\n", argv[1]);
+				fprintf (stderr, "cannot open file %s\n", argv[i]);
 				exit (EXIT_FAILURE);
 			}
-			rspamc_process_input (ev_base, cmd, in, argv[1], kwattrs);
+			rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
 			fclose (in);
 		}
 	}
