@@ -44,6 +44,7 @@ static gchar                   *classifier = "bayes";
 static gchar                   *local_addr = NULL;
 static gint                     weight = 1;
 static gint                     flag;
+static gint                     max_requests = 1024;
 static gdouble                  timeout = 5.0;
 static gboolean                 pass_all;
 static gboolean                 tty = FALSE;
@@ -75,6 +76,7 @@ static GOptionEntry entries[] =
 		{ "json", 'j', 0, G_OPTION_ARG_NONE, &json, "Output json reply", NULL },
 		{ "headers", 0, 0, G_OPTION_ARG_NONE, &headers, "Output HTTP headers", NULL },
 		{ "raw", 0, 0, G_OPTION_ARG_NONE, &raw, "Output raw reply from rspamd", NULL },
+		{ "max-requests", 'n', 0, G_OPTION_ARG_INT, &max_requests, "Maximum count of parallel requests to rspamd", NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -559,7 +561,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint                             i, start_argc;
+	gint                             i, start_argc, cur_req = 0;
 	GHashTable						*kwattrs;
 	struct rspamc_command			*cmd;
 	FILE							*in = NULL;
@@ -642,7 +644,13 @@ main (gint argc, gchar **argv, gchar **env)
 				exit (EXIT_FAILURE);
 			}
 			rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
+			cur_req ++;
 			fclose (in);
+			if (cur_req >= max_requests) {
+				cur_req = 0;
+				/* Wait for completion */
+				event_base_loop (ev_base, 0);
+			}
 		}
 	}
 
