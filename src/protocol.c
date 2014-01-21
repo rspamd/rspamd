@@ -435,7 +435,7 @@ write_hashes_to_log (struct worker_task *task, GString *logbuf)
 
 /* Structure for writing tree data */
 struct tree_cb_data {
-	GString *urls;
+	ucl_object_t *top;
 	struct worker_task *task;
 };
 
@@ -447,8 +447,10 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data             *cb = ud;
 	struct uri                      *url = value;
+	ucl_object_t                     *obj;
 
-	rspamd_printf_gstring (cb->urls, " %*s,", url->hostlen, url->host);
+	obj = ucl_object_fromlstring (url->host, url->hostlen);
+	DL_APPEND (cb->top->value.av, obj);
 
 	if (cb->task->cfg->log_urls) {
 		msg_info ("<%s> URL: %s - %s: %s", cb->task->message_id, cb->task->user ?
@@ -465,17 +467,12 @@ rspamd_urls_tree_ucl (GTree *input, struct worker_task *task)
 	struct tree_cb_data             cb;
 	ucl_object_t                    *obj;
 
-	cb.urls = g_string_sized_new (BUFSIZ);
+	obj = ucl_object_typed_new (UCL_ARRAY);
+	cb.top = obj;
 	cb.task = task;
 
 	g_tree_foreach (input, urls_protocol_cb, &cb);
-	/* Strip last ',' */
-	if (cb.urls->str[cb.urls->len - 1] == ',') {
-		cb.urls->len --;
-	}
 
-	obj = ucl_object_fromlstring (cb.urls->str, cb.urls->len);
-	g_string_free (cb.urls, TRUE);
 	return obj;
 }
 
