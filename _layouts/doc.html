@@ -67,17 +67,35 @@
       </div>
 	</div>
 	
-	<div class="container">
-      <!-- Jumbotron -->
-	  <div class="jumbotron" id="jumbo-head">
-        <h1>Rspamd</h1>
-        <p class="lead">Fast, free and open-source spam filtering system.</p>
-		<p><a class="btn btn-primary btn-large" href="/about.html">Learn more &raquo;</a></p>
-	  </div>
 
-      <div class="body-content">
+	 <div class="container">
+
+	 <div class="row">
+	 <div class="col-sm-3">
+	 <!-- Docs navigation -->
+	 	<ul class="nav nav-pills nav-stacked" role="navigation">
+			<li><a  href="/doc/index.html">Documentation index</a></li>
+			<li class="divider"></li>
+
+			<li><a  href="/doc/quickstart.html">Quick start</a></li>
+			<li><a  href="/doc/features.html">Rspamd features</a></li>
+			<li><a  href="/doc/integration.html">Integration to MTA</a></li>
+			<li class="divider"></li>
+			<li><a  href="/doc/architecture/">Architecture</a></li>
+			<li><a  href="/doc/configuration/">Configuration guide</a></li>
+			<li><a  href="/doc/modules/">Rspamd modules</a></li>
+			<li><a  href="/doc/workers/">Rspamd workers</a></li>
+			<li><a  href="/doc/lua/">Lua API guide</a></li>
+		</ul>
+	 </div>
+
+	 <div class="col-sm-9">
+     <div class="body-content">
                 {{ content }}
-      </div><!-- /.body-content -->
+      </div>
+	 </div>
+
+	 </div> <!-- row -->
 
       <!-- Site footer -->
 	  <hr>
