@@ -257,6 +257,8 @@ struct worker_task {
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 	struct event_base *ev_base;									/**< Event base										*/
 
+	GThreadPool *classify_pool;									/**< A pool of classify threads 					*/
+
 	struct {
 		enum rspamd_metric_action action;						/**< Action of pre filters							*/
 		gchar *str;												/**< String describing action						*/
@@ -300,6 +302,17 @@ struct worker_task* construct_task (struct rspamd_worker *worker);
 void free_task (struct worker_task *task, gboolean is_soft);
 void free_task_hard (gpointer ud);
 void free_task_soft (gpointer ud);
+
+/**
+ * Called if session was restored inside fin callback
+ */
+void rspamd_restore_task (void *arg);
+
+/**
+ * Called if all filters are processed
+ * @return TRUE if session should be terminated
+ */
+gboolean rspamd_fin_task (void *arg);
 
 /**
  * Set counter for a symbol
