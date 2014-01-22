@@ -76,7 +76,15 @@ local function rbl_cb (task)
 		end
 		task:inc_dns_req()
 	end
-	
+
+	local sender_dns = task:get_hostname()
+	if sender_dns ~= nil then
+		for k,rbl in pairs(rbls) do
+			if rbl['rdns'] then
+				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), sender_dns .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+			end
+		end
+	end
 	local rip = task:get_from_ip()
 	if rip and (rip:to_string() ~= '0.0.0.0') then
 		for k,rbl in pairs(rbls) do
@@ -132,8 +140,11 @@ end
 if(opts['default_unknown'] == nil) then
 	opts['default_unknown'] = false
 end
+if(opts['default_rdns'] == nil) then
+        opts['default_rdns'] = false
+end
 for key,rbl in pairs(opts['rbls']) do
-	local o = { "ipv4", "ipv6", "from", "received", "unknown" }
+	local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns" }
 	for i=1,table.maxn(o) do
 		if(rbl[o[i]] == nil) then
 			rbl[o[i]] = opts['default_' .. o[i]]
