@@ -78,7 +78,7 @@ local function rbl_cb (task)
 	end
 
 	local sender_dns = task:get_hostname()
-	if sender_dns ~= nil then
+	if sender_dns ~= nil and not string.find(sender_dns, "[") then
 		for k,rbl in pairs(rbls) do
 			if rbl['rdns'] then
 				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), sender_dns .. '.' .. rbl['rbl'], rbl_dns_cb, k)
