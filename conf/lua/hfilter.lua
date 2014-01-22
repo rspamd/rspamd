@@ -134,12 +134,10 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     end
     if eq_host then
         eq_host = string.lower(eq_host)
-    else
-        eq_host = ''
     end
 
     if check_fqdn(host) then
-        if eq_host == '' or eq_host ~= host then
+        if not eq_host or (eq_host ~= 'unknown' or eq_host ~= host) then
             task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), host, check_host_cb_a)
         end
     else
@@ -169,9 +167,6 @@ local function hfilter(task)
     
     --HOSTNAME--
     local hostname = task:get_hostname()
-        if hostname and ip and hostname == '[' .. ip .. ']' then
-            hostname = false
-        end
     
     --HELO--
     local helo = task:get_helo()
@@ -218,8 +213,9 @@ local function hfilter(task)
                 break
             end
         end
-    else
-        task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
+        if hostname == 'unknown' then
+        	task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
+    	end
     end
     
     --Insert weight's for HELO or HOSTNAME

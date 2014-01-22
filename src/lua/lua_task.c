@@ -1070,7 +1070,21 @@ lua_task_get_hostname (lua_State *L)
 
 	if (task) {
 		if (task->hostname != NULL) {
-			lua_pushstring (L, (gchar *)task->hostname);
+			/* Check whether it looks like an IP address */
+			if (*task->hostname == '[') {
+				/*
+				 * From the milter documentation:
+				 *  If the reverse lookup fails or if none of the IP
+				 *  addresses of the resolved host name matches the
+				 *  original IP address, hostname will contain the
+				 *  message sender's IP address enclosed in square
+				 *  brackets (e.g. `[a.b.c.d]')
+				 */
+				lua_pushstring (L, "unknown");
+			}
+			else {
+				lua_pushstring (L, task->hostname);
+			}
 			return 1;
 		}
 	}
