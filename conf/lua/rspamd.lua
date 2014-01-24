@@ -22,7 +22,7 @@ reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_c
 reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
 
 -- Different text parts
-reconf['R_PARTS_DIFFER'] = 'compare_parts_distance(85)';
+reconf['R_PARTS_DIFFER'] = 'compare_parts_distance(50)';
 
 reconf['R_EMPTY_IMAGE'] = function (task)
 	parts = task:get_text_parts()
