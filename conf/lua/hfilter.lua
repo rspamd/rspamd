@@ -262,7 +262,7 @@ local function hfilter(task)
 					total_url_len = total_url_len + url:get_length()
 				end
 				if total_url_len > 0 then
-					if total_url_len + 7 > total_part_len then
+					if total_url_len + 7 > total_parts_len then
 						task:insert_result('HFILTER_URL_ONLY', 1.00)
 					end
 				end
