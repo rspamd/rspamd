@@ -476,6 +476,34 @@ rspamd_urls_tree_ucl (GTree *input, struct worker_task *task)
 	return obj;
 }
 
+static gboolean
+emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
+{
+	struct tree_cb_data             *cb = ud;
+	struct uri                      *url = value;
+	ucl_object_t                     *obj;
+
+	obj = ucl_object_fromlstring (url->user, url->userlen + url->hostlen + 1);
+	DL_APPEND (cb->top->value.av, obj);
+
+	return FALSE;
+}
+
+static ucl_object_t *
+rspamd_emails_tree_ucl (GTree *input, struct worker_task *task)
+{
+	struct tree_cb_data             cb;
+	ucl_object_t                    *obj;
+
+	obj = ucl_object_typed_new (UCL_ARRAY);
+	cb.top = obj;
+	cb.task = task;
+
+	g_tree_foreach (input, emails_protocol_cb, &cb);
+
+	return obj;
+}
+
 
 /* Write new subject */
 static const gchar *
@@ -724,7 +752,7 @@ write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 		top = ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls, task), "urls", 0, false);
 	}
 	if (g_tree_nnodes (task->emails) > 0) {
-		top = ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->emails, task), "emails", 0, false);
+		top = ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task), "emails", 0, false);
 	}
 	
 	top = ucl_object_insert_key (top, ucl_object_fromstring (task->message_id), "message-id", 0, false);
