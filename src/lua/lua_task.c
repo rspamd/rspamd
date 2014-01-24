@@ -146,6 +146,7 @@ static const struct luaL_reg    tasklib_m[] = {
 
 /* Textpart methods */
 LUA_FUNCTION_DEF (textpart, get_content);
+LUA_FUNCTION_DEF (textpart, get_length);
 LUA_FUNCTION_DEF (textpart, is_empty);
 LUA_FUNCTION_DEF (textpart, is_html);
 LUA_FUNCTION_DEF (textpart, get_fuzzy);
@@ -154,6 +155,7 @@ LUA_FUNCTION_DEF (textpart, compare_distance);
 
 static const struct luaL_reg    textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_content),
+	LUA_INTERFACE_DEF (textpart, get_length),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_fuzzy),
@@ -197,6 +199,7 @@ static const struct luaL_reg    imagelib_m[] = {
 };
 
 /* URL methods */
+LUA_FUNCTION_DEF (url, get_length);
 LUA_FUNCTION_DEF (url, get_host);
 LUA_FUNCTION_DEF (url, get_user);
 LUA_FUNCTION_DEF (url, get_path);
@@ -205,6 +208,7 @@ LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, get_phished);
 
 static const struct luaL_reg    urllib_m[] = {
+	LUA_INTERFACE_DEF (url, get_length),
 	LUA_INTERFACE_DEF (url, get_host),
 	LUA_INTERFACE_DEF (url, get_user),
 	LUA_INTERFACE_DEF (url, get_path),
@@ -1386,6 +1390,26 @@ lua_textpart_get_content (lua_State * L)
 }
 
 static gint
+lua_textpart_get_length (lua_State * L)
+{
+	struct mime_text_part          *part = lua_check_textpart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	if (part->is_empty) {
+		lua_pushnumber (L, 0);
+	}
+	else {
+		lua_pushnumber (L, part->content->len);
+	}
+
+	return 1;
+}
+
+static gint
 lua_textpart_is_empty (lua_State * L)
 {
 	struct mime_text_part          *part = lua_check_textpart (L);
@@ -1721,6 +1745,20 @@ lua_image_get_filename (lua_State *L)
 }
 
 /* URL part */
+static gint
+lua_url_get_length (lua_State *L)
+{
+	struct uri                      *url = lua_check_url (L);
+
+	if (url != NULL) {
+		lua_pushinteger (L, strlen (struri (url)));
+	}
+	else {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
 static gint
 lua_url_get_host (lua_State *L)
 {
