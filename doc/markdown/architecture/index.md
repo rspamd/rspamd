@@ -130,19 +130,19 @@ First of all, it is important to note that all user's signals should be sent to 
 
 - by reading pidfile: 
 
-	$ cat pidfile
+		$ cat pidfile
 
 - by getting process info: 
 
-	$ ps auxwww | grep rspamd
-	nobody 28378  0.0  0.2 49744  9424   rspamd: main process (rspamd)
-	nobody 64082  0.0  0.2 50784  9520   rspamd: worker process (rspamd)
-	nobody 64083  0.0  0.3 51792 11036   rspamd: worker process (rspamd)
-	nobody 64084  0.0  2.7 158288 114200 rspamd: controller process (rspamd)
-	nobody 64085  0.0  1.8 116304 75228  rspamd: fuzzy storage (rspamd)
-
-	$ ps auxwww | grep rspamd | grep main
-	nobody 28378  0.0  0.2 49744  9424   rspamd: main process (rspamd)
+		$ ps auxwww | grep rspamd
+		nobody 28378  0.0  0.2 49744  9424   rspamd: main process (rspamd)
+		nobody 64082  0.0  0.2 50784  9520   rspamd: worker process (rspamd)
+		nobody 64083  0.0  0.3 51792 11036   rspamd: worker process (rspamd)
+		nobody 64084  0.0  2.7 158288 114200 rspamd: controller process (rspamd)
+		nobody 64085  0.0  1.8 116304 75228  rspamd: fuzzy storage (rspamd)
+	
+		$ ps auxwww | grep rspamd | grep main
+		nobody 28378  0.0  0.2 49744  9424   rspamd: main process (rspamd)
 
 After getting the pid of main process it is possible to manage rspamd with signals:
  
