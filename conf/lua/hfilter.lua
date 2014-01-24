@@ -250,28 +250,24 @@ local function hfilter(task)
     local parts = task:get_text_parts()
     if parts then
         --One text part--
-        if table.maxn(parts) > 0 and parts[1]:get_content() then
-            local part_text = trim1(parts[1]:get_content())
-            local total_part_len = string.len(part_text)
-            if total_part_len > 0 then
-                local urls = task:get_urls()
-                if urls then
-                    local total_url_len = 0
-                    for _,url in ipairs(urls) do
-                        total_url_len = total_url_len + string.len(url:get_text())
-                    end
-                    if total_url_len > 0 then
-                        if total_url_len + 7 > total_part_len then
-                            task:insert_result('HFILTER_URL_ONLY', 1.00)
-                        else
-                            if not string.find(part_text, "\n") then
-                                task:insert_result('HFILTER_URL_ONELINE', 1.00)
-                            end
-                        end
-                    end
-                end
-            end
-        end
+		total_parts_len = 0
+		for _,p in ipairs(parts) do
+			total_parts_len = total_parts_len + p:get_length()
+		end
+		if total_parts_len > 0 then
+			local urls = task:get_urls()
+			if urls then
+				local total_url_len = 0
+				for _,url in ipairs(urls) do
+					total_url_len = total_url_len + url:get_length()
+				end
+				if total_url_len > 0 then
+					if total_url_len + 7 > total_part_len then
+						task:insert_result('HFILTER_URL_ONLY', 1.00)
+					end
+				end
+			end
+		end
     end
     
     return false
@@ -284,4 +280,4 @@ rspamd_config:register_symbols(hfilter, 1.0,
 "HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN",  
 "HFILTER_MID_NOT_FQDN",
 "HFILTER_HOSTNAME_NOPTR",
-"HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
+"HFILTER_URL_ONLY");
