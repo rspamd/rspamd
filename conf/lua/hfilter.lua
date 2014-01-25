@@ -250,9 +250,16 @@ local function hfilter(task)
     local parts = task:get_text_parts()
     if parts then
         --One text part--
-		total_parts_len = 0
+		local total_parts_len = 0
+		local text_parts_count = 0
+		local selected_text_part = nil
 		for _,p in ipairs(parts) do
 			total_parts_len = total_parts_len + p:get_length()
+			
+			if not p:is_html() then
+				text_parts_count = text_parts_count + 1
+				selected_text_part = p
+			end
 		end
 		if total_parts_len > 0 then
 			local urls = task:get_urls()
@@ -264,6 +271,14 @@ local function hfilter(task)
 				if total_url_len > 0 then
 					if total_url_len + 7 > total_parts_len then
 						task:insert_result('HFILTER_URL_ONLY', 1.00)
+					elseif text_parts_count == 1 and
+						selected_text_part:get_length() < 1024 then
+						-- We got a single text part with
+						-- the total length < 1024 symbols.
+						local part_text = trim1(selected_text_part:get_content())
+						if not string.find(part_text, "\n") then
+							task:insert_result('HFILTER_URL_ONELINE', 1.00)
+						end
 					end
 				end
 			end
@@ -280,4 +295,4 @@ rspamd_config:register_symbols(hfilter, 1.0,
 "HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN",  
 "HFILTER_MID_NOT_FQDN",
 "HFILTER_HOSTNAME_NOPTR",
-"HFILTER_URL_ONLY");
+"HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
