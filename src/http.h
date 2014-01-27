@@ -71,25 +71,31 @@ enum rspamd_http_options {
 
 struct rspamd_http_connection_private;
 struct rspamd_http_connection;
+struct rspamd_http_connection_router;
+struct rspamd_http_connection_entry;
 
-typedef int (*rspamd_http_body_handler) (struct rspamd_http_connection *conn,
+typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *chunk,
 		gsize len);
 
-typedef void (*rspamd_http_error_handler) (struct rspamd_http_connection *conn, GError *err);
+typedef void (*rspamd_http_error_handler_t) (struct rspamd_http_connection *conn, GError *err);
 
-typedef int (*rspamd_http_finish_handler) (struct rspamd_http_connection *conn,
+typedef int (*rspamd_http_finish_handler_t) (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg);
+
+typedef int (*rspamd_http_router_handler_t) (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg);
+typedef void (*rspamd_http_router_error_handler_t) (struct rspamd_http_connection_entry *conn_ent, GError *err);
 
 /**
  * HTTP connection structure
  */
 struct rspamd_http_connection {
 	struct rspamd_http_connection_private *priv;
-	rspamd_http_body_handler body_handler;
-	rspamd_http_error_handler error_handler;
-	rspamd_http_finish_handler finish_handler;
+	rspamd_http_body_handler_t body_handler;
+	rspamd_http_error_handler_t error_handler;
+	rspamd_http_finish_handler_t finish_handler;
 	gpointer ud;
 	enum rspamd_http_options opts;
 	enum rspamd_http_connection_type type;
@@ -97,16 +103,33 @@ struct rspamd_http_connection {
 	gint ref;
 };
 
+struct rspamd_http_connection_entry {
+	struct rspamd_http_connection_router *rt;
+	struct rspamd_http_connection *conn;
+	gpointer ud;
+	gboolean is_reply;
+	struct rspamd_http_connection_entry *next;
+};
+
+struct rspamd_http_connection_router {
+	struct rspamd_http_connection_entry *conns;
+	GHashTable *paths;
+	struct timeval tv;
+	struct timeval *ptv;
+	struct event_base *ev_base;
+	rspamd_http_router_error_handler_t error_handler;
+};
+
 /**
  * Create new http connection
- * @param handler handler for body
+ * @param handler_t handler_t for body
  * @param opts options
  * @return new connection structure
  */
 struct rspamd_http_connection* rspamd_http_connection_new (
-		rspamd_http_body_handler body_handler,
-		rspamd_http_error_handler error_handler,
-		rspamd_http_finish_handler finish_handler,
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
 		enum rspamd_http_options opts,
 		enum rspamd_http_connection_type type);
 
@@ -204,5 +227,35 @@ void rspamd_http_message_free (struct rspamd_http_message *msg);
  * @return time_t or (time_t)-1 in case of error
  */
 time_t rspamd_http_parse_date (const gchar *header, gsize len);
+
+/**
+ * Create new http connection router and the associated HTTP connection
+ * @return
+ */
+struct rspamd_http_connection_router* rspamd_http_router_new (
+		rspamd_http_router_error_handler_t eh,
+		struct timeval *timeout,
+		struct event_base *base);
+
+/**
+ * Add new path to the router
+ */
+void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
+		const gchar *path, rspamd_http_router_handler_t handler);
+
+/**
+ * Handle new accepted socket
+ * @param router router object
+ * @param fd server socket
+ * @param ud opaque userdata
+ */
+void rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
+		gint fd, gpointer ud);
+
+/**
+ * Free router and all connections associated
+ * @param router
+ */
+void rspamd_http_router_free (struct rspamd_http_connection_router *router);
 
 #endif /* HTTP_H_ */

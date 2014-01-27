@@ -24,6 +24,7 @@
 #include "config.h"
 #include "http.h"
 #include "utlist.h"
+#include "util.h"
 #include "printf.h"
 
 struct rspamd_http_connection_private {
@@ -595,9 +596,9 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 }
 
 struct rspamd_http_connection*
-rspamd_http_connection_new (rspamd_http_body_handler body_handler,
-		rspamd_http_error_handler error_handler,
-		rspamd_http_finish_handler finish_handler,
+rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
 		enum rspamd_http_options opts,
 		enum rspamd_http_connection_type type)
 {
@@ -869,5 +870,162 @@ void rspamd_http_message_add_header (struct rspamd_http_message *msg,
 		hdr->name = g_string_new (name);
 		hdr->value = g_string_new (value);
 		DL_APPEND (msg->headers, hdr);
+	}
+}
+
+/*
+ * HTTP router functions
+ */
+
+static void
+rspamd_http_entry_free (struct rspamd_http_connection_entry *entry)
+{
+	if (entry != NULL) {
+		close (entry->conn->fd);
+		rspamd_http_connection_unref (entry->conn);
+		g_slice_free1 (sizeof (struct rspamd_http_connection_entry), entry);
+	}
+}
+
+static void
+rspamd_http_router_error_handler (struct rspamd_http_connection *conn, GError *err)
+{
+	struct rspamd_http_connection_entry *entry = conn->ud;
+	struct rspamd_http_message *msg;
+
+	if (entry->is_reply) {
+		/* At this point we need to finish this session and close owned socket */
+		if (entry->rt->error_handler != NULL) {
+			entry->rt->error_handler (entry, err);
+		}
+		rspamd_http_entry_free (entry);
+	}
+	else {
+		/* Here we can write a reply to a client */
+		if (entry->rt->error_handler != NULL) {
+			entry->rt->error_handler (entry, err);
+		}
+		msg = rspamd_http_new_message (HTTP_RESPONSE);
+		msg->date = time (NULL);
+		msg->code = err->code;
+		msg->body = g_string_new (err->message);
+		rspamd_http_connection_reset (entry->conn);
+		rspamd_http_connection_write_message (entry->conn, msg, NULL,
+					"text/plain", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+		entry->is_reply = TRUE;
+	}
+}
+
+static int
+rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_http_connection_entry *entry = conn->ud;
+	rspamd_http_router_handler_t handler = NULL;
+	gpointer found;
+	struct rspamd_http_message *err_msg;
+	GError *err;
+
+	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) == sizeof (gpointer));
+
+	if (entry->is_reply) {
+		/* Request is finished, it is safe to free a connection */
+		rspamd_http_entry_free (entry);
+	}
+	else {
+		/* Search for path */
+		if (msg->url != NULL && msg->url->len != 0) {
+			found = g_hash_table_lookup (entry->rt->paths, msg->url->str);
+			memcpy (&handler, &found, sizeof (found));
+		}
+		entry->is_reply = TRUE;
+		if (handler != NULL) {
+			return handler (entry, msg);
+		}
+		else {
+			err = g_error_new (HTTP_ERROR, 404,
+							"Not found");
+			if (entry->rt->error_handler != NULL) {
+				entry->rt->error_handler (entry, err);
+			}
+			err_msg = rspamd_http_new_message (HTTP_RESPONSE);
+			err_msg->date = time (NULL);
+			err_msg->code = err->code;
+			err_msg->body = g_string_new (err->message);
+			rspamd_http_connection_reset (entry->conn);
+			rspamd_http_connection_write_message (entry->conn, err_msg, NULL,
+					"text/plain", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+			g_error_free (err);
+		}
+	}
+
+	return 0;
+}
+
+struct rspamd_http_connection_router*
+rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
+		struct timeval *timeout, struct event_base *base)
+{
+	struct rspamd_http_connection_router* new;
+
+	new = g_slice_alloc (sizeof (struct rspamd_http_connection_router));
+	new->paths = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->conns = NULL;
+	new->error_handler = eh;
+	new->ev_base = base;
+	if (timeout) {
+		new->tv = *timeout;
+		new->ptv = &new->tv;
+	}
+	else {
+		new->ptv = NULL;
+	}
+
+	return new;
+}
+
+void
+rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
+		const gchar *path, rspamd_http_router_handler_t handler)
+{
+	gpointer ptr;
+	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) == sizeof (gpointer));
+
+	if (path != NULL && handler != NULL && router != NULL) {
+		memcpy (&ptr, &handler, sizeof (ptr));
+		g_hash_table_insert (router->paths, (gpointer)path, ptr);
+	}
+}
+
+void
+rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
+		gint fd, gpointer ud)
+{
+	struct rspamd_http_connection_entry *conn;
+
+	conn = g_slice_alloc (sizeof (struct rspamd_http_connection_entry));
+	conn->rt = router;
+	conn->ud = ud;
+	conn->is_reply = FALSE;
+
+	conn->conn = rspamd_http_connection_new (NULL, rspamd_http_router_error_handler,
+			rspamd_http_router_finish_handler, 0, RSPAMD_HTTP_SERVER);
+
+	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv, router->ev_base);
+	LL_PREPEND (router->conns, conn);
+}
+
+void
+rspamd_http_router_free (struct rspamd_http_connection_router *router)
+{
+	struct rspamd_http_connection_entry *conn, *tmp;
+
+	if (router) {
+		LL_FOREACH_SAFE (router->conns, conn, tmp) {
+			rspamd_http_entry_free (conn);
+		}
+
+		g_hash_table_unref (router->paths);
+		g_slice_free1 (sizeof (struct rspamd_http_connection_router), router);
 	}
 }
