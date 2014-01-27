@@ -243,7 +243,7 @@ static void
 lua_redis_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct lua_redis_userdata			*ud = arg;
-	union rspamd_reply_element			*elt;
+	struct rspamd_reply_entry			*elt;
 
 
 	if (reply->code != DNS_RC_NOERROR) {
@@ -251,8 +251,8 @@ lua_redis_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 		return;
 	}
 	else {
-		elt = reply->elements->data;
-		memcpy (&ud->ina, &elt->a.addr[0], sizeof (struct in_addr));
+		elt = reply->entries;
+		memcpy (&ud->ina, &elt->content.a.addr, sizeof (struct in_addr));
 		/* Make real request */
 		lua_redis_make_request_real (ud);
 	}

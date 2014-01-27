@@ -31,61 +31,10 @@
 #include "events.h"
 #include "upstream.h"
 
-#define MAX_SERVERS 16
-
-#define DNS_D_MAXLABEL	63	/* + 1 '\0' */
-#define DNS_D_MAXNAME	255	/* + 1 '\0' */
-
-#define MAX_ADDRS 10
-
 struct rspamd_dns_reply;
 struct config_file;
 
 typedef void (*dns_callback_type) (struct rspamd_dns_reply *reply, gpointer arg);
-
-/**
- * Represents DNS server
- */
-struct rspamd_dns_server {
-	struct upstream up;					/**< upstream structure						*/
-	gchar *name;							/**< name of DNS server						*/
-	struct rspamd_dns_io_channel *io_channels;
-	struct rspamd_dns_io_channel *cur_io_channel;
-};
-
-/**
- * IO channel for a specific DNS server
- */
-struct rspamd_dns_io_channel {
-	struct rspamd_dns_server *srv;
-	struct rspamd_dns_resolver *resolver;
-	gint sock;							/**< persistent socket						*/
-	struct event ev;
-	GHashTable *requests;				/**< requests in flight						*/
-	struct rspamd_dns_io_channel *prev, *next;
-};
-
-struct dns_permutor;
-
-struct rspamd_dns_resolver {
-	struct rspamd_dns_server servers[MAX_SERVERS];
-	gint servers_num;					/**< number of DNS servers registered		*/
-	struct dns_permutor *permutor;	/**< permutor for randomizing request id	*/
-	guint request_timeout;
-	guint max_retransmits;
-	guint max_errors;
-	GHashTable *io_channels;			/**< hash of io chains indexed by socket	*/
-	memory_pool_t *static_pool;			/**< permament pool (cfg_pool)				*/
-	gboolean throttling;				/**< dns servers are busy					*/
-	gboolean is_master_slave;			/**< if this is true, then select upstreams as master/slave */
-	guint errors;						/**< resolver errors						*/
-	struct timeval throttling_time;		/**< throttling time						*/
-	struct event throttling_event;		/**< throttling event						*/
-	struct event_base *ev_base;			/**< base for event ops						*/
-};
-
-struct dns_header;
-struct dns_query;
 
 enum rspamd_request_type {
 	DNS_REQUEST_A = 0,
@@ -117,13 +66,12 @@ struct rspamd_dns_request {
 	gint sock;
 	enum rspamd_request_type type;
 	time_t time;
+	struct rspamd_dns_request *next;
 };
 
-
-
-union rspamd_reply_element {
+union rspamd_reply_element_un {
 	struct {
-		struct in_addr addr[MAX_ADDRS];
+		struct in_addr addr;
 		guint16 addrcount;
 	} a;
 #ifdef HAVE_INET_PTON
@@ -142,15 +90,20 @@ union rspamd_reply_element {
 		gchar *data;
 	} txt;
 	struct {
-		gchar *data;
-	} spf;
-	struct {
 		guint16 priority;
 		guint16 weight;
 		guint16 port;
 		gchar *target;
 	} srv;
 };
+
+struct rspamd_reply_entry {
+	union rspamd_reply_element_un content;
+	guint16 type;
+	guint16 ttl;
+	struct rspamd_reply_entry *prev, *next;
+};
+
 
 enum dns_rcode {
 	DNS_RC_NOERROR	= 0,
@@ -167,97 +120,11 @@ enum dns_rcode {
 };
 	
 struct rspamd_dns_reply {
-	enum rspamd_request_type type;
 	struct rspamd_dns_request *request;
 	enum dns_rcode code;
-	GList *elements;
+	struct rspamd_reply_entry *entries;
 };
 
-/* Internal DNS structs */
-
-struct dns_header {
-		guint qid:16;
-
-#if BYTE_ORDER == BIG_ENDIAN
-		guint qr:1;
-		guint opcode:4;
-		guint aa:1;
-		guint tc:1;
-		guint rd:1;
-
-		guint ra:1;
-		guint unused:3;
-		guint rcode:4;
-#else
-		guint rd:1;
-		guint tc:1;
-		guint aa:1;
-		guint opcode:4;
-		guint qr:1;
-
-		guint rcode:4;
-		guint unused:3;
-		guint ra:1;
-#endif
-
-		guint qdcount:16;
-		guint ancount:16;
-		guint nscount:16;
-		guint arcount:16;
-};
-
-enum dns_section {
-	DNS_S_QD		= 0x01,
-#define DNS_S_QUESTION		DNS_S_QD
-
-	DNS_S_AN		= 0x02,
-#define DNS_S_ANSWER		DNS_S_AN
-
-	DNS_S_NS		= 0x04,
-#define DNS_S_AUTHORITY		DNS_S_NS
-
-	DNS_S_AR		= 0x08,
-#define DNS_S_ADDITIONAL	DNS_S_AR
-
-	DNS_S_ALL		= 0x0f
-}; /* enum dns_section */
-
-enum dns_opcode {
-	DNS_OP_QUERY	= 0,
-	DNS_OP_IQUERY	= 1,
-	DNS_OP_STATUS	= 2,
-	DNS_OP_NOTIFY	= 4,
-	DNS_OP_UPDATE	= 5,
-}; /* dns_opcode */
-
-enum dns_type {
-	DNS_T_A		= 1,
-	DNS_T_NS	= 2,
-	DNS_T_CNAME	= 5,
-	DNS_T_SOA	= 6,
-	DNS_T_PTR	= 12,
-	DNS_T_MX	= 15,
-	DNS_T_TXT	= 16,
-	DNS_T_AAAA	= 28,
-	DNS_T_SRV	= 33,
-	DNS_T_OPT	= 41,
-	DNS_T_SSHFP	= 44,
-	DNS_T_SPF	= 99,
-
-	DNS_T_ALL	= 255
-}; /* enum dns_type */
-
-enum dns_class {
-	DNS_C_IN	= 1,
-
-	DNS_C_ANY	= 255
-}; /* enum dns_class */
-
-struct dns_query {
-	gchar *qname;
-	guint qtype:16;
-	guint qclass:16;
-};
 
 /* Rspamd DNS API */
 

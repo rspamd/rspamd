@@ -302,7 +302,7 @@ static void
 lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct lua_http_ud             *ud = arg;
-	union rspamd_reply_element     *elt;
+	struct rspamd_reply_entry      *elt;
 	struct in_addr                  ina;
 	struct timeval                  tv;
 
@@ -312,8 +312,8 @@ lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	}
 
 	/* Create socket to server */
-	elt = reply->elements->data;
-	memcpy (&ina, &elt->a.addr[0], sizeof (struct in_addr));
+	elt = reply->entries;
+	memcpy (&ina, &elt->content.a.addr, sizeof (struct in_addr));
 
 	ud->fd = make_universal_socket (inet_ntoa (ina), ud->port, SOCK_STREAM, TRUE, FALSE, FALSE);
 

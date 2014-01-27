@@ -652,7 +652,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 {
 	struct smtp_proxy_session 						*session = arg;
 	gint 											 res = 0;
-	union rspamd_reply_element 						*elt;
+	struct rspamd_reply_entry 						*elt;
 	GList 											*cur;
 
 	switch (session->state)
@@ -676,10 +676,10 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 			smtp_make_delay (session);
 		}
 		else {
-			if (reply->elements) {
-				elt = reply->elements->data;
+			if (reply->entries) {
+				elt = reply->entries;
 				session->hostname = memory_pool_strdup (session->pool,
-						elt->ptr.name);
+						elt->content.ptr.name);
 				session->state = SMTP_PROXY_STATE_RESOLVE_NORMAL;
 				make_dns_request (session->resolver, session->s, session->pool,
 						smtp_dns_cb, session, DNS_REQUEST_A, session->hostname);
@@ -706,10 +706,8 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 		}
 		else {
 			res = 0;
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				if (memcmp (&session->client_addr, &elt->a.addr[0],
+			LL_FOREACH (reply->entries, elt) {
+				if (memcmp (&session->client_addr, &elt->content.a.addr,
 						sizeof(struct in_addr)) == 0) {
 					res = 1;
 					session->resolved = TRUE;
