@@ -71,8 +71,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	struct lua_dns_cbdata   	   *cd = arg;
 	gint                            i = 0;
 	struct rspamd_dns_resolver    **presolver;
-	union rspamd_reply_element     *elt;
-	GList                          *cur;
+	struct rspamd_reply_entry     *elt;
 
 	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
@@ -81,77 +80,50 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	*presolver = cd->resolver;
 	lua_pushstring (cd->L, cd->to_resolve);
 
+	/*
+	 * XXX: rework to handle different request types
+	 */
 	if (reply->code == DNS_RC_NOERROR) {
-		if (reply->type == DNS_REQUEST_A) {
-
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_ip_push (cd->L, AF_INET, &elt->a.addr);
-				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
+		lua_newtable (cd->L);
+		LL_FOREACH (reply->entries, elt) {
+			if (elt->type != reply->request->type) {
+				/*
+				 * XXX: Skip additional record here to be compatible
+				 * with the existing plugins
+				 */
+				continue;
 			}
-			lua_pushnil (cd->L);
-		}
-		else if (reply->type == DNS_REQUEST_AAA) {
-
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_ip_push (cd->L, AF_INET6, &elt->aaa.addr);
+			switch (elt->type) {
+			case DNS_REQUEST_A:
+				lua_ip_push (cd->L, AF_INET, &elt->content.a.addr);
 				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-		}
-		else if (reply->type == DNS_REQUEST_PTR) {
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_pushstring (cd->L, elt->ptr.name);
+				break;
+			case DNS_REQUEST_AAA:
+				lua_ip_push (cd->L, AF_INET6, &elt->content.aaa.addr);
 				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-
-		}
-		else if (reply->type == DNS_REQUEST_TXT) {
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
-				lua_pushstring (cd->L, elt->txt.data);
+				break;
+			case DNS_REQUEST_PTR:
+				lua_pushstring (cd->L, elt->content.ptr.name);
 				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
-			}
-			lua_pushnil (cd->L);
-
-		}
-		else if (reply->type == DNS_REQUEST_MX) {
-			lua_newtable (cd->L);
-			cur = reply->elements;
-			while (cur) {
-				elt = cur->data;
+				break;
+			case DNS_REQUEST_TXT:
+			case DNS_REQUEST_SPF:
+				lua_pushstring (cd->L, elt->content.txt.data);
+				lua_rawseti (cd->L, -2, ++i);
+				break;
+			case DNS_REQUEST_MX:
 				/* mx['name'], mx['priority'] */
 				lua_newtable (cd->L);
-				lua_set_table_index (cd->L, "name", elt->mx.name);
+				lua_set_table_index (cd->L, "name", elt->content.mx.name);
 				lua_pushstring (cd->L, "priority");
-				lua_pushnumber (cd->L, elt->mx.priority);
+				lua_pushnumber (cd->L, elt->content.mx.priority);
 				lua_settable (cd->L, -3);
 
 				lua_rawseti (cd->L, -2, ++i);
-				cur = g_list_next (cur);
+				break;
 			}
-			lua_pushnil (cd->L);
-
 		}
-		else {
-			lua_pushnil (cd->L);
-			lua_pushstring (cd->L, "Unknown reply type");
-		}
+		lua_pushnil (cd->L);
 	}
 	else {
 		lua_pushnil (cd->L);

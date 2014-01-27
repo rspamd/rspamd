@@ -754,8 +754,7 @@ rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 	struct rspamd_dkim_key_cbdata				*cbdata = arg;
 	rspamd_dkim_key_t							*key = NULL;
 	GError										*err = NULL;
-	GList										*cur;
-	union rspamd_reply_element					*elt;
+	struct rspamd_reply_entry					*elt;
 	gsize										 keylen = 0;
 
 	if (reply->code != DNS_RC_NOERROR) {
@@ -764,14 +763,13 @@ rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 		cbdata->handler (NULL, 0, cbdata->ctx, cbdata->ud, err);
 	}
 	else {
-		cur = reply->elements;
-		while (cur) {
-			elt = cur->data;
-			key = rspamd_dkim_parse_key (elt->txt.data, &keylen, &err);
-			if (key) {
-				break;
+		LL_FOREACH (reply->entries, elt) {
+			if (elt->type == DNS_REQUEST_TXT) {
+				key = rspamd_dkim_parse_key (elt->content.txt.data, &keylen, &err);
+				if (key) {
+					break;
+				}
 			}
-			cur = g_list_next (cur);
 		}
 		if (key != NULL && err != NULL) {
 			/* Free error as it is insignificant */

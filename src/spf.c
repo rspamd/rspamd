@@ -391,8 +391,8 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct spf_dns_cb               *cb = arg;
 	gchar                           *begin;
-	union rspamd_reply_element      *elt_data;
-	GList                           *tmp = NULL, *elt;
+	struct rspamd_reply_entry      *elt_data;
+	GList                           *tmp = NULL;
 	struct worker_task              *task;
 	struct spf_addr                 *new_addr;
 
@@ -401,165 +401,160 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	cb->rec->requests_inflight --;
 
 	if (reply->code == DNS_RC_NOERROR) {
-		if (reply->elements != NULL) {
-			/* Add all logic for all DNS states here */
-			elt = reply->elements;
-			while (elt) {
-				elt_data = elt->data;
-				switch (cb->cur_action) {
-				case SPF_RESOLVE_MX:
-					if (reply->type == DNS_REQUEST_MX) {
-						/* Now resolve A record for this MX */
-						if (make_dns_request (task->resolver, task->s, task->task_pool,
-								spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, elt_data->mx.name)) {
-							task->dns_requests ++;
-							cb->rec->requests_inflight ++;
-						}
+		/* Add all logic for all DNS states here */
+		LL_FOREACH (reply->entries, elt_data) {
+			switch (cb->cur_action) {
+			case SPF_RESOLVE_MX:
+				if (elt_data->type == DNS_REQUEST_MX) {
+					/* Now resolve A record for this MX */
+					if (make_dns_request (task->resolver, task->s, task->task_pool,
+							spf_record_dns_callback, (void *)cb, DNS_REQUEST_A, elt_data->content.mx.name)) {
+						task->dns_requests ++;
+						cb->rec->requests_inflight ++;
 					}
-					else if (reply->type == DNS_REQUEST_A) {
-						if (!cb->addr->data.normal.parsed) {
-							cb->addr->data.normal.d.in4.s_addr = elt_data->a.addr[0].s_addr;
-							cb->addr->data.normal.mask = 32;
-							cb->addr->data.normal.parsed = TRUE;
-						}
-						else {
-							/* Insert one more address */
-							tmp = spf_addr_find (cb->rec->addrs, cb->addr);
-							if (tmp) {
-								new_addr = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
-								memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
-								new_addr->data.normal.d.in4.s_addr = elt_data->a.addr[0].s_addr;
-								new_addr->data.normal.parsed = TRUE;
-								cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
-							}
-							else {
-								msg_info ("<%s>: spf error for domain %s: addresses mismatch",
-										task->message_id, cb->rec->sender_domain);
-							}
-						}
-
-					}
-#ifdef HAVE_INET_PTON
-					else if (reply->type == DNS_REQUEST_AAA) {
-						if (!cb->addr->data.normal.parsed) {
-							memcpy (&cb->addr->data.normal.d.in6, &elt_data->aaa.addr, sizeof (struct in6_addr));
-							cb->addr->data.normal.mask = 32;
-							cb->addr->data.normal.parsed = TRUE;
-							cb->addr->data.normal.ipv6 = TRUE;
-						}
-						else {
-							/* Insert one more address */
-							tmp = spf_addr_find (cb->rec->addrs, cb->addr);
-							if (tmp) {
-								new_addr = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
-								memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
-								memcpy (&new_addr->data.normal.d.in6, &elt_data->aaa.addr, sizeof (struct in6_addr));
-								new_addr->data.normal.parsed = TRUE;
-								new_addr->data.normal.ipv6 = TRUE;
-								cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
-							}
-							else {
-								msg_info ("<%s>: spf error for domain %s: addresses mismatch",
-										task->message_id, cb->rec->sender_domain);
-							}
-						}
-
-					}
-#endif
-					break;
-				case SPF_RESOLVE_A:
-					if (reply->type == DNS_REQUEST_A) {
-						/* XXX: process only one record */
-						cb->addr->data.normal.d.in4.s_addr = elt_data->a.addr[0].s_addr;
-						cb->addr->data.normal.mask = 32;
-						cb->addr->data.normal.parsed = TRUE;
-					}
-#ifdef HAVE_INET_PTON
-					else if (reply->type == DNS_REQUEST_AAA) {
-						memcpy (&cb->addr->data.normal.d.in6, &elt_data->aaa.addr, sizeof (struct in6_addr));
-						cb->addr->data.normal.mask = 32;
-						cb->addr->data.normal.parsed = TRUE;
-						cb->addr->data.normal.ipv6 = TRUE;
-					}
-#endif
-					break;
-#ifdef HAVE_INET_PTON
-				case SPF_RESOLVE_AAA:
-					if (reply->type == DNS_REQUEST_A) {
-						/* XXX: process only one record */
-						cb->addr->data.normal.d.in4.s_addr = elt_data->a.addr[0].s_addr;
-						cb->addr->data.normal.mask = 32;
-						cb->addr->data.normal.parsed = TRUE;
-					}
-					else if (reply->type == DNS_REQUEST_AAA) {
-						memcpy (&cb->addr->data.normal.d.in6, &elt_data->aaa.addr, sizeof (struct in6_addr));
-						cb->addr->data.normal.mask = 32;
-						cb->addr->data.normal.parsed = TRUE;
-						cb->addr->data.normal.ipv6 = TRUE;
-					}
-#endif
-					break;
-				case SPF_RESOLVE_PTR:
-					break;
-				case SPF_RESOLVE_REDIRECT:
-					if (reply->type == DNS_REQUEST_TXT) {
-						begin = elt_data->txt.data;
-
-						if (!cb->in_include && cb->rec->addrs) {
-							g_list_free (cb->rec->addrs);
-							cb->rec->addrs = NULL;
-						}
-						start_spf_parse (cb->rec, begin);
-
-					}
-					break;
-				case SPF_RESOLVE_INCLUDE:
-					if (reply->type == DNS_REQUEST_TXT) {
-						begin = elt_data->txt.data;
-#ifdef SPF_DEBUG
-						msg_info ("before include");
-						dump_spf_record (cb->rec->addrs);
-#endif
-						tmp = cb->rec->addrs;
-						cb->rec->addrs = NULL;
-						cb->rec->in_include = TRUE;
-						start_spf_parse (cb->rec, begin);
-						cb->rec->in_include = FALSE;
-
-#ifdef SPF_DEBUG
-						msg_info ("after include");
-						dump_spf_record (cb->rec->addrs);
-#endif
-						/* Insert new list */
-						cb->addr->is_list = TRUE;
-						cb->addr->data.list = cb->rec->addrs;
-						cb->rec->addrs = tmp;
-					}
-					break;
-				case SPF_RESOLVE_EXP:
-					break;
-				case SPF_RESOLVE_EXISTS:
-					if (reply->type == DNS_REQUEST_A) {
-						/* If specified address resolves, we can accept connection from every IP */
-						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
-						cb->addr->data.normal.mask = 0;
-					}
-					break;
 				}
-				elt = g_list_next (elt);
+				else if (elt_data->type == DNS_REQUEST_A) {
+					if (!cb->addr->data.normal.parsed) {
+						cb->addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
+						cb->addr->data.normal.mask = 32;
+						cb->addr->data.normal.parsed = TRUE;
+					}
+					else {
+						/* Insert one more address */
+						tmp = spf_addr_find (cb->rec->addrs, cb->addr);
+						if (tmp) {
+							new_addr = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
+							memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
+							new_addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
+							new_addr->data.normal.parsed = TRUE;
+							cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
+						}
+						else {
+							msg_info ("<%s>: spf error for domain %s: addresses mismatch",
+									task->message_id, cb->rec->sender_domain);
+						}
+					}
+
+				}
+#ifdef HAVE_INET_PTON
+				else if (elt_data->type == DNS_REQUEST_AAA) {
+					if (!cb->addr->data.normal.parsed) {
+						memcpy (&cb->addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
+						cb->addr->data.normal.mask = 32;
+						cb->addr->data.normal.parsed = TRUE;
+						cb->addr->data.normal.ipv6 = TRUE;
+					}
+					else {
+						/* Insert one more address */
+						tmp = spf_addr_find (cb->rec->addrs, cb->addr);
+						if (tmp) {
+							new_addr = memory_pool_alloc (task->task_pool, sizeof (struct spf_addr));
+							memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
+							memcpy (&new_addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
+							new_addr->data.normal.parsed = TRUE;
+							new_addr->data.normal.ipv6 = TRUE;
+							cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
+						}
+						else {
+							msg_info ("<%s>: spf error for domain %s: addresses mismatch",
+									task->message_id, cb->rec->sender_domain);
+						}
+					}
+
+				}
+#endif
+				break;
+			case SPF_RESOLVE_A:
+				if (elt_data->type == DNS_REQUEST_A) {
+					/* XXX: process only one record */
+					cb->addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
+					cb->addr->data.normal.mask = 32;
+					cb->addr->data.normal.parsed = TRUE;
+				}
+#ifdef HAVE_INET_PTON
+				else if (elt_data->type == DNS_REQUEST_AAA) {
+					memcpy (&cb->addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
+					cb->addr->data.normal.mask = 32;
+					cb->addr->data.normal.parsed = TRUE;
+					cb->addr->data.normal.ipv6 = TRUE;
+				}
+#endif
+				break;
+#ifdef HAVE_INET_PTON
+			case SPF_RESOLVE_AAA:
+				if (elt_data->type == DNS_REQUEST_A) {
+					/* XXX: process only one record */
+					cb->addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
+					cb->addr->data.normal.mask = 32;
+					cb->addr->data.normal.parsed = TRUE;
+				}
+				else if (elt_data->type == DNS_REQUEST_AAA) {
+					memcpy (&cb->addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
+					cb->addr->data.normal.mask = 32;
+					cb->addr->data.normal.parsed = TRUE;
+					cb->addr->data.normal.ipv6 = TRUE;
+				}
+#endif
+				break;
+			case SPF_RESOLVE_PTR:
+				break;
+			case SPF_RESOLVE_REDIRECT:
+				if (elt_data->type == DNS_REQUEST_TXT) {
+					begin = elt_data->content.txt.data;
+
+					if (!cb->in_include && cb->rec->addrs) {
+						g_list_free (cb->rec->addrs);
+						cb->rec->addrs = NULL;
+					}
+					start_spf_parse (cb->rec, begin);
+
+				}
+				break;
+			case SPF_RESOLVE_INCLUDE:
+				if (elt_data->type == DNS_REQUEST_TXT) {
+					begin = elt_data->content.txt.data;
+#ifdef SPF_DEBUG
+					msg_info ("before include");
+					dump_spf_record (cb->rec->addrs);
+#endif
+					tmp = cb->rec->addrs;
+					cb->rec->addrs = NULL;
+					cb->rec->in_include = TRUE;
+					start_spf_parse (cb->rec, begin);
+					cb->rec->in_include = FALSE;
+
+#ifdef SPF_DEBUG
+					msg_info ("after include");
+					dump_spf_record (cb->rec->addrs);
+#endif
+					/* Insert new list */
+					cb->addr->is_list = TRUE;
+					cb->addr->data.list = cb->rec->addrs;
+					cb->rec->addrs = tmp;
+				}
+				break;
+			case SPF_RESOLVE_EXP:
+				break;
+			case SPF_RESOLVE_EXISTS:
+				if (elt_data->type == DNS_REQUEST_A) {
+					/* If specified address resolves, we can accept connection from every IP */
+					cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
+					cb->addr->data.normal.mask = 0;
+				}
+				break;
 			}
 		}
 	}
 	else if (reply->code == DNS_RC_NXDOMAIN) {
 		switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
-					if (reply->type == DNS_REQUEST_MX) {
+					if (reply->request->type == DNS_REQUEST_MX) {
 						msg_info ("<%s>: spf error for domain %s: cannot find MX record for %s",
 								task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 						cb->addr->data.normal.mask = 32;
 					}
-					else if (reply->type != DNS_REQUEST_MX) {
+					else if (reply->request->type != DNS_REQUEST_MX) {
 						msg_info ("<%s>: spf error for domain %s: cannot resolve MX record for %s",
 								task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
@@ -567,7 +562,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					}
 					break;
 				case SPF_RESOLVE_A:
-					if (reply->type == DNS_REQUEST_A) {
+					if (reply->request->type == DNS_REQUEST_A) {
 						/* XXX: process only one record */
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 						cb->addr->data.normal.mask = 32;
@@ -575,7 +570,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					break;
 #ifdef HAVE_INET_PTON
 				case SPF_RESOLVE_AAA:
-					if (reply->type == DNS_REQUEST_AAA) {
+					if (reply->request->type == DNS_REQUEST_AAA) {
 						/* XXX: process only one record */
 						memset (&cb->addr->data.normal.d.in6, 0xff, sizeof (struct in6_addr));
 						cb->addr->data.normal.mask = 32;
@@ -1345,16 +1340,12 @@ static void
 spf_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct spf_record *rec = arg;
-	union rspamd_reply_element *elt;
-	GList *cur;
+	struct rspamd_reply_entry *elt;
 
 	rec->requests_inflight --;
 	if (reply->code == DNS_RC_NOERROR) {
-		cur = reply->elements;
-		while (cur) {
-			elt = cur->data;
-			start_spf_parse (rec, elt->txt.data);
-			cur = g_list_next (cur);
+		LL_FOREACH (reply->entries, elt) {
+			start_spf_parse (rec, elt->content.txt.data);
 		}
 	}
 

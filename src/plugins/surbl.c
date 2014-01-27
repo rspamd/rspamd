@@ -679,14 +679,16 @@ dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 {
 	struct dns_param               *param = (struct dns_param *)arg;
 	struct worker_task             *task = param->task;
-	union rspamd_reply_element     *elt;
+	struct rspamd_reply_entry      *elt;
 
 	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
-	if (reply->code == DNS_RC_NOERROR && reply->elements) {
+	if (reply->code == DNS_RC_NOERROR && reply->entries) {
 		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
-		elt = reply->elements->data;
-		process_dns_results (param->task, param->suffix, param->host_resolve, (guint32)elt->a.addr[0].s_addr);
+		elt = reply->entries;
+		if (elt->type == DNS_REQUEST_A) {
+			process_dns_results (param->task, param->suffix, param->host_resolve, (guint32)elt->content.a.addr.s_addr);
+		}
 	}
 	else {
 		debug_task ("<%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);

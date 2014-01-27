@@ -25,47 +25,20 @@
 
 #include "config.h"
 #include "dns.h"
+#include "dns_private.h"
 #include "main.h"
 #include "utlist.h"
-#include "chacha_private.h"
+#include "uthash.h"
+
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #endif
-
-/* Upstream timeouts */
-#define DEFAULT_UPSTREAM_ERROR_TIME 10
-#define DEFAULT_UPSTREAM_DEAD_TIME 300
-#define DEFAULT_UPSTREAM_MAXERRORS 10
-
-static const unsigned base         = 36;
-static const unsigned t_min        = 1;
-static const unsigned t_max        = 26;
-static const unsigned skew         = 38;
-static const unsigned damp         = 700;
-static const unsigned initial_n    = 128;
-static const unsigned initial_bias = 72;
-
-static const gint dns_port = 53;
-
-#define UDP_PACKET_SIZE 4096
-
-#define DNS_COMPRESSION_BITS 0xC0
 
 static void dns_retransmit_handler (gint fd, short what, void *arg);
 
 /*
  * DNS permutor utilities
  */
-
-#define PERMUTOR_BUF_SIZE 32768
-#define PERMUTOR_KSIZE 32
-#define PERMUTOR_IVSIZE 8
-
-struct dns_permutor {
-	chacha_ctx ctx;
-	guchar perm_buf[PERMUTOR_BUF_SIZE];
-	guint pos;
-};
 
 /**
  * Init chacha20 context
@@ -87,11 +60,11 @@ dns_permutor_init (struct dns_permutor *p)
 }
 
 static struct dns_permutor *
-dns_permutor_new (memory_pool_t *pool)
+dns_permutor_new (void)
 {
 	struct dns_permutor *new;
 
-	new = memory_pool_alloc0 (pool, sizeof (struct dns_permutor));
+	new = g_slice_alloc0 (sizeof (struct dns_permutor));
 	dns_permutor_init (new);
 
 	return new;
@@ -112,12 +85,14 @@ dns_permutor_generate_id (struct dns_permutor *p)
 }
 
 /* Punycode utility */
-static guint digit(unsigned n)
+static guint
+digit (unsigned n)
 {
 	return "abcdefghijklmnopqrstuvwxyz0123456789"[n];
 }
 
-static guint adapt(guint delta, guint numpoints, gint first)
+static guint
+adapt (guint delta, guint numpoints, gint first)
 {
 	guint k;
 
@@ -256,34 +231,30 @@ struct dns_name_table {
 	guint8 off;
 	guint8 *label;
 	guint8 len;
+	UT_hash_handle hh;
 };
 
 static gboolean
-try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 len, guint8 *label, GList **table)
+try_compress_label (memory_pool_t *pool, guint8 *target, guint8 *start, guint8 len,
+		guint8 *label, struct dns_name_table **table)
 {
-	GList *cur;
-	struct dns_name_table *tbl;
+	struct dns_name_table *found = NULL;
 	guint16 pointer;
 
-	cur = *table;
-	while (cur) {
-		tbl = cur->data;
-		if (tbl->len == len) {
-			if (memcmp (label, tbl->label, len) == 0) {
-				pointer = htons ((guint16)tbl->off | 0xC0);
-				memcpy (target, &pointer, sizeof (pointer));
-				return TRUE;
-			}
-		}
-		cur = g_list_next (cur);
+	HASH_FIND (hh, *table, label, len, found);
+	if (found != NULL) {
+		pointer = htons ((guint16)found->off | 0xC0);
+		memcpy (target, &pointer, sizeof (pointer));
+		return TRUE;
 	}
-
-	/* Insert label to list */
-	tbl = memory_pool_alloc (pool, sizeof (struct dns_name_table));
-	tbl->off = target - start;
-	tbl->label = label;
-	tbl->len = len;
-	*table = g_list_prepend (*table, tbl);
+	else {
+		/* Insert label to list */
+		found = memory_pool_alloc (pool, sizeof (struct dns_name_table));
+		found->off = target - start;
+		found->label = label;
+		found->len = len;
+		HASH_ADD_KEYPTR (hh, *table, found->label, len, found);
+	}
 
 	return FALSE;
 }
@@ -353,7 +324,7 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 {
 	guint8 *pos = req->packet + req->pos, *end, *dot, *name_pos, *begin;
 	guint remain = req->packet_len - req->pos - 5, label_len;
-	GList *table = NULL;
+	struct dns_name_table *table = NULL;
 	gunichar *uclabel;
 	glong uclabel_len;
 	gsize punylabel_len;
@@ -448,7 +419,7 @@ format_dns_name (struct rspamd_dns_request *req, const gchar *name, guint namele
 	*pos = '\0';
 	req->pos += pos - (req->packet + req->pos) + 1;
 	if (table != NULL) {
-		g_list_free (table);
+		HASH_CLEAR (hh, table);
 	}
 }
 
@@ -849,12 +820,13 @@ end:
 
 #define GET16(x) do {(x) = ((*p) << 8) + *(p + 1); p += sizeof (guint16); *remain -= sizeof (guint16); } while(0)
 #define GET32(x) do {(x) = ((*p) << 24) + ((*(p + 1)) << 16) + ((*(p + 2)) << 8) + *(p + 3); p += sizeof (guint32); *remain -= sizeof (guint32); } while(0)
+#define SKIP(type) do { p += sizeof(type); *remain -= sizeof(type); } while (0)
 
 static gint
-dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct rspamd_dns_reply *rep, gint *remain)
+dns_parse_rr (guint8 *in, struct rspamd_reply_entry *elt, guint8 **pos, struct rspamd_dns_reply *rep, gint *remain)
 {
 	guint8 *p = *pos, parts;
-	guint16 type, datalen, txtlen, copied;
+	guint16 type, datalen, txtlen, copied, ttl;
 	gboolean parsed = FALSE;
 
 	/* Skip the whole name */
@@ -867,146 +839,94 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 		return -1;
 	}
 	GET16 (type);
-	/* Skip ttl and class */
-	p += sizeof (guint16) + sizeof (guint32);
-	*remain -= sizeof (guint16) + sizeof (guint32);
+	GET16 (ttl);
+	/* Skip class */
+	SKIP (guint32);
 	GET16 (datalen);
 	/* Now p points to RR data */
 	switch (type) {
 	case DNS_T_A:
-		if (rep->request->type != DNS_REQUEST_A) {
+		if (!(datalen & 0x3) && datalen <= *remain) {
+			memcpy (&elt->content.a.addr, p, sizeof (struct in_addr));
 			p += datalen;
+			*remain -= datalen;
+			parsed = TRUE;
+			elt->type = DNS_REQUEST_A;
 		}
 		else {
-			if (!(datalen & 0x3) && datalen <= *remain) {
-				memcpy (&elt->a.addr[0], p, sizeof (struct in_addr));
-				p += datalen;
-				*remain -= datalen;
-				parsed = TRUE;
-			}
-			else {
-				msg_info ("corrupted A record");
-				return -1;
-			}
+			msg_info ("corrupted A record");
+			return -1;
 		}
 		break;
 #ifdef HAVE_INET_PTON
 	case DNS_T_AAAA:
-		if (rep->request->type != DNS_REQUEST_AAA) {
+		if (datalen == sizeof (struct in6_addr) && datalen <= *remain) {
+			memcpy (&elt->content.aaa.addr, p, sizeof (struct in6_addr));
 			p += datalen;
 			*remain -= datalen;
+			parsed = TRUE;
+			elt->type = DNS_REQUEST_AAA;
 		}
 		else {
-			if (datalen == sizeof (struct in6_addr) && datalen <= *remain) {
-				memcpy (&elt->aaa.addr, p, sizeof (struct in6_addr));
-				p += datalen;
-				*remain -= datalen;
-				parsed = TRUE;
-			}
-			else {
-				msg_info ("corrupted AAAA record");
-				return -1;
-			}
+			msg_info ("corrupted AAAA record");
+			return -1;
 		}
 		break;
 #endif
 	case DNS_T_PTR:
-		if (rep->request->type != DNS_REQUEST_PTR) {
-			p += datalen;
-			*remain -= datalen;
+		if (! dns_parse_labels (in, &elt->content.ptr.name, &p, rep, remain, TRUE)) {
+			msg_info ("invalid labels in PTR record");
+			return -1;
 		}
-		else {
-			if (! dns_parse_labels (in, &elt->ptr.name, &p, rep, remain, TRUE)) {
-				msg_info ("invalid labels in PTR record");
-				return -1;
-			}
-			parsed = TRUE;
-		}
+		parsed = TRUE;
+		elt->type = DNS_REQUEST_PTR;
 		break;
 	case DNS_T_MX:
-		if (rep->request->type != DNS_REQUEST_MX) {
-			p += datalen;
-			*remain -= datalen;
+		GET16 (elt->content.mx.priority);
+		if (! dns_parse_labels (in, &elt->content.mx.name, &p, rep, remain, TRUE)) {
+			msg_info ("invalid labels in MX record");
+			return -1;
 		}
-		else {
-			GET16 (elt->mx.priority);
-			if (! dns_parse_labels (in, &elt->mx.name, &p, rep, remain, TRUE)) {
-				msg_info ("invalid labels in MX record");
-				return -1;
-			}
-			parsed = TRUE;
-		}
+		parsed = TRUE;
+		elt->type = DNS_REQUEST_MX;
 		break;
 	case DNS_T_TXT:
-		if (rep->request->type != DNS_REQUEST_TXT) {
-			p += datalen;
-			*remain -= datalen;
-		}
-		else {
-			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
-			/* Now we should compose data from parts */
-			copied = 0;
-			parts = 0;
-			while (copied + parts < datalen) {
-				txtlen = *p;
-				if (txtlen + copied + parts <= datalen) {
-					parts ++;
-					memcpy (elt->txt.data + copied, p + 1, txtlen);
-					copied += txtlen;
-					p += txtlen + 1;
-					*remain -= txtlen + 1;
-				}
-				else {
-					break;
-				}
-			}
-			*(elt->txt.data + copied) = '\0';
-			parsed = TRUE;
-		}
-		break;
 	case DNS_T_SPF:
-		if (rep->request->type != DNS_REQUEST_SPF) {
-			p += datalen;
-			*remain -= datalen;
-		}
-		else {
-			copied = 0;
-			elt->txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
-			while (copied < datalen) {
-				txtlen = *p;
-				if (txtlen + copied < datalen) {
-					memcpy (elt->txt.data + copied, p + 1, txtlen);
-					copied += txtlen;
-					p += txtlen + 1;
-					*remain -= txtlen + 1;
-				}
-				else {
-					break;
-				}
+		elt->content.txt.data = memory_pool_alloc (rep->request->pool, datalen + 1);
+		/* Now we should compose data from parts */
+		copied = 0;
+		parts = 0;
+		while (copied + parts < datalen) {
+			txtlen = *p;
+			if (txtlen + copied + parts <= datalen) {
+				parts ++;
+				memcpy (elt->content.txt.data + copied, p + 1, txtlen);
+				copied += txtlen;
+				p += txtlen + 1;
+				*remain -= txtlen + 1;
 			}
-			*(elt->spf.data + copied) = '\0';
-			parsed = TRUE;
+			else {
+				break;
+			}
 		}
+		*(elt->content.txt.data + copied) = '\0';
+		parsed = TRUE;
+		elt->type = DNS_REQUEST_TXT;
 		break;
 	case DNS_T_SRV:
-		if (rep->request->type != DNS_REQUEST_SRV) {
-			p += datalen;
-			*remain -= datalen;
+		if (p - *pos > (gint)(*remain - sizeof (guint16) * 3)) {
+			msg_info ("stripped dns reply while reading SRV record");
+			return -1;
 		}
-		else {
-			if (p - *pos > (gint)(*remain - sizeof (guint16) * 3)) {
-				msg_info ("stripped dns reply while reading SRV record");
-				return -1;
-			}
-			GET16 (elt->srv.priority);
-			GET16 (elt->srv.weight);
-			GET16 (elt->srv.port);
-			if (! dns_parse_labels (in, &elt->srv.target, &p, rep, remain, TRUE)) {
-				msg_info ("invalid labels in SRV record");
-				return -1;
-			}
-			parsed = TRUE;
+		GET16 (elt->content.srv.priority);
+		GET16 (elt->content.srv.weight);
+		GET16 (elt->content.srv.port);
+		if (! dns_parse_labels (in, &elt->content.srv.target, &p, rep, remain, TRUE)) {
+			msg_info ("invalid labels in SRV record");
+			return -1;
 		}
+		parsed = TRUE;
+		elt->type = DNS_REQUEST_SRV;
 		break;
 	case DNS_T_CNAME:
 		/* Skip cname records */
@@ -1022,6 +942,7 @@ dns_parse_rr (guint8 *in, union rspamd_reply_element *elt, guint8 **pos, struct 
 	*pos = p;
 
 	if (parsed) {
+		elt->ttl = ttl;
 		return 1;
 	}
 	return 0;
@@ -1035,7 +956,7 @@ dns_parse_reply (gint sock, guint8 *in, gint r, struct rspamd_dns_resolver *reso
 	struct rspamd_dns_request      *req;
 	struct rspamd_dns_reply        *rep;
 	struct rspamd_dns_io_channel   *ioc;
-	union rspamd_reply_element     *elt;
+	struct rspamd_reply_entry      *elt;
 	guint8                         *pos;
 	guint16                         id;
 	gint                            i, t;
@@ -1074,26 +995,22 @@ dns_parse_reply (gint sock, guint8 *in, gint r, struct rspamd_dns_resolver *reso
 	 */
 	rep = memory_pool_alloc (req->pool, sizeof (struct rspamd_dns_reply));
 	rep->request = req;
-	rep->type = req->type;
-	rep->elements = NULL;
+	rep->entries = NULL;
 	rep->code = header->rcode;
 
 	if (rep->code == DNS_RC_NOERROR) {
 		r -= pos - in;
 		/* Extract RR records */
 		for (i = 0; i < ntohs (header->ancount); i ++) {
-			elt = memory_pool_alloc (req->pool, sizeof (union rspamd_reply_element));
+			elt = memory_pool_alloc (req->pool, sizeof (struct rspamd_reply_entry));
 			t = dns_parse_rr (in, elt, &pos, rep, &r);
 			if (t == -1) {
 				msg_info ("incomplete reply");
 				break;
 			}
 			else if (t == 1) {
-				rep->elements = g_list_prepend (rep->elements, elt);
+				DL_APPEND (rep->entries, elt);
 			}
-		}
-		if (rep->elements) {
-			memory_pool_add_destructor (req->pool, (pool_destruct_func)g_list_free, rep->elements);
 		}
 	}
 	
@@ -1387,8 +1304,6 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	return TRUE;
 }
 
-#define RESOLV_CONF "/etc/resolv.conf"
-
 static gboolean
 parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 {
@@ -1419,7 +1334,7 @@ parse_resolv_conf (struct rspamd_dns_resolver *resolver)
 					if (inet_pton (AF_INET6, p, addr_holder) == 1 ||
 							inet_pton (AF_INET, p, addr_holder) == 1) {
 						new = &resolver->servers[resolver->servers_num];
-						new->name = memory_pool_strdup (resolver->static_pool, p);
+						new->name = strdup (p);
 						resolver->servers_num ++;
 					}
 					else {
@@ -1459,11 +1374,10 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	struct rspamd_dns_server       *serv;
 	struct rspamd_dns_io_channel   *ioc;
 	
-	new = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_dns_resolver));
+	new = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
 	new->ev_base = ev_base;
-	new->permutor = dns_permutor_new (cfg->cfg_pool);
+	new->permutor = dns_permutor_new ();
 	new->io_channels = g_hash_table_new (g_direct_hash, g_direct_equal);
-	new->static_pool = cfg->cfg_pool;
 	new->request_timeout = cfg->dns_timeout;
 	new->max_retransmits = cfg->dns_retransmits;
 	new->max_errors = cfg->dns_throttling_errors;
@@ -1514,7 +1428,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 			serv = &new->servers[new->servers_num];
 			if (inet_pton (AF_INET6, begin, addr_holder) == 1 ||
 				inet_pton (AF_INET, begin, addr_holder) == 1) {
-				serv->name = memory_pool_strdup (new->static_pool, begin);
+				serv->name = strdup (begin);
 				serv->up.priority = priority;
 				serv->up.weight = priority;
 				new->servers_num ++;
@@ -1540,15 +1454,13 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	for (i = 0; i < new->servers_num; i ++) {
 		serv = &new->servers[i];
 		for (j = 0; j < (gint)cfg->dns_io_per_server; j ++) {
-			ioc = memory_pool_alloc (new->static_pool, sizeof (struct rspamd_dns_io_channel));
+			ioc = g_slice_alloc0 (sizeof (struct rspamd_dns_io_channel));
 			ioc->sock = make_universal_socket (serv->name, dns_port, SOCK_DGRAM, TRUE, FALSE, FALSE);
 			if (ioc->sock == -1) {
 				msg_warn ("cannot create socket to server %s", serv->name);
 			}
 			else {
 				ioc->requests = g_hash_table_new (dns_id_hash, dns_id_equal);
-				memory_pool_add_destructor (new->static_pool, (pool_destruct_func)g_hash_table_unref,
-						ioc->requests);
 				ioc->srv = serv;
 				ioc->resolver = new;
 				event_set (&ioc->ev, ioc->sock, EV_READ | EV_PERSIST, dns_read_cb, new);
@@ -1564,20 +1476,6 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	return new;
 }
 
-static gchar dns_rcodes[16][16] = {
-	[DNS_RC_NOERROR]  = "NOERROR",
-	[DNS_RC_FORMERR]  = "FORMERR",
-	[DNS_RC_SERVFAIL] = "SERVFAIL",
-	[DNS_RC_NXDOMAIN] = "NXDOMAIN",
-	[DNS_RC_NOTIMP]   = "NOTIMP",
-	[DNS_RC_REFUSED]  = "REFUSED",
-	[DNS_RC_YXDOMAIN] = "YXDOMAIN",
-	[DNS_RC_YXRRSET]  = "YXRRSET",
-	[DNS_RC_NXRRSET]  = "NXRRSET",
-	[DNS_RC_NOTAUTH]  = "NOTAUTH",
-	[DNS_RC_NOTZONE]  = "NOTZONE",
-};
-
 const gchar *
 dns_strerror (enum dns_rcode rcode)
 {
@@ -1590,16 +1488,6 @@ dns_strerror (enum dns_rcode rcode)
 	}
 	return dns_rcodes[rcode];
 }
-
-static gchar dns_types[7][16] = {
-		[DNS_REQUEST_A] = "A request",
-		[DNS_REQUEST_PTR] = "PTR request",
-		[DNS_REQUEST_MX] = "MX request",
-		[DNS_REQUEST_TXT] = "TXT request",
-		[DNS_REQUEST_SRV] = "SRV request",
-		[DNS_REQUEST_SPF] = "SPF request",
-		[DNS_REQUEST_AAA] = "AAA request"
-};
 
 const gchar *
 dns_strtype (enum rspamd_request_type type)
