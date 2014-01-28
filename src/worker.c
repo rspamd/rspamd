@@ -346,7 +346,6 @@ accept_socket (gint fd, short what, void *arg)
 
 	worker->srv->stat->connections_count++;
 	new_task->resolver = ctx->resolver;
-	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 #if 0
 	/* Set up dispatcher */
@@ -426,6 +425,7 @@ start_worker (struct rspamd_worker *worker)
 	struct lua_locked_state		   *nL;
 
 	ctx->ev_base = prepare_worker (worker, "normal", sig_handler, accept_socket);
+	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);

@@ -25,6 +25,7 @@
 #include "config.h"
 #include "util.h"
 #include "main.h"
+#include "http.h"
 #include "message.h"
 #include "protocol.h"
 #include "upstream.h"
@@ -36,32 +37,6 @@
 #include "classifiers/classifiers.h"
 #include "dynamic_cfg.h"
 #include "rrd.h"
-#include "json/jansson.h"
-
-
-#if (_EVENT_NUMERIC_VERSION > 0x02010000) && defined(HAVE_OPENSSL)
-#define HAVE_WEBUI_SSL
-#include <openssl/ssl.h>
-#include <openssl/rand.h>
-#include <event2/event-config.h>
-#include <event2/bufferevent.h>
-#include <event2/util.h>
-#include <event2/bufferevent_ssl.h>
-#include <event2/http.h>
-#include <event2/http_struct.h>
-#include <event2/http_compat.h>
-#else
-#ifdef LIBEVENT_EVHTTP
-#  include <evhttp.h>
-#else
-#  warning "Your libevent version is too old for webui work and therefore it will be disabled"
-#endif
-#endif
-
-/* Another workaround for old libevent */
-#ifndef HTTP_INTERNAL
-#define HTTP_INTERNAL 500
-#endif
 
 #ifdef WITH_GPERF_TOOLS
 #   include <glib/gprintf.h>
@@ -106,12 +81,12 @@ worker_t webui_worker = {
 	TRUE,					/* Killable */
 	SOCK_STREAM				/* TCP socket */
 };
-
-#if defined(LIBEVENT_EVHTTP) || (defined(_EVENT_NUMERIC_VERSION) && (_EVENT_NUMERIC_VERSION > 0x02010000))
 /*
  * Worker's context
  */
 struct rspamd_webui_worker_ctx {
+	guint32                         timeout;
+	struct timeval                  io_tv;
 	/* DNS resolver */
 	struct rspamd_dns_resolver     *resolver;
 	/* Events base */
@@ -121,7 +96,7 @@ struct rspamd_webui_worker_ctx {
 	/* Webui password */
 	gchar *password;
 	/* HTTP server */
-	struct evhttp *http;
+	struct rspamd_http_connection_router *http;
 	/* Server's start time */
 	time_t start_time;
 	/* Main server */
@@ -182,6 +157,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev_usr1);
 		event_del (&worker->sig_ev_usr2);
+		worker_stop_accept (worker);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
@@ -201,95 +177,51 @@ sigusr1_handler (gint fd, short what, void *arg)
 	return;
 }
 
-#ifdef HAVE_WEBUI_SSL
-
-static struct bufferevent*
-webui_ssl_bufferevent_gen (struct event_base *base, void *arg)
+static void
+rspamd_webui_send_error (struct rspamd_http_connection_entry *entry, gint code,
+		const gchar *error_msg)
 {
-	SSL_CTX									*server_ctx = arg;
-	SSL										*client_ctx;
-	struct bufferevent						*base_bev, *ssl_bev;
+	struct rspamd_http_message *msg;
 
-	client_ctx = SSL_new (server_ctx);
-
-	base_bev = bufferevent_socket_new (base, -1, 0);
-	if (base_bev == NULL) {
-		msg_err ("cannot create base bufferevent for ssl connection");
-		return NULL;
-	}
-
-	ssl_bev = bufferevent_openssl_filter_new (base, base_bev, client_ctx, BUFFEREVENT_SSL_ACCEPTING, 0);
-
-	if (ssl_bev == NULL) {
-		msg_err ("cannot create ssl bufferevent for ssl connection");
-	}
-
-	return ssl_bev;
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = code;
+	msg->body = g_string_sized_new (128);
+	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn, msg, NULL,
+			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	entry->is_reply = TRUE;
 }
 
 static void
-webui_ssl_init (struct rspamd_webui_worker_ctx *ctx)
+rspamd_webui_send_ucl (struct rspamd_http_connection_entry *entry, ucl_object_t *obj)
 {
-	SSL_CTX									*server_ctx;
+	struct rspamd_http_message *msg;
 
-	/* Initialize the OpenSSL library */
-	SSL_load_error_strings ();
-	SSL_library_init ();
-	/* We MUST have entropy, or else there's no point to crypto. */
-	if (!RAND_poll ()) {
-		return NULL;
-	}
-
-	server_ctx = SSL_CTX_new (SSLv23_server_method ());
-
-	if (! SSL_CTX_use_certificate_chain_file (server_ctx, ctx->ssl_cert) ||
-			! SSL_CTX_use_PrivateKey_file(server_ctx, ctx->ssl_key, SSL_FILETYPE_PEM)) {
-		msg_err ("cannot load ssl key %s or ssl cert: %s", ctx->ssl_key, ctx->ssl_cert);
-		return;
-	}
-	SSL_CTX_set_options (server_ctx, SSL_OP_NO_SSLv2);
-
-	if (server_ctx) {
-		/* Set generator for ssl events */
-		evhttp_set_bevcb (ctx->http, webui_ssl_bufferevent_gen, server_ctx);
-	}
-}
-#endif
-
-/* Calculate and set content-length header */
-static void
-http_calculate_content_length (struct evbuffer *evb, struct evhttp_request *req)
-{
-	gchar									 numbuf[64];
-
-#if _EVENT_NUMERIC_VERSION > 0x02000000
-	rspamd_snprintf (numbuf, sizeof (numbuf), "%z", evbuffer_get_length (evb));
-#else
-	rspamd_snprintf (numbuf, sizeof (numbuf), "%z", EVBUFFER_LENGTH (evb));
-#endif
-	evhttp_add_header(req->output_headers, "Content-Length", numbuf);
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = 200;
+	msg->body = g_string_sized_new (BUFSIZ);
+	rspamd_ucl_emit_gstring (obj, UCL_EMIT_JSON_COMPACT, msg->body);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn, msg, NULL,
+			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	entry->is_reply = TRUE;
 }
 
 /* Check for password if it is required by configuration */
 static gboolean
-http_check_password (struct rspamd_webui_worker_ctx *ctx, struct evhttp_request *req)
+rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
+		struct rspamd_webui_worker_ctx *ctx, struct rspamd_http_message *msg)
 {
 	const gchar								*password;
-	struct evbuffer							*evb;
 
 	if (ctx->password) {
-		password = evhttp_find_header (req->input_headers, "Password");
+		password = rspamd_http_message_find_header (msg, "Password");
 		if (password == NULL || strcmp (password, ctx->password) != 0) {
 			msg_info ("incorrect or absent password was specified");
-			evb = evbuffer_new ();
-			if (!evb) {
-				msg_err ("cannot allocate evbuffer for reply");
-				evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-				return FALSE;
-			}
-			evbuffer_add (evb, "{\"error\":\"unauthorized\"}" CRLF, sizeof ("{\"error\":\"unauthorized\"}" CRLF));
-			evhttp_send_reply (req, 403, "403 access denied", evb);
-			evbuffer_free (evb);
+			rspamd_webui_send_error (entry, 403, "Unauthorized");
 			return FALSE;
 		}
 	}
@@ -306,12 +238,12 @@ struct scan_callback_data {
 	gboolean first_symbol;
 };
 
-
+#if 0
 /*
  * Write metric result in json format
  */
 static void
-http_scan_metric_symbols_callback (gpointer key, gpointer value, gpointer ud)
+rspamd_webui_scan_metric_symbols_callback (gpointer key, gpointer value, gpointer ud)
 {
 	struct scan_callback_data				*cbdata = ud;
 	struct symbol							*s = value;
@@ -339,7 +271,7 @@ http_scan_metric_symbols_callback (gpointer key, gpointer value, gpointer ud)
  * Called before destroying of task's session
  */
 static void
-http_scan_task_free (gpointer arg)
+rspamd_webui_scan_task_free (gpointer arg)
 {
 	struct scan_callback_data				*cbdata = arg;
 	struct evbuffer							*evb;
@@ -391,7 +323,7 @@ http_scan_task_free (gpointer arg)
  * Handler of session destroying
  */
 static void
-http_scan_task_event_helper (int fd, short what, gpointer arg)
+rspamd_webui_scan_task_event_helper (int fd, short what, gpointer arg)
 {
 	struct scan_callback_data				*cbdata = arg;
 
@@ -402,7 +334,7 @@ http_scan_task_event_helper (int fd, short what, gpointer arg)
  * Called if all filters are processed, non-threaded and simple version
  */
 static gboolean
-http_scan_task_fin (gpointer arg)
+rspamd_webui_scan_task_fin (gpointer arg)
 {
 	struct scan_callback_data				*cbdata = arg;
 	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
@@ -434,7 +366,7 @@ http_scan_task_fin (gpointer arg)
  * Called if session was restored inside fin callback
  */
 static void
-http_scan_task_restore (gpointer arg)
+rspamd_webui_scan_task_restore (gpointer arg)
 {
 	struct scan_callback_data				*cbdata = arg;
 
@@ -446,7 +378,7 @@ http_scan_task_restore (gpointer arg)
 
 /* Prepare callback data for scan */
 static struct scan_callback_data*
-http_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, GError **err)
+rspamd_webui_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, GError **err)
 {
 	struct worker_task						*task;
 	struct scan_callback_data				*cbdata;
@@ -509,7 +441,7 @@ struct learn_callback_data {
  * Called before destroying of task's session, here we can perform learning
  */
 static void
-http_learn_task_free (gpointer arg)
+rspamd_webui_learn_task_free (gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
 	GError									*err = NULL;
@@ -552,7 +484,7 @@ http_learn_task_free (gpointer arg)
  * Handler of session destroying
  */
 static void
-http_learn_task_event_helper (int fd, short what, gpointer arg)
+rspamd_webui_learn_task_event_helper (int fd, short what, gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
 
@@ -563,7 +495,7 @@ http_learn_task_event_helper (int fd, short what, gpointer arg)
  * Called if all filters are processed, non-threaded and simple version
  */
 static gboolean
-http_learn_task_fin (gpointer arg)
+rspamd_webui_learn_task_fin (gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
 	static struct timeval					 tv = {.tv_sec = 0, .tv_usec = 0 };
@@ -594,7 +526,7 @@ http_learn_task_fin (gpointer arg)
  * Called if session was restored inside fin callback
  */
 static void
-http_learn_task_restore (gpointer arg)
+rspamd_webui_learn_task_restore (gpointer arg)
 {
 	struct learn_callback_data				*cbdata = arg;
 #if 0
@@ -605,7 +537,7 @@ http_learn_task_restore (gpointer arg)
 
 /* Prepare callback data for learn */
 static struct learn_callback_data*
-http_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, gboolean is_spam, GError **err)
+rspamd_webui_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, gboolean is_spam, GError **err)
 {
 	struct worker_task						*task;
 	struct learn_callback_data				*cbdata;
@@ -667,7 +599,7 @@ http_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *
  * Set metric action
  */
 static gboolean
-http_set_metric_action (struct config_file *cfg,
+rspamd_webui_set_metric_action (struct config_file *cfg,
 		json_t *jv, struct metric *metric, enum rspamd_metric_action act)
 {
 	gdouble									 actval;
@@ -683,6 +615,9 @@ http_set_metric_action (struct config_file *cfg,
 	return TRUE;
 }
 
+#endif
+
+
 /* Command handlers */
 
 /*
@@ -691,27 +626,21 @@ http_set_metric_action (struct config_file *cfg,
  * headers: Password
  * reply: json {"auth": "ok", "version": "0.5.2", "uptime": "some uptime", "error": "none"}
  */
-static void
-http_handle_auth (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
 	struct rspamd_stat						*st;
-	struct evbuffer							*evb;
-	gchar									*auth = "ok", *error = "none";
-	time_t									 uptime;
+	int64_t									 uptime;
 	gulong									 data[4];
+	ucl_object_t							*obj;
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
-
+	obj = ucl_object_typed_new (UCL_OBJECT);
 	st = ctx->srv->stat;
 	data[0] = st->actions_stat[METRIC_ACTION_NOACTION];
 	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] + st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
@@ -721,16 +650,20 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
 	/* Get uptime */
 	uptime = time (NULL) - ctx->start_time;
 
-	evbuffer_add_printf (evb, "{\"auth\": \"%s\",\"version\":\"%s\",\"uptime\": %lu,\"error\":\"%s\", "
-			"\"clean\":%lu,\"probable\":%lu,\"greylist\":%lu,\"reject\":%lu,"
-			"\"scanned\":%u,\"learned\":%u}" CRLF,
-			auth, RVERSION, (long unsigned)uptime, error, data[0], data[1], data[2], data[3],
-			st->messages_scanned, st->messages_learned);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
+	obj = ucl_object_insert_key (obj, ucl_object_fromstring (RVERSION), "version", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromstring ("ok"), "auth", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (uptime), "uptime", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[0]), "clean", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[1]), "probable", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[2]), "greylist", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[3]), "reject", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (st->messages_scanned), "scanned", 0, false);
+	obj = ucl_object_insert_key (obj, ucl_object_fromint (st->messages_learned), "learned", 0, false);
 
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	rspamd_webui_send_ucl (conn_ent, obj);
+	ucl_object_unref (obj);
+
+	return 0;
 }
 
 /*
@@ -748,64 +681,54 @@ http_handle_auth (struct evhttp_request *req, gpointer arg)
  * },
  * {...}]
  */
-static void
-http_handle_symbols (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
 	GList									*cur_gr, *cur_sym;
 	struct symbols_group					*gr;
 	struct symbol_def						*sym;
+	ucl_object_t							*obj, *top, *sym_obj;
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500", NULL);
-		return;
-	}
+	top = ucl_object_typed_new (UCL_ARRAY);
 
-	/* Trailer */
-	evbuffer_add (evb, "[", 1);
-
-	/* Go throught all symbols groups */
+	/* Go through all symbols groups */
 	cur_gr = ctx->cfg->symbols_groups;
 	while (cur_gr) {
 		gr = cur_gr->data;
-		evbuffer_add_printf (evb, "{\"group\":\"%s\",\"rules\":[", gr->name);
-		/* Iterate throught all symbols */
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		obj = ucl_object_insert_key (obj, ucl_object_fromstring (gr->name), "group", 0, false);
+		/* Iterate through all symbols */
 		cur_sym = gr->symbols;
 		while (cur_sym) {
+			sym_obj = ucl_object_typed_new (UCL_OBJECT);
 			sym = cur_sym->data;
 
+			sym_obj = ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
+					"symbol", 0, false);
+			sym_obj = ucl_object_insert_key (sym_obj, ucl_object_fromdouble (*sym->weight_ptr),
+					"weight", 0, false);
 			if (sym->description) {
-				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f,\"description\":\"%s\"%s", sym->name, *sym->weight_ptr,
-						sym->description, g_list_next (cur_sym) ? "}," : "}");
-			}
-			else {
-				evbuffer_add_printf (evb, "{\"symbol\":\"%s\",\"weight\":%.2f%s", sym->name, *sym->weight_ptr,
-										g_list_next (cur_sym) ? "}," : "}");
+				sym_obj = ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->description),
+					"description", 0, false);
 			}
 
+			obj = ucl_object_insert_key (obj, sym_obj, "rules", 0, false);
 			cur_sym = g_list_next (cur_sym);
 		}
-		if (g_list_next (cur_gr)) {
-			evbuffer_add (evb, "]},", 3);
-		}
-		else {
-			evbuffer_add (evb, "]},", 2);
-		}
 		cur_gr = g_list_next (cur_gr);
+		top = ucl_array_append (top, obj);
 	}
-	evbuffer_add (evb, "]" CRLF, 3);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
 
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
 }
 
 /*
@@ -817,29 +740,21 @@ http_handle_symbols (struct evhttp_request *req, gpointer arg)
  * },
  * {...}]
  */
-static void
-http_handle_actions (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
 	struct metric							*metric;
 	struct metric_action					*act;
-	gboolean								 start = TRUE;
 	gint									 i;
+	ucl_object_t							*obj, *top;
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500", NULL);
-		return;
-	}
-
-	/* Trailer */
-	evbuffer_add (evb, "[", 1);
+	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Get actions for default metric */
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
@@ -847,21 +762,19 @@ http_handle_actions (struct evhttp_request *req, gpointer arg)
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
 			act = &metric->actions[i];
 			if (act->score > 0) {
-				evbuffer_add_printf (evb, "%s{\"action\":\"%s\",\"value\":%.2f}",
-						(start ? "" : ","), str_action_metric (act->action), act->score);
-				if (start) {
-					start = FALSE;
-				}
+				obj = ucl_object_typed_new (UCL_OBJECT);
+				obj = ucl_object_insert_key (obj,
+						ucl_object_fromstring (str_action_metric (act->action)), "action", 0, false);
+				obj = ucl_object_insert_key (obj, ucl_object_fromdouble (act->score), "value", 0, false);
+				top = ucl_array_append (top, obj);
 			}
 		}
 	}
 
-	evbuffer_add (evb, "]" CRLF, 3);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	return 0;
 }
 /*
  * Maps command handler:
@@ -876,30 +789,22 @@ http_handle_actions (struct evhttp_request *req, gpointer arg)
  * 		{...}
  * ]
  */
-static void
-http_handle_maps (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
 	GList									*cur, *tmp = NULL;
 	struct rspamd_map						*map;
 	gboolean								 editable;
+	ucl_object_t							*obj, *top;
 
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
-
-	/* Trailer */
-	evbuffer_add (evb, "[", 1);
-
+	top = ucl_object_typed_new (UCL_ARRAY);
 	/* Iterate over all maps */
 	cur = ctx->cfg->maps;
 	while (cur) {
@@ -915,10 +820,17 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 	cur = tmp;
 	while (cur) {
 		map = cur->data;
-		editable = access (map->uri, W_OK) == 0;
-		evbuffer_add_printf (evb, "{\"map\":%u,\"description\":\"%s\",\"editable\":%s%s",
-				map->id, map->description, editable ? "true" : "false",
-						cur->next ? "}," : "}");
+		editable = (access (map->uri, W_OK) == 0);
+
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		obj = ucl_object_insert_key (obj, ucl_object_fromint (map->id),
+				"map", 0, false);
+		obj = ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
+				"description", 0, false);
+		obj = ucl_object_insert_key (obj, ucl_object_frombool (editable),
+				"editable", 0, false);
+		top = ucl_array_append (top, obj);
+
 		cur = g_list_next (cur);
 	}
 
@@ -926,12 +838,10 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
 		g_list_free (tmp);
 	}
 
-	evbuffer_add (evb, "]" CRLF, 3);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	return 0;
 }
 
 /*
@@ -940,11 +850,11 @@ http_handle_maps (struct evhttp_request *req, gpointer arg)
  * headers: Password, Map
  * reply: plain-text
  */
-static void
-http_handle_get_map (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
 	GList									*cur;
 	struct rspamd_map						*map;
 	const gchar								*idstr;
@@ -953,34 +863,27 @@ http_handle_get_map (struct evhttp_request *req, gpointer arg)
 	gint									 fd;
 	guint32									 id;
 	gboolean								 found = FALSE;
+	struct rspamd_http_message				*reply;
 
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
 
-	idstr = evhttp_find_header (req->input_headers, "Map");
+	idstr = rspamd_http_message_find_header (msg, "Map");
 
 	if (idstr == NULL) {
 		msg_info ("absent map id");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 400, "400 id header missing");
+		return 0;
 	}
 
 	id = strtoul (idstr, &errstr, 10);
 	if (*errstr != '\0') {
 		msg_info ("invalid map id");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 400, "400 invalid map id");
+		return 0;
 	}
 
 	/* Now let's be sure that we have map defined in configuration */
@@ -996,44 +899,44 @@ http_handle_get_map (struct evhttp_request *req, gpointer arg)
 
 	if (!found) {
 		msg_info ("map not found");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map not found", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 404, "404 map not found");
+		return 0;
 	}
 
 	if (stat (map->uri, &st) == -1 || (fd = open (map->uri, O_RDONLY)) == -1) {
 		msg_err ("cannot open map %s: %s", map->uri, strerror (errno));
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 500, "500 map open error");
+		return 0;
 	}
-	/* Set buffer size */
-	if (evbuffer_expand (evb, st.st_size) != 0) {
-		msg_err ("cannot allocate buffer for map %s: %s", map->uri, strerror (errno));
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		close (fd);
-		return;
-	}
+
+	reply = rspamd_http_new_message (HTTP_RESPONSE);
+	reply->date = time (NULL);
+	reply->code = 200;
+	reply->body = g_string_sized_new (st.st_size);
 
 	/* Read the whole buffer */
-	if (evbuffer_read (evb, fd, st.st_size) == -1) {
+	if (read (fd, msg->body->str, st.st_size) == -1) {
+		rspamd_http_message_free (reply);
 		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map read error", NULL);
-		close (fd);
-		return;
+		rspamd_webui_send_error (conn_ent, 500, "500 map read error");
+		return 0;
 	}
 
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
+	reply->body->len = st.st_size;
+	reply->body->str[reply->body->len] = '\0';
 
 	close (fd);
 
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
+			"text/plain", conn_ent, conn_ent->conn->fd,
+			conn_ent->rt->ptv, conn_ent->rt->ev_base);
+	conn_ent->is_reply = TRUE;
+
+	return 0;
 }
 
+#if 0
 /*
  * Graph command handler:
  * request: /graph
@@ -1046,7 +949,7 @@ http_handle_get_map (struct evhttp_request *req, gpointer arg)
  */
 /* XXX: now this function returns only random data */
 static void
-http_handle_graph (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_graph (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
@@ -1145,7 +1048,7 @@ http_handle_graph (struct evhttp_request *req, gpointer arg)
  * ]
  */
 static void
-http_handle_pie_chart (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_pie_chart (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
@@ -1197,7 +1100,7 @@ http_handle_pie_chart (struct evhttp_request *req, gpointer arg)
  * ]
  */
 static void
-http_handle_history (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_history (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
@@ -1286,7 +1189,7 @@ http_handle_history (struct evhttp_request *req, gpointer arg)
  * reply: json {"success":true} or {"error":"error message"}
  */
 static void
-http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_learn_spam (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
@@ -1327,7 +1230,7 @@ http_handle_learn_spam (struct evhttp_request *req, gpointer arg)
  * reply: json {"success":true} or {"error":"error message"}
  */
 static void
-http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_learn_ham (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
@@ -1368,7 +1271,7 @@ http_handle_learn_ham (struct evhttp_request *req, gpointer arg)
  * reply: json {"success":true} or {"error":"error message"}
  */
 static void
-http_handle_save_actions (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_save_actions (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
@@ -1466,7 +1369,7 @@ http_handle_save_actions (struct evhttp_request *req, gpointer arg)
  * reply: json {"success":true} or {"error":"error message"}
  */
 static void
-http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_save_symbols (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
@@ -1563,7 +1466,7 @@ http_handle_save_symbols (struct evhttp_request *req, gpointer arg)
  * reply: json {"success":true} or {"error":"error message"}
  */
 static void
-http_handle_save_map (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_save_map (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
@@ -1668,7 +1571,7 @@ http_handle_save_map (struct evhttp_request *req, gpointer arg)
  * reply: json {scan data} or {"error":"error message"}
  */
 static void
-http_handle_scan (struct evhttp_request *req, gpointer arg)
+rspamd_webui_handle_scan (struct evhttp_request *req, gpointer arg)
 {
 	struct rspamd_webui_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb, *inb;
@@ -1701,11 +1604,56 @@ http_handle_scan (struct evhttp_request *req, gpointer arg)
 	}
 }
 
+#endif
+
+static void
+rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
+{
+	msg_err ("http error occurred: %s", err->message);
+}
+
+static void
+rspamd_webui_accept_socket (gint fd, short what, void *arg)
+{
+	struct rspamd_worker				*worker = (struct rspamd_worker *) arg;
+	struct rspamd_webui_worker_ctx		*ctx;
+	gint								 nfd;
+	union sa_union						 su;
+	socklen_t							 addrlen = sizeof (su);
+	char								 ip_str[INET6_ADDRSTRLEN + 1];
+
+	ctx = worker->ctx;
+
+	if ((nfd =
+			accept_from_socket (fd, &su.sa, &addrlen)) == -1) {
+		msg_warn ("accept failed: %s", strerror (errno));
+		return;
+	}
+	/* Check for EAGAIN */
+	if (nfd == 0){
+		return;
+	}
+
+	if (su.sa.sa_family == AF_UNIX) {
+		msg_info ("accepted connection from unix socket");
+	}
+	else if (su.sa.sa_family == AF_INET) {
+		msg_info ("accepted connection from %s port %d",
+				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
+	}
+	else if (su.sa.sa_family == AF_INET6) {
+		msg_info ("accepted connection from %s port %d",
+				inet_ntop (su.sa.sa_family, &su.s6.sin6_addr, ip_str, sizeof (ip_str)),
+				ntohs (su.s6.sin6_port));
+	}
+
+	rspamd_http_router_handle_socket (ctx->http, nfd, ctx);
+}
 
 gpointer
 init_webui_worker (struct config_file *cfg)
 {
-	struct rspamd_webui_worker_ctx     *ctx;
+	struct rspamd_webui_worker_ctx		*ctx;
 	GQuark								type;
 
 	type = g_quark_try_string ("webui");
@@ -1727,7 +1675,9 @@ init_webui_worker (struct config_file *cfg)
 	rspamd_rcl_register_worker_option (cfg, type, "ssl_key",
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_key), 0);
-
+	rspamd_rcl_register_worker_option (cfg, type, "timeout",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 
 	return ctx;
 }
@@ -1738,26 +1688,10 @@ init_webui_worker (struct config_file *cfg)
 void
 start_webui_worker (struct rspamd_worker *worker)
 {
-	struct sigaction                signals;
 	struct rspamd_webui_worker_ctx *ctx = worker->ctx;
-	GList                           *cur;
 
-#ifdef WITH_PROFILER
-	extern void                     _start (void), etext (void);
-	monstartup ((u_long) & _start, (u_long) & etext);
-#endif
-
-	gperf_profiler_init (worker->srv->cfg, "webui_worker");
-
-	worker->srv->pid = getpid ();
-
-	ctx->ev_base = event_init ();
-
-	ctx->cfg = worker->srv->cfg;
-	ctx->srv = worker->srv;
-
-	init_signals (&signals, sig_handler);
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
+	ctx->ev_base = prepare_worker (worker, "controller", sig_handler, rspamd_webui_accept_socket);
+	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
@@ -1771,43 +1705,29 @@ start_webui_worker (struct rspamd_worker *worker)
 
 	ctx->start_time = time (NULL);
 	ctx->worker = worker;
+	ctx->cfg = worker->srv->cfg;
+
 	/* Accept event */
-	ctx->http = evhttp_new (ctx->ev_base);
-
-	cur = worker->cf->listen_socks;
-	while (cur) {
-		evhttp_accept_socket (ctx->http, GPOINTER_TO_INT (cur->data));
-		cur = g_list_next (cur);
-	}
-
-	if (ctx->use_ssl) {
-#ifdef HAVE_WEBUI_SSL
-		if (ctx->ssl_cert && ctx->ssl_key) {
-			webui_ssl_init (ctx);
-		}
-		else {
-			msg_err ("ssl cannot be enabled without key and cert for this server");
-		}
-#else
-		msg_err ("http ssl is not supported by this libevent version");
-#endif
-	}
+	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler, &ctx->io_tv, ctx->ev_base);
 
 	/* Add callbacks for different methods */
-	evhttp_set_cb (ctx->http, PATH_AUTH, http_handle_auth, ctx);
-	evhttp_set_cb (ctx->http, PATH_SYMBOLS, http_handle_symbols, ctx);
-	evhttp_set_cb (ctx->http, PATH_ACTIONS, http_handle_actions, ctx);
-	evhttp_set_cb (ctx->http, PATH_MAPS, http_handle_maps, ctx);
-	evhttp_set_cb (ctx->http, PATH_GET_MAP, http_handle_get_map, ctx);
-	evhttp_set_cb (ctx->http, PATH_GRAPH, http_handle_graph, ctx);
-	evhttp_set_cb (ctx->http, PATH_PIE_CHART, http_handle_pie_chart, ctx);
-	evhttp_set_cb (ctx->http, PATH_HISTORY, http_handle_history, ctx);
-	evhttp_set_cb (ctx->http, PATH_LEARN_SPAM, http_handle_learn_spam, ctx);
-	evhttp_set_cb (ctx->http, PATH_LEARN_HAM, http_handle_learn_ham, ctx);
-	evhttp_set_cb (ctx->http, PATH_SAVE_ACTIONS, http_handle_save_actions, ctx);
-	evhttp_set_cb (ctx->http, PATH_SAVE_SYMBOLS, http_handle_save_symbols, ctx);
-	evhttp_set_cb (ctx->http, PATH_SAVE_MAP, http_handle_save_map, ctx);
-	evhttp_set_cb (ctx->http, PATH_SCAN, http_handle_scan, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_webui_handle_auth);
+	rspamd_http_router_add_path (ctx->http, PATH_SYMBOLS, rspamd_webui_handle_symbols);
+	rspamd_http_router_add_path (ctx->http, PATH_ACTIONS, rspamd_webui_handle_actions);
+	rspamd_http_router_add_path (ctx->http, PATH_MAPS, rspamd_webui_handle_maps);
+	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_webui_handle_get_map);
+#if 0
+	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
+
+	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learn_spam, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learn_ham, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_save_actions, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_save_symbols, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_save_map, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan, ctx);
+#endif
 
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
 
@@ -1816,23 +1736,7 @@ start_webui_worker (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 
+	g_mime_shutdown ();
 	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
-#else
-
-gpointer
-init_webui_worker (void)
-{
-	return NULL;
-}
-
-/*
- * Start worker process
- */
-void
-start_webui_worker (struct rspamd_worker *worker)
-{
-	exit (EXIT_SUCCESS);
-}
-#endif
