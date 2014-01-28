@@ -7,6 +7,7 @@
 #include "statfile.h"
 #include "printf.h"
 #include "fstring.h"
+#include "ucl.h"
 
 struct config_file;
 struct rspamd_main;
@@ -456,5 +457,13 @@ void rspamd_random_bytes (gchar *buf, gsize buflen);
  * @return TRUE if the address is valid
  */
 gboolean rspamd_ip_is_valid (void *ptr, int af);
+
+/**
+ * Emit UCL object to gstring
+ * @param obj object to emit
+ * @param emit_type emitter type
+ * @param target target string
+ */
+void rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString *target);
 
 #endif

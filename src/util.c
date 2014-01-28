@@ -2178,5 +2178,81 @@ rspamd_ip_is_valid (void *ptr, int af)
 }
 
 /*
+ * GString ucl emitting functions
+ */
+static int
+rspamd_gstring_append_character (unsigned char c, size_t len, void *ud)
+{
+	GString *buf = ud;
+
+	if (len == 1) {
+		g_string_append_c (buf, c);
+	}
+	else {
+		if (buf->allocated_len - buf->len <= len) {
+			g_string_set_size (buf, buf->len + len + 1);
+		}
+		memset (&buf->str[buf->len], c, len);
+		buf->len += len;
+		buf->str[buf->len] = '\0';
+	}
+
+	return 0;
+}
+
+static int
+rspamd_gstring_append_len (const unsigned char *str, size_t len, void *ud)
+{
+	GString *buf = ud;
+
+	g_string_append_len (buf, str, len);
+
+	return 0;
+}
+
+static int
+rspamd_gstring_append_int (int64_t val, void *ud)
+{
+	GString *buf = ud;
+
+	rspamd_printf_gstring (buf, "%L", (intmax_t)val);
+	return 0;
+}
+
+static int
+rspamd_gstring_append_double (double val, void *ud)
+{
+	GString *buf = ud;
+	const double delta = 0.0000001;
+
+	if (val == (double)(int)val) {
+		rspamd_printf_gstring (buf, "%.1f", val);
+	}
+	else if (fabs (val - (double)(int)val) < delta) {
+		/* Write at maximum precision */
+		rspamd_printf_gstring (buf, "%.*g", DBL_DIG, val);
+	}
+	else {
+		rspamd_printf_gstring (buf, "%f", val);
+	}
+
+	return 0;
+}
+
+void
+rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString *target)
+{
+	struct ucl_emitter_functions func = {
+		.ucl_emitter_append_character = rspamd_gstring_append_character,
+		.ucl_emitter_append_len = rspamd_gstring_append_len,
+		.ucl_emitter_append_int = rspamd_gstring_append_int,
+		.ucl_emitter_append_double = rspamd_gstring_append_double
+	};
+
+	func.ud = target;
+	ucl_object_emit_full (obj, emit_type, &func);
+}
+
+/*
  * vi:ts=4
  */
