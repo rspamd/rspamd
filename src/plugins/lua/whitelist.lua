@@ -6,7 +6,7 @@ local symbol_from = nil
 local r = nil
 local h = nil  -- radix tree and hash table
 
-function check_whitelist (task)
+local function check_whitelist (task)
 	if symbol_ip then
 		-- check client's ip
 		local ipn = task:get_from_ip_num()
@@ -50,8 +50,8 @@ end
 local opts =  rspamd_config:get_all_opt('whitelist')
 if opts then
     if opts['symbol_ip'] or opts['symbol_from'] then
-        symbol_ip = opts['symbol_ip']
-        symbol_from = opts['symbol_from']
+        local symbol_ip = opts['symbol_ip']
+        local symbol_from = opts['symbol_from']
 		
 		if symbol_ip then
 			if opts['ip_whitelist'] then
@@ -72,10 +72,14 @@ if opts then
 
 
 		-- Register symbol's callback
-		if symbol_ip then
-			rspamd_config:register_symbol(symbol_ip, 1.0, 'check_whitelist')
-		elseif symbol_from then
-			rspamd_config:register_symbol(symbol_from, 1.0, 'check_whitelist')
+		if symbol_ip or symbol_from then
+			rspamd_config:register_callback_symbol_priority('WHITELIST', 1.0, -1, check_whitelist)
+			if symbol_from then
+				rspamd_config:register_virtual_symbol(symbol_from, 1.0)
+			end
+			if symbol_ip then
+				rspamd_config:register_virtual_symbol(symbol_ip, 1.0)
+			end
 		end
 	end
 end
