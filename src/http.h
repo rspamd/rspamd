@@ -215,6 +215,13 @@ struct rspamd_http_message* rspamd_http_new_message (enum http_parser_type type)
 void rspamd_http_message_add_header (struct rspamd_http_message *rep, const gchar *name, const gchar *value);
 
 /**
+ * Search for a specified header in message
+ * @param rep message
+ * @param name name of header
+ */
+const gchar* rspamd_http_message_find_header (struct rspamd_http_message *rep, const gchar *name);
+
+/**
  * Free HTTP reply
  * @param rep
  */

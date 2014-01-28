@@ -873,6 +873,27 @@ void rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	}
 }
 
+const gchar*
+rspamd_http_message_find_header (struct rspamd_http_message *msg, const gchar *name)
+{
+	struct rspamd_http_header *hdr;
+	const gchar *res = NULL;
+	guint slen = strlen (name);
+
+	if (msg != NULL) {
+		LL_FOREACH (msg->headers, hdr) {
+			if (hdr->name->len == slen) {
+				if (memcmp (hdr->name->str, name, slen) == 0) {
+					res = hdr->value->str;
+					break;
+				}
+			}
+		}
+	}
+
+	return res;
+}
+
 /*
  * HTTP router functions
  */
