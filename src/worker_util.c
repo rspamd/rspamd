@@ -234,7 +234,7 @@ prepare_worker (struct rspamd_worker *worker, const char *name,
 	monstartup ((u_long) & _start, (u_long) & etext);
 #endif
 
-	gperf_profiler_init (worker->srv->cfg, "worker");
+	gperf_profiler_init (worker->srv->cfg, name);
 
 	worker->srv->pid = getpid ();
 
