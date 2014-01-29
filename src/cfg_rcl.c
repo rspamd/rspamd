@@ -841,11 +841,17 @@ rspamd_rcl_composite_handler (struct config_file *cfg, ucl_object_t *obj,
 	struct expression *expr;
 	struct rspamd_composite *composite;
 	const gchar *composite_name, *composite_expression;
+	gboolean new = TRUE;
 
 	val = ucl_object_find_key (obj, "name");
 	if (val == NULL || !ucl_object_tostring_safe (val, &composite_name)) {
 		g_set_error (err, CFG_RCL_ERROR, EINVAL, "composite must have a name defined");
 		return FALSE;
+	}
+
+	if (g_hash_table_lookup (cfg->composite_symbols, composite_name) != NULL) {
+		msg_warn ("composite %s is redefined", composite_name);
+		new = FALSE;
 	}
 
 	val = ucl_object_find_key (obj, "expression");
@@ -863,7 +869,10 @@ rspamd_rcl_composite_handler (struct config_file *cfg, ucl_object_t *obj,
 	composite->expr = expr;
 	composite->id = g_hash_table_size (cfg->composite_symbols) + 1;
 	g_hash_table_insert (cfg->composite_symbols, (gpointer)composite_name, composite);
-	register_virtual_symbol (&cfg->cache, composite_name, 1);
+
+	if (new) {
+		register_virtual_symbol (&cfg->cache, composite_name, 1);
+	}
 
 	return TRUE;
 }
