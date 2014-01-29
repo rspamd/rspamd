@@ -280,5 +280,11 @@ ucl_hash_insert_object (ucl_hash_t *hashlin, ucl_object_t *obj)
 	return hashlin;
 }
 
+/**
+ * Emit a single object to string
+ * @param obj
+ * @return
+ */
+unsigned char * ucl_object_emit_single_json (ucl_object_t *obj);
 
 #endif /* UCL_INTERNAL_H_ */

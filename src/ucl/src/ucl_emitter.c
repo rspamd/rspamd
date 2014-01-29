@@ -754,7 +754,8 @@ ucl_object_emit (ucl_object_t *obj, enum ucl_emitter emit_type)
 	return res;
 }
 
-bool ucl_object_emit_full (ucl_object_t *obj, enum ucl_emitter emit_type,
+bool
+ucl_object_emit_full (ucl_object_t *obj, enum ucl_emitter emit_type,
 		struct ucl_emitter_functions *emitter)
 {
 	if (emit_type == UCL_EMIT_JSON) {
@@ -772,4 +773,57 @@ bool ucl_object_emit_full (ucl_object_t *obj, enum ucl_emitter emit_type,
 
 	/* XXX: need some error checks here */
 	return true;
+}
+
+
+unsigned char *
+ucl_object_emit_single_json (ucl_object_t *obj)
+{
+	UT_string *buf = NULL;
+	unsigned char *res = NULL;
+
+	if (obj == NULL) {
+		return NULL;
+	}
+
+	utstring_new (buf);
+
+	if (buf != NULL) {
+		switch (obj->type) {
+		case UCL_OBJECT:
+			ucl_utstring_append_len ("object", 6, buf);
+			break;
+		case UCL_ARRAY:
+			ucl_utstring_append_len ("array", 5, buf);
+			break;
+		case UCL_INT:
+			ucl_utstring_append_int (obj->value.iv, buf);
+			break;
+		case UCL_FLOAT:
+		case UCL_TIME:
+			ucl_utstring_append_double (obj->value.dv, buf);
+			break;
+		case UCL_NULL:
+			ucl_utstring_append_len ("null", 4, buf);
+			break;
+		case UCL_BOOLEAN:
+			if (obj->value.iv) {
+				ucl_utstring_append_len ("true", 4, buf);
+			}
+			else {
+				ucl_utstring_append_len ("false", 5, buf);
+			}
+			break;
+		case UCL_STRING:
+			ucl_utstring_append_len (obj->value.sv, obj->len, buf);
+			break;
+		case UCL_USERDATA:
+			ucl_utstring_append_len ("userdata", 8, buf);
+			break;
+		}
+		res = utstring_body (buf);
+		free (buf);
+	}
+
+	return res;
 }

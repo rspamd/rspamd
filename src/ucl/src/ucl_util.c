@@ -161,7 +161,7 @@ ucl_unescape_json_string (char *str, size_t len)
 				}
 				break;
 			default:
-				*t++ = '?';
+				*t++ = *h;
 				break;
 			}
 			h ++;
@@ -208,8 +208,7 @@ ucl_copy_value_trash (ucl_object_t *obj)
 		}
 		else {
 			/* Just emit value in json notation */
-			obj->trash_stack[UCL_TRASH_VALUE] = ucl_object_emit (obj,
-					UCL_EMIT_JSON_COMPACT);
+			obj->trash_stack[UCL_TRASH_VALUE] = ucl_object_emit_single_json (obj);
 			obj->len = strlen (obj->trash_stack[UCL_TRASH_VALUE]);
 		}
 		obj->flags |= UCL_OBJECT_ALLOCATED_VALUE;
