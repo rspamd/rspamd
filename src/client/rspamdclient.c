@@ -151,7 +151,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 {
 	struct rspamd_client_request *req;
 	gchar *p, *hn, *hv;
-	gsize remain;
+	gsize remain, old_len;
 	GHashTableIter it;
 
 	req = g_slice_alloc (sizeof (struct rspamd_client_request));
@@ -167,7 +167,10 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			p = req->msg->body->str + req->msg->body->len;
 			remain = req->msg->body->allocated_len - req->msg->body->len - 1;
 			if (remain == 0) {
-				g_string_set_size (req->msg->body, req->msg->body->len * 2);
+				old_len = req->msg->body->len;
+				g_string_set_size (req->msg->body, old_len * 2);
+				req->msg->body->len = old_len;
+				continue;
 			}
 			remain = fread (p, 1, remain, in);
 			if (remain > 0) {

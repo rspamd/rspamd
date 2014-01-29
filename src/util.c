@@ -2184,17 +2184,19 @@ static int
 rspamd_gstring_append_character (unsigned char c, size_t len, void *ud)
 {
 	GString *buf = ud;
+	gsize old_len;
 
 	if (len == 1) {
 		g_string_append_c (buf, c);
 	}
 	else {
 		if (buf->allocated_len - buf->len <= len) {
+			old_len = buf->len;
 			g_string_set_size (buf, buf->len + len + 1);
+			buf->len = old_len;
 		}
 		memset (&buf->str[buf->len], c, len);
 		buf->len += len;
-		buf->str[buf->len] = '\0';
 	}
 
 	return 0;
