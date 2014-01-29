@@ -365,7 +365,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 				}
 			}
 		}
-		if (!have_actions) {
+		if (new && !have_actions) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "metric %s has no actions", metric_name);
 			return FALSE;
 		}
@@ -405,7 +405,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 				}
 			}
 		}
-		else {
+		else if (new) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "metric %s has no symbols", metric_name);
 			return FALSE;
 		}
@@ -422,8 +422,10 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 	}
 
 	/* Insert the resulting metric */
-	g_hash_table_insert (cfg->metrics, (void *)metric->name, metric);
-	cfg->metrics_list = g_list_prepend (cfg->metrics_list, metric);
+	if (new) {
+		g_hash_table_insert (cfg->metrics, (void *)metric->name, metric);
+		cfg->metrics_list = g_list_prepend (cfg->metrics_list, metric);
+	}
 
 	return TRUE;
 }
