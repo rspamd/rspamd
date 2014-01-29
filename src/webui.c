@@ -1658,6 +1658,8 @@ init_webui_worker (struct config_file *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_webui_worker_ctx));
 
+	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
+
 	rspamd_rcl_register_worker_option (cfg, type, "password",
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
@@ -1704,6 +1706,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	ctx->start_time = time (NULL);
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
+	ctx->srv = worker->srv;
 
 	/* Accept event */
 	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler, &ctx->io_tv, ctx->ev_base);
