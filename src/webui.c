@@ -1036,7 +1036,7 @@ rspamd_webui_handle_graph (struct evhttp_request *req, gpointer arg)
 	evhttp_send_reply (req, HTTP_OK, "OK", evb);
 	evbuffer_free (evb);
 }
-
+#endif
 /*
  * Pie chart command handler:
  * request: /pie
@@ -1047,46 +1047,54 @@ rspamd_webui_handle_graph (struct evhttp_request *req, gpointer arg)
  * 		{...}
  * ]
  */
-static void
-rspamd_webui_handle_pie_chart (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
-	gdouble                             	 data[4], total;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	gdouble									 data[4], total;
+	ucl_object_t							*top, *obj;
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
-
+	top = ucl_object_typed_new (UCL_ARRAY);
 	total = ctx->srv->stat->messages_scanned;
 	if (total != 0) {
+		obj = ucl_object_typed_new (UCL_ARRAY);
+
 		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total * 100.;
-		data[1] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] + ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) / total * 100.;
+		data[1] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
+				ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) / total * 100.;
 		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total * 100.;
 		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total * 100.;
 
-		evbuffer_add_printf (evb, "[[\"Clean messages\",%.2f],", data[0]);
-		evbuffer_add_printf (evb, "[\"Probable spam messages\",%.2f],", data[1]);
-		evbuffer_add_printf (evb, "[\"Greylisted messages\",%.2f],", data[2]);
-		evbuffer_add_printf (evb, "[\"Rejected messages\",%.2f]]" CRLF, data[3]);
+		obj = ucl_array_append (obj, ucl_object_fromstring ("Clean messages"));
+		obj = ucl_array_append (obj, ucl_object_fromdouble (data[0]));
+		top = ucl_array_append (top, obj);
+		obj = ucl_array_append (obj, ucl_object_fromstring ("Probable spam messages"));
+		obj = ucl_array_append (obj, ucl_object_fromdouble (data[1]));
+		top = ucl_array_append (top, obj);
+		obj = ucl_array_append (obj, ucl_object_fromstring ("Greylisted messages"));
+		obj = ucl_array_append (obj, ucl_object_fromdouble (data[2]));
+		top = ucl_array_append (top, obj);
+		obj = ucl_array_append (obj, ucl_object_fromstring ("Rejected messages"));
+		obj = ucl_array_append (obj, ucl_object_fromdouble (data[3]));
+		top = ucl_array_append (top, obj);
 	}
 	else {
-		evbuffer_add_printf (evb, "[[\"Not scanned messages\", 0]]" CRLF);
+		obj = ucl_object_typed_new (UCL_ARRAY);
+
+		obj = ucl_array_append (obj, ucl_object_fromstring ("Scanned messages"));
+		obj = ucl_array_append (obj, ucl_object_fromdouble (0));
+		top = ucl_array_append (top, obj);
 	}
 
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	return 0;
 }
 
 /*
@@ -1099,28 +1107,24 @@ rspamd_webui_handle_pie_chart (struct evhttp_request *req, gpointer arg)
  * 		{...}
  * ]
  */
-static void
-rspamd_webui_handle_history (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
 	struct roll_history_row					*row;
 	struct roll_history						 copied_history;
 	gint									 i, rows_proc, row_num;
 	struct tm								*tm;
 	gchar									 timebuf[32];
 	gchar									 ip_buf[INET6_ADDRSTRLEN];
+	ucl_object_t							*top, *obj;
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
+	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Set lock on history */
 	memory_pool_lock_mutex (ctx->srv->history->mtx);
@@ -1129,10 +1133,7 @@ rspamd_webui_handle_history (struct evhttp_request *req, gpointer arg)
 	memcpy (&copied_history, ctx->srv->history, sizeof (copied_history));
 	memory_pool_unlock_mutex (ctx->srv->history->mtx);
 
-	/* Trailer */
-	evbuffer_add (evb, "[", 1);
-
-	/* Go throught all rows */
+	/* Go through all rows */
 	row_num = copied_history.cur_row;
 	for (i = 0, rows_proc = 0; i < HISTORY_MAX_ROWS; i ++, row_num ++) {
 		if (row_num == HISTORY_MAX_ROWS) {
@@ -1141,9 +1142,6 @@ rspamd_webui_handle_history (struct evhttp_request *req, gpointer arg)
 		row = &copied_history.rows[row_num];
 		/* Get only completed rows */
 		if (row->completed) {
-			if (rows_proc != 0) {
-				evbuffer_add (evb, ",", 1);
-			}
 			tm = localtime (&row->tv.tv_sec);
 			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tm);
 #ifdef HAVE_INET_PTON
@@ -1156,31 +1154,31 @@ rspamd_webui_handle_history (struct evhttp_request *req, gpointer arg)
 #else
 			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr), sizeof (ip_buf));
 #endif
+			obj = ucl_object_typed_new (UCL_OBJECT);
+			obj = ucl_object_insert_key (obj, ucl_object_fromstring (timebuf), "time", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromstring (row->message_id), "id", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromstring (ip_buf), "ip", 0, false);
+			obj = ucl_object_insert_key (obj,
+					ucl_object_fromstring (str_action_metric (row->action)), "action", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromdouble (row->score), "score", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromdouble (row->required_score), "required_score", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromstring (row->symbols), "symbols", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromint (row->len), "size", 0, false);
+			obj = ucl_object_insert_key (obj, ucl_object_fromint (row->scan_time), "scan_time", 0, false);
 			if (row->user[0] != '\0') {
-				evbuffer_add_printf (evb, "{\"time\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"action\":\"%s\","
-					"\"score\":%.2f,\"required_score\": %.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u,"
-					"\"user\":\"%s\"}", timebuf, row->message_id, ip_buf, str_action_metric (row->action),
-					row->score, row->required_score, row->symbols, row->len, row->scan_time, row->user);
+				obj = ucl_object_insert_key (obj, ucl_object_fromstring (row->user), "user", 0, false);
 			}
-			else {
-				evbuffer_add_printf (evb, "{\"time\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"action\":\"%s\","
-					"\"score\": %.2f,\"required_score\":%.2f,\"symbols\":\"%s\",\"size\":%zd,\"scan_time\":%u}",
-					timebuf, row->message_id, ip_buf, str_action_metric (row->action),
-					row->score, row->required_score, row->symbols, row->len, row->scan_time);
-			}
+			top = ucl_array_append (top, obj);
 			rows_proc ++;
 		}
 	}
 
-	evbuffer_add (evb, "]" CRLF, 3);
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	return 0;
 }
-
+#if 0
 /*
  * Learn spam command handler:
  * request: /learnspam
@@ -1716,11 +1714,11 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_ACTIONS, rspamd_webui_handle_actions);
 	rspamd_http_router_add_path (ctx->http, PATH_MAPS, rspamd_webui_handle_maps);
 	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_webui_handle_get_map);
+	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart);
+	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history);
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
 
-	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart, ctx);
-	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learn_spam, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learn_ham, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_save_actions, ctx);
