@@ -78,7 +78,7 @@ local function rbl_cb (task)
 	end
 
 	local helo = task:get_helo()
-	if helo then
+	if helo and string.sub(helo,1,1) ~= '[' then
 		for k,rbl in pairs(rbls) do
 			if rbl['helo'] then
 				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), helo .. '.' .. rbl['rbl'], rbl_dns_cb, k)
