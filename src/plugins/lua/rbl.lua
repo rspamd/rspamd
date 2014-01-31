@@ -77,6 +77,14 @@ local function rbl_cb (task)
 		task:inc_dns_req()
 	end
 
+	local helo = task:get_helo()
+	if helo and string.sub(helo,1,1) ~= '[' then
+		for k,rbl in pairs(rbls) do
+			if rbl['helo'] then
+				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), helo .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+			end
+		end
+	end
 	local sender_dns = task:get_hostname()
 	if sender_dns ~= nil and sender_dns ~= 'unknown' then
 		for k,rbl in pairs(rbls) do
