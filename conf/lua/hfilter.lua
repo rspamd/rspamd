@@ -207,15 +207,16 @@ local function hfilter(task)
     local weight_hostname = 0
     if hostname then
         -- Check regexp HOSTNAME
-        for regexp,weight in pairs(checks_hellohost) do
-            if check_regexp(hostname, regexp) then
-                weight_hostname = weight
-                break
+        if hostname == 'unknown' then
+            task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
+        else
+            for regexp,weight in pairs(checks_hellohost) do
+                if check_regexp(hostname, regexp) then
+                    weight_hostname = weight
+                    break
+                end
             end
         end
-        if hostname == 'unknown' then
-        	task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
-    	end
     end
     
     --Insert weight's for HELO or HOSTNAME
