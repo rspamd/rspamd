@@ -77,6 +77,14 @@ local function rbl_cb (task)
 		task:inc_dns_req()
 	end
 
+	local helo = task:get_helo()
+	if helo then
+		for k,rbl in pairs(rbls) do
+			if rbl['helo'] then
+				task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), helo .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+			end
+		end
+	end
 	local sender_dns = task:get_hostname()
 	if sender_dns ~= nil and sender_dns ~= 'unknown' then
 		for k,rbl in pairs(rbls) do
@@ -117,6 +125,8 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 		rspamd_config:register_module_option('rbl', 'default_ipv6', 'string')
 		rspamd_config:register_module_option('rbl', 'default_received', 'string')
 		rspamd_config:register_module_option('rbl', 'default_from', 'string')
+		rspamd_config:register_module_option('rbl', 'default_rdns', 'string')
+		rspamd_config:register_module_option('rbl', 'default_helo', 'string')
 	end
 end
 
@@ -143,8 +153,11 @@ end
 if(opts['default_rdns'] == nil) then
         opts['default_rdns'] = false
 end
+if(opts['default_helo'] == nil) then
+        opts['default_helo'] = false
+end
 for key,rbl in pairs(opts['rbls']) do
-	local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns" }
+	local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo" }
 	for i=1,table.maxn(o) do
 		if(rbl[o[i]] == nil) then
 			rbl[o[i]] = opts['default_' .. o[i]]
