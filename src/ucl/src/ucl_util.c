@@ -339,7 +339,8 @@ ucl_curl_write_callback (void* contents, size_t size, size_t nmemb, void* ud)
  * @return
  */
 static bool
-ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen, UT_string **err)
+ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen,
+		UT_string **err, bool must_exist)
 {
 
 #ifdef HAVE_FETCH_H
@@ -354,8 +355,10 @@ ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen, UT
 		return false;
 	}
 	if ((in = fetchXGet (fetch_url, &us, "")) == NULL) {
-		ucl_create_err (err, "cannot fetch URL %s: %s",
+		if (!must_exist) {
+			ucl_create_err (err, "cannot fetch URL %s: %s",
 				url, strerror (errno));
+		}
 		fetchFreeURL (fetch_url);
 		return false;
 	}
@@ -402,8 +405,10 @@ ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen, UT
 	curl_easy_setopt (curl, CURLOPT_WRITEDATA, &cbdata);
 
 	if ((r = curl_easy_perform (curl)) != CURLE_OK) {
-		ucl_create_err (err, "error fetching URL %s: %s",
+		if (!must_exist) {
+			ucl_create_err (err, "error fetching URL %s: %s",
 				url, curl_easy_strerror (r));
+		}
 		curl_easy_cleanup (curl);
 		if (cbdata.buf) {
 			free (cbdata.buf);
@@ -429,14 +434,17 @@ ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen, UT
  * @return
  */
 static bool
-ucl_fetch_file (const unsigned char *filename, unsigned char **buf, size_t *buflen, UT_string **err)
+ucl_fetch_file (const unsigned char *filename, unsigned char **buf, size_t *buflen,
+		UT_string **err, bool must_exist)
 {
 	int fd;
 	struct stat st;
 
 	if (stat (filename, &st) == -1 || !S_ISREG (st.st_mode)) {
-		ucl_create_err (err, "cannot stat file %s: %s",
-				filename, strerror (errno));
+		if (must_exist) {
+			ucl_create_err (err, "cannot stat file %s: %s",
+					filename, strerror (errno));
+		}
 		return false;
 	}
 	if (st.st_size == 0) {
@@ -522,7 +530,7 @@ ucl_sig_check (const unsigned char *data, size_t datalen,
  */
 static bool
 ucl_include_url (const unsigned char *data, size_t len,
-		struct ucl_parser *parser, bool check_signature)
+		struct ucl_parser *parser, bool check_signature, bool must_exist)
 {
 
 	bool res;
@@ -534,8 +542,8 @@ ucl_include_url (const unsigned char *data, size_t len,
 
 	snprintf (urlbuf, sizeof (urlbuf), "%.*s", (int)len, data);
 
-	if (!ucl_fetch_url (urlbuf, &buf, &buflen, &parser->err)) {
-		return false;
+	if (!ucl_fetch_url (urlbuf, &buf, &buflen, &parser->err, must_exist)) {
+		return (!must_exist || false);
 	}
 
 	if (check_signature) {
@@ -544,7 +552,7 @@ ucl_include_url (const unsigned char *data, size_t len,
 		size_t siglen = 0;
 		/* We need to check signature first */
 		snprintf (urlbuf, sizeof (urlbuf), "%.*s.sig", (int)len, data);
-		if (!ucl_fetch_file (urlbuf, &sigbuf, &siglen, &parser->err)) {
+		if (!ucl_fetch_url (urlbuf, &sigbuf, &siglen, &parser->err, true)) {
 			return false;
 		}
 		if (!ucl_sig_check (buf, buflen, sigbuf, siglen, parser)) {
@@ -591,7 +599,7 @@ ucl_include_url (const unsigned char *data, size_t len,
  */
 static bool
 ucl_include_file (const unsigned char *data, size_t len,
-		struct ucl_parser *parser, bool check_signature)
+		struct ucl_parser *parser, bool check_signature, bool must_exist)
 {
 	bool res;
 	struct ucl_chunk *chunk;
@@ -602,14 +610,17 @@ ucl_include_file (const unsigned char *data, size_t len,
 
 	snprintf (filebuf, sizeof (filebuf), "%.*s", (int)len, data);
 	if (realpath (filebuf, realbuf) == NULL) {
+		if (!must_exist) {
+			return true;
+		}
 		ucl_create_err (&parser->err, "cannot open file %s: %s",
 									filebuf,
 									strerror (errno));
 		return false;
 	}
 
-	if (!ucl_fetch_file (realbuf, &buf, &buflen, &parser->err)) {
-		return false;
+	if (!ucl_fetch_file (realbuf, &buf, &buflen, &parser->err, must_exist)) {
+		return (!must_exist || false);
 	}
 
 	if (check_signature) {
@@ -618,7 +629,7 @@ ucl_include_file (const unsigned char *data, size_t len,
 		size_t siglen = 0;
 		/* We need to check signature first */
 		snprintf (filebuf, sizeof (filebuf), "%s.sig", realbuf);
-		if (!ucl_fetch_file (filebuf, &sigbuf, &siglen, &parser->err)) {
+		if (!ucl_fetch_file (filebuf, &sigbuf, &siglen, &parser->err, true)) {
 			return false;
 		}
 		if (!ucl_sig_check (buf, buflen, sigbuf, siglen, parser)) {
@@ -675,10 +686,10 @@ ucl_include_handler (const unsigned char *data, size_t len, void* ud)
 
 	if (*data == '/' || *data == '.') {
 		/* Try to load a file */
-		return ucl_include_file (data, len, parser, false);
+		return ucl_include_file (data, len, parser, false, true);
 	}
 
-	return ucl_include_url (data, len, parser, false);
+	return ucl_include_url (data, len, parser, false, true);
 }
 
 /**
@@ -696,10 +707,24 @@ ucl_includes_handler (const unsigned char *data, size_t len, void* ud)
 
 	if (*data == '/' || *data == '.') {
 		/* Try to load a file */
-		return ucl_include_file (data, len, parser, true);
+		return ucl_include_file (data, len, parser, true, true);
 	}
 
-	return ucl_include_url (data, len, parser, true);
+	return ucl_include_url (data, len, parser, true, true);
+}
+
+
+bool
+ucl_try_include_handler (const unsigned char *data, size_t len, void* ud)
+{
+	struct ucl_parser *parser = ud;
+
+	if (*data == '/' || *data == '.') {
+		/* Try to load a file */
+		return ucl_include_file (data, len, parser, false, false);
+	}
+
+	return ucl_include_url (data, len, parser, false, false);
 }
 
 bool
@@ -747,7 +772,7 @@ ucl_parser_add_file (struct ucl_parser *parser, const char *filename)
 		return false;
 	}
 
-	if (!ucl_fetch_file (realbuf, &buf, &len, &parser->err)) {
+	if (!ucl_fetch_file (realbuf, &buf, &len, &parser->err, true)) {
 		return false;
 	}
 

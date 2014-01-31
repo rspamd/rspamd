@@ -159,6 +159,8 @@ size_t ucl_unescape_json_string (char *str, size_t len);
  */
 bool ucl_include_handler (const unsigned char *data, size_t len, void* ud);
 
+bool ucl_try_include_handler (const unsigned char *data, size_t len, void* ud);
+
 /**
  * Handle includes macro
  * @param data include data
