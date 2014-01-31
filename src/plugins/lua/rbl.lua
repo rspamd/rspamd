@@ -125,6 +125,8 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 		rspamd_config:register_module_option('rbl', 'default_ipv6', 'string')
 		rspamd_config:register_module_option('rbl', 'default_received', 'string')
 		rspamd_config:register_module_option('rbl', 'default_from', 'string')
+		rspamd_config:register_module_option('rbl', 'default_rdns', 'string')
+		rspamd_config:register_module_option('rbl', 'default_helo', 'string')
 	end
 end
 
@@ -151,8 +153,11 @@ end
 if(opts['default_rdns'] == nil) then
         opts['default_rdns'] = false
 end
+if(opts['default_helo'] == nil) then
+        opts['default_helo'] = false
+end
 for key,rbl in pairs(opts['rbls']) do
-	local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns" }
+	local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo" }
 	for i=1,table.maxn(o) do
 		if(rbl[o[i]] == nil) then
 			rbl[o[i]] = opts['default_' .. o[i]]
