@@ -75,11 +75,11 @@ static void
 dns_permutor_init (struct dns_permutor *p)
 {
 	/* Init random key and IV */
-	rspamd_random_bytes (p->perm_buf, sizeof (p->perm_buf));
+	rspamd_random_bytes (p->perm_buf, PERMUTOR_KSIZE + PERMUTOR_IVSIZE);
 
 	/* Setup ctx */
 	chacha_keysetup (&p->ctx, p->perm_buf, PERMUTOR_KSIZE * 8, 0);
-	chacha_ivsetup (&p->ctx, p->perm_buf + PERMUTOR_KSIZE);
+	chacha_ivsetup (&p->ctx, p->perm_buf + PERMUTOR_KSIZE * 8);
 
 	chacha_encrypt_bytes (&p->ctx, p->perm_buf, p->perm_buf, sizeof (p->perm_buf));
 
