@@ -1596,6 +1596,14 @@ ucl_state_machine (struct ucl_parser *parser)
 				parser->state = UCL_STATE_AFTER_VALUE;
 				continue;
 			}
+			if (parser->stack == NULL) {
+				/* No objects are on stack, but we want to parse a key */
+				ucl_set_err (chunk, UCL_ESYNTAX, "top object is finished but the parser "
+						"expects a key", &parser->err);
+				parser->prev_state = parser->state;
+				parser->state = UCL_STATE_ERROR;
+				return false;
+			}
 			if (!ucl_parse_key (parser, chunk, &next_key, &end_of_object)) {
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_ERROR;
@@ -1659,7 +1667,8 @@ ucl_state_machine (struct ucl_parser *parser)
 				/* We got macro name */
 				HASH_FIND (hh, parser->macroes, c, (p - c), macro);
 				if (macro == NULL) {
-					ucl_create_err (&parser->err, "error on line %d at column %d: unknown macro: '%.*s', character: '%c'",
+					ucl_create_err (&parser->err, "error on line %d at column %d: "
+							"unknown macro: '%.*s', character: '%c'",
 								chunk->line, chunk->column, (int)(p - c), c, *chunk->pos);
 					parser->state = UCL_STATE_ERROR;
 					return false;
@@ -1706,7 +1715,7 @@ ucl_state_machine (struct ucl_parser *parser)
 			break;
 		default:
 			/* TODO: add all states */
-			ucl_set_err (chunk, UCL_EMACRO, "internal error: parser is in an unknown state", &parser->err);
+			ucl_set_err (chunk, UCL_EINTERNAL, "internal error: parser is in an unknown state", &parser->err);
 			parser->state = UCL_STATE_ERROR;
 			return false;
 		}
