@@ -2115,6 +2115,11 @@ rspamd_random_bytes (gchar *buf, gsize buflen)
 {
 	gint fd;
 	gsize i;
+#ifdef HAVE_CLOCK_GETTIME
+	struct timespec ts;
+#else
+	struct timeval tv;
+#endif
 #ifdef HAVE_OPENSSL
 
 	/* Init random generator */
@@ -2139,7 +2144,13 @@ fallback:
 		close (fd);
 	}
 	/* No /dev/random */
-	g_random_set_seed (time (NULL));
+#ifdef HAVE_CLOCK_GETTIME
+	(void)clock_gettime (CLOCK_REALTIME, &ts);
+	g_random_set_seed (ts.tv_nsec);
+#else
+	(void)gettimeofday (&tv, NULL);
+	g_random_set_seed (tv.tv_usec);
+#endif
 	for (i = 0; i < buflen; i ++) {
 		buf[i] = g_random_int () & 0xff;
 	}
