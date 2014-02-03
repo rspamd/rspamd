@@ -3,9 +3,7 @@
 References
 ==========
 
-* Home site: <http://rspamd.com>
-* Downloads: <https://bitbucket.org/vstakhov/rspamd/downloads>
-* Wiki: <https://bitbucket.org/vstakhov/rspamd/wiki/>
+* Home site: <https://rspamd.com>
 
 Description
 ===========
@@ -36,10 +34,9 @@ collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad
 
 <https://launchpad.net/~vsevolod-n/+archive/rspamd>
 
-Users of other OSes should use sources to build and install rspamd. You can
-obtain rspamd sources at the bitbucket download page:
+Users of other OSes should use sources to build and install rspamd. Alternatively you could check the OpenSUSE build system for packages suitable for your environment:
 
-<https://bitbucket.org/vstakhov/rspamd/downloads>
+<http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
 
 There are packages for debian and CentOS/RHEL distribution. Debian users could
 use *debuild* utility to create the binary packages of rspamd. CentOS/RHEL
