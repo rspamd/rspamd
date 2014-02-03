@@ -795,12 +795,36 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
 {
 	ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
-	const gchar *key;
-	struct classifier_config *ccf;
+	const gchar *key, *type;
+	struct classifier_config *ccf, *found = NULL;
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
+	GList *cur_cl;
 
-	ccf = check_classifier_conf (cfg, NULL);
+	val = ucl_object_find_key (obj, "type");
+	if (val == NULL || !ucl_object_tostring_safe (val, &type)) {
+		g_set_error (err, CFG_RCL_ERROR, EINVAL, "classifier should have type defined");
+		return FALSE;
+	}
+
+	cur_cl = cfg->classifiers;
+	while (cur_cl != NULL) {
+		ccf = cur_cl->data;
+		if (g_ascii_strcasecmp (ccf->classifier->name, type) == 0) {
+			found = ccf;
+			break;
+		}
+		cur_cl = g_list_next (cur_cl);
+	}
+
+	if (found == NULL) {
+		ccf = check_classifier_conf (cfg, NULL);
+		ccf->classifier = get_classifier (type);
+	}
+	else {
+		ccf = found;
+	}
+
 	HASH_FIND_STR (section->subsections, "statfile", stat_section);
 
 	while ((val = ucl_iterate_object (obj, &it, true)) != NULL && res) {
@@ -815,7 +839,7 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
 				}
 			}
 			else if (g_ascii_strcasecmp (key, "type") == 0 && val->type == UCL_STRING) {
-				ccf->classifier = get_classifier (ucl_object_tostring (val));
+				continue;
 			}
 			else if (g_ascii_strcasecmp (key, "tokenizer") == 0 && val->type == UCL_STRING) {
 				ccf->tokenizer = get_tokenizer (ucl_object_tostring (val));
@@ -827,7 +851,9 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
 		}
 	}
 
-	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
+	if (found == NULL) {
+		cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
+	}
 
 
 	return res;
