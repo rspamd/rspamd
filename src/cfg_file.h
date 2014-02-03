@@ -484,11 +484,6 @@ struct metric* check_metric_conf (struct config_file *cfg, struct metric *c);
 struct statfile* check_statfile_conf (struct config_file *cfg, struct statfile *c);
 
 /*
- * XXX: Depreciated function, now it is used for
- */
-gboolean parse_normalizer (struct config_file *cfg, struct statfile *st, const gchar *line);
-
-/*
  * Read XML configuration file
  */
 gboolean read_rspamd_config (struct config_file *cfg,
