@@ -208,7 +208,7 @@ local function hfilter(task)
     if hostname then
         -- Check regexp HOSTNAME
         if hostname == 'unknown' then
-            task:insert_result('HFILTER_HOSTNAME_NOPTR', 1.00)
+            task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
         else
             for regexp,weight in pairs(checks_hellohost) do
                 if check_regexp(hostname, regexp) then
@@ -295,5 +295,5 @@ rspamd_config:register_symbols(hfilter, 1.0,
 "HFILTER_HELO_NORESOLVE_MX", "HFILTER_HELO_NORES_A_OR_MX", "HFILTER_HELO_IP_A", "HFILTER_HELO_NOT_FQDN", 
 "HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN",  
 "HFILTER_MID_NOT_FQDN",
-"HFILTER_HOSTNAME_NOPTR",
+"HFILTER_HOSTNAME_UNKNOWN",
 "HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
