@@ -461,7 +461,7 @@ rspamd_http_on_message_complete (http_parser* parser)
 {
 	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
-	int ret;
+	int ret = 0;
 
 	priv = conn->priv;
 
