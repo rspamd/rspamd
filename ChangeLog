@@ -1,3 +1,19 @@
+0.6.8:
+	* Controller now listen for localhost and not for 127.0.0.1 by default
+	* Allow FCrDNS-style RBL lookups (by @fatalbanana)
+	* Reduce threshold for parts_differ function.
+	* Fix hostname lookup for rdns rbl (by @AlexeySa)
+	* Fix HFILTER_URL_ONELINE to reduce false positive rate.
+	* Fix whitelist module.
+	* Allow override system predefined settings without touching system ones
+	by .try_include macro (by @andrejzverev)
+	* Check for [ip.address]-style HELO and suppress lookups. (by
+	@fatalbanana)
+	* Optimize hfilter (by @AlexeySa)
+	* Fix issue with random numbers generator in dns.
+	* Use more clever time values to setup entropy.
+	* Synced with the recent libucl.
+
 0.6.7:
 	* Use ChaCha20 for DNS generator (more secure DNS id)
 	* Unknown symbols now has zero weight and not 1.0
