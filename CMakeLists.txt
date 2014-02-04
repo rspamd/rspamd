@@ -877,7 +877,8 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_BINARY_DIR}/src" 
 					"${CMAKE_SOURCE_DIR}/src/ucl/include"
 					"${CMAKE_SOURCE_DIR}/contrib/uthash"
-					"${CMAKE_SOURCE_DIR}/contrib/http-parser")
+					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
+					"${CMAKE_SOURCE_DIR}/contrib/libottery")
 
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
@@ -919,6 +920,7 @@ ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
 ADD_SUBDIRECTORY(src/ucl)
 ADD_SUBDIRECTORY(contrib/http-parser)
+ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(src/client)
 

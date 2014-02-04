@@ -439,18 +439,6 @@ gboolean parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask);
 gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 
 /**
- * Seed glib prng using openssl if possible
- */
-void rspamd_prng_seed (void);
-
-/**
- * Generate random bytes using the most suitable generator
- * @param buf
- * @param buflen
- */
-void rspamd_random_bytes (gchar *buf, gsize buflen);
-
-/**
  * Check whether specified ip is valid (not INADDR_ANY or INADDR_NONE) for ipv4 or ipv6
  * @param ptr pointer to struct in_addr or struct in6_addr
  * @param af address family (AF_INET or AF_INET6)

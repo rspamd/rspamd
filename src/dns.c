@@ -29,6 +29,7 @@
 #include "main.h"
 #include "utlist.h"
 #include "uthash.h"
+#include "ottery.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
@@ -36,50 +37,12 @@
 
 static void dns_retransmit_handler (gint fd, short what, void *arg);
 
-/*
- * DNS permutor utilities
- */
-
-/**
- * Init chacha20 context
- * @param p
- */
-static void
-dns_permutor_init (struct dns_permutor *p)
-{
-	/* Init random key and IV */
-	rspamd_random_bytes (p->perm_buf, PERMUTOR_KSIZE + PERMUTOR_IVSIZE);
-
-	/* Setup ctx */
-	chacha_keysetup (&p->ctx, p->perm_buf, PERMUTOR_KSIZE * 8, 0);
-	chacha_ivsetup (&p->ctx, p->perm_buf + PERMUTOR_KSIZE * 8);
-
-	chacha_encrypt_bytes (&p->ctx, p->perm_buf, p->perm_buf, sizeof (p->perm_buf));
-
-	p->pos = 0;
-}
-
-static struct dns_permutor *
-dns_permutor_new (void)
-{
-	struct dns_permutor *new;
-
-	new = g_slice_alloc0 (sizeof (struct dns_permutor));
-	dns_permutor_init (new);
-
-	return new;
-}
-
 static guint16
-dns_permutor_generate_id (struct dns_permutor *p)
+dns_permutor_generate_id (void)
 {
 	guint16 id;
-	if (p->pos + sizeof (guint16) >= sizeof (p->perm_buf)) {
-		dns_permutor_init (p);
-	}
 
-	memcpy (&id, &p->perm_buf[p->pos], sizeof (guint16));
-	p->pos += sizeof (guint16);
+	id = ottery_rand_unsigned ();
 
 	return id;
 }
@@ -280,7 +243,7 @@ make_dns_header (struct rspamd_dns_request *req)
 	/* Set DNS header values */
 	header = (struct dns_header *)req->packet;
 	memset (header, 0 , sizeof (struct dns_header));
-	header->qid = dns_permutor_generate_id (req->resolver->permutor);
+	header->qid = dns_permutor_generate_id ();
 	header->rd = 1;
 	header->qdcount = htons (1);
 	header->arcount = htons (1);
@@ -1284,7 +1247,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		while (g_hash_table_lookup (req->io->requests, &req->id)) {
 			/* Check for unique id */
 			header = (struct dns_header *)req->packet;
-			header->qid = dns_permutor_generate_id (resolver->permutor);
+			header->qid = dns_permutor_generate_id ();
 			req->id = header->qid;
 			if (++r > max_id_cycles) {
 				msg_err ("cannot generate new id for server %s", serv->name);
@@ -1376,7 +1339,6 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	
 	new = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
 	new->ev_base = ev_base;
-	new->permutor = dns_permutor_new ();
 	new->io_channels = g_hash_table_new (g_direct_hash, g_direct_equal);
 	new->request_timeout = cfg->dns_timeout;
 	new->max_retransmits = cfg->dns_retransmits;

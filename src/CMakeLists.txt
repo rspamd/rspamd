@@ -67,6 +67,7 @@ ENDIF(CMAKE_COMPILER_IS_GNUCC)
 TARGET_LINK_LIBRARIES(rspamd-util ${RSPAMD_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd-util pcre)
 TARGET_LINK_LIBRARIES(rspamd-util rspamd-ucl)
+TARGET_LINK_LIBRARIES(rspamd-util rspamd-ottery)
 TARGET_LINK_LIBRARIES(rspamd-util rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-util event)
 

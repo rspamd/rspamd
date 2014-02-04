@@ -25,7 +25,6 @@
 #define DNS_PRIVATE_H_
 
 #include "config.h"
-#include "chacha_private.h"
 
 #define MAX_SERVERS 16
 /* Upstream timeouts */
@@ -49,10 +48,6 @@ static const gint dns_port = 53;
 
 #define DNS_D_MAXLABEL  63      /* + 1 '\0' */
 #define DNS_D_MAXNAME   255     /* + 1 '\0' */
-
-#define PERMUTOR_BUF_SIZE 32768
-#define PERMUTOR_KSIZE 32
-#define PERMUTOR_IVSIZE 8
 
 #define RESOLV_CONF "/etc/resolv.conf"
 
@@ -78,12 +73,10 @@ struct rspamd_dns_io_channel {
 	struct rspamd_dns_io_channel *prev, *next;
 };
 
-struct dns_permutor;
 
 struct rspamd_dns_resolver {
 	struct rspamd_dns_server servers[MAX_SERVERS];
 	gint servers_num; /**< number of DNS servers registered           */
-	struct dns_permutor *permutor; /**< permutor for randomizing request id        */
 	guint request_timeout;
 	guint max_retransmits;
 	guint max_errors;
@@ -188,12 +181,6 @@ enum dns_type {
 	DNS_T_ALL = 255
 };
 /* enum dns_type */
-
-struct dns_permutor {
-	chacha_ctx ctx;
-	guchar perm_buf[PERMUTOR_BUF_SIZE];
-	guint pos;
-};
 
 static const gchar dns_rcodes[16][16] = {
 	[DNS_RC_NOERROR]  = "NOERROR",

@@ -2110,61 +2110,6 @@ restart:
 #endif
 }
 
-void
-rspamd_random_bytes (gchar *buf, gsize buflen)
-{
-	gint fd;
-	gsize i;
-#ifdef HAVE_CLOCK_GETTIME
-	struct timespec ts;
-#else
-	struct timeval tv;
-#endif
-#ifdef HAVE_OPENSSL
-
-	/* Init random generator */
-	if (RAND_bytes (buf, buflen) != 1) {
-		msg_err ("cannot seed random generator using openssl: %s, using time",
-				ERR_error_string (ERR_get_error (), NULL));
-		goto fallback;
-	}
-#else
-	goto fallback;
-#endif
-	return;
-
-fallback:
-	/* Try to use /dev/random if no openssl is found */
-	fd = open ("/dev/random", O_RDONLY);
-	if (fd != -1) {
-		if (read (fd, buf, buflen) == (gssize)buflen) {
-			close (fd);
-			return;
-		}
-		close (fd);
-	}
-	/* No /dev/random */
-#ifdef HAVE_CLOCK_GETTIME
-	(void)clock_gettime (CLOCK_REALTIME, &ts);
-	g_random_set_seed (ts.tv_nsec);
-#else
-	(void)gettimeofday (&tv, NULL);
-	g_random_set_seed (tv.tv_usec);
-#endif
-	for (i = 0; i < buflen; i ++) {
-		buf[i] = g_random_int () & 0xff;
-	}
-}
-
-void
-rspamd_prng_seed (void)
-{
-	guint32                          rand_seed = 0;
-
-	rspamd_random_bytes ((gchar *)&rand_seed, sizeof (rand_seed));
-	g_random_set_seed (rand_seed);
-}
-
 gboolean
 rspamd_ip_is_valid (void *ptr, int af)
 {

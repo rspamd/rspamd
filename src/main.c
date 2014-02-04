@@ -34,6 +34,7 @@
 #include "cfg_xml.h"
 #include "symbols_cache.h"
 #include "lua/lua_common.h"
+#include "ottery.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -1055,7 +1056,7 @@ main (gint argc, gchar **argv, gchar **env)
 	OpenSSL_add_all_ciphers ();
 #endif
 
-	rspamd_prng_seed ();
+	g_random_set_seed (ottery_rand_uint32 ());
 
 	/* First set logger to console logger */
 	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
