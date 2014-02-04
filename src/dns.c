@@ -79,7 +79,7 @@ dns_permutor_init (struct dns_permutor *p)
 
 	/* Setup ctx */
 	chacha_keysetup (&p->ctx, p->perm_buf, PERMUTOR_KSIZE * 8, 0);
-	chacha_ivsetup (&p->ctx, p->perm_buf + PERMUTOR_KSIZE * 8);
+	chacha_ivsetup (&p->ctx, p->perm_buf + PERMUTOR_KSIZE);
 
 	chacha_encrypt_bytes (&p->ctx, p->perm_buf, p->perm_buf, sizeof (p->perm_buf));
 
