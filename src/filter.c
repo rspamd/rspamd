@@ -673,12 +673,13 @@ classifiers_callback (gpointer value, void *arg)
 		g_hash_table_insert (task->tokens, cl->tokenizer, tokens);
 	}
 
+	/* Take care of subject */
+	tokenize_subject (task, &tokens);
+
 	if (tokens == NULL) {
 		return;
 	}
 
-	/* Take care of subject */
-	tokenize_subject (task, &tokens);
 	if (cbdata->nL != NULL) {
 		rspamd_mutex_lock (cbdata->nL->m);
 		cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task, cbdata->nL->L);
