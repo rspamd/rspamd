@@ -7,8 +7,8 @@ Configuration is structured as follows:
 ~~~nginx
 rbl {
   # default settings defined here
-  # 'rbls' subsection under which the RBL definitions are nested
   rbls {
+  # 'rbls' subsection under which the RBL definitions are nested
     an_rbl {
        # rbl-specific subsection 
     }
