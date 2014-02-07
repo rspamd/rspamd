@@ -1,26 +1,3 @@
--- Configuration:
--- rbl {
---    default_ipv4 = true;
---    default_ipv6 = false;
---    default_received = true;
---    default_from = false;
---    rbls {
---	spamhaus {
---	   rbl = "zen.spamhaus.org";
---         ipv4 = true;
---         ipv6 = false;
---         unknown = false;
---         returncodes {
---            RBL_ZEN_SBL = "127.0.0.2";
---            RBL_ZEN_SBL = "127.0.0.3";
---            RBL_ZEN_XBL = "127.0.0.4";
---            RBL_ZEN_PBL = "127.0.0.10";
---            RBL_ZEN_PBL = "127.0.0.11";
---         }
---	}
---    }
--- }
-
 local rbls = {}
 
 local function ip_to_rbl(ip, rbl)
@@ -127,6 +104,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 		rspamd_config:register_module_option('rbl', 'default_from', 'string')
 		rspamd_config:register_module_option('rbl', 'default_rdns', 'string')
 		rspamd_config:register_module_option('rbl', 'default_helo', 'string')
+		rspamd_config:register_module_option('rbl', 'default_unknown', 'string')
 	end
 end
 
