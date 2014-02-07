@@ -6,11 +6,14 @@ Configuration is structured as follows:
 
 ~~~nginx
 rbl {
-  # default settings
-  an_rbl {
-    # rbl-specific subsection 
+  # default settings defined here
+  rbls {
+  # 'rbls' subsection under which the RBL definitions are nested
+    an_rbl {
+       # rbl-specific subsection 
+    }
+    # ...
   }
-  # ...
 }
 ~~~
 
