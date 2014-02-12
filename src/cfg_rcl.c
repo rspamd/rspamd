@@ -1423,6 +1423,7 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
 	gchar *val;
 	ucl_object_t *cur;
 	const gsize num_str_len = 32;
+	ucl_object_iter_t iter = NULL;
 
 	target = (GList **)(((gchar *)pd->user_struct) + pd->offset);
 
@@ -1431,10 +1432,10 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
 		return FALSE;
 	}
 
-	for (cur = obj; cur != NULL; cur = cur->next) {
+	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
 		switch (cur->type) {
 		case UCL_STRING:
-			val = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
+			val = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (cur));
 			break;
 		case UCL_INT:
 			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
