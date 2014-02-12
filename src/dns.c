@@ -1362,11 +1362,13 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 				p ++;
 				if (!new->is_master_slave) {
 					priority = strtoul (p, &err, 10);
-					if (err != NULL && (*err == 'm' || *err == 'M' || *err == 's' || *err == 'S')) {
-						new->is_master_slave = TRUE;
-					}
-					else {
-						msg_info ("bad character '%c', must be 'm' or 's' or a numeric priority", *err);
+					if (err != NULL && *err != '\0') {
+						if ((*err == 'm' || *err == 'M' || *err == 's' || *err == 'S')) {
+							new->is_master_slave = TRUE;
+						}
+						else {
+							msg_info ("bad character '%x', must be 'm' or 's' or a numeric priority", *err);
+						}
 					}
 				}
 				if (new->is_master_slave) {
@@ -1386,14 +1388,15 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 				priority = 0;
 			}
 			serv = &new->servers[new->servers_num];
-			if (inet_pton (AF_INET6, p, addr_holder) == 1 ||
-				inet_pton (AF_INET, p, addr_holder) == 1) {
+			if (inet_pton (AF_INET6, begin, addr_holder) == 1 ||
+				inet_pton (AF_INET, begin, addr_holder) == 1) {
 				serv->name = strdup (begin);
 				serv->up.priority = priority;
+				serv->up.weight = priority;
 				new->servers_num ++;
 			}
 			else {
-				msg_warn ("cannot parse ip address of nameserver: %s", p);
+				msg_warn ("cannot parse ip address of nameserver: %s", begin);
 				cur = g_list_next (cur);
 				continue;
 			}
