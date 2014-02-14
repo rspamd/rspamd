@@ -902,7 +902,7 @@ register_fuzzy_controller_call (struct controller_session *session,
 	return FALSE;
 }
 
-static gboolean
+static int
 fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 		struct worker_task *task, GError **err, gint cmd, gint flag, gint value, gint *saved)
 {
@@ -912,7 +912,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 	GList                           *cur;
 	gchar                           *checksum;
 	fuzzy_hash_t                    fake_fuzzy;
-	gboolean                        processed = FALSE;
+	gint                            processed = 0;
 
 	/* Plan new event for writing */
 	cur = task->text_parts;
@@ -927,14 +927,14 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 		}
 		if (! register_fuzzy_controller_call (session, rule, task,
 				part->fuzzy, cmd, value, flag, saved, err)) {
-			return FALSE;
+			goto err;
 		}
 		if (! register_fuzzy_controller_call (session, rule, task,
 				part->double_fuzzy, cmd, value, flag, saved, err)) {
 			/* Cannot write hash */
-			return FALSE;
+			goto err;
 		}
-		processed = TRUE;
+		processed ++;
 		cur = g_list_next (cur);
 	}
 
@@ -953,12 +953,12 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 					if (! register_fuzzy_controller_call (session, rule, task,
 							&fake_fuzzy, cmd, value, flag, saved, err)) {
 						g_free (checksum);
-						return FALSE;
+						goto err;
 					}
 
 					msg_info ("save hash of image: [%s] to list: %d", checksum, flag);
 					g_free (checksum);
-					processed = TRUE;
+					processed ++;
 				}
 			}
 		}
@@ -978,21 +978,23 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 				rspamd_strlcpy (fake_fuzzy.hash_pipe, checksum, sizeof (fake_fuzzy.hash_pipe));
 				if (! register_fuzzy_controller_call (session, rule, task,
 						&fake_fuzzy, cmd, value, flag, saved, err)) {
-					return FALSE;
+					goto err;
 				}
 				msg_info ("save hash of part of type: %s/%s: [%s] to list %d",
 						mime_part->type->type, mime_part->type->subtype,
 						checksum, flag);
 				g_free (checksum);
-				processed = TRUE;
+				processed ++;
 			}
 		}
 		cur = g_list_next (cur);
 	}
 
-	memory_pool_add_destructor (session->session_pool, (pool_destruct_func)free_task_soft, task);
-
 	return processed;
+
+err:
+	free_task (task, FALSE);
+	return -1;
 }
 
 static gboolean
@@ -1064,17 +1066,22 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		if (res) {
 			processed = TRUE;
 		}
+		else if (res == -1) {
+			break;
+		}
 
 		cur = g_list_next (cur);
 	}
 
-	if (!res) {
+	memory_pool_add_destructor (session->session_pool, (pool_destruct_func)free_task_soft, task);
+
+	if (res == -1) {
 		session->state = STATE_REPLY;
 		if (session->restful) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 404 No hashes have been written" CRLF CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Hash write error" CRLF CRLF);
 		}
 		else {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no hashes have been written" CRLF "END" CRLF);
+			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot write hashes" CRLF "END" CRLF);
 		}
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return FALSE;
@@ -1089,6 +1096,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		else {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "no fuzzy rules matched" CRLF "END" CRLF);
 		}
+		msg_info ("no rules matched fuzzy_add command");
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 			return FALSE;
 		}
