@@ -1,2 +1,2 @@
 version=3
-https://bitbucket.org/vstakhov/rspamd/downloads  .+rspamd-(\d+[\d\.]*).tar.gz
+http://githubredir.debian.net/github/vstakhov/rspamd/ (.*).tar.gz
