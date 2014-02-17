@@ -229,7 +229,7 @@ License: CC0
  <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 Files: src/ucl/src/xxhash.*
-Copytight: 2012-2013, Yann Collet.
+Copyright: 2012-2013, Yann Collet.
 License: BSD-2-Clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are
