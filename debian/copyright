@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: rspamd
-Source: https://bitbucket.org/vstakhov/rspamd
+Source: https://github.com/vstakhov/rspamd
 
 Files: contrib/lgpl/*
 Copyright: 1999, 2000  Scott Wimer,
