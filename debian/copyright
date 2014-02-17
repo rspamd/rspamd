@@ -89,7 +89,7 @@ License: BSD-3-CLAUSE
 
 Files: contrib/uthash/*
 Copyright: 2003-2013 Troy D. Hanson http://troydhanson.github.com/uthash/
-License: BSD-2-CLAUSE
+License: BSD-1-clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
  are met:
