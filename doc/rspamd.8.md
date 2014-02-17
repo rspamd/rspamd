@@ -8,7 +8,7 @@ rspamd - main daemon for rapid spam filtering system
 
 rspamd [*options*]...
 
-rspamd --help
+rspamd \--help
 
 # DESCRIPTION
 
@@ -66,23 +66,23 @@ Run rspamd daemon with default configuration:
 	
 Run rspamd in foreground with custom configuration:
 
-	rspamd -f -c ~/rspamd.conf
+	rspamd \-f \-c ~/rspamd.conf
 	
 Run rspamd specifying user and group:
 
-	rspamd -u rspamd -g rspamd -c /etc/rspamd/rspamd.conf
+	rspamd \-u rspamd \-g rspamd \-c /etc/rspamd/rspamd.conf
 
 Test lua scripts using rspamd API:
 
-	rspamd --test-lua=~/test1.lua --test-lua=~/test2.lua
+	rspamd \-\-test-lua=~/test1.lua \-\-test-lua=~/test2.lua
 
 Sign config files for `.includes` macro:
 
-	rspamd --private-key=sign.key --sign-config=rspamd.conf
+	rspamd \-\-private-key=sign.key \-\-sign-config=rspamd.conf
 
 Convert old `XML` config to the `UCL` format (since 0.6.0):
 
-	rspamd -c /etc/rspamd.xml --convert-config=/etc/rspamd/rspamd.conf
+	rspamd \-c /etc/rspamd.xml \-\-convert-config=/etc/rspamd/rspamd.conf
 
 # SEE ALSO
 

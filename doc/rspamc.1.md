@@ -8,7 +8,7 @@ rspamc - rspamd command line client
 
 rspamc [*options*] [*command*] [*input-file*]...
 
-rspamc --help
+rspamc \-\-help
 
 # DESCRIPTION
 
@@ -20,8 +20,8 @@ Rspamc supports the following commands:
 * Control commands
 	* *learn_spam*: learn message as spam
 	* *learn_ham*: learn message as ham
-	* *fuzzy_add*: add message to fuzzy storage (check `-f` and `-w` options for this command)
-	* *fuzzy_del*: delete message from fuzzy storage (check `-f` option for this command)
+	* *fuzzy_add*: add message to fuzzy storage (check `\-f` and `\-w` options for this command)
+	* *fuzzy_del*: delete message from fuzzy storage (check `\-f` option for this command)
 	* *stat*: show rspamd statistics
 	* *stat_reset*: show and reset rspamd statistics (useful for graphs)
 	* *counters*: display rspamd symbols statistics
@@ -30,7 +30,7 @@ Rspamc supports the following commands:
 	* *add_action*: add or modify action settings
 
 Control commands that modifies rspamd state are considered as privileged and basically requires a password
-to be specified with `-P` option (see **OPTIONS**, below, for details). 
+to be specified with `\-P` option (see **OPTIONS**, below, for details). 
 This depends on a controller's settings and is discussed in `rspamd-workers` page.
 
 `Input files` may be either regular file(s) or a directory to scan. If no files are specified rspamc reads
@@ -39,10 +39,10 @@ requires input.
 
 # OPTIONS
 
--h *host[:port]*, \--connect=*host[:port]*
+\-h *host[:port]*, \--connect=*host[:port]*
 	Specify host and port
 	
--P *password*, \--password=*password*
+\-P *password*, \--password=*password*
 	Specify control password
 	
 -c *name*, \--classifier=*name*
@@ -106,15 +106,15 @@ Check files:
 	
 Learn files:
 
-	rspamc -P pass learn_spam file1 file2 file3
+	rspamc \-P pass learn_spam file1 file2 file3
 
 Add fuzzy hash to set 2:
 	
-	rspamc -P pass -f 2 -w 10 fuzzy_add file1 file2
+	rspamc \-P pass \-f 2 \-w 10 fuzzy_add file1 file2
 	
 Delete fuzzy hash from other server:
 
-	rspamc -P pass -h hostname:11334 -f 2 fuzzy_del file1 file2
+	rspamc \-P pass \-h hostname:11334 \-f 2 fuzzy_del file1 file2
 	
 Get statistics:
 	
