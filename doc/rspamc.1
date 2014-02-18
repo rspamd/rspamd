@@ -1,12 +1,12 @@
-.TH RSPAMC 1 "" "Rspamd User Manual"
+.TH "RSPAMC" "1" "" "Rspamd User Manual" ""
 .SH NAME
 .PP
-rspamc - rspamd command line client
+rspamc \- rspamd command line client
 .SH SYNOPSIS
 .PP
-rspamc [\f[I]options\f[]] [\f[I]command\f[]] [\f[I]input-file\f[]]...
+rspamc [\f[I]options\f[]] [\f[I]command\f[]] [\f[I]input\-file\f[]]...
 .PP
-rspamc --help
+rspamc \-\-help
 .SH DESCRIPTION
 .PP
 Rspamc is a simple client for checking messages using rspamd or for
@@ -26,11 +26,11 @@ Control commands
 .IP \[bu] 2
 \f[I]learn_ham\f[]: learn message as ham
 .IP \[bu] 2
-\f[I]fuzzy_add\f[]: add message to fuzzy storage (check \f[C]-f\f[] and
-\f[C]-w\f[] options for this command)
+\f[I]fuzzy_add\f[]: add message to fuzzy storage (check \f[C]\\\-f\f[]
+and \f[C]\\\-w\f[] options for this command)
 .IP \[bu] 2
-\f[I]fuzzy_del\f[]: delete message from fuzzy storage (check \f[C]-f\f[]
-option for this command)
+\f[I]fuzzy_del\f[]: delete message from fuzzy storage (check
+\f[C]\\\-f\f[] option for this command)
 .IP \[bu] 2
 \f[I]stat\f[]: show rspamd statistics
 .IP \[bu] 2
@@ -47,10 +47,10 @@ graphs)
 .RE
 .PP
 Control commands that modifies rspamd state are considered as privileged
-and basically requires a password to be specified with \f[C]-P\f[]
+and basically requires a password to be specified with \f[C]\\\-P\f[]
 option (see \f[B]OPTIONS\f[], below, for details).
 This depends on a controller\[aq]s settings and is discussed in
-\f[C]rspamd-workers\f[] page.
+\f[C]rspamd\-workers\f[] page.
 .PP
 \f[C]Input\ files\f[] may be either regular file(s) or a directory to
 scan.
@@ -59,84 +59,84 @@ Controller commands usually does not accept any input, however learn*
 and fuzzy* commands requires input.
 .SH OPTIONS
 .PP
--h \f[I]host[:port]\f[], --connect=\f[I]host[:port]\f[] Specify host and
-port
+\-h \f[I]host[:port]\f[], \-\-connect=\f[I]host[:port]\f[] Specify host
+and port
 .PP
--P \f[I]password\f[], --password=\f[I]password\f[] Specify control
+\-P \f[I]password\f[], \-\-password=\f[I]password\f[] Specify control
 password
 .TP
-.B -c \f[I]name\f[], --classifier=\f[I]name\f[]
+.B \-c \f[I]name\f[], \-\-classifier=\f[I]name\f[]
 Classifier to learn spam or ham (bayes is used by default)
 .RS
 .RE
 .TP
-.B -w \f[I]weight\f[], --weight=\f[I]weight\f[]
+.B \-w \f[I]weight\f[], \-\-weight=\f[I]weight\f[]
 Weight for fuzzy operations
 .RS
 .RE
 .TP
-.B -f \f[I]number\f[], --flag=\f[I]number\f[]
+.B \-f \f[I]number\f[], \-\-flag=\f[I]number\f[]
 Flag for fuzzy operations
 .RS
 .RE
 .TP
-.B -p, --pass
+.B \-p, \-\-pass
 Pass all filters
 .RS
 .RE
 .TP
-.B -v, --verbose
+.B \-v, \-\-verbose
 More verbose output
 .RS
 .RE
 .TP
-.B -i \f[I]ip address\f[], --ip=\f[I]ip address\f[]
+.B \-i \f[I]ip address\f[], \-\-ip=\f[I]ip address\f[]
 Emulate that message was received from specified ip address
 .RS
 .RE
 .TP
-.B -u \f[I]username\f[], --user=\f[I]username\f[]
+.B \-u \f[I]username\f[], \-\-user=\f[I]username\f[]
 Emulate that message was from specified user
 .RS
 .RE
 .TP
-.B -d \f[I]user\@domain\f[], --deliver=\f[I]user\@domain\f[]
+.B \-d \f[I]user\@domain\f[], \-\-deliver=\f[I]user\@domain\f[]
 Emulate that message is delivered to specified user
 .RS
 .RE
 .TP
-.B -F \f[I]user\@domain\f[], --from=\f[I]user\@domain\f[]
+.B \-F \f[I]user\@domain\f[], \-\-from=\f[I]user\@domain\f[]
 Emulate that message is from specified user
 .RS
 .RE
 .TP
-.B -r \f[I]user\@domain\f[], --rcpt=\f[I]user\@domain\f[]
+.B \-r \f[I]user\@domain\f[], \-\-rcpt=\f[I]user\@domain\f[]
 Emulate that message is for specified user
 .RS
 .RE
 .TP
-.B --helo=\f[I]helo_string\f[]
+.B \-\-helo=\f[I]helo_string\f[]
 Imitate SMTP HELO passing from MTA
 .RS
 .RE
 .TP
-.B --hostname=\f[I]hostname\f[]
+.B \-\-hostname=\f[I]hostname\f[]
 Imitate hostname passing from MTA (rspamd assumes that it is verified by
 MTA)
 .RS
 .RE
 .TP
-.B -t \f[I]seconds\f[], --timeout=\f[I]seconds\f[]
+.B \-t \f[I]seconds\f[], \-\-timeout=\f[I]seconds\f[]
 Timeout for waiting for a reply
 .RS
 .RE
 .TP
-.B -b \f[I]host:port\f[], --bind=\f[I]host:port\f[]
+.B \-b \f[I]host:port\f[], \-\-bind=\f[I]host:port\f[]
 Bind to specified ip address
 .RS
 .RE
 .TP
-.B --commands
+.B \-\-commands
 List available commands
 .RS
 .RE
@@ -166,7 +166,7 @@ Learn files:
 .IP
 .nf
 \f[C]
-rspamc\ -P\ pass\ learn_spam\ file1\ file2\ file3
+rspamc\ \\\-P\ pass\ learn_spam\ file1\ file2\ file3
 \f[]
 .fi
 .PP
@@ -174,7 +174,7 @@ Add fuzzy hash to set 2:
 .IP
 .nf
 \f[C]
-rspamc\ -P\ pass\ -f\ 2\ -w\ 10\ fuzzy_add\ file1\ file2
+rspamc\ \\\-P\ pass\ \\\-f\ 2\ \\\-w\ 10\ fuzzy_add\ file1\ file2
 \f[]
 .fi
 .PP
@@ -182,7 +182,7 @@ Delete fuzzy hash from other server:
 .IP
 .nf
 \f[C]
-rspamc\ -P\ pass\ -h\ hostname:11334\ -f\ 2\ fuzzy_del\ file1\ file2
+rspamc\ \\\-P\ pass\ \\\-h\ hostname:11334\ \\\-f\ 2\ fuzzy_del\ file1\ file2
 \f[]
 .fi
 .PP
