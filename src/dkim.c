@@ -767,6 +767,7 @@ rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
 			if (elt->type == DNS_REQUEST_TXT) {
 				key = rspamd_dkim_parse_key (elt->content.txt.data, &keylen, &err);
 				if (key) {
+					key->ttl = elt->ttl;
 					break;
 				}
 			}

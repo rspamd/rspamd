@@ -50,7 +50,9 @@ typedef struct rspamd_lru_element_s {
 	gpointer                  data;
 	gpointer                  key;
 	time_t                    store_time;
+	guint                     ttl;
 	rspamd_lru_hash_t        *hash;
+	GList                    *link;
 } rspamd_lru_element_t;
 
 
@@ -141,7 +143,8 @@ gpointer rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t n
  * @param key key to insert
  * @param value value of key
  */
-void rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now);
+void rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
+		time_t now, guint ttl);
 
 /**
  * Remove lru hash

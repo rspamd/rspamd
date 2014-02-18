@@ -56,6 +56,8 @@ struct spf_record {
 	gint dns_requests;
 	gint requests_inflight;
 
+	guint ttl;
+
 	GList *addrs;
 	gchar *cur_domain;
 	gchar *sender;

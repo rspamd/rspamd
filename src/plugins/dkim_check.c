@@ -281,14 +281,16 @@ dkim_module_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_conte
 
 	if (key != NULL) {
 		/* Add new key to the lru cache */
-		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash, g_strdup (ctx->dns_key), key, task->tv.tv_sec);
+		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash, g_strdup (ctx->dns_key),
+				key, task->tv.tv_sec, key->ttl);
 		dkim_module_check (task, ctx, key);
 	}
 	else {
 		/* Insert tempfail symbol */
 		msg_info ("cannot get key for domain %s", ctx->dns_key);
 		if (err != NULL) {
-			insert_result (task, dkim_module_ctx->symbol_tempfail, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, err->message)));
+			insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
+					g_list_prepend (NULL, memory_pool_strdup (task->task_pool, err->message)));
 
 		}
 		else {
@@ -322,7 +324,10 @@ dkim_symbol_callback (struct worker_task *task, void *unused)
 #endif
 			/* Parse signature */
 			msg_debug ("create dkim signature");
-			/* Check only last signature as there is no way to check embeded signatures after resend or something like this */
+			/*
+			 * Check only last signature as there is no way to check embeded signatures after
+			 * resend or something like this
+			 */
 			if (dkim_module_ctx->skip_multi) {
 				if (hlist->next != NULL) {
 					msg_info ("<%s> skip dkim check as it has several dkim signatures", task->message_id);
@@ -337,7 +342,8 @@ dkim_symbol_callback (struct worker_task *task, void *unused)
 			}
 			else {
 				/* Get key */
-				if (dkim_module_ctx->trusted_only && (dkim_module_ctx->dkim_domains == NULL || g_hash_table_lookup (dkim_module_ctx->dkim_domains, ctx->domain) == NULL)) {
+				if (dkim_module_ctx->trusted_only && (dkim_module_ctx->dkim_domains == NULL ||
+						g_hash_table_lookup (dkim_module_ctx->dkim_domains, ctx->domain) == NULL)) {
 					msg_debug ("skip dkim check for %s domain", ctx->domain);
 					return;
 				}

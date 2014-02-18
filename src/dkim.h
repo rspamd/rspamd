@@ -155,6 +155,7 @@ typedef struct rspamd_dkim_key_s {
 	guint8 *keydata;
 	guint keylen;
 	gsize decoded_len;
+	guint ttl;
 #ifdef HAVE_OPENSSL
 	RSA *key_rsa;
 	BIO *key_bio;
