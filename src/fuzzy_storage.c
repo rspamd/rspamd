@@ -79,7 +79,7 @@ worker_t fuzzy_worker = {
 static GQueue                  *hashes[BUCKETS];
 static GQueue                  *frequent;
 static GHashTable              *static_hash;
-static bloom_filter_t          *bf;
+static rspamd_bloom_filter_t   *bf;
 
 /* Number of cache modifications */
 static guint32                 mods = 0;
@@ -666,7 +666,7 @@ process_write_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_
 {
 	struct rspamd_fuzzy_node       *h;
 
-	if (rspamd_bloom_check (bf, cmd->hash)) {
+	if (bloom_check (bf, cmd->hash)) {
 		if (update_hash (cmd, time, ctx)) {
 			return TRUE;
 		}
@@ -1040,6 +1040,12 @@ start_fuzzy (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &sev);
 	signal_add (&sev, NULL);
 
+	/* Init bloom filter */
+	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
+	/* Try to read hashes from file */
+	if (!read_hashes_file (worker)) {
+		msg_err ("cannot read hashes file, it can be created after save procedure");
+	}
 
 	if (ctx->strict_hash) {
 		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
@@ -1050,13 +1056,6 @@ start_fuzzy (struct rspamd_worker *worker)
 			hashes[i] = g_queue_new ();
 		}
 		frequent = g_queue_new ();
-	}
-
-	/* Init bloom filter */
-	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);
-	/* Try to read hashes from file */
-	if (!read_hashes_file (worker)) {
-		msg_err ("cannot read hashes file, it can be created after save procedure");
 	}
 
 	/* Timer event */
