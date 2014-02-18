@@ -851,7 +851,8 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/src/ucl/include"
 					"${CMAKE_SOURCE_DIR}/contrib/uthash"
 					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
-					"${CMAKE_SOURCE_DIR}/contrib/libottery")
+					"${CMAKE_SOURCE_DIR}/contrib/libottery"
+					"${CMAKE_SOURCE_DIR}/contrib/xxhash")
 
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
@@ -887,13 +888,13 @@ IF(NOT HIREDIS_FOUND)
     INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/hiredis")
 ENDIF(NOT HIREDIS_FOUND)
 
-
+ADD_SUBDIRECTORY(contrib/xxhash)
+ADD_SUBDIRECTORY(contrib/http-parser)
+ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(src/lua)
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
 ADD_SUBDIRECTORY(src/ucl)
-ADD_SUBDIRECTORY(contrib/http-parser)
-ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(src/client)
 

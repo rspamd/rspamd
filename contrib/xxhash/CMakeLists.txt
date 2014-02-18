@@ -1,0 +1,3 @@
+SET(XXHASHSRC xxhash.c)
+
+ADD_LIBRARY(xxhash STATIC ${XXHASHSRC})

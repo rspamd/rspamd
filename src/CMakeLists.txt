@@ -70,6 +70,7 @@ TARGET_LINK_LIBRARIES(rspamd-util rspamd-ucl)
 TARGET_LINK_LIBRARIES(rspamd-util rspamd-ottery)
 TARGET_LINK_LIBRARIES(rspamd-util rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-util event)
+TARGET_LINK_LIBRARIES(rspamd-util xxhash)
 
 IF(NOT DEBIAN_BUILD)
 SET_TARGET_PROPERTIES(rspamd-util PROPERTIES VERSION ${RSPAMD_VERSION})

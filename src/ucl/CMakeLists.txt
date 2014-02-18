@@ -1,13 +1,13 @@
 SET(UCLSRC            src/ucl_util.c
                       src/ucl_parser.c
                       src/ucl_emitter.c
-                      src/ucl_hash.c
-                      src/xxhash.c)
+                      src/ucl_hash.c)
 
 ADD_LIBRARY(rspamd-ucl ${LINK_TYPE} ${UCLSRC})
 SET_TARGET_PROPERTIES(rspamd-ucl PROPERTIES VERSION ${RSPAMD_VERSION})
 SET_TARGET_PROPERTIES(rspamd-ucl PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
 
+TARGET_LINK_LIBRARIES(rspamd-ucl xxhash)
 IF(HAVE_FETCH_H)
     TARGET_LINK_LIBRARIES(rspamd-ucl fetch)
 ELSE(HAVE_FETCH_H)
