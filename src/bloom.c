@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "bloom.h"
+#include "xxhash.h"
 
 /* 4 bits are used for counting (implementing delete operation) */
 #define SIZE_BIT 4
@@ -50,130 +51,23 @@
 #define GETBIT(a, n) (a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)))
 
 /* Common hash functions */
-guint
-bloom_sax_hash (const gchar *key)
+
+
+rspamd_bloom_filter_t                 *
+rspamd_bloom_create (size_t size, size_t nfuncs, ...)
 {
-	guint                           h = 0;
-
-	while (*key)
-		h ^= (h << 5) + (h >> 2) + (gchar)*key++;
-
-	return h;
-}
-
-guint
-bloom_sdbm_hash (const gchar *key)
-{
-	guint                           h = 0;
-
-	while (*key)
-		h = (gchar)*key++ + (h << 6) + (h << 16) - h;
-
-	return h;
-}
-
-guint
-bloom_fnv_hash (const gchar *key)
-{
-	guint                           h = 0;
-
-	while (*key) {
-		h ^= (gchar)*key++;
-		h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-	}
-
-	return h;
-}
-
-guint
-bloom_rs_hash (const gchar *key)
-{
-	guint                           b = 378551;
-	guint                           a = 63689;
-	guint                           hash = 0;
-
-	while (*key) {
-		hash = hash * a + (gchar)*key++;
-		a = a * b;
-	}
-
-	return hash;
-}
-
-guint
-bloom_js_hash (const gchar *key)
-{
-	guint                           hash = 1315423911;
-
-	while (*key) {
-		hash ^= ((hash << 5) + (gchar)*key++ + (hash >> 2));
-	}
-
-	return hash;
-}
-
-
-guint
-bloom_elf_hash (const gchar *key)
-{
-	guint                           hash = 0;
-	guint                           x = 0;
-
-	while (*key) {
-		hash = (hash << 4) + (gchar)*key++;
-		if ((x = hash & 0xF0000000L) != 0) {
-			hash ^= (x >> 24);
-		}
-		hash &= ~x;
-	}
-
-	return hash;
-}
-
-
-guint
-bloom_bkdr_hash (const gchar *key)
-{
-	guint                           seed = 131;	/* 31 131 1313 13131 131313 etc.. */
-	guint                           hash = 0;
-
-	while (*key) {
-		hash = (hash * seed) + (gchar)*key++;
-	}
-
-	return hash;
-}
-
-
-guint
-bloom_ap_hash (const gchar *key)
-{
-	guint                           hash = 0xAAAAAAAA;
-	guint                           i = 0;
-
-	while (*key) {
-		hash ^= ((i & 1) == 0) ? ((hash << 7) ^ ((gchar)*key) * (hash >> 3)) : (~((hash << 11) + (((gchar)*key) ^ (hash >> 5))));
-		key++;
-	}
-
-	return hash;
-}
-
-bloom_filter_t                 *
-bloom_create (size_t size, size_t nfuncs, ...)
-{
-	bloom_filter_t                 *bloom;
+	rspamd_bloom_filter_t                 *bloom;
 	va_list                         l;
 	gsize                           n;
 
-	if (!(bloom = g_malloc (sizeof (bloom_filter_t)))) {
+	if (!(bloom = g_malloc (sizeof (rspamd_bloom_filter_t)))) {
 		return NULL;
 	}
 	if (!(bloom->a = g_new0 (gchar,  (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
 		g_free (bloom);
 		return NULL;
 	}
-	if (!(bloom->funcs = (hashfunc_t *) g_malloc (nfuncs * sizeof (hashfunc_t)))) {
+	if (!(bloom->seeds = g_new0 (guint32, nfuncs))) {
 		g_free (bloom->a);
 		g_free (bloom);
 		return NULL;
@@ -181,7 +75,7 @@ bloom_create (size_t size, size_t nfuncs, ...)
 
 	va_start (l, nfuncs);
 	for (n = 0; n < nfuncs; ++n) {
-		bloom->funcs[n] = va_arg (l, hashfunc_t);
+		bloom->seeds[n] = va_arg (l, guint32);
 	}
 	va_end (l);
 
@@ -192,22 +86,26 @@ bloom_create (size_t size, size_t nfuncs, ...)
 }
 
 void
-bloom_destroy (bloom_filter_t * bloom)
+rspamd_bloom_destroy (rspamd_bloom_filter_t * bloom)
 {
 	g_free (bloom->a);
-	g_free (bloom->funcs);
+	g_free (bloom->seeds);
 	g_free (bloom);
 }
 
 gboolean
-bloom_add (bloom_filter_t * bloom, const gchar *s)
+rspamd_bloom_add (rspamd_bloom_filter_t * bloom, const gchar *s)
 {
-	size_t                          n;
+	size_t                          n, len;
 	u_char                          t;
 	guint                           v;
 
+	if (s == NULL) {
+		return FALSE;
+	}
+	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = bloom->funcs[n] (s) % bloom->asize;
+		v = XXH32 (s, len, bloom->seeds[n]) % bloom->asize;
 		INCBIT (bloom->a, v, t);
 	}
 
@@ -215,14 +113,18 @@ bloom_add (bloom_filter_t * bloom, const gchar *s)
 }
 
 gboolean
-bloom_del (bloom_filter_t * bloom, const gchar *s)
+rspamd_bloom_del (rspamd_bloom_filter_t * bloom, const gchar *s)
 {
-	size_t                          n;
+	size_t                          n, len;
 	u_char                          t;
 	guint                           v;
 
+	if (s == NULL) {
+		return FALSE;
+	}
+	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = bloom->funcs[n] (s) % bloom->asize;
+		v = XXH32 (s, len, bloom->seeds[n]) % bloom->asize;
 		DECBIT (bloom->a, v, t);
 	}
 
@@ -231,15 +133,20 @@ bloom_del (bloom_filter_t * bloom, const gchar *s)
 }
 
 gboolean
-bloom_check (bloom_filter_t * bloom, const gchar *s)
+rspamd_bloom_check (rspamd_bloom_filter_t * bloom, const gchar *s)
 {
-	size_t                          n;
+	size_t                          n, len;
 	guint                           v;
 
+	if (s == NULL) {
+		return FALSE;
+	}
+	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = bloom->funcs[n] (s) % bloom->asize;
-		if (!(GETBIT (bloom->a, v)))
+		v = XXH32 (s, len, bloom->seeds[n]) % bloom->asize;
+		if (!(GETBIT (bloom->a, v))) {
 			return FALSE;
+		}
 	}
 
 	return TRUE;
