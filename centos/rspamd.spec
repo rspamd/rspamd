@@ -5,8 +5,6 @@
 %define rspamd_confdir   %{_sysconfdir}/rspamd
 %define rspamd_pluginsdir   %{_datadir}/rspamd
 
-%define USE_JUDY         0
-
 %if 0%{?suse_version}
 %define __cmake cmake
 %define __install install
@@ -29,17 +27,8 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-%if "%{USE_JUDY}" == "1"
-%if 0%{?suse_version}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,judy-devel,pcre-devel
-%else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,Judy-devel,pcre-devel
-%endif
-Requires:       lua, logrotate
-%else
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel
 Requires:       lua, logrotate
-%endif
 # for /user/sbin/useradd
 %if 0%{?suse_version}
 Requires(pre):  shadow
@@ -96,12 +85,7 @@ lua.
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
         -DRSPAMD_GROUP=%{rspamd_group} \
-        -DRSPAMD_USER=%{rspamd_user} \
-%if "%{USE_JUDY}" == "1"
-        -DENABLE_JUDY=ON
-%else
-        -DENABLE_JUDY=OFF
-%endif
+        -DRSPAMD_USER=%{rspamd_user}
 
 %{__make} %{?jobs:-j%jobs}
 
