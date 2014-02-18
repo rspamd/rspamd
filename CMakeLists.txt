@@ -440,12 +440,12 @@ IF(OPENSSL_FOUND)
 	INCLUDE_DIRECTORIES("${OPENSSL_INCLUDE_DIR}")
 ENDIF(OPENSSL_FOUND)
 
-ProcessPackage(GLIB2 glib-2.0>=2.12)
+ProcessPackage(GLIB2 glib-2.0>=2.16)
 ProcessPackage(GTHREAD gthread-2.0)
 
 IF(ENABLE_HIREDIS MATCHES "ON")
 	# Try to find hiredis library
-	ProcessPackage(HIREDIS hiredis)
+	ProcessPackage(HIREDIS libhiredis)
 ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
 ProcessPackage(GMIME2 gmime-2.6 gmime-2.4 gmime-2.0)
@@ -850,7 +850,8 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_BINARY_DIR}/src" 
 					"${CMAKE_SOURCE_DIR}/src/ucl/include"
 					"${CMAKE_SOURCE_DIR}/contrib/uthash"
-					"${CMAKE_SOURCE_DIR}/contrib/http-parser")
+					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
+					"${CMAKE_SOURCE_DIR}/contrib/libottery")
 
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c
@@ -886,7 +887,7 @@ IF(NOT HIREDIS_FOUND)
     INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/hiredis")
 ENDIF(NOT HIREDIS_FOUND)
 
-
+ADD_SUBDIRECTORY(contrib/xxhash)
 ADD_SUBDIRECTORY(src/lua)
 ADD_SUBDIRECTORY(src/json)
 ADD_SUBDIRECTORY(src/cdb)
