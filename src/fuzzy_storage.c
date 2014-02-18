@@ -79,7 +79,7 @@ worker_t fuzzy_worker = {
 static GQueue                  *hashes[BUCKETS];
 static GQueue                  *frequent;
 static GHashTable              *static_hash;
-static bloom_filter_t          *bf;
+static rspamd_bloom_filter_t   *bf;
 
 /* Number of cache modifications */
 static guint32                 mods = 0;
@@ -184,7 +184,7 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 			}
 			server_stat->fuzzy_hashes --;
 			g_hash_table_remove (static_hash, node->h.hash_pipe);
-			bloom_del (bf, node->h.hash_pipe);
+			rspamd_bloom_del (bf, node->h.hash_pipe);
 			g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
 		}
 		else {
@@ -192,7 +192,7 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 			node = (struct rspamd_fuzzy_node *)cur->data;
 			head = hashes[node->h.block_size % BUCKETS];
 			g_queue_delete_link (head, cur);
-			bloom_del (bf, node->h.hash_pipe);
+			rspamd_bloom_del (bf, node->h.hash_pipe);
 			if (node->time != INVALID_NODE_TIME) {
 				server_stat->fuzzy_hashes_expired ++;
 			}
@@ -492,7 +492,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 				g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
 			}
 		}
-		bloom_add (bf, node->h.hash_pipe);
+		rspamd_bloom_add (bf, node->h.hash_pipe);
 		if (touch_stat) {
 			server_stat->fuzzy_hashes ++;
 		}
@@ -610,7 +610,7 @@ process_check_command (struct fuzzy_cmd *cmd, gint *flag, guint64 time, struct r
 	struct rspamd_fuzzy_node       *h;
 
 
-	if (!bloom_check (bf, cmd->hash)) {
+	if (!rspamd_bloom_check (bf, cmd->hash)) {
 		return 0;
 	}
 
@@ -666,7 +666,7 @@ process_write_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_
 {
 	struct rspamd_fuzzy_node       *h;
 
-	if (bloom_check (bf, cmd->hash)) {
+	if (rspamd_bloom_check (bf, cmd->hash)) {
 		if (update_hash (cmd, time, ctx)) {
 			return TRUE;
 		}
@@ -685,8 +685,10 @@ process_write_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_
 	else {
 		g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
 	}
+	rspamd_bloom_add (bf, cmd->hash);
+
 	rspamd_rwlock_writer_unlock (ctx->tree_lock);
-	bloom_add (bf, cmd->hash);
+
 	mods++;
 	server_stat->fuzzy_hashes ++;
 	msg_info ("fuzzy hash was successfully added");
@@ -704,7 +706,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s, struct rspamd_fuzzy_storage_ctx *ctx
 	if (ctx->strict_hash) {
 		rspamd_rwlock_writer_lock (ctx->tree_lock);
 		if (g_hash_table_remove (static_hash, s->hash_pipe)) {
-			bloom_del (bf, s->hash_pipe);
+			rspamd_bloom_del (bf, s->hash_pipe);
 			msg_info ("fuzzy hash was successfully deleted");
 			server_stat->fuzzy_hashes --;
 			mods++;
@@ -723,7 +725,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s, struct rspamd_fuzzy_storage_ctx *ctx
 				tmp = cur;
 				cur = g_list_next (cur);
 				g_queue_delete_link (hash, tmp);
-				bloom_del (bf, s->hash_pipe);
+				rspamd_bloom_del (bf, s->hash_pipe);
 				msg_info ("fuzzy hash was successfully deleted");
 				server_stat->fuzzy_hashes --;
 				mods++;
@@ -745,7 +747,7 @@ process_delete_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy
 	fuzzy_hash_t                    s;
 	gboolean                        res = FALSE;
 
-	if (!bloom_check (bf, cmd->hash)) {
+	if (!rspamd_bloom_check (bf, cmd->hash)) {
 		return FALSE;
 	}
 
@@ -1039,7 +1041,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	signal_add (&sev, NULL);
 
 	/* Init bloom filter */
-	bf = bloom_create (20000000L, DEFAULT_BLOOM_HASHES);
+	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
 	/* Try to read hashes from file */
 	if (!read_hashes_file (worker)) {
 		msg_err ("cannot read hashes file, it can be created after save procedure");
