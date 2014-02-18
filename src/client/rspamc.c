@@ -462,6 +462,9 @@ rspamc_symbols_output (ucl_object_t *obj)
 			rspamd_fprintf (stdout, "Emails: %s\n", emitted);
 			free (emitted);
 		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "error") == 0) {
+			rspamd_fprintf (stdout, "Scan error: %s\n", ucl_object_tostring (cur));
+		}
 		else if (cur->type == UCL_OBJECT) {
 			/* Parse metric */
 			rspamc_metric_output (cur);
@@ -510,6 +513,9 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 			cmd->command_output_func (result);
 		}
 		ucl_object_unref (result);
+	}
+	else if (err != NULL) {
+		rspamd_fprintf (stdout, "%s\n", err->message);
 	}
 
 	rspamd_fprintf (stdout, "\n");
@@ -584,6 +590,7 @@ main (gint argc, gchar **argv, gchar **env)
 	if (argc == 1) {
 		start_argc = argc;
 		in = stdin;
+		cmd = check_rspamc_command ("symbols");
 	}
 	else if (argc == 2) {
 		/* One argument is whether command or filename */

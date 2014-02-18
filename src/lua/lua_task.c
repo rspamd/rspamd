@@ -963,7 +963,7 @@ lua_task_get_from_headers (lua_State *L)
 	struct worker_task             *task = lua_check_task (L);
 	InternetAddressList            *addrs;
 
-	if (task) {
+	if (task && task->message != NULL) {
 #ifndef GMIME24
 		addrs = internet_address_parse_string (g_mime_message_get_sender (task->message));
 #else

@@ -183,6 +183,9 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	if (msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
+		task->last_error = "message's body is empty";
+		task->error_code = RSPAMD_LENGTH_ERROR;
+		task->state = WRITE_REPLY;
 		return 0;
 	}
 
@@ -215,7 +218,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		if (task->cfg->pre_filters == NULL) {
 			r = process_filters (task);
 			if (r == -1) {
-				task->last_error = "Filter processing error";
+				task->last_error = "filter processing error";
 				task->error_code = RSPAMD_FILTER_ERROR;
 				task->state = WRITE_REPLY;
 				return 0;

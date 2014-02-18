@@ -706,7 +706,8 @@ void
 rspamd_protocol_write_reply (struct worker_task *task)
 {
 	struct rspamd_http_message    *msg;
-	const gchar                   *ctype = "text/plain";
+	const gchar                   *ctype = "application/json";
+	ucl_object_t                   *top = NULL;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
@@ -716,7 +717,10 @@ rspamd_protocol_write_reply (struct worker_task *task)
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {
 		msg->code = task->error_code;
-		msg->body = g_string_new (task->last_error);
+		top = ucl_object_insert_key (top, ucl_object_fromstring (task->last_error), "error", 0, false);
+		msg->body = g_string_sized_new (256);
+		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
+		ucl_object_unref (top);
 	}
 	else {
 		switch (task->cmd) {
@@ -726,7 +730,6 @@ rspamd_protocol_write_reply (struct worker_task *task)
 		case CMD_SYMBOLS:
 		case CMD_PROCESS:
 		case CMD_SKIP:
-			ctype = "application/json";
 			write_check_reply (msg, task);
 			break;
 		case CMD_PING:
