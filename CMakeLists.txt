@@ -31,7 +31,6 @@ OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: OFF]"                 OFF)
-OPTION(ENABLE_JUDY         "Find and link with Judy library [default: ON]"      ON)
 OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
 OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
 OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: OFF]"  OFF)
@@ -485,32 +484,6 @@ GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
 INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
 LINK_DIRECTORIES("${LIBEVENT_PATH}")
 
-IF(ENABLE_JUDY MATCHES "ON")
-	# Find libjudy
-	FIND_LIBRARY(LIBJUDY_LIBRARY NAMES Judy PATH_SUFFIXES lib64 lib
-	                  PATHS
-	                      ~/Library/Frameworks
-	                      /Library/Frameworks
-	                      /usr/local
-	                      /usr
-	                      /sw
-	                      /opt/local
-	                      /opt/csw
-	                      /opt
-	                 DOC "Path where the libjudy library can be found")
-	IF(LIBJUDY_LIBRARY)
-		FIND_PATH(LIBJUDY_INCLUDE Judy.h PATHS 	/opt/include
-												/usr/include
-												/usr/local/include
-												DOC "Path where the judy header files can be found")
-	
-		GET_FILENAME_COMPONENT(LIBJUDY_PATH "${LIBJUDY_LIBRARY}" PATH)
-		INCLUDE_DIRECTORIES("${LIBJUDY_INCLUDE}")
-		LINK_DIRECTORIES("${LIBJUDY_PATH}")
-		SET(WITH_JUDY 1)
-	ENDIF(LIBJUDY_LIBRARY)
-ENDIF(ENABLE_JUDY MATCHES "ON")
-
 # Find libbd
 IF(ENABLE_DB MATCHES "ON")
 	FIND_LIBRARY(LIBDB_LIBRARY NAMES db PATHS PATH_SUFFIXES lib64 lib
@@ -959,10 +932,6 @@ TARGET_LINK_LIBRARIES(rspamd rspamd-mime)
 TARGET_LINK_LIBRARIES(rspamd rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd rspamd-util)
 TARGET_LINK_LIBRARIES(rspamd rspamd-lua)
-
-IF(LIBJUDY_LIBRARY)
-	TARGET_LINK_LIBRARIES(rspamd Judy)
-ENDIF(LIBJUDY_LIBRARY)
 
 TARGET_LINK_LIBRARIES(rspamd event)
 IF(HAVE_LIBEVENT2)
