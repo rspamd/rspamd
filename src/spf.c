@@ -90,7 +90,7 @@ do {														\
 } while (0)													\
 
 static gboolean parse_spf_record (struct worker_task *task, struct spf_record *rec);
-static void start_spf_parse (struct spf_record *rec, gchar *begin);
+static void start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl);
 
 /* Determine spf mech */
 static spf_mech_t
@@ -506,7 +506,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 						g_list_free (cb->rec->addrs);
 						cb->rec->addrs = NULL;
 					}
-					start_spf_parse (cb->rec, begin);
+					start_spf_parse (cb->rec, begin, elt_data->ttl);
 
 				}
 				break;
@@ -520,7 +520,7 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					tmp = cb->rec->addrs;
 					cb->rec->addrs = NULL;
 					cb->rec->in_include = TRUE;
-					start_spf_parse (cb->rec, begin);
+					start_spf_parse (cb->rec, begin, 0);
 					cb->rec->in_include = FALSE;
 
 #ifdef SPF_DEBUG
@@ -1287,7 +1287,7 @@ parse_spf_scopes (struct spf_record *rec, gchar **begin)
 }
 
 static void
-start_spf_parse (struct spf_record *rec, gchar *begin)
+start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 {
 	/* Skip spaces */
 	while (g_ascii_isspace (*begin)) {
@@ -1305,6 +1305,9 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 			memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
 			rec->cur_elt = rec->elts[0];
 			while (parse_spf_record (rec->task, rec));
+			if (ttl != 0) {
+				rec->ttl = ttl;
+			}
 		}
 	}
 	else if (g_ascii_strncasecmp (begin, SPF_VER2_STR, sizeof (SPF_VER2_STR) - 1) == 0) {
@@ -1328,6 +1331,9 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 			memory_pool_add_destructor (rec->task->task_pool, (pool_destruct_func)g_strfreev, rec->elts);
 			rec->cur_elt = rec->elts[0];
 			while (parse_spf_record (rec->task, rec));
+			if (ttl != 0) {
+				rec->ttl = ttl;
+			}
 		}
 	}
 	else {
@@ -1345,7 +1351,7 @@ spf_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	rec->requests_inflight --;
 	if (reply->code == DNS_RC_NOERROR) {
 		LL_FOREACH (reply->entries, elt) {
-			start_spf_parse (rec, elt->content.txt.data);
+			start_spf_parse (rec, elt->content.txt.data, elt->ttl);
 		}
 	}
 

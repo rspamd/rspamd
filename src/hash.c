@@ -313,20 +313,21 @@ rspamd_lru_hash_destroy_node (gpointer v)
 	if (node->hash->value_destroy) {
 		node->hash->value_destroy (node->data);
 	}
-
+	g_queue_delete_link (node->hash->q, node->link);
 	g_slice_free1 (sizeof (rspamd_lru_element_t), node);
 }
 
 static rspamd_lru_element_t*
-rspamd_lru_create_node (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now)
+rspamd_lru_create_node (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now, guint ttl)
 {
 	rspamd_lru_element_t           *node;
 
 	node = g_slice_alloc (sizeof (rspamd_lru_element_t));
-	node->hash = hash;
 	node->data = value;
 	node->key = key;
 	node->store_time = now;
+	node->ttl = ttl;
+	node->hash = hash;
 
 	return node;
 }
@@ -402,26 +403,24 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now)
 	rspamd_lru_element_t           *res;
 
 	if ((res = hash->lookup_func (hash->storage, key)) != NULL) {
+		if (res->ttl != 0) {
+			if (now - res->store_time > res->ttl) {
+				hash->delete_func (hash->storage, key);
+				return NULL;
+			}
+		}
 		if (hash->maxage > 0) {
 			if (now - res->store_time > hash->maxage) {
+				res = g_queue_peek_tail (hash->q);
 				/* Expire elements from queue tail */
-				res = g_queue_pop_tail (hash->q);
-
 				while (res != NULL && now - res->store_time > hash->maxage) {
 					hash->delete_func (hash->storage, res->key);
-					res = g_queue_pop_tail (hash->q);
-				}
-				/* Restore last element */
-				if (res != NULL) {
-					g_queue_push_tail (hash->q, res);
+					res = g_queue_peek_tail (hash->q);
 				}
 
 				return NULL;
 			}
 		}
-	}
-
-	if (res) {
 		return res->data;
 	}
 
@@ -434,32 +433,45 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now)
  * @param value value of key
  */
 void
-rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value, time_t now)
+rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
+		time_t now, guint ttl)
 {
 	rspamd_lru_element_t           *res;
 	gint                            removed = 0;
 
-	if ((gint)g_queue_get_length (hash->q) >= hash->maxsize) {
-		/* Expire some elements */
-		res = g_queue_pop_tail (hash->q);
-		if (hash->maxage > 0) {
-			while (res != NULL && now - res->store_time > hash->maxage) {
+	if ((res = hash->lookup_func (hash->storage, key)) != NULL) {
+		hash->delete_func (hash->storage, res->key);
+	}
+	else {
+		if (hash->maxsize > 0 &&
+				(gint)g_queue_get_length (hash->q) >= hash->maxsize) {
+			/* Expire some elements */
+			res = g_queue_peek_tail (hash->q);
+			if (hash->maxage > 0) {
+				while (res != NULL && now - res->store_time > hash->maxage) {
+					if (res->key != NULL) {
+						hash->delete_func (hash->storage, res->key);
+					}
+					else {
+						break;
+					}
+					res = g_queue_peek_tail (hash->q);
+					removed ++;
+				}
+			}
+			if (removed == 0) {
+				/* Remove explicitly */
 				if (res->key != NULL) {
 					hash->delete_func (hash->storage, res->key);
 				}
-				res = g_queue_pop_tail (hash->q);
-				removed ++;
 			}
-		}
-		/* If elements are already removed do not expire extra elements */
-		if (removed != 0 && res != NULL) {
-			g_queue_push_tail (hash->q, res);
 		}
 	}
 
-	res = rspamd_lru_create_node (hash, key, value, now);
+	res = rspamd_lru_create_node (hash, key, value, now, ttl);
 	hash->insert_func (hash->storage, key, res);
 	g_queue_push_head (hash->q, res);
+	res->link = g_queue_peek_head_link (hash->q);
 }
 
 void

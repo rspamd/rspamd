@@ -289,7 +289,7 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, record->sender_domain, task->tv.tv_sec)) == NULL) {
 			l = spf_record_copy (record->addrs);
 			rspamd_lru_hash_insert (spf_module_ctx->spf_hash, g_strdup (record->sender_domain),
-				l, task->tv.tv_sec);
+				l, task->tv.tv_sec, record->ttl);
 		}
 		spf_check_list (l, task);
 	}
