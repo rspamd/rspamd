@@ -108,6 +108,7 @@ struct smtp_proxy_session {
 	enum rspamd_smtp_proxy_state state;
 	struct rspamd_worker *worker;
 	struct in_addr client_addr;
+	gchar *ptr_str;
 	gchar *hostname;
 	gchar *error;
 	gchar *temp_name;
@@ -232,6 +233,9 @@ free_smtp_proxy_session (gpointer arg)
 
 		if (session->proxy) {
 			rspamd_proxy_close (session->proxy);
+		}
+		if (session->ptr_str) {
+			free (session->ptr_str);
 		}
 		if (session->upstream_sock != -1) {
 			event_del (&session->upstream_ev);
@@ -930,6 +934,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->resolver = ctx->resolver;
 	session->ev_base = ctx->ev_base;
 	session->upstream_sock = -1;
+	session->ptr_str = rdns_generate_ptr_from_str (inet_ntoa (su.s4.sin_addr));
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */
@@ -937,7 +942,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->s = new_async_session (session->pool, NULL, NULL, free_smtp_proxy_session, session);
 	session->state = SMTP_PROXY_STATE_RESOLVE_REVERSE;
 	if (! make_dns_request (session->resolver, session->s, session->pool,
-			smtp_dns_cb, session, DNS_REQUEST_PTR, &session->client_addr)) {
+			smtp_dns_cb, session, DNS_REQUEST_PTR, session->ptr_str)) {
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_slice_free1 (sizeof (struct smtp_proxy_session), session);
 		close (nfd);

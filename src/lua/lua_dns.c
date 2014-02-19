@@ -178,7 +178,6 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 	struct rspamd_async_session					*session, **psession;
 	memory_pool_t								*pool, **ppool;
 	const gchar									*to_resolve;
-	struct in_addr								 ina;
 	struct lua_dns_cbdata						*cbdata;
 
 	/* Check arguments */
@@ -191,17 +190,23 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 	to_resolve = luaL_checkstring (L, 4);
 
 	if (pool != NULL && session != NULL && to_resolve != NULL && lua_isfunction (L, 5)) {
-		if (type == DNS_REQUEST_PTR) {
-			if (inet_aton (to_resolve, &ina) == 0) {
+		cbdata = memory_pool_alloc (pool, sizeof (struct lua_dns_cbdata));
+		cbdata->L = L;
+		cbdata->resolver = resolver;
+		if (type != DNS_REQUEST_PTR) {
+			cbdata->to_resolve = memory_pool_strdup (pool, to_resolve);
+		}
+		else {
+			char *ptr_str;
+			ptr_str = rdns_generate_ptr_from_str (to_resolve);
+			if (ptr_str == NULL) {
 				msg_err ("wrong resolve string to PTR request: %s", to_resolve);
 				lua_pushnil (L);
 				return 1;
 			}
+			cbdata->to_resolve = memory_pool_strdup (pool, ptr_str);
+			free (ptr_str);
 		}
-		cbdata = memory_pool_alloc (pool, sizeof (struct lua_dns_cbdata));
-		cbdata->L = L;
-		cbdata->resolver = resolver;
-		cbdata->to_resolve = memory_pool_strdup (pool, to_resolve);
 		lua_pushvalue (L, 5);
 		cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
@@ -211,13 +216,7 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 		else {
 			cbdata->user_str = NULL;
 		}
-
-		if (type == DNS_REQUEST_PTR) {
-			make_dns_request (resolver, session, pool, lua_dns_callback, cbdata, type, &ina);
-		}
-		else {
-			make_dns_request (resolver, session, pool, lua_dns_callback, cbdata, type, to_resolve);
-		}
+		make_dns_request (resolver, session, pool, lua_dns_callback, cbdata, type, to_resolve);
 		lua_pushboolean (L, TRUE);
 	}
 	else {
