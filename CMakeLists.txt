@@ -852,7 +852,8 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/contrib/uthash"
 					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 					"${CMAKE_SOURCE_DIR}/contrib/libottery"
-					"${CMAKE_SOURCE_DIR}/contrib/xxhash")
+					"${CMAKE_SOURCE_DIR}/contrib/xxhash"
+					"${CMAKE_SOURCE_DIR}/src/rdns/include")
 
 SET(RSPAMDSRC	src/modules.c
 				src/controller.c

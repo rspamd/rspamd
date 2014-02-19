@@ -476,7 +476,7 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 }
 
 static void
-smtp_dnsbl_cb (struct rspamd_dns_reply *reply, void *arg)
+smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 {
 	struct smtp_proxy_session 						*session = arg;
 	const gchar										*p;
@@ -484,13 +484,13 @@ smtp_dnsbl_cb (struct rspamd_dns_reply *reply, void *arg)
 
 	session->rbl_requests --;
 
-	msg_debug ("got reply for %s: %s", reply->request->requested_name, dns_strerror (reply->code));
+	msg_debug ("got reply for %s: %s", rdns_request_get_name (reply->request), rdns_strerror (reply->code));
 
 	if (session->state != SMTP_PROXY_STATE_REJECT) {
 
 		if (reply->code == DNS_RC_NOERROR) {
 			/* This means that address is in dnsbl */
-			p = reply->request->requested_name;
+			p = rdns_request_get_name (reply->request);
 			while (*p) {
 				if (*p == '.') {
 					dots ++;
@@ -648,11 +648,11 @@ smtp_make_delay (struct smtp_proxy_session *session)
  * Handle DNS replies
  */
 static void
-smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
+smtp_dns_cb (struct rdns_reply *reply, void *arg)
 {
 	struct smtp_proxy_session 						*session = arg;
 	gint 											 res = 0;
-	struct rspamd_reply_entry 						*elt;
+	struct rdns_reply_entry 						*elt;
 	GList 											*cur;
 
 	switch (session->state)
@@ -662,7 +662,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 		if (reply->code != DNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
 					session->client_addr.s_addr, __FUNCTION__, "DNS error: %s",
-					dns_strerror (reply->code));
+					rdns_strerror (reply->code));
 
 			if (reply->code == DNS_RC_NXDOMAIN) {
 				session->hostname = memory_pool_strdup (session->pool,
@@ -691,7 +691,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 		if (reply->code != DNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
 					session->client_addr.s_addr, __FUNCTION__, "DNS error: %s",
-					dns_strerror (reply->code));
+					rdns_strerror (reply->code));
 
 			if (reply->code == DNS_RC_NXDOMAIN) {
 				session->hostname = memory_pool_strdup (session->pool,
@@ -718,7 +718,8 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 
 			if (res == 0) {
 				msg_info(
-						"cannot find address for hostname: %s, ip: %s", session->hostname, inet_ntoa (session->client_addr));
+						"cannot find address for hostname: %s, ip: %s", session->hostname,
+						inet_ntoa (session->client_addr));
 				session->hostname = memory_pool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}

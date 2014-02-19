@@ -58,7 +58,7 @@
 static struct surbl_ctx        *surbl_module_ctx = NULL;
 
 static void surbl_test_url (struct worker_task *task, void *user_data);
-static void dns_callback (struct rspamd_dns_reply *reply, gpointer arg);
+static void dns_callback (struct rdns_reply *reply, gpointer arg);
 static void process_dns_results (struct worker_task *task,
 		struct suffix_item *suffix, gchar *url, guint32 addr);
 
@@ -628,7 +628,8 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 			param->suffix = suffix;
 			param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 			debug_task ("send surbl dns request %s", surbl_req);
-			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback, (void *)param, DNS_REQUEST_A, surbl_req)) {
+			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback,
+					(void *)param, DNS_REQUEST_A, surbl_req)) {
 				task->dns_requests ++;
 			}
 		}
@@ -670,23 +671,25 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar
 }
 
 static void
-dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param               *param = (struct dns_param *)arg;
 	struct worker_task             *task = param->task;
-	struct rspamd_reply_entry      *elt;
+	struct rdns_reply_entry        *elt;
 
 	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (reply->code == DNS_RC_NOERROR && reply->entries) {
-		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
+		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id,
+				param->host_resolve, param->suffix->suffix);
 		elt = reply->entries;
 		if (elt->type == DNS_REQUEST_A) {
 			process_dns_results (param->task, param->suffix, param->host_resolve, (guint32)elt->content.a.addr.s_addr);
 		}
 	}
 	else {
-		debug_task ("<%s> domain [%s] is not in surbl %s", param->task->message_id, param->host_resolve, param->suffix->suffix);
+		debug_task ("<%s> domain [%s] is not in surbl %s",
+				param->task->message_id, param->host_resolve, param->suffix->suffix);
 	}
 }
 

@@ -749,17 +749,17 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 
 /* Get TXT request data and parse it */
 static void
-rspamd_dkim_dns_cb (struct rspamd_dns_reply *reply, gpointer arg)
+rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 {
 	struct rspamd_dkim_key_cbdata				*cbdata = arg;
 	rspamd_dkim_key_t							*key = NULL;
 	GError										*err = NULL;
-	struct rspamd_reply_entry					*elt;
+	struct rdns_reply_entry					*elt;
 	gsize										 keylen = 0;
 
 	if (reply->code != DNS_RC_NOERROR) {
 		g_set_error (&err, DKIM_ERROR, DKIM_SIGERROR_NOKEY, "dns request to %s failed: %s", cbdata->ctx->dns_key,
-				dns_strerror (reply->code));
+				rdns_strerror (reply->code));
 		cbdata->handler (NULL, 0, cbdata->ctx, cbdata->ud, err);
 	}
 	else {

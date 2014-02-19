@@ -299,10 +299,10 @@ lua_http_err_cb (GError * err, void *arg)
 
 
 static void
-lua_http_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+lua_http_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct lua_http_ud             *ud = arg;
-	struct rspamd_reply_entry      *elt;
+	struct rdns_reply_entry        *elt;
 	struct in_addr                  ina;
 	struct timeval                  tv;
 

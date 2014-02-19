@@ -387,11 +387,11 @@ parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_add
 }
 
 static void
-spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_dns_cb               *cb = arg;
 	gchar                           *begin;
-	struct rspamd_reply_entry      *elt_data;
+	struct rdns_reply_entry      *elt_data;
 	GList                           *tmp = NULL;
 	struct worker_task              *task;
 	struct spf_addr                 *new_addr;
@@ -548,13 +548,13 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	else if (reply->code == DNS_RC_NXDOMAIN) {
 		switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
-					if (reply->request->type == DNS_REQUEST_MX) {
+					if (rdns_request_has_type (reply->request, DNS_REQUEST_MX)) {
 						msg_info ("<%s>: spf error for domain %s: cannot find MX record for %s",
 								task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 						cb->addr->data.normal.mask = 32;
 					}
-					else if (reply->request->type != DNS_REQUEST_MX) {
+					else {
 						msg_info ("<%s>: spf error for domain %s: cannot resolve MX record for %s",
 								task->message_id, cb->rec->sender_domain, cb->rec->cur_domain);
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
@@ -562,16 +562,14 @@ spf_record_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 					}
 					break;
 				case SPF_RESOLVE_A:
-					if (reply->request->type == DNS_REQUEST_A) {
-						/* XXX: process only one record */
+					if (rdns_request_has_type (reply->request, DNS_REQUEST_A)) {
 						cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 						cb->addr->data.normal.mask = 32;
 					}
 					break;
 #ifdef HAVE_INET_PTON
 				case SPF_RESOLVE_AAA:
-					if (reply->request->type == DNS_REQUEST_AAA) {
-						/* XXX: process only one record */
+					if (rdns_request_has_type (reply->request, DNS_REQUEST_AAA)) {
 						memset (&cb->addr->data.normal.d.in6, 0xff, sizeof (struct in6_addr));
 						cb->addr->data.normal.mask = 32;
 					}
@@ -1343,10 +1341,10 @@ start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 }
 
 static void
-spf_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_record *rec = arg;
-	struct rspamd_reply_entry *elt;
+	struct rdns_reply_entry *elt;
 
 	rec->requests_inflight --;
 	if (reply->code == DNS_RC_NOERROR) {

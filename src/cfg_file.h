@@ -363,7 +363,7 @@ struct config_file {
 
 	gchar* history_file;							/**< file to save rolling history						*/
 
-	guint32 dns_timeout;							/**< timeout in milliseconds for waiting for dns reply	*/
+	gdouble dns_timeout;							/**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;						/**< maximum retransmits count							*/
 	guint32 dns_throttling_errors;					/**< maximum errors for starting resolver throttling	*/
 	guint32 dns_throttling_time;					/**< time in seconds for DNS throttling					*/

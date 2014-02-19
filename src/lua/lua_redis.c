@@ -240,14 +240,14 @@ lua_redis_make_request_real (struct lua_redis_userdata *ud)
  * @param arg user data
  */
 static void
-lua_redis_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+lua_redis_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct lua_redis_userdata			*ud = arg;
-	struct rspamd_reply_entry			*elt;
+	struct rdns_reply_entry			*elt;
 
 
 	if (reply->code != DNS_RC_NOERROR) {
-		lua_redis_push_error (dns_strerror (reply->code), ud, FALSE);
+		lua_redis_push_error (rdns_strerror (reply->code), ud, FALSE);
 		return;
 	}
 	else {

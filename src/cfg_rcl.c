@@ -1065,7 +1065,7 @@ rspamd_rcl_config_init (void)
 	rspamd_rcl_add_default_handler (sub, "dns_nameserver", rspamd_rcl_parse_struct_string_list,
 			G_STRUCT_OFFSET (struct config_file, nameservers), 0);
 	rspamd_rcl_add_default_handler (sub, "dns_timeout", rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct config_file, dns_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+			G_STRUCT_OFFSET (struct config_file, dns_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_add_default_handler (sub, "dns_retransmits", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct config_file, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "dns_sockets", rspamd_rcl_parse_struct_integer,

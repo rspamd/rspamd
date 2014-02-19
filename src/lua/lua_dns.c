@@ -66,12 +66,12 @@ struct lua_dns_cbdata {
 };
 
 static void
-lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
+lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct lua_dns_cbdata   	   *cd = arg;
 	gint                            i = 0;
 	struct rspamd_dns_resolver    **presolver;
-	struct rspamd_reply_entry     *elt;
+	struct rdns_reply_entry        *elt;
 
 	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
@@ -86,13 +86,6 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	if (reply->code == DNS_RC_NOERROR) {
 		lua_newtable (cd->L);
 		LL_FOREACH (reply->entries, elt) {
-			if (elt->type != reply->request->type) {
-				/*
-				 * XXX: Skip additional record here to be compatible
-				 * with the existing plugins
-				 */
-				continue;
-			}
 			switch (elt->type) {
 			case DNS_REQUEST_A:
 				lua_ip_push (cd->L, AF_INET, &elt->content.a.addr);
@@ -127,7 +120,7 @@ lua_dns_callback (struct rspamd_dns_reply *reply, gpointer arg)
 	}
 	else {
 		lua_pushnil (cd->L);
-		lua_pushstring (cd->L, dns_strerror (reply->code));
+		lua_pushstring (cd->L, rdns_strerror (reply->code));
 	}
 
 	if (cd->user_str != NULL) {
@@ -179,7 +172,8 @@ lua_dns_resolver_init (lua_State *L)
 }
 
 static int
-lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resolver, enum rspamd_request_type type)
+lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resolver,
+		enum rdns_request_type type)
 {
 	struct rspamd_async_session					*session, **psession;
 	memory_pool_t								*pool, **ppool;
