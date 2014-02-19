@@ -1,0 +1,3 @@
+[submodule "src/rdns"]
+	path = src/rdns
+	url = git://github.com/vstakhov/librdns
