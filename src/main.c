@@ -552,7 +552,7 @@ create_listen_socket (const gchar *addr, gint port, gint listen_type)
 static GList *
 systemd_get_socket (gint number, gint listen_type)
 {
-	int sock, max;
+	int sock, max, flags;
 	GList *result = NULL;
 	const gchar *e;
 	gchar *err;
@@ -577,6 +577,10 @@ systemd_get_socket (gint number, gint listen_type)
 				if (listen (sock, -1) == -1) {
 					return NULL;
 				}
+			}
+			flags = fcntl (sock, F_GETFD);
+			if (flags != -1) {
+				(void)fcntl (sock, F_SETFD, flags | FD_CLOEXEC);
 			}
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
