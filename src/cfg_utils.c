@@ -242,6 +242,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 		/* The actual socket will be passed by systemd environment */
 		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
 		cnf->ai = strtoul (tokens[1], &err, 10);
+		cnf->is_systemd = TRUE;
 		if (err == NULL || *err == '\0') {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
