@@ -1063,7 +1063,7 @@ start_smtp_proxy (struct rspamd_worker *worker)
 	signal_add (&worker->sig_ev_usr1, NULL);
 
 	/* DNS resolver */
-	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 
 	/* Set umask */
 	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);

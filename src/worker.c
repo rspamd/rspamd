@@ -443,7 +443,7 @@ start_worker (struct rspamd_worker *worker)
 	start_map_watch (worker->srv->cfg, ctx->ev_base);
 
 
-	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 
 	/* Create classify pool */
 	ctx->classify_pool = NULL;

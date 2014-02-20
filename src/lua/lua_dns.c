@@ -154,7 +154,7 @@ lua_dns_resolver_init (lua_State *L)
 	cfg = pcfg ? *(pcfg) : NULL;
 
 	if (base != NULL && cfg != NULL) {
-		resolver = dns_resolver_init (base, cfg);
+		resolver = dns_resolver_init (rspamd_main->logger, base, cfg);
 		if (resolver) {
 			presolver = lua_newuserdata (L, sizeof (gpointer));
 			lua_setclass (L, "rspamd{resolver}", -1);

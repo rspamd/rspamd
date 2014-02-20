@@ -1986,7 +1986,7 @@ start_controller (struct rspamd_worker *worker)
 	rspamd_snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
 
 	start_map_watch (worker->srv->cfg, ctx->ev_base);
-	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 
 	event_base_loop (ctx->ev_base, 0);
 

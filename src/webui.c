@@ -1730,7 +1730,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan, ctx);
 #endif
 
-	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 
 	/* Maps events */
 	start_map_watch (worker->srv->cfg, ctx->ev_base);

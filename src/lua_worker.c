@@ -454,7 +454,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
 	signal_add (&worker->sig_ev_usr1, NULL);
 
-	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 
 	/* Open worker's lib */
 	luaopen_lua_worker (L);

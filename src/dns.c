@@ -94,7 +94,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 
 struct rspamd_dns_resolver *
-dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
+dns_resolver_init (rspamd_logger_t *logger, struct event_base *ev_base, struct config_file *cfg)
 {
 	GList                          *cur;
 	struct rspamd_dns_resolver     *new;
@@ -109,6 +109,7 @@ dns_resolver_init (struct event_base *ev_base, struct config_file *cfg)
 	new->r = rdns_resolver_new ();
 	rdns_bind_libevent (new->r, new->ev_base);
 	rdns_resolver_set_log_level (new->r, cfg->log_level);
+	rdns_resolver_set_logger (new->r, (rdns_log_function)rspamd_common_logv, logger);
 
 	if (cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
