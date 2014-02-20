@@ -391,6 +391,37 @@ flush_log_buf (rspamd_logger_t *rspamd_log)
 	}
 }
 
+
+void
+rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level, const gchar *function,
+		const gchar *fmt, va_list args)
+{
+	static gchar                   logbuf[BUFSIZ];
+	u_char                         *end;
+
+	if (rspamd_log == NULL) {
+		rspamd_log = default_logger;
+	}
+
+	if (rspamd_log == NULL) {
+		/* Just fprintf message to stderr */
+		if (log_level >= G_LOG_LEVEL_INFO) {
+			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
+			*end = '\0';
+			rspamd_escape_log_string (logbuf);
+			fprintf (stderr, "%s\n", logbuf);
+		}
+	}
+	else if (log_level <= rspamd_log->cfg->log_level) {
+		g_mutex_lock (rspamd_log->mtx);
+		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
+		*end = '\0';
+		rspamd_escape_log_string (logbuf);
+		rspamd_log->log_func (NULL, function, log_level, logbuf, FALSE, rspamd_log);
+		g_mutex_unlock (rspamd_log->mtx);
+	}
+}
+
 /**
  * This log functions select real logger and write message if level is less or equal to configured log level
  */
@@ -398,51 +429,30 @@ void
 rspamd_common_log_function (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 		const gchar *function, const gchar *fmt, ...)
 {
-	static gchar                    logbuf[BUFSIZ];
 	va_list                         vp;
-    u_char                         *end;
 
-	if (log_level <= rspamd_log->cfg->log_level) {
-		g_mutex_lock (rspamd_log->mtx);
-		va_start (vp, fmt);
-		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
-		*end = '\0';
-		rspamd_escape_log_string (logbuf);
-		va_end (vp);
-		rspamd_log->log_func (NULL, function, log_level, logbuf, FALSE, rspamd_log);
-		g_mutex_unlock (rspamd_log->mtx);
-	}
+	va_start (vp, fmt);
+	rspamd_common_logv (rspamd_log, log_level, function, fmt, vp);
+	va_end (vp);
+}
+
+void
+rspamd_default_logv (GLogLevelFlags log_level, const gchar *function,
+		const gchar *fmt, va_list args)
+{
+	rspamd_common_logv (NULL, log_level, function, fmt, args);
 }
 
 void
 rspamd_default_log_function (GLogLevelFlags log_level,
 		const gchar *function, const gchar *fmt, ...)
 {
-	static gchar                   logbuf[BUFSIZ];
-	va_list                         vp;
-	u_char                         *end;
 
-	if (default_logger == NULL) {
-		/* Just fprintf message */
-		if (log_level >= G_LOG_LEVEL_INFO) {
-			va_start (vp, fmt);
-			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
-			*end = '\0';
-			rspamd_escape_log_string (logbuf);
-			va_end (vp);
-			fprintf (stderr, "%s\n", logbuf);
-		}
-	}
-	else if (log_level <= default_logger->cfg->log_level) {
-		g_mutex_lock (default_logger->mtx);
-		va_start (vp, fmt);
-		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
-		*end = '\0';
-		rspamd_escape_log_string (logbuf);
-		va_end (vp);
-		default_logger->log_func (NULL, function, log_level, logbuf, FALSE, default_logger);
-		g_mutex_unlock (default_logger->mtx);
-	}
+	va_list                         vp;
+
+	va_start (vp, fmt);
+	rspamd_default_logv (log_level, function, fmt, vp);
+	va_end (vp);
 }
 
 

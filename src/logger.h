@@ -63,6 +63,9 @@ void rspamd_glib_log_function (const gchar *log_domain,
 void rspamd_common_log_function (rspamd_logger_t *logger,
 		GLogLevelFlags log_level, const gchar *function, const gchar *fmt, ...);
 
+void rspamd_common_logv (rspamd_logger_t *logger,
+		GLogLevelFlags log_level, const gchar *function, const gchar *fmt, va_list args);
+
 /**
  * Conditional debug function
  */
@@ -74,6 +77,15 @@ void rspamd_conditional_debug (rspamd_logger_t *logger,
  */
 void rspamd_default_log_function (GLogLevelFlags log_level, const gchar *function,
 		const gchar *fmt, ...);
+
+/**
+ * Varargs version of default log function
+ * @param log_level
+ * @param function
+ * @param fmt
+ * @param args
+ */
+void rspamd_default_logv (GLogLevelFlags log_level, const gchar *function, const gchar *fmt, va_list args);
 
 /**
  * Temporary turn on debug
