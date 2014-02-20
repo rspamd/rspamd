@@ -227,6 +227,7 @@ struct rspamd_worker_bind_conf {
 	gchar *bind_host;
 	guint16 bind_port;
 	gint ai;
+	gboolean is_systemd;
 	struct rspamd_worker_bind_conf *next;
 };
 

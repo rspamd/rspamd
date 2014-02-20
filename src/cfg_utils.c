@@ -196,7 +196,7 @@ gboolean
 parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
-	gchar **tokens, *tmp;
+	gchar **tokens, *tmp, *err;
 	gboolean ret;
 
 	if (str == NULL) {
@@ -237,6 +237,14 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		tokens[0] = tmp;
+	}
+	else if (strcmp (tokens[0], "systemd") == 0) {
+		/* The actual socket will be passed by systemd environment */
+		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+		cnf->ai = strtoul (tokens[1], &err, 10);
+		if (err == NULL || *err == '\0') {
+			LL_PREPEND (cf->bind_conf, cnf);
+		}
 	}
 	else {
 		if ((ret = parse_host_port_priority_strv (cfg->cfg_pool, tokens,

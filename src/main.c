@@ -549,6 +549,48 @@ create_listen_socket (const gchar *addr, gint port, gint listen_type)
 	return result;
 }
 
+static GList *
+systemd_get_socket (gint number, gint listen_type)
+{
+	int sock, max;
+	GList *result = NULL;
+	const gchar *e;
+	gchar *err;
+	struct stat st;
+	/* XXX: can we trust the current choice ? */
+	static const int sd_listen_fds_start = 3;
+
+	e = getenv ("LISTEN_FDS");
+	if (e != NULL) {
+		errno = 0;
+		max = strtoul (e, &err, 10);
+		if ((e == NULL || *e == '\0') && max > number + sd_listen_fds_start) {
+			sock = number + sd_listen_fds_start;
+			if (fstat (sock, &st) == -1) {
+				return NULL;
+			}
+			if (!S_ISSOCK (st.st_mode)) {
+				errno = EINVAL;
+				return NULL;
+			}
+			if (listen_type != SOCK_DGRAM) {
+				if (listen (sock, -1) == -1) {
+					return NULL;
+				}
+			}
+			result = g_list_prepend (result, GINT_TO_POINTER (sock));
+		}
+		else if (max <= number + sd_listen_fds_start) {
+			errno = EOVERFLOW;
+		}
+	}
+	else {
+		errno = ENOENT;
+	}
+
+	return result;
+}
+
 static void
 fork_delayed (struct rspamd_main *rspamd)
 {
@@ -599,10 +641,16 @@ spawn_workers (struct rspamd_main *rspamd)
 				LL_FOREACH (cf->bind_conf, bcf) {
 					key = make_listen_key (bcf->ai, bcf->bind_host, bcf->bind_port);
 					if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (key))) == NULL) {
-						/* Create listen socket */
-						ls = create_listen_socket (bcf->bind_host, bcf->bind_port,
-								cf->worker->listen_type);
+						if (!bcf->is_systemd) {
+							/* Create listen socket */
+							ls = create_listen_socket (bcf->bind_host, bcf->bind_port,
+									cf->worker->listen_type);
+						}
+						else {
+							ls = systemd_get_socket (bcf->ai, cf->worker->listen_type);
+						}
 						if (ls == NULL) {
+							msg_err ("cannot listen on socket %s: %s", bcf->bind_host, strerror (errno));
 							exit (-errno);
 						}
 						g_hash_table_insert (listen_sockets, GINT_TO_POINTER (key), ls);
