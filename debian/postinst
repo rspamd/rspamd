@@ -21,9 +21,7 @@ case "$1" in
                $SERVER_USER
 
        # 2. create homedir if not existing
-       test -d $SERVER_HOME || mkdir $SERVER_HOME
        test -d $SERVER_RUN || mkdir $SERVER_RUN
-       test -d $SERVER_LOG || mkdir $SERVER_LOG
 
        # 5. adjust file and directory permissions
        if ! dpkg-statoverride --list $SERVER_HOME >/dev/null
