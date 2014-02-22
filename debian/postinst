@@ -1,11 +1,10 @@
 #!/bin/sh
-# preinst script for rspamd
 #DEBHELPER#
 
 set -e
 
 case "$1" in
-    install)
+    configure)
        SERVER_HOME=/var/lib/rspamd
        SERVER_RUN=/var/run/rspamd
        SERVER_LOG=/var/log/rspamd
@@ -58,11 +57,11 @@ case "$1" in
        fi
     ;;
 
-    abort-upgrade|upgrade)
+    abort-*)
     ;;
 
     *)
-        echo "preinst called with unknown argument \`$1'" >&2
+        echo "postinst called with unknown argument \`$1'" >&2
         exit 1
     ;;
 esac
