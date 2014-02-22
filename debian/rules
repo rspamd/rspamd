@@ -22,6 +22,7 @@ DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc/rspamd \
 						-DINSTALL_EXAMPLES=ON \
 						-DFORCE_GMIME24=ON \
 						-DRSPAMD_GROUP=rspamd \
-						-DRSPAMD_USER=rspamd
+						-DRSPAMD_USER=rspamd \
+						-DENABLE_HIREDIS=ON
 clean::
 	rm -f src/modules.c
