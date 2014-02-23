@@ -17,6 +17,7 @@ case "$1" in
                --no-create-home \
                --disabled-login \
                --gecos "$SERVER_NAME" \
+               --force-badname \
                $SERVER_USER
 
        chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
