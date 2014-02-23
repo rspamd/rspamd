@@ -10,7 +10,7 @@ include /usr/share/cdbs/1/class/cmake.mk
 
 DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc/rspamd \
 						-DMANDIR=/usr/share/man \
-						-DRUNDIR=/var/lib/rspamd \
+						-DRUNDIR=/run/rspamd \
 						-DDBDIR=/var/lib/rspamd \
 						-DLOGDIR=/var/log/rspamd \
 						-DPLUGINSDIR=/usr/share/rspamd \
