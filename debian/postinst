@@ -19,13 +19,9 @@ case "$1" in
                --gecos "$SERVER_NAME" \
                $SERVER_USER
 
-       # 5. adjust file and directory permissions
-       if ! dpkg-statoverride --list $SERVER_HOME >/dev/null
-       then
-           chown -R $SERVER_USER:$SERVER_GROUP $SERVER_HOME $SERVER_LOG
-           chmod u=rwx,g=rx,o= $SERVER_HOME
-           chmod u=rwx,g=rx,o=rx $SERVER_LOG
-       fi
+       chown -R $SERVER_USER:$SERVER_GROUP $SERVER_HOME $SERVER_LOG
+       chmod u=rwx,g=rx,o= $SERVER_HOME
+       chmod u=rwx,g=rx,o=rx $SERVER_LOG
     ;;
 
     abort-*)
