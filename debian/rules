@@ -1,14 +1,11 @@
 #!/usr/bin/make -f
+%:
+	dh $@
 
-#export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
-export DEB_LDFLAGS_MAINT_APPEND=-Wl,--as-needed
-
-include /usr/share/dpkg/buildflags.mk
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/cmake.mk
-
-DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc/rspamd \
+override_dh_auto_configure:
+	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
 						-DMANDIR=/usr/share/man \
 						-DRUNDIR=/run/rspamd \
 						-DDBDIR=/var/lib/rspamd \
@@ -22,7 +19,10 @@ DEB_CMAKE_NORMAL_ARGS+= -DCONFDIR=/etc/rspamd \
 						-DINSTALL_EXAMPLES=ON \
 						-DFORCE_GMIME24=ON \
 						-DRSPAMD_GROUP=rspamd \
-						-DRSPAMD_USER=rspamd \
-						-DENABLE_HIREDIS=ON
-clean::
+						-DRSPAMD_USER=_rspamd
+# \
+#						-DENABLE_HIREDIS=ON
+
+override_dh_auto_clean:
+	dh_auto_clean
 	rm -f src/modules.c
