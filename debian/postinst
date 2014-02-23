@@ -20,8 +20,6 @@ case "$1" in
                $SERVER_USER
 
        chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
-       chmod u=rwx,g=rx,o= $SERVER_HOME
-       chmod u=rwx,g=rx,o=rx $SERVER_LOG
     ;;
 
     abort-*)
