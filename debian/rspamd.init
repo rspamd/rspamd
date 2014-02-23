@@ -20,8 +20,8 @@ DAEMON_ARGS="-c /etc/rspamd/rspamd.conf"
 DESC="rapid spam filtering system"
 PIDFILE=/var/lib/rspamd/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
-RSPAMD_USERNAME=rspamd
-RSPAMD_GROUPNAME=rspamd
+RSPAMD_USERNAME=_rspamd
+RSPAMD_GROUPNAME=_rspamd
 
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
