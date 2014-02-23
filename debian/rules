@@ -6,22 +6,22 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
-						-DMANDIR=/usr/share/man \
-						-DRUNDIR=/run/rspamd \
-						-DDBDIR=/var/lib/rspamd \
-						-DLOGDIR=/var/log/rspamd \
-						-DPLUGINSDIR=/usr/share/rspamd \
-						-DEXAMPLESDIR=/usr/share/examples/rspamd \
-						-DLIBDIR=/usr/lib \
-						-DINCLUDEDIR=/usr/include \
-						-DNO_SHARED=ON \
-						-DDEBIAN_BUILD=1 \
-						-DINSTALL_EXAMPLES=ON \
-						-DFORCE_GMIME24=ON \
-						-DRSPAMD_GROUP=rspamd \
-						-DRSPAMD_USER=_rspamd
+		-DMANDIR=/usr/share/man \
+		-DRUNDIR=/run/rspamd \
+		-DDBDIR=/var/lib/rspamd \
+		-DLOGDIR=/var/log/rspamd \
+		-DPLUGINSDIR=/usr/share/rspamd \
+		-DEXAMPLESDIR=/usr/share/examples/rspamd \
+		-DLIBDIR=/usr/lib \
+		-DINCLUDEDIR=/usr/include \
+		-DNO_SHARED=ON \
+		-DDEBIAN_BUILD=1 \
+		-DINSTALL_EXAMPLES=ON \
+		-DFORCE_GMIME24=ON \
+		-DRSPAMD_GROUP=rspamd \
+		-DRSPAMD_USER=_rspamd
 # \
-#						-DENABLE_HIREDIS=ON
+#		-DENABLE_HIREDIS=ON
 
 override_dh_auto_clean:
 	dh_auto_clean
