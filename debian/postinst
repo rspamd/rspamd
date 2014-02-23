@@ -19,7 +19,7 @@ case "$1" in
                --gecos "$SERVER_NAME" \
                $SERVER_USER
 
-       chown -R $SERVER_USER:$SERVER_GROUP $SERVER_HOME $SERVER_LOG
+       chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
        chmod u=rwx,g=rx,o= $SERVER_HOME
        chmod u=rwx,g=rx,o=rx $SERVER_LOG
     ;;
