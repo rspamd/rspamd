@@ -1772,6 +1772,9 @@ start_webui_worker (struct rspamd_worker *worker)
 
 	ctx->start_time = time (NULL);
 	ctx->worker = worker;
+	ctx->cfg = worker->srv->cfg;
+	ctx->srv = worker->srv;
+
 	/* Accept event */
 	ctx->http = evhttp_new (ctx->ev_base);
 

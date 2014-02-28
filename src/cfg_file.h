@@ -505,6 +505,11 @@ gboolean check_classifier_statfiles (struct classifier_config *cf);
  */
 struct classifier_config* find_classifier_conf (struct config_file *cfg, const gchar *name);
 
+/*
+ * Parse input `ip_list` to radix tree `tree`. Now supports only IPv4 addresses.
+ */
+gboolean rspamd_parse_ip_list (const gchar *ip_list, radix_tree_t **tree);
+
 #endif /* ifdef CFG_FILE_H */
 /* 
  * vi:ts=4 
