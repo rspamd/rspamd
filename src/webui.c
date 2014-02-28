@@ -115,6 +115,7 @@ struct rspamd_webui_session {
 	struct rspamd_webui_worker_ctx *ctx;
 	memory_pool_t *pool;
 	struct worker_task *task;
+	struct classifier_config *cl;
 	struct {
 		union {
 			struct in_addr in4;
@@ -123,6 +124,7 @@ struct rspamd_webui_session {
 		gboolean ipv6;
 		gboolean has_addr;
 	} from_addr;
+	gboolean is_spam;
 };
 
 static sig_atomic_t             wanna_die = 0;
@@ -202,6 +204,21 @@ rspamd_webui_send_error (struct rspamd_http_connection_entry *entry, gint code,
 	msg->code = code;
 	msg->body = g_string_sized_new (128);
 	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn, msg, NULL,
+			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	entry->is_reply = TRUE;
+}
+
+static void
+rspamd_webui_send_string (struct rspamd_http_connection_entry *entry, const gchar *str)
+{
+	struct rspamd_http_message *msg;
+
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = 200;
+	msg->body = g_string_new (str);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn, msg, NULL,
 			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
@@ -1199,11 +1216,38 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+static gboolean
+rspamd_webui_learn_fin_task (void *ud)
+{
+	struct worker_task						*task = ud;
+	struct rspamd_webui_session 			*session;
+	struct rspamd_http_connection_entry		*conn_ent;
+	GError									*err = NULL;
+
+	conn_ent = task->fin_arg;
+	session = conn_ent->ud;
+
+	if (!learn_task_spam (session->cl, task, session->is_spam, &err)) {
+		rspamd_webui_send_error (conn_ent, 500 + err->code, err->message);
+		return TRUE;
+	}
+	/* Successful learn */
+	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+
+	return TRUE;
+}
+
 static int
-rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg, gboolean is_spam)
 {
 	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
+	struct classifier_config				*cl;
+	struct worker_task						*task;
+	const gchar								*classifier;
+
+	ctx = session->ctx;
 
 	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
 		return 0;
@@ -1215,12 +1259,49 @@ rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	session->task = construct_task (session->ctx->worker);
-	session->task->ev_base = session->ctx->ev_base;
+	if ((classifier = rspamd_http_message_find_header (msg, "Classifier")) == NULL) {
+		classifier = "bayes";
+	}
+
+	cl = find_classifier_conf (ctx->cfg, classifier);
+	if (cl == NULL) {
+		rspamd_webui_send_error (conn_ent, 400, "Classifier not found");
+		return 0;
+	}
+
+	task = construct_task (session->ctx->worker);
+	task->ev_base = session->ctx->ev_base;
+	task->msg = msg->body;
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	task->s = new_async_session (session->pool, rspamd_webui_learn_fin_task, NULL,
+			free_task_hard, task);
+	task->s->wanna_die = TRUE;
+	task->fin_arg = conn_ent;
+
+	if (process_message (task) == -1) {
+		msg_warn ("processing of message failed");
+		destroy_session (task->s);
+		rspamd_webui_send_error (conn_ent, 500, "Message cannot be processed");
+		return 0;
+	}
+
+	if (process_filters (task) == -1) {
+		msg_warn ("filters cannot be processed for %s", task->message_id);
+		destroy_session (task->s);
+		rspamd_webui_send_error (conn_ent, 500, "Filters cannot be processed");
+		return 0;
+	}
+
+	session->task = task;
+	session->cl = cl;
+	session->is_spam = is_spam;
 
 	return 0;
 }
-#if 0
+
 /*
  * Learn spam command handler:
  * request: /learnspam
@@ -1228,40 +1309,12 @@ rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
  * input: plaintext data
  * reply: json {"success":true} or {"error":"error message"}
  */
-static void
-rspamd_webui_handle_learn_spam (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb, *inb;
-	GError									*err = NULL;
-	struct learn_callback_data				*cbdata;
-
-	if (!http_check_password (ctx, req)) {
-		return;
-	}
-
-	inb = req->input_buffer;
-
-	cbdata = http_prepare_learn (req, ctx, inb, TRUE, &err);
-	if (cbdata == NULL) {
-		/* Handle error */
-		evb = evbuffer_new ();
-		if (!evb) {
-			msg_err ("cannot allocate evbuffer for reply");
-			evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-			return;
-		}
-		evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
-		evhttp_add_header (req->output_headers, "Connection", "close");
-		http_calculate_content_length (evb, req);
-
-		evhttp_send_reply (req, err->code, err->message, evb);
-		evbuffer_free (evb);
-		g_error_free (err);
-		return;
-	}
+	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
 }
-
 /*
  * Learn ham command handler:
  * request: /learnham
@@ -1269,40 +1322,13 @@ rspamd_webui_handle_learn_spam (struct evhttp_request *req, gpointer arg)
  * input: plaintext data
  * reply: json {"success":true} or {"error":"error message"}
  */
-static void
-rspamd_webui_handle_learn_ham (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb, *inb;
-	GError									*err = NULL;
-	struct learn_callback_data				*cbdata;
-
-	if (!http_check_password (ctx, req)) {
-		return;
-	}
-
-	inb = req->input_buffer;
-
-	cbdata = http_prepare_learn (req, ctx, inb, FALSE, &err);
-	if (cbdata == NULL) {
-		/* Handle error */
-		evb = evbuffer_new ();
-		if (!evb) {
-			msg_err ("cannot allocate evbuffer for reply");
-			evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-			return;
-		}
-		evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
-		evhttp_add_header (req->output_headers, "Connection", "close");
-		http_calculate_content_length (evb, req);
-
-		evhttp_send_reply (req, err->code, err->message, evb);
-		evbuffer_free (evb);
-		g_error_free (err);
-		return;
-	}
+	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
 }
-
+#if 0
 /*
  * Save actions command handler:
  * request: /saveactions
@@ -1660,6 +1686,9 @@ rspamd_webui_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 	if (session->pool) {
 		memory_pool_delete (session->pool);
 	}
+	if (session->task != NULL) {
+		destroy_session (session->task->s);
+	}
 
 	g_slice_free1 (sizeof (struct rspamd_webui_session), session);
 }
@@ -1787,9 +1816,9 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart);
 	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learnspam);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learnham);
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
-	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learn_ham, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_save_actions, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_save_symbols, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_save_map, ctx);
