@@ -247,10 +247,23 @@ rspamd_webui_send_ucl (struct rspamd_http_connection_entry *entry, ucl_object_t 
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
-		struct rspamd_webui_worker_ctx *ctx, struct rspamd_http_message *msg)
+		struct rspamd_webui_session *session, struct rspamd_http_message *msg)
 {
 	const gchar								*password;
+	struct rspamd_webui_worker_ctx			*ctx = session->ctx;
 
+	if (!session->from_addr.has_addr) {
+		msg_info ("allow unauthorized connection from a unix socket");
+		return TRUE;
+	}
+	else if (ctx->secure_map && !session->from_addr.ipv6) {
+		if (radix32tree_find (ctx->secure_map,
+				ntohl (session->from_addr.d.in4.s_addr)) != RADIX_NO_VALUE) {
+			msg_info ("allow unauthorized connection from a trusted IP %s",
+					inet_ntoa (session->from_addr.d.in4));
+			return TRUE;
+		}
+	}
 	if (ctx->password) {
 		password = rspamd_http_message_find_header (msg, "Password");
 		if (password == NULL || strcmp (password, ctx->password) != 0) {
@@ -258,6 +271,10 @@ rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
 			rspamd_webui_send_error (entry, 403, "Unauthorized");
 			return FALSE;
 		}
+	}
+	else if (ctx->secure_map) {
+		msg_info ("deny unauthorized connection");
+		return FALSE;
 	}
 
 	return TRUE;
@@ -670,7 +687,7 @@ rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	gulong									 data[4];
 	ucl_object_t							*obj;
 
-	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -725,7 +742,7 @@ rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	struct symbol_def						*sym;
 	ucl_object_t							*obj, *top, *sym_obj;
 
-	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -784,7 +801,7 @@ rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	gint									 i;
 	ucl_object_t							*obj, *top;
 
-	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -834,7 +851,7 @@ rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	ucl_object_t							*obj, *top;
 
 
-	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -900,7 +917,7 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message				*reply;
 
 
-	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -1092,7 +1109,7 @@ rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -1160,7 +1177,7 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
@@ -1252,7 +1269,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
 		return 0;
 	}
 
