@@ -1,3 +1,6 @@
 [submodule "src/rdns"]
 	path = src/rdns
 	url = git://github.com/vstakhov/librdns
+[submodule "interface"]
+	path = interface
+	url = git://github.com/vstakhov/rspamd-interface
