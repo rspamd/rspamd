@@ -1005,6 +1005,30 @@ rspamd_ucl_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	}
 }
 
+gboolean
+rspamd_parse_ip_list (const gchar *ip_list, radix_tree_t **tree)
+{
+	gchar                           **strvec, **cur;
+	struct in_addr                   ina;
+	guint32                           mask;
+
+	strvec = g_strsplit_set (ip_list, ",", 0);
+	cur = strvec;
+
+	while (*cur != NULL) {
+		/* XXX: handle only ipv4 addresses */
+		if (parse_ipmask_v4 (*cur, &ina, &mask)) {
+			if (*tree == NULL) {
+				*tree = radix_tree_create ();
+			}
+			radix32tree_add (*tree, htonl (ina.s_addr), mask, 1);
+		}
+		cur ++;
+	}
+
+	return (*tree != NULL);
+}
+
 /*
  * vi:ts=4
  */

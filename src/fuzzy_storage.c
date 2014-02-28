@@ -937,30 +937,6 @@ sync_callback (gint fd, short what, void *arg)
 	rspamd_mutex_unlock (ctx->update_mtx);
 }
 
-static gboolean
-parse_fuzzy_update_list (struct rspamd_fuzzy_storage_ctx *ctx)
-{
-	gchar                           **strvec, **cur;
-	struct in_addr                   ina;
-	guint32                           mask;
-
-	strvec = g_strsplit_set (ctx->update_map, ",", 0);
-	cur = strvec;
-
-	while (*cur != NULL) {
-		/* XXX: handle only ipv4 addresses */
-		if (parse_ipmask_v4 (*cur, &ina, &mask)) {
-			if (ctx->update_ips == NULL) {
-				ctx->update_ips = radix_tree_create ();
-			}
-			radix32tree_add (ctx->update_ips, htonl (ina.s_addr), mask, 1);
-		}
-		cur ++;
-	}
-
-	return (ctx->update_ips != NULL);
-}
-
 gpointer
 init_fuzzy (struct config_file *cfg)
 {
@@ -1070,7 +1046,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->update_map != NULL) {
 		if (!add_map (worker->srv->cfg, ctx->update_map, "Allow fuzzy updates from specified addresses",
 				read_radix_list, fin_radix_list, (void **)&ctx->update_ips)) {
-			if (!parse_fuzzy_update_list (ctx)) {
+			if (!rspamd_parse_ip_list (ctx->update_map, &ctx->update_ips)) {
 				msg_warn ("cannot load or parse ip list from '%s'", ctx->update_map);
 			}
 		}

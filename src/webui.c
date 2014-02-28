@@ -107,6 +107,9 @@ struct rspamd_webui_worker_ctx {
 	gchar *ssl_cert;
 	/* SSL private key */
 	gchar *ssl_key;
+	/* A map of secure IP */
+	gchar *secure_ip;
+	radix_tree_t *secure_map;
 	/* Worker */
 	struct rspamd_worker *worker;
 };
@@ -1774,6 +1777,10 @@ init_webui_worker (struct config_file *cfg)
 			rspamd_rcl_parse_struct_time, ctx,
 			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 
+	rspamd_rcl_register_worker_option (cfg, type, "secure_ip",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, secure_ip), 0);
+
 	return ctx;
 }
 
@@ -1802,7 +1809,14 @@ start_webui_worker (struct rspamd_worker *worker)
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	ctx->srv = worker->srv;
-
+	if (ctx->secure_ip != NULL) {
+		if (!add_map (worker->srv->cfg, ctx->secure_ip, "Allow webui access from the specified IP",
+				read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
+			if (!rspamd_parse_ip_list (ctx->secure_ip, &ctx->secure_map)) {
+				msg_warn ("cannot load or parse ip list from '%s'", ctx->secure_ip);
+			}
+		}
+	}
 	/* Accept event */
 	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler,
 			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base);
