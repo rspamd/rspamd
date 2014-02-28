@@ -86,7 +86,9 @@ typedef int (*rspamd_http_finish_handler_t) (struct rspamd_http_connection *conn
 
 typedef int (*rspamd_http_router_handler_t) (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg);
-typedef void (*rspamd_http_router_error_handler_t) (struct rspamd_http_connection_entry *conn_ent, GError *err);
+typedef void (*rspamd_http_router_error_handler_t) (struct rspamd_http_connection_entry *conn_ent,
+		GError *err);
+typedef void (*rspamd_http_router_finish_handler_t) (struct rspamd_http_connection_entry *conn_ent);
 
 /**
  * HTTP connection structure
@@ -118,6 +120,7 @@ struct rspamd_http_connection_router {
 	struct timeval *ptv;
 	struct event_base *ev_base;
 	rspamd_http_router_error_handler_t error_handler;
+	rspamd_http_router_finish_handler_t finish_handler;
 };
 
 /**
@@ -237,10 +240,13 @@ time_t rspamd_http_parse_date (const gchar *header, gsize len);
 
 /**
  * Create new http connection router and the associated HTTP connection
+ * @param eh error handler callback
+ * @param fh finish handler callback
  * @return
  */
 struct rspamd_http_connection_router* rspamd_http_router_new (
 		rspamd_http_router_error_handler_t eh,
+		rspamd_http_router_finish_handler_t fh,
 		struct timeval *timeout,
 		struct event_base *base);
 

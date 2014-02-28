@@ -905,6 +905,9 @@ rspamd_http_entry_free (struct rspamd_http_connection_entry *entry)
 		close (entry->conn->fd);
 		rspamd_http_connection_unref (entry->conn);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_entry), entry);
+		if (entry->rt->finish_handler) {
+			entry->rt->finish_handler (entry);
+		}
 	}
 }
 
@@ -985,6 +988,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 
 struct rspamd_http_connection_router*
 rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
+		rspamd_http_router_finish_handler_t fh,
 		struct timeval *timeout, struct event_base *base)
 {
 	struct rspamd_http_connection_router* new;
@@ -993,6 +997,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	new->paths = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->conns = NULL;
 	new->error_handler = eh;
+	new->finish_handler = fh;
 	new->ev_base = base;
 	if (timeout) {
 		new->tv = *timeout;

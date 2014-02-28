@@ -111,6 +111,20 @@ struct rspamd_webui_worker_ctx {
 	struct rspamd_worker *worker;
 };
 
+struct rspamd_webui_session {
+	struct rspamd_webui_worker_ctx *ctx;
+	memory_pool_t *pool;
+	struct worker_task *task;
+	struct {
+		union {
+			struct in_addr in4;
+			struct in6_addr in6;
+		} d;
+		gboolean ipv6;
+		gboolean has_addr;
+	} from_addr;
+};
+
 static sig_atomic_t             wanna_die = 0;
 
 /* Signal handlers */
@@ -630,25 +644,25 @@ static int
 rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 	struct rspamd_stat						*st;
 	int64_t									 uptime;
 	gulong									 data[4];
 	ucl_object_t							*obj;
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
 		return 0;
 	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
-	st = ctx->srv->stat;
+	st = session->ctx->srv->stat;
 	data[0] = st->actions_stat[METRIC_ACTION_NOACTION];
 	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] + st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
 	data[2] = st->actions_stat[METRIC_ACTION_GREYLIST];
 	data[3] = st->actions_stat[METRIC_ACTION_REJECT];
 
 	/* Get uptime */
-	uptime = time (NULL) - ctx->start_time;
+	uptime = time (NULL) - session->ctx->start_time;
 
 	obj = ucl_object_insert_key (obj, ucl_object_fromstring (RVERSION), "version", 0, false);
 	obj = ucl_object_insert_key (obj, ucl_object_fromstring ("ok"), "auth", 0, false);
@@ -685,20 +699,20 @@ static int
 rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 	GList									*cur_gr, *cur_sym;
 	struct symbols_group					*gr;
 	struct symbol_def						*sym;
 	ucl_object_t							*obj, *top, *sym_obj;
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
 		return 0;
 	}
 
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Go through all symbols groups */
-	cur_gr = ctx->cfg->symbols_groups;
+	cur_gr = session->ctx->cfg->symbols_groups;
 	while (cur_gr) {
 		gr = cur_gr->data;
 		obj = ucl_object_typed_new (UCL_OBJECT);
@@ -744,20 +758,20 @@ static int
 rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 	struct metric							*metric;
 	struct metric_action					*act;
 	gint									 i;
 	ucl_object_t							*obj, *top;
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
 		return 0;
 	}
 
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Get actions for default metric */
-	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	metric = g_hash_table_lookup (session->ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric != NULL) {
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
 			act = &metric->actions[i];
@@ -793,20 +807,20 @@ static int
 rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 	GList									*cur, *tmp = NULL;
 	struct rspamd_map						*map;
 	gboolean								 editable;
 	ucl_object_t							*obj, *top;
 
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
 		return 0;
 	}
 
 	top = ucl_object_typed_new (UCL_ARRAY);
 	/* Iterate over all maps */
-	cur = ctx->cfg->maps;
+	cur = session->ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
 		if (map->protocol == MAP_PROTO_FILE && map->description != NULL) {
@@ -854,7 +868,7 @@ static int
 rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 	GList									*cur;
 	struct rspamd_map						*map;
 	const gchar								*idstr;
@@ -866,7 +880,7 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message				*reply;
 
 
-	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
 		return 0;
 	}
 
@@ -887,7 +901,7 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	/* Now let's be sure that we have map defined in configuration */
-	cur = ctx->cfg->maps;
+	cur = session->ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
 		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
@@ -1051,9 +1065,12 @@ static int
 rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
 	gdouble									 data[4], total;
 	ucl_object_t							*top, *obj;
+
+	ctx = session->ctx;
 
 	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
 		return 0;
@@ -1111,7 +1128,8 @@ static int
 rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = conn_ent->ud;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
 	struct roll_history_row					*row;
 	struct roll_history						 copied_history;
 	gint									 i, rows_proc, row_num;
@@ -1119,6 +1137,8 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 	gchar									 timebuf[32];
 	gchar									 ip_buf[INET6_ADDRSTRLEN];
 	ucl_object_t							*top, *obj;
+
+	ctx = session->ctx;
 
 	if (!rspamd_webui_check_password (conn_ent, ctx, msg)) {
 		return 0;
@@ -1175,6 +1195,28 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 
 	rspamd_webui_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
+
+	return 0;
+}
+
+static int
+rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+
+	if (!rspamd_webui_check_password (conn_ent, session->ctx, msg)) {
+		return 0;
+	}
+
+	if (msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	session->task = construct_task (session->ctx->worker);
+	session->task->ev_base = session->ctx->ev_base;
 
 	return 0;
 }
@@ -1611,10 +1653,23 @@ rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GErro
 }
 
 static void
+rspamd_webui_finish_handler (struct rspamd_http_connection_entry *conn_ent)
+{
+	struct rspamd_webui_session 		*session = conn_ent->ud;
+
+	if (session->pool) {
+		memory_pool_delete (session->pool);
+	}
+
+	g_slice_free1 (sizeof (struct rspamd_webui_session), session);
+}
+
+static void
 rspamd_webui_accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker				*worker = (struct rspamd_worker *) arg;
 	struct rspamd_webui_worker_ctx		*ctx;
+	struct rspamd_webui_session			*nsession;
 	gint								 nfd;
 	union sa_union						 su;
 	socklen_t							 addrlen = sizeof (su);
@@ -1632,20 +1687,31 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
+	nsession = g_slice_alloc0 (sizeof (struct rspamd_webui_session));
+	nsession->pool = memory_pool_new (memory_pool_get_size ());
+	nsession->ctx = ctx;
+
 	if (su.sa.sa_family == AF_UNIX) {
 		msg_info ("accepted connection from unix socket");
+		nsession->from_addr.has_addr = FALSE;
 	}
 	else if (su.sa.sa_family == AF_INET) {
 		msg_info ("accepted connection from %s port %d",
 				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
+		nsession->from_addr.has_addr = TRUE;
+		nsession->from_addr.d.in4.s_addr = su.s4.sin_addr.s_addr;
 	}
 	else if (su.sa.sa_family == AF_INET6) {
 		msg_info ("accepted connection from %s port %d",
 				inet_ntop (su.sa.sa_family, &su.s6.sin6_addr, ip_str, sizeof (ip_str)),
 				ntohs (su.s6.sin6_port));
+		memcpy (&nsession->from_addr.d.in6, &su.s6.sin6_addr,
+				sizeof (struct in6_addr));
+		nsession->from_addr.has_addr = TRUE;
+		nsession->from_addr.ipv6 = TRUE;
 	}
 
-	rspamd_http_router_handle_socket (ctx->http, nfd, ctx);
+	rspamd_http_router_handle_socket (ctx->http, nfd, nsession);
 }
 
 gpointer
@@ -1709,7 +1775,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	ctx->srv = worker->srv;
 
 	/* Accept event */
-	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler, &ctx->io_tv, ctx->ev_base);
+	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler,
+			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base);
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_webui_handle_auth);
@@ -1719,10 +1786,9 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_webui_handle_get_map);
 	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart);
 	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learnspam);
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
-
-	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learn_spam, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learn_ham, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_save_actions, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_save_symbols, ctx);
