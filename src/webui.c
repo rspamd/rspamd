@@ -645,27 +645,6 @@ rspamd_webui_prepare_learn (struct evhttp_request *req, struct rspamd_webui_work
 
 	return cbdata;
 }
-
-/*
- * Set metric action
- */
-static gboolean
-rspamd_webui_set_metric_action (struct config_file *cfg,
-		json_t *jv, struct metric *metric, enum rspamd_metric_action act)
-{
-	gdouble									 actval;
-
-	if (!json_is_number (jv)) {
-		msg_err ("json element data error");
-		return FALSE;
-	}
-	actval = json_number_value (jv);
-	if (metric->actions[act].score != actval) {
-		return add_dynamic_action (cfg, DEFAULT_METRIC, act, actval);
-	}
-	return TRUE;
-}
-
 #endif
 
 
@@ -1348,7 +1327,7 @@ rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
 {
 	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
 }
-#if 0
+
 /*
  * Save actions command handler:
  * request: /saveactions
@@ -1356,96 +1335,93 @@ rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
  * input: json array [<spam>,<probable spam>,<greylist>]
  * reply: json {"success":true} or {"error":"error message"}
  */
-static void
-rspamd_webui_handle_save_actions (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct ucl_parser						*parser;
 	struct metric							*metric;
-	json_t									*json, *jv;
-	json_error_t							 je;
+	ucl_object_t							*obj, *cur;
+	struct rspamd_webui_worker_ctx 			*ctx;
+	const gchar								*error;
+	gint64									 score;
+	gint									 i;
+	enum rspamd_metric_action				 act;
 
+	ctx = session->ctx;
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+		return 0;
+	}
+
+	if (msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
 	}
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
 		msg_err ("cannot find default metric");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 default metric not defined", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 500, "Default metric is absent");
+		return 0;
 	}
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
 		msg_err ("dynamic conf has not been defined");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "503 dynamic config not found, cannot save", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		return 0;
 	}
 
-	/* Try to load json */
-	json = json_load_evbuffer (req->input_buffer, &je);
-	if (json == NULL) {
-		msg_err ("json load error: %s", je.text);
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "504 json parse error", NULL);
-		return;
+	parser = ucl_parser_new (0);
+	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+
+	if ((error = ucl_parser_get_error (parser)) != NULL) {
+		msg_err ("cannot parse input: %s", error);
+		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_parser_free (parser);
+		return 0;
 	}
 
-	if (!json_is_array (json) || json_array_size (json) != 3) {
-		msg_err ("json data error");
-		evbuffer_free (evb);
-		json_delete (json);
-		evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
-		return;
+	obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+
+	if (obj->type != UCL_ARRAY || obj->len != 3) {
+		msg_err ("input is not an array of 3 elements");
+		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_object_unref (obj);
+		return 0;
 	}
 
-	/* Now try to check what we have */
-
-	/* Spam element */
-	jv = json_array_get (json, 0);
-	if (!http_set_metric_action (ctx->cfg, jv, metric, METRIC_ACTION_REJECT)) {
-		msg_err ("json data error");
-		evbuffer_free (evb);
-		json_delete (json);
-		evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot set action's value", NULL);
-		return;
-	}
-
-	/* Probable spam */
-	jv = json_array_get (json, 1);
-	if (!http_set_metric_action (ctx->cfg, jv, metric, METRIC_ACTION_ADD_HEADER)) {
-		msg_err ("json data error");
-		evbuffer_free (evb);
-		json_delete (json);
-		evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot set action's value", NULL);
-		return;
-	}
-
-	/* Greylist */
-	jv = json_array_get (json, 2);
-	if (!http_set_metric_action (ctx->cfg, jv, metric, METRIC_ACTION_GREYLIST)) {
-		msg_err ("json data error");
-		evbuffer_free (evb);
-		json_delete (json);
-		evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot set action's value", NULL);
-		return;
+	cur = obj->value.av;
+	for (i = 0; i < 3 && cur != NULL; i ++, cur = cur->next) {
+		switch(i) {
+		case 0:
+			act = METRIC_ACTION_REJECT;
+			break;
+		case 1:
+			act = METRIC_ACTION_ADD_HEADER;
+			break;
+		case 2:
+			act = METRIC_ACTION_GREYLIST;
+			break;
+		}
+		score = ucl_object_toint (cur);
+		if (metric->actions[act].score != score) {
+			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
+		}
 	}
 
 	dump_dynamic_config (ctx->cfg);
 
-	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
 }
+
+#if 0
 
 /*
  * Save symbols command handler:
@@ -1848,9 +1824,10 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learnspam);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learnham);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_saveactions);
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_save_actions, ctx);
+
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_save_symbols, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_save_map, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan, ctx);
