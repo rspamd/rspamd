@@ -20,8 +20,6 @@ override_dh_auto_configure:
 		-DDEBIAN_BUILD=1 \
 		-DINSTALL_EXAMPLES=ON \
 		-DFORCE_GMIME24=ON \
-		-DRSPAMD_GROUP=_rspamd \
-		-DRSPAMD_USER=_rspamd \
 		-DENABLE_HIREDIS=ON
 
 override_dh_auto_clean:
