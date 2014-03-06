@@ -36,16 +36,6 @@ RSPAMD_GROUPNAME=_rspamd
 # Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
 . /lib/lsb/init-functions
 
-FILES=(/etc/default/rspamd_*.conf)
-# check for alternative config schema
-if [ -r "${FILES[0]}" ]; then
-	CONFIGS=(/etc/default/rspamd_*.conf)
-else
- 	CONFIGS=(/etc/default/$NAME)
-fi;
-
-CONFIG_NUM=${#CONFIGS[@]}
-
 #
 # Function that starts the daemon/service
 #
@@ -97,64 +87,58 @@ do_reopenlog() {
 	return 0
 }
 
-_retcode=0
-
-for ((i=0; i < $CONFIG_NUM; i++)); do
-  SCRIPT=${CONFIGS[${i}]}
-  . ${SCRIPT}
-  case "$1" in
+case "$1" in
   start)
-	[ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
+    [ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
+    do_start
+    case "$?" in
+      0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+      2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+    esac
+    ;;
+  stop)
+    [ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
+    do_stop
+    case "$?" in
+      0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+      2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+    esac
+    ;;
+  status)
+    status_of_proc -p $PIDFILE "$DAEMON" "$NAME" || exit $?
+    ;;
+  reload|force-reload)
+    log_daemon_msg "Reloading $DESC" "$NAME"
+    do_reload
+    log_end_msg $?
+    ;;
+  reopenlog)
+    log_daemon_msg "Reopen logs for $DESC" "$NAME"
+    do_reopenlog
+    log_end_msg $?
+    ;;
+  restart)
+    log_daemon_msg "Restarting $DESC" "$NAME"
+    do_stop
+    case "$?" in
+      0|1)
 	do_start
 	case "$?" in
-		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
-		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+	  0) log_end_msg 0 ;;
+	  1) log_end_msg 1 ;; # Old process is still running
+	  *) log_end_msg 1 ;; # Failed to start
 	esac
 	;;
-  stop)
-	[ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
-	do_stop
-	case "$?" in
-		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
-		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
-	esac
+      *)
+	# Failed to stop
+	log_end_msg 1
 	;;
-  status)
-       status_of_proc -p $PIDFILE "$DAEMON" "$NAME" || _retcode=$?
-       ;;
-  reload|force-reload)
-	log_daemon_msg "Reloading $DESC" "$NAME"
-	do_reload
-	log_end_msg $?
-	;;
-  reopenlog)
-	log_daemon_msg "Reopen logs for $DESC" "$NAME"
-	do_reopenlog
-	log_end_msg $?
-	;;
-  restart)
-	log_daemon_msg "Restarting $DESC" "$NAME"
-	do_stop
-	case "$?" in
-	  0|1)
-		do_start
-		case "$?" in
-			0) log_end_msg 0 ;;
-			1) log_end_msg 1 ;; # Old process is still running
-			*) log_end_msg 1 ;; # Failed to start
-		esac
-		;;
-	  *)
-	  	# Failed to stop
-		log_end_msg 1
-		;;
-	esac
-	;;
+    esac
+    ;;
   *)
-	echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload|reopenlog}" >&2
-	exit 3
-	;;
-  esac
-done
-exit $_retcode
-:
+    echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload|reopenlog}" >&2
+    exit 3
+    ;;
+esac
+
+exit 0
