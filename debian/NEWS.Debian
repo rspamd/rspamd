@@ -9,7 +9,7 @@ rspamd (0.6.8) unstable; urgency=medium
     - multiple rspamd instances in single init.d script are no longer
       supported. Use LXC or systemd-nspawn to achieve the same effect.
     - rspamd user/group have been renamed to _rspamd:_rspamd in order to
-      decrease changes of name clash with local users.
+      decrease chances of name clash with local users.
 
  -- Mikhail Gusarov <dottedmag@debian.org>  Thu, 06 Mar 2014 22:03:40 +0100
 
