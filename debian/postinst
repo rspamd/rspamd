@@ -17,9 +17,7 @@ case "$1" in
                --force-badname \
                $SERVER_USER
 
-       chown $SERVER_USER: $SERVER_HOME
-       chown $SERVER_USER:adm $SERVER_LOG
-       chmod g+s $SERVER_LOG
+       chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
     ;;
 
     abort-*)
