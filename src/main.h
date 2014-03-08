@@ -248,6 +248,7 @@ struct worker_task {
 	guint32 scan_milliseconds;									/**< how much milliseconds passed					*/
 	gboolean view_checked;
 	gboolean pass_all_filters;									/**< pass task throught every rule					*/
+	gboolean no_log;											/**< do not log or write this task to the history	*/
 	guint32 parser_recursion;									/**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(void *arg);						/**< calback for filters finalizing					*/
 	void *fin_arg;												/**< argument for fin callback						*/

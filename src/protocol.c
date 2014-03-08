@@ -94,6 +94,7 @@
 #define JSON_HEADER "Json"
 #define HOSTNAME_HEADER "Hostname"
 #define DELIVER_TO_HEADER "Deliver-To"
+#define NO_LOG_HEADER "Log"
 
 static GList                   *custom_commands = NULL;
 
@@ -377,6 +378,17 @@ rspamd_protocol_handle_headers (struct worker_task *task, struct rspamd_http_mes
 		case 'U':
 			if (g_ascii_strcasecmp (headern, USER_HEADER) == 0) {
 				task->user = h->value->str;
+			}
+			else {
+				res = FALSE;
+			}
+			break;
+		case 'l':
+		case 'L':
+			if (g_ascii_strcasecmp (headern, NO_LOG_HEADER) == 0) {
+				if (g_ascii_strcasecmp (h->value->str, "no") == 0) {
+					task->no_log = TRUE;
+				}
 			}
 			else {
 				res = FALSE;
@@ -667,7 +679,9 @@ write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 		rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
 	}
 
-	rspamd_roll_history_update (task->worker->srv->history, task);
+	if (!task->no_log) {
+		rspamd_roll_history_update (task->worker->srv->history, task);
+	}
 	g_hash_table_iter_init (&hiter, task->results);
 
 	/* Convert results to an ucl object */
@@ -690,7 +704,9 @@ write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 	top = ucl_object_insert_key (top, ucl_object_fromstring (task->message_id), "message-id", 0, false);
 
 	write_hashes_to_log (task, logbuf);
-	msg_info ("%v", logbuf);
+	if (!task->no_log) {
+		msg_info ("%v", logbuf);
+	}
 	g_string_free (logbuf, TRUE);
 
 	msg->body = g_string_sized_new (BUFSIZ);
