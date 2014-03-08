@@ -197,7 +197,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 {
 	struct rspamd_worker_bind_conf *cnf;
 	gchar **tokens, *tmp, *err;
-	gboolean ret;
+	gboolean ret = TRUE;
 
 	if (str == NULL) {
 		return FALSE;
