@@ -184,7 +184,7 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 			}
 			server_stat->fuzzy_hashes --;
 			g_hash_table_remove (static_hash, node->h.hash_pipe);
-			bloom_del (bf, node->h.hash_pipe);
+			rspamd_bloom_del (bf, node->h.hash_pipe);
 			g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
 		}
 		else {
@@ -192,7 +192,7 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 			node = (struct rspamd_fuzzy_node *)cur->data;
 			head = hashes[node->h.block_size % BUCKETS];
 			g_queue_delete_link (head, cur);
-			bloom_del (bf, node->h.hash_pipe);
+			rspamd_bloom_del (bf, node->h.hash_pipe);
 			if (node->time != INVALID_NODE_TIME) {
 				server_stat->fuzzy_hashes_expired ++;
 			}
@@ -492,7 +492,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 				g_queue_push_head (hashes[node->h.block_size % BUCKETS], node);
 			}
 		}
-		bloom_add (bf, node->h.hash_pipe);
+		rspamd_bloom_add (bf, node->h.hash_pipe);
 		if (touch_stat) {
 			server_stat->fuzzy_hashes ++;
 		}
@@ -610,7 +610,7 @@ process_check_command (struct fuzzy_cmd *cmd, gint *flag, guint64 time, struct r
 	struct rspamd_fuzzy_node       *h;
 
 
-	if (!bloom_check (bf, cmd->hash)) {
+	if (!rspamd_bloom_check (bf, cmd->hash)) {
 		return 0;
 	}
 
@@ -666,7 +666,7 @@ process_write_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy_
 {
 	struct rspamd_fuzzy_node       *h;
 
-	if (bloom_check (bf, cmd->hash)) {
+	if (rspamd_bloom_check (bf, cmd->hash)) {
 		if (update_hash (cmd, time, ctx)) {
 			return TRUE;
 		}
@@ -725,7 +725,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s, struct rspamd_fuzzy_storage_ctx *ctx
 				tmp = cur;
 				cur = g_list_next (cur);
 				g_queue_delete_link (hash, tmp);
-				bloom_del (bf, s->hash_pipe);
+				rspamd_bloom_del (bf, s->hash_pipe);
 				msg_info ("fuzzy hash was successfully deleted");
 				server_stat->fuzzy_hashes --;
 				mods++;
@@ -747,7 +747,7 @@ process_delete_command (struct fuzzy_cmd *cmd, guint64 time, struct rspamd_fuzzy
 	fuzzy_hash_t                    s;
 	gboolean                        res = FALSE;
 
-	if (!bloom_check (bf, cmd->hash)) {
+	if (!rspamd_bloom_check (bf, cmd->hash)) {
 		return FALSE;
 	}
 
@@ -937,30 +937,6 @@ sync_callback (gint fd, short what, void *arg)
 	rspamd_mutex_unlock (ctx->update_mtx);
 }
 
-static gboolean
-parse_fuzzy_update_list (struct rspamd_fuzzy_storage_ctx *ctx)
-{
-	gchar                           **strvec, **cur;
-	struct in_addr                   ina;
-	guint32                           mask;
-
-	strvec = g_strsplit_set (ctx->update_map, ",", 0);
-	cur = strvec;
-
-	while (*cur != NULL) {
-		/* XXX: handle only ipv4 addresses */
-		if (parse_ipmask_v4 (*cur, &ina, &mask)) {
-			if (ctx->update_ips == NULL) {
-				ctx->update_ips = radix_tree_create ();
-			}
-			radix32tree_add (ctx->update_ips, htonl (ina.s_addr), mask, 1);
-		}
-		cur ++;
-	}
-
-	return (ctx->update_ips != NULL);
-}
-
 gpointer
 init_fuzzy (struct config_file *cfg)
 {
@@ -1040,13 +1016,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &sev);
 	signal_add (&sev, NULL);
 
-	/* Init bloom filter */
-	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
-	/* Try to read hashes from file */
-	if (!read_hashes_file (worker)) {
-		msg_err ("cannot read hashes file, it can be created after save procedure");
-	}
-
 	if (ctx->strict_hash) {
 		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 				NULL, rspamd_fuzzy_free_node);
@@ -1056,6 +1025,13 @@ start_fuzzy (struct rspamd_worker *worker)
 			hashes[i] = g_queue_new ();
 		}
 		frequent = g_queue_new ();
+	}
+
+	/* Init bloom filter */
+	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
+	/* Try to read hashes from file */
+	if (!read_hashes_file (worker)) {
+		msg_err ("cannot read hashes file, it can be created after save procedure");
 	}
 
 	/* Timer event */
@@ -1070,7 +1046,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->update_map != NULL) {
 		if (!add_map (worker->srv->cfg, ctx->update_map, "Allow fuzzy updates from specified addresses",
 				read_radix_list, fin_radix_list, (void **)&ctx->update_ips)) {
-			if (!parse_fuzzy_update_list (ctx)) {
+			if (!rspamd_parse_ip_list (ctx->update_map, &ctx->update_ips)) {
 				msg_warn ("cannot load or parse ip list from '%s'", ctx->update_map);
 			}
 		}
