@@ -1016,13 +1016,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	event_base_set (ctx->ev_base, &sev);
 	signal_add (&sev, NULL);
 
-	/* Init bloom filter */
-	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
-	/* Try to read hashes from file */
-	if (!read_hashes_file (worker)) {
-		msg_err ("cannot read hashes file, it can be created after save procedure");
-	}
-
 	if (ctx->strict_hash) {
 		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 				NULL, rspamd_fuzzy_free_node);
@@ -1032,6 +1025,13 @@ start_fuzzy (struct rspamd_worker *worker)
 			hashes[i] = g_queue_new ();
 		}
 		frequent = g_queue_new ();
+	}
+
+	/* Init bloom filter */
+	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
+	/* Try to read hashes from file */
+	if (!read_hashes_file (worker)) {
+		msg_err ("cannot read hashes file, it can be created after save procedure");
 	}
 
 	/* Timer event */
