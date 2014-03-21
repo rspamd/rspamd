@@ -7,6 +7,7 @@ case "$1" in
     purge)
       rm -rf /var/lib/rspamd
       rm -rf /var/log/rspamd
+      rm -rf /run/rspamd
       exit 0;;
     remove|upgrade|disappear|failed-upgrade|abort-*)
       exit 0;;

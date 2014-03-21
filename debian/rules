@@ -13,15 +13,13 @@ override_dh_auto_configure:
 		-DDBDIR=/var/lib/rspamd \
 		-DLOGDIR=/var/log/rspamd \
 		-DPLUGINSDIR=/usr/share/rspamd \
-		-DEXAMPLESDIR=/usr/share/examples/rspamd \
+		-DEXAMPLESDIR=/usr/share/doc/rspamd/examples \
 		-DLIBDIR=/usr/lib \
 		-DINCLUDEDIR=/usr/include \
 		-DNO_SHARED=ON \
 		-DDEBIAN_BUILD=1 \
 		-DINSTALL_EXAMPLES=ON \
 		-DFORCE_GMIME24=ON \
-		-DRSPAMD_GROUP=rspamd \
-		-DRSPAMD_USER=_rspamd \
 		-DENABLE_HIREDIS=ON
 
 override_dh_auto_clean:

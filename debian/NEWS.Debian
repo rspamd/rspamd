@@ -1,0 +1,15 @@
+rspamd (0.6.8) unstable; urgency=medium
+
+  * In order to be uploaded to Debian, rspamd package has been changed in
+    incompatible ways compared to packages from Launchpad PPA or OBS
+    previously distributed by rspamd project:
+
+    - /etc/default/rspamd* files are no longer supported. rspamd is run
+      under fixed user/group.
+    - multiple rspamd instances in single init.d script are no longer
+      supported. Use LXC or systemd-nspawn to achieve the same effect.
+    - rspamd user/group have been renamed to _rspamd:_rspamd in order to
+      decrease chances of name clash with local users.
+
+ -- Mikhail Gusarov <dottedmag@debian.org>  Thu, 06 Mar 2014 22:03:40 +0100
+

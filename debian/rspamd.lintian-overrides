@@ -1,0 +1,1 @@
+rspamd: non-standard-dir-perm var/lib/rspamd/ 0750 != 0755
