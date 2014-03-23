@@ -13,7 +13,7 @@
 %endif
 
 Name:           rspamd
-Version:        0.6.8
+Version:        0.6.9
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
@@ -213,6 +213,9 @@ fi
 %{rspamd_confdir}/lua/rspamd.classifiers.lua
 
 %changelog
+* Sun Mar 23 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.9-1
+- Update to 0.6.9.
+
 * Mon Feb 03 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.8-1
 - Update to 0.6.8.
 

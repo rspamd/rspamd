@@ -1,3 +1,19 @@
+0.6.9:
+	* Fix serious bug in DNS random code.
+	* Rename symbol HFILTER_HOSTNAME_NOPTR (@AlexeySa)
+	* Fix Hfilter for null text part (@AlexeySa)
+	* Fix rule MISSING_MIMEOLE for IPB forum (@AlexeySa)
+	* Tweak default RBL module config for brevity (@fatalbanana)
+	* Fix nameservers setup.
+	* Fix overrides for a metric. (#33)
+	* Fix memory leak in fuzzy_add command.
+	* Debianization (by @dottedmag).
+	* Rework resolver library.
+	* Rework LRU hash logic.
+	* Fix users in debian package (by @dottedmag).
+	* Rework bloom hash library to use XXHash.
+	* Remove judy and use glib hash tables from fuzzy_storage.
+
 0.6.8:
 	* Controller now listen for localhost and not for 127.0.0.1 by default
 	* Allow FCrDNS-style RBL lookups (by @fatalbanana)
