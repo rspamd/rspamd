@@ -15,11 +15,11 @@ various versions of ubuntu:
 <http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
 
 Users of other OSes can use sources to build and install rspamd. The recent version of rspamd is
-0.6.8.
+0.6.9.
 
-<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.8.tar.gz">Download rspamd-0.6.8</a></p>
+<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.9.tar.gz">Download rspamd-0.6.9</a></p>
 
-[Signature](/downloads/rspamd-0.6.8.tar.gz.asc)
+[Signature](/downloads/rspamd-0.6.9.tar.gz.asc)
 
 [My GPG key](https://rspamd.com/vsevolod.pubkey)
 
@@ -32,7 +32,7 @@ build from sources.
 Build requirements
 ------------------
 
-Rspamd requires several 3-rd party software to build and run:
+Rspamd requires several 3-rd party software packages to build and run:
 
 * libevent - asynchronous event library
 * glib - common purposes library
