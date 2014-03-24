@@ -32,7 +32,7 @@ build from sources.
 Build requirements
 ------------------
 
-Rspamd requires several 3rd party software to build and run:
+Rspamd requires several 3-rd party software packages to build and run:
 
 * libevent - asynchronous event library
 * glib - common purposes library
