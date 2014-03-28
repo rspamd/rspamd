@@ -1,5 +1,5 @@
-rspamd (0.6.8) UNRELEASED; urgency=low
+rspamd (0.6.9) unstable; urgency=low
 
   * Initial release (Closes: #683746)
 
- -- Mikhail Gusarov <dottedmag@debian.org>  Mon, 17 Feb 2014 23:24:39 +0100
+ -- Mikhail Gusarov <dottedmag@debian.org>  Sun, 23 Mar 2014 19:04:13 +0100
