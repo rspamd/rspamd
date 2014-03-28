@@ -550,7 +550,7 @@ create_listen_socket (const gchar *addr, gint port, gint listen_type)
 }
 
 static GList *
-systemd_get_socket (gint number, gint listen_type)
+systemd_get_socket (gint number)
 {
 	int sock, max, flags;
 	GList *result = NULL;
@@ -572,11 +572,6 @@ systemd_get_socket (gint number, gint listen_type)
 			if (!S_ISSOCK (st.st_mode)) {
 				errno = EINVAL;
 				return NULL;
-			}
-			if (listen_type != SOCK_DGRAM) {
-				if (listen (sock, -1) == -1) {
-					return NULL;
-				}
 			}
 			flags = fcntl (sock, F_GETFD);
 			if (flags != -1) {
@@ -651,7 +646,7 @@ spawn_workers (struct rspamd_main *rspamd)
 									cf->worker->listen_type);
 						}
 						else {
-							ls = systemd_get_socket (bcf->ai, cf->worker->listen_type);
+							ls = systemd_get_socket (bcf->ai);
 						}
 						if (ls == NULL) {
 							msg_err ("cannot listen on socket %s: %s", bcf->bind_host, strerror (errno));
