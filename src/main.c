@@ -564,7 +564,7 @@ systemd_get_socket (gint number, gint listen_type)
 	if (e != NULL) {
 		errno = 0;
 		max = strtoul (e, &err, 10);
-		if ((e == NULL || *e == '\0') && max > number + sd_listen_fds_start) {
+		if ((e == NULL || *e == '\0') && max > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
 				return NULL;
@@ -584,7 +584,7 @@ systemd_get_socket (gint number, gint listen_type)
 			}
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
-		else if (max <= number + sd_listen_fds_start) {
+		else if (max <= number) {
 			errno = EOVERFLOW;
 		}
 	}
