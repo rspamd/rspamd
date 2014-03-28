@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 %:
-	dh $@
+	dh $@ --with systemd
 
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 # Until https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=739834 is fixed
@@ -29,3 +29,6 @@ override_dh_auto_clean:
 override_dh_fixperms:
 	dh_fixperms
 	chmod 750 $(CURDIR)/debian/rspamd/var/lib/rspamd
+
+override_dh_systemd_start:
+	dh_systemd_start --restart-after-upgrade

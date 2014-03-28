@@ -1,0 +1,14 @@
+[Unit]
+Description=rapid spam filtering system
+
+[Service]
+Type=simple
+# Replace Pre/Post with RuntimeDirectory once it is available
+PermissionsStartOnly=true
+ExecStartPre=/bin/mkdir -m700 -p /run/rspamd
+ExecStartPre=/bin/chown _rspamd:_rspamd /run/rspamd
+ExecStart=/usr/bin/rspamd -f -c /etc/rspamd/rspamd.conf
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStopPost=/bin/rm -r /run/rspamd
+WorkingDirectory=/var/lib/rspamd
+User=_rspamd

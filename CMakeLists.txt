@@ -91,6 +91,10 @@ IF(NOT INCLUDEDIR)
 	SET(INCLUDEDIR include/rspamd)
 ENDIF(NOT INCLUDEDIR)
 
+IF(NOT SYSTEMDDIR)
+	SET(SYSTEMDDIR ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
+ENDIF(NOT SYSTEMDDIR)
+
 ############################# INCLUDE SECTION #############################################
 
 INCLUDE(CheckIncludeFiles)
@@ -1014,6 +1018,11 @@ FOREACH(LUA_CONF ${LUA_CONFIGS})
 	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/lua/${_rp})")
 	INSTALL(FILES "conf/lua/${LUA_CONF}" DESTINATION ${CONFDIR}/lua/${_rp})
 ENDFOREACH(LUA_CONF)
+
+# systemd unit
+
+INSTALL(FILES "rspamd.service" DESTINATION ${SYSTEMDDIR})
+INSTALL(FILES "rspamd.socket" DESTINATION ${SYSTEMDDIR})
 
 # Manual pages
 INSTALL(FILES "doc/rspamd.8" DESTINATION ${MANDIR}/man8)
