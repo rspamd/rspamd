@@ -147,6 +147,7 @@ struct rspamd_lua_ip {
 		struct in_addr ip4;
 	} data;
 	int af;
+	gboolean is_valid;
 };
 
 /**
