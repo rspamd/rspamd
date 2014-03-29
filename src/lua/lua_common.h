@@ -19,6 +19,11 @@
 #define luaL_reg	luaL_Reg
 #endif
 
+#define LUA_ENUM(L, name, val) \
+  lua_pushlstring(L, #name, sizeof(#name)-1); \
+  lua_pushnumber(L, val); \
+  lua_settable(L, -3);
+
 #if LUA_VERSION_NUM > 501
 static inline void
 luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
@@ -127,6 +132,11 @@ void lua_ip_push (lua_State *L, int af, gpointer data);
  * Push ip address from a string (nil is pushed if a string cannot be converted)
  */
 void lua_ip_push_fromstring (lua_State *L, const gchar *ip_str);
+
+/**
+ * Create type error
+ */
+int rspamd_lua_typerror (lua_State *L, int narg, const char *tname);
 
 /**
  * Lua IP address structure
