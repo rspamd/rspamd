@@ -552,7 +552,7 @@ create_listen_socket (const gchar *addr, gint port, gint listen_type)
 static GList *
 systemd_get_socket (gint number)
 {
-	int sock, max, flags;
+	int sock, num_passed, flags;
 	GList *result = NULL;
 	const gchar *e;
 	gchar *err;
@@ -563,8 +563,8 @@ systemd_get_socket (gint number)
 	e = getenv ("LISTEN_FDS");
 	if (e != NULL) {
 		errno = 0;
-		max = strtoul (e, &err, 10);
-		if ((err == NULL || *err == '\0') && max > number) {
+		num_passed = strtoul (e, &err, 10);
+		if ((err == NULL || *err == '\0') && num_passed > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
 				return NULL;
@@ -579,7 +579,7 @@ systemd_get_socket (gint number)
 			}
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
-		else if (max <= number) {
+		else if (num_passed <= number) {
 			errno = EOVERFLOW;
 		}
 	}
