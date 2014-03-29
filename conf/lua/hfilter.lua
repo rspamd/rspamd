@@ -161,12 +161,9 @@ local function hfilter(task)
     --IP--
     local ip = false
     local rip = task:get_from_ip()
-        if rip then
-            ip = rip:to_string()
-            if ip and (ip == '0.0.0.0' or ip == '::') then
-                ip = false
-            end
-        end
+    if rip:is_valid() then
+        ip = rip:to_string()
+    end
     
     --HOSTNAME--
     local hostname = task:get_hostname()
