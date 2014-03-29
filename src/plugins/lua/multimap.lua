@@ -28,7 +28,7 @@ local function check_multimap(task)
 					task:insert_result(rule['symbol'], 1)
 				end
 			else
-				local ip = task:get_from_ip_num()
+				local ip = task:get_from_ip():to_number()
 				if ip and rule['ips'] and rule['ips']:get_key(ip) then
 					task:insert_result(rule['symbol'], 1)
 				end
