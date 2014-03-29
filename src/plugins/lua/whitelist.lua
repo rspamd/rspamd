@@ -9,7 +9,7 @@ local h = nil  -- radix tree and hash table
 local function check_whitelist (task)
 	if symbol_ip then
 		-- check client's ip
-		local ipn = task:get_from_ip_num()
+		local ipn = task:get_from_ip():to_number()
 		if ipn then
 			local key = r:get_key(ipn)
 			if key then
