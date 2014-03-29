@@ -24,12 +24,12 @@ local function check_multimap(task)
 		if rule['type'] == 'ip' then
 			if rule['cdb'] then
 				local ip = task:get_from_ip()
-				if ip and rule['hash']:lookup(ip) then
+				if ip:is_valid() and rule['hash']:lookup(ip) then
 					task:insert_result(rule['symbol'], 1)
 				end
 			else
 				local ip = task:get_from_ip():to_number()
-				if ip and rule['ips'] and rule['ips']:get_key(ip) then
+				if ip:is_valid() and rule['ips'] and rule['ips']:get_key(ip) then
 					task:insert_result(rule['symbol'], 1)
 				end
 			end
@@ -66,7 +66,7 @@ local function check_multimap(task)
 			end
 		elseif rule['type'] == 'dnsbl' then
 			local ip = task:get_from_ip()
-			if ip and ip:to_string() ~= "0.0.0.0" then
+			if ip:is_valid() then
 				if ip:get_version() == 6 and rule['ipv6'] then
 					task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
 						ip_to_rbl(ip, rule['map']), multimap_rbl_cb, rule['map'])
