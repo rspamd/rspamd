@@ -564,7 +564,7 @@ systemd_get_socket (gint number)
 	if (e != NULL) {
 		errno = 0;
 		max = strtoul (e, &err, 10);
-		if ((e == NULL || *e == '\0') && max > number) {
+		if ((err == NULL || *err == '\0') && max > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
 				return NULL;
