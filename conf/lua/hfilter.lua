@@ -37,12 +37,15 @@ local checks_hellohost = {
 }
 
 local checks_hello = {
-['localhost$'] = 5, ['\\.hfilter\\.ru'] = 5, ['^\\[*84\\.47\\.176\\.(70|71)'] = 5, ['^\\[*81\\.26\\.148\\.(66|67|68|69|70|71|72|73|74|75|76|77|79)'] = 5,
+['localhost$'] = 5,
 ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
 ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5,
-['^\\[*127\\.'] = 5, ['^\\[*10\\.'] = 5, ['^\\[*172\\.16\\.'] = 5, ['^\\[*192\\.168\\.'] = 5,
---bareip
-['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4
+['^\\[*0\\.'] = 5, ['^\\[*::1\\]*'] = 5, --loopback ipv4, ipv6
+['^\\[*127\\.'] = 5, ['^\\[*10\\.'] = 5, ['^\\[*172\\.16\\.'] = 5, ['^\\[*192\\.168\\.'] = 5, --local ipv4
+['^\\[*fe[89ab][0-9a-f]::'] = 5, ['^\\[*fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
+['^\\[*2001:db8::'] = 5, --reserved RFC 3849 for ipv6
+['^\\[*fc00::'] = 5, ['^\\[*ffxx::'] = 5, --unicast, multicast ipv6
+['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4, ['^\\[*\\d+:'] = 4 --bareip ipv4, ipv6
 }
 
 local function trim1(s)
@@ -158,12 +161,9 @@ local function hfilter(task)
     --IP--
     local ip = false
     local rip = task:get_from_ip()
-        if rip then
-            ip = rip:to_string()
-            if ip and ip == '0.0.0.0' then
-                ip = false
-            end
-        end
+    if rip:is_valid() then
+        ip = rip:to_string()
+    end
     
     --HOSTNAME--
     local hostname = task:get_hostname()
