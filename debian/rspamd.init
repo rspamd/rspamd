@@ -20,14 +20,9 @@ DAEMON_ARGS="-c /etc/rspamd/rspamd.conf"
 DESC="rapid spam filtering system"
 PIDFILE=/run/rspamd/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
-RSPAMD_USERNAME=_rspamd
-RSPAMD_GROUPNAME=_rspamd
 
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
-
-# Read configuration variable file if it is present
-[ -r /etc/default/$NAME ] && . /etc/default/$NAME
 
 # Load the VERBOSE setting and other rcS variables
 . /lib/init/vars.sh
@@ -45,11 +40,11 @@ do_start()
 	#   0 if daemon has been started
 	#   1 if daemon was already running
 	#   2 if daemon could not be started
-	mkdir -m 755 $RSPAMD_USERNAME:$RSPAMD_GROUPNAME -p /run/rspamd
+	mkdir -m 755 _rspamd:_rspamd -p /run/rspamd
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
-		$DAEMON_ARGS -u $RSPAMD_USERNAME -g $RSPAMD_GROUPNAME \
+		$DAEMON_ARGS -u _rspamd -g _rspamd \
 		|| return 2
 }
 

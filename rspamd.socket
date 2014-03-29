@@ -1,0 +1,11 @@
+[Unit]
+Description=rapid spam filtering system
+
+[Socket]
+ListenStream=11333
+ListenStream=127.0.0.1:11334
+ListenStream=127.0.0.1:11336
+FreeBind=true
+
+[Install]
+WantedBy=sockets.target
