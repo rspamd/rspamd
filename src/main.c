@@ -550,7 +550,7 @@ create_listen_socket (const gchar *addr, gint port, gint listen_type)
 }
 
 static GList *
-systemd_get_socket (gint number, gint listen_type)
+systemd_get_socket (gint number)
 {
 	int sock, max, flags;
 	GList *result = NULL;
@@ -564,7 +564,7 @@ systemd_get_socket (gint number, gint listen_type)
 	if (e != NULL) {
 		errno = 0;
 		max = strtoul (e, &err, 10);
-		if ((e == NULL || *e == '\0') && max > number + sd_listen_fds_start) {
+		if ((err == NULL || *err == '\0') && max > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
 				return NULL;
@@ -573,18 +573,13 @@ systemd_get_socket (gint number, gint listen_type)
 				errno = EINVAL;
 				return NULL;
 			}
-			if (listen_type != SOCK_DGRAM) {
-				if (listen (sock, -1) == -1) {
-					return NULL;
-				}
-			}
 			flags = fcntl (sock, F_GETFD);
 			if (flags != -1) {
 				(void)fcntl (sock, F_SETFD, flags | FD_CLOEXEC);
 			}
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
-		else if (max <= number + sd_listen_fds_start) {
+		else if (max <= number) {
 			errno = EOVERFLOW;
 		}
 	}
@@ -651,7 +646,7 @@ spawn_workers (struct rspamd_main *rspamd)
 									cf->worker->listen_type);
 						}
 						else {
-							ls = systemd_get_socket (bcf->ai, cf->worker->listen_type);
+							ls = systemd_get_socket (bcf->ai);
 						}
 						if (ls == NULL) {
 							msg_err ("cannot listen on socket %s: %s", bcf->bind_host, strerror (errno));
