@@ -26,6 +26,7 @@
 #include "utlist.h"
 #include "util.h"
 #include "printf.h"
+#include "logger.h"
 
 struct rspamd_http_connection_private {
 	GString *buf;
@@ -1063,12 +1064,19 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 		new->ptv = NULL;
 	}
 
-	if (default_fs_path != NULL && stat (default_fs_path, &st) != -1 &&
-			S_ISDIR (st.st_mode)) {
-		new->default_fs_path = g_strdup (default_fs_path);
-	}
-	else {
-		new->default_fs_path = NULL;
+	new->default_fs_path = NULL;
+	if (default_fs_path != NULL) {
+		if (stat (default_fs_path, &st) == -1) {
+			msg_err ("cannot stat %s", default_fs_path);
+		}
+		else {
+			if (!S_ISDIR (st.st_mode)) {
+				msg_err ("path %s is not a directory", default_fs_path);
+			}
+			else {
+				new->default_fs_path = g_strdup (default_fs_path);
+			}
+		}
 	}
 
 	return new;
