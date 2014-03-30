@@ -1812,7 +1812,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	}
 	/* Accept event */
 	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler,
-			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base);
+			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base,
+			NULL);
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_webui_handle_auth);

@@ -940,6 +940,56 @@ rspamd_http_router_error_handler (struct rspamd_http_connection *conn, GError *e
 	}
 }
 
+static gboolean
+rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
+		struct rspamd_http_message *msg)
+{
+	struct stat st;
+	int fd;
+	char filebuf[PATH_MAX], realbuf[PATH_MAX];
+	struct rspamd_http_message *reply_msg;
+
+	/* XXX: filter filename component only */
+	rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
+			entry->rt->default_fs_path, G_DIR_SEPARATOR, msg->url);
+
+	if (realpath (filebuf, realbuf) == NULL ||
+			lstat (realbuf, &st) == -1 ||
+			!S_ISREG (st.st_mode)) {
+		/* Skip everything suspicious */
+		return FALSE;
+	}
+
+	fd = open (realbuf, O_RDONLY);
+	if (fd == -1) {
+		return FALSE;
+	}
+
+	reply_msg = rspamd_http_new_message (HTTP_RESPONSE);
+	reply_msg->date = time (NULL);
+	reply_msg->code = 200;
+	reply_msg->body = g_string_sized_new (st.st_size);
+
+	if (read (fd, reply_msg->body->str, st.st_size) != st.st_size) {
+		close (fd);
+		rspamd_http_message_free (reply_msg);
+		return FALSE;
+	}
+
+	reply_msg->body->len = st.st_size;
+	reply_msg->body->str[st.st_size] = '\0';
+	close (fd);
+
+	rspamd_http_connection_reset (entry->conn);
+
+	/* XXX: detect content type */
+	rspamd_http_connection_write_message (entry->conn, reply_msg, NULL,
+			"text/plain", entry, entry->conn->fd,
+			entry->rt->ptv, entry->rt->ev_base);
+
+	return TRUE;
+}
+
 static int
 rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
@@ -967,19 +1017,23 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			return handler (entry, msg);
 		}
 		else {
-			err = g_error_new (HTTP_ERROR, 404,
-							"Not found");
-			if (entry->rt->error_handler != NULL) {
-				entry->rt->error_handler (entry, err);
+			if (entry->rt->default_fs_path == NULL ||
+					rspamd_http_router_try_file (entry, msg)) {
+				err = g_error_new (HTTP_ERROR, 404,
+						"Not found");
+				if (entry->rt->error_handler != NULL) {
+					entry->rt->error_handler (entry, err);
+				}
+				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
+				err_msg->date = time (NULL);
+				err_msg->code = err->code;
+				err_msg->body = g_string_new (err->message);
+				rspamd_http_connection_reset (entry->conn);
+				rspamd_http_connection_write_message (entry->conn, err_msg, NULL,
+						"text/plain", entry, entry->conn->fd,
+						entry->rt->ptv, entry->rt->ev_base);
+				g_error_free (err);
 			}
-			err_msg = rspamd_http_new_message (HTTP_RESPONSE);
-			err_msg->date = time (NULL);
-			err_msg->code = err->code;
-			err_msg->body = g_string_new (err->message);
-			rspamd_http_connection_reset (entry->conn);
-			rspamd_http_connection_write_message (entry->conn, err_msg, NULL,
-					"text/plain", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
-			g_error_free (err);
 		}
 	}
 
@@ -989,9 +1043,11 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 struct rspamd_http_connection_router*
 rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 		rspamd_http_router_finish_handler_t fh,
-		struct timeval *timeout, struct event_base *base)
+		struct timeval *timeout, struct event_base *base,
+		const char *default_fs_path)
 {
 	struct rspamd_http_connection_router* new;
+	struct stat st;
 
 	new = g_slice_alloc (sizeof (struct rspamd_http_connection_router));
 	new->paths = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -1005,6 +1061,14 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	}
 	else {
 		new->ptv = NULL;
+	}
+
+	if (default_fs_path != NULL && stat (default_fs_path, &st) != -1 &&
+			S_ISDIR (st.st_mode)) {
+		new->default_fs_path = g_strdup (default_fs_path);
+	}
+	else {
+		new->default_fs_path = NULL;
 	}
 
 	return new;
@@ -1037,7 +1101,8 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 	conn->conn = rspamd_http_connection_new (NULL, rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler, 0, RSPAMD_HTTP_SERVER);
 
-	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv, router->ev_base);
+	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv,
+			router->ev_base);
 	LL_PREPEND (router->conns, conn);
 }
 
@@ -1051,6 +1116,9 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 			rspamd_http_entry_free (conn);
 		}
 
+		if (router->default_fs_path != NULL) {
+			g_free (router->default_fs_path);
+		}
 		g_hash_table_unref (router->paths);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_router), router);
 	}

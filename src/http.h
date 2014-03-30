@@ -119,6 +119,7 @@ struct rspamd_http_connection_router {
 	struct timeval tv;
 	struct timeval *ptv;
 	struct event_base *ev_base;
+	gchar *default_fs_path;
 	rspamd_http_router_error_handler_t error_handler;
 	rspamd_http_router_finish_handler_t finish_handler;
 };
@@ -242,13 +243,16 @@ time_t rspamd_http_parse_date (const gchar *header, gsize len);
  * Create new http connection router and the associated HTTP connection
  * @param eh error handler callback
  * @param fh finish handler callback
+ * @param default_fs_path if not NULL try to serve static files from
+ * the specified directory
  * @return
  */
 struct rspamd_http_connection_router* rspamd_http_router_new (
 		rspamd_http_router_error_handler_t eh,
 		rspamd_http_router_finish_handler_t fh,
 		struct timeval *timeout,
-		struct event_base *base);
+		struct event_base *base,
+		const char *default_fs_path);
 
 /**
  * Add new path to the router
