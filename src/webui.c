@@ -110,6 +110,10 @@ struct rspamd_webui_worker_ctx {
 	/* A map of secure IP */
 	gchar *secure_ip;
 	radix_tree_t *secure_map;
+
+	/* Static files dir */
+	gchar *static_files_dir;
+
 	/* Worker */
 	struct rspamd_worker *worker;
 };
@@ -1774,6 +1778,10 @@ init_webui_worker (struct config_file *cfg)
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, secure_ip), 0);
 
+	rspamd_rcl_register_worker_option (cfg, type, "static_dir",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, static_files_dir), 0);
+
 	return ctx;
 }
 
@@ -1813,7 +1821,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	/* Accept event */
 	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler,
 			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base,
-			NULL);
+			ctx->static_files_dir);
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_webui_handle_auth);
