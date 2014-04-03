@@ -445,7 +445,7 @@ ProcessPackage(GTHREAD gthread-2.0)
 
 IF(ENABLE_HIREDIS MATCHES "ON")
 	# Try to find hiredis library
-	ProcessPackage(HIREDIS hiredis)
+	ProcessPackage(HIREDIS hiredis libhiredis)
 ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
 ProcessPackage(GMIME2 gmime-2.6 gmime-2.4 gmime-2.0)
