@@ -645,7 +645,7 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 			param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
 			debug_task ("send surbl dns request %s", surbl_req);
 			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback,
-					(void *)param, DNS_REQUEST_A, surbl_req)) {
+					(void *)param, RDNS_REQUEST_A, surbl_req)) {
 				task->dns_requests ++;
 			}
 		}
@@ -697,11 +697,11 @@ dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
-	if (reply->code == DNS_RC_NOERROR && reply->entries) {
+	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
 		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id,
 				param->host_resolve, param->suffix->suffix);
 		elt = reply->entries;
-		if (elt->type == DNS_REQUEST_A) {
+		if (elt->type == RDNS_REQUEST_A) {
 			process_dns_results (param->task, param->suffix,
 					param->host_resolve, (guint32)elt->content.a.addr.s_addr);
 		}

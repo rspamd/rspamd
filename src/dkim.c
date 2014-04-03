@@ -757,14 +757,14 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 	struct rdns_reply_entry					*elt;
 	gsize										 keylen = 0;
 
-	if (reply->code != DNS_RC_NOERROR) {
+	if (reply->code != RDNS_RC_NOERROR) {
 		g_set_error (&err, DKIM_ERROR, DKIM_SIGERROR_NOKEY, "dns request to %s failed: %s", cbdata->ctx->dns_key,
 				rdns_strerror (reply->code));
 		cbdata->handler (NULL, 0, cbdata->ctx, cbdata->ud, err);
 	}
 	else {
 		LL_FOREACH (reply->entries, elt) {
-			if (elt->type == DNS_REQUEST_TXT) {
+			if (elt->type == RDNS_REQUEST_TXT) {
 				key = rspamd_dkim_parse_key (elt->content.txt.data, &keylen, &err);
 				if (key) {
 					key->ttl = elt->ttl;
@@ -802,7 +802,7 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *res
 	cbdata->handler = handler;
 	cbdata->ud = ud;
 
-	return make_dns_request (resolver, s, ctx->pool, rspamd_dkim_dns_cb, cbdata, DNS_REQUEST_TXT, ctx->dns_key);
+	return make_dns_request (resolver, s, ctx->pool, rspamd_dkim_dns_cb, cbdata, RDNS_REQUEST_TXT, ctx->dns_key);
 }
 
 static gboolean

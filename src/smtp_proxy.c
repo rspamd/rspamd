@@ -492,7 +492,7 @@ smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 
 	if (session->state != SMTP_PROXY_STATE_REJECT) {
 
-		if (reply->code == DNS_RC_NOERROR) {
+		if (reply->code == RDNS_RC_NOERROR) {
 			/* This means that address is in dnsbl */
 			p = rdns_request_get_name (reply->request);
 			while (*p) {
@@ -559,7 +559,7 @@ make_rbl_requests (struct smtp_proxy_session *session)
 		rspamd_snprintf (dst, len, "%ud.%ud.%ud.%ud.%s", (guint)p[3],
 				(guint)p[2], (guint)p[1], (guint)p[0], cur->data);
 		if (make_dns_request (session->resolver, session->s, session->pool,
-								smtp_dnsbl_cb, session, DNS_REQUEST_A, dst)) {
+								smtp_dnsbl_cb, session, RDNS_REQUEST_A, dst)) {
 			session->rbl_requests ++;
 			msg_debug ("send request to %s", dst);
 		}
@@ -663,12 +663,12 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 	{
 	case SMTP_PROXY_STATE_RESOLVE_REVERSE:
 		/* Parse reverse reply and start resolve of this ip */
-		if (reply->code != DNS_RC_NOERROR) {
+		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
 					session->client_addr.s_addr, __FUNCTION__, "DNS error: %s",
 					rdns_strerror (reply->code));
 
-			if (reply->code == DNS_RC_NXDOMAIN) {
+			if (reply->code == RDNS_RC_NXDOMAIN) {
 				session->hostname = memory_pool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}
@@ -686,18 +686,18 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 						elt->content.ptr.name);
 				session->state = SMTP_PROXY_STATE_RESOLVE_NORMAL;
 				make_dns_request (session->resolver, session->s, session->pool,
-						smtp_dns_cb, session, DNS_REQUEST_A, session->hostname);
+						smtp_dns_cb, session, RDNS_REQUEST_A, session->hostname);
 
 			}
 		}
 		break;
 	case SMTP_PROXY_STATE_RESOLVE_NORMAL:
-		if (reply->code != DNS_RC_NOERROR) {
+		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
 					session->client_addr.s_addr, __FUNCTION__, "DNS error: %s",
 					rdns_strerror (reply->code));
 
-			if (reply->code == DNS_RC_NXDOMAIN) {
+			if (reply->code == RDNS_RC_NXDOMAIN) {
 				session->hostname = memory_pool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}
@@ -942,7 +942,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->s = new_async_session (session->pool, NULL, NULL, free_smtp_proxy_session, session);
 	session->state = SMTP_PROXY_STATE_RESOLVE_REVERSE;
 	if (! make_dns_request (session->resolver, session->s, session->pool,
-			smtp_dns_cb, session, DNS_REQUEST_PTR, session->ptr_str)) {
+			smtp_dns_cb, session, RDNS_REQUEST_PTR, session->ptr_str)) {
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_slice_free1 (sizeof (struct smtp_proxy_session), session);
 		close (nfd);

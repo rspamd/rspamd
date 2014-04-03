@@ -76,7 +76,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	reqdata->ud = ud;
 
 	req = rdns_make_request_full (resolver->r, rspamd_dns_callback, reqdata,
-			resolver->request_timeout, resolver->max_retransmits, name, 1, type);
+			resolver->request_timeout, resolver->max_retransmits, 1, name, type);
 
 	if (req != NULL) {
 		register_async_event (session, (event_finalizer_t)rspamd_dns_fin_cb, req,

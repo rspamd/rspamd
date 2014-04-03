@@ -592,11 +592,11 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 	switch (session->state) {
 		case SMTP_STATE_RESOLVE_REVERSE:
 			/* Parse reverse reply and start resolve of this ip */
-			if (reply->code != DNS_RC_NOERROR) {
+			if (reply->code != RDNS_RC_NOERROR) {
 				rspamd_conditional_debug(rspamd_main->logger, session->client_addr.s_addr, __FUNCTION__,
 						"DNS error: %s", dns_strerror (reply->code));
 				
-				if (reply->code == DNS_RC_NXDOMAIN) {
+				if (reply->code == RDNS_RC_NXDOMAIN) {
 					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				else {
@@ -610,17 +610,18 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 					elt = reply->elements->data;
 					session->hostname = memory_pool_strdup (session->pool, elt->ptr.name);
 					session->state = SMTP_STATE_RESOLVE_NORMAL;
-					make_dns_request (session->resolver, session->s, session->pool, smtp_dns_cb, session, DNS_REQUEST_A, session->hostname);
+					make_dns_request (session->resolver, session->s, session->pool,
+							smtp_dns_cb, session, RDNS_REQUEST_A, session->hostname);
 					
 				}
 			}
 			break;
 		case SMTP_STATE_RESOLVE_NORMAL:
-			if (reply->code != DNS_RC_NOERROR) {
+			if (reply->code != RDNS_RC_NOERROR) {
 				rspamd_conditional_debug(rspamd_main->logger, session->client_addr.s_addr, __FUNCTION__,
 										"DNS error: %s", dns_strerror (reply->code));
 
-				if (reply->code == DNS_RC_NXDOMAIN) {
+				if (reply->code == RDNS_RC_NXDOMAIN) {
 					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				else {
@@ -714,7 +715,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->s = new_async_session (session->pool, NULL, NULL, free_smtp_session, session);
 	session->state = SMTP_STATE_RESOLVE_REVERSE;
 	if (! make_dns_request (session->resolver, session->s, session->pool,
-			smtp_dns_cb, session, DNS_REQUEST_PTR, &session->client_addr)) {
+			smtp_dns_cb, session, RDNS_REQUEST_PTR, &session->client_addr)) {
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_free (session);
 		close (nfd);

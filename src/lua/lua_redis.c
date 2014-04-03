@@ -246,7 +246,7 @@ lua_redis_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rdns_reply_entry			*elt;
 
 
-	if (reply->code != DNS_RC_NOERROR) {
+	if (reply->code != RDNS_RC_NOERROR) {
 		lua_redis_push_error (rdns_strerror (reply->code), ud, FALSE);
 		return;
 	}
@@ -306,8 +306,9 @@ lua_redis_make_request (lua_State *L)
 			if (inet_aton (ud->server, &ud->ina) == 0) {
 				/* Need to make dns request */
 				/* Resolve hostname */
-				if (make_dns_request (task->resolver, task->s, task->task_pool, lua_redis_dns_callback, ud,
-					DNS_REQUEST_A, ud->server)) {
+				if (make_dns_request (task->resolver, task->s, task->task_pool,
+						lua_redis_dns_callback, ud,
+						RDNS_REQUEST_A, ud->server)) {
 					task->dns_requests ++;
 					lua_pushboolean (L, TRUE);
 				}

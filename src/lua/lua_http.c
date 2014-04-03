@@ -306,7 +306,7 @@ lua_http_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct in_addr                  ina;
 	struct timeval                  tv;
 
-	if (reply->code != DNS_RC_NOERROR) {
+	if (reply->code != RDNS_RC_NOERROR) {
 		lua_http_push_error (450, ud);
 		return;
 	}
@@ -404,7 +404,7 @@ lua_http_make_request_common (lua_State *L, struct worker_task *task, const gcha
 
 	/* Resolve hostname */
 	if (make_dns_request (task->resolver, task->s, task->task_pool, lua_http_dns_callback, ud,
-			DNS_REQUEST_A, hostname)) {
+			RDNS_REQUEST_A, hostname)) {
 		task->dns_requests ++;
 	}
 

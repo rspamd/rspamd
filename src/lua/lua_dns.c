@@ -101,28 +101,28 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	/*
 	 * XXX: rework to handle different request types
 	 */
-	if (reply->code == DNS_RC_NOERROR) {
+	if (reply->code == RDNS_RC_NOERROR) {
 		lua_newtable (cd->L);
 		LL_FOREACH (reply->entries, elt) {
 			switch (elt->type) {
-			case DNS_REQUEST_A:
+			case RDNS_REQUEST_A:
 				lua_ip_push (cd->L, AF_INET, &elt->content.a.addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
-			case DNS_REQUEST_AAA:
+			case RDNS_REQUEST_AAAA:
 				lua_ip_push (cd->L, AF_INET6, &elt->content.aaa.addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
-			case DNS_REQUEST_PTR:
+			case RDNS_REQUEST_PTR:
 				lua_pushstring (cd->L, elt->content.ptr.name);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
-			case DNS_REQUEST_TXT:
-			case DNS_REQUEST_SPF:
+			case RDNS_REQUEST_TXT:
+			case RDNS_REQUEST_SPF:
 				lua_pushstring (cd->L, elt->content.txt.data);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
-			case DNS_REQUEST_MX:
+			case RDNS_REQUEST_MX:
 				/* mx['name'], mx['priority'] */
 				lua_newtable (cd->L);
 				lua_set_table_index (cd->L, "name", elt->content.mx.name);
@@ -211,7 +211,7 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 		cbdata = memory_pool_alloc (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
-		if (type != DNS_REQUEST_PTR) {
+		if (type != RDNS_REQUEST_PTR) {
 			cbdata->to_resolve = memory_pool_strdup (pool, to_resolve);
 		}
 		else {
@@ -252,7 +252,7 @@ lua_dns_resolver_resolve_a (lua_State *L)
 	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L, dns_resolver, DNS_REQUEST_A, 2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_A, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -267,7 +267,7 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L, dns_resolver, DNS_REQUEST_PTR, 2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_PTR, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -282,7 +282,7 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L, dns_resolver, DNS_REQUEST_TXT, 2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_TXT, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -297,7 +297,7 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L, dns_resolver, DNS_REQUEST_MX, 2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_MX, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -339,13 +339,13 @@ luaopen_dns_resolver (lua_State * L)
 
 	lua_newtable(L);
 	{
-		LUA_ENUM(L, DNS_REQUEST_A, DNS_REQUEST_A);
-		LUA_ENUM(L, DNS_REQUEST_PTR, DNS_REQUEST_PTR);
-		LUA_ENUM(L, DNS_REQUEST_MX, DNS_REQUEST_MX);
-		LUA_ENUM(L, DNS_REQUEST_TXT, DNS_REQUEST_TXT);
-		LUA_ENUM(L, DNS_REQUEST_SRV, DNS_REQUEST_SRV);
-		LUA_ENUM(L, DNS_REQUEST_SPF, DNS_REQUEST_SRV);
-		LUA_ENUM(L, DNS_REQUEST_AAA, DNS_REQUEST_SRV);
+		LUA_ENUM(L, RDNS_REQUEST_A, RDNS_REQUEST_A);
+		LUA_ENUM(L, RDNS_REQUEST_PTR, RDNS_REQUEST_PTR);
+		LUA_ENUM(L, RDNS_REQUEST_MX, RDNS_REQUEST_MX);
+		LUA_ENUM(L, RDNS_REQUEST_TXT, RDNS_REQUEST_TXT);
+		LUA_ENUM(L, RDNS_REQUEST_SRV, RDNS_REQUEST_SRV);
+		LUA_ENUM(L, RDNS_REQUEST_SPF, RDNS_REQUEST_SRV);
+		LUA_ENUM(L, RDNS_REQUEST_AAA, RDNS_REQUEST_SRV);
 	}
 
 	luaL_register (L, NULL, dns_resolverlib_m);
