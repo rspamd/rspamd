@@ -1,5 +1,5 @@
 --
--- Copyright (c) 2013, Alexey Savelyev
+-- Copyright (c) 2013-2014, Alexey Savelyev
 -- E-mail: info@homeweb.ru
 -- WWW: http://homeweb.ru
 --
@@ -161,7 +161,7 @@ local function hfilter(task)
     --IP--
     local ip = false
     local rip = task:get_from_ip()
-    if rip:is_valid() then
+    if rip and rip:is_valid() then
         ip = rip:to_string()
     end
     
