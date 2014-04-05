@@ -415,11 +415,23 @@ gboolean
 rspamd_protocol_handle_request (struct worker_task *task,
 		struct rspamd_http_message *msg)
 {
-	if (rspamd_protocol_handle_url (task, msg)) {
-		return rspamd_protocol_handle_headers (task, msg);
+	gboolean ret = TRUE;
+
+	if (msg->method == HTTP_SYMBOLS) {
+		task->cmd = CMD_SYMBOLS;
+	}
+	else if (msg->method == HTTP_CHECK) {
+		task->cmd = CMD_CHECK;
+	}
+	else {
+		ret = rspamd_protocol_handle_url (task, msg);
 	}
 
-	return FALSE;
+	if (ret) {
+		ret = rspamd_protocol_handle_headers (task, msg);
+	}
+
+	return ret;
 }
 
 static void
