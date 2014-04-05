@@ -437,6 +437,8 @@ rspamd_http_on_headers_complete (http_parser* parser)
 		priv->msg->body = g_string_sized_new (BUFSIZ);
 	}
 
+	priv->msg->method = parser->method;
+
 	return 0;
 }
 
