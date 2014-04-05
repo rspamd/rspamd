@@ -110,6 +110,9 @@ typedef int (*http_cb) (http_parser*);
   /* RFC-5789 */                    \
   XX(24, PATCH,       PATCH)        \
   XX(25, PURGE,       PURGE)        \
+  /* SPAMC compatibility */			\
+  XX(26, SYMBOLS,     SYMBOLS)      \
+  XX(27, CHECK,       CHECK)
 
 enum http_method
   {
