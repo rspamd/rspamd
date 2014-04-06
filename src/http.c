@@ -729,45 +729,62 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->header = NULL;
 	priv->buf = g_string_sized_new (128);
 
-	if (msg->body == NULL || msg->body->len == 0) {
-		pbody = NULL;
-		bodylen = 0;
-		priv->outlen = 2;
-		msg->method = HTTP_GET;
+	if (msg->method < HTTP_SYMBOLS) {
+		if (msg->body == NULL || msg->body->len == 0) {
+			pbody = NULL;
+			bodylen = 0;
+			priv->outlen = 2;
+			msg->method = HTTP_GET;
+		}
+		else {
+			pbody = msg->body->str;
+			bodylen = msg->body->len;
+			priv->outlen = 3;
+			msg->method = HTTP_POST;
+		}
 	}
-	else {
+	else if (msg->body != NULL) {
 		pbody = msg->body->str;
 		bodylen = msg->body->len;
-		priv->outlen = 3;
-		msg->method = HTTP_POST;
+		priv->outlen = 2;
+	}
+	else {
+		/* Invalid body for spamc method */
+		return;
 	}
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
-		ptm = gmtime (&msg->date);
-		t = *ptm;
-		rspamd_snprintf (datebuf, sizeof (datebuf), "%s, %02d %s %4d %02d:%02d:%02d GMT",
-				http_week[t.tm_wday],
-				t.tm_mday,
-				http_month[t.tm_mon],
-				t.tm_year + 1900,
-				t.tm_hour,
-				t.tm_min,
-				t.tm_sec);
-		if (mime_type == NULL) {
-			mime_type = "text/plain";
+		if (msg->method < HTTP_SYMBOLS) {
+			ptm = gmtime (&msg->date);
+			t = *ptm;
+			rspamd_snprintf (datebuf, sizeof (datebuf), "%s, %02d %s %4d %02d:%02d:%02d GMT",
+					http_week[t.tm_wday],
+					t.tm_mday,
+					http_month[t.tm_mon],
+					t.tm_year + 1900,
+					t.tm_hour,
+					t.tm_min,
+					t.tm_sec);
+			if (mime_type == NULL) {
+				mime_type = "text/plain";
+			}
+			rspamd_printf_gstring (priv->buf, "HTTP/1.1 %d %s\r\n"
+					"Connection: close\r\n"
+					"Server: %s\r\n"
+					"Date: %s\r\n"
+					"Content-Length: %z\r\n"
+					"Content-Type: %s\r\n",
+					msg->code, rspamd_http_code_to_str (msg->code),
+					"rspamd/" RVERSION,
+					datebuf,
+					msg->body->len,
+					mime_type);
 		}
-		rspamd_printf_gstring (priv->buf, "HTTP/1.1 %d %s\r\n"
-				"Connection: close\r\n"
-				"Server: %s\r\n"
-				"Date: %s\r\n"
-				"Content-Length: %z\r\n"
-				"Content-Type: %s\r\n",
-				msg->code, rspamd_http_code_to_str (msg->code),
-				"rspamd/" RVERSION,
-				datebuf,
-				msg->body->len,
-				mime_type);
+		else {
+			/* Legacy spamd reply */
+			rspamd_printf_gstring (priv->buf, "RSPAMD/1.3 0 EX_OK\r\n");
+		}
 	}
 	else {
 		/* Format request */
@@ -809,8 +826,14 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->out[i].iov_base = "\r\n";
 		priv->out[i++].iov_len = 2;
 	}
-	priv->out[i].iov_base = "\r\n";
-	priv->out[i++].iov_len = 2;
+	if (msg->method < HTTP_SYMBOLS) {
+		priv->out[i].iov_base = "\r\n";
+		priv->out[i++].iov_len = 2;
+	}
+	else {
+		/* No CRLF for compatibility reply */
+		priv->wr_total -= 2;
+	}
 	if (msg->body != NULL) {
 		priv->out[i].iov_base = pbody;
 		priv->out[i++].iov_len = bodylen;

@@ -741,6 +741,10 @@ rspamd_protocol_write_reply (struct worker_task *task)
 	ucl_object_t                   *top = NULL;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	if (!task->is_json) {
+		/* Turn compatibility on */
+		msg->method = HTTP_SYMBOLS;
+	}
 	msg->date = time (NULL);
 
 	task->state = CLOSING_CONNECTION;
