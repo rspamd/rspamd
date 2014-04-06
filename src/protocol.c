@@ -419,11 +419,14 @@ rspamd_protocol_handle_request (struct worker_task *task,
 
 	if (msg->method == HTTP_SYMBOLS) {
 		task->cmd = CMD_SYMBOLS;
+		task->is_json = FALSE;
 	}
 	else if (msg->method == HTTP_CHECK) {
 		task->cmd = CMD_CHECK;
+		task->is_json = FALSE;
 	}
 	else {
+		task->is_json = TRUE;
 		ret = rspamd_protocol_handle_url (task, msg);
 	}
 

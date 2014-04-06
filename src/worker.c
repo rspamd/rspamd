@@ -344,7 +344,6 @@ accept_socket (gint fd, short what, void *arg)
 	/* Copy some variables */
 	new_task->sock = nfd;
 	new_task->is_mime = ctx->is_mime;
-	new_task->is_json = ctx->is_json;
 	new_task->allow_learn = ctx->allow_learn;
 
 	worker->srv->stat->connections_count++;
