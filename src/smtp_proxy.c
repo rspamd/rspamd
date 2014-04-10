@@ -485,16 +485,19 @@ smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 	struct smtp_proxy_session 						*session = arg;
 	const gchar										*p;
 	gint											 dots = 0;
+	const struct rdns_request_name					*req_name;
 
 	session->rbl_requests --;
 
-	msg_debug ("got reply for %s: %s", rdns_request_get_name (reply->request), rdns_strerror (reply->code));
+	req_name = rdns_request_get_name (reply->request, NULL);
+
+	msg_debug ("got reply for %s: %s", req_name[0].name, rdns_strerror (reply->code));
 
 	if (session->state != SMTP_PROXY_STATE_REJECT) {
 
 		if (reply->code == RDNS_RC_NOERROR) {
 			/* This means that address is in dnsbl */
-			p = rdns_request_get_name (reply->request);
+			p = req_name[0].name;
 			while (*p) {
 				if (*p == '.') {
 					dots ++;

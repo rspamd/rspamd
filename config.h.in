@@ -209,6 +209,8 @@
 
 #cmakedefine HAVE_IPV6_V6ONLY    1
 
+#cmakedefine HAVE_CTYPE_H        1
+
 #if (defined(__i386__) || defined(__x86_64__)  || defined(_M_IX86))
 /* Use murmur hash for UTHash for these platforms */
 #define HASH_FUNCTION HASH_MUR
