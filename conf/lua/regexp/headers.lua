@@ -339,7 +339,7 @@ reconf['REPTO_QUOTE_YAHOO'] = string.format('(%s) & ((%s) | (%s))', repto_quote,
 local xm_gnus = 'X-Mailer=/^Gnus v/H'
 local xm_msoe5 = 'X-Mailer=/^Microsoft Outlook Express 5/H'
 local xm_msoe6 = 'X-Mailer=/^Microsoft Outlook Express 6/H'
-local xm_mso12 = 'X-Mailer=/^Microsoft Office Outlook 12\\.0/H'
+local xm_mso12 = 'X-Mailer=/^Microsoft(?: Office Outlook 12\\.0| Outlook 14\\.0)/H'
 local xm_cgpmapi = 'X-Mailer=/^CommuniGate Pro MAPI Connector/H'
 local xm_moz4 = 'X-Mailer=/^Mozilla 4/H'
 local xm_skyri = 'X-Mailer=/^SKYRiXgreen/H'
