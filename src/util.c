@@ -36,6 +36,13 @@
 #include <openssl/err.h>
 #endif
 
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#endif
+#ifdef HAVE_READPASSPHRASE_H
+#include <readpassphrase.h>
+#endif
+
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
 /* More than 2 log messages per second */

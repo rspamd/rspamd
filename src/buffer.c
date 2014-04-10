@@ -25,6 +25,9 @@
 #include "config.h"
 #include "buffer.h"
 #include "main.h"
+#ifdef HAVE_SYS_SENDFILE_H
+#include <sys/sendfile.h>
+#endif
 
 #define G_DISPATCHER_ERROR dispatcher_error_quark()
 #define debug_ip(...) rspamd_conditional_debug(rspamd_main->logger, d->peer_addr, __FUNCTION__, __VA_ARGS__)

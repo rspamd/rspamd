@@ -25,6 +25,14 @@
 #include "aio_event.h"
 #include "main.h"
 
+#ifdef HAVE_SYS_EVENTFD_H
+#include <sys/eventfd.h>
+#endif
+
+#ifdef HAVE_AIO_H
+#include <aio.h>
+#endif
+
 /* Linux syscall numbers */
 #if defined(__i386__)
 # define SYS_io_setup      245

@@ -42,6 +42,10 @@
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #endif
+#ifdef HAVE_LOCALE_H
+#include <locale.h>
+#define HAVE_SETLOCALE 1
+#endif
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2

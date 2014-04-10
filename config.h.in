@@ -328,6 +328,10 @@
 #include <sys/timeb.h>
 #endif
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
 /* sysexits */
 #ifdef HAVE_SYSEXITS_H
 #include <sysexits.h>
@@ -416,43 +420,8 @@
 #include <search.h>
 #endif
 
-#ifdef HAVE_LOCALE_H
-#include <locale.h>
-#define HAVE_SETLOCALE 1
-#endif
-
-#ifdef HAVE_SYS_EVENTFD_H
-#include <sys/eventfd.h>
-#endif
-
-#ifdef HAVE_AIO_H
-#include <aio.h>
-#endif
-
-#ifdef HAVE_SYS_SENDFILE_H
-#include <sys/sendfile.h>
-#endif
-
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
-#endif
-
-#ifdef HAVE_FETCH_H
-#include <fetch.h>
-#elif defined(CURL_FOUND)
-#include <curl/curl.h>
-#endif
-
-#ifdef HAVE_READPASSPHRASE_H
-#include <readpassphrase.h>
-#endif
-
-#ifdef HAVE_TERMIOS_H
-#include <termios.h>
-#endif
-
-#ifdef HAVE_PATHS_H
-#include <paths.h>
 #endif
 
 #include <errno.h>

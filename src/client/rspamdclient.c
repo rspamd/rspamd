@@ -25,6 +25,12 @@
 #include "util.h"
 #include "http.h"
 
+#ifdef HAVE_FETCH_H
+#include <fetch.h>
+#elif defined(CURL_FOUND)
+#include <curl/curl.h>
+#endif
+
 struct rspamd_client_request;
 
 /*
