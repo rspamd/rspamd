@@ -6,4 +6,4 @@
 	url = git://github.com/vstakhov/rspamd-interface
 [submodule "src/ucl"]
 	path = src/ucl
-	url = git@github.com:vstakhov/libucl
+	url = git://github.com/vstakhov/libucl
