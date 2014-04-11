@@ -323,12 +323,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	IF(ENABLE_REDIRECTOR MATCHES "ON")
 		CONFIGURE_FILE(freebsd/redirector.sh.in freebsd/redirector @ONLY)
 	ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
-    FIND_LIBRARY(LIBINTL_LIBRARY NAMES intl PATHS   /lib
-                                               /opt/lib
-                                               /usr/lib
-                                               /usr/local/lib
-                 DOC "Path where the libintl library can be found")
-    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
 	MESSAGE(STATUS "Configuring for FreeBSD")
  
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -337,12 +331,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_BSD_SOURCE -DDARWIN")
     SET(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "${CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS} -undefined dynamic_lookup")
 
-    FIND_LIBRARY(LIBINTL_LIBRARY NAMES intl PATHS   /lib
-                                               /opt/lib
-                                               /usr/lib
-                                               /usr/local/lib
-                 DOC "Path where the libintl library can be found")
-    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${LIBINTL_LIBRARY})
 	MESSAGE(STATUS "Configuring for Darwin")
 
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
