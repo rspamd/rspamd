@@ -44,9 +44,31 @@ struct rspamd_http_connection_private {
 	gsize wr_total;
 };
 
+enum http_magic_type {
+	HTTP_MAGIC_PLAIN = 0,
+	HTTP_MAGIC_HTML,
+	HTTP_MAGIC_CSS,
+	HTTP_MAGIC_JS,
+	HTTP_MAGIC_PNG,
+	HTTP_MAGIC_JPG
+};
+
+static const struct _rspamd_http_magic {
+	const gchar *ext;
+	const gchar *ct;
+} http_file_types[] = {
+	[HTTP_MAGIC_PLAIN] = { "txt", "text/plain" },
+	[HTTP_MAGIC_HTML] = { "html", "text/html" },
+	[HTTP_MAGIC_CSS] = { "css", "text/css" },
+	[HTTP_MAGIC_JS] = { "js", "application/javascript" },
+	[HTTP_MAGIC_PNG] = { "png", "image/png" },
+	[HTTP_MAGIC_JPG] = { "jpg", "image/jpeg" },
+};
+
 static gchar  *http_week[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 static gchar  *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 							"Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
 
 #define HTTP_ERROR http_error_quark ()
 GQuark
@@ -966,13 +988,34 @@ rspamd_http_router_error_handler (struct rspamd_http_connection *conn, GError *e
 	}
 }
 
+static const gchar *
+rspamd_http_router_detect_ct (const gchar *path)
+{
+	const gchar *dot;
+	guint i;
+
+	dot = strrchr (path, '.');
+	if (dot == NULL) {
+		return http_file_types[HTTP_MAGIC_PLAIN].ct;
+	}
+	dot ++;
+
+	for (i = 0; i < G_N_ELEMENTS (http_file_types); i ++) {
+		if (strcmp (http_file_types[i].ext, dot) == 0) {
+			return http_file_types[i].ct;
+		}
+	}
+
+	return http_file_types[HTTP_MAGIC_PLAIN].ct;
+}
+
 static gboolean
 rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 		struct rspamd_http_message *msg)
 {
 	struct stat st;
-	int fd;
-	char filebuf[PATH_MAX], realbuf[PATH_MAX];
+	gint fd;
+	gchar filebuf[PATH_MAX], realbuf[PATH_MAX];
 	struct rspamd_http_message *reply_msg;
 
 	/* XXX: filter filename component only */
@@ -982,6 +1025,12 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	if (realpath (filebuf, realbuf) == NULL ||
 			lstat (realbuf, &st) == -1 ||
 			!S_ISREG (st.st_mode)) {
+		if (S_ISDIR (st.st_mode)) {
+			/* Try to append 'index.html' to the url */
+			g_string_append_printf (msg->url, "%c%s", G_DIR_SEPARATOR,
+					"index.html");
+			return rspamd_http_router_try_file (entry, msg);
+		}
 		/* Skip everything suspicious */
 		return FALSE;
 	}
@@ -1010,7 +1059,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 
 	/* XXX: detect content type */
 	rspamd_http_connection_write_message (entry->conn, reply_msg, NULL,
-			"text/plain", entry, entry->conn->fd,
+			rspamd_http_router_detect_ct (realbuf), entry, entry->conn->fd,
 			entry->rt->ptv, entry->rt->ev_base);
 
 	return TRUE;
