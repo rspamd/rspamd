@@ -1011,27 +1011,42 @@ rspamd_http_router_detect_ct (const gchar *path)
 
 static gboolean
 rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
-		struct rspamd_http_message *msg)
+		struct rspamd_http_message *msg, gboolean expand_path)
 {
 	struct stat st;
 	gint fd;
-	gchar filebuf[PATH_MAX], realbuf[PATH_MAX];
+	gchar filebuf[PATH_MAX], realbuf[PATH_MAX], *dir;
 	struct rspamd_http_message *reply_msg;
 
 	/* XXX: filter filename component only */
-	rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
+	if (expand_path) {
+		rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
 			entry->rt->default_fs_path, G_DIR_SEPARATOR, msg->url);
+	}
+	else {
+		rspamd_snprintf (filebuf, sizeof (filebuf), "%v",
+			msg->url);
+	}
 
 	if (realpath (filebuf, realbuf) == NULL ||
-			lstat (realbuf, &st) == -1 ||
-			!S_ISREG (st.st_mode)) {
-		if (S_ISDIR (st.st_mode)) {
-			/* Try to append 'index.html' to the url */
-			g_string_append_printf (msg->url, "%c%s", G_DIR_SEPARATOR,
-					"index.html");
-			return rspamd_http_router_try_file (entry, msg);
-		}
-		/* Skip everything suspicious */
+			lstat (realbuf, &st) == -1) {
+		return FALSE;
+	}
+
+	if (S_ISDIR (st.st_mode) && expand_path) {
+		/* Try to append 'index.html' to the url */
+		g_string_append_printf (msg->url, "%c%s", G_DIR_SEPARATOR,
+				"index.html");
+		return rspamd_http_router_try_file (entry, msg, FALSE);
+	}
+	else if (!S_ISREG (st.st_mode)) {
+		return FALSE;
+	}
+
+	/* We also need to ensure that file is inside the defined dir */
+	dir = dirname (realbuf);
+	if (dir == NULL || strncmp (dir, entry->rt->default_fs_path,
+			strlen (entry->rt->default_fs_path)) != 0) {
 		return FALSE;
 	}
 
@@ -1093,7 +1108,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			if (entry->rt->default_fs_path == NULL ||
-					rspamd_http_router_try_file (entry, msg)) {
+					rspamd_http_router_try_file (entry, msg, TRUE)) {
 				err = g_error_new (HTTP_ERROR, 404,
 						"Not found");
 				if (entry->rt->error_handler != NULL) {
