@@ -37,8 +37,6 @@
 #include "view.h"
 #include "lua/lua_common.h"
 #include "json/jansson.h"
-#include "cfg_xml.h"
-
 
 #define DEFAULT_STATFILE_PREFIX "./"
 

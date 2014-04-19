@@ -50,7 +50,6 @@
 #include "view.h"
 #include "map.h"
 #include "dns.h"
-#include "cfg_xml.h"
 #include "hash.h"
 
 #include "surbl.h"

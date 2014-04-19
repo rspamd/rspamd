@@ -30,7 +30,6 @@
 #include "filter.h"
 #include "settings.h"
 #include "classifiers/classifiers.h"
-#include "cfg_xml.h"
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"
 #include "map.h"
@@ -666,25 +665,6 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 	return c;
 }
 
-static GMarkupParser xml_parser = {
-	.start_element = rspamd_xml_start_element,
-	.end_element = rspamd_xml_end_element,
-	.passthrough = NULL,
-	.text = rspamd_xml_text,
-	.error = rspamd_xml_error,
-};
-
-static const char*
-get_filename_extension (const char *filename)
-{
-	const char *dot_pos = strrchr (filename, '.');
-
-	if (dot_pos != NULL) {
-		return (dot_pos + 1);
-	}
-
-	return NULL;
-}
 
 static bool
 rspamd_include_map_handler (const guchar *data, gsize len, void* ud)
@@ -749,13 +729,10 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename,
 {
 	struct stat                     st;
 	gint                            fd;
-	gchar                          *data, *rcl;
-	const gchar                    *ext;
-	GMarkupParseContext            *ctx;
+	gchar                          *data;
 	GError                         *err = NULL;
 	struct rspamd_rcl_section     *top, *logger;
-	gboolean res, is_xml = FALSE;
-	struct rspamd_xml_userdata ud;
+	gboolean res;
 	struct ucl_parser *parser;
 
 	if (stat (filename, &st) == -1) {
@@ -774,65 +751,23 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename,
 		return FALSE;
 	}
 	close (fd);
-	
-	if (convert_to != NULL) {
-		is_xml = TRUE;
-	}
-	else {
-		ext = get_filename_extension (filename);
-		if (ext != NULL && strcmp (ext, "xml") == 0) {
-			is_xml = TRUE;
-		}
-	}
 
-	if (is_xml) {
-		/* Prepare xml parser */
-		memset (&ud, 0, sizeof (ud));
-		ud.cfg = cfg;
-		ud.state = 0;
-		ctx = g_markup_parse_context_new (&xml_parser, G_MARKUP_TREAT_CDATA_AS_TEXT, &ud, NULL);
-		res = g_markup_parse_context_parse (ctx, data, st.st_size, &err);
-
-		munmap (data, st.st_size);
-	}
-	else {
-		parser = ucl_parser_new (0);
-		rspamd_ucl_add_conf_variables (parser);
-		rspamd_ucl_add_conf_macros (parser, cfg);
-		if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
-			msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
-			ucl_parser_free (parser);
-			munmap (data, st.st_size);
-			return FALSE;
-		}
-		munmap (data, st.st_size);
-		cfg->rcl_obj = ucl_parser_get_object (parser);
+	parser = ucl_parser_new (0);
+	rspamd_ucl_add_conf_variables (parser);
+	rspamd_ucl_add_conf_macros (parser, cfg);
+	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
+		msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
-		res = TRUE;
+		munmap (data, st.st_size);
+		return FALSE;
 	}
+	munmap (data, st.st_size);
+	cfg->rcl_obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+	res = TRUE;
 
 	if (!res) {
 		return FALSE;
-	}
-
-	if (is_xml && convert_to != NULL) {
-		/* Convert XML config to UCL */
-		rcl = ucl_object_emit (cfg->rcl_obj, UCL_EMIT_CONFIG);
-		if (rcl != NULL) {
-			fd = open (convert_to, O_CREAT|O_TRUNC|O_WRONLY, 00644);
-			if (fd == -1) {
-				msg_err ("cannot open %s: %s", convert_to, strerror (errno));
-			}
-			else if (write (fd, rcl, strlen (rcl)) == -1) {
-				msg_err ("cannot write rcl %s: %s", convert_to, strerror (errno));
-			}
-			else {
-				msg_info ("dumped xml configuration %s to ucl configuration %s",
-						filename, convert_to);
-			}
-			close (fd);
-			free (rcl);
-		}
 	}
 
 	top = rspamd_rcl_config_init ();

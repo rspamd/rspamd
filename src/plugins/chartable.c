@@ -37,7 +37,6 @@
 #include "cfg_file.h"
 #include "expressions.h"
 #include "view.h"
-#include "cfg_xml.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1

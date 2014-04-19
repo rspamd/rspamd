@@ -41,7 +41,6 @@
 #include "view.h"
 #include "map.h"
 #include "spf.h"
-#include "cfg_xml.h"
 #include "hash.h"
 
 #define DEFAULT_SYMBOL_FAIL "R_SPF_FAIL"

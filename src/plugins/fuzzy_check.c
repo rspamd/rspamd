@@ -49,7 +49,6 @@
 #include "map.h"
 #include "images.h"
 #include "fuzzy_storage.h"
-#include "cfg_xml.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10

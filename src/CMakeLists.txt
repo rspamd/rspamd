@@ -23,7 +23,6 @@ SET(LIBRSPAMDSERVERSRC
 				buffer.c
 				cfg_utils.c
 				cfg_rcl.c
-				cfg_xml.c
 				dkim.c
 				dns.c
 				dynamic_cfg.c

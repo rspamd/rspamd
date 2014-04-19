@@ -24,7 +24,6 @@
 #include "config.h"
 #include "main.h"
 #include "cfg_file.h"
-#include "cfg_xml.h"
 #include "util.h"
 #include "smtp_proto.h"
 #include "map.h"

@@ -46,7 +46,6 @@
 #include "view.h"
 #include "map.h"
 #include "dkim.h"
-#include "cfg_xml.h"
 #include "hash.h"
 
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"

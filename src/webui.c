@@ -30,7 +30,6 @@
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"
-#include "cfg_xml.h"
 #include "map.h"
 #include "dns.h"
 #include "tokenizers/tokenizers.h"

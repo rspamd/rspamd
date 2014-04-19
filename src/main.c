@@ -31,7 +31,6 @@
 #include "map.h"
 #include "fuzzy_storage.h"
 #include "kvstorage_server.h"
-#include "cfg_xml.h"
 #include "symbols_cache.h"
 #include "lua/lua_common.h"
 #include "ottery.h"
@@ -79,8 +78,6 @@ static gchar                   *rspamd_pidfile = NULL;
 static gboolean                 dump_cache = FALSE;
 static gboolean                 is_debug = FALSE;
 static gboolean                 is_insecure = FALSE;
-static gchar                   *convert_config = FALSE;
-
 /* List of workers that are pending to start */
 static GList                   *workers_pending = NULL;
 
@@ -107,7 +104,6 @@ static GOptionEntry entries[] =
   { "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_tests, "Specify lua file(s) to test", NULL },
   { "sign-config", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &sign_configs, "Specify config file(s) to sign", NULL },
   { "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey, "Specify private key to sign", NULL },
-  { "convert-config", 0, 0, G_OPTION_ARG_FILENAME, &convert_config, "Convert cnfiguration to UCL", NULL},
   { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -774,7 +770,7 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 	struct filter                  *filt;
 	struct module_ctx              *cur_module = NULL;
 
-	if (! read_rspamd_config (cfg, cfg->cfg_name, convert_config,
+	if (! read_rspamd_config (cfg, cfg->cfg_name, NULL,
 			config_logger, rspamd_main)) {
 		return FALSE;
 	}

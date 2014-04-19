@@ -32,7 +32,6 @@
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"
-#include "cfg_xml.h"
 #include "url.h"
 #include "message.h"
 #include "map.h"
