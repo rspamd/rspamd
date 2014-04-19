@@ -191,7 +191,7 @@ static int
 lua_worker_get_option (lua_State *L)
 {
 	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
-	ucl_object_t									*val;
+	const ucl_object_t									*val;
 	const gchar										*name;
 
 	if (ctx) {

@@ -156,7 +156,7 @@ lua_config_get_module_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
 	const gchar                     *mname, *optname;
-	ucl_object_t              *obj;
+	const ucl_object_t              *obj;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -192,7 +192,7 @@ lua_config_get_all_opt (lua_State * L)
 {
 	struct config_file             *cfg = lua_check_config (L);
 	const gchar                     *mname;
-	ucl_object_t              *obj;
+	const ucl_object_t              *obj;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);

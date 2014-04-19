@@ -241,7 +241,7 @@ struct rspamd_worker_param_parser {
 struct rspamd_worker_cfg_parser {
 	struct rspamd_worker_param_parser *parsers;		/**< parsers hash										*/
 	gint type;										/**< workers quark										*/
-	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud);	/**< default object parser								*/
+	gboolean (*def_obj_parser)(const ucl_object_t *obj, gpointer ud);	/**< default object parser								*/
 	gpointer def_ud;
 	UT_hash_handle hh;								/**< hash by type										*/
 };
@@ -426,7 +426,7 @@ void free_config (struct config_file *cfg);
  * @param opt_name name of option to get
  * @return module value or NULL if option does not defined
  */
-ucl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
+const ucl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
 		const gchar *opt_name);
 
 /**

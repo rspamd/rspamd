@@ -382,7 +382,7 @@ lua_statfile_get_param (lua_State *L)
 {
 	struct statfile                *st = lua_check_statfile (L);
 	const gchar                    *param;
-	ucl_object_t                    *value;
+	const ucl_object_t                    *value;
 
 	param = luaL_checkstring (L, 2);
 

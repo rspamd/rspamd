@@ -337,10 +337,10 @@ free_config (struct config_file *cfg)
 	memory_pool_delete (cfg->cfg_pool);
 }
 
-ucl_object_t        *
+const ucl_object_t        *
 get_module_opt (struct config_file *cfg, const gchar *module_name, const gchar *opt_name)
 {
-	ucl_object_t *res = NULL, *sec;
+	const ucl_object_t *res = NULL, *sec;
 
 	sec = ucl_obj_get_key (cfg->rcl_obj, module_name);
 	if (sec != NULL) {

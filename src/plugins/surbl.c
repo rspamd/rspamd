@@ -269,7 +269,7 @@ surbl_module_config (struct config_file *cfg)
 	struct suffix_item             *new_suffix, *cur_suffix = NULL;
 	struct surbl_bit_item          *new_bit;
 
-	ucl_object_t                   *value, *cur, *cur_rule, *cur_bit;
+	const ucl_object_t                   *value, *cur, *cur_rule, *cur_bit;
 	ucl_object_iter_t               it = NULL;
 	const gchar                    *redir_val;
 	guint32                         bit;

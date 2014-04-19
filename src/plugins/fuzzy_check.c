@@ -149,9 +149,9 @@ module_t fuzzy_check_module = {
 };
 
 static void
-parse_flags (struct fuzzy_rule *rule, struct config_file *cfg, ucl_object_t *val)
+parse_flags (struct fuzzy_rule *rule, struct config_file *cfg, const ucl_object_t *val)
 {
-	ucl_object_t *elt;
+	const ucl_object_t *elt;
 	struct fuzzy_mapping *map;
 	const gchar *sym = NULL;
 
@@ -325,9 +325,9 @@ fuzzy_rule_new (const char *default_symbol, memory_pool_t *pool)
 }
 
 static gint
-fuzzy_parse_rule (struct config_file *cfg, ucl_object_t *obj)
+fuzzy_parse_rule (struct config_file *cfg, const ucl_object_t *obj)
 {
-	ucl_object_t *value, *cur;
+	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
 	ucl_object_iter_t it = NULL;
 
@@ -404,7 +404,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 fuzzy_check_module_config (struct config_file *cfg)
 {
-	ucl_object_t             *value, *cur;
+	const ucl_object_t             *value, *cur;
 	gint                      res = TRUE;
 
 	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {

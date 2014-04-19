@@ -592,13 +592,14 @@ rspamd_metric_symbol_ucl (struct worker_task *task, struct metric *m,
 	rspamd_printf_gstring (logbuf, "%s,", sym->name);
 	description = g_hash_table_lookup (m->descriptions, sym->name);
 
-	obj = ucl_object_insert_key (obj, ucl_object_fromstring (sym->name), "name", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromdouble (sym->score), "score", 0, false);
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (obj, ucl_object_fromstring (sym->name), "name", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (sym->score), "score", 0, false);
 	if (description) {
-		obj = ucl_object_insert_key (obj, ucl_object_fromstring (description), "description", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromstring (description), "description", 0, false);
 	}
 	if (sym->options != NULL) {
-		obj = ucl_object_insert_key (obj, rspamd_str_list_ucl (sym->options), "options", 0, false);
+		ucl_object_insert_key (obj, rspamd_str_list_ucl (sym->options), "options", 0, false);
 	}
 
 	return obj;
@@ -638,20 +639,21 @@ rspamd_metric_result_ucl (struct worker_task *task, struct metric_result *mres, 
 			str_action_metric (action),
 			mres->score, required_score);
 
-	obj = ucl_object_insert_key (obj, ucl_object_frombool (is_spam),
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (obj, ucl_object_frombool (is_spam),
 			"is_spam", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_frombool (task->is_skipped),
+	ucl_object_insert_key (obj, ucl_object_frombool (task->is_skipped),
 			"is_skipped", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
+	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
 			"score", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromdouble (required_score),
+	ucl_object_insert_key (obj, ucl_object_fromdouble (required_score),
 			"required_score", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromstring (str_action_metric (action)),
+	ucl_object_insert_key (obj, ucl_object_fromstring (str_action_metric (action)),
 			"action", 0, false);
 
 	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
 		subject = make_rewritten_subject (m, task);
-		obj = ucl_object_insert_key (obj, ucl_object_fromstring (subject),
+		ucl_object_insert_key (obj, ucl_object_fromstring (subject),
 					"subject", 0, false);
 	}
 	/* Now handle symbols */
@@ -659,7 +661,7 @@ rspamd_metric_result_ucl (struct worker_task *task, struct metric_result *mres, 
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		sym = (struct symbol *)v;
 		sobj = rspamd_metric_symbol_ucl (task, m, sym, logbuf);
-		obj = ucl_object_insert_key (obj, sobj, h, 0, false);
+		ucl_object_insert_key (obj, sobj, h, 0, false);
 	}
 
 	/* Cut the trailing comma if needed */
@@ -684,7 +686,8 @@ rspamd_metric_result_ucl (struct worker_task *task, struct metric_result *mres, 
 static void
 rspamd_ucl_tolegacy_output (struct worker_task *task, ucl_object_t *top, GString *out)
 {
-	ucl_object_t *metric, *score, *required_score, *is_spam, *elt, *symbols;
+	const ucl_object_t *metric, *score,
+		*required_score, *is_spam, *elt, *symbols;
 	ucl_object_iter_t iter = NULL;
 
 	metric = ucl_object_find_key (top, DEFAULT_METRIC);
@@ -704,7 +707,7 @@ rspamd_ucl_tolegacy_output (struct worker_task *task, ucl_object_t *top, GString
 
 		symbols = ucl_object_find_key (metric, "symbols");
 		while ((elt = ucl_iterate_object (symbols, &iter, true)) != NULL) {
-			ucl_object_t *sym_score;
+			const ucl_object_t *sym_score;
 			sym_score = ucl_object_find_key (elt, "score");
 			g_string_append_printf (out, "Symbol: %s; %.2f\r\n",
 					ucl_object_key (elt),
@@ -742,24 +745,27 @@ write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 	}
 	g_hash_table_iter_init (&hiter, task->results);
 
+	top = ucl_object_typed_new (UCL_OBJECT);
 	/* Convert results to an ucl object */
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		metric_res = (struct metric_result *)v;
 		obj = rspamd_metric_result_ucl (task, metric_res, logbuf);
-		top = ucl_object_insert_key (top, obj, h, 0, false);
+		ucl_object_insert_key (top, obj, h, 0, false);
 	}
 
 	if (task->messages != NULL) {
-		top = ucl_object_insert_key (top, rspamd_str_list_ucl (task->messages), "messages", 0, false);
+		ucl_object_insert_key (top, rspamd_str_list_ucl (task->messages), "messages", 0, false);
 	}
 	if (g_tree_nnodes (task->urls) > 0) {
-		top = ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls, task), "urls", 0, false);
+		ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls, task), "urls", 0, false);
 	}
 	if (g_tree_nnodes (task->emails) > 0) {
-		top = ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task), "emails", 0, false);
+		ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
+				"emails", 0, false);
 	}
 	
-	top = ucl_object_insert_key (top, ucl_object_fromstring (task->message_id), "message-id", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
+			"message-id", 0, false);
 
 	write_hashes_to_log (task, logbuf);
 	if (!task->no_log) {
@@ -797,10 +803,11 @@ rspamd_protocol_write_reply (struct worker_task *task)
 
 	task->state = CLOSING_CONNECTION;
 
+	top = ucl_object_typed_new (UCL_OBJECT);
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {
 		msg->code = task->error_code;
-		top = ucl_object_insert_key (top, ucl_object_fromstring (task->last_error), "error", 0, false);
+		ucl_object_insert_key (top, ucl_object_fromstring (task->last_error), "error", 0, false);
 		msg->body = g_string_sized_new (256);
 		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
 		ucl_object_unref (top);

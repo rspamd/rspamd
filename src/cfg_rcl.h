@@ -63,7 +63,7 @@ struct rspamd_rcl_struct_parser {
  * @param err error object
  * @return TRUE if a section has been parsed
  */
-typedef gboolean (*rspamd_rcl_handler_t) (struct config_file *cfg, ucl_object_t *obj,
+typedef gboolean (*rspamd_rcl_handler_t) (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 /**
@@ -116,7 +116,7 @@ struct rspamd_rcl_section *rspamd_rcl_config_get_section (struct rspamd_rcl_sect
  * @return TRUE if an object can be parsed
  */
 gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
-		struct config_file *cfg, ucl_object_t *obj, GError **err);
+		struct config_file *cfg, const ucl_object_t *obj, GError **err);
 
 
 /**
@@ -129,7 +129,7 @@ gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
  * @return TRUE if the object has been parsed
  */
 gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
-		struct config_file *cfg, ucl_object_t *obj, gpointer ptr,
+		struct config_file *cfg, const ucl_object_t *obj, gpointer ptr,
 		GError **err);
 /**
  * Here is a section of common handlers that accepts rcl_struct_parser
@@ -146,7 +146,7 @@ gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
  * @param err error pointer
  * @return TRUE if a string value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
+gboolean rspamd_rcl_parse_struct_string (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 /**
@@ -158,7 +158,7 @@ gboolean rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
+gboolean rspamd_rcl_parse_struct_integer (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 
@@ -171,7 +171,7 @@ gboolean rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t 
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_double (struct config_file *cfg, ucl_object_t *obj,
+gboolean rspamd_rcl_parse_struct_double (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 /**
@@ -183,7 +183,7 @@ gboolean rspamd_rcl_parse_struct_double (struct config_file *cfg, ucl_object_t *
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_time (struct config_file *cfg, ucl_object_t *obj,
+gboolean rspamd_rcl_parse_struct_time (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 /**
@@ -195,7 +195,7 @@ gboolean rspamd_rcl_parse_struct_time (struct config_file *cfg, ucl_object_t *ob
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
+gboolean rspamd_rcl_parse_struct_string_list (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 /**
@@ -207,7 +207,7 @@ gboolean rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_objec
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_boolean (struct config_file *cfg, ucl_object_t *obj,
+gboolean rspamd_rcl_parse_struct_boolean (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
 /**

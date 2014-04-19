@@ -374,9 +374,9 @@ add_options (GHashTable *opts)
 }
 
 static void
-rspamc_symbol_ouptut (ucl_object_t *obj)
+rspamc_symbol_ouptut (const ucl_object_t *obj)
 {
-	ucl_object_t *cur, *it;
+	const ucl_object_t *cur, *it;
 
 	rspamd_fprintf (stdout, "Symbol: %s ", ucl_object_key (obj));
 	cur = ucl_object_find_key (obj, "score");
@@ -403,10 +403,10 @@ rspamc_symbol_ouptut (ucl_object_t *obj)
 }
 
 static void
-rspamc_metric_output (ucl_object_t *obj)
+rspamc_metric_output (const ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL;
-	ucl_object_t *cur;
+	const ucl_object_t *cur;
 	gdouble score, required_score;
 	gint got_scores = 0;
 
@@ -442,7 +442,7 @@ static void
 rspamc_symbols_output (ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL;
-	ucl_object_t *cur;
+	const ucl_object_t *cur;
 	gchar *emitted;
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {

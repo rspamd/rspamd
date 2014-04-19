@@ -27,8 +27,8 @@
  * @file lua rcl bindings
  */
 
-static gint lua_rcl_obj_push_array (lua_State *L, ucl_object_t *obj);
-static gint lua_rcl_obj_push_simple (lua_State *L, ucl_object_t *obj, gboolean allow_array);
+static gint lua_rcl_obj_push_array (lua_State *L, const ucl_object_t *obj);
+static gint lua_rcl_obj_push_simple (lua_State *L, const ucl_object_t *obj, gboolean allow_array);
 static ucl_object_t* lua_rcl_table_get (lua_State *L, gint idx);
 static ucl_object_t* lua_rcl_elt_get (lua_State *L, gint idx);
 
@@ -39,7 +39,7 @@ static ucl_object_t* lua_rcl_elt_get (lua_State *L, gint idx);
  * @param obj
  */
 static void
-lua_rcl_obj_push_elt (lua_State *L, const char *key, ucl_object_t *obj)
+lua_rcl_obj_push_elt (lua_State *L, const char *key, const ucl_object_t *obj)
 {
 	lua_pushstring (L, key);
 	lua_rcl_obj_push (L, obj, TRUE);
@@ -53,9 +53,9 @@ lua_rcl_obj_push_elt (lua_State *L, const char *key, ucl_object_t *obj)
  * @return
  */
 static gint
-lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj, gboolean allow_array)
+lua_rcl_obj_push_obj (lua_State *L, const ucl_object_t *obj, gboolean allow_array)
 {
-	ucl_object_t *cur;
+	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 
 	if (allow_array && obj->next != NULL) {
@@ -78,9 +78,9 @@ lua_rcl_obj_push_obj (lua_State *L, ucl_object_t *obj, gboolean allow_array)
  * @return
  */
 static gint
-lua_rcl_obj_push_array (lua_State *L, ucl_object_t *obj)
+lua_rcl_obj_push_array (lua_State *L, const ucl_object_t *obj)
 {
-	ucl_object_t *cur;
+	const ucl_object_t *cur;
 	gint i = 1;
 
 	lua_newtable (L);
@@ -98,7 +98,7 @@ lua_rcl_obj_push_array (lua_State *L, ucl_object_t *obj)
  * Push a simple object to lua depending on its actual type
  */
 static gint
-lua_rcl_obj_push_simple (lua_State *L, ucl_object_t *obj, gboolean allow_array)
+lua_rcl_obj_push_simple (lua_State *L, const ucl_object_t *obj, gboolean allow_array)
 {
 	if (allow_array && obj->next != NULL) {
 		/* Actually we need to push this as an array */
@@ -137,7 +137,7 @@ lua_rcl_obj_push_simple (lua_State *L, ucl_object_t *obj, gboolean allow_array)
  * @param obj object to push
  */
 gint
-lua_rcl_obj_push (lua_State *L, ucl_object_t *obj, gboolean allow_array)
+lua_rcl_obj_push (lua_State *L, const ucl_object_t *obj, gboolean allow_array)
 {
 	switch (obj->type) {
 	case UCL_OBJECT:
@@ -165,12 +165,13 @@ lua_rcl_table_get (lua_State *L, gint idx)
 	/* Table iterate */
 	lua_pushvalue (L, idx);
 	lua_pushnil (L);
+	top = ucl_object_typed_new (UCL_OBJECT);
 	while (lua_next (L, -2) != 0) {
 		/* copy key to avoid modifications */
 		lua_pushvalue (L, -2);
 		k = lua_tolstring (L, -1, &keylen);
 		obj = lua_rcl_elt_get (L, -2);
-		top = ucl_object_insert_key (top, obj, k, keylen, true);
+		ucl_object_insert_key (top, obj, k, keylen, true);
 		lua_pop (L, 2);
 	}
 	lua_pop (L, 1);

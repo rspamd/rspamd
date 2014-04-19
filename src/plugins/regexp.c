@@ -570,7 +570,7 @@ gint
 regexp_module_config (struct config_file *cfg)
 {
 	struct regexp_module_item      *cur_item;
-	ucl_object_t                   *sec, *value;
+	const ucl_object_t             *sec, *value;
 	ucl_object_iter_t               it = NULL;
 	gint                            res = TRUE;
 	struct regexp_json_buf         *jb, **pjb;

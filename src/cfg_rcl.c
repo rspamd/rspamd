@@ -35,10 +35,10 @@
  * Common section handlers
  */
 static gboolean
-rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_logging_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val;
+	const ucl_object_t *val;
 	const gchar *facility, *log_type, *log_level;
 
 	val = ucl_object_find_key (obj, "type");
@@ -155,10 +155,10 @@ rspamd_rcl_logging_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_options_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_options_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val;
+	const ucl_object_t *val;
 	const gchar *user_settings, *domain_settings;
 
 	/* Handle user and domain settings */
@@ -202,11 +202,11 @@ rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
  */
 static gboolean
 rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
-		ucl_object_t *obj, gboolean is_legacy, GError **err)
+		const ucl_object_t *obj, gboolean is_legacy, GError **err)
 {
 	const gchar *group = "ungrouped", *description = NULL, *sym_name;
 	gdouble symbol_score, *score_ptr;
-	ucl_object_t *val;
+	const ucl_object_t *val;
 	struct symbols_group *sym_group;
 	struct symbol_def *sym_def;
 	GList *metric_list, *group_list;
@@ -296,10 +296,10 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 }
 
 static gboolean
-rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_metric_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur;
 	const gchar *metric_name, *subject_name, *semicolon, *act_str;
 	struct metric *metric;
 	struct metric_action *action;
@@ -431,10 +431,10 @@ rspamd_rcl_metric_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_worker_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
 	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
@@ -483,7 +483,7 @@ rspamd_rcl_worker_handler (struct config_file *cfg, ucl_object_t *obj,
 		}
 	}
 
-	wrk->options = obj;
+	wrk->options = (ucl_object_t *)obj;
 
 	if (!rspamd_rcl_section_parse_defaults (section, cfg, obj, wrk, err)) {
 		return FALSE;
@@ -553,7 +553,7 @@ rspamd_rcl_set_lua_globals (struct config_file *cfg, lua_State *L)
 }
 
 static gboolean
-rspamd_rcl_lua_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_lua_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const gchar *lua_src = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (obj));
@@ -669,10 +669,10 @@ rspamd_rcl_add_module_path (struct config_file *cfg, const gchar *path, GError *
 }
 
 static gboolean
-rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_modules_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur;
 	const gchar *data;
 
 	if (obj->type == UCL_OBJECT) {
@@ -700,11 +700,11 @@ rspamd_rcl_modules_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_statfile_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct classifier_config *ccf = ud;
-	ucl_object_t *val;
+	const ucl_object_t *val;
 	struct statfile *st;
 	const gchar *data;
 	gdouble binlog_rotate;
@@ -765,7 +765,7 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
 			return FALSE;
 		}
 
-		st->opts = obj;
+		st->opts = (ucl_object_t *)obj;
 
 		val = ucl_object_find_key (obj, "spam");
 		if (val == NULL) {
@@ -790,10 +790,10 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_classifier_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
 	const gchar *key, *type;
 	struct classifier_config *ccf, *found = NULL;
@@ -860,10 +860,10 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_composite_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_composite_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val;
+	const ucl_object_t *val;
 	struct expression *expr;
 	struct rspamd_composite *composite;
 	const gchar *composite_name, *composite_expression;
@@ -904,10 +904,10 @@ rspamd_rcl_composite_handler (struct config_file *cfg, ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_view_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_view_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur;
 	struct rspamd_view *view;
 	const gchar *view_ip, *view_client_ip, *view_symbols,
 				*view_rcpt, *view_from;
@@ -975,7 +975,7 @@ rspamd_rcl_view_handler (struct config_file *cfg, ucl_object_t *obj,
  * for default handlers
  */
 static gboolean
-rspamd_rcl_empty_handler (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_empty_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
@@ -1200,9 +1200,9 @@ rspamd_rcl_config_get_section (struct rspamd_rcl_section *top,
 
 gboolean
 rspamd_read_rcl_config (struct rspamd_rcl_section *top,
-		struct config_file *cfg, ucl_object_t *obj, GError **err)
+		struct config_file *cfg, const ucl_object_t *obj, GError **err)
 {
-	ucl_object_t *found, *cur_obj;
+	const ucl_object_t *found, *cur_obj;
 	struct rspamd_rcl_section *cur, *tmp;
 
 	if (obj->type != UCL_OBJECT) {
@@ -1238,16 +1238,16 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 		}
 	}
 
-	cfg->rcl_obj = obj;
+	cfg->rcl_obj = (ucl_object_t *)obj;
 
 	return TRUE;
 }
 
 gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
-		struct config_file *cfg, ucl_object_t *obj, gpointer ptr,
+		struct config_file *cfg, const ucl_object_t *obj, gpointer ptr,
 		GError **err)
 {
-	ucl_object_t *found;
+	const ucl_object_t *found;
 	struct rspamd_rcl_default_handler_data *cur, *tmp;
 
 	if (obj->type != UCL_OBJECT) {
@@ -1269,7 +1269,7 @@ gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 }
 
 gboolean
-rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_parse_struct_string (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1302,7 +1302,7 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_parse_struct_integer (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1360,7 +1360,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_parse_struct_double (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_parse_struct_double (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1377,7 +1377,7 @@ rspamd_rcl_parse_struct_double (struct config_file *cfg, ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_parse_struct_time (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_parse_struct_time (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1426,13 +1426,13 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_parse_struct_string_list (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
 	GList **target;
 	gchar *val;
-	ucl_object_t *cur;
+	const ucl_object_t *cur;
 	const gsize num_str_len = 32;
 	ucl_object_iter_t iter = NULL;
 
@@ -1474,7 +1474,7 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_parse_struct_boolean (struct config_file *cfg, ucl_object_t *obj,
+rspamd_rcl_parse_struct_boolean (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;

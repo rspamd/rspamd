@@ -684,15 +684,15 @@ rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	/* Get uptime */
 	uptime = time (NULL) - session->ctx->start_time;
 
-	obj = ucl_object_insert_key (obj, ucl_object_fromstring (RVERSION), "version", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromstring ("ok"), "auth", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (uptime), "uptime", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[0]), "clean", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[1]), "probable", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[2]), "greylist", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (data[3]), "reject", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (st->messages_scanned), "scanned", 0, false);
-	obj = ucl_object_insert_key (obj, ucl_object_fromint (st->messages_learned), "learned", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring (RVERSION), "version", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring ("ok"), "auth", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (uptime), "uptime", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[0]), "clean", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[1]), "probable", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[2]), "greylist", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[3]), "reject", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_learned), "learned", 0, false);
 
 	rspamd_webui_send_ucl (conn_ent, obj);
 	ucl_object_unref (obj);
@@ -736,27 +736,27 @@ rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	while (cur_gr) {
 		gr = cur_gr->data;
 		obj = ucl_object_typed_new (UCL_OBJECT);
-		obj = ucl_object_insert_key (obj, ucl_object_fromstring (gr->name), "group", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromstring (gr->name), "group", 0, false);
 		/* Iterate through all symbols */
 		cur_sym = gr->symbols;
 		while (cur_sym) {
 			sym_obj = ucl_object_typed_new (UCL_OBJECT);
 			sym = cur_sym->data;
 
-			sym_obj = ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
+			ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
 					"symbol", 0, false);
-			sym_obj = ucl_object_insert_key (sym_obj, ucl_object_fromdouble (*sym->weight_ptr),
+			ucl_object_insert_key (sym_obj, ucl_object_fromdouble (*sym->weight_ptr),
 					"weight", 0, false);
 			if (sym->description) {
-				sym_obj = ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->description),
+				ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->description),
 					"description", 0, false);
 			}
 
-			obj = ucl_object_insert_key (obj, sym_obj, "rules", 0, false);
+			ucl_object_insert_key (obj, sym_obj, "rules", 0, false);
 			cur_sym = g_list_next (cur_sym);
 		}
 		cur_gr = g_list_next (cur_gr);
-		top = ucl_array_append (top, obj);
+		ucl_array_append (top, obj);
 	}
 
 	rspamd_webui_send_ucl (conn_ent, top);
@@ -797,10 +797,10 @@ rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 			act = &metric->actions[i];
 			if (act->score > 0) {
 				obj = ucl_object_typed_new (UCL_OBJECT);
-				obj = ucl_object_insert_key (obj,
+				ucl_object_insert_key (obj,
 						ucl_object_fromstring (str_action_metric (act->action)), "action", 0, false);
-				obj = ucl_object_insert_key (obj, ucl_object_fromdouble (act->score), "value", 0, false);
-				top = ucl_array_append (top, obj);
+				ucl_object_insert_key (obj, ucl_object_fromdouble (act->score), "value", 0, false);
+				ucl_array_append (top, obj);
 			}
 		}
 	}
@@ -857,13 +857,13 @@ rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		editable = (access (map->uri, W_OK) == 0);
 
 		obj = ucl_object_typed_new (UCL_OBJECT);
-		obj = ucl_object_insert_key (obj, ucl_object_fromint (map->id),
+		ucl_object_insert_key (obj, ucl_object_fromint (map->id),
 				"map", 0, false);
-		obj = ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
+		ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
 				"description", 0, false);
-		obj = ucl_object_insert_key (obj, ucl_object_frombool (editable),
+		ucl_object_insert_key (obj, ucl_object_frombool (editable),
 				"editable", 0, false);
-		top = ucl_array_append (top, obj);
+		ucl_array_append (top, obj);
 
 		cur = g_list_next (cur);
 	}
@@ -1107,25 +1107,25 @@ rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
 		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total * 100.;
 		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total * 100.;
 
-		obj = ucl_array_append (obj, ucl_object_fromstring ("Clean messages"));
-		obj = ucl_array_append (obj, ucl_object_fromdouble (data[0]));
-		top = ucl_array_append (top, obj);
-		obj = ucl_array_append (obj, ucl_object_fromstring ("Probable spam messages"));
-		obj = ucl_array_append (obj, ucl_object_fromdouble (data[1]));
-		top = ucl_array_append (top, obj);
-		obj = ucl_array_append (obj, ucl_object_fromstring ("Greylisted messages"));
-		obj = ucl_array_append (obj, ucl_object_fromdouble (data[2]));
-		top = ucl_array_append (top, obj);
-		obj = ucl_array_append (obj, ucl_object_fromstring ("Rejected messages"));
-		obj = ucl_array_append (obj, ucl_object_fromdouble (data[3]));
-		top = ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Clean messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[0]));
+		ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Probable spam messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[1]));
+		ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Greylisted messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[2]));
+		ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Rejected messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[3]));
+		ucl_array_append (top, obj);
 	}
 	else {
 		obj = ucl_object_typed_new (UCL_ARRAY);
 
-		obj = ucl_array_append (obj, ucl_object_fromstring ("Scanned messages"));
-		obj = ucl_array_append (obj, ucl_object_fromdouble (0));
-		top = ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Scanned messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (0));
+		ucl_array_append (top, obj);
 	}
 
 	rspamd_webui_send_ucl (conn_ent, top);
@@ -1195,20 +1195,20 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr), sizeof (ip_buf));
 #endif
 			obj = ucl_object_typed_new (UCL_OBJECT);
-			obj = ucl_object_insert_key (obj, ucl_object_fromstring (timebuf), "time", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromstring (row->message_id), "id", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromstring (ip_buf), "ip", 0, false);
-			obj = ucl_object_insert_key (obj,
+			ucl_object_insert_key (obj, ucl_object_fromstring (timebuf), "time", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (row->message_id), "id", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (ip_buf), "ip", 0, false);
+			ucl_object_insert_key (obj,
 					ucl_object_fromstring (str_action_metric (row->action)), "action", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromdouble (row->score), "score", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromdouble (row->required_score), "required_score", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromstring (row->symbols), "symbols", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromint (row->len), "size", 0, false);
-			obj = ucl_object_insert_key (obj, ucl_object_fromint (row->scan_time), "scan_time", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (row->score), "score", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (row->required_score), "required_score", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (row->symbols), "symbols", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (row->len), "size", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (row->scan_time), "scan_time", 0, false);
 			if (row->user[0] != '\0') {
-				obj = ucl_object_insert_key (obj, ucl_object_fromstring (row->user), "user", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromstring (row->user), "user", 0, false);
 			}
-			top = ucl_array_append (top, obj);
+			ucl_array_append (top, obj);
 			rows_proc ++;
 		}
 	}

@@ -84,7 +84,7 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 chartable_module_config (struct config_file *cfg)
 {
-	ucl_object_t             *value;
+	const ucl_object_t             *value;
 	gint                            res = TRUE;
 
 	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {

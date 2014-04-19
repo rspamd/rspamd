@@ -95,7 +95,7 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 gint
 spf_module_config (struct config_file *cfg)
 {
-	ucl_object_t             *value;
+	const ucl_object_t             *value;
 	gint                            res = TRUE;
 	guint                           cache_size, cache_expire;
 
