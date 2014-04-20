@@ -143,7 +143,7 @@ lua_session_create (lua_State *L)
 {
 	struct rspamd_async_session					*session, **psession;
 	struct lua_session_udata					*cbdata;
-	memory_pool_t								*mempool;
+	rspamd_mempool_t								*mempool;
 
 
 
@@ -166,7 +166,7 @@ lua_session_create (lua_State *L)
 		return 1;
 	}
 
-	cbdata = memory_pool_alloc0 (mempool, sizeof (struct lua_session_udata));
+	cbdata = rspamd_mempool_alloc0 (mempool, sizeof (struct lua_session_udata));
 	cbdata->L = L;
 	lua_pushvalue (L, 2);
 	cbdata->cbref_fin = luaL_ref (L, LUA_REGISTRYINDEX);
@@ -235,7 +235,7 @@ lua_session_register_async_event (lua_State *L)
 
 	if (session) {
 		if (lua_isfunction (L, 1)) {
-			cbdata = memory_pool_alloc (session->pool, sizeof (struct lua_event_udata));
+			cbdata = rspamd_mempool_alloc (session->pool, sizeof (struct lua_event_udata));
 			cbdata->L = L;
 			lua_pushvalue (L, 1);
 			cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);

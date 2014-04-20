@@ -340,10 +340,10 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 		while (*pmodule) {
 			g_strstrip (*p);
 			if ((*pmodule)->name != NULL && g_ascii_strcasecmp ((*pmodule)->name, *p) == 0) {
-				cur = memory_pool_alloc (cfg->cfg_pool, sizeof (struct filter));
+				cur = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				msg_debug ("found C filter %s", *p);
-				cur->func_name = memory_pool_strdup (cfg->cfg_pool, *p);
+				cur->func_name = rspamd_mempool_strdup (cfg->cfg_pool, *p);
 				cur->module = (*pmodule);
 				cfg->filters = g_list_prepend (cfg->filters, cur);
 
@@ -373,13 +373,13 @@ reread_config (struct rspamd_main *rspamd)
 	tmp_cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	if (tmp_cfg) {
 		bzero (tmp_cfg, sizeof (struct config_file));
-		tmp_cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+		tmp_cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 		init_defaults (tmp_cfg);
-		cfg_file = memory_pool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
+		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
 		tmp_cfg->lua_state = init_lua (tmp_cfg);
-		memory_pool_add_destructor (tmp_cfg->cfg_pool, (pool_destruct_func)lua_close, tmp_cfg->lua_state);
+		rspamd_mempool_add_destructor (tmp_cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_close, tmp_cfg->lua_state);
 
 		if (! load_rspamd_config (tmp_cfg, FALSE)) {
 			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"), rspamd_main);
@@ -398,7 +398,7 @@ reread_config (struct rspamd_main *rspamd)
 			}
 			/* Pre-init of cache */
 			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
-			rspamd->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
+			rspamd->cfg->cache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 			rspamd->cfg->cache->cfg = rspamd->cfg;
 			rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 			/* Perform modules configuring */
@@ -778,11 +778,11 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 	/* Strictly set temp dir */
 	if (!cfg->temp_dir) {
 		msg_warn ("tempdir is not set, trying to use $TMPDIR");
-		cfg->temp_dir = memory_pool_strdup (cfg->cfg_pool, getenv ("TMPDIR"));
+		cfg->temp_dir = rspamd_mempool_strdup (cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!cfg->temp_dir) {
 			msg_warn ("$TMPDIR is empty too, using /tmp as default");
-			cfg->temp_dir = memory_pool_strdup (cfg->cfg_pool, "/tmp");
+			cfg->temp_dir = rspamd_mempool_strdup (cfg->cfg_pool, "/tmp");
 		}
 	}
 
@@ -797,7 +797,7 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 		while (l) {
 			filt = l->data;
 			if (filt->module) {
-				cur_module = memory_pool_alloc (cfg->cfg_pool, sizeof (struct module_ctx));
+				cur_module = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct module_ctx));
 				if (filt->module->module_init_func (cfg, &cur_module) == 0) {
 					g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
 				}
@@ -1053,7 +1053,7 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
-	rspamd_main->server_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 
 	if (!rspamd_main || !rspamd_main->cfg) {
@@ -1065,11 +1065,11 @@ main (gint argc, gchar **argv, gchar **env)
 	init_title (argc, argv, env);
 #endif
 
-	rspamd_main->stat = memory_pool_alloc_shared (rspamd_main->server_pool, sizeof (struct rspamd_stat));
+	rspamd_main->stat = rspamd_mempool_alloc_shared (rspamd_main->server_pool, sizeof (struct rspamd_stat));
 	memset (rspamd_main->stat, 0, sizeof (struct rspamd_stat));
 
 	memset (rspamd_main->cfg, 0, sizeof (struct config_file));
-	rspamd_main->cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	init_defaults (rspamd_main->cfg);
 
 	memset (&signals, 0, sizeof (struct sigaction));
@@ -1113,7 +1113,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	detect_priv (rspamd_main);
 	rspamd_main->cfg->lua_state = init_lua (rspamd_main->cfg);
-	memory_pool_add_destructor (rspamd_main->cfg->cfg_pool, (pool_destruct_func)lua_close, rspamd_main->cfg->lua_state);
+	rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_close, rspamd_main->cfg->lua_state);
 
 	pworker = &workers[0];
 	while (*pworker) {
@@ -1129,7 +1129,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Pre-init of cache */
 	rspamd_main->cfg->cache = g_new0 (struct symbols_cache, 1);
-	rspamd_main->cfg->cache->static_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->cfg->cache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg->cache->cfg = rspamd_main->cfg;
 	rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
@@ -1200,7 +1200,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
 
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
-	rspamd_main->cfg->cfg_name = memory_pool_strdup (rspamd_main->cfg->cfg_pool, rspamd_main->cfg->cfg_name);
+	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (rspamd_main->cfg->cfg_pool, rspamd_main->cfg->cfg_name);
 
 	/* Daemonize */
 	if (!rspamd_main->cfg->no_fork && daemon (0, 0) == -1) {

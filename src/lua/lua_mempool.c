@@ -33,14 +33,14 @@ LUA_FUNCTION_DEF (mempool, create);
 LUA_FUNCTION_DEF (mempool, memory_pool_add_destructor);
 LUA_FUNCTION_DEF (mempool, memory_pool_delete);
 LUA_FUNCTION_DEF (mempool, memory_pool_stat);
-LUA_FUNCTION_DEF (mempool, memory_pool_get_size);
+LUA_FUNCTION_DEF (mempool, memory_pool_suggest_size);
 LUA_FUNCTION_DEF (mempool, memory_pool_set_variable);
 LUA_FUNCTION_DEF (mempool, memory_pool_get_variable);
 
 static const struct luaL_reg    mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, memory_pool_add_destructor),
 	LUA_INTERFACE_DEF (mempool, memory_pool_stat),
-	LUA_INTERFACE_DEF (mempool, memory_pool_get_size),
+	LUA_INTERFACE_DEF (mempool, memory_pool_suggest_size),
 	LUA_INTERFACE_DEF (mempool, memory_pool_set_variable),
 	LUA_INTERFACE_DEF (mempool, memory_pool_get_variable),
 	{"destroy", lua_mempool_memory_pool_delete},
@@ -60,7 +60,7 @@ static const struct luaL_reg    mempoollib_f[] = {
 struct lua_mempool_udata {
 	lua_State *L;
 	gint cbref;
-	memory_pool_t *mempool;
+	rspamd_mempool_t *mempool;
 };
 
 struct memory_pool_s      *
@@ -75,7 +75,7 @@ lua_check_mempool (lua_State * L)
 static int
 lua_mempool_create (lua_State *L)
 {
-	struct memory_pool_s					*mempool = memory_pool_new (memory_pool_get_size ()), **pmempool;
+	struct memory_pool_s					*mempool = rspamd_mempool_new (rspamd_mempool_suggest_size ()), **pmempool;
 
 	if (mempool) {
 		pmempool = lua_newuserdata (L, sizeof (struct memory_pool_s *));
@@ -109,13 +109,13 @@ lua_mempool_memory_pool_add_destructor (lua_State *L)
 
 	if (mempool) {
 		if (lua_isfunction (L, 2)) {
-			ud = memory_pool_alloc (mempool, sizeof (struct lua_mempool_udata));
+			ud = rspamd_mempool_alloc (mempool, sizeof (struct lua_mempool_udata));
 			lua_pushvalue (L, 2);
 			/* Get a reference */
 			ud->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 			ud->L = L;
 			ud->mempool = mempool;
-			memory_pool_add_destructor (mempool, lua_mempool_destructor_func, ud);
+			rspamd_mempool_add_destructor (mempool, lua_mempool_destructor_func, ud);
 		}
 		else {
 			msg_err ("trying to add destructor without function");
@@ -134,7 +134,7 @@ lua_mempool_memory_pool_delete (lua_State *L)
 	struct memory_pool_s					*mempool = lua_check_mempool (L);
 
 	if (mempool) {
-		memory_pool_delete (mempool);
+		rspamd_mempool_delete (mempool);
 		return 0;
 	}
 	else {
@@ -160,12 +160,12 @@ lua_mempool_memory_pool_stat (lua_State *L)
 }
 
 static int
-lua_mempool_memory_pool_get_size (lua_State *L)
+lua_mempool_memory_pool_suggest_size (lua_State *L)
 {
 	struct memory_pool_s					*mempool = lua_check_mempool (L);
 
 	if (mempool) {
-		lua_pushinteger (L, memory_pool_get_size ());
+		lua_pushinteger (L, rspamd_mempool_suggest_size ());
 		return 0;
 	}
 	else {
@@ -183,7 +183,7 @@ lua_mempool_memory_pool_set_variable (lua_State *L)
 											*value = luaL_checkstring (L, 3);
 
 	if (mempool && var && value) {
-		memory_pool_set_variable (mempool, var, memory_pool_strdup (mempool, value), NULL);
+		rspamd_mempool_set_variable (mempool, var, rspamd_mempool_strdup (mempool, value), NULL);
 		return 0;
 	}
 	else {
@@ -201,7 +201,7 @@ lua_mempool_memory_pool_get_variable (lua_State *L)
 	gchar									*value;
 
 	if (mempool && var) {
-		value = memory_pool_get_variable (mempool, var);
+		value = rspamd_mempool_get_variable (mempool, var);
 		if (value) {
 			lua_pushstring (L, value);
 		}

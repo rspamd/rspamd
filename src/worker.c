@@ -359,7 +359,7 @@ accept_socket (gint fd, short what, void *arg)
 			rspamd_worker_error_handler, rspamd_worker_finish_handler, 0, RSPAMD_HTTP_SERVER);
 	new_task->ev_base = ctx->ev_base;
 	ctx->tasks ++;
-	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func)reduce_tasks_count, &ctx->tasks);
+	rspamd_mempool_add_destructor (new_task->task_pool, (rspamd_mempool_destruct_t)reduce_tasks_count, &ctx->tasks);
 
 	/* Set up async session */
 	new_task->s = new_async_session (new_task->task_pool, rspamd_fin_task,

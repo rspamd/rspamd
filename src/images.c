@@ -102,7 +102,7 @@ process_png_image (struct worker_task *task, GByteArray *data)
 		return NULL;
 	}
 
-	img = memory_pool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_PNG;
 	img->data = data;
 
@@ -124,7 +124,7 @@ process_jpg_image (struct worker_task *task, GByteArray *data)
 	gsize                            remain;
 	struct rspamd_image             *img;
 
-	img = memory_pool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_JPG;
 	img->data = data;
 
@@ -157,7 +157,7 @@ process_gif_image (struct worker_task *task, GByteArray *data)
 		return NULL;
 	}
 
-	img = memory_pool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_GIF;
 	img->data = data;
 
@@ -184,7 +184,7 @@ process_bmp_image (struct worker_task *task, GByteArray *data)
 		return NULL;
 	}
 
-	img = memory_pool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->data + 18;

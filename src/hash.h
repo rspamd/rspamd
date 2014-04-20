@@ -24,8 +24,8 @@ typedef struct rspamd_hash_s {
 	GHashFunc                 hash_func;
 	GEqualFunc                key_equal_func;
 	gint                      shared;
-	memory_pool_rwlock_t     *lock;
-	memory_pool_t            *pool;
+	rspamd_mempool_rwlock_t     *lock;
+	rspamd_mempool_t            *pool;
 } rspamd_hash_t;
 
 typedef void (*lru_cache_insert_func)(gpointer storage, gpointer key, gpointer value);
@@ -65,7 +65,7 @@ typedef struct rspamd_lru_element_s {
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
  */
-rspamd_hash_t* rspamd_hash_new (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func);
+rspamd_hash_t* rspamd_hash_new (rspamd_mempool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func);
 
 /**
  * Create new hash in specified pool using shared memory
@@ -74,7 +74,7 @@ rspamd_hash_t* rspamd_hash_new (memory_pool_t *pool, GHashFunc hash_func, GEqual
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
  */
-rspamd_hash_t* rspamd_hash_new_shared (memory_pool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func, gint size);
+rspamd_hash_t* rspamd_hash_new_shared (rspamd_mempool_t *pool, GHashFunc hash_func, GEqualFunc key_equal_func, gint size);
 
 /**
  * Insert item in hash

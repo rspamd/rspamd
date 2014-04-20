@@ -28,14 +28,14 @@ struct mime_text_part;
  * @param pool pool object
  * @return fuzzy_hash object allocated in pool
  */
-fuzzy_hash_t * fuzzy_init (f_str_t *in, memory_pool_t *pool);
+fuzzy_hash_t * fuzzy_init (f_str_t *in, rspamd_mempool_t *pool);
 /**
  * Calculate fuzzy hash for specified byte array
  * @param in input string
  * @param pool pool object
  * @return fuzzy_hash object allocated in pool
  */
-fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
+fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, rspamd_mempool_t *pool);
 
 /**
  * Calculate fuzzy hash for specified text part
@@ -44,7 +44,7 @@ fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, memory_pool_t *pool);
  * @param max_diff maximum text length to use diff algorithm in comparasions
  * @return fuzzy_hash object allocated in pool
  */
-void fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_diff);
+void fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_diff);
 
 /**
  * Compare score of difference between two hashes 

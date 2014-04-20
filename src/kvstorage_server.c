@@ -108,7 +108,7 @@ init_keystorage (void)
 
 	type = g_quark_try_string ("keystorage");
 	ctx = g_malloc0 (sizeof (struct kvstorage_worker_ctx));
-	ctx->pool = memory_pool_new (memory_pool_get_size ());
+	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	/* Set default values */
 	ctx->timeout_raw = 300000;
@@ -139,7 +139,7 @@ static void
 free_kvstorage_session (struct kvstorage_session *session)
 {
 	rspamd_remove_dispatcher (session->dispather);
-	memory_pool_delete (session->pool);
+	rspamd_mempool_delete (session->pool);
 	close (session->sock);
 	g_slice_free1 (sizeof (struct kvstorage_session), session);
 }
@@ -322,7 +322,7 @@ parse_kvstorage_line (struct kvstorage_session *session, f_str_t *in)
 					return FALSE;
 				}
 				else {
-					session->key = memory_pool_alloc (session->pool, p - c + 1);
+					session->key = rspamd_mempool_alloc (session->pool, p - c + 1);
 					rspamd_strlcpy (session->key, c, p - c + 1);
 					session->keylen = p - c;
 					/* Now we must select next state based on command */
@@ -825,7 +825,7 @@ kvstorage_read_socket (f_str_t * in, void *arg)
 		else if (session->argnum == 1) {
 			if (session->command != KVSTORAGE_CMD_SELECT) {
 				/* This argument is a key for normal command */
-				session->key = memory_pool_fstrdup (session->pool, in);
+				session->key = rspamd_mempool_fstrdup (session->pool, in);
 				session->keylen = in->len;
 				if (session->argnum == session->argc - 1) {
 					session->state = KVSTORAGE_STATE_READ_CMD;
@@ -1010,7 +1010,7 @@ thr_accept_socket (gint fd, short what, void *arg)
 	}
 
 	session = g_slice_alloc0 (sizeof (struct kvstorage_session));
-	session->pool = memory_pool_new (memory_pool_get_size ());
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	session->state = KVSTORAGE_STATE_READ_CMD;
 	session->thr = thr;
 	session->sock = nfd;
@@ -1084,7 +1084,7 @@ create_kvstorage_thread (struct rspamd_worker *worker, struct kvstorage_worker_c
 	struct kvstorage_worker_thread 		*new;
 	GError								*err = NULL;
 
-	new = memory_pool_alloc (ctx->pool, sizeof (struct kvstorage_worker_thread));
+	new = rspamd_mempool_alloc (ctx->pool, sizeof (struct kvstorage_worker_thread));
 	new->ctx = ctx;
 	new->worker = worker;
 	new->tv = &ctx->io_timeout;
@@ -1104,7 +1104,7 @@ create_kvstorage_thread (struct rspamd_worker *worker, struct kvstorage_worker_c
 #else
 	gchar								*name;
 
-	name = memory_pool_alloc (ctx->pool, sizeof ("kvstorage_thread") + sizeof ("4294967296") - 1);
+	name = rspamd_mempool_alloc (ctx->pool, sizeof ("kvstorage_thread") + sizeof ("4294967296") - 1);
 	rspamd_snprintf (name, sizeof ("kvstorage_thread") + sizeof ("4294967296") - 1, "kvstorage_thread%d", id);
 
 	new->thr = g_thread_new (name, kvstorage_thread, new);
@@ -1169,8 +1169,8 @@ start_keystorage (struct rspamd_worker *worker)
 	ctx->log_mtx = g_mutex_new ();
 	ctx->accept_mtx = g_mutex_new ();
 #else
-	ctx->log_mtx = memory_pool_alloc (ctx->pool, sizeof (GMutex));
-	ctx->accept_mtx = memory_pool_alloc (ctx->pool, sizeof (GMutex));
+	ctx->log_mtx = rspamd_mempool_alloc (ctx->pool, sizeof (GMutex));
+	ctx->accept_mtx = rspamd_mempool_alloc (ctx->pool, sizeof (GMutex));
 	g_mutex_init (ctx->log_mtx);
 	g_mutex_init (ctx->accept_mtx);
 #endif

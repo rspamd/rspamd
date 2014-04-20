@@ -45,7 +45,7 @@ typedef struct rspamd_io_dispatcher_s {
 	} out_buffers;													/**< output buffers chain	*/
 	struct timeval *tv;												/**< io timeout				*/
 	struct event *ev;												/**< libevent io event		*/
-	memory_pool_t *pool;											/**< where to store data	*/
+	rspamd_mempool_t *pool;											/**< where to store data	*/
 	enum io_policy policy;											/**< IO policy				*/
 	size_t nchars;													/**< how many chars to read	*/
 	gint fd;															/**< descriptor				*/

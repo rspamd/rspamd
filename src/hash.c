@@ -40,7 +40,7 @@ rspamd_hash_lookup_node (rspamd_hash_t * hash, gconstpointer key, guint * hash_r
 	hash_value = (*hash->hash_func) (key);
 
 	if (hash->shared) {
-		memory_pool_rlock_rwlock (hash->lock);
+		rspamd_mempool_rlock_rwlock (hash->lock);
 	}
 	node_ptr = &hash->nodes[hash_value % hash->size];
 
@@ -73,7 +73,7 @@ rspamd_hash_lookup_node (rspamd_hash_t * hash, gconstpointer key, guint * hash_r
 		}
 	}
 	if (hash->shared) {
-		memory_pool_runlock_rwlock (hash->lock);
+		rspamd_mempool_runlock_rwlock (hash->lock);
 	}
 	return node_ptr;
 }
@@ -88,7 +88,7 @@ rspamd_hash_remove_node (rspamd_hash_t * hash, struct rspamd_hash_node ***node_p
 	struct rspamd_hash_node       **node_ptr, *node;
 
 	if (hash->shared) {
-		memory_pool_wlock_rwlock (hash->lock);
+		rspamd_mempool_wlock_rwlock (hash->lock);
 	}
 	node_ptr = *node_ptr_ptr;
 	node = *node_ptr;
@@ -97,7 +97,7 @@ rspamd_hash_remove_node (rspamd_hash_t * hash, struct rspamd_hash_node ***node_p
 
 	hash->nnodes--;
 	if (hash->shared) {
-		memory_pool_wunlock_rwlock (hash->lock);
+		rspamd_mempool_wunlock_rwlock (hash->lock);
 	}
 }
 
@@ -117,14 +117,14 @@ rspamd_hash_resize (rspamd_hash_t * hash)
 	new_size = CLAMP (new_size, HASH_TABLE_MIN_SIZE, HASH_TABLE_MAX_SIZE);
 
 	if (hash->shared) {
-		new_nodes = memory_pool_alloc_shared (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
+		new_nodes = rspamd_mempool_alloc_shared (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
 	}
 	else {
-		new_nodes = memory_pool_alloc (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
+		new_nodes = rspamd_mempool_alloc (hash->pool, sizeof (struct rspamd_hash_node *) * new_size);
 	}
 
 	if (hash->shared) {
-		memory_pool_wlock_rwlock (hash->lock);
+		rspamd_mempool_wlock_rwlock (hash->lock);
 	}
 
 	for (i = 0; i < hash->size; i++) {
@@ -140,7 +140,7 @@ rspamd_hash_resize (rspamd_hash_t * hash)
 	hash->size = new_size;
 
 	if (hash->shared) {
-		memory_pool_wunlock_rwlock (hash->lock);
+		rspamd_mempool_wunlock_rwlock (hash->lock);
 	}
 }
 
@@ -160,16 +160,16 @@ rspamd_hash_maybe_resize (rspamd_hash_t * hash)
 
 /* Create new hash in specified pool */
 rspamd_hash_t                  *
-rspamd_hash_new (memory_pool_t * pool, GHashFunc hash_func, GEqualFunc key_equal_func)
+rspamd_hash_new (rspamd_mempool_t * pool, GHashFunc hash_func, GEqualFunc key_equal_func)
 {
 	rspamd_hash_t                  *hash;
 
-	hash = memory_pool_alloc (pool, sizeof (rspamd_hash_t));
+	hash = rspamd_mempool_alloc (pool, sizeof (rspamd_hash_t));
 	hash->size = HASH_TABLE_MIN_SIZE;
 	hash->nnodes = 0;
 	hash->hash_func = hash_func ? hash_func : g_direct_hash;
 	hash->key_equal_func = key_equal_func;
-	hash->nodes = memory_pool_alloc0 (pool, sizeof (struct rspamd_hash_node *) * hash->size);
+	hash->nodes = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_hash_node *) * hash->size);
 	hash->shared = 0;
 	hash->pool = pool;
 
@@ -180,19 +180,19 @@ rspamd_hash_new (memory_pool_t * pool, GHashFunc hash_func, GEqualFunc key_equal
  * Create new hash in specified pool using shared memory 
  */
 rspamd_hash_t                  *
-rspamd_hash_new_shared (memory_pool_t * pool, GHashFunc hash_func, GEqualFunc key_equal_func, gint size)
+rspamd_hash_new_shared (rspamd_mempool_t * pool, GHashFunc hash_func, GEqualFunc key_equal_func, gint size)
 {
 	rspamd_hash_t                  *hash;
 
-	hash = memory_pool_alloc_shared (pool, sizeof (rspamd_hash_t));
+	hash = rspamd_mempool_alloc_shared (pool, sizeof (rspamd_hash_t));
 	hash->size = size;
 	hash->nnodes = 0;
 	hash->hash_func = hash_func ? hash_func : g_direct_hash;
 	hash->key_equal_func = key_equal_func;
-	hash->nodes = memory_pool_alloc0_shared (pool, sizeof (struct rspamd_hash_node *) * hash->size);
+	hash->nodes = rspamd_mempool_alloc0_shared (pool, sizeof (struct rspamd_hash_node *) * hash->size);
 	hash->shared = 1;
 	/* Get mutex from pool for locking on insert/remove operations */
-	hash->lock = memory_pool_get_rwlock (pool);
+	hash->lock = rspamd_mempool_get_rwlock (pool);
 	hash->pool = pool;
 
 	return hash;
@@ -211,7 +211,7 @@ rspamd_hash_insert (rspamd_hash_t * hash, gpointer key, gpointer value)
 	node_ptr = rspamd_hash_lookup_node (hash, key, &key_hash);
 
 	if (hash->shared) {
-		memory_pool_wlock_rwlock (hash->lock);
+		rspamd_mempool_wlock_rwlock (hash->lock);
 	}
 	if ((node = *node_ptr)) {
 		node->key = key;
@@ -219,10 +219,10 @@ rspamd_hash_insert (rspamd_hash_t * hash, gpointer key, gpointer value)
 	}
 	else {
 		if (hash->shared) {
-			node = memory_pool_alloc_shared (hash->pool, sizeof (struct rspamd_hash_node));
+			node = rspamd_mempool_alloc_shared (hash->pool, sizeof (struct rspamd_hash_node));
 		}
 		else {
-			node = memory_pool_alloc (hash->pool, sizeof (struct rspamd_hash_node));
+			node = rspamd_mempool_alloc (hash->pool, sizeof (struct rspamd_hash_node));
 		}
 
 		node->key = key;
@@ -234,7 +234,7 @@ rspamd_hash_insert (rspamd_hash_t * hash, gpointer key, gpointer value)
 		hash->nnodes++;
 	}
 	if (hash->shared) {
-		memory_pool_wunlock_rwlock (hash->lock);
+		rspamd_mempool_wunlock_rwlock (hash->lock);
 	}
 
 	if (!hash->shared) {
@@ -289,7 +289,7 @@ rspamd_hash_foreach (rspamd_hash_t * hash, GHFunc func, gpointer user_data)
 	g_return_if_fail (func != NULL);
 
 	if (hash->shared) {
-		memory_pool_rlock_rwlock (hash->lock);
+		rspamd_mempool_rlock_rwlock (hash->lock);
 	}
 	for (i = 0; i < hash->size; i++) {
 		for (node = hash->nodes[i]; node; node = node->next) {
@@ -297,7 +297,7 @@ rspamd_hash_foreach (rspamd_hash_t * hash, GHFunc func, gpointer user_data)
 		}
 	}
 	if (hash->shared) {
-		memory_pool_runlock_rwlock (hash->lock);
+		rspamd_mempool_runlock_rwlock (hash->lock);
 	}
 }
 

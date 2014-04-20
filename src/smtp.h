@@ -24,7 +24,7 @@ struct smtp_worker_ctx {
 	gsize upstream_num;
 	gchar *upstreams_str;
 	
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	gchar *smtp_banner;
 	gchar *smtp_banner_str;
 	guint32 smtp_delay;
@@ -68,7 +68,7 @@ enum rspamd_smtp_state {
 struct smtp_session {
 	struct smtp_worker_ctx *ctx;
 	struct config_file *cfg;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 
 	enum rspamd_smtp_state state;
 	enum rspamd_smtp_state upstream_state;

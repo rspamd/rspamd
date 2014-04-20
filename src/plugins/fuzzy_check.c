@@ -89,7 +89,7 @@ struct fuzzy_rule {
 
 struct fuzzy_ctx {
 	gint (*filter) (struct worker_task * task);
-	memory_pool_t *fuzzy_pool;
+	rspamd_mempool_t *fuzzy_pool;
 	GList *fuzzy_rules;
 	const gchar *default_symbol;
 	guint32 min_hash_len;
@@ -163,7 +163,7 @@ parse_flags (struct fuzzy_rule *rule, struct config_file *cfg, const ucl_object_
 			sym = ucl_object_key (val);
 		}
 		if (sym != NULL) {
-			map =  memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mapping));
+			map =  rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mapping));
 			map->symbol = sym;
 			elt = ucl_object_find_key (val, "flag");
 			if (elt != NULL && ucl_obj_toint_safe (elt, &map->fuzzy_flag)) {
@@ -205,9 +205,9 @@ parse_mime_types (const gchar *str)
 		g_strstrip (strvec[i]);
 		if ((p = strchr (strvec[i], '/')) != NULL) {
 			*p = 0;
-			type = memory_pool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mime_type));
-			type->type = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]);
-			type->subtype = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, p + 1);
+			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool, sizeof (struct fuzzy_mime_type));
+			type->type = rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]);
+			type->subtype = rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool, p + 1);
 			res = g_list_prepend (res, type);
 		}
 		else {
@@ -216,7 +216,7 @@ parse_mime_types (const gchar *str)
 	}
 
 	if (res != NULL) {
-		memory_pool_add_destructor (fuzzy_module_ctx->fuzzy_pool, (pool_destruct_func)g_list_free, res);
+		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool, (rspamd_mempool_destruct_t)g_list_free, res);
 	}
 
 	return res;
@@ -250,7 +250,7 @@ parse_servers_string (struct fuzzy_rule *rule, const gchar *str)
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
 
-	rule->servers = memory_pool_alloc0 (fuzzy_module_ctx->fuzzy_pool, sizeof (struct storage_server) * num);
+	rule->servers = rspamd_mempool_alloc0 (fuzzy_module_ctx->fuzzy_pool, sizeof (struct storage_server) * num);
 
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
@@ -260,7 +260,7 @@ parse_servers_string (struct fuzzy_rule *rule, const gchar *str)
 			if (cur->port == 0) {
 				cur->port = DEFAULT_PORT;
 			}
-			cur->name = memory_pool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]);
+			cur->name = rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]);
 			rule->servers_num++;
 		}
 	}
@@ -309,15 +309,15 @@ fuzzy_to_string (fuzzy_hash_t *h)
 }
 
 static struct fuzzy_rule *
-fuzzy_rule_new (const char *default_symbol, memory_pool_t *pool)
+fuzzy_rule_new (const char *default_symbol, rspamd_mempool_t *pool)
 {
 	struct fuzzy_rule *rule;
 
-	rule = memory_pool_alloc0 (pool, sizeof (struct fuzzy_rule));
+	rule = rspamd_mempool_alloc0 (pool, sizeof (struct fuzzy_rule));
 
 	rule->mappings = g_hash_table_new (g_direct_hash, g_direct_equal);
 	rule->symbol = default_symbol;
-	memory_pool_add_destructor (pool, (pool_destruct_func)g_hash_table_unref, rule->mappings);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t)g_hash_table_unref, rule->mappings);
 	rule->read_only = FALSE;
 
 	return rule;
@@ -393,7 +393,7 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
 
-	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
+	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
@@ -481,9 +481,9 @@ fuzzy_check_module_config (struct config_file *cfg)
 gint
 fuzzy_check_module_reconfig (struct config_file *cfg)
 {
-	memory_pool_delete (fuzzy_module_ctx->fuzzy_pool);
+	rspamd_mempool_delete (fuzzy_module_ctx->fuzzy_pool);
 
-	fuzzy_module_ctx->fuzzy_pool = memory_pool_new (memory_pool_get_size ());
+	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	
 	return fuzzy_check_module_config (cfg);
 }
@@ -558,7 +558,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 			if (map != NULL || !session->rule->skip_unknown) {
 				rspamd_snprintf (buf, sizeof (buf), "%d: %d / %.2f", flag, value, nval);
 				insert_result_single (session->task, symbol, nval, g_list_prepend (NULL,
-						memory_pool_strdup (session->task->task_pool, buf)));
+						rspamd_mempool_strdup (session->task->task_pool, buf)));
 			}
 		}
 		goto ok;
@@ -714,7 +714,7 @@ register_fuzzy_call (struct worker_task *task, struct fuzzy_rule *rule, fuzzy_ha
 		}
 		else {
 			/* Create session for a socket */
-			session = memory_pool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
+			session = rspamd_mempool_alloc (task->task_pool, sizeof (struct fuzzy_client_session));
 			event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback, session);
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &session->tv);
 			session->state = 0;
@@ -786,7 +786,7 @@ fuzzy_check_rule (struct worker_task *task, struct fuzzy_rule *rule)
 				if (fuzzy_module_ctx->min_width <= 0 || image->width >= fuzzy_module_ctx->min_width) {
 					checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5, image->data->data, image->data->len);
 					/* Construct fake fuzzy hash */
-					fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
+					fake_fuzzy = rspamd_mempool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
 					rspamd_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
 					register_fuzzy_call (task, rule, fake_fuzzy);
 					g_free (checksum);
@@ -804,7 +804,7 @@ fuzzy_check_rule (struct worker_task *task, struct fuzzy_rule *rule)
 					checksum = g_compute_checksum_for_data (G_CHECKSUM_MD5,
 							mime_part->content->data, mime_part->content->len);
 					/* Construct fake fuzzy hash */
-					fake_fuzzy = memory_pool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
+					fake_fuzzy = rspamd_mempool_alloc0 (task->task_pool, sizeof (fuzzy_hash_t));
 					rspamd_strlcpy (fake_fuzzy->hash_pipe, checksum, sizeof (fake_fuzzy->hash_pipe));
 					register_fuzzy_call (task, rule, fake_fuzzy);
 					g_free (checksum);
@@ -876,11 +876,11 @@ register_fuzzy_controller_call (struct controller_session *session,
 		}
 		else {
 			/* Socket is made, create session */
-			s = memory_pool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
+			s = rspamd_mempool_alloc (session->session_pool, sizeof (struct fuzzy_learn_session));
 			event_set (&s->ev, sock, EV_WRITE, fuzzy_learn_callback, s);
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
 			s->task = task;
-			s->h = memory_pool_alloc (session->session_pool, sizeof (fuzzy_hash_t));
+			s->h = rspamd_mempool_alloc (session->session_pool, sizeof (fuzzy_hash_t));
 			memcpy (s->h, h, sizeof (fuzzy_hash_t));
 			s->session = session;
 			s->server = selected;
@@ -1023,8 +1023,8 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	/* Allocate message from string */
 	task->msg = g_string_new_len (in->begin, in->len);
 
-	saved = memory_pool_alloc0 (session->session_pool, sizeof (gint));
-	err = memory_pool_alloc0 (session->session_pool, sizeof (GError *));
+	saved = rspamd_mempool_alloc0 (session->session_pool, sizeof (gint));
+	err = rspamd_mempool_alloc0 (session->session_pool, sizeof (GError *));
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");
@@ -1069,7 +1069,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		cur = g_list_next (cur);
 	}
 
-	memory_pool_add_destructor (session->session_pool, (pool_destruct_func)free_task_soft, task);
+	rspamd_mempool_add_destructor (session->session_pool, (rspamd_mempool_destruct_t)free_task_soft, task);
 
 	if (res == -1) {
 		session->state = STATE_REPLY;
@@ -1200,7 +1200,7 @@ fuzzy_controller_handler (gchar **args, struct controller_session *session, gint
 	rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
 	session->other_handler = fuzzy_process_handler;
 	/* Prepare args */
-	sargs = memory_pool_alloc (session->session_pool, sizeof (gint) * 3);
+	sargs = rspamd_mempool_alloc (session->session_pool, sizeof (gint) * 3);
 	sargs[0] = cmd;
 	sargs[1] = value;
 	sargs[2] = flag;

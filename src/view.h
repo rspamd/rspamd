@@ -23,7 +23,7 @@ struct rspamd_view {
 	GList *symbols_re_list;
 	gboolean skip_check;
 
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 };
 
 
@@ -32,7 +32,7 @@ struct rspamd_view {
  * @param pool pool for view
  * @return
  */
-struct rspamd_view* init_view (struct config_file *cfg, memory_pool_t *pool);
+struct rspamd_view* init_view (struct config_file *cfg, rspamd_mempool_t *pool);
 
 /**
  * Add from option for this view

@@ -33,7 +33,7 @@ rspamd_trie_create (gboolean icase)
 	new = g_malloc (sizeof (rspamd_trie_t));
 
 	new->icase = icase;
-	new->pool = memory_pool_new (memory_pool_get_size ());
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	new->root.fail = NULL;
 	new->root.final = 0;
 	new->root.id = 0;
@@ -54,14 +54,14 @@ rspamd_trie_insert_char (rspamd_trie_t *trie, guint depth, struct rspamd_trie_st
 	struct rspamd_trie_state     *new_pos;
 
 	/* New match is inserted before pos */
-	new_match = memory_pool_alloc (trie->pool, sizeof (struct rspamd_trie_match));
+	new_match = rspamd_mempool_alloc (trie->pool, sizeof (struct rspamd_trie_match));
 	new_match->next = pos->match;
 	new_match->c = c;
 
 	/* Now set match link */
 	pos->match = new_match;
 
-	new_match->state = memory_pool_alloc (trie->pool, sizeof (struct rspamd_trie_state));
+	new_match->state = rspamd_mempool_alloc (trie->pool, sizeof (struct rspamd_trie_state));
 	new_pos = new_match->state;
 	new_pos->match = NULL;
 	new_pos->fail = &trie->root;
@@ -225,6 +225,6 @@ void
 rspamd_trie_free (rspamd_trie_t *trie)
 {
 	g_ptr_array_free (trie->fail_states, TRUE);
-	memory_pool_delete (trie->pool);
+	rspamd_mempool_delete (trie->pool);
 	g_free (trie);
 }

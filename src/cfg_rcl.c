@@ -51,7 +51,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, const ucl_object_t *obj,
 				return FALSE;
 			}
 			cfg->log_type = RSPAMD_LOG_FILE;
-			cfg->log_file = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (val));
+			cfg->log_file = rspamd_mempool_strdup (cfg->cfg_pool, ucl_object_tostring (val));
 		}
 		else if (g_ascii_strcasecmp (log_type, "syslog") == 0) {
 			/* Need to get facility */
@@ -168,7 +168,7 @@ rspamd_rcl_options_handler (struct config_file *cfg, const ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", user_settings);
 			return FALSE;
 		}
-		cfg->user_settings_str = memory_pool_strdup (cfg->cfg_pool, user_settings);
+		cfg->user_settings_str = rspamd_mempool_strdup (cfg->cfg_pool, user_settings);
 	}
 
 	val = ucl_object_find_key (obj, "domain_settings");
@@ -177,7 +177,7 @@ rspamd_rcl_options_handler (struct config_file *cfg, const ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", domain_settings);
 			return FALSE;
 		}
-		cfg->domain_settings_str = memory_pool_strdup (cfg->cfg_pool, domain_settings);
+		cfg->domain_settings_str = rspamd_mempool_strdup (cfg->cfg_pool, domain_settings);
 	}
 
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
@@ -255,19 +255,19 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 		return FALSE;
 	}
 
-	sym_def = memory_pool_alloc (cfg->cfg_pool, sizeof (struct symbol_def));
-	score_ptr = memory_pool_alloc (cfg->cfg_pool, sizeof (gdouble));
+	sym_def = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct symbol_def));
+	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	*score_ptr = symbol_score;
 	sym_def->weight_ptr = score_ptr;
-	sym_def->name = memory_pool_strdup (cfg->cfg_pool, sym_name);
+	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, sym_name);
 	sym_def->description = (gchar *)description;
 
 	g_hash_table_insert (metric->symbols, sym_def->name, score_ptr);
 
 	if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
 		metric_list = g_list_prepend (NULL, metric);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, metric_list);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_list_free, metric_list);
 		g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
 	}
 	else {
@@ -281,8 +281,8 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 	group_list = g_list_find_custom (cfg->symbols_groups, group, rspamd_symbols_group_find_func);
 	if (group_list == NULL) {
 		/* Create new group */
-		sym_group = memory_pool_alloc (cfg->cfg_pool, sizeof (struct symbols_group));
-		sym_group->name = memory_pool_strdup (cfg->cfg_pool, group);
+		sym_group = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct symbols_group));
+		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
 		sym_group->symbols = NULL;
 		cfg->symbols_groups = g_list_prepend (cfg->symbols_groups, sym_group);
 	}
@@ -556,7 +556,7 @@ static gboolean
 rspamd_rcl_lua_handler (struct config_file *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	const gchar *lua_src = memory_pool_strdup (cfg->cfg_pool, ucl_object_tostring (obj));
+	const gchar *lua_src = rspamd_mempool_strdup (cfg->cfg_pool, ucl_object_tostring (obj));
 	gchar *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State *L = cfg->lua_state;
 
@@ -645,8 +645,8 @@ rspamd_rcl_add_module_path (struct config_file *cfg, const gchar *path, GError *
 
 		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
 			for (i = 0; i < globbuf.gl_pathc; i ++) {
-				cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-				cur_mod->path = memory_pool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
+				cur_mod = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+				cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool, globbuf.gl_pathv[i]);
 				cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
 			}
 			globfree (&globbuf);
@@ -660,8 +660,8 @@ rspamd_rcl_add_module_path (struct config_file *cfg, const gchar *path, GError *
 	}
 	else {
 		/* Handle single file */
-		cur_mod = memory_pool_alloc (cfg->cfg_pool, sizeof (struct script_module));
-		cur_mod->path = memory_pool_strdup (cfg->cfg_pool, path);
+		cur_mod = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct script_module));
+		cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool, path);
 		cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
 	}
 
@@ -680,14 +680,14 @@ rspamd_rcl_modules_handler (struct config_file *cfg, const ucl_object_t *obj,
 
 		LL_FOREACH (val, cur) {
 			if (ucl_object_tostring_safe (cur, &data)) {
-				if (!rspamd_rcl_add_module_path (cfg, memory_pool_strdup (cfg->cfg_pool, data), err)) {
+				if (!rspamd_rcl_add_module_path (cfg, rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
 					return FALSE;
 				}
 			}
 		}
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
-		if (!rspamd_rcl_add_module_path (cfg, memory_pool_strdup (cfg->cfg_pool, data), err)) {
+		if (!rspamd_rcl_add_module_path (cfg, rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
 			return FALSE;
 		}
 	}
@@ -715,7 +715,7 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, const ucl_object_t *obj,
 	val = ucl_object_find_key (obj, "binlog");
 	if (val != NULL && ucl_object_tostring_safe (val, &data)) {
 		if (st->binlog == NULL) {
-			st->binlog = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
+			st->binlog = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct statfile_binlog_params));
 		}
 		if (g_ascii_strcasecmp (data, "master") == 0) {
 			st->binlog->affinity = AFFINITY_MASTER;
@@ -891,7 +891,7 @@ rspamd_rcl_composite_handler (struct config_file *cfg, const ucl_object_t *obj,
 		return FALSE;
 	}
 
-	composite = memory_pool_alloc (cfg->cfg_pool, sizeof (struct rspamd_composite));
+	composite = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct rspamd_composite));
 	composite->expr = expr;
 	composite->id = g_hash_table_size (cfg->composite_symbols) + 1;
 	g_hash_table_insert (cfg->composite_symbols, (gpointer)composite_name, composite);
@@ -1279,18 +1279,18 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, const ucl_object_t *obj
 	target = (gchar **)(((gchar *)pd->user_struct) + pd->offset);
 	switch (obj->type) {
 	case UCL_STRING:
-		*target = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
+		*target = rspamd_mempool_strdup (cfg->cfg_pool, ucl_copy_value_trash (obj));
 		break;
 	case UCL_INT:
-		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+		*target = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
 		rspamd_snprintf (*target, num_str_len, "%L", obj->value.iv);
 		break;
 	case UCL_FLOAT:
-		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+		*target = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
 		rspamd_snprintf (*target, num_str_len, "%f", obj->value.dv);
 		break;
 	case UCL_BOOLEAN:
-		*target = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+		*target = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
 		rspamd_snprintf (*target, num_str_len, "%b", (gboolean)obj->value.iv);
 		break;
 	default:
@@ -1446,18 +1446,18 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, const ucl_object_t
 	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
 		switch (cur->type) {
 		case UCL_STRING:
-			val = memory_pool_strdup (cfg->cfg_pool, ucl_copy_value_trash (cur));
+			val = rspamd_mempool_strdup (cfg->cfg_pool, ucl_copy_value_trash (cur));
 			break;
 		case UCL_INT:
-			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
 			rspamd_snprintf (val, num_str_len, "%L", cur->value.iv);
 			break;
 		case UCL_FLOAT:
-			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
 			rspamd_snprintf (val, num_str_len, "%f", cur->value.dv);
 			break;
 		case UCL_BOOLEAN:
-			val = memory_pool_alloc (cfg->cfg_pool, num_str_len);
+			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
 			rspamd_snprintf (val, num_str_len, "%b", (gboolean)cur->value.iv);
 			break;
 		default:
@@ -1468,7 +1468,7 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, const ucl_object_t
 	}
 
 	/* Add a destructor */
-	memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, *target);
+	rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_list_free, *target);
 
 	return TRUE;
 }
@@ -1506,7 +1506,7 @@ rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gch
 	HASH_FIND_INT (cfg->wrk_parsers, &type, nparser);
 	if (nparser == NULL) {
 		/* Allocate new parser for this worker */
-		nparser = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_cfg_parser));
+		nparser = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_cfg_parser));
 		nparser->type = type;
 		HASH_ADD_INT (cfg->wrk_parsers, type, nparser);
 	}
@@ -1517,7 +1517,7 @@ rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gch
 				name, g_quark_to_string (type));
 		return;
 	}
-	nhandler = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_param_parser));
+	nhandler = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_param_parser));
 	nhandler->name = name;
 	nhandler->parser.flags = flags;
 	nhandler->parser.offset = offset;
@@ -1535,7 +1535,7 @@ rspamd_rcl_register_worker_parser (struct config_file *cfg, gint type,
 	HASH_FIND_INT (cfg->wrk_parsers, &type, nparser);
 	if (nparser == NULL) {
 		/* Allocate new parser for this worker */
-		nparser = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_cfg_parser));
+		nparser = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_cfg_parser));
 		nparser->type = type;
 		HASH_ADD_INT (cfg->wrk_parsers, type, nparser);
 	}

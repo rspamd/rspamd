@@ -182,9 +182,9 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 }
 
 struct classifier_ctx          *
-winnow_init (memory_pool_t * pool, struct classifier_config *cfg)
+winnow_init (rspamd_mempool_t * pool, struct classifier_config *cfg)
 {
-	struct classifier_ctx          *ctx = memory_pool_alloc (pool, sizeof (struct classifier_ctx));
+	struct classifier_ctx          *ctx = rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
 
 	ctx->pool = pool;
 	ctx->cfg = cfg;
@@ -223,7 +223,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 
 	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
 	}
 	else {
 		cur = ctx->cfg->statfiles;
@@ -272,7 +272,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
          */
         max = tanh ((double) max);
 #endif
-		sumbuf = memory_pool_alloc (task->task_pool, 32);
+		sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
 		rspamd_snprintf (sumbuf, 32, "%.2F", max);
 		cur = g_list_prepend (NULL, sumbuf);
 		insert_result (task, sel->symbol, max, cur);
@@ -328,7 +328,7 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 			g_tree_foreach (input, winnow_classify_callback, &data);
 		}
 
-		w = memory_pool_alloc0 (task->task_pool, sizeof (struct classify_weight));
+		w = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct classify_weight));
 		if (data.count != 0) {
 			res = data.sum / (double)data.count;
 		}
@@ -342,7 +342,7 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 	}
 	
 	if (resl != NULL) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, resl);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, resl);
 	}
 
 	return resl;

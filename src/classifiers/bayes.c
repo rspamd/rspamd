@@ -190,9 +190,9 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 }
 
 struct classifier_ctx*
-bayes_init (memory_pool_t *pool, struct classifier_config *cfg)
+bayes_init (rspamd_mempool_t *pool, struct classifier_config *cfg)
 {
-	struct classifier_ctx          *ctx = memory_pool_alloc (pool, sizeof (struct classifier_ctx));
+	struct classifier_ctx          *ctx = rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
 
 	ctx->pool = pool;
 	ctx->cfg = cfg;
@@ -231,7 +231,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 
 	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
 	}
 	else {
 		cur = ctx->cfg->statfiles;
@@ -296,7 +296,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 
 	if (data.processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
 
-		sumbuf = memory_pool_alloc (task->task_pool, 32);
+		sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
 		for (i = 0; i < cnt; i ++) {
 			if ((final_prob > 0.5 && !data.statfiles[i].st->is_spam) ||
 					(final_prob < 0.5 && data.statfiles[i].st->is_spam)) {
@@ -461,7 +461,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	cur = call_classifier_pre_callbacks (ctx->cfg, task, TRUE, is_spam, L);
 	if (cur) {
 		skip_labels = FALSE;
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
 	}
 	else {
 		/* Do not try to learn specific statfiles if pre callback returned nil */

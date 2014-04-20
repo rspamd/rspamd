@@ -971,7 +971,7 @@ rspamd_pidfile_remove (rspamd_pidfh_t *pfh)
 
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
 gchar                           *
-resolve_stat_filename (memory_pool_t * pool, gchar *pattern, gchar *rcpt, gchar *from)
+resolve_stat_filename (rspamd_mempool_t * pool, gchar *pattern, gchar *rcpt, gchar *from)
 {
 	gint                            need_to_format = 0, len = 0;
 	gint                            rcptlen, fromlen;
@@ -1014,7 +1014,7 @@ resolve_stat_filename (memory_pool_t * pool, gchar *pattern, gchar *rcpt, gchar 
 	}
 
 	/* Allocate new string */
-	new = memory_pool_alloc (pool, len);
+	new = rspamd_mempool_alloc (pool, len);
 	c = pattern;
 	s = new;
 
@@ -1961,9 +1961,9 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
 gpointer
 rspamd_str_pool_copy (gconstpointer data, gpointer ud)
 {
-	memory_pool_t						*pool = ud;
+	rspamd_mempool_t						*pool = ud;
 
-	return data ? memory_pool_strdup (pool, data) : NULL;
+	return data ? rspamd_mempool_strdup (pool, data) : NULL;
 }
 
 gboolean

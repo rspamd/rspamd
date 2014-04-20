@@ -52,7 +52,7 @@ typedef struct rspamd_trie_s {
 	struct rspamd_trie_state root;
 	GPtrArray *fail_states;
 	gboolean icase;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 } rspamd_trie_t;
 
 /*

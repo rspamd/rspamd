@@ -59,7 +59,7 @@ typedef gboolean (*rspamd_internal_func_t)(struct worker_task *, GList *args, vo
  * @param line incoming line
  * @return regexp structure or NULL in case of error
  */
-struct rspamd_regexp* parse_regexp (memory_pool_t *pool, const gchar *line, gboolean raw_mode);
+struct rspamd_regexp* parse_regexp (rspamd_mempool_t *pool, const gchar *line, gboolean raw_mode);
 
 /**
  * Parse composites line to composites structure (eg. "SYMBOL1&SYMBOL2|!SYMBOL3")
@@ -67,7 +67,7 @@ struct rspamd_regexp* parse_regexp (memory_pool_t *pool, const gchar *line, gboo
  * @param line incoming line
  * @return expression structure or NULL in case of error
  */
-struct expression* parse_expression (memory_pool_t *pool, gchar *line);
+struct expression* parse_expression (rspamd_mempool_t *pool, gchar *line);
 
 /**
  * Call specified fucntion and return boolean result
@@ -90,20 +90,20 @@ void register_expression_function (const gchar *name, rspamd_internal_func_t fun
  * @param line symbolic representation
  * @param pointer regexp data
  */
-void re_cache_add (const gchar *line, void *pointer, memory_pool_t *pool);
+void re_cache_add (const gchar *line, void *pointer, rspamd_mempool_t *pool);
 
 /**
  * Check regexp in cache
  * @param line symbolic representation
  * @return pointer to regexp data or NULL if regexp is not found
  */
-void * re_cache_check (const gchar *line, memory_pool_t *pool);
+void * re_cache_check (const gchar *line, rspamd_mempool_t *pool);
 
 /**
  * Remove regexp from regexp cache
  * @param line symbolic representation
  */
-void re_cache_del (const gchar *line, memory_pool_t *pool);
+void re_cache_del (const gchar *line, rspamd_mempool_t *pool);
 
 /**
  * Add regexp to regexp task cache

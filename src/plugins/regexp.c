@@ -58,8 +58,8 @@ struct regexp_ctx {
 	GHashTable                     *autolearn_symbols;
 	gchar                          *statfile_prefix;
 
-	memory_pool_t                  *regexp_pool;
-	memory_pool_t                  *dynamic_pool;
+	rspamd_mempool_t                  *regexp_pool;
+	rspamd_mempool_t                  *dynamic_pool;
 	gsize                           max_size;
 	gsize							max_threads;
 	GThreadPool					   *workers;
@@ -304,7 +304,7 @@ parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
 
 /* Process regexp expression */
 static                          gboolean
-read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain,
+read_regexp_expression (rspamd_mempool_t * pool, struct regexp_module_item *chain,
 		const gchar *symbol, const gchar *line, gboolean raw_mode)
 {
 	struct expression              *e, *cur;
@@ -334,7 +334,7 @@ read_regexp_expression (memory_pool_t * pool, struct regexp_module_item *chain,
 
 /* Callbacks for reading json dynamic rules */
 gchar                         *
-json_regexp_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+json_regexp_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct regexp_json_buf                *jb;
 	gint                            free, off;
@@ -374,7 +374,7 @@ json_regexp_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_c
 }
 
 void
-json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
+json_regexp_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	struct regexp_json_buf         *jb;
 	guint                           nelts, i, j;
@@ -385,7 +385,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 	struct regexp_module_item      *cur_item;
 	GList                          *cur_networks = NULL;
 	struct dynamic_map_item        *cur_nitem;
-	memory_pool_t                  *new_pool;
+	rspamd_mempool_t                  *new_pool;
 
 	if (data->prev_data) {
 		jb = data->prev_data;
@@ -423,11 +423,11 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		return;
 	}
 	
-	new_pool = memory_pool_new (memory_pool_get_size ());
+	new_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 		
 	remove_dynamic_rules (jb->cfg->cache);
 	if (regexp_module_ctx->dynamic_pool != NULL) {
-		memory_pool_delete (regexp_module_ctx->dynamic_pool);
+		rspamd_mempool_delete (regexp_module_ctx->dynamic_pool);
 	}
 	regexp_module_ctx->dynamic_pool = new_pool;
 
@@ -454,7 +454,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			msg_err ("symbol is not a string or not exists, but is required");
 			continue;
 		}
-		cur_symbol = memory_pool_strdup (new_pool, json_string_value (cur_nm)); 
+		cur_symbol = rspamd_mempool_strdup (new_pool, json_string_value (cur_nm)); 
 		/* Enabled flag */
 		cur_nm = json_object_get (cur_elt, "enabled");
 		if (cur_nm != NULL && json_is_boolean (cur_nm)) {
@@ -467,7 +467,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		/* Rule */
 		cur_nm = json_object_get (cur_elt, "rule");
 		if (cur_nm != NULL && json_is_string (cur_nm)) {
-			cur_rule = memory_pool_strdup (new_pool, json_string_value (cur_nm));
+			cur_rule = rspamd_mempool_strdup (new_pool, json_string_value (cur_nm));
 		}
 		/* Networks array */
 		cur_nm = json_object_get (cur_elt, "networks");
@@ -475,7 +475,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 			for (j = 0; j < json_array_size (cur_nm); j++) {
 				it_val = json_array_get (cur_nm, i);
 				if (it_val && json_is_string (it_val)) {
-					cur_nitem = memory_pool_alloc (new_pool, sizeof (struct dynamic_map_item));
+					cur_nitem = rspamd_mempool_alloc (new_pool, sizeof (struct dynamic_map_item));
 					if (parse_regexp_ipmask (json_string_value (it_val), cur_nitem)) {
 						cur_networks = g_list_prepend (cur_networks, cur_nitem);
 					}
@@ -484,7 +484,7 @@ json_regexp_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
 		}
 		if (cur_rule) {
 			/* Dynamic rule has rule option */
-			cur_item = memory_pool_alloc0 (new_pool, sizeof (struct regexp_module_item));
+			cur_item = rspamd_mempool_alloc0 (new_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = cur_symbol;
 			if (read_regexp_expression (new_pool, cur_item, cur_symbol, cur_rule, jb->cfg->raw_mode)) {
 				register_dynamic_symbol (new_pool, &jb->cfg->cache, cur_symbol, score, process_regexp_item, cur_item, cur_networks);
@@ -510,7 +510,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
 
-	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
+	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	regexp_module_ctx->dynamic_pool = NULL;
 	regexp_module_ctx->autolearn_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	regexp_module_ctx->workers = NULL;
@@ -543,8 +543,8 @@ parse_autolearn_param (const gchar *param, const gchar *value, struct config_fil
 	struct autolearn_data          *d;
 	gchar                           *p;
 
-	p = memory_pool_strdup (regexp_module_ctx->regexp_pool, value);
-	d = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (struct autolearn_data));
+	p = rspamd_mempool_strdup (regexp_module_ctx->regexp_pool, value);
+	d = rspamd_mempool_alloc (regexp_module_ctx->regexp_pool, sizeof (struct autolearn_data));
 
 	d->symbol = strsep (&p, ":");
 	if (d->symbol) {
@@ -607,7 +607,7 @@ regexp_module_config (struct config_file *cfg)
 			regexp_module_ctx->max_threads = ucl_obj_toint (value);
 		}
 		else if (value->type == UCL_STRING) {
-			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
+			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
 			if (!read_regexp_expression (regexp_module_ctx->regexp_pool, cur_item, ucl_object_key (value),
 					ucl_obj_tostring (value), cfg->raw_mode)) {
@@ -616,7 +616,7 @@ regexp_module_config (struct config_file *cfg)
 			register_symbol (&cfg->cache, cur_item->symbol, 1, process_regexp_item, cur_item);
 		}
 		else if (value->type == UCL_USERDATA) {
-			cur_item = memory_pool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
+			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool, sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = value->value.ud;
 			register_symbol (&cfg->cache, cur_item->symbol, 1, process_regexp_item, cur_item);
@@ -632,8 +632,8 @@ regexp_module_config (struct config_file *cfg)
 gint
 regexp_module_reconfig (struct config_file *cfg)
 {
-	memory_pool_delete (regexp_module_ctx->regexp_pool);
-	regexp_module_ctx->regexp_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_mempool_delete (regexp_module_ctx->regexp_pool);
+	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	return regexp_module_config (cfg);
 }
@@ -744,7 +744,7 @@ process_regexp (struct rspamd_regexp *re, struct worker_task *task, const gchar 
 			return 0;
 		}
 		else {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, headerlist);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, headerlist);
 			/* Check whether we have regexp for it */
 			if (re->regexp == NULL) {
 				debug_task ("regexp contains only header and it is found %s", re->header);
@@ -1273,7 +1273,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 # endif
 			workers_mtx = g_mutex_new ();
 #else
-			workers_mtx = memory_pool_alloc (regexp_module_ctx->regexp_pool, sizeof (GMutex));
+			workers_mtx = rspamd_mempool_alloc (regexp_module_ctx->regexp_pool, sizeof (GMutex));
 			g_mutex_init (workers_mtx);
 #endif
 			nL = init_lua_locked (task->cfg);
@@ -1286,7 +1286,7 @@ process_regexp_item (struct worker_task *task, void *user_data)
 				return;
 			}
 		}
-		thr_ud = memory_pool_alloc (task->task_pool, sizeof (struct regexp_threaded_ud));
+		thr_ud = rspamd_mempool_alloc (task->task_pool, sizeof (struct regexp_threaded_ud));
 		thr_ud->item = item;
 		thr_ud->task = task;
 

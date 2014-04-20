@@ -58,7 +58,7 @@ struct chartable_ctx {
 	const gchar                    *symbol;
 	double                          threshold;
 
-	memory_pool_t                  *chartable_pool;
+	rspamd_mempool_t                  *chartable_pool;
 };
 
 static struct chartable_ctx    *chartable_module_ctx = NULL;
@@ -72,7 +72,7 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
 	chartable_module_ctx->filter = chartable_mime_filter;
-	chartable_module_ctx->chartable_pool = memory_pool_new (memory_pool_get_size ());
+	chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
 
@@ -110,8 +110,8 @@ chartable_module_config (struct config_file *cfg)
 gint
 chartable_module_reconfig (struct config_file *cfg)
 {
-	memory_pool_delete (chartable_module_ctx->chartable_pool);
-	chartable_module_ctx->chartable_pool = memory_pool_new (1024);
+	rspamd_mempool_delete (chartable_module_ctx->chartable_pool);
+	chartable_module_ctx->chartable_pool = rspamd_mempool_new (1024);
 
 	return chartable_module_config (cfg);
 }

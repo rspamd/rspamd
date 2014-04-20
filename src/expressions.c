@@ -80,41 +80,41 @@ fl_cmp (const void *s1, const void *s2)
 
 /* Cache for regular expressions that are used in functions */
 void                           *
-re_cache_check (const gchar *line, memory_pool_t *pool)
+re_cache_check (const gchar *line, rspamd_mempool_t *pool)
 {
 	GHashTable              *re_cache;
 	
-	re_cache = memory_pool_get_variable (pool, "re_cache");
+	re_cache = rspamd_mempool_get_variable (pool, "re_cache");
 
 	if (re_cache == NULL) {
 		re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
+		rspamd_mempool_set_variable (pool, "re_cache", re_cache, (rspamd_mempool_destruct_t)g_hash_table_destroy);
 		return NULL;
 	}
 	return g_hash_table_lookup (re_cache, line);
 }
 
 void
-re_cache_add (const gchar *line, void *pointer, memory_pool_t *pool)
+re_cache_add (const gchar *line, void *pointer, rspamd_mempool_t *pool)
 {
 	GHashTable              *re_cache;
 	
-	re_cache = memory_pool_get_variable (pool, "re_cache");
+	re_cache = rspamd_mempool_get_variable (pool, "re_cache");
 
 	if (re_cache == NULL) {
 		re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		memory_pool_set_variable (pool, "re_cache", re_cache, (pool_destruct_func)g_hash_table_destroy);
+		rspamd_mempool_set_variable (pool, "re_cache", re_cache, (rspamd_mempool_destruct_t)g_hash_table_destroy);
 	}
 
 	g_hash_table_insert (re_cache, (gpointer)line, pointer);
 }
 
 void
-re_cache_del (const gchar *line, memory_pool_t *pool)
+re_cache_del (const gchar *line, rspamd_mempool_t *pool)
 {
 	GHashTable              *re_cache;
 
-	re_cache = memory_pool_get_variable (pool, "re_cache");
+	re_cache = rspamd_mempool_get_variable (pool, "re_cache");
 
 	if (re_cache != NULL) {
 		g_hash_table_remove (re_cache, line);
@@ -134,10 +134,10 @@ struct expression_stack {
  * Push operand or operator to stack  
  */
 static struct expression_stack *
-push_expression_stack (memory_pool_t * pool, struct expression_stack *head, gchar op)
+push_expression_stack (rspamd_mempool_t * pool, struct expression_stack *head, gchar op)
 {
 	struct expression_stack        *new;
-	new = memory_pool_alloc (pool, sizeof (struct expression_stack));
+	new = rspamd_mempool_alloc (pool, sizeof (struct expression_stack));
 	new->op = op;
 	new->next = head;
 	return new;
@@ -284,11 +284,11 @@ is_regexp_flag (gchar a)
 }
 
 static void
-insert_expression (memory_pool_t * pool, struct expression **head, gint type, gchar op, void *operand, const gchar *orig)
+insert_expression (rspamd_mempool_t * pool, struct expression **head, gint type, gchar op, void *operand, const gchar *orig)
 {
 	struct expression              *new, *cur;
 
-	new = memory_pool_alloc (pool, sizeof (struct expression));
+	new = rspamd_mempool_alloc (pool, sizeof (struct expression));
 	new->type = type;
 	new->orig = orig;
 	if (new->type != EXPR_OPERATION) {
@@ -312,7 +312,7 @@ insert_expression (memory_pool_t * pool, struct expression **head, gint type, gc
 }
 
 static struct expression       *
-maybe_parse_expression (memory_pool_t * pool, gchar *line)
+maybe_parse_expression (rspamd_mempool_t * pool, gchar *line)
 {
 	struct expression              *expr;
 	gchar                           *p = line;
@@ -324,9 +324,9 @@ maybe_parse_expression (memory_pool_t * pool, gchar *line)
 		p++;
 	}
 
-	expr = memory_pool_alloc (pool, sizeof (struct expression));
+	expr = rspamd_mempool_alloc (pool, sizeof (struct expression));
 	expr->type = EXPR_STR;
-	expr->content.operand = memory_pool_strdup (pool, line);
+	expr->content.operand = rspamd_mempool_strdup (pool, line);
 	expr->next = NULL;
 
 	return expr;
@@ -337,7 +337,7 @@ maybe_parse_expression (memory_pool_t * pool, gchar *line)
  * Memory is allocated from given pool
  */
 struct expression              *
-parse_expression (memory_pool_t * pool, gchar *line)
+parse_expression (rspamd_mempool_t * pool, gchar *line)
 {
 	struct expression              *expr = NULL;
 	struct expression_stack        *stack = NULL;
@@ -364,7 +364,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 	msg_debug ("parsing expression {{ %s }}", line);
 
 	function_stack = g_queue_new ();
-	copy = memory_pool_strdup (pool, line);
+	copy = rspamd_mempool_strdup (pool, line);
 	p = line;
 	c = p;
 	while (*p) {
@@ -462,7 +462,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 					if ((is_regexp_flag (*p) || *p == '/') && *(p + 1) == '\0') {
 						p++;
 					}
-					str = memory_pool_alloc (pool, p - c + 2);
+					str = rspamd_mempool_alloc (pool, p - c + 2);
 					rspamd_strlcpy (str, c - 1, (p - c + 2));
 					g_strstrip (str);
 					msg_debug ("found regexp: %s", str);
@@ -486,8 +486,8 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				p++;
 			}
 			else if (*p == '(') {
-				func = memory_pool_alloc (pool, sizeof (struct expression_function));
-				func->name = memory_pool_alloc (pool, p - c + 1);
+				func = rspamd_mempool_alloc (pool, sizeof (struct expression_function));
+				func->name = rspamd_mempool_alloc (pool, p - c + 1);
 				func->args = NULL;
 				rspamd_strlcpy (func->name, c, (p - c + 1));
 				g_strstrip (func->name);
@@ -499,7 +499,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 			else if (is_operation_symbol (p)) {
 				/* In fact it is not function, but symbol */
 				if (c != p) {
-					str = memory_pool_alloc (pool, p - c + 1);
+					str = rspamd_mempool_alloc (pool, p - c + 1);
 					rspamd_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					if (strlen (str) > 0) {
@@ -512,7 +512,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				/* In fact it is not function, but symbol */
 				p++;
 				if (c != p) {
-					str = memory_pool_alloc (pool, p - c + 1);
+					str = rspamd_mempool_alloc (pool, p - c + 1);
 					rspamd_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					if (strlen (str) > 0) {
@@ -535,7 +535,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
 				/* Append argument to list */
 				if (*p == ',' || (*p == ')' && brackets == 0)) {
 					arg = NULL;
-					str = memory_pool_alloc (pool, p - c + 1);
+					str = rspamd_mempool_alloc (pool, p - c + 1);
 					rspamd_strlcpy (str, c, (p - c + 1));
 					g_strstrip (str);
 					/* Recursive call */
@@ -587,7 +587,7 @@ parse_expression (memory_pool_t * pool, gchar *line)
  * Rspamd regexp utility functions
  */
 struct rspamd_regexp           *
-parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
+parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 {
 	const gchar                    *begin, *end, *p, *src, *start;
 	gchar                          *dbegin, *dend;
@@ -601,7 +601,7 @@ parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 	}
 
 	src = line;
-	result = memory_pool_alloc0 (pool, sizeof (struct rspamd_regexp));
+	result = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_regexp));
 	/* Skip whitespaces */
 	while (g_ascii_isspace (*line)) {
 		line++;
@@ -624,14 +624,14 @@ parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 			p --;
 		}
 		if (end) {
-			result->header = memory_pool_alloc (pool, end - line + 1);
+			result->header = rspamd_mempool_alloc (pool, end - line + 1);
 			rspamd_strlcpy (result->header, line, end - line + 1);
 			result->type = REGEXP_HEADER;
 			line = end;
 		}
 	}
 	else {
-		result->header = memory_pool_strdup (pool, line);
+		result->header = rspamd_mempool_strdup (pool, line);
 		result->type = REGEXP_HEADER;
 		line = start;
 	}
@@ -644,7 +644,7 @@ parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 	}
 	else if (result->header == NULL) {
 		/* Assume that line without // is just a header name */
-		result->header = memory_pool_strdup (pool, line);
+		result->header = rspamd_mempool_strdup (pool, line);
 		result->type = REGEXP_HEADER;
 		return result;
 	}
@@ -741,7 +741,7 @@ parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 		}
 	}
 
-	result->regexp_text = memory_pool_strdup (pool, start);
+	result->regexp_text = rspamd_mempool_strdup (pool, start);
 	dbegin = result->regexp_text + (begin - start);
 	dend = result->regexp_text + (end - start);
 	*dend = '\0';
@@ -770,9 +770,9 @@ parse_regexp (memory_pool_t * pool, const gchar *line, gboolean raw_mode)
 	}
 	else {
 		result->raw_regexp = g_regex_new (dbegin, regexp_flags | G_REGEX_RAW, 0, &err);
-		memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->raw_regexp);
+		rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_regex_unref, (void *)result->raw_regexp);
 	}
-	memory_pool_add_destructor (pool, (pool_destruct_func) g_regex_unref, (void *)result->regexp);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_regex_unref, (void *)result->regexp);
 
 	*dend = '/';
 
@@ -820,7 +820,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 		return NULL;
 	}
 	if (expr->next == NULL) {
-		res = memory_pool_alloc (task->task_pool, sizeof (struct expression_argument));
+		res = rspamd_mempool_alloc (task->task_pool, sizeof (struct expression_argument));
 		if (expr->type == EXPR_REGEXP || expr->type == EXPR_STR || expr->type == EXPR_REGEXP_PARSED) {
 			res->type = EXPRESSION_ARGUMENT_NORMAL;
 			res->data = expr->content.operand;
@@ -837,7 +837,7 @@ get_function_arg (struct expression *expr, struct worker_task *task, gboolean wa
 		return res;
 	}
 	else if (!want_string) {
-		res = memory_pool_alloc (task->task_pool, sizeof (struct expression_argument));
+		res = rspamd_mempool_alloc (task->task_pool, sizeof (struct expression_argument));
 		res->type = EXPRESSION_ARGUMENT_BOOL;
 		stack = g_queue_new ();
 		it = expr;
@@ -1005,7 +1005,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		}
 	}
 
-	if ((pdiff = memory_pool_get_variable (task->task_pool, "parts_distance")) != NULL) {
+	if ((pdiff = rspamd_mempool_get_variable (task->task_pool, "parts_distance")) != NULL) {
 		diff = *pdiff;
 		if (diff != -1) {
 			if (threshold2 > 0) {
@@ -1029,7 +1029,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		cur = g_list_first (task->text_parts);
 		p1 = cur->data;
 		cur = g_list_next (cur);
-		pdiff = memory_pool_alloc (task->task_pool, sizeof (gint));
+		pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
 		*pdiff = -1;
 
 		if (cur == NULL) {
@@ -1047,13 +1047,13 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			if (ct == NULL || ! g_mime_content_type_is_type ((GMimeContentType *)ct, "multipart", "alternative")) {
 #endif
 				debug_task ("two parts are not belong to multipart/alternative container, skip check");
-				memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
+				rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 				return FALSE;
 			}
 		}
 		else {
 			debug_task ("message contains two parts but they are in different multi-parts");
-			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
+			rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			return FALSE;
 		}
 		if (!p1->is_empty && !p2->is_empty) {
@@ -1065,7 +1065,7 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 			}
 			debug_task ("got likeliness between parts of %d%%, threshold is %d%%", diff, threshold);
 			*pdiff = diff;
-			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
+			rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			if (threshold2 > 0) {
 				if (diff >= MIN (threshold, threshold2) && diff < MAX (threshold, threshold2)) {
 					return TRUE;
@@ -1080,17 +1080,17 @@ rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
 		else if ((p1->is_empty && !p2->is_empty) || (!p1->is_empty && p2->is_empty)) {
 			/* Empty and non empty parts are different */
 			*pdiff = 0;
-			memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
+			rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 			return TRUE;
 		}
 	}
 	else {
 		debug_task ("message has too many text parts, so do not try to compare them with each other");
-		memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
+		rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 		return FALSE;
 	}
 
-	memory_pool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
+	rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff, NULL);
 	return FALSE;
 }
 
@@ -1133,14 +1133,14 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
-	ar = memory_pool_alloc0 (task->task_pool, num * sizeof (struct addr_list));
+	ar = rspamd_mempool_alloc0 (task->task_pool, num * sizeof (struct addr_list));
 
 	/* Fill array */
 	cur = task->rcpts;
 #ifdef GMIME24
 	for (i = 0; i < num; i ++) {
 		addr = internet_address_list_get_address (cur, i);
-		ar[i].name = memory_pool_strdup (task->task_pool, internet_address_get_name (addr));
+		ar[i].name = rspamd_mempool_strdup (task->task_pool, internet_address_get_name (addr));
 		if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
 			*c = '\0';
 			ar[i].addr = c + 1;
@@ -1151,7 +1151,7 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 	while (cur) {
 		addr = internet_address_list_get_address (cur);
 		if (addr && internet_address_get_type (addr) == INTERNET_ADDRESS_NAME) {
-			ar[i].name = memory_pool_strdup (task->task_pool, internet_address_get_addr (addr));
+			ar[i].name = rspamd_mempool_strdup (task->task_pool, internet_address_get_addr (addr));
 			if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
 				*c = '\0';
 				ar[i].addr = c + 1;

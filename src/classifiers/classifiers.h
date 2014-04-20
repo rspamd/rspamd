@@ -14,7 +14,7 @@ struct classifier_config;
 struct worker_task;
 
 struct classifier_ctx {
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	GHashTable *results;
 	gboolean debug;
 	struct classifier_config *cfg;
@@ -28,7 +28,7 @@ struct classify_weight {
 /* Common classifier structure */
 struct classifier {
 	char *name;
-	struct classifier_ctx* (*init_func)(memory_pool_t *pool, struct classifier_config *cf);
+	struct classifier_ctx* (*init_func)(rspamd_mempool_t *pool, struct classifier_config *cf);
 	gboolean (*classify_func)(struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task, lua_State *L);
 	gboolean (*learn_func)(struct classifier_ctx* ctx, statfile_pool_t *pool,
 							const char *symbol, GTree *input, gboolean in_class,
@@ -42,7 +42,7 @@ struct classifier {
 struct classifier* get_classifier (const char *name);
 
 /* Winnow algorithm */
-struct classifier_ctx* winnow_init (memory_pool_t *pool, struct classifier_config *cf);
+struct classifier_ctx* winnow_init (rspamd_mempool_t *pool, struct classifier_config *cf);
 gboolean winnow_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task, lua_State *L);
 gboolean winnow_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symbol, GTree *input,
 				gboolean in_class, double *sum, double multiplier, GError **err);
@@ -51,7 +51,7 @@ gboolean winnow_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 GList *winnow_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task);
 
 /* Bayes algorithm */
-struct classifier_ctx* bayes_init (memory_pool_t *pool, struct classifier_config *cf);
+struct classifier_ctx* bayes_init (rspamd_mempool_t *pool, struct classifier_config *cf);
 gboolean bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task, lua_State *L);
 gboolean bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symbol, GTree *input,
 				gboolean in_class, double *sum, double multiplier, GError **err);

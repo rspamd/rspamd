@@ -131,7 +131,7 @@
 #define	DKIM_RECORD_ERROR	4	/* error requesting record */
 
 typedef struct rspamd_dkim_context_s {
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	gint sig_alg;
 	gint header_canon_type;
 	gint body_canon_type;
@@ -177,7 +177,7 @@ typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen, rspamd_
  * @param err pointer to error object
  * @return new context or NULL
  */
-rspamd_dkim_context_t* rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool,  guint time_jitter, GError **err);
+rspamd_dkim_context_t* rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool,  guint time_jitter, GError **err);
 
 /**
  * Make DNS request for specified context and obtain and parse key

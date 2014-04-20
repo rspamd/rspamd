@@ -37,7 +37,7 @@ typedef struct rspamd_proxy_s {
 	struct event client_ev;					/**< event for client's communication */
 	struct event backend_ev; 				/**< event for backend communication */
 	struct event_base *base;				/**< base for event operations */
-	memory_pool_t *pool;					/**< memory pool */
+	rspamd_mempool_t *pool;					/**< memory pool */
 	dispatcher_err_callback_t err_cb;		/**< error callback	*/
 	struct event_base *ev_base;				/**< event base */
 	gint cfd;								/**< client's socket */
@@ -60,7 +60,7 @@ typedef struct rspamd_proxy_s {
  * @param ud user data for callback
  * @return new proxy object
  */
-rspamd_proxy_t* rspamd_create_proxy (gint cfd, gint bfd, memory_pool_t *pool,
+rspamd_proxy_t* rspamd_create_proxy (gint cfd, gint bfd, rspamd_mempool_t *pool,
 		struct event_base *base, gsize bufsize, struct timeval *tv,
 		dispatcher_err_callback_t err_cb, gpointer ud);
 

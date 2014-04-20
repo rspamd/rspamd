@@ -36,7 +36,7 @@ struct kvstorage_worker_ctx {
 	GList *threads;
 	gint s_pair[2];
 	gboolean is_redis;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	struct event_base *ev_base;
 	GMutex *log_mtx;
 	GMutex *accept_mtx;
@@ -78,7 +78,7 @@ struct kvstorage_session {
 	guint id;
 	guint argc;
 	guint argnum;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	gchar *key;
 	guint keylen;
 	struct kvstorage_config *cf;

@@ -21,7 +21,7 @@ struct rspamd_async_session {
 	event_finalizer_t cleanup;
 	GHashTable *events;
 	void *user_data;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	gboolean wanna_die;
 	guint threads;
 	GMutex *mtx;
@@ -37,7 +37,7 @@ struct rspamd_async_session {
  * @param user_data abstract user data
  * @return
  */
-struct rspamd_async_session *new_async_session (memory_pool_t *pool,
+struct rspamd_async_session *new_async_session (rspamd_mempool_t *pool,
 		session_finalizer_t fin, event_finalizer_t restore,
 		event_finalizer_t cleanup, void *user_data);
 

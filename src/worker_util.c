@@ -70,30 +70,30 @@ construct_task (struct rspamd_worker *worker)
 		msg_warn ("gettimeofday failed: %s", strerror (errno));
 	}
 
-	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
+	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
-	memory_pool_add_destructor (new_task->task_pool,
-			(pool_destruct_func) rcpt_destruct, new_task);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+			(rspamd_mempool_destruct_t) rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	memory_pool_add_destructor (new_task->task_pool,
-			(pool_destruct_func) g_hash_table_destroy,
+	rspamd_mempool_add_destructor (new_task->task_pool,
+			(rspamd_mempool_destruct_t) g_hash_table_destroy,
 			new_task->results);
 	new_task->re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	memory_pool_add_destructor (new_task->task_pool,
-			(pool_destruct_func) g_hash_table_destroy,
+	rspamd_mempool_add_destructor (new_task->task_pool,
+			(rspamd_mempool_destruct_t) g_hash_table_destroy,
 			new_task->re_cache);
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-	memory_pool_add_destructor (new_task->task_pool,
-				(pool_destruct_func) g_hash_table_destroy,
+	rspamd_mempool_add_destructor (new_task->task_pool,
+				(rspamd_mempool_destruct_t) g_hash_table_destroy,
 				new_task->raw_headers);
 	new_task->emails = g_tree_new (compare_email_func);
-	memory_pool_add_destructor (new_task->task_pool,
-				(pool_destruct_func) g_tree_destroy,
+	rspamd_mempool_add_destructor (new_task->task_pool,
+				(rspamd_mempool_destruct_t) g_tree_destroy,
 				new_task->emails);
 	new_task->urls = g_tree_new (compare_url_func);
-	memory_pool_add_destructor (new_task->task_pool,
-					(pool_destruct_func) g_tree_destroy,
+	rspamd_mempool_add_destructor (new_task->task_pool,
+					(rspamd_mempool_destruct_t) g_tree_destroy,
 					new_task->urls);
 	new_task->sock = -1;
 	new_task->is_mime = TRUE;
@@ -170,7 +170,7 @@ free_task (struct worker_task *task, gboolean is_soft)
 		if (task->sock != -1) {
 			close (task->sock);
 		}
-		memory_pool_delete (task->task_pool);
+		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct worker_task), task);
 	}
 }
@@ -201,20 +201,20 @@ set_counter (const gchar *name, guint32 value)
 	cd = rspamd_hash_lookup (rspamd_main->counters, (gpointer) name);
 
 	if (cd == NULL) {
-		cd = memory_pool_alloc_shared (rspamd_main->counters->pool, sizeof (struct counter_data));
+		cd = rspamd_mempool_alloc_shared (rspamd_main->counters->pool, sizeof (struct counter_data));
 		cd->value = value;
 		cd->number = 0;
-		key = memory_pool_strdup_shared (rspamd_main->counters->pool, name);
+		key = rspamd_mempool_strdup_shared (rspamd_main->counters->pool, name);
 		rspamd_hash_insert (rspamd_main->counters, (gpointer) key, (gpointer) cd);
 	}
 	else {
 		/* Calculate new value */
-		memory_pool_wlock_rwlock (rspamd_main->counters->lock);
+		rspamd_mempool_wlock_rwlock (rspamd_main->counters->lock);
 
 		alpha = 2. / (++cd->number + 1);
 		cd->value = cd->value * (1. - alpha) + value * alpha;
 
-		memory_pool_wunlock_rwlock (rspamd_main->counters->lock);
+		rspamd_mempool_wunlock_rwlock (rspamd_main->counters->lock);
 	}
 
 	return cd->value;

@@ -39,7 +39,7 @@ radix_tree_create (void)
 		return NULL;
 	}
 
-	tree->pool = memory_pool_new (memory_pool_get_size ());
+	tree->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	tree->size = 0;
 
 	tree->root = radix_alloc (tree);
@@ -290,7 +290,7 @@ radix_alloc (radix_tree_t * tree)
 {
 	gchar                           *p;
 
-	p = memory_pool_alloc (tree->pool, sizeof (radix_node_t));
+	p = rspamd_mempool_alloc (tree->pool, sizeof (radix_node_t));
 
 	tree->size += sizeof (radix_node_t);
 
@@ -302,7 +302,7 @@ radix_tree_free (radix_tree_t * tree)
 {
 
 	g_return_if_fail (tree != NULL);
-	memory_pool_delete (tree->pool);
+	rspamd_mempool_delete (tree->pool);
 	g_free (tree);
 }
 

@@ -354,11 +354,11 @@ lua_task_get_message (lua_State * L)
 static int
 lua_task_get_mempool (lua_State * L)
 {
-	memory_pool_t                  **ppool;
+	rspamd_mempool_t                  **ppool;
 	struct worker_task             *task = lua_check_task (L);
 
 	if (task != NULL) {
-		ppool = lua_newuserdata (L, sizeof (memory_pool_t *));
+		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
 		lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = task->task_pool;
 	}
@@ -412,13 +412,13 @@ lua_task_insert_result (lua_State * L)
 	gint                            i, top;
 
 	if (task != NULL) {
-		symbol_name = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
+		symbol_name = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 2));
 		flag = luaL_checknumber (L, 3);
 		top = lua_gettop (L);
 		/* Get additional options */
 		for (i = 4; i <= top; i++) {
 			param = luaL_checkstring (L, i);
-			params = g_list_prepend (params, memory_pool_strdup (task->task_pool, param));
+			params = g_list_prepend (params, rspamd_mempool_strdup (task->task_pool, param));
 		}
 
 		insert_result (task, symbol_name, flag, params);
@@ -438,7 +438,7 @@ lua_task_set_pre_result (lua_State * L)
 		if (action < task->pre_result.action) {
 			task->pre_result.action = action;
 			if (lua_gettop (L) >= 3) {
-				action_str = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
+				action_str = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 3));
 				task->pre_result.str = action_str;
 			}
 			else {
@@ -903,7 +903,7 @@ lua_task_set_from (lua_State *L)
 	if (task) {
 		new_from = luaL_checkstring (L, 2);
 		if (new_from) {
-			task->from = memory_pool_strdup (task->task_pool, new_from);
+			task->from = rspamd_mempool_strdup (task->task_pool, new_from);
 		}
 	}
 
@@ -933,7 +933,7 @@ lua_task_set_user (lua_State *L)
 	if (task) {
 		new_user = luaL_checkstring (L, 2);
 		if (new_user) {
-			task->user = memory_pool_strdup (task->task_pool, new_user);
+			task->user = rspamd_mempool_strdup (task->task_pool, new_user);
 		}
 	}
 
@@ -1057,7 +1057,7 @@ lua_task_set_helo (lua_State *L)
 	if (task) {
 		new_helo = luaL_checkstring (L, 2);
 		if (new_helo) {
-			task->helo = memory_pool_strdup (task->task_pool, new_helo);
+			task->helo = rspamd_mempool_strdup (task->task_pool, new_helo);
 		}
 	}
 
@@ -1103,7 +1103,7 @@ lua_task_set_hostname (lua_State *L)
 	if (task) {
 		new_hostname = luaL_checkstring (L, 2);
 		if (new_hostname) {
-			task->hostname = memory_pool_strdup (task->task_pool, new_hostname);
+			task->hostname = rspamd_mempool_strdup (task->task_pool, new_hostname);
 		}
 	}
 

@@ -58,6 +58,6 @@ void free_smtp_session (gpointer arg);
  * @param count targeted count
  * @return
  */
-gboolean parse_upstreams_line (memory_pool_t *pool, struct smtp_upstream *upstreams, const gchar *line, gsize *count);
+gboolean parse_upstreams_line (rspamd_mempool_t *pool, struct smtp_upstream *upstreams, const gchar *line, gsize *count);
 
 #endif /* SMTP_UTILS_H_ */

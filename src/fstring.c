@@ -213,10 +213,10 @@ fstrcat (f_str_t * dest, f_str_t * src)
  * Make copy of string to 0-terminated string
  */
 gchar                           *
-fstrcstr (f_str_t * str, memory_pool_t * pool)
+fstrcstr (f_str_t * str, rspamd_mempool_t * pool)
 {
 	gchar                           *res;
-	res = memory_pool_alloc (pool, str->len + 1);
+	res = rspamd_mempool_alloc (pool, str->len + 1);
 
 	/* Do not allow multiply \0 characters */
 	memccpy (res, str->begin, '\0', str->len);
@@ -262,11 +262,11 @@ fstrpush_unichar (f_str_t * dest, gunichar c)
  * Allocate memory for f_str_t
  */
 f_str_t                        *
-fstralloc (memory_pool_t * pool, size_t len)
+fstralloc (rspamd_mempool_t * pool, size_t len)
 {
-	f_str_t                        *res = memory_pool_alloc (pool, sizeof (f_str_t));
+	f_str_t                        *res = rspamd_mempool_alloc (pool, sizeof (f_str_t));
 
-	res->begin = memory_pool_alloc (pool, len);
+	res->begin = rspamd_mempool_alloc (pool, len);
 
 	res->size = len;
 	res->len = 0;
@@ -277,11 +277,11 @@ fstralloc (memory_pool_t * pool, size_t len)
  * Allocate memory for f_str_t from temporary pool
  */
 f_str_t                        *
-fstralloc_tmp (memory_pool_t * pool, size_t len)
+fstralloc_tmp (rspamd_mempool_t * pool, size_t len)
 {
-	f_str_t                        *res = memory_pool_alloc_tmp (pool, sizeof (f_str_t));
+	f_str_t                        *res = rspamd_mempool_alloc_tmp (pool, sizeof (f_str_t));
 
-	res->begin = memory_pool_alloc_tmp (pool, len);
+	res->begin = rspamd_mempool_alloc_tmp (pool, len);
 
 	res->size = len;
 	res->len = 0;
@@ -292,7 +292,7 @@ fstralloc_tmp (memory_pool_t * pool, size_t len)
  * Truncate string to its len
  */
 f_str_t                        *
-fstrtruncate (memory_pool_t * pool, f_str_t * orig)
+fstrtruncate (rspamd_mempool_t * pool, f_str_t * orig)
 {
 	f_str_t                        *res;
 
@@ -313,7 +313,7 @@ fstrtruncate (memory_pool_t * pool, f_str_t * orig)
  * Enlarge string to new size
  */
 f_str_t                        *
-fstrgrow (memory_pool_t * pool, f_str_t * orig, size_t newlen)
+fstrgrow (rspamd_mempool_t * pool, f_str_t * orig, size_t newlen)
 {
 	f_str_t                        *res;
 

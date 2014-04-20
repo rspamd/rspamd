@@ -53,7 +53,7 @@ free_smtp_session (gpointer arg)
 		if (session->temp_fd != -1) {
 			close (session->temp_fd);
 		}
-		memory_pool_delete (session->pool);
+		rspamd_mempool_delete (session->pool);
 		g_free (session);
 	}
 }
@@ -190,7 +190,7 @@ make_smtp_tempfile (struct smtp_session *session)
 	gsize                            r;
 
 	r = strlen (session->cfg->temp_dir) + sizeof ("/rspamd-XXXXXX");
-	session->temp_name = memory_pool_alloc (session->pool, r);
+	session->temp_name = rspamd_mempool_alloc (session->pool, r);
 	rspamd_snprintf (session->temp_name, r, "%s%crspamd-XXXXXX", session->cfg->temp_dir, G_DIR_SEPARATOR);
 #ifdef HAVE_MKSTEMP
 	/* Umask is set before */
@@ -261,7 +261,7 @@ write_smtp_reply (struct smtp_session *session)
 			old_subject = g_mime_message_get_subject (session->task->message);
 			if (old_subject != NULL) {
 				sublen = strlen (old_subject) + sizeof (SPAM_SUBJECT);
-				new_subject = memory_pool_alloc (session->pool, sublen);
+				new_subject = rspamd_mempool_alloc (session->pool, sublen);
 				rspamd_snprintf (new_subject, sublen, "%s%s", SPAM_SUBJECT, old_subject);
 			}
 			else {
@@ -306,7 +306,7 @@ err:
 }
 
 gboolean
-parse_upstreams_line (memory_pool_t *pool, struct smtp_upstream *upstreams, const gchar *line, gsize *count)
+parse_upstreams_line (rspamd_mempool_t *pool, struct smtp_upstream *upstreams, const gchar *line, gsize *count)
 {
 	gchar                           **strv, *p, *t, *tt, *err_str;
 	guint32                         num, i;
@@ -344,7 +344,7 @@ parse_upstreams_line (memory_pool_t *pool, struct smtp_upstream *upstreams, cons
 				g_strfreev (strv);
 				return FALSE;
 			}
-			cur->name = memory_pool_strdup (pool, resolved_path);
+			cur->name = rspamd_mempool_strdup (pool, resolved_path);
 			(*count) ++;
 		}
 		else {
@@ -352,7 +352,7 @@ parse_upstreams_line (memory_pool_t *pool, struct smtp_upstream *upstreams, cons
 				g_strfreev (strv);
 				return FALSE;
 			}
-			cur->name = memory_pool_strdup (pool, p);
+			cur->name = rspamd_mempool_strdup (pool, p);
 			(*count) ++;
 		}
 	}

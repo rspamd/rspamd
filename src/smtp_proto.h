@@ -43,7 +43,7 @@ struct smtp_command {
 /*
  * Generate SMTP error message
  */
-gchar * make_smtp_error (memory_pool_t *pool, gint error_code, const gchar *format, ...);
+gchar * make_smtp_error (rspamd_mempool_t *pool, gint error_code, const gchar *format, ...);
 
 /*
  * Parse a single SMTP command

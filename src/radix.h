@@ -20,7 +20,7 @@ struct radix_node_s {
 typedef struct {
     radix_node_t  *root;
     size_t         size;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 } radix_tree_t;
 
 typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask, uintptr_t value, void *user_data);

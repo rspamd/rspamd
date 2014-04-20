@@ -77,7 +77,7 @@ void message_set_header (GMimeMessage *message, const gchar *field, const gchar 
  * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
  * @return A list of header's values or NULL. If list is not NULL it MUST be freed. If pool is NULL elements must be freed as well.
  */
-GList* message_get_header (memory_pool_t *pool, GMimeMessage *message, const gchar *field, gboolean strong);
+GList* message_get_header (rspamd_mempool_t *pool, GMimeMessage *message, const gchar *field, gboolean strong);
 
 /*
  * Get a list of header's values with specified header's name using raw headers

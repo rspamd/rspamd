@@ -155,7 +155,7 @@ unmap_cache_file (gpointer arg)
 }
 
 static                          gboolean
-mmap_cache_file (struct symbols_cache *cache, gint fd, memory_pool_t *pool)
+mmap_cache_file (struct symbols_cache *cache, gint fd, rspamd_mempool_t *pool)
 {
 	guint8                         *map;
 	gint                            i;
@@ -197,7 +197,7 @@ mmap_cache_file (struct symbols_cache *cache, gint fd, memory_pool_t *pool)
 
 /* Fd must be opened for writing, after creating file is mmapped */
 static                          gboolean
-create_cache_file (struct symbols_cache *cache, const gchar *filename, gint fd, memory_pool_t *pool)
+create_cache_file (struct symbols_cache *cache, const gchar *filename, gint fd, rspamd_mempool_t *pool)
 {
 	GChecksum                      *cksum;
 	u_char                         *digest;
@@ -281,12 +281,12 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
 		*cache = pcache;
-		pcache->static_pool = memory_pool_new (memory_pool_get_size ());
+		pcache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 		pcache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	}
 	
-	item = memory_pool_alloc0 (pcache->static_pool, sizeof (struct cache_item));
-	item->s = memory_pool_alloc0 (pcache->static_pool, sizeof (struct saved_cache_item));
+	item = rspamd_mempool_alloc0 (pcache->static_pool, sizeof (struct cache_item));
+	item->s = rspamd_mempool_alloc0 (pcache->static_pool, sizeof (struct saved_cache_item));
 	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
@@ -366,7 +366,7 @@ register_callback_symbol_priority (struct symbols_cache **cache, const gchar *na
 }
 
 void
-register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cache,
+register_dynamic_symbol (rspamd_mempool_t *dynamic_pool, struct symbols_cache **cache,
 		const gchar *name, double weight, symbol_func_t func, 
 		gpointer user_data, GList *networks)
 {
@@ -382,11 +382,11 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
 		*cache = pcache;
-		pcache->static_pool = memory_pool_new (memory_pool_get_size ());
+		pcache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	}
 	
-	item = memory_pool_alloc0 (dynamic_pool, sizeof (struct cache_item));
-	item->s = memory_pool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
+	item = rspamd_mempool_alloc0 (dynamic_pool, sizeof (struct cache_item));
+	item->s = rspamd_mempool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
 	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
@@ -425,7 +425,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 					t = (GList *)((gpointer)r);
 					t = g_list_prepend (t, item);
 					/* Replace pointers in radix tree and in destructor function */
-					memory_pool_replace_destructor (dynamic_pool, (pool_destruct_func)g_list_free, (gpointer)r, t);
+					rspamd_mempool_replace_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
 					rr = radix32tree_replace (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 					if (rr == -1) {
 						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
@@ -433,7 +433,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 				}
 				else {
 					t = g_list_prepend (NULL, item);
-					memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
+					rspamd_mempool_add_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, t);
 					rr = radix32tree_insert (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 					if (rr == -1) {
 						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
@@ -450,7 +450,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 					t = (GList *)((gpointer)r);
 					t = g_list_prepend (t, item);
 					/* Replace pointers in radix tree and in destructor function */
-					memory_pool_replace_destructor (dynamic_pool, (pool_destruct_func)g_list_free, (gpointer)r, t);
+					rspamd_mempool_replace_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
 					rr = radix32tree_replace (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 					if (rr == -1) {
 						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
@@ -458,7 +458,7 @@ register_dynamic_symbol (memory_pool_t *dynamic_pool, struct symbols_cache **cac
 				}
 				else {
 					t = g_list_prepend (NULL, item);
-					memory_pool_add_destructor (dynamic_pool, (pool_destruct_func)g_list_free, t);
+					rspamd_mempool_add_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, t);
 					rr = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 					if (rr == -1) {
 						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
@@ -516,13 +516,13 @@ free_cache (gpointer arg)
 		radix_tree_free (cache->negative_dynamic_map);
 	}
 	g_hash_table_destroy (cache->items_by_symbol);
-	memory_pool_delete (cache->static_pool);
+	rspamd_mempool_delete (cache->static_pool);
 
 	g_free (cache);
 }
 
 gboolean
-init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct config_file *cfg,
+init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct config_file *cfg,
 		const gchar *filename, gboolean ignore_checksum)
 {
 	struct stat                     st;
@@ -537,7 +537,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 	}
 
 	/* Init locking */
-	cache->lock = memory_pool_get_rwlock (pool);
+	cache->lock = rspamd_mempool_get_rwlock (pool);
 
 	cache->cfg = cfg;
 
@@ -637,7 +637,7 @@ init_symbols_cache (memory_pool_t * pool, struct symbols_cache *cache, struct co
 	/* MMap cache file and copy saved_cache structures */
 	res = mmap_cache_file (cache, fd, pool);
 
-	memory_pool_add_destructor (pool, (pool_destruct_func)free_cache, cache);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t)free_cache, cache);
 
 	return res;
 }
@@ -858,13 +858,13 @@ call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, g
 		}
 		if (cache->uses++ >= MAX_USES) {
 			msg_info ("resort symbols cache");
-			memory_pool_wlock_rwlock (cache->lock);
+			rspamd_mempool_wlock_rwlock (cache->lock);
 			cache->uses = 0;
 			/* Resort while having write lock */
 			post_cache_init (cache);
-			memory_pool_wunlock_rwlock (cache->lock);
+			rspamd_mempool_wunlock_rwlock (cache->lock);
 		}
-		s = memory_pool_alloc0 (task->task_pool, sizeof (struct symbol_callback_data));
+		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct symbol_callback_data));
 		*save = s;
 		if (cache->negative_items != NULL) {
 			s->list_pointer = g_list_first (cache->negative_items);

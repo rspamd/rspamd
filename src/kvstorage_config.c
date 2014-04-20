@@ -61,7 +61,7 @@ struct kvstorage_config_parser {
 		KVSTORAGE_STATE_ERROR
 	} state;
 	struct kvstorage_config *current_storage;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	gchar *cur_elt;
 };
 
@@ -157,9 +157,9 @@ void kvstorage_xml_start_element (GMarkupParseContext	*context,
 		if (kv_parser->current_storage == NULL) {
 			/* Make temporary pool */
 			if (kv_parser->pool != NULL) {
-				memory_pool_delete (kv_parser->pool);
+				rspamd_mempool_delete (kv_parser->pool);
 			}
-			kv_parser->pool = memory_pool_new (memory_pool_get_size ());
+			kv_parser->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 			/* Create new kvstorage_config */
 			kv_parser->current_storage = g_malloc0 (sizeof (struct kvstorage_config));
@@ -514,7 +514,7 @@ init_kvstorage_config (void)
 
 	kv_parser = g_malloc0 (sizeof (struct kvstorage_config_parser));
 	kv_parser->state = KVSTORAGE_STATE_PARAM;
-	kv_parser->pool = memory_pool_new (memory_pool_get_size ());
+	kv_parser->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	register_subparser ("keystorage", 0, parser, kvstorage_cleanup, kv_parser);
 }

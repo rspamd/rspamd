@@ -34,7 +34,7 @@
  * @return new structure
  */
 struct roll_history*
-rspamd_roll_history_new (memory_pool_t *pool)
+rspamd_roll_history_new (rspamd_mempool_t *pool)
 {
 	struct roll_history						*new;
 
@@ -42,9 +42,9 @@ rspamd_roll_history_new (memory_pool_t *pool)
 		return NULL;
 	}
 
-	new = memory_pool_alloc0_shared (pool, sizeof (struct roll_history));
+	new = rspamd_mempool_alloc0_shared (pool, sizeof (struct roll_history));
 	new->pool = pool;
-	new->mtx = memory_pool_get_mutex (pool);
+	new->mtx = rspamd_mempool_get_mutex (pool);
 
 	return new;
 }
@@ -83,9 +83,9 @@ rspamd_roll_history_update (struct roll_history *history, struct worker_task *ta
 
 	if (history->need_lock) {
 		/* Some process is getting history, so wait on a mutex */
-		memory_pool_lock_mutex (history->mtx);
+		rspamd_mempool_lock_mutex (history->mtx);
 		history->need_lock = FALSE;
-		memory_pool_unlock_mutex (history->mtx);
+		rspamd_mempool_unlock_mutex (history->mtx);
 	}
 
 	/* First of all obtain check and obtain row number */

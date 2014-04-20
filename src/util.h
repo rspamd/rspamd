@@ -147,7 +147,7 @@ typedef struct pidfh rspamd_pidfh_t;
 /*
  * Replace %r with rcpt value and %f with from value, new string is allocated in pool
  */
-gchar* resolve_stat_filename (memory_pool_t *pool, gchar *pattern, gchar *rcpt, gchar *from);
+gchar* resolve_stat_filename (rspamd_mempool_t *pool, gchar *pattern, gchar *rcpt, gchar *from);
 #ifdef HAVE_CLOCK_GETTIME
 /*
  * Calculate check time with specified resolution of timer

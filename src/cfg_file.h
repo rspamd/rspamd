@@ -270,7 +270,7 @@ struct worker_conf {
 struct config_file {
 	gchar *rspamd_user;								/**< user to run as										*/
 	gchar *rspamd_group;							/**< group to run as									*/
-	memory_pool_t *cfg_pool;						/**< memory pool for config								*/
+	rspamd_mempool_t *cfg_pool;						/**< memory pool for config								*/
 	gchar *cfg_name;								/**< name of config file								*/
 	gchar *pid_file;								/**< name of pid file									*/
 	gchar *temp_dir;								/**< dir for temp files									*/
@@ -349,7 +349,7 @@ struct config_file {
 	gint clock_res;									/**< resolution of clock used							*/
 
 	GList *maps;									/**< maps active										*/
-	memory_pool_t *map_pool;						/**< static maps pool									*/
+	rspamd_mempool_t *map_pool;						/**< static maps pool									*/
 	gdouble map_timeout;							/**< maps watch timeout									*/
 
 	struct symbols_cache *cache;					/**< symbols cache object								*/ 
@@ -380,7 +380,7 @@ struct config_file {
  * @param priority priority
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority);
+gboolean parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority);
 
 /**
  * Parse host:port line
@@ -388,7 +388,7 @@ gboolean parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar 
  * @param port port
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port);
+gboolean parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port);
 
 /**
  * Parse host:priority line
@@ -396,7 +396,7 @@ gboolean parse_host_port (memory_pool_t *pool, const gchar *str, gchar **addr, g
  * @param priority priority
  * @return TRUE if string was parsed
  */
-gboolean parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint *priority);
+gboolean parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint *priority);
 
 /**
  * Parse bind credits
@@ -465,7 +465,7 @@ void unescape_quotes (gchar *line);
 /*
  * Convert comma separated string to a list of strings
  */
-GList* parse_comma_list (memory_pool_t *pool, const gchar *line);
+GList* parse_comma_list (rspamd_mempool_t *pool, const gchar *line);
 
 /*
  * Return a new classifier_config structure, setting default and non-conflicting attributes

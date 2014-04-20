@@ -309,7 +309,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 	}
 
 	if (d->in_buf == NULL) {
-		d->in_buf = memory_pool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
+		d->in_buf = rspamd_mempool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
 		if (d->policy == BUFFER_LINE || d->policy == BUFFER_ANY) {
 			d->in_buf->data = fstralloc_tmp (d->pool, d->default_buf_size);
 		}
@@ -570,9 +570,9 @@ rspamd_create_dispatcher (struct event_base *base, gint fd, enum io_policy polic
 
 	new = g_slice_alloc0 (sizeof (rspamd_io_dispatcher_t));
 
-	new->pool = memory_pool_new (memory_pool_get_size ());
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	if (tv != NULL) {
-		new->tv = memory_pool_alloc (new->pool, sizeof (struct timeval));
+		new->tv = rspamd_mempool_alloc (new->pool, sizeof (struct timeval));
 		memcpy (new->tv, tv, sizeof (struct timeval));
 	}
 	else {
@@ -591,7 +591,7 @@ rspamd_create_dispatcher (struct event_base *base, gint fd, enum io_policy polic
 	new->is_restored = FALSE;
 	new->default_buf_size = sysconf (_SC_PAGESIZE);
 
-	new->ev = memory_pool_alloc0 (new->pool, sizeof (struct event));
+	new->ev = rspamd_mempool_alloc0 (new->pool, sizeof (struct event));
 	new->fd = fd;
 	new->ev_base = base;
 
@@ -612,7 +612,7 @@ rspamd_remove_dispatcher (rspamd_io_dispatcher_t * d)
 			DELETE_OUT_BUFFER (d, cur);
 		}
 		event_del (d->ev);
-		memory_pool_delete (d->pool);
+		rspamd_mempool_delete (d->pool);
 		g_slice_free1 (sizeof (rspamd_io_dispatcher_t), d);
 	}
 }
@@ -775,7 +775,7 @@ rspamd_dispacther_cleanup (rspamd_io_dispatcher_t *d)
 		DELETE_OUT_BUFFER (d, cur);
 	}
 	/* Cleanup temporary data */
-	memory_pool_cleanup_tmp (d->pool);
+	rspamd_mempool_cleanup_tmp (d->pool);
 	d->in_buf = NULL;
 }
 

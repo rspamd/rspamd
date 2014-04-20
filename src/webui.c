@@ -119,7 +119,7 @@ struct rspamd_webui_worker_ctx {
 
 struct rspamd_webui_session {
 	struct rspamd_webui_worker_ctx *ctx;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	struct worker_task *task;
 	struct classifier_config *cl;
 	struct {
@@ -1166,11 +1166,11 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Set lock on history */
-	memory_pool_lock_mutex (ctx->srv->history->mtx);
+	rspamd_mempool_lock_mutex (ctx->srv->history->mtx);
 	ctx->srv->history->need_lock = TRUE;
 	/* Copy locked */
 	memcpy (&copied_history, ctx->srv->history, sizeof (copied_history));
-	memory_pool_unlock_mutex (ctx->srv->history->mtx);
+	rspamd_mempool_unlock_mutex (ctx->srv->history->mtx);
 
 	/* Go through all rows */
 	row_num = copied_history.cur_row;
@@ -1683,7 +1683,7 @@ rspamd_webui_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 	struct rspamd_webui_session 		*session = conn_ent->ud;
 
 	if (session->pool) {
-		memory_pool_delete (session->pool);
+		rspamd_mempool_delete (session->pool);
 	}
 	if (session->task != NULL) {
 		destroy_session (session->task->s);
@@ -1716,7 +1716,7 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 	}
 
 	nsession = g_slice_alloc0 (sizeof (struct rspamd_webui_session));
-	nsession->pool = memory_pool_new (memory_pool_get_size ());
+	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	nsession->ctx = ctx;
 
 	if (su.sa.sa_family == AF_UNIX) {

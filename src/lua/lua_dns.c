@@ -194,7 +194,7 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 		enum rdns_request_type type, int first)
 {
 	struct rspamd_async_session					*session, **psession;
-	memory_pool_t								*pool, **ppool;
+	rspamd_mempool_t								*pool, **ppool;
 	const gchar									*to_resolve;
 	struct lua_dns_cbdata						*cbdata;
 
@@ -208,11 +208,11 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 	to_resolve = luaL_checkstring (L, first + 2);
 
 	if (pool != NULL && session != NULL && to_resolve != NULL && lua_isfunction (L, first + 3)) {
-		cbdata = memory_pool_alloc (pool, sizeof (struct lua_dns_cbdata));
+		cbdata = rspamd_mempool_alloc (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
 		if (type != RDNS_REQUEST_PTR) {
-			cbdata->to_resolve = memory_pool_strdup (pool, to_resolve);
+			cbdata->to_resolve = rspamd_mempool_strdup (pool, to_resolve);
 		}
 		else {
 			char *ptr_str;
@@ -222,7 +222,7 @@ lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resol
 				lua_pushnil (L);
 				return 1;
 			}
-			cbdata->to_resolve = memory_pool_strdup (pool, ptr_str);
+			cbdata->to_resolve = rspamd_mempool_strdup (pool, ptr_str);
 			free (ptr_str);
 		}
 		lua_pushvalue (L, first + 3);

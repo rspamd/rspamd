@@ -128,7 +128,7 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 			g_byte_array_free (p->content, FALSE);
 			g_list_free_1 (part);
 		}
-		memory_pool_delete (lmtp->task->task_pool);
+		rspamd_mempool_delete (lmtp->task->task_pool);
 		if (is_soft) {
 			/* Plan dispatcher shutdown */
 			lmtp->task->dispatcher->wanna_die = 1;
@@ -268,12 +268,12 @@ accept_socket (gint fd, short what, void *arg)
 
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
-	new_task->task_pool = memory_pool_new (memory_pool_get_size ());
+	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
-	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) rcpt_destruct, new_task);
+	rspamd_mempool_add_destructor (new_task->task_pool, (rspamd_mempool_destruct_t) rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	new_task->ev_base = worker->ctx;
-	memory_pool_add_destructor (new_task->task_pool, (pool_destruct_func) g_hash_table_destroy, new_task->results);
+	rspamd_mempool_add_destructor (new_task->task_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, new_task->results);
 	worker->srv->stat->connections_count++;
 	lmtp->task = new_task;
 	lmtp->state = LMTP_READ_LHLO;

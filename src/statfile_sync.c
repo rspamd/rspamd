@@ -286,7 +286,7 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_fi
 	guint32 jittered_interval;
 	
 	if (st->binlog->master_addr != NULL) {
-		ctx = memory_pool_alloc (pool->pool, sizeof (struct rspamd_sync_ctx));
+		ctx = rspamd_mempool_alloc (pool->pool, sizeof (struct rspamd_sync_ctx));
 		ctx->st = st;
 		ctx->timeout = cfg->statfile_sync_timeout;
 		ctx->sync_interval = cfg->statfile_sync_interval;

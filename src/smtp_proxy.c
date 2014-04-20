@@ -70,7 +70,7 @@ struct smtp_proxy_ctx {
 	size_t upstream_num;
 	gchar *upstreams_str;
 
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	guint32 smtp_delay;
 	guint32 delay_jitter;
 	guint32 smtp_timeout_raw;
@@ -102,7 +102,7 @@ enum rspamd_smtp_proxy_state {
 
 struct smtp_proxy_session {
 	struct smtp_proxy_ctx *ctx;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 
 	enum rspamd_smtp_proxy_state state;
 	struct rspamd_worker *worker;
@@ -240,7 +240,7 @@ free_smtp_proxy_session (gpointer arg)
 			event_del (&session->upstream_ev);
 			close (session->upstream_sock);
 		}
-		memory_pool_delete (session->pool);
+		rspamd_mempool_delete (session->pool);
 		g_slice_free1 (sizeof (struct smtp_proxy_session), session);
 	}
 }
@@ -555,7 +555,7 @@ make_rbl_requests (struct smtp_proxy_session *session)
 	cur = session->ctx->rbls;
 	while (cur) {
 		len = INET_ADDRSTRLEN + strlen (cur->data) + 1;
-		dst = memory_pool_alloc (session->pool, len);
+		dst = rspamd_mempool_alloc (session->pool, len);
 		/* Print ipv4 addr */
 		p = (gchar *)&session->client_addr.s_addr;
 		rspamd_snprintf (dst, len, "%ud.%ud.%ud.%ud.%s", (guint)p[3],
@@ -621,8 +621,8 @@ smtp_make_delay (struct smtp_proxy_session *session)
 	gint32 									 jitter;
 
 	if (session->ctx->smtp_delay != 0 && session->state == SMTP_PROXY_STATE_DELAY) {
-		tev = memory_pool_alloc (session->pool, sizeof(struct event));
-		tv = memory_pool_alloc (session->pool, sizeof(struct timeval));
+		tev = rspamd_mempool_alloc (session->pool, sizeof(struct event));
+		tv = rspamd_mempool_alloc (session->pool, sizeof(struct timeval));
 		if (session->ctx->delay_jitter != 0) {
 			jitter = g_random_int_range (0, session->ctx->delay_jitter);
 			msec_to_tv (session->ctx->smtp_delay + jitter, tv);
@@ -671,11 +671,11 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 					rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
-				session->hostname = memory_pool_strdup (session->pool,
+				session->hostname = rspamd_mempool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}
 			else {
-				session->hostname = memory_pool_strdup (session->pool,
+				session->hostname = rspamd_mempool_strdup (session->pool,
 						XCLIENT_HOST_TEMPFAIL);
 			}
 			session->state = SMTP_PROXY_STATE_DELAY;
@@ -684,7 +684,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 		else {
 			if (reply->entries) {
 				elt = reply->entries;
-				session->hostname = memory_pool_strdup (session->pool,
+				session->hostname = rspamd_mempool_strdup (session->pool,
 						elt->content.ptr.name);
 				session->state = SMTP_PROXY_STATE_RESOLVE_NORMAL;
 				make_dns_request (session->resolver, session->s, session->pool,
@@ -700,11 +700,11 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 					rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
-				session->hostname = memory_pool_strdup (session->pool,
+				session->hostname = rspamd_mempool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}
 			else {
-				session->hostname = memory_pool_strdup (session->pool,
+				session->hostname = rspamd_mempool_strdup (session->pool,
 						XCLIENT_HOST_TEMPFAIL);
 			}
 			session->state = SMTP_PROXY_STATE_DELAY;
@@ -726,7 +726,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 				msg_info(
 						"cannot find address for hostname: %s, ip: %s", session->hostname,
 						inet_ntoa (session->client_addr));
-				session->hostname = memory_pool_strdup (session->pool,
+				session->hostname = rspamd_mempool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}
 			session->state = SMTP_PROXY_STATE_DELAY;
@@ -759,7 +759,7 @@ proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
 				p ++;
 			}
 			len = p - c;
-			session->rcpt = memory_pool_alloc (session->pool, len + 1);
+			session->rcpt = rspamd_mempool_alloc (session->pool, len + 1);
 			rspamd_strlcpy (session->rcpt, c, len + 1);
 		}
 	}
@@ -775,7 +775,7 @@ proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
 				p ++;
 			}
 			len = p - c;
-			session->from = memory_pool_alloc (session->pool, len + 1);
+			session->from = rspamd_mempool_alloc (session->pool, len + 1);
 			rspamd_strlcpy (session->from, c, len + 1);
 		}
 	}
@@ -919,7 +919,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	ctx = worker->ctx;
 	session = g_slice_alloc0 (sizeof (struct smtp_proxy_session));
-	session->pool = memory_pool_new (memory_pool_get_size ());
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	if (su.ss.ss_family == AF_UNIX) {
 		msg_info ("accepted connection from unix socket");
@@ -967,7 +967,7 @@ init_smtp_proxy (struct config_file *cfg)
 	type = g_quark_try_string ("smtp_proxy");
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
-	ctx->pool = memory_pool_new (memory_pool_get_size ());
+	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	/* Set default values */
 	ctx->smtp_timeout_raw = 300000;

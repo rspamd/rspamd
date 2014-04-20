@@ -66,7 +66,7 @@ static GRegex                  *mail_re = NULL;
  * return <> if no valid address detected
  */
 static gchar                    *
-extract_mail (memory_pool_t * pool, f_str_t * line)
+extract_mail (rspamd_mempool_t * pool, f_str_t * line)
 {
 	GError                         *err = NULL;
 	gchar                           *match;
@@ -78,7 +78,7 @@ extract_mail (memory_pool_t * pool, f_str_t * line)
 	}
 
 	if (g_regex_match_full (mail_re, line->begin, line->len, 0, 0, &info, NULL) == TRUE) {
-		match = memory_pool_strdup (pool, g_match_info_fetch (info, 0));
+		match = rspamd_mempool_strdup (pool, g_match_info_fetch (info, 0));
 		g_match_info_free (info);
 	}
 	else {
@@ -129,7 +129,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 				i++;
 				c++;
 			}
-			lmtp->task->helo = memory_pool_alloc (lmtp->task->task_pool, line->len - i + 1);
+			lmtp->task->helo = rspamd_mempool_alloc (lmtp->task->task_pool, line->len - i + 1);
 			/* Strlcpy makes string null terminated by design */
 			rspamd_strlcpy (lmtp->task->helo, c, line->len - i + 1);
 			lmtp->state = LMTP_READ_FROM;
@@ -201,7 +201,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			while (g_ascii_isspace (*c++)) {
 				i++;
 			}
-			rcpt = memory_pool_alloc (lmtp->task->task_pool, line->len - i + 1);
+			rcpt = rspamd_mempool_alloc (lmtp->task->task_pool, line->len - i + 1);
 			/* Strlcpy makes string null terminated by design */
 			rspamd_strlcpy (rcpt, c, line->len - i + 1);
 			lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
@@ -410,7 +410,7 @@ mta_read_socket (f_str_t * in, void *arg)
 		if (! rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE, TRUE)) {
 			return FALSE;
 		}
-		memory_pool_add_destructor (cd->task->task_pool, (pool_destruct_func) g_free, c);
+		rspamd_mempool_add_destructor (cd->task->task_pool, (rspamd_mempool_destruct_t) g_free, c);
 		r = rspamd_snprintf (outbuf, sizeof (outbuf), CRLF "." CRLF);
 		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
 			return FALSE;
@@ -463,7 +463,7 @@ lmtp_deliver_mta (struct worker_task *task)
 		msg_warn ("cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));
 	}
 
-	cd = memory_pool_alloc (task->task_pool, sizeof (struct mta_callback_data));
+	cd = rspamd_mempool_alloc (task->task_pool, sizeof (struct mta_callback_data));
 	cd->task = task;
 	cd->state = LMTP_WANT_GREETING;
 	cd->dispatcher = rspamd_create_dispatcher (task->ev_base, sock, BUFFER_LINE, mta_read_socket, NULL, mta_err_socket, NULL, (void *)cd);
@@ -508,7 +508,7 @@ format_lda_args (struct worker_task *task)
 		c++;
 		len++;
 	}
-	res = memory_pool_alloc (task->task_pool, len + 1);
+	res = rspamd_mempool_alloc (task->task_pool, len + 1);
 	r = res;
 	c = task->cfg->deliver_agent_path;
 

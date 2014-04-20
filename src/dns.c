@@ -64,13 +64,13 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 
 gboolean 
 make_dns_request (struct rspamd_dns_resolver *resolver,
-		struct rspamd_async_session *session, memory_pool_t *pool, dns_callback_type cb,
+		struct rspamd_async_session *session, rspamd_mempool_t *pool, dns_callback_type cb,
 		gpointer ud, enum rdns_request_type type, const char *name)
 {
 	struct rdns_request *req;
 	struct rspamd_dns_request_ud *reqdata;
 	
-	reqdata = memory_pool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
+	reqdata = rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
 	reqdata->session = session;
 	reqdata->cb = cb;
 	reqdata->ud = ud;

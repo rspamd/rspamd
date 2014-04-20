@@ -61,7 +61,7 @@ struct dkim_ctx {
 	const gchar                    *symbol_tempfail;
 	const gchar                    *symbol_allow;
 
-	memory_pool_t                   *dkim_pool;
+	rspamd_mempool_t                   *dkim_pool;
 	radix_tree_t                    *whitelist_ip;
 	GHashTable						*dkim_domains;
 	guint							 strict_multiplier;
@@ -92,7 +92,7 @@ dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
 
-	dkim_module_ctx->dkim_pool = memory_pool_new (memory_pool_get_size ());
+	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 
@@ -204,12 +204,12 @@ dkim_module_config (struct config_file *cfg)
 gint
 dkim_module_reconfig (struct config_file *cfg)
 {
-	memory_pool_delete (dkim_module_ctx->dkim_pool);
+	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
 	radix_tree_free (dkim_module_ctx->whitelist_ip);
 	if (dkim_module_ctx->dkim_domains) {
 		g_hash_table_destroy (dkim_module_ctx->dkim_domains);
 	}
-	dkim_module_ctx->dkim_pool = memory_pool_new (memory_pool_get_size ());
+	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	return dkim_module_config (cfg);
 }
@@ -289,7 +289,7 @@ dkim_module_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_conte
 		msg_info ("cannot get key for domain %s", ctx->dns_key);
 		if (err != NULL) {
 			insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
-					g_list_prepend (NULL, memory_pool_strdup (task->task_pool, err->message)));
+					g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, err->message)));
 
 		}
 		else {

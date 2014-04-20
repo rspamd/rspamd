@@ -31,11 +31,11 @@
 #include "map.h"
 
 struct rspamd_view             *
-init_view (struct config_file *cfg, memory_pool_t * pool)
+init_view (struct config_file *cfg, rspamd_mempool_t * pool)
 {
 	struct rspamd_view             *new;
 
-	new = memory_pool_alloc0 (pool, sizeof (struct rspamd_view));
+	new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_view));
 
 	new->pool = pool;
 	new->from_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -45,7 +45,7 @@ init_view (struct config_file *cfg, memory_pool_t * pool)
 	new->client_ip_tree = radix_tree_create ();
 	new->cfg = cfg;
 
-	memory_pool_add_destructor (new->pool, (pool_destruct_func) g_hash_table_destroy, new->symbols_hash);
+	rspamd_mempool_add_destructor (new->pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, new->symbols_hash);
 
 	return new;
 }

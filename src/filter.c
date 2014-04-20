@@ -74,10 +74,10 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 
 	if (metric_res == NULL) {
 		/* Create new metric chain */
-		metric_res = memory_pool_alloc (task->task_pool, sizeof (struct metric_result));
+		metric_res = rspamd_mempool_alloc (task->task_pool, sizeof (struct metric_result));
 		metric_res->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		metric_res->checked = FALSE;
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_hash_table_unref, metric_res->symbols);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_hash_table_unref, metric_res->symbols);
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
 		metric_res->score = 0;
@@ -108,7 +108,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		}
 		else if (opts) {
 			s->options = g_list_copy (opts);
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_list_free, s->options);
 		}
 		if (!single) {
 			/* Handle grow factor */
@@ -128,7 +128,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 		}
 	}
 	else {
-		s = memory_pool_alloc (task->task_pool, sizeof (struct symbol));
+		s = rspamd_mempool_alloc (task->task_pool, sizeof (struct symbol));
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && w > 0) {
@@ -145,7 +145,7 @@ insert_metric_result (struct worker_task *task, struct metric *metric, const gch
 
 		if (opts) {
 			s->options = g_list_copy (opts);
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_list_free, s->options);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_list_free, s->options);
 		}
 		else {
 			s->options = NULL;
@@ -426,7 +426,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				}
 
 				if (ms != NULL) {
-					rd = memory_pool_alloc (cd->task->task_pool, sizeof (struct symbol_remove_data));
+					rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (struct symbol_remove_data));
 					rd->ms = ms;
 					if (G_UNLIKELY (*sym == '~')) {
 						rd->remove_weight = FALSE;
@@ -558,13 +558,13 @@ static void
 composites_metric_callback (gpointer key, gpointer value, gpointer data)
 {
 	struct worker_task             *task = (struct worker_task *)data;
-	struct composites_data         *cd = memory_pool_alloc (task->task_pool, sizeof (struct composites_data));
+	struct composites_data         *cd = rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
 	struct metric_result           *metric_res = (struct metric_result *)value;
 
 	cd->task = task;
 	cd->metric_res = (struct metric_result *)metric_res;
 	cd->symbols_to_remove = g_tree_new (remove_compare_data);
-	cd->checked = memory_pool_alloc0 (task->task_pool, NBYTES (g_hash_table_size (task->cfg->composite_symbols)));
+	cd->checked = rspamd_mempool_alloc0 (task->task_pool, NBYTES (g_hash_table_size (task->cfg->composite_symbols)));
 
 	/* Process hash table */
 	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
@@ -607,12 +607,12 @@ classifiers_callback (gpointer value, void *arg)
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur = message_get_header (task->task_pool, task->message, header, FALSE);
 		if (cur) {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
 		}
 	}
 	else {
 		cur = g_list_first (task->text_parts);
-		dist =  memory_pool_get_variable (task->task_pool, "parts_distance");
+		dist =  rspamd_mempool_get_variable (task->task_pool, "parts_distance");
 		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
 			is_twopart = TRUE;
 		}
@@ -716,7 +716,7 @@ process_statfiles (struct worker_task *task)
 
 	if (task->tokens == NULL) {
 		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref, task->tokens);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
 	}
 	cbdata.task = task;
 	cbdata.nL = NULL;
@@ -740,7 +740,7 @@ process_statfiles_threaded (gpointer data, gpointer user_data)
 
 	if (task->tokens == NULL) {
 		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_hash_table_unref, task->tokens);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
 	}
 
 	cbdata.task = task;
@@ -905,7 +905,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 	if ((s = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur = message_get_header (task->task_pool, task->message, s, FALSE);
 		if (cur) {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, cur);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
 		}
 	}
 	else {

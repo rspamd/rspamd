@@ -24,11 +24,11 @@ main (int argc, char **argv)
 #endif
 
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
-	rspamd_main->server_pool = memory_pool_new (memory_pool_get_size ());
+	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	cfg = rspamd_main->cfg;
 	bzero (cfg, sizeof (struct config_file));
-	cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	base = event_init ();
 

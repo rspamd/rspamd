@@ -47,7 +47,7 @@ struct lua_http_ud {
 	struct worker_task *task;
 	gint parser_state;
 	struct rspamd_async_session *s;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	struct rspamd_dns_resolver *resolver;
 	struct event_base *ev_base;
 	lua_State *L;
@@ -211,8 +211,8 @@ lua_http_parse_header_line (struct lua_http_ud *ud, f_str_t *in)
 		return FALSE;
 	}
 	/* Copy name */
-	new = memory_pool_alloc (ud->pool, sizeof (struct lua_http_header));
-	new->name = memory_pool_alloc (ud->pool, p - in->begin + 1);
+	new = rspamd_mempool_alloc (ud->pool, sizeof (struct lua_http_header));
+	new->name = rspamd_mempool_alloc (ud->pool, p - in->begin + 1);
 	rspamd_strlcpy (new->name, in->begin, p - in->begin + 1);
 
 	p ++;
@@ -220,7 +220,7 @@ lua_http_parse_header_line (struct lua_http_ud *ud, f_str_t *in)
 	while (p < in->begin + in->len && g_ascii_isspace (*p)) {
 		p ++;
 	}
-	new->value = memory_pool_alloc (ud->pool, in->begin + in->len - p + 1);
+	new->value = rspamd_mempool_alloc (ud->pool, in->begin + in->len - p + 1);
 	rspamd_strlcpy (new->value, p, in->begin + in->len - p + 1);
 
 	/* Check content-length */
@@ -350,14 +350,14 @@ lua_http_make_request_common (lua_State *L, struct worker_task *task, const gcha
 	s = MAX_HEADERS_SIZE + sizeof (CRLF) * 3 + strlen (hostname) + strlen (path) + datalen
 			+ sizeof ("POST HTTP/1.1");
 
-	ud = memory_pool_alloc0 (task->task_pool, sizeof (struct lua_http_ud));
+	ud = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct lua_http_ud));
 	ud->L = L;
 	ud->s = task->s;
 	ud->pool = task->task_pool;
 	ud->ev_base = task->ev_base;
 	ud->task = task;
 	/* Preallocate buffer */
-	ud->req_buf = memory_pool_alloc (task->task_pool, s);
+	ud->req_buf = rspamd_mempool_alloc (task->task_pool, s);
 	ud->callback = callback;
 
 	/* Print request */
@@ -415,7 +415,7 @@ lua_http_make_request_common (lua_State *L, struct worker_task *task, const gcha
  * Common request function (new version)
  */
 static gint
-lua_http_make_request_common_new (lua_State *L, struct rspamd_async_session *session, memory_pool_t *pool, struct event_base *base, gint cbref,
+lua_http_make_request_common_new (lua_State *L, struct rspamd_async_session *session, rspamd_mempool_t *pool, struct event_base *base, gint cbref,
 		const gchar *hostname, const gchar *path, const gchar *data, gint top)
 {
 	gint                           r, s, datalen;
@@ -428,13 +428,13 @@ lua_http_make_request_common_new (lua_State *L, struct rspamd_async_session *ses
 	s = MAX_HEADERS_SIZE + sizeof (CRLF) * 3 + strlen (hostname) + strlen (path) + datalen
 			+ sizeof ("POST HTTP/1.1");
 
-	ud = memory_pool_alloc0 (pool, sizeof (struct lua_http_ud));
+	ud = rspamd_mempool_alloc0 (pool, sizeof (struct lua_http_ud));
 	ud->L = L;
 	ud->pool = pool;
 	ud->s = session;
 	ud->ev_base = base;
 	/* Preallocate buffer */
-	ud->req_buf = memory_pool_alloc (pool, s);
+	ud->req_buf = rspamd_mempool_alloc (pool, s);
 	ud->callback = NULL;
 	ud->cbref = cbref;
 
@@ -519,7 +519,7 @@ static gint
 lua_http_make_post_request (lua_State *L)
 {
 	struct worker_task            *task, **ptask;
-	memory_pool_t				  *pool, **ppool;
+	rspamd_mempool_t				  *pool, **ppool;
 	struct rspamd_async_session	  *session, **psession;
 	struct event_base			  *base, **pbase;
 	const gchar                   *hostname, *path, *data, *callback;
@@ -545,10 +545,10 @@ lua_http_make_post_request (lua_State *L)
 	/* Now extract hostname, path and data */
 
 	if (task) {
-		callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
-		hostname = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
-		path = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 4));
-		data = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 5));
+		callback = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 2));
+		hostname = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		path = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 4));
+		data = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 5));
 
 		if (callback != NULL && hostname != NULL && path != NULL && data != NULL) {
 			return lua_http_make_request_common (L, task, callback, hostname, path, data, 5);
@@ -559,9 +559,9 @@ lua_http_make_post_request (lua_State *L)
 	}
 	else {
 		/* Common version */
-		hostname = memory_pool_strdup (pool, luaL_checkstring (L, 4));
-		path = memory_pool_strdup (pool, luaL_checkstring (L, 5));
-		data = memory_pool_strdup (pool, luaL_checkstring (L, 6));
+		hostname = rspamd_mempool_strdup (pool, luaL_checkstring (L, 4));
+		path = rspamd_mempool_strdup (pool, luaL_checkstring (L, 5));
+		data = rspamd_mempool_strdup (pool, luaL_checkstring (L, 6));
 		if (session != NULL && pool != NULL && hostname != NULL && path != NULL && data != NULL && lua_isfunction (L, 7)) {
 			lua_pushvalue (L, 7);
 			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
@@ -580,7 +580,7 @@ static gint
 lua_http_make_get_request (lua_State *L)
 {
 	struct worker_task            *task, **ptask;
-	memory_pool_t				  *pool, **ppool;
+	rspamd_mempool_t				  *pool, **ppool;
 	struct rspamd_async_session	  *session, **psession;
 	struct event_base			  *base, **pbase;
 	const gchar                   *hostname, *path, *callback;
@@ -606,9 +606,9 @@ lua_http_make_get_request (lua_State *L)
 	/* Now extract hostname, path and data */
 
 	if (task) {
-		callback = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 2));
-		hostname = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 3));
-		path = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 4));
+		callback = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 2));
+		hostname = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 3));
+		path = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 4));
 
 		if (callback != NULL && hostname != NULL && path != NULL) {
 			return lua_http_make_request_common (L, task, callback, hostname, path, NULL, 4);
@@ -619,8 +619,8 @@ lua_http_make_get_request (lua_State *L)
 	}
 	else {
 		/* Common version */
-		hostname = memory_pool_strdup (pool, luaL_checkstring (L, 4));
-		path = memory_pool_strdup (pool, luaL_checkstring (L, 5));
+		hostname = rspamd_mempool_strdup (pool, luaL_checkstring (L, 4));
+		path = rspamd_mempool_strdup (pool, luaL_checkstring (L, 5));
 		if (session != NULL && pool != NULL && hostname != NULL && path != NULL && lua_isfunction (L, 6)) {
 			lua_pushvalue (L, 6);
 			cbref = luaL_ref (L, LUA_REGISTRYINDEX);

@@ -81,7 +81,7 @@ enum protocol {
  * @param part current text part
  * @param is_html turn on html euristic
  */
-void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
+void url_parse_text (rspamd_mempool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
 
 /*
  * Parse a single url into an uri structure
@@ -89,7 +89,7 @@ void url_parse_text (memory_pool_t *pool, struct worker_task *task, struct mime_
  * @param uristring text form of url
  * @param uri url object, must be pre allocated
  */
-enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool);
+enum uri_errno parse_uri(struct uri *uri, gchar *uristring, rspamd_mempool_t *pool);
 
 /*
  * Try to extract url from a text
@@ -101,7 +101,7 @@ enum uri_errno parse_uri(struct uri *uri, gchar *uristring, memory_pool_t *pool)
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str, gboolean is_html);
+gboolean url_try_text (rspamd_mempool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str, gboolean is_html);
 
 /*
  * Return text representation of url parsing error

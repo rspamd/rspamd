@@ -33,7 +33,7 @@
 #define VALID_VERSION { '1', '0' }
 
 static GHashTable *binlog_opened = NULL;
-static memory_pool_t *binlog_pool = NULL;
+static rspamd_mempool_t *binlog_pool = NULL;
 
 static gboolean 
 binlog_write_header (struct rspamd_binlog *log)
@@ -151,13 +151,13 @@ binlog_open_real (struct rspamd_binlog *log)
 
 
 struct rspamd_binlog* 
-binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter)
+binlog_open (rspamd_mempool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter)
 {
 	struct rspamd_binlog *new;
 	gint                            len = strlen (path);
 	struct stat st;
 
-	new = memory_pool_alloc0 (pool, sizeof (struct rspamd_binlog));
+	new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_binlog));
 	new->pool = pool;
 	new->rotate_time = rotate_time;
 	new->fd = -1;
@@ -166,7 +166,7 @@ binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint ro
 		new->rotate_jitter = g_random_int_range (0, rotate_jitter);
 	}
 	
-	new->filename = memory_pool_alloc (pool, len + sizeof (BINLOG_SUFFIX));
+	new->filename = rspamd_mempool_alloc (pool, len + sizeof (BINLOG_SUFFIX));
 	rspamd_strlcpy (new->filename, path, len + 1);
 	rspamd_strlcpy (new->filename + len, BINLOG_SUFFIX, sizeof (BINLOG_SUFFIX));
 
@@ -508,7 +508,7 @@ maybe_init_static (void)
 	}
 
 	if (!binlog_pool) {
-		binlog_pool = memory_pool_new (memory_pool_get_size ());
+		binlog_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 		if (!binlog_pool) {
 			return FALSE;
 		}

@@ -19,7 +19,7 @@ typedef struct token_node_s {
 /* Common tokenizer structure */
 struct tokenizer {
 	gchar *name;
-	gint (*tokenize_func)(struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input,
+	gint (*tokenize_func)(struct tokenizer *tokenizer, rspamd_mempool_t *pool, f_str_t *input,
 			GTree **cur, gboolean save_token, gboolean is_utf, GList *exceptions);
 	gchar* (*get_next_word)(f_str_t *buf, f_str_t *token, GList **exceptions);
 };
@@ -31,10 +31,10 @@ struct tokenizer* get_tokenizer (const char *name);
 /* Get next word from specified f_str_t buf */
 gchar* get_next_word (f_str_t *buf, f_str_t *token, GList **exceptions);
 /* OSB tokenize function */
-int osb_tokenize_text (struct tokenizer *tokenizer, memory_pool_t *pool, f_str_t *input,
+int osb_tokenize_text (struct tokenizer *tokenizer, rspamd_mempool_t *pool, f_str_t *input,
 		GTree **cur, gboolean save_token, gboolean is_utf, GList *exceptions);
 /* Common tokenizer for headers */
-int tokenize_headers (memory_pool_t *pool, struct worker_task *task, GTree **cur);
+int tokenize_headers (rspamd_mempool_t *pool, struct worker_task *task, GTree **cur);
 /* Make tokens for a subject */
 void tokenize_subject (struct worker_task *task, GTree ** tree);
 

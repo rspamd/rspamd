@@ -45,7 +45,7 @@ struct surbl_ctx {
 	guint use_redirector;
 	struct redirector_upstream *redirectors;
 	guint32 redirectors_number;
-	memory_pool_t *surbl_pool;
+	rspamd_mempool_t *surbl_pool;
 };
 
 struct suffix_item {

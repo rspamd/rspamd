@@ -560,7 +560,7 @@ make_rewritten_subject (struct metric *metric, struct worker_task *task)
 	}
 	res = g_mime_utils_header_encode_text (subj_buf);
 
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_free, res);
+	rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_free, res);
 
 	return res;
 }

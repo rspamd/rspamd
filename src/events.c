@@ -65,12 +65,12 @@ event_cond_free (gpointer data)
 #endif
 
 struct rspamd_async_session    *
-new_async_session (memory_pool_t * pool, session_finalizer_t fin,
+new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
 		event_finalizer_t restore, event_finalizer_t cleanup, void *user_data)
 {
 	struct rspamd_async_session    *new;
 
-	new = memory_pool_alloc (pool, sizeof (struct rspamd_async_session));
+	new = rspamd_mempool_alloc (pool, sizeof (struct rspamd_async_session));
 	new->pool = pool;
 	new->fin = fin;
 	new->restore = restore;
@@ -81,19 +81,19 @@ new_async_session (memory_pool_t * pool, session_finalizer_t fin,
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	new->mtx = g_mutex_new ();
 	new->cond = g_cond_new ();
-	memory_pool_add_destructor (pool, (pool_destruct_func) event_mutex_free, new->mtx);
-	memory_pool_add_destructor (pool, (pool_destruct_func) event_cond_free, new->cond);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) event_mutex_free, new->mtx);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) event_cond_free, new->cond);
 #else
-	new->mtx = memory_pool_alloc (pool, sizeof (GMutex));
+	new->mtx = rspamd_mempool_alloc (pool, sizeof (GMutex));
 	g_mutex_init (new->mtx);
-	new->cond = memory_pool_alloc (pool, sizeof (GCond));
+	new->cond = rspamd_mempool_alloc (pool, sizeof (GCond));
 	g_cond_init (new->cond);
-	memory_pool_add_destructor (pool, (pool_destruct_func) g_mutex_clear, new->mtx);
-	memory_pool_add_destructor (pool, (pool_destruct_func) g_cond_clear, new->cond);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_mutex_clear, new->mtx);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_cond_clear, new->cond);
 #endif
 	new->threads = 0;
 
-	memory_pool_add_destructor (pool, (pool_destruct_func) g_hash_table_destroy, new->events);
+	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, new->events);
 
 	return new;
 }
@@ -109,7 +109,7 @@ register_async_event (struct rspamd_async_session *session, event_finalizer_t fi
 	}
 
 	g_mutex_lock (session->mtx);
-	new = memory_pool_alloc (session->pool, sizeof (struct rspamd_async_event));
+	new = rspamd_mempool_alloc (session->pool, sizeof (struct rspamd_async_event));
 	new->fin = fin;
 	new->user_data = user_data;
 	new->subsystem = subsystem;

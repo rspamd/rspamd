@@ -16,21 +16,21 @@ char *test_expressions[] = {
 void 
 rspamd_expression_test_func ()
 {
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	struct expression *cur;
 	struct expression_argument *arg;
 	char **line, *outstr;
 	int r, s;
 	GList *cur_arg;
 
-	pool = memory_pool_new (1024);
+	pool = rspamd_mempool_new (1024);
 	
 	line = test_expressions;
 	while (*line) {
 		r = 0;
 		cur = parse_expression (pool, *line);
 		s = strlen (*line) * 4;
-		outstr = memory_pool_alloc (pool, s);
+		outstr = rspamd_mempool_alloc (pool, s);
 		while (cur) {
 			if (cur->type == EXPR_REGEXP) {
 				r += rspamd_snprintf (outstr + r, s - r, "OP:%s ", (char *)cur->content.operand);
@@ -60,5 +60,5 @@ rspamd_expression_test_func ()
 		line ++;
 	}
 
-	memory_pool_delete (pool);
+	rspamd_mempool_delete (pool);
 }

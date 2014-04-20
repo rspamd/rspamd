@@ -45,15 +45,15 @@ struct map_cb_data;
 /**
  * Callback types
  */
-typedef gchar* (*map_cb_t)(memory_pool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
-typedef void (*map_fin_cb_t)(memory_pool_t *pool, struct map_cb_data *data);
+typedef gchar* (*map_cb_t)(rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
+typedef void (*map_fin_cb_t)(rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Common map object
  */
 struct config_file;
 struct rspamd_map {
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	struct config_file *cfg;
 	enum fetch_proto protocol;
 	map_cb_t read_callback;
@@ -111,24 +111,24 @@ typedef void                    (*insert_func) (gpointer st, gconstpointer key, 
 /**
  * Radix list is a list like ip/mask
  */
-gchar* read_radix_list (memory_pool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
-void fin_radix_list (memory_pool_t *pool, struct map_cb_data *data);
+gchar* read_radix_list (rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
+void fin_radix_list (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Host list is an ordinal list of hosts or domains
  */
-gchar* read_host_list (memory_pool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
-void fin_host_list (memory_pool_t *pool, struct map_cb_data *data);
+gchar* read_host_list (rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
+void fin_host_list (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
  */
-gchar* read_kv_list (memory_pool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
-void fin_kv_list (memory_pool_t *pool, struct map_cb_data *data);
+gchar* read_kv_list (rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
+void fin_kv_list (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
-gchar * abstract_parse_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func);
+gchar * abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func);
 
 #endif

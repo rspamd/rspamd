@@ -139,7 +139,7 @@ apply_dynamic_conf (GList *conf_metrics, struct config_file *cfg)
 
 /* Callbacks for reading json dynamic rules */
 gchar                         *
-json_config_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+json_config_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct config_json_buf				*jb;
 	gint								 free, off;
@@ -180,7 +180,7 @@ json_config_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_c
 }
 
 void
-json_config_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
+json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	struct config_json_buf				*jb;
 	guint								 nelts, i, j, selts;

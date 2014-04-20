@@ -64,20 +64,20 @@ struct symbols_cache {
 	/* Hash table for fast access */
 	GHashTable *items_by_symbol;
 
-	memory_pool_t *static_pool;
+	rspamd_mempool_t *static_pool;
 
 	guint cur_items;
 	guint used_items;
 	guint uses;
 	gpointer map;
-	memory_pool_rwlock_t *lock;
+	rspamd_mempool_rwlock_t *lock;
 	struct config_file *cfg;
 };
 
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (memory_pool_t *pool, struct symbols_cache *cache, struct config_file *cfg,
+gboolean init_symbols_cache (rspamd_mempool_t *pool, struct symbols_cache *cache, struct config_file *cfg,
 		const gchar *filename, gboolean ignore_checksum);
 
 /**
@@ -120,7 +120,7 @@ void register_callback_symbol_priority (struct symbols_cache **cache, const gcha
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_dynamic_symbol (memory_pool_t *pool, struct symbols_cache **cache, const gchar *name, 
+void register_dynamic_symbol (rspamd_mempool_t *pool, struct symbols_cache **cache, const gchar *name, 
 						double weight, symbol_func_t func, 
 						gpointer user_data, GList *networks);
 

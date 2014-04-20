@@ -211,19 +211,19 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
  * @return new proxy object
  */
 rspamd_proxy_t*
-rspamd_create_proxy (gint cfd, gint bfd, memory_pool_t *pool, struct event_base *base,
+rspamd_create_proxy (gint cfd, gint bfd, rspamd_mempool_t *pool, struct event_base *base,
 		gsize bufsize, struct timeval *tv, dispatcher_err_callback_t err_cb, gpointer ud)
 {
 	rspamd_proxy_t						*new;
 
-	new = memory_pool_alloc0 (pool, sizeof (rspamd_proxy_t));
+	new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_proxy_t));
 
 	new->cfd = dup (cfd);
 	new->bfd = dup (bfd);
 	new->pool = pool;
 	new->base = base;
 	new->bufsize = bufsize;
-	new->buf = memory_pool_alloc (pool, bufsize);
+	new->buf = rspamd_mempool_alloc (pool, bufsize);
 	new->err_cb = err_cb;
 	new->user_data = ud;
 	new->tv = tv;

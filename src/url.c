@@ -679,7 +679,7 @@ url_strip (gchar *s)
 }
 
 static gchar                    *
-url_escape_1 (const gchar *s, gint allow_passthrough, memory_pool_t * pool)
+url_escape_1 (const gchar *s, gint allow_passthrough, rspamd_mempool_t * pool)
 {
 	const gchar                     *p1;
 	gchar                           *p2, *newstr;
@@ -696,12 +696,12 @@ url_escape_1 (const gchar *s, gint allow_passthrough, memory_pool_t * pool)
 			return (gchar *)s;
 		}
 		else {
-			return memory_pool_strdup (pool, s);
+			return rspamd_mempool_strdup (pool, s);
 		}
 	}
 
 	newlen = (p1 - s) + addition;
-	newstr = (gchar *)memory_pool_alloc (pool, newlen + 1);
+	newstr = (gchar *)rspamd_mempool_alloc (pool, newlen + 1);
 
 	p1 = s;
 	p2 = newstr;
@@ -725,7 +725,7 @@ url_escape_1 (const gchar *s, gint allow_passthrough, memory_pool_t * pool)
    string, returning a freshly allocated string.  */
 
 gchar                           *
-url_escape (const gchar *s, memory_pool_t * pool)
+url_escape (const gchar *s, rspamd_mempool_t * pool)
 {
 	return url_escape_1 (s, 0, pool);
 }
@@ -758,7 +758,7 @@ char_needs_escaping (const gchar *p)
 */
 
 static gchar                    *
-reencode_escapes (gchar *s, memory_pool_t * pool)
+reencode_escapes (gchar *s, rspamd_mempool_t * pool)
 {
 	const gchar                     *p1;
 	gchar                           *newstr, *p2;
@@ -780,7 +780,7 @@ reencode_escapes (gchar *s, memory_pool_t * pool)
 	oldlen = p1 - s;
 	/* Each encoding adds two characters (hex digits).  */
 	newlen = oldlen + 2 * encode_count;
-	newstr = memory_pool_alloc (pool, newlen + 1);
+	newstr = rspamd_mempool_alloc (pool, newlen + 1);
 
 	/* Second pass: copy the string to the destination address, encoding
 	   chars when needed.  */
@@ -892,7 +892,7 @@ path_simplify (gchar *path)
 }
 
 enum uri_errno
-parse_uri (struct uri *uri, gchar *uristring, memory_pool_t * pool)
+parse_uri (struct uri *uri, gchar *uristring, rspamd_mempool_t * pool)
 {
 	guchar                          *prefix_end, *host_end, *p;
 	guchar                          *lbracket, *rbracket;
@@ -920,7 +920,7 @@ parse_uri (struct uri *uri, gchar *uristring, memory_pool_t * pool)
 			return URI_ERRNO_INVALID_PROTOCOL;
 		}
 		p = g_strconcat ("http://", uri->string, NULL);
-		uri->string = memory_pool_strdup (pool, p);
+		uri->string = rspamd_mempool_strdup (pool, p);
 		g_free (p);
 		uri->protocol = PROTOCOL_HTTP;
 		prefix_end = struri (uri) + 7;
@@ -1488,7 +1488,7 @@ url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match
 }
 
 void
-url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
+url_parse_text (rspamd_mempool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
 {
 	gint                            rc;
 	gchar                          *url_str = NULL, *url_start, *url_end;
@@ -1516,8 +1516,8 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 		while (p < end) {
 			if (url_try_text (pool, p, end - p, &url_start, &url_end, &url_str, is_html)) {
 				if (url_str != NULL) {
-					new = memory_pool_alloc0 (pool, sizeof (struct uri));
-					ex = memory_pool_alloc0 (pool, sizeof (struct process_exception));
+					new = rspamd_mempool_alloc0 (pool, sizeof (struct uri));
+					ex = rspamd_mempool_alloc0 (pool, sizeof (struct process_exception));
 					if (new != NULL) {
 						g_strstrip (url_str);
 						rc = parse_uri (new, url_str, pool);
@@ -1554,12 +1554,12 @@ url_parse_text (memory_pool_t * pool, struct worker_task *task, struct mime_text
 	/* Handle offsets of this part */
 	if (part->urls_offset != NULL) {
 		part->urls_offset = g_list_reverse (part->urls_offset);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, part->urls_offset);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, part->urls_offset);
 	}
 }
 
 gboolean
-url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **fin, gchar **url_str, gboolean is_html)
+url_try_text (rspamd_mempool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **fin, gchar **url_str, gboolean is_html)
 {
 	const gchar                    *end, *pos;
 	gint                            idx, l;
@@ -1583,11 +1583,11 @@ url_try_text (memory_pool_t *pool, const gchar *begin, gsize len, gchar **start,
 			if (matcher->start (begin, end, pos, &m) && matcher->end (begin, end, pos, &m)) {
 				if (m.add_prefix) {
 					l = m.m_len + 1 + strlen (m.prefix);
-					*url_str = memory_pool_alloc (pool, l);
+					*url_str = rspamd_mempool_alloc (pool, l);
 					rspamd_snprintf (*url_str, l, "%s%*s", m.prefix, m.m_len, m.m_begin);
 				}
 				else {
-					*url_str = memory_pool_alloc (pool, m.m_len + 1);
+					*url_str = rspamd_mempool_alloc (pool, m.m_len + 1);
 					memcpy (*url_str, m.m_begin, m.m_len);
 					(*url_str)[m.m_len] = '\0';
 				}

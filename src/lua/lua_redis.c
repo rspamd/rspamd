@@ -282,8 +282,8 @@ lua_redis_make_request (lua_State *L)
 		/* Now get callback */
 		if (lua_isfunction (L, 4) && server != NULL && port > 0 && port < G_MAXUINT16) {
 			/* Create userdata */
-			ud = memory_pool_alloc (task->task_pool, sizeof (struct lua_redis_userdata));
-			ud->server = memory_pool_strdup (task->task_pool, server);
+			ud = rspamd_mempool_alloc (task->task_pool, sizeof (struct lua_redis_userdata));
+			ud->server = rspamd_mempool_strdup (task->task_pool, server);
 			ud->port = port;
 			ud->task = task;
 			ud->L = L;
@@ -292,14 +292,14 @@ lua_redis_make_request (lua_State *L)
 			lua_pushvalue (L, 4);
 			/* Get a reference */
 			ud->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-			ud->reqline = memory_pool_strdup (task->task_pool, luaL_checkstring (L, 5));
+			ud->reqline = rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 5));
 			/* Now get remaining args */
 			ud->args_num = lua_gettop (L) - 5;
-			ud->args = memory_pool_alloc (task->task_pool, ud->args_num * sizeof (f_str_t));
+			ud->args = rspamd_mempool_alloc (task->task_pool, ud->args_num * sizeof (f_str_t));
 			for (i = 0; i < ud->args_num; i ++) {
 				tmp = lua_tolstring (L, i + 6, &ud->args[i].len);
 				/* Make a copy of argument */
-				ud->args[i].begin = memory_pool_alloc (task->task_pool, ud->args[i].len);
+				ud->args[i].begin = rspamd_mempool_alloc (task->task_pool, ud->args[i].len);
 				memcpy (ud->args[i].begin, tmp, ud->args[i].len);
 			}
 			/* Now check whether we need to perform DNS request */

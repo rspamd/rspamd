@@ -46,7 +46,7 @@ struct rspamd_binlog {
 	guint64 cur_seq;
 	guint64 cur_time;
 	gint fd;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 
 	struct rspamd_binlog_header header;
 	struct rspamd_binlog_metaindex *metaindex;
@@ -58,7 +58,7 @@ struct classifier_config;
 /*
  * Open binlog at specified path with specified rotate params
  */
-struct rspamd_binlog* binlog_open (memory_pool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter);
+struct rspamd_binlog* binlog_open (rspamd_mempool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter);
 
 /*
  * Get and open binlog for specified statfile

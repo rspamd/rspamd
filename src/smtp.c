@@ -310,7 +310,7 @@ process_smtp_data (struct smtp_session *session)
 		session->task->resolver = session->resolver;
 		session->task->fin_callback = smtp_write_socket;
 		session->task->fin_arg = session;
-		session->task->msg = memory_pool_alloc (session->pool, sizeof (GString));
+		session->task->msg = rspamd_mempool_alloc (session->pool, sizeof (GString));
 		session->task->s = session->s;
 #ifdef HAVE_MMAP_NOCORE
 		if ((session->task->msg->str = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED | MAP_NOCORE, session->temp_fd, 0)) == MAP_FAILED) {
@@ -326,7 +326,7 @@ process_smtp_data (struct smtp_session *session)
 		cur = session->from;
 		if (cur) {
 			f = cur->data;
-			s = memory_pool_alloc (session->pool, f->len + 1);
+			s = rspamd_mempool_alloc (session->pool, f->len + 1);
 			rspamd_strlcpy (s, f->begin, f->len + 1);
 			session->task->from = s;
 		}
@@ -336,7 +336,7 @@ process_smtp_data (struct smtp_session *session)
 			cur = t->data;
 			if (cur) {
 				f = cur->data;
-				s = memory_pool_alloc (session->pool, f->len + 1);
+				s = rspamd_mempool_alloc (session->pool, f->len + 1);
 				rspamd_strlcpy (s, f->begin, f->len + 1);
 				session->task->rcpt = g_list_prepend (session->task->rcpt, s);
 			}
@@ -557,8 +557,8 @@ smtp_make_delay (struct smtp_session *session)
 	gint32                         jitter;
 
 	if (session->ctx->smtp_delay != 0 && session->state == SMTP_STATE_DELAY) {
-		tev = memory_pool_alloc (session->pool, sizeof (struct event));
-		tv = memory_pool_alloc (session->pool, sizeof (struct timeval));
+		tev = rspamd_mempool_alloc (session->pool, sizeof (struct event));
+		tv = rspamd_mempool_alloc (session->pool, sizeof (struct timeval));
 		if (session->ctx->delay_jitter != 0) {
 			jitter = g_random_int_range (0, session->ctx->delay_jitter);
 			msec_to_tv (session->ctx->smtp_delay + jitter, tv);
@@ -597,10 +597,10 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 						"DNS error: %s", dns_strerror (reply->code));
 				
 				if (reply->code == RDNS_RC_NXDOMAIN) {
-					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
+					session->hostname = rspamd_mempool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				else {
-					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_TEMPFAIL);
+					session->hostname = rspamd_mempool_strdup (session->pool, XCLIENT_HOST_TEMPFAIL);
 				}
 				session->state = SMTP_STATE_DELAY;
 				smtp_make_delay (session);
@@ -608,7 +608,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 			else {
 				if (reply->elements) {
 					elt = reply->elements->data;
-					session->hostname = memory_pool_strdup (session->pool, elt->ptr.name);
+					session->hostname = rspamd_mempool_strdup (session->pool, elt->ptr.name);
 					session->state = SMTP_STATE_RESOLVE_NORMAL;
 					make_dns_request (session->resolver, session->s, session->pool,
 							smtp_dns_cb, session, RDNS_REQUEST_A, session->hostname);
@@ -622,10 +622,10 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 										"DNS error: %s", dns_strerror (reply->code));
 
 				if (reply->code == RDNS_RC_NXDOMAIN) {
-					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
+					session->hostname = rspamd_mempool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				else {
-					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_TEMPFAIL);
+					session->hostname = rspamd_mempool_strdup (session->pool, XCLIENT_HOST_TEMPFAIL);
 				}
 				session->state = SMTP_STATE_DELAY;
 				smtp_make_delay (session);
@@ -645,7 +645,7 @@ smtp_dns_cb (struct rspamd_dns_reply *reply, void *arg)
 
 				if (res == 0) {
 					msg_info ("cannot find address for hostname: %s, ip: %s", session->hostname, inet_ntoa (session->client_addr));
-					session->hostname = memory_pool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
+					session->hostname = rspamd_mempool_strdup (session->pool, XCLIENT_HOST_UNAVAILABLE);
 				}
 				session->state = SMTP_STATE_DELAY;
 				smtp_make_delay (session);
@@ -689,7 +689,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	ctx = worker->ctx;
 	session = g_malloc0 (sizeof (struct smtp_session));
-	session->pool = memory_pool_new (memory_pool_get_size ());
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	if (su.ss.ss_family == AF_UNIX) {
 		msg_info ("accepted connection from unix socket");
@@ -773,7 +773,7 @@ parse_smtp_banner (struct smtp_worker_ctx *ctx, const gchar *line)
 		banner_len += sizeof (CRLF);
 	}
 
-	ctx->smtp_banner = memory_pool_alloc (ctx->pool, banner_len + 1);
+	ctx->smtp_banner = rspamd_mempool_alloc (ctx->pool, banner_len + 1);
 	t = ctx->smtp_banner;
 	p = (gchar *)line;
 
@@ -841,7 +841,7 @@ make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 		len += sizeof ("250-") + sizeof (CRLF) + strlen (p) - 2;
 	}
 
-	result = memory_pool_alloc (ctx->pool, len);
+	result = rspamd_mempool_alloc (ctx->pool, len);
 	ctx->smtp_capabilities = result;
 	
 	p = result;
@@ -872,7 +872,7 @@ init_smtp (struct config_file *cfg)
 	type = g_quark_try_string ("smtp");
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
-	ctx->pool = memory_pool_new (memory_pool_get_size ());
+	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	
 	/* Set default values */
 	ctx->smtp_timeout_raw = 300000;
@@ -1006,7 +1006,7 @@ register_smtp_filter (struct smtp_worker_ctx *ctx, enum rspamd_smtp_stage stage,
 {
 	struct smtp_filter             *new;
 
-	new = memory_pool_alloc (ctx->pool, sizeof (struct smtp_filter));
+	new = rspamd_mempool_alloc (ctx->pool, sizeof (struct smtp_filter));
 
 	new->filter = filter;
 	new->filter_data = filter_data;

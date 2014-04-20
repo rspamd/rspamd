@@ -55,7 +55,7 @@ struct spf_ctx {
 	const gchar                    *symbol_softfail;
 	const gchar                    *symbol_allow;
 
-	memory_pool_t                   *spf_pool;
+	rspamd_mempool_t                   *spf_pool;
 	radix_tree_t                    *whitelist_ip;
 	rspamd_lru_hash_t               *spf_hash;
 };
@@ -83,7 +83,7 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 {
 	spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
 
-	spf_module_ctx->spf_pool = memory_pool_new (memory_pool_get_size ());
+	spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	*ctx = (struct module_ctx *)spf_module_ctx;
 
@@ -151,9 +151,9 @@ spf_module_config (struct config_file *cfg)
 gint
 spf_module_reconfig (struct config_file *cfg)
 {
-	memory_pool_delete (spf_module_ctx->spf_pool);
+	rspamd_mempool_delete (spf_module_ctx->spf_pool);
 	radix_tree_free (spf_module_ctx->whitelist_ip);
-	spf_module_ctx->spf_pool = memory_pool_new (memory_pool_get_size ());
+	spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	return spf_module_config (cfg);
 }

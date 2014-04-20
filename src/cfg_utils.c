@@ -45,11 +45,11 @@ struct rspamd_ucl_map_cbdata {
 	struct config_file *cfg;
 	GString *buf;
 };
-static gchar* rspamd_ucl_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data);
-static void rspamd_ucl_fin_cb (memory_pool_t * pool, struct map_cb_data *data);
+static gchar* rspamd_ucl_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data);
+static void rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data);
 
 static gboolean
-parse_host_port_priority_strv (memory_pool_t *pool, gchar **tokens,
+parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 		gchar **addr, guint16 *port, guint *priority, guint default_port)
 {
 	gchar                          *err_str, portbuf[8];
@@ -135,13 +135,13 @@ parse_host_port_priority_strv (memory_pool_t *pool, gchar **tokens,
 		memcpy (&addr_holder, res->ai_addr, MIN (sizeof (addr_holder), res->ai_addrlen));
 		if (res->ai_family == AF_INET) {
 			if (pool != NULL) {
-				*addr = memory_pool_alloc (pool, INET_ADDRSTRLEN + 1);
+				*addr = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
 			}
 			inet_ntop (res->ai_family, &addr_holder.v4.sin_addr, *addr, INET_ADDRSTRLEN + 1);
 		}
 		else {
 			if (pool != NULL) {
-				*addr = memory_pool_alloc (pool, INET6_ADDRSTRLEN + 1);
+				*addr = rspamd_mempool_alloc (pool, INET6_ADDRSTRLEN + 1);
 			}
 			inet_ntop (res->ai_family, &addr_holder.v6.sin6_addr, *addr, INET6_ADDRSTRLEN + 1);
 		}
@@ -162,7 +162,7 @@ err:
 }
 
 gboolean
-parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
+parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
 {
 	gchar                          **tokens;
 	gboolean                         ret;
@@ -180,13 +180,13 @@ parse_host_port_priority (memory_pool_t *pool, const gchar *str, gchar **addr, g
 }
 
 gboolean
-parse_host_port (memory_pool_t *pool, const gchar *str, gchar **addr, guint16 *port)
+parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port)
 {
 	return parse_host_port_priority (pool, str, addr, port, NULL);
 }
 
 gboolean
-parse_host_priority (memory_pool_t *pool, const gchar *str, gchar **addr, guint *priority)
+parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint *priority)
 {
 	return parse_host_port_priority (pool, str, addr, NULL, priority);
 }
@@ -207,9 +207,9 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 		return FALSE;
 	}
 
-	cnf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
+	cnf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
 	cnf->bind_port = DEFAULT_BIND_PORT;
-	cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+	cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
 	cnf->ai = AF_UNSPEC;
 
 	if (*tokens[0] == '/' || *tokens[0] == '.') {
@@ -226,9 +226,9 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
-		cnf = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
+		cnf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
 		cnf->bind_port = DEFAULT_BIND_PORT;
-		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
 		cnf->ai = AF_INET6;
 		tokens[0] = "*v6";
 		if ((ret &= parse_host_port_priority_strv (cfg->cfg_pool, tokens,
@@ -239,7 +239,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 	}
 	else if (strcmp (tokens[0], "systemd") == 0) {
 		/* The actual socket will be passed by systemd environment */
-		cnf->bind_host = memory_pool_strdup (cfg->cfg_pool, str);
+		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
 		cnf->ai = strtoul (tokens[1], &err, 10);
 		cnf->is_systemd = TRUE;
 		if (err == NULL || *err == '\0') {
@@ -333,7 +333,7 @@ free_config (struct config_file *cfg)
 	}
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
-	memory_pool_delete (cfg->cfg_pool);
+	rspamd_mempool_delete (cfg->cfg_pool);
 }
 
 const ucl_object_t        *
@@ -569,7 +569,7 @@ unescape_quotes (gchar *line)
 }
 
 GList                          *
-parse_comma_list (memory_pool_t * pool, const gchar *line)
+parse_comma_list (rspamd_mempool_t * pool, const gchar *line)
 {
 	GList                          *res = NULL;
 	const gchar                    *c, *p;
@@ -580,7 +580,7 @@ parse_comma_list (memory_pool_t * pool, const gchar *line)
 
 	while (*p) {
 		if (*p == ',' && *c != *p) {
-			str = memory_pool_alloc (pool, p - c + 1);
+			str = rspamd_mempool_alloc (pool, p - c + 1);
 			rspamd_strlcpy (str, c, p - c + 1);
 			res = g_list_prepend (res, str);
 			/* Skip spaces */
@@ -591,7 +591,7 @@ parse_comma_list (memory_pool_t * pool, const gchar *line)
 		p++;
 	}
 	if (res != NULL) {
-		memory_pool_add_destructor (pool, (pool_destruct_func) g_list_free, res);
+		rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_list_free, res);
 	}
 
 	return res;
@@ -601,15 +601,15 @@ struct classifier_config       *
 check_classifier_conf (struct config_file *cfg, struct classifier_config *c)
 {
 	if (c == NULL) {
-		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct classifier_config));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct classifier_config));
 	}
 	if (c->opts == NULL) {
 		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->opts);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->opts);
 	}
 	if (c->labels == NULL) {
 		c->labels = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, NULL, (GDestroyNotify)g_list_free);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->labels);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->labels);
 	}
 
 	return c;
@@ -619,7 +619,7 @@ struct statfile*
 check_statfile_conf (struct config_file *cfg, struct statfile *c)
 {
 	if (c == NULL) {
-		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
 	}
 
 	return c;
@@ -630,15 +630,15 @@ check_metric_conf (struct config_file *cfg, struct metric *c)
 {
 	int i;
 	if (c == NULL) {
-		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->descriptions = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
 			c->actions[i].score = -1.0;
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->symbols);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func) g_hash_table_destroy, c->descriptions);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->symbols);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->descriptions);
 	}
 
 	return c;
@@ -648,11 +648,11 @@ struct worker_conf *
 check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 {
 	if (c == NULL) {
-		c = memory_pool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
 		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, c->params);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_queue_free, c->active_workers);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, c->params);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_queue_free, c->active_workers);
 #ifdef HAVE_SC_NPROCESSORS_ONLN
 		c->count = sysconf (_SC_NPROCESSORS_ONLN);
 #else
@@ -673,7 +673,7 @@ rspamd_include_map_handler (const guchar *data, gsize len, void* ud)
 	struct rspamd_ucl_map_cbdata *cbdata, **pcbdata;
 	gchar *map_line;
 
-	map_line = memory_pool_alloc (cfg->cfg_pool, len + 1);
+	map_line = rspamd_mempool_alloc (cfg->cfg_pool, len + 1);
 	rspamd_strlcpy (map_line, data, len + 1);
 
 	cbdata = g_malloc (sizeof (struct rspamd_ucl_map_cbdata));
@@ -882,7 +882,7 @@ check_classifier_statfiles (struct classifier_config *cf)
 }
 
 static gchar*
-rspamd_ucl_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+rspamd_ucl_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev;
 
@@ -900,7 +900,7 @@ rspamd_ucl_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb
 }
 
 static void
-rspamd_ucl_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
+rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev = data->prev_data;
 	ucl_object_t *obj;

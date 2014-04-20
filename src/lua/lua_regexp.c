@@ -45,7 +45,7 @@ static const struct luaL_reg    regexplib_f[] = {
 	{NULL, NULL}
 };
 
-memory_pool_t *regexp_static_pool = NULL;
+rspamd_mempool_t *regexp_static_pool = NULL;
 
 struct rspamd_lua_regexp {
 	GRegex *re;
@@ -269,7 +269,7 @@ luaopen_glib_regexp (lua_State * L)
 	luaL_register (L, NULL, regexplib_m);
 	luaL_register (L, "regexp", regexplib_f);
 
-	regexp_static_pool = memory_pool_new (memory_pool_get_size ());
+	regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	return 1;
 }

@@ -468,7 +468,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
  * FSM for parsing lists
  */
 gchar                  *
-abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
+abstract_parse_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
 {
 	gchar                         *c, *p, *key = NULL, *value = NULL;
 
@@ -482,7 +482,7 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct ma
 			/* Check here comments, eol and end of buffer */
 			if (*p == '#') {
 				if (key != NULL && p - c  >= 0) {
-					value = memory_pool_alloc (pool, p - c + 1);
+					value = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (value, c, p - c);
 					value[p - c] = '\0';
 					value = g_strstrip (value);
@@ -493,7 +493,7 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct ma
 			}
 			else if (*p == '\r' || *p == '\n' || p - chunk == len - 1) {
 				if (key != NULL && p - c >= 0) {
-					value = memory_pool_alloc (pool, p - c + 1);
+					value = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (value, c, p - c);
 					value[p - c] = '\0';
 
@@ -503,10 +503,10 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct ma
 				}
 				else if (key == NULL && p - c > 0) {
 					/* Key only line */
-					key = memory_pool_alloc (pool, p - c + 1);
+					key = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (key, c, p - c);
 					key[p - c] = '\0';
-					value = memory_pool_alloc (pool, 1);
+					value = rspamd_mempool_alloc (pool, 1);
 					*value = '\0';
 					func (data->cur_data, key, value);
 					msg_debug ("insert kv pair: %s -> %s", key, value);
@@ -516,7 +516,7 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct ma
 			}
 			else if (g_ascii_isspace (*p)) {
 				if (p - c > 0) {
-					key = memory_pool_alloc (pool, p - c + 1);
+					key = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (key, c, p - c);
 					key[p - c] = '\0';
 					data->state = 2;
@@ -572,7 +572,7 @@ abstract_parse_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct ma
 }
 
 gchar                  *
-abstract_parse_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
+abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
 {
 	gchar                         *s, *p, *str, *start;
 
@@ -591,7 +591,7 @@ abstract_parse_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_c
 				if (s != str) {
 					/* Save previous string in lines like: "127.0.0.1 #localhost" */
 					*s = '\0';
-					s = memory_pool_strdup (pool, g_strstrip (str));
+					s = rspamd_mempool_strdup (pool, g_strstrip (str));
 					if (strlen (s) > 0) {
 						func (data->cur_data, s, hash_fill);
 					}
@@ -604,7 +604,7 @@ abstract_parse_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_c
 				/* Got EOL marker, save stored string */
 				if (s != str) {
 					*s = '\0';
-					s = memory_pool_strdup (pool, g_strstrip (str));
+					s = rspamd_mempool_strdup (pool, g_strstrip (str));
 					if (strlen (s) > 0) {
 						func (data->cur_data, s, hash_fill);
 					}
@@ -711,7 +711,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 
 /* Helpers */
 gchar                         *
-read_host_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+read_host_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -720,7 +720,7 @@ read_host_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_dat
 }
 
 void
-fin_host_list (memory_pool_t * pool, struct map_cb_data *data)
+fin_host_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
@@ -728,7 +728,7 @@ fin_host_list (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 gchar                         *
-read_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+read_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -737,7 +737,7 @@ read_kv_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data 
 }
 
 void
-fin_kv_list (memory_pool_t * pool, struct map_cb_data *data)
+fin_kv_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
@@ -745,7 +745,7 @@ fin_kv_list (memory_pool_t * pool, struct map_cb_data *data)
 }
 
 gchar                         *
-read_radix_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+read_radix_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = radix_tree_create ();
@@ -754,7 +754,7 @@ read_radix_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_da
 }
 
 void
-fin_radix_list (memory_pool_t * pool, struct map_cb_data *data)
+fin_radix_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		radix_tree_free (data->prev_data);
@@ -988,7 +988,7 @@ remove_all_maps (struct config_file *cfg)
 	g_list_free (cfg->maps);
 	cfg->maps = NULL;
 	if (cfg->map_pool != NULL) {
-		memory_pool_delete (cfg->map_pool);
+		rspamd_mempool_delete (cfg->map_pool);
 		cfg->map_pool = NULL;
 	}
 }
@@ -1040,31 +1040,31 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 	}
 	/* Constant pool */
 	if (cfg->map_pool == NULL) {
-		cfg->map_pool = memory_pool_new (memory_pool_get_size ());
+		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	}
-	new_map = memory_pool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
+	new_map = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
 	new_map->read_callback = read_callback;
 	new_map->fin_callback = fin_callback;
 	new_map->user_data = user_data;
 	new_map->protocol = proto;
 	new_map->cfg = cfg;
 	new_map->id = g_random_int ();
-	new_map->locked = memory_pool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+	new_map->locked = rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 
 	if (proto == MAP_PROTO_FILE) {
-		new_map->uri = memory_pool_strdup (cfg->cfg_pool, def);
+		new_map->uri = rspamd_mempool_strdup (cfg->cfg_pool, def);
 		def = new_map->uri;
 	}
 	else {
-		new_map->uri = memory_pool_strdup (cfg->cfg_pool, map_line);
+		new_map->uri = rspamd_mempool_strdup (cfg->cfg_pool, map_line);
 	}
 	if (description != NULL) {
-		new_map->description = memory_pool_strdup (cfg->cfg_pool, description);
+		new_map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
 	}
 
 	/* Now check for each proto separately */
 	if (proto == MAP_PROTO_FILE) {
-		fdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
+		fdata = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
 		if (access (def, R_OK) == -1) {
 			if (errno != ENOENT) {
 				msg_err ("cannot open file '%s': %s", def, strerror (errno));
@@ -1078,11 +1078,11 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 		else {
 			stat (def, &fdata->st);
 		}
-		fdata->filename = memory_pool_strdup (cfg->map_pool, def);
+		fdata->filename = rspamd_mempool_strdup (cfg->map_pool, def);
 		new_map->map_data = fdata;
 	}
 	else if (proto == MAP_PROTO_HTTP) {
-		hdata = memory_pool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
+		hdata = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
 		/* Try to search port */
 		if ((p = strchr (def, ':')) != NULL) {
 			hostend = p;
@@ -1109,9 +1109,9 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 			}
 			hostend = p;
 		}
-		hdata->host = memory_pool_alloc (cfg->map_pool, hostend - def + 1);
+		hdata->host = rspamd_mempool_alloc (cfg->map_pool, hostend - def + 1);
 		rspamd_strlcpy (hdata->host, def, hostend - def + 1);
-		hdata->path = memory_pool_strdup (cfg->map_pool, p);
+		hdata->path = rspamd_mempool_strdup (cfg->map_pool, p);
 		hdata->rlen = 0;
 		/* Now try to resolve */
 		memset (&hints, 0, sizeof (hints));
@@ -1125,7 +1125,7 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 
 		if ((r = getaddrinfo (hdata->host, portbuf, &hints, &res)) == 0) {
 			hdata->addr = res;
-			memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)freeaddrinfo, hdata->addr);
+			rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)freeaddrinfo, hdata->addr);
 		}
 		else {
 			msg_err ("address resolution for %s failed: %s", hdata->host, gai_strerror (r));
@@ -1140,7 +1140,7 @@ add_map (struct config_file *cfg, const gchar *map_line, const gchar *descriptio
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
-	new_map->pool = memory_pool_new (memory_pool_get_size ());
+	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	cfg->maps = g_list_prepend (cfg->maps, new_map);
 

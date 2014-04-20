@@ -215,7 +215,7 @@ free_session (void *ud)
 
 	close (session->sock);
 
-	memory_pool_delete (session->session_pool);
+	rspamd_mempool_delete (session->session_pool);
 	g_slice_free1 (sizeof (struct controller_session), session);
 }
 
@@ -330,7 +330,7 @@ write_whole_statfile (struct controller_session *session, gchar *symbol, struct 
 
 	blocks = statfile_get_total_blocks (statfile);
 	len = blocks * sizeof (struct rspamd_binlog_element);
-	out = memory_pool_alloc (session->session_pool, len);
+	out = rspamd_mempool_alloc (session->session_pool, len);
 
 	for (i = 0, pos = 0; i < blocks; i ++) {
 		stat_elt = (struct stat_file_block *)((u_char *)statfile->map + statfile->seek_pos + i * sizeof (struct stat_file_block));
@@ -508,14 +508,14 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 	gint                            i;
 	guint64                         used, total, rev, ham = 0, spam = 0;
 	time_t                          ti;
-	memory_pool_stat_t              mem_st;
+	rspamd_mempool_stat_t              mem_st;
 	struct classifier_config       *ccf;
 	stat_file_t                    *statfile;
 	struct statfile                *st;
 	GList                          *cur_cl, *cur_st;
 	struct rspamd_stat            *stat, stat_copy;
 
-	memory_pool_stat (&mem_st);
+	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
 	out = g_string_sized_new (BUFSIZ);
@@ -1020,7 +1020,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 				return TRUE;
 			}
 
-			session->learn_symbol = memory_pool_strdup (session->session_pool, *cmd_args);
+			session->learn_symbol = rspamd_mempool_strdup (session->session_pool, *cmd_args);
 			cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
 
 			session->learn_classifier = cl;
@@ -1041,7 +1041,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 								return FALSE;
 							}
 						}
-						session->learn_rcpt = memory_pool_strdup (session->session_pool, arg);
+						session->learn_rcpt = rspamd_mempool_strdup (session->session_pool, arg);
 						break;
 					case 'f':
 						arg = *(cmd_args + 1);
@@ -1051,7 +1051,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 								return FALSE;
 							}
 						}
-						session->learn_from = memory_pool_strdup (session->session_pool, arg);
+						session->learn_from = rspamd_mempool_strdup (session->session_pool, arg);
 						break;
 					case 'n':
 						session->in_class = 0;
@@ -1318,7 +1318,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		s = fstrcstr (in, session->session_pool);
 		params = g_strsplit_set (s, " ", -1);
 
-		memory_pool_add_destructor (session->session_pool, (pool_destruct_func) g_strfreev, params);
+		rspamd_mempool_add_destructor (session->session_pool, (rspamd_mempool_destruct_t) g_strfreev, params);
 
 		len = g_strv_length (params);
 		if (len > 0) {
@@ -1758,7 +1758,7 @@ accept_socket (gint fd, short what, void *arg)
 	new_session->sock = nfd;
 	new_session->cfg = worker->srv->cfg;
 	new_session->state = STATE_COMMAND;
-	new_session->session_pool = memory_pool_new (memory_pool_get_size () - 1);
+	new_session->session_pool = rspamd_mempool_new (rspamd_mempool_suggest_size () - 1);
 	new_session->resolver = ctx->resolver;
 	new_session->ev_base = ctx->ev_base;
 	if (ctx->password == NULL) {
@@ -1767,7 +1767,7 @@ accept_socket (gint fd, short what, void *arg)
 	worker->srv->stat->control_connections_count++;
 
 	/* Set up dispatcher */
-	io_tv = memory_pool_alloc (new_session->session_pool, sizeof (struct timeval));
+	io_tv = rspamd_mempool_alloc (new_session->session_pool, sizeof (struct timeval));
 	io_tv->tv_sec = ctx->timeout / 1000;
 	io_tv->tv_usec = ctx->timeout - io_tv->tv_sec * 1000;
 

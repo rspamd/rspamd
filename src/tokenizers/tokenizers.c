@@ -189,7 +189,7 @@ typedef struct _GMimeHeader {
 } local_GMimeHeader;
 
 int
-tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
+tokenize_headers (rspamd_mempool_t * pool, struct worker_task *task, GTree ** tree)
 {
 	token_node_t                   *new = NULL;
 	f_str_t                         headername;
@@ -197,7 +197,7 @@ tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		memory_pool_add_destructor (pool, (pool_destruct_func) g_tree_destroy, *tree);
+		rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_tree_destroy, *tree);
 	}
 #ifndef GMIME24
 	struct raw_header              *h;
@@ -205,7 +205,7 @@ tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 	h = GMIME_OBJECT (task->message)->headers->headers;
 	while (h) {
 		if (h->name && h->value) {
-			new = memory_pool_alloc (pool, sizeof (token_node_t));
+			new = rspamd_mempool_alloc (pool, sizeof (token_node_t));
 			headername.begin = h->name;
 			headername.len = strlen (h->name);
 			headervalue.begin = h->value;
@@ -229,7 +229,7 @@ tokenize_headers (memory_pool_t * pool, struct worker_task *task, GTree ** tree)
 
 	if (g_mime_header_list_get_iter (ls, iter)) {
 		while (g_mime_header_iter_is_valid (iter)) {
-			new = memory_pool_alloc (pool, sizeof (token_node_t));
+			new = rspamd_mempool_alloc (pool, sizeof (token_node_t));
 			name = g_mime_header_iter_get_name (iter);
 			value = g_mime_header_iter_get_value (iter);
 			headername.begin = (u_char *)name;
@@ -260,7 +260,7 @@ tokenize_subject (struct worker_task *task, GTree ** tree)
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_tree_destroy, *tree);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_tree_destroy, *tree);
 	}
 
 	osb_tokenizer = get_tokenizer ("osb-text");

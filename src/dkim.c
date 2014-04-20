@@ -77,7 +77,7 @@ dkim_error_quark (void)
 static gboolean
 rspamd_dkim_parse_signature (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
 {
-	ctx->b = memory_pool_alloc (ctx->pool, len + 1);
+	ctx->b = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->b, param, len + 1);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
 	gchar *tmp;
@@ -115,7 +115,7 @@ rspamd_dkim_parse_signalg (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 static gboolean
 rspamd_dkim_parse_domain (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
 {
-	ctx->domain = memory_pool_alloc (ctx->pool, len + 1);
+	ctx->domain = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->domain, param, len + 1);
 	return TRUE;
 }
@@ -186,7 +186,7 @@ rspamd_dkim_parse_ignore (rspamd_dkim_context_t* ctx, const gchar *param, gsize 
 static gboolean
 rspamd_dkim_parse_selector (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
 {
-	ctx->selector = memory_pool_alloc (ctx->pool, len + 1);
+	ctx->selector = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->selector, param, len + 1);
 	return TRUE;
 }
@@ -248,8 +248,8 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 			}
 			else {
 				/* Insert new header to the list */
-				new = memory_pool_alloc (ctx->pool, sizeof (struct rspamd_dkim_header));
-				h = memory_pool_alloc (ctx->pool, p - c + 1);
+				new = rspamd_mempool_alloc (ctx->pool, sizeof (struct rspamd_dkim_header));
+				h = rspamd_mempool_alloc (ctx->pool, p - c + 1);
 				rspamd_strlcpy (h, c, p - c + 1);
 				g_strstrip (h);
 				new->name = h;
@@ -279,7 +279,7 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 			return FALSE;
 		}
 		/* Reverse list */
-		memory_pool_add_destructor (ctx->pool, (pool_destruct_func)rspamd_dkim_hlist_free, ctx->hlist);
+		rspamd_mempool_add_destructor (ctx->pool, (rspamd_mempool_destruct_t)rspamd_dkim_hlist_free, ctx->hlist);
 	}
 
 	return TRUE;
@@ -328,7 +328,7 @@ rspamd_dkim_parse_expiration (rspamd_dkim_context_t* ctx, const gchar *param, gs
 static gboolean
 rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
 {
-	ctx->bh = memory_pool_alloc (ctx->pool, len + 1);
+	ctx->bh = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->bh, param, len + 1);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
 	gchar *tmp;
@@ -365,7 +365,7 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gs
  * @return new context or NULL
  */
 rspamd_dkim_context_t*
-rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_jitter, GError **err)
+rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time_jitter, GError **err)
 {
 	const gchar						*p, *c, *tag = NULL, *end;
 	gsize							 taglen;
@@ -381,7 +381,7 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_ji
 	}								 state, next_state;
 
 
-	new = memory_pool_alloc0 (pool, sizeof (rspamd_dkim_context_t));
+	new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_dkim_context_t));
 	new->pool = pool;
 	new->header_canon_type = DKIM_CANON_DEFAULT;
 	new->body_canon_type = DKIM_CANON_DEFAULT;
@@ -604,7 +604,7 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_ji
 
 	/* Now create dns key to request further */
 	taglen = strlen (new->domain) + strlen (new->selector) + sizeof (DKIM_DNSKEYNAME) + 2;
-	new->dns_key = memory_pool_alloc (new->pool, taglen);
+	new->dns_key = rspamd_mempool_alloc (new->pool, taglen);
 	rspamd_snprintf (new->dns_key, taglen, "%s.%s.%s", new->selector, DKIM_DNSKEYNAME, new->domain);
 
 	/* Create checksums for further operations */
@@ -621,8 +621,8 @@ rspamd_create_dkim_context (const gchar *sig, memory_pool_t *pool, guint time_ji
 		return NULL;
 	}
 
-	memory_pool_add_destructor (new->pool, (pool_destruct_func)g_checksum_free, new->body_hash);
-	memory_pool_add_destructor (new->pool, (pool_destruct_func)g_checksum_free, new->headers_hash);
+	rspamd_mempool_add_destructor (new->pool, (rspamd_mempool_destruct_t)g_checksum_free, new->body_hash);
+	rspamd_mempool_add_destructor (new->pool, (rspamd_mempool_destruct_t)g_checksum_free, new->headers_hash);
 
 	return new;
 }
@@ -797,7 +797,7 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *res
 	g_return_val_if_fail (ctx != NULL, FALSE);
 	g_return_val_if_fail (ctx->dns_key != NULL, FALSE);
 
-	cbdata = memory_pool_alloc (ctx->pool, sizeof (struct rspamd_dkim_key_cbdata));
+	cbdata = rspamd_mempool_alloc (ctx->pool, sizeof (struct rspamd_dkim_key_cbdata));
 	cbdata->ctx = ctx;
 	cbdata->handler = handler;
 	cbdata->ud = ud;

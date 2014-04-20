@@ -98,7 +98,7 @@ struct rspamd_main {
 	guint ev_initialized;										/**< is event system is initialized					*/
 	struct rspamd_stat *stat;									/**< pointer to statistics							*/
 
-	memory_pool_t *server_pool;									/**< server's memory pool							*/
+	rspamd_mempool_t *server_pool;									/**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;								/**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
 	rspamd_hash_t *counters;									/**< symbol cache counters							*/
@@ -149,7 +149,7 @@ struct controller_session {
 	gboolean restful;											/**< whether this session is a restful session		*/
 	GHashTable *kwargs;											/**< keyword arguments for restful command			*/
 	struct controller_command *cmd;								/**< real command									*/
-	memory_pool_t *session_pool;								/**< memory pool for session 						*/
+	rspamd_mempool_t *session_pool;								/**< memory pool for session 						*/
 	struct config_file *cfg;									/**< pointer to config file							*/
 	gchar *learn_rcpt;											/**< recipient for learning							*/
 	gchar *learn_from;											/**< from address for learning						*/
@@ -239,7 +239,7 @@ struct worker_task {
 	struct config_file *cfg;									/**< pointer to config object						*/
 	gchar *last_error;											/**< last error										*/
 	gint error_code;												/**< code of last error								*/
-	memory_pool_t *task_pool;									/**< memory pool for task							*/
+	rspamd_mempool_t *task_pool;									/**< memory pool for task							*/
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;											/**< time of connection								*/
 #endif

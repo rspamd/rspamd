@@ -46,20 +46,20 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
 		metric = check_metric_conf (cfg, metric);
-		metric->name = memory_pool_strdup (cfg->cfg_pool, name);
+		metric->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
 	}
 
 	/* Now iterate throught module table */
 	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 		/* key - -2, value - -1 */
-		symbol = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
+		symbol = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
 		if (symbol != NULL) {
 			if (lua_istable (L, -1)) {
 				/* We got a table, so extract individual attributes */
 				lua_pushstring (L, "weight");
 				lua_gettable (L, -2);
 				if (lua_isnumber (L, -1)) {
-					score = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+					score = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (double));
 					*score = lua_tonumber (L, -1);
 				}
 				else {
@@ -75,18 +75,18 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 					if (old_desc) {
 						msg_info ("replacing description for symbol %s", symbol);
 						g_hash_table_replace (metric->descriptions,
-							symbol, memory_pool_strdup (cfg->cfg_pool, desc));
+							symbol, rspamd_mempool_strdup (cfg->cfg_pool, desc));
 					}
 					else {
 						g_hash_table_insert (metric->descriptions,
-							symbol, memory_pool_strdup (cfg->cfg_pool, desc));
+							symbol, rspamd_mempool_strdup (cfg->cfg_pool, desc));
 					}
 				}
 				lua_pop (L, 1);
 			}
 			else if (lua_isnumber (L, -1)) {
 				/* Just got weight */
-				score = memory_pool_alloc (cfg->cfg_pool, sizeof (double));
+				score = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (double));
 				*score = lua_tonumber (L, -1);
 			}
 			else {
@@ -104,7 +104,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 
 			if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, symbol)) == NULL) {
 				metric_list = g_list_prepend (NULL, metric);
-				memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_list_free, metric_list);
+				rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_list_free, metric_list);
 				g_hash_table_insert (cfg->metrics_symbols, symbol, metric_list);
 			}
 			else {
@@ -172,8 +172,8 @@ lua_post_load_config (struct config_file *cfg)
 			name = luaL_checkstring (L, -2);
 			if (name != NULL && lua_isstring (L, -1)) {
 				val = lua_tostring (L, -1);
-				sym = memory_pool_strdup(cfg->cfg_pool, name);
-				if ((expr = parse_expression (cfg->cfg_pool, memory_pool_strdup(cfg->cfg_pool, val))) == NULL) {
+				sym = rspamd_mempool_strdup(cfg->cfg_pool, name);
+				if ((expr = parse_expression (cfg->cfg_pool, rspamd_mempool_strdup(cfg->cfg_pool, val))) == NULL) {
 					msg_err ("cannot parse composite expression: %s", val);
 					continue;
 				}

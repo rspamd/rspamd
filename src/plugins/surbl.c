@@ -116,16 +116,16 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 }
 
 static gchar *
-read_exceptions_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+read_exceptions_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = memory_pool_alloc0 (pool, sizeof (GHashTable *) * MAX_LEVELS);
+		data->cur_data = rspamd_mempool_alloc0 (pool, sizeof (GHashTable *) * MAX_LEVELS);
 	}
 	return abstract_parse_list (pool, chunk, len, data, (insert_func) exception_insert);
 }
 
 static void
-fin_exceptions_list (memory_pool_t * pool, struct map_cb_data *data)
+fin_exceptions_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	GHashTable                    **t;
 	gint                            i;
@@ -190,7 +190,7 @@ redirector_item_free (gpointer p)
 }
 
 static gchar                         *
-read_redirectors_list (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+read_redirectors_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, redirector_item_free);
@@ -200,7 +200,7 @@ read_redirectors_list (memory_pool_t * pool, gchar * chunk, gint len, struct map
 }
 
 void
-fin_redirectors_list (memory_pool_t * pool, struct map_cb_data *data)
+fin_redirectors_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
@@ -214,7 +214,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
+	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
@@ -225,13 +225,13 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	/* Zero exceptions hashes */
-	surbl_module_ctx->exceptions = memory_pool_alloc0 (surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
 	/* Register destructors */
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->whitelist);
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, surbl_module_ctx->whitelist);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
 
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) rspamd_trie_free, surbl_module_ctx->redirector_trie);
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) rspamd_trie_free, surbl_module_ctx->redirector_trie);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
@@ -280,7 +280,7 @@ surbl_module_config (struct config_file *cfg)
 		LL_FOREACH (value, cur) {
 			i ++;
 		}
-		surbl_module_ctx->redirectors = memory_pool_alloc0 (surbl_module_ctx->surbl_pool,
+		surbl_module_ctx->redirectors = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
 								i * sizeof (struct redirector_upstream));
 		idx = 0;
 		LL_FOREACH (value, cur) {
@@ -294,7 +294,7 @@ surbl_module_config (struct config_file *cfg)
 			}
 			else {
 				if (surbl_module_ctx->redirectors[idx].port != 0) {
-					surbl_module_ctx->redirectors[idx].name = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+					surbl_module_ctx->redirectors[idx].name = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
 							redir_val);
 					msg_info ("add redirector %s", surbl_module_ctx->redirectors[idx].name);
 					idx ++;
@@ -352,7 +352,7 @@ surbl_module_config (struct config_file *cfg)
 		if (add_map (cfg, ucl_obj_tostring (value),
 				"SURBL exceptions list", read_exceptions_list, fin_exceptions_list,
 				(void **)&surbl_module_ctx->exceptions)) {
-			surbl_module_ctx->tld2_file = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+			surbl_module_ctx->tld2_file = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
 					ucl_obj_tostring (value) + sizeof ("file://") - 1);
 		}
 	}
@@ -360,7 +360,7 @@ surbl_module_config (struct config_file *cfg)
 		if (add_map (cfg, ucl_obj_tostring (value),
 				"SURBL whitelist", read_host_list, fin_host_list,
 				(void **)&surbl_module_ctx->whitelist)) {
-			surbl_module_ctx->whitelist_file = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+			surbl_module_ctx->whitelist_file = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
 					ucl_obj_tostring (value) + sizeof ("file://") - 1);
 		}
 	}
@@ -373,8 +373,8 @@ surbl_module_config (struct config_file *cfg)
 				msg_err ("surbl rule must have explicit symbol definition");
 				continue;
 			}
-			new_suffix = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
-			new_suffix->suffix = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+			new_suffix = rspamd_mempool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct suffix_item));
+			new_suffix->suffix = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
 					ucl_obj_tostring (cur));
 			new_suffix->options = 0;
 			new_suffix->bits = NULL;
@@ -383,11 +383,11 @@ surbl_module_config (struct config_file *cfg)
 			if (cur == NULL) {
 				msg_warn ("surbl rule for suffix %s lacks symbol, using %s as symbol", new_suffix->suffix,
 						DEFAULT_SURBL_SYMBOL);
-				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+				new_suffix->symbol = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
 						DEFAULT_SURBL_SYMBOL);
 			}
 			else {
-				new_suffix->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool,
+				new_suffix->symbol = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
 						ucl_obj_tostring (cur));
 			}
 			cur = ucl_obj_get_key (cur_rule, "options");
@@ -402,9 +402,9 @@ surbl_module_config (struct config_file *cfg)
 				while ((cur_bit = ucl_iterate_object (cur, &it, true)) != NULL) {
 					if (ucl_object_key (cur_bit) != NULL && cur_bit->type == UCL_INT) {
 						bit = ucl_obj_toint (cur_bit);
-						new_bit = memory_pool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
+						new_bit = rspamd_mempool_alloc (surbl_module_ctx->surbl_pool, sizeof (struct surbl_bit_item));
 						new_bit->bit = bit;
-						new_bit->symbol = memory_pool_strdup (surbl_module_ctx->surbl_pool, ucl_object_key (cur_bit));
+						new_bit->symbol = rspamd_mempool_strdup (surbl_module_ctx->surbl_pool, ucl_object_key (cur_bit));
 						msg_debug ("add new bit suffix: %d with symbol: %s", (gint)new_bit->bit, new_bit->symbol);
 						new_suffix->bits = g_list_prepend (new_suffix->bits, new_bit);
 					}
@@ -421,7 +421,7 @@ surbl_module_config (struct config_file *cfg)
 	}
 
 	if (surbl_module_ctx->suffixes != NULL) {
-		memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
+		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_list_free,
 				surbl_module_ctx->suffixes);
 	}
 
@@ -430,7 +430,7 @@ surbl_module_config (struct config_file *cfg)
 		cur_suffix = cur_opt->data;
 		if (cur_suffix->bits != NULL) {
 			register_bit_symbols (cfg, cur_suffix);
-			memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free,
+			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_list_free,
 					cur_suffix->bits);
 		}
 		cur_opt = g_list_next (cur_opt);
@@ -443,11 +443,11 @@ gint
 surbl_module_reconfig (struct config_file *cfg)
 {
 	/* Delete pool and objects */
-	memory_pool_delete (surbl_module_ctx->surbl_pool);
+	rspamd_mempool_delete (surbl_module_ctx->surbl_pool);
 	/* Reinit module */
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = memory_pool_new (memory_pool_get_size ());
+	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
@@ -457,15 +457,15 @@ surbl_module_reconfig (struct config_file *cfg)
 	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	/* Zero exceptions hashes */
-	surbl_module_ctx->exceptions = memory_pool_alloc0 (surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
 	/* Register destructors */
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->whitelist);
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, surbl_module_ctx->whitelist);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, surbl_module_ctx->redirector_hosts);
 
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_list_free, surbl_module_ctx->suffixes);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_list_free, surbl_module_ctx->suffixes);
 	
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) rspamd_trie_free, surbl_module_ctx->redirector_trie);
-	memory_pool_add_destructor (surbl_module_ctx->surbl_pool, (pool_destruct_func) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) rspamd_trie_free, surbl_module_ctx->redirector_trie);
+	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool, (rspamd_mempool_destruct_t) g_ptr_array_unref, surbl_module_ctx->redirector_ptrs);
 
 	/* Perform configure */
 	return surbl_module_config (cfg);
@@ -474,7 +474,7 @@ surbl_module_reconfig (struct config_file *cfg)
 
 
 static gchar                    *
-format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_item *suffix,
+format_surbl_request (rspamd_mempool_t * pool, f_str_t * hostname, struct suffix_item *suffix,
 		gboolean append_suffix, GError ** err, gboolean forced, GTree *tree)
 {
 	GHashTable                     *t;
@@ -515,7 +515,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 			msg_info ("ignore request of ip url for list %s", suffix->symbol);
 			return NULL;
 		}
-		result = memory_pool_alloc (pool, len);
+		result = rspamd_mempool_alloc (pool, len);
 		r = rspamd_snprintf (result, len, "%*s.%*s.%*s.%*s", 
 				(gint)(hostname->len - (dots[2] - hostname->begin + 1)),
 				dots[2] + 1,
@@ -545,7 +545,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 		}
 
 		len = sizeof ("255.255.255.255") + slen;
-		result = memory_pool_alloc (pool, len);
+		result = rspamd_mempool_alloc (pool, len);
 		/* Hack for bugged windows resolver */
 		ip_num &= 0xFFFFFFFF;
 		/* Get octets */
@@ -554,7 +554,7 @@ format_surbl_request (memory_pool_t * pool, f_str_t * hostname, struct suffix_it
 	}
 	else {
 		/* Not a numeric url */
-		result = memory_pool_alloc (pool, len);
+		result = rspamd_mempool_alloc (pool, len);
 		/* Now we should try to check for exceptions */
 		if (! forced) {
 			for (i = MAX_LEVELS - 1; i >= 0; i --) {
@@ -637,11 +637,11 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 	if (check_view (task->cfg->views, suffix->symbol, task)) {
 		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
 				&err, forced, tree)) != NULL) {
-			param = memory_pool_alloc (task->task_pool, sizeof (struct dns_param));
+			param = rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
 			param->url = url;
 			param->task = task;
 			param->suffix = suffix;
-			param->host_resolve = memory_pool_strdup (task->task_pool, surbl_req);
+			param->host_resolve = rspamd_mempool_strdup (task->task_pool, surbl_req);
 			debug_task ("send surbl dns request %s", surbl_req);
 			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback,
 					(void *)param, RDNS_REQUEST_A, surbl_req)) {
@@ -677,13 +677,13 @@ process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar
 					(gint)bit->bit & (gint)ntohl (addr));
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
 				insert_result (task, bit->symbol, 1,
-						g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+						g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, url)));
 			}
 			cur = g_list_next (cur);
 		}
 	}
 	else {
-		insert_result (task, suffix->symbol, 1, g_list_prepend (NULL, memory_pool_strdup (task->task_pool, url)));
+		insert_result (task, suffix->symbol, 1, g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, url)));
 	}
 }
 
@@ -768,16 +768,16 @@ register_memcached_call (struct uri *url, struct worker_task *task,
 	gchar                          *sum_str;
 	gint                            *url_count;
 
-	param = memory_pool_alloc (task->task_pool, sizeof (struct memcached_param));
-	cur_param = memory_pool_alloc0 (task->task_pool, sizeof (memcached_param_t));
-	url_count = memory_pool_alloc (task->task_pool, sizeof (gint));
+	param = rspamd_mempool_alloc (task->task_pool, sizeof (struct memcached_param));
+	cur_param = rspamd_mempool_alloc0 (task->task_pool, sizeof (memcached_param_t));
+	url_count = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
 
 	param->url = url;
 	param->task = task;
 	param->suffix = suffix;
 	param->tree = tree;
 
-	param->ctx = memory_pool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
+	param->ctx = rspamd_mempool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
 
 	cur_param->buf = (gchar *) url_count;
 	cur_param->bufsize = sizeof (gint);
@@ -836,7 +836,7 @@ redirector_callback (gint fd, short what, void *arg)
 	case STATE_CONNECT:
 		/* We have write readiness after connect call, so reinit event */
 		if (what == EV_WRITE) {
-			timeout = memory_pool_alloc (param->task->task_pool, sizeof (struct timeval));
+			timeout = rspamd_mempool_alloc (param->task->task_pool, sizeof (struct timeval));
 			timeout->tv_sec = surbl_module_ctx->read_timeout / 1000;
 			timeout->tv_usec = (surbl_module_ctx->read_timeout - timeout->tv_sec * 1000) * 1000;
 			event_del (&param->ev);
@@ -885,7 +885,7 @@ redirector_callback (gint fd, short what, void *arg)
 				}
 				if (found) {
 					debug_task ("<%s> got reply from redirector: '%s' -> '%s'", param->task->message_id, struri (param->url), c);
-					r = parse_uri (param->url, memory_pool_strdup (param->task->task_pool, c), param->task->task_pool);
+					r = parse_uri (param->url, rspamd_mempool_strdup (param->task->task_pool, c), param->task->task_pool);
 					if (r == URI_ERRNO_OK || r == URI_ERRNO_NO_SLASHES || r == URI_ERRNO_NO_HOST_SLASH) {
 						make_surbl_requests (param->url, param->task, param->suffix, FALSE, param->tree);
 					}
@@ -930,7 +930,7 @@ register_redirector_call (struct uri *url, struct worker_task *task,
 		return;
 	}
 
-	param = memory_pool_alloc (task->task_pool, sizeof (struct redirector_param));
+	param = rspamd_mempool_alloc (task->task_pool, sizeof (struct redirector_param));
 	param->url = url;
 	param->task = task;
 	param->state = STATE_CONNECT;
@@ -939,7 +939,7 @@ register_redirector_call (struct uri *url, struct worker_task *task,
 	param->redirector = selected;
 	param->buf = g_string_sized_new (1024);
 	param->tree = tree;
-	timeout = memory_pool_alloc (task->task_pool, sizeof (struct timeval));
+	timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
 	timeout->tv_sec = surbl_module_ctx->connect_timeout / 1000;
 	timeout->tv_usec = (surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000) * 1000;
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
@@ -1016,7 +1016,7 @@ surbl_test_url (struct worker_task *task, void *user_data)
 	param.task = task;
 	param.suffix = suffix;
 	param.tree = g_tree_new ((GCompareFunc)strcmp);
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_tree_destroy, param.tree);
+	rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_tree_destroy, param.tree);
 	g_tree_foreach (task->urls, surbl_tree_url_callback, &param);
 }
 /*
@@ -1078,7 +1078,7 @@ urls_command_handler (struct worker_task *task)
 	cb.off = 0;
 	g_tree_foreach (task->urls, calculate_buflen_cb, &cb);
 
-	cb.buf = memory_pool_alloc (task->task_pool, cb.len * sizeof (gchar));
+	cb.buf = rspamd_mempool_alloc (task->task_pool, cb.len * sizeof (gchar));
 	cb.off += rspamd_snprintf (cb.buf + cb.off, cb.len - cb.off, "%s/%s 0 %s" CRLF "Urls:",
 				(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
 				"1.3", SPAMD_OK);

@@ -78,7 +78,7 @@ typedef struct stat_file_s {
 	time_t open_time;						/**< time when file was opened			*/
 	time_t access_time;						/**< last access time					*/
 	size_t len;								/**< length of file(in bytes)			*/
-	memory_pool_mutex_t *lock;				/**< mutex								*/
+	rspamd_mempool_mutex_t *lock;				/**< mutex								*/
 } stat_file_t;
 
 /**
@@ -88,8 +88,8 @@ typedef struct statfile_pool_s {
 	stat_file_t *files;						/**< hash table of opened files indexed by name	*/
 	void **maps;							/**< shared hash table of mmaped areas indexed by name	*/
 	gint opened;								/**< number of opened files				*/
-	memory_pool_t *pool;					/**< memory pool object					*/
-	memory_pool_mutex_t *lock;				/**< mutex								*/
+	rspamd_mempool_t *pool;					/**< memory pool object					*/
+	rspamd_mempool_mutex_t *lock;				/**< mutex								*/
 	struct event  *invalidate_event;        /**< event for pool invalidation        */
 	struct timeval invalidate_tv;
 	gboolean mlock_ok;						/**< whether it is possible to use mlock (2) to avoid statfiles unloading */
@@ -104,7 +104,7 @@ struct statfile;
  * @param max_size maximum size
  * @return statfile pool object
  */
-statfile_pool_t* statfile_pool_new (memory_pool_t *pool, gboolean use_mlock);
+statfile_pool_t* statfile_pool_new (rspamd_mempool_t *pool, gboolean use_mlock);
 
 /**
  * Open statfile and attach it to pool

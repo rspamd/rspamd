@@ -115,7 +115,7 @@ settings_unref (struct rspamd_settings *s)
 
 
 gchar                         *
-json_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+json_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
 	size_t                          free, off;
@@ -155,7 +155,7 @@ json_read_cb (memory_pool_t * pool, gchar * chunk, gint len, struct map_cb_data 
 }
 
 void
-json_fin_cb (memory_pool_t * pool, struct map_cb_data *data)
+json_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	struct json_buf                *jb;
 	gint                            nelts, i, n, j;
@@ -579,13 +579,13 @@ apply_metric_settings (struct worker_task *task, struct metric *metric, struct m
 		if (us != NULL || ds != NULL) {
 			if (us != NULL) {
 				res->user_settings = settings_ref (us);
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)settings_unref,
+				rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)settings_unref,
 						us);
 			}
 			if (ds != NULL) {
 				/* Need to ref hash table to avoid occasional data corruption */
 				res->domain_settings = settings_ref (ds);
-				memory_pool_add_destructor (task->task_pool, (pool_destruct_func)settings_unref,
+				rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)settings_unref,
 						ds);
 			}
 		}

@@ -34,7 +34,7 @@
 #define UTF8_CHARSET "UTF-8"
 
 GByteArray                     *
-strip_html_tags (struct worker_task *task, memory_pool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
+strip_html_tags (struct worker_task *task, rspamd_mempool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
 {
 	uint8_t                        *p, *rp, *tbegin = NULL, *end, c, lc;
 	gint                            br, i = 0, depth = 0, in_q = 0;
@@ -252,7 +252,7 @@ unbreak_tag:
 }
 
 static void
-parse_qmail_recv (memory_pool_t * pool, gchar *line, struct received_header *r)
+parse_qmail_recv (rspamd_mempool_t * pool, gchar *line, struct received_header *r)
 {
 	gchar                           *s, *p, t;
 
@@ -276,7 +276,7 @@ parse_qmail_recv (memory_pool_t * pool, gchar *line, struct received_header *r)
 		}
 		else {
 			*p = '\0';
-			r->real_ip = memory_pool_strdup (pool, s);
+			r->real_ip = rspamd_mempool_strdup (pool, s);
 			*p = '/';
 			/* Now try to parse hostname */
 			s = ++p;
@@ -285,14 +285,14 @@ parse_qmail_recv (memory_pool_t * pool, gchar *line, struct received_header *r)
 			}
 			t = *p;
 			*p = '\0';
-			r->real_hostname = memory_pool_strdup (pool, s);
+			r->real_hostname = rspamd_mempool_strdup (pool, s);
 			*p = t;
 		}
 	}
 }
 
 static void
-parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
+parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header *r)
 {
 	gchar                           *p, *s, t, **res = NULL;
 	enum {
@@ -347,7 +347,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			else {
 				t = *p;
 				*p = '\0';
-				r->from_hostname = memory_pool_strdup (pool, s);
+				r->from_hostname = rspamd_mempool_strdup (pool, s);
 				*p = t;
 				state = RSPAMD_RECV_STATE_SKIP_SPACES;
 				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
@@ -414,7 +414,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 								p ++;
 							}
 							if (p > s) {
-								r->from_hostname = memory_pool_alloc (pool, p - s + 1);
+								r->from_hostname = rspamd_mempool_alloc (pool, p - s + 1);
 								rspamd_strlcpy (r->from_hostname, s, p - s + 1);
 							}
 						}
@@ -446,7 +446,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 						/* Postfix style (hostname [ip]) */
 						t = *p;
 						*p = '\0';
-						r->real_hostname = memory_pool_strdup (pool, s);
+						r->real_hostname = rspamd_mempool_strdup (pool, s);
 						*p = t;
 						/* Now parse ip */
 						p += 2;
@@ -485,11 +485,11 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 				if (p[1] != '\0') {
 					t = *p;
 					*p = '\0';
-					r->by_hostname = memory_pool_strdup (pool, s);
+					r->by_hostname = rspamd_mempool_strdup (pool, s);
 					*p = t;
 				}
 				else {
-					r->by_hostname = memory_pool_strdup (pool, s);
+					r->by_hostname = rspamd_mempool_strdup (pool, s);
 				}
 				/* Now end of parsing */
 				if (is_exim) {
@@ -520,7 +520,7 @@ parse_recv_header (memory_pool_t * pool, gchar *line, struct received_header *r)
 			}
 			else {
 				*p = '\0';
-				*res = memory_pool_strdup (pool, s);
+				*res = rspamd_mempool_strdup (pool, s);
 				*p = ']';
 				p++;
 				state = RSPAMD_RECV_STATE_SKIP_SPACES;
@@ -577,9 +577,9 @@ process_raw_headers (struct worker_task *task)
 		case 1:
 			/* We got something like header's name */
 			if (*p == ':') {
-				new = memory_pool_alloc0 (task->task_pool, sizeof (struct raw_header));
+				new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct raw_header));
 				l = p - c;
-				tmp = memory_pool_alloc (task->task_pool, l + 1);
+				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
 				new->name = tmp;
 				new->empty_separator = TRUE;
@@ -612,7 +612,7 @@ process_raw_headers (struct worker_task *task)
 				state = 99;
 				l = p - c;
 				if (l > 0) {
-					tmp = memory_pool_alloc (task->task_pool, l + 1);
+					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
 				}
@@ -624,7 +624,7 @@ process_raw_headers (struct worker_task *task)
 				/* Process value */
 				l = p - c;
 				if (l >= 0) {
-					tmp = memory_pool_alloc (task->task_pool, l + 1);
+					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
 				}
@@ -649,7 +649,7 @@ process_raw_headers (struct worker_task *task)
 		case 4:
 			/* Copy header's value */
 			l = p - c;
-			tmp = memory_pool_alloc (task->task_pool, l + 1);
+			tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 			tp = tmp;
 			t_state = 0;
 			while (l --) {
@@ -812,10 +812,10 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 		return part_content;
 	}
 
-	result_array = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
+	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	result_array->data = res_str;
 	result_array->len = write_bytes;
-	memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, res_str);
+	rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_free, res_str);
 	text_part->is_raw = FALSE;
 	text_part->is_utf = TRUE;
 
@@ -847,7 +847,7 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
 		debug_task ("got urls from text/html part");
 
-		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
+		text_part = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = TRUE;
 		if (is_empty) {
 			text_part->is_empty = TRUE;
@@ -875,13 +875,13 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 		}
 
 		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) free_byte_array_callback, text_part->content);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) free_byte_array_callback, text_part->content);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 	else if (g_mime_content_type_is_type (type, "text", "*")) {
 		debug_task ("got urls from text/plain part");
 
-		text_part = memory_pool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
+		text_part = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
 		text_part->is_html = FALSE;
 		text_part->parent = parent;
 		if (is_empty) {
@@ -980,9 +980,9 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			msg_warn ("type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
 #ifdef GMIME24
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, type);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, type);
 #else
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_mime_content_type_destroy, type);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_mime_content_type_destroy, type);
 #endif
 		}
 		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
@@ -996,7 +996,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream), FALSE);
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
 				g_object_unref (part_stream);
-				mime_part = memory_pool_alloc (task->task_pool, sizeof (struct mime_part));
+				mime_part = rspamd_mempool_alloc (task->task_pool, sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
 				mime_part->parent = task->parser_parent_part;
@@ -1047,7 +1047,7 @@ process_message (struct worker_task *task)
 	gsize                           len;
 	gint                            rc;
 
-	tmp = memory_pool_alloc (task->task_pool, sizeof (GByteArray));
+	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->str;
 	tmp->len = task->msg->len;
 
@@ -1074,7 +1074,7 @@ process_message (struct worker_task *task)
 		}
 
 		task->message = message;
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) destroy_message, task->message);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) destroy_message, task->message);
 
 		/* Save message id for future use */
 		task->message_id = g_mime_message_get_message_id (task->message);
@@ -1112,7 +1112,7 @@ process_message (struct worker_task *task)
 		first = message_get_header (task->task_pool, message, "Received", FALSE);
 		cur = first;
 		while (cur) {
-			recv = memory_pool_alloc0 (task->task_pool, sizeof (struct received_header));
+			recv = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct received_header));
 			parse_recv_header (task->task_pool, cur->data, recv);
 			task->received = g_list_prepend (task->received, recv);
 			cur = g_list_next (cur);
@@ -1122,16 +1122,16 @@ process_message (struct worker_task *task)
 		}
 
 		if (task->raw_headers_str) {
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, task->raw_headers_str);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
 			process_raw_headers (task);
 		}
 
 		task->rcpts = g_mime_message_get_all_recipients (message);
 		if (task->rcpts) {
 #ifdef GMIME24
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, task->rcpts);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, task->rcpts);
 #else
-			memory_pool_add_destructor (task->task_pool, (pool_destruct_func) internet_address_list_destroy, task->rcpts);
+			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) internet_address_list_destroy, task->rcpts);
 #endif
 		}
 
@@ -1156,9 +1156,9 @@ process_message (struct worker_task *task)
 		g_mime_part_set_content_object (part, wrapper);
 		g_mime_message_set_mime_part (task->message, GMIME_OBJECT (part));
 		/* Register destructors */
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, wrapper);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_object_unref, part);
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) destroy_message, task->message);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, wrapper);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, part);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) destroy_message, task->message);
 		/* Now parse in a normal way */
 		task->parser_recursion = 0;
 #ifdef GMIME24
@@ -1168,7 +1168,7 @@ process_message (struct worker_task *task)
 #endif
 		/* Generate message ID */
 		mid = g_mime_utils_generate_message_id ("localhost.localdomain");
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) g_free, mid);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_free, mid);
 		g_mime_message_set_message_id (task->message, mid);
 		task->message_id = mid;
 		task->queue_id = mid;
@@ -1200,7 +1200,7 @@ process_message (struct worker_task *task)
 			/* Search to the end of url */
 			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end, &url_str, FALSE)) {
 				if (url_str != NULL) {
-					subject_url = memory_pool_alloc0 (task->task_pool, sizeof (struct uri));
+					subject_url = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct uri));
 					if (subject_url != NULL) {
 						/* Try to parse url */
 						rc = parse_uri (subject_url, url_str, task->task_pool);
@@ -1261,13 +1261,13 @@ enum {
  */
 #ifndef GMIME24
 static void
-header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, const gchar *field, gboolean strong)
+header_iterate (rspamd_mempool_t * pool, struct gmime_raw_header *h, GList ** ret, const gchar *field, gboolean strong)
 {
 	while (h) {
 		if (G_LIKELY (!strong)) {
 			if (h->value && !g_ascii_strncasecmp (field, h->name, strlen (field))) {
 				if (pool != NULL) {
-					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
+					*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, h->value));
 				}
 				else {
 					*ret = g_list_prepend (*ret, g_strdup (h->value));
@@ -1277,7 +1277,7 @@ header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, 
 		else {
 			if (h->value && !strncmp (field, h->name, strlen (field))) {
 				if (pool != NULL) {
-					*ret = g_list_prepend (*ret, memory_pool_strdup (pool, h->value));
+					*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, h->value));
 				}
 				else {
 					*ret = g_list_prepend (*ret, g_strdup (h->value));
@@ -1289,7 +1289,7 @@ header_iterate (memory_pool_t * pool, struct gmime_raw_header *h, GList ** ret, 
 }
 #else
 static void
-header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field, gboolean strong)
+header_iterate (rspamd_mempool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field, gboolean strong)
 {
 	/* Use iterator in case of gmime 2.4 */
 	GMimeHeaderIter                *iter;
@@ -1308,7 +1308,7 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 			if (G_LIKELY (!strong)) {
 				if (!g_ascii_strncasecmp (field, name, strlen (name))) {
 					if (pool != NULL) {
-						*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+						*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, g_mime_header_iter_get_value (iter)));
 					}
 					else {
 						*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
@@ -1318,7 +1318,7 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 			else {
 				if (!strncmp (field, name, strlen (name))) {
 					if (pool != NULL) {
-						*ret = g_list_prepend (*ret, memory_pool_strdup (pool, g_mime_header_iter_get_value (iter)));
+						*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, g_mime_header_iter_get_value (iter)));
 					}
 					else {
 						*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
@@ -1337,7 +1337,7 @@ header_iterate (memory_pool_t * pool, GMimeHeaderList * ls, GList ** ret, const 
 
 struct multipart_cb_data {
 	GList                          *ret;
-	memory_pool_t                  *pool;
+	rspamd_mempool_t                  *pool;
 	const gchar                     *field;
 	gboolean                        try_search;
 	gboolean                        strong;
@@ -1392,7 +1392,7 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 }
 
 static GList                   *
-local_message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
+local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
 {
 	GList                          *gret = NULL;
 	GMimeObject                    *part;
@@ -1564,7 +1564,7 @@ local_message_get_recipients_##type (GMimeMessage *message, const gchar *unused)
 /* different declarations for different types of set and get functions */
   typedef const gchar             *(*GetFunc) (GMimeMessage * message);
   typedef InternetAddressList    *(*GetRcptFunc) (GMimeMessage * message, const gchar *type);
-  typedef GList                  *(*GetListFunc) (memory_pool_t * pool, GMimeMessage * message, const gchar *type, gboolean strong);
+  typedef GList                  *(*GetListFunc) (rspamd_mempool_t * pool, GMimeMessage * message, const gchar *type, gboolean strong);
   typedef void                    (*SetFunc) (GMimeMessage * message, const gchar *value);
   typedef void                    (*SetListFunc) (GMimeMessage * message, const gchar *field, const gchar *value);
 
@@ -1668,7 +1668,7 @@ message_set_header (GMimeMessage * message, const gchar *field, const gchar *val
 * You should free the GList list by yourself.
 **/
 GList                          *
-message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
+message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
 {
 	gint                            i;
 	gchar                           *ret = NULL, *ia_string;
@@ -1692,7 +1692,7 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 
 					ia_string = internet_address_to_string ((InternetAddress *) ia->address, FALSE);
 					if (pool != NULL) {
-						memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
+						rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_free, ia_string);
 					}
 					gret = g_list_prepend (gret, ia_string);
 					ia = ia->next;
@@ -1702,7 +1702,7 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 				while (--i >= 0) {
 					ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
 					if (pool != NULL) {
-						memory_pool_add_destructor (pool, (pool_destruct_func) g_free, ia_string);
+						rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_free, ia_string);
 					}
 					gret = g_list_prepend (gret, ia_string);
 				}
@@ -1717,7 +1717,7 @@ message_get_header (memory_pool_t * pool, GMimeMessage * message, const gchar *f
 	}
 	if (gret == NULL && ret != NULL) {
 		if (pool != NULL) {
-			gret = g_list_prepend (gret, memory_pool_strdup (pool, ret));
+			gret = g_list_prepend (gret, rspamd_mempool_strdup (pool, ret));
 		}
 		else {
 			gret = g_list_prepend (gret, g_strdup (ret));
@@ -1757,7 +1757,7 @@ message_get_raw_header (struct worker_task *task, const gchar *field, gboolean s
 	}
 
 	if (gret != NULL) {
-		memory_pool_add_destructor (task->task_pool, (pool_destruct_func)g_list_free, gret);
+		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, gret);
 	}
 
 	return gret;

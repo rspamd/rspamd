@@ -175,11 +175,11 @@ lua_config_get_module_opt (lua_State * L)
 static int
 lua_config_get_mempool (lua_State * L)
 {
-	memory_pool_t                  **ppool;
+	rspamd_mempool_t                  **ppool;
 	struct config_file             *cfg = lua_check_config (L);
 
 	if (cfg != NULL) {
-		ppool = lua_newuserdata (L, sizeof (memory_pool_t *));
+		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
 		lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = cfg->cfg_pool;
 	}
@@ -316,11 +316,11 @@ lua_config_register_function (lua_State *L)
 	struct lua_callback_data       *cd;
 	
 	if (cfg) {
-		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 
 		if (lua_type (L, 3) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 3));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 3));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -334,7 +334,7 @@ lua_config_register_function (lua_State *L)
 			cd->symbol = name;
 			register_expression_function (name, lua_config_function_callback, cd);
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;
 }
@@ -380,9 +380,9 @@ lua_config_register_post_filter (lua_State *L)
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -393,7 +393,7 @@ lua_config_register_post_filter (lua_State *L)
 		}
 		cd->L = L;
 		cfg->post_filters = g_list_prepend (cfg->post_filters, cd);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;
 }
@@ -433,9 +433,9 @@ lua_config_register_pre_filter (lua_State *L)
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -446,7 +446,7 @@ lua_config_register_pre_filter (lua_State *L)
 		}
 		cd->L = L;
 		cfg->pre_filters = g_list_prepend (cfg->pre_filters, cd);
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;
 }
@@ -461,7 +461,7 @@ lua_config_add_radix_map (lua_State *L)
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
-		r = memory_pool_alloc (cfg->cfg_pool, sizeof (radix_tree_t *));
+		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_tree_t *));
 		*r = radix_tree_create ();
 		if (!add_map (cfg, map_line, description, read_radix_list, fin_radix_list, (void **)r)) {
 			msg_warn ("invalid radix map %s", map_line);
@@ -491,7 +491,7 @@ lua_config_add_hash_map (lua_State *L)
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
-		r = memory_pool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
+		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 		if (!add_map (cfg, map_line, description, read_host_list, fin_host_list, (void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
@@ -499,7 +499,7 @@ lua_config_add_hash_map (lua_State *L)
 			lua_pushnil (L);
 			return 1;
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, *r);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, *r);
 		ud = lua_newuserdata (L, sizeof (GHashTable *));
 		*ud = r;
 		lua_setclass (L, "rspamd{hash_table}", -1);
@@ -522,7 +522,7 @@ lua_config_add_kv_map (lua_State *L)
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
-		r = memory_pool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
+		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 		if (!add_map (cfg, map_line, description, read_kv_list, fin_kv_list, (void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
@@ -530,7 +530,7 @@ lua_config_add_kv_map (lua_State *L)
 			lua_pushnil (L);
 			return 1;
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)g_hash_table_destroy, *r);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, *r);
 		ud = lua_newuserdata (L, sizeof (GHashTable *));
 		*ud = r;
 		lua_setclass (L, "rspamd{hash_table}", -1);
@@ -577,11 +577,11 @@ lua_config_register_symbol (lua_State * L)
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 4) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -595,7 +595,7 @@ lua_config_register_symbol (lua_State * L)
 			cd->L = L;
 			register_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 0;
 }
@@ -614,9 +614,9 @@ lua_config_register_symbols (lua_State *L)
 		return 0;
 	}
 	if (cfg) {
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -632,12 +632,12 @@ lua_config_register_symbols (lua_State *L)
 		else {
 			top = 3;
 		}
-		sym = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
+		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
 		cd->symbol = sym;
 		cd->L = L;
 		register_symbol (&cfg->cache, sym, weight, lua_metric_symbol_callback, cd);
 		for (i = top; i < lua_gettop (L); i ++) {
-			sym = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, i + 1));
+			sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, i + 1));
 			register_virtual_symbol (&cfg->cache, sym, weight);
 		}
 	}
@@ -653,7 +653,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 	double                          weight;
 
 	if (cfg) {
-		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		if (name) {
 			register_virtual_symbol (&cfg->cache, name, weight);
@@ -671,11 +671,11 @@ lua_config_register_callback_symbol (lua_State * L)
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 4) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -689,7 +689,7 @@ lua_config_register_callback_symbol (lua_State * L)
 			cd->L = L;
 			register_callback_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 0;
 }
@@ -704,12 +704,12 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		priority = luaL_checknumber (L, 4);
-		cd = memory_pool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 5) == LUA_TSTRING) {
-			cd->callback.name = memory_pool_strdup (cfg->cfg_pool, luaL_checkstring (L, 5));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 5));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -724,7 +724,7 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 			cd->symbol = name;
 			register_callback_symbol_priority (&cfg->cache, name, weight, priority, lua_metric_symbol_callback, cd);
 		}
-		memory_pool_add_destructor (cfg->cfg_pool, (pool_destruct_func)lua_destroy_cfg_symbol, cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 
 	}
 	return 0;

@@ -67,17 +67,17 @@ rspamd_dns_test_func ()
 {
 	struct rspamd_dns_resolver *resolver;
 	struct config_file *cfg;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	struct rspamd_async_session *s;
 	struct in_addr ina;
 
 	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
 	bzero (cfg, sizeof (struct config_file));
-	cfg->cfg_pool = memory_pool_new (memory_pool_get_size ());
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	cfg->dns_retransmits = 10;
 	cfg->dns_timeout = 1000;
 
-	pool = memory_pool_new (memory_pool_get_size ());
+	pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	s = new_async_session (pool, session_fin, NULL, NULL, NULL);
 

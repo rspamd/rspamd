@@ -68,9 +68,9 @@ struct roll_history_row {
 struct roll_history {
 	struct roll_history_row rows[HISTORY_MAX_ROWS];
 	gint cur_row;
-	memory_pool_t *pool;
+	rspamd_mempool_t *pool;
 	gboolean need_lock;
-	memory_pool_mutex_t *mtx;
+	rspamd_mempool_mutex_t *mtx;
 };
 
 /**
@@ -78,7 +78,7 @@ struct roll_history {
  * @param pool pool for shared memory
  * @return new structure
  */
-struct roll_history* rspamd_roll_history_new (memory_pool_t *pool);
+struct roll_history* rspamd_roll_history_new (rspamd_mempool_t *pool);
 
 /**
  * Update roll history with data from task

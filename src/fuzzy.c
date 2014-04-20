@@ -253,14 +253,14 @@ lev_distance (gchar *s1, gint len1, gchar *s2, gint len2)
 
 /* Calculate fuzzy hash for specified string */
 fuzzy_hash_t                   *
-fuzzy_init (f_str_t * in, memory_pool_t * pool)
+fuzzy_init (f_str_t * in, rspamd_mempool_t * pool)
 {
 	fuzzy_hash_t                   *new;
 	guint                           i, repeats = 0;
 	gchar                          *c = in->begin, last = '\0';
 	gsize                           real_len = 0;
 
-	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	new = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
 	for (i = 0; i < in->len; i++) {
 		if (*c == last) {
@@ -302,7 +302,7 @@ fuzzy_init (f_str_t * in, memory_pool_t * pool)
 }
 
 fuzzy_hash_t                   *
-fuzzy_init_byte_array (GByteArray * in, memory_pool_t * pool)
+fuzzy_init_byte_array (GByteArray * in, rspamd_mempool_t * pool)
 {
 	f_str_t                         f;
 
@@ -313,7 +313,7 @@ fuzzy_init_byte_array (GByteArray * in, memory_pool_t * pool)
 }
 
 void
-fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_diff)
+fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_diff)
 {
 	fuzzy_hash_t                   *new, *new2;
 	gchar                          *c, *end, *begin;
@@ -330,8 +330,8 @@ fuzzy_init_part (struct mime_text_part *part, memory_pool_t *pool, gsize max_dif
 
 	begin = (gchar *)part->content->data;
 	c = begin;
-	new = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
-	new2 = memory_pool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	new = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	new2 = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
 	end = c + len;
 

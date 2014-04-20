@@ -168,14 +168,14 @@ statfile_pool_check (stat_file_t * file)
 
 
 statfile_pool_t                *
-statfile_pool_new (memory_pool_t *pool, gboolean use_mlock)
+statfile_pool_new (rspamd_mempool_t *pool, gboolean use_mlock)
 {
 	statfile_pool_t                *new;
 
-	new = memory_pool_alloc0 (pool, sizeof (statfile_pool_t));
-	new->pool = memory_pool_new (memory_pool_get_size ());
-	new->files = memory_pool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
-	new->lock = memory_pool_get_mutex (new->pool);
+	new = rspamd_mempool_alloc0 (pool, sizeof (statfile_pool_t));
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	new->files = rspamd_mempool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
+	new->lock = rspamd_mempool_get_mutex (new->pool);
 	new->mlock_ok = use_mlock;
 
 	return new;
@@ -198,17 +198,17 @@ statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size,
 	}
 
 	/* First of all rename old file */
-	memory_pool_lock_mutex (pool->lock);
+	rspamd_mempool_lock_mutex (pool->lock);
 
 	backup = g_strconcat (filename, ".old", NULL);
 	if (rename (filename, backup) == -1) {
 		msg_err ("cannot rename %s to %s: %s", filename, backup, strerror (errno));
 		g_free (backup);
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		return NULL;
 	}
 
-	memory_pool_unlock_mutex (pool->lock);
+	rspamd_mempool_unlock_mutex (pool->lock);
 
 	/* Now create new file with required size */
 	if (statfile_pool_create (pool, filename, size) != 0) {
@@ -306,10 +306,10 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 		return NULL;
 	}
 
-	memory_pool_lock_mutex (pool->lock);
+	rspamd_mempool_lock_mutex (pool->lock);
 	if (!forced && labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
 			&& size > sizeof (struct stat_file)) {
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", (size_t)st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
 	}
@@ -321,14 +321,14 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	bzero (new_file, sizeof (stat_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1) {
 		msg_info ("cannot open file %s, error %d, %s", filename, errno, strerror (errno));
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		pool->opened--;
 		return NULL;
 	}
 
 	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == MAP_FAILED) {
 		close (new_file->fd);
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		msg_info ("cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
 		pool->opened--;
 		return NULL;
@@ -348,7 +348,7 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 	lock_file (new_file->fd, FALSE);
 	if (statfile_pool_check (new_file) == -1) {
 		pool->opened--;
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		unlock_file (new_file->fd, FALSE);
         munmap (new_file->map, st.st_size);
 		return NULL;
@@ -357,11 +357,11 @@ statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboole
 
 	new_file->open_time = time (NULL);
 	new_file->access_time = new_file->open_time;
-	new_file->lock = memory_pool_get_mutex (pool->pool);
+	new_file->lock = rspamd_mempool_get_mutex (pool->pool);
 
 	statfile_preload (new_file);
 
-	memory_pool_unlock_mutex (pool->lock);
+	rspamd_mempool_unlock_mutex (pool->lock);
 
 	return statfile_pool_is_open (pool, filename);
 }
@@ -376,7 +376,7 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 		return -1;
 	}
 
-	memory_pool_lock_mutex (pool->lock);
+	rspamd_mempool_lock_mutex (pool->lock);
 
 	if (file->map) {
 		msg_info ("syncing statfile %s", file->filename);
@@ -390,7 +390,7 @@ statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_s
 	memmove (pos, ((guint8 *)pos) + sizeof (stat_file_t),
 			(--pool->opened - (pos - pool->files)) * sizeof (stat_file_t));
 
-	memory_pool_unlock_mutex (pool->lock);
+	rspamd_mempool_unlock_mutex (pool->lock);
 
 	return 0;
 }
@@ -425,13 +425,13 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 		return -1;
 	}
 
-	memory_pool_lock_mutex (pool->lock);
+	rspamd_mempool_lock_mutex (pool->lock);
 	nblocks = (size - sizeof (struct stat_file_header) - sizeof (struct stat_file_section)) / sizeof (struct stat_file_block);
 	header.total_blocks = nblocks;
 
 	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
 		msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
 	}
 
@@ -441,7 +441,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 	if (write (fd, &header, sizeof (header)) == -1) {
 		msg_info ("cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
 	}
 
@@ -449,7 +449,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 	if (write (fd, &section, sizeof (section)) == -1) {
 		msg_info ("cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
-		memory_pool_unlock_mutex (pool->lock);
+		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
 	}
 	
@@ -465,7 +465,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 			if (write (fd, buf, buflen) == -1) {
 				msg_info ("cannot write blocks buffer to file %s, error %d, %s", filename, errno, strerror (errno));
 				close (fd);
-				memory_pool_unlock_mutex (pool->lock);
+				rspamd_mempool_unlock_mutex (pool->lock);
 				g_free (buf);
 				return -1;
 			}
@@ -478,7 +478,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 				if (buf) {
 					g_free (buf);
 				}
-				memory_pool_unlock_mutex (pool->lock);
+				rspamd_mempool_unlock_mutex (pool->lock);
 				return -1;
 			}
 			nblocks --;
@@ -486,7 +486,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 	}
 
 	close (fd);
-	memory_pool_unlock_mutex (pool->lock);
+	rspamd_mempool_unlock_mutex (pool->lock);
 
 	if (buf) {
 		g_free (buf);
@@ -503,21 +503,21 @@ statfile_pool_delete (statfile_pool_t * pool)
 	for (i = 0; i < pool->opened; i++) {
 		statfile_pool_close (pool, &pool->files[i], FALSE);
 	}
-	memory_pool_delete (pool->pool);
+	rspamd_mempool_delete (pool->pool);
 }
 
 void
 statfile_pool_lock_file (statfile_pool_t * pool, stat_file_t * file)
 {
 
-	memory_pool_lock_mutex (file->lock);
+	rspamd_mempool_lock_mutex (file->lock);
 }
 
 void
 statfile_pool_unlock_file (statfile_pool_t * pool, stat_file_t * file)
 {
 
-	memory_pool_unlock_mutex (file->lock);
+	rspamd_mempool_unlock_mutex (file->lock);
 }
 
 double
@@ -851,7 +851,7 @@ statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jit
 		}
 	}
 	else {
-		pool->invalidate_event = memory_pool_alloc (pool->pool, sizeof (struct event));
+		pool->invalidate_event = rspamd_mempool_alloc (pool->pool, sizeof (struct event));
 		pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
 		pool->invalidate_tv.tv_usec = 0;
 		evtimer_set (pool->invalidate_event, statfile_pool_invalidate_callback, pool);
