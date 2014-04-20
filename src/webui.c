@@ -1521,152 +1521,52 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
-#if 0
-
 /*
- * Save symbols command handler:
- * request: /savesymbols
- * headers: Password
- * input: json data
- * reply: json {"success":true} or {"error":"error message"}
- */
-static void
-rspamd_webui_handle_save_symbols (struct evhttp_request *req, gpointer arg)
-{
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
-	struct metric							*metric;
-	struct symbol							*sym;
-	json_t									*json, *jv, *jname, *jvalue;
-	json_error_t							 je;
-	guint									 i, len;
-	gdouble									 val;
-
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
-
-	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
-	if (metric == NULL) {
-		msg_err ("cannot find default metric");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 default metric not defined", NULL);
-		return;
-	}
-
-	/* Now check for dynamic config */
-	if (!ctx->cfg->dynamic_conf) {
-		msg_err ("dynamic conf has not been defined");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "503 dynamic config not found, cannot save", NULL);
-		return;
-	}
-
-	/* Try to load json */
-	json = json_load_evbuffer (req->input_buffer, &je);
-	if (json == NULL) {
-		msg_err ("json load error: %s", je.text);
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "504 json parse error", NULL);
-		return;
-	}
-
-	if (!json_is_array (json) || (len = json_array_size (json)) == 0) {
-		msg_err ("json data error");
-		evbuffer_free (evb);
-		json_delete (json);
-		evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
-		return;
-	}
-
-	/* Iterate over all elements */
-	for (i = 0; i < len; i ++) {
-		jv = json_array_get (json, i);
-		if (!json_is_object (jv)) {
-			msg_err ("json array data error");
-			evbuffer_free (evb);
-			json_delete (json);
-			evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
-			return;
-		}
-		jname = json_object_get (jv, "name");
-		jvalue = json_object_get (jv, "value");
-		if (!json_is_string (jname) || !json_is_number (jvalue)) {
-			msg_err ("json object data error");
-			evbuffer_free (evb);
-			json_delete (json);
-			evhttp_send_reply (req, HTTP_INTERNAL, "505 invalid json data", NULL);
-			return;
-		}
-		val = json_number_value (jvalue);
-		sym = g_hash_table_lookup (metric->symbols, json_string_value (jname));
-		if (sym && fabs (sym->score - val) > 0.01) {
-			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC, json_string_value (jname), val)) {
-				evbuffer_free (evb);
-				json_delete (json);
-				evhttp_send_reply (req, HTTP_INTERNAL, "506 cannot write symbol's value", NULL);
-				return;
-			}
-		}
-	}
-
-	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
-}
-
-/*
- * Save symbols command handler:
- * request: /savesymbols
+ * Save map command handler:
+ * request: /savemap
  * headers: Password, Map
  * input: plaintext data
  * reply: json {"success":true} or {"error":"error message"}
  */
-static void
-rspamd_webui_handle_save_map (struct evhttp_request *req, gpointer arg)
+static int
+rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 	GList									*cur;
 	struct rspamd_map						*map;
+	struct rspamd_webui_worker_ctx 			*ctx;
 	const gchar								*idstr;
 	gchar									*errstr;
 	guint32									 id;
 	gboolean								 found = FALSE;
 	gint									 fd;
 
+	ctx = session->ctx;
 
-	if (!http_check_password (ctx, req)) {
-		return;
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+		return 0;
 	}
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
+	if (msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
 	}
 
-	idstr = evhttp_find_header (req->input_headers, "Map");
+	idstr = rspamd_http_message_find_header (msg, "Map");
 
 	if (idstr == NULL) {
 		msg_info ("absent map id");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 400, "Map id not specified");
+		return 0;
 	}
 
 	id = strtoul (idstr, &errstr, 10);
 	if (*errstr != '\0') {
 		msg_info ("invalid map id");
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 400, "Map id is invalid");
+		return 0;
 	}
 
 	/* Now let's be sure that we have map defined in configuration */
@@ -1682,16 +1582,14 @@ rspamd_webui_handle_save_map (struct evhttp_request *req, gpointer arg)
 
 	if (!found) {
 		msg_info ("map not found: %d", id);
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map not found", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 404, "Map id not found");
+		return 0;
 	}
 
 	if (g_atomic_int_get (map->locked)) {
 		msg_info ("map locked: %s", map->uri);
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map is locked", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 404, "Map is locked");
+		return 0;
 	}
 
 	/* Set lock */
@@ -1700,30 +1598,28 @@ rspamd_webui_handle_save_map (struct evhttp_request *req, gpointer arg)
 	if (fd == -1) {
 		g_atomic_int_set (map->locked, 0);
 		msg_info ("map %s open error: %s", map->uri, strerror (errno));
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_NOTFOUND, "404 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 404, "Map id not found");
+		return 0;
 	}
 
-	if (evbuffer_write (req->input_buffer, fd) == -1) {
+	if (write (fd, msg->body->str, msg->body->len) == -1) {
+		msg_info ("map %s write error: %s", map->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
-		msg_info ("map %s open error: %s", map->uri, strerror (errno));
-		evbuffer_free (evb);
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 map open error", NULL);
-		return;
+		rspamd_webui_send_error (conn_ent, 500, "Map write error");
+		return 0;
 	}
 
 	/* Close and unlock */
 	close (fd);
 	g_atomic_int_set (map->locked, 0);
 
-	evbuffer_add_printf (evb, "{\"success\":true}" CRLF);
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
 }
+
+#if 0
 
 /*
  * Learn ham command handler:
@@ -1931,11 +1827,9 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learnham);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_saveactions);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_savesymbols);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_savemap);
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
-
-
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_save_map, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan, ctx);
 #endif
 
