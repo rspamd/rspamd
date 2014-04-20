@@ -1424,6 +1424,103 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+/*
+ * Save symbols command handler:
+ * request: /savesymbols
+ * headers: Password
+ * input: json data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct ucl_parser						*parser;
+	struct metric							*metric;
+	ucl_object_t							*obj;
+	const ucl_object_t						*cur, *jname, *jvalue;
+	ucl_object_iter_t						 iter = NULL;
+	struct rspamd_webui_worker_ctx 			*ctx;
+	const gchar								*error;
+	gdouble									 val;
+	struct symbol							*sym;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+		return 0;
+	}
+
+	if (msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric == NULL) {
+		msg_err ("cannot find default metric");
+		rspamd_webui_send_error (conn_ent, 500, "Default metric is absent");
+		return 0;
+	}
+
+	/* Now check for dynamic config */
+	if (!ctx->cfg->dynamic_conf) {
+		msg_err ("dynamic conf has not been defined");
+		rspamd_webui_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		return 0;
+	}
+
+	parser = ucl_parser_new (0);
+	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+
+	if ((error = ucl_parser_get_error (parser)) != NULL) {
+		msg_err ("cannot parse input: %s", error);
+		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_parser_free (parser);
+		return 0;
+	}
+
+	obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+
+	if (obj->type != UCL_ARRAY || obj->len != 3) {
+		msg_err ("input is not an array of 3 elements");
+		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_object_unref (obj);
+		return 0;
+	}
+
+	while ((cur = ucl_iterate_object (obj, &iter, true))) {
+		if (cur->type != UCL_OBJECT) {
+			msg_err ("json array data error");
+			rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+			ucl_object_unref (obj);
+			return 0;
+		}
+		jname = ucl_object_find_key (cur, "name");
+		jvalue = ucl_object_find_key (cur, "value");
+		val = ucl_object_todouble (jvalue);
+		sym = g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
+		if (sym && fabs (sym->score - val) > 0.01) {
+			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
+					ucl_object_tostring (jname), val)) {
+				msg_err ("add symbol failed for %s", ucl_object_tostring (jname));
+				rspamd_webui_send_error (conn_ent, 506, "Add symbol failed");
+				ucl_object_unref (obj);
+				return 0;
+			}
+		}
+	}
+
+	dump_dynamic_config (ctx->cfg);
+
+	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
+}
+
 #if 0
 
 /*
@@ -1833,10 +1930,11 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learnspam);
 	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learnham);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_saveactions);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_savesymbols);
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
 
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_save_symbols, ctx);
+
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_save_map, ctx);
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan, ctx);
 #endif
