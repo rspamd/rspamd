@@ -1348,7 +1348,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 	ucl_object_t							*obj, *cur;
 	struct rspamd_webui_worker_ctx 			*ctx;
 	const gchar								*error;
-	gint64									 score;
+	gdouble									 score;
 	gint									 i;
 	enum rspamd_metric_action				 act;
 
@@ -1411,7 +1411,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 			act = METRIC_ACTION_GREYLIST;
 			break;
 		}
-		score = ucl_object_toint (cur);
+		score = ucl_object_todouble (cur);
 		if (metric->actions[act].score != score) {
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
 		}
