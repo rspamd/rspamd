@@ -9,6 +9,7 @@
 #include "config.h"
 #include "filter.h"
 #include "http.h"
+#include "task.h"
 
 #define RSPAMD_BASE_ERROR 500
 #define RSPAMD_FILTER_ERROR RSPAMD_BASE_ERROR + 1
@@ -17,7 +18,6 @@
 #define RSPAMD_LENGTH_ERROR RSPAMD_BASE_ERROR + 4
 #define RSPAMD_STATFILE_ERROR RSPAMD_BASE_ERROR + 5
 
-struct rspamd_task;
 struct metric;
 
 /**

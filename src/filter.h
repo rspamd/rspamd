@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "symbols_cache.h"
+#include "task.h"
 
 struct rspamd_task;
 struct rspamd_settings;

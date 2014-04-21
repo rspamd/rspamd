@@ -448,7 +448,7 @@ gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
  * @param af address family (AF_INET or AF_INET6)
  * @return TRUE if the address is valid
  */
-gboolean rspamd_ip_is_valid (void *ptr, int af);
+gboolean rspamd_ip_is_valid (rspamd_inet_addr_t *addr);
 
 /**
  * Emit UCL object to gstring

@@ -2083,21 +2083,23 @@ restart:
 }
 
 gboolean
-rspamd_ip_is_valid (void *ptr, int af)
+rspamd_ip_is_valid (rspamd_inet_addr_t *addr)
 {
 	const struct in_addr ip4_any = { INADDR_ANY }, ip4_none = { INADDR_NONE };
 	const struct in6_addr ip6_any = IN6ADDR_ANY_INIT;
 
 	gboolean ret = FALSE;
 
-	if (G_LIKELY (af == AF_INET)) {
-		if (memcmp (ptr, &ip4_any, sizeof (struct in_addr)) != 0 &&
-				memcmp (ptr, &ip4_none, sizeof (struct in_addr)) != 0) {
+	if (G_LIKELY (addr->af == AF_INET)) {
+		if (memcmp (&addr->addr.s4.sin_addr, &ip4_any, sizeof (struct in_addr)) != 0 &&
+				memcmp (&addr->addr.s4.sin_addr, &ip4_none,
+						sizeof (struct in_addr)) != 0) {
 			ret = TRUE;
 		}
 	}
-	else if (G_UNLIKELY (af == AF_INET6)) {
-		if (memcmp (ptr, &ip6_any, sizeof (struct in6_addr)) != 0) {
+	else if (G_UNLIKELY (addr->af == AF_INET6)) {
+		if (memcmp (&addr->addr.s6.sin6_addr, &ip6_any,
+				sizeof (struct in6_addr)) != 0) {
 			ret = TRUE;
 		}
 	}
@@ -2264,9 +2266,9 @@ rspamd_inet_address_get_port (rspamd_inet_addr_t *addr)
 {
 	switch (addr->af) {
 	case AF_INET:
-		return addr->addr.s4.sin_port;
+		return ntohs (addr->addr.s4.sin_port);
 	case AF_INET6:
-		return addr->addr.s6.sin6_port;
+		return ntohs (addr->addr.s6.sin6_port);
 	}
 
 	return 0;
