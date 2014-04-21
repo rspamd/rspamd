@@ -47,7 +47,6 @@
 #include "cfg_file.h"
 #include "expressions.h"
 #include "util.h"
-#include "view.h"
 #include "map.h"
 #include "dns.h"
 #include "hash.h"
@@ -634,31 +633,26 @@ make_surbl_requests (struct uri *url, struct rspamd_task *task,
 	f.begin = url->host;
 	f.len = url->hostlen;
 
-	if (check_view (task->cfg->views, suffix->symbol, task)) {
-		if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
-				&err, forced, tree)) != NULL) {
-			param = rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
-			param->url = url;
-			param->task = task;
-			param->suffix = suffix;
-			param->host_resolve = rspamd_mempool_strdup (task->task_pool, surbl_req);
-			debug_task ("send surbl dns request %s", surbl_req);
-			if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback,
-					(void *)param, RDNS_REQUEST_A, surbl_req)) {
-				task->dns_requests ++;
-			}
-		}
-		else if (err != NULL && err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
-			msg_info ("cannot format url string for surbl %s, %s", struri (url), err->message);
-			g_error_free (err);
-			return;
-		}
-		else if (err != NULL) {
-			g_error_free (err);
+	if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
+			&err, forced, tree)) != NULL) {
+		param = rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
+		param->url = url;
+		param->task = task;
+		param->suffix = suffix;
+		param->host_resolve = rspamd_mempool_strdup (task->task_pool, surbl_req);
+		debug_task ("send surbl dns request %s", surbl_req);
+		if (make_dns_request (task->resolver, task->s, task->task_pool, dns_callback,
+				(void *)param, RDNS_REQUEST_A, surbl_req)) {
+			task->dns_requests ++;
 		}
 	}
-	else {
-		debug_task ("skipping symbol that is not in view: %s", suffix->symbol);
+	else if (err != NULL && err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
+		msg_info ("cannot format url string for surbl %s, %s", struri (url), err->message);
+		g_error_free (err);
+		return;
+	}
+	else if (err != NULL) {
+		g_error_free (err);
 	}
 }
 

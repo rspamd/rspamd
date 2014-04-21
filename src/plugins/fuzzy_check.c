@@ -45,7 +45,6 @@
 #include "cfg_file.h"
 #include "expressions.h"
 #include "util.h"
-#include "view.h"
 #include "map.h"
 #include "images.h"
 #include "fuzzy_storage.h"
@@ -823,8 +822,9 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 
 	/* Check whitelist */
 #ifdef HAVE_INET_PTON
-	if (fuzzy_module_ctx->whitelist && !task->from_addr.ipv6 && task->from_addr.d.in4.s_addr != INADDR_NONE) {
-		if (radix32tree_find (fuzzy_module_ctx->whitelist, ntohl ((guint32) task->from_addr.d.in4.s_addr)) != RADIX_NO_VALUE) {
+	if (fuzzy_module_ctx->whitelist && task->from_addr.af == AF_INET) {
+		if (radix32tree_find (fuzzy_module_ctx->whitelist,
+				ntohl (task->from_addr.addr.s4.sin_addr.s_addr)) != RADIX_NO_VALUE) {
 			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
 					task->message_id, inet_ntoa (task->from_addr.d.in4));
 			return;

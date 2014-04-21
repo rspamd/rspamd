@@ -58,8 +58,6 @@ struct custom_command {
 	protocol_reply_func func;
 };
 
-struct rspamd_view;
-
 /**
  * Worker task structure
  */
@@ -122,9 +120,7 @@ struct rspamd_task {
 	struct timespec ts;											/**< time of connection								*/
 #endif
 	struct timeval tv;											/**< time of connection								*/
-	struct rspamd_view *view;									/**< matching view									*/
 	guint32 scan_milliseconds;									/**< how much milliseconds passed					*/
-	gboolean view_checked;
 	gboolean pass_all_filters;									/**< pass task throught every rule					*/
 	gboolean no_log;											/**< do not log or write this task to the history	*/
 	guint32 parser_recursion;									/**< for avoiding recursion stack overflow			*/

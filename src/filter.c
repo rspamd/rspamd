@@ -31,7 +31,6 @@
 #include "util.h"
 #include "expressions.h"
 #include "settings.h"
-#include "view.h"
 #include "binlog.h"
 #include "diff.h"
 #include "classifiers/classifiers.h"
@@ -265,14 +264,6 @@ process_filters (struct rspamd_task *task)
 	GList                          *cur;
 	struct metric                  *metric;
 	gpointer                        item = NULL;
-
-	/* Check want spam setting */
-	if (check_skip (task->cfg->views, task) || check_want_spam (task)) {
-		task->is_skipped = TRUE;
-		task->state = WRITE_REPLY;
-		msg_info ("disable check for message id <%s>, user wants spam", task->message_id);
-		return 1;
-	}
 
 	/* Process metrics symbols */
 	while (call_symbol_callback (task, task->cfg->cache, &item)) {

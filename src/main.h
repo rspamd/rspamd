@@ -70,7 +70,6 @@ struct tokenizer;
 struct classifier;
 struct classifier_config;
 struct mime_part;
-struct rspamd_view;
 struct rspamd_dns_resolver;
 struct rspamd_task;
 

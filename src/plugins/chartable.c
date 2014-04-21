@@ -36,7 +36,6 @@
 #include "message.h"
 #include "cfg_file.h"
 #include "expressions.h"
-#include "view.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1
@@ -202,15 +201,13 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 	GList                          *cur;
 	struct mime_text_part          *part;
 
-	if (check_view (task->cfg->views, chartable_module_ctx->symbol, task)) {
-		cur = g_list_first (task->text_parts);
-		while (cur) {
-			part = cur->data;
-			if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
-				insert_result (task, chartable_module_ctx->symbol, 1, NULL);
-			}
-			cur = g_list_next (cur);
+	cur = g_list_first (task->text_parts);
+	while (cur) {
+		part = cur->data;
+		if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
+			insert_result (task, chartable_module_ctx->symbol, 1, NULL);
 		}
+		cur = g_list_next (cur);
 	}
 
 }

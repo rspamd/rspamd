@@ -56,7 +56,6 @@ construct_task (struct rspamd_worker *worker)
 	if (worker) {
 		new_task->cfg = worker->srv->cfg;
 	}
-	new_task->view_checked = FALSE;
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
@@ -154,15 +153,6 @@ free_task (struct rspamd_task *task, gboolean is_soft)
 		}
 		if (task->received) {
 			g_list_free (task->received);
-		}
-		if (task->dispatcher) {
-			if (is_soft) {
-				/* Plan dispatcher shutdown */
-				task->dispatcher->wanna_die = 1;
-			}
-			else {
-				rspamd_remove_dispatcher (task->dispatcher);
-			}
 		}
 		if (task->http_conn != NULL) {
 			rspamd_http_connection_unref (task->http_conn);

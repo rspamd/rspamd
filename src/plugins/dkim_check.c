@@ -43,7 +43,6 @@
 #include "cfg_file.h"
 #include "expressions.h"
 #include "util.h"
-#include "view.h"
 #include "map.h"
 #include "dkim.h"
 #include "hash.h"
@@ -315,12 +314,9 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	if (hlist != NULL) {
 		/* Check whitelist */
 		msg_debug ("dkim signature found");
-#ifdef HAVE_INET_PTON
-		if (!task->from_addr.has_addr ||
-				radix32tree_find (dkim_module_ctx->whitelist_ip, ntohl (task->from_addr.d.in4.s_addr)) == RADIX_NO_VALUE) {
-#else
-		if (radix32tree_find (dkim_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) == RADIX_NO_VALUE) {
-#endif
+		if (task->from_addr.af == AF_INET ||
+				radix32tree_find (dkim_module_ctx->whitelist_ip,
+						ntohl (task->from_addr.addr.s4.sin_addr.s_addr)) == RADIX_NO_VALUE) {
 			/* Parse signature */
 			msg_debug ("create dkim signature");
 			/*

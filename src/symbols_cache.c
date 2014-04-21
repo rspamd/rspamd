@@ -27,7 +27,6 @@
 #include "main.h"
 #include "message.h"
 #include "symbols_cache.h"
-#include "view.h"
 #include "cfg_file.h"
 
 #define WEIGHT_MULT 4.0
@@ -1003,7 +1002,7 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 	if (!item) {
 		return FALSE;
 	}
-	if (!item->is_virtual && check_view (task->cfg->views, item->s->symbol, task)) {
+	if (!item->is_virtual) {
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);

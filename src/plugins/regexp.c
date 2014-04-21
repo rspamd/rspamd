@@ -34,7 +34,6 @@
 #include "map.h"
 #include "util.h"
 #include "expressions.h"
-#include "view.h"
 #include "lua/lua_common.h"
 #include "json/jansson.h"
 

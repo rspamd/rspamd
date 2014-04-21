@@ -38,7 +38,6 @@
 #include "cfg_file.h"
 #include "expressions.h"
 #include "util.h"
-#include "view.h"
 #include "map.h"
 #include "spf.h"
 #include "hash.h"
