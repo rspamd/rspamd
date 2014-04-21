@@ -94,6 +94,8 @@ struct rspamd_webui_worker_ctx {
 	gboolean use_ssl;
 	/* Webui password */
 	gchar *password;
+	/* Privilleged password */
+	gchar *enable_password;
 	/* HTTP server */
 	struct rspamd_http_connection_router *http;
 	/* Server's start time */
@@ -122,14 +124,7 @@ struct rspamd_webui_session {
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
 	struct classifier_config *cl;
-	struct {
-		union {
-			struct in_addr in4;
-			struct in6_addr in6;
-		} d;
-		gboolean ipv6;
-		gboolean has_addr;
-	} from_addr;
+	rspamd_inet_addr_t from_addr;
 	gboolean is_spam;
 };
 
@@ -250,37 +245,80 @@ rspamd_webui_send_ucl (struct rspamd_http_connection_entry *entry, ucl_object_t 
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
-		struct rspamd_webui_session *session, struct rspamd_http_message *msg)
+		struct rspamd_webui_session *session, struct rspamd_http_message *msg,
+		gboolean is_enable)
 {
-	const gchar								*password;
+	const gchar								*password, *check;
 	struct rspamd_webui_worker_ctx			*ctx = session->ctx;
+	gboolean ret = TRUE;
 
-	if (!session->from_addr.has_addr) {
+	/* Access list logic */
+	if (!session->from_addr.af == AF_UNIX) {
 		msg_info ("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
-	else if (ctx->secure_map && !session->from_addr.ipv6) {
-		if (radix32tree_find (ctx->secure_map,
-				ntohl (session->from_addr.d.in4.s_addr)) != RADIX_NO_VALUE) {
-			msg_info ("allow unauthorized connection from a trusted IP %s",
-					inet_ntoa (session->from_addr.d.in4));
-			return TRUE;
-		}
-	}
-	if (ctx->password) {
-		password = rspamd_http_message_find_header (msg, "Password");
-		if (password == NULL || strcmp (password, ctx->password) != 0) {
-			msg_info ("incorrect or absent password was specified");
-			rspamd_webui_send_error (entry, 403, "Unauthorized");
-			return FALSE;
-		}
-	}
-	else if (ctx->secure_map) {
-		msg_info ("deny unauthorized connection");
-		return FALSE;
+	else if (ctx->secure_map && radix32_tree_find_addr (ctx->secure_map,
+			&session->from_addr) != RADIX_NO_VALUE) {
+		msg_info ("allow unauthorized connection from a trusted IP %s",
+				rspamd_inet_address_to_string (&session->from_addr));
+		return TRUE;
 	}
 
-	return TRUE;
+	/* Password logic */
+	if (is_enable) {
+		/* For privileged commands we strictly require enable password */
+		password = rspamd_http_message_find_header (msg, "Password");
+		if (ctx->enable_password == NULL) {
+			/* Use just a password (legacy mode) */
+			msg_info ("using password as enable_password for a privileged command");
+			check = ctx->password;
+		}
+		if (check != NULL) {
+			if (password == NULL || strcmp (password, check) != 0) {
+				msg_info ("incorrect or absent password has been specified");
+				ret = FALSE;
+			}
+		}
+		else {
+			msg_warn ("no password to check while executing a privileged command");
+			if (ctx->secure_map) {
+				msg_info ("deny unauthorized connection");
+				ret = FALSE;
+			}
+		}
+	}
+	else {
+		password = rspamd_http_message_find_header (msg, "Password");
+		if (ctx->password != NULL) {
+			/* Accept both normal and enable passwords */
+			check = ctx->password;
+			if (password == NULL) {
+				msg_info ("absent password has been specified");
+				ret = FALSE;
+			}
+			else if (strcmp (password, check) != 0) {
+				if (ctx->enable_password != NULL) {
+					check = ctx->enable_password;
+					if (strcmp (password, check) != 0) {
+						msg_info ("incorrect password has been specified");
+						ret = FALSE;
+					}
+				}
+				else {
+					msg_info ("incorrect or absent password has been specified");
+					ret = FALSE;
+				}
+			}
+		}
+		/* No password specified, allowing this command */
+	}
+
+
+	if (!ret) {
+		rspamd_webui_send_error (entry, 403, "Unauthorized");
+	}
+
+	return ret;
 }
 
 struct scan_callback_data {
@@ -669,7 +707,7 @@ rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	gulong									 data[4];
 	ucl_object_t							*obj;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -724,7 +762,7 @@ rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	struct symbol_def						*sym;
 	ucl_object_t							*obj, *top, *sym_obj;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -783,7 +821,7 @@ rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	gint									 i;
 	ucl_object_t							*obj, *top;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -833,7 +871,7 @@ rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	ucl_object_t							*obj, *top;
 
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -899,7 +937,7 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message				*reply;
 
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -1091,7 +1129,7 @@ rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -1159,7 +1197,7 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -1251,7 +1289,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1354,7 +1392,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1448,7 +1486,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1544,7 +1582,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg)) {
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1730,6 +1768,10 @@ init_webui_worker (struct config_file *cfg)
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
 	rspamd_rcl_register_worker_option (cfg, type, "password",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "enable_password",
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
 
