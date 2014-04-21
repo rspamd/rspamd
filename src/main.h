@@ -198,28 +198,6 @@ extern struct rspamd_main *rspamd_main;
 /* Worker task manipulations */
 
 /**
- * Construct new task for worker
- */
-struct rspamd_task* construct_task (struct rspamd_worker *worker);
-/**
- * Destroy task object and remove its IO dispatcher if it exists
- */
-void free_task (struct rspamd_task *task, gboolean is_soft);
-void free_task_hard (gpointer ud);
-void free_task_soft (gpointer ud);
-
-/**
- * Called if session was restored inside fin callback
- */
-void rspamd_restore_task (void *arg);
-
-/**
- * Called if all filters are processed
- * @return TRUE if session should be terminated
- */
-gboolean rspamd_fin_task (void *arg);
-
-/**
  * Set counter for a symbol
  */
 double set_counter (const gchar *name, guint32 value);

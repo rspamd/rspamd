@@ -320,7 +320,7 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	new_task = construct_task (worker);
+	new_task = rspamd_task_new (worker);
 
 	msg_info ("accepted connection from %s port %d",
 			rspamd_inet_address_to_string (&addr),
@@ -342,8 +342,8 @@ accept_socket (gint fd, short what, void *arg)
 	rspamd_mempool_add_destructor (new_task->task_pool, (rspamd_mempool_destruct_t)reduce_tasks_count, &ctx->tasks);
 
 	/* Set up async session */
-	new_task->s = new_async_session (new_task->task_pool, rspamd_fin_task,
-						rspamd_restore_task, free_task_hard, new_task);
+	new_task->s = new_async_session (new_task->task_pool, rspamd_task_fin,
+						rspamd_task_restore, rspamd_task_free_hard, new_task);
 
 	new_task->classify_pool = ctx->classify_pool;
 

@@ -1394,7 +1394,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		break;
 	case STATE_LEARN:
 		session->learn_buf = in;
-		task = construct_task (session->worker);
+		task = rspamd_task_new (session->worker);
 
 		task->msg = g_string_new_len (in->begin, in->len);
 		task->ev_base = session->ev_base;
@@ -1402,7 +1402,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");
-			free_task (task, FALSE);
+			rspamd_task_free (task, FALSE);
 			session->state = STATE_REPLY;
 			if (session->restful) {
 				r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
@@ -1417,7 +1417,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 
 		if (!learn_task (session->learn_symbol, task, &err)) {
-			free_task (task, FALSE);
+			rspamd_task_free (task, FALSE);
 			if (err) {
 				if (session->restful) {
 					i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn classifier error: %s" CRLF CRLF, err->message);
@@ -1443,7 +1443,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			return TRUE;
 		}
 
-		free_task (task, FALSE);
+		rspamd_task_free (task, FALSE);
 		if (session->restful) {
 			i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 200 Learn OK" CRLF CRLF);
 		}
@@ -1457,7 +1457,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		break;
 	case STATE_LEARN_SPAM_PRE:
 		session->learn_buf = in;
-		task = construct_task (session->worker);
+		task = rspamd_task_new (session->worker);
 
 		task->msg = g_string_new_len (in->begin, in->len);
 
@@ -1487,7 +1487,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		/* Set up async session */
-		task->s = new_async_session (task->task_pool, fin_learn_task, restore_learn_task, free_task_hard, task);
+		task->s = new_async_session (task->task_pool, fin_learn_task, restore_learn_task, rspamd_task_free_hard, task);
 		session->learn_task = task;
 		session->state = STATE_LEARN_SPAM;
 		rspamd_dispatcher_pause (session->dispatcher);
@@ -1516,7 +1516,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		break;
 	case STATE_WEIGHTS:
 		session->learn_buf = in;
-		task = construct_task (session->worker);
+		task = rspamd_task_new (session->worker);
 
 		task->msg = g_string_new_len (in->begin, in->len);
 		task->ev_base = session->ev_base;
@@ -1524,7 +1524,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		r = process_message (task);
 		if (r == -1) {
 			msg_warn ("processing of message failed");
-			free_task (task, FALSE);
+			rspamd_task_free (task, FALSE);
 			session->state = STATE_REPLY;
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF END);
 			if (!session->restful) {
@@ -1553,7 +1553,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer,
 					session->session_pool, &c, &tokens, FALSE, part->is_utf, part->urls_offset)) {
 				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF END);
-				free_task (task, FALSE);
+				rspamd_task_free (task, FALSE);
 				if (!session->restful) {
 					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
 						return FALSE;
@@ -1573,7 +1573,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		/* Handle messages without text */
 		if (tokens == NULL) {
 			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, no tokens can be extracted (no text data)" CRLF END);
-			free_task (task, FALSE);
+			rspamd_task_free (task, FALSE);
 			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
 				return FALSE;
 			}
@@ -1607,7 +1607,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			}
 		}
 
-		free_task (task, FALSE);
+		rspamd_task_free (task, FALSE);
 
 		session->state = STATE_REPLY;
 		break;

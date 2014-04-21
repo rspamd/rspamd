@@ -255,7 +255,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	lmtp = g_malloc (sizeof (struct rspamd_lmtp_proto));
 
-	new_task = construct_task (worker);
+	new_task = rspamd_task_new (worker);
 
 	if (su.ss.ss_family == AF_UNIX) {
 		msg_info ("accepted connection from unix socket");

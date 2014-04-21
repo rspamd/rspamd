@@ -35,7 +35,7 @@ free_smtp_session (gpointer arg)
 
 	if (session) {
 		if (session->task) {
-			free_task (session->task, FALSE);
+			rspamd_task_free (session->task, FALSE);
 			if (session->task->msg->str) {
 				munmap (session->task->msg->str, session->task->msg->len);
 			}

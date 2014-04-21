@@ -336,7 +336,7 @@ rspamd_webui_scan_task_free (gpointer arg)
 		if (!evb) {
 			msg_err ("cannot allocate evbuffer for reply");
 			evhttp_send_reply (cbdata->req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-			free_task_hard (cbdata->task);
+			rspamd_task_free_hard (cbdata->task);
 			return;
 		}
 		cbdata->out = evb;
@@ -367,7 +367,7 @@ rspamd_webui_scan_task_free (gpointer arg)
 
 		evhttp_send_reply (cbdata->req, HTTP_OK, "OK", evb);
 		evbuffer_free (evb);
-		free_task_hard (cbdata->task);
+		rspamd_task_free_hard (cbdata->task);
 	}
 	/* If task is not processed, just do nothing */
 	return;
@@ -444,7 +444,7 @@ rspamd_webui_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worke
 	}
 
 	/* Prepare task */
-	task = construct_task (ctx->worker);
+	task = rspamd_task_new (ctx->worker);
 	if (task == NULL) {
 		g_set_error (err, g_quark_from_static_string ("webui"), 500, "task cannot be created");
 		return NULL;
@@ -464,7 +464,7 @@ rspamd_webui_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worke
 	if (process_message (task) == -1) {
 		msg_warn ("processing of message failed");
 		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be processed");
-		free_task_hard (task);
+		rspamd_task_free_hard (task);
 		return NULL;
 	}
 
@@ -473,7 +473,7 @@ rspamd_webui_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worke
 	if (process_filters (task) == -1) {
 		msg_warn ("filtering of message failed");
 		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be filtered");
-		free_task_hard (task);
+		rspamd_task_free_hard (task);
 		return NULL;
 	}
 
@@ -506,7 +506,7 @@ rspamd_webui_learn_task_free (gpointer arg)
 		if (!evb) {
 			msg_err ("cannot allocate evbuffer for reply");
 			evhttp_send_reply (cbdata->req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-			free_task_hard (cbdata->task);
+			rspamd_task_free_hard (cbdata->task);
 			return;
 		}
 
@@ -518,7 +518,7 @@ rspamd_webui_learn_task_free (gpointer arg)
 			evhttp_send_reply (cbdata->req, HTTP_INTERNAL + err->code, err->message, evb);
 			evbuffer_free (evb);
 			g_error_free (err);
-			free_task_hard (cbdata->task);
+			rspamd_task_free_hard (cbdata->task);
 			return;
 		}
 		/* Successful learn */
@@ -528,7 +528,7 @@ rspamd_webui_learn_task_free (gpointer arg)
 
 		evhttp_send_reply (cbdata->req, HTTP_OK, "OK", evb);
 		evbuffer_free (evb);
-		free_task_hard (cbdata->task);
+		rspamd_task_free_hard (cbdata->task);
 	}
 	/* If task is not processed, just do nothing */
 	return;
@@ -609,7 +609,7 @@ rspamd_webui_prepare_learn (struct evhttp_request *req, struct rspamd_webui_work
 		return NULL;
 	}
 	/* Prepare task */
-	task = construct_task (ctx->worker);
+	task = rspamd_task_new (ctx->worker);
 	if (task == NULL) {
 		g_set_error (err, g_quark_from_static_string ("webui"), 500, "task cannot be created");
 		return NULL;
@@ -631,7 +631,7 @@ rspamd_webui_prepare_learn (struct evhttp_request *req, struct rspamd_webui_work
 	if (process_message (task) == -1) {
 		msg_warn ("processing of message failed");
 		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be processed");
-		free_task_hard (task);
+		rspamd_task_free_hard (task);
 		return NULL;
 	}
 
@@ -640,7 +640,7 @@ rspamd_webui_prepare_learn (struct evhttp_request *req, struct rspamd_webui_work
 	if (process_filters (task) == -1) {
 		msg_warn ("filtering of message failed");
 		g_set_error (err, g_quark_from_static_string ("webui"), 500, "message cannot be filtered");
-		free_task_hard (task);
+		rspamd_task_free_hard (task);
 		return NULL;
 	}
 
@@ -1271,7 +1271,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = construct_task (session->ctx->worker);
+	task = rspamd_task_new (session->ctx->worker);
 	task->ev_base = session->ctx->ev_base;
 	task->msg = msg->body;
 
@@ -1279,7 +1279,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 	task->ev_base = ctx->ev_base;
 
 	task->s = new_async_session (session->pool, rspamd_webui_learn_fin_task, NULL,
-			free_task_hard, task);
+			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
 

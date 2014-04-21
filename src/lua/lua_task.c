@@ -267,7 +267,7 @@ lua_task_create_empty (lua_State *L)
 {
 	struct rspamd_task             **ptask, *task;
 
-	task = construct_task (NULL);
+	task = rspamd_task_new (NULL);
 	ptask = lua_newuserdata (L, sizeof (gpointer));
 	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
@@ -283,7 +283,7 @@ lua_task_create_from_buffer (lua_State *L)
 
 	data = luaL_checklstring (L, 1, &len);
 	if (data) {
-		task = construct_task (NULL);
+		task = rspamd_task_new (NULL);
 		ptask = lua_newuserdata (L, sizeof (gpointer));
 		lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
@@ -328,7 +328,7 @@ lua_task_destroy (lua_State *L)
 	struct rspamd_task             *task = lua_check_task (L);
 
 	if (task != NULL) {
-		free_task (task, FALSE);
+		rspamd_task_free (task, FALSE);
 	}
 
 	return 0;

@@ -982,7 +982,7 @@ fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
 	return processed;
 
 err:
-	free_task (task, FALSE);
+	rspamd_task_free (task, FALSE);
 	return -1;
 }
 
@@ -1006,7 +1006,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	}
 
 	/* Prepare task */
-	task = construct_task (session->worker);
+	task = rspamd_task_new (session->worker);
 	session->other_data = task;
 	session->state = STATE_WAIT;
 
@@ -1018,7 +1018,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");
-		free_task (task, FALSE);
+		rspamd_task_free (task, FALSE);
 		session->state = STATE_REPLY;
 		if (session->restful) {
 			r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
@@ -1059,7 +1059,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 		cur = g_list_next (cur);
 	}
 
-	rspamd_mempool_add_destructor (session->session_pool, (rspamd_mempool_destruct_t)free_task_soft, task);
+	rspamd_mempool_add_destructor (session->session_pool, (rspamd_mempool_destruct_t)rspamd_task_free_soft, task);
 
 	if (res == -1) {
 		session->state = STATE_REPLY;

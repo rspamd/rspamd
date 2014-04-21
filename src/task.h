@@ -140,4 +140,26 @@ struct rspamd_task {
 	} pre_result;												/**< Result of pre-filters							*/
 };
 
+/**
+ * Construct new task for worker
+ */
+struct rspamd_task* rspamd_task_new (struct rspamd_worker *worker);
+/**
+ * Destroy task object and remove its IO dispatcher if it exists
+ */
+void rspamd_task_free (struct rspamd_task *task, gboolean is_soft);
+void rspamd_task_free_hard (gpointer ud);
+void rspamd_task_free_soft (gpointer ud);
+
+/**
+ * Called if session was restored inside fin callback
+ */
+void rspamd_task_restore (void *arg);
+
+/**
+ * Called if all filters are processed
+ * @return TRUE if session should be terminated
+ */
+gboolean rspamd_task_fin (void *arg);
+
 #endif /* TASK_H_ */

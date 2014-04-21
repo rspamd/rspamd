@@ -2,6 +2,7 @@
 #define RSPAMD_EVENTS_H
 
 #include "config.h"
+#include "mem_pool.h"
 
 struct rspamd_async_event;
 
