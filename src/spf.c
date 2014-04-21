@@ -1019,13 +1019,9 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec, gchar *begin
 				switch (g_ascii_tolower (*p)) {
 					case 'i':
 #ifdef HAVE_INET_PTON
-						if (task->from_addr.ipv6) {
-							inet_ntop (AF_INET6, &task->from_addr.d.in6, ip_buf, sizeof (ip_buf));
-						}
-						else {
-							inet_ntop (AF_INET, &task->from_addr.d.in4, ip_buf, sizeof (ip_buf));
-						}
-						len = strlen (ip_buf);
+						len = rspamd_strlcpy (ip_buf,
+								rspamd_inet_address_to_string (&task->from_addr),
+								sizeof (ip_buf));
 						memcpy (c, ip_buf, len);
 #else
 						tmp = inet_ntoa (task->from_addr);
