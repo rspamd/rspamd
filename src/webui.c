@@ -1752,6 +1752,8 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	nsession->ctx = ctx;
 
+	memcpy (&nsession->from_addr, &addr, sizeof (addr));
+
 	rspamd_http_router_handle_socket (ctx->http, nfd, nsession);
 }
 
