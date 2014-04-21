@@ -80,11 +80,11 @@ lua_check_classifier (lua_State * L)
 }
 
 static GList *
-call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task *task,
+call_classifier_pre_callback (struct classifier_config *ccf, struct rspamd_task *task,
 		lua_State *L, gboolean is_learn, gboolean is_spam)
 {
 	struct classifier_config      **pccf;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	struct statfile               **pst;
 	GList                          *res = NULL;
 
@@ -92,7 +92,7 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 	lua_setclass (L, "rspamd{classifier}", -1);
 	*pccf = ccf;
 
-	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
 	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 
@@ -120,7 +120,7 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct worker_task 
 
 /* Return list of statfiles that should be checked for this message */
 GList *
-call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task,
+call_classifier_pre_callbacks (struct classifier_config *ccf, struct rspamd_task *task,
 		gboolean is_learn, gboolean is_spam, lua_State *L)
 {
 	GList                           *res = NULL, *cur;
@@ -158,11 +158,11 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task
 
 /* Return result mark for statfile */
 double
-call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in, lua_State *L)
+call_classifier_post_callbacks (struct classifier_config *ccf, struct rspamd_task *task, double in, lua_State *L)
 {
 	struct classifier_callback_data *cd;
 	struct classifier_config      **pccf;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	double                          out = in;
 	GList                          *cur;
 
@@ -176,7 +176,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_tas
 		lua_setclass (L, "rspamd{classifier}", -1);
 		*pccf = ccf;
 
-		ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
 		lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
 

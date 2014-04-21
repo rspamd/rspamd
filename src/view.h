@@ -82,7 +82,7 @@ gboolean add_view_symbols (struct rspamd_view *view, const gchar *line);
  * @param task task object
  * @return whether to check this symbol for this task
  */
-gboolean check_view (GList *views, const gchar *symbol, struct worker_task *task);
+gboolean check_view (GList *views, const gchar *symbol, struct rspamd_task *task);
 
 /**
  * Check whether this task should be skipped from checks
@@ -90,6 +90,6 @@ gboolean check_view (GList *views, const gchar *symbol, struct worker_task *task
  * @param task task object
  * @return
  */
-gboolean check_skip (GList *views, struct worker_task *task);
+gboolean check_skip (GList *views, struct rspamd_task *task);
 
 #endif

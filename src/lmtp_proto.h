@@ -3,7 +3,7 @@
 
 #include "config.h"
 
-struct worker_task;
+struct rspamd_task;
 
 enum lmtp_state {
 	LMTP_READ_LHLO,
@@ -15,7 +15,7 @@ enum lmtp_state {
 };
 
 struct rspamd_lmtp_proto {
-	struct worker_task *task;
+	struct rspamd_task *task;
 	enum lmtp_state state;
 };
 
@@ -32,7 +32,7 @@ gint read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line);
  * @param task task object
  * @return 0 if we wrote message and -1 if there was some error
  */
-gint lmtp_deliver_message (struct worker_task *task);
+gint lmtp_deliver_message (struct rspamd_task *task);
 
 /**
  * Write reply for specified lmtp object

@@ -193,7 +193,7 @@ lua_post_load_config (struct config_file *cfg)
 
 /* Handle lua dynamic config param */
 gboolean
-lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, enum lua_var_type expected_type, gpointer *res)
+lua_handle_param (struct rspamd_task *task, gchar *mname, gchar *optname, enum lua_var_type expected_type, gpointer *res)
 {
 	/* xxx: Adopt this for rcl */
 	

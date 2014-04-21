@@ -33,16 +33,16 @@
 #include "lua/lua_common.h"
 #include "diff.h"
 
-gboolean                        rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_header_exists (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_parts_distance (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_has_only_html_part (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_is_recipients_sorted (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_compare_transfer_encoding (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_is_html_balanced (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_has_html_tag (struct worker_task *task, GList * args, void *unused);
-gboolean                        rspamd_has_fake_html (struct worker_task *task, GList * args, void *unused);
+gboolean                        rspamd_compare_encoding (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_header_exists (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_parts_distance (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_recipients_distance (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_only_html_part (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_is_recipients_sorted (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_compare_transfer_encoding (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_is_html_balanced (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_html_tag (struct rspamd_task *task, GList * args, void *unused);
+gboolean                        rspamd_has_fake_html (struct rspamd_task *task, GList * args, void *unused);
 
 /*
  * List of internal functions of rspamd
@@ -792,7 +792,7 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 }
 
 gboolean
-call_expression_function (struct expression_function * func, struct worker_task * task, lua_State *L)
+call_expression_function (struct expression_function * func, struct rspamd_task * task, lua_State *L)
 {
 	struct _fl                     *selected, key;
 
@@ -808,7 +808,7 @@ call_expression_function (struct expression_function * func, struct worker_task 
 }
 
 struct expression_argument     *
-get_function_arg (struct expression *expr, struct worker_task *task, gboolean want_string)
+get_function_arg (struct expression *expr, struct rspamd_task *task, gboolean want_string)
 {
 	GQueue                         *stack;
 	gsize                           cur, op1, op2;
@@ -922,7 +922,7 @@ register_expression_function (const gchar *name, rspamd_internal_func_t func, vo
 }
 
 gboolean
-rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused)
+rspamd_compare_encoding (struct rspamd_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 
@@ -941,7 +941,7 @@ rspamd_compare_encoding (struct worker_task *task, GList * args, void *unused)
 }
 
 gboolean
-rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
+rspamd_header_exists (struct rspamd_task * task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 	GList                          *headerlist;
@@ -972,7 +972,7 @@ rspamd_header_exists (struct worker_task * task, GList * args, void *unused)
  * and return FALSE otherwise.
  */
 gboolean
-rspamd_parts_distance (struct worker_task * task, GList * args, void *unused)
+rspamd_parts_distance (struct rspamd_task * task, GList * args, void *unused)
 {
 	gint                            threshold, threshold2 = -1, diff;
 	struct mime_text_part          *p1, *p2;
@@ -1103,7 +1103,7 @@ struct addr_list {
 #define MIN_RCPT_TO_COMPARE 7
 
 gboolean
-rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused)
+rspamd_recipients_distance (struct rspamd_task *task, GList * args, void *unused)
 {
 	struct expression_argument     *arg;
 	InternetAddressList            *cur;
@@ -1188,7 +1188,7 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 }
 
 gboolean
-rspamd_has_only_html_part (struct worker_task * task, GList * args, void *unused)
+rspamd_has_only_html_part (struct rspamd_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;
@@ -1262,7 +1262,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 }
 
 gboolean
-rspamd_is_recipients_sorted (struct worker_task * task, GList * args, void *unused)
+rspamd_is_recipients_sorted (struct rspamd_task * task, GList * args, void *unused)
 {
 	/* Check all types of addresses */
 	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message, GMIME_RECIPIENT_TYPE_TO)) == TRUE) {
@@ -1279,7 +1279,7 @@ rspamd_is_recipients_sorted (struct worker_task * task, GList * args, void *unus
 }
 
 gboolean
-rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void *unused)
+rspamd_compare_transfer_encoding (struct rspamd_task * task, GList * args, void *unused)
 {
 	GMimeObject                    *part;
 #ifndef GMIME24
@@ -1340,7 +1340,7 @@ rspamd_compare_transfer_encoding (struct worker_task * task, GList * args, void 
 }
 
 gboolean
-rspamd_is_html_balanced (struct worker_task * task, GList * args, void *unused)
+rspamd_is_html_balanced (struct rspamd_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;
@@ -1388,7 +1388,7 @@ search_html_node_callback (GNode * node, gpointer data)
 }
 
 gboolean
-rspamd_has_html_tag (struct worker_task * task, GList * args, void *unused)
+rspamd_has_html_tag (struct rspamd_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;
@@ -1426,7 +1426,7 @@ rspamd_has_html_tag (struct worker_task * task, GList * args, void *unused)
 }
 
 gboolean
-rspamd_has_fake_html (struct worker_task * task, GList * args, void *unused)
+rspamd_has_fake_html (struct rspamd_task * task, GList * args, void *unused)
 {
 	struct mime_text_part          *p;
 	GList                          *cur;

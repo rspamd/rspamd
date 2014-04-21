@@ -53,7 +53,7 @@ static const struct luaL_reg    redislib_m[] = {
 struct lua_redis_userdata {
 	redisAsyncContext *ctx;
 	lua_State *L;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	gint cbref;
 	gchar *server;
 	struct in_addr ina;
@@ -68,12 +68,12 @@ struct lua_redis_userdata {
  * @param L lua stack
  * @return worker task object
  */
-static struct worker_task      *
+static struct rspamd_task      *
 lua_check_task (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{task}");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	return ud ? *((struct worker_task **)ud) : NULL;
+	return ud ? *((struct rspamd_task **)ud) : NULL;
 }
 
 static void
@@ -95,11 +95,11 @@ lua_redis_fin (void *arg)
 static void
 lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud, gboolean connected)
 {
-	struct worker_task					**ptask;
+	struct rspamd_task					**ptask;
 
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-	ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
 	lua_setclass (ud->L, "rspamd{task}", -1);
 
 	*ptask = ud->task;
@@ -125,11 +125,11 @@ lua_redis_push_error (const gchar *err, struct lua_redis_userdata *ud, gboolean 
 static void
 lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 {
-	struct worker_task					**ptask;
+	struct rspamd_task					**ptask;
 
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-	ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
 	lua_setclass (ud->L, "rspamd{task}", -1);
 
 	*ptask = ud->task;
@@ -271,7 +271,7 @@ lua_redis_dns_callback (struct rdns_reply *reply, gpointer arg)
 static int
 lua_redis_make_request (lua_State *L)
 {
-	struct worker_task					*task;
+	struct rspamd_task					*task;
 	struct lua_redis_userdata			*ud;
 	const gchar						 	*server, *tmp;
 	guint								 port, i;

@@ -120,7 +120,7 @@ struct rspamd_webui_worker_ctx {
 struct rspamd_webui_session {
 	struct rspamd_webui_worker_ctx *ctx;
 	rspamd_mempool_t *pool;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct classifier_config *cl;
 	struct {
 		union {
@@ -284,7 +284,7 @@ rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
 }
 
 struct scan_callback_data {
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct evhttp_request *req;
 	struct rspamd_webui_worker_ctx *ctx;
 	gboolean processed;
@@ -434,7 +434,7 @@ rspamd_webui_scan_task_restore (gpointer arg)
 static struct scan_callback_data*
 rspamd_webui_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, GError **err)
 {
-	struct worker_task						*task;
+	struct rspamd_task						*task;
 	struct scan_callback_data				*cbdata;
 
 	/* Check for data */
@@ -483,7 +483,7 @@ rspamd_webui_prepare_scan (struct evhttp_request *req, struct rspamd_webui_worke
 }
 
 struct learn_callback_data {
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct evhttp_request *req;
 	struct classifier_config *classifier;
 	struct rspamd_webui_worker_ctx *ctx;
@@ -593,7 +593,7 @@ rspamd_webui_learn_task_restore (gpointer arg)
 static struct learn_callback_data*
 rspamd_webui_prepare_learn (struct evhttp_request *req, struct rspamd_webui_worker_ctx *ctx, struct evbuffer *in, gboolean is_spam, GError **err)
 {
-	struct worker_task						*task;
+	struct rspamd_task						*task;
 	struct learn_callback_data				*cbdata;
 	struct classifier_config				*cl;
 
@@ -1221,7 +1221,7 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 static gboolean
 rspamd_webui_learn_fin_task (void *ud)
 {
-	struct worker_task						*task = ud;
+	struct rspamd_task						*task = ud;
 	struct rspamd_webui_session 			*session;
 	struct rspamd_http_connection_entry		*conn_ent;
 	GError									*err = NULL;
@@ -1246,7 +1246,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_webui_session 			*session = conn_ent->ud;
 	struct rspamd_webui_worker_ctx			*ctx;
 	struct classifier_config				*cl;
-	struct worker_task						*task;
+	struct rspamd_task						*task;
 	const gchar								*classifier;
 
 	ctx = session->ctx;

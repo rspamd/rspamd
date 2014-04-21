@@ -381,7 +381,7 @@ init_settings (struct config_file *cfg)
 }
 
 static                          gboolean
-check_setting (struct worker_task *task, struct rspamd_settings **user_settings, struct rspamd_settings **domain_settings)
+check_setting (struct rspamd_task *task, struct rspamd_settings **user_settings, struct rspamd_settings **domain_settings)
 {
 	gchar                           *field = NULL, *domain = NULL;
 	gchar                            cmp_buf[1024];
@@ -437,7 +437,7 @@ check_setting (struct worker_task *task, struct rspamd_settings **user_settings,
 }
 
 static				gboolean
-check_bwhitelist (struct worker_task *task, struct rspamd_settings *s, gboolean *is_black)
+check_bwhitelist (struct rspamd_task *task, struct rspamd_settings *s, gboolean *is_black)
 {
 	gchar                           *src_email = NULL, *src_domain = NULL, *data;
 
@@ -508,7 +508,7 @@ check_metric_settings (struct metric_result *res, double *score, double *rscore)
 }
 
 gboolean
-check_metric_action_settings (struct worker_task *task, struct metric_result *res,
+check_metric_action_settings (struct rspamd_task *task, struct metric_result *res,
 		double score, enum rspamd_metric_action *result)
 {
 	struct rspamd_settings         *us = res->user_settings, *ds = res->domain_settings;
@@ -571,7 +571,7 @@ check_metric_action_settings (struct worker_task *task, struct metric_result *re
 }
 
 gboolean
-apply_metric_settings (struct worker_task *task, struct metric *metric, struct metric_result *res)
+apply_metric_settings (struct rspamd_task *task, struct metric *metric, struct metric_result *res)
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
 
@@ -627,7 +627,7 @@ check_factor_settings (struct metric_result *res, const gchar *symbol, double *f
 
 
 gboolean
-check_want_spam (struct worker_task *task)
+check_want_spam (struct rspamd_task *task)
 {
 	struct rspamd_settings         *us = NULL, *ds = NULL;
 

@@ -34,7 +34,7 @@ extern struct rspamd_main			*rspamd_main;
 static void
 rcpt_destruct (void *pointer)
 {
-	struct worker_task             *task = (struct worker_task *) pointer;
+	struct rspamd_task             *task = (struct rspamd_task *) pointer;
 
 	if (task->rcpt) {
 		g_list_free (task->rcpt);
@@ -44,12 +44,12 @@ rcpt_destruct (void *pointer)
 /*
  * Create new task
  */
-struct worker_task             *
+struct rspamd_task             *
 construct_task (struct rspamd_worker *worker)
 {
-	struct worker_task             *new_task;
+	struct rspamd_task             *new_task;
 
-	new_task = g_slice_alloc0 (sizeof (struct worker_task));
+	new_task = g_slice_alloc0 (sizeof (struct rspamd_task));
 
 	new_task->worker = worker;
 	new_task->state = READ_MESSAGE;
@@ -130,7 +130,7 @@ get_worker_by_type (GQuark type)
  * Free all structures of worker_task
  */
 void
-free_task (struct worker_task *task, gboolean is_soft)
+free_task (struct rspamd_task *task, gboolean is_soft)
 {
 	GList                          *part;
 	struct mime_part               *p;
@@ -171,14 +171,14 @@ free_task (struct worker_task *task, gboolean is_soft)
 			close (task->sock);
 		}
 		rspamd_mempool_delete (task->task_pool);
-		g_slice_free1 (sizeof (struct worker_task), task);
+		g_slice_free1 (sizeof (struct rspamd_task), task);
 	}
 }
 
 void
 free_task_hard (gpointer ud)
 {
-  struct worker_task             *task = ud;
+  struct rspamd_task             *task = ud;
 
   free_task (task, FALSE);
 }
@@ -186,7 +186,7 @@ free_task_hard (gpointer ud)
 void
 free_task_soft (gpointer ud)
 {
-  struct worker_task             *task = ud;
+  struct rspamd_task             *task = ud;
 
   free_task (task, FALSE);
 }
@@ -290,7 +290,7 @@ worker_stop_accept (struct rspamd_worker *worker)
 gboolean
 rspamd_fin_task (void *arg)
 {
-	struct worker_task              *task = (struct worker_task *) arg;
+	struct rspamd_task              *task = (struct rspamd_task *) arg;
 	gint r;
 	GError *err = NULL;
 
@@ -387,7 +387,7 @@ rspamd_fin_task (void *arg)
 void
 rspamd_restore_task (void *arg)
 {
-	struct worker_task             *task = (struct worker_task *) arg;
+	struct rspamd_task             *task = (struct rspamd_task *) arg;
 
 	/* Call post filters */
 	if (task->state == WAIT_POST_FILTER) {

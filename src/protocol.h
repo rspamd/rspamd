@@ -17,28 +17,8 @@
 #define RSPAMD_LENGTH_ERROR RSPAMD_BASE_ERROR + 4
 #define RSPAMD_STATFILE_ERROR RSPAMD_BASE_ERROR + 5
 
-struct worker_task;
+struct rspamd_task;
 struct metric;
-
-
-enum rspamd_command {
-	CMD_CHECK,
-	CMD_SYMBOLS,
-	CMD_REPORT,
-	CMD_REPORT_IFSPAM,
-	CMD_SKIP,
-	CMD_PING,
-	CMD_PROCESS,
-	CMD_OTHER
-};
-
-
-typedef gint (*protocol_reply_func)(struct worker_task *task);
-
-struct custom_command {
-	const gchar *name;
-	protocol_reply_func func;
-};
 
 /**
  * Process HTTP request to the task structure
@@ -46,14 +26,14 @@ struct custom_command {
  * @param msg
  * @return
  */
-gboolean rspamd_protocol_handle_request (struct worker_task *task, struct rspamd_http_message *msg);
+gboolean rspamd_protocol_handle_request (struct rspamd_task *task, struct rspamd_http_message *msg);
 
 /**
  * Write reply for specified task command
  * @param task task object
  * @return 0 if we wrote reply and -1 if there was some error
  */
-void rspamd_protocol_write_reply (struct worker_task *task);
+void rspamd_protocol_write_reply (struct rspamd_task *task);
 
 
 /**

@@ -21,6 +21,7 @@
 #include "logger.h"
 #include "roll_history.h"
 #include "http.h"
+#include "task.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE RSPAMD_CONFDIR "/rspamd.conf"
@@ -71,7 +72,7 @@ struct classifier_config;
 struct mime_part;
 struct rspamd_view;
 struct rspamd_dns_resolver;
-struct worker_task;
+struct rspamd_task;
 
 /** 
  * Server statistics
@@ -165,112 +166,16 @@ struct controller_session {
 	void *other_data;											/**< and its data 									*/
 	controller_func_t custom_handler;							/**< custom command handler							*/
 	struct rspamd_async_session* s;								/**< async session object							*/
-	struct worker_task *learn_task;
+	struct rspamd_task *learn_task;
 	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
 	struct event_base *ev_base;									/**< Event base										*/
-};
-
-/**
- * Worker task structure
- */
-struct worker_task {
-	struct rspamd_worker *worker;								/**< pointer to worker object						*/
-	enum {
-		READ_MESSAGE,
-		WAIT_PRE_FILTER,
-		WAIT_FILTER,
-		WAIT_POST_FILTER,
-		WRITE_REPLY,
-		CLOSING_CONNECTION
-	} state;													/**< current session state							*/
-	enum rspamd_command cmd;									/**< command										*/
-	struct custom_command *custom_cmd;							/**< custom command if any							*/	
-	gint sock;													/**< socket descriptor								*/
-	gboolean is_mime;                                           /**< if this task is mime task                      */
-	gboolean is_json;											/**< output is JSON									*/
-	gboolean allow_learn;										/**< allow learning									*/
-	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
-
-	gchar *helo;													/**< helo header value								*/
-	gchar *from;													/**< from header value								*/
-	gchar *queue_id;												/**< queue id if specified							*/
-	const gchar *message_id;										/**< message id										*/
-	GList *rcpt;													/**< recipients list								*/
-	guint nrcpt;											/**< number of recipients							*/
-#ifdef HAVE_INET_PTON
-	struct {
-		union {
-			struct in_addr in4;
-			struct in6_addr in6;
-		} d;
-		gboolean ipv6;
-		gboolean has_addr;
-	} from_addr;
-#else
-	struct in_addr from_addr;									/**< client addr in numeric form					*/
-#endif
-	struct in_addr client_addr;									/**< client addr in numeric form					*/
-	gchar *deliver_to;											/**< address to deliver								*/
-	gchar *user;													/**< user to deliver								*/
-	gchar *subject;												/**< subject (for non-mime)							*/
-	gchar *hostname;											/**< hostname reported by MTA						*/
-	GString *msg;												/**< message buffer									*/
-	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
-	struct rspamd_http_connection *http_conn;					/**< HTTP server connection							*/
-	struct rspamd_async_session* s;								/**< async session object							*/
-	gint parts_count;											/**< mime parts count								*/
-	GMimeMessage *message;										/**< message, parsed with GMime						*/
-	GMimeObject *parser_parent_part;							/**< current parent part							*/
-	InternetAddressList *rcpts;									/**< list of all recipients 						*/
-	GList *parts;												/**< list of parsed parts							*/
-	GList *text_parts;											/**< list of text parts								*/
-	gchar *raw_headers_str;											/**< list of raw headers							*/
-	GList *received;											/**< list of received headers						*/
-	GTree *urls;												/**< list of parsed urls							*/
-	GTree *emails;												/**< list of parsed emails							*/
-	GList *images;												/**< list of images									*/
-	GHashTable *raw_headers;									/**< list of raw headers							*/
-	GHashTable *results;										/**< hash table of metric_result indexed by 
-	 *    metric's name									*/
-	GHashTable *tokens;											/**< hash table of tokens indexed by tokenizer
-	 *    pointer 										*/
-	GList *messages;											/**< list of messages that would be reported		*/
-	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
-	struct config_file *cfg;									/**< pointer to config object						*/
-	gchar *last_error;											/**< last error										*/
-	gint error_code;												/**< code of last error								*/
-	rspamd_mempool_t *task_pool;									/**< memory pool for task							*/
-#ifdef HAVE_CLOCK_GETTIME
-	struct timespec ts;											/**< time of connection								*/
-#endif
-	struct timeval tv;											/**< time of connection								*/
-	struct rspamd_view *view;									/**< matching view									*/
-	guint32 scan_milliseconds;									/**< how much milliseconds passed					*/
-	gboolean view_checked;
-	gboolean pass_all_filters;									/**< pass task throught every rule					*/
-	gboolean no_log;											/**< do not log or write this task to the history	*/
-	guint32 parser_recursion;									/**< for avoiding recursion stack overflow			*/
-	gboolean (*fin_callback)(void *arg);						/**< calback for filters finalizing					*/
-	void *fin_arg;												/**< argument for fin callback						*/
-
-	guint32 dns_requests;										/**< number of DNS requests per this task			*/
-
-	struct rspamd_dns_resolver *resolver;						/**< DNS resolver									*/
-	struct event_base *ev_base;									/**< Event base										*/
-
-	GThreadPool *classify_pool;									/**< A pool of classify threads 					*/
-
-	struct {
-		enum rspamd_metric_action action;						/**< Action of pre filters							*/
-		gchar *str;												/**< String describing action						*/
-	} pre_result;												/**< Result of pre-filters							*/
 };
 
 /**
  * Common structure representing C module context
  */
 struct module_ctx {
-	gint (*filter)(struct worker_task *task);					/**< pointer to headers process function			*/
+	gint (*filter)(struct rspamd_task *task);					/**< pointer to headers process function			*/
 };
 
 /**
@@ -296,11 +201,11 @@ extern struct rspamd_main *rspamd_main;
 /**
  * Construct new task for worker
  */
-struct worker_task* construct_task (struct rspamd_worker *worker);
+struct rspamd_task* construct_task (struct rspamd_worker *worker);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */
-void free_task (struct worker_task *task, gboolean is_soft);
+void free_task (struct rspamd_task *task, gboolean is_soft);
 void free_task_hard (gpointer ud);
 void free_task_soft (gpointer ud);
 

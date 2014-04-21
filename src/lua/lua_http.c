@@ -44,7 +44,7 @@ struct lua_http_header {
 };
 
 struct lua_http_ud {
-	struct worker_task *task;
+	struct rspamd_task *task;
 	gint parser_state;
 	struct rspamd_async_session *s;
 	rspamd_mempool_t *pool;
@@ -81,13 +81,13 @@ lua_http_fin (void *arg)
 static void
 lua_http_push_error (gint code, struct lua_http_ud *ud)
 {
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	gint							num;
 
 	/* Push error */
 	if (ud->callback) {
 		lua_getglobal (ud->L, ud->callback);
-		ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
+		ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
 		lua_setclass (ud->L, "rspamd{task}", -1);
 		*ptask = ud->task;
 		num = 4;
@@ -122,13 +122,13 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 {
 	GList                          *cur;
 	struct lua_http_header         *header;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	gint							num;
 
 	if (ud->callback) {
 		/* Push error */
 		lua_getglobal (ud->L, ud->callback);
-		ptask = lua_newuserdata (ud->L, sizeof (struct worker_task *));
+		ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
 		lua_setclass (ud->L, "rspamd{task}", -1);
 
 		*ptask = ud->task;
@@ -339,7 +339,7 @@ lua_http_dns_callback (struct rdns_reply *reply, gpointer arg)
  * Common request function
  */
 static gint
-lua_http_make_request_common (lua_State *L, struct worker_task *task, const gchar *callback,
+lua_http_make_request_common (lua_State *L, struct rspamd_task *task, const gchar *callback,
 		const gchar *hostname, const gchar *path, const gchar *data, gint top)
 {
 	gint                           r, s, datalen;
@@ -518,7 +518,7 @@ lua_http_make_request_common_new (lua_State *L, struct rspamd_async_session *ses
 static gint
 lua_http_make_post_request (lua_State *L)
 {
-	struct worker_task            *task, **ptask;
+	struct rspamd_task            *task, **ptask;
 	rspamd_mempool_t				  *pool, **ppool;
 	struct rspamd_async_session	  *session, **psession;
 	struct event_base			  *base, **pbase;
@@ -579,7 +579,7 @@ lua_http_make_post_request (lua_State *L)
 static gint
 lua_http_make_get_request (lua_State *L)
 {
-	struct worker_task            *task, **ptask;
+	struct rspamd_task            *task, **ptask;
 	rspamd_mempool_t				  *pool, **ppool;
 	struct rspamd_async_session	  *session, **psession;
 	struct event_base			  *base, **pbase;

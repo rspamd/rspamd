@@ -56,7 +56,7 @@
 #define DEFAULT_TIME_JITTER 60
 
 struct dkim_ctx {
-	gint                            (*filter) (struct worker_task * task);
+	gint                            (*filter) (struct rspamd_task * task);
 	const gchar                    *symbol_reject;
 	const gchar                    *symbol_tempfail;
 	const gchar                    *symbol_allow;
@@ -73,7 +73,7 @@ struct dkim_ctx {
 
 static struct dkim_ctx        *dkim_module_ctx = NULL;
 
-static void                   dkim_symbol_callback (struct worker_task *task, void *unused);
+static void                   dkim_symbol_callback (struct rspamd_task *task, void *unused);
 
 /* Initialization */
 gint dkim_module_init (struct config_file *cfg, struct module_ctx **ctx);
@@ -238,7 +238,7 @@ dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
 }
 
 static void
-dkim_module_check (struct worker_task *task, rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key)
+dkim_module_check (struct rspamd_task *task, rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key)
 {
 	gint								 res, score_allow = 1, score_deny = 1;
 	const gchar							*strict_value;
@@ -275,7 +275,7 @@ dkim_module_check (struct worker_task *task, rspamd_dkim_context_t *ctx, rspamd_
 static void
 dkim_module_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_context_t *ctx, gpointer ud, GError *err)
 {
-	struct worker_task					*task = ud;
+	struct rspamd_task					*task = ud;
 
 
 	if (key != NULL) {
@@ -303,7 +303,7 @@ dkim_module_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_conte
 }
 
 static void
-dkim_symbol_callback (struct worker_task *task, void *unused)
+dkim_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	GList								*hlist;
 	rspamd_dkim_context_t				*ctx;

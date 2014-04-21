@@ -656,7 +656,7 @@ decode_entitles (gchar *s, guint * len)
 }
 
 static void
-check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url_text, gsize remain, tag_id_t id)
+check_phishing (struct rspamd_task *task, struct uri *href_url, const gchar *url_text, gsize remain, tag_id_t id)
 {
 	struct uri                     *new;
 	gchar                          *url_str;
@@ -770,7 +770,7 @@ check_phishing (struct worker_task *task, struct uri *href_url, const gchar *url
 }
 
 static void
-parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t id,
+parse_tag_url (struct rspamd_task *task, struct mime_text_part *part, tag_id_t id,
 		gchar *tag_text, gsize tag_len, gsize remain)
 {
 	gchar                           *c = NULL, *p, *url_text;
@@ -869,7 +869,7 @@ parse_tag_url (struct worker_task *task, struct mime_text_part *part, tag_id_t i
 }
 
 gboolean
-add_html_node (struct worker_task *task, rspamd_mempool_t * pool, struct mime_text_part *part,
+add_html_node (struct rspamd_task *task, rspamd_mempool_t * pool, struct mime_text_part *part,
 		gchar *tag_text, gsize tag_len, gsize remain, GNode ** cur_level)
 {
 	GNode                          *new;

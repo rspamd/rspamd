@@ -35,7 +35,7 @@ gboolean check_metric_settings (struct metric_result *res, double *score, double
 /*
  * Check actions settings
  */
-gboolean check_metric_action_settings (struct worker_task *task, struct metric_result *res, double score, enum rspamd_metric_action *result);
+gboolean check_metric_action_settings (struct rspamd_task *task, struct metric_result *res, double score, enum rspamd_metric_action *result);
 
 /*
  * Check individual weights for settings
@@ -45,11 +45,11 @@ gboolean check_factor_settings (struct metric_result *res, const gchar *symbol, 
 /*
  * Check want_spam flag
  */
-gboolean check_want_spam (struct worker_task *task);
+gboolean check_want_spam (struct rspamd_task *task);
 
 /*
  * Search settings for metric and store pointers to settings into metric_result structure
  */
-gboolean apply_metric_settings (struct worker_task *task, struct metric *metric, struct metric_result *res);
+gboolean apply_metric_settings (struct rspamd_task *task, struct metric *metric, struct metric_result *res);
 
 #endif

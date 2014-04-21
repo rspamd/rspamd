@@ -23,7 +23,7 @@ struct rspamd_image {
 /*
  * Process images from a worker task
  */
-void process_images (struct worker_task *task);
+void process_images (struct rspamd_task *task);
 
 /*
  * Get textual representation of an image's type

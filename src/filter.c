@@ -63,7 +63,7 @@ filter_error_quark (void)
 }
 
 static void
-insert_metric_result (struct worker_task *task, struct metric *metric, const gchar *symbol,
+insert_metric_result (struct rspamd_task *task, struct metric *metric, const gchar *symbol,
 		double flag, GList * opts, gboolean single)
 {
 	struct metric_result           *metric_res;
@@ -164,7 +164,7 @@ G_LOCK_DEFINE (result_mtx);
 #endif
 
 static void
-insert_result_common (struct worker_task *task, const gchar *symbol, double flag, GList * opts, gboolean single)
+insert_result_common (struct rspamd_task *task, const gchar *symbol, double flag, GList * opts, gboolean single)
 {
 	struct metric                  *metric;
 	struct cache_item              *item;
@@ -212,21 +212,21 @@ insert_result_common (struct worker_task *task, const gchar *symbol, double flag
 
 /* Insert result that may be increased on next insertions */
 void
-insert_result (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
+insert_result (struct rspamd_task *task, const gchar *symbol, double flag, GList * opts)
 {
 	insert_result_common (task, symbol, flag, opts, task->cfg->one_shot_mode);
 }
 
 /* Insert result as a single option */
 void
-insert_result_single (struct worker_task *task, const gchar *symbol, double flag, GList * opts)
+insert_result_single (struct rspamd_task *task, const gchar *symbol, double flag, GList * opts)
 {
 	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
 /* Return true if metric has score that is more than spam score for it */
 static                          gboolean
-check_metric_is_spam (struct worker_task *task, struct metric *metric)
+check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 {
 	struct metric_result           *res;
 	double                          ms, rs;
@@ -260,7 +260,7 @@ check_metric_is_spam (struct worker_task *task, struct metric *metric)
 }
 
 gint
-process_filters (struct worker_task *task)
+process_filters (struct rspamd_task *task)
 {
 	GList                          *cur;
 	struct metric                  *metric;
@@ -297,7 +297,7 @@ process_filters (struct worker_task *task)
 
 
 struct composites_data {
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 	struct metric_result           *metric_res;
 	GTree                          *symbols_to_remove;
 	guint8						   *checked;
@@ -470,7 +470,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 }
 
 static                          gboolean
-check_autolearn (struct statfile_autolearn_params *params, struct worker_task *task)
+check_autolearn (struct statfile_autolearn_params *params, struct rspamd_task *task)
 {
 	gchar                          *metric_name = DEFAULT_METRIC;
 	struct metric_result           *metric_res;
@@ -512,7 +512,7 @@ check_autolearn (struct statfile_autolearn_params *params, struct worker_task *t
 }
 
 void
-process_autolearn (struct statfile *st, struct worker_task *task, GTree * tokens, struct classifier *classifier, gchar *filename, struct classifier_ctx *ctx)
+process_autolearn (struct statfile *st, struct rspamd_task *task, GTree * tokens, struct classifier *classifier, gchar *filename, struct classifier_ctx *ctx)
 {
 	stat_file_t                    *statfile;
 	struct statfile                *unused;
@@ -557,7 +557,7 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 static void
 composites_metric_callback (gpointer key, gpointer value, gpointer data)
 {
-	struct worker_task             *task = (struct worker_task *)data;
+	struct rspamd_task             *task = (struct rspamd_task *)data;
 	struct composites_data         *cd = rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
 	struct metric_result           *metric_res = (struct metric_result *)value;
 
@@ -576,13 +576,13 @@ composites_metric_callback (gpointer key, gpointer value, gpointer data)
 }
 
 void
-make_composites (struct worker_task *task)
+make_composites (struct rspamd_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
 
 struct classifiers_cbdata {
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct lua_locked_state *nL;
 };
 
@@ -590,7 +590,7 @@ static void
 classifiers_callback (gpointer value, void *arg)
 {
 	struct classifiers_cbdata	   *cbdata = arg;
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 	struct classifier_config       *cl = value;
 	struct classifier_ctx          *ctx;
 	struct mime_text_part          *text_part, *p1, *p2;
@@ -706,7 +706,7 @@ classifiers_callback (gpointer value, void *arg)
 
 
 void
-process_statfiles (struct worker_task *task)
+process_statfiles (struct rspamd_task *task)
 {
 	struct classifiers_cbdata		cbdata;
 
@@ -729,7 +729,7 @@ process_statfiles (struct worker_task *task)
 void
 process_statfiles_threaded (gpointer data, gpointer user_data)
 {
-	struct worker_task             *task = (struct worker_task *)data;
+	struct rspamd_task             *task = (struct rspamd_task *)data;
 	struct lua_locked_state 	   *nL = user_data;
 	struct classifiers_cbdata		cbdata;
 
@@ -753,7 +753,7 @@ static void
 insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data)
 {
 #ifndef GLIB_HASH_COMPAT
-	struct worker_task             *task = (struct worker_task *)data;
+	struct rspamd_task             *task = (struct rspamd_task *)data;
 	gint                            r = 0;
 	/* Try to be rfc2822 compatible and avoid long headers with folding */
 	gchar                           header_name[128], outbuf[1000];
@@ -795,7 +795,7 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 }
 
 void
-insert_headers (struct worker_task *task)
+insert_headers (struct rspamd_task *task)
 {
 	g_hash_table_foreach (task->results, insert_metric_header, task);
 }
@@ -878,7 +878,7 @@ check_metric_action (double score, double required_score, struct metric *metric)
 }
 
 gboolean
-learn_task (const gchar *statfile, struct worker_task *task, GError **err)
+learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 {
 	GList                          *cur, *ex;
 	struct classifier_config       *cl;
@@ -1006,7 +1006,7 @@ learn_task (const gchar *statfile, struct worker_task *task, GError **err)
 }
 
 gboolean
-learn_task_spam (struct classifier_config *cl, struct worker_task *task, gboolean is_spam, GError **err)
+learn_task_spam (struct classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err)
 {
 	GList                          *cur, *ex;
 	struct classifier_ctx          *cls_ctx;

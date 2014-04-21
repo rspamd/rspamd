@@ -89,7 +89,7 @@ do {														\
 	}														\
 } while (0)													\
 
-static gboolean parse_spf_record (struct worker_task *task, struct spf_record *rec);
+static gboolean parse_spf_record (struct rspamd_task *task, struct spf_record *rec);
 static void start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl);
 
 /* Determine spf mech */
@@ -350,7 +350,7 @@ parse_spf_ipmask (const gchar *begin, struct spf_addr *addr, struct spf_record *
 }
 
 static gchar *
-parse_spf_hostmask (struct worker_task *task, const gchar *begin, struct spf_addr *addr, struct spf_record *rec)
+parse_spf_hostmask (struct rspamd_task *task, const gchar *begin, struct spf_addr *addr, struct spf_record *rec)
 {
 	gchar                           *host = NULL, *p,  mask_buf[3];
 	gint                            hostlen;
@@ -393,7 +393,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	gchar                           *begin;
 	struct rdns_reply_entry      *elt_data;
 	GList                           *tmp = NULL;
-	struct worker_task              *task;
+	struct rspamd_task              *task;
 	struct spf_addr                 *new_addr;
 
 	task = cb->rec->task;
@@ -600,7 +600,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 }
 
 static gboolean
-parse_spf_a (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_a (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar                           *host;
@@ -635,7 +635,7 @@ parse_spf_a (struct worker_task *task, const gchar *begin, struct spf_record *re
 }
 
 static gboolean
-parse_spf_ptr (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ptr (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	CHECK_REC (rec);
 	
@@ -645,7 +645,7 @@ parse_spf_ptr (struct worker_task *task, const gchar *begin, struct spf_record *
 }
 
 static gboolean
-parse_spf_mx (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_mx (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar                           *host;
@@ -683,7 +683,7 @@ parse_spf_mx (struct worker_task *task, const gchar *begin, struct spf_record *r
 }
 
 static gboolean
-parse_spf_all (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_all (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	/* All is 0/0 */
 	memset (&addr->data.normal.d, 0, sizeof (addr->data.normal.d));
@@ -700,7 +700,7 @@ parse_spf_all (struct worker_task *task, const gchar *begin, struct spf_record *
 }
 
 static gboolean
-parse_spf_ip4 (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ip4 (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip4:addr[/mask] */
 
@@ -710,7 +710,7 @@ parse_spf_ip4 (struct worker_task *task, const gchar *begin, struct spf_record *
 
 #ifdef HAVE_INET_PTON
 static gboolean
-parse_spf_ip6 (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ip6 (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip6:addr[/mask] */
 
@@ -720,7 +720,7 @@ parse_spf_ip6 (struct worker_task *task, const gchar *begin, struct spf_record *
 #endif
 
 static gboolean
-parse_spf_include (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_include (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar                           *domain;
@@ -754,7 +754,7 @@ parse_spf_include (struct worker_task *task, const gchar *begin, struct spf_reco
 }
 
 static gboolean
-parse_spf_exp (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_exp (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	CHECK_REC (rec);
 
@@ -763,7 +763,7 @@ parse_spf_exp (struct worker_task *task, const gchar *begin, struct spf_record *
 }
 
 static gboolean
-parse_spf_redirect (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_redirect (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar                           *domain;
@@ -794,7 +794,7 @@ parse_spf_redirect (struct worker_task *task, const gchar *begin, struct spf_rec
 }
 
 static gboolean
-parse_spf_exists (struct worker_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
+parse_spf_exists (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar                           *host;
@@ -859,7 +859,7 @@ reverse_spf_ip (gchar *ip, gint len)
 }
 
 static gchar *
-expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin)
+expand_spf_macro (struct rspamd_task *task, struct spf_record *rec, gchar *begin)
 {
 	gchar                           *p, *c, *new, *tmp;
 	gint                            len = 0, slen = 0, state = 0;
@@ -1116,7 +1116,7 @@ expand_spf_macro (struct worker_task *task, struct spf_record *rec, gchar *begin
 
 /* Read current element and try to parse record */
 static gboolean
-parse_spf_record (struct worker_task *task, struct spf_record *rec)
+parse_spf_record (struct rspamd_task *task, struct spf_record *rec)
 {
 	struct spf_addr *new = NULL;
 	gboolean need_shift, res = FALSE;
@@ -1359,7 +1359,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 }
 
 gchar *
-get_spf_domain (struct worker_task *task)
+get_spf_domain (struct rspamd_task *task)
 {
 	gchar                           *domain, *res = NULL;
 	GList                           *domains;
@@ -1394,7 +1394,7 @@ get_spf_domain (struct worker_task *task)
 }
 
 gboolean
-resolve_spf (struct worker_task *task, spf_cb_t callback)
+resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 {
 	struct spf_record               *rec;
 	gchar                           *domain;

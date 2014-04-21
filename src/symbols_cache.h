@@ -6,10 +6,10 @@
 
 #define MAX_SYMBOL 128
 
-struct worker_task;
+struct rspamd_task;
 struct config_file;
 
-typedef void (*symbol_func_t)(struct worker_task *task, gpointer user_data);
+typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
 
 struct saved_cache_item {
 	gchar symbol[MAX_SYMBOL];
@@ -130,7 +130,7 @@ void register_dynamic_symbol (rspamd_mempool_t *pool, struct symbols_cache **cac
  * @param cache symbols cache
  * @param saved_item pointer to currently saved item
  */
-gboolean call_symbol_callback (struct worker_task *task, struct symbols_cache *cache, gpointer *save);
+gboolean call_symbol_callback (struct rspamd_task *task, struct symbols_cache *cache, gpointer *save);
 
 /**
  * Remove all dynamic rules from cache

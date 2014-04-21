@@ -74,7 +74,7 @@ roll_history_symbols_callback (gpointer key, gpointer value, void *user_data)
  * @param task task object
  */
 void
-rspamd_roll_history_update (struct roll_history *history, struct worker_task *task)
+rspamd_roll_history_update (struct roll_history *history, struct rspamd_task *task)
 {
 	gint									 row_num;
 	struct roll_history_row					*row;

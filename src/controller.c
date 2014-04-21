@@ -1279,7 +1279,7 @@ process_header (f_str_t *line, struct controller_session *session)
 static gboolean
 fin_learn_task (void *arg)
 {
-	struct worker_task             *task = (struct worker_task *) arg;
+	struct rspamd_task             *task = (struct rspamd_task *) arg;
 
 	/* XXX: needs to be reworked */
 
@@ -1292,7 +1292,7 @@ fin_learn_task (void *arg)
 static void
 restore_learn_task (void *arg)
 {
-	struct worker_task             *task = (struct worker_task *) arg;
+	struct rspamd_task             *task = (struct rspamd_task *) arg;
 
 	/* Special state */
 }
@@ -1305,7 +1305,7 @@ controller_read_socket (f_str_t * in, void *arg)
 	gint                            len, i, r;
 	gchar                          *s, **params, *cmd, out_buf[128];
 	struct controller_command      *command;
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 	struct mime_text_part          *part;
 	GList                          *cur = NULL;
 	GTree                          *tokens = NULL;

@@ -35,6 +35,7 @@ SET(LIBRSPAMDSERVERSRC
 				statfile.c
 				statfile_sync.c
 				symbols_cache.c
+				task.c
 				url.c
 				view.c)
 				

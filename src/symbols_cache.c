@@ -643,7 +643,7 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 }
 
 static GList *
-check_dynamic_item (struct worker_task *task, struct symbols_cache *cache)
+check_dynamic_item (struct rspamd_task *task, struct symbols_cache *cache)
 {
 #ifdef HAVE_INET_PTON
 	/* TODO: radix doesn't support ipv6 addrs */
@@ -665,7 +665,7 @@ check_dynamic_item (struct worker_task *task, struct symbols_cache *cache)
 }
 
 static gboolean
-check_negative_dynamic_item (struct worker_task *task, struct symbols_cache *cache, struct cache_item *item)
+check_negative_dynamic_item (struct rspamd_task *task, struct symbols_cache *cache, struct cache_item *item)
 {
 
 #ifdef HAVE_INET_PTON
@@ -841,7 +841,7 @@ struct symbol_callback_data {
 };
 
 gboolean
-call_symbol_callback (struct worker_task * task, struct symbols_cache * cache, gpointer *save)
+call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, gpointer *save)
 {
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec                 ts1, ts2;

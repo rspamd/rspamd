@@ -34,9 +34,9 @@ gchar* get_next_word (f_str_t *buf, f_str_t *token, GList **exceptions);
 int osb_tokenize_text (struct tokenizer *tokenizer, rspamd_mempool_t *pool, f_str_t *input,
 		GTree **cur, gboolean save_token, gboolean is_utf, GList *exceptions);
 /* Common tokenizer for headers */
-int tokenize_headers (rspamd_mempool_t *pool, struct worker_task *task, GTree **cur);
+int tokenize_headers (rspamd_mempool_t *pool, struct rspamd_task *task, GTree **cur);
 /* Make tokens for a subject */
-void tokenize_subject (struct worker_task *task, GTree ** tree);
+void tokenize_subject (struct rspamd_task *task, GTree ** tree);
 
 /* Array of all defined tokenizers */
 extern struct tokenizer tokenizers[];

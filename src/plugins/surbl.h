@@ -26,7 +26,7 @@ struct redirector_upstream {
 };
 
 struct surbl_ctx {
-	gint (*filter)(struct worker_task *task);
+	gint (*filter)(struct rspamd_task *task);
 	guint16 weight;
 	guint connect_timeout;
 	guint read_timeout;
@@ -57,14 +57,14 @@ struct suffix_item {
 
 struct dns_param {
 	struct uri *url;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	gchar *host_resolve;
 	struct suffix_item *suffix;
 };
 
 struct redirector_param {
 	struct uri *url;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct redirector_upstream *redirector;
 	enum {
 		STATE_CONNECT,
@@ -79,7 +79,7 @@ struct redirector_param {
 
 struct memcached_param {
 	struct uri *url;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	memcached_ctx_t *ctx;
 	GTree *tree;
 	struct suffix_item *suffix;

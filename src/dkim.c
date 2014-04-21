@@ -1267,7 +1267,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 }
 
 static gboolean
-rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *task, const gchar *header_name,
+rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *task, const gchar *header_name,
 		guint count, gboolean is_sig)
 {
 	struct raw_header 							*rh, *rh_iter;
@@ -1337,7 +1337,7 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct worker_task *tas
  * @return
  */
 gint
-rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct worker_task *task)
+rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct rspamd_task *task)
 {
 	const gchar									*p, *headers_end = NULL, *end, *body_end;
 	gboolean									 got_cr = FALSE, got_crlf = FALSE, got_lf = FALSE;

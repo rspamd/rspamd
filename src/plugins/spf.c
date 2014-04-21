@@ -50,7 +50,7 @@
 #define DEFAULT_CACHE_MAXAGE 86400
 
 struct spf_ctx {
-	gint                            (*filter) (struct worker_task * task);
+	gint                            (*filter) (struct rspamd_task * task);
 	const gchar                    *symbol_fail;
 	const gchar                    *symbol_softfail;
 	const gchar                    *symbol_allow;
@@ -62,7 +62,7 @@ struct spf_ctx {
 
 static struct spf_ctx        *spf_module_ctx = NULL;
 
-static void                   spf_symbol_callback (struct worker_task *task, void *unused);
+static void                   spf_symbol_callback (struct rspamd_task *task, void *unused);
 static GList *                spf_record_copy (GList *addrs);
 static void                   spf_record_destroy (gpointer list);
 
@@ -159,7 +159,7 @@ spf_module_reconfig (struct config_file *cfg)
 }
 
 static gboolean
-spf_check_element (struct spf_addr *addr, struct worker_task *task)
+spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 {
 	gboolean                        res = FALSE;
 #ifdef HAVE_INET_PTON
@@ -252,7 +252,7 @@ spf_check_element (struct spf_addr *addr, struct worker_task *task)
 }
 
 static gboolean
-spf_check_list (GList *list, struct worker_task *task)
+spf_check_list (GList *list, struct rspamd_task *task)
 {
 	GList                           *cur;
 	struct spf_addr                 *addr;
@@ -279,7 +279,7 @@ spf_check_list (GList *list, struct worker_task *task)
 }
 
 static void 
-spf_plugin_callback (struct spf_record *record, struct worker_task *task)
+spf_plugin_callback (struct spf_record *record, struct rspamd_task *task)
 {
 	GList                           *l;
 
@@ -296,7 +296,7 @@ spf_plugin_callback (struct spf_record *record, struct worker_task *task)
 
 
 static void 
-spf_symbol_callback (struct worker_task *task, void *unused)
+spf_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	gchar                           *domain;
 	GList                           *l;

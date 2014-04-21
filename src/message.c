@@ -34,7 +34,7 @@
 #define UTF8_CHARSET "UTF-8"
 
 GByteArray                     *
-strip_html_tags (struct worker_task *task, rspamd_mempool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
+strip_html_tags (struct rspamd_task *task, rspamd_mempool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
 {
 	uint8_t                        *p, *rp, *tbegin = NULL, *end, c, lc;
 	gint                            br, i = 0, depth = 0, in_q = 0;
@@ -550,7 +550,7 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 
 /* Convert raw headers to a list of struct raw_header * */
 static void
-process_raw_headers (struct worker_task *task)
+process_raw_headers (struct rspamd_task *task)
 {
 	struct raw_header              *new = NULL, *lp;
 	gchar                          *p, *c, *tmp, *tp;
@@ -774,7 +774,7 @@ free_byte_array_callback (void *pointer)
 }
 
 static GByteArray              *
-convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeContentType * type, struct mime_text_part *text_part)
+convert_text_to_utf (struct rspamd_task *task, GByteArray * part_content, GMimeContentType * type, struct mime_text_part *text_part)
 {
 	GError                         *err = NULL;
 	gsize                           read_bytes, write_bytes;
@@ -823,7 +823,7 @@ convert_text_to_utf (struct worker_task *task, GByteArray * part_content, GMimeC
 }
 
 static void
-process_text_part (struct worker_task *task, GByteArray *part_content, GMimeContentType *type,
+process_text_part (struct rspamd_task *task, GByteArray *part_content, GMimeContentType *type,
 		GMimeObject *part, GMimeObject *parent, gboolean is_empty)
 {
 	struct mime_text_part          *text_part;
@@ -907,7 +907,7 @@ static void
 mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 {
-	struct worker_task             *task = (struct worker_task *)user_data;
+	struct rspamd_task             *task = (struct rspamd_task *)user_data;
 	struct mime_part               *mime_part;
 	GMimeContentType               *type;
 	GMimeDataWrapper               *wrapper;
@@ -1032,7 +1032,7 @@ destroy_message (void *pointer)
 }
 
 gint
-process_message (struct worker_task *task)
+process_message (struct rspamd_task *task)
 {
 	GMimeMessage                   *message;
 	GMimeParser                    *parser;
@@ -1731,7 +1731,7 @@ message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar
 }
 
 GList*
-message_get_raw_header (struct worker_task *task, const gchar *field, gboolean strong)
+message_get_raw_header (struct rspamd_task *task, const gchar *field, gboolean strong)
 {
 	GList                               *gret = NULL;
 	struct raw_header                   *rh;

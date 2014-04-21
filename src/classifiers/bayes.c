@@ -202,7 +202,7 @@ bayes_init (rspamd_mempool_t *pool, struct classifier_config *cfg)
 }
 
 gboolean
-bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task, lua_State *L)
+bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct rspamd_task *task, lua_State *L)
 {
 	struct bayes_callback_data      data;
 	gchar                           *value;
@@ -428,7 +428,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 
 gboolean
 bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
-		GTree *input, struct worker_task *task, gboolean is_spam, lua_State *L, GError **err)
+		GTree *input, struct rspamd_task *task, gboolean is_spam, lua_State *L, GError **err)
 {
 	struct bayes_callback_data      data;
 	gchar                          *value;
@@ -528,7 +528,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 }
 
 GList *
-bayes_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct worker_task *task)
+bayes_weights (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input, struct rspamd_task *task)
 {
 	/* This function is unimplemented with new normalizer */
 	return NULL;

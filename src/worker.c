@@ -168,7 +168,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *chunk, gsize len)
 {
-	struct worker_task             *task = (struct worker_task *) conn->ud;
+	struct rspamd_task             *task = (struct rspamd_task *) conn->ud;
 	struct rspamd_worker_ctx       *ctx;
 	ssize_t                         r;
 	GError                         *err = NULL;
@@ -251,7 +251,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 static void
 rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
-	struct worker_task             *task = (struct worker_task *) conn->ud;
+	struct rspamd_task             *task = (struct rspamd_task *) conn->ud;
 
 	msg_info ("abnormally closing connection from: %s, error: %s",
 			inet_ntoa (task->client_addr), err->message);
@@ -272,7 +272,7 @@ static gint
 rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
-	struct worker_task             *task = (struct worker_task *) conn->ud;
+	struct rspamd_task             *task = (struct rspamd_task *) conn->ud;
 
 	if (task->state == CLOSING_CONNECTION) {
 		msg_debug ("normally closing connection from: %s", inet_ntoa (task->client_addr));
@@ -299,7 +299,7 @@ accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
 	struct rspamd_worker_ctx       *ctx;
 	union sa_union                  su;
-	struct worker_task             *new_task;
+	struct rspamd_task             *new_task;
 	char                            ip_str[INET6_ADDRSTRLEN + 1];
 
 	socklen_t                       addrlen = sizeof (su);

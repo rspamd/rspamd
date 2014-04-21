@@ -73,7 +73,7 @@ struct smtp_session {
 	enum rspamd_smtp_state state;
 	enum rspamd_smtp_state upstream_state;
 	struct rspamd_worker *worker;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct in_addr client_addr;
 	gchar *hostname;
 	gchar *error;

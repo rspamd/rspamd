@@ -131,7 +131,7 @@ add_view_client_ip (struct rspamd_view * view, const gchar *line)
 
 
 static struct rspamd_view             *
-find_view_by_ip (GList * views, struct worker_task *task)
+find_view_by_ip (GList * views, struct rspamd_task *task)
 {
 	GList                          *cur;
 	struct rspamd_view             *v;
@@ -172,7 +172,7 @@ find_view_by_ip (GList * views, struct worker_task *task)
 }
 
 static struct rspamd_view             *
-find_view_by_client_ip (GList * views, struct worker_task *task)
+find_view_by_client_ip (GList * views, struct rspamd_task *task)
 {
 	GList                          *cur;
 	struct rspamd_view             *v;
@@ -195,7 +195,7 @@ find_view_by_client_ip (GList * views, struct worker_task *task)
 }
 
 static struct rspamd_view             *
-find_view_by_from (GList * views, struct worker_task *task)
+find_view_by_from (GList * views, struct rspamd_task *task)
 {
 	GList                          *cur, *cur_re;
 	struct rspamd_view             *v;
@@ -239,7 +239,7 @@ find_view_by_from (GList * views, struct worker_task *task)
 }
 
 static inline gboolean
-check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
+check_view_rcpt (struct rspamd_view *v, struct rspamd_task *task)
 {
 	GList                          *cur, *cur_re;
 	gchar                           rcpt_user[256], *p;
@@ -292,7 +292,7 @@ check_view_rcpt (struct rspamd_view *v, struct worker_task *task)
 }
 
 static struct rspamd_view             *
-find_view_by_rcpt (GList * views, struct worker_task *task)
+find_view_by_rcpt (GList * views, struct rspamd_task *task)
 {
 	GList                          *cur;
 	struct rspamd_view             *v;
@@ -342,7 +342,7 @@ match_view_symbol (struct rspamd_view *v, const gchar *symbol)
 }
 
 gboolean
-check_view (GList * views, const gchar *symbol, struct worker_task * task)
+check_view (GList * views, const gchar *symbol, struct rspamd_task * task)
 {
 	struct rspamd_view             *selected = NULL;
 
@@ -384,7 +384,7 @@ check_view (GList * views, const gchar *symbol, struct worker_task * task)
 }
 
 gboolean
-check_skip (GList * views, struct worker_task * task)
+check_skip (GList * views, struct rspamd_task * task)
 {
 	if (check_view (views, NULL, task) == FALSE) {
 		return TRUE;

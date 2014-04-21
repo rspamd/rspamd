@@ -56,9 +56,9 @@
 
 static struct surbl_ctx        *surbl_module_ctx = NULL;
 
-static void surbl_test_url (struct worker_task *task, void *user_data);
+static void surbl_test_url (struct rspamd_task *task, void *user_data);
 static void dns_callback (struct rdns_reply *reply, gpointer arg);
-static void process_dns_results (struct worker_task *task,
+static void process_dns_results (struct rspamd_task *task,
 		struct suffix_item *suffix, gchar *url, guint32 addr);
 
 
@@ -623,7 +623,7 @@ format_surbl_request (rspamd_mempool_t * pool, f_str_t * hostname, struct suffix
 }
 
 static void
-make_surbl_requests (struct uri *url, struct worker_task *task,
+make_surbl_requests (struct uri *url, struct rspamd_task *task,
 		struct suffix_item *suffix, gboolean forced, GTree *tree)
 {
 	gchar                           *surbl_req;
@@ -663,7 +663,7 @@ make_surbl_requests (struct uri *url, struct worker_task *task,
 }
 
 static void
-process_dns_results (struct worker_task *task, struct suffix_item *suffix, gchar *url, guint32 addr)
+process_dns_results (struct rspamd_task *task, struct suffix_item *suffix, gchar *url, guint32 addr)
 {
 	GList                           *cur;
 	struct surbl_bit_item          *bit;
@@ -691,7 +691,7 @@ static void
 dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param               *param = (struct dns_param *)arg;
-	struct worker_task             *task = param->task;
+	struct rspamd_task             *task = param->task;
 	struct rdns_reply_entry        *elt;
 
 	debug_task ("in surbl request callback");
@@ -759,7 +759,7 @@ memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
 }
 
 static void
-register_memcached_call (struct uri *url, struct worker_task *task,
+register_memcached_call (struct uri *url, struct rspamd_task *task,
 		struct suffix_item *suffix, GTree *tree)
 {
 	struct memcached_param         *param;
@@ -825,7 +825,7 @@ static void
 redirector_callback (gint fd, short what, void *arg)
 {
 	struct redirector_param        *param = (struct redirector_param *)arg;
-	struct worker_task             *task = param->task;
+	struct rspamd_task             *task = param->task;
 	gchar                           url_buf[512];
 	gint                            r;
 	struct timeval                 *timeout;
@@ -906,7 +906,7 @@ redirector_callback (gint fd, short what, void *arg)
 
 
 static void
-register_redirector_call (struct uri *url, struct worker_task *task,
+register_redirector_call (struct uri *url, struct rspamd_task *task,
 		struct suffix_item *suffix, const gchar *rule, GTree *tree)
 {
 	gint                            s = -1;
@@ -954,7 +954,7 @@ static                          gboolean
 surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param        *param = data;
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 	struct uri                     *url = value;
 	gchar                          *red_domain;
 	const gchar                    *pos;
@@ -1008,7 +1008,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static void
-surbl_test_url (struct worker_task *task, void *user_data)
+surbl_test_url (struct rspamd_task *task, void *user_data)
 {
 	struct redirector_param         param;
 	struct suffix_item             *suffix = user_data;
@@ -1027,7 +1027,7 @@ struct urls_tree_cb_data {
 	gchar                          *buf;
 	gsize                           len;
 	gsize                           off;
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 };
 
 static gboolean
@@ -1069,7 +1069,7 @@ write_urls_buffer (gpointer key, gpointer value, gpointer cbdata)
 
 
 static gboolean
-urls_command_handler (struct worker_task *task)
+urls_command_handler (struct rspamd_task *task)
 {
 	struct urls_tree_cb_data        cb;
 

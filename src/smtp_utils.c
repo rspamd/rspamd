@@ -141,7 +141,7 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 	enum rspamd_metric_action       action = METRIC_ACTION_NOACTION;
 	double                          ms = 0, rs = 0;
 	gboolean                        is_spam = FALSE;
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 
 	task = cd->session->task;
 

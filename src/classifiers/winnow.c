@@ -193,7 +193,7 @@ winnow_init (rspamd_mempool_t * pool, struct classifier_config *cfg)
 }
 
 gboolean
-winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task, lua_State *L)
+winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct rspamd_task *task, lua_State *L)
 {
 	struct winnow_callback_data     data;
 	char                           *sumbuf, *value;
@@ -282,7 +282,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 }
 
 GList *
-winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct worker_task *task)
+winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct rspamd_task *task)
 {
 	struct winnow_callback_data     data;
 	long double                     res = 0.;
@@ -593,7 +593,7 @@ end:
 
 gboolean
 winnow_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
-		GTree *input, struct worker_task *task, gboolean is_spam, lua_State *L, GError **err)
+		GTree *input, struct rspamd_task *task, gboolean is_spam, lua_State *L, GError **err)
 {
 	g_set_error (err,
 					winnow_error_quark(),		/* error domain */

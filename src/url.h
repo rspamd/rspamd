@@ -5,7 +5,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
-struct worker_task;
+struct rspamd_task;
 struct mime_text_part;
 
 struct uri {
@@ -81,7 +81,7 @@ enum protocol {
  * @param part current text part
  * @param is_html turn on html euristic
  */
-void url_parse_text (rspamd_mempool_t *pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html);
+void url_parse_text (rspamd_mempool_t *pool, struct rspamd_task *task, struct mime_text_part *part, gboolean is_html);
 
 /*
  * Parse a single url into an uri structure

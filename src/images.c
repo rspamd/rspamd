@@ -32,11 +32,11 @@ static const guint8 jpg_sig2[] = {'J', 'F', 'I', 'F'};
 static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
-static void                     process_image (struct worker_task *task, struct mime_part *part);
+static void                     process_image (struct rspamd_task *task, struct mime_part *part);
 
 
 void
-process_images (struct worker_task *task)
+process_images (struct rspamd_task *task)
 {
 	GList                          *cur;
 	struct mime_part			   *part;
@@ -83,7 +83,7 @@ detect_image_type (GByteArray *data)
 
 
 static struct rspamd_image *
-process_png_image (struct worker_task *task, GByteArray *data)
+process_png_image (struct rspamd_task *task, GByteArray *data)
 {
 	struct rspamd_image             *img;
 	guint32                          t;
@@ -117,7 +117,7 @@ process_png_image (struct worker_task *task, GByteArray *data)
 }
 
 static struct rspamd_image *
-process_jpg_image (struct worker_task *task, GByteArray *data)
+process_jpg_image (struct rspamd_task *task, GByteArray *data)
 {
 	guint8                          *p;
 	guint16                          t;
@@ -146,7 +146,7 @@ process_jpg_image (struct worker_task *task, GByteArray *data)
 }
 
 static struct rspamd_image *
-process_gif_image (struct worker_task *task, GByteArray *data)
+process_gif_image (struct rspamd_task *task, GByteArray *data)
 {
 	struct rspamd_image             *img;
 	guint8                          *p;
@@ -171,7 +171,7 @@ process_gif_image (struct worker_task *task, GByteArray *data)
 }
 
 static struct rspamd_image *
-process_bmp_image (struct worker_task *task, GByteArray *data)
+process_bmp_image (struct rspamd_task *task, GByteArray *data)
 {
 	struct rspamd_image             *img;
 	gint32                           t;
@@ -197,7 +197,7 @@ process_bmp_image (struct worker_task *task, GByteArray *data)
 }
 
 static void
-process_image (struct worker_task *task, struct mime_part *part)
+process_image (struct rspamd_task *task, struct mime_part *part)
 {
 	enum known_image_types          type;
 	struct rspamd_image            *img = NULL;

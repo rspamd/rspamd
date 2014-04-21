@@ -127,7 +127,7 @@ rspamd_protocol_escape_braces (GString *in)
 }
 
 static gboolean
-rspamd_protocol_handle_url (struct worker_task *task, struct rspamd_http_message *msg)
+rspamd_protocol_handle_url (struct rspamd_task *task, struct rspamd_http_message *msg)
 {
 	GList                          *cur;
 	struct custom_command          *cmd;
@@ -224,7 +224,7 @@ err:
 }
 
 static gboolean
-rspamd_protocol_handle_headers (struct worker_task *task, struct rspamd_http_message *msg)
+rspamd_protocol_handle_headers (struct rspamd_task *task, struct rspamd_http_message *msg)
 {
 	gchar                           *headern, *err, *tmp;
 	gboolean                         res = TRUE;
@@ -412,7 +412,7 @@ rspamd_protocol_handle_headers (struct worker_task *task, struct rspamd_http_mes
 }
 
 gboolean
-rspamd_protocol_handle_request (struct worker_task *task,
+rspamd_protocol_handle_request (struct rspamd_task *task,
 		struct rspamd_http_message *msg)
 {
 	gboolean ret = TRUE;
@@ -438,7 +438,7 @@ rspamd_protocol_handle_request (struct worker_task *task,
 }
 
 static void
-write_hashes_to_log (struct worker_task *task, GString *logbuf)
+write_hashes_to_log (struct rspamd_task *task, GString *logbuf)
 {
 	GList                          *cur;
 	struct mime_text_part          *text_part;
@@ -463,7 +463,7 @@ write_hashes_to_log (struct worker_task *task, GString *logbuf)
 /* Structure for writing tree data */
 struct tree_cb_data {
 	ucl_object_t *top;
-	struct worker_task *task;
+	struct rspamd_task *task;
 };
 
 /*
@@ -489,7 +489,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 }
 
 static ucl_object_t *
-rspamd_urls_tree_ucl (GTree *input, struct worker_task *task)
+rspamd_urls_tree_ucl (GTree *input, struct rspamd_task *task)
 {
 	struct tree_cb_data             cb;
 	ucl_object_t                    *obj;
@@ -517,7 +517,7 @@ emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 }
 
 static ucl_object_t *
-rspamd_emails_tree_ucl (GTree *input, struct worker_task *task)
+rspamd_emails_tree_ucl (GTree *input, struct rspamd_task *task)
 {
 	struct tree_cb_data             cb;
 	ucl_object_t                    *obj;
@@ -534,7 +534,7 @@ rspamd_emails_tree_ucl (GTree *input, struct worker_task *task)
 
 /* Write new subject */
 static const gchar *
-make_rewritten_subject (struct metric *metric, struct worker_task *task)
+make_rewritten_subject (struct metric *metric, struct rspamd_task *task)
 {
 	static gchar                    subj_buf[1024];
 	gchar                          *p = subj_buf, *end, *c, *res;
@@ -583,7 +583,7 @@ rspamd_str_list_ucl (GList *str_list)
 }
 
 static ucl_object_t *
-rspamd_metric_symbol_ucl (struct worker_task *task, struct metric *m,
+rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 		struct symbol *sym, GString *logbuf)
 {
 	ucl_object_t                    *obj = NULL;
@@ -606,7 +606,7 @@ rspamd_metric_symbol_ucl (struct worker_task *task, struct metric *m,
 }
 
 static ucl_object_t *
-rspamd_metric_result_ucl (struct worker_task *task, struct metric_result *mres, GString *logbuf)
+rspamd_metric_result_ucl (struct rspamd_task *task, struct metric_result *mres, GString *logbuf)
 {
 	GHashTableIter                   hiter;
 	struct symbol                  *sym;
@@ -684,7 +684,7 @@ rspamd_metric_result_ucl (struct worker_task *task, struct metric_result *mres, 
 }
 
 static void
-rspamd_ucl_tolegacy_output (struct worker_task *task, ucl_object_t *top, GString *out)
+rspamd_ucl_tolegacy_output (struct rspamd_task *task, ucl_object_t *top, GString *out)
 {
 	const ucl_object_t *metric, *score,
 		*required_score, *is_spam, *elt, *symbols;
@@ -724,7 +724,7 @@ rspamd_ucl_tolegacy_output (struct worker_task *task, ucl_object_t *top, GString
 }
 
 static void
-write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
+write_check_reply (struct rspamd_http_message *msg, struct rspamd_task *task)
 {
 	GString                         *logbuf;
 	struct metric_result           *metric_res;
@@ -788,7 +788,7 @@ write_check_reply (struct rspamd_http_message *msg, struct worker_task *task)
 }
 
 void
-rspamd_protocol_write_reply (struct worker_task *task)
+rspamd_protocol_write_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message    *msg;
 	const gchar                   *ctype = "application/json";

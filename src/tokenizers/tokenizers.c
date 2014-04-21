@@ -189,7 +189,7 @@ typedef struct _GMimeHeader {
 } local_GMimeHeader;
 
 int
-tokenize_headers (rspamd_mempool_t * pool, struct worker_task *task, GTree ** tree)
+tokenize_headers (rspamd_mempool_t * pool, struct rspamd_task *task, GTree ** tree)
 {
 	token_node_t                   *new = NULL;
 	f_str_t                         headername;
@@ -252,7 +252,7 @@ tokenize_headers (rspamd_mempool_t * pool, struct worker_task *task, GTree ** tr
 }
 
 void
-tokenize_subject (struct worker_task *task, GTree ** tree)
+tokenize_subject (struct rspamd_task *task, GTree ** tree)
 {
 	f_str_t                         subject;
 	const gchar                    *sub;

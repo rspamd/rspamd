@@ -88,7 +88,7 @@ struct fuzzy_rule {
 };
 
 struct fuzzy_ctx {
-	gint (*filter) (struct worker_task * task);
+	gint (*filter) (struct rspamd_task * task);
 	rspamd_mempool_t *fuzzy_pool;
 	GList *fuzzy_rules;
 	const gchar *default_symbol;
@@ -105,7 +105,7 @@ struct fuzzy_client_session {
 	fuzzy_hash_t *h;
 	struct event ev;
 	struct timeval tv;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	struct storage_server *server;
 	struct fuzzy_rule *rule;
 	gint fd;
@@ -123,14 +123,14 @@ struct fuzzy_learn_session {
 	struct controller_session *session;
 	struct storage_server *server;
 	struct fuzzy_rule *rule;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	gint fd;
 };
 
 static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
 static const gchar hex_digits[] = "0123456789abcdef";
 
-static void fuzzy_symbol_callback (struct worker_task *task, void *unused);
+static void fuzzy_symbol_callback (struct rspamd_task *task, void *unused);
 static gboolean fuzzy_add_handler (gchar **args, struct controller_session *session);
 static gboolean fuzzy_delete_handler (gchar **args,
 		struct controller_session *session);
@@ -691,7 +691,7 @@ ok:
 }
 
 static inline void
-register_fuzzy_call (struct worker_task *task, struct fuzzy_rule *rule, fuzzy_hash_t *h)
+register_fuzzy_call (struct rspamd_task *task, struct fuzzy_rule *rule, fuzzy_hash_t *h)
 {
 	struct fuzzy_client_session    *session;
 	struct storage_server          *selected;
@@ -730,7 +730,7 @@ register_fuzzy_call (struct worker_task *task, struct fuzzy_rule *rule, fuzzy_ha
 }
 
 static void
-fuzzy_check_rule (struct worker_task *task, struct fuzzy_rule *rule)
+fuzzy_check_rule (struct rspamd_task *task, struct fuzzy_rule *rule)
 {
 	struct mime_text_part          *part;
 	struct mime_part               *mime_part;
@@ -816,7 +816,7 @@ fuzzy_check_rule (struct worker_task *task, struct fuzzy_rule *rule)
 
 /* This callback is called when we check message via fuzzy hashes storage */
 static void
-fuzzy_symbol_callback (struct worker_task *task, void *unused)
+fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	struct fuzzy_rule *rule;
 	GList *cur;
@@ -850,7 +850,7 @@ fuzzy_symbol_callback (struct worker_task *task, void *unused)
 
 static inline gboolean
 register_fuzzy_controller_call (struct controller_session *session,
-		struct fuzzy_rule *rule, struct worker_task *task, fuzzy_hash_t *h,
+		struct fuzzy_rule *rule, struct rspamd_task *task, fuzzy_hash_t *h,
 		gint cmd, gint value, gint flag, gint *saved, GError **err)
 {
 	struct fuzzy_learn_session     *s;
@@ -903,7 +903,7 @@ register_fuzzy_controller_call (struct controller_session *session,
 
 static int
 fuzzy_process_rule (struct controller_session *session, struct fuzzy_rule *rule,
-		struct worker_task *task, GError **err, gint cmd, gint flag, gint value, gint *saved)
+		struct rspamd_task *task, GError **err, gint cmd, gint flag, gint value, gint *saved)
 {
 	struct mime_text_part          *part;
 	struct mime_part               *mime_part;
@@ -1002,7 +1002,7 @@ fuzzy_process_handler (struct controller_session *session, f_str_t * in)
 	struct fuzzy_rule *rule;
 	gboolean processed = FALSE, res = TRUE;
 	GList *cur;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	GError **err;
 	gint r, cmd = 0, value = 0, flag = 0, *saved, *sargs;
 	gchar out_buf[BUFSIZ];

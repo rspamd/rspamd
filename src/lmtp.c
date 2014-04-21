@@ -103,7 +103,7 @@ sigusr1_handler (gint fd, short what, void *arg)
 static void
 rcpt_destruct (void *pointer)
 {
-	struct worker_task             *task = (struct worker_task *)pointer;
+	struct rspamd_task             *task = (struct rspamd_task *)pointer;
 
 	if (task->rcpt) {
 		g_list_free (task->rcpt);
@@ -118,7 +118,7 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 {
 	GList                          *part;
 	struct mime_part               *p;
-	struct worker_task             *task = lmtp->task;
+	struct rspamd_task             *task = lmtp->task;
 
 	if (lmtp) {
 		debug_task ("free pointer %p", lmtp->task);
@@ -149,7 +149,7 @@ static                          gboolean
 lmtp_read_socket (f_str_t * in, void *arg)
 {
 	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
-	struct worker_task             *task = lmtp->task;
+	struct rspamd_task             *task = lmtp->task;
 	ssize_t                         r;
 
 	switch (task->state) {
@@ -195,7 +195,7 @@ static                          gboolean
 lmtp_write_socket (void *arg)
 {
 	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
-	struct worker_task             *task = lmtp->task;
+	struct rspamd_task             *task = lmtp->task;
 
 	switch (lmtp->task->state) {
 	case WRITE_REPLY:
@@ -243,7 +243,7 @@ accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
 	union sa_union                  su;
-	struct worker_task             *new_task;
+	struct rspamd_task             *new_task;
 	struct rspamd_lmtp_proto       *lmtp;
 	socklen_t                       addrlen = sizeof (su.ss);
 	gint                            nfd;

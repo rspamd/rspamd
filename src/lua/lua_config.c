@@ -266,10 +266,10 @@ lua_destroy_cfg_symbol (gpointer ud)
 }
 
 static gboolean
-lua_config_function_callback (struct worker_task *task, GList *args, void *user_data)
+lua_config_function_callback (struct rspamd_task *task, GList *args, void *user_data)
 {
 	struct lua_callback_data       *cd = user_data;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	gint                            i = 1;
 	struct expression_argument     *arg;
 	GList                          *cur;
@@ -281,7 +281,7 @@ lua_config_function_callback (struct worker_task *task, GList *args, void *user_
 	else {
 		lua_getglobal (cd->L, cd->callback.name);
 	}
-	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
 	lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 	/* Now push all arguments */
@@ -346,10 +346,10 @@ lua_config_register_module_option (lua_State *L)
 }
 
 void
-lua_call_post_filters (struct worker_task *task)
+lua_call_post_filters (struct rspamd_task *task)
 {
 	struct lua_callback_data       *cd;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	GList                          *cur;
 
 	cur = task->cfg->post_filters;
@@ -361,7 +361,7 @@ lua_call_post_filters (struct worker_task *task)
 		else {
 			lua_getglobal (cd->L, cd->callback.name);
 		}
-		ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+		ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
 		lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
@@ -399,10 +399,10 @@ lua_config_register_post_filter (lua_State *L)
 }
 
 void
-lua_call_pre_filters (struct worker_task *task)
+lua_call_pre_filters (struct rspamd_task *task)
 {
 	struct lua_callback_data       *cd;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	GList                          *cur;
 
 	cur = task->cfg->pre_filters;
@@ -414,7 +414,7 @@ lua_call_pre_filters (struct worker_task *task)
 		else {
 			lua_getglobal (cd->L, cd->callback.name);
 		}
-		ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+		ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
 		lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
@@ -547,10 +547,10 @@ lua_config_add_kv_map (lua_State *L)
 
 
 static void
-lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
+lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
 	struct lua_callback_data       *cd = ud;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -558,7 +558,7 @@ lua_metric_symbol_callback (struct worker_task *task, gpointer ud)
 	else {
 		lua_getglobal (cd->L, cd->callback.name);
 	}
-	ptask = lua_newuserdata (cd->L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
 	lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 
@@ -851,7 +851,7 @@ static gint
 lua_trie_search_task (lua_State *L)
 {
 	rspamd_trie_t                 *trie = lua_check_trie (L);
-	struct worker_task            *task;
+	struct rspamd_task            *task;
 	struct mime_text_part         *part;
 	GList                         *cur;
 	const gchar                   *pos, *end;
@@ -862,7 +862,7 @@ lua_trie_search_task (lua_State *L)
 	if (trie) {
 		ud = luaL_checkudata (L, 2, "rspamd{task}");
 		luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-		task = ud ? *((struct worker_task **)ud) : NULL;
+		task = ud ? *((struct rspamd_task **)ud) : NULL;
 		if (task) {
 			lua_newtable (L);
 			cur = task->text_parts;

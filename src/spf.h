@@ -3,10 +3,10 @@
 
 #include "config.h"
 
-struct worker_task;
+struct rspamd_task;
 struct spf_record;
 
-typedef void (*spf_cb_t)(struct spf_record *record, struct worker_task *task);
+typedef void (*spf_cb_t)(struct spf_record *record, struct rspamd_task *task);
 
 typedef enum spf_mech_e {
 	SPF_FAIL,
@@ -63,7 +63,7 @@ struct spf_record {
 	gchar *sender;
 	gchar *sender_domain;
 	gchar *local_part;
-	struct worker_task *task;
+	struct rspamd_task *task;
 	spf_cb_t callback;
 
 	gboolean in_include;
@@ -73,12 +73,12 @@ struct spf_record {
 /*
  * Resolve spf record for specified task and call a callback after resolution fails/succeed
  */
-gboolean resolve_spf (struct worker_task *task, spf_cb_t callback);
+gboolean resolve_spf (struct rspamd_task *task, spf_cb_t callback);
 
 /*
  * Get a domain for spf for specified task
  */
-gchar *get_spf_domain (struct worker_task *task);
+gchar *get_spf_domain (struct rspamd_task *task);
 
 
 #endif

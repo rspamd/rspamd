@@ -179,17 +179,17 @@ gint luaopen_dns_resolver (lua_State * L);
 gint luaopen_rsa (lua_State * L);
 gint luaopen_ip (lua_State * L);
 
-gint lua_call_filter (const gchar *function, struct worker_task *task);
-gint lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number);
-double lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name);
-gboolean lua_call_expression_func (gpointer lua_data, struct worker_task *task, GList *args, gboolean *res);
-void lua_call_post_filters (struct worker_task *task);
-void lua_call_pre_filters (struct worker_task *task);
+gint lua_call_filter (const gchar *function, struct rspamd_task *task);
+gint lua_call_chain_filter (const gchar *function, struct rspamd_task *task, gint *marks, guint number);
+double lua_consolidation_func (struct rspamd_task *task, const gchar *metric_name, const gchar *function_name);
+gboolean lua_call_expression_func (gpointer lua_data, struct rspamd_task *task, GList *args, gboolean *res);
+void lua_call_post_filters (struct rspamd_task *task);
+void lua_call_pre_filters (struct rspamd_task *task);
 void add_luabuf (const gchar *line);
 
 /* Classify functions */
-GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct worker_task *task, gboolean is_learn, gboolean is_spam, lua_State *L);
-double call_classifier_post_callbacks (struct classifier_config *ccf, struct worker_task *task, double in, lua_State *L);
+GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct rspamd_task *task, gboolean is_learn, gboolean is_spam, lua_State *L);
+double call_classifier_post_callbacks (struct classifier_config *ccf, struct rspamd_task *task, double in, lua_State *L);
 
 double lua_normalizer_func (struct config_file *cfg, long double score, void *params);
 
@@ -197,7 +197,7 @@ double lua_normalizer_func (struct config_file *cfg, long double score, void *pa
 void lua_post_load_config (struct config_file *cfg);
 void lua_process_element (struct config_file *cfg, const gchar *name,
 		const gchar *module_name, struct module_opt *opt, gint idx, gboolean allow_meta);
-gboolean lua_handle_param (struct worker_task *task, gchar *mname, gchar *optname, 
+gboolean lua_handle_param (struct rspamd_task *task, gchar *mname, gchar *optname, 
 							enum lua_var_type expected_type, gpointer *res);
 gboolean lua_check_condition (struct config_file *cfg, const gchar *condition);
 void lua_dumpstack (lua_State *L);

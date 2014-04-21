@@ -26,6 +26,13 @@ union sa_union {
 	struct sockaddr_un su;
 };
 
+typedef struct _rspamd_inet_addr_s {
+	union sa_union addr;
+	socklen_t slen;
+	int af;
+} rspamd_inet_addr_t;
+
+
 /*
  * Create socket and bind or connect it to specified address and port
  */
@@ -453,5 +460,6 @@ gboolean rspamd_ip_is_valid (void *ptr, int af);
  * @param target target string
  */
 void rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString *target);
+
 
 #endif

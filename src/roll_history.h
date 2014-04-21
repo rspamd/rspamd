@@ -38,7 +38,7 @@
 #define HISTORY_MAX_USER 20
 #define HISTORY_MAX_ROWS 200
 
-struct worker_task;
+struct rspamd_task;
 
 struct roll_history_row {
 	struct timeval tv;
@@ -85,7 +85,7 @@ struct roll_history* rspamd_roll_history_new (rspamd_mempool_t *pool);
  * @param history roll history object
  * @param task task object
  */
-void rspamd_roll_history_update (struct roll_history *history, struct worker_task *task);
+void rspamd_roll_history_update (struct roll_history *history, struct rspamd_task *task);
 
 /**
  * Load previously saved history from file

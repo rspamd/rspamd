@@ -164,7 +164,7 @@ typedef struct rspamd_dkim_key_s {
 }
 rspamd_dkim_key_t;
 
-struct worker_task;
+struct rspamd_task;
 
 /* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
 typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
@@ -196,7 +196,7 @@ gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_reso
  * @param task task to check
  * @return
  */
-gint rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct worker_task *task);
+gint rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct rspamd_task *task);
 
 /**
  * Free DKIM key

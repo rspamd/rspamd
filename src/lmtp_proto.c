@@ -89,7 +89,7 @@ extract_mail (rspamd_mempool_t * pool, f_str_t * line)
 }
 
 static gboolean
-out_lmtp_reply (struct worker_task *task, gint code, gchar *rcode, gchar *msg)
+out_lmtp_reply (struct rspamd_task *task, gint code, gchar *rcode, gchar *msg)
 {
 	gchar                           outbuf[OUTBUFSIZ];
 	gint                            r;
@@ -252,7 +252,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 }
 
 struct mta_callback_data {
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 	rspamd_io_dispatcher_t         *dispatcher;
 	enum {
 		LMTP_WANT_GREETING,
@@ -445,7 +445,7 @@ mta_err_socket (GError * err, void *arg)
  * Deliver mail via smtp or lmtp
  */
 static gint
-lmtp_deliver_mta (struct worker_task *task)
+lmtp_deliver_mta (struct rspamd_task *task)
 {
 	gint                            sock;
 	struct sockaddr_un             *un;
@@ -471,7 +471,7 @@ lmtp_deliver_mta (struct worker_task *task)
 }
 
 static gchar                    *
-format_lda_args (struct worker_task *task)
+format_lda_args (struct rspamd_task *task)
 {
 	gchar                           *res, *c, *r;
 	size_t                          len;
@@ -555,7 +555,7 @@ format_lda_args (struct worker_task *task)
 }
 
 static gint
-lmtp_deliver_lda (struct worker_task *task)
+lmtp_deliver_lda (struct rspamd_task *task)
 {
 	gchar                           *args, **argv;
 	GMimeStream                    *stream;
@@ -652,7 +652,7 @@ lmtp_deliver_lda (struct worker_task *task)
 }
 
 gint
-lmtp_deliver_message (struct worker_task *task)
+lmtp_deliver_message (struct rspamd_task *task)
 {
 	if (task->cfg->deliver_agent_path != NULL) {
 		/* Do deliver to LDA */
@@ -668,7 +668,7 @@ gint
 write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 {
 	gint                            r;
-	struct worker_task             *task = lmtp->task;
+	struct rspamd_task             *task = lmtp->task;
 
 	debug_task ("writing reply to client");
 	if (lmtp->task->error_code != 0) {

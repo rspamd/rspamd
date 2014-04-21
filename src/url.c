@@ -1488,7 +1488,7 @@ url_email_end (const gchar *begin, const gchar *end, const gchar *pos, url_match
 }
 
 void
-url_parse_text (rspamd_mempool_t * pool, struct worker_task *task, struct mime_text_part *part, gboolean is_html)
+url_parse_text (rspamd_mempool_t * pool, struct rspamd_task *task, struct mime_text_part *part, gboolean is_html)
 {
 	gint                            rc;
 	gchar                          *url_str = NULL, *url_start, *url_end;

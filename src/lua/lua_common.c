@@ -400,14 +400,14 @@ init_lua_filters (struct config_file *cfg)
 /* Callback functions */
 
 gint
-lua_call_filter (const gchar *function, struct worker_task *task)
+lua_call_filter (const gchar *function, struct rspamd_task *task)
 {
 	gint                            result;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	lua_State                      *L = task->cfg->lua_state;
 
 	lua_getglobal (L, function);
-	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
 	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 
@@ -426,7 +426,7 @@ lua_call_filter (const gchar *function, struct worker_task *task)
 }
 
 gint
-lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *marks, guint number)
+lua_call_chain_filter (const gchar *function, struct rspamd_task *task, gint *marks, guint number)
 {
 	gint                            result;
 	guint                           i;
@@ -454,17 +454,17 @@ lua_call_chain_filter (const gchar *function, struct worker_task *task, gint *ma
 /* Call custom lua function in rspamd expression */
 gboolean 
 lua_call_expression_func (gpointer lua_data,
-		struct worker_task *task, GList *args, gboolean *res)
+		struct rspamd_task *task, GList *args, gboolean *res)
 {
 	lua_State                      *L = task->cfg->lua_state;
-	struct worker_task            **ptask;
+	struct rspamd_task            **ptask;
 	GList                          *cur;
 	struct expression_argument     *arg;
 	int                             nargs = 1, pop = 0;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, GPOINTER_TO_INT (lua_data));
 	/* Now we got function in top of stack */
-	ptask = lua_newuserdata (L, sizeof (struct worker_task *));
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
 	lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 	
@@ -511,7 +511,7 @@ lua_call_expression_func (gpointer lua_data,
  * LUA custom consolidation function
  */
 struct consolidation_callback_data {
-	struct worker_task             *task;
+	struct rspamd_task             *task;
 	double                          score;
 	const gchar                     *func;
 };
@@ -542,7 +542,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 }
 
 double
-lua_consolidation_func (struct worker_task *task, const gchar *metric_name, const gchar *function_name)
+lua_consolidation_func (struct rspamd_task *task, const gchar *metric_name, const gchar *function_name)
 {
 	struct metric_result           *metric_res;
 	double                          res = 0.;

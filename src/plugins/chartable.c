@@ -54,7 +54,7 @@ module_t chartable_module = {
 };
 
 struct chartable_ctx {
-	gint                            (*filter) (struct worker_task * task);
+	gint                            (*filter) (struct rspamd_task * task);
 	const gchar                    *symbol;
 	double                          threshold;
 
@@ -63,8 +63,8 @@ struct chartable_ctx {
 
 static struct chartable_ctx    *chartable_module_ctx = NULL;
 
-static gint                      chartable_mime_filter (struct worker_task *task);
-static void                     chartable_symbol_callback (struct worker_task *task, void *unused);
+static gint                      chartable_mime_filter (struct rspamd_task *task);
+static void                     chartable_symbol_callback (struct rspamd_task *task, void *unused);
 
 gint
 chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
@@ -197,7 +197,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 }
 
 static void
-chartable_symbol_callback (struct worker_task *task, void *unused)
+chartable_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	GList                          *cur;
 	struct mime_text_part          *part;
@@ -216,7 +216,7 @@ chartable_symbol_callback (struct worker_task *task, void *unused)
 }
 
 static gint
-chartable_mime_filter (struct worker_task *task)
+chartable_mime_filter (struct rspamd_task *task)
 {
 	/* XXX: remove it */
 	return 0;
