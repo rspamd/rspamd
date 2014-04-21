@@ -306,6 +306,16 @@ radix_tree_free (radix_tree_t * tree)
 	g_free (tree);
 }
 
+uintptr_t
+radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr)
+{
+	if (addr == NULL || addr->af != AF_INET) {
+		return RADIX_NO_VALUE;
+	}
+
+	return radix32tree_find (tree, ntohl (addr->addr.s4.sin_addr.s_addr));
+}
+
 /* 
  * vi:ts=4 
  */

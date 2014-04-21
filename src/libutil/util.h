@@ -3,7 +3,6 @@
 
 #include "config.h"
 #include "mem_pool.h"
-#include "radix.h"
 #include "statfile.h"
 #include "printf.h"
 #include "fstring.h"
