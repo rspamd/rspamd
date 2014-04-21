@@ -466,4 +466,26 @@ void rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GSt
  */
 gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr);
 
+/**
+ * Try to parse address from string
+ * @param target target to fill
+ * @param src IP string representation
+ * @return TRUE if addr has been parsed
+ */
+gboolean rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src);
+
+/**
+ * Returns string representation of inet address
+ * @param addr
+ * @return statically allocated string pointer (not thread safe)
+ */
+const char* rspamd_inet_address_to_string (rspamd_inet_addr_t *addr);
+
+/**
+ * Returns port number for the specified inet address in host byte order
+ * @param addr
+ * @return
+ */
+uint16_t rspamd_inet_address_get_port (rspamd_inet_addr_t *addr);
+
 #endif

@@ -298,12 +298,9 @@ accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
 	struct rspamd_worker_ctx       *ctx;
-	union sa_union                  su;
 	struct rspamd_task             *new_task;
-	char                            ip_str[INET6_ADDRSTRLEN + 1];
-
-	socklen_t                       addrlen = sizeof (su);
-	gint                            nfd;
+	rspamd_inet_addr_t               addr;
+	gint                             nfd;
 
 	ctx = worker->ctx;
 
@@ -313,48 +310,30 @@ accept_socket (gint fd, short what, void *arg)
 	}
 
 	if ((nfd =
-			accept_from_socket (fd, &su.sa, &addrlen)) == -1) {
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
-	if (nfd == 0){
+	if (nfd == 0) {
 		return;
 	}
 
 	new_task = construct_task (worker);
 
-	if (su.sa.sa_family == AF_UNIX) {
-		msg_info ("accepted connection from unix socket");
-		new_task->client_addr.s_addr = INADDR_NONE;
-	}
-	else if (su.sa.sa_family == AF_INET) {
-		msg_info ("accepted connection from %s port %d",
-				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
-		memcpy (&new_task->client_addr, &su.s4.sin_addr,
-				sizeof (struct in_addr));
-	}
-	else if (su.sa.sa_family == AF_INET6) {
-		msg_info ("accepted connection from %s port %d",
-				inet_ntop (su.sa.sa_family, &su.s6.sin6_addr, ip_str, sizeof (ip_str)),
-				ntohs (su.s6.sin6_port));
-	}
+	msg_info ("accepted connection from %s port %d",
+			rspamd_inet_address_to_string (&addr),
+			rspamd_inet_address_get_port (&addr));
 
 	/* Copy some variables */
 	new_task->sock = nfd;
 	new_task->is_mime = ctx->is_mime;
 	new_task->allow_learn = ctx->allow_learn;
+	memcpy (&new_task->client_addr, &addr, sizeof (addr));
 
 	worker->srv->stat->connections_count++;
 	new_task->resolver = ctx->resolver;
 
-#if 0
-	/* Set up dispatcher */
-	new_task->dispatcher =
-			rspamd_create_dispatcher (ctx->ev_base, nfd, BUFFER_LINE, read_socket, write_socket,
-					err_socket, &ctx->io_tv, (void *) new_task);
-	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
-#endif
 	new_task->http_conn = rspamd_http_connection_new (rspamd_worker_body_handler,
 			rspamd_worker_error_handler, rspamd_worker_finish_handler, 0, RSPAMD_HTTP_SERVER);
 	new_task->ev_base = ctx->ev_base;

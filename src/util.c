@@ -2190,7 +2190,7 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr)
 	socklen_t len = sizeof (addr->addr.ss);
 
 	if ((nfd = accept (sock, &addr->addr.sa, &len)) == -1) {
-		if (errno == EAGAIN) {
+		if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
 			return 0;
 		}
 		return -1;
@@ -2218,6 +2218,56 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr)
 	return (-1);
 
 }
-/*
- * vi:ts=4
- */
+
+gboolean
+rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
+{
+	gboolean ret = FALSE;
+
+	if (inet_pton (AF_INET6, src, &target->addr.s6.sin6_addr) == 1) {
+		target->af = AF_INET6;
+		target->slen = sizeof (target->addr.s6);
+		ret = TRUE;
+	}
+	else if (inet_pton (AF_INET, src, &target->addr.s4.sin_addr) == 1) {
+		target->af = AF_INET;
+		target->slen = sizeof (target->addr.s4);
+		ret = TRUE;
+	}
+
+	target->addr.sa.sa_family = target->af;
+
+	return ret;
+}
+
+const char*
+rspamd_inet_address_to_string (rspamd_inet_addr_t *addr)
+{
+	static char addr_str[INET6_ADDRSTRLEN + 1];
+
+	switch (addr->af) {
+	case AF_INET:
+		return inet_ntop (addr->af, &addr->addr.s4.sin_addr, addr_str,
+				sizeof (addr_str));
+	case AF_INET6:
+		return inet_ntop (addr->af, &addr->addr.s6.sin6_addr, addr_str,
+				sizeof (addr_str));
+	case AF_UNIX:
+		return addr->addr.su.sun_path;
+	}
+
+	return "undefined";
+}
+
+uint16_t
+rspamd_inet_address_get_port (rspamd_inet_addr_t *addr)
+{
+	switch (addr->af) {
+	case AF_INET:
+		return addr->addr.s4.sin_port;
+	case AF_INET6:
+		return addr->addr.s6.sin6_port;
+	}
+
+	return 0;
+}
