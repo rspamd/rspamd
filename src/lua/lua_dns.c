@@ -90,6 +90,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	gint                            i = 0;
 	struct rspamd_dns_resolver    **presolver;
 	struct rdns_reply_entry        *elt;
+	rspamd_inet_addr_t               addr;
 
 	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
@@ -106,11 +107,19 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		LL_FOREACH (reply->entries, elt) {
 			switch (elt->type) {
 			case RDNS_REQUEST_A:
-				lua_ip_push (cd->L, AF_INET, &elt->content.a.addr);
+				addr.af = AF_INET;
+				addr.slen = sizeof (addr.addr.s4);
+				memcpy (&addr.addr.s4.sin_addr, &elt->content.a.addr,
+						sizeof (addr.addr.s4.sin_addr));
+				lua_ip_push (cd->L, &addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_AAAA:
-				lua_ip_push (cd->L, AF_INET6, &elt->content.aaa.addr);
+				addr.af = AF_INET6;
+				addr.slen = sizeof (addr.addr.s6);
+				memcpy (&addr.addr.s6.sin6_addr, &elt->content.aaa.addr,
+						sizeof (addr.addr.s6.sin6_addr));
+				lua_ip_push (cd->L, &addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_PTR:

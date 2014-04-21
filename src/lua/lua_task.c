@@ -993,7 +993,7 @@ lua_task_get_from_ip (lua_State *L)
 	struct rspamd_task             *task = lua_check_task (L);
 	
 	if (task) {
-		lua_ip_push (L, task->from_addr.ipv6 ? AF_INET6 : AF_INET, &task->from_addr.d);
+		lua_ip_push (L, &task->from_addr);
 	}
 	else {
 		lua_pushnil (L);
@@ -1023,7 +1023,7 @@ lua_task_get_client_ip_num (lua_State *L)
 	struct rspamd_task             *task = lua_check_task (L);
 	
 	if (task) {
-		lua_ip_push (L, AF_INET, &task->client_addr);
+		lua_ip_push (L, &task->client_addr);
 	}
 	else {
 		lua_pushnil (L);

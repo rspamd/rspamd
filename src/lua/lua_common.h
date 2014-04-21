@@ -126,7 +126,7 @@ ucl_object_t * lua_rcl_obj_get (lua_State *L, gint idx);
 /**
  * Push lua ip address
  */
-void lua_ip_push (lua_State *L, int af, gpointer data);
+void lua_ip_push (lua_State *L, rspamd_inet_addr_t *addr);
 
 /**
  * Push ip address from a string (nil is pushed if a string cannot be converted)
@@ -142,11 +142,7 @@ int rspamd_lua_typerror (lua_State *L, int narg, const char *tname);
  * Lua IP address structure
  */
 struct rspamd_lua_ip {
-	union {
-		struct in6_addr ip6;
-		struct in_addr ip4;
-	} data;
-	int af;
+	rspamd_inet_addr_t addr;
 	gboolean is_valid;
 };
 
