@@ -195,41 +195,6 @@ make_udp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 }
 
 gint
-accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t * len)
-{
-	gint                            nfd;
-	gint                            serrno;
-
-	if ((nfd = accept (listen_sock, addr, len)) == -1) {
-		if (errno == EAGAIN) {
-			return 0;
-		}
-		msg_warn ("accept failed: %d, '%s'", errno, strerror (errno));
-		return -1;
-	}
-	if (make_socket_nonblocking (nfd) < 0) {
-		goto out;
-	}
-
-	/* Set close on exec */
-	if (fcntl (nfd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
-		goto out;
-	}
-
-
-
-	return (nfd);
-
-  out:
-	serrno = errno;
-	close (nfd);
-	errno = serrno;
-	return (-1);
-
-}
-
-gint
 make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboolean is_server, gboolean async)
 {
 	gint                            fd = -1, s_error, r, optlen, serrno, on = 1;
@@ -2218,6 +2183,41 @@ rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString 
 	ucl_object_emit_full (obj, emit_type, &func);
 }
 
+gint
+rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr)
+{
+	gint nfd, serrno;
+	socklen_t len = sizeof (addr->addr.ss);
+
+	if ((nfd = accept (sock, &addr->addr.sa, &len)) == -1) {
+		if (errno == EAGAIN) {
+			return 0;
+		}
+		return -1;
+	}
+
+	addr->slen = len;
+	addr->af = addr->addr.sa.sa_family;
+
+	if (make_socket_nonblocking (nfd) < 0) {
+		goto out;
+	}
+
+	/* Set close on exec */
+	if (fcntl (nfd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		goto out;
+	}
+
+	return (nfd);
+
+  out:
+	serrno = errno;
+	close (nfd);
+	errno = serrno;
+	return (-1);
+
+}
 /*
  * vi:ts=4
  */

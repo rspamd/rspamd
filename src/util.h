@@ -41,10 +41,7 @@ gint make_tcp_socket (struct addrinfo *, gboolean is_server, gboolean async);
  * Create socket and bind or connect it to specified address and port
  */
 gint make_udp_socket (struct addrinfo *, gboolean is_server, gboolean async);
-/*
- * Accept from socket
- */
-gint accept_from_socket (gint listen_sock, struct sockaddr *addr, socklen_t *len);
+
 /*
  * Create and bind or connect unix socket
  */
@@ -461,5 +458,12 @@ gboolean rspamd_ip_is_valid (void *ptr, int af);
  */
 void rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString *target);
 
+/**
+ * Accept from listening socket filling addr structure
+ * @param sock listening socket
+ * @param addr
+ * @return
+ */
+gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr);
 
 #endif
