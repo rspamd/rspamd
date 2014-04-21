@@ -161,25 +161,24 @@ static gboolean
 spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 {
 	gboolean                        res = FALSE;
-#ifdef HAVE_INET_PTON
 	guint8                         *s, *d, t;
 	guint                           nbits, addrlen;
 	struct in_addr					in4s, in4d;
 	struct in6_addr                 in6s, in6d;
 
 	/* Basic comparing algorithm */
-	if (addr->data.normal.ipv6 == task->from_addr.ipv6) {
+	if (addr->data.normal.ipv6 && task->from_addr.af == AF_INET6) {
 		if (addr->data.normal.ipv6) {
 			addrlen = sizeof (struct in6_addr);
 			memcpy (&in6s, &addr->data.normal.d.in6, sizeof (struct in6_addr));
-			memcpy (&in6d, &task->from_addr.d.in6, sizeof (struct in6_addr));
+			memcpy (&in6d, &task->from_addr.addr.s6.sin6_addr, sizeof (struct in6_addr));
 			s = (guint8 *)&in6s;
 			d = (guint8 *)&in6d;
 		}
 		else {
 			addrlen = sizeof (struct in_addr);
 			memcpy (&in4s, &addr->data.normal.d.in4, sizeof (struct in_addr));
-			memcpy (&in4d, &task->from_addr.d.in4, sizeof (struct in_addr));
+			memcpy (&in4d, &task->from_addr.addr.s4.sin_addr, sizeof (struct in_addr));
 			s = (guint8 *)&in4s;
 			d = (guint8 *)&in4d;
 		}
@@ -215,18 +214,6 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 			res = FALSE;
 		}
 	}
-#else
-	guint32                         s, m;
-
-	if (addr->data.normal.mask == 0) {
-		m = 0;
-	}
-	else {
-		m = htonl (G_MAXUINT32 << (32 - addr->data.normal.mask));
-	}
-	s = task->from_addr.s_addr;
-	res = (s & m) == (addr->data.normal.d.in4.s_addr & m);
-#endif
 
 	if (res) {
 		switch (addr->mech) {
@@ -300,28 +287,16 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	gchar                           *domain;
 	GList                           *l;
 
-#ifdef HAVE_INET_PTON
-	if (task->from_addr.has_addr) {
-		if (TRUE) {
-#else
-	if (task->from_addr.s_addr != INADDR_NONE && task->from_addr.s_addr != INADDR_ANY) {
-		if (radix32tree_find (spf_module_ctx->whitelist_ip, ntohl (task->from_addr.s_addr)) == RADIX_NO_VALUE) {
-#endif
-			domain = get_spf_domain (task);
-			if (domain) {
-				if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain, task->tv.tv_sec)) != NULL) {
-					spf_check_list (l, task);
-				}
-				else if (!resolve_spf (task, spf_plugin_callback)) {
-					msg_info ("cannot make spf request for [%s]", task->message_id);
-				}
+	if (task->from_addr.af != AF_UNIX) {
+		domain = get_spf_domain (task);
+		if (domain) {
+			if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain, task->tv.tv_sec)) != NULL) {
+				spf_check_list (l, task);
+			}
+			else if (!resolve_spf (task, spf_plugin_callback)) {
+				msg_info ("cannot make spf request for [%s]", task->message_id);
 			}
 		}
-#ifndef HAVE_INET_PTON
-		else {
-			msg_info ("ip %s is whitelisted for spf checks", inet_ntoa (task->from_addr));
-		}
-#endif
 	}
 }
 

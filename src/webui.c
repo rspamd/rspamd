@@ -1691,46 +1691,28 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker				*worker = (struct rspamd_worker *) arg;
 	struct rspamd_webui_worker_ctx		*ctx;
 	struct rspamd_webui_session			*nsession;
+	rspamd_inet_addr_t					 addr;
 	gint								 nfd;
-	union sa_union						 su;
-	socklen_t							 addrlen = sizeof (su);
-	char								 ip_str[INET6_ADDRSTRLEN + 1];
 
 	ctx = worker->ctx;
 
 	if ((nfd =
-			accept_from_socket (fd, &su.sa, &addrlen)) == -1) {
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
-	if (nfd == 0){
+	if (nfd == 0) {
 		return;
 	}
+
+	msg_info ("accepted connection from %s port %d",
+			rspamd_inet_address_to_string (&addr),
+			rspamd_inet_address_get_port (&addr));
 
 	nsession = g_slice_alloc0 (sizeof (struct rspamd_webui_session));
 	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	nsession->ctx = ctx;
-
-	if (su.sa.sa_family == AF_UNIX) {
-		msg_info ("accepted connection from unix socket");
-		nsession->from_addr.has_addr = FALSE;
-	}
-	else if (su.sa.sa_family == AF_INET) {
-		msg_info ("accepted connection from %s port %d",
-				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
-		nsession->from_addr.has_addr = TRUE;
-		nsession->from_addr.d.in4.s_addr = su.s4.sin_addr.s_addr;
-	}
-	else if (su.sa.sa_family == AF_INET6) {
-		msg_info ("accepted connection from %s port %d",
-				inet_ntop (su.sa.sa_family, &su.s6.sin6_addr, ip_str, sizeof (ip_str)),
-				ntohs (su.s6.sin6_port));
-		memcpy (&nsession->from_addr.d.in6, &su.s6.sin6_addr,
-				sizeof (struct in6_addr));
-		nsession->from_addr.has_addr = TRUE;
-		nsession->from_addr.ipv6 = TRUE;
-	}
 
 	rspamd_http_router_handle_socket (ctx->http, nfd, nsession);
 }

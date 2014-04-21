@@ -711,15 +711,20 @@ file_log_function (const gchar * log_domain, const gchar *function, GLogLevelFla
  * Write log line depending on ip
  */
 void
-rspamd_conditional_debug (rspamd_logger_t *rspamd_log, guint32 addr, const gchar *function, const gchar *fmt, ...)
+rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
+		rspamd_inet_addr_t *addr, const gchar *function, const gchar *fmt, ...)
 {
 	static gchar                     logbuf[BUFSIZ];
 	va_list                         vp;
     u_char                         *end;
 
-	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG || rspamd_log->is_debug ||
-			(rspamd_log->debug_ip != NULL && radix32tree_find (rspamd_log->debug_ip, ntohl (addr)) != RADIX_NO_VALUE)) {
-
+	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG || rspamd_log->is_debug) {
+		if (rspamd_log->debug_ip && addr != NULL) {
+			if (addr->af == AF_INET && radix32tree_find (rspamd_log->debug_ip,
+					ntohl (addr->addr.s4.sin_addr.s_addr)) == RADIX_NO_VALUE) {
+				return;
+			}
+		}
 		g_mutex_lock (rspamd_log->mtx);
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);

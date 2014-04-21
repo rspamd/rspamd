@@ -325,52 +325,26 @@ lua_accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
 	struct rspamd_lua_worker_ctx   *ctx, **pctx;
-	union sa_union                  su;
-	socklen_t                       addrlen = sizeof (su.ss);
 	gint                            nfd;
-	struct in_addr				    addr;
-	gchar						   *addr_str = NULL;
 	lua_State					   *L;
+	rspamd_inet_addr_t              addr;
 
 	ctx = worker->ctx;
 	L = ctx->L;
 
 	if ((nfd =
-			accept_from_socket (fd, (struct sockaddr *) &su.ss, &addrlen)) == -1) {
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
-	if (nfd == 0){
+	if (nfd == 0) {
 		return;
 	}
 
-	if (su.ss.ss_family == AF_UNIX) {
-		msg_info ("accepted connection from unix socket");
-		addr.s_addr = INADDR_NONE;
-		addr_str = "127.0.0.1";
-	}
-	else if (su.ss.ss_family == AF_INET) {
-		msg_info ("accepted connection from %s port %d",
-				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
-		memcpy (&addr, &su.s4.sin_addr,
-				sizeof (struct in_addr));
-		addr_str = g_strdup (inet_ntoa (su.s4.sin_addr));
-	}
-	else if (su.ss.ss_family == AF_INET6) {
-		addr_str = g_malloc0 (INET6_ADDRSTRLEN + 1);
-		/* XXX: support ipv6 addresses here */
-		addr.s_addr = INADDR_NONE;
-		inet_ntop (AF_INET6, &su.s6.sin6_addr, addr_str, INET6_ADDRSTRLEN);
-		msg_info ("accepted connection from [%s] port %d",
-						addr_str, ntohs (su.s6.sin6_port));
-	}
-	else {
-		addr.s_addr = INADDR_NONE;
-		msg_err ("accepted connection from unsupported address family: %d", su.ss.ss_family);
-		close (nfd);
-		return;
-	}
+	msg_info ("accepted connection from %s port %d",
+				rspamd_inet_address_to_string (&addr),
+				rspamd_inet_address_get_port (&addr));
 
 	/* Call finalizer function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
@@ -378,16 +352,12 @@ lua_accept_socket (gint fd, short what, void *arg)
 	lua_setclass (L, "rspamd{worker}", -1);
 	*pctx = ctx;
 	lua_pushinteger (L, nfd);
-	lua_pushstring (L, addr_str);
-	lua_pushinteger (L, addr.s_addr);
+	lua_pushstring (L, rspamd_inet_address_to_string (&addr));
+	lua_pushinteger (L, 0);
 
 
 	if (lua_pcall (L, 4, 0, 0) != 0) {
 		msg_info ("call to worker accept failed: %s", lua_tostring (L, -1));
-	}
-
-	if (addr_str) {
-		g_free (addr_str);
 	}
 }
 

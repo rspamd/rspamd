@@ -1488,7 +1488,6 @@ controller_read_socket (f_str_t * in, void *arg)
 		}
 		/* Set up async session */
 		task->s = new_async_session (task->task_pool, fin_learn_task, restore_learn_task, free_task_hard, task);
-		task->dispatcher = session->dispatcher;
 		session->learn_task = task;
 		session->state = STATE_LEARN_SPAM;
 		rspamd_dispatcher_pause (session->dispatcher);
@@ -1692,7 +1691,6 @@ controller_write_socket (void *arg)
 				}
 			}
 		}
-		session->learn_task->dispatcher = NULL;
 		destroy_session (session->learn_task->s);
 		session->state = STATE_REPLY;
 		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
@@ -1738,13 +1736,13 @@ accept_socket (gint fd, short what, void *arg)
 	union sa_union                  su;
 	struct controller_session      *new_session;
 	struct timeval                 *io_tv;
-	socklen_t                       addrlen = sizeof (su.ss);
 	gint                            nfd;
 	struct rspamd_controller_ctx   *ctx;
+	rspamd_inet_addr_t addr;
 
 	ctx = worker->ctx;
 
-	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
+	if ((nfd = rspamd_accept_from_socket (fd, &addr)) == -1) {
 		return;
 	}
 

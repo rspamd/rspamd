@@ -667,7 +667,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 		/* Parse reverse reply and start resolve of this ip */
 		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
-					session->client_addr.s_addr, __FUNCTION__, "DNS error: %s",
+					NULL, __FUNCTION__, "DNS error: %s",
 					rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
@@ -696,7 +696,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 	case SMTP_PROXY_STATE_RESOLVE_NORMAL:
 		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
-					session->client_addr.s_addr, __FUNCTION__, "DNS error: %s",
+					NULL, __FUNCTION__, "DNS error: %s",
 					rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
@@ -901,14 +901,15 @@ static void
 accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	union sa_union                  su;
 	struct smtp_proxy_session      *session;
 	struct smtp_proxy_ctx          *ctx;
+	rspamd_inet_addr_t               addr;
+	gint                             nfd;
 
-	socklen_t                       addrlen = sizeof (su.ss);
-	gint                            nfd;
+	ctx = worker->ctx;
 
-	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
+	if ((nfd =
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -917,18 +918,14 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
+	msg_info ("accepted connection from %s port %d",
+			rspamd_inet_address_to_string (&addr),
+			rspamd_inet_address_get_port (&addr));
+
 	ctx = worker->ctx;
 	session = g_slice_alloc0 (sizeof (struct smtp_proxy_session));
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
-	if (su.ss.ss_family == AF_UNIX) {
-		msg_info ("accepted connection from unix socket");
-		session->client_addr.s_addr = INADDR_NONE;
-	}
-	else if (su.ss.ss_family == AF_INET) {
-		msg_info ("accepted connection from %s port %d", inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
-		memcpy (&session->client_addr, &su.s4.sin_addr, sizeof (struct in_addr));
-	}
 
 	session->sock = nfd;
 	session->worker = worker;
@@ -936,7 +933,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->resolver = ctx->resolver;
 	session->ev_base = ctx->ev_base;
 	session->upstream_sock = -1;
-	session->ptr_str = rdns_generate_ptr_from_str (inet_ntoa (su.s4.sin_addr));
+	session->ptr_str = rdns_generate_ptr_from_str (rspamd_inet_address_to_string (&addr));
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */

@@ -312,39 +312,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task, struct rspamd_http_mes
 		case 'I':
 			if (g_ascii_strcasecmp (headern, IP_ADDR_HEADER) == 0) {
 				tmp = h->value->str;
-#ifdef HAVE_INET_PTON
-				if (g_ascii_strncasecmp (tmp, "IPv6:", 5) == 0) {
-					if (inet_pton (AF_INET6, tmp + 6, &task->from_addr.d.in6) == 1) {
-						task->from_addr.ipv6 = TRUE;
-					}
-					else {
-						msg_err ("bad ip header: '%s'", tmp);
-						return FALSE;
-					}
-					task->from_addr.has_addr = TRUE;
-				}
-				else {
-					if (inet_pton (AF_INET, tmp, &task->from_addr.d.in4) != 1) {
-						/* Try ipv6 */
-						if (inet_pton (AF_INET6, tmp, &task->from_addr.d.in6) == 1) {
-							task->from_addr.ipv6 = TRUE;
-						}
-						else {
-							msg_err ("bad ip header: '%s'", tmp);
-							return FALSE;
-						}
-					}
-					else {
-						task->from_addr.ipv6 = FALSE;
-					}
-					task->from_addr.has_addr = TRUE;
-				}
-#else
-				if (!inet_aton (tmp, &task->from_addr)) {
+				if (!rspamd_parse_inet_address (&task->from_addr, tmp)) {
 					msg_err ("bad ip header: '%s'", tmp);
 					return FALSE;
 				}
-#endif
 				debug_task ("read IP header, value: %s", tmp);
 			}
 			else {
@@ -482,7 +453,8 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	if (cb->task->cfg->log_urls) {
 		msg_info ("<%s> URL: %s - %s: %s", cb->task->message_id, cb->task->user ?
 				cb->task->user : (cb->task->from ? cb->task->from : "unknown"),
-				inet_ntoa (cb->task->client_addr), struri (url));
+				rspamd_inet_address_to_string (&cb->task->from_addr),
+				struri (url));
 	}
 
 	return FALSE;

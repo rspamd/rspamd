@@ -821,24 +821,14 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	GList *cur;
 
 	/* Check whitelist */
-#ifdef HAVE_INET_PTON
 	if (fuzzy_module_ctx->whitelist && task->from_addr.af == AF_INET) {
 		if (radix32tree_find (fuzzy_module_ctx->whitelist,
 				ntohl (task->from_addr.addr.s4.sin_addr.s_addr)) != RADIX_NO_VALUE) {
 			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
-					task->message_id, inet_ntoa (task->from_addr.d.in4));
+					task->message_id, rspamd_inet_address_to_string (&task->from_addr));
 			return;
 		}
 	}
-#else
-	if (fuzzy_module_ctx->whitelist && task->from_addr.s_addr != 0) {
-		if (radix32tree_find (fuzzy_module_ctx->whitelist, ntohl ((guint32) task->from_addr.s_addr)) != RADIX_NO_VALUE) {
-			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
-					task->message_id, inet_ntoa (task->from_addr));
-			return;
-		}
-	}
-#endif
 
 	cur = fuzzy_module_ctx->fuzzy_rules;
 	while (cur) {
