@@ -107,61 +107,7 @@ INCLUDE(CheckCCompilerFlag)
 INCLUDE(FindPerl)
 INCLUDE(FindOpenSSL)
 
-############################# MODULES SECTION #############################################
-
-MACRO(_AddModulesForced MLIST WLIST)
-# Generate unique string for this build
-	STRING(RANDOM LENGTH 8 _MODULES_ID)
-	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
-	FILE(WRITE "src/modules.c" "/* ${MODULES_ID} */\n#include \"config.h\"\n")
-	
-	# Handle even old cmake
-	LIST(LENGTH ${MLIST} MLIST_COUNT)
-	LIST(LENGTH ${WLIST} WLIST_COUNT)
-	MATH(EXPR MLIST_MAX ${MLIST_COUNT}-1)
-	MATH(EXPR WLIST_MAX ${WLIST_COUNT}-1)
-	
-	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
-		LIST(GET ${MLIST} ${MOD_IDX} MOD)
-		FILE(APPEND "src/modules.c" "extern module_t ${MOD}_module;\n")
-	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
-		 
-	FILE(APPEND "src/modules.c" "\n\nmodule_t *modules[] = {\n")
-	
-	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
-		LIST(GET ${MLIST} ${MOD_IDX} MOD)
-		FILE(APPEND "src/modules.c" "&${MOD}_module,\n")
-	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
-	
-	FILE(APPEND "src/modules.c" "NULL\n};\n")
-	
-	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
-		LIST(GET ${WLIST} ${MOD_IDX} WRK)
-		FILE(APPEND "src/modules.c" "extern worker_t ${WRK}_worker;\n")
-	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
-	 
-	FILE(APPEND "src/modules.c" "\n\nworker_t *workers[] = {\n")
-	
-	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
-		LIST(GET ${WLIST} ${MOD_IDX} WRK)
-		FILE(APPEND "src/modules.c" "&${WRK}_worker,\n")
-	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
-	FILE(APPEND "src/modules.c" "NULL\n};\n")
-ENDMACRO(_AddModulesForced MLIST WLIST)
-
-MACRO(AddModules MLIST WLIST)
-	_AddModulesForced(${MLIST} ${WLIST})
-	#IF(NOT EXISTS "src/modules.c")
-	#	_AddModulesForced(${MLIST} ${WLIST})
-	#ELSE(NOT EXISTS "src/modules.c")
-	#	FILE(STRINGS "src/modules.c" FILE_ID_RAW REGEX "^/.*[a-zA-Z0-9]+.*/$")
-	#	STRING(REGEX MATCH "[a-zA-Z0-9]+" FILE_ID "${FILE_ID_RAW}")
-	#	IF(NOT FILE_ID STREQUAL MODULES_ID)
-	#		MESSAGE("Regenerate modules info")
-	#		_AddModulesForced(${MLIST} ${WLIST})
-	#	ENDIF(NOT FILE_ID STREQUAL MODULES_ID)
-	#ENDIF(NOT EXISTS "src/modules.c")
-ENDMACRO(AddModules MLIST WLIST)
+############################# MACRO SECTION #############################################
 
 # Find lua installation
 MACRO(FindLua _major _minor)
@@ -839,7 +785,6 @@ ENDIF(HG)
  
 
 ################################ SOURCES SECTION ###########################
-
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" 
 					"${CMAKE_BINARY_DIR}/src" 
 					"${CMAKE_SOURCE_DIR}/src/ucl/include"
@@ -848,28 +793,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/contrib/libottery"
 					"${CMAKE_SOURCE_DIR}/contrib/xxhash"
 					"${CMAKE_SOURCE_DIR}/src/rdns/include")
-
-SET(RSPAMDSRC	src/modules.c
-				src/controller.c
-				src/fuzzy_storage.c
-				src/lua_worker.c
-				src/main.c
-				src/map.c
-				src/smtp_proxy.c
-				src/webui.c
-				src/worker.c)
-
-SET(PLUGINSSRC	src/plugins/surbl.c
-				src/plugins/regexp.c
-				src/plugins/chartable.c
-				src/plugins/fuzzy_check.c
-				src/plugins/spf.c
-				src/plugins/dkim_check.c)
-				
-SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
-SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua webui)
-
-AddModules(MODULES_LIST WORKERS_LIST)
 
 ################################ SUBDIRS SECTION ###########################
 
@@ -888,20 +811,9 @@ ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 ADD_SUBDIRECTORY(contrib/xxhash)
 ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/libottery)
-ADD_SUBDIRECTORY(src/lua)
-ADD_SUBDIRECTORY(src/json)
-ADD_SUBDIRECTORY(src/cdb)
-ADD_SUBDIRECTORY(src/ucl/cmake)
 ADD_SUBDIRECTORY(src)
-ADD_SUBDIRECTORY(src/client)
-
-SET(SLAVE_BUILD 1)
-ADD_SUBDIRECTORY(src/rdns)
-UNSET(SLAVE_BUILD)
 
 ADD_SUBDIRECTORY(test)
-
-LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
 ############################ TARGETS SECTION ###############################
 
@@ -921,54 +833,9 @@ SET(CONFFILES
 	conf/2tld.inc
 	conf/surbl-whitelist.inc)
 
-######################### LINK SECTION ###############################
-
-ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${PLUGINSSRC})
-SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
-SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
-IF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
-ENDIF(NOT DEBIAN_BUILD)
-
-TARGET_LINK_LIBRARIES(rspamd rspamd-mime)
-TARGET_LINK_LIBRARIES(rspamd rspamd-server)
-TARGET_LINK_LIBRARIES(rspamd rspamd-util)
-TARGET_LINK_LIBRARIES(rspamd rspamd-lua)
-
-TARGET_LINK_LIBRARIES(rspamd event)
-IF(HAVE_LIBEVENT2)
-	TARGET_LINK_LIBRARIES(rspamd event_pthreads)
-ENDIF(HAVE_LIBEVENT2)
-IF(WITH_DB)
-	TARGET_LINK_LIBRARIES(rspamd db)
-ENDIF(WITH_DB)
-
-IF(OPENSSL_FOUND)
-	TARGET_LINK_LIBRARIES(rspamd ${OPENSSL_LIBRARIES})
-ENDIF(OPENSSL_FOUND)
-IF(HAVE_FETCH_H)
-	TARGET_LINK_LIBRARIES(rspamd fetch)
-ENDIF(HAVE_FETCH_H)
-TARGET_LINK_LIBRARIES(rspamd ${RSPAMD_REQUIRED_LIBRARIES})
-
-IF(ENABLE_LUAJIT MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd "${LUAJIT_LIBRARY}")
-ELSE(ENABLE_LUAJIT MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd "${LUA_LIBRARY}")
-ENDIF(ENABLE_LUAJIT MATCHES "ON")
-
-IF(ENABLE_GPERF_TOOLS MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd profiler)
-ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
-TARGET_LINK_LIBRARIES(rspamd hiredis)
-IF(GLIB_COMPAT)
-	TARGET_LINK_LIBRARIES(rspamd glibadditions)
-ENDIF(GLIB_COMPAT)
-
 ##################### INSTALLATION ##########################################
 
 # Binaries
-INSTALL(TARGETS rspamd RUNTIME DESTINATION bin)
 
 # Configs
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR})")
@@ -1012,9 +879,10 @@ FOREACH(LUA_CONF ${LUA_CONFIGS})
 ENDFOREACH(LUA_CONF)
 
 # systemd unit
-
-INSTALL(FILES "rspamd.service" DESTINATION ${SYSTEMDDIR})
-INSTALL(FILES "rspamd.socket" DESTINATION ${SYSTEMDDIR})
+IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	INSTALL(FILES "rspamd.service" DESTINATION ${SYSTEMDDIR})
+	INSTALL(FILES "rspamd.socket" DESTINATION ${SYSTEMDDIR})
+ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 # Manual pages
 INSTALL(FILES "doc/rspamd.8" DESTINATION ${MANDIR}/man8)

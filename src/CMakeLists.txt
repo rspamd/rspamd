@@ -1,149 +1,139 @@
-# Librspamd-util
-SET(LIBRSPAMDUTILSRC			aio_event.c
-								bloom.c
-								diff.c
-								fstring.c
-								fuzzy.c
-								hash.c
-								http.c
-								logger.c
-								map.c
-								memcached.c
-								mem_pool.c
-								printf.c
-								radix.c
-								rrd.c
-								trie.c
-								upstream.c
-								util.c)
+MACRO(_AddModulesForced MLIST WLIST)
+# Generate unique string for this build
+	STRING(RANDOM LENGTH 8 _MODULES_ID)
+	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
+	FILE(WRITE "src/modules.c" "/* ${MODULES_ID} */\n#include \"config.h\"\n")
+	
+	# Handle even old cmake
+	LIST(LENGTH ${MLIST} MLIST_COUNT)
+	LIST(LENGTH ${WLIST} WLIST_COUNT)
+	MATH(EXPR MLIST_MAX ${MLIST_COUNT}-1)
+	MATH(EXPR WLIST_MAX ${WLIST_COUNT}-1)
+	
+	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
+		LIST(GET ${MLIST} ${MOD_IDX} MOD)
+		FILE(APPEND "src/modules.c" "extern module_t ${MOD}_module;\n")
+	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
+		 
+	FILE(APPEND "src/modules.c" "\n\nmodule_t *modules[] = {\n")
+	
+	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
+		LIST(GET ${MLIST} ${MOD_IDX} MOD)
+		FILE(APPEND "src/modules.c" "&${MOD}_module,\n")
+	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
+	
+	FILE(APPEND "src/modules.c" "NULL\n};\n")
+	
+	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
+		LIST(GET ${WLIST} ${MOD_IDX} WRK)
+		FILE(APPEND "src/modules.c" "extern worker_t ${WRK}_worker;\n")
+	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
+	 
+	FILE(APPEND "src/modules.c" "\n\nworker_t *workers[] = {\n")
+	
+	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
+		LIST(GET ${WLIST} ${MOD_IDX} WRK)
+		FILE(APPEND "src/modules.c" "&${WRK}_worker,\n")
+	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
+	FILE(APPEND "src/modules.c" "NULL\n};\n")
+ENDMACRO(_AddModulesForced MLIST WLIST)
 
-# Librspamdserver
-SET(LIBRSPAMDSERVERSRC
-				binlog.c
-				buffer.c
-				cfg_utils.c
-				cfg_rcl.c
-				dkim.c
-				dns.c
-				dynamic_cfg.c
-				events.c
-				html.c
-				proxy.c
-				roll_history.c
-				settings.c
-				spf.c
-				statfile.c
-				statfile_sync.c
-				symbols_cache.c
-				task.c
-				url.c)
+MACRO(AddModules MLIST WLIST)
+	_AddModulesForced(${MLIST} ${WLIST})
+	#IF(NOT EXISTS "src/modules.c")
+	#	_AddModulesForced(${MLIST} ${WLIST})
+	#ELSE(NOT EXISTS "src/modules.c")
+	#	FILE(STRINGS "src/modules.c" FILE_ID_RAW REGEX "^/.*[a-zA-Z0-9]+.*/$")
+	#	STRING(REGEX MATCH "[a-zA-Z0-9]+" FILE_ID "${FILE_ID_RAW}")
+	#	IF(NOT FILE_ID STREQUAL MODULES_ID)
+	#		MESSAGE("Regenerate modules info")
+	#		_AddModulesForced(${MLIST} ${WLIST})
+	#	ENDIF(NOT FILE_ID STREQUAL MODULES_ID)
+	#ENDIF(NOT EXISTS "src/modules.c")
+ENDMACRO(AddModules MLIST WLIST)
+
+# Contrib software
+ADD_SUBDIRECTORY(json)
+ADD_SUBDIRECTORY(cdb)
+ADD_SUBDIRECTORY(ucl/cmake)
+SET(SLAVE_BUILD 1)
+ADD_SUBDIRECTORY(rdns)
+UNSET(SLAVE_BUILD)
+
+INCLUDE_DIRECTORIES(libutil libserver libmime)
+
+# Rspamd core components
+ADD_SUBDIRECTORY(lua)
+ADD_SUBDIRECTORY(libutil)
+ADD_SUBDIRECTORY(libserver)
+ADD_SUBDIRECTORY(libmime)
+ADD_SUBDIRECTORY(client)
 				
-# Librspamd mime
-SET(LIBRSPAMDMIMESRC
-				expressions.c
-				filter.c
-				images.c
-				message.c
-				protocol.c
-				smtp_utils.c
-				smtp_proto.c
-				worker_util.c)
+SET(RSPAMDSRC	modules.c
+				controller.c
+				fuzzy_storage.c
+				lua_worker.c
+				main.c
+				smtp_proxy.c
+				webui.c
+				worker.c)
+
+SET(PLUGINSSRC	plugins/surbl.c
+				plugins/regexp.c
+				plugins/chartable.c
+				plugins/fuzzy_check.c
+				plugins/spf.c
+				plugins/dkim_check.c)
 				
-SET(TOKENIZERSSRC  tokenizers/tokenizers.c
-				tokenizers/osb.c)
+SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
+SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua webui)
 
-SET(CLASSIFIERSSRC classifiers/classifiers.c
-                classifiers/bayes.c
-				classifiers/winnow.c)
-# Add targets
+AddModules(MODULES_LIST WORKERS_LIST)
+LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 
-# Rspamdutil
-ADD_LIBRARY(rspamd-util ${LINK_TYPE} ${LIBRSPAMDUTILSRC})
-IF(CMAKE_COMPILER_IS_GNUCC)
-SET_TARGET_PROPERTIES(rspamd-util PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
-ENDIF(CMAKE_COMPILER_IS_GNUCC)
+######################### LINK SECTION ###############################
 
-
-TARGET_LINK_LIBRARIES(rspamd-util ${RSPAMD_REQUIRED_LIBRARIES})
-TARGET_LINK_LIBRARIES(rspamd-util pcre)
-TARGET_LINK_LIBRARIES(rspamd-util ucl)
-TARGET_LINK_LIBRARIES(rspamd-util ottery)
-TARGET_LINK_LIBRARIES(rspamd-util rspamd-http-parser)
-TARGET_LINK_LIBRARIES(rspamd-util event)
-TARGET_LINK_LIBRARIES(rspamd-util xxhash)
-IF(OPENSSL_FOUND)
-	TARGET_LINK_LIBRARIES(rspamd-util ${OPENSSL_LIBRARIES})
-ENDIF(OPENSSL_FOUND)
-
+ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${PLUGINSSRC})
+SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
+SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
 IF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd-util PROPERTIES VERSION ${RSPAMD_VERSION})
+SET_TARGET_PROPERTIES(rspamd PROPERTIES VERSION ${RSPAMD_VERSION})
 ENDIF(NOT DEBIAN_BUILD)
 
-IF(GLIB_COMPAT)
-	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/lgpl")
-	TARGET_LINK_LIBRARIES(rspamd-util glibadditions)
-ENDIF(GLIB_COMPAT)
+TARGET_LINK_LIBRARIES(rspamd rspamd-mime)
+TARGET_LINK_LIBRARIES(rspamd rspamd-server)
+TARGET_LINK_LIBRARIES(rspamd rspamd-util)
+TARGET_LINK_LIBRARIES(rspamd rspamd-lua)
 
-IF(NO_SHARED MATCHES "OFF")
-	INSTALL(TARGETS rspamd-util 
-    	LIBRARY DESTINATION ${LIBDIR} 
-    	PUBLIC_HEADER DESTINATION include)
-ENDIF(NO_SHARED MATCHES "OFF")
-    
-# Librspamd-server
-
-#IF(WITH_DB)
-#	LIST(APPEND LIBRSPAMDSERVERSRC kvstorage_bdb.c)
-#ENDIF(WITH_DB)
-#IF(WITH_SQLITE)
-#	LIST(APPEND LIBRSPAMDSERVERSRC kvstorage_sqlite.c)
-#ENDIF(WITH_SQLITE)
-				
-ADD_LIBRARY(rspamd-server ${LINK_TYPE} ${LIBRSPAMDSERVERSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC})
-IF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd-server PROPERTIES VERSION ${RSPAMD_VERSION})
-ENDIF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd-server PROPERTIES LINKER_LANGUAGE C COMPILE_FLAGS "-DRSPAMD_LIB")
-TARGET_LINK_LIBRARIES(rspamd-server rspamd-lua)
-TARGET_LINK_LIBRARIES(rspamd-server rspamd-json)
-TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
-TARGET_LINK_LIBRARIES(rspamd-server rspamd-util)
-TARGET_LINK_LIBRARIES(rspamd-server rdns)   
-IF(CMAKE_COMPILER_IS_GNUCC)
-SET_TARGET_PROPERTIES(rspamd-server PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB -fno-strict-aliasing")
-ENDIF(CMAKE_COMPILER_IS_GNUCC)
-
+TARGET_LINK_LIBRARIES(rspamd event)
+IF(HAVE_LIBEVENT2)
+	TARGET_LINK_LIBRARIES(rspamd event_pthreads)
+ENDIF(HAVE_LIBEVENT2)
 IF(WITH_DB)
-	TARGET_LINK_LIBRARIES(rspamd-server db)
+	TARGET_LINK_LIBRARIES(rspamd db)
 ENDIF(WITH_DB)
 
 IF(OPENSSL_FOUND)
-	TARGET_LINK_LIBRARIES(rspamd-server ${OPENSSL_LIBRARIES})
+	TARGET_LINK_LIBRARIES(rspamd ${OPENSSL_LIBRARIES})
 ENDIF(OPENSSL_FOUND)
+IF(HAVE_FETCH_H)
+	TARGET_LINK_LIBRARIES(rspamd fetch)
+ENDIF(HAVE_FETCH_H)
+TARGET_LINK_LIBRARIES(rspamd ${RSPAMD_REQUIRED_LIBRARIES})
 
-IF(NO_SHARED MATCHES "OFF")
-	INSTALL(TARGETS rspamd-server 
-    	LIBRARY DESTINATION ${LIBDIR} 
-    	PUBLIC_HEADER DESTINATION ${INCLUDEDIR})
-ENDIF(NO_SHARED MATCHES "OFF")
-    
-# Librspamdmime
-ADD_LIBRARY(rspamd-mime ${LINK_TYPE} ${LIBRSPAMDMIMESRC})
-IF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd-mime PROPERTIES VERSION ${RSPAMD_VERSION})
-ENDIF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd-mime PROPERTIES LINKER_LANGUAGE C)
-SET_TARGET_PROPERTIES(rspamd-mime PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB")
-TARGET_LINK_LIBRARIES(rspamd-mime rspamd-server)
-TARGET_LINK_LIBRARIES(rspamd-mime rspamd-util)      
-IF(CMAKE_COMPILER_IS_GNUCC)
-SET_TARGET_PROPERTIES(rspamd-mime PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB -fno-strict-aliasing")
-ENDIF(CMAKE_COMPILER_IS_GNUCC)
+IF(ENABLE_LUAJIT MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd "${LUAJIT_LIBRARY}")
+ELSE(ENABLE_LUAJIT MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd "${LUA_LIBRARY}")
+ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
-IF(NO_SHARED MATCHES "OFF")
-	INSTALL(TARGETS rspamd-mime 
-   	 	LIBRARY DESTINATION ${LIBDIR}  
-    	PUBLIC_HEADER DESTINATION ${INCLUDEDIR})
-ENDIF(NO_SHARED MATCHES "OFF")
+IF(ENABLE_GPERF_TOOLS MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd profiler)
+ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
+TARGET_LINK_LIBRARIES(rspamd hiredis)
+IF(GLIB_COMPAT)
+	TARGET_LINK_LIBRARIES(rspamd glibadditions)
+ENDIF(GLIB_COMPAT)
 
-INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+INSTALL(TARGETS rspamd RUNTIME DESTINATION bin)
