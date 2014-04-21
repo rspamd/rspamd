@@ -2,7 +2,7 @@ MACRO(_AddModulesForced MLIST WLIST)
 # Generate unique string for this build
 	STRING(RANDOM LENGTH 8 _MODULES_ID)
 	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
-	FILE(WRITE "src/modules.c" "/* ${MODULES_ID} */\n#include \"config.h\"\n")
+	FILE(WRITE "modules.c" "/* ${MODULES_ID} */\n#include \"config.h\"\n")
 	
 	# Handle even old cmake
 	LIST(LENGTH ${MLIST} MLIST_COUNT)
@@ -12,44 +12,44 @@ MACRO(_AddModulesForced MLIST WLIST)
 	
 	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		LIST(GET ${MLIST} ${MOD_IDX} MOD)
-		FILE(APPEND "src/modules.c" "extern module_t ${MOD}_module;\n")
+		FILE(APPEND "modules.c" "extern module_t ${MOD}_module;\n")
 	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		 
-	FILE(APPEND "src/modules.c" "\n\nmodule_t *modules[] = {\n")
+	FILE(APPEND "modules.c" "\n\nmodule_t *modules[] = {\n")
 	
 	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		LIST(GET ${MLIST} ${MOD_IDX} MOD)
-		FILE(APPEND "src/modules.c" "&${MOD}_module,\n")
+		FILE(APPEND "modules.c" "&${MOD}_module,\n")
 	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
 	
-	FILE(APPEND "src/modules.c" "NULL\n};\n")
+	FILE(APPEND "modules.c" "NULL\n};\n")
 	
 	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
 		LIST(GET ${WLIST} ${MOD_IDX} WRK)
-		FILE(APPEND "src/modules.c" "extern worker_t ${WRK}_worker;\n")
+		FILE(APPEND "modules.c" "extern worker_t ${WRK}_worker;\n")
 	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
 	 
-	FILE(APPEND "src/modules.c" "\n\nworker_t *workers[] = {\n")
+	FILE(APPEND "modules.c" "\n\nworker_t *workers[] = {\n")
 	
 	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
 		LIST(GET ${WLIST} ${MOD_IDX} WRK)
-		FILE(APPEND "src/modules.c" "&${WRK}_worker,\n")
+		FILE(APPEND "modules.c" "&${WRK}_worker,\n")
 	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
-	FILE(APPEND "src/modules.c" "NULL\n};\n")
+	FILE(APPEND "modules.c" "NULL\n};\n")
 ENDMACRO(_AddModulesForced MLIST WLIST)
 
 MACRO(AddModules MLIST WLIST)
 	_AddModulesForced(${MLIST} ${WLIST})
-	#IF(NOT EXISTS "src/modules.c")
+	#IF(NOT EXISTS "modules.c")
 	#	_AddModulesForced(${MLIST} ${WLIST})
-	#ELSE(NOT EXISTS "src/modules.c")
-	#	FILE(STRINGS "src/modules.c" FILE_ID_RAW REGEX "^/.*[a-zA-Z0-9]+.*/$")
+	#ELSE(NOT EXISTS "modules.c")
+	#	FILE(STRINGS "modules.c" FILE_ID_RAW REGEX "^/.*[a-zA-Z0-9]+.*/$")
 	#	STRING(REGEX MATCH "[a-zA-Z0-9]+" FILE_ID "${FILE_ID_RAW}")
 	#	IF(NOT FILE_ID STREQUAL MODULES_ID)
 	#		MESSAGE("Regenerate modules info")
 	#		_AddModulesForced(${MLIST} ${WLIST})
 	#	ENDIF(NOT FILE_ID STREQUAL MODULES_ID)
-	#ENDIF(NOT EXISTS "src/modules.c")
+	#ENDIF(NOT EXISTS "modules.c")
 ENDMACRO(AddModules MLIST WLIST)
 
 # Contrib software
