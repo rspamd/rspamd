@@ -59,6 +59,8 @@
 #define PATH_SAVE_SYMBOLS "/savesymbols"
 #define PATH_SAVE_MAP "/savemap"
 #define PATH_SCAN "/scan"
+#define PATH_STAT "/stat"
+#define PATH_STAT_RESET "/statreset"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -1285,6 +1287,160 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+/*
+ * Stat command handler:
+ * request: /stat (/resetstat)
+ * headers: Password
+ * reply: json data
+ */
+static int
+rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg, gboolean do_reset)
+{
+	struct rspamd_webui_session *session = conn_ent->ud;
+	ucl_object_t *top, *sub;
+	gint i;
+	guint64 used, total, rev, ham = 0, spam = 0;
+	time_t ti;
+	rspamd_mempool_stat_t mem_st;
+	struct classifier_config *ccf;
+	stat_file_t *statfile;
+	struct statfile *st;
+	GList *cur_cl, *cur_st;
+	struct rspamd_stat *stat, stat_copy;
+
+	rspamd_mempool_stat (&mem_st);
+	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
+	stat = &stat_copy;
+	top = ucl_object_typed_new (UCL_OBJECT);
+
+	ucl_object_insert_key (top, ucl_object_fromint (stat->messages_scanned), "scanned", 0, false);
+	if (stat->messages_scanned > 0) {
+		sub = ucl_object_typed_new (UCL_OBJECT);
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
+			ucl_object_insert_key (top,
+					ucl_object_fromint (stat->actions_stat[i]),
+					str_action_metric (i), 0, false);
+			if (i < METRIC_ACTION_GREYLIST) {
+				spam += stat->actions_stat[i];
+			}
+			else {
+				ham += stat->actions_stat[i];
+			}
+			if (do_reset) {
+				session->ctx->worker->srv->stat->actions_stat[i] = 0;
+			}
+		}
+		ucl_object_insert_key (top, sub, "actions", 0, false);
+	}
+
+	ucl_object_insert_key (top, ucl_object_fromint (spam), "spam_count", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (ham), "ham_count", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->messages_learned), "learned", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->connections_count), "connections", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->control_connections_count),
+			"control_connections", 0, false);
+
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.pools_freed), "pools_freed", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.bytes_allocated), "bytes_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.chunks_allocated), "chunks_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.shared_chunks_allocated),
+			"shared_chunks_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.chunks_freed), "chunks_freed", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.oversized_chunks), "chunks_oversized", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
+
+	/* Now write statistics for each statfile */
+	cur_cl = g_list_first (session->ctx->cfg->classifiers);
+	sub = ucl_object_typed_new (UCL_ARRAY);
+	while (cur_cl) {
+		ccf = cur_cl->data;
+		cur_st = g_list_first (ccf->statfiles);
+		while (cur_st) {
+			st = cur_st->data;
+			if ((statfile = statfile_pool_is_open (session->ctx->srv->statfile_pool,
+					st->path)) == NULL) {
+				statfile = statfile_pool_open (session->ctx->srv->statfile_pool,
+						st->path, st->size, FALSE);
+			}
+			if (statfile) {
+				ucl_object_t *obj = ucl_object_typed_new (UCL_OBJECT);
+
+				used = statfile_get_used_blocks (statfile);
+				total = statfile_get_total_blocks (statfile);
+				statfile_get_revision (statfile, &rev, &ti);
+				ucl_object_insert_key (obj,
+						ucl_object_fromstring (st->symbol), "symbol", 0, false);
+				if (st->label != NULL) {
+					ucl_object_insert_key (obj,
+							ucl_object_fromstring (st->label), "label", 0, false);
+				}
+				ucl_object_insert_key (obj, ucl_object_fromint (rev), "revision", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (used), "used", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (total), "total", 0, false);
+
+				ucl_array_append (sub, obj);
+			}
+			cur_st = g_list_next (cur_st);
+		}
+		cur_cl = g_list_next (cur_cl);
+	}
+
+	ucl_object_insert_key (top, sub, "statfiles", 0, false);
+
+	if (do_reset) {
+		session->ctx->srv->stat->messages_scanned = 0;
+		session->ctx->srv->stat->messages_learned = 0;
+		session->ctx->srv->stat->connections_count = 0;
+		session->ctx->srv->stat->control_connections_count = 0;
+	}
+
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
+}
+
+static int
+rspamd_webui_handle_stat (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	return rspamd_webui_handle_stat_common (conn_ent, msg, FALSE);
+}
+
+static int
+rspamd_webui_handle_statreset (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	return rspamd_webui_handle_stat_common (conn_ent, msg, TRUE);
+}
+
 static void
 rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
 {
@@ -1428,6 +1584,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_savesymbols);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_savemap);
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan);
+	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_webui_handle_stat);
+	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_webui_handle_statreset);
 
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
