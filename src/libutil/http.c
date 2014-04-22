@@ -800,7 +800,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					msg->code, rspamd_http_code_to_str (msg->code),
 					"rspamd/" RVERSION,
 					datebuf,
-					msg->body->len,
+					bodylen,
 					mime_type);
 		}
 		else {
@@ -815,13 +815,13 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					"Connection: close\r\n"
 					"Host: %s\r\n"
 					"Content-Length: %z\r\n",
-				http_method_str (msg->method), msg->url, host, msg->body->len);
+				http_method_str (msg->method), msg->url, host, bodylen);
 		}
 		else {
 			/* Fallback to HTTP/1.0 */
 			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.0\r\n"
 					"Content-Length: %z\r\n",
-				http_method_str (msg->method), msg->url, msg->body->len);
+				http_method_str (msg->method), msg->url, bodylen);
 		}
 	}
 	/* Allocate iov */
