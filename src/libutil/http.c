@@ -952,10 +952,10 @@ rspamd_http_entry_free (struct rspamd_http_connection_entry *entry)
 	if (entry != NULL) {
 		close (entry->conn->fd);
 		rspamd_http_connection_unref (entry->conn);
-		g_slice_free1 (sizeof (struct rspamd_http_connection_entry), entry);
 		if (entry->rt->finish_handler) {
 			entry->rt->finish_handler (entry);
 		}
+		g_slice_free1 (sizeof (struct rspamd_http_connection_entry), entry);
 	}
 }
 
