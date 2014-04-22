@@ -1277,6 +1277,20 @@ rspamd_webui_learn_fin_task (void *ud)
 	return TRUE;
 }
 
+static gboolean
+rspamd_webui_check_fin_task (void *ud)
+{
+	struct rspamd_task						*task = ud;
+	struct rspamd_http_connection_entry		*conn_ent;
+
+	conn_ent = task->fin_arg;
+	task->http_conn = conn_ent->conn;
+	rspamd_protocol_write_reply (task);
+	conn_ent->is_reply = TRUE;
+
+	return TRUE;
+}
+
 static int
 rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg, gboolean is_spam)
@@ -1321,17 +1335,10 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
 
-	if (process_message (task) == -1) {
-		msg_warn ("processing of message failed");
-		destroy_session (task->s);
-		rspamd_webui_send_error (conn_ent, 500, "Message cannot be processed");
-		return 0;
-	}
-
-	if (process_filters (task) == -1) {
+	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
+		rspamd_webui_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);
-		rspamd_webui_send_error (conn_ent, 500, "Filters cannot be processed");
 		return 0;
 	}
 
@@ -1367,6 +1374,57 @@ rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
 	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
+}
+
+/*
+ * Scan command handler:
+ * request: /scan
+ * headers: Password
+ * input: plaintext data
+ * reply: json {scan data} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_task						*task;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	if (msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	task = rspamd_task_new (session->ctx->worker);
+	task->ev_base = session->ctx->ev_base;
+	task->msg = msg->body;
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	task->s = new_async_session (session->pool, rspamd_webui_check_fin_task, NULL,
+			rspamd_task_free_hard, task);
+	task->s->wanna_die = TRUE;
+	task->fin_arg = conn_ent;
+
+	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
+		msg_warn ("filters cannot be processed for %s", task->message_id);
+		rspamd_webui_send_error (conn_ent, 500, task->last_error);
+		destroy_session (task->s);
+		return 0;
+	}
+
+	session->task = task;
+
+	return 0;
 }
 
 /*
@@ -1657,51 +1715,6 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
-#if 0
-
-/*
- * Learn ham command handler:
- * request: /scan
- * headers: Password
- * input: plaintext data
- * reply: json {scan data} or {"error":"error message"}
- */
-static void
-rspamd_webui_handle_scan (struct evhttp_request *req, gpointer arg)
-{
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb, *inb;
-	GError									*err = NULL;
-	struct scan_callback_data				*cbdata;
-
-	if (!http_check_password (ctx, req)) {
-		return;
-	}
-
-	inb = req->input_buffer;
-
-	cbdata = http_prepare_scan (req, ctx, inb, &err);
-	if (cbdata == NULL) {
-		/* Handle error */
-		evb = evbuffer_new ();
-		if (!evb) {
-			msg_err ("cannot allocate evbuffer for reply");
-			evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-			return;
-		}
-		evbuffer_add_printf (evb, "{\"error\":\"%s\"}" CRLF, err->message);
-		evhttp_add_header (req->output_headers, "Connection", "close");
-		http_calculate_content_length (evb, req);
-
-		evhttp_send_reply (req, err->code, err->message, evb);
-		evbuffer_free (evb);
-		g_error_free (err);
-		return;
-	}
-}
-
-#endif
-
 static void
 rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
 {
@@ -1854,9 +1867,10 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_saveactions);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_savesymbols);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_savemap);
+	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan);
+
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
-	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan, ctx);
 #endif
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
