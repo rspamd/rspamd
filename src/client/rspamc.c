@@ -101,6 +101,7 @@ struct rspamc_command {
 	enum rspamc_command_type cmd;
 	const char *name;
 	const char *description;
+	const char *path;
 	gboolean is_controller;
 	gboolean is_privileged;
 	gboolean need_input;
@@ -109,6 +110,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
 		.name = "symbols",
+		.path = "symbols",
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
 		.is_privileged = FALSE,
@@ -118,6 +120,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_LEARN_SPAM,
 		.name = "learn_spam",
+		.path = "learnspam",
 		.description = "learn message as spam",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -127,6 +130,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_LEARN_HAM,
 		.name = "learn_ham",
+		.path = "learnham",
 		.description = "learn message as ham",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -136,6 +140,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
 		.name = "fuzzy_add",
+		.path = "fuzzyadd",
 		.description = "add message to fuzzy storage (check -f and -w options for this command)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -145,6 +150,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_FUZZY_DEL,
 		.name = "fuzzy_del",
+		.path = "fuzzydel",
 		.description = "delete message from fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -154,6 +160,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_STAT,
 		.name = "stat",
+		.path = "stat",
 		.description = "show rspamd statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -163,6 +170,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_STAT_RESET,
 		.name = "stat_reset",
+		.path = "statreset",
 		.description = "show and reset rspamd statistics (useful for graphs)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -172,6 +180,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_COUNTERS,
 		.name = "counters",
+		.path = "counters",
 		.description = "display rspamd symbols statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -181,6 +190,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_UPTIME,
 		.name = "uptime",
+		.path = "uptime",
 		.description = "show rspamd uptime",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
@@ -190,6 +200,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
 		.name = "add_symbol",
+		.path = "addsymbol",
 		.description = "add or modify symbol settings in rspamd",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -199,6 +210,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_ADD_ACTION,
 		.name = "add_action",
+		.path = "addaction",
 		.description = "add or modify action settings",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
@@ -581,11 +593,11 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 		cbdata->cmd = cmd;
 		cbdata->filename = name;
 		if (cmd->need_input) {
-			rspamd_client_command (conn, cmd->name, attrs, in, rspamc_client_cb,
+			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,
 					cbdata, &err);
 		}
 		else {
-			rspamd_client_command (conn, cmd->name, attrs, NULL, rspamc_client_cb,
+			rspamd_client_command (conn, cmd->path, attrs, NULL, rspamc_client_cb,
 					cbdata, &err);
 		}
 	}
