@@ -509,7 +509,12 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamc_command *cmd;
 
 	cmd = cbdata->cmd;
-	rspamd_fprintf (stdout, "Results for file: %s\n", cbdata->filename);
+	if (cmd->need_input) {
+		rspamd_fprintf (stdout, "Results for file: %s\n", cbdata->filename);
+	}
+	else {
+		rspamd_fprintf (stdout, "Results for command: %s\n", cmd->name);
+	}
 	if (result != NULL) {
 		if (headers && msg != NULL) {
 			rspamc_output_headers (msg);
