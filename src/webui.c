@@ -1407,6 +1407,7 @@ rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
 		session->ctx->srv->stat->messages_learned = 0;
 		session->ctx->srv->stat->connections_count = 0;
 		session->ctx->srv->stat->control_connections_count = 0;
+		rspamd_mempool_stat_reset ();
 	}
 
 	rspamd_webui_send_ucl (conn_ent, top);

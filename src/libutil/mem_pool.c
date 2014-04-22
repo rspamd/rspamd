@@ -645,14 +645,24 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t* pool)
 void
 rspamd_mempool_stat (rspamd_mempool_stat_t * st)
 {
-	st->pools_allocated = mem_pool_stat->pools_allocated;
-	st->pools_freed = mem_pool_stat->pools_freed;
-	st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
-	st->bytes_allocated = mem_pool_stat->bytes_allocated;
-	st->chunks_allocated = mem_pool_stat->chunks_allocated;
-	st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
-	st->chunks_freed = mem_pool_stat->chunks_freed;
-	st->oversized_chunks = mem_pool_stat->oversized_chunks;
+	if (mem_pool_stat != NULL) {
+		st->pools_allocated = mem_pool_stat->pools_allocated;
+		st->pools_freed = mem_pool_stat->pools_freed;
+		st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
+		st->bytes_allocated = mem_pool_stat->bytes_allocated;
+		st->chunks_allocated = mem_pool_stat->chunks_allocated;
+		st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
+		st->chunks_freed = mem_pool_stat->chunks_freed;
+		st->oversized_chunks = mem_pool_stat->oversized_chunks;
+	}
+}
+
+void
+rspamd_mempool_stat_reset (void)
+{
+	if (mem_pool_stat != NULL) {
+		memset (mem_pool_stat, 0, sizeof (rspamd_mempool_stat_t));
+	}
 }
 
 /* By default allocate 8Kb chunks of memory */

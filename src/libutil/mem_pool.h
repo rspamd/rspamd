@@ -272,6 +272,11 @@ void rspamd_mempool_wunlock_rwlock (rspamd_mempool_rwlock_t *lock);
 void rspamd_mempool_stat (rspamd_mempool_stat_t *st);
 
 /**
+ * Reset memory pool stat
+ */
+void rspamd_mempool_stat_reset (void);
+
+/**
  * Get optimal pool size based on page size for this system
  * @return size of memory page in system
  */
