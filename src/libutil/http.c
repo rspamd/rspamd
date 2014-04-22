@@ -460,6 +460,7 @@ rspamd_http_on_headers_complete (http_parser* parser)
 	}
 
 	priv->msg->method = parser->method;
+	priv->msg->code = parser->status_code;
 
 	return 0;
 }
