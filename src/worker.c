@@ -170,8 +170,6 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_task             *task = (struct rspamd_task *) conn->ud;
 	struct rspamd_worker_ctx       *ctx;
-	ssize_t                         r;
-	GError                         *err = NULL;
 
 	ctx = task->worker->ctx;
 
@@ -193,58 +191,8 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 
-	task->msg = msg->body;
+	rspamd_task_process (task, msg, ctx->classify_pool, TRUE);
 
-	debug_task ("got string of length %z", task->msg->len);
-
-	/* We got body, set wanna_die flag */
-	task->s->wanna_die = TRUE;
-
-	r = process_message (task);
-	if (r == -1) {
-		msg_warn ("processing of message failed");
-		task->last_error = "MIME processing error";
-		task->error_code = RSPAMD_FILTER_ERROR;
-		task->state = WRITE_REPLY;
-		return 0;
-	}
-	if (task->cmd == CMD_OTHER) {
-		/* Skip filters */
-		task->state = WRITE_REPLY;
-		return 0;
-	}
-	else {
-		if (task->cfg->pre_filters == NULL) {
-			r = process_filters (task);
-			if (r == -1) {
-				task->last_error = "filter processing error";
-				task->error_code = RSPAMD_FILTER_ERROR;
-				task->state = WRITE_REPLY;
-				return 0;
-			}
-			/* Add task to classify to classify pool */
-			if (!task->is_skipped && ctx->classify_pool) {
-				register_async_thread (task->s);
-				g_thread_pool_push (ctx->classify_pool, task, &err);
-				if (err != NULL) {
-					msg_err ("cannot pull task to the pool: %s", err->message);
-					remove_async_thread (task->s);
-				}
-			}
-			if (task->is_skipped) {
-				/* Call write_socket to write reply and exit */
-				task->state = WRITE_REPLY;
-				return 0;
-			}
-		}
-		else {
-			lua_call_pre_filters (task);
-			/* We want fin_task after pre filters are processed */
-			task->s->wanna_die = TRUE;
-			task->state = WAIT_PRE_FILTER;
-			check_session_pending (task->s);
-		}
-	}
 	return 0;
 }
 
@@ -329,7 +277,6 @@ accept_socket (gint fd, short what, void *arg)
 	/* Copy some variables */
 	new_task->sock = nfd;
 	new_task->is_mime = ctx->is_mime;
-	new_task->allow_learn = ctx->allow_learn;
 	memcpy (&new_task->client_addr, &addr, sizeof (addr));
 
 	worker->srv->stat->connections_count++;

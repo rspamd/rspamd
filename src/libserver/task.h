@@ -76,7 +76,7 @@ struct rspamd_task {
 	gint sock;													/**< socket descriptor								*/
 	gboolean is_mime;                                           /**< if this task is mime task                      */
 	gboolean is_json;											/**< output is JSON									*/
-	gboolean allow_learn;										/**< allow learning									*/
+	gboolean skip_extra_filters;								/**< skip pre and post filters						*/
 	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
 
 	gchar *helo;													/**< helo header value								*/
@@ -161,5 +161,17 @@ void rspamd_task_restore (void *arg);
  * @return TRUE if session should be terminated
  */
 gboolean rspamd_task_fin (void *arg);
+
+/**
+ * Process task from http message and write reply or call task->fin_handler
+ * @param task task to process
+ * @param msg incoming http message
+ * @param classify_pool classify pool (or NULL)
+ * @param process_extra_filters whether to check pre and post filters
+ * @return task has been successfully parsed and processed
+ */
+gboolean rspamd_task_process (struct rspamd_task *task,
+		struct rspamd_http_message *msg, GThreadPool *classify_pool,
+		gboolean process_extra_filters);
 
 #endif /* TASK_H_ */
