@@ -380,6 +380,9 @@ add_options (GHashTable *opts)
 	if (hostname != NULL) {
 		g_hash_table_insert (opts, "Hostname", hostname);
 	}
+	if (password != NULL) {
+		g_hash_table_insert (opts, "Password", password);
+	}
 	if (pass_all) {
 		g_hash_table_insert (opts, "Pass", "all");
 	}
