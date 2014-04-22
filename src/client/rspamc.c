@@ -103,6 +103,7 @@ struct rspamc_command {
 	const char *description;
 	gboolean is_controller;
 	gboolean is_privileged;
+	gboolean need_input;
 	void (*command_output_func)(ucl_object_t *obj);
 } rspamc_commands[] = {
 	{
@@ -111,6 +112,7 @@ struct rspamc_command {
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
 		.is_privileged = FALSE,
+		.need_input = TRUE,
 		.command_output_func = rspamc_symbols_output
 	},
 	{
@@ -119,6 +121,7 @@ struct rspamc_command {
 		.description = "learn message as spam",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = TRUE,
 		.command_output_func = NULL
 	},
 	{
@@ -127,6 +130,7 @@ struct rspamc_command {
 		.description = "learn message as ham",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = TRUE,
 		.command_output_func = NULL
 	},
 	{
@@ -135,6 +139,7 @@ struct rspamc_command {
 		.description = "add message to fuzzy storage (check -f and -w options for this command)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = TRUE,
 		.command_output_func = NULL
 	},
 	{
@@ -143,6 +148,7 @@ struct rspamc_command {
 		.description = "delete message from fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = TRUE,
 		.command_output_func = NULL
 	},
 	{
@@ -151,6 +157,7 @@ struct rspamc_command {
 		.description = "show rspamd statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	},
 	{
@@ -159,6 +166,7 @@ struct rspamc_command {
 		.description = "show and reset rspamd statistics (useful for graphs)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	},
 	{
@@ -167,6 +175,7 @@ struct rspamc_command {
 		.description = "display rspamd symbols statistics",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	},
 	{
@@ -175,6 +184,7 @@ struct rspamc_command {
 		.description = "show rspamd uptime",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	},
 	{
@@ -183,6 +193,7 @@ struct rspamc_command {
 		.description = "add or modify symbol settings in rspamd",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	},
 	{
@@ -191,6 +202,7 @@ struct rspamc_command {
 		.description = "add or modify action settings",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	}
 };
@@ -560,7 +572,14 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
 		cbdata->cmd = cmd;
 		cbdata->filename = name;
-		rspamd_client_command (conn, cmd->name, attrs, in, rspamc_client_cb, cbdata, &err);
+		if (cmd->need_input) {
+			rspamd_client_command (conn, cmd->name, attrs, in, rspamc_client_cb,
+					cbdata, &err);
+		}
+		else {
+			rspamd_client_command (conn, cmd->name, attrs, NULL, rspamc_client_cb,
+					cbdata, &err);
+		}
 	}
 }
 
