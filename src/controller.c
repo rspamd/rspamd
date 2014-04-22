@@ -133,64 +133,8 @@ static GList                   *custom_commands = NULL;
 static time_t                   start_time;
 
 static gchar                    greetingbuf[1024];
-static sig_atomic_t             wanna_die = 0;
 
 static gboolean                 controller_write_socket (void *arg);
-
-#ifndef HAVE_SA_SIGINFO
-static void
-sig_handler (gint signo)
-#else
-static void
-sig_handler (gint signo, siginfo_t *info, void *unused)
-#endif
-{
-	struct timeval                  tv;
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-		if (!wanna_die) {
-			wanna_die = 1;
-			tv.tv_sec = 0;
-			tv.tv_usec = 0;
-			event_loopexit (&tv);
-
-#ifdef WITH_GPERF_TOOLS
-			ProfilerStop ();
-#endif
-		}
-		break;
-	}
-}
-
-static void
-sigusr2_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval                  tv;
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	event_del (&worker->sig_ev_usr1);
-	event_del (&worker->sig_ev_usr2);
-	worker_stop_accept (worker);
-	msg_info ("controller's shutdown is pending in %d sec", 2);
-	event_loopexit (&tv);
-	return;
-}
-
-/*
- * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
- */
-static void
-sigusr1_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
-
-	reopen_log (worker->srv->logger);
-
-	return;
-}
 
 static void
 free_session (void *ud)
@@ -1931,19 +1875,8 @@ start_controller (struct rspamd_worker *worker)
 	GError                         *err = NULL;
 	struct timeval                  tv;
 
-	ctx->ev_base = prepare_worker (worker, "controller", sig_handler, accept_socket);
+	ctx->ev_base = prepare_worker (worker, "controller", accept_socket);
 	g_mime_init (0);
-
-	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr2);
-	signal_add (&worker->sig_ev_usr2, NULL);
-
-	/* SIGUSR1 handler */
-	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
-	signal_add (&worker->sig_ev_usr1, NULL);
-
 
 	start_time = time (NULL);
 

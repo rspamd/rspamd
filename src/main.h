@@ -218,7 +218,6 @@ typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
  */
 struct event_base *
 prepare_worker (struct rspamd_worker *worker, const char *name,
-		rspamd_sig_handler_t sig_handler,
 		void (*accept_handler)(int, short, void *));
 
 /**

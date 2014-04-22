@@ -78,9 +78,72 @@ set_counter (const gchar *name, guint32 value)
 	return cd->value;
 }
 
+sig_atomic_t wanna_die = 0;
+
+#ifndef HAVE_SA_SIGINFO
+static void
+worker_sig_handler (gint signo)
+#else
+static void
+worker_sig_handler (gint signo, siginfo_t * info, void *unused)
+#endif
+{
+	struct timeval                  tv;
+
+	switch (signo) {
+	case SIGINT:
+	case SIGTERM:
+		if (!wanna_die) {
+			wanna_die = 1;
+			tv.tv_sec = 0;
+			tv.tv_usec = 0;
+			event_loopexit (&tv);
+
+#ifdef WITH_GPERF_TOOLS
+			ProfilerStop ();
+#endif
+		}
+		break;
+	}
+}
+
+/*
+ * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
+ */
+static void
+worker_sigusr2_handler (gint fd, short what, void *arg)
+{
+	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+	/* Do not accept new connections, preparing to end worker's process */
+	struct timeval                  tv;
+
+	if (!wanna_die) {
+		tv.tv_sec = SOFT_SHUTDOWN_TIME;
+		tv.tv_usec = 0;
+		event_del (&worker->sig_ev_usr1);
+		event_del (&worker->sig_ev_usr2);
+		worker_stop_accept (worker);
+		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
+		event_loopexit (&tv);
+	}
+	return;
+}
+
+/*
+ * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
+ */
+static void
+worker_sigusr1_handler (gint fd, short what, void *arg)
+{
+	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+
+	reopen_log (worker->srv->logger);
+
+	return;
+}
+
 struct event_base *
 prepare_worker (struct rspamd_worker *worker, const char *name,
-		rspamd_sig_handler_t sig_handler,
 		void (*accept_handler)(int, short, void *))
 {
 	struct event_base                *ev_base;
@@ -100,7 +163,7 @@ prepare_worker (struct rspamd_worker *worker, const char *name,
 
 	ev_base = event_init ();
 
-	init_signals (&signals, sig_handler);
+	init_signals (&signals, worker_sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* Accept all sockets */
@@ -117,6 +180,18 @@ prepare_worker (struct rspamd_worker *worker, const char *name,
 		}
 		cur = g_list_next (cur);
 	}
+
+	/* SIGUSR2 handler */
+	signal_set (&worker->sig_ev_usr2, SIGUSR2, worker_sigusr2_handler,
+			(void *) worker);
+	event_base_set (ev_base, &worker->sig_ev_usr2);
+	signal_add (&worker->sig_ev_usr2, NULL);
+
+	/* SIGUSR1 handler */
+	signal_set (&worker->sig_ev_usr1, SIGUSR1, worker_sigusr1_handler,
+			(void *) worker);
+	event_base_set (ev_base, &worker->sig_ev_usr1);
+	signal_add (&worker->sig_ev_usr1, NULL);
 
 	return ev_base;
 }

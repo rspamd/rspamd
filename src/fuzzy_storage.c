@@ -86,7 +86,6 @@ static guint32                 mods = 0;
 static struct timeval           tmv;
 static struct event             tev;
 static struct rspamd_stat      *server_stat;
-static sig_atomic_t             wanna_die = 0;
 
 struct rspamd_fuzzy_storage_ctx {
 	gboolean                        strict_hash;
@@ -126,22 +125,7 @@ struct fuzzy_session {
 	struct rspamd_fuzzy_storage_ctx *ctx;
 };
 
-#ifndef HAVE_SA_SIGINFO
-static void
-sig_handler (gint signo)
-#else
-static void
-sig_handler (gint signo, siginfo_t *info, void *unused)
-#endif
-{
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-		/* Ignore SIGINT and SIGTERM as they are handled by libevent handler */
-		return;
-		break;
-	}
-}
+extern sig_atomic_t wanna_die;
 
 static gint
 compare_nodes (gconstpointer a, gconstpointer b, gpointer unused)
@@ -390,19 +374,6 @@ sigusr2_handler (gint fd, short what, void *arg)
 	rspamd_mutex_unlock (ctx->update_mtx);
 
 	event_base_loopexit (ctx->ev_base, &tv);
-	return;
-}
-
-/*
- * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
- */
-static void
-sigusr1_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
-
-	reopen_log (worker->srv->logger);
-
 	return;
 }
 
@@ -997,23 +968,20 @@ start_fuzzy (struct rspamd_worker *worker)
 	GError                          *err = NULL;
 	gint i;
 
-	ctx->ev_base = prepare_worker (worker, "controller", sig_handler, accept_fuzzy_socket);
-
+	ctx->ev_base = prepare_worker (worker, "controller", accept_fuzzy_socket);
 	server_stat = worker->srv->stat;
 
-	/* SIGUSR2 handler */
+	/* Custom SIGUSR2 handler */
+	event_del (&worker->sig_ev_usr2);
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
 	event_base_set (ctx->ev_base, &worker->sig_ev_usr2);
 	signal_add (&worker->sig_ev_usr2, NULL);
 
-	/* SIGUSR1 handler */
-	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
-	signal_add (&worker->sig_ev_usr1, NULL);
-
 	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
 	event_base_set (ctx->ev_base, &sev);
 	signal_add (&sev, NULL);
+	/* We set wanna_die to 1 as we setup our own SIGTERM handler */
+	wanna_die = 1;
 
 	if (ctx->strict_hash) {
 		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,

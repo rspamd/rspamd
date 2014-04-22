@@ -99,8 +99,6 @@ static const struct luaL_reg    lua_workerlib_m[] = {
 	{NULL, NULL}
 };
 
-static sig_atomic_t             wanna_die = 0;
-
 /* Basic functions of LUA API for worker object */
 static gint
 luaopen_lua_worker (lua_State * L)
@@ -253,69 +251,6 @@ lua_worker_get_cfg (lua_State *L)
 }
 
 /* End of lua API */
-/* Signal handlers */
-
-#ifndef HAVE_SA_SIGINFO
-static void
-sig_handler (gint signo)
-#else
-static void
-sig_handler (gint signo, siginfo_t * info, void *unused)
-#endif
-{
-	struct timeval                  tv;
-
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-		if (!wanna_die) {
-			wanna_die = 1;
-			tv.tv_sec = 0;
-			tv.tv_usec = 0;
-			event_loopexit (&tv);
-
-#ifdef WITH_GPERF_TOOLS
-			ProfilerStop ();
-#endif
-		}
-		break;
-	}
-}
-
-/*
- * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
- */
-static void
-sigusr2_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
-	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval                  tv;
-
-	if (!wanna_die) {
-		tv.tv_sec = SOFT_SHUTDOWN_TIME;
-		tv.tv_usec = 0;
-		event_del (&worker->sig_ev_usr1);
-		event_del (&worker->sig_ev_usr2);
-		worker_stop_accept (worker);
-		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
-		event_loopexit (&tv);
-	}
-	return;
-}
-
-/*
- * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
- */
-static void
-sigusr1_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
-
-	reopen_log (worker->srv->logger);
-
-	return;
-}
 
 /*
  * Accept new connection and construct task
@@ -406,22 +341,11 @@ start_lua_worker (struct rspamd_worker *worker)
 	monstartup ((u_long) & _start, (u_long) & etext);
 #endif
 
-	ctx->ev_base = prepare_worker (worker, "lua_worker", sig_handler, lua_accept_socket);
+	ctx->ev_base = prepare_worker (worker, "lua_worker", lua_accept_socket);
 
 	L = worker->srv->cfg->lua_state;
 	ctx->L = L;
 	ctx->cfg = worker->srv->cfg;
-
-
-	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr2);
-	signal_add (&worker->sig_ev_usr2, NULL);
-
-	/* SIGUSR1 handler */
-	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
-	signal_add (&worker->sig_ev_usr1, NULL);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 

@@ -48,8 +48,6 @@
 
 static gboolean smtp_write_socket (void *arg);
 
-static sig_atomic_t                    wanna_die = 0;
-
 /* Init functions */
 gpointer init_smtp (struct config_file *cfg);
 void start_smtp (struct rspamd_worker *worker);
@@ -64,67 +62,6 @@ worker_t smtp_worker = {
 	TRUE,						/* Killable */
 	SOCK_STREAM					/* TCP socket */
 };
-
-#ifndef HAVE_SA_SIGINFO
-static void
-sig_handler (gint signo)
-#else
-static void
-sig_handler (gint signo, siginfo_t *info, void *unused)
-#endif
-{
-	struct timeval                  tv;
-
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-		if (!wanna_die) {
-			wanna_die = 1;
-			tv.tv_sec = 0;
-			tv.tv_usec = 0;
-			event_loopexit (&tv);
-
-#ifdef WITH_GPERF_TOOLS
-			ProfilerStop ();
-#endif
-		}
-		break;
-	}
-}
-
-/*
- * Config reload is designed by sending sigusr to active workers and pending shutdown of them
- */
-static void
-sigusr2_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval                  tv;
-	if (! wanna_die) {
-		tv.tv_sec = SOFT_SHUTDOWN_TIME;
-		tv.tv_usec = 0;
-		event_del (&worker->sig_ev_usr1);
-		event_del (&worker->sig_ev_usr2);
-		worker_stop_accept (worker);
-		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
-		event_loopexit (&tv);
-	}
-	return;
-}
-
-/*
- * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
- */
-static void
-sigusr1_handler (gint fd, short what, void *arg)
-{
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
-
-	reopen_log (worker->srv->logger);
-
-	return;
-}
 
 static gboolean
 call_stage_filters (struct smtp_session *session, enum rspamd_smtp_stage stage)
@@ -967,24 +904,13 @@ start_smtp (struct rspamd_worker *worker)
 {
 	struct smtp_worker_ctx         *ctx = worker->ctx;
 
-	ctx->ev_base = prepare_worker (worker, "smtp_worker", sig_handler, accept_socket);
-
+	ctx->ev_base = prepare_worker (worker, "smtp_worker", accept_socket);
 
 	/* Set smtp options */
 	if ( !config_smtp_worker (worker)) {
 		msg_err ("cannot configure smtp worker, exiting");
 		exit (EXIT_SUCCESS);
 	}
-
-	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr2);
-	signal_add (&worker->sig_ev_usr2, NULL);
-
-	/* SIGUSR1 handler */
-	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr1);
-	signal_add (&worker->sig_ev_usr1, NULL);
 
 	/* Maps events */
 	start_map_watch (worker->srv->cfg, ctx->ev_base);
