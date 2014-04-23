@@ -346,7 +346,6 @@ luaopen_dns_resolver (lua_State * L)
 	lua_pushstring (L, "rspamd{resolver}");
 	lua_rawset (L, -3);
 
-	lua_newtable(L);
 	{
 		LUA_ENUM(L, RDNS_REQUEST_A, RDNS_REQUEST_A);
 		LUA_ENUM(L, RDNS_REQUEST_PTR, RDNS_REQUEST_PTR);
