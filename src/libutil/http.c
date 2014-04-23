@@ -877,7 +877,6 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->out[i++].iov_len = bodylen;
 	}
 
-	event_del (&priv->ev);
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
 	event_base_set (base, &priv->ev);
 	event_add (&priv->ev, priv->ptv);
