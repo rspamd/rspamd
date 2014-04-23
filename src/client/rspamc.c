@@ -82,6 +82,7 @@ static GOptionEntry entries[] =
 
 static void rspamc_symbols_output (ucl_object_t *obj);
 static void rspamc_uptime_output (ucl_object_t *obj);
+static void rspamc_counters_output (ucl_object_t *obj);
 
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
@@ -186,7 +187,7 @@ struct rspamc_command {
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
 		.need_input = FALSE,
-		.command_output_func = NULL
+		.command_output_func = rspamc_counters_output
 	},
 	{
 		.cmd = RSPAMC_COMMAND_UPTIME,
@@ -323,55 +324,6 @@ print_commands_list (void)
 }
 
 
-#if 0
-
-struct rspamd_client_counter {
-	gchar name[128];
-	gint frequency;
-	gdouble weight;
-	gdouble time;
-};
-
-static void
-print_rspamd_counters (struct rspamd_client_counter *counters, gint count)
-{
-	gint                             i, max_len = 24, l;
-	struct rspamd_client_counter   *cur;
-	gchar                            fmt_buf[64], dash_buf[82];
-
-	/* Find maximum width of symbol's name */
-	for (i = 0; i < count; i ++) {
-		cur = &counters[i];
-		l = strlen (cur->name);
-		if (l > max_len) {
-			max_len = MIN (40, l);
-		}
-	}
-
-	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3s | %%%ds | %%6s | %%9s | %%9s |\n", max_len);
-	memset (dash_buf, '-', 40 + max_len);
-	dash_buf[40 + max_len] = '\0';
-
-	PRINT_FUNC ("Symbols cache\n");
-	PRINT_FUNC (" %s \n", dash_buf);
-	if (tty) {
-		printf ("\033[1m");
-	}
-	PRINT_FUNC (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Avg. time");
-	if (tty) {
-		printf ("\033[0m");
-	}
-	rspamd_snprintf (fmt_buf, sizeof (fmt_buf), "| %%3d | %%%ds | %%6.1f | %%9d | %%9.3f |\n", max_len);
-	for (i = 0; i < count; i ++) {
-		cur = &counters[i];
-		PRINT_FUNC (" %s \n", dash_buf);
-		PRINT_FUNC (fmt_buf, i, cur->name, cur->weight, cur->frequency, cur->time);
-	}
-	PRINT_FUNC (" %s \n", dash_buf);
-}
-
-#endif
-
 static void
 add_options (GHashTable *opts)
 {
@@ -405,7 +357,7 @@ add_options (GHashTable *opts)
 }
 
 static void
-rspamc_symbol_ouptut (const ucl_object_t *obj)
+rspamc_symbol_output (const ucl_object_t *obj)
 {
 	const ucl_object_t *cur, *it;
 
@@ -460,7 +412,7 @@ rspamc_metric_output (const ucl_object_t *obj)
 			rspamd_fprintf (stdout, "Action: %s\n", ucl_object_tostring(cur));
 		}
 		else if (cur->type == UCL_OBJECT) {
-			rspamc_symbol_ouptut (cur);
+			rspamc_symbol_output (cur);
 		}
 		if (got_scores == 2) {
 			rspamd_fprintf (stdout, "Score: %.2f / %.2f\n", score, required_score);
@@ -542,6 +494,66 @@ rspamc_uptime_output (ucl_object_t *obj)
 					seconds, seconds > 1 ? "s" : "");
 		}
 	}
+}
+
+static void
+rspamc_counters_output (ucl_object_t *obj)
+{
+	const ucl_object_t *cur, *sym, *weight, *freq, *tim;
+	ucl_object_iter_t iter = NULL;
+	gchar fmt_buf[64], dash_buf[82];
+	gint l, max_len = INT_MIN, i;
+
+	if (obj->type != UCL_ARRAY) {
+		rspamd_printf ("Bad output\n");
+		return;
+	}
+	/* Find maximum width of symbol's name */
+	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
+		sym = ucl_object_find_key (cur, "symbol");
+		if (sym != NULL) {
+			l = sym->len;
+			if (l > max_len) {
+				max_len = MIN (40, l);
+			}
+		}
+	}
+
+	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
+			"| %%3s | %%%ds | %%6s | %%9s | %%9s |\n", max_len);
+	memset (dash_buf, '-', 40 + max_len);
+	dash_buf[40 + max_len] = '\0';
+
+	printf ("Symbols cache\n");
+	printf (" %s \n", dash_buf);
+	if (tty) {
+		printf ("\033[1m");
+	}
+	printf (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Avg. time");
+	if (tty) {
+		printf ("\033[0m");
+	}
+	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
+			"| %%3d | %%%ds | %%6.1f | %%9d | %%9.3f |\n", max_len);
+
+	iter = NULL;
+	i = 0;
+	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
+		printf (" %s \n", dash_buf);
+		sym = ucl_object_find_key (cur, "symbol");
+		weight = ucl_object_find_key (cur, "weight");
+		freq = ucl_object_find_key (cur, "frequency");
+		tim = ucl_object_find_key (cur, "time");
+		if (sym && weight && freq && tim) {
+			printf (fmt_buf, i,
+				ucl_object_tostring (sym),
+				ucl_object_todouble (weight),
+				(gint)ucl_object_toint (freq),
+				ucl_object_todouble (tim));
+		}
+		i ++;
+	}
+	printf (" %s \n", dash_buf);
 }
 
 static void
