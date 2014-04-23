@@ -245,6 +245,9 @@ read_cmd_line (gint *argc, gchar ***argv)
 		exit (EXIT_FAILURE);
 	}
 
+	if (json) {
+		raw = TRUE;
+	}
 	/* Argc and argv are shifted after this function */
 }
 
