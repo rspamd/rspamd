@@ -45,7 +45,7 @@
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
 /* HTTP paths */
-#define PATH_AUTH "/login"
+#define PATH_AUTH "/auth"
 #define PATH_SYMBOLS "/symbols"
 #define PATH_ACTIONS "/actions"
 #define PATH_MAPS "/maps"

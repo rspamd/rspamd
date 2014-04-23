@@ -190,7 +190,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_UPTIME,
 		.name = "uptime",
-		.path = "uptime",
+		.path = "auth",
 		.description = "show rspamd uptime",
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
