@@ -678,6 +678,7 @@ rspamd_ucl_tolegacy_output (struct rspamd_task *task, ucl_object_t *top, GString
 		}
 
 		symbols = ucl_object_find_key (metric, "symbols");
+		iter = NULL;
 		while ((elt = ucl_iterate_object (symbols, &iter, true)) != NULL) {
 			const ucl_object_t *sym_score;
 			sym_score = ucl_object_find_key (elt, "score");
