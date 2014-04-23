@@ -520,13 +520,13 @@ rspamc_uptime_output (ucl_object_t *obj)
 			hours = seconds / 3600 - days * 24;
 			minutes = seconds / 60 - hours * 60 - days * 1440;
 			rspamd_printf ("%L day%s %L hour%s %L minute%s\n", days,
-					days > 1 ? "s" : " ", hours, hours > 1 ? "s" : " ",
-					minutes, minutes > 1 ? "s" : " ");
+					days > 1 ? "s" : "", hours, hours > 1 ? "s" : "",
+					minutes, minutes > 1 ? "s" : "");
 		}
 		/* If uptime is less than 1 minute print only seconds */
 		else if (seconds / 60 == 0) {
 			rspamd_printf ("%L second%s\n", (gint)seconds,
-					(gint)seconds > 1 ? "s" : " ");
+					(gint)seconds > 1 ? "s" : "");
 		}
 		/* Else print the minutes and seconds. */
 		else {
@@ -534,9 +534,9 @@ rspamc_uptime_output (ucl_object_t *obj)
 			minutes = seconds / 60 - hours * 60;
 			seconds -= hours * 3600 + minutes * 60;
 			rspamd_printf ("%L hour%s %L minute%s %L second%s\n", hours,
-					hours > 1 ? "s" : " ", minutes,
-					minutes > 1 ? "s" : " ",
-					seconds, seconds > 1 ? "s" : " ");
+					hours > 1 ? "s" : "", minutes,
+					minutes > 1 ? "s" : "",
+					seconds, seconds > 1 ? "s" : "");
 		}
 	}
 }
