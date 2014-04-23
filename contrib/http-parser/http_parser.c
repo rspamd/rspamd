@@ -1218,6 +1218,7 @@ size_t http_parser_execute (http_parser *parser,
       case s_req_spamc_start:
           switch (ch) {
           case 'S':
+          case 'R':
               parser->state = s_req_spamc;
               break;
           case ' ':
