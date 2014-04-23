@@ -659,7 +659,7 @@ static void
 rspamd_ucl_tolegacy_output (struct rspamd_task *task, ucl_object_t *top, GString *out)
 {
 	const ucl_object_t *metric, *score,
-		*required_score, *is_spam, *elt, *symbols;
+		*required_score, *is_spam, *elt;
 	ucl_object_iter_t iter = NULL;
 
 	metric = ucl_object_find_key (top, DEFAULT_METRIC);
@@ -677,14 +677,15 @@ rspamd_ucl_tolegacy_output (struct rspamd_task *task, ucl_object_t *top, GString
 				ucl_object_tostring (elt));
 		}
 
-		symbols = ucl_object_find_key (metric, "symbols");
 		iter = NULL;
-		while ((elt = ucl_iterate_object (symbols, &iter, true)) != NULL) {
-			const ucl_object_t *sym_score;
-			sym_score = ucl_object_find_key (elt, "score");
-			g_string_append_printf (out, "Symbol: %s; %.2f\r\n",
-					ucl_object_key (elt),
-					ucl_object_todouble (sym_score));
+		while ((elt = ucl_iterate_object (metric, &iter, true)) != NULL) {
+			if (elt->type == UCL_OBJECT) {
+				const ucl_object_t *sym_score;
+				sym_score = ucl_object_find_key (elt, "score");
+				g_string_append_printf (out, "Symbol: %s(%.2f)\r\n",
+						ucl_object_key (elt),
+						ucl_object_todouble (sym_score));
+			}
 		}
 
 		elt = ucl_object_find_key (metric, "subject");
