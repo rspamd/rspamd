@@ -505,6 +505,7 @@ rspamd_http_on_message_complete (http_parser* parser)
 	if (ret == 0) {
 		rspamd_http_connection_ref (conn);
 		ret = conn->finish_handler (conn, priv->msg);
+		conn->finished = TRUE;
 		rspamd_http_connection_unref (conn);
 	}
 
@@ -565,6 +566,7 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	if (priv->wr_pos >= priv->wr_total) {
 		rspamd_http_connection_ref (conn);
 		conn->finish_handler (conn, priv->msg);
+		conn->finished = TRUE;
 		rspamd_http_connection_unref (conn);
 	}
 	else {
@@ -592,6 +594,18 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			conn->error_handler (conn, err);
 			g_error_free (err);
 			return;
+		}
+		else if (r == 0) {
+			if (conn->finished) {
+				rspamd_http_connection_unref (conn);
+				return;
+			}
+			else {
+				err = g_error_new (HTTP_ERROR, errno, "IO read error: unexpected EOF");
+				conn->error_handler (conn, err);
+				g_error_free (err);
+				return;
+			}
 		}
 		else {
 			buf->len = r;
@@ -643,6 +657,7 @@ rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 	new->finish_handler = finish_handler;
 	new->fd = -1;
 	new->ref = 1;
+	new->finished = FALSE;
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));
@@ -674,7 +689,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		rspamd_http_message_free (msg);
 		priv->msg = NULL;
 	}
-
+	conn->finished = FALSE;
 	/* Clear priv */
 	event_del (&priv->ev);
 	if (priv->buf != NULL) {
@@ -862,6 +877,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->out[i++].iov_len = bodylen;
 	}
 
+	event_del (&priv->ev);
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
 	event_base_set (base, &priv->ev);
 	event_add (&priv->ev, priv->ptv);

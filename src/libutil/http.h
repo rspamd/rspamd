@@ -101,6 +101,7 @@ struct rspamd_http_connection {
 	gpointer ud;
 	enum rspamd_http_options opts;
 	enum rspamd_http_connection_type type;
+	gboolean finished;
 	gint fd;
 	gint ref;
 };
