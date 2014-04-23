@@ -61,6 +61,7 @@
 #define PATH_SCAN "/scan"
 #define PATH_STAT "/stat"
 #define PATH_STAT_RESET "/statreset"
+#define PATH_COUNTERS "/counters"
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
@@ -1442,6 +1443,70 @@ rspamd_webui_handle_statreset (struct rspamd_http_connection_entry *conn_ent,
 	return rspamd_webui_handle_stat_common (conn_ent, msg, TRUE);
 }
 
+static ucl_object_t *
+rspamd_webui_cache_item_to_ucl (struct cache_item *item)
+{
+	ucl_object_t							*obj;
+
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (obj, ucl_object_fromstring (item->s->symbol),
+			"symbol", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->weight),
+			"weight", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (item->s->frequency),
+			"frequency", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->avg_time),
+			"time", 0, false);
+
+	return obj;
+}
+
+/*
+ * Counters command handler:
+ * request: /counters
+ * headers: Password
+ * reply: json array of all counters
+ */
+static int
+rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	ucl_object_t							*top;
+	GList									*cur;
+	struct cache_item						*item;
+	struct symbols_cache					*cache;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	cache = session->ctx->cfg->cache;
+	top = ucl_object_typed_new (UCL_ARRAY);
+	if (cache != NULL) {
+		cur = cache->negative_items;
+		while (cur) {
+			item = cur->data;
+			if (!item->is_callback) {
+				ucl_array_append (top, rspamd_webui_cache_item_to_ucl (item));
+			}
+			cur = g_list_next (cur);
+		}
+		cur = cache->static_items;
+		while (cur) {
+			item = cur->data;
+			if (!item->is_callback) {
+				ucl_array_append (top, rspamd_webui_cache_item_to_ucl (item));
+			}
+			cur = g_list_next (cur);
+		}
+	}
+	rspamd_webui_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
+}
+
 static void
 rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
 {
@@ -1587,6 +1652,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan);
 	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_webui_handle_stat);
 	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_webui_handle_statreset);
+	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_webui_handle_counters);
 
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
