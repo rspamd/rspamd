@@ -81,6 +81,7 @@ static GOptionEntry entries[] =
 };
 
 static void rspamc_symbols_output (ucl_object_t *obj);
+static void rspamc_uptime_output (ucl_object_t *obj);
 
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
@@ -195,7 +196,7 @@ struct rspamc_command {
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
 		.need_input = FALSE,
-		.command_output_func = NULL
+		.command_output_func = rspamc_uptime_output
 	},
 	{
 		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
@@ -495,6 +496,47 @@ rspamc_symbols_output (ucl_object_t *obj)
 		else if (cur->type == UCL_OBJECT) {
 			/* Parse metric */
 			rspamc_metric_output (cur);
+		}
+	}
+}
+
+static void
+rspamc_uptime_output (ucl_object_t *obj)
+{
+	const ucl_object_t *elt;
+	int64_t seconds, days, hours, minutes;
+
+	elt = ucl_object_find_key (obj, "version");
+	if (elt != NULL) {
+		rspamd_fprintf (stdout, "Rspamd version: %s\n", ucl_object_tostring (elt));
+	}
+
+	elt = ucl_object_find_key (obj, "uptime");
+	if (elt != NULL) {
+		rspamd_printf ("Uptime: ");
+		seconds = ucl_object_toint (elt);
+		if (seconds >= 2 * 3600) {
+			days = seconds / 86400;
+			hours = seconds / 3600 - days * 24;
+			minutes = seconds / 60 - hours * 60 - days * 1440;
+			rspamd_printf ("%L day%s %L hour%s %L minute%s\n", days,
+					days > 1 ? "s" : " ", hours, hours > 1 ? "s" : " ",
+					minutes, minutes > 1 ? "s" : " ");
+		}
+		/* If uptime is less than 1 minute print only seconds */
+		else if (seconds / 60 == 0) {
+			rspamd_printf ("%L second%s\n", (gint)seconds,
+					(gint)seconds > 1 ? "s" : " ");
+		}
+		/* Else print the minutes and seconds. */
+		else {
+			hours = seconds / 3600;
+			minutes = seconds / 60 - hours * 60;
+			seconds -= hours * 3600 + minutes * 60;
+			rspamd_printf ("%L hour%s %L minute%s %L second%s\n", hours,
+					hours > 1 ? "s" : " ", minutes,
+					minutes > 1 ? "s" : " ",
+					seconds, seconds > 1 ? "s" : " ");
 		}
 	}
 }
