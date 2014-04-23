@@ -225,6 +225,19 @@ rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 }
 
 glong
+rspamd_printf (const gchar *fmt, ...)
+{
+	va_list   args;
+	glong r;
+
+	va_start (args, fmt);
+	r = rspamd_vprintf_common (rspamd_printf_append_file, stdout, fmt, args);
+	va_end (args);
+
+	return r;
+}
+
+glong
 rspamd_log_fprintf (FILE *f, const gchar *fmt, ...)
 {
 	va_list   args;

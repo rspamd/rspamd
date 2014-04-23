@@ -65,6 +65,7 @@
 typedef glong (*rspamd_printf_append_func)(const gchar *buf, glong buflen, gpointer ud);
 
 glong rspamd_fprintf (FILE *f, const gchar *fmt, ...);
+glong rspamd_printf (const gchar *fmt, ...);
 glong rspamd_log_fprintf (FILE *f, const gchar *fmt, ...);
 glong rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...);
 gchar *rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args);
