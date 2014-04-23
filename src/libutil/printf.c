@@ -197,8 +197,12 @@ static glong
 rspamd_printf_append_file (const gchar *buf, glong buflen, gpointer ud)
 {
 	FILE *dst = (FILE *)ud;
-
-	return fwrite (buf, 1, buflen, dst);
+	if (buflen > 0) {
+		return fwrite (buf, 1, buflen, dst);
+	}
+	else {
+		return 0;
+	}
 }
 
 static glong
@@ -206,7 +210,9 @@ rspamd_printf_append_gstring (const gchar *buf, glong buflen, gpointer ud)
 {
 	GString *dst = (GString *)ud;
 
-	g_string_append_len (dst, buf, buflen);
+	if (buflen > 0) {
+		g_string_append_len (dst, buf, buflen);
+	}
 
 	return buflen;
 }
@@ -296,7 +302,7 @@ rspamd_printf_gstring (GString *s, const gchar *fmt, ...)
 #define RSPAMD_PRINTF_APPEND(buf, len)											\
     do {																		\
     wr = func ((buf), (len), apd);												\
-    if (wr <= 0) {																\
+    if (wr < (__typeof(wr))(len)) {											\
         goto oob;																\
     }																			\
     written += wr;																\
@@ -439,7 +445,6 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 					/* NULL terminated string */
 					slen = strlen (p);
 				}
-
 				RSPAMD_PRINTF_APPEND (p, slen);
 
 				continue;
