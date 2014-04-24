@@ -166,9 +166,8 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 				server_stat->fuzzy_hashes_expired ++;
 			}
 			server_stat->fuzzy_hashes --;
-			g_hash_table_remove (static_hash, node->h.hash_pipe);
 			rspamd_bloom_del (bf, node->h.hash_pipe);
-			g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
+			g_hash_table_remove (static_hash, node->h.hash_pipe);
 		}
 		else {
 			cur = (GList *)to_expire[i];
