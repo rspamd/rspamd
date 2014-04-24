@@ -701,6 +701,7 @@ rspamd_include_map_handler (const guchar *data, gsize len, void* ud)
 #define RSPAMD_DBDIR_MACRO "DBDIR"
 #define RSPAMD_LOGDIR_MACRO "LOGDIR"
 #define RSPAMD_PLUGINSDIR_MACRO "PLUGINSDIR"
+#define RSPAMD_WWWDIR_MACRO "WWWDIR"
 #define RSPAMD_PREFIX_MACRO "PREFIX"
 #define RSPAMD_VERSION_MACRO "VERSION"
 
@@ -712,6 +713,7 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 	ucl_parser_register_variable (parser, RSPAMD_DBDIR_MACRO, RSPAMD_DBDIR);
 	ucl_parser_register_variable (parser, RSPAMD_LOGDIR_MACRO, RSPAMD_LOGDIR);
 	ucl_parser_register_variable (parser, RSPAMD_PLUGINSDIR_MACRO, RSPAMD_PLUGINSDIR);
+	ucl_parser_register_variable (parser, RSPAMD_WWWDIR_MACRO, RSPAMD_WWWDIR);
 	ucl_parser_register_variable (parser, RSPAMD_PREFIX_MACRO, RSPAMD_PREFIX);
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
 }
