@@ -22,7 +22,7 @@ Patch is placed in rspamd source tree: src/contrib/exim/patch-exim-src_spam.c.di
 It should be applied in exim's source directory:
 
 {% highlight sh %}
-patch -p1 < patch-exim-src_spam.c.diff
+patch -p2 < patch-exim-src_spam.c.diff
 {% endhighlight %}
 
 After patching you can use rspamd just like spamassassin spamd. Here is an example of such configuration:
