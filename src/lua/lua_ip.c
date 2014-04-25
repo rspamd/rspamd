@@ -73,11 +73,13 @@ lua_ip_to_table (lua_State *L)
 		lua_newtable (L);
 		if (ip->addr.af == AF_INET) {
 			max = 32 / 8;
+			ptr = (guint8 *)&ip->addr.addr.s4.sin_addr;
 		}
 		else {
 			max = 128 / 8;
+			ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
 		}
-		ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
+
 		for (i = 1; i <= max; i ++, ptr ++) {
 			lua_pushnumber (L, *ptr);
 			lua_rawseti (L, -2, i);
@@ -101,12 +103,14 @@ lua_ip_str_octets (lua_State *L)
 	if (ip != NULL && ip->is_valid) {
 		lua_newtable (L);
 		if (ip->addr.af == AF_INET) {
+			ptr = (guint8 *)&ip->addr.addr.s4.sin_addr;
 			max = 32 / 8;
 		}
 		else {
 			max = 128 / 8;
+			ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
 		}
-		ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
+
 		for (i = 1; i <= max; i ++, ptr ++) {
 			if (ip->addr.af == AF_INET) {
 				rspamd_snprintf (numbuf, sizeof (numbuf), "%d", *ptr);
@@ -142,11 +146,13 @@ lua_ip_inversed_str_octets (lua_State *L)
 		lua_newtable (L);
 		if (ip->addr.af == AF_INET) {
 			max = 32 / 8;
+			ptr = (guint8 *)&ip->addr.addr.s4.sin_addr;
 		}
 		else {
 			max = 128 / 8;
+			ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
 		}
-		ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
+
 		ptr += max - 1;
 		for (i = 1; i <= max; i ++, ptr --) {
 			if (ip->addr.af == AF_INET) {
