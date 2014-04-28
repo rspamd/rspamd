@@ -519,6 +519,9 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 					*p++ = '-';
 					f = -f;
 				}
+				if (frac_width == 0) {
+					frac_width = 6;
+				}
 
 				ui64 = (gint64) f;
 
