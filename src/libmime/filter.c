@@ -827,7 +827,7 @@ str_action_metric (enum rspamd_metric_action action)
 	case METRIC_ACTION_GREYLIST:
 		return "greylist";
 	case METRIC_ACTION_NOACTION:
-		return "no_action";
+		return "no action";
 	case METRIC_ACTION_MAX:
 		return "invalid max action";
 	}
