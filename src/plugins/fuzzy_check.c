@@ -1098,14 +1098,14 @@ fuzzy_attach_controller (struct module_ctx *ctx, GHashTable *commands)
 	cmd->require_message = TRUE;
 	cmd->handler = fuzzy_add_handler;
 	cmd->ctx = ctx;
-	g_hash_table_insert (commands, "/fuzzy_add", cmd);
+	g_hash_table_insert (commands, "/fuzzyadd", cmd);
 
 	cmd = rspamd_mempool_alloc (fctx->fuzzy_pool, sizeof (*cmd));
 	cmd->privilleged = TRUE;
 	cmd->require_message = TRUE;
 	cmd->handler = fuzzy_delete_handler;
 	cmd->ctx = ctx;
-	g_hash_table_insert (commands, "/fuzzy_del", cmd);
+	g_hash_table_insert (commands, "/fuzzydel", cmd);
 
 	return 0;
 }
