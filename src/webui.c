@@ -795,10 +795,12 @@ rspamd_webui_learn_fin_task (void *ud)
 
 	if (!learn_task_spam (session->cl, task, session->is_spam, &err)) {
 		rspamd_controller_send_error (conn_ent, 500 + err->code, err->message);
+		rspamd_http_connection_unref (conn_ent->conn);
 		return TRUE;
 	}
 	/* Successful learn */
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	rspamd_http_connection_unref (conn_ent->conn);
 
 	return TRUE;
 }
@@ -813,6 +815,7 @@ rspamd_webui_check_fin_task (void *ud)
 	task->http_conn = conn_ent->conn;
 	rspamd_protocol_write_reply (task);
 	conn_ent->is_reply = TRUE;
+	rspamd_http_connection_unref (conn_ent->conn);
 
 	return TRUE;
 }
@@ -856,6 +859,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 
+	rspamd_http_connection_ref (conn_ent->conn);
 	task->s = new_async_session (session->pool, rspamd_webui_learn_fin_task, NULL,
 			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
@@ -936,6 +940,7 @@ rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 
+	rspamd_http_connection_ref (conn_ent->conn);
 	task->s = new_async_session (session->pool, rspamd_webui_check_fin_task, NULL,
 			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
