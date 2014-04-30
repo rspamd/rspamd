@@ -393,6 +393,24 @@ rspamd_http_on_url (http_parser* parser, const gchar *at, size_t length)
 }
 
 static gint
+rspamd_http_on_status (http_parser* parser, const gchar *at, size_t length)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection_private *priv;
+
+	priv = conn->priv;
+
+	if (parser->status_code != 200) {
+		if (priv->msg->status == NULL) {
+			priv->msg->status = g_string_sized_new (128);
+		}
+		g_string_append_len (priv->msg->status, at, length);
+	}
+
+	return 0;
+}
+
+static gint
 rspamd_http_on_header_field (http_parser* parser, const gchar *at, size_t length)
 {
 	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
@@ -664,6 +682,7 @@ rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 	http_parser_init (&priv->parser, type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 	priv->parser.data = new;
 	priv->parser_cb.on_url = rspamd_http_on_url;
+	priv->parser_cb.on_status = rspamd_http_on_status;
 	priv->parser_cb.on_header_field = rspamd_http_on_header_field;
 	priv->parser_cb.on_header_value = rspamd_http_on_header_value;
 	priv->parser_cb.on_headers_complete = rspamd_http_on_headers_complete;
@@ -898,6 +917,7 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->headers = NULL;
 	new->date = 0;
 	new->body = NULL;
+	new->status = NULL;
 	new->type = type;
 	new->method = HTTP_GET;
 
@@ -919,6 +939,9 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 	}
 	if (msg->url != NULL) {
 		g_string_free (msg->url, TRUE);
+	}
+	if (msg->status != NULL) {
+		g_string_free (msg->status, TRUE);
 	}
 	g_slice_free1 (sizeof (struct rspamd_http_message), msg);
 }

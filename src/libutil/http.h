@@ -53,6 +53,7 @@ struct rspamd_http_header {
  */
 struct rspamd_http_message {
 	GString *url;
+	GString *status;
 	struct rspamd_http_header *headers;
 	GString *body;
 	enum http_parser_type type;
