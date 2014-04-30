@@ -1502,11 +1502,11 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 {
 	struct rspamd_controller_session 		*session = conn_ent->ud;
 
-	if (session->pool) {
-		rspamd_mempool_delete (session->pool);
-	}
 	if (session->task != NULL) {
 		destroy_session (session->task->s);
+	}
+	if (session->pool) {
+		rspamd_mempool_delete (session->pool);
 	}
 
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
