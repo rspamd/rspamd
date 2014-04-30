@@ -1560,7 +1560,7 @@ init_controller_worker (struct rspamd_config *cfg)
 	struct rspamd_controller_worker_ctx		*ctx;
 	GQuark								type;
 
-	type = g_quark_try_string ("webui");
+	type = g_quark_try_string ("controller");
 
 	ctx = g_malloc0 (sizeof (struct rspamd_controller_worker_ctx));
 
