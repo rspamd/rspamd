@@ -227,6 +227,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	msg->date = time (NULL);
 	msg->code = code;
 	msg->body = g_string_sized_new (128);
+	msg->status = g_string_new (error_msg);
 	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn, msg, NULL,

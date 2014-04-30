@@ -832,7 +832,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					"Date: %s\r\n"
 					"Content-Length: %z\r\n"
 					"Content-Type: %s\r\n",
-					msg->code, rspamd_http_code_to_str (msg->code),
+					msg->code,
+					msg->status ? msg->status->str : rspamd_http_code_to_str (msg->code),
 					"rspamd/" RVERSION,
 					datebuf,
 					bodylen,

@@ -1030,7 +1030,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	else if (!processed) {
 		msg_warn ("processing of message failed");
 		rspamd_task_free (task, FALSE);
-		rspamd_controller_send_error (conn_ent, 404, "No fuzzy rules matchedr");
+		rspamd_controller_send_error (conn_ent, 404, "No fuzzy rules matched");
 		return;
 	}
 
