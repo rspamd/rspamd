@@ -29,6 +29,13 @@ struct metric;
 gboolean rspamd_protocol_handle_request (struct rspamd_task *task, struct rspamd_http_message *msg);
 
 /**
+ * Write task results to http message
+ * @param msg
+ * @param task
+ */
+void rspamd_protocol_http_reply (struct rspamd_http_message *msg, struct rspamd_task *task);
+
+/**
  * Write reply for specified task command
  * @param task task object
  * @return 0 if we wrote reply and -1 if there was some error

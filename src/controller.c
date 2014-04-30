@@ -796,12 +796,10 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	if (!learn_task_spam (session->cl, task, session->is_spam, &err)) {
 		rspamd_controller_send_error (conn_ent, 500 + err->code, err->message);
-		rspamd_http_connection_unref (conn_ent->conn);
 		return TRUE;
 	}
 	/* Successful learn */
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
-	rspamd_http_connection_unref (conn_ent->conn);
 
 	return TRUE;
 }
@@ -811,12 +809,18 @@ rspamd_controller_check_fin_task (void *ud)
 {
 	struct rspamd_task						*task = ud;
 	struct rspamd_http_connection_entry		*conn_ent;
+	struct rspamd_http_message *msg;
 
 	conn_ent = task->fin_arg;
-	task->http_conn = conn_ent->conn;
-	rspamd_protocol_write_reply (task);
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = 200;
+	rspamd_protocol_http_reply (msg, task);
+	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
+			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
+			conn_ent->rt->ev_base);
 	conn_ent->is_reply = TRUE;
-	rspamd_http_connection_unref (conn_ent->conn);
 
 	return TRUE;
 }
@@ -854,17 +858,19 @@ rspamd_controller_handle_learn_common (struct rspamd_http_connection_entry *conn
 	}
 
 	task = rspamd_task_new (session->ctx->worker);
-	task->ev_base = session->ctx->ev_base;
 	task->msg = msg->body;
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 
-	rspamd_http_connection_ref (conn_ent->conn);
+
 	task->s = new_async_session (session->pool, rspamd_controller_learn_fin_task, NULL,
 			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
+	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
+	task->sock = conn_ent->conn->fd;
+
 
 	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
@@ -941,11 +947,12 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 
-	rspamd_http_connection_ref (conn_ent->conn);
 	task->s = new_async_session (session->pool, rspamd_controller_check_fin_task, NULL,
 			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
+	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);
+	task->sock = conn_ent->conn->fd;
 
 	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);

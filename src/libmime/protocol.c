@@ -697,8 +697,8 @@ rspamd_ucl_tolegacy_output (struct rspamd_task *task, ucl_object_t *top, GString
 	g_string_append_printf (out, "Message-ID: %s\r\n", task->message_id);
 }
 
-static void
-write_check_reply (struct rspamd_http_message *msg, struct rspamd_task *task)
+void
+rspamd_protocol_http_reply (struct rspamd_http_message *msg, struct rspamd_task *task)
 {
 	GString                         *logbuf;
 	struct metric_result           *metric_res;
@@ -794,7 +794,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_SYMBOLS:
 		case CMD_PROCESS:
 		case CMD_SKIP:
-			write_check_reply (msg, task);
+			rspamd_protocol_http_reply (msg, task);
 			break;
 		case CMD_PING:
 			msg->body = g_string_new ("pong");

@@ -96,6 +96,7 @@ rspamd_task_new (struct rspamd_worker *worker)
 					new_task->urls);
 	new_task->sock = -1;
 	new_task->is_mime = TRUE;
+	new_task->is_json = TRUE;
 	new_task->pre_result.action = METRIC_ACTION_NOACTION;
 
 	new_task->message_id = new_task->queue_id = "undef";
