@@ -112,7 +112,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
 		.name = "symbols",
-		.path = "symbols",
+		.path = "check",
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
 		.is_privileged = FALSE,

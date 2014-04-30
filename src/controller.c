@@ -59,6 +59,7 @@
 #define PATH_SAVE_SYMBOLS "/savesymbols"
 #define PATH_SAVE_MAP "/savemap"
 #define PATH_SCAN "/scan"
+#define PATH_CHECK "/check"
 #define PATH_STAT "/stat"
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
@@ -1642,6 +1643,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_controller_handle_savesymbols);
 	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_controller_handle_savemap);
 	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_controller_handle_scan);
+	rspamd_http_router_add_path (ctx->http, PATH_CHECK, rspamd_controller_handle_scan);
 	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_controller_handle_stat);
 	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_controller_handle_statreset);
 	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_controller_handle_counters);
