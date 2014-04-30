@@ -8,7 +8,6 @@ SET(LIBRSPAMDUTILSRC			aio_event.c
 								http.c
 								logger.c
 								map.c
-								memcached.c
 								mem_pool.c
 								printf.c
 								radix.c

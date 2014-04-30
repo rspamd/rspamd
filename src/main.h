@@ -11,7 +11,6 @@
 #include "mem_pool.h"
 #include "statfile.h"
 #include "url.h"
-#include "memcached.h"
 #include "protocol.h"
 #include "filter.h"
 #include "buffer.h"

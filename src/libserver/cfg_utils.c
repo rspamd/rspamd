@@ -261,12 +261,6 @@ rspamd_parse_bind_line (struct rspamd_config *cfg, struct rspamd_worker_conf *cf
 void
 rspamd_config_defaults (struct rspamd_config *cfg)
 {
-
-	cfg->memcached_error_time = DEFAULT_UPSTREAM_ERROR_TIME;
-	cfg->memcached_dead_time = DEFAULT_UPSTREAM_DEAD_TIME;
-	cfg->memcached_maxerrors = DEFAULT_UPSTREAM_MAXERRORS;
-	cfg->memcached_protocol = TCP_TEXT;
-
 	cfg->dns_timeout = 1000;
 	cfg->dns_retransmits = 5;
 	/* After 20 errors do throttling for 10 seconds */

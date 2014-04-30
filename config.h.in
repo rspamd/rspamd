@@ -461,19 +461,19 @@ typedef off_t goffset;
 
 /* Forwarded declaration */
 struct module_ctx;
-struct config_file;
+struct rspamd_config;
 struct rspamd_worker;
 
 typedef struct module_s {
 	const gchar *name;
-	int (*module_init_func)(struct config_file *cfg, struct module_ctx **ctx);
-	int (*module_config_func)(struct config_file *cfg);
-	int (*module_reconfig_func)(struct config_file *cfg);
+	int (*module_init_func)(struct rspamd_config *cfg, struct module_ctx **ctx);
+	int (*module_config_func)(struct rspamd_config *cfg);
+	int (*module_reconfig_func)(struct rspamd_config *cfg);
 } module_t;
 
 typedef struct worker_s {
 	const gchar *name;
-	gpointer (*worker_init_func)(struct config_file *cfg);
+	gpointer (*worker_init_func)(struct rspamd_config *cfg);
 	void (*worker_start_func)(struct rspamd_worker *worker);
 	gboolean has_socket;
 	gboolean unique;

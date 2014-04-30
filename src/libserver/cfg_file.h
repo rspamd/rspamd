@@ -9,7 +9,6 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "upstream.h"
-#include "memcached.h"
 #include "symbols_cache.h"
 #include "cfg_rcl.h"
 #include "utlist.h"
@@ -17,10 +16,6 @@
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
-#define MAX_MEMCACHED_SERVERS 4
-#define DEFAULT_MEMCACHED_PORT 11211
-/* Memcached timeouts */
-#define DEFAULT_MEMCACHED_CONNECT_TIMEOUT 1000
 /* Upstream timeouts */
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
@@ -85,17 +80,6 @@ struct rspamd_regexp {
 	gboolean is_test;								/**< true if this expression must be tested				*/
 	gboolean is_raw;								/**< true if this regexp is done by raw matching		*/
 	gboolean is_strong;								/**< true if headers search must be case sensitive		*/
-};
-
-/**
- * Memcached server object
- */
-struct memcached_server {
-	struct upstream up;								/**< common upstream base								*/
-	struct in_addr addr;							/**< address of server									*/
-	guint16 port;									/**< port to connect									*/
-	short alive;									/**< is this server alive								*/
-	gint16 num;									/**< number of servers in case of mirror				*/
 };
 
 /**
@@ -298,14 +282,6 @@ struct rspamd_config {
 	guint32 statfile_sync_interval;					/**< synchronization interval							*/
 	guint32 statfile_sync_timeout;					/**< synchronization timeout							*/
 	gboolean mlock_statfile_pool;					/**< use mlock (2) for locking statfiles				*/
-
-	struct memcached_server memcached_servers[MAX_MEMCACHED_SERVERS];	/**< memcached servers				*/
-	gsize memcached_servers_num;					/**< number of memcached servers						*/
-	memc_proto_t memcached_protocol;				/**< memcached protocol									*/
-	guint memcached_error_time;				/**< memcached error time (see upstream documentation)	*/
-	guint memcached_dead_time;				/**< memcached dead time								*/
-	guint memcached_maxerrors;				/**< maximum number of errors							*/
-	guint memcached_connect_timeout;			/**< connection timeout									*/
 
 	gboolean delivery_enable;						/**< is delivery agent is enabled						*/
 	gchar *deliver_host;							/**< host for mail deliviring							*/

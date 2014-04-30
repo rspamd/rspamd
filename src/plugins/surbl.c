@@ -706,106 +706,6 @@ dns_callback (struct rdns_reply *reply, gpointer arg)
 }
 
 static void
-memcached_callback (memcached_ctx_t * ctx, memc_error_t error, void *data)
-{
-	struct memcached_param         *param = (struct memcached_param *)data;
-	gint                            *url_count;
-
-	switch (ctx->op) {
-	case CMD_CONNECT:
-		if (error != OK) {
-			msg_info ("memcached returned error %s on CONNECT stage", memc_strerror (error));
-			memc_close_ctx (param->ctx);
-		}
-		else {
-			memc_get (param->ctx, param->ctx->param);
-		}
-		break;
-	case CMD_READ:
-		if (error != OK) {
-			msg_info ("memcached returned error %s on READ stage", memc_strerror (error));
-			memc_close_ctx (param->ctx);
-		}
-		else {
-			url_count = (gint *)param->ctx->param->buf;
-			/* Do not check DNS for urls that have count more than max_urls */
-			if (*url_count > (gint)surbl_module_ctx->max_urls) {
-				msg_info ("url '%s' has count %d, max: %d", struri (param->url), *url_count, surbl_module_ctx->max_urls);
-				/* 
-				 * XXX: try to understand why we should use memcached here
-				 * insert_result (param->task, surbl_module_ctx->metric, surbl_module_ctx->symbol, 1);
-				 */
-			}
-			(*url_count)++;
-			memc_set (param->ctx, param->ctx->param, surbl_module_ctx->url_expire);
-		}
-		break;
-	case CMD_WRITE:
-		if (error != OK) {
-			msg_info ("memcached returned error %s on WRITE stage", memc_strerror (error));
-		}
-		memc_close_ctx (param->ctx);
-		make_surbl_requests (param->url, param->task, param->suffix, FALSE, param->tree);
-		break;
-	default:
-		return;
-	}
-}
-
-static void
-register_memcached_call (struct uri *url, struct rspamd_task *task,
-		struct suffix_item *suffix, GTree *tree)
-{
-	struct memcached_param         *param;
-	struct memcached_server        *selected;
-	memcached_param_t              *cur_param;
-	gchar                          *sum_str;
-	gint                            *url_count;
-
-	param = rspamd_mempool_alloc (task->task_pool, sizeof (struct memcached_param));
-	cur_param = rspamd_mempool_alloc0 (task->task_pool, sizeof (memcached_param_t));
-	url_count = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
-
-	param->url = url;
-	param->task = task;
-	param->suffix = suffix;
-	param->tree = tree;
-
-	param->ctx = rspamd_mempool_alloc0 (task->task_pool, sizeof (memcached_ctx_t));
-
-	cur_param->buf = (gchar *) url_count;
-	cur_param->bufsize = sizeof (gint);
-
-	sum_str = g_compute_checksum_for_string (G_CHECKSUM_MD5, struri (url), -1);
-	rspamd_strlcpy (cur_param->key, sum_str, sizeof (cur_param->key));
-	g_free (sum_str);
-
-	selected = (struct memcached_server *)get_upstream_by_hash ((void *)task->cfg->memcached_servers,
-		task->cfg->memcached_servers_num, sizeof (struct memcached_server),
-		time (NULL), task->cfg->memcached_error_time, task->cfg->memcached_dead_time, task->cfg->memcached_maxerrors, cur_param->key, strlen (cur_param->key));
-	if (selected == NULL) {
-		msg_err ("no memcached servers can be selected");
-		return;
-	}
-	param->ctx->callback = memcached_callback;
-	param->ctx->callback_data = (void *)param;
-	param->ctx->protocol = task->cfg->memcached_protocol;
-	memcpy (&param->ctx->addr, &selected->addr, sizeof (struct in_addr));
-	param->ctx->port = selected->port;
-	param->ctx->timeout.tv_sec = task->cfg->memcached_connect_timeout / 1000;
-	param->ctx->timeout.tv_sec = task->cfg->memcached_connect_timeout - param->ctx->timeout.tv_sec * 1000;
-	param->ctx->sock = -1;
-
-#ifdef WITH_DEBUG
-	param->ctx->options = MEMC_OPT_DEBUG;
-#else
-	param->ctx->options = 0;
-#endif
-	param->ctx->param = cur_param;
-	memc_init_ctx (param->ctx);
-}
-
-static void
 free_redirector_session (void *ud)
 {
 	struct redirector_param        *param = (struct redirector_param *)ud;
@@ -990,12 +890,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		make_surbl_requests (url, param->task, param->suffix, FALSE, param->tree);
 	}
 	else {
-		if (param->task->worker->srv->cfg->memcached_servers_num > 0) {
-			register_memcached_call (url, param->task, param->suffix, param->tree);
-		}
-		else {
-			make_surbl_requests (url, param->task, param->suffix, FALSE, param->tree);
-		}
+		make_surbl_requests (url, param->task, param->suffix, FALSE, param->tree);
 	}
 
 	return FALSE;

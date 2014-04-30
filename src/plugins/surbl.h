@@ -4,7 +4,6 @@
 #include "config.h"
 #include "main.h"
 #include "cfg_file.h"
-#include "memcached.h"
 #include "trie.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
@@ -73,14 +72,6 @@ struct redirector_param {
 	GString *buf;
 	struct event ev;
 	gint sock;
-	GTree *tree;
-	struct suffix_item *suffix;
-};
-
-struct memcached_param {
-	struct uri *url;
-	struct rspamd_task *task;
-	memcached_ctx_t *ctx;
 	GTree *tree;
 	struct suffix_item *suffix;
 };
