@@ -98,7 +98,8 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 	}
 	else {
 		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
-			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error occurred: %d", msg->code);
+			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %s",
+					msg->code, msg->status ? msg->status->str : "unknown error");
 			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
 			return -1;
