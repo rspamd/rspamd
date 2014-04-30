@@ -118,6 +118,9 @@ struct rspamd_webui_worker_ctx {
 	/* Static files dir */
 	gchar *static_files_dir;
 
+	/* Custom commands registered by plugins */
+	GHashTable *custom_commands;
+
 	/* Worker */
 	struct rspamd_worker *worker;
 };
@@ -1507,6 +1510,32 @@ rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+static int
+rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_custom_controller_command	*cmd;
+
+	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
+	if (cmd == NULL || cmd->handler == NULL) {
+		msg_err ("custom command %V has not been found", msg->url);
+		rspamd_webui_send_error (conn_ent, 404, "No command associated");
+		return 0;
+	}
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, cmd->privilleged)) {
+		return 0;
+	}
+	if (cmd->require_message && msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	return cmd->handler (conn_ent, msg);
+}
+
 static void
 rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
 {
@@ -1615,6 +1644,12 @@ void
 start_webui_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_webui_worker_ctx *ctx = worker->ctx;
+	GList *cur;
+	struct filter *f;
+	struct module_ctx *mctx;
+	GHashTableIter iter;
+	gpointer key, value;
+
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "controller", rspamd_webui_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
@@ -1623,6 +1658,8 @@ start_webui_worker (struct rspamd_worker *worker)
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	ctx->srv = worker->srv;
+	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
+			rspamd_strcase_equal);
 	if (ctx->secure_ip != NULL) {
 		if (!add_map (worker->srv->cfg, ctx->secure_ip, "Allow webui access from the specified IP",
 				read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
@@ -1653,6 +1690,22 @@ start_webui_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_webui_handle_stat);
 	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_webui_handle_statreset);
 	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_webui_handle_counters);
+
+	/* Attach plugins */
+	cur = g_list_first (ctx->cfg->filters);
+	while (cur) {
+		f = cur->data;
+		mctx = g_hash_table_lookup (ctx->cfg->c_modules, f->module->name);
+		if (mctx != NULL && f->module->module_init_func != NULL) {
+			f->module->module_attach_controller_func (mctx, ctx->custom_commands);
+		}
+		cur = g_list_next (cur);
+	}
+
+	g_hash_table_iter_init (&iter, ctx->custom_commands);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		rspamd_http_router_add_path (ctx->http, key, rspamd_webui_handle_custom);
+	}
 
 #if 0
 	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);

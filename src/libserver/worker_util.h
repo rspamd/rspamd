@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "util.h"
+#include "http.h"
 
 /**
  * Return worker's control structure by its type
@@ -63,5 +64,16 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
  * @param worker
  */
 void rspamd_worker_stop_accept (struct rspamd_worker *worker);
+
+typedef gint (*rspamd_controller_func_t) (
+		struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg);
+
+struct rspamd_custom_controller_command {
+	const gchar *command;
+	gboolean privilleged;
+	gboolean require_message;
+	rspamd_controller_func_t handler;
+};
 
 #endif /* WORKER_UTIL_H_ */
