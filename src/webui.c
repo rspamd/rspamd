@@ -1483,7 +1483,7 @@ rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	return cmd->handler (conn_ent, msg);
+	return cmd->handler (conn_ent, msg, cmd->ctx);
 }
 
 static void

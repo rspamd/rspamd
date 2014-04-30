@@ -67,10 +67,12 @@ void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
 typedef gint (*rspamd_controller_func_t) (
 		struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg);
+		struct rspamd_http_message *msg,
+		struct module_ctx *ctx);
 
 struct rspamd_custom_controller_command {
 	const gchar *command;
+	struct module_ctx *ctx;
 	gboolean privilleged;
 	gboolean require_message;
 	rspamd_controller_func_t handler;
