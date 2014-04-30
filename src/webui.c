@@ -883,7 +883,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body->len == 0) {
+	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
 		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
@@ -973,7 +973,7 @@ rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body->len == 0) {
+	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
 		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
@@ -1030,7 +1030,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body->len == 0) {
+	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
 		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
@@ -1124,7 +1124,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body->len == 0) {
+	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
 		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
@@ -1220,7 +1220,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body->len == 0) {
+	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
 		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
@@ -1527,7 +1527,7 @@ rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	if (!rspamd_webui_check_password (conn_ent, session, msg, cmd->privilleged)) {
 		return 0;
 	}
-	if (cmd->require_message && msg->body->len == 0) {
+	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
 		msg_err ("got zero length body, cannot continue");
 		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
