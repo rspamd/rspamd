@@ -71,13 +71,12 @@ ADD_SUBDIRECTORY(libserver)
 ADD_SUBDIRECTORY(libmime)
 ADD_SUBDIRECTORY(client)
 				
-SET(RSPAMDSRC	modules.c
+SET(RSPAMDSRC	${CMAKE_CURRENT_BINARY_DIR}/modules.c
 				controller.c
 				fuzzy_storage.c
 				lua_worker.c
 				main.c
 				smtp_proxy.c
-				webui.c
 				worker.c)
 
 SET(PLUGINSSRC	plugins/surbl.c
@@ -88,7 +87,7 @@ SET(PLUGINSSRC	plugins/surbl.c
 				plugins/dkim_check.c)
 				
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
-SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua webui)
+SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua)
 
 AddModules(MODULES_LIST WORKERS_LIST)
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)

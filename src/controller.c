@@ -70,13 +70,13 @@
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-gpointer init_webui_worker (struct rspamd_config *cfg);
-void start_webui_worker (struct rspamd_worker *worker);
+gpointer init_controller_worker (struct rspamd_config *cfg);
+void start_controller_worker (struct rspamd_worker *worker);
 
-worker_t webui_worker = {
-	"webui",					/* Name */
-	init_webui_worker,		/* Init function */
-	start_webui_worker,		/* Start function */
+worker_t controller_worker = {
+	"controller",					/* Name */
+	init_controller_worker,			/* Init function */
+	start_controller_worker,		/* Start function */
 	TRUE,					/* Has socket */
 	TRUE,					/* Non unique */
 	FALSE,					/* Non threaded */
@@ -86,7 +86,7 @@ worker_t webui_worker = {
 /*
  * Worker's context
  */
-struct rspamd_webui_worker_ctx {
+struct rspamd_controller_worker_ctx {
 	guint32                         timeout;
 	struct timeval                  io_tv;
 	/* DNS resolver */
@@ -125,8 +125,8 @@ struct rspamd_webui_worker_ctx {
 	struct rspamd_worker *worker;
 };
 
-struct rspamd_webui_session {
-	struct rspamd_webui_worker_ctx *ctx;
+struct rspamd_controller_session {
+	struct rspamd_controller_worker_ctx *ctx;
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
 	struct rspamd_classifier_config *cl;
@@ -138,12 +138,12 @@ sig_atomic_t             wanna_die = 0;
 
 /* Check for password if it is required by configuration */
 static gboolean
-rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
-		struct rspamd_webui_session *session, struct rspamd_http_message *msg,
+rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
+		struct rspamd_controller_session *session, struct rspamd_http_message *msg,
 		gboolean is_enable)
 {
 	const gchar								*password, *check;
-	struct rspamd_webui_worker_ctx			*ctx = session->ctx;
+	struct rspamd_controller_worker_ctx			*ctx = session->ctx;
 	gboolean ret = TRUE;
 
 	/* Access list logic */
@@ -224,16 +224,16 @@ rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
  * reply: json {"auth": "ok", "version": "0.5.2", "uptime": "some uptime", "error": "none"}
  */
 static int
-rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	struct rspamd_stat						*st;
 	int64_t									 uptime;
 	gulong									 data[4];
 	ucl_object_t							*obj;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -279,16 +279,16 @@ rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
  * {...}]
  */
 static int
-rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	GList									*cur_gr, *cur_sym;
 	struct rspamd_symbols_group					*gr;
 	struct rspamd_symbol_def						*sym;
 	ucl_object_t							*obj, *top, *sym_obj;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -338,16 +338,16 @@ rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
  * {...}]
  */
 static int
-rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	struct metric							*metric;
 	struct metric_action					*act;
 	gint									 i;
 	ucl_object_t							*obj, *top;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -387,17 +387,17 @@ rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
  * ]
  */
 static int
-rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	GList									*cur, *tmp = NULL;
 	struct rspamd_map						*map;
 	gboolean								 editable;
 	ucl_object_t							*obj, *top;
 
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -448,10 +448,10 @@ rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
  * reply: plain-text
  */
 static int
-rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	GList									*cur;
 	struct rspamd_map						*map;
 	const gchar								*idstr;
@@ -463,7 +463,7 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message				*reply;
 
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -546,9 +546,9 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
  */
 /* XXX: now this function returns only random data */
 static void
-rspamd_webui_handle_graph (struct evhttp_request *req, gpointer arg)
+rspamd_controller_handle_graph (struct evhttp_request *req, gpointer arg)
 {
-	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct rspamd_controller_worker_ctx 			*ctx = arg;
 	struct evbuffer							*evb;
 	gint									 i, seed;
 	time_t									 now, t;
@@ -645,17 +645,17 @@ rspamd_webui_handle_graph (struct evhttp_request *req, gpointer arg)
  * ]
  */
 static int
-rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
-	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx			*ctx;
 	gdouble									 data[4], total;
 	ucl_object_t							*top, *obj;
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -708,11 +708,11 @@ rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
  * ]
  */
 static int
-rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
-	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx			*ctx;
 	struct roll_history_row					*row;
 	struct roll_history						 copied_history;
 	gint									 i, rows_proc, row_num;
@@ -723,7 +723,7 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -783,10 +783,10 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static gboolean
-rspamd_webui_learn_fin_task (void *ud)
+rspamd_controller_learn_fin_task (void *ud)
 {
 	struct rspamd_task						*task = ud;
-	struct rspamd_webui_session 			*session;
+	struct rspamd_controller_session 			*session;
 	struct rspamd_http_connection_entry		*conn_ent;
 	GError									*err = NULL;
 
@@ -806,7 +806,7 @@ rspamd_webui_learn_fin_task (void *ud)
 }
 
 static gboolean
-rspamd_webui_check_fin_task (void *ud)
+rspamd_controller_check_fin_task (void *ud)
 {
 	struct rspamd_task						*task = ud;
 	struct rspamd_http_connection_entry		*conn_ent;
@@ -821,18 +821,18 @@ rspamd_webui_check_fin_task (void *ud)
 }
 
 static int
-rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg, gboolean is_spam)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
-	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx			*ctx;
 	struct rspamd_classifier_config				*cl;
 	struct rspamd_task						*task;
 	const gchar								*classifier;
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -860,7 +860,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 	task->ev_base = ctx->ev_base;
 
 	rspamd_http_connection_ref (conn_ent->conn);
-	task->s = new_async_session (session->pool, rspamd_webui_learn_fin_task, NULL,
+	task->s = new_async_session (session->pool, rspamd_controller_learn_fin_task, NULL,
 			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
@@ -887,10 +887,10 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
+	return rspamd_controller_handle_learn_common (conn_ent, msg, TRUE);
 }
 /*
  * Learn ham command handler:
@@ -900,10 +900,10 @@ rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
+	return rspamd_controller_handle_learn_common (conn_ent, msg, TRUE);
 }
 
 /*
@@ -914,16 +914,16 @@ rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {scan data} or {"error":"error message"}
  */
 static int
-rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
-	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx			*ctx;
 	struct rspamd_task						*task;
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -941,7 +941,7 @@ rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->ev_base = ctx->ev_base;
 
 	rspamd_http_connection_ref (conn_ent->conn);
-	task->s = new_async_session (session->pool, rspamd_webui_check_fin_task, NULL,
+	task->s = new_async_session (session->pool, rspamd_controller_check_fin_task, NULL,
 			rspamd_task_free_hard, task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
@@ -966,14 +966,14 @@ rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	struct ucl_parser						*parser;
 	struct metric							*metric;
 	ucl_object_t							*obj, *cur;
-	struct rspamd_webui_worker_ctx 			*ctx;
+	struct rspamd_controller_worker_ctx 			*ctx;
 	const gchar								*error;
 	gdouble									 score;
 	gint									 i;
@@ -981,7 +981,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1059,23 +1059,23 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	struct ucl_parser						*parser;
 	struct metric							*metric;
 	ucl_object_t							*obj;
 	const ucl_object_t						*cur, *jname, *jvalue;
 	ucl_object_iter_t						 iter = NULL;
-	struct rspamd_webui_worker_ctx 			*ctx;
+	struct rspamd_controller_worker_ctx 			*ctx;
 	const gchar								*error;
 	gdouble									 val;
 	struct symbol							*sym;
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1156,13 +1156,13 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	GList									*cur;
 	struct rspamd_map						*map;
-	struct rspamd_webui_worker_ctx 			*ctx;
+	struct rspamd_controller_worker_ctx 			*ctx;
 	const gchar								*idstr;
 	gchar									*errstr;
 	guint32									 id;
@@ -1171,7 +1171,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	ctx = session->ctx;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
@@ -1253,10 +1253,10 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
  * reply: json data
  */
 static int
-rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg, gboolean do_reset)
 {
-	struct rspamd_webui_session *session = conn_ent->ud;
+	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
 	gint i;
 	guint64 used, total, rev, ham = 0, spam = 0;
@@ -1376,33 +1376,33 @@ rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static int
-rspamd_webui_handle_stat (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_stat (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
-	return rspamd_webui_handle_stat_common (conn_ent, msg, FALSE);
+	return rspamd_controller_handle_stat_common (conn_ent, msg, FALSE);
 }
 
 static int
-rspamd_webui_handle_statreset (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_statreset (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
-	return rspamd_webui_handle_stat_common (conn_ent, msg, TRUE);
+	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
 
 static ucl_object_t *
-rspamd_webui_cache_item_to_ucl (struct cache_item *item)
+rspamd_controller_cache_item_to_ucl (struct cache_item *item)
 {
 	ucl_object_t							*obj;
 
@@ -1426,16 +1426,16 @@ rspamd_webui_cache_item_to_ucl (struct cache_item *item)
  * reply: json array of all counters
  */
 static int
-rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_counters (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	ucl_object_t							*top;
 	GList									*cur;
 	struct cache_item						*item;
 	struct symbols_cache					*cache;
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
@@ -1446,7 +1446,7 @@ rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				ucl_array_append (top, rspamd_webui_cache_item_to_ucl (item));
+				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (item));
 			}
 			cur = g_list_next (cur);
 		}
@@ -1454,7 +1454,7 @@ rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				ucl_array_append (top, rspamd_webui_cache_item_to_ucl (item));
+				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (item));
 			}
 			cur = g_list_next (cur);
 		}
@@ -1466,10 +1466,10 @@ rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static int
-rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
+rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		struct rspamd_http_message *msg)
 {
-	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session 			*session = conn_ent->ud;
 	struct rspamd_custom_controller_command	*cmd;
 
 	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
@@ -1479,7 +1479,7 @@ rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (!rspamd_webui_check_password (conn_ent, session, msg, cmd->privilleged)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg, cmd->privilleged)) {
 		return 0;
 	}
 	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
@@ -1492,15 +1492,15 @@ rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static void
-rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
+rspamd_controller_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
 {
 	msg_err ("http error occurred: %s", err->message);
 }
 
 static void
-rspamd_webui_finish_handler (struct rspamd_http_connection_entry *conn_ent)
+rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 {
-	struct rspamd_webui_session 		*session = conn_ent->ud;
+	struct rspamd_controller_session 		*session = conn_ent->ud;
 
 	if (session->pool) {
 		rspamd_mempool_delete (session->pool);
@@ -1509,15 +1509,15 @@ rspamd_webui_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 		destroy_session (session->task->s);
 	}
 
-	g_slice_free1 (sizeof (struct rspamd_webui_session), session);
+	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
 }
 
 static void
-rspamd_webui_accept_socket (gint fd, short what, void *arg)
+rspamd_controller_accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker				*worker = (struct rspamd_worker *) arg;
-	struct rspamd_webui_worker_ctx		*ctx;
-	struct rspamd_webui_session			*nsession;
+	struct rspamd_controller_worker_ctx		*ctx;
+	struct rspamd_controller_session			*nsession;
 	rspamd_inet_addr_t					 addr;
 	gint								 nfd;
 
@@ -1537,7 +1537,7 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 			rspamd_inet_address_to_string (&addr),
 			rspamd_inet_address_get_port (&addr));
 
-	nsession = g_slice_alloc0 (sizeof (struct rspamd_webui_session));
+	nsession = g_slice_alloc0 (sizeof (struct rspamd_controller_session));
 	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	nsession->ctx = ctx;
 
@@ -1547,47 +1547,47 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_webui_worker (struct rspamd_config *cfg)
+init_controller_worker (struct rspamd_config *cfg)
 {
-	struct rspamd_webui_worker_ctx		*ctx;
+	struct rspamd_controller_worker_ctx		*ctx;
 	GQuark								type;
 
 	type = g_quark_try_string ("webui");
 
-	ctx = g_malloc0 (sizeof (struct rspamd_webui_worker_ctx));
+	ctx = g_malloc0 (sizeof (struct rspamd_controller_worker_ctx));
 
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
 	rspamd_rcl_register_worker_option (cfg, type, "password",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "enable_password",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl",
 			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, use_ssl), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, use_ssl), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl_cert",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_cert), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_cert), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl_key",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_key), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_key), 0);
 	rspamd_rcl_register_worker_option (cfg, type, "timeout",
 			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 
 	rspamd_rcl_register_worker_option (cfg, type, "secure_ip",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, secure_ip), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "static_dir",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, static_files_dir), 0);
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, static_files_dir), 0);
 
 	return ctx;
 }
@@ -1596,9 +1596,9 @@ init_webui_worker (struct rspamd_config *cfg)
  * Start worker process
  */
 void
-start_webui_worker (struct rspamd_worker *worker)
+start_controller_worker (struct rspamd_worker *worker)
 {
-	struct rspamd_webui_worker_ctx *ctx = worker->ctx;
+	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
 	GList *cur;
 	struct filter *f;
 	struct module_ctx *mctx;
@@ -1606,7 +1606,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	gpointer key, value;
 
 
-	ctx->ev_base = rspamd_prepare_worker (worker, "controller", rspamd_webui_accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "controller", rspamd_controller_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	ctx->start_time = time (NULL);
@@ -1624,27 +1624,27 @@ start_webui_worker (struct rspamd_worker *worker)
 		}
 	}
 	/* Accept event */
-	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler,
-			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base,
+	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
+			rspamd_controller_finish_handler, &ctx->io_tv, ctx->ev_base,
 			ctx->static_files_dir);
 
 	/* Add callbacks for different methods */
-	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_webui_handle_auth);
-	rspamd_http_router_add_path (ctx->http, PATH_SYMBOLS, rspamd_webui_handle_symbols);
-	rspamd_http_router_add_path (ctx->http, PATH_ACTIONS, rspamd_webui_handle_actions);
-	rspamd_http_router_add_path (ctx->http, PATH_MAPS, rspamd_webui_handle_maps);
-	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_webui_handle_get_map);
-	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart);
-	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history);
-	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learnspam);
-	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learnham);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_saveactions);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_savesymbols);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_savemap);
-	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan);
-	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_webui_handle_stat);
-	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_webui_handle_statreset);
-	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_webui_handle_counters);
+	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_controller_handle_auth);
+	rspamd_http_router_add_path (ctx->http, PATH_SYMBOLS, rspamd_controller_handle_symbols);
+	rspamd_http_router_add_path (ctx->http, PATH_ACTIONS, rspamd_controller_handle_actions);
+	rspamd_http_router_add_path (ctx->http, PATH_MAPS, rspamd_controller_handle_maps);
+	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_controller_handle_get_map);
+	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_controller_handle_pie_chart);
+	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_controller_handle_history);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_controller_handle_learnspam);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_controller_handle_learnham);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_controller_handle_saveactions);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_controller_handle_savesymbols);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_controller_handle_savemap);
+	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_controller_handle_scan);
+	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_controller_handle_stat);
+	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_controller_handle_statreset);
+	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_controller_handle_counters);
 
 	/* Attach plugins */
 	cur = g_list_first (ctx->cfg->filters);
@@ -1659,11 +1659,11 @@ start_webui_worker (struct rspamd_worker *worker)
 
 	g_hash_table_iter_init (&iter, ctx->custom_commands);
 	while (g_hash_table_iter_next (&iter, &key, &value)) {
-		rspamd_http_router_add_path (ctx->http, key, rspamd_webui_handle_custom);
+		rspamd_http_router_add_path (ctx->http, key, rspamd_controller_handle_custom);
 	}
 
 #if 0
-	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
+	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_controller_handle_graph, ctx);
 #endif
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
