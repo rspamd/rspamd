@@ -17,7 +17,9 @@ SET(LIBRSPAMDSERVERSRC
 				statfile_sync.c
 				symbols_cache.c
 				task.c
-				url.c)
+				url.c
+				worker_util.c)
+
 SET(TOKENIZERSSRC  ../tokenizers/tokenizers.c
 				../tokenizers/osb.c)
 

@@ -6,8 +6,7 @@ SET(LIBRSPAMDMIMESRC
 				message.c
 				protocol.c
 				smtp_utils.c
-				smtp_proto.c
-				worker_util.c)
+				smtp_proto.c)
 
 # Librspamdmime
 ADD_LIBRARY(rspamd-mime ${LINK_TYPE} ${LIBRSPAMDMIMESRC})

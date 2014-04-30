@@ -22,6 +22,7 @@
 #include "roll_history.h"
 #include "http.h"
 #include "task.h"
+#include "worker_util.h"
 
 /* Default values */
 #define FIXED_CONFIG_FILE RSPAMD_CONFDIR "/rspamd.conf"
@@ -194,37 +195,6 @@ void register_custom_controller_command (const gchar *name, controller_func_t ha
  * If set, reopen log file on next write
  */
 extern struct rspamd_main *rspamd_main;
-
-/* Worker task manipulations */
-
-/**
- * Set counter for a symbol
- */
-double set_counter (const gchar *name, guint32 value);
-
-#ifndef HAVE_SA_SIGINFO
-typedef void (*rspamd_sig_handler_t) (gint);
-#else
-typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
-#endif
-
-/**
- * Prepare worker's startup
- * @param worker worker structure
- * @param name name of the worker
- * @param sig_handler handler of main signals
- * @param accept_handler handler of accept event for listen sockets
- * @return event base suitable for a worker
- */
-struct event_base *
-prepare_worker (struct rspamd_worker *worker, const char *name,
-		void (*accept_handler)(int, short, void *));
-
-/**
- * Stop accepting new connections for a worker
- * @param worker
- */
-void worker_stop_accept (struct rspamd_worker *worker);
 
 #endif
 

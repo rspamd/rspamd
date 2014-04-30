@@ -260,13 +260,6 @@ gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
 gint rspamd_fallocate (gint fd, off_t offset, off_t len);
 
 /**
- * Return worker's control structure by its type
- * @param type
- * @return worker's control structure or NULL
- */
-extern worker_t* get_worker_by_type (GQuark type);
-
-/**
  * Utils for working with threads to be compatible with all glib versions
  */
 typedef struct rspamd_mutex_s {
