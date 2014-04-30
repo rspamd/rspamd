@@ -2,7 +2,9 @@ MACRO(_AddModulesForced MLIST WLIST)
 # Generate unique string for this build
 	STRING(RANDOM LENGTH 8 _MODULES_ID)
 	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
-	FILE(WRITE "modules.c" "/* ${MODULES_ID} */\n#include \"config.h\"\n")
+	SET(MODULES_C "${CMAKE_CURRENT_BINARY_DIR}/modules.c")
+	FILE(WRITE "${MODULES_C}"
+		"/* ${MODULES_ID} */\n#include \"config.h\"\n")
 	
 	# Handle even old cmake
 	LIST(LENGTH ${MLIST} MLIST_COUNT)
@@ -12,30 +14,30 @@ MACRO(_AddModulesForced MLIST WLIST)
 	
 	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		LIST(GET ${MLIST} ${MOD_IDX} MOD)
-		FILE(APPEND "modules.c" "extern module_t ${MOD}_module;\n")
+		FILE(APPEND "${MODULES_C}" "extern module_t ${MOD}_module;\n")
 	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		 
-	FILE(APPEND "modules.c" "\n\nmodule_t *modules[] = {\n")
+	FILE(APPEND "${MODULES_C}" "\n\nmodule_t *modules[] = {\n")
 	
 	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		LIST(GET ${MLIST} ${MOD_IDX} MOD)
-		FILE(APPEND "modules.c" "&${MOD}_module,\n")
+		FILE(APPEND "${MODULES_C}" "&${MOD}_module,\n")
 	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
 	
-	FILE(APPEND "modules.c" "NULL\n};\n")
+	FILE(APPEND "${MODULES_C}" "NULL\n};\n")
 	
 	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
 		LIST(GET ${WLIST} ${MOD_IDX} WRK)
-		FILE(APPEND "modules.c" "extern worker_t ${WRK}_worker;\n")
+		FILE(APPEND "${MODULES_C}" "extern worker_t ${WRK}_worker;\n")
 	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
 	 
-	FILE(APPEND "modules.c" "\n\nworker_t *workers[] = {\n")
+	FILE(APPEND "${MODULES_C}" "\n\nworker_t *workers[] = {\n")
 	
 	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
 		LIST(GET ${WLIST} ${MOD_IDX} WRK)
-		FILE(APPEND "modules.c" "&${WRK}_worker,\n")
+		FILE(APPEND "${MODULES_C}" "&${WRK}_worker,\n")
 	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
-	FILE(APPEND "modules.c" "NULL\n};\n")
+	FILE(APPEND "${MODULES_C}" "NULL\n};\n")
 ENDMACRO(_AddModulesForced MLIST WLIST)
 
 MACRO(AddModules MLIST WLIST)

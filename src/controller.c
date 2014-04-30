@@ -1,16 +1,15 @@
-/*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+/* Copyright (c) 2010-2012, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
+ *       * Redistributions of source code must retain the above copyright
+ *         notice, this list of conditions and the following disclaimer.
+ *       * Redistributions in binary form must reproduce the above copyright
+ *         notice, this list of conditions and the following disclaimer in the
+ *         documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY AUTHOR ''AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
  * DISCLAIMED. IN NO EVENT SHALL AUTHOR BE LIABLE FOR ANY
@@ -22,9 +21,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
 #include "config.h"
 #include "util.h"
 #include "main.h"
+#include "http.h"
 #include "message.h"
 #include "protocol.h"
 #include "upstream.h"
@@ -33,442 +34,1252 @@
 #include "dns.h"
 #include "tokenizers/tokenizers.h"
 #include "classifiers/classifiers.h"
-#include "binlog.h"
-#include "statfile_sync.h"
-#include "lua/lua_common.h"
 #include "dynamic_cfg.h"
 #include "rrd.h"
 
-#define END "END" CRLF
+#ifdef WITH_GPERF_TOOLS
+#   include <glib/gprintf.h>
+#endif
 
-/* 120 seconds for controller's IO */
-#define CONTROLLER_IO_TIMEOUT 120
+/* 60 seconds for worker's IO */
+#define DEFAULT_WORKER_IO_TIMEOUT 60000
 
-/* RRD macroes */
-/* Write data each minute */
-#define CONTROLLER_RRD_STEP 60
+/* HTTP paths */
+#define PATH_AUTH "/auth"
+#define PATH_SYMBOLS "/symbols"
+#define PATH_ACTIONS "/actions"
+#define PATH_MAPS "/maps"
+#define PATH_GET_MAP "/getmap"
+#define PATH_GRAPH "/graph"
+#define PATH_PIE_CHART "/pie"
+#define PATH_HISTORY "/history"
+#define PATH_LEARN_SPAM "/learnspam"
+#define PATH_LEARN_HAM "/learnham"
+#define PATH_SAVE_ACTIONS "/saveactions"
+#define PATH_SAVE_SYMBOLS "/savesymbols"
+#define PATH_SAVE_MAP "/savemap"
+#define PATH_SCAN "/scan"
+#define PATH_STAT "/stat"
+#define PATH_STAT_RESET "/statreset"
+#define PATH_COUNTERS "/counters"
 
-/* Init functions */
-gpointer init_controller (struct rspamd_config *cfg);
-void start_controller (struct rspamd_worker *worker);
+/* Graph colors */
+#define COLOR_CLEAN "#58A458"
+#define COLOR_PROBABLE_SPAM "#D67E7E"
+#define COLOR_GREYLIST "#A0A0A0"
+#define COLOR_REJECT "#CB4B4B"
+#define COLOR_TOTAL "#9440ED"
 
-worker_t controller_worker = {
-	"controller",				/* Name */
-	init_controller,			/* Init function */
-	start_controller,			/* Start function */
-	TRUE,						/* Has socket */
-	FALSE,						/* Non unique */
-	FALSE,						/* Non threaded */
-	TRUE,						/* Killable */
-	SOCK_STREAM					/* TCP socket */
+gpointer init_webui_worker (struct rspamd_config *cfg);
+void start_webui_worker (struct rspamd_worker *worker);
+
+worker_t webui_worker = {
+	"webui",					/* Name */
+	init_webui_worker,		/* Init function */
+	start_webui_worker,		/* Start function */
+	TRUE,					/* Has socket */
+	TRUE,					/* Non unique */
+	FALSE,					/* Non threaded */
+	TRUE,					/* Killable */
+	SOCK_STREAM				/* TCP socket */
 };
-
-enum command_type {
-	COMMAND_PASSWORD,
-	COMMAND_QUIT,
-	COMMAND_RELOAD,
-	COMMAND_STAT,
-	COMMAND_STAT_RESET,
-	COMMAND_SHUTDOWN,
-	COMMAND_UPTIME,
-	COMMAND_LEARN,
-	COMMAND_LEARN_SPAM,
-	COMMAND_LEARN_HAM,
-	COMMAND_HELP,
-	COMMAND_COUNTERS,
-	COMMAND_SYNC,
-	COMMAND_WEIGHTS,
-	COMMAND_GET,
-	COMMAND_POST,
-	COMMAND_ADD_SYMBOL,
-	COMMAND_ADD_ACTION
-};
-
-struct controller_command {
-	gchar                           *command;
-	gboolean                        privilleged;
-	enum command_type               type;
-};
-
-struct custom_controller_command {
-	const gchar                     *command;
-	gboolean                        privilleged;
-	gboolean                        require_message;
-	controller_func_t               handler;
-};
-
-struct rspamd_controller_ctx {
-	char 						   *password;
-	guint32							timeout;
+/*
+ * Worker's context
+ */
+struct rspamd_webui_worker_ctx {
+	guint32                         timeout;
+	struct timeval                  io_tv;
+	/* DNS resolver */
 	struct rspamd_dns_resolver     *resolver;
+	/* Events base */
 	struct event_base              *ev_base;
-	struct event				    rrd_event;
-	struct rspamd_rrd_file         *rrd_file;
-	struct rspamd_main			   *srv;
+	/* Whether we use ssl for this server */
+	gboolean use_ssl;
+	/* Webui password */
+	gchar *password;
+	/* Privilleged password */
+	gchar *enable_password;
+	/* HTTP server */
+	struct rspamd_http_connection_router *http;
+	/* Server's start time */
+	time_t start_time;
+	/* Main server */
+	struct rspamd_main *srv;
+	/* Configuration */
+	struct rspamd_config *cfg;
+	/* SSL cert */
+	gchar *ssl_cert;
+	/* SSL private key */
+	gchar *ssl_key;
+	/* A map of secure IP */
+	gchar *secure_ip;
+	radix_tree_t *secure_map;
+
+	/* Static files dir */
+	gchar *static_files_dir;
+
+	/* Custom commands registered by plugins */
+	GHashTable *custom_commands;
+
+	/* Worker */
+	struct rspamd_worker *worker;
 };
 
-static struct controller_command commands[] = {
-	{"password", FALSE, COMMAND_PASSWORD},
-	{"quit", FALSE, COMMAND_QUIT},
-	{"reload", TRUE, COMMAND_RELOAD},
-	{"stat", FALSE, COMMAND_STAT},
-	{"stat_reset", TRUE, COMMAND_STAT_RESET},
-	{"shutdown", TRUE, COMMAND_SHUTDOWN},
-	{"uptime", FALSE, COMMAND_UPTIME},
-	{"learn", TRUE, COMMAND_LEARN},
-	{"weights", FALSE, COMMAND_WEIGHTS},
-	{"help", FALSE, COMMAND_HELP},
-	{"counters", FALSE, COMMAND_COUNTERS},
-	{"sync", FALSE, COMMAND_SYNC},
-	{"learn_spam", TRUE, COMMAND_LEARN_SPAM},
-	{"learn_ham", TRUE, COMMAND_LEARN_HAM},
-	{"get", FALSE, COMMAND_GET},
-	{"post", FALSE, COMMAND_POST},
-	{"add_symbol", TRUE, COMMAND_ADD_SYMBOL},
-	{"add_action", TRUE, COMMAND_ADD_ACTION}
+struct rspamd_webui_session {
+	struct rspamd_webui_worker_ctx *ctx;
+	rspamd_mempool_t *pool;
+	struct rspamd_task *task;
+	struct rspamd_classifier_config *cl;
+	rspamd_inet_addr_t from_addr;
+	gboolean is_spam;
 };
 
-static GList                   *custom_commands = NULL;
+sig_atomic_t             wanna_die = 0;
 
-static time_t                   start_time;
-
-static gchar                    greetingbuf[1024];
-
-static gboolean                 controller_write_socket (void *arg);
-
-static void
-free_session (void *ud)
-{
-	GList                          *part;
-	struct mime_part               *p;
-	struct controller_session      *session = ud;
-
-	msg_debug ("freeing session %p", session);
-
-	while ((part = g_list_first (session->parts))) {
-		session->parts = g_list_remove_link (session->parts, part);
-		p = (struct mime_part *)part->data;
-		g_byte_array_free (p->content, FALSE);
-		g_list_free_1 (part);
-	}
-	rspamd_remove_dispatcher (session->dispatcher);
-
-	if (session->kwargs) {
-		g_hash_table_destroy (session->kwargs);
-	}
-
-	close (session->sock);
-
-	rspamd_mempool_delete (session->session_pool);
-	g_slice_free1 (sizeof (struct controller_session), session);
-}
-
+/* Check for password if it is required by configuration */
 static gboolean
-restful_write_reply (gint error_code, const gchar *err_message,
-		const gchar *buf, gsize buflen, rspamd_io_dispatcher_t *d)
+rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
+		struct rspamd_webui_session *session, struct rspamd_http_message *msg,
+		gboolean is_enable)
 {
-	static gchar					 hbuf[256];
-	gint							 r;
+	const gchar								*password, *check;
+	struct rspamd_webui_worker_ctx			*ctx = session->ctx;
+	gboolean ret = TRUE;
 
-	r = rspamd_snprintf (hbuf, sizeof (hbuf),
-			"HTTP/1.0 %d %s" CRLF "Version: " RVERSION CRLF,
-			error_code, err_message ? err_message : "OK");
-	if (buflen > 0) {
-		r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, "Content-Length: %z" CRLF, buflen);
+	/* Access list logic */
+	if (!session->from_addr.af == AF_UNIX) {
+		msg_info ("allow unauthorized connection from a unix socket");
+		return TRUE;
 	}
-	r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, CRLF);
+	else if (ctx->secure_map && radix32_tree_find_addr (ctx->secure_map,
+			&session->from_addr) != RADIX_NO_VALUE) {
+		msg_info ("allow unauthorized connection from a trusted IP %s",
+				rspamd_inet_address_to_string (&session->from_addr));
+		return TRUE;
+	}
 
-	if (buf != NULL) {
-		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, TRUE)) {
-			return FALSE;
+	/* Password logic */
+	if (is_enable) {
+		/* For privileged commands we strictly require enable password */
+		password = rspamd_http_message_find_header (msg, "Password");
+		if (ctx->enable_password == NULL) {
+			/* Use just a password (legacy mode) */
+			msg_info ("using password as enable_password for a privileged command");
+			check = ctx->password;
 		}
-		return rspamd_dispatcher_write (d, buf, buflen, FALSE, FALSE);
-	}
-	else {
-		if (!rspamd_dispatcher_write (d, hbuf, r, FALSE, TRUE)) {
-			return FALSE;
-		}
-	}
-
-	return TRUE;
-}
-
-static gboolean
-restful_write_reply_string (gint error_code, const gchar *err_message,
-		GString *buf, rspamd_io_dispatcher_t *d)
-{
-	static gchar					 hbuf[256];
-	gint							 r;
-
-	r = rspamd_snprintf (hbuf, sizeof (hbuf),
-			"HTTP/1.0 %d %s" CRLF "Version: " RVERSION CRLF,
-			error_code, err_message ? err_message : "OK");
-	if (buf->len > 0) {
-		r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, "Content-Length: %z" CRLF, buf->len);
-	}
-	r += rspamd_snprintf (hbuf + r, sizeof (hbuf) - r, CRLF);
-
-	if (buf != NULL) {
-		if (!rspamd_dispatcher_write (d, hbuf, r, TRUE, TRUE)) {
-			return FALSE;
-		}
-		return rspamd_dispatcher_write_string (d, buf, FALSE, TRUE);
-	}
-	else {
-		if (!rspamd_dispatcher_write (d, hbuf, r, FALSE, TRUE)) {
-			return FALSE;
-		}
-	}
-
-	return TRUE;
-}
-
-static gint
-check_auth (struct controller_command *cmd, struct controller_session *session)
-{
-	gchar                           out_buf[128];
-	gint                            r;
-
-	if (cmd->privilleged && !session->authorized) {
-		if (!session->restful) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "not authorized" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return 0;
+		if (check != NULL) {
+			if (password == NULL || strcmp (password, check) != 0) {
+				msg_info ("incorrect or absent password has been specified");
+				ret = FALSE;
 			}
 		}
 		else {
-			(void)restful_write_reply (403, "Not authorized", NULL, 0, session->dispatcher);
+			msg_warn ("no password to check while executing a privileged command");
+			if (ctx->secure_map) {
+				msg_info ("deny unauthorized connection");
+				ret = FALSE;
+			}
 		}
+	}
+	else {
+		password = rspamd_http_message_find_header (msg, "Password");
+		if (ctx->password != NULL) {
+			/* Accept both normal and enable passwords */
+			check = ctx->password;
+			if (password == NULL) {
+				msg_info ("absent password has been specified");
+				ret = FALSE;
+			}
+			else if (strcmp (password, check) != 0) {
+				if (ctx->enable_password != NULL) {
+					check = ctx->enable_password;
+					if (strcmp (password, check) != 0) {
+						msg_info ("incorrect password has been specified");
+						ret = FALSE;
+					}
+				}
+				else {
+					msg_info ("incorrect or absent password has been specified");
+					ret = FALSE;
+				}
+			}
+		}
+		/* No password specified, allowing this command */
+	}
+
+
+	if (!ret) {
+		rspamd_controller_send_error (entry, 403, "Unauthorized");
+	}
+
+	return ret;
+}
+
+/* Command handlers */
+
+/*
+ * Auth command handler:
+ * request: /auth
+ * headers: Password
+ * reply: json {"auth": "ok", "version": "0.5.2", "uptime": "some uptime", "error": "none"}
+ */
+static int
+rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_stat						*st;
+	int64_t									 uptime;
+	gulong									 data[4];
+	ucl_object_t							*obj;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
 
-	return 1;
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	st = session->ctx->srv->stat;
+	data[0] = st->actions_stat[METRIC_ACTION_NOACTION];
+	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] + st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+	data[2] = st->actions_stat[METRIC_ACTION_GREYLIST];
+	data[3] = st->actions_stat[METRIC_ACTION_REJECT];
+
+	/* Get uptime */
+	uptime = time (NULL) - session->ctx->start_time;
+
+	ucl_object_insert_key (obj, ucl_object_fromstring (RVERSION), "version", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring ("ok"), "auth", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (uptime), "uptime", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[0]), "clean", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[1]), "probable", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[2]), "greylist", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (data[3]), "reject", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_learned), "learned", 0, false);
+
+	rspamd_controller_send_ucl (conn_ent, obj);
+	ucl_object_unref (obj);
+
+	return 0;
 }
 
-static gboolean
-write_whole_statfile (struct controller_session *session, gchar *symbol, struct rspamd_classifier_config *ccf)
+/*
+ * Symbols command handler:
+ * request: /symbols
+ * reply: json [{
+ * 	"name": "group_name",
+ * 	"symbols": [
+ * 		{
+ * 		"name": "name",
+ * 		"weight": 0.1,
+ * 		"description": "description of symbol"
+ * 		},
+ * 		{...}
+ * },
+ * {...}]
+ */
+static int
+rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	stat_file_t                    *statfile;
-	struct rspamd_statfile_config                *st;
-	gchar                           out_buf[BUFSIZ];
-	guint                           i;
-	guint64                         rev, ti, len, pos, blocks;
-	gchar                           *out;
-	struct rspamd_binlog_element    log_elt;
-	struct stat_file_block         *stat_elt;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	GList									*cur_gr, *cur_sym;
+	struct rspamd_symbols_group					*gr;
+	struct rspamd_symbol_def						*sym;
+	ucl_object_t							*obj, *top, *sym_obj;
 
-	statfile = get_statfile_by_symbol (session->worker->srv->statfile_pool, ccf,
-						symbol, &st, FALSE);
-	if (statfile == NULL) {
-		return FALSE;
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
 	}
 
-	/* Begin to copy all blocks into array */
-	statfile_get_revision (statfile, &rev, (time_t *)&ti);
-	if (ti == 0) {
-		/* Not tracked file */
-		ti = time (NULL);
-		statfile_set_revision (statfile, rev, ti);
+	top = ucl_object_typed_new (UCL_ARRAY);
+
+	/* Go through all symbols groups */
+	cur_gr = session->ctx->cfg->symbols_groups;
+	while (cur_gr) {
+		gr = cur_gr->data;
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (obj, ucl_object_fromstring (gr->name), "group", 0, false);
+		/* Iterate through all symbols */
+		cur_sym = gr->symbols;
+		while (cur_sym) {
+			sym_obj = ucl_object_typed_new (UCL_OBJECT);
+			sym = cur_sym->data;
+
+			ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
+					"symbol", 0, false);
+			ucl_object_insert_key (sym_obj, ucl_object_fromdouble (*sym->weight_ptr),
+					"weight", 0, false);
+			if (sym->description) {
+				ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->description),
+					"description", 0, false);
+			}
+
+			ucl_object_insert_key (obj, sym_obj, "rules", 0, false);
+			cur_sym = g_list_next (cur_sym);
+		}
+		cur_gr = g_list_next (cur_gr);
+		ucl_array_append (top, obj);
 	}
-	msg_info ("send a whole statfile %s with version %uL to slave", symbol, rev);
 
-	blocks = statfile_get_total_blocks (statfile);
-	len = blocks * sizeof (struct rspamd_binlog_element);
-	out = rspamd_mempool_alloc (session->session_pool, len);
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	for (i = 0, pos = 0; i < blocks; i ++) {
-		stat_elt = (struct stat_file_block *)((u_char *)statfile->map + statfile->seek_pos + i * sizeof (struct stat_file_block));
-		if (fabs (stat_elt->value) > 0.001) {
-			/* Write only those values which value is not 0 */
-			log_elt.h1 = stat_elt->hash1;
-			log_elt.h2 = stat_elt->hash2;
-			log_elt.value = stat_elt->value;
+	return 0;
+}
 
-			memcpy (out + pos, &log_elt, sizeof (log_elt));
-			pos += sizeof (struct rspamd_binlog_element);
+/*
+ * Actions command handler:
+ * request: /actions
+ * reply: json [{
+ * 	"action": "no action",
+ * 	"value": 1.1
+ * },
+ * {...}]
+ */
+static int
+rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct metric							*metric;
+	struct metric_action					*act;
+	gint									 i;
+	ucl_object_t							*obj, *top;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	top = ucl_object_typed_new (UCL_ARRAY);
+
+	/* Get actions for default metric */
+	metric = g_hash_table_lookup (session->ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric != NULL) {
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			act = &metric->actions[i];
+			if (act->score > 0) {
+				obj = ucl_object_typed_new (UCL_OBJECT);
+				ucl_object_insert_key (obj,
+						ucl_object_fromstring (str_action_metric (act->action)), "action", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromdouble (act->score), "value", 0, false);
+				ucl_array_append (top, obj);
+			}
 		}
 	}
 
-	i = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %uL" CRLF, rev, ti, pos);
-	if (! rspamd_dispatcher_write (session->dispatcher, out_buf, i, TRUE, FALSE)) {
-		return FALSE;
-	}
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	if (!rspamd_dispatcher_write (session->dispatcher, out, pos, TRUE, TRUE)) {
-		return FALSE;
-	}
-	
-	return TRUE;
+	return 0;
 }
-
-static gboolean
-process_sync_command (struct controller_session *session, gchar **args)
+/*
+ * Maps command handler:
+ * request: /maps
+ * headers: Password
+ * reply: json [
+ * 		{
+ * 		"map": "name",
+ * 		"description": "description",
+ * 		"editable": true
+ * 		},
+ * 		{...}
+ * ]
+ */
+static int
+rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	gchar                           out_buf[BUFSIZ], *arg, *err_str, *symbol;
-	gint                            r;
-	guint64                         rev, time;
-	struct rspamd_statfile_config                *st = NULL;
-	struct rspamd_classifier_config       *ccf;
-	GList                          *cur;
-	struct rspamd_binlog           *binlog;
-	GByteArray                     *data = NULL;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	GList									*cur, *tmp = NULL;
+	struct rspamd_map						*map;
+	gboolean								 editable;
+	ucl_object_t							*obj, *top;
 
-	arg = *args;
-	if (!arg || *arg == '\0') {
-		msg_info ("bad arguments to sync command, need symbol");
-		return FALSE;
-	}
-	symbol = arg;
-	arg = *(args + 1);
-	if (!arg || *arg == '\0') {
-		msg_info ("bad arguments to sync command, need revision");
-		return FALSE;
-	}
-	rev = strtoull (arg, &err_str, 10);
-	if (err_str && *err_str != 0) {
-		msg_info ("bad arguments to sync command: %s", arg);
-		return FALSE;
-	}
-	arg = *(args + 2);
-	if (!arg || *arg == '\0') {
-		msg_info ("bad arguments to sync command, need time");
-		return FALSE;
-	}
-	time = strtoull (arg, &err_str, 10);
-	if (err_str && *err_str != 0) {
-		msg_info ("bad arguments to sync command: %s", arg);
-		return FALSE;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
 	}
 
-	ccf = g_hash_table_lookup (session->cfg->classifiers_symbols, symbol);
-	if (ccf == NULL) {
-		msg_info ("bad symbol: %s", symbol);
-		return FALSE;
-	}
-	
-	cur = g_list_first (ccf->statfiles);
+	top = ucl_object_typed_new (UCL_ARRAY);
+	/* Iterate over all maps */
+	cur = session->ctx->cfg->maps;
 	while (cur) {
-		st = cur->data;
-		if (strcmp (symbol, st->symbol) == 0) {
-			break;
+		map = cur->data;
+		if (map->protocol == MAP_PROTO_FILE && map->description != NULL) {
+			if (access (map->uri, R_OK) == 0) {
+				tmp = g_list_prepend (tmp, map);
+			}
 		}
-		st = NULL;
 		cur = g_list_next (cur);
 	}
-    if (st == NULL) {
-		msg_info ("bad symbol: %s", symbol);
-        return FALSE;
-    }
-	
-	binlog = get_binlog_by_statfile (st);
-	if (binlog == NULL) {
-		msg_info ("cannot open binlog: %s", symbol);
-        return FALSE;
+	/* Iterate over selected maps */
+	cur = tmp;
+	while (cur) {
+		map = cur->data;
+		editable = (access (map->uri, W_OK) == 0);
+
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (obj, ucl_object_fromint (map->id),
+				"map", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
+				"description", 0, false);
+		ucl_object_insert_key (obj, ucl_object_frombool (editable),
+				"editable", 0, false);
+		ucl_array_append (top, obj);
+
+		cur = g_list_next (cur);
 	}
-	
-	while (binlog_sync (binlog, rev, &time, &data)) {
-		rev ++;
-		r = rspamd_snprintf (out_buf, sizeof (out_buf), "%uL %uL %z" CRLF, rev, time, data->len);
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-			if (data != NULL) {
-				g_free (data);
-			}
-			return FALSE;
+
+	if (tmp) {
+		g_list_free (tmp);
+	}
+
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
+}
+
+/*
+ * Get map command handler:
+ * request: /getmap
+ * headers: Password, Map
+ * reply: plain-text
+ */
+static int
+rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	GList									*cur;
+	struct rspamd_map						*map;
+	const gchar								*idstr;
+	gchar									*errstr;
+	struct stat								 st;
+	gint									 fd;
+	guint32									 id;
+	gboolean								 found = FALSE;
+	struct rspamd_http_message				*reply;
+
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+
+	idstr = rspamd_http_message_find_header (msg, "Map");
+
+	if (idstr == NULL) {
+		msg_info ("absent map id");
+		rspamd_controller_send_error (conn_ent, 400, "400 id header missing");
+		return 0;
+	}
+
+	id = strtoul (idstr, &errstr, 10);
+	if (*errstr != '\0') {
+		msg_info ("invalid map id");
+		rspamd_controller_send_error (conn_ent, 400, "400 invalid map id");
+		return 0;
+	}
+
+	/* Now let's be sure that we have map defined in configuration */
+	cur = session->ctx->cfg->maps;
+	while (cur) {
+		map = cur->data;
+		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
+			found = TRUE;
+			break;
 		}
-		if (data->data != NULL) {
-			if (!rspamd_dispatcher_write (session->dispatcher, data->data, data->len, TRUE, FALSE)) {
-				if (data != NULL) {
-					g_free (data);
-				}
-				return FALSE;
+		cur = g_list_next (cur);
+	}
+
+	if (!found) {
+		msg_info ("map not found");
+		rspamd_controller_send_error (conn_ent, 404, "404 map not found");
+		return 0;
+	}
+
+	if (stat (map->uri, &st) == -1 || (fd = open (map->uri, O_RDONLY)) == -1) {
+		msg_err ("cannot open map %s: %s", map->uri, strerror (errno));
+		rspamd_controller_send_error (conn_ent, 500, "500 map open error");
+		return 0;
+	}
+
+	reply = rspamd_http_new_message (HTTP_RESPONSE);
+	reply->date = time (NULL);
+	reply->code = 200;
+	reply->body = g_string_sized_new (st.st_size);
+
+	/* Read the whole buffer */
+	if (read (fd, msg->body->str, st.st_size) == -1) {
+		rspamd_http_message_free (reply);
+		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
+		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
+		return 0;
+	}
+
+	reply->body->len = st.st_size;
+	reply->body->str[reply->body->len] = '\0';
+
+	close (fd);
+
+	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
+			"text/plain", conn_ent, conn_ent->conn->fd,
+			conn_ent->rt->ptv, conn_ent->rt->ev_base);
+	conn_ent->is_reply = TRUE;
+
+	return 0;
+}
+
+#if 0
+/*
+ * Graph command handler:
+ * request: /graph
+ * headers: Password
+ * reply: json [
+ * 		{ label: "Foo", data: [ [10, 1], [17, -14], [30, 5] ] },
+ * 		{ label: "Bar", data: [ [10, 1], [17, -14], [30, 5] ] },
+ * 		{...}
+ * ]
+ */
+/* XXX: now this function returns only random data */
+static void
+rspamd_webui_handle_graph (struct evhttp_request *req, gpointer arg)
+{
+	struct rspamd_webui_worker_ctx 			*ctx = arg;
+	struct evbuffer							*evb;
+	gint									 i, seed;
+	time_t									 now, t;
+	double									 vals[5][100];
+
+	if (!http_check_password (ctx, req)) {
+		return;
+	}
+
+	evb = evbuffer_new ();
+	if (!evb) {
+		msg_err ("cannot allocate evbuffer for reply");
+		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
+		return;
+	}
+
+	/* Trailer */
+	evbuffer_add (evb, "[", 1);
+
+	/* XXX: simple and stupid set */
+	seed = g_random_int ();
+	for (i = 0; i < 100; i ++, seed ++) {
+		vals[0][i] = fabs ((sin (seed * 0.1 * M_PI_2) + 1) * 40. + ((gint)(g_random_int () % 2) - 1));
+		vals[1][i] = vals[0][i] * 0.5;
+		vals[2][i] = vals[0][i] * 0.1;
+		vals[3][i] = vals[0][i] * 0.3;
+		vals[4][i] = vals[0][i] * 1.9;
+	}
+
+	now = time (NULL);
+
+	/* Ham label */
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_CLEAN "\", \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[0][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Probable spam label */
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_PROBABLE_SPAM "\", \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[1][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Greylist label */
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_GREYLIST "\", \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[2][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Reject label */
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_REJECT "\", \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[3][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]},", 3);
+
+	/* Total label */
+	t = now - 6000;
+	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"color\": \""
+			COLOR_TOTAL "\", \"data\":[");
+	for (i = 0; i < 100; i ++, t += 60) {
+		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[4][i], i == 99 ? "]" : "],");
+	}
+	evbuffer_add (evb, "]}", 2);
+
+	evbuffer_add (evb, "]" CRLF, 3);
+
+	evhttp_add_header (req->output_headers, "Connection", "close");
+	http_calculate_content_length (evb, req);
+
+	evhttp_send_reply (req, HTTP_OK, "OK", evb);
+	evbuffer_free (evb);
+}
+#endif
+/*
+ * Pie chart command handler:
+ * request: /pie
+ * headers: Password
+ * reply: json [
+ * 		{ label: "Foo", data: 11 },
+ * 		{ label: "Bar", data: 20 },
+ * 		{...}
+ * ]
+ */
+static int
+rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
+	gdouble									 data[4], total;
+	ucl_object_t							*top, *obj;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	top = ucl_object_typed_new (UCL_ARRAY);
+	total = ctx->srv->stat->messages_scanned;
+	if (total != 0) {
+		obj = ucl_object_typed_new (UCL_ARRAY);
+
+		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total * 100.;
+		data[1] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
+				ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) / total * 100.;
+		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total * 100.;
+		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total * 100.;
+
+		ucl_array_append (obj, ucl_object_fromstring ("Clean messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[0]));
+		ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Probable spam messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[1]));
+		ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Greylisted messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[2]));
+		ucl_array_append (top, obj);
+		ucl_array_append (obj, ucl_object_fromstring ("Rejected messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (data[3]));
+		ucl_array_append (top, obj);
+	}
+	else {
+		obj = ucl_object_typed_new (UCL_ARRAY);
+
+		ucl_array_append (obj, ucl_object_fromstring ("Scanned messages"));
+		ucl_array_append (obj, ucl_object_fromdouble (0));
+		ucl_array_append (top, obj);
+	}
+
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
+}
+
+/*
+ * History command handler:
+ * request: /history
+ * headers: Password
+ * reply: json [
+ * 		{ label: "Foo", data: 11 },
+ * 		{ label: "Bar", data: 20 },
+ * 		{...}
+ * ]
+ */
+static int
+rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
+	struct roll_history_row					*row;
+	struct roll_history						 copied_history;
+	gint									 i, rows_proc, row_num;
+	struct tm								*tm;
+	gchar									 timebuf[32];
+	gchar									 ip_buf[INET6_ADDRSTRLEN];
+	ucl_object_t							*top, *obj;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	top = ucl_object_typed_new (UCL_ARRAY);
+
+	/* Set lock on history */
+	rspamd_mempool_lock_mutex (ctx->srv->history->mtx);
+	ctx->srv->history->need_lock = TRUE;
+	/* Copy locked */
+	memcpy (&copied_history, ctx->srv->history, sizeof (copied_history));
+	rspamd_mempool_unlock_mutex (ctx->srv->history->mtx);
+
+	/* Go through all rows */
+	row_num = copied_history.cur_row;
+	for (i = 0, rows_proc = 0; i < HISTORY_MAX_ROWS; i ++, row_num ++) {
+		if (row_num == HISTORY_MAX_ROWS) {
+			row_num = 0;
+		}
+		row = &copied_history.rows[row_num];
+		/* Get only completed rows */
+		if (row->completed) {
+			tm = localtime (&row->tv.tv_sec);
+			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tm);
+#ifdef HAVE_INET_PTON
+			if (row->from_addr.ipv6) {
+				inet_ntop (AF_INET6, &row->from_addr.d.in6, ip_buf, sizeof (ip_buf));
 			}
+			else {
+				inet_ntop (AF_INET, &row->from_addr.d.in4, ip_buf, sizeof (ip_buf));
+			}
+#else
+			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr), sizeof (ip_buf));
+#endif
+			obj = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (obj, ucl_object_fromstring (timebuf), "time", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (row->message_id), "id", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (ip_buf), "ip", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromstring (str_action_metric (row->action)), "action", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (row->score), "score", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (row->required_score), "required_score", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (row->symbols), "symbols", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (row->len), "size", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (row->scan_time), "scan_time", 0, false);
+			if (row->user[0] != '\0') {
+				ucl_object_insert_key (obj, ucl_object_fromstring (row->user), "user", 0, false);
+			}
+			ucl_array_append (top, obj);
+			rows_proc ++;
 		}
 	}
 
-	if (time == 0) {
-		if (data != NULL) {
-			g_free (data);
-		}
-		return write_whole_statfile (session, symbol, ccf);
-	}
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	if (data != NULL) {
-		g_free (data);
+	return 0;
+}
+
+static gboolean
+rspamd_webui_learn_fin_task (void *ud)
+{
+	struct rspamd_task						*task = ud;
+	struct rspamd_webui_session 			*session;
+	struct rspamd_http_connection_entry		*conn_ent;
+	GError									*err = NULL;
+
+	conn_ent = task->fin_arg;
+	session = conn_ent->ud;
+
+	if (!learn_task_spam (session->cl, task, session->is_spam, &err)) {
+		rspamd_controller_send_error (conn_ent, 500 + err->code, err->message);
+		rspamd_http_connection_unref (conn_ent->conn);
+		return TRUE;
 	}
+	/* Successful learn */
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	rspamd_http_connection_unref (conn_ent->conn);
 
 	return TRUE;
 }
 
 static gboolean
-process_counters_command (struct controller_session *session)
+rspamd_webui_check_fin_task (void *ud)
 {
-	GList                          *cur;
-	struct cache_item             *item;
-	struct symbols_cache          *cache;
-	GString                        *out;
+	struct rspamd_task						*task = ud;
+	struct rspamd_http_connection_entry		*conn_ent;
 
-	cache = session->cfg->cache;
-	out = g_string_sized_new (BUFSIZ);
+	conn_ent = task->fin_arg;
+	task->http_conn = conn_ent->conn;
+	rspamd_protocol_write_reply (task);
+	conn_ent->is_reply = TRUE;
+	rspamd_http_connection_unref (conn_ent->conn);
 
-	if (!session->restful) {
-		rspamd_printf_gstring (out, "Rspamd counters:" CRLF);
-	}
-
-	if (cache != NULL) {
-		cur = cache->negative_items;
-		while (cur) {
-			item = cur->data;
-			if (!item->is_callback) {
-				rspamd_printf_gstring (out, "%s %.2f %d %.3f" CRLF,
-						item->s->symbol, item->s->weight,
-						item->s->frequency, item->s->avg_time);
-			}
-			cur = g_list_next (cur);
-		}
-		cur = cache->static_items;
-		while (cur) {
-			item = cur->data;
-			if (!item->is_callback) {
-				rspamd_printf_gstring (out, "%s %.2f %d %.3f" CRLF,
-						item->s->symbol, item->s->weight,
-						item->s->frequency, item->s->avg_time);
-			}
-			cur = g_list_next (cur);
-		}
-	}
-
-	if (!session->restful) {
-		return rspamd_dispatcher_write_string (session->dispatcher, out, FALSE, TRUE);
-	}
-	else {
-		return restful_write_reply_string (200, NULL, out, session->dispatcher);
-	}
+	return TRUE;
 }
 
-static gboolean
-process_stat_command (struct controller_session *session, gboolean do_reset)
+static int
+rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg, gboolean is_spam)
 {
-	GString                        *out;
-	gint                            i;
-	guint64                         used, total, rev, ham = 0, spam = 0;
-	time_t                          ti;
-	rspamd_mempool_stat_t              mem_st;
-	struct rspamd_classifier_config       *ccf;
-	stat_file_t                    *statfile;
-	struct rspamd_statfile_config                *st;
-	GList                          *cur_cl, *cur_st;
-	struct rspamd_stat            *stat, stat_copy;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_classifier_config				*cl;
+	struct rspamd_task						*task;
+	const gchar								*classifier;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	if (msg->body == NULL || msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	if ((classifier = rspamd_http_message_find_header (msg, "Classifier")) == NULL) {
+		classifier = "bayes";
+	}
+
+	cl = rspamd_config_find_classifier (ctx->cfg, classifier);
+	if (cl == NULL) {
+		rspamd_controller_send_error (conn_ent, 400, "Classifier not found");
+		return 0;
+	}
+
+	task = rspamd_task_new (session->ctx->worker);
+	task->ev_base = session->ctx->ev_base;
+	task->msg = msg->body;
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	rspamd_http_connection_ref (conn_ent->conn);
+	task->s = new_async_session (session->pool, rspamd_webui_learn_fin_task, NULL,
+			rspamd_task_free_hard, task);
+	task->s->wanna_die = TRUE;
+	task->fin_arg = conn_ent;
+
+	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
+		msg_warn ("filters cannot be processed for %s", task->message_id);
+		rspamd_controller_send_error (conn_ent, 500, task->last_error);
+		destroy_session (task->s);
+		return 0;
+	}
+
+	session->task = task;
+	session->cl = cl;
+	session->is_spam = is_spam;
+
+	return 0;
+}
+
+/*
+ * Learn spam command handler:
+ * request: /learnspam
+ * headers: Password
+ * input: plaintext data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
+}
+/*
+ * Learn ham command handler:
+ * request: /learnham
+ * headers: Password
+ * input: plaintext data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	return rspamd_webui_handle_learn_common (conn_ent, msg, TRUE);
+}
+
+/*
+ * Scan command handler:
+ * request: /scan
+ * headers: Password
+ * input: plaintext data
+ * reply: json {scan data} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_webui_worker_ctx			*ctx;
+	struct rspamd_task						*task;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	if (msg->body == NULL || msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	task = rspamd_task_new (session->ctx->worker);
+	task->ev_base = session->ctx->ev_base;
+	task->msg = msg->body;
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	rspamd_http_connection_ref (conn_ent->conn);
+	task->s = new_async_session (session->pool, rspamd_webui_check_fin_task, NULL,
+			rspamd_task_free_hard, task);
+	task->s->wanna_die = TRUE;
+	task->fin_arg = conn_ent;
+
+	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
+		msg_warn ("filters cannot be processed for %s", task->message_id);
+		rspamd_controller_send_error (conn_ent, 500, task->last_error);
+		destroy_session (task->s);
+		return 0;
+	}
+
+	session->task = task;
+
+	return 0;
+}
+
+/*
+ * Save actions command handler:
+ * request: /saveactions
+ * headers: Password
+ * input: json array [<spam>,<probable spam>,<greylist>]
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct ucl_parser						*parser;
+	struct metric							*metric;
+	ucl_object_t							*obj, *cur;
+	struct rspamd_webui_worker_ctx 			*ctx;
+	const gchar								*error;
+	gdouble									 score;
+	gint									 i;
+	enum rspamd_metric_action				 act;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	if (msg->body == NULL || msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric == NULL) {
+		msg_err ("cannot find default metric");
+		rspamd_controller_send_error (conn_ent, 500, "Default metric is absent");
+		return 0;
+	}
+
+	/* Now check for dynamic config */
+	if (!ctx->cfg->dynamic_conf) {
+		msg_err ("dynamic conf has not been defined");
+		rspamd_controller_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		return 0;
+	}
+
+	parser = ucl_parser_new (0);
+	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+
+	if ((error = ucl_parser_get_error (parser)) != NULL) {
+		msg_err ("cannot parse input: %s", error);
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_parser_free (parser);
+		return 0;
+	}
+
+	obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+
+	if (obj->type != UCL_ARRAY || obj->len != 3) {
+		msg_err ("input is not an array of 3 elements");
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_object_unref (obj);
+		return 0;
+	}
+
+	cur = obj->value.av;
+	for (i = 0; i < 3 && cur != NULL; i ++, cur = cur->next) {
+		switch(i) {
+		case 0:
+			act = METRIC_ACTION_REJECT;
+			break;
+		case 1:
+			act = METRIC_ACTION_ADD_HEADER;
+			break;
+		case 2:
+			act = METRIC_ACTION_GREYLIST;
+			break;
+		}
+		score = ucl_object_todouble (cur);
+		if (metric->actions[act].score != score) {
+			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
+		}
+	}
+
+	dump_dynamic_config (ctx->cfg);
+
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
+}
+
+/*
+ * Save symbols command handler:
+ * request: /savesymbols
+ * headers: Password
+ * input: json data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct ucl_parser						*parser;
+	struct metric							*metric;
+	ucl_object_t							*obj;
+	const ucl_object_t						*cur, *jname, *jvalue;
+	ucl_object_iter_t						 iter = NULL;
+	struct rspamd_webui_worker_ctx 			*ctx;
+	const gchar								*error;
+	gdouble									 val;
+	struct symbol							*sym;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	if (msg->body == NULL || msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
+	if (metric == NULL) {
+		msg_err ("cannot find default metric");
+		rspamd_controller_send_error (conn_ent, 500, "Default metric is absent");
+		return 0;
+	}
+
+	/* Now check for dynamic config */
+	if (!ctx->cfg->dynamic_conf) {
+		msg_err ("dynamic conf has not been defined");
+		rspamd_controller_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		return 0;
+	}
+
+	parser = ucl_parser_new (0);
+	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+
+	if ((error = ucl_parser_get_error (parser)) != NULL) {
+		msg_err ("cannot parse input: %s", error);
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_parser_free (parser);
+		return 0;
+	}
+
+	obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+
+	if (obj->type != UCL_ARRAY || obj->len != 3) {
+		msg_err ("input is not an array of 3 elements");
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+		ucl_object_unref (obj);
+		return 0;
+	}
+
+	while ((cur = ucl_iterate_object (obj, &iter, true))) {
+		if (cur->type != UCL_OBJECT) {
+			msg_err ("json array data error");
+			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+			ucl_object_unref (obj);
+			return 0;
+		}
+		jname = ucl_object_find_key (cur, "name");
+		jvalue = ucl_object_find_key (cur, "value");
+		val = ucl_object_todouble (jvalue);
+		sym = g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
+		if (sym && fabs (sym->score - val) > 0.01) {
+			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
+					ucl_object_tostring (jname), val)) {
+				msg_err ("add symbol failed for %s", ucl_object_tostring (jname));
+				rspamd_controller_send_error (conn_ent, 506, "Add symbol failed");
+				ucl_object_unref (obj);
+				return 0;
+			}
+		}
+	}
+
+	dump_dynamic_config (ctx->cfg);
+
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
+}
+
+/*
+ * Save map command handler:
+ * request: /savemap
+ * headers: Password, Map
+ * input: plaintext data
+ * reply: json {"success":true} or {"error":"error message"}
+ */
+static int
+rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	GList									*cur;
+	struct rspamd_map						*map;
+	struct rspamd_webui_worker_ctx 			*ctx;
+	const gchar								*idstr;
+	gchar									*errstr;
+	guint32									 id;
+	gboolean								 found = FALSE;
+	gint									 fd;
+
+	ctx = session->ctx;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	if (msg->body == NULL || msg->body->len == 0) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
+	}
+
+	idstr = rspamd_http_message_find_header (msg, "Map");
+
+	if (idstr == NULL) {
+		msg_info ("absent map id");
+		rspamd_controller_send_error (conn_ent, 400, "Map id not specified");
+		return 0;
+	}
+
+	id = strtoul (idstr, &errstr, 10);
+	if (*errstr != '\0') {
+		msg_info ("invalid map id");
+		rspamd_controller_send_error (conn_ent, 400, "Map id is invalid");
+		return 0;
+	}
+
+	/* Now let's be sure that we have map defined in configuration */
+	cur = ctx->cfg->maps;
+	while (cur) {
+		map = cur->data;
+		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
+			found = TRUE;
+			break;
+		}
+		cur = g_list_next (cur);
+	}
+
+	if (!found) {
+		msg_info ("map not found: %d", id);
+		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
+		return 0;
+	}
+
+	if (g_atomic_int_get (map->locked)) {
+		msg_info ("map locked: %s", map->uri);
+		rspamd_controller_send_error (conn_ent, 404, "Map is locked");
+		return 0;
+	}
+
+	/* Set lock */
+	g_atomic_int_set (map->locked, 1);
+	fd = open (map->uri, O_WRONLY | O_TRUNC);
+	if (fd == -1) {
+		g_atomic_int_set (map->locked, 0);
+		msg_info ("map %s open error: %s", map->uri, strerror (errno));
+		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
+		return 0;
+	}
+
+	if (write (fd, msg->body->str, msg->body->len) == -1) {
+		msg_info ("map %s write error: %s", map->uri, strerror (errno));
+		close (fd);
+		g_atomic_int_set (map->locked, 0);
+		rspamd_controller_send_error (conn_ent, 500, "Map write error");
+		return 0;
+	}
+
+	/* Close and unlock */
+	close (fd);
+	g_atomic_int_set (map->locked, 0);
+
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
+}
+
+/*
+ * Stat command handler:
+ * request: /stat (/resetstat)
+ * headers: Password
+ * reply: json data
+ */
+static int
+rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg, gboolean do_reset)
+{
+	struct rspamd_webui_session *session = conn_ent->ud;
+	ucl_object_t *top, *sub;
+	gint i;
+	guint64 used, total, rev, ham = 0, spam = 0;
+	time_t ti;
+	rspamd_mempool_stat_t mem_st;
+	struct rspamd_classifier_config *ccf;
+	stat_file_t *statfile;
+	struct rspamd_statfile_config *st;
+	GList *cur_cl, *cur_st;
+	struct rspamd_stat *stat, stat_copy;
 
 	rspamd_mempool_stat (&mem_st);
-	memcpy (&stat_copy, session->worker->srv->stat, sizeof (stat_copy));
+	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
-	out = g_string_sized_new (BUFSIZ);
-	rspamd_printf_gstring (out, "Messages scanned: %ud" CRLF, stat->messages_scanned);
+	top = ucl_object_typed_new (UCL_OBJECT);
+
+	ucl_object_insert_key (top, ucl_object_fromint (stat->messages_scanned), "scanned", 0, false);
 	if (stat->messages_scanned > 0) {
+		sub = ucl_object_typed_new (UCL_OBJECT);
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
-			rspamd_printf_gstring (out, "Messages with action %s: %ud, %.2f%%" CRLF,
-					str_action_metric (i), stat->actions_stat[i],
-					(double)stat->actions_stat[i] / (double)stat->messages_scanned * 100.);
+			ucl_object_insert_key (top,
+					ucl_object_fromint (stat->actions_stat[i]),
+					str_action_metric (i), 0, false);
 			if (i < METRIC_ACTION_GREYLIST) {
 				spam += stat->actions_stat[i];
 			}
@@ -476,1472 +1287,393 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 				ham += stat->actions_stat[i];
 			}
 			if (do_reset) {
-				session->worker->srv->stat->actions_stat[i] = 0;
+				session->ctx->worker->srv->stat->actions_stat[i] = 0;
 			}
 		}
-		rspamd_printf_gstring (out, "Messages treated as spam: %ud, %.2f%%" CRLF, spam,
-								(double)spam / (double)stat->messages_scanned * 100.);
-		rspamd_printf_gstring (out, "Messages treated as ham: %ud, %.2f%%" CRLF, ham,
-								(double)ham / (double)stat->messages_scanned * 100.);
+		ucl_object_insert_key (top, sub, "actions", 0, false);
 	}
-	rspamd_printf_gstring (out, "Messages learned: %ud" CRLF, stat->messages_learned);
-	rspamd_printf_gstring (out, "Connections count: %ud" CRLF, stat->connections_count);
-	rspamd_printf_gstring (out, "Control connections count: %ud" CRLF, stat->control_connections_count);
-	rspamd_printf_gstring (out, "Pools allocated: %z" CRLF, mem_st.pools_allocated);
-	rspamd_printf_gstring (out, "Pools freed: %z" CRLF, mem_st.pools_freed);
-	rspamd_printf_gstring (out, "Bytes allocated: %z" CRLF, mem_st.bytes_allocated);
-	rspamd_printf_gstring (out, "Memory chunks allocated: %z" CRLF, mem_st.chunks_allocated);
-	rspamd_printf_gstring (out, "Shared chunks allocated: %z" CRLF, mem_st.shared_chunks_allocated);
-	rspamd_printf_gstring (out, "Chunks freed: %z" CRLF, mem_st.chunks_freed);
-	rspamd_printf_gstring (out, "Oversized chunks: %z" CRLF, mem_st.oversized_chunks);
-	rspamd_printf_gstring (out, "Fuzzy hashes stored: %ud" CRLF, stat->fuzzy_hashes);
-	rspamd_printf_gstring (out, "Fuzzy hashes expired: %ud" CRLF, stat->fuzzy_hashes_expired);
+
+	ucl_object_insert_key (top, ucl_object_fromint (spam), "spam_count", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (ham), "ham_count", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->messages_learned), "learned", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->connections_count), "connections", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->control_connections_count),
+			"control_connections", 0, false);
+
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.pools_freed), "pools_freed", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.bytes_allocated), "bytes_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.chunks_allocated), "chunks_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.shared_chunks_allocated),
+			"shared_chunks_allocated", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.chunks_freed), "chunks_freed", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.oversized_chunks), "chunks_oversized", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
+
 	/* Now write statistics for each statfile */
-	cur_cl = g_list_first (session->cfg->classifiers);
+	cur_cl = g_list_first (session->ctx->cfg->classifiers);
+	sub = ucl_object_typed_new (UCL_ARRAY);
 	while (cur_cl) {
 		ccf = cur_cl->data;
 		cur_st = g_list_first (ccf->statfiles);
 		while (cur_st) {
 			st = cur_st->data;
-			if ((statfile = statfile_pool_is_open (session->worker->srv->statfile_pool, st->path)) == NULL) {
-				statfile = statfile_pool_open (session->worker->srv->statfile_pool, st->path, st->size, FALSE);
+			if ((statfile = statfile_pool_is_open (session->ctx->srv->statfile_pool,
+					st->path)) == NULL) {
+				statfile = statfile_pool_open (session->ctx->srv->statfile_pool,
+						st->path, st->size, FALSE);
 			}
 			if (statfile) {
+				ucl_object_t *obj = ucl_object_typed_new (UCL_OBJECT);
+
 				used = statfile_get_used_blocks (statfile);
 				total = statfile_get_total_blocks (statfile);
 				statfile_get_revision (statfile, &rev, &ti);
-				if (total != (guint64)-1 && used != (guint64)-1) {
-					if (st->label) {
-						rspamd_printf_gstring (out,
-								"Statfile: %s <%s> (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
-								st->symbol, st->label, rev, st->size,
-								(total - used), total,
-								(double)((double)(total - used) / (double)total) * 100.);
-					}
-					else {
-						rspamd_printf_gstring (out,
-								"Statfile: %s (version %uL); length: %Hz; free blocks: %uL; total blocks: %uL; free: %.2f%%" CRLF,
-								st->symbol, rev, st->size,
-								(total - used), total,
-								(double)((double)(total - used) / (double)total) * 100.);
-					}
+				ucl_object_insert_key (obj,
+						ucl_object_fromstring (st->symbol), "symbol", 0, false);
+				if (st->label != NULL) {
+					ucl_object_insert_key (obj,
+							ucl_object_fromstring (st->label), "label", 0, false);
 				}
+				ucl_object_insert_key (obj, ucl_object_fromint (rev), "revision", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (used), "used", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (total), "total", 0, false);
+
+				ucl_array_append (sub, obj);
 			}
 			cur_st = g_list_next (cur_st);
 		}
 		cur_cl = g_list_next (cur_cl);
 	}
 
+	ucl_object_insert_key (top, sub, "statfiles", 0, false);
+
 	if (do_reset) {
-		session->worker->srv->stat->messages_scanned = 0;
-		session->worker->srv->stat->messages_learned = 0;
-		session->worker->srv->stat->connections_count = 0;
-		session->worker->srv->stat->control_connections_count = 0;
+		session->ctx->srv->stat->messages_scanned = 0;
+		session->ctx->srv->stat->messages_learned = 0;
+		session->ctx->srv->stat->connections_count = 0;
+		session->ctx->srv->stat->control_connections_count = 0;
+		rspamd_mempool_stat_reset ();
 	}
 
-	if (!session->restful) {
-		return rspamd_dispatcher_write_string (session->dispatcher, out, FALSE, TRUE);
-	}
-	else {
-		return restful_write_reply_string (200, NULL, out, session->dispatcher);
-	}
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
 }
 
-static gboolean
-process_dynamic_conf_command (gchar **cmd_args, struct controller_session *session, gboolean is_action)
+static int
+rspamd_webui_handle_stat (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_config			   *cfg = session->cfg;
-	gchar						   *arg, *metric, *name, *err_str;
-	gdouble						    value;
-	gboolean						res;
-	guint							real_act;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 
-	if (cfg->dynamic_conf == NULL) {
-		if (!session->restful) {
-			return rspamd_dispatcher_write (session->dispatcher, "dynamic config is not specified" CRLF, 0, FALSE, TRUE);
-		}
-		else {
-			return restful_write_reply (500, "dynamic config is not specified", NULL, 0, session->dispatcher);
-		}
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
 	}
 
-	if (session->restful) {
-		if ((arg = g_hash_table_lookup (session->kwargs, "metric")) == NULL) {
-			metric = DEFAULT_METRIC;
-		}
-		else {
-			metric = arg;
-		}
-		if ((arg = g_hash_table_lookup (session->kwargs, "name")) == NULL) {
-			goto invalid_arguments;
-		}
-		name = arg;
-		if ((arg = g_hash_table_lookup (session->kwargs, "value")) == NULL) {
-			goto invalid_arguments;
-		}
-		value = strtod (arg, &err_str);
-		if (err_str && *err_str != '\0') {
-			msg_info ("double value is invalid: %s", arg);
-			goto invalid_arguments;
-		}
-	}
-	else {
-		if (cmd_args[0] == NULL || cmd_args[1] == NULL) {
-			goto invalid_arguments;
-		}
-		if (cmd_args[2] == NULL) {
-			metric = DEFAULT_METRIC;
-			name = cmd_args[0];
-			arg = cmd_args[1];
-			value = strtod (arg, &err_str);
-			if (err_str && *err_str != '\0') {
-				msg_info ("double value is invalid: %s", arg);
-				goto invalid_arguments;
-			}
-		}
-		else {
-			metric = cmd_args[0];
-			name = cmd_args[1];
-			arg = cmd_args[2];
-			value = strtod (arg, &err_str);
-			if (err_str && *err_str != '\0') {
-				msg_info ("double value is invalid: %s", arg);
-				goto invalid_arguments;
-			}
-		}
-	}
-
-	if (is_action) {
-		if (!check_action_str (name, &real_act)) {
-			msg_info ("invalid action string: %s", name);
-			res = FALSE;
-		}
-		else {
-			res = add_dynamic_action (cfg, metric, real_act, value);
-		}
-	}
-	else {
-		res = add_dynamic_symbol (cfg, metric, name, value);
-	}
-
-	if (res) {
-
-		res = dump_dynamic_config (cfg);
-		if (res) {
-			if (!session->restful) {
-				return rspamd_dispatcher_write (session->dispatcher, "OK" CRLF, 0, FALSE, TRUE);
-			}
-			else {
-				return restful_write_reply (200, "OK", NULL, 0, session->dispatcher);
-			}
-		}
-		else {
-			if (!session->restful) {
-				return rspamd_dispatcher_write (session->dispatcher, "Error dumping dynamic config" CRLF, 0, FALSE, TRUE);
-			}
-			else {
-				return restful_write_reply (500, "Error dumping dynamic config", NULL, 0, session->dispatcher);
-			}
-		}
-	}
-	else {
-		if (!session->restful) {
-			return rspamd_dispatcher_write (session->dispatcher, "Cannot add dynamic rule" CRLF, 0, FALSE, TRUE);
-		}
-		else {
-			return restful_write_reply (500, "Cannot add dynamic rule", NULL, 0, session->dispatcher);
-		}
-	}
-
-invalid_arguments:
-	if (!session->restful) {
-		return rspamd_dispatcher_write (session->dispatcher, "Invalid arguments" CRLF, 0, FALSE, TRUE);
-	}
-	else {
-		return restful_write_reply (500, "Invalid arguments", NULL, 0, session->dispatcher);
-	}
+	return rspamd_webui_handle_stat_common (conn_ent, msg, FALSE);
 }
 
-static gboolean
-process_command (struct controller_command *cmd, gchar **cmd_args, struct controller_session *session)
+static int
+rspamd_webui_handle_statreset (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	gchar                           out_buf[BUFSIZ], *arg, *err_str;
-	gint                            r = 0, days, hours, minutes;
-	time_t                          uptime;
-	guint32                   		size = 0;
-	struct rspamd_classifier_config       *cl;
-	struct rspamd_controller_ctx   *ctx = session->worker->ctx;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
 
-	switch (cmd->type) {
-	case COMMAND_GET:
-	case COMMAND_POST:
-		session->restful = TRUE;
-		session->state = STATE_HEADER;
-		session->kwargs = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		break;
-	case COMMAND_PASSWORD:
-		arg = *cmd_args;
-		if (!arg || *arg == '\0') {
-			msg_debug ("empty password passed");
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command requires one argument" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
-		if (ctx->password == NULL) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password command disabled in config, authorized access granted" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
-		if (strncmp (arg, ctx->password, strlen (arg)) == 0) {
-			session->authorized = 1;
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password accepted" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-		}
-		else {
-			session->authorized = 0;
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "password NOT accepted" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-		}
-		break;
-	case COMMAND_QUIT:
-		session->state = STATE_QUIT;
-		break;
-	case COMMAND_RELOAD:
-		if (check_auth (cmd, session)) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "reload request sent" CRLF);
-			if (!session->restful) {
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-			}
-			else {
-				if (! restful_write_reply (200, out_buf, NULL, 0, session->dispatcher)) {
-					return FALSE;
-				}
-			}
-			kill (getppid (), SIGHUP);
-		}
-		break;
-	case COMMAND_STAT:
-		if (check_auth (cmd, session)) {
-			return process_stat_command (session, FALSE);
-		}
-		break;
-	case COMMAND_STAT_RESET:
-		if (check_auth (cmd, session)) {
-			return process_stat_command (session, TRUE);
-		}
-		break;
-	case COMMAND_SHUTDOWN:
-		if (check_auth (cmd, session)) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "shutdown request sent" CRLF);
-			if (!session->restful) {
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-			}
-			else {
-				if (! restful_write_reply (200, out_buf, NULL, 0, session->dispatcher)) {
-					return FALSE;
-				}
-			}
-			kill (getppid (), SIGTERM);
-		}
-		break;
-	case COMMAND_UPTIME:
-		if (check_auth (cmd, session)) {
-			uptime = time (NULL) - start_time;
-			/* If uptime more than 2 hours, print as a number of days. */
-			if (uptime >= 2 * 3600) {
-				days = uptime / 86400;
-				hours = uptime / 3600 - days * 24;
-				minutes = uptime / 60 - hours * 60 - days * 1440;
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d day%s %d hour%s %d minute%s" CRLF, days, days > 1 ? "s" : " ", hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ");
-			}
-			/* If uptime is less than 1 minute print only seconds */
-			else if (uptime / 60 == 0) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d second%s" CRLF, (gint)uptime, (gint)uptime > 1 ? "s" : " ");
-			}
-			/* Else print the minutes and seconds. */
-			else {
-				hours = uptime / 3600;
-				minutes = uptime / 60 - hours * 60;
-				uptime -= hours * 3600 + minutes * 60;
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "%d hour%s %d minute%s %d second%s" CRLF, hours, hours > 1 ? "s" : " ", minutes, minutes > 1 ? "s" : " ", (gint)uptime, uptime > 1 ? "s" : " ");
-			}
-			if (!session->restful) {
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-			}
-			else {
-				if (! restful_write_reply (200, NULL, out_buf, r, session->dispatcher)) {
-					return FALSE;
-				}
-			}
-		}
-		break;
-	case COMMAND_LEARN_SPAM:
-		if (check_auth (cmd, session)) {
-			if (!session->restful) {
-				arg = *cmd_args;
-				if (!arg || *arg == '\0') {
-					msg_debug ("no statfile specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				arg = *(cmd_args + 1);
-				if (arg == NULL || *arg == '\0') {
-					msg_debug ("no message size specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				size = strtoul (arg, &err_str, 10);
-				if (err_str && *err_str != '\0') {
-					msg_debug ("message size is invalid: %s", arg);
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				cl = rspamd_config_find_classifier (session->cfg, *cmd_args);
-			}
-			else {
-				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
-					msg_debug ("no classifier specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				else {
-					cl = rspamd_config_find_classifier (session->cfg, arg);
-				}
-				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
-					msg_debug ("no size specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-						return FALSE;
-					}
-				}
-				else {
-					size = strtoul (arg, &err_str, 10);
-					if (err_str && *err_str != '\0') {
-						msg_debug ("message size is invalid: %s", arg);
-						r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-						if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-							return FALSE;
-						}
-						return TRUE;
-					}
-				}
-			}
-
-			session->learn_classifier = cl;
-
-			/* By default learn positive */
-			session->in_class = TRUE;
-			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
-			session->state = STATE_LEARN_SPAM_PRE;
-		}
-		break;
-	case COMMAND_LEARN_HAM:
-		if (check_auth (cmd, session)) {
-			if (!session->restful) {
-				arg = *cmd_args;
-				if (!arg || *arg == '\0') {
-					msg_debug ("no statfile specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				arg = *(cmd_args + 1);
-				if (arg == NULL || *arg == '\0') {
-					msg_debug ("no message size specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				size = strtoul (arg, &err_str, 10);
-				if (err_str && *err_str != '\0') {
-					msg_debug ("message size is invalid: %s", arg);
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				cl = rspamd_config_find_classifier (session->cfg, *cmd_args);
-			}
-			else {
-				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
-					msg_debug ("no classifier specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-						return FALSE;
-					}
-					return TRUE;
-				}
-				else {
-					cl = rspamd_config_find_classifier (session->cfg, arg);
-				}
-				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
-					msg_debug ("no size specified in learn command");
-					r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn_spam command requires at least two arguments: classifier name and a message's size" CRLF);
-					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-						return FALSE;
-					}
-				}
-				else {
-					size = strtoul (arg, &err_str, 10);
-					if (err_str && *err_str != '\0') {
-						msg_debug ("message size is invalid: %s", arg);
-						r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-						if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-							return FALSE;
-						}
-						return TRUE;
-					}
-				}
-			}
-
-			session->learn_classifier = cl;
-
-			/* By default learn positive */
-			session->in_class = FALSE;
-			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
-			session->state = STATE_LEARN_SPAM_PRE;
-		}
-		break;
-	case COMMAND_LEARN:
-		if (check_auth (cmd, session)) {
-			/* TODO: remove this command as currenly it should not be used anywhere */
-			arg = *cmd_args;
-			if (!arg || *arg == '\0') {
-				msg_debug ("no statfile specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: stat filename and its size" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-				return TRUE;
-			}
-			arg = *(cmd_args + 1);
-			if (arg == NULL || *arg == '\0') {
-				msg_debug ("no message size specified in learn command");
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn command requires at least two arguments: symbol and message size" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-				return TRUE;
-			}
-			size = strtoul (arg, &err_str, 10);
-			if (err_str && *err_str != '\0') {
-				msg_debug ("message size is invalid: %s", arg);
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "learn size is invalid" CRLF);
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-				return TRUE;
-			}
-
-			session->learn_symbol = rspamd_mempool_strdup (session->session_pool, *cmd_args);
-			cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
-
-			session->learn_classifier = cl;
-
-			/* By default learn positive */
-			session->in_class = 1;
-			session->learn_multiplier = 1.;
-			/* Get all arguments */
-			while (*cmd_args++) {
-				arg = *cmd_args;
-				if (arg && *arg == '-') {
-					switch (*(arg + 1)) {
-					case 'r':
-						arg = *(cmd_args + 1);
-						if (!arg || *arg == '\0') {
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "recipient is not defined" CRLF);
-							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-								return FALSE;
-							}
-						}
-						session->learn_rcpt = rspamd_mempool_strdup (session->session_pool, arg);
-						break;
-					case 'f':
-						arg = *(cmd_args + 1);
-						if (!arg || *arg == '\0') {
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "from is not defined" CRLF);
-							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-								return FALSE;
-							}
-						}
-						session->learn_from = rspamd_mempool_strdup (session->session_pool, arg);
-						break;
-					case 'n':
-						session->in_class = 0;
-						break;
-					case 'm':
-						arg = *(cmd_args + 1);
-						if (!arg || *arg == '\0') {
-							r = rspamd_snprintf (out_buf, sizeof (out_buf), "multiplier is not defined" CRLF);
-							if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-								return FALSE;
-							}
-						}
-						else {
-							session->learn_multiplier = strtod (arg, NULL);
-						}
-						break;
-					default:
-						r = rspamd_snprintf (out_buf, sizeof (out_buf), "tokenizer is not defined" CRLF);
-						if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-							return FALSE;
-						}
-						return TRUE;
-					}
-				}
-			}
-			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
-			session->state = STATE_LEARN;
-		}
-		break;
-
-	case COMMAND_WEIGHTS:
-		/* TODO: remove this command as currenly it should not be used anywhere */
-		arg = *cmd_args;
-		if (!arg || *arg == '\0') {
-			msg_debug ("no statfile specified in weights command");
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "weights command requires two arguments: statfile and message size" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
-		arg = *(cmd_args + 1);
-		if (arg == NULL || *arg == '\0') {
-			msg_debug ("no message size specified in weights command");
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "weights command requires two arguments: statfile and message size" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
-		size = strtoul (arg, &err_str, 10);
-		if (err_str && *err_str != '\0') {
-			msg_debug ("message size is invalid: %s", arg);
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "message size is invalid" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
-
-		cl = g_hash_table_lookup (session->cfg->classifiers_symbols, *cmd_args);
-		if (cl == NULL) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "statfile %s is not defined" CRLF, *cmd_args);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-
-		}
-		session->learn_classifier = cl;
-
-		rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_CHARACTER, size);
-		session->state = STATE_WEIGHTS;
-		break;
-	case COMMAND_SYNC:
-		if (!process_sync_command (session, cmd_args)) {
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "FAIL" CRLF);
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return TRUE;
-		}
-		break;
-	case COMMAND_HELP:
-		r = rspamd_snprintf (out_buf, sizeof (out_buf),
-			"Rspamd CLI commands (* - privileged command):" CRLF
-			"    help - this help message" CRLF
-			"(*) learn <statfile> <size> [-r recipient] [-m multiplier] [-f from] [-n] - learn message to specified statfile" CRLF
-			"    quit - quit CLI session" CRLF
-			"    password <password> - authenticate yourself for privileged commands" CRLF
-			"(*) reload - reload rspamd" CRLF
-			"(*) shutdown - shutdown rspamd" CRLF 
-			"    stat - show different rspamd stat" CRLF
-			"    sync - run synchronization of statfiles" CRLF
-			"    counters - show rspamd counters" CRLF 
-			"    uptime - rspamd uptime" CRLF
-			"    weights <statfile> <size> - weight of message in all statfiles" CRLF);
-		if (!session->restful) {
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-		}
-		else {
-			if (! restful_write_reply (200, NULL, out_buf, r, session->dispatcher)) {
-				return FALSE;
-			}
-		}
-		break;
-	case COMMAND_COUNTERS:
-		process_counters_command (session);
-		break;
-	case COMMAND_ADD_ACTION:
-		if (check_auth (cmd, session)) {
-			return process_dynamic_conf_command (cmd_args, session, TRUE);
-		}
-		break;
-	case COMMAND_ADD_SYMBOL:
-		if (check_auth (cmd, session)) {
-			return process_dynamic_conf_command (cmd_args, session, FALSE);
-		}
-		break;
+	if (!rspamd_webui_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
 	}
-	return TRUE;
+
+	return rspamd_webui_handle_stat_common (conn_ent, msg, TRUE);
 }
 
-static controller_func_t
-parse_custom_command (gchar *line, gchar **cmd_args, struct controller_session *session, gsize len)
+static ucl_object_t *
+rspamd_webui_cache_item_to_ucl (struct cache_item *item)
 {
-	GList                          *cur;
-	struct custom_controller_command *cmd;
+	ucl_object_t							*obj;
 
-	if (len == 0) {
-		len = strlen (line);
-	}
-	cur = custom_commands;
-	while (cur) {
-		cmd = cur->data;
-		if (g_ascii_strncasecmp (cmd->command, line, len) == 0) {
-			return cmd->handler;
-		}
-		cur = g_list_next (cur);
-	}
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (obj, ucl_object_fromstring (item->s->symbol),
+			"symbol", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->weight),
+			"weight", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (item->s->frequency),
+			"frequency", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->avg_time),
+			"time", 0, false);
 
-	return NULL;
-}
-
-static struct controller_command *
-parse_normal_command (const gchar *line, gsize len)
-{
-	guint                           i;
-	struct controller_command      *c;
-
-	if (len == 0) {
-		len = strlen (line);
-	}
-	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
-		c = &commands[i];
-		if (g_ascii_strncasecmp (line, c->command, len) == 0) {
-			return c;
-		}
-	}
-
-	return NULL;
-}
-
-static gboolean
-process_header (f_str_t *line, struct controller_session *session)
-{
-	gchar							*headern;
-	struct controller_command		*command;
-	struct rspamd_controller_ctx	*ctx = session->worker->ctx;
-	controller_func_t				 custom_handler;
-
-	/* XXX: temporary workaround */
-	headern = NULL;
-
-	if (line == NULL || headern == NULL) {
-		msg_warn ("bad header: %V", line);
-		return FALSE;
-	}
-	/* Eat whitespaces */
-	g_strstrip (headern);
-	fstrstrip (line);
-
-	if (*headern == 'c' || *headern == 'C') {
-		if (g_ascii_strcasecmp (headern, "command") == 0) {
-			/* This header is actually command */
-			command = parse_normal_command (line->begin, line->len);
-			if (command == NULL) {
-				if ((custom_handler = parse_custom_command (line->begin, NULL, session, line->len)) == NULL) {
-					msg_info ("bad command header: %V", line);
-					return FALSE;
-				}
-				else {
-					session->custom_handler = custom_handler;
-				}
-			}
-			session->cmd = command;
-			return TRUE;
-		}
-	}
-	else if (*headern == 'p' || *headern == 'P') {
-		/* Password header */
-		if (g_ascii_strcasecmp (headern, "password") == 0) {
-			if (ctx->password == NULL ||
-					(line->len == strlen (ctx->password)
-					&& memcmp (line->begin, ctx->password, line->len) == 0)) {
-				session->authorized = TRUE;
-			}
-			else {
-				msg_info ("wrong password in controller command");
-			}
-			return TRUE;
-		}
-	}
-
-	g_hash_table_insert (session->kwargs, headern, fstrcstr (line, session->session_pool));
-
-	return TRUE;
+	return obj;
 }
 
 /*
- * Called if all filters are processed, non-threaded and simple version
+ * Counters command handler:
+ * request: /counters
+ * headers: Password
+ * reply: json array of all counters
  */
-static gboolean
-fin_learn_task (void *arg)
+static int
+rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_task             *task = (struct rspamd_task *) arg;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	ucl_object_t							*top;
+	GList									*cur;
+	struct cache_item						*item;
+	struct symbols_cache					*cache;
 
-	/* XXX: needs to be reworked */
+	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
 
-	return TRUE;
-}
-
-/*
- * Called if session was restored inside fin callback
- */
-static void
-restore_learn_task (void *arg)
-{
-	struct rspamd_task             *task = (struct rspamd_task *) arg;
-
-	/* Special state */
-}
-
-static                          gboolean
-controller_read_socket (f_str_t * in, void *arg)
-{
-	struct controller_session      *session = (struct controller_session *)arg;
-	struct classifier_ctx          *cls_ctx;
-	gint                            len, i, r;
-	gchar                          *s, **params, *cmd, out_buf[128];
-	struct controller_command      *command;
-	struct rspamd_task             *task;
-	struct mime_text_part          *part;
-	GList                          *cur = NULL;
-	GTree                          *tokens = NULL;
-	GError                         *err = NULL;
-	f_str_t                         c;
-	controller_func_t				custom_handler;
-
-	switch (session->state) {
-	case STATE_COMMAND:
-		s = fstrcstr (in, session->session_pool);
-		params = g_strsplit_set (s, " ", -1);
-
-		rspamd_mempool_add_destructor (session->session_pool, (rspamd_mempool_destruct_t) g_strfreev, params);
-
-		len = g_strv_length (params);
-		if (len > 0) {
-			cmd = g_strstrip (params[0]);
-
-			command = parse_normal_command (cmd, 0);
-			if (command != NULL) {
-				if (! process_command (command, &params[1], session)) {
-					return FALSE;
-				}
-			}
-			else {
-				if ((custom_handler = parse_custom_command (cmd, &params[1], session, 0)) == NULL) {
-					msg_debug ("'%s'", cmd);
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "Unknown command" CRLF);
-					if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-						return FALSE;
-					}
-				}
-				else {
-					custom_handler (&params[1], session);
-				}
-			}
-		}
-		if (session->state != STATE_LEARN && session->state != STATE_LEARN_SPAM_PRE
-				&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER && session->state != STATE_HEADER) {
-			if (!rspamd_dispatcher_write (session->dispatcher, END, sizeof (END) - 1, FALSE, TRUE)) {
-				return FALSE;
-			}
-			if (session->state == STATE_QUIT) {
-				destroy_session (session->s);
-				return FALSE;
-			}
-		}
-
-		break;
-	case STATE_HEADER:
-		if (in->len == 0) {
-			/* End of headers */
-			if (session->cmd == NULL && session->custom_handler == NULL) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Bad command" CRLF CRLF);
-				if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-					return FALSE;
-				}
-				destroy_session (session->s);
-				return FALSE;
-			}
-			/* Perform command */
-			else if (session->cmd != NULL) {
-				if (! process_command (session->cmd, NULL, session)) {
-					msg_debug ("process command failed");
-					return FALSE;
-				}
-			}
-			else {
-				session->custom_handler (NULL, session);
-			}
-			if (session->state != STATE_LEARN && session->state != STATE_LEARN_SPAM_PRE
-					&& session->state != STATE_WEIGHTS && session->state != STATE_OTHER) {
-				msg_debug ("closing restful connection");
-				destroy_session (session->s);
-				return FALSE;
-			}
-		}
-		else if (!process_header (in, session)) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Bad header" CRLF CRLF);
-			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-				return FALSE;
-			}
-			destroy_session (session->s);
-			return FALSE;
-		}
-		break;
-	case STATE_LEARN:
-		session->learn_buf = in;
-		task = rspamd_task_new (session->worker);
-
-		task->msg = g_string_new_len (in->begin, in->len);
-		task->ev_base = session->ev_base;
-
-		r = process_message (task);
-		if (r == -1) {
-			msg_warn ("processing of message failed");
-			rspamd_task_free (task, FALSE);
-			session->state = STATE_REPLY;
-			if (session->restful) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
-			}
-			else {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
-			}
-			if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-				return FALSE;
-			}
-			return FALSE;
-		}
-
-		if (!learn_task (session->learn_symbol, task, &err)) {
-			rspamd_task_free (task, FALSE);
-			if (err) {
-				if (session->restful) {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn classifier error: %s" CRLF CRLF, err->message);
-				}
-				else {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
-				}
-				g_error_free (err);
-			}
-			else {
-				if (session->restful) {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn classifier error: unknown" CRLF CRLF);
-				}
-				else {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, unknown learn classifier error" CRLF END);
-				}
-			}
-
-			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-				return FALSE;
-			}
-			session->state = STATE_REPLY;
-			return TRUE;
-		}
-
-		rspamd_task_free (task, FALSE);
-		if (session->restful) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 200 Learn OK" CRLF CRLF);
-		}
-		else {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
-		}
-		session->state = STATE_REPLY;
-		if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-			return FALSE;
-		}
-		break;
-	case STATE_LEARN_SPAM_PRE:
-		session->learn_buf = in;
-		task = rspamd_task_new (session->worker);
-
-		task->msg = g_string_new_len (in->begin, in->len);
-
-		task->resolver = session->resolver;
-		task->ev_base = session->ev_base;
-
-		r = process_message (task);
-		if (r == -1) {
-			msg_warn ("processing of message failed");
-			session->state = STATE_REPLY;
-			if (session->restful) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
-			}
-			else {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
-			}
-			if (!session->restful) {
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-			}
-			else {
-				if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-					return FALSE;
-				}
-			}
-			return FALSE;
-		}
-		/* Set up async session */
-		task->s = new_async_session (task->task_pool, fin_learn_task, restore_learn_task, rspamd_task_free_hard, task);
-		session->learn_task = task;
-		session->state = STATE_LEARN_SPAM;
-		rspamd_dispatcher_pause (session->dispatcher);
-		r = process_filters (task);
-		if (r == -1) {
-			rspamd_dispatcher_restore (session->dispatcher);
-			session->state = STATE_REPLY;
-			if (session->restful) {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Cannot process message" CRLF CRLF);
-			}
-			else {
-				r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF);
-			}
-			destroy_session (task->s);
-			if (!session->restful) {
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-			}
-			else {
-				if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-					return FALSE;
-				}
-			}
-		}
-		break;
-	case STATE_WEIGHTS:
-		session->learn_buf = in;
-		task = rspamd_task_new (session->worker);
-
-		task->msg = g_string_new_len (in->begin, in->len);
-		task->ev_base = session->ev_base;
-
-		r = process_message (task);
-		if (r == -1) {
-			msg_warn ("processing of message failed");
-			rspamd_task_free (task, FALSE);
-			session->state = STATE_REPLY;
-			r = rspamd_snprintf (out_buf, sizeof (out_buf), "cannot process message" CRLF END);
-			if (!session->restful) {
-				if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-					return FALSE;
-				}
-			}
-			else {
-				if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-					return FALSE;
-				}
-			}
-			return FALSE;
-		}
-
-		cur = g_list_first (task->text_parts);
+	cache = session->ctx->cfg->cache;
+	top = ucl_object_typed_new (UCL_ARRAY);
+	if (cache != NULL) {
+		cur = cache->negative_items;
 		while (cur) {
-			part = cur->data;
-			if (part->is_empty) {
-				cur = g_list_next (cur);
-				continue;
-			}
-
-			c.begin = part->content->data;
-			c.len = part->content->len;
-			if (!session->learn_classifier->tokenizer->tokenize_func (session->learn_classifier->tokenizer,
-					session->session_pool, &c, &tokens, FALSE, part->is_utf, part->urls_offset)) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, tokenizer error" CRLF END);
-				rspamd_task_free (task, FALSE);
-				if (!session->restful) {
-					if (! rspamd_dispatcher_write (session->dispatcher, out_buf, r, FALSE, FALSE)) {
-						return FALSE;
-					}
-				}
-				else {
-					if (! restful_write_reply (500, out_buf, NULL, 0, session->dispatcher)) {
-						return FALSE;
-					}
-				}
-				session->state = STATE_REPLY;
-				return TRUE;
+			item = cur->data;
+			if (!item->is_callback) {
+				ucl_array_append (top, rspamd_webui_cache_item_to_ucl (item));
 			}
 			cur = g_list_next (cur);
 		}
-		
-		/* Handle messages without text */
-		if (tokens == NULL) {
-			i = rspamd_snprintf (out_buf, sizeof (out_buf), "weights failed, no tokens can be extracted (no text data)" CRLF END);
-			rspamd_task_free (task, FALSE);
-			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-				return FALSE;
-			}
-			session->state = STATE_REPLY;
-			return TRUE;
-		}
-	
-		
-		/* Init classifier */
-		cls_ctx = session->learn_classifier->classifier->init_func (session->session_pool, session->learn_classifier);
-		
-		cur = session->learn_classifier->classifier->weights_func (cls_ctx, session->worker->srv->statfile_pool, 
-																	tokens, task);
-		i = 0;
-		struct classify_weight *w;
-
+		cur = cache->static_items;
 		while (cur) {
-			w = cur->data;
-			i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, "%s: %G" CRLF, w->name, w->weight);
+			item = cur->data;
+			if (!item->is_callback) {
+				ucl_array_append (top, rspamd_webui_cache_item_to_ucl (item));
+			}
 			cur = g_list_next (cur);
 		}
-		i += rspamd_snprintf (out_buf + i, sizeof (out_buf) - i, END);
-		if (i != 0) {
-			if (!rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-				return FALSE;
-			}
-		}
-		else {
-			if (!rspamd_dispatcher_write (session->dispatcher, "weights failed: classifier error" CRLF END, 0, FALSE, TRUE)) {
-				return FALSE;
-			}
-		}
-
-		rspamd_task_free (task, FALSE);
-
-		session->state = STATE_REPLY;
-		break;
-	case STATE_OTHER:
-		rspamd_dispatcher_pause (session->dispatcher);
-		if (session->other_handler) {
-			if (!session->other_handler (session, in)) {
-				return FALSE;
-			}
-		}
-		break;
-	case STATE_WAIT:
-		rspamd_dispatcher_pause (session->dispatcher);
-		break;
-	default:
-		msg_debug ("unknown state while reading %d", session->state);
-		break;
 	}
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
 
-	if (session->state == STATE_REPLY || session->state == STATE_QUIT) {
-		/* In case of normal session we restore read state, for restful session we need to terminate immediately */
-		if (!session->restful) {
-			rspamd_dispatcher_restore (session->dispatcher);
-		}
-		else {
-			return FALSE;
-		}
-	}
-	return TRUE;
+	return 0;
 }
 
-static                          gboolean
-controller_write_socket (void *arg)
+static int
+rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct controller_session      *session = (struct controller_session *)arg;
-	gint                            i;
-	gchar                           out_buf[1024];
-	GError                         *err = NULL;
+	struct rspamd_webui_session 			*session = conn_ent->ud;
+	struct rspamd_custom_controller_command	*cmd;
 
-	if (session->state == STATE_QUIT) {
-		/* Free buffers */
-		destroy_session (session->s);
-		return FALSE;
+	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
+	if (cmd == NULL || cmd->handler == NULL) {
+		msg_err ("custom command %V has not been found", msg->url);
+		rspamd_controller_send_error (conn_ent, 404, "No command associated");
+		return 0;
 	}
-	else if (session->state == STATE_LEARN_SPAM) {
-		/* Perform actual learn here */
-		if (session->learn_classifier == NULL) {
-			if (session->restful) {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn classifier error: %s" CRLF CRLF, "unknown classifier");
-			}
-			else {
-				i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, "unknown classifier");
-			}
-		}
-		else {
-			if (! learn_task_spam (session->learn_classifier, session->learn_task, session->in_class, &err)) {
-				if (err) {
-					if (session->restful) {
-						i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn classifier error: %s" CRLF CRLF, err->message);
-					}
-					else {
-						i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: %s" CRLF END, err->message);
-					}
-					g_error_free (err);
-				}
-				else {
-					if (session->restful) {
-						i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 500 Learn classifier error: unknown" CRLF CRLF);
-					}
-					else {
-						i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn failed, learn classifier error: unknown" CRLF END);
-					}
-				}
-			}
-			else {
-				if (session->restful) {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "HTTP/1.0 200 Learn OK" CRLF CRLF);
-				}
-				else {
-					i = rspamd_snprintf (out_buf, sizeof (out_buf), "learn ok" CRLF END);
-				}
-			}
-		}
-		destroy_session (session->learn_task->s);
-		session->state = STATE_REPLY;
-		if (! rspamd_dispatcher_write (session->dispatcher, out_buf, i, FALSE, FALSE)) {
-			return FALSE;
-		}
-		if (session->restful) {
-			destroy_session (session->s);
-			return FALSE;
-		}
-		return TRUE;
+
+	if (!rspamd_webui_check_password (conn_ent, session, msg, cmd->privilleged)) {
+		return 0;
 	}
-	else if (session->state == STATE_REPLY) {
-		if (session->restful) {
-			destroy_session (session->s);
-			return FALSE;
-		}
-		else {
-			session->state = STATE_COMMAND;
-			rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, BUFSIZ);
-		}
+	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
+		msg_err ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		return 0;
 	}
-	rspamd_dispatcher_restore (session->dispatcher);
-	return TRUE;
+
+	return cmd->handler (conn_ent, msg, cmd->ctx);
 }
 
 static void
-controller_err_socket (GError * err, void *arg)
+rspamd_webui_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
 {
-	struct controller_session      *session = (struct controller_session *)arg;
-
-	if (err->code != EOF) {
-		msg_info ("abnormally closing control connection, error: %s", err->message);
-	}
-	g_error_free (err);
-	/* Free buffers */
-	destroy_session (session->s);
+	msg_err ("http error occurred: %s", err->message);
 }
 
 static void
-accept_socket (gint fd, short what, void *arg)
+rspamd_webui_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	union sa_union                  su;
-	struct controller_session      *new_session;
-	struct timeval                 *io_tv;
-	gint                            nfd;
-	struct rspamd_controller_ctx   *ctx;
-	rspamd_inet_addr_t addr;
+	struct rspamd_webui_session 		*session = conn_ent->ud;
+
+	if (session->pool) {
+		rspamd_mempool_delete (session->pool);
+	}
+	if (session->task != NULL) {
+		destroy_session (session->task->s);
+	}
+
+	g_slice_free1 (sizeof (struct rspamd_webui_session), session);
+}
+
+static void
+rspamd_webui_accept_socket (gint fd, short what, void *arg)
+{
+	struct rspamd_worker				*worker = (struct rspamd_worker *) arg;
+	struct rspamd_webui_worker_ctx		*ctx;
+	struct rspamd_webui_session			*nsession;
+	rspamd_inet_addr_t					 addr;
+	gint								 nfd;
 
 	ctx = worker->ctx;
 
-	if ((nfd = rspamd_accept_from_socket (fd, &addr)) == -1) {
+	if ((nfd =
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
+		msg_warn ("accept failed: %s", strerror (errno));
+		return;
+	}
+	/* Check for EAGAIN */
+	if (nfd == 0) {
 		return;
 	}
 
-	new_session = g_slice_alloc0 (sizeof (struct controller_session));
-	if (new_session == NULL) {
-		msg_err ("cannot allocate memory for task, %s", strerror (errno));
-		return;
-	}
+	msg_info ("accepted connection from %s port %d",
+			rspamd_inet_address_to_string (&addr),
+			rspamd_inet_address_get_port (&addr));
 
-	new_session->worker = worker;
-	new_session->sock = nfd;
-	new_session->cfg = worker->srv->cfg;
-	new_session->state = STATE_COMMAND;
-	new_session->session_pool = rspamd_mempool_new (rspamd_mempool_suggest_size () - 1);
-	new_session->resolver = ctx->resolver;
-	new_session->ev_base = ctx->ev_base;
-	if (ctx->password == NULL) {
-		new_session->authorized = TRUE;
-	}
-	worker->srv->stat->control_connections_count++;
+	nsession = g_slice_alloc0 (sizeof (struct rspamd_webui_session));
+	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	nsession->ctx = ctx;
 
-	/* Set up dispatcher */
-	io_tv = rspamd_mempool_alloc (new_session->session_pool, sizeof (struct timeval));
-	io_tv->tv_sec = ctx->timeout / 1000;
-	io_tv->tv_usec = ctx->timeout - io_tv->tv_sec * 1000;
+	memcpy (&nsession->from_addr, &addr, sizeof (addr));
 
-	new_session->s = new_async_session (new_session->session_pool, NULL, NULL, free_session, new_session);
-
-	new_session->dispatcher = rspamd_create_dispatcher (ctx->ev_base, nfd, BUFFER_LINE, controller_read_socket,
-			controller_write_socket, controller_err_socket, io_tv, (void *)new_session);
-
-	if (su.ss.ss_family == AF_UNIX) {
-		msg_info ("accepted connection from unix socket");
-		new_session->dispatcher->peer_addr = INADDR_LOOPBACK;
-	}
-	else if (su.ss.ss_family == AF_INET) {
-		msg_info ("accepted connection from %s port %d",
-				inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
-		memcpy (&new_session->dispatcher->peer_addr, &su.s4.sin_addr,
-				sizeof (guint32));
-	}
-#if 0
-	/* As we support now restful HTTP like connections, this should not be printed anymore */
-	if (! rspamd_dispatcher_write (new_session->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
-		msg_warn ("cannot write greeting");
-	}
-#endif
-}
-
-static gboolean
-create_rrd_file (const gchar *filename, struct rspamd_controller_ctx *ctx)
-{
-	GError								*err = NULL;
-	GArray								 ar;
-	struct rrd_rra_def					 rra[5];
-	struct rrd_ds_def					 ds[4];
-
-	/*
-	 * DS:
-	 * 1) reject as spam
-	 * 2) mark as spam
-	 * 3) greylist
-	 * 4) pass
-	 */
-	/*
-	 * RRA:
-	 * 1) per minute AVERAGE
-	 * 2) per 5 minutes AVERAGE
-	 * 3) per 30 minutes AVERAGE
-	 * 4) per 2 hours AVERAGE
-	 * 5) per day AVERAGE
-	 */
-	ctx->rrd_file = rspamd_rrd_create (filename, 4, 5, CONTROLLER_RRD_STEP, &err);
-	if (ctx->rrd_file == NULL) {
-		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
-		g_error_free (err);
-		return FALSE;
-	}
-
-	/* Add all ds and rra */
-	rrd_make_default_ds ("spam", CONTROLLER_RRD_STEP, &ds[0]);
-	rrd_make_default_ds ("possible spam", CONTROLLER_RRD_STEP, &ds[1]);
-	rrd_make_default_ds ("greylist", CONTROLLER_RRD_STEP, &ds[2]);
-	rrd_make_default_ds ("ham", CONTROLLER_RRD_STEP, &ds[3]);
-
-	rrd_make_default_rra ("AVERAGE", 1, 600, &rra[0]);
-	rrd_make_default_rra ("AVERAGE", 5, 600, &rra[1]);
-	rrd_make_default_rra ("AVERAGE", 30, 700, &rra[2]);
-	rrd_make_default_rra ("AVERAGE", 120, 775, &rra[3]);
-	rrd_make_default_rra ("AVERAGE", 1440, 797, &rra[4]);
-
-	ar.data = (gchar *)ds;
-	ar.len = sizeof (ds);
-	if (!rspamd_rrd_add_ds (ctx->rrd_file, &ar, &err)) {
-		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
-		g_error_free (err);
-		rspamd_rrd_close (ctx->rrd_file);
-		return FALSE;
-	}
-
-	ar.data = (gchar *)rra;
-	ar.len = sizeof (rra);
-	if (!rspamd_rrd_add_rra (ctx->rrd_file, &ar, &err)) {
-		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
-		g_error_free (err);
-		rspamd_rrd_close (ctx->rrd_file);
-		return FALSE;
-	}
-
-	/* Finalize */
-	if (!rspamd_rrd_finalize (ctx->rrd_file, &err)) {
-		msg_err ("cannot create rrd file %s, error: %s", filename, err->message);
-		g_error_free (err);
-		rspamd_rrd_close (ctx->rrd_file);
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-static void
-controller_update_rrd (gint fd, short what, void *arg)
-{
-	struct rspamd_controller_ctx       *ctx = arg;
-	struct timeval                      tv;
-	GArray                              ar;
-	gdouble                             data[4];
-	GError                             *err = NULL;
-
-	/*
-	 * Data:
-	 * 1) reject as spam
-	 * 2) mark as spam
-	 * 3) greylist
-	 * 4) pass
-	 */
-
-	tv.tv_sec = CONTROLLER_RRD_STEP;
-	tv.tv_usec = 0;
-
-	/* Fill data */
-	data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT];
-	data[1] = ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] + ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
-	data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST];
-	data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION];
-
-	ar.data = (gchar *)data;
-	ar.len = sizeof (data);
-	if (!rspamd_rrd_add_record (ctx->rrd_file, &ar, &err)) {
-		msg_err ("cannot add record to rrd database: %s, stop rrd update", err->message);
-		g_error_free (err);
-	}
-	else {
-		evtimer_add (&ctx->rrd_event, &tv);
-	}
+	rspamd_http_router_handle_socket (ctx->http, nfd, nsession);
 }
 
 gpointer
-init_controller (struct rspamd_config *cfg)
+init_webui_worker (struct rspamd_config *cfg)
 {
-	struct rspamd_controller_ctx       *ctx;
+	struct rspamd_webui_worker_ctx		*ctx;
 	GQuark								type;
 
-	type = g_quark_try_string ("controller");
-	ctx = g_malloc0 (sizeof (struct rspamd_controller_ctx));
+	type = g_quark_try_string ("webui");
 
-	ctx->timeout = CONTROLLER_IO_TIMEOUT * 1000;
+	ctx = g_malloc0 (sizeof (struct rspamd_webui_worker_ctx));
+
+	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
 	rspamd_rcl_register_worker_option (cfg, type, "password",
 			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_ctx, password), 0);
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
 
+	rspamd_rcl_register_worker_option (cfg, type, "enable_password",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, password), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "ssl",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, use_ssl), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "ssl_cert",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_cert), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "ssl_key",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, ssl_key), 0);
 	rspamd_rcl_register_worker_option (cfg, type, "timeout",
 			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_ctx, timeout), RSPAMD_CL_FLAG_TIME_UINT_32);
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+
+	rspamd_rcl_register_worker_option (cfg, type, "secure_ip",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, secure_ip), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "static_dir",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_webui_worker_ctx, static_files_dir), 0);
 
 	return ctx;
 }
 
+/*
+ * Start worker process
+ */
 void
-start_controller (struct rspamd_worker *worker)
+start_webui_worker (struct rspamd_worker *worker)
 {
-	gchar                          *hostbuf;
-	gsize                           hostmax;
-	struct rspamd_controller_ctx   *ctx = worker->ctx;
-	GError                         *err = NULL;
-	struct timeval                  tv;
+	struct rspamd_webui_worker_ctx *ctx = worker->ctx;
+	GList *cur;
+	struct filter *f;
+	struct module_ctx *mctx;
+	GHashTableIter iter;
+	gpointer key, value;
 
-	ctx->ev_base = rspamd_prepare_worker (worker, "controller", accept_socket);
-	g_mime_init (0);
 
-	start_time = time (NULL);
+	ctx->ev_base = rspamd_prepare_worker (worker, "controller", rspamd_webui_accept_socket);
+	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
-	/* Start statfile synchronization */
-	if (!start_statfile_sync (worker->srv->statfile_pool, worker->srv->cfg, ctx->ev_base)) {
-		msg_info ("cannot start statfile synchronization, statfiles would not be synchronized");
-	}
-
-	/* Check for rrd */
-	tv.tv_sec = CONTROLLER_RRD_STEP;
-	tv.tv_usec = 0;
+	ctx->start_time = time (NULL);
+	ctx->worker = worker;
+	ctx->cfg = worker->srv->cfg;
 	ctx->srv = worker->srv;
-	if (worker->srv->cfg->rrd_file) {
-		ctx->rrd_file = rspamd_rrd_open (worker->srv->cfg->rrd_file, &err);
-		if (ctx->rrd_file == NULL) {
-			msg_info ("cannot open rrd file: %s, error: %s, trying to create", worker->srv->cfg->rrd_file, err->message);
-			g_error_free (err);
-			/* Try to create rrd file */
-			if (create_rrd_file (worker->srv->cfg->rrd_file, ctx)) {
-				evtimer_set (&ctx->rrd_event, controller_update_rrd, ctx);
-				event_base_set (ctx->ev_base, &ctx->rrd_event);
-				evtimer_add (&ctx->rrd_event, &tv);
+	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
+			rspamd_strcase_equal);
+	if (ctx->secure_ip != NULL) {
+		if (!add_map (worker->srv->cfg, ctx->secure_ip, "Allow webui access from the specified IP",
+				read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
+			if (!rspamd_config_parse_ip_list (ctx->secure_ip, &ctx->secure_map)) {
+				msg_warn ("cannot load or parse ip list from '%s'", ctx->secure_ip);
 			}
 		}
-		else {
-			evtimer_set (&ctx->rrd_event, controller_update_rrd, ctx);
-			event_base_set (ctx->ev_base, &ctx->rrd_event);
-			evtimer_add (&ctx->rrd_event, &tv);
+	}
+	/* Accept event */
+	ctx->http = rspamd_http_router_new (rspamd_webui_error_handler,
+			rspamd_webui_finish_handler, &ctx->io_tv, ctx->ev_base,
+			ctx->static_files_dir);
+
+	/* Add callbacks for different methods */
+	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_webui_handle_auth);
+	rspamd_http_router_add_path (ctx->http, PATH_SYMBOLS, rspamd_webui_handle_symbols);
+	rspamd_http_router_add_path (ctx->http, PATH_ACTIONS, rspamd_webui_handle_actions);
+	rspamd_http_router_add_path (ctx->http, PATH_MAPS, rspamd_webui_handle_maps);
+	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_webui_handle_get_map);
+	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_webui_handle_pie_chart);
+	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_webui_handle_history);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_webui_handle_learnspam);
+	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_webui_handle_learnham);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_webui_handle_saveactions);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_webui_handle_savesymbols);
+	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_webui_handle_savemap);
+	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_webui_handle_scan);
+	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_webui_handle_stat);
+	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_webui_handle_statreset);
+	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_webui_handle_counters);
+
+	/* Attach plugins */
+	cur = g_list_first (ctx->cfg->filters);
+	while (cur) {
+		f = cur->data;
+		mctx = g_hash_table_lookup (ctx->cfg->c_modules, f->module->name);
+		if (mctx != NULL && f->module->module_init_func != NULL) {
+			f->module->module_attach_controller_func (mctx, ctx->custom_commands);
 		}
+		cur = g_list_next (cur);
 	}
 
-	/* Fill hostname buf */
-	hostmax = sysconf (_SC_HOST_NAME_MAX) + 1;
-	hostbuf = alloca (hostmax);
-	gethostname (hostbuf, hostmax);
-	hostbuf[hostmax - 1] = '\0';
-	rspamd_snprintf (greetingbuf, sizeof (greetingbuf), "Rspamd version %s is running on %s" CRLF, RVERSION, hostbuf);
+	g_hash_table_iter_init (&iter, ctx->custom_commands);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		rspamd_http_router_add_path (ctx->http, key, rspamd_webui_handle_custom);
+	}
 
-	start_map_watch (worker->srv->cfg, ctx->ev_base);
+#if 0
+	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_webui_handle_graph, ctx);
+#endif
+
 	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
+
+	/* Maps events */
+	start_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
 
-	close_log (worker->srv->logger);
-	if (ctx->rrd_file) {
-		rspamd_rrd_close (ctx->rrd_file);
-	}
-
+	g_mime_shutdown ();
+	close_log (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
-
-void
-register_custom_controller_command (const gchar *name, controller_func_t handler, gboolean privilleged, gboolean require_message)
-{
-	struct custom_controller_command *cmd;
-
-	cmd = g_malloc (sizeof (struct custom_controller_command));
-	cmd->command = name;
-	cmd->handler = handler;
-	cmd->privilleged = privilleged;
-	cmd->require_message = require_message;
-
-	custom_commands = g_list_prepend (custom_commands, cmd);
-}
-
-/* 
- * vi:ts=4 
- */
