@@ -49,7 +49,8 @@ module_t chartable_module = {
 	"chartable",
 	chartable_module_init,
 	chartable_module_config,
-	chartable_module_reconfig
+	chartable_module_reconfig,
+	NULL
 };
 
 struct chartable_ctx {

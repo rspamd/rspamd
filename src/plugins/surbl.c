@@ -82,7 +82,8 @@ module_t surbl_module = {
 	"surbl",
 	surbl_module_init,
 	surbl_module_config,
-	surbl_module_reconfig
+	surbl_module_reconfig,
+	NULL
 };
 
 static void

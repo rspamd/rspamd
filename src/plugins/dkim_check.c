@@ -83,7 +83,8 @@ module_t dkim_module = {
 	"dkim",
 	dkim_module_init,
 	dkim_module_config,
-	dkim_module_reconfig
+	dkim_module_reconfig,
+	NULL
 };
 
 gint

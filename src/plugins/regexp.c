@@ -107,7 +107,8 @@ module_t regexp_module = {
 	"regexp",
 	regexp_module_init,
 	regexp_module_config,
-	regexp_module_reconfig
+	regexp_module_reconfig,
+	NULL
 };
 
 /* Task cache functions */

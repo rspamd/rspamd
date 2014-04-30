@@ -74,7 +74,8 @@ module_t spf_module = {
 	"spf",
 	spf_module_init,
 	spf_module_config,
-	spf_module_reconfig
+	spf_module_reconfig,
+	NULL
 };
 
 gint

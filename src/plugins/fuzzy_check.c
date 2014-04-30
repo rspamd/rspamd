@@ -143,7 +143,8 @@ module_t fuzzy_check_module = {
 	"fuzzy_check",
 	fuzzy_check_module_init,
 	fuzzy_check_module_config,
-	fuzzy_check_module_reconfig
+	fuzzy_check_module_reconfig,
+	NULL
 };
 
 static void
