@@ -327,6 +327,8 @@ print_commands_list (void)
 static void
 add_options (GHashTable *opts)
 {
+	GString *numbuf;
+
 	if (ip != NULL) {
 		g_hash_table_insert (opts, "Ip", ip);
 	}
@@ -353,6 +355,16 @@ add_options (GHashTable *opts)
 	}
 	if (pass_all) {
 		g_hash_table_insert (opts, "Pass", "all");
+	}
+	if (weight != 0) {
+		numbuf = g_string_sized_new (8);
+		rspamd_printf_gstring (numbuf, "%d", weight);
+		g_hash_table_insert (opts, "Weight", numbuf->str);
+	}
+	if (flag != 0) {
+		numbuf = g_string_sized_new (8);
+		rspamd_printf_gstring (numbuf, "%d", flag);
+		g_hash_table_insert (opts, "Flag", numbuf->str);
 	}
 }
 
