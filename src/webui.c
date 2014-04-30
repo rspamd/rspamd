@@ -136,56 +136,6 @@ struct rspamd_webui_session {
 
 sig_atomic_t             wanna_die = 0;
 
-/* Signal handlers */
-
-static void
-rspamd_webui_send_error (struct rspamd_http_connection_entry *entry, gint code,
-		const gchar *error_msg)
-{
-	struct rspamd_http_message *msg;
-
-	msg = rspamd_http_new_message (HTTP_RESPONSE);
-	msg->date = time (NULL);
-	msg->code = code;
-	msg->body = g_string_sized_new (128);
-	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
-	rspamd_http_connection_reset (entry->conn);
-	rspamd_http_connection_write_message (entry->conn, msg, NULL,
-			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
-	entry->is_reply = TRUE;
-}
-
-static void
-rspamd_webui_send_string (struct rspamd_http_connection_entry *entry, const gchar *str)
-{
-	struct rspamd_http_message *msg;
-
-	msg = rspamd_http_new_message (HTTP_RESPONSE);
-	msg->date = time (NULL);
-	msg->code = 200;
-	msg->body = g_string_new (str);
-	rspamd_http_connection_reset (entry->conn);
-	rspamd_http_connection_write_message (entry->conn, msg, NULL,
-			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
-	entry->is_reply = TRUE;
-}
-
-static void
-rspamd_webui_send_ucl (struct rspamd_http_connection_entry *entry, ucl_object_t *obj)
-{
-	struct rspamd_http_message *msg;
-
-	msg = rspamd_http_new_message (HTTP_RESPONSE);
-	msg->date = time (NULL);
-	msg->code = 200;
-	msg->body = g_string_sized_new (BUFSIZ);
-	rspamd_ucl_emit_gstring (obj, UCL_EMIT_JSON_COMPACT, msg->body);
-	rspamd_http_connection_reset (entry->conn);
-	rspamd_http_connection_write_message (entry->conn, msg, NULL,
-			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
-	entry->is_reply = TRUE;
-}
-
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
@@ -259,7 +209,7 @@ rspamd_webui_check_password (struct rspamd_http_connection_entry *entry,
 
 
 	if (!ret) {
-		rspamd_webui_send_error (entry, 403, "Unauthorized");
+		rspamd_controller_send_error (entry, 403, "Unauthorized");
 	}
 
 	return ret;
@@ -307,7 +257,7 @@ rspamd_webui_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_scanned), "scanned", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_learned), "learned", 0, false);
 
-	rspamd_webui_send_ucl (conn_ent, obj);
+	rspamd_controller_send_ucl (conn_ent, obj);
 	ucl_object_unref (obj);
 
 	return 0;
@@ -372,7 +322,7 @@ rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 		ucl_array_append (top, obj);
 	}
 
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -418,7 +368,7 @@ rspamd_webui_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 		}
 	}
 
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -485,7 +435,7 @@ rspamd_webui_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		g_list_free (tmp);
 	}
 
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -522,14 +472,14 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	if (idstr == NULL) {
 		msg_info ("absent map id");
-		rspamd_webui_send_error (conn_ent, 400, "400 id header missing");
+		rspamd_controller_send_error (conn_ent, 400, "400 id header missing");
 		return 0;
 	}
 
 	id = strtoul (idstr, &errstr, 10);
 	if (*errstr != '\0') {
 		msg_info ("invalid map id");
-		rspamd_webui_send_error (conn_ent, 400, "400 invalid map id");
+		rspamd_controller_send_error (conn_ent, 400, "400 invalid map id");
 		return 0;
 	}
 
@@ -546,13 +496,13 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!found) {
 		msg_info ("map not found");
-		rspamd_webui_send_error (conn_ent, 404, "404 map not found");
+		rspamd_controller_send_error (conn_ent, 404, "404 map not found");
 		return 0;
 	}
 
 	if (stat (map->uri, &st) == -1 || (fd = open (map->uri, O_RDONLY)) == -1) {
 		msg_err ("cannot open map %s: %s", map->uri, strerror (errno));
-		rspamd_webui_send_error (conn_ent, 500, "500 map open error");
+		rspamd_controller_send_error (conn_ent, 500, "500 map open error");
 		return 0;
 	}
 
@@ -565,7 +515,7 @@ rspamd_webui_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	if (read (fd, msg->body->str, st.st_size) == -1) {
 		rspamd_http_message_free (reply);
 		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
-		rspamd_webui_send_error (conn_ent, 500, "500 map read error");
+		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
 		return 0;
 	}
 
@@ -741,7 +691,7 @@ rspamd_webui_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
 		ucl_array_append (top, obj);
 	}
 
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -826,7 +776,7 @@ rspamd_webui_handle_history (struct rspamd_http_connection_entry *conn_ent,
 		}
 	}
 
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -844,11 +794,11 @@ rspamd_webui_learn_fin_task (void *ud)
 	session = conn_ent->ud;
 
 	if (!learn_task_spam (session->cl, task, session->is_spam, &err)) {
-		rspamd_webui_send_error (conn_ent, 500 + err->code, err->message);
+		rspamd_controller_send_error (conn_ent, 500 + err->code, err->message);
 		return TRUE;
 	}
 	/* Successful learn */
-	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
 	return TRUE;
 }
@@ -885,7 +835,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
 	}
 
@@ -895,7 +845,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 
 	cl = rspamd_config_find_classifier (ctx->cfg, classifier);
 	if (cl == NULL) {
-		rspamd_webui_send_error (conn_ent, 400, "Classifier not found");
+		rspamd_controller_send_error (conn_ent, 400, "Classifier not found");
 		return 0;
 	}
 
@@ -913,7 +863,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
-		rspamd_webui_send_error (conn_ent, 500, task->last_error);
+		rspamd_controller_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);
 		return 0;
 	}
@@ -975,7 +925,7 @@ rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
 	}
 
@@ -993,7 +943,7 @@ rspamd_webui_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
-		rspamd_webui_send_error (conn_ent, 500, task->last_error);
+		rspamd_controller_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);
 		return 0;
 	}
@@ -1032,21 +982,21 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
 	}
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
 		msg_err ("cannot find default metric");
-		rspamd_webui_send_error (conn_ent, 500, "Default metric is absent");
+		rspamd_controller_send_error (conn_ent, 500, "Default metric is absent");
 		return 0;
 	}
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
 		msg_err ("dynamic conf has not been defined");
-		rspamd_webui_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		rspamd_controller_send_error (conn_ent, 500, "No dynamic_rules setting defined");
 		return 0;
 	}
 
@@ -1055,7 +1005,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
 		msg_err ("cannot parse input: %s", error);
-		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_parser_free (parser);
 		return 0;
 	}
@@ -1065,7 +1015,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 
 	if (obj->type != UCL_ARRAY || obj->len != 3) {
 		msg_err ("input is not an array of 3 elements");
-		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_object_unref (obj);
 		return 0;
 	}
@@ -1091,7 +1041,7 @@ rspamd_webui_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
 
 	dump_dynamic_config (ctx->cfg);
 
-	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
 	return 0;
 }
@@ -1126,21 +1076,21 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
 	}
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
 		msg_err ("cannot find default metric");
-		rspamd_webui_send_error (conn_ent, 500, "Default metric is absent");
+		rspamd_controller_send_error (conn_ent, 500, "Default metric is absent");
 		return 0;
 	}
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
 		msg_err ("dynamic conf has not been defined");
-		rspamd_webui_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		rspamd_controller_send_error (conn_ent, 500, "No dynamic_rules setting defined");
 		return 0;
 	}
 
@@ -1149,7 +1099,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
 		msg_err ("cannot parse input: %s", error);
-		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_parser_free (parser);
 		return 0;
 	}
@@ -1159,7 +1109,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 
 	if (obj->type != UCL_ARRAY || obj->len != 3) {
 		msg_err ("input is not an array of 3 elements");
-		rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_object_unref (obj);
 		return 0;
 	}
@@ -1167,7 +1117,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 	while ((cur = ucl_iterate_object (obj, &iter, true))) {
 		if (cur->type != UCL_OBJECT) {
 			msg_err ("json array data error");
-			rspamd_webui_send_error (conn_ent, 400, "Cannot parse input");
+			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 			ucl_object_unref (obj);
 			return 0;
 		}
@@ -1179,7 +1129,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
 					ucl_object_tostring (jname), val)) {
 				msg_err ("add symbol failed for %s", ucl_object_tostring (jname));
-				rspamd_webui_send_error (conn_ent, 506, "Add symbol failed");
+				rspamd_controller_send_error (conn_ent, 506, "Add symbol failed");
 				ucl_object_unref (obj);
 				return 0;
 			}
@@ -1188,7 +1138,7 @@ rspamd_webui_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
 
 	dump_dynamic_config (ctx->cfg);
 
-	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
 	return 0;
 }
@@ -1222,7 +1172,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
 	}
 
@@ -1230,14 +1180,14 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	if (idstr == NULL) {
 		msg_info ("absent map id");
-		rspamd_webui_send_error (conn_ent, 400, "Map id not specified");
+		rspamd_controller_send_error (conn_ent, 400, "Map id not specified");
 		return 0;
 	}
 
 	id = strtoul (idstr, &errstr, 10);
 	if (*errstr != '\0') {
 		msg_info ("invalid map id");
-		rspamd_webui_send_error (conn_ent, 400, "Map id is invalid");
+		rspamd_controller_send_error (conn_ent, 400, "Map id is invalid");
 		return 0;
 	}
 
@@ -1254,13 +1204,13 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!found) {
 		msg_info ("map not found: %d", id);
-		rspamd_webui_send_error (conn_ent, 404, "Map id not found");
+		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
 		return 0;
 	}
 
 	if (g_atomic_int_get (map->locked)) {
 		msg_info ("map locked: %s", map->uri);
-		rspamd_webui_send_error (conn_ent, 404, "Map is locked");
+		rspamd_controller_send_error (conn_ent, 404, "Map is locked");
 		return 0;
 	}
 
@@ -1270,7 +1220,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	if (fd == -1) {
 		g_atomic_int_set (map->locked, 0);
 		msg_info ("map %s open error: %s", map->uri, strerror (errno));
-		rspamd_webui_send_error (conn_ent, 404, "Map id not found");
+		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
 		return 0;
 	}
 
@@ -1278,7 +1228,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		msg_info ("map %s write error: %s", map->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
-		rspamd_webui_send_error (conn_ent, 500, "Map write error");
+		rspamd_controller_send_error (conn_ent, 500, "Map write error");
 		return 0;
 	}
 
@@ -1286,7 +1236,7 @@ rspamd_webui_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	close (fd);
 	g_atomic_int_set (map->locked, 0);
 
-	rspamd_webui_send_string (conn_ent, "{\"success\":true}");
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
 	return 0;
 }
@@ -1414,7 +1364,7 @@ rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
 		rspamd_mempool_stat_reset ();
 	}
 
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -1504,7 +1454,7 @@ rspamd_webui_handle_counters (struct rspamd_http_connection_entry *conn_ent,
 			cur = g_list_next (cur);
 		}
 	}
-	rspamd_webui_send_ucl (conn_ent, top);
+	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
 	return 0;
@@ -1520,7 +1470,7 @@ rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
 	if (cmd == NULL || cmd->handler == NULL) {
 		msg_err ("custom command %V has not been found", msg->url);
-		rspamd_webui_send_error (conn_ent, 404, "No command associated");
+		rspamd_controller_send_error (conn_ent, 404, "No command associated");
 		return 0;
 	}
 
@@ -1529,7 +1479,7 @@ rspamd_webui_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	}
 	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_webui_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
 		return 0;
 	}
 

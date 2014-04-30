@@ -76,4 +76,30 @@ struct rspamd_custom_controller_command {
 	rspamd_controller_func_t handler;
 };
 
+/**
+ * Send error using HTTP and JSON output
+ * @param entry router entry
+ * @param code error code
+ * @param error_msg error message
+ */
+void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
+		gint code,
+		const gchar *error_msg);
+
+/**
+ * Send a custom string using HTTP
+ * @param entry router entry
+ * @param str string to send
+ */
+void rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
+		const gchar *str);
+
+/**
+ * Send UCL using HTTP and JSON serialization
+ * @param entry router entry
+ * @param obj object to send
+ */
+void rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
+		ucl_object_t *obj);
+
 #endif /* WORKER_UTIL_H_ */

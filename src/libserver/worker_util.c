@@ -215,3 +215,54 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 		g_list_free (worker->accept_events);
 	}
 }
+
+void
+rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
+		gint code,
+		const gchar *error_msg)
+{
+	struct rspamd_http_message *msg;
+
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = code;
+	msg->body = g_string_sized_new (128);
+	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn, msg, NULL,
+			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	entry->is_reply = TRUE;
+}
+
+void
+rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
+		const gchar *str)
+{
+	struct rspamd_http_message *msg;
+
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = 200;
+	msg->body = g_string_new (str);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn, msg, NULL,
+			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	entry->is_reply = TRUE;
+}
+
+void
+rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
+		ucl_object_t *obj)
+{
+	struct rspamd_http_message *msg;
+
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = 200;
+	msg->body = g_string_sized_new (BUFSIZ);
+	rspamd_ucl_emit_gstring (obj, UCL_EMIT_JSON_COMPACT, msg->body);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn, msg, NULL,
+			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	entry->is_reply = TRUE;
+}
