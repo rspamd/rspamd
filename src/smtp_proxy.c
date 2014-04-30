@@ -50,7 +50,7 @@
 
 
 /* Init functions */
-gpointer init_smtp_proxy (struct config_file *cfg);
+gpointer init_smtp_proxy (struct rspamd_config *cfg);
 void start_smtp_proxy (struct rspamd_worker *worker);
 
 worker_t smtp_proxy_worker = {
@@ -894,7 +894,7 @@ accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_smtp_proxy (struct config_file *cfg)
+init_smtp_proxy (struct rspamd_config *cfg)
 {
 	struct smtp_proxy_ctx         		*ctx;
 	GQuark								type;
@@ -980,7 +980,7 @@ start_smtp_proxy (struct rspamd_worker *worker)
 {
 	struct smtp_proxy_ctx         *ctx = worker->ctx;
 
-	ctx->ev_base = prepare_worker (worker, "smtp_proxy", accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "smtp_proxy", accept_socket);
 
 	/* Set smtp options */
 	if ( !config_smtp_proxy_worker (worker)) {

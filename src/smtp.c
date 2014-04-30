@@ -49,7 +49,7 @@
 static gboolean smtp_write_socket (void *arg);
 
 /* Init functions */
-gpointer init_smtp (struct config_file *cfg);
+gpointer init_smtp (struct rspamd_config *cfg);
 void start_smtp (struct rspamd_worker *worker);
 
 worker_t smtp_worker = {
@@ -801,7 +801,7 @@ make_capabilities (struct smtp_worker_ctx *ctx, const gchar *line)
 }
 
 gpointer
-init_smtp (struct config_file *cfg)
+init_smtp (struct rspamd_config *cfg)
 {
 	struct smtp_worker_ctx         		*ctx;
 	GQuark								type;
@@ -904,7 +904,7 @@ start_smtp (struct rspamd_worker *worker)
 {
 	struct smtp_worker_ctx         *ctx = worker->ctx;
 
-	ctx->ev_base = prepare_worker (worker, "smtp_worker", accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "smtp_worker", accept_socket);
 
 	/* Set smtp options */
 	if ( !config_smtp_worker (worker)) {

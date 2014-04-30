@@ -42,7 +42,7 @@
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
-gpointer init_lua_worker (struct config_file *cfg);
+gpointer init_lua_worker (struct rspamd_config *cfg);
 void start_lua_worker (struct rspamd_worker *worker);
 
 worker_t lua_worker = {
@@ -75,7 +75,7 @@ struct rspamd_lua_worker_ctx {
 	/* Callback for finishing */
 	gint							cbref_fin;
 	/* Config file */
-	struct config_file 			   *cfg;
+	struct rspamd_config 			   *cfg;
 	/* The rest options */
 	ucl_object_t				   *opts;
 };
@@ -236,7 +236,7 @@ static int
 lua_worker_get_cfg (lua_State *L)
 {
 	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
-	struct config_file								**pcfg;
+	struct rspamd_config								**pcfg;
 
 	if (ctx) {
 		pcfg = lua_newuserdata (L, sizeof (gpointer));
@@ -307,7 +307,7 @@ rspamd_lua_worker_parser (ucl_object_t *obj, gpointer ud)
 }
 
 gpointer
-init_lua_worker (struct config_file *cfg)
+init_lua_worker (struct rspamd_config *cfg)
 {
 	struct rspamd_lua_worker_ctx       *ctx;
 	GQuark								type;
@@ -341,7 +341,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	monstartup ((u_long) & _start, (u_long) & etext);
 #endif
 
-	ctx->ev_base = prepare_worker (worker, "lua_worker", lua_accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "lua_worker", lua_accept_socket);
 
 	L = worker->srv->cfg->lua_state;
 	ctx->L = L;

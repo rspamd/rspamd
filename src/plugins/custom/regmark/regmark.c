@@ -54,7 +54,7 @@
 #define MAX_LEVELS 32
 
 /* Exported functions */
-void module_init (struct config_file *cfg);
+void module_init (struct rspamd_config *cfg);
 void* before_connect (void);
 gboolean parse_line (const char *line, size_t len, char **output, void *user_data);
 void after_connect (char **output, char **log_line, void *user_data);
@@ -67,10 +67,10 @@ static prefix_tree_t *tree = NULL;
 /* Implementation */
 
 char                           *
-get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
+rspamd_config_get_module_opt (struct rspamd_config *cfg, char *module_name, char *opt_name)
 {
 	GList                          *cur_opt;
-	struct module_opt              *cur;
+	struct rspamd_module_opt              *cur;
 
 	cur_opt = g_hash_table_lookup (cfg->modules_opts, module_name);
 	if (cur_opt == NULL) {
@@ -89,11 +89,11 @@ get_module_opt (struct config_file *cfg, char *module_name, char *opt_name)
 }
 
 void 
-module_init (struct config_file *cfg)
+module_init (struct rspamd_config *cfg)
 {
 	char *value;
 
-	if (cfg && (value = get_module_opt (cfg, "ipmark", "file")) != NULL) {
+	if (cfg && (value = rspamd_config_get_module_opt (cfg, "ipmark", "file")) != NULL) {
 		filename = g_strdup (value);
 	}
 	

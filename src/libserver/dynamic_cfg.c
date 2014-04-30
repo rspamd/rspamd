@@ -48,7 +48,7 @@ struct config_json_buf {
 	gchar                          *buf;
 	gchar                          *pos;
 	size_t                          buflen;
-	struct config_file             *cfg;
+	struct rspamd_config             *cfg;
 	GList						   *config_metrics;
 };
 
@@ -89,7 +89,7 @@ dynamic_cfg_free (GList *conf_metrics)
  * @param cfg
  */
 static void
-apply_dynamic_conf (GList *conf_metrics, struct config_file *cfg)
+apply_dynamic_conf (GList *conf_metrics, struct rspamd_config *cfg)
 {
 	GList								*cur, *cur_elt;
 	struct dynamic_cfg_metric			*metric;
@@ -312,7 +312,7 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
  * @param cfg config file
  */
 void
-init_dynamic_config (struct config_file *cfg)
+init_dynamic_config (struct rspamd_config *cfg)
 {
 	struct config_json_buf				*jb, **pjb;
 
@@ -412,7 +412,7 @@ dump_dynamic_list (gint fd, GList *rules)
  * @return
  */
 gboolean
-dump_dynamic_config (struct config_file *cfg)
+dump_dynamic_config (struct rspamd_config *cfg)
 {
 	struct stat							 st;
 	gchar								*dir, pathbuf[PATH_MAX];
@@ -490,7 +490,7 @@ dump_dynamic_config (struct config_file *cfg)
  * @return
  */
 gboolean
-add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gchar *symbol, gdouble value)
+add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric_name, const gchar *symbol, gdouble value)
 {
 	GList								*cur;
 	struct dynamic_cfg_metric			*metric = NULL;
@@ -560,7 +560,7 @@ add_dynamic_symbol (struct config_file *cfg, const gchar *metric_name, const gch
  * @return
  */
 gboolean
-add_dynamic_action (struct config_file *cfg, const gchar *metric_name, guint action, gdouble value)
+add_dynamic_action (struct rspamd_config *cfg, const gchar *metric_name, guint action, gdouble value)
 {
 	GList								*cur;
 	struct dynamic_cfg_metric			*metric = NULL;

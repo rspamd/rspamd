@@ -503,10 +503,10 @@ check_autolearn (struct statfile_autolearn_params *params, struct rspamd_task *t
 }
 
 void
-process_autolearn (struct statfile *st, struct rspamd_task *task, GTree * tokens, struct classifier *classifier, gchar *filename, struct classifier_ctx *ctx)
+process_autolearn (struct rspamd_statfile_config *st, struct rspamd_task *task, GTree * tokens, struct classifier *classifier, gchar *filename, struct classifier_ctx *ctx)
 {
 	stat_file_t                    *statfile;
-	struct statfile                *unused;
+	struct rspamd_statfile_config                *unused;
 
 	if (check_autolearn (st->autolearn, task)) {
 		if (tokens) {
@@ -582,10 +582,10 @@ classifiers_callback (gpointer value, void *arg)
 {
 	struct classifiers_cbdata	   *cbdata = arg;
 	struct rspamd_task             *task;
-	struct classifier_config       *cl = value;
+	struct rspamd_classifier_config       *cl = value;
 	struct classifier_ctx          *ctx;
 	struct mime_text_part          *text_part, *p1, *p2;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	GTree                          *tokens = NULL;
 	GList                          *cur;
 	f_str_t                         c;
@@ -872,12 +872,12 @@ gboolean
 learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 {
 	GList                          *cur, *ex;
-	struct classifier_config       *cl;
+	struct rspamd_classifier_config       *cl;
 	struct classifier_ctx          *cls_ctx;
 	gchar                          *s;
 	f_str_t                         c;
 	GTree                          *tokens = NULL;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	stat_file_t                    *stf;
 	gdouble                         sum;
 	struct mime_text_part          *part, *p1, *p2;
@@ -997,7 +997,7 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 }
 
 gboolean
-learn_task_spam (struct classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err)
+learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err)
 {
 	GList                          *cur, *ex;
 	struct classifier_ctx          *cls_ctx;

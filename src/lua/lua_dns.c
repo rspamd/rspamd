@@ -169,7 +169,7 @@ static int
 lua_dns_resolver_init (lua_State *L)
 {
 	struct rspamd_dns_resolver					*resolver, **presolver;
-	struct config_file 							*cfg, **pcfg;
+	struct rspamd_config 							*cfg, **pcfg;
 	struct event_base							*base, **pbase;
 
 	/* Check args */

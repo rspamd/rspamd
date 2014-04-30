@@ -94,7 +94,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 
 struct rspamd_dns_resolver *
-dns_resolver_init (rspamd_logger_t *logger, struct event_base *ev_base, struct config_file *cfg)
+dns_resolver_init (rspamd_logger_t *logger, struct event_base *ev_base, struct rspamd_config *cfg)
 {
 	GList                          *cur;
 	struct rspamd_dns_resolver     *new;

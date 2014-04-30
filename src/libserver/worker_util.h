@@ -31,12 +31,12 @@
  * @param type
  * @return worker's control structure or NULL
  */
-worker_t* get_worker_by_type (GQuark type);
+worker_t* rspamd_get_worker_by_type (GQuark type);
 
 /**
  * Set counter for a symbol
  */
-double set_counter (const gchar *name, guint32 value);
+double rspamd_set_counter (const gchar *name, guint32 value);
 
 #ifndef HAVE_SA_SIGINFO
 typedef void (*rspamd_sig_handler_t) (gint);
@@ -55,13 +55,13 @@ struct rspamd_worker;
  * @return event base suitable for a worker
  */
 struct event_base *
-prepare_worker (struct rspamd_worker *worker, const char *name,
+rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 		void (*accept_handler)(int, short, void *));
 
 /**
  * Stop accepting new connections for a worker
  * @param worker
  */
-void worker_stop_accept (struct rspamd_worker *worker);
+void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
 #endif /* WORKER_UTIL_H_ */

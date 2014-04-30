@@ -20,12 +20,12 @@ struct rspamd_settings {
 /*
  * Read settings from specified path
  */
-gboolean read_settings (const gchar *path, const gchar *description, struct config_file *cfg, GHashTable *table);
+gboolean read_settings (const gchar *path, const gchar *description, struct rspamd_config *cfg, GHashTable *table);
 
 /*
  * Init configuration structures for settings
  */
-void init_settings (struct config_file *cfg);
+void init_settings (struct rspamd_config *cfg);
 
 /*
  * Check scores settings

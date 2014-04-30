@@ -8,11 +8,11 @@
 #include "fstring.h"
 #include "ucl.h"
 
-struct config_file;
+struct rspamd_config;
 struct rspamd_main;
 struct workq;
-struct statfile;
-struct classifier_config;
+struct rspamd_statfile_config;
+struct rspamd_classifier_config;
 
 /**
  * Union that is used for storing sockaddrs
@@ -188,7 +188,7 @@ gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
 /*
  * Google perf-tools initialization function
  */
-void gperf_profiler_init (struct config_file *cfg, const gchar *descr);
+void gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr);
 
 /*
  * Workarounds for older versions of glib

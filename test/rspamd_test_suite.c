@@ -11,7 +11,7 @@ worker_t *workers[] = { NULL };
 int
 main (int argc, char **argv)
 {
-	struct config_file            *cfg;
+	struct rspamd_config            *cfg;
 
 	g_test_init (&argc, &argv, NULL);
 
@@ -25,9 +25,9 @@ main (int argc, char **argv)
 
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	cfg = rspamd_main->cfg;
-	bzero (cfg, sizeof (struct config_file));
+	bzero (cfg, sizeof (struct rspamd_config));
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	base = event_init ();

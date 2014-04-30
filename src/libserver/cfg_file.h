@@ -119,7 +119,7 @@ enum lua_var_type {
 /**
  * Module option
  */
-struct module_opt {
+struct rspamd_module_opt {
 	gchar *param;									/**< parameter name										*/
 	gchar *value;									/**< parameter value									*/
 	gchar *description;								/**< parameter description								*/
@@ -129,15 +129,10 @@ struct module_opt {
 	enum lua_var_type lua_type;						/**< type of lua variable								*/
 };
 
-struct module_meta_opt {
-	gchar *name;									/**< Name of meta option								*/
-	GList *options;									/**< List of struct module_opt							*/
-};
-
 /**
  * Symbol definition
  */
-struct symbol_def {
+struct rspamd_symbol_def {
 	gchar *name;
 	gchar *description;
 	gdouble *weight_ptr;
@@ -146,7 +141,7 @@ struct symbol_def {
 /**
  * Symbols group
  */
-struct symbols_group {
+struct rspamd_symbols_group {
 	gchar *name;
 	GList *symbols;
 };
@@ -154,7 +149,7 @@ struct symbols_group {
 /**
  * Statfile section definition
  */
-struct statfile_section {
+struct rspamd_statfile_section {
 	guint32 code;									/**< section's code										*/
 	guint64 size;									/**< size of section									*/
 	double weight;									/**< weight coefficient for section						*/
@@ -189,12 +184,12 @@ struct statfile_binlog_params {
 	guint16 master_port;
 };
 
-typedef double (*statfile_normalize_func)(struct config_file *cfg, long double score, void *params);
+typedef double (*statfile_normalize_func)(struct rspamd_config *cfg, long double score, void *params);
 
 /**
  * Statfile config definition
  */
-struct statfile {
+struct rspamd_statfile_config {
 	gchar *symbol;									/**< symbol of statfile									*/
 	gchar *path; 									/**< filesystem pattern (with %r or %f)					*/
 	gchar *label;									/**< label of this statfile								*/
@@ -212,7 +207,7 @@ struct statfile {
 /**
  * Classifier config definition
  */
-struct classifier_config {
+struct rspamd_classifier_config {
     GList *statfiles;                               /**< statfiles list                                     */
     GHashTable *labels;								/**< statfiles with labels								*/
     gchar *metric;                                  /**< metric of this classifier                          */
@@ -249,7 +244,7 @@ struct rspamd_worker_cfg_parser {
 /**
  * Config params for rspamd worker
  */
-struct worker_conf {
+struct rspamd_worker_conf {
 	worker_t *worker;								/**< pointer to worker type								*/
 	GQuark type;									/**< type of worker										*/
 	struct rspamd_worker_bind_conf *bind_conf;		/**< bind configuration									*/
@@ -267,7 +262,7 @@ struct worker_conf {
 /**
  * Structure that stores all config data
  */
-struct config_file {
+struct rspamd_config {
 	gchar *rspamd_user;								/**< user to run as										*/
 	gchar *rspamd_group;							/**< group to run as									*/
 	rspamd_mempool_t *cfg_pool;						/**< memory pool for config								*/
@@ -379,7 +374,8 @@ struct config_file {
  * @param priority priority
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority);
+gboolean rspamd_parse_host_port_priority (rspamd_mempool_t *pool,
+		const gchar *str, gchar **addr, guint16 *port, guint *priority);
 
 /**
  * Parse host:port line
@@ -387,7 +383,8 @@ gboolean parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gch
  * @param port port
  * @return TRUE if string was parsed
  */
-gboolean parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port);
+gboolean rspamd_parse_host_port (rspamd_mempool_t *pool, const gchar *str,
+		gchar **addr, guint16 *port);
 
 /**
  * Parse host:priority line
@@ -395,7 +392,8 @@ gboolean parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr
  * @param priority priority
  * @return TRUE if string was parsed
  */
-gboolean parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint *priority);
+gboolean rspamd_parse_host_priority (rspamd_mempool_t *pool, const gchar *str,
+		gchar **addr, guint *priority);
 
 /**
  * Parse bind credits
@@ -404,19 +402,20 @@ gboolean parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **
  * @param type type of credits
  * @return 1 if line was successfully parsed and 0 in case of error
  */
-gboolean parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str);
+gboolean rspamd_parse_bind_line (struct rspamd_config *cfg,
+		struct rspamd_worker_conf *cf, const gchar *str);
 
 /**
  * Init default values
  * @param cfg config file
  */
-void init_defaults (struct config_file *cfg);
+void rspamd_config_defaults (struct rspamd_config *cfg);
 
 /**
  * Free memory used by config structure
  * @param cfg config file
  */
-void free_config (struct config_file *cfg);
+void rspamd_config_free (struct rspamd_config *cfg);
 
 /**
  * Gets module option with specified name
@@ -425,7 +424,8 @@ void free_config (struct config_file *cfg);
  * @param opt_name name of option to get
  * @return module value or NULL if option does not defined
  */
-const ucl_object_t* get_module_opt (struct config_file *cfg, const gchar *module_name,
+const ucl_object_t* rspamd_config_get_module_opt (struct rspamd_config *cfg,
+		const gchar *module_name,
 		const gchar *opt_name);
 
 /**
@@ -433,82 +433,90 @@ const ucl_object_t* get_module_opt (struct config_file *cfg, const gchar *module
  * @param limit string representation of limit (eg. 1M)
  * @return numeric value of limit
  */
-guint64 parse_limit (const gchar *limit, guint len);
+guint64 rspamd_config_parse_limit (const gchar *limit, guint len);
 
 /**
  * Parse flag
  * @param str string representation of flag (eg. 'on')
  * @return numeric value of flag (0 or 1)
  */
-gchar parse_flag (const gchar *str);
+gchar rspamd_config_parse_flag (const gchar *str);
 
 /**
  * Do post load actions for config
  * @param cfg config file
  */
-void post_load_config (struct config_file *cfg);
+void rspamd_config_post_load (struct rspamd_config *cfg);
 
 /**
  * Calculate checksum for config file
  * @param cfg config file
  */
-gboolean get_config_checksum (struct config_file *cfg);
+gboolean rspamd_config_calculate_checksum (struct rspamd_config *cfg);
 
 
 /**
  * Replace all \" with a single " in given string
  * @param line input string
  */
-void unescape_quotes (gchar *line);
+void rspamd_config_unescape_quotes (gchar *line);
 
 /*
  * Convert comma separated string to a list of strings
  */
-GList* parse_comma_list (rspamd_mempool_t *pool, const gchar *line);
+GList* rspamd_config_parse_comma_list (rspamd_mempool_t *pool,
+		const gchar *line);
 
 /*
  * Return a new classifier_config structure, setting default and non-conflicting attributes
  */
-struct classifier_config* check_classifier_conf (struct config_file *cfg, struct classifier_config *c);
+struct rspamd_classifier_config* rspamd_config_new_classifier (struct rspamd_config *cfg,
+		struct rspamd_classifier_config *c);
 /*
  * Return a new worker_conf structure, setting default and non-conflicting attributes
  */
-struct worker_conf* check_worker_conf (struct config_file *cfg, struct worker_conf *c);
+struct rspamd_worker_conf* rspamd_config_new_worker (struct rspamd_config *cfg,
+		struct rspamd_worker_conf *c);
 /*
  * Return a new metric structure, setting default and non-conflicting attributes
  */
-struct metric* check_metric_conf (struct config_file *cfg, struct metric *c);
+struct metric* rspamd_config_new_metric (struct rspamd_config *cfg,
+		struct metric *c);
 /*
  * Return a new statfile structure, setting default and non-conflicting attributes
  */
-struct statfile* check_statfile_conf (struct config_file *cfg, struct statfile *c);
+struct rspamd_statfile_config* rspamd_config_new_statfile (struct rspamd_config *cfg,
+		struct rspamd_statfile_config *c);
 
 /*
  * Read XML configuration file
  */
-gboolean read_rspamd_config (struct config_file *cfg,
+gboolean rspamd_config_read (struct rspamd_config *cfg,
 		const gchar *filename, const gchar *convert_to,
 		rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud);
 
 /*
  * Register symbols of classifiers inside metrics
  */
-void insert_classifier_symbols (struct config_file *cfg);
+void rspamd_config_insert_classify_symbols (struct rspamd_config *cfg);
 
 /*
  * Check statfiles inside a classifier
  */
-gboolean check_classifier_statfiles (struct classifier_config *cf);
+gboolean rspamd_config_check_statfiles (struct rspamd_classifier_config *cf);
 
 /*
  * Find classifier config by name
  */
-struct classifier_config* find_classifier_conf (struct config_file *cfg, const gchar *name);
+struct rspamd_classifier_config* rspamd_config_find_classifier (
+		struct rspamd_config *cfg,
+		const gchar *name);
 
 /*
  * Parse input `ip_list` to radix tree `tree`. Now supports only IPv4 addresses.
  */
-gboolean rspamd_parse_ip_list (const gchar *ip_list, radix_tree_t **tree);
+gboolean rspamd_config_parse_ip_list (const gchar *ip_list,
+		radix_tree_t **tree);
 
 #endif /* ifdef CFG_FILE_H */
 /* 

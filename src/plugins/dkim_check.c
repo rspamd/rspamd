@@ -75,9 +75,9 @@ static struct dkim_ctx        *dkim_module_ctx = NULL;
 static void                   dkim_symbol_callback (struct rspamd_task *task, void *unused);
 
 /* Initialization */
-gint dkim_module_init (struct config_file *cfg, struct module_ctx **ctx);
-gint dkim_module_config (struct config_file *cfg);
-gint dkim_module_reconfig (struct config_file *cfg);
+gint dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
+gint dkim_module_config (struct rspamd_config *cfg);
+gint dkim_module_reconfig (struct rspamd_config *cfg);
 
 module_t dkim_module = {
 	"dkim",
@@ -87,7 +87,7 @@ module_t dkim_module = {
 };
 
 gint
-dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
+dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
 
@@ -99,7 +99,7 @@ dkim_module_init (struct config_file *cfg, struct module_ctx **ctx)
 }
 
 gint
-dkim_module_config (struct config_file *cfg)
+dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t             *value;
 	gint                            res = TRUE;
@@ -108,50 +108,50 @@ dkim_module_config (struct config_file *cfg)
 
 	dkim_module_ctx->whitelist_ip = radix_tree_create ();
 
-	if ((value = get_module_opt (cfg, "dkim", "symbol_reject")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "symbol_reject")) != NULL) {
 		dkim_module_ctx->symbol_reject = ucl_obj_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_reject = DEFAULT_SYMBOL_REJECT;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "symbol_tempfail")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "symbol_tempfail")) != NULL) {
 		dkim_module_ctx->symbol_tempfail = ucl_obj_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_tempfail = DEFAULT_SYMBOL_TEMPFAIL;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "symbol_allow")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "symbol_allow")) != NULL) {
 		dkim_module_ctx->symbol_allow = ucl_obj_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "dkim_cache_size")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "dkim_cache_size")) != NULL) {
 		cache_size = ucl_obj_toint (value);
 	}
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "dkim_cache_expire")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "dkim_cache_expire")) != NULL) {
 		cache_expire = ucl_obj_todouble (value);
 	}
 	else {
 		cache_expire = DEFAULT_CACHE_MAXAGE;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "time_jitter")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "time_jitter")) != NULL) {
 		dkim_module_ctx->time_jitter = ucl_obj_todouble (value);
 	}
 	else {
 		dkim_module_ctx->time_jitter = DEFAULT_TIME_JITTER;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
 		if (! add_map (cfg, ucl_obj_tostring (value),
 				"DKIM whitelist", read_radix_list, fin_radix_list,
 				(void **)&dkim_module_ctx->whitelist_ip)) {
 			msg_warn ("cannot load whitelist from %s", ucl_obj_tostring (value));
 		}
 	}
-	if ((value = get_module_opt (cfg, "dkim", "domains")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "domains")) != NULL) {
 		if (! add_map (cfg, ucl_obj_tostring (value),
 				"DKIM domains", read_kv_list, fin_kv_list,
 				(void **)&dkim_module_ctx->dkim_domains)) {
@@ -161,19 +161,19 @@ dkim_module_config (struct config_file *cfg)
 			got_trusted = TRUE;
 		}
 	}
-	if ((value = get_module_opt (cfg, "dkim", "strict_multiplier")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "strict_multiplier")) != NULL) {
 		dkim_module_ctx->strict_multiplier = ucl_obj_toint (value);
 	}
 	else {
 		dkim_module_ctx->strict_multiplier = 1;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "trusted_only")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "trusted_only")) != NULL) {
 		dkim_module_ctx->trusted_only = ucl_obj_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->trusted_only = FALSE;
 	}
-	if ((value = get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
 		dkim_module_ctx->skip_multi = ucl_obj_toboolean (value);
 	}
 	else {
@@ -201,7 +201,7 @@ dkim_module_config (struct config_file *cfg)
 }
 
 gint
-dkim_module_reconfig (struct config_file *cfg)
+dkim_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
 	radix_tree_free (dkim_module_ctx->whitelist_ip);

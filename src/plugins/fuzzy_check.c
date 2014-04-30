@@ -135,9 +135,9 @@ static gboolean fuzzy_delete_handler (gchar **args,
 		struct controller_session *session);
 
 /* Initialization */
-gint fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx);
-gint fuzzy_check_module_config (struct config_file *cfg);
-gint fuzzy_check_module_reconfig (struct config_file *cfg);
+gint fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
+gint fuzzy_check_module_config (struct rspamd_config *cfg);
+gint fuzzy_check_module_reconfig (struct rspamd_config *cfg);
 
 module_t fuzzy_check_module = {
 	"fuzzy_check",
@@ -147,7 +147,7 @@ module_t fuzzy_check_module = {
 };
 
 static void
-parse_flags (struct fuzzy_rule *rule, struct config_file *cfg, const ucl_object_t *val)
+parse_flags (struct fuzzy_rule *rule, struct rspamd_config *cfg, const ucl_object_t *val)
 {
 	const ucl_object_t *elt;
 	struct fuzzy_mapping *map;
@@ -255,7 +255,7 @@ parse_servers_string (struct fuzzy_rule *rule, const gchar *str)
 		g_strstrip (strvec[i]);
 
 		cur = &rule->servers[rule->servers_num];
-		if (parse_host_port (fuzzy_module_ctx->fuzzy_pool, strvec[i], &cur->addr, &cur->port)) {
+		if (rspamd_parse_host_port (fuzzy_module_ctx->fuzzy_pool, strvec[i], &cur->addr, &cur->port)) {
 			if (cur->port == 0) {
 				cur->port = DEFAULT_PORT;
 			}
@@ -323,7 +323,7 @@ fuzzy_rule_new (const char *default_symbol, rspamd_mempool_t *pool)
 }
 
 static gint
-fuzzy_parse_rule (struct config_file *cfg, const ucl_object_t *obj)
+fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 {
 	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
@@ -388,7 +388,7 @@ fuzzy_parse_rule (struct config_file *cfg, const ucl_object_t *obj)
 }
 
 gint
-fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
+fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
 
@@ -400,50 +400,50 @@ fuzzy_check_module_init (struct config_file *cfg, struct module_ctx **ctx)
 }
 
 gint
-fuzzy_check_module_config (struct config_file *cfg)
+fuzzy_check_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t             *value, *cur;
 	gint                      res = TRUE;
 
-	if ((value = get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
 		fuzzy_module_ctx->default_symbol = ucl_obj_tostring (value);
 	}
 	else {
 		fuzzy_module_ctx->default_symbol = DEFAULT_SYMBOL;
 	}
 
-	if ((value = get_module_opt (cfg, "fuzzy_check", "min_length")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "min_length")) != NULL) {
 		fuzzy_module_ctx->min_hash_len = ucl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_hash_len = 0;
 	}
-	if ((value = get_module_opt (cfg, "fuzzy_check", "min_bytes")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "min_bytes")) != NULL) {
 		fuzzy_module_ctx->min_bytes = ucl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_bytes = 0;
 	}
-	if ((value = get_module_opt (cfg, "fuzzy_check", "min_height")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "min_height")) != NULL) {
 		fuzzy_module_ctx->min_height = ucl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_height = 0;
 	}
-	if ((value = get_module_opt (cfg, "fuzzy_check", "min_width")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "min_width")) != NULL) {
 		fuzzy_module_ctx->min_width = ucl_obj_toint (value);
 	}
 	else {
 		fuzzy_module_ctx->min_width = 0;
 	}
-	if ((value = get_module_opt (cfg, "fuzzy_check", "timeout")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "timeout")) != NULL) {
 		fuzzy_module_ctx->io_timeout = ucl_obj_todouble (value) * 1000;
 	}
 	else {
 		fuzzy_module_ctx->io_timeout = DEFAULT_IO_TIMEOUT;
 	}
 
-	if ((value = get_module_opt (cfg, "fuzzy_check", "whitelist")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "whitelist")) != NULL) {
 		fuzzy_module_ctx->whitelist = radix_tree_create ();
 		if (!add_map (cfg, ucl_obj_tostring (value),
 				"Fuzzy whitelist", read_radix_list, fin_radix_list,
@@ -455,7 +455,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 		fuzzy_module_ctx->whitelist = NULL;
 	}
 
-	if ((value = get_module_opt (cfg, "fuzzy_check", "rule")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "fuzzy_check", "rule")) != NULL) {
 		LL_FOREACH (value, cur) {
 			if (fuzzy_parse_rule (cfg, cur) == -1) {
 				return -1;
@@ -478,7 +478,7 @@ fuzzy_check_module_config (struct config_file *cfg)
 }
 
 gint
-fuzzy_check_module_reconfig (struct config_file *cfg)
+fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (fuzzy_module_ctx->fuzzy_pool);
 

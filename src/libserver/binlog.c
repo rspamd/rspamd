@@ -518,7 +518,7 @@ maybe_init_static (void)
 }
 
 gboolean 
-maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_file_t *file, GTree *nodes)
+maybe_write_binlog (struct rspamd_classifier_config *ccf, struct rspamd_statfile_config *st, stat_file_t *file, GTree *nodes)
 {
 	struct rspamd_binlog *log;
 
@@ -554,7 +554,7 @@ maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_fil
 }
 
 struct rspamd_binlog* 
-get_binlog_by_statfile (struct statfile *st)
+get_binlog_by_statfile (struct rspamd_statfile_config *st)
 {
 	struct rspamd_binlog *log;
 

@@ -52,9 +52,9 @@
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
 #define HARD_TERMINATION_TIME 10
 
-static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct worker_conf *);
-static gboolean                 load_rspamd_config (struct config_file *cfg, gboolean init_modules);
-static void                     init_cfg_cache (struct config_file *cfg);
+static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct rspamd_worker_conf *);
+static gboolean                 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules);
+static void                     init_cfg_cache (struct rspamd_config *cfg);
 
 sig_atomic_t                    do_restart = 0;
 sig_atomic_t                    do_reopen_log = 0;
@@ -188,7 +188,7 @@ print_signals_info (void)
 
 
 static void
-read_cmd_line (gint argc, gchar **argv, struct config_file *cfg)
+read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 {
 	GError                         *error = NULL;
 	GOptionContext                 *context;
@@ -300,7 +300,7 @@ drop_priv (struct rspamd_main *rspamd)
 }
 
 static void
-config_logger (struct config_file *cfg, gpointer ud)
+config_logger (struct rspamd_config *cfg, gpointer ud)
 {
 	struct rspamd_main *rm = ud;
 
@@ -317,7 +317,7 @@ config_logger (struct config_file *cfg, gpointer ud)
 }
 
 static void
-parse_filters_str (struct config_file *cfg, const gchar *str)
+parse_filters_str (struct rspamd_config *cfg, const gchar *str)
 {
 	gchar                         **strvec, **p;
 	struct filter                  *cur;
@@ -365,16 +365,16 @@ parse_filters_str (struct config_file *cfg, const gchar *str)
 static void
 reread_config (struct rspamd_main *rspamd)
 {
-	struct config_file             *tmp_cfg;
+	struct rspamd_config             *tmp_cfg;
 	gchar                           *cfg_file;
 	GList                          *l;
 	struct filter                  *filt;
 
-	tmp_cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+	tmp_cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	if (tmp_cfg) {
-		bzero (tmp_cfg, sizeof (struct config_file));
+		bzero (tmp_cfg, sizeof (struct rspamd_config));
 		tmp_cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-		init_defaults (tmp_cfg);
+		rspamd_config_defaults (tmp_cfg);
 		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
@@ -384,11 +384,11 @@ reread_config (struct rspamd_main *rspamd)
 		if (! load_rspamd_config (tmp_cfg, FALSE)) {
 			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"), rspamd_main);
 			msg_err ("cannot parse new config file, revert to old one");
-			free_config (tmp_cfg);
+			rspamd_config_free (tmp_cfg);
 		}
 		else {
 			msg_debug ("replacing config");
-			free_config (rspamd->cfg);
+			rspamd_config_free (rspamd->cfg);
 			close_log (rspamd->logger);
 			g_free (rspamd->cfg);
 			rspamd->cfg = tmp_cfg;
@@ -420,7 +420,7 @@ reread_config (struct rspamd_main *rspamd)
 }
 
 static void
-set_worker_limits (struct worker_conf *cf)
+set_worker_limits (struct rspamd_worker_conf *cf)
 {
 	struct rlimit                   rlmt;
 
@@ -444,7 +444,7 @@ set_worker_limits (struct worker_conf *cf)
 }
 
 static struct rspamd_worker    *
-fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
+fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 {
 	struct rspamd_worker           *cur;
 	/* Starting worker process */
@@ -454,8 +454,8 @@ fork_worker (struct rspamd_main *rspamd, struct worker_conf *cf)
 		cur->srv = rspamd;
 		cur->type = cf->type;
 		cur->pid = fork ();
-		cur->cf = g_malloc (sizeof (struct worker_conf));
-		memcpy (cur->cf, cf, sizeof (struct worker_conf));
+		cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));
+		memcpy (cur->cf, cf, sizeof (struct rspamd_worker_conf));
 		cur->pending = FALSE;
 		cur->ctx = cf->ctx;
 		switch (cur->pid) {
@@ -521,7 +521,7 @@ set_alarm (guint seconds)
 }
 
 static void
-delay_fork (struct worker_conf *cf)
+delay_fork (struct rspamd_worker_conf *cf)
 {
 	workers_pending = g_list_prepend (workers_pending, cf);
 	set_alarm (SOFT_FORK_TIME);
@@ -594,7 +594,7 @@ static void
 fork_delayed (struct rspamd_main *rspamd)
 {
 	GList                          *cur;
-	struct worker_conf             *cf;
+	struct rspamd_worker_conf             *cf;
 
 	while (workers_pending != NULL) {
 		cur = workers_pending;
@@ -622,7 +622,7 @@ static void
 spawn_workers (struct rspamd_main *rspamd)
 {
 	GList                          *cur, *ls;
-	struct worker_conf             *cf;
+	struct rspamd_worker_conf             *cf;
 	gint                            i, key;
 	gpointer                        p;
 	struct rspamd_worker_bind_conf *bcf;
@@ -739,8 +739,8 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 static void
 preload_statfiles (struct rspamd_main *rspamd)
 {
-	struct classifier_config       *cf;
-	struct statfile                *st;
+	struct rspamd_classifier_config       *cf;
+	struct rspamd_statfile_config                *st;
 	stat_file_t                    *stf;
 	GList                          *cur_cl, *cur_st;
 
@@ -764,13 +764,13 @@ preload_statfiles (struct rspamd_main *rspamd)
 }
 
 static gboolean
-load_rspamd_config (struct config_file *cfg, gboolean init_modules)
+load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 {
 	GList                          *l;
 	struct filter                  *filt;
 	struct module_ctx              *cur_module = NULL;
 
-	if (! read_rspamd_config (cfg, cfg->cfg_name, NULL,
+	if (! rspamd_config_read (cfg, cfg->cfg_name, NULL,
 			config_logger, rspamd_main)) {
 		return FALSE;
 	}
@@ -787,7 +787,7 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 	}
 
 	/* Do post-load actions */
-	post_load_config (cfg);
+	rspamd_config_post_load (cfg);
 	parse_filters_str (cfg, cfg->filters_str);
 	
 	if (init_modules) {
@@ -810,7 +810,7 @@ load_rspamd_config (struct config_file *cfg, gboolean init_modules)
 }
 
 static void
-init_cfg_cache (struct config_file *cfg) 
+init_cfg_cache (struct rspamd_config *cfg) 
 {
 
 	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename, FALSE)) {
@@ -819,7 +819,7 @@ init_cfg_cache (struct config_file *cfg)
 }
 
 static void
-print_symbols_cache (struct config_file *cfg) 
+print_symbols_cache (struct rspamd_config *cfg) 
 {
 	GList                          *cur;
 	struct cache_item              *item;
@@ -859,7 +859,7 @@ print_symbols_cache (struct config_file *cfg)
 }
 
 static gint
-perform_lua_tests (struct config_file *cfg)
+perform_lua_tests (struct rspamd_config *cfg)
 {
 	gint                            i, tests_num, res = EXIT_SUCCESS;
 	gchar                          *cur_script;
@@ -1054,7 +1054,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	rspamd_main->cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
+	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 
 	if (!rspamd_main || !rspamd_main->cfg) {
 		fprintf (stderr, "Cannot allocate memory\n");
@@ -1068,9 +1068,9 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->stat = rspamd_mempool_alloc_shared (rspamd_main->server_pool, sizeof (struct rspamd_stat));
 	memset (rspamd_main->stat, 0, sizeof (struct rspamd_stat));
 
-	memset (rspamd_main->cfg, 0, sizeof (struct config_file));
+	memset (rspamd_main->cfg, 0, sizeof (struct rspamd_config));
 	rspamd_main->cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	init_defaults (rspamd_main->cfg);
+	rspamd_config_defaults (rspamd_main->cfg);
 
 	memset (&signals, 0, sizeof (struct sigaction));
 
@@ -1178,7 +1178,7 @@ main (gint argc, gchar **argv, gchar **env)
 			l = g_list_next (l);
 		}
 		/* Insert classifiers symbols */
-		(void)insert_classifier_symbols (rspamd_main->cfg);
+		(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 
 		if (! validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE)) {
 			res = FALSE;
@@ -1238,7 +1238,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 
 	/* Insert classifiers symbols */
-	(void)insert_classifier_symbols (rspamd_main->cfg);
+	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 
 	/* Perform modules configuring */
 	l = g_list_first (rspamd_main->cfg->filters);
@@ -1369,7 +1369,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	close_log (rspamd_main->logger);
 
-	free_config (rspamd_main->cfg);
+	rspamd_config_free (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);
 	g_free (rspamd_main);
 

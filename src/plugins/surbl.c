@@ -74,9 +74,9 @@ surbl_error_quark (void)
 }
 
 /* Initialization */
-gint surbl_module_init (struct config_file *cfg, struct module_ctx **ctx);
-gint surbl_module_config (struct config_file *cfg);
-gint surbl_module_reconfig (struct config_file *cfg);
+gint surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
+gint surbl_module_config (struct rspamd_config *cfg);
+gint surbl_module_reconfig (struct rspamd_config *cfg);
 
 module_t surbl_module = {
 	"surbl",
@@ -207,7 +207,7 @@ fin_redirectors_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 }
 
 gint
-surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
+surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	surbl_module_ctx = g_malloc (sizeof (struct surbl_ctx));
 
@@ -241,7 +241,7 @@ surbl_module_init (struct config_file *cfg, struct module_ctx **ctx)
  * Register virtual symbols for suffixes with bit wildcard
  */
 static void
-register_bit_symbols (struct config_file *cfg, struct suffix_item *suffix)
+register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix)
 {
 	GList                           *cur;
 	struct surbl_bit_item          *bit;
@@ -261,7 +261,7 @@ register_bit_symbols (struct config_file *cfg, struct suffix_item *suffix)
 }
 
 gint
-surbl_module_config (struct config_file *cfg)
+surbl_module_config (struct rspamd_config *cfg)
 {
 	GList                          *cur_opt;
 	struct suffix_item             *new_suffix, *cur_suffix = NULL;
@@ -274,7 +274,7 @@ surbl_module_config (struct config_file *cfg)
 	gint                            i, idx;
 
 
-	if ((value = get_module_opt (cfg, "surbl", "redirector")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
 		i = 0;
 		LL_FOREACH (value, cur) {
 			i ++;
@@ -285,7 +285,7 @@ surbl_module_config (struct config_file *cfg)
 		LL_FOREACH (value, cur) {
 			redir_val = ucl_obj_tostring (cur);
 			surbl_module_ctx->redirectors[idx].up.priority = 100;
-			if (! parse_host_port_priority (surbl_module_ctx->surbl_pool,
+			if (! rspamd_parse_host_port_priority (surbl_module_ctx->surbl_pool,
 					redir_val, &surbl_module_ctx->redirectors[idx].addr,
 					&surbl_module_ctx->redirectors[idx].port,
 					&surbl_module_ctx->redirectors[idx].up.priority)) {
@@ -304,50 +304,50 @@ surbl_module_config (struct config_file *cfg)
 		surbl_module_ctx->redirectors_number = idx;
 		surbl_module_ctx->use_redirector = (surbl_module_ctx->redirectors_number != 0);
 	}
-	if ((value = get_module_opt (cfg, "surbl", "redirector_symbol")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "redirector_symbol")) != NULL) {
 		surbl_module_ctx->redirector_symbol = ucl_obj_tostring (value);
 		register_virtual_symbol (&cfg->cache, surbl_module_ctx->redirector_symbol, 1.0);
 	}
 	else {
 		surbl_module_ctx->redirector_symbol = NULL;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "weight")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "weight")) != NULL) {
 		surbl_module_ctx->weight = ucl_obj_toint (value);
 	}
 	else {
 		surbl_module_ctx->weight = DEFAULT_SURBL_WEIGHT;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "url_expire")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "url_expire")) != NULL) {
 		surbl_module_ctx->url_expire = ucl_obj_todouble (value);
 	}
 	else {
 		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "redirector_connect_timeout")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "redirector_connect_timeout")) != NULL) {
 		surbl_module_ctx->connect_timeout = ucl_obj_todouble (value);
 	}
 	else {
 		surbl_module_ctx->connect_timeout = DEFAULT_REDIRECTOR_CONNECT_TIMEOUT;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "redirector_read_timeout")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "redirector_read_timeout")) != NULL) {
 		surbl_module_ctx->read_timeout = ucl_obj_todouble (value);
 	}
 	else {
 		surbl_module_ctx->read_timeout = DEFAULT_REDIRECTOR_READ_TIMEOUT;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "redirector_hosts_map")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "redirector_hosts_map")) != NULL) {
 		add_map (cfg, ucl_obj_tostring (value),
 				"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
 				(void **)&surbl_module_ctx->redirector_hosts);
 	}
 
-	if ((value = get_module_opt (cfg, "surbl", "max_urls")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "max_urls")) != NULL) {
 		surbl_module_ctx->max_urls = ucl_obj_toint (value);
 	}
 	else {
 		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
 	}
-	if ((value = get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
 		if (add_map (cfg, ucl_obj_tostring (value),
 				"SURBL exceptions list", read_exceptions_list, fin_exceptions_list,
 				(void **)&surbl_module_ctx->exceptions)) {
@@ -355,7 +355,7 @@ surbl_module_config (struct config_file *cfg)
 					ucl_obj_tostring (value) + sizeof ("file://") - 1);
 		}
 	}
-	if ((value = get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
 		if (add_map (cfg, ucl_obj_tostring (value),
 				"SURBL whitelist", read_host_list, fin_host_list,
 				(void **)&surbl_module_ctx->whitelist)) {
@@ -364,7 +364,7 @@ surbl_module_config (struct config_file *cfg)
 		}
 	}
 
-	value = get_module_opt (cfg, "surbl", "rule");
+	value = rspamd_config_get_module_opt (cfg, "surbl", "rule");
 	if (value != NULL && value->type == UCL_OBJECT) {
 		LL_FOREACH (value, cur_rule) {
 			cur = ucl_obj_get_key (cur_rule, "suffix");
@@ -439,7 +439,7 @@ surbl_module_config (struct config_file *cfg)
 }
 
 gint
-surbl_module_reconfig (struct config_file *cfg)
+surbl_module_reconfig (struct rspamd_config *cfg)
 {
 	/* Delete pool and objects */
 	rspamd_mempool_delete (surbl_module_ctx->surbl_pool);

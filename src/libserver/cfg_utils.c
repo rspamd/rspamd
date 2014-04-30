@@ -42,7 +42,7 @@
 #define DEFAULT_MAP_TIMEOUT 10
 
 struct rspamd_ucl_map_cbdata {
-	struct config_file *cfg;
+	struct rspamd_config *cfg;
 	GString *buf;
 };
 static gchar* rspamd_ucl_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data);
@@ -162,7 +162,7 @@ err:
 }
 
 gboolean
-parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
+rspamd_parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
 {
 	gchar                          **tokens;
 	gboolean                         ret;
@@ -180,19 +180,19 @@ parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr
 }
 
 gboolean
-parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port)
+rspamd_parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port)
 {
-	return parse_host_port_priority (pool, str, addr, port, NULL);
+	return rspamd_parse_host_port_priority (pool, str, addr, port, NULL);
 }
 
 gboolean
-parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint *priority)
+rspamd_parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint *priority)
 {
-	return parse_host_port_priority (pool, str, addr, NULL, priority);
+	return rspamd_parse_host_port_priority (pool, str, addr, NULL, priority);
 }
 
 gboolean
-parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *str)
+rspamd_parse_bind_line (struct rspamd_config *cfg, struct rspamd_worker_conf *cf, const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
 	gchar **tokens, *tmp, *err;
@@ -259,7 +259,7 @@ parse_bind_line (struct config_file *cfg, struct worker_conf *cf, const gchar *s
 }
 
 void
-init_defaults (struct config_file *cfg)
+rspamd_config_defaults (struct rspamd_config *cfg)
 {
 
 	cfg->memcached_error_time = DEFAULT_UPSTREAM_ERROR_TIME;
@@ -298,10 +298,10 @@ init_defaults (struct config_file *cfg)
 }
 
 void
-free_config (struct config_file *cfg)
+rspamd_config_free (struct rspamd_config *cfg)
 {
 	GList							*cur;
-	struct symbols_group			*gr;
+	struct rspamd_symbols_group			*gr;
 
 	remove_all_maps (cfg);
 	ucl_obj_unref (cfg->rcl_obj);
@@ -337,7 +337,7 @@ free_config (struct config_file *cfg)
 }
 
 const ucl_object_t        *
-get_module_opt (struct config_file *cfg, const gchar *module_name, const gchar *opt_name)
+rspamd_config_get_module_opt (struct rspamd_config *cfg, const gchar *module_name, const gchar *opt_name)
 {
 	const ucl_object_t *res = NULL, *sec;
 
@@ -350,7 +350,7 @@ get_module_opt (struct config_file *cfg, const gchar *module_name, const gchar *
 }
 
 guint64
-parse_limit (const gchar *limit, guint len)
+rspamd_config_parse_limit (const gchar *limit, guint len)
 {
 	guint64                        result = 0;
 	const gchar                   *err_str;
@@ -385,7 +385,7 @@ parse_limit (const gchar *limit, guint len)
 }
 
 gchar
-parse_flag (const gchar *str)
+rspamd_config_parse_flag (const gchar *str)
 {
 	guint							 len;
 	gchar							 c;
@@ -438,7 +438,7 @@ parse_flag (const gchar *str)
 }
 
 gboolean
-get_config_checksum (struct config_file *cfg) 
+rspamd_config_calculate_checksum (struct rspamd_config *cfg) 
 {
 	gint                            fd;
 	void                           *map;
@@ -472,7 +472,7 @@ get_config_checksum (struct config_file *cfg)
  * Perform post load actions
  */
 void
-post_load_config (struct config_file *cfg)
+rspamd_config_post_load (struct rspamd_config *cfg)
 {
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec                 ts;
@@ -501,7 +501,7 @@ post_load_config (struct config_file *cfg)
 #endif
 
 	if ((def_metric = g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
-		def_metric = check_metric_conf (cfg, NULL);
+		def_metric = rspamd_config_new_metric (cfg, NULL);
 		def_metric->name = DEFAULT_METRIC;
 		def_metric->actions[METRIC_ACTION_REJECT].score = DEFAULT_SCORE;
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
@@ -552,7 +552,7 @@ parse_warn (const gchar *fmt, ...)
 #endif
 
 void
-unescape_quotes (gchar *line)
+rspamd_config_unescape_quotes (gchar *line)
 {
 	gchar                           *c = line, *t;
 
@@ -569,7 +569,7 @@ unescape_quotes (gchar *line)
 }
 
 GList                          *
-parse_comma_list (rspamd_mempool_t * pool, const gchar *line)
+rspamd_config_parse_comma_list (rspamd_mempool_t * pool, const gchar *line)
 {
 	GList                          *res = NULL;
 	const gchar                    *c, *p;
@@ -597,11 +597,11 @@ parse_comma_list (rspamd_mempool_t * pool, const gchar *line)
 	return res;
 }
 
-struct classifier_config       *
-check_classifier_conf (struct config_file *cfg, struct classifier_config *c)
+struct rspamd_classifier_config       *
+rspamd_config_new_classifier (struct rspamd_config *cfg, struct rspamd_classifier_config *c)
 {
 	if (c == NULL) {
-		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct classifier_config));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_classifier_config));
 	}
 	if (c->opts == NULL) {
 		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -615,18 +615,18 @@ check_classifier_conf (struct config_file *cfg, struct classifier_config *c)
 	return c;
 }
 
-struct statfile*
-check_statfile_conf (struct config_file *cfg, struct statfile *c)
+struct rspamd_statfile_config*
+rspamd_config_new_statfile (struct rspamd_config *cfg, struct rspamd_statfile_config *c)
 {
 	if (c == NULL) {
-		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct statfile));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_statfile_config));
 	}
 
 	return c;
 }
 
 struct metric *
-check_metric_conf (struct config_file *cfg, struct metric *c)
+rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c)
 {
 	int i;
 	if (c == NULL) {
@@ -644,11 +644,11 @@ check_metric_conf (struct config_file *cfg, struct metric *c)
 	return c;
 }
 
-struct worker_conf *
-check_worker_conf (struct config_file *cfg, struct worker_conf *c)
+struct rspamd_worker_conf *
+rspamd_config_new_worker (struct rspamd_config *cfg, struct rspamd_worker_conf *c)
 {
 	if (c == NULL) {
-		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct worker_conf));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_conf));
 		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
 		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, c->params);
@@ -669,7 +669,7 @@ check_worker_conf (struct config_file *cfg, struct worker_conf *c)
 static bool
 rspamd_include_map_handler (const guchar *data, gsize len, void* ud)
 {
-	struct config_file *cfg = (struct config_file *)ud;
+	struct rspamd_config *cfg = (struct rspamd_config *)ud;
 	struct rspamd_ucl_map_cbdata *cbdata, **pcbdata;
 	gchar *map_line;
 
@@ -719,13 +719,13 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 }
 
 static void
-rspamd_ucl_add_conf_macros (struct ucl_parser *parser, struct config_file *cfg)
+rspamd_ucl_add_conf_macros (struct ucl_parser *parser, struct rspamd_config *cfg)
 {
 	ucl_parser_register_macro (parser, "include_map", rspamd_include_map_handler, cfg);
 }
 
 gboolean
-read_rspamd_config (struct config_file *cfg, const gchar *filename,
+rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 		const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
 		gpointer logger_ud)
 {
@@ -792,22 +792,22 @@ read_rspamd_config (struct config_file *cfg, const gchar *filename,
 static void
 symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 {
-	struct config_file             *cfg = ud;
+	struct rspamd_config             *cfg = ud;
 
 	register_virtual_symbol (&cfg->cache, key, 1.0);
 }
 
 void
-insert_classifier_symbols (struct config_file *cfg)
+rspamd_config_insert_classify_symbols (struct rspamd_config *cfg)
 {
 	g_hash_table_foreach (cfg->classifiers_symbols, symbols_classifiers_callback, cfg);
 }
 
-struct classifier_config*
-find_classifier_conf (struct config_file *cfg, const gchar *name)
+struct rspamd_classifier_config*
+rspamd_config_find_classifier (struct rspamd_config *cfg, const gchar *name)
 {
 	GList                          *cur;
-	struct classifier_config       *cf;
+	struct rspamd_classifier_config       *cf;
 
 	if (name == NULL) {
 		return NULL;
@@ -828,9 +828,9 @@ find_classifier_conf (struct config_file *cfg, const gchar *name)
 }
 
 gboolean
-check_classifier_statfiles (struct classifier_config *cf)
+rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 {
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	gboolean                        has_other = FALSE, res = FALSE, cur_class;
 	GList                          *cur;
 
@@ -943,7 +943,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 }
 
 gboolean
-rspamd_parse_ip_list (const gchar *ip_list, radix_tree_t **tree)
+rspamd_config_parse_ip_list (const gchar *ip_list, radix_tree_t **tree)
 {
 	gchar                           **strvec, **cur;
 	struct in_addr                   ina;

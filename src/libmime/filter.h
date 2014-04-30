@@ -12,7 +12,7 @@
 
 struct rspamd_task;
 struct rspamd_settings;
-struct classifier_config;
+struct rspamd_classifier_config;
 
 typedef double (*metric_cons_func)(struct rspamd_task *task, const gchar *metric_name, const gchar *func_name);
 typedef void (*filter_func)(struct rspamd_task *task);
@@ -147,7 +147,7 @@ gboolean learn_task (const gchar *statfile, struct rspamd_task *task, GError **e
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean learn_task_spam (struct classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err);
+gboolean learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err);
 
 /*
  * Get action from a string

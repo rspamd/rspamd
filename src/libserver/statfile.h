@@ -96,8 +96,8 @@ typedef struct statfile_pool_s {
 } statfile_pool_t;
 
 /* Forwarded declarations */
-struct classifier_config;
-struct statfile;
+struct rspamd_classifier_config;
+struct rspamd_statfile_config;
 
 /**
  * Create new statfile pool
@@ -278,7 +278,7 @@ void statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_
  * @param st statfile to get
  * @param try_create whether we need to create statfile if it is absent
  */
-stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
-		const gchar *symbol, struct statfile **st, gboolean try_create);
+stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct rspamd_classifier_config *ccf,
+		const gchar *symbol, struct rspamd_statfile_config **st, gboolean try_create);
 
 #endif

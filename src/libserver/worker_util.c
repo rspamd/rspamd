@@ -34,7 +34,7 @@ extern struct rspamd_main			*rspamd_main;
  * @return worker's control structure or NULL
  */
 worker_t*
-get_worker_by_type (GQuark type)
+rspamd_get_worker_by_type (GQuark type)
 {
 	worker_t						**cur;
 
@@ -50,7 +50,7 @@ get_worker_by_type (GQuark type)
 }
 
 double
-set_counter (const gchar *name, guint32 value)
+rspamd_set_counter (const gchar *name, guint32 value)
 {
 	struct counter_data            *cd;
 	double                          alpha;
@@ -122,7 +122,7 @@ worker_sigusr2_handler (gint fd, short what, void *arg)
 		tv.tv_usec = 0;
 		event_del (&worker->sig_ev_usr1);
 		event_del (&worker->sig_ev_usr2);
-		worker_stop_accept (worker);
+		rspamd_worker_stop_accept (worker);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_loopexit (&tv);
 	}
@@ -143,7 +143,7 @@ worker_sigusr1_handler (gint fd, short what, void *arg)
 }
 
 struct event_base *
-prepare_worker (struct rspamd_worker *worker, const char *name,
+rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 		void (*accept_handler)(int, short, void *))
 {
 	struct event_base                *ev_base;
@@ -197,7 +197,7 @@ prepare_worker (struct rspamd_worker *worker, const char *name,
 }
 
 void
-worker_stop_accept (struct rspamd_worker *worker)
+rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
 	GList                             *cur;
 	struct event                     *event;

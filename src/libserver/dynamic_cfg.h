@@ -32,14 +32,14 @@
  * Init dynamic configuration using map logic and specific configuration
  * @param cfg config file
  */
-void init_dynamic_config (struct config_file *cfg);
+void init_dynamic_config (struct rspamd_config *cfg);
 
 /**
  * Dump dynamic configuration to the disk
  * @param cfg
  * @return
  */
-gboolean dump_dynamic_config (struct config_file *cfg);
+gboolean dump_dynamic_config (struct rspamd_config *cfg);
 
 /**
  * Add symbol for specified metric
@@ -49,7 +49,7 @@ gboolean dump_dynamic_config (struct config_file *cfg);
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_symbol (struct config_file *cfg, const gchar *metric, const gchar *symbol, gdouble value);
+gboolean add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric, const gchar *symbol, gdouble value);
 
 
 /**
@@ -60,7 +60,7 @@ gboolean add_dynamic_symbol (struct config_file *cfg, const gchar *metric, const
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_action (struct config_file *cfg, const gchar *metric, guint action, gdouble value);
+gboolean add_dynamic_action (struct rspamd_config *cfg, const gchar *metric, guint action, gdouble value);
 
 
 #endif /* DYNAMIC_CFG_H_ */

@@ -41,9 +41,9 @@
 #define DEFAULT_THRESHOLD 0.1
 
 /* Initialization */
-gint chartable_module_init (struct config_file *cfg, struct module_ctx **ctx);
-gint chartable_module_config (struct config_file *cfg);
-gint chartable_module_reconfig (struct config_file *cfg);
+gint chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
+gint chartable_module_config (struct rspamd_config *cfg);
+gint chartable_module_reconfig (struct rspamd_config *cfg);
 
 module_t chartable_module = {
 	"chartable",
@@ -66,7 +66,7 @@ static gint                      chartable_mime_filter (struct rspamd_task *task
 static void                     chartable_symbol_callback (struct rspamd_task *task, void *unused);
 
 gint
-chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
+chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
@@ -80,18 +80,18 @@ chartable_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 
 gint
-chartable_module_config (struct config_file *cfg)
+chartable_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t             *value;
 	gint                            res = TRUE;
 
-	if ((value = get_module_opt (cfg, "chartable", "symbol")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "chartable", "symbol")) != NULL) {
 		chartable_module_ctx->symbol = ucl_obj_tostring (value);
 	}
 	else {
 		chartable_module_ctx->symbol = DEFAULT_SYMBOL;
 	} 
-	if ((value = get_module_opt (cfg, "chartable", "threshold")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "chartable", "threshold")) != NULL) {
 		if (!ucl_obj_todouble_safe (value, &chartable_module_ctx->threshold)) {
 			msg_warn ("invalid numeric value");
 			chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
@@ -107,7 +107,7 @@ chartable_module_config (struct config_file *cfg)
 }
 
 gint
-chartable_module_reconfig (struct config_file *cfg)
+chartable_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (chartable_module_ctx->chartable_pool);
 	chartable_module_ctx->chartable_pool = rspamd_mempool_new (1024);

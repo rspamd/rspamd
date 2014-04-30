@@ -39,7 +39,7 @@
  */
 struct rspamd_logger_s {
 	rspamd_log_func_t        log_func;
-	struct config_file		*cfg;
+	struct rspamd_config		*cfg;
 	struct {
 		guint32              size;
 		guint32              used;
@@ -275,7 +275,7 @@ reopen_log (rspamd_logger_t *logger)
  * Setup logger
  */
 void
-rspamd_set_logger (struct config_file *cfg, GQuark ptype, struct rspamd_main *rspamd)
+rspamd_set_logger (struct rspamd_config *cfg, GQuark ptype, struct rspamd_main *rspamd)
 {
 	gchar                           **strvec, *p, *err;
 	gint                            num, i, k;

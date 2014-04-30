@@ -66,29 +66,29 @@ struct classifier_callback_data {
 	const gchar *name;
 };
 
-static struct statfile* lua_check_statfile (lua_State * L);
+static struct rspamd_statfile_config* lua_check_statfile (lua_State * L);
 
 /* Classifier implementation */
 
 
-static struct classifier_config      *
+static struct rspamd_classifier_config      *
 lua_check_classifier (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{classifier}");
 	luaL_argcheck (L, ud != NULL, 1, "'classifier' expected");
-	return ud ? *((struct classifier_config **)ud) : NULL;
+	return ud ? *((struct rspamd_classifier_config **)ud) : NULL;
 }
 
 static GList *
-call_classifier_pre_callback (struct classifier_config *ccf, struct rspamd_task *task,
+call_classifier_pre_callback (struct rspamd_classifier_config *ccf, struct rspamd_task *task,
 		lua_State *L, gboolean is_learn, gboolean is_spam)
 {
-	struct classifier_config      **pccf;
+	struct rspamd_classifier_config      **pccf;
 	struct rspamd_task            **ptask;
-	struct statfile               **pst;
+	struct rspamd_statfile_config               **pst;
 	GList                          *res = NULL;
 
-	pccf = lua_newuserdata (L, sizeof (struct classifier_config *));
+	pccf = lua_newuserdata (L, sizeof (struct rspamd_classifier_config *));
 	lua_setclass (L, "rspamd{classifier}", -1);
 	*pccf = ccf;
 
@@ -120,7 +120,7 @@ call_classifier_pre_callback (struct classifier_config *ccf, struct rspamd_task 
 
 /* Return list of statfiles that should be checked for this message */
 GList *
-call_classifier_pre_callbacks (struct classifier_config *ccf, struct rspamd_task *task,
+call_classifier_pre_callbacks (struct rspamd_classifier_config *ccf, struct rspamd_task *task,
 		gboolean is_learn, gboolean is_spam, lua_State *L)
 {
 	GList                           *res = NULL, *cur;
@@ -158,10 +158,10 @@ call_classifier_pre_callbacks (struct classifier_config *ccf, struct rspamd_task
 
 /* Return result mark for statfile */
 double
-call_classifier_post_callbacks (struct classifier_config *ccf, struct rspamd_task *task, double in, lua_State *L)
+call_classifier_post_callbacks (struct rspamd_classifier_config *ccf, struct rspamd_task *task, double in, lua_State *L)
 {
 	struct classifier_callback_data *cd;
-	struct classifier_config      **pccf;
+	struct rspamd_classifier_config      **pccf;
 	struct rspamd_task            **ptask;
 	double                          out = in;
 	GList                          *cur;
@@ -172,7 +172,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct rspamd_tas
 		cd = cur->data;
 		lua_getglobal (L, cd->name);
 
-		pccf = lua_newuserdata (L, sizeof (struct classifier_config *));
+		pccf = lua_newuserdata (L, sizeof (struct rspamd_classifier_config *));
 		lua_setclass (L, "rspamd{classifier}", -1);
 		*pccf = ccf;
 
@@ -202,7 +202,7 @@ call_classifier_post_callbacks (struct classifier_config *ccf, struct rspamd_tas
 static gint
 lua_classifier_register_pre_callback (lua_State *L)
 {
-	struct classifier_config       *ccf = lua_check_classifier (L);
+	struct rspamd_classifier_config       *ccf = lua_check_classifier (L);
 	struct classifier_callback_data *cd;
 	const gchar                     *name;
 
@@ -223,7 +223,7 @@ lua_classifier_register_pre_callback (lua_State *L)
 static gint
 lua_classifier_register_post_callback (lua_State *L)
 {
-	struct classifier_config       *ccf = lua_check_classifier (L);
+	struct rspamd_classifier_config       *ccf = lua_check_classifier (L);
 	struct classifier_callback_data *cd;
 	const gchar                     *name;
 
@@ -244,9 +244,9 @@ lua_classifier_register_post_callback (lua_State *L)
 static gint
 lua_classifier_get_statfiles (lua_State *L)
 {
-	struct classifier_config       *ccf = lua_check_classifier (L);
+	struct rspamd_classifier_config       *ccf = lua_check_classifier (L);
 	GList                          *cur;
-	struct statfile                *st, **pst;
+	struct rspamd_statfile_config                *st, **pst;
 	gint							i;
 
 	if (ccf) {
@@ -255,7 +255,7 @@ lua_classifier_get_statfiles (lua_State *L)
 		i = 1;
 		while (cur) {
 			st = cur->data;
-			pst = lua_newuserdata (L, sizeof (struct statfile *));
+			pst = lua_newuserdata (L, sizeof (struct rspamd_statfile_config *));
 			lua_setclass (L, "rspamd{statfile}", -1);
 			*pst = st;
 			lua_rawseti (L, -2, i++);
@@ -274,8 +274,8 @@ lua_classifier_get_statfiles (lua_State *L)
 static gint
 lua_classifier_get_statfile_by_label (lua_State *L)
 {
-	struct classifier_config       *ccf = lua_check_classifier (L);
-	struct statfile                *st, **pst;
+	struct rspamd_classifier_config       *ccf = lua_check_classifier (L);
+	struct rspamd_statfile_config                *st, **pst;
 	const gchar					   *label;
 	GList						   *cur;
 	gint							i;
@@ -288,7 +288,7 @@ lua_classifier_get_statfile_by_label (lua_State *L)
 			i = 1;
 			while (cur) {
 				st = cur->data;
-				pst = lua_newuserdata (L, sizeof (struct statfile *));
+				pst = lua_newuserdata (L, sizeof (struct rspamd_statfile_config *));
 				lua_setclass (L, "rspamd{statfile}", -1);
 				*pst = st;
 				lua_rawseti (L, -2, i++);
@@ -305,7 +305,7 @@ lua_classifier_get_statfile_by_label (lua_State *L)
 static gint
 lua_statfile_get_symbol (lua_State *L)
 {
-	struct statfile                *st = lua_check_statfile (L);
+	struct rspamd_statfile_config                *st = lua_check_statfile (L);
 
 	if (st != NULL) {
 		lua_pushstring (L, st->symbol);
@@ -320,7 +320,7 @@ lua_statfile_get_symbol (lua_State *L)
 static gint
 lua_statfile_get_label (lua_State *L)
 {
-	struct statfile                *st = lua_check_statfile (L);
+	struct rspamd_statfile_config                *st = lua_check_statfile (L);
 
 	if (st != NULL && st->label != NULL) {
 		lua_pushstring (L, st->label);
@@ -335,7 +335,7 @@ lua_statfile_get_label (lua_State *L)
 static gint
 lua_statfile_get_path (lua_State *L)
 {
-	struct statfile                *st = lua_check_statfile (L);
+	struct rspamd_statfile_config                *st = lua_check_statfile (L);
 
 	if (st != NULL) {
 		lua_pushstring (L, st->path);
@@ -350,7 +350,7 @@ lua_statfile_get_path (lua_State *L)
 static gint
 lua_statfile_get_size (lua_State *L)
 {
-	struct statfile                *st = lua_check_statfile (L);
+	struct rspamd_statfile_config                *st = lua_check_statfile (L);
 
 	if (st != NULL) {
 		lua_pushinteger (L, st->size);
@@ -365,7 +365,7 @@ lua_statfile_get_size (lua_State *L)
 static gint
 lua_statfile_is_spam (lua_State *L)
 {
-	struct statfile                *st = lua_check_statfile (L);
+	struct rspamd_statfile_config                *st = lua_check_statfile (L);
 
 	if (st != NULL) {
 		lua_pushboolean (L, st->is_spam);
@@ -380,7 +380,7 @@ lua_statfile_is_spam (lua_State *L)
 static gint
 lua_statfile_get_param (lua_State *L)
 {
-	struct statfile                *st = lua_check_statfile (L);
+	struct rspamd_statfile_config                *st = lua_check_statfile (L);
 	const gchar                    *param;
 	const ucl_object_t                    *value;
 
@@ -398,12 +398,12 @@ lua_statfile_get_param (lua_State *L)
 	return 1;
 }
 
-static struct statfile      *
+static struct rspamd_statfile_config      *
 lua_check_statfile (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{statfile}");
 	luaL_argcheck (L, ud != NULL, 1, "'statfile' expected");
-	return ud ? *((struct statfile **)ud) : NULL;
+	return ud ? *((struct rspamd_statfile_config **)ud) : NULL;
 }
 
 

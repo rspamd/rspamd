@@ -53,7 +53,7 @@ struct rspamd_binlog {
 	struct rspamd_index_block *cur_idx;
 };
 
-struct classifier_config;
+struct rspamd_classifier_config;
 
 /*
  * Open binlog at specified path with specified rotate params
@@ -63,7 +63,7 @@ struct rspamd_binlog* binlog_open (rspamd_mempool_t *pool, const gchar *path, ti
 /*
  * Get and open binlog for specified statfile
  */
-struct rspamd_binlog* get_binlog_by_statfile (struct statfile *st);
+struct rspamd_binlog* get_binlog_by_statfile (struct rspamd_statfile_config *st);
 
 /*
  * Close binlog
@@ -88,6 +88,6 @@ gboolean binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from
 /*
  * Conditional write to a binlog for specified statfile
  */
-gboolean maybe_write_binlog (struct classifier_config *ccf, struct statfile *st, stat_file_t *file, GTree *nodes);
+gboolean maybe_write_binlog (struct rspamd_classifier_config *ccf, struct rspamd_statfile_config *st, stat_file_t *file, GTree *nodes);
 
 #endif

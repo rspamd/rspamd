@@ -45,7 +45,7 @@ struct bayes_statfile_data {
 	guint64                         hits;
 	guint64                         total_hits;
 	double                         value;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	stat_file_t                    *file;
 };
 
@@ -190,7 +190,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 }
 
 struct classifier_ctx*
-bayes_init (rspamd_mempool_t *pool, struct classifier_config *cfg)
+bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier_config *cfg)
 {
 	struct classifier_ctx          *ctx = rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
 
@@ -210,7 +210,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	gint                             minnodes;
 	guint64                          maxhits = 0, rev;
 	double                          final_prob, h, s;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	stat_file_t                     *file;
 	GList                           *cur;
 	char                            *sumbuf;
@@ -249,7 +249,7 @@ bayes_classify (struct classifier_ctx* ctx, statfile_pool_t *pool, GTree *input,
 	data.total_ham = 0;
 	data.total_spam = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
-		minnodes = parse_limit (value, -1);
+		minnodes = rspamd_config_parse_limit (value, -1);
 		data.max_tokens = minnodes;
 	}
 	else {
@@ -334,7 +334,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	gchar                          *value;
 	gint                            nodes;
 	gint                            minnodes;
-	struct statfile                *st, *sel_st = NULL;
+	struct rspamd_statfile_config                *st, *sel_st = NULL;
 	stat_file_t                    *to_learn;
 	GList                          *cur;
 
@@ -366,7 +366,7 @@ bayes_learn (struct classifier_ctx* ctx, statfile_pool_t *pool, const char *symb
 	data.processed_tokens = 0;
 	data.processed_tokens = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
-		minnodes = parse_limit (value, -1);
+		minnodes = rspamd_config_parse_limit (value, -1);
 		data.max_tokens = minnodes;
 	}
 	else {
@@ -434,7 +434,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 	gchar                          *value;
 	gint                            nodes;
 	gint                            minnodes;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	stat_file_t                    *file;
 	GList                          *cur;
 	gboolean						skip_labels;
@@ -476,7 +476,7 @@ bayes_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
 
 	data.processed_tokens = 0;
 	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "max_tokens")) != NULL) {
-		minnodes = parse_limit (value, -1);
+		minnodes = rspamd_config_parse_limit (value, -1);
 		data.max_tokens = minnodes;
 	}
 	else {

@@ -93,17 +93,17 @@ gpointer lua_check_class (lua_State *L, gint index, const gchar *name);
 /**
  * Initialize lua and bindings
  */
-lua_State* init_lua (struct config_file *cfg);
+lua_State* init_lua (struct rspamd_config *cfg);
 
 /**
  * Load and initialize lua plugins
  */
-gboolean init_lua_filters (struct config_file *cfg);
+gboolean init_lua_filters (struct rspamd_config *cfg);
 
 /**
  * Initialize new locked lua_State structure
  */
-struct lua_locked_state* init_lua_locked (struct config_file *cfg);
+struct lua_locked_state* init_lua_locked (struct rspamd_config *cfg);
 /**
  * Free locked state structure
  */
@@ -184,18 +184,18 @@ void lua_call_pre_filters (struct rspamd_task *task);
 void add_luabuf (const gchar *line);
 
 /* Classify functions */
-GList *call_classifier_pre_callbacks (struct classifier_config *ccf, struct rspamd_task *task, gboolean is_learn, gboolean is_spam, lua_State *L);
-double call_classifier_post_callbacks (struct classifier_config *ccf, struct rspamd_task *task, double in, lua_State *L);
+GList *call_classifier_pre_callbacks (struct rspamd_classifier_config *ccf, struct rspamd_task *task, gboolean is_learn, gboolean is_spam, lua_State *L);
+double call_classifier_post_callbacks (struct rspamd_classifier_config *ccf, struct rspamd_task *task, double in, lua_State *L);
 
-double lua_normalizer_func (struct config_file *cfg, long double score, void *params);
+double lua_normalizer_func (struct rspamd_config *cfg, long double score, void *params);
 
 /* Config file functions */
-void lua_post_load_config (struct config_file *cfg);
-void lua_process_element (struct config_file *cfg, const gchar *name,
-		const gchar *module_name, struct module_opt *opt, gint idx, gboolean allow_meta);
+void lua_post_load_config (struct rspamd_config *cfg);
+void lua_process_element (struct rspamd_config *cfg, const gchar *name,
+		const gchar *module_name, struct rspamd_module_opt *opt, gint idx, gboolean allow_meta);
 gboolean lua_handle_param (struct rspamd_task *task, gchar *mname, gchar *optname, 
 							enum lua_var_type expected_type, gpointer *res);
-gboolean lua_check_condition (struct config_file *cfg, const gchar *condition);
+gboolean lua_check_condition (struct rspamd_config *cfg, const gchar *condition);
 void lua_dumpstack (lua_State *L);
 
 struct memory_pool_s *lua_check_mempool (lua_State * L);

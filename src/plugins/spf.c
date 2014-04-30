@@ -66,9 +66,9 @@ static GList *                spf_record_copy (GList *addrs);
 static void                   spf_record_destroy (gpointer list);
 
 /* Initialization */
-gint spf_module_init (struct config_file *cfg, struct module_ctx **ctx);
-gint spf_module_config (struct config_file *cfg);
-gint spf_module_reconfig (struct config_file *cfg);
+gint spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
+gint spf_module_config (struct rspamd_config *cfg);
+gint spf_module_reconfig (struct rspamd_config *cfg);
 
 module_t spf_module = {
 	"spf",
@@ -78,7 +78,7 @@ module_t spf_module = {
 };
 
 gint
-spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
+spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
 
@@ -91,7 +91,7 @@ spf_module_init (struct config_file *cfg, struct module_ctx **ctx)
 
 
 gint
-spf_module_config (struct config_file *cfg)
+spf_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t             *value;
 	gint                            res = TRUE;
@@ -99,37 +99,37 @@ spf_module_config (struct config_file *cfg)
 
 	spf_module_ctx->whitelist_ip = radix_tree_create ();
 	
-	if ((value = get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
 		spf_module_ctx->symbol_fail = ucl_obj_tostring (value);
 	}
 	else {
 		spf_module_ctx->symbol_fail = DEFAULT_SYMBOL_FAIL;
 	}
-	if ((value = get_module_opt (cfg, "spf", "symbol_softfail")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "spf", "symbol_softfail")) != NULL) {
 		spf_module_ctx->symbol_softfail = ucl_obj_tostring (value);
 	}
 	else {
 		spf_module_ctx->symbol_softfail = DEFAULT_SYMBOL_SOFTFAIL;
 	}
-	if ((value = get_module_opt (cfg, "spf", "symbol_allow")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "spf", "symbol_allow")) != NULL) {
 		spf_module_ctx->symbol_allow = ucl_obj_tostring (value);
 	}
 	else {
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
-	if ((value = get_module_opt (cfg, "spf", "spf_cache_size")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "spf", "spf_cache_size")) != NULL) {
 		cache_size = ucl_obj_toint (value);
 	}
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
-	if ((value = get_module_opt (cfg, "spf", "spf_cache_expire")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "spf", "spf_cache_expire")) != NULL) {
 		cache_expire = ucl_obj_toint (value);
 	}
 	else {
 		cache_expire = DEFAULT_CACHE_MAXAGE;
 	}
-	if ((value = get_module_opt (cfg, "spf", "whitelist")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "spf", "whitelist")) != NULL) {
 		if (! add_map (cfg, ucl_obj_tostring (value),
 				"SPF whitelist", read_radix_list, fin_radix_list,
 				(void **)&spf_module_ctx->whitelist_ip)) {
@@ -148,7 +148,7 @@ spf_module_config (struct config_file *cfg)
 }
 
 gint
-spf_module_reconfig (struct config_file *cfg)
+spf_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (spf_module_ctx->spf_pool);
 	radix_tree_free (spf_module_ctx->whitelist_ip);

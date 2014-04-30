@@ -39,8 +39,8 @@
 #include "statfile_sync.h"
 #include "diff.h"
 
-extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
-		const gchar *symbol, struct statfile **st, gboolean try_create);
+extern stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct rspamd_classifier_config *ccf,
+		const gchar *symbol, struct rspamd_statfile_config **st, gboolean try_create);
 
 /* Task creation */
 LUA_FUNCTION_DEF (task, create_empty);
@@ -318,7 +318,7 @@ lua_task_set_cfg (lua_State *L)
 	void                           *ud = luaL_checkudata (L, 2, "rspamd{config}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
-	task->cfg = ud ? *((struct config_file **)ud) : NULL;
+	task->cfg = ud ? *((struct rspamd_config **)ud) : NULL;
 	return 0;
 }
 
@@ -1281,9 +1281,9 @@ lua_task_learn_statfile (lua_State *L)
 {
 	struct rspamd_task             *task = lua_check_task (L);
 	const gchar                     *symbol;
-	struct classifier_config       *cl;
+	struct rspamd_classifier_config       *cl;
 	GTree                          *tokens;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	stat_file_t                    *statfile;
 	struct classifier_ctx          *ctx;
 

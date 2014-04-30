@@ -7,7 +7,7 @@
 #define MAX_SYMBOL 128
 
 struct rspamd_task;
-struct config_file;
+struct rspamd_config;
 
 typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
 
@@ -71,13 +71,13 @@ struct symbols_cache {
 	guint uses;
 	gpointer map;
 	rspamd_mempool_rwlock_t *lock;
-	struct config_file *cfg;
+	struct rspamd_config *cfg;
 };
 
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (rspamd_mempool_t *pool, struct symbols_cache *cache, struct config_file *cfg,
+gboolean init_symbols_cache (rspamd_mempool_t *pool, struct symbols_cache *cache, struct rspamd_config *cfg,
 		const gchar *filename, gboolean ignore_checksum);
 
 /**
@@ -144,7 +144,7 @@ void remove_dynamic_rules (struct symbols_cache *cache);
  * @param cfg configuration
  * @param strict do strict checks - symbols MUST be described in metrics
  */
-gboolean validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean strict);
+gboolean validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean strict);
 
 
 #endif

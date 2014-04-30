@@ -46,7 +46,7 @@
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
-gpointer init_worker (struct config_file *cfg);
+gpointer init_worker (struct rspamd_config *cfg);
 void start_worker (struct rspamd_worker *worker);
 
 worker_t normal_worker = {
@@ -234,7 +234,7 @@ accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_worker (struct config_file *cfg)
+init_worker (struct rspamd_config *cfg)
 {
 	struct rspamd_worker_ctx       *ctx;
 	GQuark								type;
@@ -288,7 +288,7 @@ start_worker (struct rspamd_worker *worker)
 	GError						   *err = NULL;
 	struct lua_locked_state		   *nL;
 
-	ctx->ev_base = prepare_worker (worker, "normal", accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	start_map_watch (worker->srv->cfg, ctx->ev_base);

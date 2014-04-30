@@ -70,7 +70,7 @@
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-gpointer init_webui_worker (struct config_file *cfg);
+gpointer init_webui_worker (struct rspamd_config *cfg);
 void start_webui_worker (struct rspamd_worker *worker);
 
 worker_t webui_worker = {
@@ -106,7 +106,7 @@ struct rspamd_webui_worker_ctx {
 	/* Main server */
 	struct rspamd_main *srv;
 	/* Configuration */
-	struct config_file *cfg;
+	struct rspamd_config *cfg;
 	/* SSL cert */
 	gchar *ssl_cert;
 	/* SSL private key */
@@ -126,7 +126,7 @@ struct rspamd_webui_session {
 	struct rspamd_webui_worker_ctx *ctx;
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
-	struct classifier_config *cl;
+	struct rspamd_classifier_config *cl;
 	rspamd_inet_addr_t from_addr;
 	gboolean is_spam;
 };
@@ -331,8 +331,8 @@ rspamd_webui_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_webui_session 			*session = conn_ent->ud;
 	GList									*cur_gr, *cur_sym;
-	struct symbols_group					*gr;
-	struct symbol_def						*sym;
+	struct rspamd_symbols_group					*gr;
+	struct rspamd_symbol_def						*sym;
 	ucl_object_t							*obj, *top, *sym_obj;
 
 	if (!rspamd_webui_check_password (conn_ent, session, msg, FALSE)) {
@@ -870,7 +870,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_webui_session 			*session = conn_ent->ud;
 	struct rspamd_webui_worker_ctx			*ctx;
-	struct classifier_config				*cl;
+	struct rspamd_classifier_config				*cl;
 	struct rspamd_task						*task;
 	const gchar								*classifier;
 
@@ -890,7 +890,7 @@ rspamd_webui_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
 		classifier = "bayes";
 	}
 
-	cl = find_classifier_conf (ctx->cfg, classifier);
+	cl = rspamd_config_find_classifier (ctx->cfg, classifier);
 	if (cl == NULL) {
 		rspamd_webui_send_error (conn_ent, 400, "Classifier not found");
 		return 0;
@@ -1304,9 +1304,9 @@ rspamd_webui_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
 	guint64 used, total, rev, ham = 0, spam = 0;
 	time_t ti;
 	rspamd_mempool_stat_t mem_st;
-	struct classifier_config *ccf;
+	struct rspamd_classifier_config *ccf;
 	stat_file_t *statfile;
-	struct statfile *st;
+	struct rspamd_statfile_config *st;
 	GList *cur_cl, *cur_st;
 	struct rspamd_stat *stat, stat_copy;
 
@@ -1563,7 +1563,7 @@ rspamd_webui_accept_socket (gint fd, short what, void *arg)
 }
 
 gpointer
-init_webui_worker (struct config_file *cfg)
+init_webui_worker (struct rspamd_config *cfg)
 {
 	struct rspamd_webui_worker_ctx		*ctx;
 	GQuark								type;
@@ -1616,7 +1616,7 @@ start_webui_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_webui_worker_ctx *ctx = worker->ctx;
 
-	ctx->ev_base = prepare_worker (worker, "controller", rspamd_webui_accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "controller", rspamd_webui_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	ctx->start_time = time (NULL);
@@ -1626,7 +1626,7 @@ start_webui_worker (struct rspamd_worker *worker)
 	if (ctx->secure_ip != NULL) {
 		if (!add_map (worker->srv->cfg, ctx->secure_ip, "Allow webui access from the specified IP",
 				read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
-			if (!rspamd_parse_ip_list (ctx->secure_ip, &ctx->secure_map)) {
+			if (!rspamd_config_parse_ip_list (ctx->secure_ip, &ctx->secure_map)) {
 				msg_warn ("cannot load or parse ip list from '%s'", ctx->secure_ip);
 			}
 		}

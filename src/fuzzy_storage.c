@@ -61,7 +61,7 @@
 #define INVALID_NODE_TIME (guint64)-1
 
 /* Init functions */
-gpointer init_fuzzy (struct config_file *cfg);
+gpointer init_fuzzy (struct rspamd_config *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
 
 worker_t fuzzy_worker = {
@@ -364,7 +364,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev_usr1);
 	event_del (&worker->sig_ev_usr2);
-	worker_stop_accept (worker);
+	rspamd_worker_stop_accept (worker);
 	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	rspamd_mutex_lock (ctx->update_mtx);
 	mods = ctx->max_mods + 1;
@@ -907,7 +907,7 @@ sync_callback (gint fd, short what, void *arg)
 }
 
 gpointer
-init_fuzzy (struct config_file *cfg)
+init_fuzzy (struct rspamd_config *cfg)
 {
 	struct rspamd_fuzzy_storage_ctx       *ctx;
 	GQuark							       type;
@@ -967,7 +967,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	GError                          *err = NULL;
 	gint i;
 
-	ctx->ev_base = prepare_worker (worker, "controller", accept_fuzzy_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "controller", accept_fuzzy_socket);
 	server_stat = worker->srv->stat;
 
 	/* Custom SIGUSR2 handler */
@@ -1012,7 +1012,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->update_map != NULL) {
 		if (!add_map (worker->srv->cfg, ctx->update_map, "Allow fuzzy updates from specified addresses",
 				read_radix_list, fin_radix_list, (void **)&ctx->update_ips)) {
-			if (!rspamd_parse_ip_list (ctx->update_map, &ctx->update_ips)) {
+			if (!rspamd_config_parse_ip_list (ctx->update_map, &ctx->update_ips)) {
 				msg_warn ("cannot load or parse ip list from '%s'", ctx->update_map);
 			}
 		}

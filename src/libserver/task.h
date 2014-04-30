@@ -112,7 +112,7 @@ struct rspamd_task {
 	 *    pointer 										*/
 	GList *messages;											/**< list of messages that would be reported		*/
 	GHashTable *re_cache;										/**< cache for matched or not matched regexps		*/
-	struct config_file *cfg;									/**< pointer to config object						*/
+	struct rspamd_config *cfg;									/**< pointer to config object						*/
 	gchar *last_error;											/**< last error										*/
 	gint error_code;												/**< code of last error								*/
 	rspamd_mempool_t *task_pool;									/**< memory pool for task							*/

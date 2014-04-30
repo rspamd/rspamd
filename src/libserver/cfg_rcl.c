@@ -34,7 +34,7 @@
  * Common section handlers
  */
 static gboolean
-rspamd_rcl_logging_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_logging_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val;
@@ -154,7 +154,7 @@ rspamd_rcl_logging_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_options_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_options_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val;
@@ -185,7 +185,7 @@ rspamd_rcl_options_handler (struct config_file *cfg, const ucl_object_t *obj,
 static gint
 rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
 {
-	const struct symbols_group		*gr = a;
+	const struct rspamd_symbols_group		*gr = a;
 	const gchar						*uv = b;
 
 	return g_ascii_strcasecmp (gr->name, uv);
@@ -200,14 +200,14 @@ rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
  * @return
  */
 static gboolean
-rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
+rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		const ucl_object_t *obj, gboolean is_legacy, GError **err)
 {
 	const gchar *group = "ungrouped", *description = NULL, *sym_name;
 	gdouble symbol_score, *score_ptr;
 	const ucl_object_t *val;
-	struct symbols_group *sym_group;
-	struct symbol_def *sym_def;
+	struct rspamd_symbols_group *sym_group;
+	struct rspamd_symbol_def *sym_def;
 	GList *metric_list, *group_list;
 
 	/*
@@ -254,7 +254,7 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 		return FALSE;
 	}
 
-	sym_def = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct symbol_def));
+	sym_def = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct rspamd_symbol_def));
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	*score_ptr = symbol_score;
@@ -280,7 +280,7 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 	group_list = g_list_find_custom (cfg->symbols_groups, group, rspamd_symbols_group_find_func);
 	if (group_list == NULL) {
 		/* Create new group */
-		sym_group = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct symbols_group));
+		sym_group = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct rspamd_symbols_group));
 		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
 		sym_group->symbols = NULL;
 		cfg->symbols_groups = g_list_prepend (cfg->symbols_groups, sym_group);
@@ -295,7 +295,7 @@ rspamd_rcl_insert_symbol (struct config_file *cfg, struct metric *metric,
 }
 
 static gboolean
-rspamd_rcl_metric_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val, *cur;
@@ -314,7 +314,7 @@ rspamd_rcl_metric_handler (struct config_file *cfg, const ucl_object_t *obj,
 
 	metric = g_hash_table_lookup (cfg->metrics, metric_name);
 	if (metric == NULL) {
-		metric = check_metric_conf (cfg, metric);
+		metric = rspamd_config_new_metric (cfg, metric);
 		metric->name = metric_name;
 	}
 	else {
@@ -430,14 +430,14 @@ rspamd_rcl_metric_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_worker_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_worker_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
 	const gchar *worker_type, *worker_bind;
 	GQuark qtype;
-	struct worker_conf *wrk;
+	struct rspamd_worker_conf *wrk;
 	struct rspamd_worker_cfg_parser *wparser;
 	struct rspamd_worker_param_parser *whandler;
 
@@ -445,8 +445,8 @@ rspamd_rcl_worker_handler (struct config_file *cfg, const ucl_object_t *obj,
 	if (val != NULL && ucl_object_tostring_safe (val, &worker_type)) {
 		qtype = g_quark_try_string (worker_type);
 		if (qtype != 0) {
-			wrk = check_worker_conf (cfg, NULL);
-			wrk->worker = get_worker_by_type (qtype);
+			wrk = rspamd_config_new_worker (cfg, NULL);
+			wrk->worker = rspamd_get_worker_by_type (qtype);
 			if (wrk->worker == NULL) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "unknown worker type: %s", worker_type);
 				return FALSE;
@@ -475,7 +475,7 @@ rspamd_rcl_worker_handler (struct config_file *cfg, const ucl_object_t *obj,
 			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
 			}
-			if (!parse_bind_line (cfg, wrk, worker_bind)) {
+			if (!rspamd_parse_bind_line (cfg, wrk, worker_bind)) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot parse bind line: %s", worker_bind);
 				return FALSE;
 			}
@@ -512,9 +512,9 @@ rspamd_rcl_worker_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static void
-rspamd_rcl_set_lua_globals (struct config_file *cfg, lua_State *L)
+rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L)
 {
-	struct config_file           **pcfg;
+	struct rspamd_config           **pcfg;
 
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
@@ -542,7 +542,7 @@ rspamd_rcl_set_lua_globals (struct config_file *cfg, lua_State *L)
 		lua_setglobal (L, "classifiers");
 	}
 
-	pcfg = lua_newuserdata (L, sizeof (struct config_file *));
+	pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 	lua_setclass (L, "rspamd{config}", -1);
 	*pcfg = cfg;
 	lua_setglobal (L, "rspamd_config");
@@ -552,7 +552,7 @@ rspamd_rcl_set_lua_globals (struct config_file *cfg, lua_State *L)
 }
 
 static gboolean
-rspamd_rcl_lua_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_lua_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const gchar *lua_src = rspamd_mempool_strdup (cfg->cfg_pool, ucl_object_tostring (obj));
@@ -621,7 +621,7 @@ rspamd_rcl_lua_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_add_module_path (struct config_file *cfg, const gchar *path, GError **err)
+rspamd_rcl_add_module_path (struct rspamd_config *cfg, const gchar *path, GError **err)
 {
 	struct stat st;
 	struct script_module *cur_mod;
@@ -668,7 +668,7 @@ rspamd_rcl_add_module_path (struct config_file *cfg, const gchar *path, GError *
 }
 
 static gboolean
-rspamd_rcl_modules_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_modules_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val, *cur;
@@ -699,17 +699,17 @@ rspamd_rcl_modules_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_statfile_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_statfile_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	struct classifier_config *ccf = ud;
+	struct rspamd_classifier_config *ccf = ud;
 	const ucl_object_t *val;
-	struct statfile *st;
+	struct rspamd_statfile_config *st;
 	const gchar *data;
 	gdouble binlog_rotate;
 	GList *labels;
 
-	st = check_statfile_conf (cfg, NULL);
+	st = rspamd_config_new_statfile (cfg, NULL);
 
 	val = ucl_object_find_key (obj, "binlog");
 	if (val != NULL && ucl_object_tostring_safe (val, &data)) {
@@ -732,7 +732,7 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, const ucl_object_t *obj,
 		}
 		val = ucl_object_find_key (obj, "binlog_master");
 		if (val != NULL && ucl_object_tostring_safe (val, &data)) {
-			if (!parse_host_port (cfg->cfg_pool, data, &st->binlog->master_addr, &st->binlog->master_port)) {
+			if (!rspamd_parse_host_port (cfg->cfg_pool, data, &st->binlog->master_addr, &st->binlog->master_port)) {
 				msg_err ("cannot parse master address: %s", data);
 				return FALSE;
 			}
@@ -789,13 +789,13 @@ rspamd_rcl_statfile_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_classifier_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_classifier_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
 	const gchar *key, *type;
-	struct classifier_config *ccf, *found = NULL;
+	struct rspamd_classifier_config *ccf, *found = NULL;
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
 	GList *cur_cl;
@@ -817,7 +817,7 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, const ucl_object_t *obj,
 	}
 
 	if (found == NULL) {
-		ccf = check_classifier_conf (cfg, NULL);
+		ccf = rspamd_config_new_classifier (cfg, NULL);
 		ccf->classifier = get_classifier (type);
 	}
 	else {
@@ -859,7 +859,7 @@ rspamd_rcl_classifier_handler (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 static gboolean
-rspamd_rcl_composite_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_composite_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val;
@@ -907,7 +907,7 @@ rspamd_rcl_composite_handler (struct config_file *cfg, const ucl_object_t *obj,
  * for default handlers
  */
 static gboolean
-rspamd_rcl_empty_handler (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_empty_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
@@ -978,60 +978,60 @@ rspamd_rcl_config_init (void)
 			FALSE, TRUE);
 	/* Default handlers */
 	rspamd_rcl_add_default_handler (sub, "log_buffer", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct config_file, log_buf_size), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, log_buf_size), 0);
 	rspamd_rcl_add_default_handler (sub, "log_urls", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, log_urls), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, log_urls), 0);
 	rspamd_rcl_add_default_handler (sub, "debug_ip", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, debug_ip_map), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map), 0);
 	rspamd_rcl_add_default_handler (sub, "debug_symbols", rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct config_file, debug_symbols), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, debug_symbols), 0);
 	rspamd_rcl_add_default_handler (sub, "log_color", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, log_color), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, log_color), 0);
 	/**
 	 * Options section
 	 */
 	sub = rspamd_rcl_add_section (&new, "options", rspamd_rcl_options_handler, UCL_OBJECT,
 			FALSE, TRUE);
 	rspamd_rcl_add_default_handler (sub, "cache_file", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, cache_filename), RSPAMD_CL_FLAG_STRING_PATH);
+			G_STRUCT_OFFSET (struct rspamd_config, cache_filename), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "dns_nameserver", rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct config_file, nameservers), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, nameservers), 0);
 	rspamd_rcl_add_default_handler (sub, "dns_timeout", rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct config_file, dns_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+			G_STRUCT_OFFSET (struct rspamd_config, dns_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_add_default_handler (sub, "dns_retransmits", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct config_file, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
+			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "dns_sockets", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct config_file, dns_io_per_server), RSPAMD_CL_FLAG_INT_32);
+			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "raw_mode", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, raw_mode), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, raw_mode), 0);
 	rspamd_rcl_add_default_handler (sub, "one_shot", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, one_shot_mode), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, one_shot_mode), 0);
 	rspamd_rcl_add_default_handler (sub, "check_attachements", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, check_text_attachements), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements), 0);
 	rspamd_rcl_add_default_handler (sub, "tempdir", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, temp_dir), RSPAMD_CL_FLAG_STRING_PATH);
+			G_STRUCT_OFFSET (struct rspamd_config, temp_dir), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "pidfile", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, pid_file), RSPAMD_CL_FLAG_STRING_PATH);
+			G_STRUCT_OFFSET (struct rspamd_config, pid_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "filters", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, filters_str), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, filters_str), 0);
 	rspamd_rcl_add_default_handler (sub, "sync_interval", rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct config_file, statfile_sync_interval), RSPAMD_CL_FLAG_TIME_INTEGER);
+			G_STRUCT_OFFSET (struct rspamd_config, statfile_sync_interval), RSPAMD_CL_FLAG_TIME_INTEGER);
 	rspamd_rcl_add_default_handler (sub, "sync_timeout", rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct config_file, statfile_sync_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+			G_STRUCT_OFFSET (struct rspamd_config, statfile_sync_timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 	rspamd_rcl_add_default_handler (sub, "max_diff", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct config_file, max_diff), RSPAMD_CL_FLAG_INT_SIZE);
+			G_STRUCT_OFFSET (struct rspamd_config, max_diff), RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (sub, "map_watch_interval", rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct config_file, map_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+			G_STRUCT_OFFSET (struct rspamd_config, map_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_add_default_handler (sub, "dynamic_conf", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, dynamic_conf), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf), 0);
 	rspamd_rcl_add_default_handler (sub, "rrd", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, rrd_file), RSPAMD_CL_FLAG_STRING_PATH);
+			G_STRUCT_OFFSET (struct rspamd_config, rrd_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "history_file", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct config_file, history_file), RSPAMD_CL_FLAG_STRING_PATH);
+			G_STRUCT_OFFSET (struct rspamd_config, history_file), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub, "use_mlock", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, mlock_statfile_pool), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, mlock_statfile_pool), 0);
 	rspamd_rcl_add_default_handler (sub, "strict_protocol_headers", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct config_file, strict_protocol_headers), 0);
+			G_STRUCT_OFFSET (struct rspamd_config, strict_protocol_headers), 0);
 
 	/**
 	 * Metric section
@@ -1045,11 +1045,11 @@ rspamd_rcl_config_init (void)
 	sub = rspamd_rcl_add_section (&new, "worker", rspamd_rcl_worker_handler, UCL_OBJECT,
 			FALSE, TRUE);
 	rspamd_rcl_add_default_handler (sub, "count", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct worker_conf, count), RSPAMD_CL_FLAG_INT_16);
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, count), RSPAMD_CL_FLAG_INT_16);
 	rspamd_rcl_add_default_handler (sub, "max_files", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct worker_conf, rlimit_nofile), RSPAMD_CL_FLAG_INT_32);
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_nofile), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "max_core", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct worker_conf, rlimit_maxcore), RSPAMD_CL_FLAG_INT_32);
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore), RSPAMD_CL_FLAG_INT_32);
 
 	/**
 	 * Lua handler
@@ -1071,15 +1071,15 @@ rspamd_rcl_config_init (void)
 	ssub = rspamd_rcl_add_section (&sub->subsections, "statfile", rspamd_rcl_statfile_handler,
 			UCL_OBJECT, TRUE, TRUE);
 	rspamd_rcl_add_default_handler (ssub, "symbol", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct statfile, symbol), 0);
+			G_STRUCT_OFFSET (struct rspamd_statfile_config, symbol), 0);
 	rspamd_rcl_add_default_handler (ssub, "path", rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct statfile, path), RSPAMD_CL_FLAG_STRING_PATH);
+			G_STRUCT_OFFSET (struct rspamd_statfile_config, path), RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (ssub, "label", rspamd_rcl_parse_struct_string,
-				G_STRUCT_OFFSET (struct statfile, label), 0);
+				G_STRUCT_OFFSET (struct rspamd_statfile_config, label), 0);
 	rspamd_rcl_add_default_handler (ssub, "size", rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct statfile, size), RSPAMD_CL_FLAG_INT_SIZE);
+			G_STRUCT_OFFSET (struct rspamd_statfile_config, size), RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (ssub, "spam", rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct statfile, is_spam), 0);
+			G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam), 0);
 
 	/**
 	 * Composites handler
@@ -1126,7 +1126,7 @@ rspamd_rcl_config_get_section (struct rspamd_rcl_section *top,
 
 gboolean
 rspamd_read_rcl_config (struct rspamd_rcl_section *top,
-		struct config_file *cfg, const ucl_object_t *obj, GError **err)
+		struct rspamd_config *cfg, const ucl_object_t *obj, GError **err)
 {
 	const ucl_object_t *found, *cur_obj;
 	struct rspamd_rcl_section *cur, *tmp;
@@ -1170,7 +1170,7 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 }
 
 gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
-		struct config_file *cfg, const ucl_object_t *obj, gpointer ptr,
+		struct rspamd_config *cfg, const ucl_object_t *obj, gpointer ptr,
 		GError **err)
 {
 	const ucl_object_t *found;
@@ -1195,7 +1195,7 @@ gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 }
 
 gboolean
-rspamd_rcl_parse_struct_string (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_parse_struct_string (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1228,7 +1228,7 @@ rspamd_rcl_parse_struct_string (struct config_file *cfg, const ucl_object_t *obj
 }
 
 gboolean
-rspamd_rcl_parse_struct_integer (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_parse_struct_integer (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1286,7 +1286,7 @@ rspamd_rcl_parse_struct_integer (struct config_file *cfg, const ucl_object_t *ob
 }
 
 gboolean
-rspamd_rcl_parse_struct_double (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_parse_struct_double (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1303,7 +1303,7 @@ rspamd_rcl_parse_struct_double (struct config_file *cfg, const ucl_object_t *obj
 }
 
 gboolean
-rspamd_rcl_parse_struct_time (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_parse_struct_time (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1352,7 +1352,7 @@ rspamd_rcl_parse_struct_time (struct config_file *cfg, const ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_parse_struct_string_list (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1400,7 +1400,7 @@ rspamd_rcl_parse_struct_string_list (struct config_file *cfg, const ucl_object_t
 }
 
 gboolean
-rspamd_rcl_parse_struct_boolean (struct config_file *cfg, const ucl_object_t *obj,
+rspamd_rcl_parse_struct_boolean (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
@@ -1423,7 +1423,7 @@ rspamd_rcl_parse_struct_boolean (struct config_file *cfg, const ucl_object_t *ob
 }
 
 void
-rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gchar *name,
+rspamd_rcl_register_worker_option (struct rspamd_config *cfg, gint type, const gchar *name,
 		rspamd_rcl_handler_t handler, gpointer target, gsize offset, gint flags)
 {
 	struct rspamd_worker_param_parser *nhandler;
@@ -1454,7 +1454,7 @@ rspamd_rcl_register_worker_option (struct config_file *cfg, gint type, const gch
 
 
 void
-rspamd_rcl_register_worker_parser (struct config_file *cfg, gint type,
+rspamd_rcl_register_worker_parser (struct rspamd_config *cfg, gint type,
 		gboolean (*func)(ucl_object_t *, gpointer), gpointer ud)
 {
 	struct rspamd_worker_cfg_parser *nparser;

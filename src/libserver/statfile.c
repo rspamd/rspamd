@@ -862,8 +862,8 @@ statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jit
 
 
 stat_file_t *
-get_statfile_by_symbol (statfile_pool_t *pool, struct classifier_config *ccf,
-        const gchar *symbol, struct statfile **st, gboolean try_create)
+get_statfile_by_symbol (statfile_pool_t *pool, struct rspamd_classifier_config *ccf,
+        const gchar *symbol, struct rspamd_statfile_config **st, gboolean try_create)
 {
     stat_file_t *res = NULL;
     GList *cur;

@@ -264,7 +264,7 @@ lua_add_actions_global (lua_State *L)
 }
 
 lua_State *
-init_lua (struct config_file *cfg)
+init_lua (struct rspamd_config *cfg)
 {
 	lua_State                      *L;
 
@@ -306,7 +306,7 @@ init_lua (struct config_file *cfg)
  * Initialize new locked lua_State structure
  */
 struct lua_locked_state*
-init_lua_locked (struct config_file *cfg)
+init_lua_locked (struct rspamd_config *cfg)
 {
 	struct lua_locked_state			*new;
 
@@ -334,12 +334,12 @@ free_lua_locked (struct lua_locked_state *st)
 }
 
 gboolean
-init_lua_filters (struct config_file *cfg)
+init_lua_filters (struct rspamd_config *cfg)
 {
-	struct config_file            **pcfg;
+	struct rspamd_config            **pcfg;
 	GList                          *cur, *tmp;
 	struct script_module           *module;
-    struct statfile                *st;
+    struct rspamd_statfile_config                *st;
 	lua_State                      *L = cfg->lua_state;
 
 	cur = g_list_first (cfg->script_modules);
@@ -353,7 +353,7 @@ init_lua_filters (struct config_file *cfg)
 			}
 
 			/* Initialize config structure */
-			pcfg = lua_newuserdata (L, sizeof (struct config_file *));
+			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
 			lua_setglobal (L, "rspamd_config");
@@ -563,7 +563,7 @@ lua_consolidation_func (struct rspamd_task *task, const gchar *metric_name, cons
 }
 
 double 
-lua_normalizer_func (struct config_file *cfg, long double score, void *params)
+lua_normalizer_func (struct rspamd_config *cfg, long double score, void *params)
 {
     GList                          *p = params;
     long double                    	res = score;

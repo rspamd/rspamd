@@ -109,12 +109,12 @@ static const struct luaL_reg    trielib_f[] = {
 	{NULL, NULL}
 };
 
-static struct config_file      *
+static struct rspamd_config      *
 lua_check_config (lua_State * L)
 {
 	void                           *ud = luaL_checkudata (L, 1, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
-	return ud ? *((struct config_file **)ud) : NULL;
+	return ud ? *((struct rspamd_config **)ud) : NULL;
 }
 
 static radix_tree_t           *
@@ -153,7 +153,7 @@ lua_config_get_api_version (lua_State *L)
 static gint
 lua_config_get_module_opt (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	const gchar                     *mname, *optname;
 	const ucl_object_t              *obj;
 
@@ -162,7 +162,7 @@ lua_config_get_module_opt (lua_State * L)
 		optname = luaL_checkstring (L, 3);
 
 		if (mname && optname) {
-			obj = get_module_opt (cfg, mname, optname);
+			obj = rspamd_config_get_module_opt (cfg, mname, optname);
 			if (obj) {
 				return lua_rcl_obj_push (L, obj, TRUE);
 			}
@@ -176,7 +176,7 @@ static int
 lua_config_get_mempool (lua_State * L)
 {
 	rspamd_mempool_t                  **ppool;
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 
 	if (cfg != NULL) {
 		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
@@ -189,7 +189,7 @@ lua_config_get_mempool (lua_State * L)
 static gint
 lua_config_get_all_opt (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	const gchar                     *mname;
 	const ucl_object_t              *obj;
 
@@ -211,8 +211,8 @@ lua_config_get_all_opt (lua_State * L)
 static gint
 lua_config_get_classifier (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
-	struct classifier_config       *clc = NULL, **pclc = NULL;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	struct rspamd_classifier_config       *clc = NULL, **pclc = NULL;
 	const gchar                     *name;
 	GList                          *cur;
 
@@ -229,7 +229,7 @@ lua_config_get_classifier (lua_State * L)
 			cur = g_list_next (cur);
 		}
 		if (pclc) {
-			pclc = lua_newuserdata (L, sizeof (struct classifier_config *));
+			pclc = lua_newuserdata (L, sizeof (struct rspamd_classifier_config *));
 			lua_setclass (L, "rspamd{classifier}", -1);
 			*pclc = clc;
 			return 1;
@@ -311,7 +311,7 @@ lua_config_function_callback (struct rspamd_task *task, GList *args, void *user_
 static gint
 lua_config_register_function (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	gchar                          *name;
 	struct lua_callback_data       *cd;
 	
@@ -376,7 +376,7 @@ lua_call_post_filters (struct rspamd_task *task)
 static gint
 lua_config_register_post_filter (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
@@ -429,7 +429,7 @@ lua_call_pre_filters (struct rspamd_task *task)
 static gint
 lua_config_register_pre_filter (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	struct lua_callback_data       *cd;
 
 	if (cfg) {
@@ -454,7 +454,7 @@ lua_config_register_pre_filter (lua_State *L)
 static gint
 lua_config_add_radix_map (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	const gchar                     *map_line, *description;
 	radix_tree_t                   **r, ***ud;
 
@@ -484,7 +484,7 @@ lua_config_add_radix_map (lua_State *L)
 static gint
 lua_config_add_hash_map (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	const gchar                     *map_line, *description;
 	GHashTable                    **r, ***ud;
 
@@ -515,7 +515,7 @@ lua_config_add_hash_map (lua_State *L)
 static gint
 lua_config_add_kv_map (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	const gchar                     *map_line, *description;
 	GHashTable                    **r, ***ud;
 
@@ -571,7 +571,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 static gint
 lua_config_register_symbol (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	gchar                          *name;
 	double                          weight;
 	struct lua_callback_data       *cd;
@@ -603,7 +603,7 @@ lua_config_register_symbol (lua_State * L)
 static gint
 lua_config_register_symbols (lua_State *L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	struct lua_callback_data       *cd;
 	gint                             i, top;
 	gchar                           *sym;
@@ -648,7 +648,7 @@ lua_config_register_symbols (lua_State *L)
 static gint
 lua_config_register_virtual_symbol (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	gchar                          *name;
 	double                          weight;
 
@@ -665,7 +665,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 static gint
 lua_config_register_callback_symbol (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	gchar                          *name;
 	double                          weight;
 	struct lua_callback_data       *cd;
@@ -697,7 +697,7 @@ lua_config_register_callback_symbol (lua_State * L)
 static gint
 lua_config_register_callback_symbol_priority (lua_State * L)
 {
-	struct config_file             *cfg = lua_check_config (L);
+	struct rspamd_config             *cfg = lua_check_config (L);
 	gchar                          *name;
 	double                          weight;
 	gint                            priority;

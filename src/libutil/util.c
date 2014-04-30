@@ -1147,7 +1147,7 @@ fstr_strcase_hash (gconstpointer key)
 }
 
 void
-gperf_profiler_init (struct config_file *cfg, const gchar *descr)
+gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 {
 #if defined(WITH_GPERF_TOOLS)
 	gchar                           prof_path[PATH_MAX];

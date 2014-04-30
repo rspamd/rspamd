@@ -943,7 +943,7 @@ http_callback (gint fd, short what, void *ud)
 
 /* Start watching event for all maps */
 void
-start_map_watch (struct config_file *cfg, struct event_base *ev_base)
+start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 {
 	GList                          *cur = cfg->maps;
 	struct rspamd_map              *map;
@@ -983,7 +983,7 @@ start_map_watch (struct config_file *cfg, struct event_base *ev_base)
 }
 
 void 
-remove_all_maps (struct config_file *cfg)
+remove_all_maps (struct rspamd_config *cfg)
 {
 	g_list_free (cfg->maps);
 	cfg->maps = NULL;
@@ -1022,7 +1022,7 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 }
 
 gboolean
-add_map (struct config_file *cfg, const gchar *map_line, const gchar *description,
+add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *description,
 		map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
 {
 	struct rspamd_map              *new_map;

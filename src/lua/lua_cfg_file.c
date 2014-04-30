@@ -35,7 +35,7 @@
 
 /* Process a single item in 'metrics' table */
 static void
-lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
+lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 {
 	GList                               *metric_list;
 	gchar                               *symbol, *old_desc;
@@ -45,7 +45,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
-		metric = check_metric_conf (cfg, metric);
+		metric = rspamd_config_new_metric (cfg, metric);
 		metric->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
 	}
 
@@ -119,7 +119,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct config_file *cfg)
 
 /* Do post load initialization based on lua */
 void
-lua_post_load_config (struct config_file *cfg)
+lua_post_load_config (struct rspamd_config *cfg)
 {
 	lua_State                            *L = cfg->lua_state;
 	const gchar                          *name, *val;
@@ -204,7 +204,7 @@ lua_handle_param (struct rspamd_task *task, gchar *mname, gchar *optname, enum l
 
 #define FAKE_RES_VAR "rspamd_res"
 gboolean
-lua_check_condition (struct config_file *cfg, const gchar *condition)
+lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 {
 	lua_State                            *L = cfg->lua_state;
 	gchar                                *hostbuf, *condbuf;

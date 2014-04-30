@@ -68,7 +68,7 @@ struct regexp_json_buf {
 	gchar                          *buf;
 	gchar                          *pos;
 	size_t                          buflen;
-	struct config_file             *cfg;
+	struct rspamd_config             *cfg;
 };
 
 /* Lua regexp module for checking rspamd regexps */
@@ -99,9 +99,9 @@ static void                    process_regexp_item (struct rspamd_task *task, vo
 
 
 /* Initialization */
-gint regexp_module_init (struct config_file *cfg, struct module_ctx **ctx);
-gint regexp_module_config (struct config_file *cfg);
-gint regexp_module_reconfig (struct config_file *cfg);
+gint regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
+gint regexp_module_config (struct rspamd_config *cfg);
+gint regexp_module_reconfig (struct rspamd_config *cfg);
 
 module_t regexp_module = {
 	"regexp",
@@ -505,7 +505,7 @@ json_regexp_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 
 /* Init function */
 gint
-regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
+regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
 
@@ -537,7 +537,7 @@ regexp_module_init (struct config_file *cfg, struct module_ctx **ctx)
  * SYMBOL:statfile:weight
  */
 void
-parse_autolearn_param (const gchar *param, const gchar *value, struct config_file *cfg)
+parse_autolearn_param (const gchar *param, const gchar *value, struct rspamd_config *cfg)
 {
 	struct autolearn_data          *d;
 	gchar                           *p;
@@ -564,7 +564,7 @@ parse_autolearn_param (const gchar *param, const gchar *value, struct config_fil
 }
 
 gint
-regexp_module_config (struct config_file *cfg)
+regexp_module_config (struct rspamd_config *cfg)
 {
 	struct regexp_module_item      *cur_item;
 	const ucl_object_t             *sec, *value;
@@ -629,7 +629,7 @@ regexp_module_config (struct config_file *cfg)
 }
 
 gint
-regexp_module_reconfig (struct config_file *cfg)
+regexp_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (regexp_module_ctx->regexp_pool);
 	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());

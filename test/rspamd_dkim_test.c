@@ -65,12 +65,12 @@ rspamd_dkim_test_func ()
 	rspamd_dkim_key_t *key;
 	rspamd_mempool_t *pool;
 	struct rspamd_dns_resolver *resolver;
-	struct config_file *cfg;
+	struct rspamd_config *cfg;
 	GError *err = NULL;
 	struct rspamd_async_session *s;
 
-	cfg = (struct config_file *)g_malloc (sizeof (struct config_file));
-	bzero (cfg, sizeof (struct config_file));
+	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
+	bzero (cfg, sizeof (struct rspamd_config));
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	cfg->dns_retransmits = 10;
 	cfg->dns_timeout = 1000;

@@ -380,13 +380,13 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 		rspamd_strlcpy (kv_parser->current_storage->name, text, text_len + 1);
 		break;
 	case KVSTORAGE_STATE_CACHE_MAX_ELTS:
-		kv_parser->current_storage->cache.max_elements = parse_limit (text, text_len);
+		kv_parser->current_storage->cache.max_elements = rspamd_config_parse_limit (text, text_len);
 		break;
 	case KVSTORAGE_STATE_CACHE_MAX_MEM:
-		kv_parser->current_storage->cache.max_memory = parse_limit (text, text_len);
+		kv_parser->current_storage->cache.max_memory = rspamd_config_parse_limit (text, text_len);
 		break;
 	case KVSTORAGE_STATE_CACHE_NO_OVERWRITE:
-		kv_parser->current_storage->cache.no_overwrite = parse_flag (text);
+		kv_parser->current_storage->cache.no_overwrite = rspamd_config_parse_flag (text);
 		break;
 	case KVSTORAGE_STATE_CACHE_TYPE:
 		if (g_ascii_strncasecmp (text, "hash", MIN (text_len, sizeof ("hash") - 1)) == 0) {
@@ -436,13 +436,13 @@ void kvstorage_xml_text       (GMarkupParseContext		*context,
 		rspamd_strlcpy (kv_parser->current_storage->backend.filename, text, text_len + 1);
 		break;
 	case KVSTORAGE_STATE_BACKEND_SYNC_OPS:
-		kv_parser->current_storage->backend.sync_ops = parse_limit (text, text_len);
+		kv_parser->current_storage->backend.sync_ops = rspamd_config_parse_limit (text, text_len);
 		break;
 	case KVSTORAGE_STATE_BACKEND_DO_FSYNC:
-		kv_parser->current_storage->backend.do_fsync = parse_flag (text);
+		kv_parser->current_storage->backend.do_fsync = rspamd_config_parse_flag (text);
 		break;
 	case KVSTORAGE_STATE_BACKEND_DO_REF:
-		kv_parser->current_storage->backend.do_ref = parse_flag (text);
+		kv_parser->current_storage->backend.do_ref = rspamd_config_parse_flag (text);
 		break;
 	case KVSTORAGE_STATE_EXPIRE_TYPE:
 		if (g_ascii_strncasecmp (text, "lru", MIN (text_len, sizeof ("lru") - 1)) == 0) {

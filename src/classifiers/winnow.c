@@ -182,7 +182,7 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 }
 
 struct classifier_ctx          *
-winnow_init (rspamd_mempool_t * pool, struct classifier_config *cfg)
+winnow_init (rspamd_mempool_t * pool, struct rspamd_classifier_config *cfg)
 {
 	struct classifier_ctx          *ctx = rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
 
@@ -199,7 +199,7 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	char                           *sumbuf, *value;
 	long double                     res = 0., max = 0.;
 	GList                          *cur;
-	struct statfile                *st, *sel = NULL;
+	struct rspamd_statfile_config                *st, *sel = NULL;
 	int                             nodes, minnodes;
 
 	g_assert (pool != NULL);
@@ -287,7 +287,7 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 	struct winnow_callback_data     data;
 	long double                     res = 0.;
 	GList                          *cur, *resl = NULL;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	struct classify_weight         *w;
 	char                           *value;
 	int                             nodes, minnodes;
@@ -360,7 +360,7 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 	};
 	char                           *value;
 	int                             nodes, minnodes, iterations = 0;
-	struct statfile                *st, *sel_st = NULL;
+	struct rspamd_statfile_config                *st, *sel_st = NULL;
 	stat_file_t                    *sel = NULL, *to_learn;
 	long double                     res = 0., max = 0., start_value = 0., end_value = 0.;
 	double                          learn_threshold = 0.0;

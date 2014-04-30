@@ -348,7 +348,7 @@ parse_upstreams_line (rspamd_mempool_t *pool, struct smtp_upstream *upstreams, c
 			(*count) ++;
 		}
 		else {
-			if (! parse_host_port (pool, p, &cur->addr, &cur->port)) {
+			if (! rspamd_parse_host_port (pool, p, &cur->addr, &cur->port)) {
 				g_strfreev (strv);
 				return FALSE;
 			}

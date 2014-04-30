@@ -353,7 +353,7 @@ json_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 }
 
 gboolean
-read_settings (const gchar *path, const gchar *description, struct config_file *cfg, GHashTable * table)
+read_settings (const gchar *path, const gchar *description, struct rspamd_config *cfg, GHashTable * table)
 {
 	struct json_buf                *jb = g_malloc (sizeof (struct json_buf)), **pjb;
 
@@ -372,7 +372,7 @@ read_settings (const gchar *path, const gchar *description, struct config_file *
 }
 
 void
-init_settings (struct config_file *cfg)
+init_settings (struct rspamd_config *cfg)
 {
 	cfg->domain_settings = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal,
 			g_free, (GDestroyNotify)settings_unref);

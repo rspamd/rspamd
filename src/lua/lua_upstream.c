@@ -114,7 +114,7 @@ lua_upstream_create (lua_State *L)
 		new = g_slice_alloc0 (sizeof (struct lua_upstream));
 		new->def = g_strdup (def);
 		new->addr = g_malloc (INET6_ADDRSTRLEN);
-		if (!parse_host_port_priority (NULL, new->def, &new->addr, &new->port, &new->up.priority)) {
+		if (!rspamd_parse_host_port_priority (NULL, new->def, &new->addr, &new->port, &new->up.priority)) {
 			g_free (new->def);
 			g_slice_free1 (sizeof (struct lua_upstream), new);
 			lua_pushnil (L);
@@ -322,7 +322,7 @@ lua_upstream_list_create (lua_State *L)
 		for (i = 0; i < new->count; i ++) {
 			cur = &new->upstreams[i];
 			cur->addr = g_malloc (INET6_ADDRSTRLEN);
-			if (!parse_host_port_priority (NULL, tokens[i], &cur->addr, &cur->port, &cur->up.priority)) {
+			if (!rspamd_parse_host_port_priority (NULL, tokens[i], &cur->addr, &cur->port, &cur->up.priority)) {
 				goto err;
 			}
 			if (cur->port == 0) {

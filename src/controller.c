@@ -49,7 +49,7 @@
 #define CONTROLLER_RRD_STEP 60
 
 /* Init functions */
-gpointer init_controller (struct config_file *cfg);
+gpointer init_controller (struct rspamd_config *cfg);
 void start_controller (struct rspamd_worker *worker);
 
 worker_t controller_worker = {
@@ -246,10 +246,10 @@ check_auth (struct controller_command *cmd, struct controller_session *session)
 }
 
 static gboolean
-write_whole_statfile (struct controller_session *session, gchar *symbol, struct classifier_config *ccf)
+write_whole_statfile (struct controller_session *session, gchar *symbol, struct rspamd_classifier_config *ccf)
 {
 	stat_file_t                    *statfile;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	gchar                           out_buf[BUFSIZ];
 	guint                           i;
 	guint64                         rev, ti, len, pos, blocks;
@@ -307,8 +307,8 @@ process_sync_command (struct controller_session *session, gchar **args)
 	gchar                           out_buf[BUFSIZ], *arg, *err_str, *symbol;
 	gint                            r;
 	guint64                         rev, time;
-	struct statfile                *st = NULL;
-	struct classifier_config       *ccf;
+	struct rspamd_statfile_config                *st = NULL;
+	struct rspamd_classifier_config       *ccf;
 	GList                          *cur;
 	struct rspamd_binlog           *binlog;
 	GByteArray                     *data = NULL;
@@ -453,9 +453,9 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 	guint64                         used, total, rev, ham = 0, spam = 0;
 	time_t                          ti;
 	rspamd_mempool_stat_t              mem_st;
-	struct classifier_config       *ccf;
+	struct rspamd_classifier_config       *ccf;
 	stat_file_t                    *statfile;
-	struct statfile                *st;
+	struct rspamd_statfile_config                *st;
 	GList                          *cur_cl, *cur_st;
 	struct rspamd_stat            *stat, stat_copy;
 
@@ -550,7 +550,7 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 static gboolean
 process_dynamic_conf_command (gchar **cmd_args, struct controller_session *session, gboolean is_action)
 {
-	struct config_file			   *cfg = session->cfg;
+	struct rspamd_config			   *cfg = session->cfg;
 	gchar						   *arg, *metric, *name, *err_str;
 	gdouble						    value;
 	gboolean						res;
@@ -669,7 +669,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 	gint                            r = 0, days, hours, minutes;
 	time_t                          uptime;
 	guint32                   		size = 0;
-	struct classifier_config       *cl;
+	struct rspamd_classifier_config       *cl;
 	struct rspamd_controller_ctx   *ctx = session->worker->ctx;
 
 	switch (cmd->type) {
@@ -819,7 +819,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 					}
 					return TRUE;
 				}
-				cl = find_classifier_conf (session->cfg, *cmd_args);
+				cl = rspamd_config_find_classifier (session->cfg, *cmd_args);
 			}
 			else {
 				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
@@ -831,7 +831,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 					return TRUE;
 				}
 				else {
-					cl = find_classifier_conf (session->cfg, arg);
+					cl = rspamd_config_find_classifier (session->cfg, arg);
 				}
 				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
 					msg_debug ("no size specified in learn command");
@@ -891,7 +891,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 					}
 					return TRUE;
 				}
-				cl = find_classifier_conf (session->cfg, *cmd_args);
+				cl = rspamd_config_find_classifier (session->cfg, *cmd_args);
 			}
 			else {
 				if ((arg = g_hash_table_lookup (session->kwargs, "classifier")) == NULL) {
@@ -903,7 +903,7 @@ process_command (struct controller_command *cmd, gchar **cmd_args, struct contro
 					return TRUE;
 				}
 				else {
-					cl = find_classifier_conf (session->cfg, arg);
+					cl = rspamd_config_find_classifier (session->cfg, arg);
 				}
 				if ((arg = g_hash_table_lookup (session->kwargs, "content-length")) == NULL) {
 					msg_debug ("no size specified in learn command");
@@ -1845,7 +1845,7 @@ controller_update_rrd (gint fd, short what, void *arg)
 }
 
 gpointer
-init_controller (struct config_file *cfg)
+init_controller (struct rspamd_config *cfg)
 {
 	struct rspamd_controller_ctx       *ctx;
 	GQuark								type;
@@ -1875,7 +1875,7 @@ start_controller (struct rspamd_worker *worker)
 	GError                         *err = NULL;
 	struct timeval                  tv;
 
-	ctx->ev_base = prepare_worker (worker, "controller", accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "controller", accept_socket);
 	g_mime_init (0);
 
 	start_time = time (NULL);

@@ -40,7 +40,7 @@ enum rspamd_sync_state {
 
 /* Context of sync process */
 struct rspamd_sync_ctx {
-	struct statfile *st;
+	struct rspamd_statfile_config *st;
 	stat_file_t *real_statfile;
 	statfile_pool_t *pool;
 	rspamd_io_dispatcher_t *dispatcher;
@@ -280,7 +280,7 @@ sync_timer_callback (gint fd, short what, void *ud)
 }
 
 static gboolean
-add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_file *cfg, struct event_base *ev_base)
+add_statfile_watch (statfile_pool_t *pool, struct rspamd_statfile_config *st, struct rspamd_config *cfg, struct event_base *ev_base)
 {
 	struct rspamd_sync_ctx *ctx;
 	guint32 jittered_interval;
@@ -320,11 +320,11 @@ add_statfile_watch (statfile_pool_t *pool, struct statfile *st, struct config_fi
 }
 
 gboolean 
-start_statfile_sync (statfile_pool_t *pool, struct config_file *cfg, struct event_base *ev_base)
+start_statfile_sync (statfile_pool_t *pool, struct rspamd_config *cfg, struct event_base *ev_base)
 {
 	GList *cur, *l;
-	struct classifier_config *cl;
-	struct statfile *st;
+	struct rspamd_classifier_config *cl;
+	struct rspamd_statfile_config *st;
 
 	/* 
 	 * First of all walk through all classifiers and find those statfiles

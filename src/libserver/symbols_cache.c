@@ -332,7 +332,7 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 	pcache->used_items++;
 	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
-	set_counter (item->s->symbol, 0);
+	rspamd_set_counter (item->s->symbol, 0);
 
 	*target = g_list_prepend (*target, item);
 }
@@ -401,7 +401,7 @@ register_dynamic_symbol (rspamd_mempool_t *dynamic_pool, struct symbols_cache **
 
 	pcache->used_items++;
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
-	set_counter (item->s->symbol, 0);
+	rspamd_set_counter (item->s->symbol, 0);
 	
 	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
 
@@ -521,7 +521,7 @@ free_cache (gpointer arg)
 }
 
 gboolean
-init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct config_file *cfg,
+init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct rspamd_config *cfg,
 		const gchar *filename, gboolean ignore_checksum)
 {
 	struct stat                     st;
@@ -691,7 +691,7 @@ check_negative_dynamic_item (struct rspamd_task *task, struct symbols_cache *cac
 }
 
 static gboolean
-check_debug_symbol (struct config_file *cfg, const gchar *symbol)
+check_debug_symbol (struct rspamd_config *cfg, const gchar *symbol)
 {
 	GList                         *cur;
 
@@ -736,7 +736,7 @@ rspamd_symbols_cache_metric_cb (gpointer k, gpointer v, gpointer ud)
 }
 
 gboolean
-validate_cache (struct symbols_cache *cache, struct config_file *cfg, gboolean strict)
+validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean strict)
 {
 	struct cache_item              *item;
 	GList                          *cur, *p, *metric_symbols;
@@ -1045,7 +1045,7 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 #else
 		diff = (tv2.tv_sec - tv1.tv_sec) * 1000000 + (tv2.tv_usec - tv1.tv_usec);
 #endif
-		item->s->avg_time = set_counter (item->s->symbol, diff);
+		item->s->avg_time = rspamd_set_counter (item->s->symbol, diff);
 	}
 
 	s->saved_item = item;

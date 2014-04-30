@@ -67,7 +67,7 @@ enum rspamd_smtp_state {
 
 struct smtp_session {
 	struct smtp_worker_ctx *ctx;
-	struct config_file *cfg;
+	struct rspamd_config *cfg;
 	rspamd_mempool_t *pool;
 
 	enum rspamd_smtp_state state;

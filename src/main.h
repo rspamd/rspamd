@@ -57,7 +57,7 @@ struct rspamd_worker {
 	struct event sig_ev_usr1;									/**< signals event									*/
 	struct event sig_ev_usr2;									/**< signals event									*/
 	GList *accept_events;										/**< socket events									*/
-	struct worker_conf *cf;										/**< worker config data								*/
+	struct rspamd_worker_conf *cf;										/**< worker config data								*/
 	gpointer ctx;												/**< worker's specific data							*/
 };
 
@@ -66,10 +66,10 @@ struct rspamd_worker {
  */
 
 struct pidfh;
-struct config_file;
+struct rspamd_config;
 struct tokenizer;
 struct classifier;
-struct classifier_config;
+struct rspamd_classifier_config;
 struct mime_part;
 struct rspamd_dns_resolver;
 struct rspamd_task;
@@ -91,7 +91,7 @@ struct rspamd_stat {
  * Struct that determine main server object (for logging purposes)
  */
 struct rspamd_main {
-	struct config_file *cfg;									/**< pointer to config structure					*/
+	struct rspamd_config *cfg;									/**< pointer to config structure					*/
 	pid_t pid;													/**< main pid										*/
 	/* Pid file structure */
 	rspamd_pidfh_t *pfh;										/**< struct pidfh for pidfile						*/
@@ -151,10 +151,10 @@ struct controller_session {
 	GHashTable *kwargs;											/**< keyword arguments for restful command			*/
 	struct controller_command *cmd;								/**< real command									*/
 	rspamd_mempool_t *session_pool;								/**< memory pool for session 						*/
-	struct config_file *cfg;									/**< pointer to config file							*/
+	struct rspamd_config *cfg;									/**< pointer to config file							*/
 	gchar *learn_rcpt;											/**< recipient for learning							*/
 	gchar *learn_from;											/**< from address for learning						*/
-	struct classifier_config *learn_classifier;
+	struct rspamd_classifier_config *learn_classifier;
 	gchar *learn_symbol;											/**< symbol to train								*/
 	double learn_multiplier;									/**< multiplier for learning						*/
 	rspamd_io_dispatcher_t *dispatcher;							/**< IO dispatcher object							*/
@@ -176,14 +176,6 @@ struct controller_session {
  */
 struct module_ctx {
 	gint (*filter)(struct rspamd_task *task);					/**< pointer to headers process function			*/
-};
-
-/**
- * Common structure for C module
- */
-struct c_module {
-	const gchar *name;											/**< name											*/
-	struct module_ctx *ctx;										/**< pointer to context								*/
 };
 
 /**

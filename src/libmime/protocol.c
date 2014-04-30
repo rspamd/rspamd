@@ -274,7 +274,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task, struct rspamd_http_mes
 		case 'j':
 		case 'J':
 			if (g_ascii_strcasecmp (headern, JSON_HEADER) == 0) {
-				task->is_json = parse_flag (h->value->str);
+				task->is_json = rspamd_config_parse_flag (h->value->str);
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
