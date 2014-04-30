@@ -1651,7 +1651,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	while (cur) {
 		f = cur->data;
 		mctx = g_hash_table_lookup (ctx->cfg->c_modules, f->module->name);
-		if (mctx != NULL && f->module->module_init_func != NULL) {
+		if (mctx != NULL && f->module->module_attach_controller_func != NULL) {
 			f->module->module_attach_controller_func (mctx, ctx->custom_commands);
 		}
 		cur = g_list_next (cur);
