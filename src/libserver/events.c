@@ -154,6 +154,9 @@ rspamd_session_destroy (gpointer k, gpointer v, gpointer unused)
 	struct rspamd_async_event      *ev = v;
 
 	/* Call event's finalizer */
+	msg_debug ("removed event on destroy: %p, subsystem: %s", ev->user_data,
+			g_quark_to_string (ev->subsystem));
+
 	if (ev->fin != NULL) {
 		ev->fin (ev->user_data);
 	}

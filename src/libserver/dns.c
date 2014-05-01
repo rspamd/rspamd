@@ -59,6 +59,11 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 
 	reqdata->cb (reply, reqdata->ud);
 
+	/*
+	 * Ref event to avoid double unref by
+	 * event removing
+	 */
+	rdns_request_retain (reply->request);
 	remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata->req);
 }
 
@@ -81,8 +86,6 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	if (req != NULL) {
 		register_async_event (session, (event_finalizer_t)rspamd_dns_fin_cb, req,
 				g_quark_from_static_string ("dns resolver"));
-		/* Ref event to free it only when according async event is deleted from the session */
-		rdns_request_retain (req);
 		reqdata->req = req;
 	}
 	else {
