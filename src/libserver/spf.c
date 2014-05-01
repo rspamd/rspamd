@@ -454,7 +454,6 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rdns_reply_entry      *elt_data;
 	GList                           *tmp = NULL;
 	struct rspamd_task              *task;
-	struct spf_addr                 *new_addr;
 
 	task = cb->rec->task;
 
