@@ -74,6 +74,7 @@
 struct spf_dns_cb {
 	struct spf_record *rec;
 	struct spf_addr *addr;
+	gchar *ptr_host;
 	spf_action_t cur_action;
 	gboolean in_include;
 };
@@ -387,6 +388,65 @@ parse_spf_hostmask (struct rspamd_task *task, const gchar *begin, struct spf_add
 }
 
 static void
+spf_record_process_addr (struct rdns_reply_entry *elt,
+		struct spf_dns_cb *cb, struct rspamd_task *task)
+{
+	struct spf_addr *addr = cb->addr, *new_addr;
+	GList *tmp = NULL;
+
+	if (elt->type == RDNS_REQUEST_A) {
+		if (!addr->data.normal.parsed) {
+			addr->data.normal.d.in4.s_addr = elt->content.a.addr.s_addr;
+			addr->data.normal.mask = 32;
+			addr->data.normal.parsed = TRUE;
+		}
+		else {
+			/* Insert one more address */
+			tmp = spf_addr_find (cb->rec->addrs, addr);
+			if (tmp) {
+				new_addr = rspamd_mempool_alloc (task->task_pool,
+						sizeof (struct spf_addr));
+				memcpy (new_addr, addr, sizeof (struct spf_addr));
+				new_addr->data.normal.d.in4.s_addr = elt->content.a.addr.s_addr;
+				new_addr->data.normal.parsed = TRUE;
+				cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
+			}
+			else {
+				msg_info ("<%s>: spf error for domain %s: addresses mismatch",
+						task->message_id, cb->rec->sender_domain);
+			}
+		}
+
+	}
+	else if (elt->type == RDNS_REQUEST_AAAA) {
+		if (!addr->data.normal.parsed) {
+			memcpy (&addr->data.normal.d.in6,
+					&elt->content.aaa.addr, sizeof (struct in6_addr));
+			addr->data.normal.mask = 32;
+			addr->data.normal.parsed = TRUE;
+			addr->data.normal.ipv6 = TRUE;
+		}
+		else {
+			/* Insert one more address */
+			tmp = spf_addr_find (cb->rec->addrs, addr);
+			if (tmp) {
+				new_addr = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_addr));
+				memcpy (new_addr, addr, sizeof (struct spf_addr));
+				memcpy (&new_addr->data.normal.d.in6,
+						&elt->content.aaa.addr, sizeof (struct in6_addr));
+				new_addr->data.normal.parsed = TRUE;
+				new_addr->data.normal.ipv6 = TRUE;
+				cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
+			}
+			else {
+				msg_info ("<%s>: spf error for domain %s: addresses mismatch",
+						task->message_id, cb->rec->sender_domain);
+			}
+		}
+	}
+}
+
+static void
 spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_dns_cb               *cb = arg;
@@ -408,95 +468,44 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				if (elt_data->type == RDNS_REQUEST_MX) {
 					/* Now resolve A record for this MX */
 					if (make_dns_request (task->resolver, task->s, task->task_pool,
-							spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A, elt_data->content.mx.name)) {
+							spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A,
+							elt_data->content.mx.name)) {
+						task->dns_requests ++;
+						cb->rec->requests_inflight ++;
+					}
+					if (make_dns_request (task->resolver, task->s, task->task_pool,
+							spf_record_dns_callback, (void *)cb, RDNS_REQUEST_AAAA,
+							elt_data->content.mx.name)) {
 						task->dns_requests ++;
 						cb->rec->requests_inflight ++;
 					}
 				}
-				else if (elt_data->type == RDNS_REQUEST_A) {
-					if (!cb->addr->data.normal.parsed) {
-						cb->addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
-						cb->addr->data.normal.mask = 32;
-						cb->addr->data.normal.parsed = TRUE;
-					}
-					else {
-						/* Insert one more address */
-						tmp = spf_addr_find (cb->rec->addrs, cb->addr);
-						if (tmp) {
-							new_addr = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_addr));
-							memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
-							new_addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
-							new_addr->data.normal.parsed = TRUE;
-							cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
-						}
-						else {
-							msg_info ("<%s>: spf error for domain %s: addresses mismatch",
-									task->message_id, cb->rec->sender_domain);
-						}
-					}
-
+				else {
+					spf_record_process_addr (elt_data, cb, task);
 				}
-#ifdef HAVE_INET_PTON
-				else if (elt_data->type == RDNS_REQUEST_AAAA) {
-					if (!cb->addr->data.normal.parsed) {
-						memcpy (&cb->addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
-						cb->addr->data.normal.mask = 32;
-						cb->addr->data.normal.parsed = TRUE;
-						cb->addr->data.normal.ipv6 = TRUE;
-					}
-					else {
-						/* Insert one more address */
-						tmp = spf_addr_find (cb->rec->addrs, cb->addr);
-						if (tmp) {
-							new_addr = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_addr));
-							memcpy (new_addr, cb->addr, sizeof (struct spf_addr));
-							memcpy (&new_addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
-							new_addr->data.normal.parsed = TRUE;
-							new_addr->data.normal.ipv6 = TRUE;
-							cb->rec->addrs = g_list_insert_before (cb->rec->addrs, tmp, new_addr);
-						}
-						else {
-							msg_info ("<%s>: spf error for domain %s: addresses mismatch",
-									task->message_id, cb->rec->sender_domain);
-						}
-					}
-
-				}
-#endif
 				break;
 			case SPF_RESOLVE_A:
-				if (elt_data->type == RDNS_REQUEST_A) {
-					/* XXX: process only one record */
-					cb->addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
-					cb->addr->data.normal.mask = 32;
-					cb->addr->data.normal.parsed = TRUE;
-				}
-#ifdef HAVE_INET_PTON
-				else if (elt_data->type == RDNS_REQUEST_AAAA) {
-					memcpy (&cb->addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
-					cb->addr->data.normal.mask = 32;
-					cb->addr->data.normal.parsed = TRUE;
-					cb->addr->data.normal.ipv6 = TRUE;
-				}
-#endif
-				break;
-#ifdef HAVE_INET_PTON
 			case SPF_RESOLVE_AAA:
-				if (elt_data->type == RDNS_REQUEST_A) {
-					/* XXX: process only one record */
-					cb->addr->data.normal.d.in4.s_addr = elt_data->content.a.addr.s_addr;
-					cb->addr->data.normal.mask = 32;
-					cb->addr->data.normal.parsed = TRUE;
-				}
-				else if (elt_data->type == RDNS_REQUEST_AAAA) {
-					memcpy (&cb->addr->data.normal.d.in6, &elt_data->content.aaa.addr, sizeof (struct in6_addr));
-					cb->addr->data.normal.mask = 32;
-					cb->addr->data.normal.parsed = TRUE;
-					cb->addr->data.normal.ipv6 = TRUE;
-				}
-#endif
+				spf_record_process_addr (elt_data, cb, task);
 				break;
 			case SPF_RESOLVE_PTR:
+				if (elt_data->type == RDNS_REQUEST_PTR) {
+					if (make_dns_request (task->resolver, task->s, task->task_pool,
+							spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A,
+							elt_data->content.ptr.name)) {
+						task->dns_requests ++;
+						cb->rec->requests_inflight ++;
+					}
+					if (make_dns_request (task->resolver, task->s, task->task_pool,
+							spf_record_dns_callback, (void *)cb, RDNS_REQUEST_AAAA,
+							elt_data->content.ptr.name)) {
+						task->dns_requests ++;
+						cb->rec->requests_inflight ++;
+					}
+				}
+				else {
+					spf_record_process_addr (elt_data, cb, task);
+				}
 				break;
 			case SPF_RESOLVE_REDIRECT:
 				if (elt_data->type == RDNS_REQUEST_TXT) {
@@ -536,7 +545,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_EXP:
 				break;
 			case SPF_RESOLVE_EXISTS:
-				if (elt_data->type == RDNS_REQUEST_A) {
+				if (elt_data->type == RDNS_REQUEST_A || elt_data->type == RDNS_REQUEST_AAAA) {
 					/* If specified address resolves, we can accept connection from every IP */
 					cb->addr->data.normal.d.in4.s_addr = INADDR_NONE;
 					cb->addr->data.normal.mask = 0;
@@ -657,10 +666,47 @@ parse_spf_a (struct rspamd_task *task, const gchar *begin, struct spf_record *re
 static gboolean
 parse_spf_ptr (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
+	struct spf_dns_cb *cb;
+	gchar                           *host, *ptr;
+
 	CHECK_REC (rec);
-	
-	msg_info ("<%s>: spf error for domain %s: ptr elements are not implemented",
-			rec->task->message_id, rec->sender_domain);
+
+	if (begin == NULL) {
+		return FALSE;
+	}
+	if (*begin == ':') {
+		begin ++;
+		host = rspamd_mempool_strdup (task->task_pool, begin);
+	}
+	else if (*begin == '\0') {
+		host = rec->cur_domain;
+	}
+	else {
+		return FALSE;
+	}
+
+	rec->dns_requests ++;
+	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+	cb->rec = rec;
+	cb->addr = addr;
+	memset (&addr->data.normal, 0, sizeof (addr->data.normal));
+	cb->cur_action = SPF_RESOLVE_PTR;
+	cb->in_include = rec->in_include;
+	cb->ptr_host = host;
+	ptr = rdns_generate_ptr_from_str (rspamd_inet_address_to_string (&task->from_addr));
+	if (ptr == NULL) {
+		return FALSE;
+	}
+	rspamd_mempool_add_destructor (task->task_pool, free, ptr);
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_record_dns_callback, (void *)cb, RDNS_REQUEST_PTR, ptr)) {
+		task->dns_requests ++;
+		rec->requests_inflight ++;
+
+		return TRUE;
+	}
+
+	return FALSE;
 	return TRUE;
 }
 
