@@ -780,8 +780,10 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	top = ucl_object_typed_new (UCL_OBJECT);
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {
-		msg->code = task->error_code;
-		ucl_object_insert_key (top, ucl_object_fromstring (task->last_error), "error", 0, false);
+		msg->code = 500 + task->error_code % 100;
+		msg->status = g_string_new (task->last_error);
+		ucl_object_insert_key (top, ucl_object_fromstring (task->last_error),
+				"error", 0, false);
 		msg->body = g_string_sized_new (256);
 		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
 		ucl_object_unref (top);

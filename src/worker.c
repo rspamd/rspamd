@@ -142,7 +142,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 	if (task->state != CLOSING_CONNECTION) {
 		/* We still need to write a reply */
 		task->error_code = err->code;
-		task->last_error = err->message;
+		task->last_error = rspamd_mempool_strdup (task->task_pool, err->message);
 		task->state = WRITE_REPLY;
 		rspamd_protocol_write_reply (task);
 	}
