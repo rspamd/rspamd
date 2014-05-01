@@ -603,20 +603,40 @@ static gboolean
 parse_spf_a (struct rspamd_task *task, const gchar *begin, struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	gchar                           *host;
+	gchar                           *host = NULL;
 	
 	CHECK_REC (rec);
 	
-	if (begin == NULL || *begin != ':') {
+	/*
+	 * a
+	 * a/<prefix-length>
+	 * a:<domain>
+	 * a:<domain>/<prefix-length>
+	 */
+	if (begin == NULL) {
 		return FALSE;
 	}
-	begin ++;
-	
-	host = parse_spf_hostmask (task, begin, addr, rec);
-	
-	if (!host) {
+	if (*begin == '\0') {
+		/* Use current domain only */
+		host = rec->cur_domain;
+		addr->data.normal.mask = 32;
+	}
+	else if (*begin == ':') {
+		begin ++;
+	}
+	else if (*begin != '/') {
+		/* Invalid A record */
 		return FALSE;
 	}
+	
+	if (host == NULL) {
+		host = parse_spf_hostmask (task, begin, addr, rec);
+	}
+	
+	if (host == NULL) {
+		return FALSE;
+	}
+
 	rec->dns_requests ++;
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
@@ -641,7 +661,7 @@ parse_spf_ptr (struct rspamd_task *task, const gchar *begin, struct spf_record *
 	
 	msg_info ("<%s>: spf error for domain %s: ptr elements are not implemented",
 			rec->task->message_id, rec->sender_domain);
-	return FALSE;
+	return TRUE;
 }
 
 static gboolean
@@ -661,7 +681,7 @@ parse_spf_mx (struct rspamd_task *task, const gchar *begin, struct spf_record *r
 	
 	host = parse_spf_hostmask (task, begin, addr, rec);
 	
-	if (!host) {
+	if (host == NULL) {
 		return FALSE;
 	}
 	rec->dns_requests ++;
