@@ -1285,7 +1285,7 @@ rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_
 	if (stat->messages_scanned > 0) {
 		sub = ucl_object_typed_new (UCL_OBJECT);
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
-			ucl_object_insert_key (top,
+			ucl_object_insert_key (sub,
 					ucl_object_fromint (stat->actions_stat[i]),
 					str_action_metric (i), 0, false);
 			if (i < METRIC_ACTION_GREYLIST) {
