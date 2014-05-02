@@ -215,7 +215,6 @@ rspamd_parse_bind_line (struct rspamd_config *cfg, struct rspamd_worker_conf *cf
 	if (*tokens[0] == '/' || *tokens[0] == '.') {
 		cnf->ai = AF_UNIX;
 		LL_PREPEND (cf->bind_conf, cnf);
-		return TRUE;
 	}
 	else if (strcmp (tokens[0], "*") == 0) {
 		/* We need to add two listen entries: one for ipv4 and one for ipv6 */
@@ -245,11 +244,23 @@ rspamd_parse_bind_line (struct rspamd_config *cfg, struct rspamd_worker_conf *cf
 		if (err == NULL || *err == '\0') {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
+		else {
+			ret = FALSE;
+		}
 	}
 	else {
-		if ((ret = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
-				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
+		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, tokens[0]);
+		if (tokens[1] == NULL) {
+			cnf->bind_port = DEFAULT_BIND_PORT;
+		}
+		else {
+			cnf->bind_port = strtoul (tokens[1], &err, 10);
+		}
+		if (err == NULL || *err == '\0') {
 			LL_PREPEND (cf->bind_conf, cnf);
+		}
+		else {
+			ret = FALSE;
 		}
 	}
 
