@@ -223,8 +223,9 @@ err:
 	return FALSE;
 }
 
-static gboolean
-rspamd_protocol_handle_headers (struct rspamd_task *task, struct rspamd_http_message *msg)
+gboolean
+rspamd_protocol_handle_headers (struct rspamd_task *task,
+		struct rspamd_http_message *msg)
 {
 	gchar                           *headern, *err, *tmp;
 	gboolean                         res = TRUE;
@@ -399,10 +400,6 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 	else {
 		task->is_json = TRUE;
 		ret = rspamd_protocol_handle_url (task, msg);
-	}
-
-	if (ret) {
-		ret = rspamd_protocol_handle_headers (task, msg);
 	}
 
 	return ret;

@@ -21,19 +21,30 @@
 struct metric;
 
 /**
+ * Process headers into HTTP message and set appropriate task fields
+ * @param task
+ * @param msg
+ * @return
+ */
+gboolean rspamd_protocol_handle_headers (struct rspamd_task *task,
+		struct rspamd_http_message *msg);
+
+/**
  * Process HTTP request to the task structure
  * @param task
  * @param msg
  * @return
  */
-gboolean rspamd_protocol_handle_request (struct rspamd_task *task, struct rspamd_http_message *msg);
+gboolean rspamd_protocol_handle_request (struct rspamd_task *task,
+		struct rspamd_http_message *msg);
 
 /**
  * Write task results to http message
  * @param msg
  * @param task
  */
-void rspamd_protocol_http_reply (struct rspamd_http_message *msg, struct rspamd_task *task);
+void rspamd_protocol_http_reply (struct rspamd_http_message *msg,
+		struct rspamd_task *task);
 
 /**
  * Write reply for specified task command

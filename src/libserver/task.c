@@ -290,6 +290,8 @@ rspamd_task_process (struct rspamd_task *task,
 	/* We got body, set wanna_die flag */
 	task->s->wanna_die = TRUE;
 
+	rspamd_protocol_handle_headers (task, msg);
+
 	r = process_message (task);
 	if (r == -1) {
 		msg_warn ("processing of message failed");
