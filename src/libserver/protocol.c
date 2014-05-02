@@ -702,6 +702,8 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg, struct rspamd_task 
 	GHashTableIter                   hiter;
 	gpointer                         h, v;
 	ucl_object_t                    *top = NULL, *obj;
+	gdouble                          required_score;
+	gint                             action;
 
 	/* Output the first line - check status */
 	logbuf = g_string_sized_new (BUFSIZ);
@@ -753,6 +755,17 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg, struct rspamd_task 
 		rspamd_ucl_tolegacy_output (task, top, msg->body);
 	}
 	ucl_object_unref (top);
+
+	/* Update stat for default metric */
+	metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+	if (metric_res != NULL) {
+		required_score = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
+		action = check_metric_action (metric_res->score, required_score,
+				metric_res->metric);
+		if (action <= METRIC_ACTION_NOACTION) {
+			task->worker->srv->stat->actions_stat[action] ++;
+		}
+	}
 
 	/* Increase counters */
 	task->worker->srv->stat->messages_scanned++;
