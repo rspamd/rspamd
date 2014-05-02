@@ -1050,6 +1050,29 @@ rspamd_http_router_detect_ct (const gchar *path)
 }
 
 static gboolean
+rspamd_http_router_is_subdir (const gchar *parent, const gchar *sub)
+{
+	if (parent == NULL || sub == NULL || *parent == '\0') {
+		return FALSE;
+	}
+
+	while (*parent != '\0') {
+		if (*sub != *parent) {
+			return FALSE;
+		}
+		parent ++;
+		sub ++;
+	}
+
+	parent --;
+	if (*parent == G_DIR_SEPARATOR) {
+		return TRUE;
+	}
+
+	return (*sub == G_DIR_SEPARATOR || *sub == '\0');
+}
+
+static gboolean
 rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 		struct rspamd_http_message *msg, gboolean expand_path)
 {
@@ -1086,7 +1109,8 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	/* We also need to ensure that file is inside the defined dir */
 	rspamd_strlcpy (filebuf, realbuf, sizeof (filebuf));
 	dir = dirname (filebuf);
-	if (dir == NULL || strcmp (dir, entry->rt->default_fs_path) != 0) {
+	if (dir == NULL || !rspamd_http_router_is_subdir (entry->rt->default_fs_path,
+			dir)) {
 		return FALSE;
 	}
 
