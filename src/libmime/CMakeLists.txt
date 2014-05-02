@@ -4,7 +4,6 @@ SET(LIBRSPAMDMIMESRC
 				filter.c
 				images.c
 				message.c
-				protocol.c
 				smtp_utils.c
 				smtp_proto.c)
 

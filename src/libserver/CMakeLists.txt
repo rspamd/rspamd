@@ -9,6 +9,7 @@ SET(LIBRSPAMDSERVERSRC
 				dynamic_cfg.c
 				events.c
 				html.c
+				protocol.c
 				proxy.c
 				roll_history.c
 				settings.c
