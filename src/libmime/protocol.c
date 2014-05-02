@@ -115,7 +115,7 @@ rspamd_protocol_escape_braces (GString *in)
 
 	g_string_erase (in, 0, orig - in->str);
 
-	p = orig;
+	p = in->str;
 	while ((!g_ascii_isspace (*p) && *p != '>') && p - in->str < (gint)in->len) {
 		p ++;
 		len ++;
