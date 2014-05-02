@@ -1203,7 +1203,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 				msg_err ("path %s is not a directory", default_fs_path);
 			}
 			else {
-				new->default_fs_path = g_strdup (default_fs_path);
+				new->default_fs_path = realpath (default_fs_path, NULL);
 			}
 		}
 	}
