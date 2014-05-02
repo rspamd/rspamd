@@ -1084,9 +1084,9 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	}
 
 	/* We also need to ensure that file is inside the defined dir */
-	dir = dirname (realbuf);
-	if (dir == NULL || strncmp (dir, entry->rt->default_fs_path,
-			strlen (entry->rt->default_fs_path)) != 0) {
+	rspamd_strlcpy (filebuf, realbuf, sizeof (filebuf));
+	dir = dirname (filebuf);
+	if (dir == NULL || strcmp (dir, entry->rt->default_fs_path) != 0) {
 		return FALSE;
 	}
 
