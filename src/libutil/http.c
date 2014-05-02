@@ -1148,7 +1148,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			if (entry->rt->default_fs_path == NULL ||
-					rspamd_http_router_try_file (entry, msg, TRUE)) {
+					!rspamd_http_router_try_file (entry, msg, TRUE)) {
 				err = g_error_new (HTTP_ERROR, 404,
 						"Not found");
 				if (entry->rt->error_handler != NULL) {
