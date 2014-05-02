@@ -638,6 +638,10 @@ rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError **err)
 {
 	rspamd_dkim_key_t							*key = NULL;
 
+	if (keylen < 3) {
+		msg_err ("DKIM key is too short to be valid");
+		return NULL;
+	}
 	key = g_slice_alloc0 (sizeof (rspamd_dkim_key_t));
 	key->keydata = g_slice_alloc (keylen + 1);
 	rspamd_strlcpy (key->keydata, keydata, keylen + 1);
