@@ -97,7 +97,8 @@ poll_sync_socket (gint fd, gint timeout, short events)
 }
 
 static gint
-make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server, gboolean async, GList **list)
+make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server,
+		gboolean async, GList **list)
 {
 	gint                            fd, r, optlen, on = 1, s_error;
 	struct addrinfo               *cur;
@@ -434,7 +435,7 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 			if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
 				r = make_inet_socket (type, res, is_server, async, &result);
 				freeaddrinfo (res);
-				if (r == -1) {
+				if (result == NULL) {
 					goto err;
 				}
 			}
