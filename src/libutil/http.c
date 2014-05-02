@@ -1081,15 +1081,8 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	gchar filebuf[PATH_MAX], realbuf[PATH_MAX], *dir;
 	struct rspamd_http_message *reply_msg;
 
-	/* XXX: filter filename component only */
-	if (expand_path) {
-		rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
+	rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
 			entry->rt->default_fs_path, G_DIR_SEPARATOR, msg->url);
-	}
-	else {
-		rspamd_snprintf (filebuf, sizeof (filebuf), "%v",
-			msg->url);
-	}
 
 	if (realpath (filebuf, realbuf) == NULL ||
 			lstat (realbuf, &st) == -1) {
