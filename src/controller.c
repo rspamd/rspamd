@@ -168,6 +168,9 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			msg_info ("using password as enable_password for a privileged command");
 			check = ctx->password;
 		}
+		else {
+			check = ctx->enable_password;
+		}
 		if (check != NULL) {
 			if (password == NULL || strcmp (password, check) != 0) {
 				msg_info ("incorrect or absent password has been specified");
