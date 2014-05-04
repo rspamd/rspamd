@@ -91,7 +91,7 @@ do {														\
 } while (0)													\
 
 static gboolean parse_spf_record (struct rspamd_task *task, struct spf_record *rec);
-static void start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl);
+static gboolean start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl);
 
 /* Determine spf mech */
 static spf_mech_t
@@ -1345,7 +1345,7 @@ parse_spf_scopes (struct spf_record *rec, gchar **begin)
 	}
 }
 
-static void
+static gboolean
 start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 {
 	/* Skip spaces */
@@ -1367,6 +1367,7 @@ start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 			if (ttl != 0) {
 				rec->ttl = ttl;
 			}
+			return TRUE;
 		}
 	}
 	else if (g_ascii_strncasecmp (begin, SPF_VER2_STR, sizeof (SPF_VER2_STR) - 1) == 0) {
@@ -1394,11 +1395,13 @@ start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 				rec->ttl = ttl;
 			}
 		}
+		return TRUE;
 	}
 	else {
 		msg_debug ("<%s>: spf error for domain %s: bad spf record version: %*s",
 				rec->task->message_id, rec->sender_domain, sizeof (SPF_VER1_STR) - 1, begin);
 	}
+	return FALSE;
 }
 
 static void
@@ -1410,7 +1413,9 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	rec->requests_inflight --;
 	if (reply->code == RDNS_RC_NOERROR) {
 		LL_FOREACH (reply->entries, elt) {
-			start_spf_parse (rec, elt->content.txt.data, elt->ttl);
+			if (start_spf_parse (rec, elt->content.txt.data, elt->ttl)) {
+				break;
+			}
 		}
 	}
 
