@@ -168,7 +168,8 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 	struct in6_addr                 in6s, in6d;
 
 	/* Basic comparing algorithm */
-	if (addr->data.normal.ipv6 && task->from_addr.af == AF_INET6) {
+	if ((addr->data.normal.ipv6 && task->from_addr.af == AF_INET6) ||
+			(!addr->data.normal.ipv6 && task->from_addr.af == AF_INET)) {
 		if (addr->data.normal.ipv6) {
 			addrlen = sizeof (struct in6_addr);
 			memcpy (&in6s, &addr->data.normal.d.in6, sizeof (struct in6_addr));
