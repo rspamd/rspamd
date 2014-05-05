@@ -18,6 +18,9 @@ case "$1" in
                $SERVER_USER
 
        chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
+
+       # Remove accidentally created directory
+       rmdir /_rspamd:_rspamd
     ;;
 
     abort-*)
