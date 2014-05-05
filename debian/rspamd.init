@@ -40,7 +40,7 @@ do_start()
 	#   0 if daemon has been started
 	#   1 if daemon was already running
 	#   2 if daemon could not be started
-	mkdir -m 755 _rspamd:_rspamd -p /run/rspamd
+	install -m 755 -o _rspamd -g _rspamd -d /run/rspamd
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
