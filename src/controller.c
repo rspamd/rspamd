@@ -135,8 +135,6 @@ struct rspamd_controller_session {
 	gboolean is_spam;
 };
 
-sig_atomic_t             wanna_die = 0;
-
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
