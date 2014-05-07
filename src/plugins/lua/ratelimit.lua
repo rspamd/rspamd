@@ -14,10 +14,14 @@ local settings = {
 	-- Limit for all bounce mail (burst 10, rate 2 per hour)
 	bounce_to = {[1] = 10, [2] = 0.000555556, [3] = 4}, 
 	-- Limit for bounce mail per one source ip (burst 5, rate 1 per hour)
-	bounce_to_ip = {[1] = 5 , [2] = 0.000277778, [3] = 5} 
+	bounce_to_ip = {[1] = 5 , [2] = 0.000277778, [3] = 5},
+ 
+        -- Limit for all mail per user (authuser) (burst 20, rate 1 per minute)
+	user = {[1] = 20, [2] = 0.01666666667, [3] = 6}
+
 }
 -- Senders that are considered as bounce
-local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-daemon'}
+local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-daemon', 'mdaemon'}
 -- Do not check ratelimits for these senders
 local whitelisted_rcpts = {'postmaster', 'mailer-daemon'}
 local whitelisted_ip = nil
@@ -61,7 +65,8 @@ local function check_specific_limit (task, limit, key)
 				rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
 							'SET %b %b', key, lstr)
 				if bucket > limit[1] then
-					task:set_pre_result(rspamd_actions['soft reject'], 'Ratelimit exceeded')
+					rspamd_logger.info(string.format('[%s]:soft_reject - Ratelimit exceeded', key))
+					task:set_pre_result(rspamd_actions['soft_reject'], 'Ratelimit exceeded')
 				end
 			else
 				rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
@@ -186,6 +191,11 @@ local function rate_test_set(task, func)
 	if from then
 		from_user = get_local_part(from[1]['addr'])
 	end
+	-- Get user (authuser)
+	local auser = task:get_user()
+	if auser then
+		func(task, settings['user'], make_rate_key (auser, '<auth>', nil))
+	end
 	
 	if not from_user or not rcpts_user[1] then
 		-- Nothing to check
@@ -270,6 +280,8 @@ local function parse_limit(str)
 		set_limit(settings['bounce_to'], params[2], params[3])
 	elseif params[1] == 'bounce_to_ip' then
 		set_limit(settings['bounce_to_ip'], params[2], params[3])
+        elseif params[1] == 'user' then
+                set_limit(settings['user'], params[2], params[3])
 	else
 		rspamd_logger.err('invalid limit type: ' .. params[1])
 	end
