@@ -1051,10 +1051,9 @@ main (gint argc, gchar **argv, gchar **env)
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_thread_init (NULL);
 #endif
-	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
-	memset (rspamd_main, 0, sizeof (struct rspamd_main));
+	rspamd_main = (struct rspamd_main *)g_malloc0 (sizeof (struct rspamd_main));
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
+	rspamd_main->cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 
 	if (!rspamd_main || !rspamd_main->cfg) {
 		fprintf (stderr, "Cannot allocate memory\n");
@@ -1068,7 +1067,6 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->stat = rspamd_mempool_alloc_shared (rspamd_main->server_pool, sizeof (struct rspamd_stat));
 	memset (rspamd_main->stat, 0, sizeof (struct rspamd_stat));
 
-	memset (rspamd_main->cfg, 0, sizeof (struct rspamd_config));
 	rspamd_main->cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_config_defaults (rspamd_main->cfg);
 
