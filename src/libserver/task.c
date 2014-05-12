@@ -325,7 +325,6 @@ rspamd_task_process (struct rspamd_task *task,
 		if (task->is_skipped) {
 			/* Call write_socket to write reply and exit */
 			task->state = WRITE_REPLY;
-			return TRUE;
 		}
 	}
 	else {
@@ -333,8 +332,9 @@ rspamd_task_process (struct rspamd_task *task,
 		/* We want fin_task after pre filters are processed */
 		task->s->wanna_die = TRUE;
 		task->state = WAIT_PRE_FILTER;
-		check_session_pending (task->s);
 	}
+
+	check_session_pending (task->s);
 
 	return TRUE;
 }

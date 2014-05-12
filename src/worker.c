@@ -127,7 +127,9 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 
-	rspamd_task_process (task, msg, ctx->classify_pool, TRUE);
+	if (!rspamd_task_process (task, msg, ctx->classify_pool, TRUE)) {
+		rspamd_protocol_write_reply (task);
+	}
 
 	return 0;
 }
