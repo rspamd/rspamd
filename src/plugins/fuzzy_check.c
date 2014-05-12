@@ -988,7 +988,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
 	r = process_message (task);
 	if (r == -1) {
-		msg_warn ("processing of message failed");
+		msg_warn ("cannot process message for fuzzy");
 		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 400, "Message processing error");
 		return;
@@ -1022,13 +1022,13 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (res == -1) {
-		msg_warn ("processing of message failed");
+		msg_warn ("cannot send fuzzy request: %s", strerror (errno));
 		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
 		return;
 	}
 	else if (!processed) {
-		msg_warn ("processing of message failed");
+		msg_warn ("no rules to match fuzzy with flag %d", flag);
 		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 404, "No fuzzy rules matched");
 		return;
