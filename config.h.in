@@ -86,7 +86,7 @@
  #endif /* HAVE_SYS_ENDIAN_H */
  #endif /* HAVE_ENDIAN_H */
  
- #if !defined(BYTE_ORDER) || (BYTE_ORDER != BIG_ENDIAN && BYTE_ORDER != LITTLE_ENDIAN)
+ #if !defined(BYTE_ORDER)
  # error "Undefined or unknown BYTE_ORDER"
  #endif
  

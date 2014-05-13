@@ -10,6 +10,13 @@
 
 #include "config.h"
 
+/*
+ * OpenBSD fix
+ */
+#ifndef EPROTO
+#define EPROTO EPROTONOSUPPORT
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
