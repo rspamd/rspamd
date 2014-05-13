@@ -658,7 +658,10 @@ spawn_workers (struct rspamd_main *rspamd)
 						/* We had socket for this type of worker */
 						ls = p;
 					}
-					cf->listen_socks = g_list_concat (cf->listen_socks, ls);
+					/* Do not add existing lists as it causes loops */
+					if (g_list_position (cf->listen_socks, ls) == -1) {
+						cf->listen_socks = g_list_concat (cf->listen_socks, ls);
+					}
 				}
 			}
 
