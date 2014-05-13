@@ -1826,7 +1826,7 @@ start_webui_worker (struct rspamd_worker *worker)
 #else
 
 gpointer
-init_webui_worker (void)
+init_webui_worker (struct config_file *cfg)
 {
 	return NULL;
 }

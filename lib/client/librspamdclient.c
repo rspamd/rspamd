@@ -917,7 +917,7 @@ read_rspamd_reply_line (struct rspamd_connection *c, GError **err)
 		}
 	}
 	/* Poll socket */
-	if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLL_IN)) <= 0) {
+	if ((r = poll_sync_socket (c->socket, c->client->read_timeout, POLLIN)) <= 0) {
 		if (*err == NULL) {
 			if (r == 0) {
 				errno = ETIMEDOUT;
