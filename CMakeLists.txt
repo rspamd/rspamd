@@ -123,6 +123,7 @@ MACRO(FindLua _major _minor)
 	  $ENV{LUA_DIR}
 	  PATH_SUFFIXES "include/lua${_major}${_minor}" 
 	  				"include/lua${_major}.${_minor}" 
+	  				"include/lua-${_major}.${_minor}"
 	  				include/lua include
 	  PATHS
 	  /usr/local
