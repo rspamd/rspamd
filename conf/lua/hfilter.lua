@@ -137,10 +137,12 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     end
     if eq_host then
         eq_host = string.lower(eq_host)
+    else
+        eq_host = ''
     end
 
     if check_fqdn(host) then
-        if not eq_host or (eq_host ~= 'unknown' or eq_host ~= host) then
+        if eq_host == '' or eq_host ~= 'unknown' or eq_host ~= host then
             task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), host, check_host_cb_a)
         end
     else
@@ -242,8 +244,8 @@ local function hfilter(task)
     local message_id = task:get_message_id()
     if message_id then
         local mid_split = split(message_id, '@', 0)
-        if table.maxn(mid_split) == 2 and not string.find(mid_split[2], "local") and not check_fqdn(mid_split[2]) then
-            task:insert_result('HFILTER_MID_NOT_FQDN', 1.00)
+        if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
+            check_host(task, mid_split[2], 'MID', '', '')
         end
     end
     
@@ -292,6 +294,7 @@ rspamd_config:register_symbols(hfilter, 1.0,
 "HFILTER_HOSTNAME_1", "HFILTER_HOSTNAME_2", "HFILTER_HOSTNAME_3", "HFILTER_HOSTNAME_4", "HFILTER_HOSTNAME_5", 
 "HFILTER_HELO_NORESOLVE_MX", "HFILTER_HELO_NORES_A_OR_MX", "HFILTER_HELO_IP_A", "HFILTER_HELO_NOT_FQDN", 
 "HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN",  
+"HFILTER_MID_NORESOLVE_MX", "HFILTER_MID_NORES_A_OR_MX", "HFILTER_MID_NOT_FQDN",
 "HFILTER_MID_NOT_FQDN",
 "HFILTER_HOSTNAME_UNKNOWN",
 "HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
