@@ -120,10 +120,10 @@ if(opts['default_ipv6'] == nil) then
 	opts['default_ipv6'] = false
 end
 if(opts['default_received'] == nil) then
-	opts['default_received'] = false
+	opts['default_received'] = true
 end
 if(opts['default_from'] == nil) then
-	opts['default_from'] = true
+	opts['default_from'] = false
 end
 if(opts['default_unknown'] == nil) then
 	opts['default_unknown'] = false
