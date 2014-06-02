@@ -25,7 +25,7 @@ local function rbl_cb (task)
 						local foundrc = false
 						for s,i in pairs(thisrbl['returncodes']) do
 							if type(i) == 'string' then
-								if string.find(ipstr, "^" .. v .. "$") then
+								if string.find(ipstr, "^" .. i .. "$") then
 									foundrc = true
 									task:insert_result(s, 1)
 									break
