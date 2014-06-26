@@ -397,7 +397,6 @@ spf_record_process_addr (struct rdns_reply_entry *elt,
 	if (elt->type == RDNS_REQUEST_A) {
 		if (!addr->data.normal.parsed) {
 			addr->data.normal.d.in4.s_addr = elt->content.a.addr.s_addr;
-			addr->data.normal.mask = 32;
 			addr->data.normal.parsed = TRUE;
 		}
 		else {
