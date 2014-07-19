@@ -525,6 +525,11 @@ rspamd_http_on_message_complete (http_parser* parser)
 		ret = conn->finish_handler (conn, priv->msg);
 		conn->finished = TRUE;
 		rspamd_http_connection_unref (conn);
+
+		/* Disable reading if we have read an HTTP message */
+		if (event_pending (&priv->ev, EV_READ, NULL)) {
+			event_del (&priv->ev);
+		}
 	}
 
 	return ret;
