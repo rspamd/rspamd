@@ -203,7 +203,7 @@ lua_worker_get_option (lua_State *L)
 				lua_pushnil (L);
 			}
 			else {
-				lua_rcl_obj_push (L, val, TRUE);
+				ucl_object_push_lua (L, val, TRUE);
 			}
 		}
 	}

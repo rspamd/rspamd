@@ -138,7 +138,7 @@ lua_post_load_config (struct rspamd_config *cfg)
 			/* Key must be a string and value must be a table */
 			name = luaL_checklstring (L, -2, &keylen);
 			if (name != NULL && lua_istable (L, -1)) {
-				obj = lua_rcl_obj_get (L, -1);
+				obj = ucl_object_lua_import (L, lua_gettop (L));
 				if (obj != NULL) {
 					ucl_object_insert_key_merged (cfg->rcl_obj, obj, name, keylen, true);
 				}
