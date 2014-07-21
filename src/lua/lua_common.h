@@ -7,6 +7,7 @@
 #include "main.h"
 #include "cfg_file.h"
 #include "ucl.h"
+#include "lua_ucl.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -108,20 +109,6 @@ struct lua_locked_state* init_lua_locked (struct rspamd_config *cfg);
  * Free locked state structure
  */
 void free_lua_locked (struct lua_locked_state *st);
-
-/**
- * Push an rcl object to lua
- * @param L lua state
- * @param obj object to push
- */
-gint lua_rcl_obj_push (lua_State *L, const ucl_object_t *obj, gboolean allow_array);
-
-/**
- * Extract rcl object from lua object
- * @param L
- * @return
- */
-ucl_object_t * lua_rcl_obj_get (lua_State *L, gint idx);
 
 /**
  * Push lua ip address

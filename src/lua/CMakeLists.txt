@@ -3,7 +3,6 @@ SET(LUASRC			  lua_common.c
 					  lua_task.c
 					  lua_message.c
 					  lua_config.c
-					  lua_rcl.c
 					  lua_classifier.c
 					  lua_cfg_file.c
 					  lua_regexp.c
