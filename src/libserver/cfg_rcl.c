@@ -156,28 +156,6 @@ static gboolean
 rspamd_rcl_options_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val;
-	const gchar *user_settings, *domain_settings;
-
-	/* Handle user and domain settings */
-	val = ucl_object_find_key (obj, "user_settings");
-	if (val != NULL && ucl_object_tostring_safe (val, &user_settings)) {
-		if (!read_settings (user_settings, "Users' settings", cfg, cfg->user_settings)) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", user_settings);
-			return FALSE;
-		}
-		cfg->user_settings_str = rspamd_mempool_strdup (cfg->cfg_pool, user_settings);
-	}
-
-	val = ucl_object_find_key (obj, "domain_settings");
-	if (val != NULL && ucl_object_tostring_safe (val, &domain_settings)) {
-		if (!read_settings (domain_settings, "Domains settings", cfg, cfg->domain_settings)) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL, "cannot read settings: %s", domain_settings);
-			return FALSE;
-		}
-		cfg->domain_settings_str = rspamd_mempool_strdup (cfg->cfg_pool, domain_settings);
-	}
-
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
 }
 
