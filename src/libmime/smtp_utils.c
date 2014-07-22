@@ -144,6 +144,10 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 
 	task = cd->session->task;
 
+	/* XXX rewrite */
+	ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
+	rs = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
+#if 0
 	if (!check_metric_settings (metric_res, &ms, &rs)) {
 		ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
 		rs = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
@@ -151,6 +155,7 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 	if (! check_metric_action_settings (task, metric_res, metric_res->score, &action)) {
 		action = check_metric_action (metric_res->score, ms, metric_res->metric);
 	}
+#endif
 	if (metric_res->score >= ms) {
 		is_spam = 1;
 	}

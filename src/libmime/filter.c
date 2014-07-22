@@ -90,7 +90,6 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 		w = (*weight) * flag;
 	}
 
-
 	/* Add metric score */
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts && opts != s->options) {

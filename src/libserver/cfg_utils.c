@@ -296,9 +296,6 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;
-
-	init_settings (cfg);
-
 }
 
 void
