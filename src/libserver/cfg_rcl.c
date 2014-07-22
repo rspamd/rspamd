@@ -156,6 +156,18 @@ static gboolean
 rspamd_rcl_options_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
+	const ucl_object_t *dns;
+	struct rspamd_rcl_section *dns_section;
+
+	HASH_FIND_STR (section->subsections, "dns", dns_section);
+
+	dns = ucl_object_find_key (obj, "dns");
+	if (dns_section != NULL && dns != NULL) {
+		if (!rspamd_rcl_section_parse_defaults (dns_section, cfg, dns, cfg, err)) {
+			return FALSE;
+		}
+	}
+
 	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
 }
 
@@ -971,6 +983,7 @@ rspamd_rcl_config_init (void)
 			FALSE, TRUE);
 	rspamd_rcl_add_default_handler (sub, "cache_file", rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_config, cache_filename), RSPAMD_CL_FLAG_STRING_PATH);
+	/* Old DNS configuration */
 	rspamd_rcl_add_default_handler (sub, "dns_nameserver", rspamd_rcl_parse_struct_string_list,
 			G_STRUCT_OFFSET (struct rspamd_config, nameservers), 0);
 	rspamd_rcl_add_default_handler (sub, "dns_timeout", rspamd_rcl_parse_struct_time,
@@ -979,6 +992,18 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub, "dns_sockets", rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server), RSPAMD_CL_FLAG_INT_32);
+	/* New DNS configiration */
+	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL,
+				UCL_OBJECT, FALSE, TRUE);
+	rspamd_rcl_add_default_handler (ssub, "nameserver", rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, nameservers), 0);
+	rspamd_rcl_add_default_handler (ssub, "timeout", rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+	rspamd_rcl_add_default_handler (ssub, "retransmits", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits), RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (ssub, "sockets", rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server), RSPAMD_CL_FLAG_INT_32);
+
 	rspamd_rcl_add_default_handler (sub, "raw_mode", rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct rspamd_config, raw_mode), 0);
 	rspamd_rcl_add_default_handler (sub, "one_shot", rspamd_rcl_parse_struct_boolean,
@@ -1118,7 +1143,8 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 		found = ucl_object_find_key (obj, cur->name);
 		if (found == NULL) {
 			if (cur->required) {
-				g_set_error (err, CFG_RCL_ERROR, ENOENT, "required section %s is missing", cur->name);
+				g_set_error (err, CFG_RCL_ERROR, ENOENT,
+						"required section %s is missing", cur->name);
 				return FALSE;
 			}
 		}
@@ -1126,13 +1152,19 @@ rspamd_read_rcl_config (struct rspamd_rcl_section *top,
 			/* Check type */
 			if (cur->strict_type) {
 				if (cur->type != found->type) {
-					g_set_error (err, CFG_RCL_ERROR, EINVAL, "object in section %s has invalid type", cur->name);
+					g_set_error (err, CFG_RCL_ERROR, EINVAL,
+							"object in section %s has invalid type", cur->name);
 					return FALSE;
 				}
 			}
 			LL_FOREACH (found, cur_obj) {
-				if (!cur->handler (cfg, cur_obj, NULL, cur, err)) {
-					return FALSE;
+				if (cur->handler != NULL) {
+					if (!cur->handler (cfg, cur_obj, NULL, cur, err)) {
+						return FALSE;
+					}
+				}
+				else {
+					rspamd_rcl_section_parse_defaults (cur, cfg, cur_obj, cfg, err);
 				}
 			}
 		}
