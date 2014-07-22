@@ -39,6 +39,7 @@ LUA_FUNCTION_DEF (config, register_function);
 LUA_FUNCTION_DEF (config, add_radix_map);
 LUA_FUNCTION_DEF (config, add_hash_map);
 LUA_FUNCTION_DEF (config, add_kv_map);
+LUA_FUNCTION_DEF (config, add_map);
 LUA_FUNCTION_DEF (config, get_classifier);
 LUA_FUNCTION_DEF (config, register_symbol);
 LUA_FUNCTION_DEF (config, register_symbols);
@@ -58,6 +59,7 @@ static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, add_kv_map),
+	LUA_INTERFACE_DEF (config, add_map),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
 	LUA_INTERFACE_DEF (config, register_symbols),
@@ -541,6 +543,112 @@ lua_config_add_kv_map (lua_State *L)
 	lua_pushnil (L);
 	return 1;
 
+}
+
+struct lua_map_callback_data {
+	lua_State *L;
+	gint ref;
+	GString *data;
+};
+
+static gchar *
+lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
+		struct map_cb_data *data)
+{
+	struct lua_map_callback_data *cbdata, *old;
+
+	if (data->cur_data == NULL) {
+		cbdata = g_slice_alloc (sizeof (*cbdata));
+		old = (struct lua_map_callback_data *)data->prev_data;
+		cbdata->L = old->L;
+		cbdata->ref = old->ref;
+	}
+	else {
+		cbdata = (struct lua_map_callback_data *)data->cur_data;
+	}
+
+	if (cbdata->data == NULL) {
+		cbdata->data = g_string_new_len (chunk, len);
+	}
+	else {
+		g_string_append_len (cbdata->data, chunk, len);
+	}
+
+	return NULL;
+}
+
+void
+lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
+{
+	struct lua_map_callback_data *cbdata, *old;
+
+	if (data->prev_data) {
+		/* Cleanup old data */
+		old = (struct lua_map_callback_data *)data->prev_data;
+		if (old->data) {
+			g_string_free (old->data, TRUE);
+		}
+		g_slice_free1 (sizeof (*old), old);
+	}
+
+	if (data->cur_data) {
+		cbdata = (struct lua_map_callback_data *)data->cur_data;
+	}
+	else {
+		msg_err ("no data read for map");
+		return;
+	}
+
+	if (cbdata->data != NULL && cbdata->data->len != 0) {
+		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+		lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
+
+		if (lua_pcall (cbdata->L, 1, 0, 0) != 0) {
+			msg_info ("call to %s failed: %s", "local function",
+					lua_tostring (cbdata->L, -1));
+		}
+	}
+}
+
+static gint
+lua_config_add_map (lua_State *L)
+{
+	struct rspamd_config            *cfg = lua_check_config (L);
+	const gchar                     *map_line, *description;
+	struct lua_map_callback_data    *cbdata, **pcbdata;
+
+	if (cfg) {
+		map_line = luaL_checkstring (L, 2);
+		description = lua_tostring (L, 3);
+
+		if (lua_type (L, 4) == LUA_TFUNCTION) {
+			cbdata = g_slice_alloc (sizeof (*cbdata));
+			cbdata->L = L;
+			cbdata->data = NULL;
+			lua_pushvalue (L, 4);
+			/* Get a reference */
+			cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
+			pcbdata = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (cbdata));
+			*pcbdata = cbdata;
+			if (!add_map (cfg, map_line, description, lua_map_read, lua_map_fin,
+					(void **)pcbdata)) {
+				msg_warn ("invalid hash map %s", map_line);
+				lua_pushboolean (L, false);
+			}
+			else {
+				lua_pushboolean (L, true);
+			}
+		}
+		else {
+			msg_warn ("invalid callback argument for map %s", map_line);
+			lua_pushboolean (L, false);
+		}
+	}
+	else {
+		lua_pushboolean (L, false);
+	}
+
+	return 1;
 }
 
 /*** Metric functions ***/
