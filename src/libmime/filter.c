@@ -79,7 +79,6 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
 		metric_res->score = 0;
-		apply_metric_settings (task, metric, metric_res);
 		g_hash_table_insert (task->results, (gpointer) metric->name, metric_res);
 	}
 	
@@ -220,12 +219,36 @@ insert_result_single (struct rspamd_task *task, const gchar *symbol, double flag
 	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
+static gboolean
+check_metric_settings (struct rspamd_task *task, struct metric *metric,
+		double *score)
+{
+	const ucl_object_t *mobj, *reject;
+	double val;
+
+	if (task->settings == NULL) {
+		return FALSE;
+	}
+
+	mobj = ucl_object_find_key (task->settings, metric->name);
+	if (mobj != NULL) {
+		reject = ucl_object_find_key (mobj,
+				str_action_metric (METRIC_ACTION_REJECT));
+		if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
+			*score = val;
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 /* Return true if metric has score that is more than spam score for it */
 static                          gboolean
 check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 {
 	struct metric_result           *res;
-	double                          ms, rs;
+	double                          ms;
 
 	/* Avoid concurrency while checking results */
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
@@ -240,7 +263,7 @@ check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 #else
 		G_UNLOCK (result_mtx);
 #endif
-		if (!check_metric_settings (res, &ms, &rs)) {
+		if (!check_metric_settings (task, metric, &ms)) {
 			ms = metric->actions[METRIC_ACTION_REJECT].score;
 		}
 		return (ms > 0 && res->score >= ms);
@@ -747,28 +770,32 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	gchar                           header_name[128], outbuf[1000];
 	GList                          *symbols = NULL, *cur;
 	struct metric_result           *metric_res = (struct metric_result *)metric_value;
-	double                          ms, rs;
+	double                          ms;
 
 	rspamd_snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
 
-	if (!check_metric_settings (metric_res, &ms, &rs)) {
+	if (!check_metric_settings (task, metric_res->metric, &ms)) {
 		ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
 	}
 	if (ms > 0 && metric_res->score >= ms) {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
+				"yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, ms);
 	}
 	else {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "no; %.2f/%.2f/%.2f; ", metric_res->score, ms, rs);
+		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
+				"no; %.2f/%.2f/%.2f; ", metric_res->score, ms, ms);
 	}
 
 	symbols = g_hash_table_get_keys (metric_res->symbols);
 	cur = symbols;
 	while (cur) {
 		if (g_list_next (cur) != NULL) {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s,", (gchar *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
+					"%s,", (gchar *)cur->data);
 		}
 		else {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "%s", (gchar *)cur->data);
+			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
+					"%s", (gchar *)cur->data);
 		}
 		cur = g_list_next (cur);
 	}
