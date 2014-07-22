@@ -298,6 +298,7 @@ init_lua (struct rspamd_config *cfg)
 	(void)luaopen_dns_resolver (L);
 	(void)luaopen_rsa (L);
 	(void)luaopen_ip (L);
+	(void)luaopen_ucl (L);
 
 	return L;
 }
