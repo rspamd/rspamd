@@ -28,7 +28,6 @@
 #include "smtp_proto.h"
 #include "map.h"
 #include "message.h"
-#include "settings.h"
 #include "dns.h"
 #include "upstream.h"
 #include "proxy.h"

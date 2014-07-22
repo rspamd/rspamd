@@ -28,7 +28,6 @@
 #include "cfg_file.h"
 #include "main.h"
 #include "filter.h"
-#include "settings.h"
 #include "classifiers/classifiers.h"
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"

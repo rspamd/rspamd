@@ -30,7 +30,6 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "expressions.h"
-#include "settings.h"
 #include "binlog.h"
 #include "diff.h"
 #include "classifiers/classifiers.h"
@@ -80,8 +79,6 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
 		metric_res->score = 0;
-		metric_res->domain_settings = NULL;
-		metric_res->user_settings = NULL;
 		apply_metric_settings (task, metric, metric_res);
 		g_hash_table_insert (task->results, (gpointer) metric->name, metric_res);
 	}

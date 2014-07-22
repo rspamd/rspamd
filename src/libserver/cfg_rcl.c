@@ -23,7 +23,6 @@
 
 #include "cfg_rcl.h"
 #include "main.h"
-#include "settings.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expressions.h"

@@ -65,8 +65,6 @@ struct metric_result {
 	GHashTable *symbols;							/**< symbols of metric						*/
 	gboolean checked;								/**< whether metric result is consolidated  */
 	double grow_factor;								/**< current grow factor					*/
-	struct rspamd_settings *user_settings;			/**< settings for metric					*/
-	struct rspamd_settings *domain_settings;		/**< settings for metric					*/
 };
 
 /**

@@ -249,6 +249,9 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 		if (task->sock != -1) {
 			close (task->sock);
 		}
+		if (task->settings != NULL) {
+			ucl_object_unref (task->settings);
+		}
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);
 	}

@@ -12,7 +12,6 @@ SET(LIBRSPAMDSERVERSRC
 				protocol.c
 				proxy.c
 				roll_history.c
-				settings.c
 				spf.c
 				statfile.c
 				statfile_sync.c

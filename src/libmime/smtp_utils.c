@@ -24,7 +24,6 @@
 #include "config.h"
 #include "main.h"
 #include "filter.h"
-#include "settings.h"
 #include "smtp.h"
 #include "smtp_proto.h"
 

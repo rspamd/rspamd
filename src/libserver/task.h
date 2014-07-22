@@ -138,6 +138,8 @@ struct rspamd_task {
 		enum rspamd_metric_action action;						/**< Action of pre filters							*/
 		gchar *str;												/**< String describing action						*/
 	} pre_result;												/**< Result of pre-filters							*/
+
+	ucl_object_t *settings;										/**< Settings applied to task						*/
 };
 
 /**

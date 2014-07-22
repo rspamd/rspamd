@@ -26,7 +26,6 @@
 #include "main.h"
 #include "util.h"
 #include "cfg_file.h"
-#include "settings.h"
 #include "message.h"
 
 /* Max line size */
